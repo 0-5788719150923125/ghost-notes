@@ -6,7 +6,7 @@ extends SceneTree
 ##   godot --headless --path . --script res://tests/table_show/episode_probe.gd -- \
 ##       --spec ../rift/tarot/truthful-tarot.md --seed 2 [--only plan,draw] [--redo say:3] [--root <dir>]
 ##
-## NOT A GATE: it spends real quota, writes into the author's own episodes
+## Not a gate: it spends real quota, writes into the author's own episodes
 ## (user://table/<show>/<seed>/) and takes minutes. It exists to make an episode headlessly - for
 ## a look probe to render, or to compare seeds - and it prints every step as it lands.
 ## `--only` stops once the named steps exist; `--redo` deletes a step (and what was made from it)

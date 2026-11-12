@@ -1,6 +1,6 @@
 extends Node
 
-## NOT a gate, and it SPENDS QUOTA: A REAL GAME, PLAYED (next/tabletop.md): real agents plan the night, prepare it and play its opening stretches through the real tools, with real players asked, on a stand-in table so nothing is painted. To read what comes of a brief and the rules, in words, before anything is drawn. Into a folder of its own: never the author's episodes.
+## Not a gate, and it spends quota: a real game, played (next/tabletop.md): real agents plan the night, prepare it and play its opening stretches through the real tools, with real players asked, on a stand-in table so nothing is painted. To read what comes of a brief and the rules, in words, before anything is drawn. Into a folder of its own: never the author's episodes.
 ##
 ##   tests/run_boot_probe.sh tests/table_show/game_play_probe.gd 3000 --brief <file.md> --out <dir> [--scenes 2] [--seed 7] [--writer-effort high]
 ##
@@ -54,7 +54,7 @@ func _run() -> void:
 	want = ["plan", "draw", "prep", "say:intro"]
 	for k in range(1, scenes + 1):
 		want.append("say:%d" % k)
-	# ...A TABLE THAT STANDS IN: nothing is made from it in words
+	# ...a table that stands in: nothing is made from it in words
 	episode.write_json("table", {"things": []})
 	began = Time.get_ticks_msec()
 	producer.start(want)

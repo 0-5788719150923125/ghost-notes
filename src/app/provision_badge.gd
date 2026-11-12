@@ -1,13 +1,11 @@
 extends CanvasLayer
 
-## ProvisionBadge - a small notice at the top of the frame while ghost is installing or updating
-## its own dependencies, in every mode. Chrome furniture, because an install can start from
-## anywhere: the voice's environment from the Generative panel, FFmpeg from a clip opened on a
-## first run, an update at launch. Hidden the rest of the time.
+## ProvisionBadge - a small notice at the top of the frame while ghost installs or updates its own
+## dependencies, in every mode. Chrome furniture, because an install can start from anywhere (the voice's
+## environment, FFmpeg for a clip, an update at launch). Hidden the rest of the time.
 ##
-## It shows the first job running - what it is doing, how far along, for how long - and how many
-## more are queued behind it; the home screen's Environment panel has the full list. It never
-## takes a click: everything under it stays usable.
+## It shows the first running job (what it is doing, how far along, for how long) and how many are queued
+## behind it; the Environment panel has the full list. It never takes a click.
 
 const COL_TEXT := Color(0.78, 0.84, 0.94)
 const COL_BAR := Color(0.45, 0.66, 1.0)

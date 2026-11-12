@@ -1,16 +1,15 @@
 extends RefCounted
 class_name Openings
 
-## Openings - WHAT THE PICTURE DOES WHILE THE INTRO HOLDS, for a medium that draws an opening of its own
-## (its [constant Medium.REGISTRY] row `uses` "opening": the card table's, the desk's, the letter's -
-## [ShowOpening] says how each is drawn). A CHOICE, NOT A GIVEN (the user, 2026-10-28: "the blur, and the
-## title with the byline - these should be optional, but not a requirement"): the Intro & outro card picks
-## it ([BookendsCard]), the Director keeps it beside the holds ([member ShowFeed.opening]), and a note that
-## names none opens on the picture itself, sharp ([constant DEFAULT]).
+## Openings - what the picture does while the intro holds, for a medium that draws an opening of its own (its
+## [constant Medium.REGISTRY] row `uses` "opening": the card table's, the desk's, the letter's; [ShowOpening] says
+## how each is drawn). A choice, not a given: the Intro & outro card picks it ([BookendsCard]), the Director keeps it
+## beside the holds ([member ShowFeed.opening]), and a note that names none opens on the picture itself, sharp
+## ([constant DEFAULT]).
 ##
-## WHAT A TAKE OPENED WITH IS ITS OWN: the reading writes the opening it was rendered with into the take's
-## sidecar, beside its holds, and whatever asks of a take later - a thumbnail taken of its title screen -
-## reads it there ([method of_take]), never the Director's as it stands by then.
+## What a take opened with is its own: the reading writes the opening it was rendered with into the take's sidecar,
+## beside its holds, and whatever asks of a take later (a thumbnail of its title screen) reads it there
+## ([method of_take]), never the Director's as it stands by then.
 
 ## One row a way of opening: `blur` - the picture thrown far out of focus, the focus pulled as the show
 ## opens; `title` - the show's name and byline over it ([TitleCard]).
@@ -24,15 +23,12 @@ const ROWS := {
 }
 ## A note that names no opening: none.
 const DEFAULT := "none"
-## THE SCENE SEEN BEFORE ANYTHING BEGINS (the user, 2026-11-07: "The speaking starts IMMEDIATELY after the title screen disappears.
-## That doesn't give the viewer enough time to orient themselves, to look at the scene, before the voice is already talking ...
-## That should probably be a general principle across most modes, after the title/intro sequence"): the name gone and the focus
-## pulled this long (seconds) before the show opens - its first word, a deck's shuffle - inside the intro hold, which is still the
-## seconds before the voice. Never so early that the name has not stood [constant TITLE_LEAST] seconds into the intro: a short intro
-## keeps what it can of both. Every medium that draws an opening takes it ([ShowOpening]'s callers: the table, the desk, the
-## dispatch desk - which had its own 3 s, "the desk at rest, seen whole before anything moves"); a letter's page lies blank longer
-## ([constant LetterScript.BLANK_PAGE], the user's own verdict). One with none has the picture up as long before the first sound
-## ([method Director._bookend_fade]).
+## The scene seen before anything begins: the name gone and the focus pulled this long (seconds) before the show
+## opens (its first word, a deck's shuffle), inside the intro hold, which is still the seconds before the voice. Never
+## so early that the name has not stood [constant TITLE_LEAST] seconds into the intro: a short intro keeps what it can
+## of both. Every medium that draws an opening takes it ([ShowOpening]'s callers: the table, the desk, the dispatch
+## desk); a letter's page lies blank longer ([constant LetterScript.BLANK_PAGE]). One with none has the picture up as
+## long before the first sound ([method Director._bookend_fade]).
 const SETTLE := 3.0
 const TITLE_LEAST := 3.5
 
@@ -52,13 +48,13 @@ static func titled(key: String) -> bool:
 	return bool(Registry.field(ROWS, known(key), "title", false))
 
 
-## HOW LONG BEFORE THE SHOW OPENS AT [param opening] (seconds into it) the intro is over ([constant SETTLE]): as long as the name
-## has stood [constant TITLE_LEAST] first, else less.
+## How long before the show opens at [param opening] (seconds into it) the intro is over ([constant SETTLE]): as long
+## as the name has stood [constant TITLE_LEAST] first, else less.
 static func settle(opening: float) -> float:
 	return clampf(opening - TITLE_LEAST, 0.0, SETTLE)
 
 
-## WHERE THE TITLE SCREEN STANDS WHOLE, seconds into a take: the name fully up over the blur - after it
+## Where the title screen stands whole, seconds into a take: the name fully up over the blur - after it
 ## fades in (by 1.4 s, [method ShowOpening.title_alpha]) and before the focus pull, which starts
 ## [constant ShowOpening.FOCUS_PULL]`.x` before the intro is over, a [method settle] before the show opens
 ## at the end of the [param intro] hold.
@@ -66,8 +62,8 @@ static func title_moment(intro: float) -> float:
 	return clampf(intro * 0.4, 1.5, maxf(1.5, intro - settle(intro) - 1.6))
 
 
-## WHAT THE TAKE AT [param take] OPENED WITH, from its sidecar: `{opening, intro}` - the way it opened and
-## its intro hold - each [param fallback]'s where the sidecar does not say it (a song, no take).
+## What the take at [param take] opened with, from its sidecar: `{opening, intro}` - the way it opened and its intro
+## hold - each [param fallback]'s where the sidecar does not say it (a song, no take).
 static func of_take(take: String, fallback: Dictionary) -> Dictionary:
 	var out := {"opening": known(String(fallback.get("opening", DEFAULT))), "intro": float(fallback.get("intro", 0.0))}
 	var side := take.get_basename() + ".json"

@@ -2,30 +2,27 @@ extends CanvasLayer
 class_name StoryboardEditor
 
 ## StoryboardEditor - the nonlinear editor of a note's storyboard: a dock along the bottom of the
-## frame, under the show it edits. Opened from the [StoryboardCard] ("Timeline…").
+## frame, under the show it edits. Opened from the [StoryboardCard] ("Timeline...").
 ##
-## THREE VIEWS OF ONE TREE. The STRIP ([StoryboardStrip]) is the story: its entries along a
-## ruler, in the order and for the lengths the Director will walk them, the tail after the
-## sequence. The LANES ([TimelineLanes], Masking's controls) open under it for a stage entry: a block per window
-## span, trimmed and moved, and its moments as flags on a strip that scrubs the entry. The INSPECTOR, at the right, is whatever is picked -
-## an entry, one of its actors, one of its spans - as rows built from the fields' own tables
-## ([SchemaForm] over [constant Storyboard.ENTRY], [constant Cast.PARAMS], [constant Actions.ARGS]
-## ...), so nothing here lists what a scene, an actor or a verb can be told.
+## Three views of one tree. The strip ([StoryboardStrip]) shows the entries along a ruler, in the order
+## and for the lengths the Director will walk them, the tail after the sequence. The lanes
+## ([TimelineLanes], Masking's controls) open under it for a stage entry: a block per window span,
+## trimmed and moved, and its moments as flags on a strip that scrubs the entry. The inspector, at the
+## right, is whatever is picked - an entry, one of its actors, one of its spans - as rows built from the
+## fields' own tables ([SchemaForm] over [constant Storyboard.ENTRY], [constant Cast.PARAMS],
+## [constant Actions.ARGS] ...), so nothing here lists what a scene, an actor or a verb can be told.
 ##
-## EVERY EDIT IS A NEW TREE ([DataPath]): the editor never changes the storyboard it was handed,
-## it raises [signal edited] with the next one. So UNDO IS THE LIST OF TREES IT HAS SHOWN - nothing
-## records what an edit did or how to reverse it, and a kind of edit added later is undone the day
-## it is written. The card that owns the storyboard keeps it in the note and hands it to the show.
+## Every edit is a new tree ([DataPath]): the editor never changes the storyboard it was handed, it
+## raises [signal edited] with the next one. Undo is the list of trees it has shown. The card that owns
+## the storyboard keeps it in the note and hands it to the show.
 ##
-## WHAT IS WRITTEN IS WHAT IS SHOWN. The tree is the RAW one, `defs` and `use` in it: a map that
-## uses a def shows the def's values dimmed, as it shows any default, and a value changed there is
-## written into the map itself, over the def - the rule `use` has always had. SOURCE shows the
-## whole tree as YAML, and takes it back if it still loads ([method Storyboard.from_yaml]): every
-## key the spec has is reachable from the first day, whatever the rows above have learned to draw.
+## What is written is what is shown. The tree is the raw one, `defs` and `use` in it: a map that uses a
+## def shows the def's values dimmed, as it shows any default, and a value changed there is written into
+## the map itself, over the def. Source shows the whole tree as YAML and takes it back if it still loads
+## ([method Storyboard.from_yaml]), so every key the spec has is reachable.
 ##
-## A STORYBOARD NOBODY CAN CHANGE HERE IS STILL SHOWN ([member read_only]): one read from a file,
-## and the seeded show itself, written down as far ahead as asked ([method Director.forecast]) -
-## the same strip, grayed, so what "automatic" is going to play is a storyboard on the screen.
+## A storyboard nobody can change here is still shown ([member read_only]): one read from a file, and
+## the seeded show written down as far ahead as asked ([method Director.forecast]), grayed.
 
 ## The storyboard was edited: the new raw tree.
 signal edited(data: Dictionary)
@@ -146,9 +143,9 @@ func selected() -> int:
 	return _sel
 
 
-## EVERY ITEM, IN THE ORDER IT COMES, for the panel's Timeline card ([TimelineList], [constant TimelineDock.GROUP]): each entry, then
-## its verbs and flags - `{label, at (the song's seconds), kind, group, item}` - read from the storyboard as it stands
-## ([method Storyboard.timeline]).
+## Every item in the order it comes, for the panel's Timeline card ([TimelineList],
+## [constant TimelineDock.GROUP]): each entry, then its verbs and flags - `{label, at (the song's
+## seconds), kind, group, item}` - read from the storyboard as it stands ([method Storyboard.timeline]).
 func timeline_items() -> Array:
 	var out: Array = []
 	var groups: Array = Storyboard.timeline(data).get("groups", [])
@@ -166,7 +163,7 @@ func timeline_items() -> Array:
 	return out
 
 
-## ROW [param i] OF [method timeline_items] PRESSED: its entry picked and shown (the show goes there), a verb picked in the inspector.
+## Row [param i] of [method timeline_items] pressed: its entry picked and shown (the show goes there), a verb picked in the inspector.
 func pick_item(i: int) -> void:
 	var all := timeline_items()
 	if i < 0 or i >= all.size():
@@ -429,7 +426,7 @@ func add_span(verb: String, actor: String, at: float) -> void:
 	_edit(DataPath.insert(next, p, n, span))
 
 
-## A FLAG ([StageKeys]) for [param field] at [param at] nominal seconds of the entry picked: a ramp over a second, its value
+## A flag ([StageKeys]) for [param field] at [param at] nominal seconds of the entry picked: a ramp over a second, its value
 ## what the entry's camera sets now - a key that changes nothing until its `to` is written.
 func add_key(field: String, at: float, actor := "") -> void:
 	if _sel < 0 or not StageKeys.FIELDS.has(field) or ((field.begins_with("actor.") or field == "look") and actor.is_empty()):
@@ -496,10 +493,9 @@ func _span_as(span: int, window: bool) -> void:
 	_edit(DataPath.put(data, p, s))
 
 
-## The actor at [param index] of the stage entry at [param entry] renamed [param to]: the spans
-## that named it follow, so its timeline is not left aimed at nobody. Told which entry and which
-## actor, never asked of the selection - a name still being typed is committed after the pick has
-## moved on.
+## The actor at [param index] of the stage entry at [param entry] renamed [param to]: the spans that
+## named it follow. Told which entry and which actor, never asked of the selection - a name still being
+## typed is committed after the pick has moved on.
 func _rename_actor(entry: Array, index: int, to: String) -> void:
 	var cast: Variant = DataPath.at(data, entry + ["cast"])
 	var taken: Array = []
@@ -569,7 +565,7 @@ func _build() -> void:
 	left.add_child(_lanes_scroll)
 	_lanes = TimelineLanes.new()
 	_lanes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# ...ITS STRIP SCRUBBED: that moment of the entry, its nominal seconds scaled to the seconds it plays for
+	# ...its strip scrubbed: that moment of the entry, its nominal seconds scaled to the seconds it plays for
 	_lanes.scrubbed.connect(func(t: float) -> void:
 		if _sel >= 0 and _sel < _strip.rows.size():
 			scrubbed.emit(_sel, t / maxf(0.05, _lanes.nominal) * float(_strip.rows[_sel]["length"])))
@@ -578,7 +574,7 @@ func _build() -> void:
 		_sub_i = span
 		_refresh())
 	_lanes.retimed.connect(_retime)
-	# ...A KEY DRAGGED ([StageKeys]): its moment, written where it lives
+	# ...a key dragged ([StageKeys]): its moment, written where it lives
 	_lanes.key_retimed.connect(func(key: int, at: float) -> void:
 		var p := _path(_sel) + ["track", "keys", key, "at"]
 		if DataPath.has(data, p):
@@ -596,7 +592,7 @@ func _build() -> void:
 	_inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_inspector)
 
-	# THE SOURCE: the whole tree as YAML, in place of the rows above
+	# The source: the whole tree as YAML, in place of the rows above
 	_source_box = VBoxContainer.new()
 	_source_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_source_box.visible = false
@@ -681,8 +677,8 @@ func _tool(bar: Container, key: String, text: String, tip: String, action: Calla
 
 
 ## The dock's place: along the bottom, beside an open panel on the left and over the transport's
-## rail - and the room it takes is claimed, so the bottom-right row stands above it and the show
-## is fitted into what is left.
+## rail. The room it takes is claimed, so the bottom-right row stands above it and the show is fitted
+## into what is left.
 func _place() -> void:
 	if _root == null or not is_inside_tree():
 		return
@@ -708,8 +704,8 @@ func _process(_delta: float) -> void:
 		_place()
 
 
-## A CLICK ON THE STAGE PICKS WHAT IS THERE (next/editing.md step 7, "one thing picked, one inspector"): an actor of the entry
-## showing, picked in the inspector ([method pick_actor]). A click that names nothing goes on to whatever else wants it.
+## A click on the stage picks what is there (next/editing.md step 7): an actor of the entry showing,
+## picked in the inspector ([method pick_actor]). A click that names nothing goes on to whatever else wants it.
 func _unhandled_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT or _source_on or _root == null or not _root.is_visible_in_tree():
@@ -719,8 +715,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## THE ACTOR [param id] PICKED ON THE STAGE: the entry showing it picked (the one playing, else the one picked) and the actor
-## opened in the inspector - without starting the entry again. False when that entry has no such actor.
+## The actor [param id] picked on the stage: the entry showing it picked (the one playing, else the one picked) and the actor
+## opened in the inspector, without starting the entry again. False when that entry has no such actor.
 func pick_actor(id: String) -> bool:
 	var i := _play_entry if _play_entry >= 0 and _play_entry < _count() else _sel
 	if i < 0 or i >= _count():
@@ -783,11 +779,9 @@ func apply_source() -> void:
 
 ## Show the tree in all three views.
 ##
-## A REFRESH ASKED FOR WHILE ONE IS UNDER WAY WAITS FOR IT. Rebuilding the inspector frees its
-## rows, and a line of text being typed in one of them commits as it loses the tree - an edit,
-## made in the middle of the rebuild that removed it. Run at once, that edit's own refresh would
-## rebuild the inspector inside the loop still clearing it, and every row would be there twice.
-## The edit is kept (the tree is already the new one); the views are drawn once more after.
+## A refresh asked for while one is under way waits for it: rebuilding the inspector frees its rows, and
+## a line being typed in one commits as it loses the tree, so run at once that edit's refresh would
+## rebuild the inspector inside the loop still clearing it. The edit is kept; the views are drawn once more after.
 func _refresh() -> void:
 	if _strip == null:
 		return
@@ -922,8 +916,8 @@ func _show_inspector() -> void:
 		else:
 			_write(p + [key], value))
 	_timing_rows(p, entry)
-	# WHAT THE SCENE CAN BE TOLD ([method SceneRoster.fields_of]): its own settings, written into the
-	# entry's `set` - a setting left unset is the seed's
+	# What the scene can be told ([method SceneRoster.fields_of]): its own settings, written into the
+	# entry's `set` - a setting left unset is the seed's.
 	var own := SceneRoster.fields_of(String(entry.get("scene", "")))
 	if not own.is_empty():
 		_heading("Its settings")
@@ -1029,7 +1023,7 @@ func _span_rows(p: Array, ctx: Dictionary) -> void:
 	add.get_popup().index_pressed.connect(func(i: int) -> void:
 		add_span(String(add.get_popup().get_item_metadata(i)), "", maxf(0.0, _lanes.playhead)))
 	_inspector.add_child(add)
-	# ...AND A FLAG ([StageKeys]): a camera value that changes at the playhead, eased in, and holds - starting as the entry
+	# ...and a flag ([StageKeys]): a camera value that changes at the playhead, eased in, and holds - starting as the entry
 	# sets it, for its `to` to be written
 	var key := MenuButton.new()
 	key.text = "+ Key ▾"

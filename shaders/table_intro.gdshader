@@ -1,18 +1,15 @@
-// THE INTRO, THROWN FAR OUT OF FOCUS (the user, 2026-10-06: "an extremely strong blur, such that
-// nothing is really visible in the scene except for the colors"): the whole frame read back through
-// a wide Gaussian while the show's name is up over it. The lens's own depth of field never got there -
-// at its softest every thing on the table could still be named. Each pixel is read from the screen's
-// mips, which Godot builds level by level with a Gaussian, at the level whose blur matches - through
-// a B-spline, so the coarse level's texels never show as blocks - and between two levels, so the blur
-// can ease away smoothly as the focus is pulled.
+// The intro, thrown far out of focus: the whole frame read back through a wide Gaussian while the show's name is up
+// over it. Each pixel is read from the screen's mips (Godot builds them level by level with a Gaussian) at the level
+// whose blur matches, through a B-spline so the coarse level's texels never show as blocks, and between two levels so
+// the blur eases away smoothly as the focus is pulled.
 shader_type canvas_item;
 render_mode unshaded;
 
 uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap, repeat_disable;
 // the blur's standard deviation, as a share of the frame's height; 0 leaves the frame as it is
 uniform float sigma = 0.0;
-// the blur one mip level carries, read through the B-spline, in that level's texels - measured off
-// an edge (tests/table/intro_blur_check.gd): at 2.07 the blur drawn is the blur asked for, at 720 and 1080
+// the blur one mip level carries, read through the B-spline, in that level's texels; measured off an edge
+// (tests/table/intro_blur_check.gd): at 2.07 the blur drawn is the blur asked for, at 720 and 1080
 uniform float level_sigma = 2.07;
 
 vec3 bspline(vec2 uv, int level) {

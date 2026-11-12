@@ -7,23 +7,20 @@ extends Node
 ## A boot probe, not a `--script` gate: [ReadingStream] names the Spectrum autoload, which a `--script`
 ## run compiles without.
 ##
-## WHAT IT HOLDS (2026-10-25, the user, reading a chapter in a Kokoro voice: "playback kept freezing").
-## The window kept LOOKAHEAD_SECONDS of audio ahead, sized for Piper, which makes a take four to eleven
-## times faster than it is heard; a host making one barely faster than it is heard ran dry on a long
-## sentence. Now the host's cost is measured and the window keeps DEPTH_SAFETY times what the next
-## chunks will take to make:
+## Holds: the window keeps DEPTH_SAFETY times what the next chunks will take to make, from the host's measured
+## cost (a fixed LOOKAHEAD_SECONDS, sized for Piper, which makes a take four to eleven times faster than it is
+## heard, runs dry on a host barely faster than real time):
 ##
-## - UNMEASURED, OR FAST, IT IS THE OLD WINDOW: no cost known, or Piper's (a quarter of a second per
-##   second), the depth is LOOKAHEAD_SECONDS exactly - a fast host reads as it always did;
-## - SLOW, IT IS DEEPER, AND BOUNDED: a host at 0.7 s a second over two long chunks keeps more, and no
-##   cost keeps more than DEPTH_MOST;
-## - THE COST RISES AT ONCE AND FALLS SLOWLY;
-## - THE CONTROL: a replay of a host at 1.5x real time (Kokoro, measured on a busy machine) over uneven
-##   sentences, through the window as it was (9 s, a 2.5 s lead) and as it is (the measured depth, the
-##   lead the next chunk needs) - the old one runs dry, the new one does not; and at Piper's pace (4x)
-##   both start at the same moment and neither runs dry. The replay is the stream's own policy (LOOKAHEAD
-##   in flight, the host making one at a time, its [method ReadingStream.depth] and
-##   [method ReadingStream.lead_for]), in simulated seconds: it times nothing.
+## - unmeasured, or fast, it is the old window: no cost known, or Piper's (a quarter of a second per second), the
+##   depth is LOOKAHEAD_SECONDS exactly;
+## - slow, it is deeper, and bounded: a host at 0.7 s a second over two long chunks keeps more, and no cost keeps
+##   more than DEPTH_MOST;
+## - the cost rises at once and falls slowly;
+## - control: a replay of a host at 1.5x real time over uneven sentences, through the fixed window (9 s, a 2.5 s
+##   lead) and the measured one (the measured depth, the lead the next chunk needs): the fixed one runs dry, the
+##   measured does not; at Piper's pace (4x) both start at the same moment and neither runs dry. The replay is
+##   the stream's own policy (LOOKAHEAD in flight, the host making one at a time, [method ReadingStream.depth]
+##   and [method ReadingStream.lead_for]) in simulated seconds: it times nothing.
 
 var _fail := 0
 
@@ -51,7 +48,7 @@ func _ready() -> void:
 	_ok(is_equal_approx(ReadingStream.cost_after(0.3, 0.9), 0.6), "a cost that rises is believed at once (halfway)")
 	_ok(is_equal_approx(ReadingStream.cost_after(0.9, 0.3), 0.78), "one that falls is let go of slowly (a fifth)")
 
-	# THE CONTROL: uneven sentences, a host at 1.5x real time
+	# the control: uneven sentences, a host at 1.5x real time
 	var lens := PackedFloat32Array([3.0, 12.0, 4.0, 14.0, 2.0, 11.0, 5.0, 13.0, 3.0, 9.0, 15.0, 4.0, 10.0, 12.0, 3.0])
 	var cost := 1.0 / 1.5
 	var was := _replay(lens, cost, false)

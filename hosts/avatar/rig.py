@@ -7,26 +7,24 @@
 
 MediaPipe's face mesh is the surface: its 478 points are tracked in every frame (frames.py), and its
 triangles come from its own tessellation. From the frames this learns:
-- THEIR NEUTRAL FACE (`canon`): every frame's points brought onto one another by a similarity (scale,
+- their neutral face (`canon`): every frame's points brought onto one another by a similarity (scale,
   rotation, shift) fitted on the points that move least with expression, then averaged;
-- EACH FRAME'S HEAD (`scale`, `rot`, `shift`): that similarity, from the neutral face into the frame's pixels;
-- HOW THEIR FACE MOVES (`basis`): the neutral face's offset at each point as a linear function of MediaPipe's
+- each frame's head (`scale`, `rot`, `shift`): that similarity, from the neutral face into the frame's pixels;
+- how their face moves (`basis`): the neutral face's offset at each point as a linear function of MediaPipe's
   52 expression scores, by ridge regression over every frame - what drives the head at playback, where a
-  blink, a glance and their face's own motion are those scores - A PART AT A TIME (`by_parts`, parts.py: each
-  point moved by the scores of the parts that reach it alone; fitted over every score, a glance had moved the
-  cheeks and the jaw);
-- THE SURFACE (`tris`): MediaPipe's triangles, with the mouth's and the eyes' holes filled - the mouth by a
+  blink, a glance and their face's own motion are those scores - a part at a time (`by_parts`, parts.py: each
+  point moved by the scores of the parts that reach it alone);
+- the surface (`tris`): MediaPipe's triangles, with the mouth's and the eyes' holes filled - the mouth by a
   fan to a point behind the lips (where the teeth and the dark of the mouth are learned), each eye by a fan
   to its iris centre (so the eye's own splats follow the gaze).
 
-THE BODY'S BONES (`BODY`, the 2D rig's bones less the head - actor.py's `BONES`): from each frame's pose
+The body's bones (`BODY`, the 2D rig's bones less the head - actor.py's `BONES`): from each frame's pose
 (MediaPipe's 33 points), a frame of reference per bone - the torso at the neck, its axes the shoulders' line
 and the picture's down; each shoulder at its joint, the torso's axes; each upper arm, forearm and hand along
 its bone from its joint - with a unit (a quarter of the shoulders' width, half a limb's length) and how
-surely it is seen (its ends' least visibility). THE BONES LIE IN ONE PLANE, BODY_BEHIND shoulder widths
-behind the face's nose tip: MediaPipe's pose guesses at depth (on his frames its shoulders stood 240 px
-apart in it), the camera is fixed and the body turns little, so its places across the picture are taken and
-its depth is not - a splat's own depth on its bone is learned.
+surely it is seen (its ends' least visibility). The bones lie in one plane, BODY_BEHIND shoulder widths
+behind the face's nose tip: MediaPipe's pose guesses at depth, the camera is fixed and the body turns little,
+so its places across the picture are taken and its depth is not - a splat's own depth on its bone is learned.
 
 Writes <out>: canon [V, 3], basis [52, V, 3], tris [T, 3], derived [V - 478, 478] with derived_shift
 [V - 478, 3] (the points that are not MediaPipe's: a mix of its points plus a fixed offset), rigid [K]
@@ -34,7 +32,7 @@ Writes <out>: canon [V, 3], basis [52, V, 3], tris [T, 3], derived [V - 478, 478
 rot [N, 3, 3], shift [N, 3], aligned [N, 478, 3] (its points on the neutral face's frame), blend [N, 52],
 bone_origin [N, B, 3], bone_axes [N, B, 3, 3] (columns), bone_unit [N, B], bone_seen [N, B].
 
-ONE FACE FOR EVERY VIDEO (next/likeness.md, "One head"): given several folders (head_frames.py's, one a video),
+One face for every video (next/likeness.md, "One head"): given several folders (head_frames.py's, one a video),
 their frames are posed and learned from together - one neutral face, one basis - and the rig says which folder
 each frame is from (`video` [N], `folders`). Given --shared (the actor's rig), nothing is learned: the folder's
 frames and stills are posed against the actor's neutral face (a set's own, played on the head learned from all),
@@ -47,10 +45,10 @@ stand in the still, which the playing ones start from),
 eye's score when it is closed: the top of their own blinks) and `looks` (each glance of the plan's - the 2D
 library's `GLANCES`, the picture's left and right - as the 52 scores' move from their median when they look
 that way most: the median of the frames whose two scores for it are in their top LOOK_SHARE, less the
-median of all; the eyes' and brows' scores alone, so the lids and brows that go with it come too, and the
-talking that went on while they looked does not) - and, given --visemes (the actor's visemes.json), `mouths`: each
-sound's mouth as their face made it (`mouths_of`: the points' and scores' move from their rest, from every frame of
-the actor's) and how far their lips part (`gap`, its 1st and 99th percentiles).
+median of all; the eyes' and brows' scores alone, so the talking that went on while they looked does not
+come too) - and, given --visemes (the actor's visemes.json), `mouths`: each sound's mouth as their face made
+it (`mouths_of`: the points' and scores' move from their rest, from every frame of the actor's) and how far
+their lips part (`gap`, its 1st and 99th percentiles).
 """
 
 from __future__ import annotations
@@ -74,7 +72,7 @@ EYE_LEFT = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144,
 EYE_RIGHT = [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]
 IRIS_LEFT = 468
 IRIS_RIGHT = 473
-# EACH SOUND'S MOUTH is the median of the frames whose mouth's scores are nearest the sound's: this share of them,
+# Each sound's mouth is the median of the frames whose mouth's scores are nearest the sound's: this share of them,
 # at least MOUTH_LEAST.
 MOUTH_SHARE = 0.01
 MOUTH_LEAST = 30
@@ -259,16 +257,15 @@ def by_parts(X, Y, canon):
 
 
 def mouths_of(aligned, blend, visemes: dict, canon, dw) -> dict:
-    """EACH SOUND'S MOUTH AS THEIR FACE MADE IT (2026-10-25, the user: "The mouth shape barely moves"): played from
-    each sound's scores through the basis, his mouth opened 0.044 to 0.062 of his face's height while it spoke - his
-    own lips, tracked, 0.013 to 0.11 - for a sound's scores were set one by one (the jaw at its place in his range,
-    the lips at their medians, where an open jaw drops the lower lip with it) and the beard leaves MediaPipe's scores
-    short of what the lips do. The head is learned on the tracked points, so the mouth is played from them: for each
-    sound of [param visemes] (visemes.json), the frames ([param aligned] [N, 478, 3] on the neutral face, [param blend]
-    [N, 52]) whose mouth's scores are nearest the sound's (each score over its spread; MOUTH_SHARE of them, at least
-    MOUTH_LEAST), their points' median less the rest's - where the mouth reaches (parts.py), the points the face adds
-    after them made from them ([param dw]) - and their mouth's scores' median less the rest's. With the inner lips' parting
-    over the face's height across every frame, its 1st and 99th percentiles: how far a mouth may go."""
+    """Each sound's mouth as their face made it: played from each sound's scores through the basis, a mouth
+    opens far less than the tracked lips do (a sound's scores are set one by one, and a beard leaves MediaPipe's
+    scores short of what the lips do). The head is learned on the tracked points, so the mouth is played from
+    them: for each sound of [param visemes] (visemes.json), the frames ([param aligned] [N, 478, 3] on the
+    neutral face, [param blend] [N, 52]) whose mouth's scores are nearest the sound's (each score over its
+    spread; MOUTH_SHARE of them, at least MOUTH_LEAST), their points' median less the rest's - where the mouth
+    reaches (parts.py), the points the face adds after them made from them ([param dw]) - and their mouth's
+    scores' median less the rest's. With the inner lips' parting over the face's height across every frame, its
+    1st and 99th percentiles: how far a mouth may go."""
     import numpy as np
     names = visemes.get("names", [])
     cols = [actor.BLEND_NAMES.index(n) for n in names]
@@ -315,13 +312,13 @@ def main() -> int:
         c = [int(v) for v in json.load(open(os.path.join(d, "spec.json")))["crop"]]
         sizes.append((c[2], c[3]) if len(c) == 4 else (c[2], c[2]))
     pts = f["points"][:, :478].astype(np.float64)
-    # EVERY FRAME WITH A FACE is posed (a hand at the mouth is theirs too, and the whole of them is learned);
+    # Every frame with a face is posed (a hand at the mouth is theirs too, and the whole of them is learned);
     # the basis is fitted on those with no hand at the mouth, whose scores a hand does not spoil
     keep = f["found"].astype(bool)
     idx = np.nonzero(keep)[0]
     shared = np.load(a.shared) if a.shared else None
     if shared is not None:
-        # POSED AGAINST THE ACTOR'S FACE: its neutral face, basis, surface and rigid points, as they are
+        # Posed against the actor's face: its neutral face, basis, surface and rigid points, as they are
         canon_all, basis_all = shared["canon"].astype(np.float64), shared["basis"].astype(np.float64)
         canon, rigid = canon_all[:478], shared["rigid"].astype(np.int64)
         tris, dw, dshift = [tuple(t) for t in shared["tris"]], shared["derived"], shared["derived_shift"]

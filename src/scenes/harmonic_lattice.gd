@@ -2,25 +2,21 @@ extends GhostScene
 
 ## Harmonic lattice - a grid of cells that breathe with the spectrum.
 ##
-## A rows x cols lattice. Each cell samples the spectrum by its column (low bands
-## left, high right) and a traveling wave whose phase is pushed by the bass, so
-## energy visibly sweeps across the grid. Cells scale, spin, and shift hue. The
-## field is overscanned so the view's tilt and drift never expose the edges.
+## A rows x cols lattice. Each cell samples the spectrum by its column (low bands left, high right) and a
+## traveling wave whose phase is pushed by the bass, so energy sweeps across the grid. Cells scale, spin and
+## shift hue. The field is overscanned so the view's tilt and drift never expose the edges.
 
 const OVER := 1.35   # draw this much beyond the screen, for view motion headroom
 
-# How finely the field is divided. This is the one choice that decides whether the
-# lattice reads as a few big panels or a fine mesh, and every lattice used to be
-# built inside the same middling band, so they all read alike.
+# How finely the field is divided: whether the lattice reads as a few big panels or a fine mesh.
 const DENSITIES := {
 	"coarse": {"cols": [4, 8], "rows": [3, 6], "fill": [0.60, 0.95]},
 	"medium": {"cols": [8, 18], "rows": [5, 12], "fill": [0.55, 0.85]},
 	"fine": {"cols": [18, 28], "rows": [10, 17], "fill": [0.45, 0.80]},
 }
 
-# The cell itself. `turn` is the polygon's resting rotation in whole turns - an
-# eighth stands a 4-gon on its edge (the old "square"), none leaves it on its point
-# (the old "diamond"). Those two were the entire vocabulary before.
+# The cell itself. `turn` is the polygon's resting rotation in whole turns: an eighth stands a 4-gon on its
+# edge (a square), none leaves it on its point (a diamond).
 const FORMS := {
 	"square": {"sides": 4, "turn": 0.125},
 	"diamond": {"sides": 4, "turn": 0.0},
@@ -38,8 +34,8 @@ var _ch := Vector2.ZERO            # live tonal color (hue, strength) from the h
 var _sig := PackedFloat32Array()   # the 12 chroma channels + coarse shape (continuous)
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"density": {"label": "Density", "type": "choice", "options": "DENSITIES", "default": null,
 		"blurb": "How finely the field is divided: a few big coarse panels, a medium grid, or a fine mesh."},
@@ -60,7 +56,7 @@ const FIELDS := {
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
-	# A lattice is abstract geometry - no mood is wrong for it, so take the whole set.
+	# A lattice is abstract geometry, so no mood is wrong for it.
 	var sch := Scheme.pick(rng)
 	var dname := String(choice("density", rng))
 	var den: Dictionary = DENSITIES[dname]
@@ -74,8 +70,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var sparsity := 0.0 if rng.randf() < 0.4 else rng.randf_range(0.35, 0.7)
 	_act = Activation.new(cols * rows, rng, sparsity)
 	_light = Lighting.new(rng)
-	# The gradients across the field travel from the scheme's base hue toward its
-	# accent rather than an arbitrary distance, so the whole grid stays one family.
+	# The gradients across the field travel from the scheme's base hue toward its accent, so the grid stays one family.
 	var to_accent := fposmod(sch.accent - sch.hue + 0.5, 1.0) - 0.5
 	return {
 		"cols": cols,
@@ -150,20 +145,16 @@ func _draw() -> void:
 			var wave := 0.5 + 0.5 * sin(wave_freq * (t + float(r) / float(rows)) * TAU - _phase)
 			var e: float = _f.sample(t) * 0.7 + wave * 0.3 * _f.energy
 			e = clampf(e + _f.beat * 0.2, 0.0, 1.0)
-			# Each COLUMN maps to a pitch class: that chroma channel lights the column, so the
-			# grid reads the music's harmonics tonally (not just raw band energy left-to-right).
+			# Each column maps to a pitch class: that chroma channel lights the column, so the grid reads harmonics tonally.
 			var pc := int(t * 12.0) % 12
 			if _sig.size() > pc:
 				e = clampf(e + 0.85 * _sig[pc], 0.0, 1.0)
 			# Rooted cells hold a small base size; activated cells swell and decay.
 			e *= 0.2 + 0.8 * _act.level(idx)
-			# Size stays mostly stable; color and brightness carry the audio - a
-			# moving hotspot lights the cells it sweeps, and the beat glow lifts all.
+			# Size stays mostly stable; color and brightness carry the audio (a moving hotspot lights the cells it sweeps).
 			var s := max_size * (0.55 + 0.30 * e)
 			var lit := _light.at(pos / u)
-			# A flowing hue *map*: a diagonal gradient across the field (hue_flow x +
-			# hue_flow_y y) plus a traveling wave that the audio drives forward (_hue_t),
-			# so color is never static - it gradients across the grid and drifts over time.
+			# A flowing hue map: a diagonal gradient across the field plus a traveling wave the audio drives (_hue_t).
 			var h := fposmod(hue + hue_flow * t + hue_flow_y * rt
 				+ hue_wave * sin((t + rt) * TAU - _hue_t * TAU) + 0.06 * _hue_t
 				+ 0.12 * lit + _light.hue_shift(), 1.0)
@@ -176,15 +167,13 @@ func _draw() -> void:
 
 
 func _draw_cell(pos: Vector2, s: float, rot: float, col: Color, sides: int, turn: float, aspect: float) -> void:
-	# Size every form by its INRADIUS, so a cell spans the same width across its flats
-	# whatever it has for corners (a 4-gon comes out exactly the old square). Capped,
-	# because a triangle's true circumradius would spill into its neighbors.
+	# Size every form by its inradius, so a cell spans the same width across its flats whatever its
+	# corners. Capped, because a triangle's true circumradius would spill into its neighbors.
 	var r := s * 0.5 * minf(1.3, 1.0 / cos(PI / float(sides)))
 	var base_rot := rot * PI + turn * TAU
 	var out := PackedVector2Array()
 	for i in sides:
-		# The cell as a regular n-gon, stretched on one axis - a 4-gon at an eighth
-		# turn is the original square, so the old look is still in the set.
+		# The cell as a regular n-gon, stretched on one axis.
 		var a := TAU * float(i) / float(sides)
 		out.append(pos + Vector2(cos(a) * r * aspect, sin(a) * r / aspect).rotated(base_rot))
 	fill_aa(out, col)

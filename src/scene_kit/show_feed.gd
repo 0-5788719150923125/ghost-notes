@@ -3,23 +3,19 @@ class_name ShowFeed
 
 ## ShowFeed - what the show hands the parts it mounts.
 ##
-## A scene and a medium are played by a show, and there are a few things of the show each of them
-## reads: the seed its rolls derive from, the dials a person set for this note (the camera, the
-## handwriting, the holds at each end), values that move as it plays (the fade at the end, the
-## hold left on the scene that is up, the fishing game's pull), and a way to ask for one more
-## scene. Those few things are this class. A part reads them from its `feed` and never names who
-## fills them in - which is what lets `scene_kit/`, `scenes/` and `media/` sit BELOW the player
-## in `src/` (docs/structure.md), and what would let another player (a preview scrubbed by a
-## timeline, a show whose entries arrive while it plays) drive the same parts.
+## A scene and a medium are played by a show, and a few things of the show each of them reads: the seed its rolls
+## derive from, the dials a person set for this note (the camera, the handwriting, the holds at each end), values
+## that move as it plays (the fade at the end, the hold left on the scene that is up, the fishing game's pull), and a
+## way to ask for one more scene. A part reads them from its `feed` and never names who fills them in, which lets
+## `scene_kit/`, `scenes/` and `media/` sit below the player in `src/` (docs/structure.md) and lets another player (a
+## preview scrubbed by a timeline, a show whose entries arrive while it plays) drive the same parts.
 ##
-## THE DIRECTOR IS ONE: `director.gd` extends this, so the fields here are its own, written by
-## its own setters and persisted by it, and it hands itself to what it mounts ([method
-## Director.attach], `_make_scene`). Nothing is copied from one object to another, so nothing
-## here can be a frame stale.
+## The Director is one: `director.gd` extends this, so the fields here are its own, written by its own setters and
+## persisted by it, and it hands itself to what it mounts ([method Director.attach], `_make_scene`). Nothing is
+## copied from one object to another, so nothing is a frame stale.
 ##
-## HANDED, WITH A DEFAULT. Whoever mounts a part sets its `feed`. A part nobody handed one - a
-## gate that builds a medium by hand, a placeholder scene - starts on the show that is up
-## ([method playing]), which is what reading the autoload by name used to give it.
+## Handed, with a default: whoever mounts a part sets its `feed`; a part nobody handed one (a gate that builds a
+## medium by hand, a placeholder scene) starts on the show that is up ([method playing]).
 
 static var _playing: ShowFeed
 
@@ -42,26 +38,21 @@ func _notification(what: int) -> void:
 
 # --- the note's dials ---------------------------------------------------------------------------
 
-## Bounds on the camera severity. 0 really is "as gentle as it goes" - a camera that drifts
-## and never cuts - and 2 is the far end rather than a doubling of anything in particular.
+## Bounds on the camera severity. 0 is as gentle as it goes (a camera that drifts and never cuts); 2 is the far end.
 const CAMERA_MIN := 0.0
 const CAMERA_MAX := 2.0
-## HOW SEVERE THE CAMERA IS, for a medium that flies one (the comic, the book, the tablet). 0 is a slow,
-## gentle drift that barely turns; 1 is the tuned default; the top of the range is fast,
-## restless and cinematic, with real jump cuts in it.
+## How severe the camera is, for a medium that flies one (the comic, the book, the tablet). 0 is a slow, gentle drift
+## that barely turns; 1 is the tuned default; the top of the range is fast, restless and cinematic, with real jump cuts.
 ##
-## ONE KNOB OVER A WHOLE BEHAVIOR, not a new setting per symptom. It scales the angular
-## excursion a shot may take, how quickly that excursion is spent, how long a move lasts, how
-## much of the bag is discontinuous, how deep a push goes and how fast the sheet drifts - so
-## it moves the whole camera along one axis from "slow" to "chaotic" instead of asking anyone
-## to balance six numbers. The full-frame medium has no camera and ignores it.
+## One knob over a whole behavior: it scales the angular excursion a shot may take, how quickly that excursion is
+## spent, how long a move lasts, how much of the bag is discontinuous, how deep a push goes and how fast the sheet
+## drifts. The full-frame medium has no camera and ignores it.
 ##
 ## Set through [method Director.set_camera]; persisted by [Settings] as `[director] camera`.
 var camera: float = 1.0
-## THE NOTEBOOK'S HANDWRITING - a key of the notebook's hands, or "random" to draw
-## one per session from the seed. A setting, not only a draw, because the seed comes from the
-## audio's fingerprint: any change to the audio chain changed the hand (Kalam -> Caveat).
-## Set through [method Director.set_hand]; persisted as `[director] hand`.
+## The notebook's handwriting: a key of the notebook's hands, or "random" to draw one per session from the seed (a
+## setting, not only a draw, because the seed comes from the audio's fingerprint). Set through
+## [method Director.set_hand]; persisted as `[director] hand`.
 var hand := "kalam"
 
 # --- the holds at each end ------------------------------------------------------------------------
@@ -71,24 +62,22 @@ const INTRO_DEFAULT := 5.0
 const OUTRO_DEFAULT := 6.0
 var intro_hold := INTRO_DEFAULT
 var outro_hold := OUTRO_DEFAULT
-## WHAT THE PICTURE DOES THROUGH THE INTRO, for a medium that draws an opening: a key of
-## [constant Openings.ROWS] - none, the picture out of focus, or the show's name over it. Set through
-## [method Director.set_opening]; persisted as `[director] opening`.
+## What the picture does through the intro, for a medium that draws an opening: a key of [constant Openings.ROWS]
+## (none, the picture out of focus, or the show's name over it). Set through [method Director.set_opening];
+## persisted as `[director] opening`.
 var opening := Openings.DEFAULT
-## A LIVE reading's own fade-out, 0..1 - the outro mark's, driven by the Generative panel from
-## the sample being heard. 1 always in a render, where the take's own length and bookend do it.
+## A live reading's own fade-out, 0..1 (the outro mark's), driven by the Generative panel from the sample being
+## heard. 1 always in a render, where the take's own length and bookend do it.
 var live_fade := 1.0
 
 # --- what moves as it plays -----------------------------------------------------------------------
 
-## The METAMORPHOSIS bus: while a catch is being reeled in, its influence
-## contorts the current scene - every GhostScene reads this in tick() and
-## stretches its motion tempo, zoom-breathing, and pan-sweeps by it. 0 = no
-## contortion; big catches push past 1.
+## The metamorphosis bus: while a catch is being reeled in, its influence contorts the current scene (every GhostScene
+## reads this in tick() and stretches its motion tempo, zoom-breathing and pan-sweeps by it). 0 = no contortion; big
+## catches push past 1.
 var aura := 0.0
-## Below this smoothed audio level the track is treated as SILENT and scenes never change -
-## forcing a cut with nothing playing (e.g. a song's silent tail) reads as broken. Kept well
-## under lull_threshold so a musical lull still cuts but true silence holds the scene.
+## Below this smoothed audio level the track is treated as silent and scenes never change (forcing a cut with nothing
+## playing reads as broken). Kept well under lull_threshold so a musical lull still cuts but true silence holds the scene.
 @export var silence_floor: float = 0.03
 
 
@@ -100,13 +89,12 @@ func session_seed() -> int:
 
 
 # --- the show's time ------------------------------------------------------------------------------
-# A PART IS A FUNCTION OF THE TIME IT IS HANDED. A medium, the table and the scenes read the
-# show's clock here, never off the audio engine: a show whose time is not a song's - a preview
-# scrubbed by a timeline, a live show conducted by what its agents write - drives them by
-# answering these, and they cannot tell (next/structure.md, step 11).
+# A part is a function of the time it is handed: a medium, the table and the scenes read the show's clock here, never
+# off the audio engine, so a show whose time is not a song's (a preview scrubbed by a timeline, a live show conducted
+# by what its agents write) drives them by answering these (next/structure.md, step 11).
 
-## WHERE THE SHOW IS, in seconds: the moment a part draws itself at - the whole timeline, the
-## bookend's lead-in included, and below 0 before it starts. [Director]: the session clock.
+## Where the show is, in seconds: the moment a part draws itself at - the whole timeline, the bookend's lead-in
+## included, and below 0 before it starts. [Director]: the session clock.
 func show_time() -> float:
 	return 0.0
 
@@ -129,28 +117,28 @@ func tail() -> float:
 	return outro_hold
 
 
-## HOLD THE SHOW'S TIME for [param who] while [param on]: something a part draws is not ready for the moment it is at (a
-## table's physics, baked on a thread of its own, behind a live reading) - and it would rather wait than draw what an export
-## never would. A feed with no clock to hold ignores it; [Director]: the session clock waits, unpaused.
+## Hold the show's time for [param who] while [param on]: something a part draws is not ready for the moment it is at
+## (a table's physics, baked on a thread of its own, behind a live reading), and it would rather wait than draw what
+## an export never would. A feed with no clock to hold ignores it; [Director]: the session clock waits, unpaused.
 func wait_for(_who: String, _on: bool) -> void:
 	pass
 
 
-## WHETHER THE SHOW IS PAUSED by whoever watches it - not waiting ([method wait_for]), not stopped: a part that makes what it draws
-## ahead of time (a table's physics) makes more of it while nobody is watching, so what was made plays smoothly. A feed with no
+## Whether the show is paused by whoever watches it (not waiting, [method wait_for], and not stopped): a part that
+## makes what it draws ahead of time (a table's physics) makes more of it while nobody is watching. A feed with no
 ## clock to pause never is.
 func paused() -> bool:
 	return false
 
 
-## HOW FAR AHEAD [param who] IS READY: [param seconds] past the moment it is at, what it draws is made (a table's physics, baked) -
-## so the transport can show what is buffered, as a video player does. A feed with no transport ignores it.
+## How far ahead [param who] is ready: [param seconds] past the moment it is at, what it draws is made (a table's
+## physics, baked), so the transport can show what is buffered. A feed with no transport ignores it.
 func ready_ahead(_who: String, _seconds: float) -> void:
 	pass
 
 
 
-## THE LOOK TURNED BY A PART OF THE SHOW this moment (next/editing.md step 10: a stage's flags on a filter's dial): [param dials]
+## The look turned by a part of the show this moment (next/editing.md step 10: a stage's flags on a filter's dial): [param dials]
 ## `{filter: amount}` laid over the Look as it is set, {} to let go. [param who] names the part, so two never fight.
 func turn_look(_who: String, _dials: Dictionary) -> void:
 	pass

@@ -1,22 +1,20 @@
 extends RefCounted
 class_name LetterSketches
 
-## LetterSketches - a letter's sketches, made: each `<!-- sketch: ... -->` drawn as SVG by an agent from
-## its words ([constant RULES]), then laid out by ghost's own TeX and figure reader
-## (hosts/math/typeset.py, the Proof pad's ink step) into what the pen draws ([LetterMedium]).
+## LetterSketches - a letter's sketches, made: each `<!-- sketch: ... -->` drawn as SVG by an agent from its words ([constant
+## RULES]), then laid out by ghost's own TeX and figure reader (hosts/math/typeset.py, the Proof pad's ink step) into what the pen
+## draws ([LetterMedium]).
 ##
-## KEPT IN THE NOTE'S OWN FOLDER (`user://letters/<note>-<hash>/`, as [NoteUpload] keeps a note's): a
-## sketch is `sketches/<key>.json` - its SVG, the words it was drawn from and the fingerprint of what
-## it was asked (its description and the parts the letter points at) - and the ink is `ink.json`, TeX's
-## answer, with the fingerprint of the drawings it laid out. A sketch whose words changed is STALE, and
-## used as it is until it is drawn again; the ink is laid out again whenever the drawings are not the
+## Kept in the note's own folder (`user://letters/<note>-<hash>/`, as [NoteUpload] keeps a note's): a sketch is
+## `sketches/<key>.json` (its SVG, the words it was drawn from and the fingerprint of what it was asked: its description and the
+## parts the letter points at) and the ink is `ink.json` (TeX's answer, with the fingerprint of the drawings it laid out). A sketch
+## whose words changed is stale and used as it is until drawn again; the ink is laid out again whenever the drawings are not the
 ## ones it was made from.
 ##
-## A DRAWING IS CHECKED AS IT LANDS: an answer with no `<svg>` in it, or one missing an id a point needs,
-## is sent back once with what it lacks; one the ink step cannot read is sent back once with why, and then
-## stands as it is - the pen leaves a drawing TeX refused out, and the letter plays without it.
+## A drawing is checked as it lands: an answer with no `<svg>`, or one missing an id a point needs, is sent back once with what it
+## lacks; one the ink step cannot read is sent back once with why, and then stands as it is (the pen leaves a refused drawing out).
 ##
-## NOTHING RUNS ON ITS OWN: [method generate] and [method redo] are the card's buttons.
+## Nothing runs on its own: [method generate] and [method redo] are the card's buttons.
 
 const RULES := "letter/sketcher"
 ## The drawing's width (figure.py's column, which spans the pad's) and its tallest height, in its units.
@@ -42,8 +40,8 @@ var _ink_error := ""
 var _kept := {}              # file -> {mt, data}
 
 
-## THE NOTE'S FOLDER, absolute, for the note at [param note]: named after its file and told apart from
-## another of that name by its path ([method NoteUpload.folder_of]'s rule). "" for a note with no file.
+## The note's folder, absolute, for the note at [param note]: named after its file and told apart from another of that name by its
+## path ([method NoteUpload.folder_of]'s rule). "" for a note with no file.
 static func folder_of(note: String) -> String:
 	if note.is_empty():
 		return ""
@@ -52,11 +50,9 @@ static func folder_of(note: String) -> String:
 	return ProjectSettings.globalize_path(root.path_join("%s-%s" % [base, abs.md5_text().substr(0, 8)]))
 
 
-## A NOTE MOVED TAKES ITS SKETCHES WITH IT ([signal DocSource.moved]; 2026-10-29, a chapter saved under another name
-## had lost its drawings - kept still, in the folder of the name it had: "that workflow should definitely rename the
-## underlying generated files path as well"): the folder of the note at [param from] renamed to the one at
-## [param to]'s - never over one already there, and the author's only where the caller [param may] write them (a
-## gate's own root always). "" once moved or with nothing to move, else why not.
+## A note moved takes its sketches with it ([signal DocSource.moved]): the folder of the note at [param from] renamed to the one at
+## [param to]'s, never over one already there, and the author's only where the caller [param may] write them (a gate's own root
+## always). "" once moved or with nothing to move, else why not.
 static func carry(from: String, to: String, may: bool) -> String:
 	var was := folder_of(from)
 	var now := folder_of(to)
@@ -97,8 +93,8 @@ func _read(path: String) -> Dictionary:
 	return c["data"]
 
 
-## "ready", "stale" (drawn from words since changed - still used), "running", "queued", "failed" or
-## "missing", for [param sketch] (a [method LetterScript.sketches] row).
+## "ready", "stale" (drawn from words since changed, still used), "running", "queued", "failed" or "missing", for [param sketch] (a
+## [method LetterScript.sketches] row).
 func state(sketch: Dictionary) -> String:
 	var key := String(sketch["key"])
 	if _jobs.has(key):
@@ -133,8 +129,7 @@ func busy() -> bool:
 	return not _jobs.is_empty() or not _ink.is_empty()
 
 
-## GENERATE: each of [param sketches] not drawn, failed or stale is drawn (the card lays them out once
-## they are).
+## Generate: each of [param sketches] not drawn, failed or stale is drawn (the card lays them out once they are).
 func generate(sketches: Array) -> void:
 	for s in sketches:
 		var st := state(s)
@@ -143,15 +138,15 @@ func generate(sketches: Array) -> void:
 			_start(s, 1, PackedStringArray(), "")
 
 
-## ⟳: [param sketch] drawn again now - told [param refused], why the ink step could not read the last one,
-## when it could not; what was drawn stays until the new one lands.
+## ⟳: [param sketch] drawn again now, told [param refused] (why the ink step could not read the last one) when it could not; what
+## was drawn stays until the new one lands.
 func redo(sketch: Dictionary, refused := "") -> void:
 	_stop_job(String(sketch["key"]))
 	_errors.erase(String(sketch["key"]))
 	_start(sketch, 1, PackedStringArray(), refused)
 
 
-## STOP: every drawing under way and the ink step; what was made stays.
+## Stop: every drawing under way and the ink step; what was made stays.
 func stop() -> void:
 	for key in _jobs.keys():
 		_stop_job(String(key))
@@ -185,8 +180,8 @@ func _start(sketch: Dictionary, tries: int, missing: PackedStringArray, refused:
 	_jobs[key] = {"id": id, "sketch": sketch.duplicate(true), "tries": tries}
 
 
-## WHAT THE DRAWER IS TOLD for [param sketch]: `{system, prompt}`, with what its last drawing lacked
-## ([param missing] ids) or why it could not be read ([param refused]).
+## What the drawer is told for [param sketch]: `{system, prompt}`, with what its last drawing lacked ([param missing] ids) or why it
+## could not be read ([param refused]).
 static func prompt(sketch: Dictionary, missing := PackedStringArray(), refused := "") -> Dictionary:
 	var parts := PackedStringArray()
 	for p in sketch.get("parts", []):
@@ -197,8 +192,7 @@ static func prompt(sketch: Dictionary, missing := PackedStringArray(), refused :
 	return {"system": Rules.say(RULES + ".system", vars), "prompt": Rules.say(RULES + ".prompt", vars)}
 
 
-## THE SVG IN AN ANSWER: from its `<svg` to its `</svg>`, fences and words round it left out - "" for
-## none.
+## The SVG in an answer: from its `<svg` to its `</svg>`, fences and words round it left out; "" for none.
 static func svg_of(text: String) -> String:
 	var a := text.find("<svg")
 	var b := text.rfind("</svg>")
@@ -216,8 +210,7 @@ static func lacking(svg: String, parts: Array) -> PackedStringArray:
 	return out
 
 
-## Land what ended, each refresh: a drawing kept, sent back once, or stopped on with why; the ink
-## step's answer kept.
+## Land what ended, each refresh: a drawing kept, sent back once, or stopped on with why; the ink step's answer kept.
 func tick() -> void:
 	for key in _jobs.keys():
 		var job: Dictionary = _jobs[key]
@@ -273,8 +266,7 @@ static func ink_from(items: Array) -> String:
 	return ",".join(ids).sha256_text().substr(0, 16)
 
 
-## "ready", "running", "failed", "stale" (laid out for other drawings) or "missing" - "ready" too for
-## a letter with no drawings to lay out.
+## "ready", "running", "failed", "stale" (laid out for other drawings) or "missing"; "ready" too for a letter with no drawings.
 func ink_state(items: Array) -> String:
 	if not _ink.is_empty():
 		return "running"
@@ -292,8 +284,8 @@ func ink_error() -> String:
 	return _ink_error
 
 
-## WHAT THE INK STEP RUNS ON THAT IS NOT INSTALLED YET - asked to be installed (as the Proof producer asks,
-## [method Provision.ensure]) and named - or "".
+## What the ink step runs on that is not installed yet, asked to be installed (as the Proof producer asks, [method
+## Provision.ensure]) and named; or "".
 static func lacks() -> String:
 	var names := PackedStringArray()
 	for k in ["tex", "math_venv"]:
@@ -302,8 +294,7 @@ static func lacks() -> String:
 	return "" if names.is_empty() else "installing %s" % " and ".join(names)
 
 
-## THE INK STEP for [param items]: every drawing laid out by ghost's own TeX (hosts/math/typeset.py).
-## "" started, else why not.
+## The ink step for [param items]: every drawing laid out by ghost's own TeX (hosts/math/typeset.py). "" started, else why not.
 func start_ink(items: Array) -> String:
 	_ink_error = ""
 	if items.is_empty() or not _ink.is_empty():
@@ -352,7 +343,7 @@ func _tick_ink() -> void:
 	_ink_error = _write(dir.path_join("ink.json"), d)
 
 
-## THE DRAWINGS THE INK STEP REFUSED: each one's id -> why, from the kept answer.
+## The drawings the ink step refused: each one's id -> why, from the kept answer.
 func refused() -> Dictionary:
 	var out := {}
 	for r in ink().get("items", []):
@@ -361,7 +352,7 @@ func refused() -> Dictionary:
 	return out
 
 
-## Written ATOMICALLY: a file that is there is a step that is done.
+## Written atomically: a file that is there is a step that is done.
 func _write(path: String, d: Dictionary) -> String:
 	if path.is_empty():
 		return "the letter has no folder"

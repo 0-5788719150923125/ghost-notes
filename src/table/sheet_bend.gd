@@ -1,9 +1,10 @@
 extends RefCounted
 class_name SheetBend
 
-## SheetBend - A SHEET AS THE BAKE HAS IT BENT ([method Particles.make_soft]; 841899, feedback 0012): the node is posed as a whole by where the sheet is on the whole, and this lays
-## the difference over its mesh - each vertex following the few of the sheet's points nearest it as it was built, each normal from its own faces, its creases kept where the mesh
-## has them. The mesh is the instance's own from here on, and laid again only as the bend changes. Nothing here decides anything: it draws what a frame says.
+## SheetBend: a sheet as the bake has it bent ([method Particles.make_soft]). The node is posed as a whole by where the sheet is on the
+## whole, and this lays the difference over its mesh - each vertex following the few of the sheet's points nearest it as it was built, each
+## normal from its own faces, its creases kept where the mesh has them. The mesh is the instance's own from here on, and laid again only
+## as the bend changes. Nothing here decides anything: it draws what a frame says.
 
 ## How many of the sheet's points a vertex follows, and how far a bent sheet may stand from its box as the mesh was measured (meters).
 const FOLLOWS := 4

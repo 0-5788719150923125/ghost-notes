@@ -1,35 +1,28 @@
 extends Node
 
-## scene_fields_check - WHAT A SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number],
-## [method GhostScene.fields_of]; next/structure.md, steps 27 and 28). Every scene with settings - the
-## rotation's and any other a storyboard may name - each setting in turn:
+## scene_fields_check - what a scene can be told ([method GhostScene.choice], [method GhostScene.number],
+## [method GhostScene.fields_of]; next/structure.md). Every scene with settings, each setting in turn:
 ##
 ##   tests/run_boot_probe.sh tests/scenes/scene_fields_check.gd 600
 ##
-##   - ITS ROWS ARE WHOLE: a label, a blurb, and either the type "choice" with options from a table of the
-##     scene that has some (for options that are indices, names for every one of them), or the type
-##     "num" with a range of two numbers, low to high;
-##   - TOLD, TAKEN: told an option the seed would not have drawn (a number: the end of its range farther
-##     from the seed's), the scene comes out as that and as another scene than the seed's - a number on
-##     at least one of the builds that draw it (a blizzard's veil is drawn only when there is a blizzard,
-##     and a ring's width matters only to a ring), searched for over seeds;
-##   - TELLING MOVES NOTHING ELSE: told the very option the seed draws (a number: its whole range), the
-##     scene is the seed's scene to the last member, inside what it made too - the die was thrown either
-##     way, so every later draw is where it was;
-##   - A NUMBER IS HELD TO WHAT IT IS TOLD: told the upper half of its range, it lands in it; told past
-##     its range, it stops at the end;
-##   - THE INSPECTOR'S ROWS ([method SceneRoster.fields_of]): unset first, then each option by its name;
-##     a number's row shows its range while unset;
-##   - THE CONTROL: a made-up scene that picks from its table and draws its number itself, never asking
+##   - rows are whole: a label, a blurb, and either type "choice" with options from a table of the
+##     scene (names for every index option) or type "num" with a low-to-high range;
+##   - told, taken: told an option the seed would not have drawn (a number: the end of its range
+##     farther from the seed's), the scene comes out as that and differs from the seed's - a number on
+##     at least one build that draws it (searched over seeds);
+##   - telling moves nothing else: told the option the seed draws (a number: its whole range), the scene
+##     is the seed's to the last member, as the die is thrown either way;
+##   - a number is held to what it is told: told the upper half of its range it lands in it, told past
+##     its range it stops at the end;
+##   - the inspector's rows ([method SceneRoster.fields_of]): unset first, then each option by name; a
+##     number's row shows its range while unset;
+##   - the control: a made-up scene that picks from its table and draws its number itself, never asking
 ##     `choice` or `number`, must fail "told, taken" for both.
-##
-## That a scene told nothing rolls exactly what it rolled before the settings existed was checked when
-## they came in, by dumping every scene and motion on four seeds before and after.
 
 const SEED := 7
-## The seeds a number is looked for on, when a build need not draw it: 7 first, then the rest in order.
+## The seeds a number is looked for on when a build need not draw it: 7 first, then the rest in order.
 const SEEDS := 48
-## A scene's state is written out this deep into what it made (its lens, its layers, its particles).
+## A scene's state is written out this deep into what it made (its lens, layers, particles).
 const DEPTH := 2
 
 var _fails := 0
@@ -179,10 +172,10 @@ func _told(script: Script, behavior: String, key: String, options: Array) -> Dic
 
 
 ## The number [param key] of [param script] ([param row] its FIELDS row), on the builds that draw it (up
-## to four, over [constant SEEDS] seeds): `whole` - its row is; `taken` - on one of them, told the end of
-## its range farther from the seed's draw, it comes out as that end and the scene differs; `still` - on
+## to four, over [constant SEEDS] seeds): `whole` - its row is; `taken` - on one, told the end of its
+## range farther from the seed's draw, it comes out as that end and the scene differs; `still` - on
 ## each, told its whole range, the scene is the seed's; `held` - on each, told its upper half it lands in
-## it, and told past its top it stops there. A number no build draws is none of these.
+## it, told past its top it stops there. A number no build draws is none of these.
 func _number_setting(script: Script, behavior: String, key: String, row: Dictionary) -> Dictionary:
 	var out := {"whole": false, "taken": false, "still": true, "held": true}
 	var r: Variant = row.get("range")

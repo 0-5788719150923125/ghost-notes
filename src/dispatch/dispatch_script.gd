@@ -4,30 +4,30 @@ class_name DispatchScript
 ## DispatchScript - a note as the dispatch desk plays it (next/dispatch.md): what the voice reads, the words it says, and
 ## everything the desk does between and alongside them.
 ##
-## THE NOTE IS THE SCRIPT, WORD FOR WORD. An ordinary paragraph is said, by whoever the last speaker cue names - the
-## first name cued is the ROOM's voice (the man at the desk, never seen); every other voice is heard through a phone.
-## The desk's marks, each on a line of its own:
+## The note is the script, word for word. An ordinary paragraph is said by whoever the last speaker cue names; the first
+## name cued is the room's voice (the man at the desk, never seen), every other voice is heard through a phone. The
+## desk's marks, each on a line of its own:
 ##
-##     <!-- call: AISLE -->            the phone labeled AISLE lifts out of its row, flips open and is held to the ear: dialed
-##                                     and ringing twice in the earpiece before anyone answers - answered at once if it was
-##                                     ringing, picked back up if it lay open on the desk. Another in hand is laid down open
-##                                     first (on hold).
+##     <!-- call: AISLE -->            the phone labeled AISLE lifts out of its row, flips open and is held to the ear:
+##                                     dialed and ringing twice in the earpiece before anyone answers; answered at once if
+##                                     it was ringing, picked back up if it lay open on the desk. Another in hand is laid
+##                                     down open first (on hold).
 ##     <!-- /call -->, <!-- /call: VAN -->   the phone in hand (or the one named, lying open) snaps shut and goes home.
 ##     <!-- ring: LIGHTS -->           that phone buzzes and rattles against its neighbors; a call to it straight after
 ##                                     answers it, and with none it rings out.
 ##     <!-- text: AISLE | words -->    a chime and a buzz, and the phone comes up out of its row, flips open and is held up
-##                                     to be read: the words on its screen, never said and never captioned. It goes home
-##                                     after, unless it texts again in a moment.
+##                                     to be read: the words on its screen, never said or captioned. It goes home after,
+##                                     unless it texts again in a moment.
 ##     <!-- reply -->, <!-- reply: AISLE -->   the room's next words are typed into that phone (the last to text) as they are
 ##                                     said, a key at a time, under the message, and sent.
 ##     <!-- ping: a place -->          the target comes to that place on the radar: a ping, the place written beside the
 ##                                     blip (the first: the radar finds him there). He goes there along a track while the
-##                                     voice goes on, the sweep painting him a step further each round - from where a
+##                                     voice goes on, the sweep painting him a step further each round, from where a
 ##                                     `moving` mark says he set off, else over the moments before. A place named again is
 ##                                     the same spot; what follows a comma in its name is a little off it.
 ##     <!-- moving -->                 the target sets off from where he is, toward the next ping's place: the radar sounds
-##                                     its alarm and the camera turns to it. The voice goes on while he goes. Straight after
-##                                     a ping he passes through it (a place on the way: `driving south`) - no alarm.
+##                                     its alarm and the camera turns to it. Straight after a ping he passes through it (a
+##                                     place on the way: `driving south`) with no alarm.
 ##     <!-- sound: jet, ... -->        a sound of [constant DispatchSounds.SOUNDS], named by its key among the words.
 ##     <!-- static: 5 -->, <!-- static: 5, surf -->   the receiver opens up for that many seconds: Io-B's crackle, or surf.
 ##     <!-- print -->                  the printer prints what was typed since it last printed (struck blocks aside).
@@ -40,8 +40,8 @@ class_name DispatchScript
 ##     <!-- live: tv -->               that screen shows this desk, live, seen from just behind the empty chair (words
 ##                                     after a comma say so for a reader: `live: tv, this desk from behind the chair`).
 ##     <!-- image (feed): words -->    a picture on that screen (feed, satellite, tv) until the next there or `off`.
-##     <!-- image (full): words --> ... <!-- /image -->   the letter's: a picture over the whole screen for the passage,
-##                                     one straight after another dissolving into it.
+##     <!-- image (full): words --> ... <!-- /image -->   a picture over the whole screen for the passage, one straight
+##                                     after another dissolving into it.
 ##     <!-- strike -->                 after a typed block: the writer stops to decide, then backspaces it off the screen.
 ##     <!-- gain: 9 -->                the radar's gain knob is turned to that number (1 to 10; it starts at 3), a click a
 ##                                     step. Above 3 the scope paints clutter round the target, more the higher it is.
@@ -50,41 +50,34 @@ class_name DispatchScript
 ##
 ## And the terminal's text, as fenced blocks:
 ##
-##     ```type ... ```                 typed on the terminal while the voice says it, word for word - each word's keys as
+##     ```type ... ```                 typed on the terminal while the voice says it, word for word, each word's keys as
 ##                                     it is said; a hesitation inside stops the keys with the voice.
-##     ```screen ... ```               put up on the terminal, replacing what it showed - drawn down the glass a line at a
-##                                     time, as a terminal draws - never said.
-##     ```terminal ... ```             a session at the terminal, silent, the voice waiting: a line opening `>` is a command,
-##                                     typed at the prompt a key at a time and entered; the lines after it are what the
-##                                     terminal answers, printed a line at a time. Asleep, it wakes to a bare prompt first.
+##     ```screen ... ```               put up on the terminal, replacing what it showed, drawn down the glass a line at a
+##                                     time; never said.
+##     ```terminal ... ```             a silent session, the voice waiting: a line opening `>` is a command, typed at the
+##                                     prompt a key at a time and entered; the lines after it are what the terminal
+##                                     answers, printed a line at a time. Asleep, it wakes to a bare prompt first.
 ##
 ## A typed block and a session are added under what the terminal shows; a shown one replaces it.
 ##
-## REDACTED WORDS, inside a shown block or a session: `NAME ........ <!-- redact: DOE, JANE -->`. The words are put up as
-## any others, and hidden over the camera's finished picture, as a video hides a name after it was shot - a box cracked
-## into large flat shards, each the average color of what lies under it ([DispatchCensor]) - never a word put in their
-## place. (2026-11-09, the user: "I do not simply want to replace words with $REDACTED"; 2026-11-10: "This is a
-## post-processing effect, applied to the raw video AFTER: like when police blur faces in a video.") A redacted character
-## travels as itself moved into a private plane of Unicode ([constant REDACT_BASE]), so typing, wrapping, scrolling and a
-## strike count it as the one character it is; the screens take it back out ([method unredacted]). A typed block is said, and the voice cannot say what is hidden: there the mark
-## is warned of and its words left out.
+## Redacted words, inside a shown block or a session: `NAME ........ <!-- redact: DOE, JANE -->`. The words are put up
+## as any others and hidden over the camera's finished picture ([DispatchCensor]), never replaced by a word. A redacted
+## character travels as itself moved into a private plane of Unicode ([constant REDACT_BASE]), so typing, wrapping,
+## scrolling and a strike count it as the one character it is; the screens take it back out ([method unredacted]). A
+## typed block is said, and the voice cannot say what is hidden: there the mark is warned of and its words left out.
 ##
-## THE DESK IS SEEN FIRST (2026-11-06, the author: "Right when it starts, we've barely had a moment to look at the scene
-## before we're zooming-in on the radar"): the voice opens on [constant OPENING] seconds of the desk at rest, the camera
-## home, before any action or word - a breath, never a silence (the same evening: "a solid 30 seconds of silence at the
-## beginning ... the silence is deafening": a radar watched while the voice waited). WHAT MOVES ON THE RADAR MOVES UNDER
-## THE VOICE: a walk is the words between a `moving` and a `ping`, and the camera turns to the radar at its sounds - the
-## alarm as he sets off, the ping as he arrives - never to watch it do nothing. `<!-- act: ... -->` is plain words for
+## The voice opens on [constant OPENING] seconds of the desk at rest, the camera home, before any action or word. What
+## moves on the radar moves under the voice: a walk is the words between a `moving` and a `ping`, and the camera turns
+## to the radar at its sounds (the alarm as he sets off, the ping as he arrives). `<!-- act: ... -->` is plain words for
 ## a puppeteer that is not built here, and stays a note; every other comment is a note too.
 ##
-## THE DESK ACTS IN THE RESTS THE VOICE LEAVES FOR IT, as the tablet's hand does: every action the voice waits for writes
-## a rest into what it reads (`<!-- action-hold: S -->`), and the medium places each action in its rest
-## ([method DispatchMedium._place]) - from the next word back by what is written after it in the same silence, so two
-## pings a hesitation apart stay a hesitation apart.
+## The desk acts in the rests the voice leaves for it: every action the voice waits for writes a rest into what it reads
+## (`<!-- action-hold: S -->`), and the medium places each action in its rest ([method DispatchMedium._place]), from the
+## next word back by what is written after it in the same silence.
 ##
-## THE VOICES THROUGH A PHONE ARE HEARD THROUGH ONE ([constant Manuscript.HEARD]): a turn of a voice whose phone is in
-## hand is marked `phone`; one whose phone lies open on the desk, `desk`; a voice with no phone of its own open (the
-## cashier, in Aisle's room), `far`. Worked out here from the calls, so the author never writes it.
+## A voice through a phone is heard through one ([constant Manuscript.HEARD]): a turn of a voice whose phone is in hand
+## is marked `phone`; one whose phone lies open on the desk, `desk`; a voice with no phone of its own open, `far`. Worked
+## out here from the calls.
 
 ## Own-line desk marks: group 1 the verb, 2 its argument.
 const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
@@ -96,23 +89,23 @@ const FENCE_CLOSE := "^\\s*```\\s*$"
 const REDACT := "<!--\\s*redact\\s*:\\s*([\\s\\S]*?)\\s*-->"
 ## A redacted character is itself moved up by this much (Supplementary Private Use Area-A, U+F0000-U+FFFFD).
 const REDACT_BASE := 0xF0000
-## Own-line marks the VOICE reads: a hesitation, a delivery.
+## Own-line marks the voice reads: a hesitation, a delivery.
 const VOICE_LINE := "^\\s*(?:<!--\\s*(?:hesitation|delivery)\\b[\\s\\S]*?-->\\s*)+$"
 const HESITATION := Manuscript.HESITATION
 const COMMENT := Manuscript.COMMENT
 ## What makes a note a dispatch script: nothing is rewritten for any other.
 const IS_DISPATCH := "(?m)^\\s*(?:<!--\\s*(?:call|ring|ping)\\s*:|```\\s*(?:type|screen|terminal)\\s*$)"
 
-## THE SCREENS a picture may be pinned to, each a thing on the desk ([DispatchSet]).
+## The screens a picture may be pinned to, each a thing on the desk ([DispatchSet]).
 const SCREENS := ["feed", "satellite", "tv"]
 
-## THE TIMING OF EACH ACTION (seconds). `rest` is what the voice waits for it; an action may move on past its rest,
-## under the next words (`len`). A PHONE: out of its row, opened and to the ear; dialed; the two rings in the earpiece,
+## The timing of each action (seconds). `rest` is what the voice waits for it; an action may move on past its rest,
+## under the next words (`len`). A phone: out of its row, opened and to the ear; dialed; the two rings in the earpiece,
 ## each a pair of short rings on a cycle, answered as the second's pair ends; answered at once when it was ringing;
 ## picked back up off the desk; the one in hand laid down open on the desk first; snapped shut and home.
 const LIFT := 1.2
 const DIAL := 1.3
-## SPEED DIAL, inside the dialing ([constant DIAL]): every phone's one contact is on 1 - held, then Send, and up to the ear.
+## Speed dial, inside the dialing ([constant DIAL]): every phone's one contact is on 1 - held, then Send, and up to the ear.
 const SPEED_PRESS := 0.15
 const SPEED_HOLD := 0.45
 const SEND_AT := 0.72
@@ -125,16 +118,14 @@ const PICK_UP := 1.0
 const LAY_DOWN := 1.0
 const HANG_UP := 1.3
 const HANG_UP_REST := 0.7
-## AN INCOMING RING: a buzz this long, then quiet this long, rung this many times before a call answers it, and this
+## An incoming ring: a buzz this long, then quiet this long, rung this many times before a call answers it, and this
 ## many when nobody does.
 const BUZZ_ON := 0.8
 const BUZZ_OFF := 0.6
 const BUZZES := 2
 const BUZZES_OUT := 4
-## A TEXT (2026-11-06, the author: "there are subtitles displayed in the middle of the screen. I don't like that. It would be
-## better to ding with a notification sound, then pick up the cell phone, open it, and look at the message on the screen"):
-## its chime and buzz; the phone up out of its row and open, held to be read; long enough to read it (seconds a word, and a
-## beat); and back down to its row - unless it texts again within [constant TEXT_AGAIN], when it stays up.
+## A text: its chime and buzz; the phone up out of its row and open, held to be read; long enough to read it (seconds a
+## word, and a beat); and back down to its row, unless it texts again within [constant TEXT_AGAIN], when it stays up.
 const TEXT_BUZZ := 0.5
 const TEXT_CHIME := 0.6
 const READ_LIFT := 0.9
@@ -142,23 +133,21 @@ const READ_WORD := 0.32
 const READ_BEAT := 0.9
 const READ_DOWN := 0.9
 const TEXT_AGAIN := 9.0
-## A REPLY, typed into the phone in hand as it is said (the author: "we are SPEAKING to the person sending text messages,
-## which doesn't work logically. We should probably be sending those messages back, through the phone"): a beat before its
-## first key, and its sending after its last.
+## A reply, typed into the phone in hand as it is said: a beat before its first key, and its sending after its last.
 const REPLY_LEAD := 0.4
 const REPLY_SEND := 0.7
-## THE RADAR'S PING: the voice's rest, and its ring's length. ITS ALARM as the target sets off: the voice's rest, and how
+## The radar's ping: the voice's rest, and its ring's length. Its alarm as the target sets off: the voice's rest, and how
 ## long it sounds.
 const PING := 1.2
 const PING_LEN := 2.6
 const MOVING := 0.7
 const MOVING_LEN := 1.6
-## THE DESK AT REST, seen whole before anything moves (seconds): the breath the voice opens on - every opening's settle
+## The desk at rest, seen whole before anything moves (seconds): the breath the voice opens on, every opening's settle
 ## ([constant Openings.SETTLE]).
 const OPENING := Openings.SETTLE
-## STATIC: a bare mark's seconds.
+## Static: a bare mark's seconds.
 const STATIC_BARE := 4.0
-## THE PRINTER: before its first line, a line, the feed after it; and its least and most.
+## The printer: before its first line, a line, the feed after it; and its least and most.
 const PRINT_LEAD := 0.5
 const PRINT_LINE := 0.42
 const PRINT_FEED := 0.8
@@ -170,24 +159,22 @@ const PRINT_COLUMNS := 80
 ## 66 characters).
 const COLUMNS := 70
 const ROWS := 22
-## THE TERMINAL: before typed words, the camera there and the cursor waiting; a shown screen looked at; the screen saver
+## The terminal: before typed words, the camera there and the cursor waiting; a shown screen looked at; the screen saver
 ## comes on.
 const TYPE_LEAD := 1.0
 const SCREEN_REST := 1.4
 const SLEEP := 1.2
-## A TYPED BLOCK IS SAID BEHIND ITS KEYS, as a letter is read behind its pen ([constant LetterScript.AHEAD_WORDS]): a
+## A typed block is said behind its keys, as a letter is read behind its pen ([constant LetterScript.AHEAD_WORDS]): a
 ## word is typed while the voice says the one this many before it, so the voice reads what is already on the screen and
-## goes on unbroken - the first words typed at a typist's pace ([constant KEY_EACH]) in the rest before it, each after
-## at most this quick a key, and never still being typed when it is said. (2026-11-06, the user: "Every word is spoken
-## individually, with breaks, because we're waiting on the typing ... just do what we do in the journal-writing mode:
-## speak slightly behind the writing.") A reply on a phone is still typed as it is said, its keys this long before each
-## word.
+## goes on unbroken. The first words are typed at a typist's pace ([constant KEY_EACH]) in the rest before them, each
+## after at most this quick a key, never still being typed when it is said. A reply on a phone is typed as it is said,
+## its keys this long before each word.
 const AHEAD_WORDS := 2
 const KEY_QUICK := 0.035
 const REPLY_AHEAD := 0.35
-## A SHOWN SCREEN is drawn down the glass a line every this many seconds.
+## A shown screen is drawn down the glass a line every this many seconds.
 const SCREEN_LINE := 0.045
-## A SESSION AT THE TERMINAL (seconds): the bare prompt waiting before the first key (and a sleeping screen waking before
+## A session at the terminal (seconds): the bare prompt waiting before the first key (and a sleeping screen waking before
 ## it); a key, give or take [constant KEY_JITTER] of it, a space a little longer; Enter after the last; the machine
 ## answering; each line it prints; then the operator reading it before the next command - at least, and a line more. The
 ## voice waits until the last answer is printed, and goes on as it is read.
@@ -202,17 +189,16 @@ const READ_LEAST := 0.7
 const READ_LINE := 0.18
 ## What a command is typed after: its line opens with this.
 const PROMPT := "> "
-## A STRIKE: the writer decides (the letter's), then backspaces at this many characters a second, held to at most.
+## A strike: the writer decides (the letter's), then backspaces at this many characters a second, held to at most.
 const DECIDE := 3.0
 const DECIDE_MOST := 30.0
 const BACKSPACE := 28.0
 const BACKSPACE_MOST := 4.0
-## THE OTHERS: a screen going dark, a look, the switch thrown, a picture landing on a screen.
+## The others: a screen going dark, a look, the switch thrown, a picture landing on a screen.
 const OFF := 0.5
 const LOOK := 1.0
-## A THING LIFTED - the mug drunk from: brought up unhurried, held at the mouth for a real sip, and set back down; the voice
-## goes on this far into its way down (2026-11-06, the user: "When the coffee mug was pulled-in for a drink, it felt like
-## it moved too fast. It also returned too quickly: it didn't hold long enough to take a sip").
+## A thing lifted (the mug drunk from): brought up unhurried, held at the mouth for a sip, and set back down; the voice
+## goes on this far into its way down.
 const LIFT_UP := 2.0
 const LIFT_HOLD := 3.0
 const LIFT_DOWN := 1.8
@@ -220,20 +206,19 @@ const LIFT_SAID := 0.5
 const SWITCH := 1.3
 const SWITCH_AT := 0.65
 const PICTURE := 1.6
-## THE LETTER'S PICTURES over the whole screen: the fade (seconds), every one; the voice rests for the last to clear.
+## The letter's pictures over the whole screen: the fade (seconds), every one; the voice rests for the last to clear.
 const IMAGE_FADE := 2.5
-## THE RADAR'S GAIN KNOB (the author's revision, 2026-11-10: "The handbook says the scope stays at three. Turn it any
-## higher, and it starts painting things that aren't him"): its least and most, where it stands when the night begins; the
-## hand reaching it, each step turned (a click), and the beat the voice waits after, as the sweep comes round.
+## The radar's gain knob: its least and most, where it stands when the night begins; the hand reaching it, each step
+## turned (a click), and the beat the voice waits after, as the sweep comes round.
 const GAIN_LEAST := 1
 const GAIN_MOST := 10
 const GAIN_REST := 3
 const GAIN_REACH := 0.25
 const GAIN_STEP := 0.14
 const GAIN_BEAT := 0.6
-## THE TERMINAL'S BELL: the half beat the voice waits for it.
+## The terminal's bell: the half beat the voice waits for it.
 const BELL := 0.35
-## THE LAMP: the hand reaching its switch (the click), and the voice's rest.
+## The lamp: the hand reaching its switch (the click), and the voice's rest.
 const LAMP_AT := 0.3
 const LAMP := 0.8
 ## A sound with no row of its own: a rest this long, and nothing heard.
@@ -265,14 +250,14 @@ static func speakable(body: String) -> String:
 	return String(parse(body)["speakable"])
 
 
-## THE PICTURES of [param body] as the painter is handed them: every image mark pinned to the screen (painted wide;
+## The pictures of [param body] as the painter is handed them: every image mark pinned to the screen (painted wide;
 ## a desk's screen shows the middle of it), so the painting is found by its words whatever it was pinned to.
 static func pictures_only(body: String) -> String:
 	var src := Manuscript.strip_frontmatter(body)
 	return _rx("<!--\\s*image\\s*(?:\\(\\s*\\w+\\s*\\))?\\s*:").sub(src, "<!-- image (screen):", true)
 
 
-## THE PHONES' LABELS, in order along the rows: the note's `desk:` block's `phones`, else every label its marks name, in
+## The phones' labels, in order along the rows: the note's `desk:` block's `phones`, else every label its marks name, in
 ## the order they first do.
 static func phones_of(body: String) -> PackedStringArray:
 	var out := PackedStringArray()
@@ -329,7 +314,7 @@ static func _logical_lines(src: String) -> PackedStringArray:
 	return out
 
 
-## THE NOTE AS BLOCKS, in order: `{kind: "para", text}`, `{kind: "speaker", name}`, `{kind: "voice", text}` (an own-line
+## The note as blocks, in order: `{kind: "para", text}`, `{kind: "speaker", name}`, `{kind: "voice", text}` (an own-line
 ## hesitation or delivery), `{kind: "mark", verb, arg}`, `{kind: "image", where, prompt}`, `{kind: "type" | "screen",
 ## text}`. Notes are dropped.
 static func blocks(body: String) -> Array:
@@ -398,7 +383,7 @@ static func words_of(text: String) -> PackedStringArray:
 	return DeskScript._words(text)
 
 
-## A TYPED BLOCK AS SHOWN: its marks out and the spaces they leave closed up, line by line.
+## A typed block as shown: its marks out and the spaces they leave closed up, line by line.
 static func shown_of(text: String) -> String:
 	var lines := PackedStringArray()
 	for line in text.split("\n"):
@@ -407,7 +392,7 @@ static func shown_of(text: String) -> String:
 	return "\n".join(lines)
 
 
-## [param text] WITH ITS REDACT MARKS AS THE TERMINAL HOLDS THEM: each mark's words in its place, every character of them
+## [param text] with its redact marks as the terminal holds them: each mark's words in its place, every character of them
 ## moved up into the private plane ([constant REDACT_BASE]) - the same length, so it is typed, wrapped and scrolled as
 ## written (a redacted space is no place to wrap, so a short redacted span stays on one line).
 static func redacted(text: String) -> String:
@@ -428,7 +413,7 @@ static func is_redacted(c: int) -> bool:
 	return c >= REDACT_BASE and c < REDACT_BASE + 0xFFFE
 
 
-## A LINE AS DRAWN: `{text, spans: [Vector2i(c0, c1)]}` - every redacted character back as itself, and the runs of them,
+## A line as drawn: `{text, spans: [Vector2i(c0, c1)]}` - every redacted character back as itself, and the runs of them,
 ## by column ([method redacted]).
 static func unredacted(line: String) -> Dictionary:
 	var out := ""
@@ -448,11 +433,10 @@ static func unredacted(line: String) -> Dictionary:
 	return {"text": out, "spans": spans}
 
 
-## WHAT THE VOICE SAYS OF A TYPED BLOCK [param shown]: its lines run together, and A BLOCK SET ALL IN CAPITALS said in
-## sentence case - every word of two capitals or more lowered, a sentence's first raised again. The voice reads a short
-## word in capitals as an initialism ([constant TextNorm.INITIALISMS]: "CONTAIN IT." was said "contain eye tee"), and a
-## terminal's line in capitals is words, not letters. A block with any small letter is said as written, its capitals kept
-## (an initialism in a log line is one); a named letter, `[D]`, stays the letter.
+## What the voice says of a typed block [param shown]: its lines run together, and a block set all in capitals said in
+## sentence case (every word of two capitals or more lowered, a sentence's first raised again), because the voice reads
+## a short word in capitals as an initialism ([constant TextNorm.INITIALISMS]). A block with any small letter is said as
+## written, its capitals kept (an initialism in a log line is one); a named letter, `[D]`, stays the letter.
 static func said_of(shown: String) -> String:
 	var text := " ".join(shown.split("\n", false))
 	if text != text.to_upper():
@@ -473,7 +457,7 @@ static func said_of(shown: String) -> String:
 	return " ".join(out)
 
 
-## WHERE EACH SPOKEN WORD OF A TYPED BLOCK IS ON THE SCREEN: `[{c0, c1}]`, one a word the voice says, the characters of
+## Where each spoken word of a typed block is on the screen: `[{c0, c1}]`, one a word the voice says, the characters of
 ## [param shown] it types - a word's spaces and line breaks after it with it, so the keys stop at a word's end.
 static func typed_spans(shown: String) -> Array:
 	var out: Array = []
@@ -485,7 +469,6 @@ static func typed_spans(shown: String) -> Array:
 				(out.back() as Dictionary)["c1"] = m.get_end()
 			continue
 		out.append({"c0": m.get_start(), "c1": m.get_end()})
-	# ...and the characters before the next word (a space, a line's end) the word before's
 	for i in out.size():
 		var next := shown.length() if i == out.size() - 1 else int((out[i + 1] as Dictionary)["c0"])
 		(out[i] as Dictionary)["c1"] = next
@@ -494,7 +477,7 @@ static func typed_spans(shown: String) -> Array:
 	return out
 
 
-## [param text]'s lines WRAPPED AT WORDS to [param width] columns (a word longer than a line is cut): what a terminal shows.
+## [param text]'s lines wrapped at words to [param width] columns (a word longer than a line is cut): what a terminal shows.
 static func wrapped(text: String, width: int) -> PackedStringArray:
 	var out := PackedStringArray()
 	for line in text.split("\n"):
@@ -555,7 +538,7 @@ static func static_of(arg: String) -> Dictionary:
 	return {"secs": secs, "kind": kind}
 
 
-## WHERE A `gain:` MARK TURNS THE KNOB: its number, held to [constant GAIN_LEAST]-[constant GAIN_MOST]; -1 for no number.
+## Where a `gain:` mark turns the knob: its number, held to [constant GAIN_LEAST]-[constant GAIN_MOST]; -1 for no number.
 static func gain_of(arg: String) -> int:
 	var a := arg.strip_edges()
 	return clampi(roundi(float(a)), GAIN_LEAST, GAIN_MOST) if a.is_valid_float() else -1
@@ -566,7 +549,7 @@ static func gain_turn(from: int, to: int) -> float:
 	return GAIN_STEP * float(absi(to - from))
 
 
-## WHICH SOUND a `sound:` mark's words name: its first part if that is a key of [constant DispatchSounds.SOUNDS], else
+## Which sound a `sound:` mark's words name: its first part if that is a key of [constant DispatchSounds.SOUNDS], else
 ## the first key the words say; "" for none.
 static func sound_of(arg: String) -> String:
 	var head := arg.get_slice(",", 0).strip_edges().to_lower()
@@ -584,7 +567,7 @@ static func label_of(s: String) -> String:
 	return s.strip_edges().to_upper()
 
 
-## THE WHOLE NOTE, WALKED: `{speakable, spoken, actions, spans, phones, room, warnings}`.
+## The whole note, walked: `{speakable, spoken, actions, spans, phones, room, warnings}`.
 ##
 ## `actions`, in order, are each `{kind, after, rest, len, fwd, back, ...}`: `after` the spoken word it comes before (its
 ## count of words before it), `rest` what the voice waits for it, `len` how long it moves, and where it falls in its
@@ -615,7 +598,6 @@ static func parse(body: String) -> Dictionary:
 	var last_text := ""                   # the phone that texted last
 	var reply_to := ""                    # the phone the room's next words are typed into
 	var gain := GAIN_REST                 # where the radar's gain knob stands
-	# THE DESK IS SEEN FIRST: the voice opens on the desk at rest
 	gap.append([OPENING, -1])
 	pending.append("<!-- action-hold: %s -->" % String.num(OPENING, 2))
 	for b in blocks(body):
@@ -690,7 +672,6 @@ static func parse(body: String) -> Dictionary:
 				var heard := _heard(who, room, in_hand, held)
 				if who != room and heard.is_empty():
 					warnings.append("%s speaks with no phone open: heard in the room" % who)
-				# A REPLY: these words typed into the phone as they are said, and sent
 				if not reply_to.is_empty() and who == room:
 					var shown := " ".join(text.split("\n", false))
 					var wn := words_of(text).size()
@@ -811,13 +792,11 @@ static func parse(body: String) -> Dictionary:
 					"look":
 						_act(actions, gap, pending, at, {"kind": "look", "at": arg.strip_edges().to_lower()}, LOOK, LOOK)
 					"lift":
-						# the voice waits through the sip and goes on as the mug comes down
 						_act(actions, gap, pending, at, {"kind": "lift", "thing": arg.strip_edges().to_lower()},
 							LIFT_UP + LIFT_HOLD + LIFT_DOWN * LIFT_SAID, LIFT_UP + LIFT_HOLD + LIFT_DOWN)
 					"switch":
 						_act(actions, gap, pending, at, {"kind": "switch", "side": arg.strip_edges().to_upper()}, SWITCH, SWITCH)
 					"live":
-						# (words after a comma say what it shows, for whoever reads the note)
 						var screen := arg.get_slice(",", 0).strip_edges().to_lower()
 						if not screen in SCREENS:
 							warnings.append("live: %s is no screen" % screen)
@@ -853,19 +832,16 @@ static func parse(body: String) -> Dictionary:
 						if open_image >= 0:
 							(spans[open_image] as Dictionary)["to"] = at
 							open_image = -1
-							# the voice rests for the last picture to clear before the desk goes on
 							_act(actions, gap, pending, at, {"kind": "clear"}, IMAGE_FADE + 0.1, IMAGE_FADE + 0.1)
 	if open_image >= 0:
 		(spans[open_image] as Dictionary)["to"] = spoken.size()
 	if in_hand != "" or not held.is_empty():
 		warnings.append("left open at the end: %s" % ", ".join(PackedStringArray(([in_hand] if not in_hand.is_empty() else []) + held)))
-	# what is left waiting rests after the last words
 	if not pending.is_empty():
 		if speak.is_empty() or not said_any:
 			speak.append(" ".join(pending))
 		else:
 			speak[speak.size() - 1] = String(speak[speak.size() - 1]) + " " + " ".join(pending)
-	# where each action falls in its silence: the seconds written into it before and after it
 	_silences(actions)
 	return {"speakable": "\n\n".join(speak), "spoken": spoken, "actions": actions, "spans": spans,
 		"phones": phones, "room": room, "warnings": warnings}
@@ -877,7 +853,7 @@ static func _rung() -> float:
 	return RING_CYCLE * float(RINGS - 1) + RING_ON + ANSWER
 
 
-## A PING'S WORDS: `{place, travel}` - a comma inside the place kept (`the grocery store, aisle seven`); a number after
+## A ping's words: `{place, travel}` - a comma inside the place kept (`the grocery store, aisle seven`); a number after
 ## its last comma is taken off it (`travel`) and not read - where he sets off is a `moving` mark - so the parse can say so.
 static func ping_of(arg: String) -> Dictionary:
 	var place := arg.strip_edges()
@@ -891,7 +867,7 @@ static func ping_of(arg: String) -> Dictionary:
 	return {"place": place, "travel": travel}
 
 
-## A SESSION'S STEPS from a ```terminal block: `[{typed, out: PackedStringArray}]` - each line opening `>` a command (what
+## A session's steps from a ```terminal block: `[{typed, out: PackedStringArray}]` - each line opening `>` a command (what
 ## follows the `>`, typed), the lines after it its answer. Lines before the first command are what the terminal shows as
 ## it wakes (a step with nothing typed). Blank lines at a step's end are dropped; inside, kept.
 static func session_of(text: String) -> Array:
@@ -932,12 +908,12 @@ static func _session_step(typed: String, command: bool, lines: PackedStringArray
 	return {"typed": typed, "out": kept, "command": command}
 
 
-## WHEN EACH THING IN A SESSION HAPPENS, in seconds from its start (the screen waking first, [constant WAKE]): per step
+## When each thing in a session happens, in seconds from its start (the screen waking first, [constant WAKE]): per step
 ## `{prompt (its prompt up), keys: PackedFloat32Array (each typed character's), enter, lines: PackedFloat32Array (each
 ## answering line's)}` - a step with nothing typed has its lines printed as the screen wakes - then `prompt`, when the bare
 ## prompt comes back after the last; `rest`, what the voice waits (the last answer printed), and `len`: the operator reads
-## each answer before the next command, and the last one before the session ends. A key's give-or-take is drawn from the session's own words, so it is typed the same way every
-## time.
+## each answer before the next command, and the last one before the session ends. A key's give-or-take is drawn from the
+## session's own words, so it is typed the same way every time.
 static func session_plan(steps: Array) -> Dictionary:
 	var t := WAKE
 	var wait := PROMPT_WAIT
@@ -971,7 +947,7 @@ static func session_plan(steps: Array) -> Dictionary:
 	return {"steps": out, "prompt": t, "rest": t + 0.2, "len": t + (wait if last_n > 0 else 0.3)}
 
 
-## WHAT A TURN OF [param who] IS HEARD THROUGH: the room's own voice in the room; a voice whose phone is in hand
+## What a turn of [param who] is heard through: the room's own voice in the room; a voice whose phone is in hand
 ## through it, one whose phone lies open on the desk from the desk, and any other through the phone in hand (a voice in
 ## the caller's room) - or the one on the desk.
 static func _heard(who: String, room: String, in_hand: String, held: Array) -> String:
@@ -987,7 +963,7 @@ static func _heard(who: String, room: String, in_hand: String, held: Array) -> S
 	return ""
 
 
-## AN ACTION BEFORE SPOKEN WORD [param at]: added, its rest written into the voice's text, its place in its silence
+## An action before spoken word [param at]: added, its rest written into the voice's text, its place in its silence
 ## noted. Returns its index.
 static func _act(actions: Array, gap: Array, pending: PackedStringArray, at: int, a: Dictionary, rest: float, length: float) -> int:
 	a["after"] = at
@@ -1043,7 +1019,7 @@ static func _ends_at(spans: Array, at: int) -> bool:
 	return not spans.is_empty() and int((spans.back() as Dictionary)["to"]) == at
 
 
-## WHICH SPOKEN WORDS END A SENTENCE in [param parsed]: 1 for each that ends in `.`, `!` or `?` (a quote or bracket after it
+## Which spoken words end a sentence in [param parsed]: 1 for each that ends in `.`, `!` or `?` (a quote or bracket after it
 ## kept) or ends its paragraph - the voice's text walked as [method rehearsal] walks it (the spoken words themselves are
 ## normalized, their punctuation gone).
 static func sentence_ends(parsed: Dictionary) -> PackedByteArray:
@@ -1067,7 +1043,7 @@ static func sentence_ends(parsed: Dictionary) -> PackedByteArray:
 	return out
 
 
-## A STEADY VOICE'S WORD TIMES for [param parsed] (for a probe and a gate): every spoken word [param word] seconds, a
+## A steady voice's word times for [param parsed] (for a probe and a gate): every spoken word [param word] seconds, a
 ## sentence's rest after each paragraph, and the rests the script writes and its hesitations at their lengths - as
 ## [method DeskScript.rehearsal] does for the desk, and as a live reading's words arrive: `{text, t0, t1}`.
 static func rehearsal(parsed: Dictionary, word := 0.32, pause := 0.35, lead := 1.0) -> Array:

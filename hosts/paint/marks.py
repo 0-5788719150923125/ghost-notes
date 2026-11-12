@@ -1,16 +1,17 @@
 """What each behavior lays, in the painting lab (TEST_PLAN.md, "The behaviors").
 
-A TOOL IS WHAT IS HELD, A BEHAVIOR HOW IT IS USED: each function here is one behavior's mark - its motion (a path, a point), its
-pressure over the course of the mark, how it uses what is on the tool, and what it leaves. Every one returns a `Mark`: the canvas's
-new paint over the box it touched (`pre`, `alp`), never yet laid - the painter weighs it first (solve.py) and lays it only if it
-helps - and what the show needs to play it again (`rec`).
+A tool is what is held, a behavior how it is used: each function here is one behavior's mark - its motion (a path, a
+point), its pressure over the course of the mark, how it uses what is on the tool, and what it leaves. Every one
+returns a `Mark`: the canvas's new paint over the box it touched (`pre`, `alp`), never yet laid - the painter weighs
+it first (solve.py) and lays it only if it helps - and what the show needs to play it again (`rec`).
 
-THE SAME FEW DYNAMICS UNDER ALL OF THEM: a load that falls as it is used (`load`), pressure (width, and how much is laid), speed
-(fast is broken), the tool's angle (a flat brush's width), wetness (marks.wet_blend), how thick the paint is (`th`). Millimeters
-throughout; the canvas is canvas.PX pixels a millimeter.
+The same few dynamics under all of them: a load that falls as it is used (`load`), pressure (width, and how much is
+laid), speed (fast is broken), the tool's angle (a flat brush's width), wetness (marks.wet_blend), how thick the paint
+is (`th`). Millimeters throughout; the canvas is canvas.PX pixels a millimeter.
 
-THE SHAPES ARE THE ENGINE'S (PaintLayers.raster): a brush's belly thinner toward its edges (BELLY), a tail narrowing over its last
-quarter, bristle streaks that open as it runs dry; a sponge's ragged edge, pores, and a film that fades toward its rim.
+The shapes are the engine's (PaintLayers.raster): a brush's belly thinner toward its edges (BELLY), a tail narrowing
+over its last quarter, bristle streaks that open as it runs dry; a sponge's ragged edge, pores, and a film that fades
+toward its rim.
 """
 from dataclasses import dataclass, field
 
@@ -408,9 +409,8 @@ def _carry(pre, alp, X, Y, dense, half_w, soft, pick, lay, wet=None):
 def soften(cv, pts, half_w, reach=0.8, strength=0.8, kind="feather", tool="round", drag=0.0):
     """FEATHERING: a clean, damp brush drawn along `pts` moves the paint under it a little way each way - each point it passes taken
     toward what lies within `reach` mm round it, as much as `strength` where the brush bears hardest. An edge becomes a gradient; the
-    tones either side stay their own (a brush that carried one average over all it touched had flattened both). AND IT DRAGS (`drag`,
-    0-1: what it takes up and lays as it goes - feedback 0020: a fat brush "spill[ing] over the edge, dragging/blending color with it"):
-    drawn from a color out over the white, it carries a little of it, fading, where a blur alone had left the white untouched."""
+    tones either side stay their own. And it drags (`drag`, 0-1: what it takes up and lays as it goes): drawn from a
+    color out over the white, it carries a little of it, fading, where a blur alone would leave the white untouched."""
     pts = np.asarray(pts, dtype=float)
     dense, s, k = resample(pts, max(half_w * 0.3, 0.2))
     sl = box(dense, half_w + reach * 3, cv.h, cv.w)
@@ -454,7 +454,7 @@ def smudge(cv, pts, half_w, tool="finger"):
     return move(cv, pts, half_w, 0.6, 0.55, "smudge", tool, soft=0.95)
 
 
-# A HAND'S PULL AS IT IS DRAWN ([slipped]): a steady hand's wander across it, a share of the brush's half width, over this wavelength (mm);
+# A hand's pull as it is drawn ([slipped]): a steady hand's wander across it, a share of the brush's half width, over this wavelength (mm);
 # a slip aside this often, as far as this many half widths at the most (most much less: the square of a uniform); run on past its end this
 # often, by up to this many half widths.
 SLIP_STEADY = 0.06
@@ -466,9 +466,7 @@ OVER_MOST = 1.0
 
 
 def slipped(pts, half_w, seed):
-    """THE PULL AS A HAND DRAWS IT (the user, 2026-11-09, of feedback 0020: "You would want a hand that generally tries to keep its whole
-    brush inside of the edge; however hands can make mistakes, and spill over the edge, dragging/blending color with it ... we want
-    naturally-looking behaviors here"): the planned path `pts` (mm) with a steady hand's slow wander, now and then a slip aside - a smooth
+    """The pull as a hand draws it: the planned path `pts` (mm) with a steady hand's slow wander, now and then a slip aside - a smooth
     bump, mostly small, rarely as far as SLIP_MOST half widths - and now and then run on past its end. The mark is laid where the hand
     went, so the show's brush and its paint agree. Seeded: the same pull slips the same way every time."""
     pts = np.asarray(pts, float)
@@ -497,9 +495,9 @@ def slipped(pts, half_w, seed):
 
 
 def blot(cv, c, r, under_pre, under_alp, take=0.85, seed=0, tool="bud"):
-    """A SPILL BLOTTED OFF WITH A COTTON SWAB (feedback 0020: "we might be able to wipe it away with a cotton swab (if the mistake was
-    small, or the color was faint)"): pressed at `c`, its tip takes up `take` of the fresh paint under it, as much as it bears there - what
-    was under the spill (`under_pre`, `under_alp`: the whole canvas before it) showing again - in a soft, slightly ragged round print."""
+    """A spill blotted off with a cotton swab: pressed at `c`, its tip takes up `take` of the fresh paint under it, as much as it bears
+    there - what was under the spill (`under_pre`, `under_alp`: the whole canvas before it) showing again - in a soft, slightly ragged
+    round print."""
     sl = box(np.array([c]), r + 1.0, cv.h, cv.w)
     if sl is None:
         return None

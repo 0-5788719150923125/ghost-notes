@@ -1,39 +1,26 @@
 extends Node
 
-## Gate for the two structural claims scenes/tunnel_run.gd is built on. No pixels needed - both
-## are properties of the generated track, so this runs headless:
+## Gate for the two structural claims scenes/tunnel_run.gd is built on. Both are properties of the
+## generated track, so no pixels are needed and it runs headless:
 ##
 ##   tests/run_boot_probe.sh tests/scenes/tunnel_track_check.gd 120
 ##
-## THE TRACK TURNS OVER, which is the whole reason it is integrated rather than splined - and
-## the CONTROL is the other construction, built here and measured beside it.
+## The track turns over, which is why it is integrated rather than splined. A path written as
+## `(x(s), y(s), s)` has the tangent `(x', y', 1)`, whose third component is a constant +1, so the
+## tangent can never point back along the advance axis: such a track winds but cannot loop, dive or
+## invert. Carrying an orthonormal frame and turning it by curvature about its own axes has no such
+## limit. The gate builds both from the same curvature numbers and asserts the difference: the
+## integrated tangent reverses, the height-mapped one cannot. The control is that construction, not a
+## track character: a barrel roll turns the frame, and a yaw about the now-tilted up axis is world
+## pitch, so any character with roll can reach any orientation whatever its pitch table says (192 of 240
+## `glide` seeds reached vertical on a pitch amplitude of 0.003).
 ##
-## A path written the obvious way, `(x(s), y(s), s)`, has the tangent `(x', y', 1)`. That third
-## component is a constant +1, so however wildly x and y wander the tangent can never point back
-## along the advance axis and its vertical component can never change sign. Such a track winds;
-## it cannot loop, dive, or invert. Carrying an orthonormal frame and turning it by curvature
-## about its OWN axes has no such limit. So the gate builds both from the same curvature numbers
-## and asserts the difference: the integrated tangent reverses, the height-mapped one cannot.
+## The frame stays orthonormal. The track is three successive rotations of a stored basis per station
+## over tens of thousands of stations, and round-off would otherwise shear the tube into a slowly
+## flattening ellipse. The scene re-orthonormalizes every step; this measures that it works over far
+## more track than any session generates.
 ##
-## THE CONTROL HAD TO BE A CONSTRUCTION, NOT A CHARACTER, and finding that out is the useful part
-## of this file. Two earlier cuts used `glide` - the gentle track - as the thing that must NOT
-## loop, and tightened its curvature table twice trying to make that true. It never can be, for a
-## reason that is the design working: ROLL turns the frame, and a YAW about the frame's own
-## now-tilted up axis IS world pitch. Any character with a barrel roll can therefore end up in
-## any orientation whatever its pitch table says, and glide's roll is what makes its tunnel
-## readable. 192 of 240 glide seeds reached vertical on a pitch amplitude of 0.003 - a twentieth
-## of what the scene ships. The characters differ in how HARD they turn, not in which axes they
-## can reach.
-##
-## THE FRAME STAYS ORTHONORMAL. The track is three successive rotations of a stored basis per
-## station, and a song's worth of it is tens of thousands of stations. Rotation matrices drift:
-## round-off accumulates, the axes stop being perpendicular, and the tube shears into an ellipse
-## that slowly flattens. It fails gradually and looks like a design choice, which is exactly the
-## kind of thing that ships. The scene re-orthonormalizes every step; this measures that it works
-## over far more track than any session will ever generate.
-##
-## And that the buffer stays BOUNDED - the track is endless, so the one thing it must not do is
-## accumulate.
+## And the buffer stays bounded: the track is endless, so it must not accumulate.
 
 ## How far out of the horizontal counts as having turned over.
 const LOOPED := 0.90
@@ -67,9 +54,8 @@ func _run() -> void:
 	get_tree().quit(1 if not _fails.is_empty() else 0)
 
 
-## THE CONSTRUCTION CLAIM. The integrated track's tangent must at some point point BACKWARDS
-## along the direction it set off in; the height-mapped alternative, driven by the very same
-## curvature functions, must never manage it.
+## The construction claim: the integrated track's tangent must at some point point backwards along the
+## direction it set off in; the height-mapped alternative, driven by the same curvature functions, never.
 func _construction() -> void:
 	var tried := 0
 	var worst_int := 1.0
@@ -89,8 +75,8 @@ func _construction() -> void:
 		worst_int = minf(worst_int, w)
 		if w >= 0.0:
 			bad.append("%d (%.2f)" % [k * 13 + 5, w])
-		# THE CONTROL, from the same numbers: `(x(s), y(s), s)`, where x and y are driven by this
-		# instance's own yaw and pitch curves. Its advance component is a constant one.
+	# The control, from the same numbers: `(x(s), y(s), s)`, with x and y driven by this instance's
+	# yaw and pitch curves. Its advance component is a constant one.
 		var stp: float = sc.STEP
 		var prev := Vector3.ZERO
 		for i in 900:
@@ -106,11 +92,9 @@ func _construction() -> void:
 	print("  height-mapped control, same curvature: its advance component never drops below %.2f"
 		% worst_map)
 	_ok(tried >= 20, "only %d tunnels built" % tried)
-	# A SHARE, not every seed, and the distinction is real: whether a GENTLE track has come round
-	# within five hundred units is a fact about its curvature amplitudes, not about the
-	# construction - two of the softest glides had simply not got there yet. The per-seed
-	# guarantee lives on `coaster` in _loops(), where reaching vertical is a strictly stronger
-	# claim and the height-mapped control cannot manage it at any length whatsoever.
+	# A share, not every seed: whether a gentle track has come round within five hundred units is a fact
+	# about its curvature amplitudes, not the construction. The per-seed guarantee lives on `coaster` in
+	# _loops(), where reaching vertical is stronger and the height-mapped control cannot manage it.
 	var share := float(tried - bad.size()) / float(maxi(1, tried))
 	_ok(share >= 0.90, "only %.0f%% of integrated tracks turned past a right angle inside 500 "
 		% (share * 100.0) + "units (%s) - the curvature across the character table is too weak "
@@ -119,8 +103,7 @@ func _construction() -> void:
 		% worst_map + "own algebra forbids - so this gate is not comparing what it claims to")
 
 
-## THE LOOP CLAIM, on the character that promises it: a `coaster` tangent must reach the whole
-## way to vertical.
+## The loop claim, on the character that promises it: a `coaster` tangent must reach vertical.
 func _loops() -> void:
 	var tried := 0
 	var least := 1.0
@@ -149,22 +132,14 @@ func _loops() -> void:
 		+ "over does not")
 
 
-## THE RIDE IS SMOOTH, which is a claim about the camera's SECOND derivative and cannot be seen
-## in a still frame - which is how it shipped broken.
+## The ride is smooth: a claim about the camera's second derivative, invisible in a still frame. Stations
+## are joined by straight segments, so linear interpolation puts the eye on a polyline: continuous in
+## position, discontinuous in velocity (fifteen kicks a second at eight units a second over a 0.55 step).
 ##
-## Stations are joined by straight segments, so interpolating between them linearly puts the eye
-## on a polyline: continuous in position, discontinuous in VELOCITY. Every station the direction
-## of travel changes abruptly, and at eight units a second over a step of 0.55 that is fifteen
-## kicks a second. Reported from a render as "super jittery... a sequence of discrete jumps at
-## each step".
-##
-## MEASURED AS A SHAPE, NOT A SIZE, for the same reason the glyph gate measures its row that way:
-## an absolute limit on per-frame acceleration cannot tell a jolt from a fast corner, because a
-## genuinely tight track legitimately accelerates hard. What separates them is that a polyline
-## puts ALL of its direction change into one step between long stretches of none - so the peak of
-## the per-step acceleration against its mean is enormous, and on a smooth path it is small. The
-## old linear interpolation is computed alongside as the control, from the same track, so the
-## before and after of this bug sit next to each other and neither can drift unnoticed.
+## Measured as a shape, not a size: an absolute acceleration limit cannot tell a jolt from a fast corner.
+## A polyline puts all of its direction change into one step between long stretches of none, so peak over
+## mean of the per-step acceleration is enormous, and on a smooth path small. The old linear
+## interpolation is computed alongside as the control, from the same track.
 func _smooth() -> void:
 	var sc = _make(31337, "weave")
 	if sc == null:
@@ -179,13 +154,12 @@ func _smooth() -> void:
 	for i in 960:
 		sc._s += v * dt
 		sc._advance_track()
-		# The first second is discarded. A scene's opening is a transient by construction (the
-		# buffer is still filling out ahead) and a peak-over-mean measure is exactly the kind
-		# that one startup sample can dominate - it read 65x off a single spike.
+	# The first second is discarded: a scene's opening is a transient (the buffer is still filling) and
+	# peak over mean is dominated by one startup sample (65x off a single spike).
 		if i < 60:
 			continue
 		cubic.append((sc._frame_at(sc._s) as Array)[0] as Vector3)
-		# The rule this replaced, run on the same stations at the same instant.
+	# the rule this replaced, run on the same stations at the same instant
 		var fi: float = (sc._s - sc._s0) / sc.STEP
 		var idx := clampi(int(floor(fi)), 0, sc._pos.size() - 2)
 		var t: float = clampf(fi - float(idx), 0.0, 1.0)
@@ -203,8 +177,8 @@ func _smooth() -> void:
 	sc.free()
 
 
-## Peak over mean of the per-step acceleration along a path. A polyline concentrates every
-## direction change into one step; a C1 curve spreads it.
+## Peak over mean of the per-step acceleration along a path. A polyline concentrates every direction
+## change into one step; a C1 curve spreads it.
 func _jerk(p: PackedVector3Array) -> float:
 	if p.size() < 4:
 		return 0.0
@@ -221,9 +195,8 @@ func _jerk(p: PackedVector3Array) -> float:
 	return peak / maxf(1e-9, mean)
 
 
-## The motes must be fixed in the WORLD and stream past. Held as an offset from the camera they
-## travel with it for ever and nothing in the near field moves at all - which is most of what
-## the jitter report was actually looking at, since they are the closest things to the lens.
+## The motes must be fixed in the world and stream past: held as an offset from the camera they travel
+## with it and nothing in the near field moves.
 func _motes_stream() -> void:
 	var sc = _make(919, "")
 	if sc == null:
@@ -233,13 +206,12 @@ func _motes_stream() -> void:
 		sc = _make(919 + 977, "")
 		if sc == null:
 			return
-	# MEASURED AS A SHARE OF STEPS, not as a start-to-end difference, because a mote that has
-	# been recycled a view-length ahead ends FURTHER away than it began - the first cut of this
-	# measured -11.5 units and read that as a failure when it was the recycling working.
+	# Measured as a share of steps, not start-to-end: a mote recycled a view-length ahead ends further away
+	# than it began.
 	var closing := 0
 	var recycles := 0
 	var steps := 600
-	# Explicitly typed: `sc` is an untyped local, so nothing it holds carries a type.
+	# Explicitly typed: `sc` is untyped, so nothing it holds carries a type.
 	var gap: float = float((sc._motes[0] as Dictionary)["at"]) - sc._s
 	for _i in steps:
 		sc._s += sc._base_speed / 60.0
@@ -261,9 +233,8 @@ func _motes_stream() -> void:
 	sc.free()
 
 
-## Carry the frame over far more track than a session will ever generate and measure how far it
-## has drifted from orthonormal: the axes' mutual dot products (0 when perpendicular) and their
-## lengths (1 when normalized).
+## Carry the frame over far more track than a session generates and measure its drift from orthonormal:
+## the axes' mutual dot products (0 when perpendicular) and lengths (1 when normalized).
 func _orthonormal() -> void:
 	var sc = _make(7717, "")
 	if sc == null:
@@ -281,7 +252,7 @@ func _orthonormal() -> void:
 		worst_len = maxf(worst_len, absf(bb.x.length() - 1.0))
 		worst_len = maxf(worst_len, absf(bb.y.length() - 1.0))
 		worst_len = maxf(worst_len, absf(bb.z.length() - 1.0))
-	# GDScript's % formatting has no %e, and these are all exponent.
+	# GDScript's % formatting has no %e.
 	print("  frame over %d stations: axes off perpendicular by %s, off unit length by %s"
 		% [STATIONS, String.num_scientific(worst_dot), String.num_scientific(worst_len)])
 	_ok(worst_dot < 1e-4, "the carried frame's axes drifted %s from perpendicular over %d "
@@ -292,14 +263,12 @@ func _orthonormal() -> void:
 	sc.free()
 
 
-## The track is endless, so the buffer must not be. Fly a long way and check the station count
-## has not grown.
+## The track is endless, so the buffer must not be: fly a long way and check the station count has not grown.
 func _bounded() -> void:
 	var sc = _make(4242, "")
 	if sc == null:
 		return
-	# Explicitly typed: `sc` is an untyped local, so nothing it returns carries a type for
-	# inference to work from.
+	# Explicitly typed: `sc` is untyped, so nothing it returns carries a type for inference.
 	var start: int = sc._pos.size()
 	var f := AudioFeatures.new()
 	var bands := PackedFloat32Array()
@@ -308,8 +277,8 @@ func _bounded() -> void:
 	f.bands = bands
 	f.energy = 0.7
 	f.beat_period = 0.5
-	# The scene's own advance, not _extend directly: the trim is what is under test and it lives
-	# in _advance_track, which only runs when the camera has actually moved.
+	# The scene's own advance, not _extend: the trim is under test and lives in _advance_track, which only
+	# runs when the camera has moved.
 	for _i in 9000:
 		sc._s += sc._speed / 60.0
 		sc._advance_track()

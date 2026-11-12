@@ -1,8 +1,7 @@
 extends Node
 
-## NOT a gate. Drives a real dispatch desk ([DispatchMedium]) over a note with a SYNTHETIC voice ([method
-## DispatchScript.rehearsal]: every spoken word at a steady pace, and the rests the script asks the voice for) - and writes
-## PNGs to look at.
+## Not a gate. Drives a real dispatch desk ([DispatchMedium]) over a note with a synthetic voice ([method
+## DispatchScript.rehearsal]: every word at a steady pace, plus the rests the script asks for) and writes PNGs to look at.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/dispatch/dispatch_look_probe.gd 600 \
 ##       --out <dir>/d --note <a note .md> [--picture <png>] [--seed N] --times 3,8,20 [--every S] [--words W] [--live 1]

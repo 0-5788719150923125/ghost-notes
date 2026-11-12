@@ -1,18 +1,17 @@
 extends HBoxContainer
 class_name NoteKept
 
-## NoteKept - WHAT IS KEPT OF A NOTE, on its Body card, the card every note has (the user, 2026-11-11: "'Folder' is truly a cache,
-## and should probably be named as such ... moved to the 'Body' card, because that card exists for every single project ... change
-## 'Copies...' to 'Restore', and move it to the Body card as well"):
+## NoteKept - what is kept of a note, on its Body card, the card every note has:
 ##
-##   - CACHE opens the folder of what is made for what the note shows: the picked episode's, else the note's own.
-##   - RESTORE… lists every state it can go back to, newest first, each its moment and what changed: the note's every save
-##     ([NoteHistory] - kept here as the note's file is written) and, where it shows an episode, that episode's step versions
+##   - Cache opens the folder of what is made for what the note shows: the picked episode's, else the note's own.
+##   - Restore... lists every state it can go back to, newest first, each its moment and what changed: the note's every save
+##     ([NoteHistory], kept as the note's file is written) and, where it shows an episode, that episode's step versions
 ##     ([method EpisodeFeed.versions]). Going back keeps what stood: the note put back is written as its newest save, a step put
-##     back sends what stood a version back - so the list only grows, and forward is a later entry put back.
+##     back sends what stood a version back - so the list only grows.
 ##
-## Handed by its panel: the note's [member doc], where its cache is ([member cache_dir]) and its history ([member history_dir]), and
-## the episode it shows ([member feed]). Never written from a process that may not write the author's things.
+## Handed by its panel: the note's [member doc], where its cache is ([member cache_dir]) and its history
+## ([member history_dir]), and the episode it shows ([member feed]). Never written from a process that may
+## not write the author's things.
 
 ## The note's source: what is put back is written through it, and each of its writes is kept.
 var doc: DocSource
@@ -48,13 +47,13 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	# EVERY SAVE KEPT: the note as it is opened, then each time its file is written
+	# Every save kept: the note as it is opened, then each time its file is written
 	if doc != null and not doc.written.is_connected(keep_now):
 		doc.written.connect(keep_now)
 	keep_now()
 
 
-## THE NOTE'S FILE, AS IT STANDS, KEPT in its history (the same as the newest is kept once). "" kept, else why not.
+## The note's file, as it stands, kept in its history (the same as the newest is kept once). "" kept, else why not.
 func keep_now() -> String:
 	if doc == null or not doc.is_sync() or Settings.is_read_only():
 		return "nothing is kept from here"
@@ -73,7 +72,7 @@ func open_cache() -> void:
 	OS.shell_open(dir)
 
 
-## EVERY STATE TO GO BACK TO, newest first: `[{at, where, said, note?: entry, key?: an episode's version}]`.
+## Every state to go back to, newest first: `[{at, where, said, note?: entry, key?: an episode's version}]`.
 func entries() -> Array:
 	var out: Array = []
 	var dir := String(history_dir.call()) if history_dir.is_valid() else ""
@@ -89,7 +88,7 @@ func entries() -> Array:
 	return out
 
 
-## ENTRY [param e] ([method entries]) PUT BACK: the note's text written as its file and read back into the panel - kept as its
+## Entry [param e] ([method entries]) put back: the note's text written as its file and read back into the panel - kept as its
 ## newest save - or an episode's step version put back. "" done, else why not.
 func put_back(e: Dictionary) -> String:
 	if Settings.is_read_only():

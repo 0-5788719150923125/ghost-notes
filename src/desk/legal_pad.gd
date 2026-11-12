@@ -1,34 +1,26 @@
 extends Node3D
 class_name LegalPad
 
-## LegalPad - the desk's pad ([DeskMedium]): its cardboard back, its stack, the binding across its head,
-## the page being written, and the pages turned over its head.
+## LegalPad - the desk's pad ([DeskMedium]): its cardboard back, its stack, the binding across its head, the page being
+## written, and the pages turned over its head.
 ##
-## A PAGE IS TURNED AS A HAND TURNS ONE (the user, 2026-10-19: "When a page is turned, it sort of just
-## disappears. Can we do a proper page turn, which gently lifts the head of the pad and folds the paper
-## around the back? ... a turned page will COVER that top part of the paper. And multiple pages might
-## fan-apart a bit, giving more depth"). The sheet was a rigid plane swung about the pad's top edge and
-## hidden once it was over. Now it is lifted at its foot, the bottom right corner a little ahead
-## ([constant LEAD]), and ROLLED: flat on the pad up to where it has lifted, round a bend that moves up
-## the page toward the binding as it tightens - the notebook's peeling photo's roller ([NotebookMedium]),
-## here as long as the page - and straight beyond it, its free end trailing while it swings
-## ([constant TRAIL]). As it comes over the binding the pad's head is lifted on its foot ([method tilt]),
-## the free end curls down behind it and under, and the head comes back down on it as the curl tightens
-## round the binding ([method curve]): the page is folded round the back of the pad, its end under it.
-## A page left lying flat behind the pad (as one does on a desk) was the first cut: it read as a sheet
-## on the desk, not a page turned on a pad.
+## A page is turned as a hand turns one. The sheet is lifted at its foot, the bottom right corner a little ahead ([constant
+## LEAD]), and rolled: flat on the pad up to where it has lifted, round a bend that moves up the page toward the binding as
+## it tightens (the notebook's peeling photo's roller, [NotebookMedium], here as long as the page), and straight beyond it,
+## its free end trailing while it swings ([constant TRAIL]). As it comes over the binding the pad's head is lifted on its
+## foot ([method tilt]), the free end curls down behind it and under, and the head comes back down on it as the curl
+## tightens round the binding ([method curve]): the page is folded round the back of the pad, its end under it.
 ##
-## IT STAYS ROUND THE HEAD. Each page turned later comes over it a little rounder ([constant GAP]): a
-## page's root is under the roots of the pages turned before it, so its loop goes round theirs, the
-## newest outermost. The loops' bulge in front of the binding covers the top of the page being
-## written, above its first rule, and they fan apart round the head. The [constant KEPT] newest are
-## drawn - older ones lie inside them, unseen - and as one more comes over, the rest close up a loop's
-## width.
+## It stays round the head. Each page turned later comes over it a little rounder ([constant GAP]): a page's root is under
+## the roots of the pages turned before it, so its loop goes round theirs, the newest outermost. The loops' bulge in front
+## of the binding covers the top of the page being written, above its first rule, and they fan apart round the head. The
+## [constant KEPT] newest are drawn - older ones lie inside them, unseen - and as one more comes over, the rest close up a
+## loop's width.
 ##
-## A PURE FUNCTION of how many pages are over and how far the one turning has gone ([method show_turned]),
-## so a seek lands on the pad as it was. A sheet is its profile, a curve in the pad's own (z, y) - z
-## toward the foot, y up - from its root at the page's top edge, under the binding, to its foot, swept
-## across the pad's width; the pad's body, every sheet with it, is turned on its foot by the tilt.
+## A pure function of how many pages are over and how far the one turning has gone ([method show_turned]), so a seek lands
+## on the pad as it was. A sheet is its profile, a curve in the pad's own (z, y) - z toward the foot, y up - from its root
+## at the page's top edge, under the binding, to its foot, swept across the pad's width; the pad's body, every sheet with
+## it, is turned on its foot by the tilt.
 
 ## The pad's size (meters): an 8.5 x 11 page, how thick the whole pad is, its cardboard back, and the
 ## binding across its head - how far down the front it reaches, past the page's top edge, and how high
@@ -47,8 +39,8 @@ const DESK_Y := -THICK - Tables.LAYERS_UNDER - 0.0001
 const SAMPLES := 240
 const STEPS := 2
 const COLUMNS := 8
-## THE LOOPS round the pad's head: the innermost's radius over the binding, how much rounder each later
-## page's is (and how much that varies), and how many are drawn.
+## The loops round the pad's head: the innermost's radius over the binding, how much rounder each later page's is (and how
+## much that varies), and how many are drawn.
 const LOOP := 0.007
 const GAP := 0.0006
 const GAP_SPREAD := 0.35
@@ -62,18 +54,16 @@ const UNDER := 0.00005
 const UNDER_STEP := 0.00004
 ## Where a page turns down behind the head: this far behind the binding's back.
 const BEHIND := 0.0015
-## THE TURN, as shares of [constant DeskScript.TURN]: the sheet is over the binding by [constant FLIP];
-## its free end curls under over [constant WRAP]; the head is lifted over the first two of [constant
-## RAISE] and set down over the last two, by [constant RAISE_MOST] radians at most, and the curl is
-## tight round the head as it is down.
+## The turn, as shares of [constant DeskScript.TURN]: the sheet is over the binding by [constant FLIP]; its free end curls
+## under over [constant WRAP]; the head is lifted over the first two of [constant RAISE] and set down over the last two, by
+## [constant RAISE_MOST] radians at most, and the curl is tight round the head as it is down.
 const FLIP := 0.45
 const WRAP := Vector2(0.36, 0.62)
 const RAISE := Vector3(0.2, 0.48, 0.62)
 const RAISE_DOWN := 0.92
 const RAISE_MOST := 0.42
-## THE LIFT: the bend's radius as the foot first lifts, how far up the page it lifts from (a share of
-## its length), how much the free end trails while it swings, and how far ahead (of the turn's 0 to 1)
-## the bottom right corner is mid-turn.
+## The lift: the bend's radius as the foot first lifts, how far up the page it lifts from (a share of its length), how much
+## the free end trails while it swings, and how far ahead (of the turn's 0 to 1) the bottom right corner is mid-turn.
 const ROLL := 0.10
 const PEEL := 0.62
 const TRAIL := 1.2
@@ -82,23 +72,13 @@ const LEAD := 0.07
 const CLEAR := 0.0004
 ## Paper is not quite white under the lamp: what the page's texture is multiplied by.
 const TINT := Color(0.93, 0.92, 0.88)
-## PAPER IS THIN (2026-10-28, the user: "When pages turn, I think the back of the paper might be pure black"): this
-## much of the light on one side of a sheet comes through to the other ([constant SHEET_SHADER]'s BACKLIGHT). A sheet
-## rolled up and over turns its back to the camera and away from every light on the desk - the lamp, the candles on
-## its left - and opaque, its back took only the room's night-blue fill: (9, 8, 15) mid-turn, where the lamp on its
-## face now shows through it warm, (206, 149, 73), the writing faintly through it the other way round. What is left
-## dark is its shadow, on itself and the page under it, as dark as any shadow on the desk.
+## Paper is thin: this much of the light on one side of a sheet comes through to the other ([constant SHEET_SHADER]'s
+## BACKLIGHT), so a sheet rolled up and over, its back away from every light, is not black; what stays dark is its shadow.
 ##
-## ONLY THE LIGHT ON ITS OTHER SIDE (2026-10-29, the user: "You can see written text on the back of pages ... the text
-## disappears immediately after the page turn settles ... at the binding ... you would not expect to see as much text as
-## we do - because that's the header section"): Godot's own BACKLIGHT adds `(1/PI - diffuse) * BACKLIGHT` whichever side
-## a light is on (its 4.7 scene_forward_lights_inc.glsl), so a sheet's back lit straight by the lamp showed the writing on
-## its face as well - the first line and a half lie on the binding's top, face down, its back up (the newest page's loop
-## takes its first 179 px, the binding the next 120; the first line is at 242), and there it showed until the sheet
-## settled, when the sheet round the head is drawn unwritten. On its back a sheet now passes only what falls on its face
-## ([constant SHEET_SHADER]'s light()): written where its face is lit (lifted, turning toward the lamp), dark where its
-## face is down on the binding, so a settling sheet's writing has gone before it is drawn plain. Its face is lit exactly
-## as Godot lights it, that term and all - the page under the candles was tuned in it.
+## Only the light on its other side: Godot's own BACKLIGHT adds `(1/PI - diffuse) * BACKLIGHT` whichever side a light is on
+## (scene_forward_lights_inc.glsl), which would show the writing on a sheet's face through its back (the first line and a
+## half lie face down on the binding). On its back a sheet therefore passes only what falls on its face ([constant
+## SHEET_SHADER]'s light()). Its face is lit exactly as Godot lights it, that term and all.
 const THROUGH := 0.45
 
 const SHEET_SHADER := """
@@ -186,8 +166,8 @@ var _parts: Array = []             # cardboard, stack, binding: rebuilt with a n
 var _shown := ""
 
 
-## THE PAD, built: its back, its stack, its binding in [param look]'s colors ([method DeskLook.of]),
-## the page being written (its texture [param page]), and the turning sheet's face [param turning].
+## The pad, built: its back, its stack, its binding in [param look]'s colors ([method DeskLook.of]), the page being written
+## (its texture [param page]), and the turning sheet's face [param turning].
 func build(look: Dictionary, page: Texture2D, turning: Texture2D) -> void:
 	for n in _parts:
 		(n as Node).queue_free()
@@ -198,13 +178,10 @@ func build(look: Dictionary, page: Texture2D, turning: Texture2D) -> void:
 	var paper: Color = look.get("paper", Color(0.985, 0.972, 0.9))
 	var top := -H * 0.5
 	var head := top - BIND_W
-	# the cardboard back, a little wider and longer than the paper
 	_part(_box(Vector3(W + 0.004, BOARD, H + BIND_W + 0.005), Vector3(0.0, -THICK + BOARD * 0.5, (head + H * 0.5) * 0.5),
 		look.get("board", Color(0.32, 0.27, 0.22)), 0.9))
-	# the stack of pages under the one being written, its edges a little darker than a face
 	_part(_box(Vector3(W, THICK - BOARD, H + BIND_W), Vector3(0.0, -(THICK - BOARD) * 0.5, (head + H * 0.5) * 0.5),
 		paper.darkened(0.12), 0.95))
-	# the binding: a tape wrapped over the head, its front edge a little over the page's top
 	var tape := _box(Vector3(W + 0.005, THICK + TAPE_TOP + 0.0003, BIND_W + BIND_OVER + 0.0025),
 		Vector3(0.0, (TAPE_TOP - THICK - 0.0003) * 0.5, top + (BIND_OVER - BIND_W - 0.0025) * 0.5),
 		look.get("binding", Color(0.5, 0.1, 0.1)), 0.55)
@@ -268,9 +245,9 @@ static func _sheet_material(front: Texture2D, written: bool) -> ShaderMaterial:
 	return mat
 
 
-## SHOWS [param over] pages turned and lying round the pad's head and, while [param u] is 0 to 1, the
-## next turning over them (its face the turning texture [method build] was handed), the pad's head
-## lifted as it is tucked under; -1, none is. Rebuilt only when either has changed.
+## Shows [param over] pages turned and lying round the pad's head and, while [param u] is 0 to 1, the next turning over them
+## (its face the turning texture [method build] was handed), the pad's head lifted as it is tucked under; -1, none is.
+## Rebuilt only when either has changed.
 func show_turned(over: int, u: float) -> void:
 	var key := "%d|%.4f" % [over, u]
 	if key == _shown:
@@ -314,9 +291,8 @@ static func lifted(q: Vector2, beta: float) -> Vector2:
 	return Vector2(p.z, p.y)
 
 
-## HOW FAR THE PAD'S HEAD IS LIFTED [param u] of the way through a turn (radians): up as the page comes
-## over, held while its end goes under, and down again before the pen comes back ([constant
-## DeskMedium.PARK_BACK]).
+## How far the pad's head is lifted [param u] of the way through a turn (radians): up as the page comes over, held while its
+## end goes under, and down again before the pen comes back ([constant DeskMedium.PARK_BACK]).
 static func tilt(u: float) -> float:
 	var up := _ease(clampf((u - RAISE.x) / (RAISE.y - RAISE.x), 0.0, 1.0))
 	var down := _ease(clampf((u - RAISE.z) / (RAISE_DOWN - RAISE.z), 0.0, 1.0))
@@ -333,8 +309,8 @@ static func turn_progress(u: float) -> float:
 	return x * x * (3.0 - 2.0 * x)
 
 
-## PAGE [param j]'s place among the loops, 0 the innermost drawn, with [param over] pages over and the
-## next [param e] of the way over them: past [constant KEPT] they close up a loop's width as it comes.
+## Page [param j]'s place among the loops, 0 the innermost drawn, with [param over] pages over and the next [param e] of the
+## way over them: past [constant KEPT] they close up a loop's width as it comes.
 static func rank(j: int, over: int, e: float) -> float:
 	return float(j) - maxf(0.0, float(over) + e - float(KEPT))
 
@@ -354,17 +330,15 @@ static func under_of(r: float) -> float:
 	return -THICK - UNDER - maxf(r, 0.0) * UNDER_STEP
 
 
-## A SHEET'S PROFILE: (z, y) in the pad's body at [constant SAMPLES] even steps along it, from its root
-## (the page's top edge, under the binding) to its foot. [param u] is how far through its turn it is -
-## 0 flat on the pad, 1 round the head with its end under the pad - [param loop] the radius it goes over
-## the binding at, [param root] how high its root is, [param under] how far under the pad its end lies,
-## and [param beta] how far the head is lifted (it keeps off the desk).
+## A sheet's profile: (z, y) in the pad's body at [constant SAMPLES] even steps along it, from its root (the page's top
+## edge, under the binding) to its foot. [param u] is how far through its turn it is (0 flat on the pad, 1 round the head
+## with its end under the pad), [param loop] the radius it goes over the binding at, [param root] how high its root is,
+## [param under] how far under the pad its end lies, [param beta] how far the head is lifted (it keeps off the desk).
 ##
-## Its angle along it: 0 (flat) up to where it has lifted, then round a bend of a radius that tightens
-## from [constant ROLL] to [param loop] as the lift moves up the page, its free part straight on, trailing
-## while it swings. Once it is over, past the binding, the free part curls down: at first all of it one
-## arc, so a page hangs no lower than a hand would let it, then - as the head comes down - a bend round
-## the head's back, as tight as the loop, and the rest straight under the pad.
+## Its angle along it: 0 up to where it has lifted, then round a bend whose radius tightens from [constant ROLL] to [param
+## loop] as the lift moves up the page, the free part straight on, trailing while it swings. Once over the binding the free
+## part curls down: first all one arc, then, as the head comes down, a bend round the head's back as tight as the loop, and
+## the rest straight under the pad.
 static func curve(u: float, loop: float, root: float, under: float, beta := 0.0) -> PackedVector2Array:
 	var top := -H * 0.5
 	var a := _ease(clampf(u / FLIP, 0.0, 1.0))

@@ -1,34 +1,29 @@
 extends RefCounted
 class_name AssemblyWorld
 
-## AssemblyWorld - THE BRICKS AS REAL BODIES: Godot's own Jolt, each piece a rigid body with its own shape and weight, falling, bouncing,
-## pushing and being pushed (next/assembly.md "Real bodies"). The user of what stood here before, 2026-11-03: "bricks gently floating
-## around in the air ... It's not actually digging, there's no proper physics, and the blocks clip through each other."
+## AssemblyWorld - the bricks as real bodies: Godot's own Jolt, each piece a rigid body with its own shape and weight, falling, bouncing,
+## pushing and being pushed (next/assembly.md "Real bodies"). Run only by [AssemblyBake], in a process of its own: the engine's physics
+## server cannot be stepped by hand, so a child Godot steps it under `--fixed-fps` as fast as the machine goes, and what happened is
+## written down.
 ##
-## RUN ONLY BY [AssemblyBake], in a process of its own: the engine's physics server cannot be stepped by hand, so a child Godot steps it
-## under `--fixed-fps` as fast as the machine goes, and what happened is written down. Nothing in the app's frame ever waits on it.
+## At ten times its size ([constant SIM]): a stud is 8 mm, and Jolt's margins are made for things a meter across. Everything is scaled
+## going in and coming out, gravity too, so a fall still takes the time a fall takes.
 ##
-## AT TEN TIMES ITS SIZE ([constant SIM]): a stud is 8 mm, and Jolt's margins are made for things a meter across. Everything in here is
-## scaled going in and coming out, gravity too, so a fall still takes the time a fall takes.
+## It must come to rest, or every stop is a lie and every moment of silence crackles: what bounces, bounces only past 25 cm/s
+## (project.godot's `bounce_velocity_threshold`; at 10x gravity a resting piece gains 0.8 m/s in a read); every piece weighs the same to the
+## solver ([constant MASS]); contacts have a millimeter's slop (`penetration_slop`); a piece rocking this little is at rest
+## ([constant REST_SPIN]).
 ##
-## IT MUST COME TO REST, or every stop is a lie and every moment of silence crackles. It did not, at first (next/assembly.md "Real bodies"): 350 "hits" a second all the way
-## through, on pieces rocking at 3 rad/s, where the only thing happening was a piece being carried across the table. Four things, each measured: what bounces, bounces only
-## past 25 cm/s (project.godot's `bounce_velocity_threshold`: at 10x gravity a resting piece gains 0.8 m/s in a read, which at the default bounced for ever); every piece
-## weighs the same to the solver ([constant MASS]); contacts have a millimeter's slop (`penetration_slop`); and a piece rocking this little IS at rest ([constant REST_SPIN]).
-## The record went from under real time to eight times it, because a heap that comes to rest costs nothing.
+## A heap at rest costs nothing ([method _thaw_and_freeze]): a piece that has stopped goes static, and is made a body again only when
+## something that moves comes near. Jolt wakes everything touching what is awake, and in a tub everything touches everything, so the cost of
+## a dig is what it disturbs, and nothing is left hanging when what held it goes.
 ##
-## A HEAP AT REST COSTS NOTHING ([method _thaw_and_freeze]): a piece that has stopped goes static, and is only made a body again when
-## something that moves comes near it. Jolt wakes everything touching what is awake, and in a tub everything touches everything: 468 of
-## 600 bricks stayed awake through a small dig. So the cost of a dig is what it disturbs, however full the tub is, and since whatever moves
-## thaws what is around it, nothing is left hanging when what held it goes.
+## A wall holds, whatever is pushed at it ([method add_vessel], [method _wall_push]). A hand is kinematic, so what it shoves against a wall
+## is pushed by something that cannot give, and no solver satisfies both; a thin wall is two faces, each pushing out through itself. So what
+## is in a vessel stays in it as a rule of this world, kept every read and laid over the solver: its inside is measured from the thing's own
+## surface by rays, and a piece's corner past that, below the rim, moves the piece back. Over the rim is not through it.
 ##
-## A WALL HOLDS, WHATEVER IS PUSHED AT IT ([method add_vessel], [method _wall_push]; feedback 0015, the first real model's tub: "an orange brick currently clipping through the side of the bucket"). A hand
-## is kinematic, so what it shoves against a wall is being pushed by something that cannot give, and no solver can satisfy both: an 8x8 plate stood 2.5 mm into a wall 3 mm thick (the tub's 5 mm, warped
-## to 0.63 on its short side), and a wall is two faces of a surface, each pushing what is nearest it out through itself, so a plate as thin as the wall between them was held there for the whole show.
-## 41 true boxes stood so in the record's first 90 steps. So what is in a vessel stays in it as a rule of this world, kept every read and laid over the solver: what its inside is was measured from the
-## thing's own surface by rays, and a piece's corner past that, below the rim, moves the piece back. Over the rim is not through it, and what lies across a rim is left alone.
-##
-## WHAT HAPPENED IS WRITTEN AS IT HAPPENS: each moving piece's pose, kept only where a straight line between keys would miss it
+## What happened is written as it happens: each moving piece's pose, kept only where a straight line between keys would miss it
 ## ([method _record]), and each hit ([method _hits]) - how hard, what it hit, where - which is the only place a brick's sound comes from.
 
 ## How much bigger than the table the world is, and how often it steps.
@@ -36,26 +31,26 @@ const SIM := 10.0
 const TICKS := 240
 const DT := 1.0 / float(TICKS)
 const G := 9.81
-## What is loose is read this many ticks apart: reading it every tick was a third of a record's time, and no sound or sight needs 240 a second.
+## What is loose is read this many ticks apart; no sound or sight needs 240 reads a second.
 const READ_EVERY := 2
 ## Keys are looked at this many ticks apart (60 a second), and kept only if leaving them out would misplace a piece by this much
 ## (meters, and as a quaternion's dot short of 1).
 const RECORD_EVERY := 4
 const KEY_NEAR := 0.0002
 const KEY_TURN := 0.00004
-## WHAT A PIECE IS LIKE: its grip, its bounce, and how heavy a cubic centimeter of a molded (hollow) piece is against a solid one.
+## What a piece is like: its grip, its bounce, and how heavy a cubic centimeter of a molded (hollow) piece is against a solid one.
 const FRICTION := 0.34
 const BOUNCE := 0.28
 const HOLLOW := 0.45
-## THEY ALL WEIGH THE SAME TO THE SOLVER, whatever they weigh to the ear ([method weight_of]): a plate sixty times a 1x1 lying on it kept whatever was under it trembling for
-## as long as it lay there, and a heap never came to rest. A little turning is lost to the air, where a real piece's is lost to its grip.
+## They all weigh the same to the solver, whatever they weigh to the ear ([method weight_of]): a heavy plate lying on a 1x1 keeps whatever is under
+## it trembling and a heap never comes to rest. A little turning is lost to the air, where a real piece's is lost to its grip.
 const MASS := 1.0
 const ANGULAR_DAMP := 3.0
-## HEARD ([method _hits]): the least sudden change in a piece's speed that is a hit at all (m/s - a piece at rest is held up against
+## Heard ([method _hits]): the least sudden change in a piece's speed that is a hit at all (m/s; a piece at rest is held up against
 ## 0.08 of it every read), and how soon the same piece can be heard again (ticks).
 const HIT_LEAST := 0.1
 const HIT_AGAIN := 4
-## ...and that it was going at least this fast, one side of it or the other: a piece resting trembles by the gravity of a read, up and down, which is twice HIT_LEAST's jitter and no hit.
+## ...and that it was going at least this fast, one side of it or the other: a piece resting trembles by the gravity of a read, which is twice HIT_LEAST's jitter and no hit.
 const HIT_GOING := 0.1
 ## ...how far round a piece that has hit something is looked at, for what it hit (the world's meters), and how many things.
 const ASK_MARGIN := 0.012
@@ -72,8 +67,8 @@ const THAW_NEAR := 0.016
 const CELL := 0.04
 ## How long the world may take to come to rest before a stop, at most (seconds): a piece still creeping then is under anything seen.
 const SETTLE_MOST := 1.6
-## WHAT IS IN A VESSEL STAYS IN IT ([method add_vessel]): how many ways round and how many heights its inside is measured at; how far past the wall a corner may stand (meters: a contact's own slop is 1 mm, and
-## a wall may be 3 mm through), where it is put back to, and past what depth it is no longer pressed into the wall but somewhere else; how far past the wall a middle is no longer in it; what a way out reads as.
+## What is in a vessel stays in it ([method add_vessel]): how many ways round and how many heights its inside is measured at; how far past the wall a corner may stand (meters: a contact's own slop is 1 mm,
+## and a wall may be 3 mm through), where it is put back to, and past what depth it is no longer pressed into the wall but somewhere else; how far past the wall a middle is no longer in it; what a way out reads as.
 const WALL_ANGLES := 96
 const WALL_BANDS := 16
 const WALL_SLOP := 0.0012
@@ -133,9 +128,9 @@ func _init(world_space: RID) -> void:
 
 # --- what the shapes are -----------------------------------------------------------------------------------------
 
-## THE SHAPES OF A PART: `[[shape, local transform]...]`, scaled to the world's size, its origin the middle of its underside as the mesh's is
-## ([AssemblyMeshes]). As tall as its studs: a piece lies ON another's studs, and that is what stops them going through each other. Its
-## hollow underside is left closed, and a stud that would have gone up into it stays out: nothing shows of that but a hair's air.
+## The shapes of a part: `[[shape, local transform]...]`, scaled to the world's size, its origin the middle of its underside as the mesh's is
+## ([AssemblyMeshes]). As tall as its studs: a piece lies on another's studs, and that is what stops them going through each other. Its
+## hollow underside is left closed, and a stud that would have gone up into it stays out.
 func shapes_of(kind: String, w: int, d: int) -> Array:
 	var key := "%s %dx%d" % [kind, w, d]
 	if _shapes.has(key):
@@ -228,7 +223,7 @@ func add_surface(faces: PackedVector3Array, sound: String) -> RID:
 	return b
 
 
-## WHAT VESSEL [param faces] (meters) HOLDS IS KEPT IN IT, from here on: its inside measured from [param middle] (x, z) by rays, all round and at each height from [param low] up, as far out as its surface. A way
+## What vessel [param faces] (meters) holds is kept in it, from here on: its inside measured from [param middle] (x, z) by rays, all round and at each height from [param low] up, as far out as its surface. A way
 ## that finds nothing is open, and so is one that steps sharply in above the wall below it, which is a handle arching over and no wall.
 func add_vessel(faces: PackedVector3Array, middle: Vector2, low: float) -> void:
 	var high := low
@@ -289,7 +284,7 @@ static func _wall_at(v: Dictionary, a: float, y: float) -> float:
 	return lerpf(lo, hi, ty)
 
 
-## HOW FAR PIECE [param id], its middle [param c] where [param at] has it, MUST MOVE TO BE IN ITS VESSEL AGAIN: nothing for what is in none, for what is clear, and for what is across the rim. It is in a
+## How far piece [param id], its middle [param c] where [param at] has it, must move to be in its vessel again: nothing for what is in none, for what is clear, and for what is across the rim. It is in a
 ## vessel from when its middle is, until that middle leaves over the rim: gone through the wall it is still in, and comes back.
 func _wall_push(id: int, at: Transform3D, c: Vector3) -> Vector3:
 	var vi := _in[id]
@@ -343,7 +338,7 @@ func _wall_push(id: int, at: Transform3D, c: Vector3) -> Vector3:
 			var over := pd - rr
 			if over <= WALL_SLOP or over > WALL_DEEP or over <= deepest:
 				continue
-			# ...WHERE THE PIECE CROSSES THE WALL'S PLACE, ON ITS WAY TO THAT CORNER: over the rim is not through it, and a plate lying across a rim has corners far below it
+						# ...where the piece crosses the wall's place, on its way to that corner: over the rim is not through it, and a plate lying across a rim has corners far below it
 			var s := clampf((rr - cd) / maxf(pd - cd, 1e-6), 0.0, 1.0)
 			if lerpf(cc.y, w.y, s) >= open:
 				continue
@@ -459,7 +454,7 @@ func make_pieces(list: Array) -> void:
 		PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_BOUNCE, BOUNCE)
 		PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_ANGULAR_DAMP, ANGULAR_DAMP)
 		PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_ANGULAR_DAMP_MODE, PhysicsServer3D.BODY_DAMP_MODE_REPLACE)
-		# ...A PLATE IS THIN AND SO IS A TIN WALL: at a meter a second a plate goes nearly its own thickness in a step, and through a wall in two
+				# ...a plate is thin and so is a tin wall: at a meter a second a plate goes nearly its own thickness in a step, and through a wall in two
 		PhysicsServer3D.body_set_enable_continuous_collision_detection(b, true)
 		bodies[id] = b
 		_corners[id] = _corners_for(kind, w, d)
@@ -468,13 +463,13 @@ func make_pieces(list: Array) -> void:
 		mid[id] = Vector3.ZERO
 
 
-## PIECE [param id]'s middle, where it is at [param at] (its origin is under it).
+## Piece [param id]'s middle, where it is at [param at] (its origin is under it).
 func _middle(id: int, at: Transform3D) -> Vector3:
 	var q: Dictionary = pieces[id]
 	return at * Vector3(0.0, float((Assembly.KINDS[String(q["kind"])] as Dictionary)["h"]) * Assembly.PLATE * 0.5, 0.0)
 
 
-## PIECE [param id] put in the world at [param at], as a body falling from there.
+## Piece [param id] put in the world at [param at], as a body falling from there.
 func drop_in(id: int, at: Transform3D, v := Vector3.ZERO, w := Vector3.ZERO) -> void:
 	var b := bodies[id]
 	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, _big(at))
@@ -491,7 +486,7 @@ func drop_in(id: int, at: Transform3D, v := Vector3.ZERO, w := Vector3.ZERO) -> 
 	_note_key(id)
 
 
-## PIECE [param id] where it was left at [param at], as still as a piece can be: how a world is stood again from a checkpoint.
+## Piece [param id] where it was left at [param at], as still as a piece can be: how a world is stood again from a checkpoint.
 func place_frozen(id: int, at: Transform3D) -> void:
 	var b := bodies[id]
 	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, _big(at))
@@ -535,7 +530,7 @@ static func _cell_of(p: Vector3) -> Vector3i:
 	return Vector3i(floori(p.x / CELL), floori(p.y / CELL), floori(p.z / CELL))
 
 
-## PIECE [param id] IN HAND: nothing moves it now but [method carry_to], and it pushes what it meets.
+## Piece [param id] in hand: nothing moves it now but [method carry_to], and it pushes what it meets.
 func take_up(id: int) -> void:
 	var b := bodies[id]
 	if state[id] == LOOSE:
@@ -559,7 +554,7 @@ func carry_to(id: int, at: Transform3D) -> void:
 	mid[id] = _middle(id, at)
 
 
-## PIECE [param id] LET GO, with the hand's speed.
+## Piece [param id] let go, with the hand's speed.
 func let_go(id: int, v := Vector3.ZERO, w := Vector3.ZERO) -> void:
 	held.erase(id)
 	var b := bodies[id]
@@ -570,7 +565,7 @@ func let_go(id: int, v := Vector3.ZERO, w := Vector3.ZERO) -> void:
 	spin[id] = w
 
 
-## PIECE [param id] PRESSED HOME at [param at] (the world's), [param local] of the plate: it is part of what stands there now, and goes
+## Piece [param id] pressed home at [param at] (the world's), [param local] of the plate: it is part of what stands there now, and goes
 ## with the plate from here on.
 func seat(id: int, at: Transform3D, local: Transform3D) -> void:
 	held.erase(id)
@@ -586,7 +581,7 @@ func seat(id: int, at: Transform3D, local: Transform3D) -> void:
 	(seats[id] as Array).append([tau, INF, local])
 
 
-## PIECE [param id] OFF THE PLATE and in hand again.
+## Piece [param id] off the plate and in hand again.
 func unseat(id: int) -> void:
 	if seats.has(id):
 		var list: Array = seats[id]
@@ -603,7 +598,7 @@ func moved_with_plate(id: int, at: Transform3D) -> void:
 
 # --- a tick ------------------------------------------------------------------------------------------------------
 
-## AFTER THE WORLD HAS STEPPED: where everything got to, what hit what, what to thaw and what has stopped.
+## After the world has stepped: where everything got to, what hit what, what to thaw and what has stopped.
 func after_step() -> void:
 	tick += 1
 	tau = float(tick) * DT
@@ -624,7 +619,7 @@ func after_step() -> void:
 					at.origin += push
 					c += push
 					PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, _big(at))
-					# ...AND WHAT IT IS MOVED TOWARD CAN GIVE: a neighbor gone static would have it lying in it for good (2.45 mm, at the end of a record)
+										# ...and what it is moved toward can give: a neighbor gone static would have it lying in it for good
 					_pushed.append(id)
 					still[id] = 0.0
 					var out := -push.normalized()
@@ -634,7 +629,7 @@ func after_step() -> void:
 						PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, v * SIM)
 			xf[id] = at
 			mid[id] = c
-			# ...NO SOUND OF ITS OWN: what the wall took off its speed is no hit, and what struck the wall struck it before it was this far in
+						# ...no sound of its own: what the wall took off its speed is no hit, and what struck the wall struck it before it was this far in
 			if recording and not pushed:
 				_hits(id, b, at, v, w)
 			vel[id] = v
@@ -648,8 +643,8 @@ func after_step() -> void:
 		_thaw_and_freeze()
 
 
-## WHAT WAS HIT ([member events]): the one place a brick's sound comes from. A sudden change in a piece's speed past what gravity gives it,
-## and how far it was turned: a hand's slow push changes it a little a tick, and is heard as nothing; a fall stopped dead, as all of it at once.
+## What was hit ([member events]): the one place a brick's sound comes from. A sudden change in a piece's speed past what gravity gives it,
+## and how far it was turned: a hand's slow push changes it a little a tick and is heard as nothing; a fall stopped dead, as all of it at once.
 func _hits(id: int, b: RID, at: Transform3D, v: Vector3, w: Vector3) -> void:
 	if quiet[id] > tick:
 		return
@@ -664,9 +659,9 @@ func _hits(id: int, b: RID, at: Transform3D, v: Vector3, w: Vector3) -> void:
 	events.append([tau, at.origin.x, at.origin.y, at.origin.z, dv, size[id], weight_of(String(q["kind"]), int(q["w"]), int(q["d"])), "hit", _against(id, b)])
 
 
-## WHAT PIECE [param id] IS AGAINST, FOR ITS SOUND: asked only when it has hit something. Having every body report its contacts as they happen is what
-## this would otherwise take, and that was more than half of the whole record's time (measured, 55.7 s to 23.3 s). A hand before what is made of something,
-## and that before another piece: a piece among others against a tin wall rings the wall.
+## What piece [param id] is against, for its sound: asked only when it has hit something (having every body report its contacts as they
+## happen was more than half of the record's time). A hand before what is made of something, and that before another piece: a piece among
+## others against a tin wall rings the wall.
 func _against(id: int, b: RID) -> String:
 	_ask.shape_rid = PhysicsServer3D.body_get_shape(b, 0)
 	_ask.transform = PhysicsServer3D.body_get_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM)
@@ -682,13 +677,13 @@ func _against(id: int, b: RID) -> String:
 	return out
 
 
-## A SOUND THAT IS NOT A HIT: a press home, a piece pulled off, a plate dragged.
+## A sound that is not a hit: a press home, a piece pulled off, a plate dragged.
 func say(kind: String, at: Vector3, strength: float, reach: float, weight := 1.0) -> void:
 	if recording:
 		events.append([tau, at.x, at.y, at.z, strength, reach, weight, kind, PLASTIC])
 
 
-## KEPT ONLY WHERE A LINE BETWEEN KEYS WOULD MISS IT: the last sample is written when going straight from the last key to here would pass
+## Kept only where a line between keys would miss it: the last sample is written when going straight from the last key to here would pass
 ## it by more than a hair, so a piece at rest has no keys and a falling one only as many as it takes. A piece's first move starts from its
 ## still pose, which is then written, and it holds there through whatever came before.
 func _record(id: int) -> void:
@@ -751,7 +746,7 @@ func _flush_key(id: int, at: Transform3D) -> void:
 	_prev[id] = null
 
 
-## EVERY PIECE'S LAST PLACE WRITTEN: nothing is left owed a key past here.
+## Every piece's last place written: nothing is left owed a key past here.
 func flush_all() -> void:
 	for id in loose:
 		_flush_key(id, xf[id])
@@ -759,7 +754,7 @@ func flush_all() -> void:
 		_flush_key(id, xf[id])
 
 
-## WHAT MOVES THAWS WHAT IS ROUND IT, AND WHAT HAS STOPPED GOES STATIC ([constant REST_FOR]). Thawed only near something moving, a heap
+## What moves thaws what is round it, and what has stopped goes static ([constant REST_FOR]). Thawed only near something moving, a heap
 ## costs what is disturbed; and because anything that moves thaws what lies on it, nothing hangs when what held it goes.
 func _thaw_and_freeze() -> void:
 	var dt := DT * float(THAW_EVERY)
@@ -836,7 +831,7 @@ func at_rest() -> bool:
 	return true
 
 
-## THE HIGHEST OF WHAT LIES NEAR [param at] (meters), a piece's top - of what lies loose, not in hand, not on the plate - or NAN.
+## The highest of what lies near [param at] (meters), a piece's top - of what lies loose, not in hand, not on the plate - or NAN.
 func top_near(at: Vector2, reach: float) -> float:
 	var out := NAN
 	for id in pieces.size():
@@ -850,7 +845,7 @@ func top_near(at: Vector2, reach: float) -> float:
 	return out
 
 
-## HOW MANY PIECES LIE OVER PIECE [param id].
+## How many pieces lie over piece [param id].
 func on_top_of(id: int) -> int:
 	var n := 0
 	var m := mid[id]

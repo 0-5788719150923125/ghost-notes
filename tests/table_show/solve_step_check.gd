@@ -1,24 +1,24 @@
 extends SceneTree
 
-## The gate of WORK A COMPUTER CHECKS at the table ([SolverTools], the `solve` step; next/proof.md, "Proof became a table show"):
+## The gate of work a computer checks at the table ([SolverTools], the `solve` step; next/proof.md, "Proof became a table show"):
 ## the problem a plan fixes, the step it makes, what the solver can do and hand in, and what the roles after it are told. No
 ## renderer, no writer, no Lean: what Lean or a run would answer is written as their answer would be.
 ##
 ##   godot --headless --path . --script res://tests/table_show/solve_step_check.gd
 ##
-## - A PLAN'S PROBLEM LANDS ONLY SOUND: a proof states `theorem main` (its `:=` and proof cut off, a forbidden name with a space
+## - a plan's problem lands only sound: a proof states `theorem main` (its `:=` and proof cut off, a forbidden name with a space
 ##   dropped), a computation says what it computes, and a computation where no code can run is refused; no problem is none (the
 ##   controls: a proof with another theorem's name and a computation that says nothing are refused).
-## - IT MAKES ITS STEP: a plan with a problem has `solve` before the table, made from the plan, and the acts and the intro wait
+## - it makes its step: a plan with a problem has `solve` before the table, made from the plan, and the acts and the intro wait
 ##   for it. The control: a plan with none has no `solve`, and nothing waits on one.
-## - THE SOLVER'S TOOLS: a proof's are the notebook, Lean and submit (and runs where code can run), a computation's the
+## - the solver's tools: a proof's are the notebook, Lean and submit (and runs where code can run), a computation's the
 ##   notebook, runs and submit; the notebook keeps its sections in order; a result is accepted only with runs that ran to their
 ##   end (the controls: none named, a run that failed, a run that is not there).
-## - ITS SESSION LANDS HONESTLY: a proof handed in is `verified`, a result `computed`; a run that handed in nothing is tried
+## - its session lands honestly: a proof handed in is `verified`, a result `computed`; a run that handed in nothing is tried
 ##   again, then goes on unchecked if it left a notebook - and fails if it left none.
-## - WHAT THE ROLES AFTER IT ARE TOLD: a verified proof is said accepted, an unfinished one never (two-sided); the upload says
+## - what the roles after it are told: a verified proof is said accepted, an unfinished one never (two-sided); the upload says
 ##   what checked it, and says nothing with no solve.
-## - NO NOTATION IN WHAT IS SAID: a passage with TeX in its words is caught, a mark's underscore is not, and plain words are
+## - no notation in what is said: a passage with TeX in its words is caught, a mark's underscore is not, and plain words are
 ##   not (the control); a letter in brackets stays to be said, a direction in brackets goes.
 
 var _fails := 0

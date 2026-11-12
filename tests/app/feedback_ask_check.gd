@@ -1,24 +1,20 @@
 extends Node
 
-## THE ASK BOX on the ` feedback console: a note written with it off is LOGGED - the screenshot
-## and the record land on disk and in the feedback list - and nothing is dispatched. Asked for as
-## "Sometimes, I do not want to prompt the agent - I just want to log the screenshot and feedback."
+## The Ask box on the ` feedback console: a note written with it off is logged (the screenshot and record
+## land on disk and in the feedback list) and nothing is dispatched.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/app/feedback_ask_check.gd 60
 ##
-## A BOOT probe: the box is remembered through [Settings] and the backend is read through
-## [AssistantBackends]. It never touches the author's feedback: the console writes into a scratch folder,
-## the backend is chosen in memory only (a probe's Settings never reach the disk), and the
-## Assistant it asks is held (`hold`) throughout, so even an entry that wrongly queues cannot start
-## a run - the control case below queues one on purpose.
+## A boot probe: the box is remembered through [Settings] and the backend read through [AssistantBackends].
+## The console writes into a scratch folder, the backend is chosen in memory only, and the Assistant is held
+## (`hold`) throughout, so even an entry that wrongly queues cannot start a run (the control case queues
+## one on purpose).
 ##
-## AN ASSISTANT THAT IS NOT INSTALLED IS NO ASSISTANT ("If no AI is installed, we cannot support
-## that feature and should definitely gate on it"): the box goes off for a chosen CLI that is
-## missing and for no AI at all, a note asked then is only logged, and a conversation pinned to a
-## missing CLI cannot be followed up or resumed - not by its button, not by Enter, and not by a
-## run that reaches the queue anyway. Whether a CLI is THERE is forced both ways in [Deps]'
-## resolution cache, so every case holds on any machine; a "present" one resolves to this very
-## executable, and nothing is ever launched.
+## An assistant that is not installed is no assistant: the box goes off for a chosen CLI that is missing and
+## for no AI at all, a note asked then is only logged, and a conversation pinned to a missing CLI cannot be
+## followed up or resumed - not by its button, not by Enter, not by a run that reaches the queue anyway.
+## Whether a CLI is there is forced both ways in [Deps]' resolution cache; a "present" one resolves to this
+## executable, and nothing is launched.
 
 const SCRATCH := "user://feedback_ask_check"
 
@@ -187,8 +183,8 @@ func _run() -> void:
 	get_tree().quit(0 if _fails == 0 else 1)
 
 
-## Type a note and press Enter. Under the dummy renderer the open-time capture is empty, so a
-## stand-in picture is put where the screenshot would be.
+## Type a note and press Enter. Under the dummy renderer the open-time capture is empty, so a stand-in
+## picture is put where the screenshot would be.
 func _submit(fc: FeedbackConsole, text: String) -> void:
 	if fc._shot_img == null or fc._shot_img.is_empty():
 		fc._shot_img = Image.create(16, 9, false, Image.FORMAT_RGBA8)

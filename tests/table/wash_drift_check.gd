@@ -1,30 +1,24 @@
 extends Node
 
-## WHAT LIES ON THE CLOTH UNDER A REAL WASH ([method Drifts.laid]'s `sweeps`, the table's
-## [method TableShuffle.sweeps]): petals lying where the deck is washed, judged off their planned tracks
-## against the cards' own, over washes of the real plan. The user, 2026-10-14: the petals were "riding"
-## cards around the wash, "which is pretty strange", and slid off the cards "yet remain attached to them
-## - even though they are way out to the side". So, every step of every piece the cards met:
+## What lies on the cloth under a real wash ([method Drifts.laid]'s `sweeps`, the table's [method TableShuffle.sweeps]): petals lying
+## where the deck is washed, judged off their planned tracks against the cards' own, over washes of the real plan. Every step of
+## every piece the cards met:
 ##
-##   - none is CARRIED BY NOTHING: on the cloth and out of every card's reach it only slows, at the
-##     cloth's grip at least, and never turns;
-##   - none is HELD UP beside a card: a face's height, steady, out of every card's reach;
-##   - none LEAPS: no step on the cloth or a face over 25 mm in 1/40 s (a shove once put one out the
-##     far side of a card, a card's width in a step);
-##   - none lies UNDER a card on the cloth, or in the deck (the first report: cards clipped through them);
-##   - RIDES ARE RARE AND SHORT: a piece is carried on a moving card's face a small share of the time
-##     (lying on a card that lies still is no ride: a wide, thin heap covers more of the cloth - 2026-10-15),
-##     and most rides carry it a few centimeters - and yet the wash moves them: they are shoved, they
-##     ride, they are flicked.
+##   - none is carried by nothing: on the cloth and out of every card's reach it only slows, at the cloth's grip at least, and
+##     never turns;
+##   - none is held up beside a card: a face's height, steady, out of every card's reach;
+##   - none leaps: no step on the cloth or a face over 25 mm in 1/40 s;
+##   - none lies under a card on the cloth, or in the deck;
+##   - rides are rare and short: a piece is carried on a moving card's face a small share of the time (lying on a card that lies
+##     still is no ride), and most rides carry it a few centimeters - and yet the wash moves them: they are shoved, ride, are flicked.
 ##
-## THE CONTROL: tracks made to do what was reported, on the same washes' cards - one carried along the
-## cloth beside a card, one held at a face's height beside it, one carried on it the whole way (carried
-## on a moving card nearly all the time, and a long ride) - each caught by the check it was made for.
+## The control: tracks made to do what is forbidden, on the same washes' cards - one carried along the cloth beside a card, one held
+## at a face's height beside it, one carried on it the whole way - each caught by the check it was made for.
 ##
 ##   tests/run_boot_probe.sh tests/table/wash_drift_check.gd 300
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - the tracks are numbers. It takes about
-## 180 s alone (2026-10-15: six washes of the real plan), so its backstop is 300.
+## A boot probe (the medium reaches the Director); no GPU - the tracks are numbers. It takes about 180 s alone (six washes of the
+## real plan), so its backstop is 300.
 
 const SEEDS := [11, 12, 13, 14, 15, 16]
 const WASH_S := 22.0
@@ -124,7 +118,7 @@ func _run() -> void:
 	_ok(tenth <= RIDE_FAR, "rides are short: the longest tenth carry a piece past %.0f mm (at most %.0f)" % [tenth * 1000.0, RIDE_FAR * 1000.0])
 	_ok(moved * 2 >= pieces and rides.size() >= 5 and flicked >= 5,
 		"the wash moves them: %d of %d moved, %d rides, %d flicked" % [moved, pieces, rides.size(), flicked])
-	# THE CONTROL: each made track caught by its own check
+	# The control: each made track caught by its own check
 	_ok(not control.is_empty(), "the control found a card on the cloth that moves")
 	if not control.is_empty():
 		_ok(int((control["beside"] as Dictionary)["carried"]) > 0, "the control: a piece carried along the cloth beside a card is caught (%d steps)"
@@ -194,14 +188,14 @@ func _judge(sw: Dictionary, pos: PackedVector3Array, s0: int, base: float, m: fl
 		if step > LEAP and h < 0.003 and pos[i - 1].y - base < 0.003:
 			tot["leaps"] = int(tot["leaps"]) + 1
 		tot["leap"] = maxf(float(tot["leap"]), step if h < 0.003 else 0.0)
-		# UNDER: on the cloth, its middle well inside a card that lies there
+		# under: on the cloth, its middle well inside a card that lies there
 		if h < 0.0002 and inside < -0.002:
 			tot["under"] = int(tot["under"]) + 1
-		# ON A FACE: up, and over a card
+		# on a face: up, and over a card
 		var up := h > 0.0002 and out <= 0.0
 		if up:
 			tot["face"] = int(tot["face"]) + 1
-			# ...and CARRIED, the card under it moving
+			# ...and carried, the card under it moving
 			var was := Drifts._cards_at(sw, mini(s0 + i - 1, last))
 			if Vector2(cur[over * st] - was[over * st], cur[over * st + 1] - was[over * st + 1]).length() > 0.0002:
 				tot["moving"] = int(tot["moving"]) + 1
@@ -211,14 +205,13 @@ func _judge(sw: Dictionary, pos: PackedVector3Array, s0: int, base: float, m: fl
 		if riding and (not up or i == pos.size() - 1):
 			(tot["rides"] as Array).append(p.distance_to(ride_from))
 			riding = false
-		# HELD UP beside a card: a face high, steady, and no card in reach
+		# held up beside a card: a face high, steady, and no card in reach
 		if i >= 2 and h > 0.00025 and absf(pos[i].y - pos[i - 1].y) < 0.00005 and absf(pos[i - 1].y - pos[i - 2].y) < 0.00005 \
 				and out > m and out_was > m:
 			tot["held"] = int(tot["held"]) + 1
 		out_was = out
-		# CARRIED BY NOTHING: lying on the cloth (not a hair over it: in the air the cloth does not slow it)
-		# and out of every card's reach three steps running, moving - and not slowing at the cloth's grip,
-		# or turning
+		# carried by nothing: lying on the cloth (not a hair over it: in the air the cloth does not slow it) and out of every card's reach three
+		# steps running, moving - and not slowing at the cloth's grip, or turning
 		if i >= 2 and clear[0] > m + 0.002 and clear[1] > m + 0.002 and clear[2] > m + 0.002 and absf(h) < 1e-6 \
 				and absf(pos[i - 1].y - base) < 1e-6 and absf(pos[i - 2].y - base) < 1e-6:
 			var v := (p - Vector2(pos[i - 1].x, pos[i - 1].z)) * hz
@@ -227,9 +220,8 @@ func _judge(sw: Dictionary, pos: PackedVector3Array, s0: int, base: float, m: fl
 				tot["carried"] = int(tot["carried"]) + 1
 
 
-## TRACKS MADE TO DO WHAT WAS REPORTED, on the card of wash [param sw] that goes furthest on the cloth in
-## a second and a half: lying on the cloth beside it, carried along with it; held a face high beside it;
-## and carried on it the whole way - each judged as a piece's track is.
+## Tracks made to do what is forbidden, on the card of wash [param sw] that goes furthest on the cloth in a second and a half: lying on the
+## cloth beside it, carried along with it; held a face high beside it; and carried on it the whole way - each judged as a piece's track is.
 func _control(sw: Dictionary, rest_y: float, m: float) -> Dictionary:
 	var n := int(sw["cards"])
 	var st := Drifts.CARD_STRIDE

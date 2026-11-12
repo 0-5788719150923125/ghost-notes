@@ -1,16 +1,13 @@
 extends GhostScene
 
-## Clouds - REAL 3D cloud masses drifting across the sky, lit by the sun.
+## Clouds - 3D cloud masses drifting across the sky, lit by the sun.
 ##
-## A colored sky bed, sometimes stars behind, sometimes haze rolling in front, and a
-## [Volumetric] cloudscape: soft gaussian puffs placed in 3D, self-shadowed (bright sunlit
-## tops, darker undersides) and drifting/billowing over time. The seed picks a WEATHER
-## first and the weather decides both which moods the sky may be drawn from and what else
-## is in the frame. `bed` + `stars?` + `volumetric` + `haze?`.
+## A colored sky bed, sometimes stars behind, sometimes haze in front, and a [Volumetric] cloudscape: soft
+## gaussian puffs placed in 3D, self-shadowed (bright sunlit tops, darker undersides) and billowing over
+## time. The seed picks a weather first, which decides both the moods the sky may be drawn from and what
+## else is in the frame. `bed` + `stars?` + `volumetric` + `haze?`.
 
-# A sky is a weather before it is a color - what accompanies the clouds (starlight behind,
-# haze in front, how heavily the bed sits) follows from the same roll, so one choice moves
-# the whole read of the scene rather than just its tint.
+# A sky is a weather before it is a color: what accompanies the clouds follows from the same roll.
 #   stars/haze/tint - probabilities; pools - the bed's color-pool count range
 const SKIES := {
 	"clear": {
@@ -28,8 +25,8 @@ const SKIES := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"weather": {"label": "Weather", "type": "choice", "options": "SKIES", "default": null,
 		"blurb": "The weather in the sky: clear with starlight behind, dusk, or overcast with heavy haze."},
@@ -60,14 +57,13 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if rng.randf() < float(sky["stars"]):
 		# Starlight on the accent, so a violet sky gets its own kind of stars.
 		add_layer("stars", rng, {"z": "back", "count": number("stars", rng), "hue": sch.accent})
-	# Real 3D clouds. Most weathers tint them to the sky's mood; a clear one usually leaves
-	# them sunlit-white, which is what makes a blue day read as a blue day.
+	# Real 3D clouds. Most weathers tint them to the sky's mood; a clear one usually leaves them sunlit-white.
 	var p := {"mode": "cloud"}
 	if rng.randf() < float(sky["tint"]):
 		p["hue"] = sch.vary(rng)
 	add_layer("volumetric", rng, p)
 	if rng.randf() < float(sky["haze"]):
-		# Haze drawn last - weather in FRONT of the masses, softening them into the sky.
+		# Haze drawn last: weather in front of the masses.
 		add_layer("fog", rng, {
 			"hue": sch.vary(rng),
 			"sat": sch.sat * rng.randf_range(0.2, 0.5),

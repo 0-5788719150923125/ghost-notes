@@ -26,8 +26,8 @@ var _fog_col := Color(0.66, 0.70, 0.78)
 const TYPES := ["hills", "mountains", "valleys", "canyon", "islands", "mesa"]
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"landform": {"label": "Landform", "type": "choice", "options": "TYPES", "default": null,
 		"blurb": "Which landform is built: rolling hills, ridged mountains, river valleys, a fissured canyon, ocean islands, or a banded mesa."},
@@ -48,8 +48,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	var ttype: String = choice("landform", rng)
 	var relief: float = number("relief", rng)
-	# Mostly a natural biome (green lowland, brown/gray rock, snow peaks, blue water),
-	# biased by terrain type; sometimes a surreal palette (volcanic / alien) for variety.
+	# Mostly a natural biome (green lowland, brown/gray rock, snow peaks, blue water) biased by
+	# terrain type; sometimes a surreal palette (volcanic / alien).
 	var climate := ""
 	var pal: Palette = null
 	if rng.randf() < 0.22:
@@ -61,8 +61,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	else:
 		climate = ["temperate", "tundra", "verdant"][rng.randi() % 3]
 	_terrain = Terrain.new()
-	# Bigger extent (4.0) + a closer camera so the land runs off every edge and fills the
-	# frame, rather than floating as a small island of geometry in a black field.
+	# Bigger extent (4.0) and a closer camera so the land runs off every edge.
 	_terrain.build(rng, ttype, 4.0, relief, pal, climate)
 	# Sampled camera (never the same flyover twice).
 	lens.fov = rng.randf_range(50.0, 62.0)
@@ -71,8 +70,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_yaw = rng.randf() * TAU
 	_yaw_dir = 1.0 if rng.randf() < 0.5 else -1.0
 	_yaw_speed = number("orbit_speed", rng)
-	# A low key light (long shadows) whose azimuth drifts slowly, so the mountains' cast shadows
-	# gently sweep across the land as it moves.
+	# A low key light (long shadows) whose azimuth drifts, so cast shadows sweep across the land.
 	_light_az = rng.randf() * TAU
 	_light_dir = 1.0 if rng.randf() < 0.5 else -1.0
 	_light_el = number("sun_height", rng)
@@ -81,8 +79,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	return {"type": ttype, "climate": climate, "surreal": pal != null}
 
 
-# Sparse VALLEY FOG (soft mist puffs pooled just above the low ground, clearing off the ridges) and a
-# broken CLOUD layer high above the peaks - real 3D billboards, projected through the same orbiting lens.
+# Sparse valley fog (soft mist puffs pooled just above the low ground, clearing off the ridges)
+# and a broken cloud layer high above the peaks: 3D billboards through the same orbiting lens.
 func _seed_atmosphere(rng: RandomNumberGenerator, climate: String) -> void:
 	var half: float = _terrain.half
 	var relief: float = _terrain.relief
@@ -131,8 +129,8 @@ func _draw() -> void:
 	_draw_puffs(_fog, Color(_fog_col.r * b * 0.95, _fog_col.g * b * 0.95, _fog_col.b * b, 1.0), 0.06)
 
 
-# Draw a set of soft billboard puffs (fog / clouds) through the orbiting lens: project each, size it by
-# depth (via the lens right-vector), depth-sort far-to-near, and stack the gaussians into soft banks.
+# Draw a set of soft billboard puffs (fog / clouds) through the orbiting lens: project each, size
+# it by depth (via the lens right-vector), depth-sort far-to-near, stack the gaussians into banks.
 func _draw_puffs(items: Array, col: Color, drift: float) -> void:
 	if items.is_empty():
 		return

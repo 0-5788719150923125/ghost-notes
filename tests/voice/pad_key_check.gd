@@ -1,9 +1,7 @@
 extends SceneTree
 
-## Gate for THE BED IN THE VOICE'S OWN KEY, AND THE BASS UNDER IT ([constant VoiceFX.KEY_HEARD],
-## [constant VoiceFX.PAD_REGISTER], [constant VoiceFX.BASS_UNDER]; 2026-10-28, the user: "a very strange tone
-## being 'plucked' a few times per minute, and it's a super distracting, dissonant sound ... always the same tone"
-## - on Puck, the key taken from the reading's first, high, window was C where he speaks at A#, and the bass's
+## Gate for the bed in the voice's own key, and the bass under it ([constant VoiceFX.KEY_HEARD],
+## [constant VoiceFX.PAD_REGISTER], [constant VoiceFX.BASS_UNDER]; on Puck, the key taken from the reading's first, high, window was C where he speaks at A#, and the bass's
 ## partials sat in his own register, the second a whole step over him):
 ##
 ## - the key's root is two octaves under the MIDDLE of the voice's pitch as far as it is known when the key is set -
@@ -15,7 +13,7 @@ extends SceneTree
 ## - a low voice's every swell has its second partial BASS_UNDER under the voice's middle - where a voice with
 ##   room under it keeps its bass in [BASS_ROOT_LO, 2 BASS_ROOT_LO), as before (the control) - and a voice too deep
 ##   for a bass over BASS_FLOOR under it has none;
-## - THE BED IS HEARD UNDER A LOW VOICE AS UNDER A HIGH ONE ([constant VoiceFX.PAD_AUDIBLE]; the user, of the bed
+## - the bed is heard under a low voice as under a high one ([constant VoiceFX.PAD_AUDIBLE]; the user, of the bed
 ##   in Puck's key: "far too quiet. I can barely hear it at all anymore" - every tone under 80 Hz): what a small
 ##   speaker plays of it, its power over 100 Hz, against the voice, within 6 dB of a high voice's - where with its
 ##   tones plain (the control: no octave partials, no lift) a low voice's is far under it.

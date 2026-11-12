@@ -1,71 +1,46 @@
 extends RefCounted
 class_name MaskSession
 
-## MaskSession - the data model for one mask-mode editing session.
+## MaskSession - the data model for one mask-mode editing session: one imported clip (video + its extracted audio, see
+## masks/README) with a timeline of markers, the points where the mask changes.
 ##
-## A session pairs one imported clip (video + its extracted audio, see masks/README) with a
-## timeline of MARKERS: distinct points where the mask changes. A marker is a fixed-schema
-## scalar VECTOR (see VECTOR_FIELDS), so a session's marker list is literally a small matrix
-## - the same shape as the harmonic-signature / seed-bias vectors elsewhere in this project,
-## and inspectable the same way instead of living as opaque nested JSON.
+## A marker is a fixed-schema scalar vector (see VECTOR_FIELDS), so a session's marker list is a small matrix. Every
+## marker is one layer, carrying one channel (one target color, effect, strength and pattern placement) plus its own
+## transition envelope. Layers stack chronologically: a later marker adds to the earlier ones without disturbing them.
 ##
-## EVERY MARKER IS ONE LAYER, carrying a single channel - one target color, one effect, one
-## strength, one pattern placement - plus its own transition envelope. Layers STACK
-## chronologically: place a marker that devours the blues, and a later marker adding fire to
-## the reds layers on top WITHOUT disturbing the blue layer.
+## The envelope's kind (see MARKER_KINDS) is which side of the anchor its transition occupies:
+##   RAMP  - eases in over the `duration` seconds before the anchor, complete exactly at the marker's time.
+##   DAMP  - begins at the anchor and accumulates over the `duration` seconds after it.
+## A zero-length marker of either kind is an instant cut.
 ##
-## The envelope's KIND (see MARKER_KINDS) is which side of the anchor its transition
-## occupies:
-##   RAMP  - the layer eases in over the `duration` seconds BEFORE the anchor, arriving
-##           complete exactly at the marker's time (anticipation).
-##   DAMP  - the layer begins AT the anchor and accumulates over the `duration` seconds
-##           AFTER it. Nothing happens before the anchor.
-## A zero-length marker of either kind is an instant cut - the degenerate case, not a third
-## kind.
+## Once in, a layer holds until one of three things ends it:
+##   1. The raw checkpoint (the rebase). A full-raw marker (view_mode 2) is a canvas reset: once its transition to raw
+##      has completed (at its anchor for a ramp, anchor+duration for a damp, never mid-fade), no earlier marker's layer
+##      exists beyond it. The reset is pop-free because nothing is on screen, so history never crosses a raw boundary.
+##   2. "restore" - draws nothing. It targets a color like a keying marker (own picker, own threshold for how wide
+##      around the color it reaches, own envelope, intensity = how completely it restores) and fades out every earlier
+##      layer on that color over its window.
+##   3. "clear" - restore for all colors at once.
 ##
-## Once in, a layer HOLDS until one of exactly three things ends it:
-##   1. THE RAW CHECKPOINT (the rebase). A full-raw marker (view_mode 2) is a canvas reset:
-##      once its transition to raw has COMPLETED (at its anchor for a ramp, anchor+duration
-##      for a damp - never mid-fade, or the cut would pop), no earlier marker's layer exists
-##      beyond it. Raw is the one place a reset is pop-free BY CONSTRUCTION, since nothing
-##      is on screen while it happens, so composition history never crosses a raw boundary -
-##      a sliding window whose edges are explicit, user-authored timeline events rather than
-##      a silent time constant.
-##   2. "restore" - fades out earlier layers matching ITS color. It draws nothing of its
-##      own: it targets a color exactly like a keying marker does (own picker, own
-##      threshold for how wide around that color it reaches, own envelope, intensity = how
-##      completely it restores) and fades out every EARLIER layer on that color over its
-##      window.
-##   3. "clear" - restore for ALL colors at once.
+## Otherwise layering is additive: a later marker keying a second color stacks with the earlier work.
 ##
-## Layering is otherwise continuous and ADDITIVE: a later marker keying a second color,
-## however near or far in hue, stacks WITH the earlier work rather than superseding it. Mask
-## a color out at minute one, restore it at minute five, mask it differently at minute six
-## - a chain of explicit operations.
-##
-## THE TRANSITION CONTRACT. Every visual quantity leaving at_time() must be
-## transition-safe in exactly one of three shapes; any new modulation MUST pick one, and
+## The transition contract: every visual quantity leaving at_time() is transition-safe in one of three shapes, and
 ## nothing may drive a visual straight off a discrete snap:
-##   1. CONTINUOUS  - global keying scalars (threshold, feather, sat_floor), lerped across
-##      transition windows. List: GLOBAL_CONTINUOUS.
-##   2. PRESENCE    - which screen layers are up (view_mode): the discrete value is kept for
-##      storage and labeling, but the visuals consume the derived AMOUNT_FIELDS, which lerp.
-##      A mode change is a presence fade.
-##   3. LAYER       - everything a marker's own channel carries (color, effect, strength,
-##      placement, coverage, contrast, resonance), baked into that marker's layer, whose
-##      ENVELOPE does the transitioning. An identity change is two layers with complementary
-##      envelopes - a dissolve, never a swap.
+##   1. CONTINUOUS - global keying scalars (threshold, feather, sat_floor), lerped across transition windows
+##      (GLOBAL_CONTINUOUS).
+##   2. PRESENCE   - which screen layers are up (view_mode): the discrete value is kept for storage and labeling, the
+##      visuals consume the derived AMOUNT_FIELDS, which lerp.
+##   3. LAYER      - everything a marker's channel carries (color, effect, strength, placement, coverage, contrast,
+##      resonance), baked into the layer, whose envelope does the transitioning. An identity change is two layers with
+##      complementary envelopes, a dissolve.
 
-## The vector schema. Order is the contract - to_vector()/from_vector() and any
-## future analysis code index into this list, so append, never reorder or remove.
-## (The *_b fields are legacy from the two-channel era: still stored, no longer
-## consumed - a marker's layer reads only the *_a channel.)
+## The vector schema. Order is the contract (to_vector()/from_vector() index into it): append, never reorder or
+## remove. The *_b fields are legacy from the two-channel era: stored, not consumed (a layer reads the *_a channel).
 const VECTOR_FIELDS := [
 	"time",             # seconds into the clip
 	"kind",             # 0=ramp (eases in before the anchor) / 1=damp (accumulates after)
 	"hue_a",            # THE layer's target hue, 0..1
 	"hue_b",            # umbra's ACCENT hue - the color of the ghost's eyes
-	                    #   (was "legacy, unused"; 0.0 = red, the default)
 	"threshold",        # key distance threshold, 0..1 (global)
 	"feather",          # edge softness, 0..1 (global)
 	"sat_floor",        # minimum saturation to key at all, 0..1 (global)
@@ -88,187 +63,101 @@ const VECTOR_FIELDS := [
 	"fx_lag",           # echo: how far back the lagged frame reaches, seconds
 	"fx_smooth",        # echo: 0 = discrete stutter, 1 = wide temporal blend (EMA-like)
 	"fx_stick",         # fur: 0 = free coat everywhere (default look), 1 = strands cling
-	                    #   to natural anchors (key-color concentration, the tracked
-	                    #   landmark/motion centroid, luminance) - see the shader's fur branch
+	                    #   to natural anchors (key-color concentration, tracked centroid, luminance) - see the shader's fur branch
 	"fx_tint",          # Morph: rotates the EFFECT'S OWN palette hue (0 = natural colors).
-	                    #   Decoupled from hue_a on purpose: the color picker says what to
-	                    #   MASK, this says what color the drawn effect becomes. The old Hue
-	                    #   slider was a second widget on hue_a and the linkage read as a bug.
-	# THE REGION - a spatial restriction on where this layer acts at all, in the
-	# frame's own 0..1 UV (so it means the same thing on any clip shape, portrait
-	# included). Real fields rather than spare ones borrowed per effect, because
-	# unlike every "reuse fx_stick under a new name" group this is not one
-	# effect's private knob: it multiplies into EVERY layer's on-screen weight
-	# (see the shader's apply_layer), so any effect can be confined without each
-	# one growing its own version. Default is the whole frame, which is exactly
-	# the behavior every session had before it existed.
-	#
-	# What it is FOR: a color key is a color key - it cannot tell the yellow
-	# wall behind a subject from a gold coin hanging at their neck, because they
-	# ARE the same color. No amount of hue selectivity separates them. Space
-	# does: the wall is up there, the coin is down here.
+	                    #   Decoupled from hue_a: the picker says what to mask, this says what color the effect becomes.
+	# The region: where this layer acts at all, in the frame's own 0..1 UV (the same on any clip shape). Real fields, not
+	# spare ones borrowed per effect: it multiplies into every layer's on-screen weight (see the shader's apply_layer),
+	# so any effect can be confined. Default is the whole frame. Space separates what a color key cannot (a yellow wall
+	# from a gold coin at the subject's neck).
 	"reg_x0",           # region left edge, 0..1 UV
 	"reg_y0",           # region top edge
 	"reg_x1",           # region right edge (x1 <= x0 is normalized on read)
 	"reg_y1",           # region bottom edge
 	"reg_soft",         # 0..1 - how gradually the region fades out at its border,
-	                    #   as a fraction of the box's own smaller side. A hard
-	                    #   rectangular cut reads as a rectangular cut.
-	# THE KEY SWATCH'S other two components. The key itself is a HUE - that is what
-	# the shader matches on, and hue_a above is the whole of it - but the picker is
-	# a color picker, and it used to store only `.h` and rebuild the swatch as
-	# from_hsv(hue_a, 0.85, 0.9). So a color picked off the footage came back a
-	# different color: pick a pale yellow off a wall, reopen the session, and the
-	# swatch is a saturated yellow. Reported as "the key color is not persisted...
-	# the UI never reads that color from state, so you never actually know what
-	# color is being keyed to". These carry the rest of the pick so the swatch is
-	# the swatch you set. Deliberately NOT in LAYER_FIELDS: nothing in any shader
-	# reads them, and a field there is a promise that something does.
-	#
-	# The defaults are exactly the constants the rebuild used, so every session
-	# that predates them opens looking identical.
+	                    #   as a fraction of the box's smaller side; a hard cut reads as a rectangular cut.
+	# The key swatch's other two components: the key itself is a hue (hue_a), and these carry the rest of the pick so a
+	# reopened session shows the swatch that was set. Not in LAYER_FIELDS: no shader reads them, and a field there
+	# promises that something does. Defaults are the constants the swatch was rebuilt with.
 	"key_sat",          # the key swatch's saturation - display only
 	"key_val",          # ...and its value
 ]
 
 ## Global keying environment - lerped across transition windows (contract shape 1).
 const GLOBAL_CONTINUOUS := ["threshold", "feather", "sat_floor"]
-## What each marker's LAYER carries (contract shape 3) - baked at the marker's own
-## values; only the layer's envelope varies over time.
-## NOTE the last four. threshold/feather/sat_floor are ALSO resolved as global
-## keying scalars (see resolve()), but a layer that wants to read them PER
-## LAYER must find them here - anything absent from this list simply is not in
-## the layer dictionary, and a `layer.get("threshold", 0.24)` then returns the
-## default forever, silently. That is exactly how umbra's Reach/Lead/Gaze
-## shipped inert. hue_b was dead weight ("legacy, unused") and is now umbra's
-## accent hue - the color of the ghost's eyes.
-## intensity_b was the other half of the old two-channels-per-marker model and has
-## been dead weight since; it is the clown's Drip curve now, and `swap` - dead the
-## same way and for the same length of time - is its Smudge, both following hue_b,
-## which was "legacy, unused" until it became umbra's accent hue. A revived field has to be
-## added HERE as well as used, or it is simply absent from the layer dictionary
-## and the control ships inert (see the note above).
+## What each marker's layer carries (contract shape 3), baked at the marker's own values; only the envelope varies over
+## time. A field a layer reads must be listed here, or `layer.get("threshold", 0.24)` returns the default forever
+## (threshold/feather/sat_floor are also resolved as global scalars, see resolve()). intensity_b is the clown's Drip
+## curve, `swap` its Smudge, hue_b umbra's accent hue (the ghost's eyes).
 const LAYER_FIELDS := ["hue_a", "effect_a", "intensity_a", "intensity_b", "swap", "fx_x", "fx_y",
 	"fx_scale", "fx_density", "resonance", "fx_contrast", "fx_speed", "fx_lag",
 	"fx_smooth", "fx_stick", "fx_tint",
 	"threshold", "feather", "sat_floor", "hue_b",
-	# The region travels WITH the layer (see the note above about umbra shipping
-	# inert): it is a property of what this marker draws, and a continuation
-	# marker blending into its predecessor lerps the box corners across, so a
-	# moving restriction is a moving restriction rather than a jump.
+	# The region travels with the layer: a continuation marker blending into its predecessor lerps the box corners.
 	"reg_x0", "reg_y0", "reg_x1", "reg_y1", "reg_soft"]
 
 const MARKER_KINDS := ["ramp", "damp"]
 
-## The most simultaneous layers the shader renders (its uniform arrays are sized
-## to this). When more are active, the OLDEST are dropped.
+## The most simultaneous layers the shader renders (its uniform arrays are sized to this); the oldest are dropped.
 const MAX_LAYERS := 6
 
-## The per-layer effect registry. Ids are the contract - append, never reorder.
+## The per-layer effect registry. Ids are the contract: append, never reorder.
 ##
-## Most effects are volumetric CONSUMING fields (see shaders/mask_split.gdshader):
-## the wisps ARE the substance - where the drifting noise field forms a lick, the
-## keyed footage is eaten to void, rimmed with a glow in the layer's own hue.
-## Placement/coverage ride the fx_* fields; coverage 0 = untouched, 1 = devoured.
+## Most effects are volumetric consuming fields (see shaders/mask_split.gdshader): the keyed footage is eaten to void
+## where the drifting noise field forms a lick, rimmed with a glow in the layer's hue. Placement and coverage ride the
+## fx_* fields; coverage 0 = untouched, 1 = devoured.
 ##
 ##   erase     hides the keyed region outright.
 ##   fire      rising domain-warped licks.
 ##   freeze    near-static crystalline veins.
 ##   smoke     soft billowing gauze.
-##   restore   SUBTRACTIVE: draws nothing, fades out every earlier layer whose
-##             target hue lies within ITS OWN `threshold` of its picked color,
-##             over its own envelope, scaled by intensity. The shader never sees
-##             it - layers_at resolves it into the other layers' envelopes.
-##   whisp     content-aware volumetric: its field is advected along the
-##             picture's luminance edges, and placement auto-locks to the target
-##             color's mass centroid, EMA-tracked by the editor.
-##   crystal   fractal faceted glass drawn IN PLACE of the target color -
-##             voronoi facets refracting the footage, cold edge light.
-##             Projection-based like erase, so no gates and no rings.
-##   echo      temporal lag: the target region shows a muted, delayed echo of the
-##             footage, optionally cloned with accumulating offsets into
-##             staircase "time-shapes".
-##   clear     restore generalized to EVERY color - the explicit "delete the old
-##             effects" primitive. Like restore, the shader never sees it.
-##   snow      KEYLESS. Foreground vs background is decided per pixel from motion
-##             (the echo ring's two newest captures) and color intensity, so
-##             flakes fall over the background and thin over the subject with no
-##             color pick. Contrast is relabeled Sensitivity; Pan X/Y become
-##             Wind X/Y (a fall DIRECTION, decoupled from Velocity's speed);
-##             Gust (fx_smooth) adds irregular swings to both.
-##   fur       hair ANCHORED on the keyed surface. Strand roots are the key
-##             color's own pixels, read live by crystal's aligned-fraction
-##             projection (fur_root_mass() in mask_split.gdshader), so the coat
-##             tracks the moving face with no tap-ring estimate. A pixel carries
-##             hair only if marching upstream against the local current reaches
-##             real root mass, so nothing can draw where no march reaches the
-##             face. One shared slowly-breathing current field every strand rides
-##             together gives the swarm dynamic. Its emissive is tinted BY the
-##             key hue - the one deliberate exception to "never the key hue",
-##             because fur being the color it grew from is the point.
-##             Undulation (fx_smooth) sends waves down each strand; Coil (fx_lag)
-##             spins the local flow frame into eddies.
-##   oracle    echo INVERTED. Echo lags the region behind a live world; oracle
-##             keeps the region LIVE and lags the WORLD through the same kernel,
-##             so the region leads the motion (delaying everything else is the
-##             only causal way to put one region "in the future" live). Coverage
-##             adds premonitions stamped ahead along the pan; Contrast mutes the
-##             delayed world; Lag is how far ahead the region leads.
-##   serpent   thousands of wriggling snakes as a sparse volumetric mask.
-##             KEYLESS like snow; its contrast is LUMINANCE-INVERSE, biting
-##             hardest where the footage is bright. Domain-warped torus lanes
-##             host at most one snake each, every snake sampling length, speed,
-##             heading, girth, wriggle, banding and glow from per-lane hashes.
-##             Centerlines are nested-sine serpentines whose wave travels
-##             backward along the body (real snake locomotion). A slow fbm
-##             cluster field decides WHERE the swarm lives, stirred by
-##             frame-to-frame motion so the swarm gathers in the model's wake.
-##             Fixed viridian-to-jade palette.
-##   chimera   the imported track's video grafted INTO the main frame. A soft
-##             window rides u_anchor (keyed by this marker's color, falling back
-##             to the MOTION centroid when nothing keys). Per pixel, whichever
-##             side carries more feature energy owns the pixel, so the heads
-##             interleave structurally instead of double-exposing. Needs an
-##             imported track (T); draws nothing without one.
-##   arealight cinematic area lighting. KEYLESS and ADDITIVE-ONLY - nothing is
-##             consumed. A rig of sources spread across the full span of azimuth
-##             behind the camera, each waxing on its own slow clock. Its lighting
-##             normal is the same mid/wide gradient probe whisp/freeze/crystal
-##             read, the only depth proxy available without real geometry. ONE
-##             dial (Contrast, relabeled Envelope): it GROWS the rig rather than
-##             aiming it - at 0 only a wide soft warm practical is lit, and the
-##             rest switch on staggered through a curated gel palette as the
-##             falloff sharpens, then discrete point flares scatter in.
-##   clown     white-face paint on a DETECTED face. The editor fits a face model
-##             each capture tick (MaskEditor._update_face_model); the shader
-##             draws in the EYE-LINE FRAME (origin mid-eyes, rotated to the eye
-##             axis, unit = eye distance) so paint turns and scales with the
-##             face. Coverage is Wear, Contrast is Smear, Velocity paces the
-##             smear's breathing. Per-element numbers come from hashes salted by
-##             the key hue - a new hue is a new clown. Bleed (fx_smooth) widens
-##             each feature's reach; Settle (fx_lag) sets both the decay of
-##             orphaned paint and the rise rate of new paint; Hollow (fx_stick)
-##             opens a radial hole gated on brightness, so it opens over a
-##             visible eyeball and closes on a blink.
-##   umbra     HER OWN SILHOUETTE thrown as a cast shadow larger than she is,
-##             standing beside her, read AHEAD of the playhead so it turns its
-##             head first. Never drawn on her - she is carved out of it. Shape
-##             comes from hosts/face/pose_track.py (a MediaPipe pose pre-pass
-##             cached in user://pose_tracks), which supplies a person mask AND a
-##             skeleton, so the head and eyes are placed rather than guessed.
-##             The throw is a similarity pinned by two point pairs - her shoulder
-##             line to the ghost's anchor, her eye line to its head - so the head
-##             lands where it was placed at any Scale. Separation is the two
-##             skulls' half-widths added (Stand scales it), and it stands on
-##             whichever side has room. IT IS A BUST, NOT A BODY: her outline is
-##             ~45% of a close-up frame, so the mass is a radial falloff about
-##             her eye line in HER OWN units, dissolving below into smoke. Lead
-##             is a real look-ahead in seconds and is the whole effect - no live
-##             tracker or velocity extrapolation can supply it. Knobs: Stand,
-##             Lead, Lean, Narrow, Gaze, Wisp, Cling, Depth; Coverage is Loom,
-##             Contrast is Roil, Velocity is the essence's climb, Resonance
-##             swells the loom with the audio. The mass DARKENS rather than
-##             paints black, so the surface keeps its hue and texture.
+##   restore   subtractive: draws nothing; fades out every earlier layer whose target hue lies within its own
+##             `threshold` of its picked color, over its envelope, scaled by intensity. layers_at resolves it into
+##             the other layers' envelopes, so the shader never sees it.
+##   whisp     content-aware volumetric: its field is advected along the picture's luminance edges and placement
+##             locks to the target color's mass centroid, EMA-tracked by the editor.
+##   crystal   faceted glass drawn in place of the target color (voronoi facets refracting the footage). Projection
+##             based like erase: no gates, no rings.
+##   echo      temporal lag: the target region shows a muted, delayed echo, optionally cloned with accumulating
+##             offsets into staircase "time-shapes".
+##   clear     restore for every color. The shader never sees it.
+##   snow      keyless: foreground vs background is decided per pixel from motion (the echo ring's two newest
+##             captures) and color intensity. Contrast is Sensitivity; Pan X/Y are Wind X/Y; Gust (fx_smooth) adds
+##             irregular swings.
+##   fur       hair anchored on the keyed surface. Strand roots are the key color's own pixels (read by crystal's
+##             aligned-fraction projection, fur_root_mass() in mask_split.gdshader); a pixel carries hair only if
+##             marching upstream against the local current reaches root mass. One shared breathing current field
+##             drives the swarm; the emissive is tinted by the key hue. Undulation (fx_smooth) sends waves down each
+##             strand; Coil (fx_lag) spins the flow into eddies.
+##   oracle    echo inverted: the region stays live and the world lags through the same kernel, so the region leads
+##             the motion. Coverage adds premonitions stamped ahead along the pan; Contrast mutes the delayed world;
+##             Lag is how far ahead the region leads.
+##   serpent   thousands of wriggling snakes as a sparse volumetric mask. Keyless like snow; contrast is
+##             luminance-inverse (bites hardest where bright). Domain-warped torus lanes host one snake each, with
+##             per-lane hashes for length, speed, heading, girth, wriggle, banding and glow; a slow fbm cluster field,
+##             stirred by motion, decides where the swarm lives. Fixed viridian-to-jade palette.
+##   chimera   the imported track's video grafted into the main frame through a soft window riding u_anchor (keyed by
+##             this marker's color, else the motion centroid). Per pixel, the side with more feature energy owns the
+##             pixel. Needs an imported track (T); draws nothing without one.
+##   arealight cinematic area lighting, keyless and additive-only: a rig of sources across the azimuth behind the
+##             camera, each waxing on its own clock, lit along the same gradient probe whisp/freeze/crystal read.
+##             One dial (Contrast, relabeled Envelope) grows the rig: a wide soft warm practical at 0, more sources
+##             through a gel palette as the falloff sharpens, then point flares.
+##   clown     white-face paint on a detected face. The editor fits a face model each capture tick
+##             (MaskEditor._update_face_model); the shader draws in the eye-line frame (origin mid-eyes, rotated to
+##             the eye axis, unit = eye distance). Coverage is Wear, Contrast is Smear, Velocity paces the smear's
+##             breathing; per-element numbers come from hashes salted by the key hue. Bleed (fx_smooth) widens each
+##             feature's reach; Settle (fx_lag) sets the decay of orphaned paint and the rise of new paint; Hollow
+##             (fx_stick) opens a radial hole gated on brightness.
+##   umbra     the subject's own silhouette thrown as a larger cast shadow beside them, read ahead of the playhead so
+##             it turns its head first; never drawn on the subject. Shape comes from hosts/face/pose_track.py (a
+##             MediaPipe pose pre-pass cached in user://pose_tracks: a person mask and a skeleton). The throw is a
+##             similarity pinned by two point pairs (shoulder line to the ghost's anchor, eye line to its head).
+##             Separation is the two skulls' half-widths added (Stand scales it), on whichever side has room. A bust,
+##             not a body: the mass is a radial falloff about the eye line in the subject's own units, dissolving into
+##             smoke below. Lead is a real look-ahead in seconds. Knobs: Stand, Lead, Lean, Narrow, Gaze, Wisp, Cling,
+##             Depth; Coverage is Loom, Contrast is Roil, Velocity is the essence's climb, Resonance swells the loom
+##             with the audio. The mass darkens rather than paints black, keeping the surface's hue and texture.
 const MASK_EFFECTS := ["erase", "fire", "freeze", "smoke", "restore", "whisp", "crystal", "echo", "clear", "snow", "fur", "oracle", "serpent", "chimera", "arealight", "meta", "clown", "umbra", "repaint", "rain", "audio"]
 const EFFECT_RESTORE := 4
 const EFFECT_CRYSTAL := 6
@@ -279,39 +168,31 @@ const EFFECT_ORACLE := 11
 const EFFECT_SERPENT := 12
 const EFFECT_CHIMERA := 13
 const EFFECT_AREALIGHT := 14
-## META: mirrors the whole editor workspace into the frame (the recorded product
-## demo + OBS-style infinite mirror). KEYLESS, no pattern - the editor captures its
-## own previous frame into u_workspace only while a meta layer is live (expensive:
-## a per-frame viewport readback), and this layer mixes it in by its envelope. See
-## mask_editor.gd _capture_workspace / _meta_amount_of.
+## META: mirrors the editor workspace into the frame (the recorded product demo). Keyless, no pattern. The editor
+## captures its previous frame into u_workspace only while a meta layer is live (a per-frame viewport readback); the
+## layer mixes it in by its envelope. See mask_editor.gd _capture_workspace / _meta_amount_of.
 const EFFECT_META := 15
 const EFFECT_CLOWN := 16
 const EFFECT_UMBRA := 17
-## REPAINT: replace one color with another. Projection-based like erase and
-## crystal - no keying gates and no pattern - but where erase SUBTRACTS the keyed
-## chroma, this substitutes a chosen one, because "make the yellow wall black" is
-## not the same request as "take the yellow out" and the second leaves gray.
-## Its selection is an angular CONE around the key rather than the raw projection
-## the other two use: a replacement is all-or-nothing, and skin sitting 28 degrees
-## off a yellow wall must not take a share of it (see tests/masking/repaint_check.gd).
+## REPAINT: replace one color with another. Projection-based like erase and crystal (no keying gates, no pattern),
+## but it substitutes a chosen chroma where erase subtracts (subtracting leaves gray). Its selection is an angular cone
+## around the key: a replacement is all-or-nothing, and skin 28 degrees off a yellow wall must not take a share (see
+## tests/masking/repaint_check.gd).
 const EFFECT_REPAINT := 18
-## RAIN: keyless weather in front of and behind the subject. Every drop is
-## independent - lane, phase, speed and length all hashed per drop - and Depth
-## sets where near rain gives way to a far sheet that falls BEHIND the subject.
+## RAIN: keyless weather in front of and behind the subject. Every drop is independent (lane, phase, speed and length
+## hashed per drop); Depth sets where near rain gives way to a far sheet that falls behind the subject.
 const EFFECT_RAIN := 19
-## AUDIO: draws nothing at all. The one layer whose product is sound - an EQ,
-## compressor, delay and reverb chain on the mask bus, scaled by the marker's own
-## envelope so it fades in rather than popping on. See MaskAudioFx.apply.
+## AUDIO: draws nothing; its product is sound, an EQ, compressor, delay and reverb chain on the mask bus scaled by the
+## marker's envelope. See MaskAudioFx.apply.
 const EFFECT_AUDIO := 20
 
-## THE CONTROL HIERARCHY: which panel option groups each effect actually consumes
-## (the editor shows/hides accordingly - a slider that does nothing for the
-## selected effect is not shown for it). Color + intensity are universal. Groups:
+## The control hierarchy: which panel option groups each effect consumes (the editor hides a slider that does nothing
+## for the selected effect). Color and intensity are universal. Groups:
 ##   "keying"  - threshold/feather/colorfulness steer the volumetric mask
 ##   "reach"   - threshold reinterpreted: how wide around the color a restore acts
 ##   "pattern" - field placement/coverage/contrast/resonance
-## Erase consumes NO groups: it is projection-subtraction, gate-free by design -
-## threshold, feather, colorfulness and the pattern have no effect on it at all.
+## Erase consumes no groups: it is projection-subtraction, gate-free. The trailing comment of a row is its note in
+## docs/masking.md, in the shape `name (note)`.
 const EFFECT_CONTROLS := {
 	0: [],                        # erase
 	1: ["keying", "pattern"],     # fire
@@ -326,73 +207,48 @@ const EFFECT_CONTROLS := {
 	10: ["keying", "pattern", "fur"],  # fur (a keyed volumetric + its own tendril-dynamics knobs)
 	11: ["pattern", "echo"],      # oracle (echo inverted: pan=premonition step, coverage=copies, contrast=mute, lag=lead)
 	12: ["pattern"],              # serpent (keyless, like snow: contrast-driven, no color to gate on)
-	13: ["pattern"],              # chimera (color steers the anchor/claim; scale=window, pan=graft offset, coverage=dominance, contrast=interleave sharpness)
-	14: ["pattern"],              # arealight (keyless; pattern group exists only to expose the single Envelope/contrast dial)
-	15: [],                       # meta (mirrors the workspace; keyless, no pattern - only intensity/duration/kind matter)
+	13: ["pattern"],              # chimera (scale=window, pan=graft offset, coverage=dominance, contrast=interleave sharpness)
+	14: ["pattern"],              # arealight (keyless; one Envelope/contrast dial)
+	15: [],                       # meta (mirrors the workspace; keyless, no pattern)
 	16: ["pattern", "clown"],     # clown (pan=layout nudge, scale=feature size, coverage=Wear, contrast=Smear, + its own Bleed/Settle/Hollow)
-	17: ["pattern", "umbra"],     # umbra (keyless - the ghost IS her silhouette; coverage=Loom, contrast=Roil, + its own Stand/Lead/Lean/Narrow/Gaze/Wisp/Cling/Depth)
-	18: ["repaint"],              # repaint (projection-based like erase/crystal: no keying gates, no pattern - just the paint color + its reach and edge smoothing)
-	19: ["pattern", "rain"],      # rain (keyless: coverage=Amount, velocity=fall speed, scale=streak length, pan=wind, contrast=Depth - where near rain gives way to far - plus its own Squall)
+	17: ["pattern", "umbra"],     # umbra (keyless; coverage=Loom, contrast=Roil, + its own Stand/Lead/Lean/Narrow/Gaze/Wisp/Cling/Depth)
+	18: ["repaint"],              # repaint (projection-based, no keying gates, no pattern: the paint color + its reach and edge smoothing)
+	19: ["pattern", "rain"],      # rain (keyless: coverage=Amount, velocity=fall speed, scale=streak length, pan=wind, contrast=Depth, + its own Squall)
 	20: ["audio"],                # audio (draws nothing: lag=Echo time, smooth=Echo mix, density=Ambience, scale=Room, contrast=Resonance, stick=Bass)
 }
 
-## Second level of the same rule, INSIDE the "pattern" group: which individual
-## knobs an effect actually reads. "Only show properties that can be used" -
-## a knob the shader never touches for this effect is hidden, not just disabled.
-## Keys: "scale", "pan", "coverage", "contrast", "velocity", "resonance". An
-## effect NOT listed here shows every pattern knob (the historical default);
-## list an effect only to PRUNE. Audit against shaders/mask_split.gdshader when
-## an effect changes what it consumes.
+## Second level of the same rule, inside the "pattern" group: which individual knobs an effect reads ("scale", "pan",
+## "coverage", "contrast", "velocity", "resonance"). An effect not listed shows every knob; list one only to prune.
+## Audit against shaders/mask_split.gdshader when an effect changes what it consumes.
 const PATTERN_KNOBS_ALL := ["scale", "pan", "coverage", "contrast", "velocity", "resonance"]
 const PATTERN_KNOBS := {
-	# chimera reads scale (graft zoom), pan (graft nudge), coverage (dominance)
-	# and contrast (interleave sharpness). It never reads speed, and its only
-	# tie to resonance is a marginal audio-breathe on dominance - both hidden.
+	# chimera reads scale (graft zoom), pan (graft nudge), coverage (dominance) and contrast (interleave sharpness).
 	13: ["scale", "pan", "coverage", "contrast"],
-	# arealight reads ONLY contrast (relabeled Envelope in the editor) - the
-	# whole point is one dial, not a knob per light.
+	# arealight reads only contrast (relabeled Envelope): one dial, not a knob per light.
 	14: ["contrast"],
-	# clown draws no drifting pattern: Velocity only paced an almost
-	# invisible wobble and Resonance only grazed Wear, so both are hidden
-	# rather than left on screen doing nothing (the control hierarchy's whole
-	# point - "only show properties that can be used").
-	#
-	# PAN IS GONE TOO, and not for tidiness: Pan could only slide a face-TRACKED
-	# mask off the face it was fitted to, so fx_x and fx_y were free, and both now
-	# carry a clown control (Edge feather and Drip width). Leaving "pan" here would
-	# put a second slider on each of those fields, and whichever moved last would
-	# win - a control that silently fights another control.
+	# clown draws no drifting pattern (Velocity and Resonance are hidden). "pan" is also absent: fx_x and fx_y carry
+	# clown controls (Edge feather and Drip width), and a second slider on a field would fight the first.
 	16: ["scale", "coverage", "contrast"],
-	# rain reads everything except resonance: scale is the streak length, pan the
-	# wind direction, coverage the Amount, velocity the fall speed and contrast the
-	# Depth at which near rain gives way to the far sheet. Its own Squall sits in
-	# the "rain" group on fx_smooth.
+	# rain reads all but resonance: scale = streak length, pan = wind, coverage = Amount, velocity = fall speed,
+	# contrast = Depth. Its own Squall is in the "rain" group on fx_smooth.
 	19: ["scale", "pan", "coverage", "contrast", "velocity"],
-	# umbra is deliberately ABSENT (so it shows all six): it is the first
-	# effect that genuinely reads every one of them. Velocity is the essence's
-	# climb rate and Resonance swells the loom with the audio - on a talking
-	# clip the ghost surges when the subject speaks, which is the single best
-	# thing this effect does.
+	# umbra is absent on purpose (it shows all six): Velocity is the essence's climb, Resonance swells the loom with the
+	# audio.
 }
 
-## The view-mode registry (see mask_editor.gd). Really a 2-axis matrix flattened to
-## one discrete field - main screen (raw / fx) x inset (hidden / raw / fx) - kept
-## flat because it's a per-marker EXPORTABLE choice, and one scalar in the vector
-## beats two half-meaningful ones. Order is append-only (indices are stored in
-## saved sessions), which is why the "evolution" display order lives in
-## mask_editor.gd's VIEW_CYCLE, not here:
-##   pip        - main raw, inset fx (the classic compare view)
+## The view-mode registry (see mask_editor.gd): a 2-axis matrix (main screen raw/fx x inset hidden/raw/fx) flattened
+## to one discrete field, since it is a per-marker exportable choice. Append-only (indices are stored in saved
+## sessions); the display order is VIEW_CYCLE in mask_editor.gd:
+##   pip        - main raw, inset fx (the compare view)
 ##   masked     - main fx, no inset
-##   raw        - main raw, no inset (the default; no shader pass at all)
-##   pip_raw    - main raw, inset raw (the frame appears, nothing effected yet)
-##   masked_pip - main fx AND inset fx (the full-evolution end state)
+##   raw        - main raw, no inset (the default; no shader pass)
+##   pip_raw    - main raw, inset raw
+##   masked_pip - main fx and inset fx
 const VIEW_MODES := ["pip", "masked", "raw", "pip_raw", "masked_pip", "masked_pip_raw"]
 
-## Untouched (no markers yet) preview state. view_mode defaults to "raw" (index 2)
-## - just the source video, no shader pass at all - so nothing is masked/effected
-## until you explicitly place a marker or toggle the view yourself.
+## The untouched (no markers) preview state: view_mode "raw" (index 2), the source video with no shader pass.
 const DEFAULTS := {
-	# hue_b 0.0 = RED - umbra's eyes, the only consumer of this once-dead field.
+	# hue_b 0.0 = red (umbra's eye color)
 	"kind": 0.0, "hue_a": 0.02, "hue_b": 0.0, "threshold": 0.24, "feather": 0.12,
 	"sat_floor": 0.18, "swap": 0.0, "effect_a": 0, "effect_b": 0,
 	"intensity_a": 1.0, "intensity_b": 0.0, "duration": 1.0, "view_mode": 2.0,
@@ -400,20 +256,15 @@ const DEFAULTS := {
 	"fx_x": 0.0, "fx_y": 0.0, "fx_scale": 1.0, "fx_density": 0.45, "resonance": 0.0,
 	"fx_contrast": 0.5, "fx_speed": 1.0, "fx_lag": 0.35, "fx_smooth": 0.0,
 	"fx_stick": 0.0, "fx_tint": 0.0,
-	# The whole frame - i.e. no restriction at all, which is what every session did
-	# before regions existed. reg_soft only bites once the box is actually smaller
-	# than the frame, and it defaults to a HARD border: a region is a selection,
-	# and an effect confined to one should look the same everywhere inside it.
-	# Softening the border is a deliberate choice, not the starting point.
+	# The whole frame (no restriction). reg_soft defaults to a hard border, since a region is a selection and the
+	# effect should look the same everywhere inside it.
 	"reg_x0": 0.0, "reg_y0": 0.0, "reg_x1": 1.0, "reg_y1": 1.0, "reg_soft": 0.0,
 	"key_sat": 0.85, "key_val": 0.9,
 }
 
 
-## Is this marker's region an actual restriction, or the default whole frame?
-## One place, because the panel, the on-screen box and the shader push all have
-## to agree about it - and "did the user limit this layer" is not the same
-## question as "are the numbers non-zero".
+## Is this marker's region an actual restriction, or the default whole frame? One place, since the panel, the
+## on-screen box and the shader push must agree.
 static func has_region(m: Dictionary) -> bool:
 	return float(m.get("reg_x0", 0.0)) > 0.001 or float(m.get("reg_y0", 0.0)) > 0.001 \
 		or float(m.get("reg_x1", 1.0)) < 0.999 or float(m.get("reg_y1", 1.0)) < 0.999
@@ -424,59 +275,44 @@ var source_path := ""     # the original file this session was prepared from
 var duration := 0.0
 var markers: Array = []   # Array[Dictionary], sorted by "time"; each has all VECTOR_FIELDS
 
-## Primary-clip trim (in/out points, seconds into video_path/audio_path). clip_out
-## of -1 means "uncut" (full duration) - the common case, so old sessions load with
-## no trim applied. These are DELIBERATELY never read by the timeline's own pixel
-## mapping (see MaskTimeline._visible_span/timeline_extent below) - dragging a trim
-## handle must never rescale the ruler it's being dragged against; that's the
-## "extreme right edge" bug every timeline editor seems to have at some point.
+## Primary-clip trim (in/out points, seconds into video_path/audio_path). clip_out of -1 means uncut (full duration).
+## Never read by the timeline's own pixel mapping (see MaskTimeline._visible_span/timeline_extent): dragging a trim
+## handle must not rescale the ruler it is dragged against.
 var clip_in := 0.0
 var clip_out := -1.0
 
-## The MAIN clip's audio level, 0 or 1 (the audio-mix toggle on its lane). Imported
-## tracks carry their own per-track "volume" in the tracks array. All audio plays
-## together, each gated by its own 0/1 - see MaskTracks.sync / _play.
+## The main clip's audio level, 0 or 1 (the toggle on its lane). Tracks carry their own "volume"; all audio plays
+## together, each gated by its own 0/1 (see MaskTracks.sync / _play).
 var main_volume := 1.0
 
-## The MAIN clip's fade envelope (seconds): audio AND video ramp in over the first
-## `main_fade_in` seconds and out over the last `main_fade_out`. Tracks carry their
-## own "fade_in"/"fade_out" per entry. Both edges of a lane are two handles - the
-## trim point and the fade boundary - see TrackLane / _apply_clip_fade.
+## The main clip's fade envelope (seconds): audio and video ramp in over the first `main_fade_in` and out over the
+## last `main_fade_out`. Tracks carry their own "fade_in"/"fade_out". A lane edge has two handles, the trim point and
+## the fade boundary (see TrackLane / _apply_clip_fade).
 var main_fade_in := 0.0
 var main_fade_out := 0.0
 
-## Where the playhead was, in seconds - persisted so reopening a session (or an
-## auto-restart after the assistant edits code) lands you back exactly where you were.
+## Where the playhead was, in seconds, so reopening a session lands back there.
 var playhead := 0.0
 
-## Timeline zoom/pan (see TimelineView), persisted alongside playhead so a reopen
-## or auto-restart also lands back on the same zoomed-in window, not just the
-## same playhead.
+## Timeline zoom/pan (see TimelineView), persisted with the playhead.
 var timeline_zoom := 1.0
 var timeline_view_start := 0.0
 
-## Secondary tracks (picture-in-picture overlays) - see mask_editor.gd's "Import
-## track" flow. Each: {video_path, duration, clip_in, clip_out, offset (seconds on
-## the MASTER timeline where this track's clip_in lands), x, y, w, h (normalized
-## 0..1 screen position/size), muted}. The primary clip (video_path/audio_path/
-## duration/clip_in/clip_out above) is NOT stored in this array - it is "track 0"
-## implicitly, the one thing every session has always had.
+## Secondary tracks (picture-in-picture overlays), see mask_editor.gd's "Import track" flow. Each: {video_path,
+## duration, clip_in, clip_out, offset (seconds on the master timeline where clip_in lands), x, y, w, h (normalized
+## 0..1 screen position/size), muted}. The primary clip (video_path/audio_path/duration/clip_in/clip_out above) is
+## not in this array: it is track 0 implicitly.
 var tracks: Array = []
 
 
-## The clip end for actual use (playback clamping, export stop condition): clip_out
-## if trimmed, else the full duration. Never negative, never past duration.
+## The clip end for playback clamping and the export stop: clip_out if trimmed, else the full duration.
 func effective_clip_out() -> float:
 	return clampf(clip_out if clip_out > 0.0 else duration, 0.0, duration)
 
 
-## Where playback (live preview and export) actually stops: effective_clip_out(),
-## extended to cover any track scheduled to run past it - e.g. MaskTracks._split_main's tail,
-## which trims clip_out and appends the remainder as a track at that same offset so
-## it keeps playing there instead of cutting the show short. Clamped to `duration`:
-## the master clock is the main clip's OWN decode position (see mask_editor.gd's
-## MaskTracks.sync), so it can never advance past the main clip's full length no
-## matter how far out a track's offset reaches.
+## Where playback (live preview and export) stops: effective_clip_out(), extended to cover any track scheduled to run
+## past it (e.g. MaskTracks._split_main's tail, appended as a track at the same offset). Clamped to `duration`: the
+## master clock is the main clip's own decode position (see MaskTracks.sync), so it cannot pass its full length.
 func content_end() -> float:
 	var extent := effective_clip_out()
 	for t in tracks:
@@ -485,29 +321,11 @@ func content_end() -> float:
 	return minf(extent, duration)
 
 
-## Index of the track that is a continuation of the main clip (same source
-## video_path - produced by splitting the main clip, see mask_editor.gd's
-## MaskTracks._split_main/MaskTracks._split_track) whose own [offset, offset+span) window covers
-## master time `t`, or -1 if none. A track pointing at a DIFFERENT file is
-## always just a PiP inset (see MaskTracks.sync) and is never a continuation.
-##
-## Each continuation track has its OWN independent player (mask_editor.gd's
-## MaskTracks.runtime) that mask_editor.gd seeks/renders full-screen while it
-## owns time `t` - unlike an earlier version of this check, there is no
-## `offset == clip_in` invariant to protect here, because nothing is being
-## borrowed from the main clip's own decode anymore. That invariant used to
-## gate main_visible_at() so the main clip's raw decode (which never re-seeks
-## for a continuation track, it just keeps decoding forward) wouldn't be
-## mistaken for a track's actual content once an ordinary edit - retrimming
-## the track's own in-point, or just shifting its body on the timeline (which
-## only moves `offset`, see track_lane.gd's body-drag) - pulled offset and
-## clip_in apart. That made picture visibility depend on a floating-point
-## equality an ordinary drag could silently break, with audio (which never
-## had that restriction) still playing right through the resulting black frame
-## (feedback/0009, /0012, /0013, /0014 all trace back to this one invariant).
-## The picture now always comes from this track's own player, seeked to its
-## own `t - offset + clip_in` like every other track, so there's nothing left
-## to protect - the invariant is simply gone.
+## Index of the track that is a continuation of the main clip (same source video_path, produced by splitting the main
+## clip, see MaskTracks._split_main/_split_track) whose [offset, offset+span) window covers master time `t`, or -1.
+## A track on a different file is a PiP inset (see MaskTracks.sync), never a continuation. Each continuation has its
+## own player (MaskTracks.runtime) that mask_editor.gd seeks and renders full-screen while it owns `t`, from its own
+## `t - offset + clip_in`, so picture visibility does not depend on `offset == clip_in`.
 func continuation_track_at(t: float) -> int:
 	for i in tracks.size():
 		var tr: Dictionary = tracks[i]
@@ -520,29 +338,16 @@ func continuation_track_at(t: float) -> int:
 	return -1
 
 
-## Whether SOME source (the main clip's own kept range, or a continuation
-## track picking up right after it) has valid picture at time `t` at all.
+## Whether some source (the main clip's kept range, or a continuation track right after it) has valid picture at `t`.
 func main_visible_at(t: float) -> bool:
 	return t < effective_clip_out() or continuation_track_at(t) != -1
 
 
-## Whether a continuation track (same video_path as the main clip) already
-## claims audio ownership at time `t`, so mask_editor.gd's _apply_main_fade
-## knows to mute the main clip's own audio in favor of that track's own
-## independent AudioStreamPlayer instead of doubling it (feedback/0013).
-##
-## Only true when that track is still a GENUINE continuation - `offset` equal
-## to its own `clip_in`, meaning its source position at every `t` (t - offset
-## + clip_in) works out to `t` itself, exactly what the main clip's own decode
-## would be showing/playing there too, hence actually a duplicate. Once a
-## track's body has been dragged independently of its trim (offset and
-## clip_in pulled apart - same drift continuation_track_at's doc describes for
-## picture), it's playing a genuinely different moment of the source, not a
-## copy of main's audio - main should keep playing so the two mix, same as
-## any other pair of overlapping tracks (feedback/0021: a dragged-apart
-## continuation track overlapping the still-active main clip went completely
-## silent because this used to mute main for ANY covering continuation track,
-## in-sync or not).
+## Whether a continuation track (same video_path as the main clip) claims audio ownership at `t`, so
+## mask_editor.gd's _apply_main_fade mutes the main clip's audio in favor of that track's own player. Only true while
+## the track is a genuine continuation: `offset` equal to its `clip_in`, so its source position (t - offset + clip_in)
+## is `t` itself and it would duplicate main's audio. Once dragged apart it plays a different moment of the source,
+## and main keeps playing so the two mix.
 func track_owns_audio_at(t: float) -> bool:
 	var i := continuation_track_at(t)
 	if i == -1:
@@ -551,13 +356,9 @@ func track_owns_audio_at(t: float) -> bool:
 	return absf(float(tr.get("offset", 0.0)) - float(tr.get("clip_in", 0.0))) < 0.05
 
 
-## The ruler's total extent in seconds: always at least `duration` (the primary
-## clip's own full, UNTRIMMED length - trimming never shrinks this), extended to
-## cover any track that runs past it, plus a fixed overflow margin so the visible
-## timeline always shows some empty space past the last real content - "the max
-## timeline overflows" rather than fitting content edge-to-edge, so a trim/shift
-## handle dragged near the current boundary never approaches a hard edge that
-## would force a rescale mid-drag.
+## The ruler's total extent in seconds: at least `duration` (the primary clip's untrimmed length), extended to cover
+## any track that runs past it, plus a fixed overflow margin so a handle dragged near the boundary never forces a
+## rescale mid-drag.
 func timeline_extent() -> float:
 	var extent := duration
 	for t in tracks:
@@ -566,11 +367,9 @@ func timeline_extent() -> float:
 	return extent + maxf(5.0, extent * 0.12)
 
 
-## A new marker at `t`, seeded from the previous marker's stored values (or
-## DEFAULTS before the first) - so a fresh marker CONTINUES the same layer: the
-## continuation rule in layers_at dissolves the predecessor through this
-## marker's envelope (identical params = visually seamless; edited params = the
-## transition animation). `kind_id` indexes MARKER_KINDS.
+## A new marker at `t`, seeded from the previous marker's values (or DEFAULTS before the first), so it continues the
+## same layer: the continuation rule in layers_at dissolves the predecessor through this marker's envelope. `kind_id`
+## indexes MARKER_KINDS.
 func add_marker(t: float, kind_id: int = 0) -> Dictionary:
 	var prev = null
 	for mm in markers:
@@ -599,10 +398,8 @@ static func hue_dist(a: float, b: float) -> float:
 	return minf(d, 1.0 - d)
 
 
-## The DERIVED per-screen-layer presence amounts (0..1) a view mode implies.
-## view_mode is stored discrete (a marker names a destination look, whole), but
-## what actually transitions on screen is each surface's presence - and those
-## blend continuously through transition windows (contract shape 2).
+## The derived per-screen-layer presence amounts (0..1) a view mode implies. view_mode is stored discrete, but what
+## transitions on screen is each surface's presence, blended through transition windows (contract shape 2).
 const AMOUNT_FIELDS := ["main_fx", "inset_show", "inset_fx"]
 
 static func mode_amounts(view_mode_val) -> Dictionary:
@@ -614,35 +411,19 @@ static func mode_amounts(view_mode_val) -> Dictionary:
 	}
 
 
-# The amounts of a resolved at_time() state: already carried in the dict if it came
-# through at_time (mid-blend values), else derived fresh from its view_mode.
+# The amounts of a resolved at_time() state: carried in the dict if it came through at_time, else derived from view_mode.
 static func _amounts_of(state: Dictionary) -> Dictionary:
 	if state.has("main_fx"):
 		return state
 	return mode_amounts(state.get("view_mode", 2.0))
 
 
-## This marker's own IN-envelope at `t`: 0 before its window, easing to 1 across
-## it, holding 1 forever after. Closed-form - no recursion, no window chaining.
-##   ramp : rises over [time - duration, time]
-##   damp: rises over [time, time + duration]
-## Index of the latest full-raw marker whose transition to raw has COMPLETED by
-## `t` (-1 if none): at its anchor for a ramp (the ramp eases in BEFORE, arriving
-## complete exactly there), anchor+duration for a damp (still fading until
-## then). Cutting only after completion keeps the reset pop-free: presence is
-## already zero when the history disappears.
-##
-## But that guarantee only holds if the screen actually GOT to raw - and a
-## later marker becomes at_time()'s governing `cur` from its own arrival
-## onward, regardless of whether an earlier raw marker's damp window has
-## finished counting down. If something later takes the screen back to
-## masked/pip before the raw damp completes, main_fx never reaches 0 (it just
-## holds wherever the later marker left it - never faded at all, in the
-## fast-forward-to-the-next-marker case), so a rebase firing purely off the
-## raw marker's own arithmetic would erase a stack that's still fully visible:
-## a hard, lead-in-free pop (the "abrupt deletion" complaint). A raw marker is
-## only ever superseded - never doubled back to - so checking for one later
-## marker starting before `done` is sufficient.
+## Index of the latest full-raw marker whose transition to raw has completed by `t` (-1 if none): at its anchor for a
+## ramp, anchor+duration for a damp. Cutting only after completion keeps the reset pop-free (presence is already zero).
+## A later marker becomes at_time()'s governing `cur` from its arrival, so if one takes the screen back to masked/pip
+## before the raw damp completes, main_fx never reaches 0 and a rebase from the raw marker's arithmetic alone would
+## erase a stack still fully visible. A raw marker is only superseded, never doubled back to, so checking for one
+## later marker starting before `done` suffices.
 func _barrier_index(t: float) -> int:
 	var idx := -1
 	for i in markers.size():
@@ -664,6 +445,8 @@ func _barrier_index(t: float) -> int:
 	return idx
 
 
+## A marker's own in-envelope at `t`: 0 before its window, easing to 1 across it, 1 after. Closed form, no recursion.
+##   ramp: rises over [time - duration, time]     damp: rises over [time, time + duration]
 static func _envelope(m: Dictionary, t: float) -> float:
 	var d: float = maxf(0.001, float(m.get("duration", 1.0)))
 	var anchor: float = float(m.time)
@@ -672,11 +455,9 @@ static func _envelope(m: Dictionary, t: float) -> float:
 	return clampf((t - anchor) / d, 0.0, 1.0)
 
 
-## Whether `b` is close enough to `a` in SCALE and PLACEMENT to plausibly be
-## the same physical instance keyframed again, rather than an unrelated new
-## burst that happens to share an effect and hue. Deliberately loose (50%
-## scale tolerance, a real pan radius) - it only needs to reject WHOLESALE
-## reconfigurations, not fine-tune what counts as "a tweak".
+## Whether `b` is close enough to `a` in scale and placement to be the same instance keyframed again, not an unrelated
+## burst sharing an effect and hue. Loose (50% scale tolerance, a real pan radius): it rejects only wholesale
+## reconfigurations.
 static func _same_instance(a: Dictionary, b: Dictionary) -> bool:
 	var scale_a := maxf(0.05, float(a.get("fx_scale", 1.0)))
 	var scale_b := maxf(0.05, float(b.get("fx_scale", 1.0)))
@@ -686,27 +467,18 @@ static func _same_instance(a: Dictionary, b: Dictionary) -> bool:
 	return scale_ratio <= 1.5 and pos_a.distance_to(pos_b) <= 0.15
 
 
-## The layer stack at time `t`, chronological (oldest first - the shader applies
-## them in order, so later layers act on top). Each entry bakes its marker's
-## LAYER_FIELDS plus "env", the layer's current envelope.
+## The layer stack at time `t`, chronological (oldest first: the shader applies them in order). Each entry bakes its
+## marker's LAYER_FIELDS plus "env", the layer's current envelope.
 ##
-## Layering is ADDITIVE: an applying marker never touches earlier layers,
-## whatever its color. Only an explicit RESTORE marker (effect == EFFECT_RESTORE)
-## closes earlier layers - every one whose target hue lies within the restore's
-## own `threshold` of its picked color fades by (1 - restore_env * restore
-## intensity) over the restore's window. Restores compose multiplicatively (two
-## half-restores ≈ three-quarters restored) and never appear as drawn layers
-## themselves. Fully-out layers are dropped; if more than MAX_LAYERS remain, the
-## oldest go (the shader can't carry them, and the newest edits are the ones
-## being worked on).
+## Layering is additive: an applying marker never touches earlier layers. Only a RESTORE marker (effect ==
+## EFFECT_RESTORE) closes earlier layers, every one whose target hue lies within its own `threshold` of its picked
+## color, by (1 - restore_env * restore intensity) over its window. Restores compose multiplicatively and never appear
+## as drawn layers. Fully-out layers are dropped; beyond MAX_LAYERS the oldest go.
 func layers_at(t: float) -> Array:
 	var out := []
-	# The raw checkpoint: layers only exist back to the most recent COMPLETED
-	# transition into full raw (see the class doc - the rebase).
+	# The raw checkpoint: layers exist only back to the latest completed transition into full raw (the rebase).
 	var start := _barrier_index(t) + 1
-	# Continuation partners are MERGED into whichever chain already claimed them,
-	# so a later pass of the outer loop must not also emit them as a fresh,
-	# independent layer (see the continuation branch below).
+	# Continuation partners are merged into the chain that claimed them, so the outer loop must not emit them again.
 	var consumed := {}
 	for i in range(start, markers.size()):
 		if consumed.has(i):
@@ -718,8 +490,7 @@ func layers_at(t: float) -> Array:
 		var env := _envelope(m, t)
 		if env <= 0.0005:
 			continue
-		# `cur` is the field values actually drawn - m's own, until a
-		# continuation partner takes over (see below).
+		# `cur` is the field values actually drawn: m's own, until a continuation partner takes over.
 		var cur: Dictionary = m
 		for j in range(i + 1, markers.size()):
 			var mj: Dictionary = markers[j]
@@ -727,33 +498,14 @@ func layers_at(t: float) -> Array:
 			if ej == EFFECT_CLEAR:
 				env *= 1.0 - _envelope(mj, t) * clampf(float(mj.get("intensity_a", 1.0)), 0.0, 1.0)
 				continue
-			# CONTINUATION: a later marker with the SAME effect on the SAME
-			# color is the same channel keyframed again - it takes over its
-			# predecessor through its own envelope. This used to run as TWO
-			# separate layers with complementary envelopes (A fades out, B
-			# fades in, weights summing to one) - correct for the simple
-			# replacement effects (crystal/echo/erase mix toward a target
-			# once), but fire/freeze/smoke/whisp add their emissive body on
-			# top of an ALREADY-suppressed color, and running that pass twice
-			# at partial weight doesn't equal running it once at full weight:
-			# suppression compounds sub-additively (two 44%/56% consumes eat
-			# LESS than one 100% consume) while the emissive term still sums
-			# to the full 100% - the footage under the glow stays too bright,
-			# reading as the transition flaring UP mid-crossfade instead of
-			# holding steady (the "much brighter" complaint). So this is one
-			# LAYER with interpolated field values, drawn once at its natural
-			# env, never two partial draws of the same field.
-			# Hue alone is a weak signal: fire's natural color IS ~0.02, so any
-			# two independently-authored fire bursts left at the default hue
-			# match this test trivially, whether or not they're remotely the
-			# same instance - and unlike the whisp case, nothing else about
-			# them needs to agree (a scale of 0.34 and one of 2.1 are two
-			# different-sized bursts, not one burst keyframed to a new size).
-			# So also require the pattern's PLACEMENT to agree closely - scale
-			# within 50% and pan within a small radius - genuine continuations
-			# (seeded by add_marker's copy-the-predecessor convention, then
-			# tweaked a LITTLE) satisfy this easily; two coincidentally
-			# same-hue bursts placed and sized independently almost never do.
+			# Continuation: a later marker with the same effect on the same color is the same channel keyframed again and
+			# takes over its predecessor through its own envelope, as one layer with interpolated field values drawn once.
+			# Two layers with complementary envelopes would be wrong for fire/freeze/smoke/whisp: they add an emissive
+			# body on top of an already-suppressed color, suppression compounds sub-additively (two 44%/56% consumes eat
+			# less than one 100% consume) while the emissive sums to 100%, so the footage under the glow flares up
+			# mid-crossfade. Hue alone is a weak signal (fire's natural hue is ~0.02, so two default fire bursts match),
+			# so the pattern's placement must also agree: scale within 50% and pan within a small radius. Genuine
+			# continuations (seeded by add_marker's copy-the-predecessor, then tweaked a little) satisfy this.
 			if ej == e and hue_dist(float(cur.get("hue_a", 0.0)), float(mj.get("hue_a", 0.0))) <= 0.02 \
 					and _same_instance(cur, mj):
 				var f := _envelope(mj, t)
@@ -785,16 +537,10 @@ func layers_at(t: float) -> Array:
 	return out
 
 
-## The resolved state at time `t`: the GLOBAL keying scalars (lerped through
-## transition windows), the discrete view_mode + its derived presence AMOUNTS
-## (lerped), and "layers" - the layer stack from layers_at(). Everything a
-## consumer needs to draw the frame; see the transition contract above.
-## want_layers=false skips the O(markers^2) layers_at() at the end - the recursive
-## calls below (resolving the source state a transition window blends FROM) read
-## only the global scalars, amounts, and pip_track off the result, never "layers",
-## so computing and discarding the layer stack at every recursion level was pure
-## waste that grew with both marker count and window overlap depth. External
-## callers keep the default and always get layers.
+## The resolved state at time `t`: the global keying scalars (lerped through transition windows), the discrete
+## view_mode and its derived presence AMOUNTS (lerped), and "layers" from layers_at(). Everything a consumer needs to
+## draw the frame. want_layers=false skips the O(markers^2) layers_at(): the recursive calls that resolve the source
+## state a transition window blends from read only the globals, amounts and pip_track.
 func at_time(t: float, want_layers := true) -> Dictionary:
 	if markers.is_empty():
 		var d0 := DEFAULTS.duplicate()
@@ -812,23 +558,19 @@ func at_time(t: float, want_layers := true) -> Dictionary:
 		elif nxt == null:
 			nxt = m
 
-	# DEFAULTS (not markers[0]) before the first marker: a marker's discrete values
-	# must not leak backward across the timeline prefix before it ever arrives.
+	# DEFAULTS (not markers[0]) before the first marker: its discrete values must not leak backward.
 	var governing: Dictionary = cur if cur != null else DEFAULTS
 	var out := {}
 	out["view_mode"] = governing.get("view_mode", DEFAULTS.get("view_mode", 2.0))
-	# pip_track is a discrete SOURCE selector - it doesn't blend (the inset's
-	# visibility does, via the amounts below). It switches with view_mode.
+	# pip_track is a discrete source selector: it does not blend (the inset's visibility does, via the amounts below).
 	out["pip_track"] = float(governing.get("pip_track", 0.0))
 	out.merge(mode_amounts(out["view_mode"]), true)
 	for key in GLOBAL_CONTINUOUS:
 		out[key] = float(governing.get(key, DEFAULTS.get(key, 0.0)))
 
-	# Ramp window: the approaching marker's stage (view_mode) is up from the
-	# window's start while its presence amounts and the global scalars ease in.
-	# The source is whatever was ACTUALLY active as the window opened - recursed,
-	# nudged strictly earlier (querying the exact boundary would resolve this same
-	# window again, forever - a real stack overflow taught that lesson).
+	# Ramp window: the approaching marker's stage (view_mode) is up from the window's start while its presence amounts
+	# and the global scalars ease in. The source is what was active as the window opened, recursed and nudged strictly
+	# earlier (querying the exact boundary would resolve this same window again, forever).
 	var approaching = nxt if nxt != null else (markers[0] if cur == null else null)
 	if approaching != null and int(approaching.get("kind", 0.0)) == 0:
 		var d: float = maxf(0.001, float(approaching.get("duration", 1.0)))
@@ -842,31 +584,22 @@ func at_time(t: float, want_layers := true) -> Dictionary:
 			out["view_mode"] = approaching.get("view_mode", DEFAULTS.get("view_mode", 2.0))
 			var src_amt := _amounts_of(src)
 			var dst_amt := mode_amounts(out["view_mode"])
-			# pip_track picks WHICH video fills the inset - a hard content swap, not a
-			# blend. Popping it to the approaching marker's value the instant the window
-			# opens shows the wrong source at whatever opacity the OLD side still holds
-			# (fading OUT of an inset: the new, usually-irrelevant source flashes in at
-			# near-full presence, then fades to nothing - the "wrong girl" bug). Whichever
-			# side currently has the greater inset presence owns the content; the swap
-			# only lands once the other side has faded past it, so it's pop-free.
+			# pip_track picks which video fills the inset: a hard content swap, not a blend. Swapping at window open would
+			# show the wrong source at the old side's opacity. Whichever side has the greater inset presence owns the
+			# content, so the swap lands only once the other side has faded past it.
 			out["pip_track"] = float(approaching.get("pip_track", 0.0)) \
 				if float(dst_amt.get("inset_show", 0.0)) >= float(src_amt.get("inset_show", 0.0)) \
 				else float(src.get("pip_track", 0.0))
 			for key in AMOUNT_FIELDS:
 				out[key] = lerpf(float(src_amt.get(key, 0.0)), float(dst_amt.get(key, 0.0)), f)
 
-	# Damp window: the just-passed marker's globals/presence accumulate from the
-	# prior state toward its own. f clamps at 1, so it holds once accumulated.
+	# Damp window: the just-passed marker's globals and presence accumulate from the prior state toward its own;
+	# f clamps at 1.
 	if cur != null and int(cur.get("kind", 0.0)) == 1 and t >= float(cur.time):
 		var d: float = maxf(0.001, float(cur.get("duration", 1.0)))
-		# If cur interrupted an EARLIER damp-to-raw marker's own trail (its window
-		# still open when cur arrived), that suppression keeps counting down on its
-		# own clock - cur doesn't start accumulating back up until it's actually
-		# done. Without this, a marker placed to fade to raw over a long trail reads
-		# as fully faded right up until the next marker's anchor, then instantly
-		# reverses and rebuilds - the "surging back" bug (feedback/0010): the
-		# overlapping trail should let the fade finish on its own promise before
-		# anything new is allowed to amplify on top of it.
+		# If cur interrupted an earlier damp-to-raw marker's trail (its window still open when cur arrived), that fade
+		# keeps counting down on its own clock and cur does not start accumulating until it is done. Otherwise a long
+		# fade to raw would read as complete until the next anchor, then reverse and rebuild.
 		var start_t := float(cur.time)
 		var prev_raw_done = null   # prev's own resolved state at start_t, if gated - see below
 		if cur_i > 0:
@@ -876,14 +609,9 @@ func at_time(t: float, want_layers := true) -> Dictionary:
 				if prev_done > start_t:
 					start_t = prev_done
 					prev_raw_done = prev
-		# While gated (t hasn't reached start_t yet), prev's OWN damp-to-raw is still
-		# mid-flight - ride that curve rather than snapping straight to its endpoint.
-		# cur is by construction prev's immediate successor arriving before prev's own
-		# trail finishes, so prev never becomes the real barrier (see _barrier_index's
-		# supersession check) - treating it as "already reached raw" the instant cur
-		# arrives popped presence straight to zero (a hard cut to raw) instead of
-		# continuing prev's fade to its natural endpoint, THEN handing off to cur - the
-		# "particular effect reverts the whole scene to raw" bug (feedback/0029).
+		# While gated (t before start_t), prev's own damp-to-raw is mid-flight: ride that curve. cur is prev's immediate
+		# successor arriving before prev's trail finishes, so prev never becomes the real barrier (see _barrier_index's
+		# supersession check); treating it as already raw would pop presence to zero.
 		if prev_raw_done != null and t < start_t:
 			var pd: float = maxf(0.001, float(prev_raw_done.get("duration", 1.0)))
 			var pf := clampf((t - float(prev_raw_done.time)) / pd, 0.0, 1.0)
@@ -901,12 +629,8 @@ func at_time(t: float, want_layers := true) -> Dictionary:
 			if want_layers:
 				out["layers"] = layers_at(t)
 			return out
-		# `src` is the state the moment cur is actually allowed to start accumulating.
-		# When gated, that's exactly prev's own fully-arrived values (querying via
-		# at_time(start_t - 0.001) would re-enter THIS SAME window, since start_t is
-		# still >= cur.time - infinite recursion) - prev has already reached them by
-		# construction (the branch above handles every t before that), so no further
-		# transitioning is needed here.
+		# `src` is the state at the moment cur may start accumulating. When gated, that is prev's own fully-arrived values
+		# (at_time(start_t - 0.001) would re-enter this same window: infinite recursion).
 		var src: Dictionary
 		if prev_raw_done != null:
 			src = prev_raw_done.duplicate()
@@ -919,10 +643,8 @@ func at_time(t: float, want_layers := true) -> Dictionary:
 				float(cur.get(key, DEFAULTS.get(key, 0.0))), f)
 		var src_amt := _amounts_of(src)
 		var dst_amt := mode_amounts(cur.get("view_mode", 2.0))
-		# Same pip_track pop-guard as the ramp window above: the initial pass at the
-		# top of this function already set out["pip_track"] to cur's (the just-arrived
-		# damp marker's) own value, which is wrong while its inset presence hasn't
-		# accumulated past whatever was showing before it.
+		# The same pip_track pop-guard as the ramp window: the initial pass set out["pip_track"] to cur's value, wrong
+		# while its inset presence has not accumulated past what was showing before.
 		out["pip_track"] = float(cur.get("pip_track", 0.0)) \
 			if float(dst_amt.get("inset_show", 0.0)) >= float(src_amt.get("inset_show", 0.0)) \
 			else float(src.get("pip_track", 0.0))
@@ -934,10 +656,8 @@ func at_time(t: float, want_layers := true) -> Dictionary:
 	return out
 
 
-## This marker's own active span - [time-duration, time] for a ramp (it's pulling
-## the timeline toward itself from the past), [time, time+duration] for a damp
-## (it's pushing away from itself into the future). Exposed so the timeline can draw
-## the span it's shading without re-deriving the ramp/damp math itself.
+## This marker's active span: [time-duration, time] for a ramp, [time, time+duration] for a damp. Exposed so the
+## timeline can draw the span without re-deriving the math.
 func marker_span(m: Dictionary) -> Vector2:
 	var d: float = maxf(0.001, float(m.get("duration", 1.0)))
 	var anchor: float = float(m.time)
@@ -961,8 +681,7 @@ static func from_vector(v: PackedFloat32Array) -> Dictionary:
 	return m
 
 
-## The whole timeline as a matrix (one row per marker, columns = VECTOR_FIELDS) -
-## the shape future bias-correlation work would want to read.
+## The whole timeline as a matrix (one row per marker, columns = VECTOR_FIELDS).
 func to_matrix() -> Array:
 	var rows := []
 	for m in markers:

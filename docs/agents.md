@@ -26,57 +26,57 @@ Where each is chosen: a card show's **Writer** and **Painter** rows, each with i
 
 _Anthropic's models through the Claude Code CLI, run with no tools and no project context. Uses the Claude Code login._
 
-CLAUDE THROUGH THE CLAUDE CODE CLI, as a bare writer.
+Claude through the Claude Code CLI, as a bare writer.
 
-`--safe-mode` leaves out everything the author has customized - CLAUDE.md, memory, skills, hooks, MCP servers, plugins, output styles - and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees the two files and nothing else (measured: ~480 input tokens for a one-line prompt). `--tools ""` takes every tool away, so a reply is words and only words. `--no-session-persistence`: nothing is resumed, see the class note. The message goes in as STREAM-JSON (one user message on stdin), the only input that carries pictures; the reply comes back as the stream's `result` event (`--verbose` is required with stream-json output). Measured with a picture attached: the tool list stays empty. `--bare` would be tighter still and is NOT used - it reads only ANTHROPIC_API_KEY, never the subscription login the rest of ghost's Claude runs use.
+`--safe-mode` leaves out the author's CLAUDE.md, memory, skills, hooks, MCP servers, plugins and output styles, and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees the two files and nothing else. `--tools ""` removes every tool. `--no-session-persistence`: nothing is resumed. The message goes in as stream-json (one user message on stdin), the only input that carries pictures; the reply is the stream's `result` event (`--verbose` is required with stream-json output). `--bare` is not used: it reads only ANTHROPIC_API_KEY, never the subscription login.
 
-Runs the Claude Code CLI. Source: [src/agents/text_gen.gd:322](../src/agents/text_gen.gd#L322)
+Runs the Claude Code CLI. Source: [src/agents/text_gen.gd:299](../src/agents/text_gen.gd#L299)
 
 ### `codex` - OpenAI (Codex CLI)
 
 _OpenAI's models through the Codex CLI, run read-only in the job's own folder and told to work only from the message it is given - and Ghost Notes' tools where a job serves them, as the card table's set dresser does. Uses the Codex login._
 
-OPENAI THROUGH THE CODEX CLI.
+OpenAI through the Codex CLI.
 
-`codex exec` has no system prompt of its own to replace, so the system prompt leads the message, after `ONLY_THIS`: an agent that keeps a shell is asked to work from the message alone. Read-only, in the job's own folder, `--ephemeral` so no session is kept, and `-o` names the file the final message is written to. Pictures go as `--image` files - each prepared the way Claude is sent it (`TextGen.picture`) and saved beside the prompt - and the message says which is which. The tier is the reasoning effort; the model is the CLI's.
+`codex exec` has no system prompt to replace, so the system prompt leads the message, after `ONLY_THIS`. Read-only, in the job's own folder, `--ephemeral` so no session is kept, and `-o` names the file the final message is written to. Pictures go as `--image` files, prepared as Claude is sent them (`TextGen.picture`) and saved beside the prompt; the message says which is which. The tier is the reasoning effort; the model is the CLI's.
 
-GHOST'S TOOLS (`AgentTools`) are its server `ghost`, named in `-c mcp_servers.ghost.*` overrides: the bare endpoint in argv and the job's token read from an environment variable set for this run alone (`bearer_token_env_var`), so no argv holds it; its calls approved (`default_tools_approval_mode = "approve"`: `codex exec` never asks, and refused ghost's call with "requires approval, but approval policy is never"); and room for a slow one (`tool_timeout_sec`). A tool's picture reaches the model (measured, codex-cli 0.157.0: described rightly).
+Ghost's tools (`AgentTools`) are its server `ghost`, named in `-c mcp_servers.ghost.*` overrides: the bare endpoint in argv and the job's token in an environment variable set for this run alone (`bearer_token_env_var`), so no argv holds it; calls approved (`default_tools_approval_mode = "approve"`, since `codex exec` never asks); and room for a slow one (`tool_timeout_sec`).
 
-Runs the OpenAI Codex CLI. Source: [src/agents/text_gen.gd:529](../src/agents/text_gen.gd#L529)
+Runs the OpenAI Codex CLI. Source: [src/agents/text_gen.gd:497](../src/agents/text_gen.gd#L497)
 
 ### `grok` - xAI (Grok Build CLI)
 
 _xAI's Grok models through the Grok Build CLI, with ghost's own system prompt, none of its own tools but reading the pictures it is sent - and Ghost Notes' tools where a job serves them, as the card table's set dresser does - no memory, and none of the setup it would borrow from Claude, Cursor or Codex. Uses the Grok login._
 
-XAI'S GROK THROUGH THE GROK BUILD CLI (`grok`), as a bare writer.
+xAI's Grok through the Grok Build CLI (`grok`), as a bare writer.
 
-Grok Build is a coding agent, and four things make it a writer. Its system prompt is ghost's: an agent file beside the prompt (`agent.md`, `promptMode: full`) whose body is the system prompt, so Grok's own agent prompt is never sent (measured, CLI 1.0.50: a one-line prompt in ~1.7K input tokens instead of ~16K). The message is a file the CLI reads itself (`--prompt-file`; `--verbatim`, so it is sent as written and never parsed as a slash command). It has none of its own tools (`argv`). And none of the author's own setup comes along (`ISOLATION`, and `skills: []`, without which Grok lists its bundled skills to the model mid-run): Grok reads Claude Code's, Cursor's and Codex's instruction files, skills, hooks and MCP servers by default - a writer here was shown ~/.claude/CLAUDE.md - and keeps a memory across sessions. What stays is Grok's own: a few lines naming the workspace, and one built-in style rule (state things affirmatively) that no switch removes.
+Its system prompt is ghost's: an agent file beside the prompt (`agent.md`, `promptMode: full`) whose body is the system prompt. The message is a file the CLI reads itself (`--prompt-file`; `--verbatim`, so it is never parsed as a slash command). It has none of its own tools (`argv`), and none of the author's setup comes along (`ISOLATION` and `skills: []`): Grok otherwise reads Claude Code's, Cursor's and Codex's instruction files, skills, hooks and MCP servers, and keeps a memory.
 
-THE REPLY is the words after the run's last tool call, read off its event stream: Grok's one-JSON reply joins every turn's words (measured: "I am about to search." ran straight into the answer).
+The reply is the words after the run's last tool call, read off its event stream.
 
-PICTURES ARE FILES IT READS. Headless Grok attaches nothing (`@path` arrives as text), and `read_file` hands the model the picture itself, so a job with pictures gets that one tool and is told which files they are (Rules `agents/grok.writer_pictures`), each prepared as Claude is sent it.
+Pictures are files it reads: headless Grok attaches nothing (`@path` arrives as text), so a job with pictures gets `read_file` and is told which files they are (Rules `agents/grok.writer_pictures`).
 
-GHOST'S TOOLS (`AgentTools`): the server is named in the agent file (`mcpServers`, a list), and Grok reaches its tools as MCP tools always are there - `search_tool` finds them (`ghost__put`...), `use_tool` calls them. A picture a tool returns reaches the model as a picture, outside the 20 KB cap on a tool's text (measured: a 130 KB JPEG, described rightly), and the text cap is raised for these runs (`TOOLS_ENV`). THE CALLS ARE ALLOWED BY RULE (`--allow MCPTool(ghost__*)`): left to Grok's headless auto mode, a classifier judges each call, and it refused ghost's as "Unknown MCP tool with unclear behavior" in one run of three; with the rule, three of three ran.
+Ghost's tools (`AgentTools`): the server is named in the agent file (`mcpServers`, a list); Grok reaches them as MCP tools (`search_tool` finds them, `use_tool` calls them). A returned picture reaches the model outside the 20 KB cap on a tool's text, which is raised for these runs (`TOOLS_ENV`). Calls are allowed by rule (`--allow MCPTool(ghost__*)`), since Grok's headless classifier refuses some.
 
-AN AGENT FILE'S BODY IS A TEMPLATE: a `${{ ... }}` in it is filled in (measured: it vanished). A system prompt holding one leads the message instead, as Codex is sent its, and arrives as written.
+An agent file's body is a template (`${{ ... }}` is filled in), so a system prompt holding one leads the message instead, as Codex is sent its.
 
-NO SESSION IS KEPT. Grok keeps every run (its messages, the pictures it read, the text in a search index) and has no switch against it, so a finished run's sessions are deleted with Grok's own `sessions delete`, as the job's last steps (`forget`). The painter (`ImageGen.Grok`) shares all of this.
+No session is kept: Grok keeps every run and has no switch against it, so a finished run's sessions are deleted with `sessions delete` as the job's last steps (`forget`). The painter (`ImageGen.Grok`) shares all of this.
 
-Runs the Grok Build CLI (xAI). Source: [src/agents/text_gen.gd:710](../src/agents/text_gen.gd#L710)
+Runs the Grok Build CLI (xAI). Source: [src/agents/text_gen.gd:667](../src/agents/text_gen.gd#L667)
 
 ### `bedrock` - Amazon Bedrock (AWS CLI)
 
 _Models on Amazon Bedrock - Amazon's own Nova by default, and the open models Bedrock hosts - through the AWS CLI with your AWS credentials and region (aws configure). Billed per token to your AWS account; a model from another provider may subscribe the account to it through AWS Marketplace on first use._
 
-MODELS ON AMAZON BEDROCK, THROUGH THE AWS CLI: Amazon's own Nova (the default) and the open models Bedrock hosts, run on the machine's AWS credentials and region (`aws configure`) and billed per token to that account.
+Models on Amazon Bedrock, through the AWS CLI: Amazon's own Nova (the default) and the open models Bedrock hosts, run on the machine's AWS credentials and region (`aws configure`), billed per token to that account.
 
-One `bedrock-runtime converse` call per job. Its whole request - the system prompt, the pictures (JPEG, base64) and the prompt - is a JSON file the CLI reads itself (`--cli-input-json file://...`), so nothing the author wrote is ever in argv. `--cli-binary-format base64` is explicit because a `cli_binary_format = raw-in-base64-out` in the user's config would send the pictures' base64 as the bytes themselves.
+One `bedrock-runtime converse` call per job. Its whole request - system prompt, pictures (JPEG, base64) and prompt - is a JSON file the CLI reads itself (`--cli-input-json file://...`), so nothing the author wrote is in argv. `--cli-binary-format base64` is explicit because a `cli_binary_format = raw-in-base64-out` in the user's config would send the base64 as the bytes themselves.
 
-WHICH MODELS, AND WHERE TO CALL THEM, is the account's own answer: `BedrockCatalog`. A model is kept by its base id and called on its route, in the region that serves it; a job finding no fresh catalog looks it up first, as steps of its own (`advance`).
+Which models, and where to call them, is the account's own answer: `BedrockCatalog`. A model is kept by its base id and called on its route, in the region that serves it; a job finding no fresh catalog looks it up first, as steps of its own (`advance`).
 
-ONE API, MANY MODELS: Converse evens out most differences between providers, and the two that remain are retried as steps: a model that takes no system prompt is sent it at the head of the message, and one whose output limit is under `MAX_TOKENS` is asked again inside it.
+Converse evens out most differences between providers; the two that remain are retried as steps: a model that takes no system prompt is sent it at the head of the message, and one whose output limit is under `MAX_TOKENS` is asked again inside it.
 
-Runs the AWS CLI. Source: [src/agents/text_gen.gd:1110](../src/agents/text_gen.gd#L1110)
+Runs the AWS CLI. Source: [src/agents/text_gen.gd:1061](../src/agents/text_gen.gd#L1061)
 
 ## Painters (3)
 
@@ -86,39 +86,37 @@ Runs the AWS CLI. Source: [src/agents/text_gen.gd:1110](../src/agents/text_gen.g
 
 _OpenAI's image model, driven through the Codex CLI's built-in image tool. Uses the Codex login, not an API key. About a minute per picture._
 
-OPENAI THROUGH THE CODEX CLI.
+OpenAI through the Codex CLI.
 
-`codex exec` is an agent, not an image API: it is asked, in words, to call its built-in image tool and save the result under an exact name in its working directory. Measured on codex-cli 0.150.0 - the tool writes the original to `$CODEX_HOME/generated_images/<thread_id>/*.png` and the agent then copies it where asked. The copy is the step an agent can skip, so `resolve` falls back to that directory, keyed by the thread id from the first JSONL event and filtered to files made after the job began - never "the newest png anywhere", which would hand one chapter another's picture.
+`codex exec` is an agent, not an image API: it is asked, in words, to call its built-in image tool and save the result under an exact name in its working directory. The tool writes the original to `$CODEX_HOME/generated_images/<thread_id>/*.png` and the agent then copies it where asked. The copy is the step an agent can skip, so `resolve` falls back to that directory, keyed by the thread id from the first JSONL event and filtered to files made after the job began (never "the newest png anywhere", which could hand one chapter another's picture).
 
-Reasoning effort is LOW unless the panel asks for another: the author's default is the maximum, which is right for code and pure latency for "call one tool and copy one file".
+Reasoning effort is low unless the panel asks for another (the agent only calls one tool and copies one file). `--ephemeral`: ghost keeps the picture, and a session log holds every reference and the result as base64 (5-20 MB a picture) and is never pruned; the thread id and `generated_images` are unaffected.
 
-`--ephemeral`: ghost keeps the picture, so Codex keeps no session. A session log holds every reference and the result as base64 (5-20 MB a picture) and Codex never prunes them. Measured on codex-cli 0.157.0: the thread id and `generated_images` are unaffected.
-
-Runs the OpenAI Codex CLI. Source: [src/agents/image_gen.gd:93](../src/agents/image_gen.gd#L93)
+Runs the OpenAI Codex CLI. Source: [src/agents/image_gen.gd:86](../src/agents/image_gen.gd#L86)
 
 ### `grok` - xAI (Grok Build CLI)
 
 _xAI's image model, driven through the Grok Build CLI's built-in image tools: it looks at the reference pictures and paints from them by path. Uses the Grok login. About half a minute per picture._
 
-XAI'S GROK THROUGH THE GROK BUILD CLI, painting with its built-in image tools.
+xAI's Grok through the Grok Build CLI, painting with its built-in image tools.
 
-Run as the writer is (`TextGen.Grok`: an agent file whose body is the system prompt, the message a file read as written, none of the setup it would borrow, no session kept), with a system prompt of its own (Rules `agents/grok.painter`). Every request asks a painter to save the picture itself, and Grok's `image_gen` / `image_edit` already keep what they make: in the run's session folder, with the path in the tool's result (measured, CLI 1.0.50: a JPEG, 832x1248 for 2:3, ~25 s a picture). Ghost reads that path off the event stream and saves the PNG itself (`collect`) before the session is deleted, so the painter needs, and has, no tool that writes a file - an agent that was given a shell converted the picture with Python, which another machine may not have. Its tools are the two image tools and `read_file`, for looking at the references, which are files listed ahead of the request ("Attached image 1: ..."), the name the requests give them.
+Run as the writer is (`TextGen.Grok`: an agent file whose body is the system prompt, the message a file read as written, none of the borrowed setup, no session kept), with a system prompt of its own (Rules `agents/grok.painter`). Grok's `image_gen` / `image_edit` keep what they make in the run's session folder, with the path in the tool's result. Ghost reads that path off the event stream and saves the PNG itself (`collect`) before the session is deleted, so the painter needs no tool that writes a file. Its tools are the two image tools and `read_file`, for looking at the references (files listed ahead of the request as "Attached image 1: ...").
 
-The effort is LOW unless one is chosen, as Codex's painter: the agent writes a prompt and calls one tool; the picture is the image model's.
+The effort is low unless one is chosen, as Codex's painter: the agent writes a prompt and calls one tool; the picture is the image model's.
 
-Runs the Grok Build CLI (xAI). Source: [src/agents/image_gen.gd:337](../src/agents/image_gen.gd#L337)
+Runs the Grok Build CLI (xAI). Source: [src/agents/image_gen.gd:322](../src/agents/image_gen.gd#L322)
 
 ### `bedrock` - Amazon Bedrock (AWS CLI)
 
 _Image models on Amazon Bedrock - Stability AI's (Amazon retired its own in 2026) - through the AWS CLI with your AWS credentials, billed per picture to your AWS account. An Amazon Nova model reads each request and its reference pictures and writes the image model's prompt. A Stability model subscribes the account to it through AWS Marketplace on first use._
 
-IMAGE MODELS ON AMAZON BEDROCK, THROUGH THE AWS CLI - Stability AI's, today (Amazon retired Titan Image Generator and Nova Canvas in 2026), on the machine's AWS credentials, billed per picture.
+Image models on Amazon Bedrock, through the AWS CLI: Stability AI's, on the machine's AWS credentials, billed per picture.
 
-AN IMAGE MODEL IS NOT AN AGENT. Every painter prompt in ghost is written for one - "use your image tool, match the attached pictures, save it here" - and a diffusion model can neither read instructions nor see an attachment. So a job is a DIRECTOR and a painter: Amazon's Nova (`DIRECTOR`, through `TextGen`'s Bedrock writer) reads the request and looks at its references, and writes the one paragraph the image model sees, the picture's faults to avoid and its aspect ratio; then the image model paints that. The deck's hand reaches the painter only as words - except through a "style" model (`SCHEMAS`), which is also handed the job's first reference and paints in its style.
+An image model is not an agent: every painter prompt in ghost assumes one ("use your image tool, match the attached pictures, save it here"), and a diffusion model can neither read instructions nor see an attachment. So a job is a director and a painter: Amazon's Nova (`DIRECTOR`, through `TextGen`'s Bedrock writer) reads the request, looks at its references and writes the one paragraph the image model sees (the picture's faults to avoid, its aspect ratio); then the image model paints that. A "style" model (`SCHEMAS`) is also handed the job's first reference and paints in its style.
 
-WHAT AN IMAGE MODEL IS ASKED is per family (`SCHEMAS`): the catalog lists every image model the account can reach, and a painter offers the ones it knows how to ask. A new family is an entry there and a body in `body`. Steps, each its own process: the catalog lookup if it is stale (see `BedrockCatalog`), the director, the painting.
+What an image model is asked is per family (`SCHEMAS`): the catalog lists every image model the account can reach and a painter offers the ones it knows how to ask. A new family is an entry there and a body in `body`. Steps, each its own process: the catalog lookup if stale (see `BedrockCatalog`), the director, the painting.
 
-Runs the AWS CLI. Source: [src/agents/image_gen.gd:507](../src/agents/image_gen.gd#L507)
+Runs the AWS CLI. Source: [src/agents/image_gen.gd:490](../src/agents/image_gen.gd#L490)
 
 ## The assistant (3)
 

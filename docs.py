@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """Auto-docs generator for ghost.
 
-The Praxis move (see praxis/docs.py) applied to a Godot project: introspect
-the source of record and generate the documentation from it, so the docs
-cannot drift from the code. Here the source of record is the GDScript
-itself - every script carries a leading `##` doc comment, the scene roster
-is the literal `SceneRoster.SCENES` array (`src/scenes/roster.gd`), the component registries are
-literal `const REGISTRY := {...}` dictionaries, and the Masking effect
-table is `MASK_EFFECTS` / `EFFECT_CONTROLS`. This script parses all of
-that statically (no Godot boot required) and writes:
+Introspects the source of record and generates the documentation from it, so the docs cannot drift from
+the code: every script carries a leading `##` doc comment, the scene roster is the literal
+`SceneRoster.SCENES` array (`src/scenes/roster.gd`), the component registries are literal
+`const REGISTRY := {...}` dictionaries, and the Masking effect table is `MASK_EFFECTS` / `EFFECT_CONTROLS`.
+All of it is parsed statically (no Godot boot) and written to:
 
   docs/index.md        - the map: design, the pages, directory layout, every script.
   docs/components.md   - what a note can carry: components, slots, workspaces, capabilities.
@@ -27,27 +24,21 @@ that statically (no Godot boot required) and writes:
   docs/structure.md    - src/ as a stack of folders, and what each names.
   docs/cli.md          - every ghost command-line flag.
 
-The README is stubs and lists that link here: docs.py patches it between
-`<!-- AUTODOC:NAME:BEGIN/END -->` marker pairs (FEATURES, SUBSYSTEMS, LAYOUT),
-the same mechanism as praxis/docs.py, and keeps next/roadmap.md's open items
-above its closed ones, as Praxis keeps its roadmap.
+The README is stubs and lists that link here: docs.py patches it between `<!-- AUTODOC:NAME:BEGIN/END -->`
+marker pairs (FEATURES, SUBSYSTEMS, LAYOUT), and keeps next/roadmap.md's open items above its closed ones.
 
-How it is built, top to bottom: the curated maps (what a parser cannot know); ONE READER of
-GDScript (`Script`, and `const`, which reads any constant as Python data - a registry is never
-picked apart by a pattern); the page kit (`page`, `entry`, `table`: a page is a list of blocks);
-one builder per page, each mapping its registries to blocks; the checks - the pattern rules as
-rows (`RULES`, each with the planted wrong it must catch), and the few that need a model of the
-code (the stack, the fields, the user folder); and `main`.
+Layout, top to bottom: the curated maps (what a parser cannot know); one reader of GDScript (`Script`, and
+`const`, which reads any constant as Python data); the page kit (`page`, `entry`, `table`: a page is a list
+of blocks); one builder per page, each mapping its registries to blocks; the checks - the pattern rules as
+rows (`RULES`, each with the planted wrong it must catch), and the few that need a model of the code (the
+stack, the fields, the user folder); and `main`.
 
-Writes are idempotent: a file is only touched when its content changes.
-Drift that a human must resolve (a script missing from the group map, a
-CLI flag missing from the table, a scene on disk but not registered) is
-printed as a warning and surfaced in the generated docs rather than
-silently dropped.
+Writes are idempotent: a file is only touched when its content changes. Drift that a human must resolve (a
+script missing from the group map, a CLI flag missing from the table, a scene on disk but not registered) is
+printed as a warning and surfaced in the generated docs.
 
-Run from anywhere: ``python docs.py`` (stdlib only). ``python docs.py --check`` writes
-nothing and exits 1 if a generated file is stale or anything drifted - what
-scripts/check.sh runs.
+Run from anywhere: ``python docs.py`` (stdlib only). ``python docs.py --check`` writes nothing and exits 1 if
+a generated file is stale or anything drifted - what scripts/check.sh runs.
 """
 
 from __future__ import annotations
@@ -77,17 +68,15 @@ def warn(msg: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Curated maps. These carry the judgments a parser can't make: how scripts
-# group into subsystems, and what each CLI flag means. Both are verified
-# against the source at every run - a script or flag that exists in the
-# code but not here is reported, so the map can rot loudly, never quietly.
+# Curated maps: the judgments a parser can't make (how scripts group into subsystems, what each CLI flag
+# means). Both are verified against the source at every run: a script or flag in the code but not here is
+# reported.
 # ---------------------------------------------------------------------------
 
-# THE STACK. Every folder under src/, BOTTOM FIRST: (folder, title, description). A script may
-# name scripts in its own folder and in the folders listed above its own here - never one below
-# it in this list. A script's group is its folder, so nothing lists file names: a new script is
-# in the docs by being in a folder, and a new folder is a row here. The order is held against
-# the code at every run (`check_structure`); next/structure.md is why it is this order.
+# The stack: every folder under src/, bottom first: (folder, title, description). A script may name
+# scripts in its own folder and in the folders listed above its own here, never one below it. A script's
+# group is its folder, so a new script is in the docs by being in a folder, and a new folder is a row here.
+# The order is held against the code at every run (`check_structure`); next/structure.md is why.
 FOLDERS: List[Tuple[str, str, str]] = [
     ("data", "Plain data",
      "Plain data in and out, at the bottom because it needs nothing: the YAML-subset parser, a document's frontmatter "
@@ -205,34 +194,24 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "console and the Assistant - and the recorder of the README's animation, which drives the real app."),
 ]
 
-# WHAT STILL POINTS UP: (pattern, the fix, [(script, the script above it that it names)]),
-# scripts as `folder/name`. `check_structure` holds this list to the code BOTH WAYS: a script
-# that names one above it and is not listed here fails the check, and so does a pair listed
-# here that is no longer in the code - so the list can only shrink, and when a pattern is
-# fixed its rows are deleted with it. Never add a row to make a new reference pass: hand the
-# script what it reads instead (next/structure.md, "The rules").
-#
-# EMPTY SINCE 2026-10-13: it began at 48 pairs in eight patterns, and each went by one of four
-# moves - a helper moved down to the folder that could own it, a contract put under both sides
-# (`Shell`, `ShowFeed`, `SoundBed`), a registry row naming its script by path
-# (`Components` `script`, `Capabilities.ROLES`, `Medium.REGISTRY`), or a script moved to the
-# folder it turned out to belong in. Keep it empty: a row here is a debt, with a date.
+# What still points up: (pattern, the fix, [(script, the script above it that it names)]), scripts as
+# `folder/name`. `check_structure` holds this list to the code both ways: a script that names one above it
+# and is not listed fails the check, and so does a listed pair no longer in the code. Empty: keep it empty,
+# and hand a script what it reads instead (a helper moved down, a contract under both sides such as `Shell`,
+# `ShowFeed`, `SoundBed`, a registry row naming its script by path; next/structure.md, "The rules").
 UPWARD: List[Tuple[str, str, List[Tuple[str, str]]]] = []
 
-# WHAT A MOUNTED PART IS HANDED, AND NEVER NAMES (next/structure.md, step 11): {script: the
-# folders whose scripts read it only through what they are handed}. A scene, a medium and the
-# table are mounted by a show and read it through their `feed` ([ShowFeed]) - its seed, its dials,
-# its clock. The Director is above most of them anyway; the audio engine is BELOW all of them, so
-# the stack alone allows it, and a medium that read the clock off `Spectrum` could only ever be
-# played by a song - never by a preview a timeline scrubs, or a live show its agents conduct.
+# What a mounted part is handed, and never names (next/structure.md, step 11): {script: the folders whose
+# scripts read it only through what they are handed}. A scene, a medium and the table are mounted by a show
+# and read its seed, dials and clock through their `feed` ([ShowFeed]), never the audio engine, so a preview
+# a timeline scrubs or a live show can conduct them.
 HANDED: Dict[str, List[str]] = {
     "audio/spectrum": ["scene_kit", "scenes", "media", "table", "desk"],
     "show/director": ["table", "desk"],
 }
 
-# (flag, argument placeholder, description, internal). Internal flags are passed between ghost's
-# own processes (exporter -> render, editor -> render), not meant for hand use. Held against the
-# flags the code reads (`flags_read`) both ways.
+# (flag, argument placeholder, description, internal). Internal flags are passed between ghost's own
+# processes (exporter -> render, editor -> render). Held against the flags the code reads (`flags_read`) both ways.
 CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
     ("--audio", "<path>",
      "Load this song (`.wav` / `.mp3` / `.ogg` / `.flac`; FLAC is transcoded via ffmpeg) and start straight on it, "
@@ -329,8 +308,8 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
 GODOT_FLAGS = {"--script"}
 
 # Top-level entries for the README LAYOUT block and docs/index.md, in that order.
-# (name, description). A runtime folder (git-ignored, so absent from a clone) says so in its
-# description and is listed without a link.
+# (name, description). A runtime folder (git-ignored, so absent from a clone) says so in its description
+# and is listed without a link.
 TOP_LEVEL: List[Tuple[str, str]] = [
     ("project.godot",
      "Godot 4.7 project; autoloads `Settings`, `Boot`, `Spectrum`, `Director`, `Provisioner`; `scenes/main.tscn` is "
@@ -404,9 +383,8 @@ AUTOGEN_HEADER = "<!-- AUTOGENERATED by docs.py - do not edit by hand -->"
 
 
 class Expr(str):
-    """What a constant holds that is not a literal - a bare name (an inner class, another constant),
-    a call (`Vector3(1, 0, 0)`, `preload(...)`), arithmetic - as its source text: a string that knows
-    it is not one."""
+    """What a constant holds that is not a literal - a bare name, a call (`Vector3(1, 0, 0)`,
+    `preload(...)`), arithmetic - as its source text."""
 
 
 _TOKEN = re.compile(
@@ -694,10 +672,8 @@ def _parse_header(text: str) -> Tuple[Optional[str], Optional[str], List[str]]:
 
 
 def md(text: str) -> str:
-    """GDScript doc markup -> markdown: `[param x]` -> `x`, `[Class]` -> `Class`.
-
-    The tag list is not decoration: `[constant X]` was leaking into docs/scenes.md
-    verbatim, eighteen times, because only `[param ]` was handled."""
+    """GDScript doc markup -> markdown: `[param x]` -> `x`, `[Class]` -> `Class`; every tag kind
+    (`[constant X]`, `[method X]`, ...) must be handled, or it shows verbatim."""
     text = re.sub(r"\[code\](.*?)\[/code\]", r"`\1`", text, flags=re.S)
     text = re.sub(r"\[(?:param|constant|method|member|signal|enum|annotation) ([\w.]+)\]", r"`\1`", text)
     return re.sub(r"\[([A-Z]\w*(?:\.\w+)*)\]", r"`\1`", text)
@@ -885,7 +861,7 @@ def scene_entry(name: str, info: Scene) -> List[Block]:
     told: List[Block] = []
     fields = const(s.text, "FIELDS", {})
     if fields:
-        # WHAT AN ENTRY CAN TELL IT (GhostScene.choice, number): its settings, each the seed's until told
+        # What an entry can tell it (GhostScene.choice, number): its settings, each the seed's until told
         rows = []
         for k, row in fields.items():
             if row.get("type") == "num":
@@ -988,11 +964,10 @@ def media_page(base: Script) -> str:
         blurb = text(row, "blurb")
         blocks += entry(f"`{key}` - {text(row, 'label', key)}", blurb and f"_{blurb}_", full_doc(sc.doc),
                         f"Source: {link(sc.rel)}", missing=f"{sc.rel}: medium '{key}' has no doc comment")
-    # The folder also holds what the media set and show (layouts, films, pictures): only a
-    # script that IS a medium - one extending Medium or a registered medium - must be a row.
+    # The folder also holds what the media set and show (layouts, films, pictures): only a script that is a
+    # medium - one extending Medium or a registered medium - must be a row, unless a registered medium extends
+    # it: then it is that medium's base (DeskMedium, the desk a Letter is written at)
     kinds = {"Medium"} | {script_at(ROOT / rel).class_name for rel in registered if (ROOT / rel).exists()}
-    # ...unless a registered medium extends it: then it is that medium's base, never a row of its own (DeskMedium, the desk a
-    # Letter is written at, since Proof - whose medium it was - became a table show)
     bases = {script_at(ROOT / rel).extends for rel in registered if (ROOT / rel).exists()}
     for path in sorted(SCRIPTS.glob("*/*.gd")):
         rel = path.relative_to(ROOT).as_posix()
@@ -1003,11 +978,10 @@ def media_page(base: Script) -> str:
 
 
 def filters_page(base: Script) -> str:
-    """docs/filters.md, from Filters.REGISTRY and the shader's own header. A filter is a uniform and
-    a block of GLSL, so it also CHECKS the pair, which is this table's own failure mode: a registry
-    key whose uniform the shader does not declare ships as a control that does nothing, because
-    `set_shader_parameter` on an unknown name is silent (tests/show/stage_filter_check.gd asserts
-    the same at runtime; this is so a docs run says it too)."""
+    """docs/filters.md, from Filters.REGISTRY and the shader's own header. A filter is a uniform and a
+    block of GLSL, so it also checks the pair: a registry key whose uniform the shader does not declare
+    is a control that does nothing, because `set_shader_parameter` on an unknown name is silent
+    (tests/show/stage_filter_check.gd asserts the same at runtime)."""
     rows = base.const("REGISTRY", {})
     if not rows:
         warn("could not parse Filters.REGISTRY")
@@ -1140,7 +1114,7 @@ def table_page(rows: Script, motions: Script) -> str:
         if not fields:
             warn(f"could not parse TableRows.{name}")
         blocks += [f"## {title}", schema_table(fields)]
-    # THE BOUNDS ARE THE CODE'S: an act's length as Motions.sanitize_acts keeps it
+    # The bounds are the code's: an act's length as Motions.sanitize_acts keeps it
     length = (rows.const("ACT", {}) or {}).get("length", {})
     most = motions.const("MAX_LENGTH", None)
     if most is None or not length or float(length.get("max", -1)) != float(most):
@@ -1861,28 +1835,24 @@ COMMENT_MARKS = {".gd": "#", ".gdshader": "//", ".gdshaderinc": "//"}
 UID_OVERRIDE = "text_editor/behavior/files/drop_preload_resources_as_uid=false"
 
 RULES: List[Rule] = [
-    # NOTHING BUT settings.gd TOUCHES THE CONFIG FILE. Each control used to write its own
-    # `ConfigFile.load()` -> set -> `save()` on the same file: five writers, five debounces, a new
-    # control persistent only if someone remembered, two processes clobbering each other (an export
-    # renders in a second one). The fix was one owner, `Settings`; this stops a sixth writer. Mask
-    # sessions are per-video files under masks/, not the app's settings.
+    # Nothing but settings.gd touches the config file: one owner, `Settings`, so a control is persistent by
+    # binding and two processes (an export renders in a second one) never clobber each other. Mask sessions are
+    # per-video files under masks/, not the app's settings.
     Rule("settings owner", ("src/**/*",), r'ConfigFile\.new\(\)|"user://ghost\.cfg"',
          "{file}: writes user://ghost.cfg directly - settings belong to Settings (src/platform/settings.gd), "
          "which owns the file, the debounce and the flushing",
          (("a.gd", "var c := ConfigFile.new()", 1), ("a.gd", "# ConfigFile.new() was here\nSettings.bind(x)", 0)),
          skip=("settings.gd", "*mask*")),
-    # ONE LIST OF WHAT IS MADE FOR A NOTE (next/pipeline.md; 2026-11-02: "the pipeline is not a unified, generic card - it
-    # is multiple branching paths"): a card hands the Pipeline card a section and draws no ⟳ of its own - six lists had
-    # grown one each, and a ⟳ meant four different things. A source's ⟳ on the Actor card lists a link again and makes nothing.
+    # One list of what is made for a note (next/pipeline.md): a card hands the Pipeline card a section and draws
+    # no ⟳ of its own. A source's ⟳ on the Actor card lists a link again and makes nothing.
     Rule("one pipeline", ("src/**/*",), r'\.text\s*=\s*"⟳"',
          "{file}: draws a ⟳ of its own ({text}) - what is made for a note is a row of its Pipeline card: a card answers "
          "pipeline() with a PipelineSection (src/notes/pipeline_section.gd)",
          (("a.gd", '\tredo.text = "⟳"', 1), ("a.gd", '\t## redo.text = "⟳"\n\tback.text = "‹"', 0)),
          skip=("pipeline_card.gd", "actor_source_list.gd")),
-    # NOTHING ON A CARD SCROLLS OF ITS OWN (the user, 2026-11-03: "the inner scrolling of the YouTube card's "description"
-    # can be pretty annoying and unexpected"): it takes the wheel from the panel as the pointer crosses it. What is left
-    # out is the panel's one scroll, what stands in a window of its own, and what is on no card; Masking's Markers
-    # are pinned under the scroll, so nothing else would scroll them.
+    # Nothing on a card scrolls of its own: it would take the wheel from the panel as the pointer crosses it. What
+    # is left out is the panel's one scroll, what stands in a window of its own, and what is on no card;
+    # Masking's Markers are pinned under the scroll, so nothing else would scroll them.
     Rule("one scroll", ("src/**/*",), r"\b(?:ScrollContainer|TextEdit|CodeEdit|ItemList|Tree)\.new\(\)",
          "{file}: makes a {hit} - nothing on a side panel's card scrolls of its own: a list grows with its rows in the "
          "panel's one scroll, and words too long for a line are a TextField (src/ui/text_field.gd), their first lines and "
@@ -1891,30 +1861,26 @@ RULES: List[Rule] = [
           ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
          skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "reader_browser.gd", "mask_editor.gd",
                "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd")),
-    # `Films.pump()` IS CALLED FROM main's `_process`. A window cut is an ffmpeg child, and something
-    # with a frame must notice it exit and promote its output out of the `.part` name. The live film
-    # panel and the Generative panel polled it - the two things usually absent - so footage showed on
-    # one page of a session and never again. A probe replaces the main scene, so no gate sees this.
+    # `Films.pump()` is called from main's `_process`: a window cut is an ffmpeg child, and something with a
+    # frame must notice it exit and promote its output out of the `.part` name. A probe replaces the main scene,
+    # so no gate sees this.
     Rule("films pumped", ("src/*/main.gd",), r"Films\.pump\(\)",
          "{file} never calls Films.pump() - a finished window cut will never be promoted, and film will "
          "appear once per session at most",
          (("main.gd", "func _process(d):\n\tpass", 1), ("main.gd", "func _process(d):\n\tFilms.pump()", 0)),
          require=True),
-    # EVERY PANEL CONTROL THE MASK EDITOR SYNCS IS BUILT. Its panel is three lists that must agree: a
-    # member, the line in _build_panel that makes it, the line in _refresh_panel_inner that writes it
-    # back. Drop a build line and the member stays null, so every refresh throws - at open, per
-    # selection, per frame - and the controls below it stop updating. A runtime error prints and
-    # carries on, so only this sees it: a name written to and never assigned.
+    # Every panel control the mask editor syncs is built. Its panel is three lists that must agree: a member,
+    # the line in _build_panel that makes it, the line in _refresh_panel_inner that writes it back. A build line
+    # dropped leaves the member null and every refresh throws; a runtime error only prints, so only this sees it.
     Rule("panel controls", ("src/*/mask_editor.gd",), r"\b(_\w+)\.set_(?:value|pressed)_no_signal\(",
          "{file}: {hit} is written by _refresh_panel_inner but never built - the panel will throw on every refresh",
          (("e.gd", "var _a\nfunc r():\n\t_a.set_value_no_signal(1)", 1),
           ("e.gd", "func b():\n\t_a = HSlider.new()\nfunc r():\n\t_a.set_value_no_signal(1)", 0)),
          when=lambda m, code: not re.search(rf"^\s*{re.escape(m.group(1))} = ", code, re.M)),
-    # A SCRIPT PATH WRITTEN ANYWHERE NAMES A SCRIPT THAT EXISTS. A class name is global, so a moved
-    # script breaks nothing the compiler sees - but a `load("res://src/...")` from a string, a
-    # `--script` argument, a registry row naming its script by path, or a gate reading a source as
-    # text breaks when it runs, in whichever session gets there first. Doc comments count; next/'s
-    # notes are allowed to remember a file that is gone.
+    # A script path written anywhere names a script that exists. A class name is global, so a moved script breaks
+    # nothing the compiler sees, but a `load("res://src/...")` from a string, a `--script` argument, a registry
+    # row naming its script by path, or a gate reading a source as text breaks when it runs. Doc comments
+    # count; next/'s notes are allowed to remember a file that is gone.
     Rule("paths", ("project.godot", "CLAUDE.md", "README.md", "src/**/*", "tests/**/*", "rules/**/*",
                    "storyboards/**/*", "shaders/**/*", "scenes/**/*", "hosts/**/*", "scripts/**/*"),
          r"(?<![\w/])(?:res://)?((?:src|tests)/[a-z_0-9]+(?:/[a-z_0-9]+)*\.gd)\b",
@@ -1923,11 +1889,10 @@ RULES: List[Rule] = [
           ("a.gd", "src/platform/settings.gd and res://src/show/director.gd", 0)),
          kinds=(".gd", ".tscn", ".godot", ".cfg", ".py", ".sh", ".md", ".yaml", ".yml", ".gdshader", ".gdshaderinc"),
          skip=("*__pycache__*",), comments=True, when=lambda m, _code: not (ROOT / m.group(1)).exists()),
-    # A FILE IS NAMED BY ITS `res://` PATH, NEVER A `uid://`. The `.uid` files are gitignored (each
-    # checkout mints its own), so a `uid://` naming another file resolves in the checkout that wrote
-    # it and nowhere else - a bare `preload("uid://...")` has no path to fall back on. The editor
-    # writes one when a file is dropped into the script editor (unless UID_OVERRIDE is kept) and when
-    # it saves a scene that references another file. A scene's own header names itself.
+    # A file is named by its `res://` path, never a `uid://`. The `.uid` files are gitignored (each checkout mints
+    # its own), so a `uid://` naming another file resolves only in the checkout that wrote it. The editor
+    # writes one when a file is dropped into the script editor (unless UID_OVERRIDE is kept) and when it saves
+    # a scene that references another file. A scene's own header names itself.
     Rule("no uids", ("project.godot", "export_presets.cfg", "src/**/*", "tests/**/*", "scenes/**/*", "shaders/**/*",
                      "fonts/**/*", "data/**/*"), r"uid://\w*",
          "{file}:{line} names a file by {hit}: name it by its res:// path (the .uid files are gitignored, so a "
@@ -2042,14 +2007,11 @@ def _handed_problems(edges: Dict[str, set], handed: Dict[str, List[str]]) -> Lis
 def check_structure() -> Dict[str, set]:
     """src/ is a stack (FOLDERS, bottom first), and the code is held to it.
 
-    Every script sits in exactly one folder that FOLDERS names, and every reference between
-    scripts points down or stays in its folder - except the pairs UPWARD lists, which is what
-    is left to fix and may only get shorter. A flat `src/` hid that the code was already
-    layered (703 of 751 references pointed down when this was first measured, 2026-10-13); a
-    stack nothing holds is flat again within a month, one convenient `Director.x` at a time.
+    Every script sits in exactly one folder that FOLDERS names, and every reference between scripts points
+    down or stays in its folder - except the pairs UPWARD lists, which may only get shorter.
 
-    THE CONTROL: before the real code is judged, a made-up graph with one reference planted
-    upward must be reported, and one listed pair that is gone must be reported too.
+    The control, run first: a made-up graph with one reference planted upward must be reported, and one
+    listed pair that is gone must be reported too.
     """
     order = [folder for folder, _t, _d in FOLDERS]
     control("check_structure", len(_structure_problems({"platform/a": {"app/b"}, "app/b": {"platform/a"}}, order, []))
@@ -2161,17 +2123,16 @@ def _scene_field_problems(text_: str, name: str) -> List[str]:
 
 
 def check_fields() -> None:
-    """EVERY SETTING A COMPOSABLE THING READS IS A ROW (next/structure.md, steps 16 and 27). A layer and
-    a force read their config through `num` / `flag` / `txt`, a scene takes an entry's `set` through
-    `choice`; each class declares those settings in its own `FIELDS` - what a timeline's inspector
-    builds its rows from ([SchemaForm]) and what an agent choosing a part is shown - and this holds the
-    two together: a setting read with no row, a row nothing reads, and a default the row and the code
-    disagree on (a scene's row: the table its options are must be the scene's).
+    """Every setting a composable thing reads is a row (next/structure.md, steps 16 and 27). A layer and a
+    force read their config through `num` / `flag` / `txt`, a scene takes an entry's `set` through `choice`;
+    each class declares those settings in its own `FIELDS` - what a timeline's inspector builds its rows from
+    ([SchemaForm]) and what an agent choosing a part is shown - and this holds the two together: a setting
+    read with no row, a row nothing reads, and a default the row and the code disagree on (a scene's row:
+    the table its options are must be the scene's).
 
-    THE CONTROL, run first: a made-up class that reads a setting its FIELDS lacks, and one whose row
-    has the wrong default, must each be reported; and a made-up scene that chooses a setting with no
-    row, one whose row names no table of it, and one that numbers a setting with no row and has a
-    range high to low.
+    The control, run first: a made-up class that reads a setting its FIELDS lacks, and one whose row has the
+    wrong default, must each be reported; and a made-up scene that chooses a setting with no row, one whose
+    row names no table of it, and one that numbers a setting with no row and has a range high to low.
     """
     planted = {"A": 'func _init():\n\tvar n := num("count", 3)\n',
                "B": 'const FIELDS := {"count": {"type": "num", "default": 4}}\nfunc _init():\n\tvar n := num("count", 3)\n'}
@@ -2192,7 +2153,7 @@ def check_fields() -> None:
             warn(f"{path.relative_to(ROOT)}: {problem}")
 
 
-# Where the user's data is, under the OS's data path: what user:// was while the project was called "ghost".
+# Where the user's data is, under the OS's data path.
 USER_DIR = "godot/app_userdata/ghost"
 
 
@@ -2215,15 +2176,13 @@ def _user_dir(project: str) -> str:
 def check_user_dir() -> None:
     """The user's data stays where it is, whatever the project is called.
 
-    Godot makes user:// from the project's name unless the project names the folder itself, so
-    renaming the project moved it: every note, setting, voice, episode and fetched tool (gigabytes)
-    left behind in the old folder, and a child started after the rename - the export's bake - wrote
-    into the new one while the app still read the old ("Bake failed", 2026-10-16). The project is
-    called "Ghost Notes" and names its folder outright: `use_custom_user_dir` and
+    Godot makes user:// from the project's name unless the project names the folder itself, so renaming the
+    project would leave every note, setting, voice, episode and fetched tool behind in the old folder. The
+    project is called "Ghost Notes" and names its folder outright: `use_custom_user_dir` and
     `custom_user_dir_name` = USER_DIR (Android ignores both and keeps the app's own files folder).
 
-    THE CONTROL, run first: a project renamed without naming its folder must be caught, and one that
-    names it must not.
+    The control, run first: a project renamed without naming its folder must be caught, and one that names
+    it must not.
     """
     renamed = '[application]\n\nconfig/name="Ghost Notes"\n'
     named = renamed + f'config/use_custom_user_dir=true\nconfig/custom_user_dir_name="{USER_DIR}"\n'

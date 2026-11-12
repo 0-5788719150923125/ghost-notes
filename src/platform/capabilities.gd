@@ -1,25 +1,22 @@
 extends RefCounted
 class_name Capabilities
 
-## Capabilities - what this platform can do, and what is ready now (next/notes.md, "Platforms:
-## desktop and Android"). One table, two questions per entry, each answered with a reason:
+## Capabilities - what this platform can do, and what is ready now (next/notes.md, "Platforms: desktop and
+## Android"). One table, two questions per entry, each answered with a reason:
 ##
-##   POSSIBLE here at all - decided by the platform (`Deps.platform()`, feature tags) and by
-##   `Provision.unsupported` for what ghost downloads. A phone can start no program ghost fetches:
-##   Android 10 and later refuse to execute a file from an app's own storage.
+## - Possible here at all: decided by the platform (`Deps.platform()`, feature tags) and by `Provision.unsupported`
+##   for what ghost downloads. A phone can start no program ghost fetches (Android 10 and later refuse to execute
+##   a file from an app's own storage).
+## - Ready now: asked again whenever the Environment panel rescans. What ghost installs itself (FFmpeg, its
+##   Python environments) is ready wherever it is possible, built the first time a feature asks. What only the
+##   user can install (an agent's command-line tool) is ready when it is there.
 ##
-##   READY now - asked again whenever the Environment panel rescans. What ghost installs itself
-##   (FFmpeg, its Python environments) is ready wherever it is possible: it is built the first time
-##   a feature asks. What only the user can install (an agent's command-line tool) is ready when it
-##   is there.
+## A component declares the capabilities it needs ([Components]); "+" leaves out what is impossible here and
+## grays what is not ready, with the reason. The table is also checked where programs start
+## ([method Subprocess.start] and its siblings), so an undeclared need still cannot launch anything on a phone.
 ##
-## A component declares the capabilities it needs ([Components]); "+" leaves out what is impossible
-## here and grays what is not ready, with the reason. The table is ALSO checked where programs
-## start ([method Subprocess.start] and its siblings), so a component that forgets to declare still
-## cannot launch anything on a phone.
-##
-## Static and free of autoload names on purpose: [Subprocess] asks it, and gates run it under a bare
-## `--script`. `Deps.platform_override` lets a gate ask as another platform would ("android").
+## Static and free of autoload names: [Subprocess] asks it, and gates run it under a bare `--script`.
+## `Deps.platform_override` lets a gate ask as another platform would ("android").
 
 ## The table. `label` reads in a sentence ("needs ..."); `where` says on what it is possible.
 const TABLE := {
@@ -38,17 +35,15 @@ const TABLE := {
 	"movie_export": {"label": "rendering a video", "where": "desktop"},
 	"checkout": {"label": "running from the repository", "where": "checkout"},
 	"forward_plus": {"label": "the desktop renderer", "where": "desktop"},
-	# THE SHOW ITSELF - a clock, a transport, a stage that plays: what a song or a voice feeds. A phone
-	# has none ("On Android a note has one component, its text, and there is no stage, transport,
-	# Chrome furniture or agent"), so a component that feeds the show asks for it.
+	# The show itself - a clock, a transport, a stage that plays: what a song or a voice feeds. A phone has none,
+	# so a component that feeds the show asks for it.
 	"stage": {"label": "the show (a stage that plays)", "where": "desktop"},
 	"mic": {"label": "a microphone", "where": "desktop"},
 }
 
-## WHO FILLS AN AGENT ROLE: the script whose `REGISTRY` lists that role's backends. Named by path
-## and loaded when asked - this file is under them ([TextGen] starts its agents through
-## [Subprocess], which asks this file), and a row is how something below names something above.
-## `tests/notes/components_check.gd` loads each and holds it to a registry.
+## Who fills an agent role: the script whose `REGISTRY` lists that role's backends. Named by path and loaded
+## when asked, since this file is under them ([TextGen] starts its agents through [Subprocess], which asks this
+## file). `tests/notes/components_check.gd` loads each and holds it to a registry.
 const ROLES := {
 	"writer": "res://src/agents/text_gen.gd",
 	"painter": "res://src/agents/image_gen.gd",
@@ -81,8 +76,8 @@ static func impossible(cap: String) -> String:
 		var why := Provision.unsupported(String(row["dep"]))
 		if not why.is_empty():
 			return "%s: %s" % [String(row["label"]).capitalize(), why]
-	# THE PROJECT'S renderer, not the running one: a headless gate renders with a dummy, and the
-	# question is what this build draws with (a phone's override is `mobile`)
+	# The project's renderer, not the running one (a headless gate renders with a dummy; a phone's override is
+	# `mobile`)
 	var method := String(ProjectSettings.get_setting("rendering/renderer/rendering_method", "forward_plus"))
 	if cap == "forward_plus" and method != "forward_plus":
 		return "This copy is set to draw with the %s renderer, not the desktop one" % method
@@ -130,11 +125,10 @@ static func _platform_name() -> String:
 
 # --- the agents: what a component can need that ghost cannot install for it ---------------------
 #
-# An AI agent in a ROLE. The agent CLIs keep their own logins, so they stay the user's to install
-# (see [constant Deps.TOOLS]). A role is a backend registry ([method registry]), filled when ANY ONE
-# of its backends is installed - availability is the backend's own `available()`, the same resolver
-# its jobs launch through, so a component is never lit for an agent its jobs cannot find. These were
-# the home screen's (Splash) until step 8 retired it; the notes list's New menu asks them now.
+# An AI agent in a role. The agent CLIs keep their own logins, so they stay the user's to install (see
+# [constant Deps.TOOLS]). A role is a backend registry ([method registry]), filled when any one of its backends
+# is installed; availability is the backend's own `available()`, the resolver its jobs launch through, so a
+# component is never lit for an agent its jobs cannot find.
 
 ## What every gate tells a person to do about a missing agent.
 const INSTALL_HINT := ("Install one or several of them, then press rescan in the Environment panel. "
@@ -166,12 +160,10 @@ static func role_phrase(roles: Array) -> String:
 	return "an AI " + join_words(roles, "and")
 
 
-## A gated component's tooltip. With nothing [param missing], which installed agents fill each role
-## in [param needs]. Otherwise: what is not installed; for each unfilled role, EVERY agent its
-## registry supports; the agents that would fill all of them alone (a key names the same CLI in
-## every registry - `codex` writes and paints); and what to do about it. Written as PARAGRAPHS: Boot
-## re-flows every tooltip to a width, folding a single newline into the line, so only a blank line
-## survives as a break.
+## A gated component's tooltip. With nothing [param missing], which installed agents fill each role in
+## [param needs]. Otherwise: what is not installed; for each unfilled role, every agent its registry supports; the
+## agents that would fill all of them alone (a key names the same CLI in every registry); and what to do about
+## it. Written as paragraphs: Boot re-flows every tooltip, folding a single newline, so only a blank line breaks.
 static func agents_tooltip(needs: Array, missing: Array) -> String:
 	var paras := PackedStringArray()
 	if missing.is_empty():

@@ -1,23 +1,20 @@
 extends VBoxContainer
 class_name PicturesCard
 
-## PicturesCard - THE NOTE'S PICTURES, ONE CARD (2026-11-06, the user: "if we are generating images, we are doing it from a
-## unified place: not from a bunch of disparate cards. And the reason is maintainability"). Every picture the note's words
-## describe is painted, painted again, stepped between, deleted or replaced with a file of the author's here, whatever the
-## note is shown in: a novel's, a notebook's, a tablet's, a letter's, a dispatch desk's (the Medium card's formats). Its list and
-## its look are [IllustrationPanel]'s, its pictures [Illustrations]'; the same pictures are rows of the Pipeline card.
-## Before it, the Picture, Letter and Dispatch desk cards each carried a list of their own, each fed its own way - and the
-## third came without what the others had.
+## PicturesCard - the note's pictures, one card. Every picture the note's words describe is painted,
+## painted again, stepped between, deleted or replaced with a file of the author's here, whatever the
+## note is shown in (a novel, notebook, tablet, letter or dispatch desk; the Medium card's formats). Its
+## list and look are [IllustrationPanel]'s, its pictures [Illustrations]'; the same pictures are rows of
+## the Pipeline card.
 ##
-## IT COMES WITH THE MEDIUM (the `illustrations` row's `comes_with`), standing while its format shows pictures: never attached by itself, no
-## ×; its block, `illustrations:` (the painter, the style, the references), goes with the note. WHICH OF THE NOTE'S MARKS
-## ARE PICTURES IS THE FORMAT'S TO SAY ([method Medium.pictures_of]: a letter's sketches are drawn by its pen, a
-## tablet's pages are captured from the web, a dispatch desk shows each on a screen), so no card names another and a
-## format added later says it in one function. THE CARD STANDS ONLY WHILE THE FORMAT SHOWS PICTURES: under a
-## Medium whose format shows none (Auto, the comic) it is not on the panel - a control that does nothing teaches nothing
-## - and it is back the moment one that does is picked. AND WHAT A SHOW'S AGENTS PAINTED (2026-11-09): every picture its episode's
-## maker says it made ([method EpisodeFeed.made_pictures], [MadePictures]) shown under the list, whatever the medium - the card
-## comes with such a show too (the `illustrations` row's `comes_with`), and stands while there is any.
+## It comes with the medium (the `illustrations` row's `comes_with`), standing while its format shows
+## pictures: never attached by itself, no ×; its block, `illustrations:` (the painter, the style, the
+## references), goes with the note. Which of the note's marks are pictures is the format's to say
+## ([method Medium.pictures_of]: a letter's sketches are drawn by its pen, a tablet's pages are captured
+## from the web, a dispatch desk shows each on a screen), so no card names another. Under a format that
+## shows none (Auto, the comic) the card is not on the panel. It also comes with a show whose agents
+## painted pictures: every picture its episode's maker says it made ([method EpisodeFeed.made_pictures],
+## [MadePictures]) is shown under the list, whatever the medium, and the card stands while there is any.
 
 const KEY := "illustrations"
 ## How often it looks at which medium the note is shown in (seconds): a pin and a pick raise no one signal.
@@ -33,7 +30,7 @@ var _look_t := 0.0
 var _card: Control = null      # the card it stands on, hidden while the medium shows no pictures
 var _made: MadePictures        # what the episode's agents painted
 var _made_t := 0.0
-## How often it looks at what the episode's agents have painted (seconds)
+## How often it looks at what the episode's agents have painted (seconds).
 const MADE_EVERY := 1.0
 
 
@@ -46,7 +43,7 @@ func _init() -> void:
 	_list.noted.connect(func(msg: String) -> void: noted.emit(msg))
 	add_child(_list)
 	_made = MadePictures.new()
-	# (...the episode as the panel hands it to the card's Pipeline section - the cards meet through the feed, never by name)
+	# (...the episode as the panel hands it to the card's Pipeline section; the cards meet through the feed, never by name)
 	_made.follow(func() -> Variant:
 		var cb: Callable = _list.pipeline().episode
 		return cb.call() if cb.is_valid() else null)
@@ -98,14 +95,14 @@ func pipeline() -> PipelineSection:
 
 # --- what it follows ---------------------------------------------------------------------------------------------------
 
-## THE NOTE'S WORDS, whenever the reading reads them (on every pause in typing): the list follows them.
+## The note's words, whenever the reading reads them (on every pause in typing): the list follows them.
 func set_script_text(body: String) -> void:
 	_body = body
 	_follow(true)
 
 
-## The pictures [member _body] calls for as the medium shown now shows them, and the card stood or put away by whether it
-## shows any: at once with [param again], else only where the medium changed.
+## The pictures [member _body] calls for as the medium shown now shows them, and the card stood or put away
+## by whether it shows any: at once with [param again], else only where the medium changed.
 func _follow(again: bool) -> void:
 	var med := Director.resolved_medium()
 	if med == _medium and not again:
@@ -117,7 +114,7 @@ func _follow(again: bool) -> void:
 	_stand()
 
 
-## THE CARD STOOD OR PUT AWAY: standing while the medium shows pictures or the episode's agents have painted any.
+## The card stood or put away: standing while the medium shows pictures or the episode's agents painted any.
 func _stand() -> void:
 	var shows := _made.refresh() or Medium.uses(_medium, "illustrations")
 	var card := _own_card()

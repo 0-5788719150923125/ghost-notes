@@ -1,13 +1,11 @@
 extends GhostScene
 
-## Fog volume - REAL 3D fog: a low, wide bank of soft gaussian puffs receding into depth, lit
-## volumetrically (a brighter sunward edge fading into a dim core) and slowly drifting. A genuine
-## haze with simulated dynamics, not a flat 2D wash. `bed` + `volumetric` (fog mode), and
-## depending on the AIR the seed draws: stars above it, or 2D sheets rolling through it.
+## Fog volume - 3D fog: a low, wide bank of soft gaussian puffs receding into depth, lit volumetrically (a
+## brighter sunward edge fading into a dim core) and slowly drifting. `bed` + `volumetric` (fog mode), and
+## depending on the air the seed draws: stars above it, or 2D sheets rolling through it.
 
-# The air the haze hangs in. A thin one is nearly clear and shows the sky through it; a soup
-# is tinted, layered and starless. What accompanies the volume is the scene's shape here,
-# since the puff field itself is built inside the layer.
+# The air the haze hangs in: a thin one is nearly clear and shows the sky; a soup is tinted, layered and
+# starless. The puff field itself is built inside the layer.
 #   tint - chance the volume takes the mood's hue rather than neutral gray
 const AIRS := {
 	"thin":   {"tint": 0.45, "sheets": 0, "stars": 0.65, "val": [0.08, 0.15]},
@@ -16,8 +14,8 @@ const AIRS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"air": {"label": "Air", "type": "choice", "options": "AIRS", "default": null,
 		"blurb": "The air the haze hangs in: thin and nearly clear with the sky showing through, tinted, or a starless layered soup."},
@@ -29,8 +27,7 @@ const FIELDS := {
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	# Haze is the color of whatever lights it - sodium street lamps, a green swamp, a cold
-	# dawn - so no mood is off the table. It was locked to one narrow blue before.
+	# Haze is the color of whatever lights it (sodium lamps, a green swamp, a cold dawn), so no mood is off the table.
 	var sch := Scheme.pick(rng)
 	var air := String(choice("air", rng))
 	var a: Dictionary = AIRS[air]
@@ -47,8 +44,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if rng.randf() < float(a["tint"]):
 		p["hue"] = sch.vary(rng)        # a tinted haze; otherwise neutral gray fog
 	add_layer("volumetric", rng, p)
-	# 2D sheets rolling THROUGH the volume: the flat drift reads as nearer air moving past
-	# the depth behind it, which is what makes a soup feel like it has layers.
+	# 2D sheets rolling through the volume: the flat drift reads as nearer air moving past the depth behind it.
 	for i in int(a["sheets"]):
 		add_layer("fog", rng, {
 			"hue": sch.hue_at(i + 1, int(a["sheets"]) + 1),

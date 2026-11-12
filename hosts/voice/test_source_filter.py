@@ -291,7 +291,7 @@ def check_whisper(v: np.ndarray) -> None:
         "half way is half way - a stage whisper, not a switch",
         "harmonicity %.2f, between %.2f and %.2f" % (mid, after, before),
     )
-    # ...AND IT DOES NOT DUCK ON THE WAY THROUGH. The two halves of this blend are
+    # ...And it does not duck on the way through. The two halves of this blend are
     # uncorrelated - noise through the tract against the periodic voice under it - so they
     # add in power, and a plain `a*wet + (1-a)*dry` sits at sqrt(a^2+(1-a)^2) of the level:
     # nothing at either end and -3 dB in the middle, which is exactly where Hushed lives.
@@ -381,7 +381,7 @@ def check_real_voice() -> None:
         # compared at all: VITS samples its own durations, so the same sentence
         # comes back a different length every time - which is what the first cut
         # of this check measured when it thought the whisper changed the timing.
-        # WITH THE NOISE OFF. VITS samples its durations and its flow, so the same
+        # With the noise off. VITS samples its durations and its flow, so the same
         # sentence is a different performance every time and the loudest 300 ms lands on a
         # different phone - measured 0.86 harmonicity one run and 0.77 the next, against a
         # threshold in between. That is the project's own rule for any measurement (see
@@ -428,7 +428,7 @@ def check_real_voice() -> None:
     )
     ok(abs(lvl) < 2.0, "at the level it was rendered at", "%+.2f dB" % lvl)
 
-    # THE PARAGRAPH ARC MUST NOT TILT THE PACE. The arc buys its pitch move by rendering at
+    # The paragraph arc must not tilt the pace. The arc buys its pitch move by rendering at
     # a different length scale and playing back to compensate, and the two do not cancel by
     # themselves - part of every sentence is frame-quantized and does not scale - so the
     # reading used to accelerate into each paragraph and drag out of it, by 5.1% and 2.0% at
@@ -460,7 +460,7 @@ def check_real_voice() -> None:
             "the arc leaves the %s sentence's pace alone" % tag,
             "%+.1f%%" % drift,
         )
-    # AND NEITHER MAY DYNAMICS RUN AWAY WITH IT. The timing coefficients in
+    # And neither may dynamics run away with it. The timing coefficients in
     # `_discourse_plan` are written as the figures they should deliver at the TOP of the
     # dial, and for a while the editor's own curve multiplied every one of them by 2.5
     # without this file knowing - a sentence at the end of a paragraph AND a section ran at

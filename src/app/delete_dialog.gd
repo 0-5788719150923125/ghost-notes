@@ -1,16 +1,14 @@
 extends ConfirmationDialog
 class_name DeleteDialog
 
-## DeleteDialog - "Delete this note?", asked before a note goes (2026-10-06, the user: "add a delete
-## option to every note, and probably an x to each note on the home screen. If we click the x,
-## prompt for confirmation to delete the note"). Asked from the notes list's × and from every
-## note's own "⋯" (see [method Shell.note_menu]).
+## DeleteDialog - "Delete this note?", asked before a note goes. Asked from the notes list's × and from
+## every note's own "⋯" (see [method Shell.note_menu]).
 ##
-## IT ASKS; THE CALLER DOES. The list trashes a note that is not open; a note that is open is left
-## first - its panel writes what it holds into the file as it goes - and only then trashed, so the
-## answer is handed back ([member then]) rather than acted on here. The file goes to the system's
-## trash ([method NoteStore.trash]). A note that is in the list only because it was added by hand -
-## a chapter in another project - can instead just leave the list, its file untouched.
+## It asks; the caller acts. The list trashes a note that is not open; an open note is left first (its
+## panel writes what it holds as it goes) and only then trashed, so the answer is handed back ([member
+## then]) rather than acted on here. The file goes to the system's trash ([method NoteStore.trash]). A
+## note in the list only because it was added by hand (a chapter in another project) can instead just
+## leave the list, its file untouched.
 
 ## The note asked about.
 var path := ""

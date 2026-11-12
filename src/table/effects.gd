@@ -1,36 +1,32 @@
 extends RefCounted
 class_name Effects
 
-## Effects - air that moves and light that bursts: FOG that rolls through a stretch of the scene,
-## MOTES that wander about it (pixies, fireflies, flies, embers, dust) and leave and come back, and BURSTS
-## of sparks, glitter, embers, flame, smoke or stars at a moment - and what the wind carries, DRIFTING
-## down and across, settling and carried off again ([Drifts]). An agent describes them as data -
-## the registries' words are what it reads ([method describe]) - [method sanitize] makes whatever it
-## wrote buildable, and [method build] makes the nodes. Generic: a host names its REGIONS (boxes in
-## its own space) and its MOMENTS (a time, how long, and where the emitter is through it), and the
-## card table is the first host.
+## Effects - air that moves and light that bursts: fog that rolls through a stretch of the scene, motes that wander about it (pixies,
+## fireflies, flies, embers, dust) and leave and come back, and bursts of sparks, glitter, embers, flame, smoke or stars at a moment - and
+## what the wind carries, drifting down and across, settling and carried off again ([Drifts]). An agent describes them as data (the
+## registries' words are what it reads, [method describe]), [method sanitize] makes whatever it wrote buildable, and [method build] makes
+## the nodes. Generic: a host names its regions (boxes in its own space) and its moments (a time, how long, and where the emitter is
+## through it); the card table is the first host.
 ##
-## EVERYTHING IS A FUNCTION OF SHOW TIME ([method Air.tick]): a mote's place, a spark's flight and the
-## fog's roll are computed from the time and the seed, never stepped frame by frame - so a render and
-## a scrub see the same picture. The fog is Godot's own volumetric fog (a FogVolume per stretch,
-## [constant FOG_SHADER]): lights in it light it, so candles glow through it, and a mote that carries a
-## light makes a colored glow in the fog around it. Sparks fly on the GPU from where and when they
-## were born ([constant SPRITE_SHADER]); motes are placed on the CPU, which also moves their lights.
+## Everything is a function of show time ([method Air.tick]): a mote's place, a spark's flight and the fog's roll are computed from the
+## time and the seed, never stepped frame by frame, so a render and a scrub see the same picture. The fog is Godot's own volumetric fog
+## (a FogVolume per stretch, [constant FOG_SHADER]): lights in it light it, so candles glow through it, and a mote that carries a light
+## makes a colored glow in the fog around it. Sparks fly on the GPU from where and when they were born ([constant SPRITE_SHADER]); motes
+## are placed on the CPU, which also moves their lights.
 ##
-## THE WIND MOVES THE AIR ([Winds], the stage's `wind`, when the light wrote one - [method Winds.blows]):
-## what rides the air - dust, snow, embers - is carried through the shot and tossed in its eddies, and
-## the shot keeps about as many as it had, each gone downwind coming in again upwind; what flies - a
-## pixie, a firefly, a wisp, a fly - holds its place against it as hard as it can fly ([method
-## Winds.pushed]), trembling as it works, and a gust past its strength carries it off for a moment before
-## it flies home; a burst's sparks and smoke are carried off downwind as the air slows them (in closed
-## form on the GPU: the air's run since each was born); fog rolls along with it. Still air moves nothing.
+## The wind moves the air ([Winds], the stage's `wind`, when the light wrote one - [method Winds.blows]): what rides the air (dust, snow,
+## embers) is carried through the shot and tossed in its eddies, and the shot keeps about as many as it had, each gone downwind coming
+## in again upwind; what flies (a pixie, a firefly, a wisp, a fly) holds its place against it as hard as it can fly ([method
+## Winds.pushed]), trembling as it works, and a gust past its strength carries it off for a moment before it flies home; a burst's sparks
+## and smoke are carried off downwind as the air slows them (in closed form on the GPU: the air's run since each was born); fog rolls
+## along with it. Still air moves nothing.
 
 const FOG_SHADER := preload("res://shaders/effect_fog.gdshader")
 const SPRITE_SHADER := preload("res://shaders/effect_sprite.gdshader")
 const SMOKE_SHADER := preload("res://shaders/effect_smoke.gdshader")
 const SPECK_SHADER := preload("res://shaders/effect_speck.gdshader")
 
-## THE KINDS of effect, and what each is for.
+## The kinds of effect, and what each is for.
 const KINDS := {
 	"fog": "a bank or a layer of fog or smoke, rolling slowly through one stretch of the scene, lit by the lights in it",
 	"motes": "a few points of light or dust that wander about one stretch of the scene, now and then leaving it and coming back",
@@ -38,16 +34,14 @@ const KINDS := {
 	"drift": "what the wind carries - petals, leaves, seeds, keys, feathers - now and then falling from overhead or blown across, more in a gust, settling on the table and carried off it again by a gust",
 }
 
-## What a mote can be: its shape, its size (millimeters - its core; its halo is wider) and the range
-## an agent may set it in (`sizes`), how brightly it glows over `glow` 0-1 (`glows`: brighter than 1
-## blooms; a dark speck's is how dark), how fast and far it wanders and how it flies (`flight`: "drift"
-## a slow wander, "dart" with sudden swerves, "zigzag" a fly's - [method _flight_plan], which `hover`s
-## and `drift`s for those shares of what it does next), whether it blinks (fireflies), flickers (embers), rises
-## (embers) or falls (snow, ash), whether it carries a little light (so fog glows round it and the
-## table takes its color) and its color when none is given. A "speck" is DARK: laid over what is
-## behind it, never added to it, and never lit. In a wind ([method _blown]): `airspeed`, how hard it
-## flies against it (m/s - a house fly's two, a firefly's half; none, it rides the air), and `back`,
-## how quickly it flies home once a gust has passed (the share of the way a second).
+## What a mote can be: its shape, its size (millimeters - its core; its halo is wider) and the range an agent may set it in (`sizes`), how
+## brightly it glows over `glow` 0-1 (`glows`: brighter than 1 blooms; a dark speck's is how dark), how fast and far it wanders and how
+## it flies (`flight`: "drift" a slow wander, "dart" with sudden swerves, "zigzag" a fly's - [method _flight_plan], which `hover`s and
+## `drift`s for those shares of what it does next), whether it blinks (fireflies), flickers (embers), rises (embers) or falls (snow,
+## ash), whether it carries a little light (so fog glows round it and the table takes its color) and its color when none is given. A
+## "speck" is dark: laid over what is behind it, never added to it, and never lit. In a wind ([method _blown]): `airspeed`, how hard it
+## flies against it (m/s - a house fly's two, a firefly's half; none, it rides the air), and `back`, how quickly it flies home once a
+## gust has passed (the share of the way a second).
 const MOTES := {
 	"pixie": {"about": "tiny bright points of colored light that dart and drift, alone or in twos and threes", "shape": "orb",
 		"size": 3.0, "sizes": Vector2(1.5, 8.0), "glows": Vector2(0.4, 1.3), "speed": 1.0, "wander": 1.0, "blink": 0.0,
@@ -119,10 +113,9 @@ const MAX_PARTICLES := 2400
 ## The time a moment's particles are born over, when the moment is an instant (seconds).
 const BIRTH := 0.12
 
-## A MOTE'S LIGHT is for the fog: [constant MOTE_LIGHT] is what the fog round it sees at full
-## brightness and middle glow - the color bleeding through - and a surface sees [constant MOTE_TINT]
-## of that. A light this small a few centimeters off the cloth burned a hot spot that bloomed into a
-## blot many times the mote's size.
+## A mote's light is for the fog: [constant MOTE_LIGHT] is what the fog round it sees at full brightness and middle glow (the color
+## bleeding through), and a surface sees [constant MOTE_TINT] of that. A brighter light this small a few centimeters off the cloth
+## blooms into a blot many times the mote's size.
 const MOTE_LIGHT := 0.03
 const MOTE_TINT := 1.0 / 15.0
 ## How far a mote keeps above the top of anything it flies over (the stage's `occluders`: the table,
@@ -134,7 +127,7 @@ const CLEAR := 0.004
 const LIT_CLEAR := 0.04
 const FLOOR_SLOPE := 1.0
 const FLOOR_ROUND := 0.05
-## A FLY'S FLIGHT ([method _flight_plan]): planned over [constant ZIG_PLAN] seconds and looped, between
+## A fly's flight ([method _flight_plan]): planned over [constant ZIG_PLAN] seconds and looped, between
 ## spots up to [constant ZIG_REACH] wander steps from where it is about, flown at about
 ## [constant ZIG_SPEED] (m/s, at speed 1); [constant ZIG_STOPS] of its legs end in a moment's stop, the
 ## rest turning sharply and flying on - and the shutter a dark speck smears over as it zips (seconds: a
@@ -143,7 +136,7 @@ const ZIG_PLAN := 240.0
 const ZIG_REACH := 3.0
 const ZIG_SPEED := 1.2
 const ZIG_STOPS := 0.15
-## THE SHARE OF LEAVINGS that are off into the distance - away from the camera, shrinking as they go
+## The share of leavings that are off into the distance - away from the camera, shrinking as they go
 ## (a dark speck blurring too) - rather than out of a side of the picture: a fly's, each time it
 ## leaves, and any other mote's.
 const AWAY_DEEP := 0.4
@@ -153,7 +146,7 @@ const LEG_STILL := 1
 const LEG_DRIFT := 2
 const LEG_OUT := 3
 const SPECK_SHUTTER := 1.0 / 500.0
-## IN A WIND ([method _blown]): the share of the wind it beats that a flier still gives way to (none holds
+## In a wind ([method _blown]): the share of the wind it beats that a flier still gives way to (none holds
 ## perfectly still in a breeze); how far the eddies toss what rides the air, a second of their churn at
 ## most [constant TOSS] meters; and the stretch of air a carried mote goes round in ([method _stretch]) -
 ## the picture at its depth, this much wider, and a little more - faded out and in at its ends.
@@ -163,7 +156,7 @@ const WRAP := 1.15
 const WRAP_MORE := 0.15
 
 
-## THE VOCABULARY, as an agent reads it. [param regions] and [param moments] are the host's names:
+## The vocabulary, as an agent reads it. [param regions] and [param moments] are the host's names:
 ## where an effect may be, and when a burst may happen - each with a few words about it.
 static func describe(regions: Dictionary, moments: Dictionary) -> String:
 	var lines := PackedStringArray()
@@ -201,7 +194,7 @@ static func describe(regions: Dictionary, moments: Dictionary) -> String:
 
 # --- sanitizing -----------------------------------------------------------------------------
 
-## WHATEVER AN AGENT WROTE, as something [method build] can make: known kinds, looks, regions and
+## Whatever an agent wrote, as something [method build] can make: known kinds, looks, regions and
 ## moments only, every number in range, every color a color (the [param palette]'s when none is
 ## given). [param regions] and [param moments] are the host's names. Unknown entries are dropped.
 static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Array) -> Array:
@@ -284,7 +277,7 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 	return out
 
 
-## WHICH TIMES A MOMENT HAPPENS a burst marks, made safe: "every", "first", "last", or a list of times
+## Which times a moment happens a burst marks, made safe: "every", "first", "last", or a list of times
 ## counted from 1 in the order they happen.
 static func _which(v: Variant) -> Variant:
 	if v is Array:
@@ -370,7 +363,7 @@ static func fog_environment(env: Environment, on: bool) -> void:
 	env.volumetric_fog_temporal_reprojection_amount = 0.8
 
 
-## BUILD [param effects] (sanitized) for a host whose [param stage] is
+## Build [param effects] (sanitized) for a host whose [param stage] is
 ## `{regions: {name: AABB}, camera: Transform3D, fov: float (vertical, degrees), aspect: float,
 ## occluders: [AABB], sharp: Vector2, defocus: float, deep: float}` - the occluders being what stands in
 ## the air (a table, the things on it); `sharp` the depths the lens has in focus (meters along its axis),
@@ -433,13 +426,13 @@ static func _fog(fx: Dictionary, stage: Dictionary, root: Node3D) -> Dictionary:
 	var c := _col(String(fx["color"]))
 	# a Color, so the shader's source_color takes it from sRGB (a Vector3 would be read as linear)
 	mat.set_shader_parameter("color", c)
-	# THE DENSITY AN AGENT WRITES is how much the fog hides, looked through: 0-1 over the stretch a
-	# line of sight crosses there (its `sight`) - a layer two centimeters thick and a bank three
-	# meters deep at one density look as thick as each other. The fog's swirls fill about half of it.
+		# The density an agent writes is how much the fog hides, looked through: 0-1 over the stretch a line of sight crosses there (its
+		# `sight`), so a layer two centimeters thick and a bank three meters deep at one density look as thick as each other. The fog's
+		# swirls fill about half of it.
 	var hides := 0.9 * float(fx["density"])
 	mat.set_shader_parameter("density", -log(1.0 - hides) / maxf(float(info["sight"]), 0.02) / 0.45)
 	mat.set_shader_parameter("rolls", float(fx["rolls"]))
-	# ITS OWN SLOW DRIFT in still air; in a wind it goes with the wind ([member Air.wind]), rising as slowly
+	# Its own slow drift in still air; in a wind it goes with the wind ([member Air.wind]), rising as slowly
 	mat.set_shader_parameter("wind", Vector3(0.0, 0.012, 0.0) if Winds.blows(stage.get("wind", {})) \
 		else Vector3(float(fx["drift"]) * 0.12, 0.012, -0.02 * absf(float(fx["drift"]))))
 	mat.set_shader_parameter("grain", float(fx["grain"]) * 0.01)
@@ -453,7 +446,7 @@ static func _fog(fx: Dictionary, stage: Dictionary, root: Node3D) -> Dictionary:
 	return {"fx": fx, "node": vol, "mat": mat}
 
 
-## A SPRITE LAYER: [param count] quads in one MultiMesh, drawn by [param shader], never culled (its
+## A sprite layer: [param count] quads in one MultiMesh, drawn by [param shader], never culled (its
 ## sprites are moved by the shader, so its bounds would lie).
 static func _sprites(count: int, shader: Shader, root: Node3D) -> Dictionary:
 	var mm := MultiMesh.new()
@@ -477,7 +470,7 @@ static func _sprites(count: int, shader: Shader, root: Node3D) -> Dictionary:
 
 # --- motes ------------------------------------------------------------------------------------
 
-## A POPULATION OF MOTES: each its own home in view inside its region, its own wander, visits and
+## A population of motes: each its own home in view inside its region, its own wander, visits and
 ## blinking, sampled once from [param salt]; up to [param lights_left] of them carry a light.
 static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, lights_left: int) -> Dictionary:
 	var look: Dictionary = MOTES[String(fx["look"])]
@@ -508,7 +501,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 	var aspect := float(stage.get("aspect", 16.0 / 9.0))
 	for i in n:
 		var home := _in_view(box, stage, rng)
-		# A MOTE WANDERS ACROSS A SHARE OF THE PICTURE round a home in it - measured on screen at its own
+		# A mote wanders across a share of the picture round a home in it - measured on screen at its own
 		# depth, across and up as the camera sees, with a little depth - so a mote past the table stays
 		# in the strip of room the camera sees there, and one near the lens does not fill it
 		var depth := maxf(-(cam.affine_inverse() * home).z, 0.1)
@@ -536,7 +529,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 			"zig": (rng.randi() & 0xFFFFFF) if String(look["flight"]) == "zigzag" else 0,
 			"zip": ZIG_SPEED * speed,
 		}
-		# SOME LEAVE INTO THE DISTANCE, away from the camera - on dice of their own, so the population's
+		# Some leave into the distance, away from the camera - on dice of their own, so the population's
 		# other draws stay as they were
 		var deep := RandomNumberGenerator.new()
 		deep.seed = hash([salt, i, "deep"])
@@ -544,7 +537,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 			var far: Variant = _deep_of(stage, deep)
 			if far != null:
 				m["exit"] = far
-		# ITS SHARE OF THE WIND ([method _blown]), on dice of its own too: how strong a flier it is against
+		# Its share of the wind ([method _blown]), on dice of its own too: how strong a flier it is against
 		# its look's own and how closely it rides the air - and, riding it, the stretch of air it goes round
 		var gust := RandomNumberGenerator.new()
 		gust.seed = hash([salt, i, "wind"])
@@ -560,7 +553,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 		if bool(fx["light"]) and lights.size() < lights_left:
 			var l := OmniLight3D.new()
 			l.light_color = m["color"]
-			# A SMALL LIGHT: a glow in the fog round the mote, a tint on what it passes - never a lamp
+			# A small light: a glow in the fog round the mote, a tint on what it passes - never a lamp
 			l.omni_range = 0.12
 			l.omni_attenuation = 2.0
 			l.shadow_enabled = false
@@ -568,7 +561,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 			l.light_specular = 0.2
 			root.add_child(l)
 			lights.append({"light": l, "mote": i})
-	# THE AIR'S FLOOR is the lowest of the stage's regions (the room's), not this one's: what stands in
+	# The air's floor is the lowest of the stage's regions (the room's), not this one's: what stands in
 	# the air lifts motes over itself, and past a table's edge a mote leaving into the room may go down
 	var floor_y := minf(_air_floor(stage), box.position.y)
 	var wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
@@ -578,7 +571,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 		"wind": wind if Winds.blows(wind) else {}, "felt": {}}
 
 
-## THE STRETCH OF AIR a mote at [param home] goes round as it rides the wind ([method _blown]): the
+## The stretch of air a mote at [param home] goes round as it rides the wind ([method _blown]): the
 ## picture at its depth ([param depth], [param frame_h] tall), seen from above - as wide as the frame
 ## across, and as deep as the frame's height reaches over the ground looking down - measured along the
 ## wind's way and across it, [constant WRAP] times that and [constant WRAP_MORE] more, its middle the
@@ -605,7 +598,7 @@ static func _stretch(home: Vector3, depth: float, frame_h: float, stage: Diction
 	return {"spans": spans, "mid": Vector2(off.dot(d), off.dot(side))}
 
 
-## A HOME FOR A MOTE, spread over the PICTURE rather than the region's volume: a spot on screen, and a
+## A home for a mote, spread over the picture rather than the region's volume: a spot on screen, and a
 ## depth along that line of sight where it is inside [param box], nearer than anything the stage
 ## `occluders` put in its way (a table), not past where the air ends (`deep`: the room's picture is
 ## there) and not right at the lens - so motes are where they can be seen, as many near as far. Tried a
@@ -663,7 +656,7 @@ static func _hidden(stage: Dictionary, p: Vector3) -> bool:
 ## Where a mote goes when it leaves: well out of the picture, to one side and up.
 static func _exit_of(home: Vector3, stage: Dictionary, rng: RandomNumberGenerator) -> Vector3:
 	var cam: Transform3D = stage.get("camera", Transform3D.IDENTITY)
-	# OFF TO A SIDE AND UP: away from the camera would keep it in a picture that widens with distance
+	# Off to a side and up: away from the camera would keep it in a picture that widens with distance
 	var side := cam.basis.x * (1.0 if rng.randf() < 0.5 else -1.0)
 	var dir := (side + Vector3.UP * rng.randf_range(0.2, 0.7)).normalized()
 	var out := home
@@ -702,7 +695,7 @@ static func _deep_of(stage: Dictionary, rng: RandomNumberGenerator) -> Variant:
 	return null
 
 
-## THE AIR'S FLOOR: the lowest of the stage's regions (a room's floor), which no mote goes under.
+## The air's floor: the lowest of the stage's regions (a room's floor), which no mote goes under.
 static func _air_floor(stage: Dictionary) -> float:
 	var floor_y := INF
 	for r in (stage.get("regions", {}) as Dictionary):
@@ -733,7 +726,7 @@ static func _screen(stage: Dictionary, p: Vector3) -> Variant:
 	return Vector2(0.5 + l.x / (-l.z * k * aspect) * 0.5, 0.5 - l.y / (-l.z * k) * 0.5)
 
 
-## MOTE [param m] of a population ([param pop]) at show time [param t]: `{pos, bright}`. Pure.
+## Mote [param m] of a population ([param pop]) at show time [param t]: `{pos, bright}`. Pure.
 static func mote_at(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 	var look: Dictionary = pop["look"]
 	var w: PackedFloat32Array = m["w"]
@@ -749,18 +742,18 @@ static func mote_at(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 	p += ax * (0.65 * sin(w[0] * tw + ph[0]) + 0.35 * sin(w[1] * tw + ph[1])) \
 		+ ay * (0.65 * sin(w[2] * tw + ph[2]) + 0.35 * sin(w[3] * tw + ph[3])) \
 		+ az * (0.65 * sin(w[4] * tw + ph[4]) + 0.35 * sin(w[5] * tw + ph[5]))
-	# A PIXIE DARTS: now and then a quick swerve, between long drifts
+	# A pixie darts: now and then a quick swerve, between long drifts
 	var dart := float(m["dart"])
 	if dart > 0.0:
 		var env := pow(maxf(0.0, sin(w[6] * 0.35 * t + ph[6])), 6.0)
 		p += (ax * sin(w[7] * 4.0 * t + ph[7]) + ay * 0.6 * cos(w[7] * 3.1 * t) + az * 0.8 * sin(w[7] * 2.3 * t + ph[6])) * 0.7 * dart * env
-	# A FLY ZIG-ZAGS about where it is - and leaves the picture now and then by flying out of it
+	# A fly zig-zags about where it is - and leaves the picture now and then by flying out of it
 	var gone := false
 	if zig:
 		var f := _zigzag(m, t)
 		p += f["at"] as Vector3
 		gone = bool(f["out"])
-	# RISING or FALLING: up (or down) through the region and round again
+	# Rising or falling: up (or down) through the region and round again
 	var rise := float(look["rise"])
 	if rise != 0.0:
 		var span := maxf(box.size.y, 0.05)
@@ -771,12 +764,12 @@ static func mote_at(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 	if rise != 0.0:
 		var u2 := fposmod(float(m["lift"]) + absf(rise) * float(look["speed"]) * 0.08 * (0.7 + 0.6 * float(m["lift"])) * t / maxf(box.size.y, 0.05), 1.0)
 		bright *= smoothstep(0.0, 0.12, u2) * (1.0 - smoothstep(0.75, 1.0, u2))
-	# IN THE WIND: carried along it, or holding its place against it
+	# In the wind: carried along it, or holding its place against it
 	if not (pop.get("wind", {}) as Dictionary).is_empty():
 		var bl := _blown(pop, m, t)
 		p += bl["off"] as Vector3
 		bright *= float(bl["fade"])
-	# VISITS: here for most of its round, then away out of the picture and back (a fly flies its own)
+	# Visits: here for most of its round, then away out of the picture and back (a fly flies its own)
 	var away := float(pop["away"])
 	var presence := 1.0
 	if zig:
@@ -794,7 +787,7 @@ static func mote_at(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 			var e := presence * presence * (3.0 - 2.0 * presence)
 			p = (m["exit"] as Vector3).lerp(p, e)
 			bright *= lerpf(0.35, 1.0, presence)
-	# NEVER UNDER ITS FLOOR - the air's, or the top of what stands under it - a soft floor, which it
+	# Never under its floor - the air's, or the top of what stands under it - a soft floor, which it
 	# glides along and lifts off, never stopping or bouncing at it
 	var fl := _floor_at(pop, p)
 	var soft := 0.012
@@ -814,17 +807,14 @@ static func mote_at(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 	return {"pos": p, "bright": bright, "presence": presence}
 
 
-## WHAT THE WIND DOES TO MOTE [param m] of [param pop] at [param t]: `{off: Vector3 (meters, from where it
-## would be in still air), fade, strain}`. A look with no `airspeed` RIDES THE AIR: carried along it
-## ([method Winds.carried], as closely as the mote's `carry`) and tossed in the eddy it rides in ([method
-## Winds.eddy], the big swirls); round a stretch of air as wide as the picture at its depth and more
-## ([method _stretch], along the wind and across it), so as it goes out of the shot downwind it comes in
-## again upwind - faded out and in at the stretch's ends, which lie out of the picture - and the shot keeps
-## about as many as it held. A look
-## that FLIES holds its place against the wind as hard as it can ([method Winds.pushed], its look's
-## `airspeed` times its own `strong`): a breeze it beats barely moves it, a gust past it carries it off,
-## and it flies home after; the harder it works, the more it trembles (`strain`, 0 at ease to 1 flat out),
-## and the small eddies it does not fight jostle it.
+## What the wind does to mote [param m] of [param pop] at [param t]: `{off: Vector3 (meters, from where it would be in still air), fade,
+## strain}`. A look with no `airspeed` rides the air: carried along it ([method Winds.carried], as closely as the mote's `carry`) and
+## tossed in the eddy it rides in ([method Winds.eddy], the big swirls); round a stretch of air as wide as the picture at its depth and
+## more ([method _stretch], along the wind and across it), so as it goes out of the shot downwind it comes in again upwind - faded out
+## and in at the stretch's ends, which lie out of the picture - and the shot keeps about as many as it held. A look that flies holds its
+## place against the wind as hard as it can ([method Winds.pushed], its look's `airspeed` times its own `strong`): a breeze it beats
+## barely moves it, a gust past it carries it off, and it flies home after; the harder it works, the more it trembles (`strain`, 0 at
+## ease to 1 flat out), and the small eddies it does not fight jostle it.
 static func _blown(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 	var wind: Dictionary = pop["wind"]
 	var look: Dictionary = pop["look"]
@@ -857,7 +847,7 @@ static func _blown(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 	return {"off": Vector3(push.x, 0.0, push.y) + tremble + jostle, "strain": strain, "fade": 1.0}
 
 
-## A FLY'S FLIGHT, planned once and then read by time ([method _zigzag]): [constant ZIG_PLAN] seconds,
+## A fly's flight, planned once and then read by time ([method _zigzag]): [constant ZIG_PLAN] seconds,
 ## looped (it ends where it began), of zig-zags - legs between spots in its patch of the picture, each
 ## as long as the way takes at about its own speed (`zip`), with sharp turns between and now and then a
 ## moment's stop - and among them hovers of a fraction of a second and rarer short drifts (the look's
@@ -922,7 +912,7 @@ static func _spot(m: Dictionary, rng: RandomNumberGenerator) -> Vector3:
 		+ (m["az"] as Vector3) * rng.randf_range(-1.0, 1.0)) * ZIG_REACH
 
 
-## A FLY at show time [param t], read off its plan ([method _flight_plan]) - the leg holding the time
+## A fly at show time [param t], read off its plan ([method _flight_plan]) - the leg holding the time
 ## found by a binary search: `{at: where it is from where it is about, out: whether it is gone}`.
 static func _zigzag(m: Dictionary, t: float) -> Dictionary:
 	var times: PackedFloat32Array = m["zt"]
@@ -947,7 +937,7 @@ static func _zigzag(m: Dictionary, t: float) -> Dictionary:
 	return {"at": at, "out": kind == LEG_OUT}
 
 
-## THE FLOOR UNDER [param p] for population [param pop]: the air's (`floor`), or over what stands
+## The floor under [param p] for population [param pop]: the air's (`floor`), or over what stands
 ## there its top and the population's clearance ([constant CLEAR], [constant LIT_CLEAR]), falling away
 ## round it ([constant FLOOR_SLOPE], [constant FLOOR_ROUND]) - so the floor never steps.
 static func _floor_at(pop: Dictionary, p: Vector3) -> float:
@@ -976,9 +966,8 @@ static func _burst(fx: Dictionary, salt: int, root: Node3D) -> Dictionary:
 	mat.set_shader_parameter("waver", float(look["waver"]))
 	mat.set_shader_parameter("twinkle", float(look["twinkle"]))
 	mat.set_shader_parameter("stretch", float(look.get("stretch", 0.022)))
-	# A PUFF'S EDGE AND HOW THICK IT IS: smoke torn and billowing; POWDER A SOFT ROUND HAZE, barely there (feedback 0018, joker-motivation
-	# 209459: "What are these sparkles, coming off of the pad thing? They look like stars" - a few millimeters across, lit by the lamp
-	# against the dark, a torn billow drew a little bright star)
+		# A puff's edge and how thick it is: smoke torn and billowing; powder a soft round haze, barely there (a torn billow a few millimeters
+		# across, lit by the lamp against the dark, draws a little bright star)
 	if smoke:
 		mat.set_shader_parameter("torn", float(look.get("torn", 1.0)))
 		mat.set_shader_parameter("thick", float(look.get("thick", 0.42)))
@@ -986,7 +975,7 @@ static func _burst(fx: Dictionary, salt: int, root: Node3D) -> Dictionary:
 	return {"fx": fx, "look": look, "layer": layer, "salt": salt, "planned": ""}
 
 
-## BIRTHS FOR A BURST over its [param moments] (`[{t, dur, path: [[t, Transform3D], ...], from}]`):
+## Births for a burst over its [param moments] (`[{t, dur, path: [[t, Transform3D], ...], from}]`):
 ## each particle's birth time and place (on the emitter as it was at that time - a point, or the edge
 ## of a card for `from` "card"), its velocity, color, life and size. Pure: the same moments give the
 ## same particles. `[{born, pos, vel, color, life, size, seed}]`.
@@ -1010,7 +999,7 @@ static func births(fx: Dictionary, moments: Array, salt: int) -> Array:
 		var path: Array = mo["path"]
 		var card := String(mo.get("from", "point")) == "card"
 		for i in per:
-			# MOST AT THE START: a burst throws most of itself as its moment begins, and trails off
+			# Most at the start: a burst throws most of itself as its moment begins, and trails off
 			var u := (float(i) + rng.randf()) / float(per)
 			var born := t0 + dur * pow(u, float(look.get("burst", 2.0)))
 			var xf := _along(path, born)
@@ -1036,7 +1025,7 @@ static func births(fx: Dictionary, moments: Array, salt: int) -> Array:
 	return out
 
 
-## A PARTICLE born of [param p] ([method births]) as its sprite holds it: its place, its velocity in the
+## A particle born of [param p] ([method births]) as its sprite holds it: its place, its velocity in the
 ## transform's first column, which nothing else uses, and in its second how far [param wind] had carried
 ## the air when it was born (none in still air, `{}`) - the shader carries it by the air's run since.
 static func particle_xform(p: Dictionary, wind: Dictionary) -> Transform3D:
@@ -1114,7 +1103,7 @@ class Air:
 
 	## Everything as it is at show time [param t].
 	func tick(t: float) -> void:
-		# THE AIR'S RUN AND ITS SPEED NOW, for the fog it rolls and the particles it carries
+		# The air's run and its speed now, for the fog it rolls and the particles it carries
 		var run := Vector3.ZERO
 		var vel := Vector3.ZERO
 		if not wind.is_empty():
@@ -1136,7 +1125,7 @@ class Air:
 			var mm: MultiMesh = (pop["layer"] as Dictionary)["mm"]
 			var each: Array = pop["each"]
 			var speck := String((pop["look"] as Dictionary)["shape"]) == "speck"
-			# THE WIND A FLIER FEELS, once for the population (and a shutter before, for a speck's smear)
+			# The wind a flier feels, once for the population (and a shutter before, for a speck's smear)
 			var felt := {}
 			var back := float((pop["look"] as Dictionary).get("back", 0.0))
 			if not (pop["wind"] as Dictionary).is_empty() and float((pop["look"] as Dictionary).get("airspeed", 0.0)) > 0.0:

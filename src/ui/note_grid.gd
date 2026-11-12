@@ -1,24 +1,20 @@
 extends VBoxContainer
 class_name NoteGrid
 
-## NoteGrid - the notes, as a notes app shows them (2026-10-31, the user: "a Google Keep kind of look:
-## extremely simple, centered with wide margins, a search bar at the top, and a 2-3 columns of sticky
-## notes"): the name, a search field with the owner's icon buttons beside it ([member actions], [Icons]),
-## and every note as a square [NoteTile] in a centered grid that scrolls up and down, newest first
-## ([method NoteStore.list]). The desktop's [NotesList] and the phone's [PhoneShell] both show it - only
-## [member s], the size of everything, differs - so the phone's list is the desktop's ("the mobile view is
-## important").
+## NoteGrid - the notes, as a notes app shows them: the name, a search field with the owner's icon
+## buttons beside it ([member actions], [Icons]), and every note as a square [NoteTile] in a centered
+## grid that scrolls up and down, newest first ([method NoteStore.list]). The desktop's [NotesList] and
+## the phone's [PhoneShell] both show it; only [member s], the size of everything, differs.
 ##
-## EVERY TILE ONE SIZE, AS MANY COLUMNS AS FIT, BETWEEN [constant LEAST_COLS] AND [constant MOST_COLS]: at
-## most [constant TILE] square, never under [constant TILE_LEAST] while a column can be given up instead, and
-## the column the tiles make is the header's width too ([method _layout]).
+## Every tile is one size, as many columns as fit between [constant LEAST_COLS] and [constant MOST_COLS]:
+## at most [constant TILE] square, never under [constant TILE_LEAST] while a column can be given up
+## instead, and the column the tiles make is the header's width too ([method _layout]).
 ##
-## THE SEARCH NARROWS THE GRID as it is typed: a note stays when every word typed is in its title, its words
-## or the names of its components and its Medium's format ([method NoteStore.summary_of] `words`), so "letter"
-## finds the letters.
+## The search narrows the grid as it is typed: a note stays when every word typed is in its title, its
+## words or the names of its components and its Medium's format ([method NoteStore.summary_of] `words`).
 ## Escape clears it; Enter opens the first note left.
 ##
-## A NOTE SAVED, MADE OR DELETED ELSEWHERE SHOWS UP within [constant POLL] seconds: the list is compared,
+## A note saved, made or deleted elsewhere shows up within [constant POLL] seconds: the list is compared,
 ## and a note's file is read again only when it changed.
 
 signal opened(path: String)
@@ -85,9 +81,8 @@ func _process(delta: float) -> void:
 
 
 func _build() -> void:
-	# A PLAIN CONTROL, NOT A CONTAINER, and the header placed in it by hand ([method _layout]): a container
-	# takes its child's width as its own least, so the width the last layout gave the header held the whole
-	# grid at least that wide, and it could never lay out narrower again.
+	# A plain control, not a container, and the header placed in it by hand ([method _layout]): a container
+	# takes its child's width as its own least, so the grid could never lay out narrower than the last layout.
 	_top = Control.new()
 	_top.resized.connect(_place_header)
 	add_child(_top)
@@ -139,7 +134,7 @@ func _build() -> void:
 
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	# never shown and never needed (the tiles are laid out to fit), and unlike DISABLED it does not take the
+	# never shown and never needed (the tiles are laid out to fit), and unlike disabled it does not take the
 	# tiles' width as the grid's least - the same trap as the header's
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	add_child(_scroll)
@@ -225,9 +220,9 @@ func tile_of(path: String) -> NoteTile:
 	return null
 
 
-## AS MANY COLUMNS AS FIT, each tile as big as it may be: from [constant MOST_COLS] down, the first count
-## whose tiles are at least [constant TILE_LEAST], never under [constant LEAST_COLS] (narrower than that, the
-## tiles shrink instead).
+## As many columns as fit, each tile as big as it may be: from [constant MOST_COLS] down, the first count
+## whose tiles are at least [constant TILE_LEAST], never under [constant LEAST_COLS] (narrower than that,
+## the tiles shrink instead).
 func _layout() -> void:
 	if size.x <= 0.0:
 		return

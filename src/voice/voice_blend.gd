@@ -3,24 +3,20 @@ class_name VoiceBlend
 
 ## VoiceBlend - a new voice made of a multi-speaker voice's own readers, written as one line.
 ##
-## Kokoro cannot really be fine-tuned, but its voices are not weights: each is a style pack, 510 rows of
-## 256 numbers (one row a sentence length), the first 128 of a row the timbre its decoder is given and
-## the last 128 the prosody its duration, pitch and energy predictors are (StyleTTS 2's acoustic and
-## prosodic styles). So two packs mixed are a voice of their own, and the community does it (2026-11-11,
-## the user: "some users have reported that new voices can be synthesized by merging tensors"): Kokoro's
-## own `af_bella,af_sky` is the two averaged, Kokoro-FastAPI's `af_bella(2)+af_sky(1)` a weighted
-## average, a ComfyUI node interpolates on the sphere. The host makes the pack (hosts/voice/blend.py, the
-## math and what was measured of each method); this is the line and its words.
+## A Kokoro voice is a style pack: 510 rows of 256 numbers (one row per sentence length), the first 128 the
+## timbre the decoder is given and the last 128 the prosody its duration, pitch and energy predictors get.
+## Two packs mixed are a voice of their own. The host makes the pack (hosts/voice/blend.py holds the math
+## of each method); this file is the line and its words.
 ##
-## THE LINE, the same in the note (`blend:` on a voice) and in the request (`blend`):
+## The line is the same in the note (`blend:` on a voice) and in the request (`blend`):
 ##
 ##     mix: af_heart 2, bf_emma 1
 ##     split british: af_heart sound, bf_emma delivery
 ##
-## the method and an accent, then each reader by its pack's name, its weight (1 unsaid, and unsaid in a
-## method that weighs nothing) and, for a method that gives voices parts, its part (both unsaid). By NAME, not number: a line a person reads in
-## a note says who is in it. Fewer than two readers is no blend - the Speaker number reads alone.
-## Only a voice whose backend says `blend` takes one (`ReadingCast.blend_of`); elsewhere it is ignored.
+## A method and an accent, then each reader by its pack's name, its weight (1 if unsaid, and unsaid for a
+## method that weighs nothing) and, for a method that gives voices parts, its part. Fewer than two readers
+## is no blend - the Speaker number reads alone. Only a voice whose backend says `blend` takes one
+## (`ReadingCast.blend_of`); elsewhere it is ignored.
 
 ## How the readers are made one: what the host does for each (blend.py), said in the reader browser.
 const METHODS := {
@@ -44,7 +40,7 @@ const PARTS := {
 }
 
 ## What eSpeak reads a blend in. Unsaid, the accent of its heaviest reader (in Sound and delivery, its
-## heaviest delivery): a British reader mixed with an American is read one way or the other, never both.
+## heaviest delivery).
 const ACCENTS := {
 	"": {"label": "Accent: its heaviest voice's", "blurb": "Read in the accent of the reader with the most weight - the delivery's, in Sound and delivery."},
 	"american": {"label": "American", "blurb": "Read as American English, whoever is in it."},

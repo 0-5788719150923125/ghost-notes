@@ -1,24 +1,22 @@
 extends HBoxContainer
 class_name AgentPick
 
-## AgentPick - who does one job, as one row: the AGENT (a CLI from a backend registry, [TextGen] for a
-## writer, [ImageGen] for a painter), the MODEL it runs and how hard it REASONS - each list the chosen
-## agent's own, read from its backend ([method TextGen.Backend.models], `efforts`). Every card that
-## runs agents builds its choice of them from this (Cards' episode, Proof's), so an agent, its models
-## and its levels read the same wherever they are chosen (the user, 2026-10-15: "We need to unify
-## agent selection under a single codebase").
+## AgentPick - who does one job, as one row: the agent (a CLI from a backend registry, [TextGen] for a
+## writer, [ImageGen] for a painter), the model it runs and how hard it reasons - each list the chosen
+## agent's own, read from its backend ([method TextGen.Backend.models], `efforts`). Every card that runs
+## agents builds its choice from this, so an agent, its models and its levels read the same wherever
+## they are chosen.
 ##
-## THE CHOICE IS THE CARD'S TO KEEP: [method set_choice] puts a stored one on the row, and [signal changed]
+## The choice is the card's to keep: [method set_choice] puts a stored one on the row, and [signal changed]
 ## says a person changed it - the card reads [method choice] into its block. Another agent resets the
 ## model and the level to that agent's own defaults; another model keeps the level. A stored model or
-## level the agent no longer offers stays on its list, marked, so a show's choice is never silently
-## lost. An agent whose CLI is not installed is listed and not choosable; a level picker for an agent
-## that takes no setting is grayed out.
+## level the agent no longer offers stays on its list, marked, so a choice is never silently lost. An
+## agent whose CLI is not installed is listed and not choosable; a level picker for an agent that takes
+## no setting is grayed out.
 ##
-## THE ASSISTANT IS CHOSEN HERE TOO ([method assistant], 2026-11-07, the user: "Right now, I can pick an agent but I cannot
-## specify the model or effort level. Rather than re-implementing, I think it would be preferable to use the same agent
-## interface"): its agents are the CLIs [AssistantBackends] can hand a note to, each offering the models and levels of the
-## writer it is, after an "Off" ([member none]).
+## The assistant is chosen here too ([method assistant]): its agents are the CLIs [AssistantBackends]
+## can hand a note to, each offering the models and levels of the writer it is, after an "Off"
+## ([member none]).
 
 ## A person changed the agent, the model or the level.
 signal changed
@@ -53,7 +51,7 @@ static func writer(what: String, model_tip := "", effort_tip := "") -> AgentPick
 	return p
 
 
-## A row for WHO PLAYS THE PLAYERS at a game's table (next/tabletop.md): writers too, asked often and briefly.
+## A row for who plays the players at a game's table (next/tabletop.md): writers too, asked often and briefly.
 static func players(what: String, model_tip: String, effort_tip: String) -> AgentPick:
 	var p := AgentPick.new()
 	p.role = "writer"
@@ -61,7 +59,7 @@ static func players(what: String, model_tip: String, effort_tip: String) -> Agen
 	return p
 
 
-## THE ASSISTANT'S ROW (the 💬 panel): Off, then every CLI [AssistantBackends] can hand a note to, each with the models and
+## The assistant's row (the chat panel): Off, then every CLI [AssistantBackends] can hand a note to, each with the models and
 ## levels of the writer it is - and its own blurb, for it runs with tools in the repository, as no writer does.
 static func assistant(what: String) -> AgentPick:
 	var reg := {}
@@ -153,7 +151,7 @@ func _build(title: String, reg: Dictionary, what: String, model_tip: String, eff
 	models = _picker()
 	models.tooltip_text = model_tip
 	add_child(models)
-	# THE REASONING EFFORT, from the chosen agent's own levels for the chosen model
+	# The reasoning effort, from the chosen agent's own levels for the chosen model
 	efforts = _picker()
 	efforts.size_flags_stretch_ratio = 0.7
 	efforts.tooltip_text = effort_tip
@@ -183,7 +181,7 @@ func _build(title: String, reg: Dictionary, what: String, model_tip: String, eff
 	set_choice(String(_keys[0]) if not _keys.is_empty() else "", "", "")
 
 
-## SIZED BY THE ROW, NOT ITS ITEMS: a picker as wide as its longest item pushed the whole panel out.
+## Sized by the row, not its items: a picker as wide as its longest item would push the whole panel out.
 func _picker() -> OptionButton:
 	var p := OptionButton.new()
 	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL

@@ -1,20 +1,20 @@
 extends Node
 
-## WHAT ONE STILL FRAME OF AN EPISODE'S TABLE COSTS TO DRAW (next/compute.md step 1, next/csharp.md): the stage's own time on the graphics
-## card and on the renderer's side of the processor - never the wall's - at the four sizes the Graphics menu's Resolution offers, then
-## at one of them (`--size`, by default the 1920 x 1080 the live stage is drawn at) with one thing taken out at a time, and each viewport
-## under the table by itself. A probe, for looking.
+## What one still frame of an episode's table costs to draw (next/compute.md step 1, next/csharp.md): the stage's own time on the
+## graphics card and on the renderer's side of the processor - never the wall's - at the four sizes the Graphics menu's Resolution
+## offers, then at one of them (`--size`, by default the 1920 x 1080 the live stage is drawn at) with one thing taken out at a time,
+## and each viewport under the table by itself. A probe, for looking.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/table_render_probe.gd 300 --take=user://generative/take_N.json \
 ##       [--at=150] [--dir=<the episode's copy>] [--size=3840x2160] [--only-inner]
 ##
-## THE EPISODE IS A COPY, never the author's: `--dir`, by default the one `episode_bake_probe` leaves in `dist/episode_bake_probe/`
+## The episode is a copy, never the author's: `--dir`, by default the one `episode_bake_probe` leaves in `dist/episode_bake_probe/`
 ## (run that first on the same take). The author's graphics rows are read as the app's stage reads them ([method Graphics.bind_stage]).
 ##
-## TWO THINGS THAT MADE ITS FIGURES WRONG, 2026-11-11: (1) THE CARD SHARED - a training run beside it and every figure was the two of
-## them (`nvidia-smi` first, and what uses the card is said here as it starts); (2) THE WINDOW - a virtual display copies each frame
-## off the card, at 3840 x 2160 five frames a second, and a card that idles between frames reads a pass at twice its cost. The window
-## is made tiny here: the stage is a viewport of its own size whatever the window's is, as it is in the app.
+## Two things falsify its figures: a training run or export beside it (every figure is both of them; `nvidia-smi` first, and what
+## uses the card is said here as it starts), and a large window (a virtual display copies each frame off the card, at 3840 x 2160
+## five frames a second, and a card that idles between frames reads a pass at twice its cost). The window is made tiny here: the stage
+## is a viewport of its own size whatever the window's is, as it is in the app.
 
 var medium: TableMedium
 var stage: SubViewport
@@ -105,7 +105,7 @@ func _run() -> void:
 		% [stage.msaa_3d, stage.scaling_3d_scale, stage.positional_shadow_atlas_size, str(Graphics.value("occlusion")), str(Graphics.value("bounce")),
 		str(Graphics.value("subsurface")), str(Graphics.value("fog")), str(Graphics.value("shadows")), str(Graphics.value("supersample"))])
 
-	# WHAT IS DRAWN, counted
+	# What is drawn, counted
 	for _i in 30:
 		await get_tree().process_frame
 	var RS := RenderingServer
@@ -124,7 +124,7 @@ func _run() -> void:
 	print("render: %d lights, %d casting shadows; %d mesh instances; %d viewports under the medium" % [lights.size(), casting,
 		medium.find_children("*", "GeometryInstance3D", true, false).size(), medium.find_children("*", "SubViewport", true, false).size()])
 
-	# THE VIEWPORTS UNDER THE TABLE (a painted surface's canvases): each one's own cost a frame
+	# The viewports under the table (a painted surface's canvases): each one's own cost a frame
 	stage.size = split
 	var inner: Array = medium.find_children("*", "SubViewport", true, false)
 	for v in inner:
@@ -141,7 +141,7 @@ func _run() -> void:
 			c += RS.viewport_get_measured_render_time_cpu(sv.get_viewport_rid())
 		print("render: inner viewport '%s' %d x %d, update mode %d, %d children: GPU %.2f ms, CPU %.2f ms a frame" % [sv.name, sv.size.x, sv.size.y,
 			sv.render_target_update_mode, sv.get_child_count(), g / 30.0, c / 30.0])
-	# THE FRAME THE STAGE IS SHOWN IN: the stage's picture through the note's Look, at the window's own size, multisampled as the
+	# The frame the stage is shown in: the stage's picture through the note's Look, at the window's own size, multisampled as the
 	# project's 2D is - what the app draws over and above the stage, every frame, whether the stage drew or not
 	var screen := SubViewport.new()
 	screen.size = Vector2i(3840, 2160)
@@ -170,12 +170,12 @@ func _run() -> void:
 		get_tree().quit(0)
 		return
 
-	# BY SIZE: what grows with the pixels is the graphics card's
+	# By size: what grows with the pixels is the graphics card's
 	for size in [Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(2560, 1440), Vector2i(3840, 2160)]:
 		stage.size = size
 		_say("%d x %d, as the app draws it" % [size.x, size.y], await _measure())
 
-	# AT ONE SIZE (the live stage's, or `--size`): one thing out at a time
+	# At one size (the live stage's, or `--size`): one thing out at a time
 	stage.size = split
 	_say("%d x %d, one thing out at a time:" % [split.x, split.y], await _measure())
 	var env: Environment = medium._env
@@ -231,7 +231,7 @@ func _run() -> void:
 		for k in keep:
 			env.set(k, keep[k])
 	stage.msaa_3d = was_msaa
-	# ...and PLAYING, the work ticked each frame, at that size
+	# ...and playing, the work ticked each frame, at that size
 	var gpu := 0.0
 	var cpu := 0.0
 	var script_us := 0

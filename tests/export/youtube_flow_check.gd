@@ -1,66 +1,41 @@
 extends SceneTree
 
-## youtube_flow_check - the YouTube sign-in and upload end to end, against a stand-in for Google on
-## 127.0.0.1: no network, no quota, no account. It speaks the protocol as Google documents it - the
-## installed-app sign-in with PKCE, the token endpoint, and resumable uploads (308 Resume
-## Incomplete with `Range`, the `bytes */N` status check, 404 for a lapsed session).
+## youtube_flow_check - the YouTube sign-in and upload end to end, against a stand-in for Google on 127.0.0.1 (no network,
+## quota or account). It speaks the protocol as Google documents it: the installed-app sign-in with PKCE, the token endpoint,
+## and resumable uploads (308 with `Range`, the `bytes */N` status check, 404 for a lapsed session).
 ##
 ##   godot --headless --path . --script res://tests/export/youtube_flow_check.gd
 ##
-## - SIGN-IN: the "browser" (YouTube.open_url) reads the consent URL ghost built and answers at its
-##   redirect - first a favicon and a stale tab carrying the wrong state, both turned away while the
-##   wait goes on, then the code. The stand-in only trades the code for the right client, the same
-##   redirect and a verifier whose S256 is the challenge; the sign-in asks which channel it is and is
-##   kept under it, owner-only, named by its handle.
-## - UPLOAD: a file of six chunks, against a stand-in that drops one chunk (503), keeps half of
-##   another and refuses a stale token (401): YouTube ends up with exactly the file's bytes - the
-##   stand-in rejects any chunk that does not start where it stopped, so nothing is sent twice - the
-##   metadata is private / not for kids / synthetic / no paid promotion / People & Blogs, the session
-##   names exactly the parts it sets, the result is recorded and nothing is
-##   left pending.
-## - RESUME: an upload stopped after two chunks, as a quit would stop it, waits in pending.json and a
-##   fresh node finishes it from where the stand-in says it stopped; a session YouTube has forgotten
-##   (404) starts over in a new one.
-## - A LAPSED SIGN-IN: a revoked refresh token is forgotten and read as signed out; its channel stays.
-## - DECLINED: the consent screen's `access_denied` ends the sign-in, saying so.
-## - SIGN-OUT: the refresh token is revoked at Google and the channel forgotten here; the client
-##   file stays.
-## - TWO CHANNELS (2026-10-17, the user: "target different channels for different kinds of
-##   project"): a second channel signs in beside the first, each upload goes up as its own channel,
-##   and each sign-in is renewed through the client it was made with - another client imported since
-##   costs neither its sign-in; the control: a channel whose client Google does not know is signed out,
-##   kept on the list, and that client forgotten - unless what is kept under its id has another secret.
-## - TWO CLIENTS, TWO PROJECTS (2026-11-02, the user: "simultaneously logged-in to two different clients,
-##   for two different projects"; Google's 403 access_denied, for an account that was a test user - of the
-##   other project). The stand-in has each project's own test users, and a refresh token is its client's
-##   alone. Channels signed in through each stay signed in, renew and upload side by side; a lapsed one signs
-##   in again through its own client; the control, sent through the last imported as it had been, meets
-##   Google's dead end. ON THE CARD: the sign-in goes through the client shown, the dialog names that project;
-##   another picked moves a signed-in channel only on Sign in again, and a cancel leaves it as it was; "+"
-##   goes through the pick; an export's check never opens a browser for a channel still signed in.
-## - THE THUMBNAIL (2026-10-06, the user: "submit a screenshot from the 'intro' section of the
-##   video"): ffmpeg takes a 1280x720 frame of a real video at the moment asked; queued with an
-##   upload, it is set once the video is up; a channel YouTube will not let set one (403) still has
-##   its video, and is told why.
-## - PLAYLISTS (2026-10-07, the YouTube card): a sign-in that may only upload is not asked for them
-##   (nothing is sent); one granted the playlists' scope lists every page of them; an upload queued
-##   for a playlist joins it once it is up, and one whose playlist YouTube refuses is still up, and
-##   says why.
-## - THE YOUTUBE CARD'S SIGN-IN (2026-10-06, the user: after Google's "Access blocked" for an account
-##   that was not a test user, "I am not prompted for credentials, nor am I redirected through the
-##   OAuth flow"; the box moved from the export menu to the card 2026-10-07): ticking "Upload after
-##   export" with no client asks for its file, and a cancel leaves the box clear; with one, and no
-##   sign-in, it opens the browser and a dialog at once; Google's dead-end block leaves the dialog
-##   waiting and naming it; "Open the page again" finishes the same sign-in once the account is
-##   allowed, and the box ticks; closing the dialog cancels; a refusal shows the hint and "Try again";
-##   a newer sign-in replaces one still waiting without the old one reporting over it; ↻ on the
-##   playlist signs in again for the wider scope and loads them. A note with no channel takes the one
-##   its tick signs in to; "+" signs in to another, which becomes the note's and clears the playlist;
-##   a toggle switches back; a sign-in meant for one channel that lands on another fails, saying so,
-##   and the note's channel stays. A NOTE OPENED ON A PLAYLIST RENAMED SINCE (2026-10-26, the user:
-##   "every time I restart, it keeps reverting to 'Tarot'") shows and keeps YouTube's title with no ↻,
-##   nothing asked or said; the control, a sign-in that may only upload, sends nothing and keeps the
-##   block's.
+## - sign-in: the "browser" (YouTube.open_url) reads the consent URL and answers at its redirect: first a favicon and a stale tab
+##   with the wrong state (turned away, the wait goes on), then the code. The stand-in trades the code only for the right client,
+##   the same redirect and a verifier whose S256 is the challenge; the channel is kept under its handle, owner-only.
+## - upload: six chunks against a stand-in that drops one (503), keeps half of another and refuses a stale token (401): YouTube ends
+##   up with exactly the file's bytes (a chunk not starting where the last stopped is rejected), the metadata is private / not
+##   for kids / synthetic / no paid promotion / People & Blogs, the session names exactly the parts it sets, the result is
+##   recorded and nothing is left pending.
+## - resume: an upload stopped after two chunks waits in pending.json and a fresh node finishes it from where the stand-in says it
+##   stopped; a session YouTube has forgotten (404) starts over in a new one.
+## - a lapsed sign-in: a revoked refresh token is forgotten and read as signed out; its channel stays. Declined: `access_denied`
+##   ends the sign-in, saying so. Sign-out: the token is revoked at Google and the channel forgotten here; the client file stays.
+## - two channels: a second signs in beside the first, each upload goes up as its own channel, each sign-in renews through the
+##   client it was made with; control: a channel whose client Google does not know is signed out, kept on the list, and that client
+##   forgotten, unless what is kept under its id has another secret.
+## - two clients, two projects: each project has its own test users and a refresh token is its client's alone. Channels signed in
+##   through each stay signed in, renew and upload side by side; a lapsed one signs in again through its own client; control: sent
+##   through the last imported, it meets Google's dead end. On the card: the sign-in goes through the client shown, another pick
+##   moves a signed-in channel only on Sign in again (a cancel leaves it), "+" goes through the pick, and an export's check never
+##   opens a browser for a channel still signed in.
+## - the thumbnail: ffmpeg takes a 1280x720 frame of a real video at the moment asked; queued with an upload it is set once the video
+##   is up; a channel that may not set one (403) still has its video, and is told why.
+## - playlists: a sign-in that may only upload is not asked for them; one granted the scope lists every page; an upload queued for
+##   a playlist joins it once up, and one whose playlist is refused is still up, and says why.
+## - the YouTube card's sign-in: ticking "Upload after export" with no client asks for its file (a cancel leaves the box clear);
+##   with one and no sign-in it opens the browser and a dialog at once; Google's dead-end block leaves the dialog waiting and
+##   naming it; "Open the page again" finishes the same sign-in and the box ticks; closing the dialog cancels; a refusal shows the
+##   hint and "Try again"; a newer sign-in replaces one still waiting; ↻ on the playlist signs in again for the wider scope. A note
+##   with no channel takes the one its tick signs in to; "+" signs in to another, which becomes the note's and clears the playlist;
+##   a toggle switches back; a sign-in meant for one channel that lands on another fails, saying so. A note opened on a renamed
+##   playlist shows and keeps YouTube's title with no ↻ (control: a sign-in that may only upload keeps the block's).
 
 const YouTube := preload("res://src/export/youtube.gd")
 const ROOT := "user://youtube_flow_check"
@@ -176,8 +151,8 @@ func _video(name: String, size: int) -> String:
 
 # --- the browser ---------------------------------------------------------------------------------
 
-## What the browser does with the consent URL: Google's page would sign in and send it back to the
-## redirect. A coroutine - it goes on knocking while the sign-in waits.
+## What the browser does with the consent URL: Google's page would sign in and send it back to the redirect. A coroutine: it
+## goes on knocking while the sign-in waits.
 func _browser(url: String) -> void:
 	_opens += 1
 	_saw = YouTube.query_of(url)
@@ -435,7 +410,7 @@ func _two_channels() -> bool:
 	res = await _yt.upload(_video("arc.mp4", CHUNK + 4), YouTube.video_body({"title": "To The Arc"}), "UC-arc", "")
 	_ok(not res.has("error") and res.get("channel") == "The Arc" and _fake.last().get("account") == "UC-arc",
 		"and one to the first as the first: the two sign-ins kept apart")
-	# ANOTHER CLIENT IMPORTED SINCE - one the stand-in does not know - costs neither channel its sign-in
+	# another client imported since (one the stand-in does not know) costs neither channel its sign-in
 	var base := "http://127.0.0.1:%d" % _fake.port
 	var stranger := _file("stranger.json", JSON.stringify({"installed": {"client_id": "stranger.apps.googleusercontent.com",
 		"project_id": "other-project", "auth_uri": base + "/auth", "token_uri": base + "/token", "client_secret": "other"}}))
@@ -459,7 +434,7 @@ func _two_channels() -> bool:
 	_ok(YouTube.client(YouTube.client_key("stranger.apps.googleusercontent.com")).has("error") and YouTube.channel_client("UC-ink") == ""
 		and YouTube.client_for("", "UC-ink").get("client_id") == _fake.client_id,
 		"that client comes off the list, and the channel's next sign-in goes through another")
-	# A SECRET CHANGED: what is kept under the id is not what Google refused
+	# a secret changed: what is kept under the id is not what Google refused
 	var kept_key := YouTube.client_key(_fake.client_id)
 	t = YouTube._token("UC-arc")
 	(t["client"] as Dictionary)["client_secret"] = "the-old-secret"
@@ -472,7 +447,7 @@ func _two_channels() -> bool:
 	return true
 
 
-## TWO CLIENTS, TWO PROJECTS, SIGNED IN AT ONCE: see the header.
+## Two clients, two projects, signed in at once: see the header.
 func _two_clients() -> bool:
 	for ch in YouTube.channels():
 		YouTube.forget_channel(String(ch["id"]))
@@ -505,7 +480,7 @@ func _two_clients() -> bool:
 	_ok(not res.has("error") and _fake.last().get("account") == "UC-ink", "an upload goes up as @the-ink (%s)" % res.get("error", ""))
 	res = await _yt.upload(_video("arc2.mp4", CHUNK + 4), YouTube.video_body({"title": "To The Arc"}), "UC-arc", "")
 	_ok(not res.has("error") and _fake.last().get("account") == "UC-arc", "and one as @the-arc, with no sign-in between (%s)" % res.get("error", ""))
-	# THE REPORT
+	# the report
 	YouTube._drop_sign_in("UC-ink")
 	_fake.account = "UC-ink"
 	got = await _yt.sign_in([YouTube.SCOPE], "", "UC-ink")
@@ -551,7 +526,7 @@ func _card_clients() -> bool:
 	card._on_sign()
 	_ok(await _until(func() -> bool: return ex._sign == "ok") and _saw.get("client_id") == first and YouTube.signed_in("UC-ink"),
 		"its Sign in goes through it, not the one imported since (%s)" % ex._sign_why)
-	# ANOTHER PICKED MOVES IT ONLY ON THE PERSON'S PRESS, AND ONLY ONCE IT LANDS
+	# another picked moves it only on the person's press, and only once it lands
 	pick.call(YouTube.client_key(second))
 	var opens := _opens
 	await _frames(5)
@@ -574,7 +549,7 @@ func _card_clients() -> bool:
 	card._seen = []
 	card._refresh_account()
 	_ok(card.capture()["client"] == "" and not card._sign.visible, "the pick is spent: the channel's own is the one shown")
-	# "+" GOES THROUGH THE PICK
+	# "+" goes through the pick
 	YouTube.forget_channel("UC-arc")
 	(_fake.testers[first] as Array).append("UC-arc")
 	pick.call(YouTube.client_key(first))
@@ -583,7 +558,7 @@ func _card_clients() -> bool:
 	_ok(await _until(func() -> bool: return card.capture()["channel"] == "UC-arc") and _saw.get("client_id") == first
 		and YouTube.channel_client("UC-arc") == YouTube.client_key(first) and card.capture()["client"] == "",
 		"+ signs in through the client picked, with no file asked for (%s)" % ex._sign_why)
-	# AN EXPORT'S CHECK NEVER OPENS A BROWSER FOR A CHANNEL STILL SIGNED IN
+	# an export's check never opens a browser for a channel still signed in
 	opens = _opens
 	ex._check_sign_in(Callable(), [YouTube.SCOPE], "UC-arc", "@the-arc", YouTube.client_key(second))
 	_ok(await _until(func() -> bool: return ex._sign == "ok") and _opens == opens and YouTube.channel_client("UC-arc") == YouTube.client_key(first),
@@ -678,7 +653,7 @@ func _card_sign_in() -> bool:
 	_ok(m.get("playlist") == "PL-2" and m.get("channel") == "UC-arc" and ex.scopes_for(m) == [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE],
 		"and the upload asks for it, with the scope it needs, on the note's channel")
 
-	# "+": ANOTHER CHANNEL, which becomes the note's
+	# "+": another channel, which becomes the note's
 	_fake.account = "UC-ink"
 	card._on_add()
 	_ok(await _until(func() -> bool: return card.capture()["channel"] == "UC-ink"), "+ signs in to another channel, and it becomes the note's")
@@ -691,9 +666,9 @@ func _card_sign_in() -> bool:
 		"a toggle each, the new one pressed")
 	(chips[0] as Button).pressed.emit()
 	_ok(card.capture()["channel"] == "UC-arc" and ex._sign == "ok", "a toggle switches back, with nothing to sign in to")
-	# A NOTE OPENED ON A PLAYLIST RENAMED SINCE IT WAS PICKED: the card loads the list itself, asking and
-	# saying nothing, and the block takes YouTube's title; the control, a channel whose sign-in may only
-	# upload, is asked for nothing and keeps the block's title
+	# a note opened on a playlist renamed since it was picked: the card loads the list itself, asking and saying nothing, and
+	# the block takes YouTube's title; control: a channel whose sign-in may only upload is asked for nothing and keeps the
+	# block's title
 	var said: Array = []
 	var listed0: int = _fake.listed
 	var opens0 := _opens
@@ -720,7 +695,7 @@ func _card_sign_in() -> bool:
 		"the control: a sign-in that may only upload is asked for nothing, and the block's title stays")
 	reopened.queue_free()
 	ink.queue_free()
-	# A SIGN-IN MEANT FOR ONE CHANNEL THAT LANDS ON ANOTHER
+	# A sign-in meant for one channel that lands on another
 	YouTube._drop_sign_in("UC-arc")
 	_fake.account = "UC-ink"
 	card._on_sign()

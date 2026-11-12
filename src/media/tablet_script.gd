@@ -3,67 +3,60 @@ class_name TabletScript
 
 ## TabletScript - a chapter written as somebody browsing on a tablet.
 ##
-## The `tablet` medium shows the reading as web pages on a tablet lying on a desk. The chapter
-## is ordinary markdown - what is on each page - plus a handful of own-line marks for what the
-## hand does between them:
+## The `tablet` medium shows the reading as web pages on a tablet lying on a desk. The chapter is
+## ordinary markdown (what is on each page) plus own-line marks for what the hand does between them:
 ##
-##     <!-- url: www.duckduckduck.mom -->    the page that follows lives at this address - and
-##                                             with nothing written under it, it is the REAL
-##                                             page there, shown as a capture ([PageCapture])
+##     <!-- url: www.duckduckduck.mom -->    the page that follows lives at this address; with
+##                                             nothing written under it, it is the real page there,
+##                                             shown as a capture ([PageCapture])
 ##     <!-- search: What is the 7th Realm? -->   type this into the page's search box; the
 ##                                             results page follows
 ##     <!-- new tab -->                        open a blank tab (the next url is typed into it)
 ##     <!-- back -->                           back to the page before, scrolled where it was left
 ##     <!-- landscape -->  <!-- portrait -->   turn the picture (the camera turns, not the tablet)
-##     <!-- skip -->                           shown, not read: the rest of this paragraph from
-##                                             the end of its sentence, or on its own line, the
-##                                             whole paragraph below it
+##     <!-- skip -->                           shown, not read: the rest of this paragraph from the
+##                                             end of its sentence, or on its own line, the whole
+##                                             paragraph below it
 ##     <!-- filler: 3 -->                      three placeholder stories (squiggles) here
 ##
-## HOW A PAGE IS REACHED IS INFERRED, never written. The first url opens the browser from the
-## home screen on a blank tab and is typed into it; a url linked from the page on screen (`[word](url)`) is scrolled to and tapped;
-## any other url is typed into the address bar. A page grows a search box when a search is made
-## on it. A heading with no text under it gets squiggles for a body, and every page is padded
-## with placeholder stories so there is something to scroll past.
+## How a page is reached is inferred. The first url opens the browser from the home screen on a blank
+## tab and is typed into it; a url linked from the page on screen (`[word](url)`) is scrolled to and
+## tapped; any other url is typed into the address bar. A page grows a search box when a search is made
+## on it. A heading with no text under it gets squiggles for a body, and every page is padded with
+## placeholder stories so there is something to scroll past.
 ##
-## NOTHING IS READ OFF THE SCREEN. No title is announced and text before the first url is not
-## spoken: the voice is the reader's, and the reader only reads what is on a page. Nor is a
-## page's own opening title (its first `#` heading) - shown, skipped, as readers do.
+## Nothing is read off the screen: no title is announced, text before the first url is not spoken, and
+## a page's own opening title (its first `#` heading) is shown and skipped.
 ##
-## A READER SKIMS. Wherever the reading passes over something it does not read - a skipped
-## tail, a skipped paragraph, a picture, placeholder stories - the hand gets a SKIM: a beat of
-## stillness, then a slow drag down the page, stopping on each picture to look at it, to the
-## next words read. The voice rests for it like any other action. A skip mark set mid-sentence
-## takes effect at the end of that sentence: a reader drops a paragraph, not half a clause.
+## A reader skims: wherever the reading passes over something it does not read (a skipped tail or
+## paragraph, a picture, placeholder stories) the hand gets a skim - a beat of stillness, then a slow
+## drag down the page, stopping on each picture, to the next words read. The voice rests for it like any
+## other action. A skip mark set mid-sentence takes effect at the end of that sentence.
 ##
-## ONE WALK, TWO READERS. [method parse] builds the pages and the words the medium draws, and in
-## the same pass the text the VOICE reads ([member speakable]): skipped text removed, link
-## targets dropped, and every run of actions replaced by one rest long enough to perform them
-## (`<!-- action-hold: S -->`, which the Generative panel splices like a hesitation). The rest
-## and the medium's schedule come from the same [method phases], so the voice waits exactly as
-## long as the hand is busy.
+## One walk, two readers: [method parse] builds the pages and words the medium draws and, in the same
+## pass, the text the voice reads ([member speakable]): skipped text removed, link targets dropped, and
+## every run of actions replaced by one rest long enough to perform them (`<!-- action-hold: S -->`,
+## which the Generative panel splices like a hesitation). The rest and the medium's schedule come from
+## the same [method phases].
 
 ## Own-line actions. Group 1 is the verb, 2 its argument.
 const MARKER := "^\\s*<!--\\s*(url|search|new tab|back|landscape|portrait|rotate|filler|redirect|notify)\\s*(?::\\s*(.*?))?\\s*-->\\s*$"
-## A REDIRECT: `<!-- redirect -->` before a page's url sends the tap (or the typed address) that
-## reaches it through a chain of addresses the reader never asked for - each in the address bar
-## for HOP_S, the page between them a blank "Redirecting…" - so the page that arrives is
-## something that HAPPENED to the reader ("nobody clicks on a link and immediately buys
-## something"). Bare, REDIRECT_HOPS hops made up from the page's own site (`auto_hops`); or
-## `<!-- redirect: a.example/x, b.example/y -->` names them.
+## A redirect: `<!-- redirect -->` before a page's url sends the tap (or typed address) through a chain
+## of addresses the reader never asked for, each in the address bar for HOP_S with a blank
+## "Redirecting…" page between. Bare, REDIRECT_HOPS hops made up from the page's own site
+## (`auto_hops`); or `<!-- redirect: a.example/x, b.example/y -->` names them.
 const HOP_S := 1.1
 ## Six: a scam's chain bounces through a good many - three was "too quick for my taste".
 const REDIRECT_HOPS := 6
-## A NOTIFICATION: `<!-- notify: Sender | Subject | Preview -->` drops a banner from the top of
-## the screen NOTE_IN after the next word read begins, holds it NOTE_HOLD and slides it away in
-## NOTE_SLIDE - an email arriving while the page is read. Not read aloud, and the voice does not
-## wait for it: a notification interrupts nobody's sentence.
+## A notification: `<!-- notify: Sender | Subject | Preview -->` drops a banner from the top of the
+## screen NOTE_IN after the next word read begins, holds it NOTE_HOLD and slides it away in NOTE_SLIDE.
+## Not read aloud, and the voice does not wait for it.
 const NOTE_IN := 1.0
 ## Six seconds: at 3.6 a banner was "barely long enough to even read it".
 const NOTE_HOLD := 6.0
 const NOTE_SLIDE := 0.35
-## The notification mark anywhere in a paragraph - mid-sentence included - and the token it
-## leaves in its place, so its banner is timed from the word read after it.
+## The notification mark anywhere in a paragraph, and the token it leaves in its place so its banner is
+## timed from the word read after it.
 const NOTIFY := "<!--\\s*notify\\s*:\\s*([\\s\\S]*?)\\s*-->"
 const NOTE_MARK := "\uE0F5"
 ## Inline or own-line: stop reading here.
@@ -71,44 +64,37 @@ const SKIP := "<!--\\s*skip\\s*-->"
 ## The rest the voice takes for a run of actions. Written by [method speakable] only.
 const HOLD := "<!--\\s*action-hold\\s*:\\s*([0-9]*\\.?[0-9]+)\\s*-->"
 const LINK := "\\[([^\\]]+)\\]\\(([^)\\s]+)\\)"
-## A list item: `- `, `* `, `+ ` or `1.` / `1)` at the start of a line. Each item is its own
-## block - set with a bullet, read as its own short paragraph - and a list ends on a pager.
+## A list item: `- `, `* `, `+ ` or `1.` / `1)` at the start of a line. Each item is its own block (set
+## with a bullet, read as its own short paragraph); a list ends on a pager.
 const LIST_ITEM := "^\\s*([-*+]|\\d+[.)])\\s+(.+)$"
-## A TABLE: lines that start with a pipe. With the `|---|---|` rule as its second line, the first
-## row is a HEADER - shown, not read, as a page's title is. The body is read row by row, cell by
-## cell, each cell a sentence of its own; a `<!-- skip -->` in a cell keeps the rest of that cell
-## (all of it, at its start) off the voice.
+## A table: lines that start with a pipe. With the `|---|---|` rule as its second line the first row is
+## a header, shown and not read. The body is read row by row, cell by cell, each cell a sentence; a
+## `<!-- skip -->` in a cell keeps the rest of that cell off the voice.
 const TABLE_ROW := "^\\s*\\|"
 const TABLE_RULE := "^\\s*\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?\\s*$"
 ## What makes a chapter a tablet chapter: nothing is rewritten for any other.
 const TABLET := "<!--\\s*(?:url|search)\\s*:"
 const SKIP_MARK := ""
 
-## Seconds per typed character, on average - a lazy typist on glass, one finger, unhurried
-## (a first cut at 0.13 read as "blazing fast"). Each letter is a little early or late
-## ([method char_times]), and a word break costs WORD_PAUSE more.
+## Seconds per typed character, on average (a lazy typist on glass). Each letter is a little early or
+## late ([method char_times]), and a word break costs WORD_PAUSE more.
 const CHAR := 0.21
 const WORD_PAUSE := 0.3
-## How long a reader lingers on a real page before moving on: it is not read aloud, so it is
-## looked at - as long as a skim past a picture and a screenful of text.
+## How long a reader lingers on a real page before moving on: it is not read aloud, so as long as a
+## skim past a picture and a screenful of text.
 const REAL_LINGER_WORDS := 120
-## Seconds a page that has just come up is looked at, still, before anything else happens on
-## it - "it almost immediately moves on... not enough time to digest what they're seeing", and
-## of a search: "the reading of results is IMMEDIATE... give viewers a chance to orient
-## themselves to the context switch". A page come back to is known: a shorter look.
+## Seconds a page that has just come up is looked at, still, before anything else happens on it, so the
+## viewer can orient to the context switch. A page come back to is known: a shorter look.
 const ARRIVE_LOOK := 3.0
 ## The pause before a new tab: deciding what to look for next.
 const THINK := 2.2
-## Seconds a link is looked at, still, between the scroll that brings it into view and the tap:
-## a tap the moment the page stops moving was "much too fast" - "it clicks that link IMMEDIATELY
-## after we see it". A link already on screen is looked at for as long.
+## Seconds a link is looked at, still, between the scroll that brings it into view and the tap. A link
+## already on screen is looked at for as long.
 const LINK_LOOK := 1.2
 const RETURN_LOOK := 1.5
-## Seconds a skim holds still on where it stopped before the reading there starts: the reader
-## finds the place first - landing on a headline and reading it at once was "too fast".
+## Seconds a skim holds still on where it stopped before the reading there starts.
 const SKIM_LOOK := 2.0
-## What a skim costs each picture it passes: a drag to it, then a real look at it - "we linger
-## for about 1 second... 3 is more appropriate".
+## What a skim costs each picture it passes: a drag to it, then a look at it.
 const PICTURE_DRAG := 1.4
 const PICTURE_HOLD := 3.0
 const PICTURE_DWELL := PICTURE_DRAG + PICTURE_HOLD
@@ -145,29 +131,27 @@ static func hold_of(comment: String) -> float:
 	return float(m.get_string(1)) if m != null else -1.0
 
 
-## THE TIMING OF EACH ACTION, in seconds from its start: every key is a moment the medium draws
-## something at, `end` is how long the voice rests for it. Scaled as a whole when a reading
-## leaves less room than this.
+## The timing of each action, in seconds from its start: every key is a moment the medium draws
+## something at, `end` is how long the voice rests for it. Scaled as a whole when a reading leaves less
+## room than this.
 ##
-## EVERY ARRIVAL ENDS ON A LOOK: an action that brings up a page (open, link, type, search) runs
-## on for [constant ARRIVE_LOOK] after the page shows, so the new page sits still - unread,
-## unscrolled - while the viewer takes in the context switch. Back, to a page already seen,
-## looks for [constant RETURN_LOOK].
+## Every arrival ends on a look: an action that brings up a page (open, link, type, search) runs on for
+## [constant ARRIVE_LOOK] after the page shows, so the new page sits still while the viewer takes it in.
+## Back, to a page already seen, looks for [constant RETURN_LOOK].
 ##
-## A link or a typed address sent through [param hops] redirects shows its page HOP_S later per
-## hop: the hops run from `hops0`.
+## A link or typed address sent through [param hops] redirects shows its page HOP_S later per hop: the
+## hops run from `hops0`.
 static func phases(kind: String, text := "", n := 0, m := 0, hops := 0) -> Dictionary:
 	var hop := HOP_S * float(hops)
 	match kind:
 		"skim":
-			# past [param n] words nobody reads and [param m] pictures somebody looks at: still a
-			# moment, then a slow drag, a pause on each picture, a look at where it stopped, and
-			# on to the next words read
+			# past [param n] words nobody reads and [param m] pictures somebody looks at: a moment, then
+			# a slow drag, a pause on each picture, a look at where it stopped, and on to the next words
 			var e := clampf(1.8 + 0.025 * float(n), 2.0, 4.5) + PICTURE_DWELL * float(m)
 			return {"rest": 0.8, "scroll0": 0.8, "scroll1": e - 0.35, "end": e - 0.35 + SKIM_LOOK}
 		"wake":
-			# a moment dark, the screen comes up, a beat on the home screen - which the intro
-			# stretches: the medium starts the wake at once and spends any slack on the home screen
+			# a moment dark, the screen comes up, a beat on the home screen (the medium starts the wake
+			# at once and spends any slack on the home screen)
 			return {"on0": 1.0, "on1": 1.8, "end": 3.2}
 		"open":
 			return {"tap": 0.3, "open0": 0.55, "open1": 1.05, "load0": 1.05, "show": 1.6,
@@ -186,23 +170,21 @@ static func phases(kind: String, text := "", n := 0, m := 0, hops := 0) -> Dicti
 				"go": go, "kb0": go + 0.45, "load0": go + 0.1, "hops0": go + 0.5, "show": go + 1.0 + hop,
 				"load1": go + 1.4 + hop, "end": go + 1.0 + hop + ARRIVE_LOOK}
 		"tab":
-			# A NEW TAB IS A DECISION: the hand rests on the page it is leaving while the reader
-			# thinks about where to go next, then reaches for the + - "the jump to a new tab and a
-			# search is immediate and jarring"
+			# A new tab is a decision: the hand rests on the page it is leaving while the reader thinks,
+			# then reaches for the +
 			return {"think": THINK, "tap": THINK + 0.6, "add": THINK + 1.05, "end": THINK + 2.2}
 		"back":
 			# the page was seen already: it comes straight back, no load to wait for
 			return {"tap": 0.6, "show": 1.0, "end": 1.0 + RETURN_LOOK}
 		"rotate":
-			# the camera turns with the screen still showing the old layout ON it, then the new
-			# layout dissolves in over it - the content never leaves the glass
+			# the camera turns with the old layout still on the screen, then the new layout dissolves in
 			return {"cam1": 1.5, "fade0": 1.3, "fade1": 1.9, "end": 2.2}
 	return {"end": 0.0}
 
 
-## When each letter of [param text] is typed, from the first: `n + 1` offsets, the last being
-## when typing ends. Uneven on purpose, and the same every time for the same text, because the
-## voice's rest and the screen are both sized from it.
+## When each letter of [param text] is typed, from the first: `n + 1` offsets, the last being when typing
+## ends. Uneven on purpose and the same every time for the same text, since the voice's rest and the
+## screen are both sized from it.
 static func char_times(text: String) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	var t := 0.0
@@ -221,23 +203,16 @@ static func norm(s: String) -> String:
 	return _rx("[^\\p{L}\\p{N}]").sub(s.to_lower(), "", true)
 
 
-## Where a reading that STARTS MID-WAY joins [param norms] (a medium's own words, normalized):
-## the index at which [param start] (the first few words read, normalized) lines up BEST, one
-## mismatch allowed - the voice and the page spell a number or a dash differently. -1 for none.
-## The best, not the first: with a mismatch allowed, an earlier run that differs in one word
-## ("sentence one five" for "sentence two five") would otherwise win, and the screen would
-## restart somewhere other than the voice.
+## Where a reading that starts mid-way joins [param norms] (a medium's own words, normalized): the index
+## at which [param start] (the first few words read, normalized) lines up best, one mismatch allowed (the
+## voice and the page spell a number or a dash differently). -1 for none. The best, not the first: an
+## earlier run that differs in one word would otherwise win.
 ##
-## WORDS WITH NO LETTERS ARE STEPPED OVER: the comma after a link is a word of its own on the
-## page, with an empty norm, and the voice's start words never have one - lined up position by
-## position, "Dionysus, the god" missed by one, the start was never found, and the screen
-## restarted from the top of the chapter and raced through it ("permanently stuck... resetting
-## to the beginning... at extremely fast speed").
+## Words with no letters are stepped over: the comma after a link is a word of its own on the page with
+## an empty norm, and the voice's start words never have one.
 ##
-## [param near], when known, is about where the run should be (a word index): among EQUALLY good
-## matches the nearest wins. A reading that repeats its openings ("Oh, wow. Okay, so...") has the
-## same six start words at several places, and the first of them is the wrong one for a scrub to
-## the third.
+## [param near], when known, is about where the run should be (a word index): among equally good matches
+## the nearest wins (a reading that repeats its openings has the same start words at several places).
 static func find_run(norms: PackedStringArray, start: PackedStringArray, near := -1) -> int:
 	var at := PackedInt32Array()
 	for i in norms.size():
@@ -262,10 +237,9 @@ static func find_run(norms: PackedStringArray, start: PackedStringArray, near :=
 	return best
 
 
-## The hops a bare `<!-- redirect -->` sends a page through, made up from its own site, the
-## way a scam's funnel runs: the site's own tracker, an ad network's click, a partner's
-## redirect, the partner's "deal", a payment gateway, and the partner's checkout - automatic,
-## as its query says.
+## The hops a bare `<!-- redirect -->` sends a page through, made up from its own site as a scam's
+## funnel runs: the site's own tracker, an ad network's click, a partner's redirect, the partner's
+## "deal", a payment gateway, and the partner's checkout.
 static func auto_hops(url: String) -> Array:
 	var host := host_of(url)
 	var name := host.get_slice(".", 0)
@@ -278,8 +252,8 @@ static func auto_hops(url: String) -> Array:
 		"secure.%s-partners.click/checkout?auto=1" % name]
 
 
-## How a redirect chain's time is split between its hops: unevenly, as real redirects are - one
-## near instant, the next hanging - and summing to HOP_S a hop. Fixed by the addresses.
+## How a redirect chain's time is split between its hops: unevenly, as real redirects are, summing to
+## HOP_S a hop. Fixed by the addresses.
 static func hop_spans(hops: Array) -> PackedFloat32Array:
 	var w := PackedFloat32Array()
 	var total := 0.0
@@ -292,9 +266,8 @@ static func hop_spans(hops: Array) -> PackedFloat32Array:
 	return w
 
 
-## Whether the page of hop [param url] shows anything at all. Most show nothing - the page goes
-## white and stays white while the addresses change over it: "real-world redirects... often
-## display nothing at all".
+## Whether the page of hop [param url] shows anything at all. Most show nothing: the page goes white and
+## stays white while the addresses change over it.
 static func hop_shows(url: String) -> bool:
 	return _unit(url + "|shows") < 0.4
 
@@ -318,7 +291,7 @@ static func host_of(url: String) -> String:
 	return url_key(url).get_slice("/", 0).get_slice("?", 0)
 
 
-## THE CHAPTER, walked once:
+## The chapter, walked once:
 ##
 ##     pages:   [{url, host, blocks, links: {url_key: word}, search_box, query, results}]
 ##     words:   [{text, norm, link, emph, spoken, page, block}]   page -1 = not on screen
@@ -334,7 +307,7 @@ static func parse(source: String) -> Dictionary:
 		"notes": w.notes, "speakable": "\n".join(w.say)}
 
 
-## The REAL pages of [param body], as picture rows for the Illustrations panel:
+## The real pages of [param body], as picture rows for the Illustrations panel:
 ## `[{key, prompt, url, placement: "page"}]` - captured rather than painted.
 static func snapshots(body: String) -> Array:
 	if not is_tablet(body):
@@ -523,14 +496,12 @@ class _Walk:
 		if _cur < 0:
 			return
 		if _returned:
-			# the page came back as it was left; writing more onto it would change a page the
-			# reader has already seen, from its first visit on
+			# the page came back as it was left; writing more onto it would change a page already seen
 			push_warning("tablet: text after <!-- back --> belongs to no page - follow it with a url, a search or another back")
 			return
 		var page: Dictionary = pages[_cur]
 		var bi := (page["blocks"] as Array).size()
-		# A PAGE'S OPENING TITLE IS SHOWN, NOT READ - a site's name, an article's title: a reader
-		# skips straight to what they came for ("nobody really reads titles")
+		# A page's opening title is shown, not read (a site's name, an article's title).
 		if bi == 0 and String(b["kind"]) == "heading" and int(b["level"]) == 1:
 			lead_skip = true
 		match String(b["kind"]):
@@ -619,8 +590,7 @@ class _Walk:
 			at = m.get_end()
 		segs.append([text.substr(at), ""])
 		var emph := 0
-		# a word written hard against the one before - a period after a link - is GLUED to it:
-		# set with no space between, the way it was written
+		# a word written hard against the one before (a period after a link) is glued to it
 		var tight := false
 		for sg in segs:
 			var link := String(sg[1])
@@ -746,8 +716,8 @@ class _Walk:
 		actions.append(a)
 		_hold += float(a["dur"])
 
-	## Leaving the page on screen. A REAL page - nothing written for it - is not read, so it is
-	## LOOKED AT before the hand moves on: a slow drag down it and a pause.
+	## Leaving the page on screen. A real page (nothing written for it) is not read, so it is looked at
+	## before the hand moves on: a slow drag down it and a pause.
 	func _leave() -> void:
 		if _cur < 0 or _returned:
 			return
@@ -803,8 +773,8 @@ class _Walk:
 				var from := _cur
 				var p := _new_page(arg)
 				var hops := _take_redirect(arg)
-				# A LINK THAT REDIRECTS OPENS A TAB OF ITS OWN, as such links mostly do: the page it
-				# was tapped on stays in its tab, and the new tab has no history to go back to
+				# A link that redirects opens a tab of its own: the page it was tapped on stays in its
+				# tab and the new tab has no history to go back to
 				var links: Dictionary = (pages[from] as Dictionary)["links"] if from >= 0 else {}
 				var k := TabletScript.url_key(arg)
 				var by_link := _browser and not _fresh_tab and from >= 0 and links.has(k)
@@ -816,10 +786,8 @@ class _Walk:
 					(_hist[_tab] as Array).append(from)
 				_returned = false
 				if not _browser:
-					# THE BROWSER OPENS ON A BLANK TAB, and the first address is typed into it:
-					# opening straight onto the first page was too quick to follow ("give the
-					# user a few more seconds to get oriented"). The open ends on the arrival
-					# look, so the empty tab is seen before the typing starts.
+					# The browser opens on a blank tab and the first address is typed into it; the
+					# open ends on the arrival look, so the empty tab is seen before the typing starts.
 					_act({"kind": "open", "page": -1, "from": -1})
 					_browser = true
 					_act({"kind": "type", "text": arg, "page": p, "from": -1, "hops": hops})
@@ -842,11 +810,9 @@ class _Walk:
 				(_hist[_tab] as Array).append(from)
 				_returned = false
 				var fp: Dictionary = pages[from]
-				# WHERE THE QUERY IS TYPED. A search engine's page (a box and little else, or its
-				# results) takes it in its own box. Any other page - an article, say - does what a
-				# browser does: the query goes in the ADDRESS BAR and the results come from the
-				# engine last used. Giving an article a box of its own put the box far above
-				# the place being read, and the typing went in off screen.
+				# Where the query is typed: a search engine's page (a box and little else, or its
+				# results) takes it in its own box; any other page does what a browser does: the query
+				# goes in the address bar and the results come from the engine last used.
 				var engine := bool(fp["results"]) or bool(fp["search_box"]) or _written_blocks(fp) <= 3
 				var host := String(fp["host"])
 				if engine:
@@ -879,8 +845,7 @@ class _Walk:
 				if behind.is_empty() or _cur < 0:
 					push_warning("tablet: <!-- back --> with nothing to go back to - ignored")
 					return
-				# A PAGE LEFT UNREAD IS GLANCED AT FIRST: a reader who opens a page and goes
-				# straight back has still looked down it
+				# A page left unread is glanced at first: a reader who goes straight back has still looked.
 				_leave()
 				var page: Dictionary = pages[_cur]
 				if not bool(page.get("lingered", false)) and (not bool(page.get("read", false))
@@ -903,8 +868,8 @@ class _Walk:
 				if _cur >= 0:
 					_block({"kind": "filler", "n": maxi(1, int(arg)) if not arg.is_empty() else 1})
 
-	## A heading with nothing written under it before the next heading of its rank or above is a
-	## STUB: the page draws squiggles for its body.
+	## A heading with nothing written under it before the next heading of its rank or above is a stub:
+	## the page draws squiggles for its body.
 	func _finish_page(p: Dictionary) -> void:
 		var blocks: Array = p["blocks"]
 		if blocks.is_empty() and not bool(p["results"]):

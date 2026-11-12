@@ -4,14 +4,12 @@ class_name PipelineRow
 ## PipelineRow - one thing made for a note, as one line of its Pipeline card ([PipelineSection], [PipelineCard];
 ## next/pipeline.md): its name, where it stands, what it says, and what its ⟳ does.
 ##
-## ONE ROW, ONE ACTION (the user, 2026-11-02: "every distinct regeneration action should just be a part of the pipeline
-## list ... when we click the regenerate button - we will KNOW that it's going to regenerate that one thing, without a
-## maybe second list appearing"). There is no menu to fill in: a thing with two ways to be made again is two rows.
+## One row, one action: a thing with two ways to be made again is two rows, so there is no menu to fill in.
 ##
-## WHAT A ⟳ THROWS AWAY IS SAID BEFORE IT IS PRESSED ([member asks]): the row goes amber, its tooltip says so, and it asks
-## once, a yes or a no. Empty when it throws away nothing but what it remakes, and then it starts at once.
+## What a ⟳ throws away is said before it is pressed ([member asks]): the row goes amber, its tooltip says so, and it
+## asks once, a yes or a no. Empty when it throws away nothing but what it remakes, and then it starts at once.
 
-## WHERE A ROW STANDS, whoever made it.
+## Where a row stands, whoever made it.
 const STATES := {
 	"made": {"label": "Made", "glyph": "✓", "blurb": "Made, from what it is made from as that stands."},
 	"running": {"label": "Being made", "glyph": "◌", "blurb": "Its agent or tool is at work."},
@@ -26,7 +24,7 @@ const STATES := {
 var key := ""
 ## What it is called.
 var label := ""
-## THE GROUP IT STANDS IN (a card's rows, the table's), "" for none. Rows of one group stay together under its name.
+## The group it stands in (a card's rows, the table's), "" for none. Rows of one group stay together under its name.
 var group := ""
 ## A key of [constant STATES].
 var state := "missing"
@@ -36,22 +34,22 @@ var said := ""
 var wraps := false
 ## What its name's and its words' tooltips say, "" for what it says.
 var tip := ""
-## WHAT ITS ⟳ DOES, in words: its tooltip. "" for a row with no ⟳ - nothing of it can be made again by itself.
+## What its ⟳ does, in words: its tooltip. "" for a row with no ⟳ (nothing of it can be made again by itself).
 var again := ""
 ## Whether its ⟳ is offered now.
 var open := true
-## WHAT ITS ⟳ THROWS AWAY besides what it remakes, a sentence: "" starts at once, otherwise it asks first.
+## What its ⟳ throws away besides what it remakes, a sentence: "" starts at once, otherwise it asks first.
 var asks := ""
 ## Its ⟳.
 var redo := Callable()
-## WHETHER IT IS KEPT ([member lockable] rows; next/editing.md step 1): locked, Generate passes it by, stale or not - its ⟳ still
-## makes it again, throwing nothing away (TableEpisode.kept). A part a hand changed is kept until it is unlocked.
+## Whether it is kept ([member lockable] rows; next/editing.md step 1): locked, Generate passes it by, stale or not;
+## its ⟳ still makes it again, throwing nothing away (TableEpisode.kept). A part a hand changed is kept until unlocked.
 var lockable := false
 var locked := false
 ## ...and how it is locked or unlocked: (on: bool) -> void, true locked.
 var lock := Callable()
-## WHAT ITS ✎ DOES, "" for a row with none (next/editing.md step 4): what it made opened to be changed by hand - its words, its
-## data, a picture of one's own - and written back as a hand's version, kept. A person is one maker, an agent another.
+## What its ✎ does, "" for a row with none (next/editing.md step 4): what it made opened to be changed by hand (its
+## words, its data, a picture of one's own) and written back as a hand's version, kept.
 var edit_tip := ""
 ## Its ✎.
 var edit := Callable()

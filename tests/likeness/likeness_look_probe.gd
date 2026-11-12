@@ -7,7 +7,7 @@ extends SceneTree
 ##       --actor <an actor's folder> --set <set id> --out <a folder> [--still K] [--seed N] [--take DIR]
 ##       [--fps 30] [--width 960] [--renderer gaussian]
 ##
-## WHAT IT WRITES into --out:
+## What it writes into --out:
 ##   identity.png   the still drawn through its own mesh with nothing moved and no library, beside the
 ##                  still itself and their difference times eight: the mesh must be invisible
 ##   sounds.png     the lower face with each sound class's first prototype drawn in, the still's own first
@@ -88,7 +88,7 @@ func _run() -> void:
 	print("identity: mean difference %.5f (of 1)" % (sum / float(sz.x * sz.y / 4)))
 	var crop := _crop_of(face.still_face)
 	_save_row([real.get_region(crop), same.get_region(crop), diff.get_region(crop)], "identity.png", 1.0)
-	# EACH SOUND'S FIRST PROTOTYPE, the still's own first
+	# Each sound's first prototype, the still's own first
 	var tiles: Array = []
 	var lips := _lips_of(face.still_face)
 	tiles.append(await _pose_mouth(m, vp, [[-1, 1.0]], lips))
@@ -144,7 +144,7 @@ func _pose_mouth(m: LikenessMedium, vp: SubViewport, mix: Array, crop: Rect2i) -
 	return (await _grab(vp)).get_region(crop)
 
 
-## THE MEDIUM OVER A TAKE: every frame at [member _fps], the head, the eyes and the mouth its plan says.
+## The medium over a take: every frame at [member _fps], the head, the eyes and the mouth its plan says.
 func _play_take(sz: Vector2i) -> void:
 	var path := _take
 	if DirAccess.dir_exists_absolute(_take):

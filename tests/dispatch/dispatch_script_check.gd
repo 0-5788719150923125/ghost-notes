@@ -1,32 +1,29 @@
 extends SceneTree
 
-## Gate for THE DISPATCH DESK'S SCRIPT ([DispatchScript], next/dispatch.md), on a note with every mark
-## (tests/fixtures/dispatch_note.md):
+## Gate for the dispatch desk's script ([DispatchScript], next/dispatch.md), on a note with every mark
+## (tests/fixtures/dispatch_note.md). It holds:
 ##
-## - THE PHONES are the `desk:` block's labels, the room's voice the first cued;
-## - THE CALLS: one dialed, the one in hand laid down open when another is called, one lying open picked back up, a ringing
-##   one answered, every one hung up - nothing left open;
-## - THE VOICES THROUGH A PHONE: a turn of a voice whose phone is in hand is heard through it, one whose phone lies on the
-##   desk from the desk, one with none of its own open (the cashier) through somebody else's;
-## - WHAT IS SAID: typed words said, shown ones and texts never - a block in capitals in sentence case, straight through
-##   (the control: one with small letters keeps its capitals); where each sentence ends (never at a comma, the control); no
-##   fence and no desk mark reaches the voice, and what the voice is planned to say is the desk's spoken words, word for
-##   word ([ReadingPlan], the words the medium matches);
-## - THE RESTS: every action that takes time leaves the voice a rest, and two pings a hesitation apart keep it between them;
-##   the voice opens on a breath of the desk at rest; a walk is a moving and a ping, a beat each, under the voice (a ping
-##   that gives seconds is told they are not read; THE CONTROL: a comma inside a place is kept); a session's commands are
-##   typed and answered in order, the voice waiting till its last answer is printed, nothing of it said; a reply is the room's
-##   next words typed into the phone that texted, still said (THE CONTROL: with no text before it, a warning);
-## - THE TERMINAL: a typed block's every spoken word has its characters, a strike strikes the block before it, a print
-##   prints what was typed;
-## - REDACTED WORDS: in a shown block and a session they are on the screen as themselves, moved into the private plane
-##   (never as written, never the mark), each character one, and drawn back with their columns; a session types them a key
-##   each; a redacted run wraps whole (THE CONTROL: the same words plain wrap between them); in a typed block they are
-##   warned of and neither shown nor said;
-## - THE GAIN, THE BELL, THE LAMP: the knob turned from three to its number and back, the voice waiting while it turns and a
-##   beat; the bell rung before the block after it, a half beat; the lamp switched off - none of them said (THE CONTROLS: a
-##   gain with no number and a lamp neither on nor off are each said, and do nothing);
-## - THE CONTROLS: a call to a phone not on the desk, a phone voice with no phone open, and a call left open are each said.
+## - phones are the `desk:` block's labels, the room's voice the first cued;
+## - calls: one dialed, the one in hand laid down open when another is called, one lying open picked back up, a ringing one
+##   answered, every one hung up;
+## - voices through a phone: a voice whose phone is in hand is heard through it, one whose phone lies on the desk from the
+##   desk, one with none open through somebody else's;
+## - what is said: typed words are said, shown ones and texts never; a block in capitals is said in sentence case (control:
+##   small letters keep their capitals); sentences end at `.`, `!`, `?`, never at a comma; no fence or desk mark reaches the
+##   voice, and the planned words are the desk's spoken words ([ReadingPlan]);
+## - rests: every action that takes time leaves the voice a rest, two pings a hesitation apart keep it between them, the voice
+##   opens on a breath; a walk is a moving and a ping, a beat each (control: a comma inside a place is kept); a session's
+##   commands are typed and answered in order and not said; a reply is the next words typed into the phone that texted, still
+##   said (control: with no text before it, a warning);
+## - terminal: a typed block's every spoken word has its characters, a strike strikes the block before it, a print prints what
+##   was typed;
+## - redacted words: in a shown block and a session they are on screen as themselves, in the private plane, each character
+##   one, drawn back with their columns; a session types them a key each; a run wraps whole (control: plain words wrap
+##   between them); in a typed block they are warned of and neither shown nor said;
+## - gain, bell, lamp: the knob turns from three to its number and back with the voice waiting; the bell rings a half beat
+##   before the block after it; the lamp is switched off; none are said (controls: a gain with no number and a lamp neither on
+##   nor off are said and do nothing);
+## - controls: a call to a phone not on the desk, a phone voice with no phone open, and a call left open are each said.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_script_check.gd
 
@@ -44,7 +41,7 @@ func _init() -> void:
 	_ok(Array(d["phones"]) == ["AISLE", "VAN", "COUGH"], "the phones are the desk block's (%s)" % str(d["phones"]))
 	_ok(String(d["room"]) == "Control", "the room's voice is the first cued (%s)" % String(d["room"]))
 	_ok((d["warnings"] as PackedStringArray).is_empty(), "a sound note has nothing to say about it (%s)" % str(d["warnings"]))
-	# THE CALLS
+	# calls
 	var calls: Array = []
 	for a in actions:
 		if String((a as Dictionary)["kind"]) == "call":
@@ -54,7 +51,7 @@ func _init() -> void:
 			calls.append(moves)
 	_ok(calls == [["AISLE:dial"], ["AISLE:lay_down", "VAN:dial"], ["VAN:lay_down", "AISLE:pick_up"], ["COUGH:answer"], ["VAN:pick_up"]],
 		"the calls dial, lay down, pick back up and answer (%s)" % str(calls))
-	# THE VOICES THROUGH A PHONE, in the order the turns come
+	# voices through a phone, in the order the turns come
 	var heard: Array = []
 	var who := ""
 	for line in sp.split("\n"):
@@ -70,7 +67,7 @@ func _init() -> void:
 	var phone_turns: Array = heard.filter(func(x: String) -> bool: return not x.begins_with("Control"))
 	_ok(phone_turns == ["Aisle:phone", "Van:phone", "Aisle:phone", "Cashier:far", "Van:desk", "Cough:phone", "Van:desk"],
 		"every voice but the room's is heard through the right phone (%s)" % str(phone_turns))
-	# WHAT IS SAID
+	# what is said
 	_ok(spoken.has("grocery") and spoken.has("watcher") and spoken.has("what"), "a typed block is said")
 	_ok(sp.contains("What do we do with it") and not sp.contains("WHAT"),
 		"a typed block in capitals is said in sentence case and straight through, its marks never reaching the voice")
@@ -78,8 +75,8 @@ func _init() -> void:
 	var kept := DispatchScript.said_of("22:51. Target left, IT watching")
 	_ok(cased == "[A] Prevent this. [B] Contain it. [D]" and kept == "22:51. Target left, IT watching",
 		"a block in capitals said in sentence case, its named letters kept (the control: a block with small letters keeps its capitals: %s / %s)" % [cased, kept])
-	# WHERE A SENTENCE ENDS, though the spoken words have lost their punctuation (a ping holds the radar to one): at `.`, `!`
-	# or `?` (a quote after it kept) and at a paragraph's end - never at a comma (THE CONTROL)
+	# where a sentence ends, though the spoken words have lost their punctuation (a ping holds the radar to one): at `.`, `!` or `?`
+	# (a quote after it kept) and at a paragraph's end, never at a comma (control)
 	var ends := DispatchScript.sentence_ends({"spoken": PackedStringArray(["one", "two", "three", "four", "five", "six", "seven"]),
 		"speakable": "One two. Three, four\n\nFive \"six?\" <!-- action-hold: 1.2 --> Seven"})
 	_ok(Array(ends) == [0, 1, 0, 1, 0, 1, 1], "a sentence ends at its stop or its paragraph's end, never at a comma (%s)" % [Array(ends)])
@@ -102,7 +99,7 @@ func _init() -> void:
 			break
 	_ok(same, "the voice is planned to say the desk's spoken words, word for word (%d against %d, first apart at %d: %s / %s)"
 		% [said.size(), spoken.size(), first_off, said[first_off] if first_off >= 0 else "", spoken[first_off] if first_off >= 0 else ""])
-	# THE RESTS
+	# rests
 	var holds := RegEx.create_from_string("<!--\\s*action-hold\\s*:").search_all(sp).size()
 	var timed := actions.filter(func(a: Dictionary) -> bool: return float(a["rest"]) > 0.0).size()
 	var passes := actions.filter(func(a: Dictionary) -> bool: return bool(a.get("passing", false))).size()
@@ -127,7 +124,7 @@ func _init() -> void:
 	var seconds := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- ping: the stairwell, 18 -->\n\nOh.\n")
 	_ok(String((seconds["actions"] as Array)[0]["place"]) == "the stairwell" and str(seconds["warnings"]).contains("moving"),
 		"a ping that gives seconds says they are not read, and where to mark the setting off instead (%s)" % str(seconds["warnings"]))
-	# A REPLY: the room's next words typed into the phone that texted, and still said
+	# a reply: the room's next words typed into the phone that texted, and still said
 	var reply: Dictionary = {}
 	for a in actions:
 		if String((a as Dictionary)["kind"]) == "reply":
@@ -137,7 +134,7 @@ func _init() -> void:
 	var unanswered := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- reply -->\n\nHello.\n")
 	_ok(str(unanswered["warnings"]).contains("reply") and (unanswered["actions"] as Array).is_empty(),
 		"the control: a reply with no text before it is warned of, and types nothing")
-	# A SESSION AT THE TERMINAL
+	# a session at the terminal
 	var session: Dictionary = {}
 	for a in actions:
 		if String((a as Dictionary)["kind"]) == "session":
@@ -156,7 +153,7 @@ func _init() -> void:
 	_ok(String(p1["kind"]) == "ping" and String(p2["kind"]) == "ping" and int(p1["after"]) == 0 and int(p2["after"]) == 0
 		and is_equal_approx(float(p2["fwd"]) - float(p1["fwd"]), float(p1["rest"]) + DispatchScript.REST_PAD + 1.5)
 		and float(p1["back"]) > float(p2["back"]), "two pings a hesitation apart keep it between them (%.2f, %.2f)" % [float(p1["fwd"]), float(p2["fwd"])])
-	# THE TERMINAL
+	# terminal
 	var typed: Dictionary = {}
 	var printed: Dictionary = {}
 	var struck: Dictionary = {}
@@ -177,7 +174,7 @@ func _init() -> void:
 	_ok(Array(printed["lines"]).has("23:21. Grocery store. Watcher in place."), "a print prints what was typed (%s)" % str(printed.get("lines")))
 	var shown := DispatchScript.shown_of("WHAT <!-- hesitation --> DO WE <!-- hesitation --> DO")
 	_ok(shown == "WHAT DO WE DO", "a typed block's marks leave no gap on the screen (%s)" % shown)
-	# REDACTED WORDS
+	# redacted words
 	var screen_a: Dictionary = {}
 	for a in actions:
 		if String((a as Dictionary)["kind"]) == "screen":
@@ -202,7 +199,7 @@ func _init() -> void:
 	var said_hid := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```type\nLOGGED <!-- redact: JANE DOE -->.\n```\n")
 	_ok(String(said_hid["warnings"][0]).begins_with("redact:") and not (said_hid["spoken"] as PackedStringArray).has("jane")
 		and not String(said_hid["actions"][0]["text"]).contains("JANE"), "a typed block's redacted words are warned of, never shown or said")
-	# THE GAIN, THE BELL, THE LAMP
+	# gain, bell, lamp
 	var gains: Array = actions.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "gain")
 	var turn := DispatchScript.GAIN_REACH + DispatchScript.GAIN_STEP * 6.0 + DispatchScript.GAIN_BEAT
 	_ok(gains.size() == 2 and int(gains[0]["from"]) == 3 and int(gains[0]["to"]) == 9 and int(gains[1]["from"]) == 9 and int(gains[1]["to"]) == 3
@@ -222,12 +219,12 @@ func _init() -> void:
 	var odd := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- gain: loud -->\n\n<!-- lamp: dim -->\n\nThere.\n")
 	_ok((odd["actions"] as Array).is_empty() and str(odd["warnings"]).contains("gain: loud") and str(odd["warnings"]).contains("lamp: dim"),
 		"the controls: a gain with no number and a lamp neither on nor off are each said, and do nothing (%s)" % str(odd["warnings"]))
-	# PICTURES
+	# pictures
 	var full: Array = d["spans"]
 	_ok(full.size() == 1 and int(full[0]["to"]) > int(full[0]["from"]), "a picture over the whole screen spans its passage")
 	_ok(Manuscript.images(DispatchScript.pictures_only(body)).size() == 2, "every picture is handed to the painter")
 	_ok(DispatchScript.rehearsal(d).size() == spoken.size(), "a rehearsal times every spoken word")
-	# THE CONTROLS
+	# controls
 	var stray := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- call: NOBODY -->\n\n<!-- speaker: Red -->\n\nHello.\n")
 	_ok(not (stray["warnings"] as PackedStringArray).is_empty() and Array(stray["phones"]).has("NOBODY"),
 		"the control: a call to a phone not on the desk, left open, is said")

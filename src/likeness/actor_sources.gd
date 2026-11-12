@@ -1,23 +1,20 @@
 extends RefCounted
 class_name ActorSources
 
-## ActorSources - where an actor's videos come from (next/likeness.md, "Sources"): a FOLDER, read in
-## place and never copied or written, a FILE picked by itself (read in place too), or a LINK - a video, a
-## playlist or a channel - listed first and then fetched one video at a time into the actor's `footage/`
-## (a voice alone's as its sound: [method ActorFolder.sound_only]). A link added CAPTIONS ONLY fetches no
-## video: each of its captions files is matched to a folder video by title, so a folder of their videos
-## downloaded long ago gets the word times its captions carry without the gigabytes fetched again.
+## ActorSources - where an actor's videos come from (next/likeness.md, "Sources"): a folder, read in place and never
+## copied or written; a file picked by itself (read in place too); or a link - a video, a playlist or a channel - listed
+## first and then fetched one video at a time into the actor's `footage/` (a voice alone's as its sound: [method
+## ActorFolder.sound_only]). A link added captions only fetches no video: each of its captions files is matched to a
+## folder video by title, so footage downloaded long ago gets the word times its captions carry.
 ##
 ## Pure where it can be (a folder's videos, a title made comparable, captions read into words, the
 ## arguments yt-dlp is given), so a gate reads it without a process; [ActorBuilder] runs what it says.
 
-## THE FORMAT FETCHED: up to 1080p, H.264 and AAC where the site has them (what Eidolon fetched), else
-## the best up to 1080p.
+## The format fetched: up to 1080p, H.264 and AAC where the site has them, else the best up to 1080p.
 const FORMAT := "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/b[height<=1080]"
-## A VOICE ALONE'S SOUND: the best AAC the site has (on YouTube, its 128 kbps .m4a), else its best sound.
+## A voice alone's sound: the best AAC the site has (on YouTube, its 128 kbps .m4a), else its best sound.
 const SOUND_FORMAT := "ba[acodec^=mp4a]/ba"
-## AUTOMATIC CAPTIONS CARRY A TIME FOR EVERY WORD (json3's `tOffsetMs`): the words a viseme is
-## learned from.
+## Automatic captions carry a time for every word (json3's `tOffsetMs`): the words a viseme is learned from.
 const SUB_LANGS := "en.*"
 ## The captions tracks taken, in order of preference: the original automatic ones first.
 const SUB_PREFER := ["en-orig", "en", "en-US", "en-GB"]
@@ -25,7 +22,7 @@ const SUB_PREFER := ["en-orig", "en", "en-US", "en-GB"]
 const WORD_MOST := 0.6
 
 
-## THE VIDEOS IN [param folder], not below it - the files of [param exts] (a voice alone's are sound files too,
+## The videos in [param folder], not below it - the files of [param exts] (a voice alone's are sound files too,
 ## [method ActorFolder.exts]): `[{path, size, title}]`, by name.
 static func scan(folder: String, exts: Array = ActorFolder.VIDEO_EXTS) -> Array:
 	var out: Array = []
@@ -41,7 +38,7 @@ static func scan(folder: String, exts: Array = ActorFolder.VIDEO_EXTS) -> Array:
 	return out
 
 
-## THE FILE AT [param path] as a scan finds it: `[{path, size, title}]`, empty while it is not there.
+## The file at [param path] as a scan finds it: `[{path, size, title}]`, empty while it is not there.
 static func scan_file(path: String) -> Array:
 	var fa := FileAccess.open(path, FileAccess.READ)
 	if fa == null:
@@ -75,8 +72,8 @@ static func comparable(title: String) -> String:
 	return out
 
 
-## Do two titles name one video? Equal once comparable - or, unless [param exact], one inside the other
-## and nearly as long: a channel's "Day 4" is not its "Day 45" (2026-10-21, a channel of 2040 videos).
+## Do two titles name one video? Equal once comparable - or, unless [param exact], one inside the other and nearly as
+## long: a channel's "Day 4" is not its "Day 45".
 static func same_title(a: String, b: String, exact := false) -> bool:
 	var x := comparable(a)
 	var y := comparable(b)
@@ -90,7 +87,7 @@ static func same_title(a: String, b: String, exact := false) -> bool:
 	return short >= 16 and float(short) >= 0.85 * float(maxi(x.length(), y.length())) and (x.contains(y) or y.contains(x))
 
 
-## ADD THE FOLDER [param folder] to [param actor]: a source, and a row per video in it - ticked, unless
+## Add the folder [param folder] to [param actor]: a source, and a row per video in it - ticked, unless
 ## [param ticked] says otherwise of a title. Returns how many videos are new.
 static func add_folder(actor: ActorFolder, folder: String) -> int:
 	for s in actor.data["sources"]:
@@ -100,8 +97,8 @@ static func add_folder(actor: ActorFolder, folder: String) -> int:
 	return rescan(actor)
 
 
-## ADD THE FILE [param path] to [param actor]: a source of its own, and its row (ticked). Returns how many videos
-## are new - none when it is listed already, or in one of their folders.
+## Add the file [param path] to [param actor]: a source of its own, and its row (ticked). Returns how many videos are
+## new - none when it is listed already, or in one of their folders.
 static func add_file(actor: ActorFolder, path: String) -> int:
 	for s in actor.data["sources"]:
 		if String((s as Dictionary).get("kind", "")) == "file" and String((s as Dictionary).get("path", "")) == path:
@@ -110,11 +107,9 @@ static func add_file(actor: ActorFolder, path: String) -> int:
 	return rescan(actor)
 
 
-## READ EVERY FOLDER AGAIN: a video added since gets its row; one gone keeps its row, and is missing
-## until it is back - or until A FILE OF ITS NAME turns up in another of their folders, when it is that video,
-## moved: its row, its id and all made from it go on (2026-10-23: the user merged one download folder into
-## another, and an id is its path's - eight videos would have been surveyed again as new, and the sets made of
-## them lost theirs). Returns how many are new.
+## Read every folder again: a video added since gets its row; one gone keeps its row, and is missing until it is back -
+## or until a file of its name turns up in another of their folders, when it is that video, moved: its row, its id and
+## all made from it go on (an id is its path's). Returns how many are new.
 static func rescan(actor: ActorFolder) -> int:
 	var added := 0
 	var vids: Dictionary = actor.data["videos"]
@@ -159,7 +154,7 @@ static func _moved_here(vids: Dictionary, path: String) -> String:
 	return ""
 
 
-## ADD A LINK: a source, its entries to come from its listing ([method land_listing]).
+## Add a link: a source, its entries to come from its listing ([method land_listing]).
 static func add_link(actor: ActorFolder, url: String, captions_only: bool) -> int:
 	var sources: Array = actor.data["sources"]
 	for i in sources.size():
@@ -170,7 +165,7 @@ static func add_link(actor: ActorFolder, url: String, captions_only: bool) -> in
 	return sources.size() - 1
 
 
-## THE ARGUMENTS THAT LIST [param url] - a video, a playlist or a channel - as JSON, nothing fetched.
+## The arguments that list [param url] - a video, a playlist or a channel - as JSON, nothing fetched.
 static func list_args(url: String, deno: String) -> PackedStringArray:
 	var a := PackedStringArray(["-u", "-m", "yt_dlp", "--flat-playlist", "-J", "--no-warnings"])
 	a.append_array(_runtime(deno))
@@ -178,11 +173,10 @@ static func list_args(url: String, deno: String) -> PackedStringArray:
 	return a
 
 
-## THE ARGUMENTS THAT FETCH ONE VIDEO into [param footage] as `<id>.<ext>`, with its automatic
-## captions and its details - or, [param captions_only], the captions and details alone. A video the
-## archive already lists is not fetched again. [param sound_only] (a voice alone, [method
-## ActorFolder.sound_only]) fetches its sound and its details, no picture and no captions: Hear listens to all
-## of it, and its words come from what it hears.
+## The arguments that fetch one video into [param footage] as `<id>.<ext>`, with its automatic captions and its details -
+## or, [param captions_only], the captions and details alone. A video the archive already lists is not fetched again.
+## [param sound_only] (a voice alone, [method ActorFolder.sound_only]) fetches its sound and details, no picture and
+## no captions: Hear listens to all of it, and its words come from what it hears.
 static func fetch_args(url: String, footage: String, captions_only: bool, deno: String, sound_only := false) -> PackedStringArray:
 	var a := PackedStringArray(["-u", "-m", "yt_dlp", "--no-playlist", "--newline", "--no-overwrites",
 		"--socket-timeout", "30"])
@@ -213,8 +207,8 @@ static func _runtime(deno: String) -> PackedStringArray:
 	return PackedStringArray()
 
 
-## THE ENTRIES OF A LISTING (yt-dlp's `-J`): `[{id, title, duration, url}]` - one for a video, every
-## entry of a playlist, and every video of a channel's tabs.
+## The entries of a listing (yt-dlp's `-J`): `[{id, title, duration, url}]` - one for a video, every entry of a
+## playlist, and every video of a channel's tabs.
 static func entries_of(listing: Variant) -> Array:
 	var out: Array = []
 	if not (listing is Dictionary):
@@ -229,7 +223,7 @@ static func entries_of(listing: Variant) -> Array:
 	for e in d["entries"]:
 		if not (e is Dictionary):
 			continue
-		# A CHANNEL IS TABS OF PLAYLISTS: its videos are inside them
+		# a channel is tabs of playlists: its videos are inside them
 		if (e as Dictionary).get("entries") is Array:
 			out.append_array(entries_of(e))
 			continue
@@ -251,8 +245,8 @@ static func entries_of(listing: Variant) -> Array:
 	return unique
 
 
-## A LINK'S LISTING LANDS: a video row per entry (ticked), or - captions only - each entry matched to
-## the folder video of its title, whose captions it fetches. Returns `{added, matched, unmatched}`.
+## A link's listing lands: a video row per entry (ticked), or - captions only - each entry matched to the folder video
+## of its title, whose captions it fetches. Returns `{added, matched, unmatched}`.
 static func land_listing(actor: ActorFolder, source: int, entries: Array) -> Dictionary:
 	var s: Dictionary = actor.data["sources"][source]
 	var vids: Dictionary = actor.data["videos"]
@@ -262,7 +256,7 @@ static func land_listing(actor: ActorFolder, source: int, entries: Array) -> Dic
 	s["listed"] = true
 	s["count"] = entries.size()
 	if bool(s.get("captions_only", false)):
-		# EXACT TITLES FIRST, then near ones for the videos still without a match: each video takes one
+		# exact titles first, then near ones for the videos still without a match: each video takes one
 		var taken := {}
 		for exact in [true, false]:
 			for e in entries:
@@ -291,9 +285,8 @@ static func land_listing(actor: ActorFolder, source: int, entries: Array) -> Dic
 	return {"added": added, "matched": 0, "unmatched": 0}
 
 
-## THE FILES A FETCH OF ENTRY [param entry] LEFT in [param footage]: `{video, captions, info}`, each ""
-## when it is not there - the video by its id and a video extension (or a sound file's, fetched for a voice
-## alone), the captions the preferred track.
+## The files a fetch of entry [param entry] left in [param footage]: `{video, captions, info}`, each "" when it is not
+## there - the video by its id and a video extension (or a sound file's, for a voice alone), the captions the preferred track.
 static func fetched(footage: String, entry: String) -> Dictionary:
 	var out := {"video": "", "captions": "", "info": ""}
 	var d := DirAccess.open(footage)
@@ -319,9 +312,9 @@ static func fetched(footage: String, entry: String) -> Dictionary:
 	return out
 
 
-## CAPTIONS INTO WORDS: json3's events, each word at its event's start plus its own offset, ending
-## where the next begins (at most [constant WORD_MOST] later, and never past its event). What the
-## captions put in brackets ([Music]) is not a word they said. `[{text, t0, t1}]`.
+## Captions into words: json3's events, each word at its event's start plus its own offset, ending where the next
+## begins (at most [constant WORD_MOST] later, and never past its event). What the captions put in brackets ([Music])
+## is not a word they said. `[{text, t0, t1}]`.
 static func words_of_json3(text: String) -> Array:
 	var out: Array = []
 	var d: Variant = JSON.parse_string(text)

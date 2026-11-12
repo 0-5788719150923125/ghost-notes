@@ -4,53 +4,47 @@ class_name TableMedium
 ## TableMedium - a card reading at a table, seen from the reader's chair.
 ##
 ## The Table mode's own medium (its row of [constant Medium.REGISTRY] names the mode): the episode's cloth on a table,
-## its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
+## its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands:
+## the cards move on their own.
 ##
-##   the intro      the deck shuffles in the middle of the table under the voice, in RUNS -
-##                  riffles, overhand passes, strings of cuts, now and then a wash across the
-##                  cloth - with long stretches of nothing between them ([constant RUNS])
+##   the intro      the deck shuffles in the middle of the table under the voice, in runs (riffles, overhand
+##                  passes, strings of cuts, now and then a wash across the cloth) with long stretches of nothing
+##                  between them ([constant RUNS])
 ##   the push       before the first card, the deck is squared and pushed to its side
-##   a draw         the deck squares, the top card slides off, turns over, and comes up to the
-##                  camera on the LEFT; its booklet page opens on the RIGHT - shown, never read
-##   the reading    the card and the page float there while the voice talks about it, turning
-##                  a little on their axes; now and then the card is turned to look at its back
+##   a draw         the deck squares, the top card slides off, turns over, and comes up to the camera on the left;
+##                  its booklet page opens on the right - shown, never read
+##   the reading    the card and the page float there while the voice talks about it, turning a little on their
+##                  axes; now and then the card is turned to look at its back
 ##   the lay        the page closes and the card goes down into its place in the spread
-##   a jumper       the first card flies out of the shuffle on its own, lands face up, and is
-##                  picked up and shown like a drawn one
+##   a jumper       the first card flies out of the shuffle on its own, lands face up, and is picked up and shown
+##                  like a drawn one
 ##   the close      the whole spread lies on the table
 ##
-## EVERYTHING IS A FUNCTION OF SHOW TIME, as the tablet's screen is: the actions are the
-## reading's own marks ([CardReading]), placed in the rests the voice left for them by a
-## [ReadingFollower], and every card, page and packet of the deck is posed from that schedule
-## each frame - so a render draws exactly what the live reading drew, and a scrub lands the
-## table where the reading is.
+## Everything is a function of show time, as the tablet's screen is: the actions are the reading's own marks
+## ([CardReading]), placed in the rests the voice left for them by a [ReadingFollower], and every card, page and
+## packet of the deck is posed from that schedule each frame - so a render draws exactly what the live reading drew,
+## and a scrub lands the table where the reading is.
 ##
-## THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are its
-## pictures; THE TABLE ITSELF - its top's shape, edge and wood, and the cloths laid on it - is the set
-## dresser's, built by [Tables] (the old board table and its painted cloth when it wrote none); the frame, the type, the props and the light come from its look through
-## [CardTable]'s registries, and the rest - where the deck sits, how the spread is laid, which
-## shuffles, the camera's height - is sampled from the episode's seed, so no two episodes share a
-## table. A picture still being painted is a placeholder until it lands, live.
+## The look is the episode's. The cloth, the room, the card back and every face are its pictures; the table itself
+## (its top's shape, edge and wood, and the cloths laid on it) is the set dresser's, built by [Tables] (the board
+## table and its painted cloth when it wrote none); the frame, the type, the props and the light come from its look
+## through [CardTable]'s registries, and the rest (where the deck sits, how the spread is laid, which shuffles, the
+## camera's height) is sampled from the episode's seed. A picture still being painted is a placeholder until it lands.
 ##
-## FOIL. The brightest, most colorful parts of each painting - found per picture from its own
-## luminance, never a fixed threshold - are printed as foil: they catch the light as a card
-## tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom
-## lets them bleed. The deck's look says how much foil it was printed with.
+## Foil: the brightest, most colorful parts of each painting - found per picture from its own luminance, never a
+## fixed threshold - are printed as foil: they catch the light as a card tilts, breathe slowly, and now and then a
+## glint sweeps across them, and the scene's bloom lets them bleed. The deck's look says how much foil it has.
 ##
-## NOTHING IS BUILT ON THE APP'S THREAD (the user, 2026-11-05: "We shouldn't be doing work in the main thread, as a rule"): an
-## episode's table is built on a worker, out of the tree, the show waiting for it as it waits for its bake, and put back
-## ([method _build_away]) - 209459's 8.5 s build drew 1,237 frames meanwhile, none over 11 ms. A render and a gate build where
-## they stand, their frames waiting for nothing; a preview's table is built aside too ([method TablePreview._stand]).
+## Nothing is built on the app's thread: an episode's table is built on a worker, out of the tree, the show waiting
+## for it as it waits for its bake, and put back ([method _build_away]). A render and a gate build where they stand,
+## their frames waiting for nothing; a preview's table is built aside too ([method TablePreview._stand]).
 
-## THE STAGE AS THE TABLE SETS IT, given back when the table leaves. EDGES: 4x multisampling. SHADOWS:
-## the first two quadrants of the atlas hold a high-resolution shadow each (a lamp's); the others hold
-## four each, so four candles can all cast (an omni light takes two). 8192 (128 MB): a candle's slot is
-## 2048 texels, its cube drawn at half that - the normal bias a filter needs ([ShadowFilter]) is counted
-## in texels, so at 4096 every shadow was lifted twice as far off what cast it, and a clock's rim lost
-## its shadow on its face (feedback 0007; about 2 ms a frame at 2880 x 1600, measured). DEBANDING: a
-## candle's pool on something smooth and dark falls off over a few levels of 8 bits, and each level is a
-## ring round the flame; dithered, they were gone (a plane's light by distance from the flame, 0.63% off
-## a smooth curve to 0.06%, measured).
+## The stage as the table sets it, given back when the table leaves. Edges: 4x multisampling. Shadows: the first two
+## quadrants of the atlas hold a high-resolution shadow each (a lamp's); the others hold four each, so four candles can
+## all cast (an omni light takes two). 8192 (128 MB): a candle's slot is 2048 texels, its cube drawn at half that, and
+## the normal bias a filter needs ([ShadowFilter]) is counted in texels, so at 4096 every shadow is lifted twice as far
+## off what cast it. Debanding: a candle's pool on something smooth and dark falls off over a few levels of 8 bits,
+## each a ring round the flame; dithered, they are gone.
 const STAGE := {"msaa_3d": Viewport.MSAA_4X, "use_debanding": true, "positional_shadow_atlas_size": 8192,
 	"positional_shadow_atlas_quad_0": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1,
 	"positional_shadow_atlas_quad_1": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1,
@@ -58,82 +52,73 @@ const STAGE := {"msaa_3d": Viewport.MSAA_4X, "use_debanding": true, "positional_
 	"positional_shadow_atlas_quad_3": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4}
 
 ## A card is 70 x 120 mm. World units are meters: the table is a table.
-## HOW FAR AHEAD A PAUSED SHOW'S PHYSICS IS BAKED, at the most (seconds): to its end, for any show a note makes.
+## How far ahead a paused show's physics is baked, at the most (seconds): to its end, for any show a note makes.
 const BUFFER := 1800.0
 ## What the show's time waits for while the work's physics is behind a live show ([method ShowFeed.wait_for]).
 const WAIT_FOR := "table physics"
 const CARD := TablePositions.CARD
 const CARD_R := 0.0045
 const CARD_T := 0.0007
-## THE DECK: a mesh for each of its cards, this thick - as many as the episode's deck holds
-## ([method TablePlan.deck_count]: the agents decide it; 78 stand about 3 cm). A WASH SPREADS EVERY ONE OF
-## THEM, so the pile it gathers builds to the deck's height card by card (the user, 2026-10-14: the
-## gathered deck kept "slowly growing in a strange way... as if the number of cards on the table/in
-## the wash does not match the number of cards needed in the deck when stacked" - it had been 26
-## meshes standing for three cards each, spread as 26 single cards that swelled fourfold on the
-## pile). A deck card is a spread card and the gap above it ([constant TableShuffle.WASH_LAYER]).
+## The deck: a mesh for each of its cards, this thick - as many as the episode's deck holds ([method
+## TablePlan.deck_count]: the agents decide it; 78 stand about 3 cm). A wash spreads every one of them, so the pile it
+## gathers builds to the deck's height card by card. A deck card is a spread card and the gap above it ([constant
+## TableShuffle.WASH_LAYER]).
 const DECK_T := 0.0004
 ## The deck of an episode that says nothing of its size (one made up, as a gate's is): a tarot's.
 const DECK_FALLBACK := 78
 ## How much table a laid card leaves between itself and the deck.
 const DECK_CLEAR := TablePositions.DECK_CLEAR
-## The table every episode had before (width, thickness, depth), centered at TABLE_Z, its top at y = 0
-## ([constant Tables.DEFAULT_TOP]; the room's old placement still measures from its far edge); the
-## cloth on it.
+## The table every episode had before (width, thickness, depth), centered at TABLE_Z, its top at y = 0 ([constant
+## Tables.DEFAULT_TOP]; the room measures from its far edge); the cloth on it.
 const TABLE := Vector3(1.9, 0.05, 0.85)
 const TABLE_Z := 0.02
-## THE ROOM, out of focus ([method _place_backdrop]): the picture drawn through a lens blur, each
-## point a disc this wide - its radius, as a share of the frame's width. A lens focused on the table
-## half a meter off sees a room some meters away about so soft at f/4.
+## The room, out of focus ([method _place_backdrop]): the picture drawn through a lens blur, each point a disc this
+## wide - its radius, as a share of the frame's width. A lens focused on the table half a meter off sees a room some
+## meters away about so soft at f/4.
 const ROOM_SHADER := preload("res://shaders/table_room.gdshader")
 const ROOM_BLUR := 0.005
 ## How far out the room's picture stands from the camera (meters, level).
 const ROOM_REACH := 3.2
-## Where a shown card and its booklet page float, in the camera's frame (meters right, up, and
-## away). The page sits a hair farther back so the card always reads as in front.
+## Where a shown card and its booklet page float, in the camera's frame (meters right, up, and away). The page sits a
+## hair farther back so the card always reads as in front.
 const PRESENT_DIST := 0.23
 const PAGE := Vector2(0.088, 0.012)
 const PAGE_H := 0.126
 const VFOV := CardTable.VFOV
 
-## THE PHASES of each action, in its own seconds. They sum to [CardReading]'s rests, which is
-## what the voice waits: DRAW = 3.4, LAY = 1.7, JUMP = 5.0.
+## The phases of each action, in its own seconds. They sum to [CardReading]'s rests, which is what the voice waits:
+## DRAW = 3.4, LAY = 1.7, JUMP = 5.0.
 const SQUARE := 0.45          # the deck squares before a card leaves it
 const RISE_END := 2.8         # ...and comes up to be shown
 const LAY_END := 1.7
-## A JUMPER FLIES OUT OF A SHUFFLE (2026-10-05: "that jump should probably happen during a shuffle -
-## not when the cards are just sitting there on the table, doing nothing"): its action opens with
-## one more riffle, and the card springs off the top of a half while the halves are falling. The
-## riffle, the flight, the card lying there, its rise, its page.
+## A jumper flies out of a shuffle: its action opens with one more riffle, and the card springs off the top of a half
+## while the halves are falling. The riffle, the flight, the card lying there, its rise, its page.
 const JUMP_RIFFLE := 2.4
 const JUMP_FLY := Vector2(1.15, 2.25)
 const JUMP_RISE := 4.3
-## A CARD DEALT (TableActions.DEAL): off its source and turned over, then down into its place.
+## A card dealt (TableActions.DEAL): off its source and turned over, then down into its place.
 const DEAL_TURN := 0.9
 const DEAL_END := 1.9
-## A WATERFALL (TableActions.FAN): each card leaves a beat behind the one before (TableActions.FAN_EACH)
-## and slides out to its place, turning face up as it goes.
+## A waterfall (TableActions.FAN): each card leaves a beat behind the one before (TableActions.FAN_EACH) and slides out
+## to its place, turning face up as it goes.
 const FAN_MOVE := 1.45
-## A CARD SHOWN from where it lies (TableActions.SHOW): it lifts and comes up; its page opens.
+## A card shown from where it lies (TableActions.SHOW): it lifts and comes up; its page opens.
 const SHOW_RISE := 1.1
-## A card TURNED where it lies (TableActions.TURN, FLIP): the turn's own seconds.
+## A card turned where it lies (TableActions.TURN, FLIP): the turn's own seconds.
 const TURN_END := 0.8
 const FLIP_END_LAY := 1.1
-## How many different cards the unseen cards of one printing are printed as ([method _unseen_fronts],
-## [method _blank_backs]) when nobody wrote them, and the most of the deck's own cards they are printed
-## as when the episode lists them.
+## How many different cards the unseen cards of one printing are printed as ([method _unseen_fronts], [method
+## _blank_backs]) when nobody wrote them, and the most of the deck's own cards they are printed as when the episode
+## lists them.
 const BLANKS := 3
 const WRITTEN := 6
 const SEARCH_LOOKS := 3
-## A SPREAD CARD IS A REAL CARD'S THICKNESS (the user: cards should rest "with a gentle tilt"): the
-## plan's chains of cards lying on cards run many deep, and every millimeter a card stands on tips
-## the card lying across it. The cloth's top, how far over it a spread card lies, a spread card's
-## thickness, and the hair between a card and the one under it (so two faces never fight for one
-## depth).
+## A spread card is a real card's thickness: the plan's chains of cards lying on cards run many deep, and every
+## millimeter a card stands on tips the card lying across it. The cloth's top, how far over it a spread card lies, a
+## spread card's thickness, and the hair between a card and the one under it (so two faces never fight for one depth).
 const CLOTH_TOP := Tables.LAYERS_UNDER
-## An episode whose first card is a jumper washes the deck into it this often: its wash is held back
-## to begin this long before the jumper is reckoned to come (from the script's words at a steady
-## pace) and to run this long past it - a voice is never quite the pace reckoned.
+## An episode whose first card is a jumper washes the deck into it this often: its wash is held back to begin this long
+## before the jumper is reckoned to come (from the script's words at a steady pace) and to run this long past it.
 const JUMPER_WASH := 0.5
 const JUMPER_WASH_LEAD := 24.0
 const JUMPER_WASH_SLACK := 16.0
@@ -142,23 +127,20 @@ const PUSH_SLIDE := 0.85
 const TURN := Vector2(0.6, 0.95)
 const PIROUETTE_HOLD := Vector2(1.6, 4.0)
 const TWIRL := Vector2(1.5, 2.1)
-## A BURST ON THE PIROUETTE makes one happen: about one card in forty twirled by chance, so a set
-## dresser's sparks on it (seen in its own preview, which stages one) went unseen in nearly every
-## reading (2026-10-07, "I have yet to see that occur even one time"). The card twirled is a held
-## one with at least this long in the hand (seconds), seeded - the longest-held when none has.
+## A burst on the pirouette makes one happen: about one card in forty twirls by chance, too rare for a set dresser's
+## sparks on it. The card twirled is a held one with at least this long in the hand (seconds), seeded - the
+## longest-held when none has.
 const SPIN_ROOM := 12.0
-## THE DECK PUT ASIDE (the user, 2026-10-08: a long row comes "oddly close to the deck ... TOO close"):
-## when a card of the spread would lie within DECK_CROWD of the deck (meters, edge to edge), the reader
-## slides the deck further out before drawing it - in an episode that draws DECK_ASIDE or under - over
-## ASIDE_S seconds, ending as that card is taken.
+## The deck put aside: when a card of the spread would lie within DECK_CROWD of the deck (meters, edge to edge), the
+## reader slides the deck further out before drawing it - in an episode that draws DECK_ASIDE or under - over ASIDE_S
+## seconds, ending as that card is taken.
 const DECK_CROWD := 0.07
 const DECK_ASIDE := 0.75
 const ASIDE_S := 0.45
-## HOW HOT A CANDLE'S POOL MAY BURN: its light times the hottest spot of cloth round it - the
-## cloth's linear luminance there over the flame's falloff (its height over the distance squared).
-## The key's light on a felt of luminance 0.18 is the measure - it reads as a candle. On pale pine
-## (0.64) the same light flooded half the frame through the bloom, and a cream stripe just behind a
-## candle on a near-black blanket blew out though the cloth round it was dark on average.
+## How hot a candle's pool may burn: its light times the hottest spot of cloth round it - the cloth's linear
+## luminance there over the flame's falloff (its height over the distance squared). Measured on the key's light on a
+## felt of luminance 0.18, which reads as a candle; on pale pine (0.64) the same light floods half the frame through
+## the bloom.
 const HEAT := 2.0
 const LUM_RECT := CardTable.SEEN_RECT
 const LUM_GRID := CardTable.SEEN_GRID
@@ -261,7 +243,7 @@ void fragment() {
 
 var _subs = null
 var _waiting := false               # this table has the show's time waiting for its bake ([constant WAIT_FOR])
-## WHAT THE EPISODE DECIDED ([TablePlan]): written when it loads, read by everything after.
+## What the episode decided ([TablePlan]): written when it loads, read by everything after.
 var _plan := TablePlan.new()
 var _source := ""                   # the reading's script
 var _follow := ReadingFollower.new()
@@ -334,14 +316,13 @@ var _air_key := ""                  # the schedule its bursts were last planned 
 var _spin_wanted := false           # a burst marks a pirouette: one card is twirled ([method _spin_card])
 var _spin_key := ""                 # ...the schedule it was chosen on
 var _spin_k := -1                   # ...and the card
-## BUILT ASIDE, on a worker thread ([method TablePreview._stand]): its long loops then [method _breathe]
+## Built aside, on a worker thread ([method TablePreview._stand]): its long loops then [method _breathe]
 var aside := false
 var _breaths := 0
-## A TABLE PLAYED IS BUILT ON A WORKER TOO, the show waiting for it as it waits for its bake (the user, 2026-11-05: "We shouldn't be
-## doing work in the main thread, as a rule ... it causes bad UI hitches" - 209459's stood for 8 s on the app's thread as it began):
-## taken out of the tree and built aside ([method _build_away]) - the build in hand, -1 when none - and put back where it was. Its leaving
-## then is no teardown (`_away`, [method _exit_tree]); and a table built aside for the show bakes on a thread of its own once it is back
-## (`live_build`, [method TablePhysics.build]). A render and a gate build where they stand: their frames wait for nothing.
+## A table played is built on a worker too, the show waiting for it as it waits for its bake: taken out of the tree and
+## built aside ([method _build_away]) - the build in hand, -1 when none - and put back where it was. Its leaving then is
+## no teardown (`_away`, [method _exit_tree]); and a table built aside for the show bakes on a thread of its own once it
+## is back (`live_build`, [method TablePhysics.build]). A render and a gate build where they stand.
 var _build_task := -1
 var _away := false
 var live_build := false
@@ -355,10 +336,10 @@ var _ride := {}                     # what the table is aboard (Rides.plan), or 
 var _movers: Array = []             # what moves with the ride and the wind: [{node, r, pivot, into, kind, at, contact}] (_tick_ride)
 
 
-## THE SHUFFLE is a part of its own ([TableShuffle]): every move the deck makes between readings,
-## where each card is during one, and the chain of moves and the room it has to make them in. This
-## file asks it by public name (`plan_moves`, `fit_room`, `shuffle_xf`, `deck_turns`, `cut_off`,
-## `finish_xf`, `wash`, `wash_jump`, `sweeps`) and hands it itself to read from.
+## The shuffle is a part of its own ([TableShuffle]): every move the deck makes between readings, where each card is
+## during one, and the chain of moves and the room it has to make them in. This file asks it by public name
+## (`plan_moves`, `fit_room`, `shuffle_xf`, `deck_turns`, `cut_off`, `finish_xf`, `wash`, `wash_jump`, `sweeps`) and
+## hands it itself to read from.
 var _shuffles := TableShuffle.new()
 
 
@@ -371,29 +352,28 @@ func _init() -> void:
 	_work.medium = self
 
 
-## THE THINGS ON THE TABLE are a part of their own ([TableThings]): where each stands, and what
-## stands where - the light, the wash and the blueprint read what stood.
+## The things on the table are a part of their own ([TableThings]): where each stands, and what stands where - the
+## light, the wash and the blueprint read what stood.
 var _things_part := TableThings.new()
 
 
-## WHERE EACH CARD IS at a moment of the show is a part of its own ([TableCardPose]): no state,
-## read off the plan, the schedule and the box; [method _pose] applies what it answers.
+## Where each card is at a moment of the show is a part of its own ([TableCardPose]): no state, read off the plan, the
+## schedule and the box; [method _pose] applies what it answers.
 var _card_poses := TableCardPose.new()
 
 
-## THE LIGHT ON THE TABLE is a part of its own ([TableLight]): the flames, their glow and heat, the
-## rig and its key, the contact shadows.
+## The light on the table is a part of its own ([TableLight]): the flames, their glow and heat, the rig and its key,
+## the contact shadows.
 var _light_part := TableLight.new()
 
 
-## THE BOX THE DECK IS KEPT IN is a part of its own ([TableBox]): built once per episode, holding
-## the box, its files and what a search looks at.
+## The box the deck is kept in is a part of its own ([TableBox]): built once per episode, holding the box, its files and
+## what a search looks at.
 var _box_part := TableBox.new()
 
 
-## THE WORK AT THE TABLE is a part of its own ([TableWork], next/table_work.md): what the set dresser's
-## working parts do by themselves - a clock's hands, steam off a brew - and the puppeteer's acts, run when
-## the reading cues them.
+## The work at the table is a part of its own ([TableWork], next/table_work.md): what the set dresser's working parts do
+## by themselves - a clock's hands, steam off a brew - and the puppeteer's acts, run when the reading cues them.
 var _work := TableWork.new()
 var _sounds: WorkSounds = null        # the work heard ([method advance])
 var _acts_mt := -2                    # the acts file's time when the work was last built (-1: none)
@@ -437,10 +417,10 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = Color(0.5, 0.46, 0.44)
 	_env.ambient_light_energy = 0.18
-	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	# The tonemapper, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
 	Tonemaps.dress(_env, 0.82)
 	_env.adjustment_enabled = true
-	# THE BLOOM the foil and the flames bleed through: only what is brighter than white glows
+	# The bloom the foil and the flames bleed through: only what is brighter than white glows
 	_env.glow_enabled = true
 	_env.glow_normalized = false
 	_env.glow_intensity = 0.75
@@ -454,19 +434,18 @@ func _build_world() -> void:
 	_env.set_glow_level(2, 1.0)
 	_env.set_glow_level(3, 0.8)
 	_env.set_glow_level(4, 0.4)
-	# BOUNCE LIGHT, as the Graphics panel has it (off unless chosen: it changes the look)
+	# Bounce light, as the Graphics panel has it (off unless chosen: it changes the look)
 	Graphics.dress(_env)
 	_cam = Camera3D.new()
 	_cam.fov = VFOV
 	_cam.near = 0.02
 	_cam.far = 40.0
 	_cam.environment = _env
-	# THE ROOM IS OUT OF FOCUS: the table is where the eye is, and a painted room far behind it
-	# reads as a place rather than as a picture of one
-	# NOT BY DEPTH OF FIELD: a far blur behind the table drew a band along its far edge - the sharp
-	# table and the blurred room bleeding into each other where their depths meet. The room's own
-	# picture is drawn through a lens blur instead ([constant ROOM_SHADER]), which is also cheaper;
-	# the lens's blur is kept for the intro, when the whole table is out of focus ([method _tick_focus]).
+	# The room is out of focus: the table is where the eye is, and a painted room far behind it reads as a place rather
+	# than as a picture of one. Not by depth of field: a far blur behind the table draws a band along its far edge,
+	# where the sharp table and the blurred room bleed into each other. The room's own picture is drawn through a lens
+	# blur instead ([constant ROOM_SHADER]), which is also cheaper; the lens's blur is kept for the intro, when the
+	# whole table is out of focus ([method _tick_focus]).
 	_attrs = CameraAttributesPractical.new()
 	_attrs.dof_blur_far_enabled = false
 	_cam.attributes = _attrs
@@ -479,11 +458,10 @@ func _build_world() -> void:
 	_lamp.spot_angle_attenuation = 2.2
 	_lamp.shadow_enabled = true
 	_lamp.shadow_blur = ShadowFilter.blur(3.2)
-	# A TABLETOP'S BIASES, as the candles' are. At Godot's own (made for rooms) the depth and normal
-	# biases came to millimeters at the lamp's distance - more than a bowl's floor stands off the
-	# cloth - so anything low cast nothing, a bowl only its rim's ring (a crescent), and taller things
-	# a shadow standing off their feet. Softened by the blur alone: a spot's light_size threw a white
-	# glare off a geode's rim facing it.
+	# A tabletop's biases, as the candles' are. At Godot's own (made for rooms) the depth and normal biases come to
+	# millimeters at the lamp's distance - more than a bowl's floor stands off the cloth - so anything low casts nothing
+	# and taller things cast a shadow standing off their feet. Softened by the blur alone: a spot's light_size throws a
+	# white glare off a geode's rim facing it.
 	_lamp.shadow_bias = 0.005
 	_lamp.shadow_normal_bias = 0.15
 	# the sun's screens and birds ([Lights]) are the sun's alone
@@ -494,7 +472,7 @@ func _build_world() -> void:
 	_fill.rotation_degrees = Vector3(-60.0, 25.0, 0.0)
 	_root3.add_child(_fill)
 
-	# THE TABLE ITSELF is built with its things, from the set dresser's description ([method _build_table])
+	# The table itself is built with its things, from the set dresser's description ([method _build_table])
 	_backdrop = MeshInstance3D.new()
 	var bq := QuadMesh.new()
 	bq.size = Vector2(1.0, 1.0)
@@ -502,7 +480,7 @@ func _build_world() -> void:
 	_backdrop_mat = ShaderMaterial.new()
 	_backdrop_mat.shader = ROOM_SHADER
 	_backdrop.material_override = _backdrop_mat
-	# A PICTURE CASTS NO SHADOW: a sun low behind the table would throw the room's picture over it
+	# A picture casts no shadow: a sun low behind the table would throw the room's picture over it
 	_backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_root3.add_child(_backdrop)
 
@@ -626,12 +604,12 @@ func begin_session() -> void:
 
 
 func release() -> void:
-	# ...A TABLE BEING BUILT is waited for and put back, so the stage it is on lets it go with the rest
+	# ...a table being built is waited for and put back, so the stage it is on lets it go with the rest
 	_settle_away()
 	_subs = null
 	_key = ""
 	_released = true
-	# ...the show's waiting let go with the session (Spectrum.stop clears it): kept, a table baking on was never waited for again
+	# ...the show's waiting let go with the session (Spectrum.stop clears it); a table baking on is not waited for again
 	_waiting = false
 
 
@@ -641,7 +619,7 @@ func _exit_tree() -> void:
 		return
 	if _sounds != null:
 		_sounds.stop()
-	# ...and the show's time never left waiting on a table that is gone (only on this one's: a preview's never waited)
+	# ...and the show's time never waits on a table that is gone (only on this one's: a preview's never waited)
 	if _waiting and feed != null:
 		_waiting = false
 		feed.wait_for(WAIT_FOR, false)
@@ -670,8 +648,7 @@ func work_report() -> Array:
 	return _work.drawn_report(_now) if _work != null and _build_task < 0 else []
 
 
-## WHICH EPISODE IS PLAYING, AND WHERE (a report from the feedback console; next/editing.md step 9: "a report from a playing episode
-## can go to a fix of the episode's data, not only of the code"): its folder, show and seed, and the episode's own time now.
+## Which episode is playing, and where (a report from the feedback console; next/editing.md step 9): its folder, show and seed, and the episode's own time now.
 func episode_report() -> Dictionary:
 	if _plan == null:
 		return {}
@@ -680,10 +657,10 @@ func episode_report() -> Dictionary:
 
 func advance(_features, delta: float, _bookend: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
-	# THE EPISODE'S CLOCK: the reading's, and a reading started again in it (a scrub, [method _seek_to]) on the clock of the one
-	# the table was made for ([member ReadingFollower.offset])
+	# The episode's clock: the reading's, and a reading started again in it (a scrub, [method _seek_to]) on the clock of
+	# the one the table was made for ([member ReadingFollower.offset])
 	_now = (_subs.now() if _subs != null and is_instance_valid(_subs) else t) + _follow.offset
-	# ...A TABLE BEING BUILT on a worker: nothing of it touched until it is done and back
+	# ...a table being built on a worker: nothing of it touched until it is done and back
 	if _build_task >= 0:
 		if not WorkerThreadPool.is_task_completed(_build_task):
 			return
@@ -711,9 +688,9 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_tick_camera(_now)
 	_tick_ride(_now)
 	_work.tick(_now)
-	# A LIVE SHOW WAITS FOR WHAT IS IN THINGS ([method TablePhysics.behind]): drawn behind its bake, it showed what an export never
-	# would - a thing an act moves where its act sends it, through whatever was there
-	# ...AND FOR THE BRICKS' RECORD ([method TableAssembly.behind]), which asking begins
+	# A live show waits for what is in things ([method TablePhysics.behind]): drawn behind its bake, it would show a
+	# thing an act moves where its act sends it, through whatever was there
+	# ...and for the bricks' record ([method TableAssembly.behind]), which asking begins
 	var behind := feed != null and _work.physics != null and _work.physics.behind(_now)
 	if feed != null and _work.assembly != null and _work.assembly.behind(_now):
 		behind = true
@@ -722,9 +699,9 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	if behind != _waiting:
 		_waiting = behind
 		feed.wait_for(WAIT_FOR, behind)
-	# ...AND BAKES ON WHILE IT IS PAUSED, to the show's end ([constant BUFFER]), saying how far it is ready: what was baked while
-	# nobody watched plays with nothing baking beside it, and the transport shows it as a video player shows what it has buffered
-	# (the user, 2026-11-01: "if we pause, the computations are able to continue rolling-ahead ... like a buffered YouTube video")
+	# ...and bakes on while it is paused, to the show's end ([constant BUFFER]), saying how far it is ready: what was
+	# baked while nobody watched plays with nothing baking beside it, and the transport shows it as a video player shows
+	# what it has buffered
 	if _work.physics != null and feed != null:
 		var left := feed.show_length() + _follow.offset - _now + 2.0 if feed.show_length() > 0.0 else BUFFER
 		_work.physics.reach = clampf(left, TablePhysics.HORIZON, BUFFER) if feed.paused() else TablePhysics.HORIZON
@@ -733,7 +710,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 			ready_to = minf(ready_to, _work.assembly.ready_to(_now))
 		feed.ready_ahead(WAIT_FOR, maxf(ready_to - _now, 0.0))
 		_ready_said = true
-	# THE WORK, HEARD ([WorkSounds]): the table on the stage only - a preview stands one and never advances it
+	# The work, heard ([WorkSounds]): the table on the stage only - a preview stands one and never advances it
 	if _sounds == null or _sounds.work != _work:
 		if _sounds != null:
 			_sounds.stop()
@@ -757,9 +734,9 @@ func _ensure_doc() -> void:
 	var key := "%s|%d|%d" % [String(pay.get("dir", "")), int(pay.get("seed", 0)), hash(src)]
 	if key == _key:
 		return
-	# THE SAME EPISODE READ AGAIN FROM ANOTHER WORD (a scrub) IS A SEEK: the table standing, its acts and what was baked of them stand -
-	# while its table and its acts are as they were built from (blocked again, it is a new table). Only as a session let it go: whoever
-	# empties the key itself means a table built again
+	# The same episode read again from another word (a scrub) is a seek: the table standing, its acts and what was baked
+	# of them stand - while its table and its acts are as they were built from (blocked again, it is a new table). Only
+	# as a session let it go: whoever empties the key itself means a table built again
 	var again := _released and key == _built_key and _work != null and not _plan.parse.is_empty() and _as_built(pay)
 	_released = false
 	if again:
@@ -774,18 +751,17 @@ func _ensure_doc() -> void:
 		_make_episode(d, pay, src, feed.intro_hold)
 
 
-## THE EPISODE [param d] (its `table` [param pay], its script [param src]) MADE AND BUILT, the show's intro held [param hold] - where it
-## stands, or on a worker ([method _build_away]).
+## The episode [param d] (its `table` [param pay], its script [param src]) made and built, the show's intro held [param hold] - where it stands, or on a worker ([method _build_away]).
 func _make_episode(d: Dictionary, pay: Dictionary, src: String, hold: float) -> void:
-	# A NEW EPISODE IS A NEW PLAN ([method TablePlan.make]): a function of the document, the set
-	# dresser's table as its file says now and the show's intro hold, and nothing of the last one's
-	# survives into it. The medium builds from it and decides nothing of its own.
+	# A new episode is a new plan ([method TablePlan.make]): a function of the document, the set dresser's table as its
+	# file says now and the show's intro hold, and nothing of the last one's survives into it. The medium builds from it
+	# and decides nothing of its own.
 	_source = src
 	_plan = TablePlan.make(d, _table_json(pay), hold)
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray()) if not _plan.parse.is_empty() \
 		else PackedStringArray()
 	_est = _word_times(spoken)
-	# ...A MID-WAY START'S PAST JUST BEFORE 0 ([member ReadingFollower.near_past]): what its acts did is baked before the first frame
+	# ...a mid-way start's past just before 0 ([member ReadingFollower.near_past]): what its acts did is baked before the first frame
 	_follow.near_past = true
 	_follow.reset(spoken, _plan.start_si, _est)
 	_built_n = -1
@@ -797,11 +773,11 @@ func _make_episode(d: Dictionary, pay: Dictionary, src: String, hold: float) -> 
 		Time.get_ticks_msec() - t0, ", on a worker" if live_build else ""])
 
 
-## THE EPISODE BUILT ON A WORKER ([member _build_task]), the show held meanwhile as for its bake: out of the tree first (a worker may
-## touch no node in it), the last table's sounds and bake stopped (its thread reads what is built again), and back in [method _settle_away].
-## THE REFLECTION PROBE IS FREED FIRST, and made again as the table comes back (the user's log, 2026-11-06: `Parameter "scenario" is
-## null` in `_render_reflection_probe_step`): a probe that updates once catches its six faces a frame each, and one taken out of the
-## world partway stays on the renderer's list with no world to draw - freeing it is what takes it off.
+## The episode built on a worker ([member _build_task]), the show held meanwhile as for its bake: out of the tree first
+## (a worker may touch no node in it), the last table's sounds and bake stopped (its thread reads what is built again),
+## and back in [method _settle_away]. The reflection probe is freed first and made again as the table comes back: a
+## probe that updates once catches its six faces a frame each, and one taken out of the world partway stays on the
+## renderer's list with no world to draw.
 func _build_away(d: Dictionary, pay: Dictionary, src: String, hold: float) -> void:
 	if _sounds != null:
 		_sounds.stop()
@@ -820,7 +796,7 @@ func _build_away(d: Dictionary, pay: Dictionary, src: String, hold: float) -> vo
 	_build_task = WorkerThreadPool.add_task(_make_episode.bind(d, pay, src, hold), false, "the episode's table")
 
 
-## A TABLE BUILT ON A WORKER, done (waited for, if it is not yet: a session let go mid-build) and put back where it stood.
+## A table built on a worker, done (waited for, if it is not yet: a session let go mid-build) and put back where it stood.
 func _settle_away() -> void:
 	if _build_task < 0:
 		return
@@ -848,18 +824,15 @@ func _as_built(pay: Dictionary) -> bool:
 		and int(mt.call(TableInk.FILE)) == _ink_mt
 
 
-## A SCRUB IN THE EPISODE STANDING, [param d] the reading started again ([ReadingFollower.seek]; the user, 2026-11-01: scrubbed back
-## to look again, "it's just stuck on 'catching up' ... It might be best if we just saved the buffer... so that returning to a
-## position is fast"). It had been a new table: built again (10 s) and its physics baked again from the show's first act - the
-## past spaced on guesses, so nothing of what was baked could be taken up - 153 s of 841899 before a frame. Now nothing is built
-## or baked again: the table keeps the clock of the reading it was made for, the new reading's words come on it where they were
-## heard before, and every act planned from them stands - so returning to a moment baked is looking its frames up, and a moment
-## never reached is baked on from where the bake had got to.
+## A scrub in the episode standing, [param d] the reading started again ([ReadingFollower.seek]). Nothing is built or
+## baked again: the table keeps the clock of the reading it was made for, the new reading's words come on it where they
+## were heard before, and every act planned from them stands - so returning to a moment baked is looking its frames up,
+## and a moment never reached is baked on from where the bake had got to.
 func _seek_to(d: Dictionary) -> void:
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray())
 	var si := 0
 	var sw: Variant = d.get("start_words", PackedStringArray())
-	# ...A READING FROM THE TOP IS NO SCRUB: it has an intro of its own ([method _restart])
+	# ...a reading from the top is no scrub: it has an intro of its own ([method _restart])
 	if not (sw is PackedStringArray and not (sw as PackedStringArray).is_empty()):
 		_restart()
 		return
@@ -878,8 +851,8 @@ func _seek_to(d: Dictionary) -> void:
 	_follow.seek(si, at, _est)
 	_built_n = -1
 	_work._last_now = -INF
-	# ...and WHAT LIES AHEAD OF IT HAS NOT BEGUN, in this reading: each is placed again by its words as they come - the same place, where the
-	# voice says them as it did; and a stretch only guessed at before, now heard, moves them where it should ([method TableWork.schedule])
+	# ...and what lies ahead of it has not begun, in this reading: each is placed again by its words as they come - the
+	# same place, where the voice says them as it did; and a stretch only guessed at before, now heard, moves them where it should ([method TableWork.schedule])
 	for nm in _work._begun.keys():
 		if float((_work._begun[nm] as Array)[0]) >= at:
 			_work._begun.erase(nm)
@@ -888,8 +861,7 @@ func _seek_to(d: Dictionary) -> void:
 		si, at, _work.physics.baked_to() if _work.physics != null else 0.0])
 
 
-## EACH SPOKEN WORD'S TIME as the table plans on it: a kept take's, where the episode has one made from its script (`take`, the
-## document's - [method TablePlan.take_times]), else the estimate ([method TablePlan.estimated_times]).
+## Each spoken word's time as the table plans on it: a kept take's, where the episode has one made from its script (`take`, the document's - [method TablePlan.take_times]), else the estimate ([method TablePlan.estimated_times]).
 func _word_times(spoken: PackedStringArray) -> PackedFloat32Array:
 	var est := _plan.estimated_times(spoken.size())
 	var take := String(_plan.pay.get("take", ""))
@@ -900,12 +872,10 @@ func _word_times(spoken: PackedStringArray) -> PackedFloat32Array:
 	return TablePlan.take_times(spoken, est, words)
 
 
-## THE SAME EPISODE READ AGAIN FROM THE TOP (a Stop, then a Play): the table and what was baked of it stand, but its clock and its
-## plan's times start over, with the intro the show holds NOW - its words come on the new reading's own clock, intro and all, and
-## every act begins again as its words come. Taken as a scrub's seek it had kept the last reading's: the intro set from 6 s to 9 s
-## between a Stop and a Play (the user, 2026-11-06: "the speaking starting DURING the intro sequence ... not inheriting the new values
-## properly after clicking stop/start"), the table stood 6.4 s ahead of the voice through it - its title gone, its work begun in the
-## silence - and jumped back as the first word was heard.
+## The same episode read again from the top (a Stop, then a Play): the table and what was baked of it stand, but its
+## clock and its plan's times start over, with the intro the show holds now - its words come on the new reading's own
+## clock, intro and all, and every act begins again as its words come. A scrub's seek would keep the last reading's
+## clock, so the table would stand ahead of the voice through a changed intro.
 func _restart() -> void:
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray())
 	_plan.hold = feed.intro_hold
@@ -921,24 +891,22 @@ func _restart() -> void:
 		_plan.hold, _work.physics.baked_to() if _work.physics != null else 0.0])
 
 
-## THE EPISODE BUILT from what its plan decided ([member _plan]): the camera, the light, the cards and
-## their faces, the deck, the table and its things, the room.
+## The episode built from what its plan decided ([member _plan]): the camera, the light, the cards and their faces, the deck, the table and its things, the room.
 func _build_episode() -> void:
-	# THE CHANNEL'S NAME ONLY: the episode's title is the video's, on the platform, not on the table
+	# The channel's name only: the episode's title is the video's, on the platform, not on the table
 	_title.channel = String(_subs.document.get("title", "")) if _subs != null else ""
 	# ...and the show's byline under it, when it has one ("with Pen & Ink")
 	_title.byline = String(_subs.document.get("byline", "")) if _subs != null else ""
-	# THE CHANNEL'S NAME IS THE CHANNEL'S, set the same way every episode - a brand, not a
-	# deck's lettering (an uncial deck turned "Truthful" into "Truchful")
+	# The channel's name is the channel's, set the same way every episode - a brand, not a deck's lettering
 	_title.face = CardTable.font("roman")
 	_title.italic = CardTable.font(CardTable.BOOK_ITALIC)
-	# THE CAMERA, THE LIGHT AND THE ROOM'S DARK, as the plan decided them
+	# The camera, the light and the room's dark, as the plan decided them
 	_cam.transform = _plan.cam_base
 	_cam.fov = _plan.fov
 	_lamp.light_color = _plan.lamp_color
 	_lamp.position = _plan.lamp_at
-	# AIMED BY ITS OWN TRANSFORM, what look_at does under _root3 (never moved): look_at needs the tree, and
-	# the set dresser's table is built out of it, on a worker thread ([method TablePreview._stand])
+	# Aimed by its own transform, what look_at does under _root3 (never moved): look_at needs the tree, and the set
+	# dresser's table is built out of it, on a worker thread ([method TablePreview._stand])
 	var lamp_scale := _lamp.scale
 	_lamp.transform = Transform3D(Basis.looking_at(Vector3(0.0, 0.0, -0.1) - _lamp.position, Vector3.UP), _lamp.position)
 	_lamp.scale = lamp_scale
@@ -947,7 +915,7 @@ func _build_episode() -> void:
 	_env.ambient_light_color = _plan.ambient["color"]
 	_fill.light_color = _plan.fill
 	_cur_base = _plan.mid
-	# THE CARDS
+	# The cards
 	for c in _cards:
 		(c as Node).queue_free()
 	for v in _faces:
@@ -959,8 +927,8 @@ func _build_episode() -> void:
 	_faces = []
 	_face_canvas = []
 	_face_mats = []
-	# THIS EPISODE'S PICTURES ARE KEPT across its sessions (each Play, each scrub): decoding a
-	# dozen full-size paintings on the main thread is a visible hitch. Another episode's go.
+	# This episode's pictures are kept across its sessions (each Play, each scrub): decoding a dozen full-size
+	# paintings on the main thread is a visible hitch. Another episode's go.
 	var keep_dir := String(_plan.pay.get("dir", "")) + "/"
 	for k in _textures.keys():
 		if not String(k).begins_with(keep_dir):
@@ -970,7 +938,7 @@ func _build_episode() -> void:
 	_build_backs(cards)
 	for i in cards.size():
 		var canvas := CardFaces.Face.new()
-		# EACH CARD IN ITS OWN PRINTING: a box may mix sets, each with its own front and back
+		# Each card in its own printing: a box may mix sets, each with its own front and back
 		canvas.look = CardTable.look_of(_plan.look, cards[i])
 		canvas.card = cards[i]
 		canvas.details = String(_plan.staging["text"]) == "front"
@@ -994,7 +962,7 @@ func _build_episode() -> void:
 	_back_vp.size = CardFaces.face_px(_plan.look)
 	_back_canvas.seed = _plan.seed_value
 	_foil_stock(_back_mat, _plan.look)
-	# THE DECK'S CARDS, as many as it holds
+	# The deck's cards, as many as it holds
 	var deck_mesh := _mesh_for(_plan.look, DECK_T)
 	while _deck.size() > _plan.deck_n:
 		(_deck.pop_back() as Node).queue_free()
@@ -1020,7 +988,7 @@ func _build_episode() -> void:
 	_plan_moves()
 	_place_backdrop()
 	_poll_pictures()
-	# ...WHAT CASTS A CANDLE'S SHADOW CUT FINE ENOUGH FOR ITS PARABOLOIDS ([ShadowCasters], [method TableLight.candle_shadow])
+	# ...what casts a candle's shadow cut fine enough for its paraboloids ([ShadowCasters], [method TableLight.candle_shadow])
 	ShadowCasters.cut_under(_root3)
 	for vp in _faces:
 		CardFaces.redraw(vp)
@@ -1033,10 +1001,7 @@ func _build_episode() -> void:
 				CardFaces.redraw((unseen as Dictionary)["vp"])
 
 
-## THE BACKS: the deck's own ([member _back_vp]), and one more per printing the drawn cards (and the box,
-## when the producer chose it) are printed in ([method CardTable.look_of]) - and with each, what the
-## cards nobody drew are printed as: their fronts (`fronts`, [method _unseen_fronts]) and, when the text
-## is on the back, their backs (`blank`, [method _blank_backs]).
+## The backs: the deck's own ([member _back_vp]), and one more per printing the drawn cards (and the box, when the producer chose it) are printed in ([method CardTable.look_of]) - and with each, what the cards nobody drew are printed as: their fronts (`fronts`, [method _unseen_fronts]) and, when the text is on the back, their backs (`blank`, [method _blank_backs]).
 func _build_backs(cards: Array) -> void:
 	for key in _backs:
 		for side in ["blank", "fronts"]:
@@ -1062,15 +1027,12 @@ func _build_backs(cards: Array) -> void:
 			"fronts": _unseen_fronts(String(name), cards)}
 
 
-## THE BACKS OF THE CARDS NOBODY DREW, for printing [param name], when the cards come from a box and
-## their text is printed on their backs: printed as a drawn card's own back is ([method _back_of]). THEY
-## ARE THE DECK'S OWN CARDS where the plan lists them - the ones the draw left in the box, their name,
-## group and meaning set as a drawn card's are ([method _left_in]; up to [constant WRITTEN] of them) - and
-## otherwise [constant BLANKS] backs of type nobody wrote ([member CardFaces.Face.anonymous]). The box's
-## unseen cards showed the printing's shared artwork while every card pulled out of it had a printed
-## back - two kinds of card in one box (the user, 2026-10-11) - and then ruled dashes, which a card
-## held up in a search showed for what they were (2026-10-12). None otherwise: the shared back is the
-## right one.
+## The backs of the cards nobody drew, for printing [param name], when the cards come from a box and their text is
+## printed on their backs: printed as a drawn card's own back is ([method _back_of]). They are the deck's own cards
+## where the plan lists them - the ones the draw left in the box, their name, group and meaning set as a drawn card's
+## are ([method _left_in]; up to [constant WRITTEN] of them) - and otherwise [constant BLANKS] backs of type nobody
+## wrote ([member CardFaces.Face.anonymous]), so one box never holds two kinds of card. None otherwise: the shared back
+## is the right one.
 func _blank_backs(name: String) -> Array:
 	var out: Array = []
 	if _plan.cards_from != "box" or String(_plan.staging["text"]) != "back":
@@ -1092,16 +1054,14 @@ func _blank_backs(name: String) -> Array:
 	return out
 
 
-## THE FRONTS OF THE CARDS NOBODY DREW, for printing [param name], when the cards come from a box - what
-## a card looked at in a search shows, and every card standing in the file. EACH IS ONE OF THE DECK'S OWN
-## CARDS the draw left in ([method _left_in]; up to [constant WRITTEN]), printed as a drawn card's front
-## is - its frame, its ornament, its name, its details under the picture when the text is on the front -
-## with A PAINTING NOBODY PAINTED in its window: a part of a drawn card's ([method CardFaces.stand_in];
-## `from`, one of this printing's among [param cards] when it has any), put in as that painting lands
-## ([method _poll_pictures]). A painting is a painter's run, and no card is painted to be glanced at in
-## its box. Where the episode lists no card left in, [constant BLANKS] fronts with no name. A search
-## used to show the BACK of every card it looked at, and nobody looks for a card by its back (the user,
-## 2026-10-13: "they rifle through it looking at the front, to find the specific card").
+## The fronts of the cards nobody drew, for printing [param name], when the cards come from a box - what a card looked
+## at in a search shows, and every card standing in the file. Each is one of the deck's own cards the draw left in
+## ([method _left_in]; up to [constant WRITTEN]), printed as a drawn card's front is - its frame, its ornament, its
+## name, its details under the picture when the text is on the front - with a stand-in painting in its window: a part of
+## a drawn card's ([method CardFaces.stand_in]; `from`, one of this printing's among [param cards] when it has any), put
+## in as that painting lands ([method _poll_pictures]). No card is painted to be glanced at in its box. Where the
+## episode lists no card left in, [constant BLANKS] fronts with no name. A search shows fronts: nobody looks for a card
+## by its back.
 func _unseen_fronts(name: String, cards: Array) -> Array:
 	var out: Array = []
 	if _plan.cards_from != "box":
@@ -1130,11 +1090,11 @@ func _unseen_fronts(name: String, cards: Array) -> Array:
 	return out
 
 
-## The deck's cards of printing [param name] that the draw LEFT IN THE BOX, as a card's faces set one
-## ([class CardFaces.Face]: its name and numeral, its group as its one fact, its meaning as its text) - at
-## most [constant WRITTEN], picked on the seed. They are the plan's deck less the drawn cards when the
-## producer chose it, and otherwise what the draw says it left of the show's own (`left`,
-## [method TableProducer._make_draw]). Empty when the episode lists neither.
+## The deck's cards of printing [param name] that the draw left in the box, as a card's faces set one ([class
+## CardFaces.Face]: its name and numeral, its group as its one fact, its meaning as its text) - at most [constant
+## WRITTEN], picked on the seed. They are the plan's deck less the drawn cards when the producer chose it, and
+## otherwise what the draw says it left of the show's own (`left`, [method TableProducer._make_draw]). Empty when the
+## episode lists neither.
 func _left_in(name: String) -> Array:
 	var plan: Dictionary = _plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}
 	var drawn := {}
@@ -1175,10 +1135,10 @@ func _unseen_mats(name: String) -> Array:
 	return blank.map(func(b: Dictionary) -> Material: return b["mat"])
 
 
-## THE CARDS NOBODY DREW, in printing [param name], as `[front, back]` materials: each its own front
-## ([method _unseen_fronts]) and, where the backs are printed, that same card's back ([method _blank_backs]
-## sets the same cards in the same order) - the shared back otherwise, on both sides where there is no
-## front to show (a show whose cards do not come from a box).
+## The cards nobody drew, in printing [param name], as `[front, back]` materials: each its own front ([method
+## _unseen_fronts]) and, where the backs are printed, that same card's back ([method _blank_backs] sets the same cards
+## in the same order) - the shared back otherwise, on both sides where there is no front to show (a show whose cards do
+## not come from a box).
 func _unseen_kinds(name: String) -> Array:
 	var backs := _unseen_mats(name)
 	var fronts: Array = (_backs.get(name, _backs[""]) as Dictionary).get("fronts", [])
@@ -1231,7 +1191,7 @@ func _back_of(i: int, card: Dictionary) -> Material:
 	canvas.seed = _plan.seed_value
 	var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
 	var mat := _foil_material(vp.get_texture())
-	# Printed details need to read even when the box shades a card held over it.
+	# Printed details must read even when the box shades a card held over it.
 	mat.set_shader_parameter("lift", 0.5)
 	mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
 	while _printed.size() <= i:
@@ -1248,26 +1208,23 @@ func _face_window(face: CardFaces.Face) -> Vector4:
 	return Vector4(w.position.x / sz.x, w.position.y / sz.y, w.end.x / sz.x, w.end.y / sz.y)
 
 
-## The card's stock, for the foil to leave alone where a shaped window's corners show it. LINEAR, as
-## the face's texture is sampled: in sRGB a pale stock missed by ~0.2 and an oval's corners blazed
-## white as foil (feedback 0005).
+## The card's stock, for the foil to leave alone where a shaped window's corners show it. Linear, as the face's texture
+## is sampled: in sRGB a pale stock is missed and an oval's corners blaze white as foil.
 static func _foil_stock(mat: ShaderMaterial, look: Dictionary) -> void:
 	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
 	var c := CardTable.color(String(f.get("stock", "#efe6d2"))).srgb_to_linear()
 	mat.set_shader_parameter("stock", Vector3(c.r, c.g, c.b))
 
 
-## The frame's accent, for the foil to find on the frame's lines. LINEAR too: in sRGB a line's own
-## color missed it by ~0.4 and the texels of its edge, half blended toward the stock, hit it - a dark
-## line with a bright, stair-stepped foil fringe down each side (the corners' aliasing in the 1327
-## export, tests/table/card_foil_check.gd).
+## The frame's accent, for the foil to find on the frame's lines. Linear too: in sRGB a line's own color misses it and
+## the half-blended texels of its edge hit it, leaving a bright, stair-stepped foil fringe (tests/table/card_foil_check.gd).
 static func _foil_accent(mat: ShaderMaterial, look: Dictionary) -> void:
 	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
 	var c := CardTable.color(String(f.get("accent", "#c9a227"))).srgb_to_linear()
 	mat.set_shader_parameter("accent", Vector3(c.r, c.g, c.b))
 
 
-## THE CARD'S SLAB for [param look], cut to its corners ([method CardTable.corner_radius]) - one mesh per
+## The card's slab for [param look], cut to its corners ([method CardTable.corner_radius]) - one mesh per
 ## radius and thickness, shared.
 func _mesh_for(look: Dictionary, t := CARD_T) -> ArrayMesh:
 	var size := CardTable.card_size(look)
@@ -1295,8 +1252,8 @@ func _poll_pictures(force := false) -> void:
 			CardFaces.redraw(_faces[i])
 		_foil_accent(_face_mats[i], _plan.look)
 		(_face_mats[i] as ShaderMaterial).set_shader_parameter("foil", _plan.foil)
-	# EACH PRINTING'S BACK (`back.png` the deck's own, `back_<printing>.png` the others'), and every back
-	# printed with a card's text over its printing's
+	# Each printing's back (`back.png` the deck's own, `back_<printing>.png` the others'), and every back printed with a
+	# card's text over its printing's
 	for name in _backs:
 		var file := "back.png" if String(name).is_empty() else "back_%s.png" % CardTable.series_key(String(name))
 		var back := _picture(dir.path_join(file), force)
@@ -1316,7 +1273,7 @@ func _poll_pictures(force := false) -> void:
 				((blank as Dictionary)["canvas"] as CardFaces.Face).art = back
 				CardFaces.redraw((blank as Dictionary)["vp"])
 			((blank as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _plan.foil * 0.25)
-		# THE FRONTS OF THE CARDS NOBODY DREW: a part of a drawn card's painting, once that one has landed
+		# The fronts of the cards nobody drew: a part of a drawn card's painting, once that one has landed
 		for front in bk.get("fronts", []) as Array:
 			var from := int((front as Dictionary).get("from", -1))
 			var fc: CardFaces.Face = (front as Dictionary)["canvas"]
@@ -1338,11 +1295,11 @@ func _poll_pictures(force := false) -> void:
 				CardFaces.redraw((pb as Dictionary)["vp"])
 			# a printed back is read, not shone: its foil kept low
 			((pb as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _plan.foil * 0.25)
-	# THE PAINTING of the episode's surface, laid wherever the table takes it ([Tables]: its cloth, its
-	# top, a runner...) - or each such surface's own color until it is painted
+	# The painting of the episode's surface, laid wherever the table takes it ([Tables]: its cloth, its top, a runner...)
+	# - or each such surface's own color until it is painted
 	var cloth := _picture(dir.path_join("surface.png"), force)
-	# ...and its DEPTH, where the painter drew a height map that lies under it (`height.json` beside it
-	# is its fit: TableProducer._land_height)
+	# ...and its depth, where the painter drew a height map that lies under it (`height.json` beside it is its fit:
+	# TableProducer._land_height)
 	var depth := _picture(dir.path_join("height.png"), force) if FileAccess.file_exists(dir.path_join("height.json")) else null
 	if cloth != _painting_tex or depth != _height_tex:
 		var relit := cloth != _painting_tex
@@ -1357,14 +1314,13 @@ func _poll_pictures(force := false) -> void:
 	if _painting_tex != _light_part._lit_cloth:
 		_light_part.light_the_table()
 		_reflect()
-	# THE TABLE, set while a reading can already be playing (live, the set dresser works beside the
-	# painter): built again when it lands, and the shuffle's chain with it - a wash goes round
-	# whatever stands
+	# The table, set while a reading can already be playing (live, the set dresser works beside the painter): built
+	# again when it lands, and the shuffle's chain with it - a wash goes round whatever stands
 	var tpath := dir.path_join("table.json")
 	if (FileAccess.get_modified_time(tpath) if FileAccess.file_exists(tpath) else -1) != _table_mt:
 		_build_table()
 		_plan_moves()
-	# ...and THE WORK, blocked while it can already be playing: built again over the table as it stands
+	# ...and the work, blocked while it can already be playing: built again over the table as it stands
 	var apath := dir.path_join("acts.json")
 	var spath := dir.path_join("skin.json")
 	var ipath := dir.path_join(TableInk.FILE)
@@ -1398,9 +1354,9 @@ func _apply_painting() -> void:
 	Tables.apply_painting(_furniture, _painting_tex, _height_tex, shift)
 
 
-## THE PAINTING SMALL, in linear light - what [method Tables.surface_lum] reads the table's lightness
-## from. Made once per picture, from the file rather than read back from the GPU (which a probe's
-## dummy renderer cannot do). Null when there is no picture.
+## The painting small, in linear light - what [method Tables.surface_lum] reads the table's lightness from. Made once
+## per picture, from the file rather than read back from the GPU (which a probe's dummy renderer cannot do). Null when
+## there is no picture.
 func _painting_small(path: String) -> Image:
 	var key := path + "|small"
 	if _textures.has(key) and int(_mtimes.get(key, -1)) == int(_mtimes.get(path, -2)):
@@ -1419,8 +1375,8 @@ func _painting_small(path: String) -> Image:
 	return img
 
 
-## THE TABLE'S LIGHTNESS where candles may stand ([constant LUM_RECT], row by row, linear): whatever
-## lies uppermost there - a layer, the top - for [method _heat].
+## The table's lightness where candles may stand ([constant LUM_RECT], row by row, linear): whatever lies uppermost
+## there - a layer, the top - for [method _heat].
 func _surface_lum() -> PackedFloat32Array:
 	if _furniture.is_empty():
 		return PackedFloat32Array()
@@ -1435,9 +1391,9 @@ func _cloth_fallback() -> Color:
 	return CardTable.color(String(pal[min(4, pal.size() - 1)])).darkened(0.35)
 
 
-## The picture at [param path] as a texture, reloaded when the file changes; null when absent.
-## Each picture's foil key is measured as it loads: the 90th and 98th percentile of its own
-## luminance, so a dark painting's stars glow and a pale one's highlights do, never a fixed line.
+## The picture at [param path] as a texture, reloaded when the file changes; null when absent. Each picture's foil key
+## is measured as it loads: the 90th and 98th percentile of its own luminance, so a dark painting's stars glow and a
+## pale one's highlights do.
 func _picture(path: String, force := false) -> Texture2D:
 	if not FileAccess.file_exists(path):
 		return null
@@ -1455,9 +1411,8 @@ func _picture(path: String, force := false) -> Texture2D:
 		for x in small.get_width():
 			lums.append(small.get_pixel(x, y).get_luminance())
 	lums.sort()
-	# IN LINEAR LIGHT: the shader samples the face as `source_color`, so it compares LINEAR values -
-	# thresholds measured on these sRGB pixels sat above the very regions they were taken from, and
-	# the foil keyed nothing at all
+	# In linear light: the shader samples the face as `source_color`, so it compares linear values (a threshold measured
+	# on sRGB pixels sits above the very regions it was taken from)
 	var lo := Color(lums[int(lums.size() * 0.9)], 0, 0).srgb_to_linear().r
 	var hi := Color(lums[int(lums.size() * 0.985)], 0, 0).srgb_to_linear().r
 	_textures[path + "|key"] = Vector2(lo, maxf(hi, lo + 0.03))
@@ -1467,16 +1422,13 @@ func _picture(path: String, force := false) -> Texture2D:
 	return tex
 
 
-## THE ROOM. A picture asked for as a LEVEL photograph from a seated eye (`backdrop.json` beside it
-## names its lens, [constant CardTable.BACKDROP_LENS]) is PROJECTED FROM THE CAMERA'S EYE: an
-## upright plane far behind the table, its middle at the eye's height straight ahead, as wide as its
-## lens saw - so every point of the picture lies in the direction it was seen from, and the camera,
-## tilted down at the table, sees the room as it would really look past the table's edge (its
-## uprights running together below, the floor where a floor would be). Laid square to the tilted
-## camera with its horizon on the table's edge, a room was seen from the height of the cloth: a wall
-## or a window just past the table looked wrong, a far landscape got away with it (the user,
-## 2026-10-05: "the backgrounds are 2D... the angles feel wrong"). A picture made before (no view
-## beside it) holds nothing below its horizon for the camera to see, so it keeps that placement.
+## The room. A picture asked for as a level photograph from a seated eye (`backdrop.json` beside it names its lens,
+## [constant CardTable.BACKDROP_LENS]) is projected from the camera's eye: an upright plane far behind the table, its
+## middle at the eye's height straight ahead, as wide as its lens saw - so every point of the picture lies in the
+## direction it was seen from, and the camera, tilted down at the table, sees the room as it would really look past the
+## table's edge. Laid square to the tilted camera with its horizon on the table's edge, a room reads as seen from the
+## height of the cloth, which is wrong for a wall or a window just past the table. A picture with no view beside it
+## holds nothing below its horizon for the camera to see, so it keeps that placement.
 func _place_backdrop() -> void:
 	var view := _backdrop_view()
 	if not view.is_empty():
@@ -1507,9 +1459,9 @@ func _place_backdrop() -> void:
 		(_backdrop.mesh as QuadMesh).size))
 
 
-## HOW SOFT THE ROOM IS, as the disc's radius in its picture's UV (per axis): [constant ROOM_BLUR]
-## of the frame's width, measured where the camera sees the picture - just past the table's far
-## edge, under the top of the frame - since the room may be placed any way and seen at a slant.
+## How soft the room is, as the disc's radius in its picture's UV (per axis): [constant ROOM_BLUR] of the frame's width,
+## measured where the camera sees the picture - just past the table's far edge, under the top of the frame - since the
+## room may be placed any way and seen at a slant.
 static func room_blur(cam: Transform3D, fov: float, room: Transform3D, size: Vector2) -> Vector2:
 	# the line of sight just under the top of the frame, to the picture's plane
 	var sight := (cam.basis * Vector3(0.0, tan(deg_to_rad(fov * 0.5)) * 0.8, -1.0)).normalized()
@@ -1542,9 +1494,8 @@ func _backdrop_view() -> Dictionary:
 
 # --- the spread ------------------------------------------------------------------------------------
 
-## WHERE EACH CARD GOES DOWN is data now ([TablePositions], step 9): a position given by the plan or
-## a dealer, or the seeded preset - a row, an arc, two rows, a pyramid - laid within reach of the
-## camera, in its frame and clear of the deck.
+## Where each card goes down is data ([TablePositions]): a position given by the plan or a dealer, or the seeded preset
+## - a row, an arc, two rows, a pyramid - laid within reach of the camera, in its frame and clear of the deck.
 
 
 ## Card [param i]'s pose lying in the spread, the way it came out of the deck - face up, unless the
@@ -1606,11 +1557,10 @@ static func _face_up() -> Basis:
 	return Basis(Vector3(0, 0, 1), PI)
 
 
-## THE TABLE'S THINGS: what the set dresser described for this episode (`table.json` in its folder,
-## made safe by [method CardTable.sanitize_table]), or the look's candles alone until it has -
-## each built ([Props]), stood where [method TableThings.place] finds it room, its wicks lit - on THE
-## TABLE ITSELF, built first ([Tables]): its top and the layers laid on it, the painting on whatever
-## takes it. [param spec]: the table made safe, when it was just read.
+## The table's things: what the set dresser described for this episode (`table.json` in its folder, made safe by
+## [method CardTable.sanitize_table]), or the look's candles alone until it has - each built ([Props]), stood where
+## [method TableThings.place] finds it room, its wicks lit - on the table itself, built first ([Tables]): its top and
+## the layers laid on it, the painting on whatever takes it. [param spec]: the table made safe, when it was just read.
 func _build_table(spec: Dictionary = {}) -> void:
 	for c in _props.get_children():
 		c.queue_free()
@@ -1632,13 +1582,13 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_work.clear()
 	_work.materials = spec["materials"]
 	_work.assembly_spec = spec.get("assembly", {}) if spec.get("assembly") is Dictionary else {}
-	# A GAME PLAYED HERE ([TableGame]): what its session came to, and where what it had painted is
+	# A game played here ([TableGame]): what its session came to, and where what it had painted is
 	_work.game_spec = _plan.pay.get("game", {}) if _plan.pay.get("game") is Dictionary else {}
 	_work.game_dir = String(_plan.pay.get("dir", ""))
 	_work.game_seed = _plan.seed_value
 	_light_part._heat_cells = {}
-	# WHAT THE TABLE IS ABOARD, planned before anything stands on it: each thing's moving parts are made
-	# ready to answer it as they are put ([method TableThings.put])
+	# What the table is aboard, planned before anything stands on it: each thing's moving parts are made ready to
+	# answer it as they are put ([method TableThings.put])
 	_ride = Rides.plan(spec.get("ride", {}) if spec.get("ride") is Dictionary else {}, hash([_plan.seed_value, "ride"]))
 	_movers = []
 	# the name over this table is printed in the color the set dresser chose to stand out from it
@@ -1650,12 +1600,12 @@ func _build_table(spec: Dictionary = {}) -> void:
 	var built: Array = []
 	for i in things.size():
 		if Props.draped(things[i]):
-			# LAID ACROSS THE TABLE ITSELF: built in its space, over the edge of this top
+			# Laid across the table itself: built in its space, over the edge of this top
 			things[i] = _things_part.grounded(things[i])
 			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"]), true))
 		else:
 			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"])))
-	# THE BOX THE CARDS ARE KEPT IN stands first, where the deck would be: the rest go round it
+	# The box the cards are kept in stands first, where the deck would be: the rest go round it
 	_box_part.build(things, built)
 	_things_part.place(things, built, rng)
 	_light_part.build(spec)
@@ -1665,8 +1615,7 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_build_work(spec)
 
 
-## THE WORK, built over the things as they stand ([TableWork]): the episode's `acts.json` (read from the FILE,
-## as the table is, so a render stands what the live table stood) - and planned again on the schedule.
+## The work, built over the things as they stand ([TableWork]): the episode's `acts.json` (read from the file, as the table is, so a render stands what the live table stood) - and planned again on the schedule.
 func _build_work(spec: Dictionary) -> void:
 	var path := String(_plan.pay.get("dir", "")).path_join("acts.json")
 	_acts_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
@@ -1689,9 +1638,9 @@ func _build_work(spec: Dictionary) -> void:
 		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
 
 
-## THE SAME TABLE, OTHER ACTS ([param raw], as `acts.json` holds them): the work bound to them again and planned again on the
-## schedule, nothing of the table built again ([method TableWork.rebind]) - what a puppeteer's next `act` asks of the table it
-## stood for the last ([TablePreview]). The acts' file, if it says the same, is not read again.
+## The same table, other acts ([param raw], as `acts.json` holds them): the work bound to them again and planned again
+## on the schedule, nothing of the table built again ([method TableWork.rebind]) - what a puppeteer's next `act` asks of
+## the table it stood for the last ([TablePreview]). The acts' file, if it says the same, is not read again.
 func rework(raw: Variant) -> void:
 	if _work == null or _work.things.is_empty():
 		return
@@ -1707,10 +1656,10 @@ func rework(raw: Variant) -> void:
 		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
 
 
-## THE DESIGNS PAINTED ON THIS TABLE ([TablePaint]): the episode's `skin.json` as parsed, read from the FILE as the acts are - and
-## its time noted, so a design that lands live is painted.
-## WHAT TEX LAID OUT of what the work writes ([TableInk]): the episode's `ink.json`, handed to the work with the seed its hand is
-## drawn from - `{}` before the ink step, and the writes it lays out are left blank until it lands.
+## The designs painted on this table ([TablePaint]): the episode's `skin.json` as parsed, read from the file as the acts
+## are - and its time noted, so a design that lands live is painted.
+## What TeX laid out of what the work writes ([TableInk]): the episode's `ink.json`, handed to the work with the seed
+## its hand is drawn from - `{}` before the ink step, and the writes it lays out are left blank until it lands.
 func _ink_json() -> void:
 	var path := String(_plan.pay.get("dir", "")).path_join(TableInk.FILE)
 	_ink_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
@@ -1726,14 +1675,12 @@ func _skin_json() -> Dictionary:
 	if _skin_mt >= 0:
 		var j := JSON.new()
 		if j.parse(FileAccess.get_file_as_string(path)) == OK and j.data is Dictionary:
-			# (never the face painted first that it was copied from: the paint is the tools', the painting only the decorator's guide -
-			# feedback 0049, skin_paint.gdshader)
+			# (never the face painted first that it was copied from: the paint is the tools', the painting only the decorator's guide, skin_paint.gdshader)
 			return j.data
 	return {}
 
 
-## THE PICTURE THE DESIGNS WERE MADE FROM ([member TableWork.skin_ref]): the episode's `face_ref.png` and the surface `face.json` says it
-## is of, read from the files as the design is. It says where each operation's paint is still wanted; every mark is still a tool's.
+## The picture the designs were made from ([member TableWork.skin_ref]): the episode's `face_ref.png` and the surface `face.json` says it is of, read from the files as the design is. It says where each operation's paint is still wanted; every mark is still a tool's.
 func _skin_picture() -> void:
 	var dir := String(_plan.pay.get("dir", ""))
 	var path := dir.path_join("face_ref.png")
@@ -1747,9 +1694,9 @@ func _skin_picture() -> void:
 			_work.skin_ref_on = String((j.data as Dictionary).get("on", ""))
 
 
-## WHAT THE THINGS REFLECT: the table and the room, caught once when the table is set (see
-## [method _reflect]). Metal with nothing to reflect read as flat paint. The things alone take it: the
-## cards and the cloth keep the light they were tuned under.
+## What the things reflect: the table and the room, caught once when the table is set (see [method _reflect]). Metal
+## with nothing to reflect reads as flat paint. The things alone take it: the cards and the cloth keep the light they
+## were tuned under.
 func _make_probe() -> void:
 	_probe = ReflectionProbe.new()
 	_probe.update_mode = ReflectionProbe.UPDATE_ONCE
@@ -1763,8 +1710,8 @@ func _make_probe() -> void:
 
 
 ## The reflection probe freed, before the table leaves the world to be built ([method _build_away]) - made again by
-## [method _make_probe] as it comes back. ([TablePreview] binds acts with it out of the world too, and keeps it: a table it stood has
-## long caught its faces by then, and one made again would leave the agent's next look without them for a few frames.)
+## [method _make_probe] as it comes back. ([TablePreview] binds acts with it out of the world too, and keeps it: a table
+## it stood has long caught its faces by then.)
 func _drop_probe() -> void:
 	if _probe != null:
 		_probe.free()
@@ -1781,7 +1728,7 @@ func _reflect() -> void:
 
 
 ## The set dresser's table, made safe - or, before there is one, the look's candles. Read from the
-## FILE, as the pictures are, so a render (a second process) stands what the live table stood.
+## file, as the pictures are, so a render (a second process) stands what the live table stood.
 func _table_spec() -> Dictionary:
 	return TablePlan.table_of(_table_json(_plan.pay), _plan.look, _plan.seed_value)
 
@@ -1798,10 +1745,9 @@ func _table_json(pay: Dictionary) -> Variant:
 	return null
 
 
-## A BREATH for the app, in a table built [member aside]: a worker in a long loop of GDScript calls holds
-## the engine's object locks so tightly that the main thread drew at four frames a second (measured
-## 2026-10-08); a moment given up now and then gave it back its frames, and the build got no slower. It
-## changes nothing built.
+## A breath for the app, in a table built [member aside]: a worker in a long loop of GDScript holds the engine's object
+## locks so tightly that the main thread draws at a few frames a second; a moment given up now and then gives it back
+## its frames and the build gets no slower. It changes nothing built.
 func _breathe() -> void:
 	if not aside:
 		return
@@ -1814,22 +1760,20 @@ func _breathe() -> void:
 
 ## The reader's eye: still - or, on a table that rides ([Rides]), given what its mount gives.
 func _tick_camera(t: float) -> void:
-	# A LOCKED-OFF CAMERA: the table is filmed from a tripod. The Camera dial's breath was a
-	# millimeter - nothing anyone could see - so the dial is gone from the panel. ABOARD SOMETHING
-	# THAT MOVES the tripod rides with the table, and only its give shows: a faint buzz, a quick nod
-	# at a jolt (Rides.camera) - turned about the lens, so what is posed from the camera's place
-	# (a card held up, its page) is where it was
+	# A locked-off camera: the table is filmed from a tripod. Aboard something that moves the tripod rides with the
+	# table, and only its give shows: a faint buzz, a quick nod at a jolt (Rides.camera) - turned about the lens, so
+	# what is posed from the camera's place (a card held up, its page) is where it was
 	var give := Rides.camera(_ride, t)
 	var base := _plan.cam_base if _work.game == null else _work.game.shot_at(t, _plan.cam_base)
 	_cam.transform = base if give == Vector3.ZERO else base * Transform3D(Basis.from_euler(give), Vector3.ZERO)
-	# ...OR LET GO OF FOR A FREE LOOK ([method free_look]): turned about the middle of the reading, drawn in or out
+	# ...or let go of for a free look ([method free_look]): turned about the middle of the reading, drawn in or out
 	if _free:
 		_cam.transform = free_eye(_cam.transform, _plan.mid, _free_yaw, _free_pitch, _free_reach)
 
 
-## A FREE LOOK AT THE TABLE (next/editing.md step 7: "a second view: the plan from above ... and a free look"): the reader's eye let
-## go of, for a person looking the set over - turned about the middle of the reading and drawn in or out ([method look_by]) - and
-## given back as it was when [param on] is false. Never in a render: what is exported is the show's own eye.
+## A free look at the table (next/editing.md step 7): the reader's eye let go of, for a person looking the set over -
+## turned about the middle of the reading and drawn in or out ([method look_by]) - and given back as it was when
+## [param on] is false. Never in a render: what is exported is the show's own eye.
 func free_look(on: bool) -> void:
 	_free = on and not OS.get_cmdline_user_args().has("--export")
 	_free_yaw = 0.0
@@ -1849,8 +1793,7 @@ func look_by(yaw: float, pitch: float, reach := 1.0) -> void:
 	_free_reach = clampf(_free_reach * reach, 0.25, 4.0)
 
 
-## THE EYE [param base] TURNED ABOUT [param pivot]: [param yaw] round the upright, [param pitch] over it, [param reach] times as far -
-## kept above the table, looking at the pivot.
+## The eye [param base] turned about [param pivot]: [param yaw] round the upright, [param pitch] over it, [param reach] times as far - kept above the table, looking at the pivot.
 static func free_eye(base: Transform3D, pivot: Vector3, yaw: float, pitch: float, reach: float) -> Transform3D:
 	var off := (base.origin - pivot).rotated(Vector3.UP, yaw)
 	var side := off.cross(Vector3.UP)
@@ -1861,8 +1804,7 @@ static func free_eye(base: Transform3D, pivot: Vector3, yaw: float, pitch: float
 	return Transform3D(Basis(), pivot + off).looking_at(pivot, Vector3.UP)
 
 
-## THE TABLE STANDING, FROM ABOVE ([method TableThings.blueprint], as [TableBlueprint] draws it): its top, its cards, where nothing
-## may stand and each thing as it stood - for a plan a person moves things on (next/editing.md step 7). {} before one stands.
+## The table standing, from above ([method TableThings.blueprint], as [TableBlueprint] draws it): its top, its cards, where nothing may stand and each thing as it stood - for a plan a person moves things on (next/editing.md step 7). {} before one stands.
 func blueprint() -> Dictionary:
 	if _built_key.is_empty() or _cam == null:
 		return {}
@@ -1874,17 +1816,14 @@ func standing_dir() -> String:
 	return String(episode_report().get("dir", ""))
 
 
-## WHAT IS AT [param at] (pixels of the view the table is seen in): `{thing, part}` for the nearest thing standing there, {} for none
-## (next/editing.md step 7: "a click on the stage names a thing and its part - a ray against what is built"). The reader's eye as it
-## is now ([method ray_pick] over what stands, [member TableThings.on_table]).
+## What is at [param at] (pixels of the view the table is seen in): `{thing, part}` for the nearest thing standing there, {} for none (next/editing.md step 7). The reader's eye as it is now ([method ray_pick] over what stands, [member TableThings.on_table]).
 func pick(at: Vector2) -> Dictionary:
 	if _cam == null or not _cam.is_inside_tree():
 		return {}
 	return ray_pick(_cam.project_ray_origin(at), _cam.project_ray_normal(at), _things_part.on_table)
 
 
-## THE THING A RAY FROM [param from] ALONG [param dir] MEETS FIRST among [param things] (`on_table`'s shape: `{name, meshes}`): each
-## mesh's box where it stands now, the nearest met naming the thing and the part (its mesh's name). {} for none met.
+## The thing a ray from [param from] along [param dir] meets first among [param things] (`on_table`'s shape: `{name, meshes}`): each mesh's box where it stands now, the nearest met naming the thing and the part (its mesh's name). {} for none met.
 static func ray_pick(from: Vector3, dir: Vector3, things: Array) -> Dictionary:
 	var best := {}
 	var best_d := INF
@@ -1907,10 +1846,10 @@ static func ray_pick(from: Vector3, dir: Vector3, things: Array) -> Dictionary:
 
 # --- what moves ----------------------------------------------------------------------------------------
 
-## A THING'S MOVING PARTS ([Props.build]'s `movers`), made ready to answer the ride and the wind: each one's
-## oscillator ([method Rides.responder], from how far it reaches as it stands - the thing's size and scale
-## counted), where it is held, the turn from the table's space into its thing's, and where it stands on
-## the table (for the eddies of the wind there). Past [constant Rides.MAX_MOVERS] on a table, a thing's stand as built.
+## A thing's moving parts ([Props.build]'s `movers`), made ready to answer the ride and the wind: each one's oscillator
+## ([method Rides.responder], from how far it reaches as it stands - the thing's size and scale counted), where it is
+## held, the turn from the table's space into its thing's, and where it stands on the table (for the wind's eddies).
+## Past [constant Rides.MAX_MOVERS] on a table, a thing's stand as built.
 func _take_movers(b: Dictionary, node: Node3D) -> void:
 	var into := node.transform.basis.orthonormalized().inverse()
 	var sized := float(b.get("sized", 1.0)) * node.transform.basis.get_scale().x
@@ -1926,10 +1865,10 @@ func _take_movers(b: Dictionary, node: Node3D) -> void:
 			"at": node.transform * (inner.transform * pivot), "contact": md.get("contact", PackedVector3Array())})
 
 
-## EVERY MOVING PART at show time [param t] ([method Rides.pose]): turned about where it is held - a lean
-## about the level axis square to it (a hanging thing's weight swung that way, a rock tipped on the edge of
-## what it rests on furthest the way it leans - [method Props._contact]), a turn about the up - inside its
-## thing, so the light and its shadows follow.
+## Every moving part at show time [param t] ([method Rides.pose]): turned about where it is held - a lean about the
+## level axis square to it (a hanging thing's weight swung that way, a rock tipped on the edge of what it rests on
+## furthest the way it leans - [method Props._contact]), a turn about the up - inside its thing, so the light and its
+## shadows follow.
 func _tick_ride(t: float) -> void:
 	for m in _movers:
 		var md: Dictionary = m
@@ -1961,11 +1900,11 @@ func _tick_ride(t: float) -> void:
 		node.transform = Transform3D(rot, pivot - rot * pivot)
 
 
-## THE INTRO IS OUT OF FOCUS, where the note opens so ([member ShowFeed.opening]): the whole frame
-## thrown far out of focus while the channel's name is up - nothing on the table to be made out, only
-## its colors - then the focus PULLS as the reading opens (the deck's shuffle, the box's opening): the
-## wide blur lifts, and the lens carries on near to far, the cloth in front of the reader first, and is
-## off for the reading. The end card leaves it alone. A note that opens on nothing is sharp throughout.
+## The intro is out of focus, where the note opens so ([member ShowFeed.opening]): the whole frame thrown far out of
+## focus while the channel's name is up - nothing on the table to be made out, only its colors - then the focus pulls
+## as the reading opens (the deck's shuffle, the box's opening): the wide blur lifts, and the lens carries on near to
+## far, the cloth in front of the reader first, and is off for the reading. The end card leaves it alone. A note that
+## opens on nothing is sharp throughout.
 func _tick_focus(t: float) -> void:
 	_lens(ShowOpening.pull(feed.opening, t, _intro_end(), not _sched.is_empty()))
 
@@ -1977,8 +1916,7 @@ func _lens(pull: float) -> void:
 
 # --- the air ---------------------------------------------------------------------------------------------
 
-## THE AIR: the set dresser's effects (its table's `effects`, [Effects]) - fog, motes and bursts -
-## built for this camera, with the stage's volumetric fog on only while there is fog to draw.
+## The air: the set dresser's effects (its table's `effects`, [Effects]) - fog, motes and bursts - built for this camera, with the stage's volumetric fog on only while there is fog to draw.
 func _build_air(spec: Dictionary) -> void:
 	if _air != null:
 		_air.release()
@@ -1992,7 +1930,7 @@ func _build_air(spec: Dictionary) -> void:
 		_root3.add_child(_air.root)
 	var foggy: bool = _air != null and _air.has_fog()
 	Effects.fog_environment(_env, foggy)
-	# IN FOG, A LIGHT IS SEEN: the lamp's beam and every candle's glow scatter in it, shafts and halos
+	# In fog, a light is seen: the lamp's beam and every candle's glow scatter in it, shafts and halos
 	_lamp.light_volumetric_fog_energy = 1.6 if foggy else 1.0
 	for l in _lights:
 		((l as Dictionary)["light"] as OmniLight3D).light_volumetric_fog_energy = 2.0 if foggy else 1.0
@@ -2001,12 +1939,11 @@ func _build_air(spec: Dictionary) -> void:
 	_air_key = ""
 
 
-## Where the air may be, the camera it is seen through, and what stands in it - the table and the
-## things on it (the cards' box too), which motes are homed in front of and fly over; the wind, the
-## table's top, where what drifts can lie, and what covers it at a time ([method _cover_at]). And THE LENS: sharp over the table
-## (its nearest corner to its farthest, along the camera's axis), blurring past it as the room is -
-## [constant ROOM_BLUR] of the frame's width, [constant ROOM_REACH] out - and the air ending just short
-## of the room's picture.
+## Where the air may be, the camera it is seen through, and what stands in it - the table and the things on it (the
+## cards' box too), which motes are homed in front of and fly over; the wind, the table's top, where what drifts can
+## lie, and what covers it at a time ([method _cover_at]). And the lens: sharp over the table (its nearest corner to
+## its farthest, along the camera's axis), blurring past it as the room is - [constant ROOM_BLUR] of the frame's width,
+## [constant ROOM_REACH] out - and the air ending just short of the room's picture.
 func _air_stage() -> Dictionary:
 	var table: AABB = _furniture.get("bounds", AABB(Vector3(-TABLE.x * 0.5, -TABLE.y, TABLE_Z - TABLE.z * 0.5), TABLE))
 	var under: Array = [table]
@@ -2028,9 +1965,8 @@ func _air_stage() -> Dictionary:
 		"deep": ROOM_REACH * 0.9}
 
 
-## WHAT LIES ON THE CLOTH at [param p] (xz, [param r] round it) at show time [param t]: the top of the deck
-## or of a card lying there, or -INF - where what drifts may not come down, skid or lie uncovered (a
-## flower once fell through the deck and lay under it, 2026-10-08). A card held up, or still in the
+## What lies on the cloth at [param p] (xz, [param r] round it) at show time [param t]: the top of the deck or of a card
+## lying there, or -INF - where what drifts may not come down, skid or lie uncovered. A card held up, or still in the
 ## deck, covers nothing; a deck being shuffled or washed spreads wider than it lies.
 func _cover_at(p: Vector2, t: float, r: float) -> float:
 	var tm := _times()
@@ -2069,8 +2005,7 @@ static func _under_card(xf: Transform3D, p: Vector2, r: float) -> bool:
 	return absf(l.x) <= CARD.x * 0.5 + r and absf(l.z) <= CARD.y * 0.5 + r
 
 
-## The air at show time [param t] - its bursts planned again whenever the schedule moved (and only
-## then: a word heard that moves no action plans nothing, as tracing every card's path is not free).
+## The air at show time [param t] - its bursts planned again whenever the schedule moved (and only then: tracing every card's path is not free).
 func _tick_air(t: float) -> void:
 	if _air == null:
 		return
@@ -2081,15 +2016,12 @@ func _tick_air(t: float) -> void:
 	_air.tick(t)
 
 
-## THE MOMENTS THE AIR CAN MARK, from the schedule: `{name: [{t, dur, path, from, card}]}` (see
-## [constant CardTable.MOMENTS]) - each with the time it starts, how long it lasts, the card it is on
-## (-1 for none), and where its emitter is through it (`path`, `[[t, Transform3D], ...]`). A card's
-## moment is timed by when the card really gets there - faces the viewer, lands, is down for the close
-## - and its path is the card as the table draws it over the whole window its particles are born in
-## ([method _card_path]), never a pose it has yet to reach: the close was once marked at the spread's
-## mark from where each card would lie, and burst on the empty cloth beside the last card while it was
-## still held up on the left, about to be laid there (2026-10-08). A moment the voice has not reached
-## yet is not here.
+## The moments the air can mark, from the schedule: `{name: [{t, dur, path, from, card}]}` (see [constant
+## CardTable.MOMENTS]) - each with the time it starts, how long it lasts, the card it is on (-1 for none), and where its
+## emitter is through it (`path`, `[[t, Transform3D], ...]`). A card's moment is timed by when the card really gets
+## there - faces the viewer, lands, is down for the close - and its path is the card as the table draws it over the
+## whole window its particles are born in ([method _card_path]), never a pose it has yet to reach. A moment the voice
+## has not reached yet is not here.
 func _air_moments() -> Dictionary:
 	var out := {}
 	for m in CardTable.MOMENTS:
@@ -2101,8 +2033,7 @@ func _air_moments() -> Dictionary:
 			"path": [[ts, Transform3D(Basis.IDENTITY, _plan.mid + Vector3(0.0, DECK_T * _plan.deck_n, 0.0))]]})
 	var all_events: Array = tm["events"]
 	var wj0 := _shuffles.wash_jump(maxf(float(tm["shuffle"]), minf(0.0, _now)))
-	# THE CLOSE waits for the last card down: the spread's mark lays a card still held up, and a turn
-	# under way finishes
+	# The close waits for the last card down: the spread's mark lays a card still held up, and a turn under way finishes
 	var tc := float(tm["spread"])
 	var down := tc
 	for k in _cards.size():
@@ -2123,8 +2054,7 @@ func _air_moments() -> Dictionary:
 			elif kind == "show":
 				up_at = td + (off + SHOW_RISE) * s
 			if how == "jumper":
-				# ALONG ITS FLIGHT, from springing off the riffle - or being thrown out of the wash - to
-				# landing
+				# Along its flight, from springing off the riffle - or being thrown out of the wash - to landing
 				var t0 := td + (off + JUMP_FLY.x) * s
 				var t1 := td + (off + JUMP_FLY.y) * s
 				if k == 0 and not wj0.is_empty():
@@ -2139,12 +2069,12 @@ func _air_moments() -> Dictionary:
 					var look: Dictionary = (l as Dictionary)["look"]
 					if float(look["twirl"]) <= 0.0:
 						continue
-					# THROUGH THE TWIRL, the card's edges spinning with it
+					# Through the twirl, the card's edges spinning with it
 					var a0 := float((l as Dictionary)["at"]) + float(look["turn"]) + float(look["hold"])
 					var dur := float(look["twirl"])
 					(out["pirouette"] as Array).append({"t": a0, "dur": dur, "from": "card", "card": k,
 						"path": _card_path(k, a0, dur, tm, wj0)})
-			# WHERE IT LANDS: laid from the hand, dealt, or swept out
+			# Where it lands: laid from the hand, dealt, or swept out
 			var land := INF
 			match kind:
 				"lay":
@@ -2166,23 +2096,22 @@ func _air_moments() -> Dictionary:
 		for k in _cards.size():
 			(out["close"] as Array).append({"t": down, "dur": 0.8, "from": "card", "card": k,
 				"path": _card_path(k, down, 0.8, tm, wj0)})
-	# THE WASH'S CARDS ON THE CLOTH, for what lies there to be shoved by ([method Drifts.laid]); not a
-	# moment a burst can be on, so not one of [constant CardTable.MOMENTS]
+	# The wash's cards on the cloth, for what lies there to be shoved by ([method Drifts.laid]); not a moment a burst
+	# can be on, so not one of [constant CardTable.MOMENTS]
 	var ts_wash := maxf(float(tm["shuffle"]), minf(0.0, _now))
 	out["sweep"] = _shuffles.sweeps(ts_wash, float(tm["end"]), func(t: float) -> Vector3: return _deck_at(t, tm, wj0),
 		str(tm["first"]))
 	return out
 
 
-## How often a burst's emitter is sampled along its card's path (seconds): a frame's time at 30 - a
-## twirl turns well under half a turn between two, so a card's edges eased between them are where
-## they are drawn.
+## How often a burst's emitter is sampled along its card's path (seconds): a frame's time at 30 - a twirl turns well
+## under half a turn between two, so a card's edges eased between them are where they are drawn.
 const AIR_STEP := 1.0 / 30.0
 
-## CARD [param k] AS THE TABLE DRAWS IT from [param t0] through [param dur] seconds - or through the
-## window a moment's particles are born in ([constant Effects.BIRTH]) when that is longer: its pose
-## ([method TableCardPose.card_pose]) with the deck where [method _pose] has it, every [constant AIR_STEP]. What a
-## burst on it rides: `[[t, Transform3D], ...]`.
+## Card [param k] as the table draws it from [param t0] through [param dur] seconds - or through the window a moment's
+## particles are born in ([constant Effects.BIRTH]) when that is longer: its pose ([method TableCardPose.card_pose])
+## with the deck where [method _pose] has it, every [constant AIR_STEP]. What a burst on it rides: `[[t, Transform3D],
+## ...]`.
 func _card_path(k: int, t0: float, dur: float, tm: Dictionary, wj: Dictionary) -> Array:
 	var keep := _cur_base
 	var keep_gone := _deck_gone
@@ -2202,22 +2131,21 @@ func _card_path(k: int, t0: float, dur: float, tm: Dictionary, wj: Dictionary) -
 
 # --- the schedule ----------------------------------------------------------------------------------------
 
-## THE SHUFFLE'S CHAIN, made now rather than a frame at a time while it plays - and after the things
-## on the table stand, so a wash's cards go round them, never through them. Again whenever the table
-## changes. A wash's plan is made when it is first asked for ([method TableShuffle._whole]): the
-## first frame of a reading that shuffles, and never for a table only looked at.
+## The shuffle's chain, made now rather than a frame at a time while it plays - and after the things on the table
+## stand, so a wash's cards go round them, never through them. Again whenever the table changes. A wash's plan is made
+## when it is first asked for ([method TableShuffle._whole]): the first frame of a reading that shuffles, and never for
+## a table only looked at.
 func _plan_moves() -> void:
 	_shuffles.plan_moves(_plan.seed_value)
 
 
-## When each card is drawn and laid, and when the shuffle starts and stops, from the placed
-## schedule: `{shuffle, opening, end, draw: [t0, s, kind, lead], lay: [t0, s], spread, first, events}` -
-## a time of INF is one the voice has not reached yet. `opening` is when the reading opens, whatever
-## its source - the deck's shuffle or the box's opening: the intro's end, where the name goes and the
-## focus pulls (a box has no shuffle, and its episodes lost both). `events` is EACH CARD'S TIMELINE, in order: `{k: arrive
-## (how: draw, jumper, deal, fan - `i` its place in the waterfall), show, lay, turn (how: tap, untap,
-## flip), t0, s, off}` - `off` the seconds (at speed 1) its own phases wait for what goes first: the
-## card up before it laid, or the deck pushed aside.
+## When each card is drawn and laid, and when the shuffle starts and stops, from the placed schedule: `{shuffle,
+## opening, end, draw: [t0, s, kind, lead], lay: [t0, s], spread, first, events}` - a time of INF is one the voice has
+## not reached yet. `opening` is when the reading opens, whatever its source - the deck's shuffle or the box's opening:
+## the intro's end, where the name goes and the focus pulls. `events` is each card's timeline, in order: `{k: arrive
+## (how: draw, jumper, deal, fan - `i` its place in the waterfall), show, lay, turn (how: tap, untap, flip), t0, s,
+## off}` - `off` the seconds (at speed 1) its own phases wait for what goes first: the card up before it laid, or the
+## deck pushed aside.
 func _times() -> Dictionary:
 	var n := _cards.size()
 	var draw: Array = []
@@ -2287,13 +2215,13 @@ func _times() -> Dictionary:
 		"first": first_act, "events": events, "rummages": rummages}
 
 
-## Where the deck is at [param t]: in the middle while it is shuffled, then pushed to its side
-## as the first card comes - squared first (SQUARE), then slid (PUSH_SLIDE), a hair off the cloth.
-## A jumper flies out of a riffle in the middle, and the deck goes once that riffle is done - or,
-## out of a wash ([param wj], [method TableShuffle.wash_jump]), once the wash is gathered.
+## Where the deck is at [param t]: in the middle while it is shuffled, then pushed to its side as the first card comes -
+## squared first (SQUARE), then slid (PUSH_SLIDE), a hair off the cloth. A jumper flies out of a riffle in the middle,
+## and the deck goes once that riffle is done - or, out of a wash ([param wj], [method TableShuffle.wash_jump]), once
+## the wash is gathered.
 func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 	if _plan.cards_from == "box":
-		# IN THE BOX: a tin's deck lies flat on its floor (a box's cards are filed, the deck unseen)
+		# In the box: a tin's deck lies flat on its floor (a box's cards are filed, the deck unseen)
 		var inner: AABB = _box_part.stood.get("inner", AABB(_plan.deck_base, Vector3.ZERO))
 		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box_part.stood.is_empty() else _plan.deck_base
 	var first: Array = tm["first"]
@@ -2305,7 +2233,7 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 		go = (float(wj["end"]) - float(first[0])) / s
 	var u := clampf(((t - float(first[0])) / s - go) / PUSH_SLIDE, 0.0, 1.0)
 	if u >= 1.0 and _plan.aside_card >= 0:
-		# PUT ASIDE before the card that would crowd it is taken ([method TablePlan.put_aside])
+		# Put aside before the card that would crowd it is taken ([method TablePlan.put_aside])
 		var d: Array = (tm["draw"] as Array)[_plan.aside_card]
 		var taken := float(d[0]) + float(d[3]) * float(d[1])
 		var v := clampf((t - (taken - ASIDE_S)) / ASIDE_S, 0.0, 1.0)
@@ -2315,9 +2243,9 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 
 # --- posing everything --------------------------------------------------------------------------------------
 
-## A lidded shoebox arrives from the side and settles at the center, broad side across the
-## table. It stays there while the lid is lifted and set beside it. The contents are built at
-## that settled position and travel with it. Scrubbing uses the same poses.
+## A lidded shoebox arrives from the side and settles at the center, broad side across the table. It stays there while
+## the lid is lifted and set beside it. The contents are built at that settled position and travel with it. Scrubbing
+## uses the same poses.
 func _pose_box(t: float, tm: Dictionary) -> void:
 	if not _box_part.stood.has("lid"):
 		return
@@ -2356,19 +2284,15 @@ func _pose_box(t: float, tm: Dictionary) -> void:
 	lid_shade.modulate.a = 0.6 * away
 
 
-## A SEARCH LOOKS AT A FEW OF THE BOX'S OWN CARDS, one after another, each in its place
-## (`_box["search"]`, [method _build_file] and [method _pile_places]), AND AT THEIR FRONTS (the user,
-## 2026-10-13: nobody looks for a card by its back): a card ON EDGE, standing face to the reader, is
-## drawn up out of the file along its own plane, [constant SEARCH_RISE] of its height, its face leaned
-## back to the eye about the file's top, and let back down ([constant SEARCH_LOOKS] of them); a card
-## LYING face down on a pile is lifted clear of the rim, turned over to be seen, turned back and laid
-## down ([constant SEARCH_LOOKS_LYING], a turn over taking the longer). THE CARD IS THE BOX'S OWN, kept
-## in that place ([method _keep_searched]), so nothing appears or changes as a look begins; only a box
-## with no place to spare (a tin's flat deck, one pile) is given a card for the length of the look
-## ([method _show_searched]). None becomes an episode draw, and none shows a painting of its own
-## ([method _unseen_fronts]). It used to be one flat card that appeared in the air over the rim, rose
-## and sank three times, over a box of cards standing on edge (the user, 2026-10-12: "lifted from the
-## deck FLAT, and THREE times in a row. That is totally wrong").
+## A search looks at a few of the box's own cards, one after another, each in its place (`_box["search"]`, [method
+## _build_file] and [method _pile_places]), and at their fronts: a card on edge, standing face to the reader, is drawn up
+## out of the file along its own plane, [constant SEARCH_RISE] of its height, its face leaned back to the eye about the
+## file's top, and let back down ([constant SEARCH_LOOKS] of them); a card lying face down on a pile is lifted clear of
+## the rim, turned over to be seen, turned back and laid down ([constant SEARCH_LOOKS_LYING], a turn over taking the
+## longer). The card is the box's own, kept in that place ([method _keep_searched]), so nothing appears or changes as a
+## look begins; only a box with no place to spare (a tin's flat deck, one pile) is given a card for the length of the
+## look ([method _show_searched]). None becomes an episode draw, and none shows a painting of its own ([method
+## _unseen_fronts]).
 func _pose_rummage(t: float, tm: Dictionary) -> void:
 	_rummage_card.visible = false
 	_box_part.looking = null
@@ -2415,8 +2339,8 @@ func _pose(t: float) -> void:
 	var tm := _times()
 	_pose_box(t, tm)
 	_pose_rummage(t, tm)
-	# a shuffle that began in the replayed past of a mid-way start is under way NOW, not a hundred
-	# thousand seconds in (the chain of moves is only made so far)
+	# a shuffle that began in the replayed past of a mid-way start is under way now, not a hundred thousand seconds in
+	# (the chain of moves is only made so far)
 	var ts := maxf(float(tm["shuffle"]), minf(0.0, _now))
 	var te := float(tm["end"])
 	# a jumper's own riffle, on the jumper's clock (its action's scale) - or the wash it comes out of
@@ -2425,17 +2349,16 @@ func _pose(t: float) -> void:
 	_shuffles.fit_room(ts, te, jump_s)
 	var wj := _shuffles.wash_jump(ts)
 	_cur_base = _deck_at(t, tm, wj)
-	# THE JUMPER'S CARD IS NOT IN THE DECK once a wash throws it: its mesh is hidden while the wash
-	# runs on, and the deck is one mesh short after (identical meshes: the top one goes)
+	# The jumper's card is not in the deck once a wash throws it: its mesh is hidden while the wash runs on, and the
+	# deck is one mesh short after (identical meshes: the top one goes)
 	var gone := -1
 	if not wj.is_empty() and t >= float(wj["eject"]):
 		gone = int(wj["card"]) if t < float(wj["end"]) else _plan.deck_n - 1
 	_deck_gone = 1 if not wj.is_empty() and t >= float(wj["end"]) else 0
-	# THE DECK: shuffling from the shuffle mark until the first card leaves it, squared after - or,
-	# when the first card is a jumper, riffled once more first: the card flies out of that riffle;
-	# or the wash under way runs on and throws it
-	# THE DECK'S CARDS LIE THE WAY THEY LIE ([method TableShuffle.deck_turns]): each carries its own way through
-	# the shuffle, and the one that ends on top is the way the next card drawn comes up
+	# The deck: shuffling from the shuffle mark until the first card leaves it, squared after - or, when the first card
+	# is a jumper, riffled once more first: the card flies out of that riffle; or the wash under way runs on and throws
+	# it. The deck's cards lie the way they lie ([method TableShuffle.deck_turns]): each carries its own way through the
+	# shuffle, and the one that ends on top is the way the next card drawn comes up
 	var chained := _plan.cards_from == "deck" and ts < INF
 	var turns := _shuffles.deck_turns(t, ts, te, tm, wj, jump_s) if chained else PackedFloat32Array()
 	var settled := float(wj["end"]) if not wj.is_empty() else te
@@ -2467,7 +2390,7 @@ func _pose(t: float) -> void:
 		dm.transform = xf
 		# a box's cards are filed in it: the deck is seen only lying flat in a tin
 		dm.visible = i != gone and i <= top_slot and (_plan.cards_from != "box" or bool(_box_part.stood.get("flat", false)))
-	# THE CARDS, each from its own timeline
+	# The cards, each from its own timeline
 	var showing := -1
 	var page_in := 0.0
 	var all_events: Array = tm["events"]
@@ -2486,7 +2409,7 @@ func _pose(t: float) -> void:
 			page_in = float(pose["page"])
 		if not bool(pose["up"]):
 			continue
-		# THE FOIL breathes while a card is held up, and now and then a glint crosses it
+		# The foil breathes while a card is held up, and now and then a glint crosses it
 		var mat: ShaderMaterial = _face_mats[k]
 		mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(glint_t * TAU / 5.5 + float(k)))
 		var cyc := fmod(maxf(glint_t - float(pose["since"]), 0.0), 7.0)
@@ -2499,9 +2422,9 @@ func _pose(t: float) -> void:
 	_back_mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(t * TAU / 7.0))
 
 
-## The card waiting on top of the deck: the next to be taken off it ([method _leaves]) - a jumper until
-## its action begins - so the deck's top card is turned the way the card it is comes up ([method _upside]),
-## and the back exposed when it is taken already lies the way of the card after it.
+## The card waiting on top of the deck: the next to be taken off it ([method _leaves]) - a jumper until its action
+## begins - so the deck's top card is turned the way the card it is comes up ([method _upside]), and the back exposed
+## when it is taken already lies the way of the card after it.
 func _top_deck_reversed(t: float, tm: Dictionary) -> bool:
 	var draws: Array = tm["draw"]
 	for k in mini(draws.size(), _cards.size()):
@@ -2552,12 +2475,9 @@ func _deck_top_xf(k: int) -> Transform3D:
 		_cur_base + Vector3(j.x, float(slot) * DECK_T + CARD_T * 0.5, j.y))
 
 
-## THE CARDS TAKEN OFF THE DECK'S TOP: a drawn, dealt or swept card is the deck's own top card until the
-## hand takes it, and the deck is a card shorter from then. It was a card of its own laid over the whole
-## deck, there from the moment its move was scheduled: at the end of a shuffle it appeared on the top
-## while the last packet of the shuffle was still coming down through where it lay (true-tarot 288024,
-## the user, 2026-10-18: a card "pops" to the top "or appearing out of nowhere").
-## Whether card [param k] comes off the deck's top (a jumper flies out of it).
+## Whether card [param k] comes off the deck's top (a jumper flies out of it). A drawn, dealt or swept card is the
+## deck's own top card until the hand takes it, and the deck is a card shorter from then, so none appears on the top
+## while the last packet of a shuffle is still coming down through where it lies.
 func _from_top(k: int) -> bool:
 	if k >= _all_events.size():
 		return false
@@ -2598,8 +2518,7 @@ func _taken_before(k: int) -> int:
 	return n
 
 
-## THE CARD TWIRLED for a burst on the pirouette ([constant SPIN_ROOM]), or -1 when no burst marks one -
-## chosen again whenever the schedule moves.
+## The card twirled for a burst on the pirouette ([constant SPIN_ROOM]), or -1 when no burst marks one - chosen again whenever the schedule moves.
 func _spin_card() -> int:
 	if not _spin_wanted:
 		return -1
@@ -2658,25 +2577,23 @@ static func _ease(x: float) -> float:
 
 # --- the title -------------------------------------------------------------------------------------------
 
-## The channel's name over the table while the intro holds, gone a settle before the reading opens (the deck's
-## shuffle, the box's opening; [method _intro_end]) - and only then: the reading ends on the table fading to
-## black, not on the name again. Only where the note opens on its title ([member ShowFeed.opening]).
+## The channel's name over the table while the intro holds, gone a settle before the reading opens (the deck's shuffle,
+## the box's opening; [method _intro_end]) - and only then: the reading ends on the table fading to black, not on the
+## name again. Only where the note opens on its title ([member ShowFeed.opening]).
 func _title_alpha(t: float) -> float:
 	return ShowOpening.title_alpha(feed.opening, t, _intro_end(), not _sched.is_empty())
 
 
-## WHEN THE INTRO IS OVER: the table seen sharp, its name gone, [method Openings.settle] before the reading opens -
-## the deck's shuffle, the box's opening, a cardless show's first words (its `begin` had been held 0.4 s, and the
-## voice began as the name went). INF until the opening is placed.
+## When the intro is over: the table seen sharp, its name gone, [method Openings.settle] before the reading opens - the
+## deck's shuffle, the box's opening, a cardless show's first words. INF until the opening is placed.
 func _intro_end() -> float:
 	var o := float(_times()["opening"])
 	return o - Openings.settle(o) if o < INF else INF
 
 
-## THE OUTRO: once the voice has said its last word, the table fades to black - a beat after it,
-## and black exactly as the outro's silence runs out (the take's own tail in a render, the
-## Director's outro live). A function of show time like everything else, so a live reading, a
-## scrub and the export fade alike. 1 until then.
+## The outro: once the voice has said its last word, the table fades to black - a beat after it, and black exactly as
+## the outro's silence runs out (the take's own tail in a render, the Director's outro live). A function of show time
+## like everything else, so a live reading, a scrub and the export fade alike. 1 until then.
 func _end_fade(t: float) -> float:
 	return ShowOpening.end_fade(t, _follow,
 		(_plan.parse.get("spoken", PackedStringArray()) as PackedStringArray).size(), feed.tail())

@@ -1,33 +1,28 @@
 extends SceneTree
 
-## The gate of THE RIDE ([Rides]): a table aboard something that moves - the lens's give, what on the table
-## moves with it, the flames and the sound - with no renderer.
+## The gate of the ride ([Rides]): a table aboard something that moves - the lens's give, what on the table moves with it, the flames
+## and the sound - with no renderer.
 ##
 ##   godot --headless --path . --script res://tests/table/ride_check.gd
 ##
-## - A TABLE THAT STANDS STILL HAS NO RIDE: nothing written plans none, the lens never moves and a moving
-##   part stands as built. A ride the table does not know is said and left off.
-## - EVERYTHING IS A FUNCTION OF SHOW TIME: the same ride and seed plan the same jolts; a pose asked out of
-##   order is the pose asked in order; the jolts of two windows are the jolts of both.
-## - THE RAILS KNOCK IN PAIRS: each joint is struck by the car's axles in turn, close pairs a long gap apart
-##   (da-da ... da-da), once a joint's length of track.
-## - THE LENS ONLY GIVES (the user: "not slow, gentle movement ... because the camera is mounted"): a faint
-##   buzz - under a pixel and a half rms on a rough train - a jolt of a few pixels, never past its stop, and
-##   none of the slow sway: the lens is the same with the sway taken out of the plan, where a swaying flower
-##   (the control) is not.
-## - A JOLT IS SEEN AND HEARD AT ONCE: the lens and a flower are still just before the hardest bump and moved
-##   just after; the sound of the ride rises at that same moment - and the same place on another seed (the
-##   control) does not.
-## - EACH KIND ANSWERS AS IT IS: a taller stalk sways slower; a pendulum swings at sqrt(g/L); a needle swings
-##   at a jolt and comes back to its north (the ride turning under it); small jolts never move a rock, and the
-##   turns a hard one sets it down with stay near where it was put; a liquid stays level as the deck rolls
-##   while what stands goes downhill; a flame leans toward the push.
-## - BUILT: a moving group is one node round all its parts, a part moving inside it a node inside that, each
-##   copy its own; at rest everything stands where the still build stands it, and turned, the vase stays and
-##   the flower moves. A ROCK ROCKS ON ITS EDGE: tipped, its lowest point stays on the cloth - turned about its
-##   middle (the control) it sinks through.
-## - MADE SAFE: the table keeps its ride; a part keeps its move (a word or an object); a part with a flame
-##   never moves; and the sound hears the ride the table plans.
+## - A table that stands still has no ride: nothing written plans none, the lens never moves and a moving part stands as built. A
+##   ride the table does not know is said and left off.
+## - Everything is a function of show time: the same ride and seed plan the same jolts; a pose asked out of order is the pose asked
+##   in order; the jolts of two windows are the jolts of both.
+## - The rails knock in pairs: each joint is struck by the car's axles in turn, close pairs a long gap apart, once a joint's length
+##   of track.
+## - The lens only gives: a faint buzz (under a pixel and a half rms on a rough train), a jolt of a few pixels, never past its
+##   stop, and none of the slow sway: the lens is the same with the sway taken out of the plan (control: a swaying flower is not).
+## - A jolt is seen and heard at once: the lens and a flower are still just before the hardest bump and moved just after; the sound
+##   of the ride rises at that moment (control: the same place on another seed does not).
+## - Each kind answers as it is: a taller stalk sways slower; a pendulum swings at sqrt(g/L); a needle swings at a jolt and comes
+##   back to its north; small jolts never move a rock, and the turns a hard one sets it down with stay near where it was put; a
+##   liquid stays level as the deck rolls while what stands goes downhill; a flame leans toward the push.
+## - Built: a moving group is one node round all its parts, a part moving inside it a node inside that, each copy its own; at rest
+##   everything stands where the still build stands it, and turned, the vase stays and the flower moves. A rock rocks on its edge:
+##   tipped, its lowest point stays on the cloth (control: turned about its middle it sinks through).
+## - Made safe: the table keeps its ride; a part keeps its move (a word or an object); a part with a flame never moves; and the
+##   sound hears the ride the table plans.
 
 var _fails := 0
 
@@ -147,7 +142,7 @@ func _lens() -> bool:
 		var rms := sqrt(sq / float(n)) * px
 		_ok(rms > 0.03 and rms < 1.6, "the lens on a rough %s buzzes %s px rms (a faint buzz is under a pixel and a half)" % [on, str(snappedf(rms, 0.01))])
 		_ok(most <= Rides.MOUNT_MOST + 1e-6 and most * px > 1.0, "the lens on a rough %s turns %s px at the most" % [on, str(snappedf(most * px, 0.1))])
-	# NONE OF THE SLOW SWAY: the lens is the same with the sway and the roll taken out
+	# none of the slow sway: the lens is the same with the sway and the roll taken out
 	var p := _plan("water", 1.0, 0.8)
 	var calm := p.duplicate()
 	calm["sways"] = []
@@ -165,7 +160,7 @@ func _lens() -> bool:
 
 
 func _at_once() -> bool:
-	# ON A ROAD, whose only struck sounds are its jolts (a rail's knocks would be heard rising too)
+	# On a road, whose only struck sounds are its jolts (a rail's knocks would be heard rising too)
 	var p := _plan("road", 1.0, 0.8)
 	var t0 := _hardest(p, 20.0, 600.0)
 	_ok(t0 > 0.0, "no hard jolt in ten minutes on a rough road")
@@ -184,7 +179,7 @@ func _at_once() -> bool:
 			- (Rides.pose(p, {}, r, t0 - 0.001, Vector3.ZERO)["lean"] as Vector2)).length())
 	_ok(after > before * 2.0, "the lens is not moved by the hardest jolt (%s before, %s after)" % [before, after])
 	_ok(flower_after > 0.002, "a flower is not moved by the hardest jolt: %s rad" % flower_after)
-	# HEARD AT THE SAME MOMENT: the ride's sound rises there, a few milliseconds at most from the jolt
+	# heard at the same moment: the ride's sound rises there, a few milliseconds at most from the jolt
 	var sr := 22050
 	var table := {"ride": {"on": "road", "rough": 1.0, "speed": 0.8}, "sound": {"ride": {"level": 1.0}}}
 	var made: Dictionary = Soundscape.of_table(table, 11)
@@ -198,9 +193,8 @@ func _at_once() -> bool:
 	return true
 
 
-## The loudest rise from 2 to 4 seconds into [param sc] (seconds from its start): the 5 ms window whose level,
-## in the high band (each sample less the one before - the rumble's slow swells left out), most exceeds the
-## 50 ms before it.
+## The loudest rise from 2 to 4 seconds into [param sc] (seconds from its start): the 5 ms window whose level, in the high band (each sample
+## less the one before), most exceeds the 50 ms before it.
 static func _onset(sc: Soundscape, sr: int) -> float:
 	var a := sc.render(sr * 4)
 	var w := int(0.005 * float(sr))
@@ -231,7 +225,7 @@ func _kinds() -> bool:
 	_ok(float(tall["w"]) < float(short["w"]), "a taller stalk does not sway slower")
 	var swing := Rides.responder(p, {"kind": "swing", "amount": 0.5}, 0.25, 1)
 	_ok(absf(float(swing["w"]) - sqrt(9.81 / 0.25)) < 1e-3, "a 25 cm pendulum does not swing at sqrt(g/L)")
-	# A NEEDLE swings at a jolt and comes back to its north
+	# a needle swings at a jolt and comes back to its north
 	var hard := _plan("track", 1.0, 0.8)
 	var t0 := _hardest(hard, 30.0, 600.0)
 	var nd := Rides.responder(hard, {"kind": "needle", "amount": 0.5}, 0.02, 9)
@@ -240,8 +234,8 @@ func _kinds() -> bool:
 	for i in 20:
 		swung = maxf(swung, float(off.call(t0 + 0.05 + float(i) * 0.05)))
 	_ok(swung > deg_to_rad(2.0), "a needle does not swing at the hardest jolt: %s°" % rad_to_deg(swung))
-	# ...and keeps to its north as the road turns under it: what it is off north is a small share of how far
-	# the road turns (the control - a needle that turned with the car would be off by all of it)
+	# ...and keeps to its north as the road turns under it: what it is off north is a small share of how far the road turns (control: a needle
+	# that turned with the car would be off by all of it)
 	var road := _plan("road", 0.3, 0.8)
 	var rn := Rides.responder(road, {"kind": "needle", "amount": 0.5}, 0.02, 9)
 	var off_sq := 0.0
@@ -254,7 +248,7 @@ func _kinds() -> bool:
 	_ok(turn_sq / 600.0 > pow(deg_to_rad(2.0), 2.0), "the control: the road hardly turns (%s° rms)" % rad_to_deg(sqrt(turn_sq / 600.0)))
 	_ok(off_sq < turn_sq * 0.16, "a needle does not keep to its north as the road turns: off by %s° rms, the road turning %s°" % [
 		rad_to_deg(sqrt(off_sq / 600.0)), rad_to_deg(sqrt(turn_sq / 600.0))])
-	# A ROCK: no small jolt moves it, a hard one does, and it is set down near where it was put
+	# a rock: no small jolt moves it, a hard one does, and it is set down near where it was put
 	var knocks := _plan("rails", 0.6)
 	knocks["starts"] = PackedFloat32Array()
 	knocks["kicks"] = PackedVector3Array()
@@ -273,7 +267,7 @@ func _kinds() -> bool:
 		turned = maxf(turned, absf(float(Rides.pose(hard, {}, rk, float(i) * 3.0, Vector3.ZERO)["turn"])))
 	_ok(rocked > deg_to_rad(0.3), "a rock is not rocked by the hardest jolt on a rough track: %s°" % rad_to_deg(rocked))
 	_ok(turned > 0.0 and turned <= deg_to_rad(Rides.ROCK_TURN_MOST) + 1e-4, "a rock wandered %s° from where it was put" % rad_to_deg(turned))
-	# A LIQUID STAYS LEVEL as the deck rolls; what stands goes downhill
+	# a liquid stays level as the deck rolls; what stands goes downhill
 	var sea := _plan("water", 1.0, 0.0)
 	sea["starts"] = PackedFloat32Array()
 	sea["kicks"] = PackedVector3Array()
@@ -296,7 +290,7 @@ func _kinds() -> bool:
 			down += 1
 	_ok(n > 20 and level < 0.25, "a liquid does not stay level as the deck rolls: %s of the roll left" % level)
 	_ok(down == n, "a stalk does not lean downhill as the deck rolls (%d of %d)" % [down, n])
-	# A FLAME leans toward the push
+	# a flame leans toward the push
 	var pushed := 0
 	var asked := 0
 	var calm := _plan("road", 0.8, 0.8)
@@ -361,14 +355,14 @@ func _built() -> bool:
 	_ok(int((movers[1] as Dictionary)["parent"]) == 0 and ((movers[1] as Dictionary)["node"] as Node).get_parent() == (movers[0] as Dictionary)["node"],
 		"the petals' node is not inside the flower's")
 	_ok(((movers[0] as Dictionary)["pivot"] as Vector3).is_equal_approx(Vector3(0, 0.086, 0)), "the flower is not held where its move says: %s" % (movers[0] as Dictionary)["pivot"])
-	# AT REST everything stands where the still build stands it
+	# at rest everything stands where the still build stands it
 	var rest_same := true
 	for i in (b["meshes"] as Array).size():
 		var a := _box(_placed(b["meshes"][i], b["node"]))
 		var c := _box(_placed(s["meshes"][i], s["node"]))
 		rest_same = rest_same and a.position.is_equal_approx(c.position) and a.size.is_equal_approx(c.size)
 	_ok(rest_same and (b["meshes"] as Array).size() == (s["meshes"] as Array).size(), "a moving thing at rest does not stand where the still one does")
-	# TURNED, through the table: the vase stays, the flower moves
+	# turned, through the table: the vase stays, the flower moves
 	var m := TableMedium.new()
 	var node: Node3D = b["node"]
 	node.transform = Transform3D(Basis(Vector3.UP, 0.7), Vector3(0.2, 0.0, -0.1))
@@ -385,7 +379,7 @@ func _built() -> bool:
 	_ok(vase0.position.is_equal_approx(vase1.position), "the vase moved with the flower in it")
 	_ok(head0.get_center().distance_to(head1.get_center()) > 0.0003, "the flower's head did not move at the hardest jolt: %s m" % head0.get_center().distance_to(head1.get_center()))
 	node.free()
-	# A ROCK ROCKS ON ITS EDGE: tipped, its lowest point stays on the cloth
+	# a rock rocks on its edge: tipped, its lowest point stays on the cloth
 	var stone := Props.sanitize({"things": [{"name": "a slab", "parts": [{"shape": "box", "size": [5, 2, 4], "round": 0.1, "material": "slate", "move": "rock"}]}],
 		"materials": {"slate": {"kind": "stone", "color": "#4a4a50"}}}, [])
 	var sb := Props.build(stone["things"][0], stone["materials"], 3)
@@ -408,7 +402,7 @@ func _built() -> bool:
 	_ok(_box(_placed(sb["meshes"][0], sn)).position.y < -0.0002, "the control: a slab turned about its middle does not sink")
 	sn.free()
 	m.free()
-	# EACH COPY ITS OWN: three stones copied, each rocks on its own
+	# each copy its own: three stones copied, each rocks on its own
 	var three := Props.sanitize({"things": [{"name": "stones", "parts": [{"shape": "ball", "size": [3, 2, 2.5], "material": "slate", "move": "rock",
 		"copies": {"line": {"count": 3, "step": [4, 0, 0]}}}]}], "materials": {"slate": {"kind": "stone", "color": "#4a4a50"}}}, [])
 	var tb := Props.build(three["things"][0], three["materials"], 3)
@@ -429,7 +423,7 @@ func _safe() -> bool:
 	_ok((CardTable.sanitize_table({"things": []}, {})["ride"] as Dictionary).is_empty(), "a table with no ride rides")
 	var notes := PackedStringArray()
 	_ok(Rides.sanitize_move("wobble", notes).is_empty() and notes.size() == 1, "a move the table does not know was kept or not said")
-	# THE SOUND HEARS THE RIDE THE TABLE PLANS - only when it names it
+	# the sound hears the ride the table plans - only when it names it
 	var felt: Dictionary = Soundscape.of_table({"ride": {"on": "rails"}, "sound": {"wind": {"through": "eaves"}}}, 5)
 	_ok((felt["ride"] as Dictionary).is_empty(), "a ride the sound does not name is heard")
 	var heard: Dictionary = Soundscape.of_table({"ride": {"on": "rails"}, "sound": {"ride": {}}}, 5)

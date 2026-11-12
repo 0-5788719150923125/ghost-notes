@@ -1,11 +1,11 @@
 """The canvas of the painting lab (TEST_PLAN.md): paint over a bare surface, as the show's skin holds it.
 
-AS THE SHOW HOLDS IT (skin_paint.gdshader into prop.gdshader): paint is kept as sRGB times its coverage (`pre`) and its coverage
+As the show holds it (skin_paint.gdshader into prop.gdshader): paint is kept as sRGB times its coverage (`pre`) and its coverage
 (`alp`); a mark of color c and coverage a lays `pre = c a + pre (1 - a)`, `alp = a + alp (1 - a)`; what shows is the bare surface
 by what is left uncovered and the paint's own color, decoded, by its coverage. The lab keeps the show's rule, so a mark list painted
 here can be played there as it was judged here.
 
-WHEN EACH POINT WAS LAST PAINTED (`laid_t`, the painting's clock in seconds): wet paint blends with what touches it, dry paint is
+When each point was last painted (`laid_t`, the painting's clock in seconds): wet paint blends with what touches it, dry paint is
 gone over (marks.wet_blend).
 """
 import numpy as np

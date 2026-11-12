@@ -1,15 +1,16 @@
 extends RefCounted
 class_name GameBoard
 
-## GameBoard - WHERE A GAME STANDS ON THE TABLE (next/tabletop.md): who sits where, where a map lies and how big its squares are, and a session's events gathered into what the table and the painter need. All of it is
-## pure and names no game: a table reads it ([TableGame]), the bake reads it ([DiceBake]) and so does the set dresser's view of what to leave clear.
+## GameBoard - where a game stands on the table (next/tabletop.md): who sits where, where a map lies and how big its squares are, and a
+## session's events gathered into what the table and the painter need. All of it is pure and names no game: a table reads it
+## ([TableGame]), the bake reads it ([DiceBake]) and so does the set dresser's view of what to leave clear.
 ##
-## A SEAT IS DEGREES ROUND THE TABLE (0 the far side, 90 the right, -90 the left, 180 at the viewer's elbow): one number, which says where their dice come from and, by its sine, which ear they are heard in (`seat`, a voice's row). So
-## they are always heard from where their dice come from.
+## A seat is degrees round the table (0 the far side, 90 the right, -90 the left, 180 at the viewer's elbow): one number, which says where
+## their dice come from and, by its sine, which ear they are heard in (`seat`, a voice's row).
 ##
-## UNITS: meters, on the table's own axes (x to the right, z toward the viewer), as [Tables] has them.
+## Units: meters, on the table's own axes (x to the right, z toward the viewer), as [Tables] has them.
 
-## THE MAP'S MIDDLE, and the most of the table it may cover: the middle of what the game's camera sees ([method CardTable.game_camera]), with room round it for dice and things.
+## The map's middle, and the most of the table it may cover: the middle of what the game's camera sees ([method CardTable.game_camera]), with room round it for dice and things.
 const MIDDLE := Vector2(0.0, -0.03)
 const MAP_MOST := Vector2(0.68, 0.44)
 ## A paper figure, as a share of a square's width (`card`), with a floor and a ceiling (meters): a figure a viewer cannot see is no figure, whatever the map's scale.
@@ -28,7 +29,7 @@ const LANDS := Rect2(-0.48, -0.31, 0.96, 0.58)
 const TOP_LEAST := Vector2(150.0, 110.0)
 
 
-## WHERE EVERYONE SITS, in degrees: what the voices say ([param given], by name), and otherwise spread round from the far side: the first is the one running the game, at its middle; the others on either hand.
+## Where everyone sits, in degrees: what the voices say ([param given], by name), and otherwise spread round from the far side: the first is the one running the game, at its middle; the others on either hand.
 static func seats_of(people: PackedStringArray, given: Dictionary) -> Dictionary:
 	var out := {}
 	var left := PackedStringArray()
@@ -101,12 +102,12 @@ static func figure_width(map: Dictionary) -> float:
 	return clampf(cell_of(map) * FIGURE_SHARE, FIGURE_LEAST, FIGURE_MOST)
 
 
-## WHAT NOTHING ELSE STANDS ON: as big as any map can lie.
+## What nothing else stands on: as big as any map can lie.
 static func keep_out() -> Array:
 	return [Rect2(MIDDLE - MAP_MOST * 0.5, MAP_MOST).grow(0.015)]
 
 
-## WHAT THE SESSION CAME TO, for the table and the painter: every event, who sits where with which dice, and each thing it asked to have painted, once by name (`maps`, `figures`, `reveals`, each `{name, looks, ...}`). An event is told which one by `pic`, its place in its list, 1 up.
+## What the session came to, for the table and the painter: every event, who sits where with which dice, and each thing it asked to have painted, once by name (`maps`, `figures`, `reveals`, each `{name, looks, ...}`). An event is told which one by `pic`, its place in its list, 1 up.
 static func gather(events: Array, people: PackedStringArray, prep: Dictionary, given_seats: Dictionary) -> Dictionary:
 	var maps: Array = []
 	var figures: Array = []
@@ -132,7 +133,7 @@ static func gather(events: Array, people: PackedStringArray, prep: Dictionary, g
 	return {"events": told, "people": people, "seats": seats_of(people, given_seats), "dice": _dice_of(people, prep), "maps": maps, "figures": figures, "reveals": reveals}
 
 
-## WHOSE DICE ARE WHOSE: as the preparation wrote them, made safe; everyone's unlike the rest's, by a color from a wheel if nobody said.
+## Whose dice are whose: as the preparation wrote them, made safe; everyone's unlike the rest's, by a color from a wheel if nobody said.
 static func _dice_of(people: PackedStringArray, prep: Dictionary) -> Dictionary:
 	var out := {}
 	var all: Dictionary = prep.get("people", {}) if prep.get("people") is Dictionary else {}
@@ -153,7 +154,7 @@ static func _dice_of(people: PackedStringArray, prep: Dictionary) -> Dictionary:
 	return out
 
 
-## WHAT STANDS ON THE MAP AT EACH THROW: the figures, by their squares, as the events have them just before it. `[{id, figures: [{at: Vector2, w, down}]}]`, one a roll.
+## What stands on the map at each throw: the figures, by their squares, as the events have them just before it. `[{id, figures: [{at: Vector2, w, down}]}]`, one a roll.
 static func figures_at_rolls(game: Dictionary) -> Dictionary:
 	var out := {}
 	var map := {}
@@ -186,7 +187,7 @@ static func figures_at_rolls(game: Dictionary) -> Dictionary:
 	return out
 
 
-## WHAT A BAKE IS HANDED ([DiceBake]): every throw, in order, each from where its person sits, with their dice, and what stands in its way. `solids`, the things on the table as triangles (the caller's: a table standing has them).
+## What a bake is handed ([DiceBake]): every throw, in order, each from where its person sits, with their dice, and what stands in its way. `solids`, the things on the table as triangles (the caller's: a table standing has them).
 static func bake_request(game: Dictionary, solids: Array, seed: int, out_path: String) -> Dictionary:
 	var rolls: Array = []
 	var seats: Dictionary = game.get("seats", {})

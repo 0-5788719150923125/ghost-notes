@@ -1,26 +1,23 @@
 extends SceneTree
 
-## The gate of A SHOW THAT DRAWS NO CARDS (the user, 2026-10-26: "that card dependency shouldn't exist. In
-## instances like this, we should start with a mask every time - and just paint it while talking"): a plan of
-## beats - the producer's, for a brief whose show draws no cards - is an episode in BEATS: the words and the work
-## at the table, nothing drawn. No renderer, no writer.
+## The gate of a show that draws no cards: a plan of beats - the producer's, for a brief whose show draws no cards - is an episode in
+## beats: the words and the work at the table, nothing drawn. No renderer, no writer.
 ##
 ##   godot --headless --path . --script res://tests/table_show/cardless_check.gd
 ##
-## - ITS STEPS ARE A TABLE'S AND ITS WORDS': the plan, the draw (of none), the cloth, the room, the table, the
+## - its steps are a table's and its words': the plan, the draw (of none), the cloth, the room, the table, the
 ##   acts, the intro, a passage per beat, the close and the script - no design, back, painting or check, and no
 ##   work passage of a card's: a beat's own passage waits for the one before it and its acts. The control: the
 ##   same plan staged from a deck has every card's steps.
-## - ITS PLAN LANDS IN BEATS: a plan of `beats` lands them as the spread's positions, staged from nowhere
+## - its plan lands in beats: a plan of `beats` lands them as the spread's positions, staged from nowhere
 ##   ([constant TableActions.SOURCES] `none`), with no deck, whatever else it says; a plan of cards that names
 ##   `none` is staged from a deck instead (the control), and a plan of neither is refused.
-## - ITS SCRIPT BEGINS AND WORKS: `begin`, then `work K` before each beat's passage, then the spread and the
+## - its script begins and works: `begin`, then `work K` before each beat's passage, then the spread and the
 ##   close - walked, it draws no card, comes from nowhere, and is chaptered at each beat.
-## - ITS AGENTS ARE TOLD OF BEATS: the producer is offered beats beside a spread, how many cards and whether any
-##   the brief's to say (the user, 2026-10-26: no Draw knob), never a count of the code's; a beat's
-##   reader is told its beat and handed its own acts, and no card; the set dresser keeps no room for cards; the
-##   puppeteer's beats are the plan's. Every prompt renders whole.
-## - ITS WORK IS KEPT: acts on every beat survive [method Motions.sanitize_acts] at the episode's beat count.
+## - Its agents are told of beats: the producer is offered beats beside a spread, how many cards and whether any the brief's to say,
+##   never a count of the code's; a beat's reader is told its beat and handed its own acts, and no card; the set dresser keeps no
+##   room for cards; the puppeteer's beats are the plan's. Every prompt renders whole.
+## - its work is kept: acts on every beat survive [method Motions.sanitize_acts] at the episode's beat count.
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
 const ROOT := "user://cardless_check"

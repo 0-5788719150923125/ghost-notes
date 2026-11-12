@@ -3,37 +3,26 @@ class_name VoiceFX
 
 ## VoiceFX - the ambience from Synthesis, over any PCM.
 ##
-## The procedural engine's echo bus and sympathetic resonance are built into its
-## per-sample kernel, so they only ever applied to its own output. Neither is
-## actually specific to formant synthesis: an echo is a delay line, and the
-## resonance is a bank of narrow resonators excited by the voice. Both work on
-## a buffer regardless of what made it.
+## An echo is a delay line and the resonance is a bank of narrow resonators excited by the voice, so
+## both work on a buffer regardless of what made it. This is that ambience as a filter over arbitrary
+## audio. It runs in the generative path's push loop, sample by sample, with all state held here so a
+## chunk boundary is not a discontinuity.
 ##
-## So this is that ambience, re-expressed as a filter over arbitrary audio. It
-## runs in the generative path's push loop, sample by sample, with all state
-## held here so a chunk boundary is not a discontinuity.
-##
-## THE RESONANCE, and the one real design difference. In Synthesis the
-## sympathetic strings are tuned to the READING's anchor notes, which come from
-## the seed's genome - each seed carries its own chord. A neural voice has no
-## genome, so the chord has to come from somewhere. Deriving it from the audio
-## keeps what made the effect good: it still answers the voice rather than
-## playing over it. The pitch tracker is a cheap autocorrelation on a decimated
-## signal, and the tones sit at consonant intervals above the tracked pitch, so
-## the chord follows the narration's register instead of fighting it.
+## The resonance: in Synthesis the sympathetic strings are tuned to the reading's anchor notes (from the
+## seed's genome). A neural voice has no genome, so the chord is derived from the audio, which keeps the
+## effect answering the voice rather than playing over it. The pitch tracker is a cheap autocorrelation
+## on a decimated signal, and the tones sit at consonant intervals above the tracked pitch.
 
 # --- heard through something: a phone, a radio ----------------------------------
-#
-# A VOICE THROUGH A PHONE (next/dispatch.md; the user's dispatch desk, 2026-11-06: "Every other voice comes through a
-# phone: the one in hand at an earpiece's thin, close band, or one lying open on the desk (on hold), small and further
-# off. A voice in the caller's own room is heard through the caller's phone, fainter still"). The telephone's band is
-# 300-3400 Hz (ITU-T G.712's voice channel): a second-order Butterworth high-pass and low-pass at a row's `low` and
-# `high` - an RBJ biquad each - then a soft clip, the small speaker's grit (`drive`: tanh, its small-signal gain one),
-# then its level (`gain`). On the voice as it leaves the model and before anything of the room's, so the room hears the
-# phone - and after the pitch tracker, which needs the fundamental the band takes away (a man's 100 Hz). A row
-# further off is quieter and narrower: a phone lying on the desk is a smaller sound than one at the ear, and a voice
-# in a room at the far end of a line is heard through that line and its room both. A radio is narrower and driven
-# harder than a phone, under static of its own (below); any script may mark a turn `<!-- heard: radio -->`.
+# A voice through a phone (next/dispatch.md). The telephone's band is 300-3400 Hz (ITU-T G.712's voice
+# channel): a second-order Butterworth high-pass and low-pass at a row's `low` and `high` (an RBJ biquad
+# each), then a soft clip, the small speaker's grit (`drive`: tanh, small-signal gain one), then its
+# level (`gain`). Applied to the voice as it leaves the model and before anything of the room's, so the
+# room hears the phone - and after the pitch tracker, which needs the fundamental the band takes away.
+# A row further off is quieter and narrower: a phone on the desk is a smaller sound than one at the ear,
+# and a voice in a room at the far end of a line is heard through that line and its room both. A radio
+# is narrower and driven harder, under static of its own (below); any script may mark a turn
+# `<!-- heard: radio -->`.
 const HEARD := {
 	"phone": {"label": "Through a phone", "blurb": "Held to the ear: the telephone's band, close, with a little grit and the line's faint hiss.",
 		"low": 300.0, "high": 3400.0, "drive": 2.0, "gain": 0.95, "hiss": 0.004, "crackle": 0.0, "squelch": false},
@@ -46,15 +35,12 @@ const HEARD := {
 }
 
 # --- ...and its static: a line's hiss, a radio's crackle -------------------------
-#
-# WHAT A LINE ADDS (2026-11-06, the user: "if any of those voices are coming over radio transmissions or cell phones
-# ... we should consider adding appropriate effects ... for radio: we might want to add a new voice feature, to overlay
-# static over the voice"). A row's `hiss` is white noise at that RMS and its `crackle` that many pops a second (each a
-# few milliseconds of noise, random in size), added to the voice BEFORE the band - so the static is shaped by the band
-# and clipped by the speaker as a real receiver's is. IT RIDES THE VOICE: the channel opens when the voice is heard
-# (its envelope over STATIC_OPEN) and stays open STATIC_HOLD past its last sound, so it hisses through the gaps between
-# words and never through the rests between turns - a line, not a bed. A row with `squelch` is a two-way radio: a short
-# burst as the channel opens, and the tail as it closes - the hiss a receiver lets through as the carrier drops.
+# A row's `hiss` is white noise at that RMS and its `crackle` that many pops a second (each a few
+# milliseconds of noise, random in size), added to the voice before the band, so the static is shaped by
+# the band and clipped by the speaker as a real receiver's is. It rides the voice: the channel opens when
+# the voice is heard (its envelope over STATIC_OPEN) and stays open STATIC_HOLD past its last sound, so
+# it hisses through the gaps between words and never through the rests between turns. A row with
+# `squelch` is a two-way radio: a short burst as the channel opens, and the tail as it closes.
 # Pseudo-random from a seed of its own, so the same take is the same static, live and exported.
 const STATIC_OPEN := 0.01        # the voice's envelope (its peak, full scale) that opens the channel
 const STATIC_FOLLOW := 0.01      # seconds the envelope falls over
@@ -67,55 +53,34 @@ const CRACKLE_RING := 0.0015     # how long a pop rings, in seconds
 const CRACKLE_KICK := 6.0        # how much louder than the hiss a pop is, at most
 
 # --- echo: a room at the bottom of the dial, a slapback at the top ------------
-#
-# THE SETTING CHOOSES THE CHARACTER, NOT JUST THE LEVEL. It used to choose only
-# the level: one tap at a fixed 170 ms with a fixed 0.42 feedback, so measured
-# across the whole dial the delay was 170 ms and the tail ran 0.85-1.36 s at
-# EVERY setting - 5 to 8 discrete repeats whether the slider was at 0.05 or 0.5.
-# Turning it down made the same effect quieter and never made it a smaller one.
-#
-# That is unusable on speech for a reason that gain cannot fix. Past roughly
-# 50 ms the precedence effect stops fusing a repeat with the direct sound and
-# the ear hears a separate event, so a discrete repeat stays plainly audible
-# far below where a diffuse room would - detection thresholds for speech at
-# this delay sit around -20 to -25 dB, and the old dial's first repeat is
-# -26 dB at 0.05 and -20 dB at 0.10. It was AT the audibility threshold at the
-# very bottom of its travel. Worse, 170 ms is about one syllable at a normal
-# reading pace, so each repeat lands on the next word: maximally smearing.
-#
-# So the tap SHORTENS as the dial comes down, until it is inside the fusion
-# window and reads as the room the voice is in; the feedback and the damping
-# come down with it, and a second incommensurate tap keeps even the long
-# setting from being a single hard image.
+# The setting chooses the character, not just the level. Past roughly 50 ms the precedence effect stops
+# fusing a repeat with the direct sound and the ear hears a separate event, so a discrete repeat stays
+# audible far below where a diffuse room would (speech detection thresholds at this delay sit around
+# -20 to -25 dB), and 170 ms is about one syllable at a reading pace, so each repeat lands on the next
+# word. So the tap shortens as the dial comes down, until it is inside the fusion window and reads as
+# the room the voice is in; the feedback and the damping come down with it, and a second incommensurate
+# tap keeps even the long setting from being a single hard image.
 const ECHO_DELAY := 0.17       # the longest tap, and the delay line's size
 const ECHO_NEAR := 0.028       # the shortest: inside the ~50 ms fusion window
-const ECHO_TAP2 := 0.61        # second tap as a fraction of the first, deliberately
-                               # not a simple ratio - a 1/2 or 1/3 tap re-lands on
-                               # the first one's repeats and rebuilds a single image
+const ECHO_TAP2 := 0.61        # second tap as a fraction of the first, not a simple ratio (a 1/2 or 1/3 tap re-lands on the first's repeats)
 const ECHO_TAP2_MIX := 0.30
 const ECHO_LP := 1400.0        # every repeat comes back darker...
 const ECHO_LP_NEAR := 650.0    # ...and a small dark room is darker still
 const ECHO_FB_NEAR := 0.12     # one repeat and gone, rather than a five-tap tail
-## The dial's taper. Above 1 so the bottom of the travel is genuinely quiet -
-## the useful settings for narration all live down there, and a linear dial spent
-## most of its length on levels that bury the voice. Not much above 1, though: at
-## a square taper 0.05 lands at -52 dB, which is inaudible, and dead travel at the
-## bottom of a dial is its own kind of broken. 1.5 puts 0.05 at -39 dB and 0.20 at
-## -21 dB, both of which do something, and both of which are a ROOM at those
-## settings rather than a repeat (see ECHO_NEAR).
+## The dial's taper. Above 1 so the bottom of the travel is quiet (the useful narration settings live
+## down there), but not much above: at a square taper 0.05 lands at -52 dB, inaudible. 1.5 puts 0.05 at
+## -39 dB and 0.20 at -21 dB, both a room rather than a repeat (see ECHO_NEAR).
 const ECHO_TAPER := 1.5
 
 # --- resonance ---------------------------------------------------------------
 const TONES := 4
-# Just intervals above the tracked pitch: octave, fifth, octave+third, two
-# octaves. Chosen over equal temperament because these ring against the voice's
-# own harmonics rather than beating with them.
+# Just intervals above the tracked pitch: octave, fifth, octave+third, two octaves. They ring against
+# the voice's own harmonics rather than beating with them.
 const RATIOS := [2.0, 3.0, 5.0, 8.0]
 const RES_Q := 0.9985          # decay per sample: seconds-long ring
-# Excitation per sample into each resonator. 0.004 measured a 5% peak lift -
-# inaudible, which is what "the resonance slider does nothing" meant. The ring
-# integrates over its whole decay, so this is a rate, not a level; 0.05 with the
-# output normalized by tone count lands it clearly under the voice but present.
+# Excitation per sample into each resonator. The ring integrates over its whole decay, so this is a
+# rate, not a level (0.004 lifts the peak 5%, inaudible); 0.05 with the output normalized by tone count
+# lands clearly under the voice but present.
 const RES_DRIVE := 0.05
 const TRACK_HZ := 12.0         # pitch re-estimates per second
 const PITCH_MIN := 70.0
@@ -124,34 +89,25 @@ const PITCH_GLIDE := 0.08      # the chord follows the register, never jumps
 
 # --- the pad: sustained ambient tones, DECOUPLED from the voice ---------------
 #
-# Distinct from the resonance above, and the distinction is the point. Resonance
-# is EXCITED by the voice: it rings when the voice rings and dies when it stops,
-# which makes it feel like the room the voice is in. A pad is its own instrument
-# - long tones that keep sounding through pauses, choosing notes on a scale,
-# breathing on their own timescale. Ambient music rather than reverb.
+# Distinct from the resonance above: resonance is excited by the voice (it rings when the voice rings
+# and dies when it stops, like the room the voice is in). A pad is its own instrument: long tones that
+# keep sounding through pauses, choosing notes on a scale, breathing on their own timescale.
 #
-# What keeps it organic is that the KEY comes from the narration. A slow average
-# of the tracked pitch gives the reader's register; the tonic is dropped two
-# octaves so the pad sits underneath rather than competing, and it glides rather
-# than jumping, so a change of register moves the music instead of breaking it.
+# The key comes from the narration: a slow average of the tracked pitch gives the reader's register; the
+# tonic is dropped two octaves so the pad sits underneath, and it glides, so a change of register moves
+# the music instead of breaking it.
 const PAD_VOICES := 5
-# Minor pentatonic, in semitones. Chosen because no two degrees are a semitone
-# apart, so ANY combination of them is consonant - the scheduler cannot stack a
-# clash however it overlaps them. That is what makes an unattended generative
-# pad safe to leave running under speech.
+# Minor pentatonic, in semitones. No two degrees are a semitone apart, so any combination is consonant
+# and the scheduler cannot stack a clash however it overlaps them.
 const PAD_SCALE := [0, 3, 5, 7, 10]
 const PAD_OCTAVES := [0, 12, 12, 24]     # weighted toward one octave up
-## NO TONE IN THE READER'S REGISTER. The key sits two octaves under the voice, so the top octave
-## of the stack (degree + 24) landed ON the reader's own pitch and above it - measured, a 220 Hz
-## voice over a bed spanning 55-392 Hz - and a sustained tone there in the voice's own key is
-## heard as a second voice humming along: "basically 80% of all words a kind of echo effect".
-## A note above this many semitones over the key is dropped an octave: at most a fifth under
-## the voice (147 Hz on that reader), still well inside what a small speaker plays.
+## No tone in the reader's register. The key sits two octaves under the voice, so the top octave of the
+## stack (degree + 24) would land on the reader's own pitch (a 220 Hz voice over a bed spanning 55-392
+## Hz), heard as a second voice humming along. A note above this many semitones over the key is dropped
+## an octave: at most a fifth under the voice (147 Hz on that reader).
 const PAD_CEILING := 17
-## How long the speech envelope that ducks the bed takes to follow, in seconds. Written as a
-## per-SAMPLE constant (0.0004, "~1 s") it was ~0.11 s at the voice's 22.05 kHz, so the bed
-## dipped under each word and swelled back in each gap - a swell after every word, in the
-## voice's key, which is the other half of that echo.
+## How long the speech envelope that ducks the bed takes to follow, in seconds. Per sample it would be
+## ~0.11 s at the voice's 22.05 kHz and the bed would swell after every word.
 const SPEECH_TAU := 1.0
 const PAD_ATTACK := 3.5                  # seconds: tones swell, never start
 const PAD_HOLD_MIN := 5.0
@@ -159,51 +115,42 @@ const PAD_HOLD_MAX := 14.0
 const PAD_RELEASE := 7.0                 # long tails, so the bed never gates
 const PAD_DETUNE := 0.004                # a second oscillator, slightly off
 const PAD_GAP := 2.2                     # seconds between new tones entering
-## The key follows the reader, slowly: the reader's REGISTER is the middle (the median) of the
-## pitch of the last this many voiced windows (20 s of voice). It had been a 12 s average of the
-## pitch in Hz, which the tracker's octave errors pull up: on Puck it drifted 3 semitones over the
-## middle of his voice in a minute and took the key with it.
+## The key follows the reader, slowly: the reader's register is the median of the pitch of the last this
+## many voiced windows (20 s of voice). A mean of the pitch in Hz is pulled up by the tracker's octave
+## errors.
 const PAD_REGISTER := 240
-# 0.55 pulled the bed back hard whenever the voice was speaking - and narration
-# is speech almost continuously, so it spent nearly all its time ducked, which
-# matters perceptually far more than the average level suggests. 0.40 still
-# steps aside for the voice without vanishing behind it.
+# Narration is speech almost continuously, so a deep duck (0.55) keeps the bed down nearly all the
+# time; 0.40 steps aside for the voice without vanishing behind it.
 const PAD_DUCK := 0.40
-## THE DIAL IS SEVERITY, NOT LEVEL. The bed plays at its full staged level (`pad_level`)
-## whenever Ambience is on at all - it faded in over this much of the travel so 0 is still
-## a clean off, not a step. What the rest of the dial buys is MORE HAPPENING on top of it.
+## The dial is severity, not level. The bed plays at its full staged level (`pad_level`) whenever
+## Ambience is on at all - it fades in over this much of the travel so 0 is a clean off, not a step. The
+## rest of the dial buys more happening on top of it.
 const PAD_FADE_IN := 0.05
-## THE BED SITS UNDER THE VOICE IT IS GIVEN, at the balance it was staged at, however loud that
-## voice comes out (2026-10-28, the user: "Even at max volume, the 'ambience' level is almost
-## inaudible with the newly-implemented Kokoro models"). Measured on one passage: Kokoro comes out
-## hot - Puck 0.141 RMS speaking, its takes at full scale, Heart 0.086 - where libritts-high is
-## 0.065, and a bed at a fixed level sat 17 dB under Puck where it sits 9 under Piper. So the bed's
-## level and its duck are scaled by the voice's own speaking level - the RMS of the windows the
-## pitch tracker finds voiced, followed over PAD_LEVEL_TAU seconds of voice and primed with the key
-## ([method prime_key]) - against PAD_VOICE_REF, that level on the voice the bed was staged under
-## (libritts-high, measured so: its bed is where it was; Puck's scale had been about 2, Heart's 1.3).
-## The host now plays every voice at one level (hosts/voice/level.py), and the bed still follows
-## what it is given: a hushed reader, a speaker of a model not levelled, Masking's own clip. Held to
-## [PAD_SCALE_MIN, PAD_SCALE_MAX] of it, so a whisper does not take the bed away nor a shout make
-## it a wall.
+## The bed sits under the voice it is given, at the balance it was staged at, however loud that voice
+## comes out. Kokoro is hot (Puck 0.141 RMS speaking, Heart 0.086) against libritts-high's 0.065, so a
+## fixed-level bed would sit 17 dB under Puck where it sits 9 under Piper. So the bed's level and its
+## duck are scaled by the voice's own speaking level - the RMS of the windows the pitch tracker finds
+## voiced, followed over PAD_LEVEL_TAU seconds of voice and primed with the key ([method prime_key]) -
+## against PAD_VOICE_REF, that level on the voice the bed was staged under (libritts-high). The host
+## plays every voice at one level (hosts/voice/level.py), and the bed still follows what it is given: a
+## hushed reader, a model not levelled, Masking's own clip. Held to [PAD_SCALE_MIN, PAD_SCALE_MAX] of
+## it, so a whisper does not take the bed away nor a shout make it a wall.
 const PAD_VOICE_REF := 0.06
 const PAD_LEVEL_TAU := 8.0
 const PAD_SCALE_MIN := 0.33
 const PAD_SCALE_MAX := 4.0
-## How much of a take [method prime_key] reads for the voice's level, from its first sound (seconds):
-## a reading opens louder than it goes on (Puck's first 4 s 1.35 times its level, its first 12 s 1.2),
-## so the bed over the intro starts that much over where it settles. 12 s is about 0.2 s of work.
+## How much of a take [method prime_key] reads for the voice's level, from its first sound (seconds): a
+## reading opens louder than it goes on (Puck's first 4 s 1.35 times its level), so the bed over the
+## intro starts that much over where it settles. 12 s is about 0.2 s of work.
 const PAD_PRIME := 12.0
-## THE BED IS STAGED BY THE EAR (2026-10-28, the user, once the bed was in a low voice's own key and
-## under it: "The ambience is far too quiet. I can barely hear it at all anymore"). The ear hears a low
-## tone far more quietly than its power says, and under Puck (115 Hz) every tone of the bed was under
-## 80 Hz: at the same power against the voice as libritts-high's bed, it was 30 dB under the voice
-## A-weighted where that one is 22 - and a speaker that small plays none of it. So a tone under
-## PAD_AUDIBLE takes octave partials (PAD_H2, PAD_H4 at an octave under it, less above; octaves only,
-## so no note is added the scale did not choose), its power held where it was, and the tones are
-## lifted by how much less audible the bed's register is than the one it was staged in
-## (PAD_EAR_KEY, libritts-high's key as it was primed, plain tones; [method _audibility]) - at most
-## PAD_EAR_MOST, at least its inverse. The bass is not: it is meant to be felt more than heard.
+## The bed is staged by the ear. The ear hears a low tone far more quietly than its power says: under
+## Puck (115 Hz) every tone of the bed is under 80 Hz, 30 dB under the voice A-weighted where
+## libritts-high's bed is 22, and a speaker that small plays none of it. So a tone under PAD_AUDIBLE
+## takes octave partials (PAD_H2, PAD_H4 at an octave under it, less above; octaves only, so no note is
+## added the scale did not choose), its power held, and the tones are lifted by how much less audible
+## the bed's register is than the one it was staged in (PAD_EAR_KEY, libritts-high's key as primed,
+## plain tones; [method _audibility]) - at most PAD_EAR_MOST, at least its inverse. The bass is not: it
+## is meant to be felt more than heard.
 const PAD_AUDIBLE := 120.0
 const PAD_H2 := 0.6
 const PAD_H4 := 0.35
@@ -211,17 +158,15 @@ const PAD_EAR_KEY := 58.3
 const PAD_EAR_MOST := 2.0
 
 # --- no melody, on purpose ------------------------------------------------------
-# Three melodic layers were built on top of the bed and each removed: a plucked string
-# (twice) and a sliding electronic lead. They were in tune and on a beat, and they still
-# sounded like random notes, because choosing WHICH note comes next needs a real model of
-# music and a handful of rules is not one. The bed works because it never has to make that
-# choice - sustained, always-consonant tones - and the bass works for the same reason: one
-# note, the key's root, when the voice moves. Do not add a melody without that model.
+# Three melodic layers (a plucked string twice, a sliding lead) were tried and removed: choosing which
+# note comes next needs a real model of music, and a handful of rules sounds like random notes. The bed
+# works because it never has to choose (sustained, always-consonant tones), and the bass for the same
+# reason (one note, the key's root, when the voice moves). Do not add a melody without that model.
 
 # --- the bass: a low swell on the key's root, when the voice MOVES -----------------
-# Cued by a shift in the reader's pitch away from its recent average - emphasis, a question,
-# a change of register - and landing on the next bar line of a steady tempo drawn per reading,
-# so swells a minute apart keep one pulse.
+# Cued by a shift in the reader's pitch away from its recent average (emphasis, a question, a change of
+# register) and landing on the next bar line of a steady tempo drawn per reading, so swells a minute
+# apart keep one pulse.
 const BPM_MIN := 80.0                    # the bar grid's tempo, drawn once per reading
 const BPM_MAX := 92.0
 const BASS_ONSET := 0.3
@@ -229,55 +174,44 @@ const BASS_CHANCE := 0.7                 # a pitch move is answered this often a
 const BASS_SHIFT := 2.0                  # semitones from the recent average that count as a move
 const BASS_PITCH_TAU := 4.0              # seconds: what "recent average" means
 const BASS_COOLDOWN := 4.0               # one move, one swell, not a swell per syllable
-## A SWELL, NEVER A PLUCK (2026-10-28, the user, of 0.35 s: "a very strange tone being 'plucked' a
-## few times per minute"): it rises over this long (seconds).
+## A swell, never a pluck: it rises over this long (seconds).
 const BASS_ATTACK := 1.2
 const BASS_DECAY := 2.4                  # exponential time constant, seconds
 const BASS_LEVEL := 1.0
 const BASS_ROOT_LO := 41.0               # the bass root sits in [LO, 2 LO), unless the voice is low
-## THE BASS STAYS UNDER THE VOICE, as the bed's tones do (PAD_CEILING): its second partial - the
-## lowest a small speaker plays - at least this many semitones under the voice's middle, the root
-## dropped an octave until it is. Puck speaks at 115 Hz: the bass root had been 65 Hz, its partials
-## 131 and 196 Hz in his own register, the 131 a whole step over where he speaks - "a super
-## distracting, dissonant sound", every swell. A root that would fall under BASS_FLOOR (A0, felt more
-## than heard) is not played.
+## The bass stays under the voice, as the bed's tones do (PAD_CEILING): its second partial - the lowest
+## a small speaker plays - at least this many semitones under the voice's middle, the root dropped an
+## octave until it is. A root that would fall under BASS_FLOOR (A0, felt more than heard) is not played.
 const BASS_UNDER := 7.0
 const BASS_FLOOR := 27.5
-# The key moves only when the SLOW register (`_tonic`, PAD_REGISTER) has left it by this
-# much: a key that followed each phrase's pitch hopped between keys phrase to phrase.
+# The key moves only when the slow register (`_tonic`, PAD_REGISTER) has left it by this much, so it
+# does not hop between keys phrase to phrase.
 const KEY_HYSTERESIS := 3.0
-## THE KEY IS THE VOICE'S OWN (2026-10-28): its root exactly two octaves under the middle of the
-## voice's pitch - the register, once KEY_HEARD voiced windows are in it (3 s; [method prime_key]
-## takes those of PAD_PRIME) - never snapped to A440's grid, which no voice speaks on. It had been the
-## first voiced window's pitch alone, rounded: a reading opens high, and Puck's key came out C where
-## he speaks at A# - inside KEY_HYSTERESIS, so it never moved - and libritts-high's 4 semitones over.
-## No tone and no swell sounds before it is set.
+## The key is the voice's own: its root exactly two octaves under the middle of the voice's pitch - the
+## register, once KEY_HEARD voiced windows are in it (3 s; [method prime_key] takes those of PAD_PRIME) -
+## never snapped to A440's grid, which no voice speaks on. (A reading opens high, so the first window's
+## pitch alone is a poor key.) No tone and no swell sounds before it is set.
 const KEY_HEARD := 36
 
 # --- lean: the reader moving around a microphone in the middle -------------------
 #
-# What an ASMR reader does on purpose: lean toward one side of the microphone, hold there,
-# drift back. Only the DIRECT voice moves. The echo, the room's tail, the resonance and the
-# bed stay centered, because the room does not move when the person in it does - and a bed
-# that swung with the reader would sound like the whole recording being panned, which is
-# a balance knob, not a person.
+# What an ASMR reader does on purpose: lean toward one side of the microphone, hold there, drift back.
+# Only the direct voice moves. The echo, the room's tail, the resonance and the bed stay centered,
+# because the room does not move when the person in it does.
 #
-# THE DIAL IS HOW OFTEN, NOT HOW FAR. Every lean goes most of the way toward the limit,
-# so a rare lean at a low setting is still one you hear (dead travel at the bottom of a
-# dial is the failure ECHO_TAPER was written about). What the dial buys is fewer and
-# shorter rests at center, shorter holds at a side, and more crossings straight to the
-# other side instead of back through the middle - until at 1 it never rests and never
-# returns, which is a slow, continuous sway.
+# The dial is how often, not how far. Every lean goes most of the way toward the limit, so a rare lean
+# at a low setting is still audible. What the dial buys is fewer and shorter rests at center, shorter
+# holds at a side, and more crossings straight to the other side instead of back through the middle -
+# until at 1 it never rests and never returns, a slow continuous sway.
 #
-# LEVEL ONLY, NO DELAY. A head moving is also an arrival-time difference between the
-# ears, and adding one is what headphones would like - but a varying sub-millisecond
-# delay between two channels turns into a moving comb filter the moment they are summed,
-# and a phone speaker, a mono bluetooth earbud and the bake's own analysis all sum them.
-## The near ear's share of the voice at the deepest lean: 70/30 and never further, so the
-## far ear always hears the reader (about 7.4 dB apart at the limit).
+# Level only, no delay: a varying sub-millisecond delay between two channels becomes a moving comb
+# filter when they are summed, and a phone speaker, a mono earbud and the bake's own analysis all sum
+# them.
+## The near ear's share of the voice at the deepest lean: 70/30 and never further, so the far ear
+## always hears the reader (about 7.4 dB apart at the limit).
 const LEAN_SHARE := 0.7
 const LEAN_DEPTH_MIN := 0.55            # a lean goes at least this far toward the limit
-## How much of a voice over this one reaches the room as this one's does; the rest goes straight to the ears, where it sits.
+## How much of a voice over this one reaches the room as this one's does; the rest goes straight to the ears.
 const SIDE_ROOM := 0.35
 const LEAN_TRAVEL_MIN := 1.4            # seconds per move, eased at both ends
 const LEAN_TRAVEL_MAX := 3.2
@@ -285,14 +219,14 @@ const LEAN_HOLD_MIN := 0.8              # how long a lean is held, at the bottom
 const LEAN_HOLD_MAX := 6.0
 const LEAN_HOLD_FLOOR := 0.15           # the turn at the top of the dial: a sway, not a wobble
 const LEAN_REST_MAX := 45.0             # the longest rest at center, at the bottom of the dial
-## LEFT AND NEARER AT ONCE. The two dials are one reader, so they compose two ways:
-##   - an approach ([method near_to]) takes the reader toward one side this often, when Lean is
-##     up at all - the side they are already on, or either from center - at the approach's own
-##     pace, held for as long as they stay in, and brought back to center when they leave;
-##   - closeness is what lets a lean reach the limit. With a microphone in the middle, the same
-##     offset to one side is a wider angle up close, so a lean from where the reader sits
-##     reaches LEAN_REACH_HOME of the way to 70/30 (about 67/33), all of it fully in, and less
-##     backed off. 70/30 is still the most there ever is.
+## Left and nearer at once. The two dials are one reader, so they compose two ways:
+##   - an approach ([method near_to]) takes the reader toward one side this often, when Lean is up at
+##     all - the side they are already on, or either from center - at the approach's own pace, held for
+##     as long as they stay in, and brought back to center when they leave;
+##   - closeness is what lets a lean reach the limit. With a microphone in the middle, the same offset
+##     to one side is a wider angle up close, so a lean from where the reader sits reaches
+##     LEAN_REACH_HOME of the way to 70/30 (about 67/33), all of it fully in, and less backed off.
+##     70/30 is the most there ever is.
 const LEAN_WITH_NEAR := 0.6
 const LEAN_JOINT_TRAVEL := 2.0          # seconds: the approach's own pace (NEAR_TAU, two stages)
 const LEAN_REACH_HOME := 0.85
@@ -300,26 +234,22 @@ const LEAN_REACH_BACK := 0.7
 
 # --- near: the reader coming in to the microphone, and backing off -------------------
 #
-# Distance at a microphone is three things, and level is only one of them. Closer, the direct
-# voice rises against the room (the room hears the same voice from wherever the reader is), and
-# the microphone's proximity effect lifts the low end - the warmth that says "right at your
-# ear" more than loudness does. Further, the reverse.
+# Distance at a microphone is three things, and level is only one. Closer, the direct voice rises
+# against the room and the proximity effect lifts the low end (the warmth that says "right at your ear"
+# more than loudness does). Further, the reverse.
 #
-# A READER WHO COMES IN OFTEN DROPS THEIR VOICE. Then the direct sound
-# stays about as loud as before while the room falls away and the bass comes up: closer without
-# being louder. So the VOCAL LEVEL is its own quantity here - it feeds the whole chain, room
-# included - and the DISTANCE is applied to the direct voice alone. A hushed approach is a
+# A reader who comes in often drops their voice: the direct sound stays about as loud while the room
+# falls away and the bass comes up. So the vocal level is its own quantity here (it feeds the whole
+# chain, room included) and the distance is applied to the direct voice alone. A hushed approach is a
 # voice dropped by about what the distance gives back.
 #
-# PER SENTENCE, NOT PER SECOND. A hushed voice is softer as well as quieter - its spectral tilt
-# is the voice host's (the request's effort) - so the choice to come in is made when a sentence
-# is planned ([method near_plan]); this chain only eases the distance there, starting in the
-# pause before it, the way a reader moves between phrases. Two one-pole stages in series, so a
-# move starts and ends without a corner.
+# Per sentence, not per second. A hushed voice is softer as well as quieter (its spectral tilt is the
+# voice host's, the request's effort), so the choice to come in is made when a sentence is planned
+# ([method near_plan]); this chain only eases the distance, starting in the pause before it. Two
+# one-pole stages in series, so a move starts and ends without a corner.
 #
-# NO WHISPER. A hushed approach asked the host for a partial whisper once (piper `_whisper`:
-# every frame rebuilt as noise through its own envelope, blended with the voice), and the blend
-# was heard as "a garbled mess". It stays out until the whisper itself is good on its own.
+# No whisper: a hushed approach that asked the host for a partial whisper (piper `_whisper` blended
+# with the voice) sounded garbled. It stays out until the whisper is good on its own.
 const NEAR_TAU := 0.45                  # seconds per stage: about two seconds to arrive
 const NEAR_IN_DB := 4.5                 # the direct voice, fully in
 const NEAR_BACK_DB := 5.0               # ...and fully backed off
@@ -327,9 +257,9 @@ const NEAR_BASS_DB := 5.0               # the proximity effect, fully in (backed
 const NEAR_BASS_HZ := 220.0
 const NEAR_HUSH_DB := 6.0               # how far a hushed reader drops their voice, fully in
 const NEAR_STEP := 32                   # samples between gain updates: the move takes seconds
-## The plan's draws. At home, a sentence starts a move NEAR_MOVE_POW-curved by the dial; a move
-## lasts 1..NEAR_RUN_MAX sentences (1 at the top); from a move, the reader goes home - or, the
-## dial squared of the time, straight to the opposite move, which at 1 is a constant in-and-out.
+## The plan's draws. At home, a sentence starts a move NEAR_MOVE_POW-curved by the dial; a move lasts
+## 1..NEAR_RUN_MAX sentences (1 at the top); from a move, the reader goes home - or, the dial squared of
+## the time, straight to the opposite move, which at 1 is a constant in-and-out.
 const NEAR_MOVE_POW := 1.2
 const NEAR_RUN_MAX := 3
 const NEAR_BACK_CHANCE := 0.2           # of the moves from home, how many back off rather than come in
@@ -340,34 +270,29 @@ var sample_rate := 22050
 var echo_wet := 0.0            # 0..1
 var echo_feedback := 0.42
 var resonance := 0.0           # 0..1
-## THE ROOM, which is not the echo above and is the reason both exist. The echo is
-## discrete: taps at a measurable delay, which the ear hears as repeats of the
-## voice however small the room is made. This is the diffuse half - a comb/allpass
-## network whose response has no countable events in it at all - so it is the
-## space the voice is in rather than a copy of the voice arriving late.
+## The room, which is not the echo above and is the reason both exist. The echo is discrete: taps at a
+## measurable delay, heard as repeats of the voice however small the room is made. This is the diffuse
+## half - a comb/allpass network with no countable events - the space the voice is in rather than a
+## copy of it arriving late.
 ##
-## Shared with Masking, which has had one on its bus for a while: [RoomFX] holds
-## the dial and its meanings, and only the engine differs (see its class docs).
+## Shared with Masking: [RoomFX] holds the dial and its meanings, and only the engine differs.
 var room := RoomFX.new()
 var presence := 1.0            # 1 = in the room, lower = further away
-## WHAT THIS VOICE IS HEARD THROUGH, a key of [constant HEARD] ("" the room): dialed with its room at each turn
-## ([constant Manuscript.HEARD], [member ReadingJoin.marks]).
+## What this voice is heard through, a key of [constant HEARD] ("" the room): dialed with its room at each
+## turn ([constant Manuscript.HEARD], [member ReadingJoin.marks]).
 var heard := ""
 var pad := 0.0                 # 0..1 the ambient bed
 var pad_seed := 0              # same text, same music
-# Staged by sweeping against real narration (voice RMS 0.0474):
-#   0.012 -> 11.8 dB below the voice   too quiet, reported as barely audible
-#   0.022 ->  6.5 dB below             present without competing  <-- chosen
-#   0.035 ->  2.5 dB below             competes with the reading
-# That is at the slider's maximum, so half-way gives roughly -12 dB and the
-# full range spans "just there" to "clearly part of the piece". Under a voice
-# louder or quieter than that one it is scaled with it (PAD_VOICE_REF).
+# Staged by sweeping against real narration (voice RMS 0.0474): 0.012 sits 11.8 dB below the voice (too
+# quiet), 0.022 sits 6.5 dB below (present without competing, chosen), 0.035 sits 2.5 dB below
+# (competes). That is the slider's maximum, so half-way gives roughly -12 dB. Under a louder or quieter
+# voice it is scaled with it (PAD_VOICE_REF).
 var pad_level := 0.022
 var pad_duck := PAD_DUCK       # how far the bed steps back under speech
 var lean := 0.0                # 0..1 how often the reader leans to one side (see LEAN_SHARE)
-## WHERE THIS VOICE SITS: -1 the left ear to 1 the right ([method Delivery.pan_of_seat]). A lean moves from here. Heard only in the direct voice, as a lean is: the room is everyone's.
+## Where this voice sits: -1 the left ear to 1 the right ([method Delivery.pan_of_seat]). A lean moves from here. Heard only in the direct voice, as a lean is.
 var seat := 0.0
-## THE VOICES OVER THIS ONE, for the buffer about to be run ([method ReadingJoin.side_between]): left and right, already where they sit. Taken once.
+## The voices over this one, for the buffer about to be run ([method ReadingJoin.side_between]): left and right, already where they sit. Taken once.
 var side := PackedVector2Array()
 
 var _echo := PackedFloat32Array()
@@ -409,8 +334,8 @@ var _track_e := 0.0                     # the tracking window's sum of squares s
 var _voice_ms := 0.0                    # the voice's speaking level (mean square), 0 before it is heard
 var _pad_k := 1.0                       # what it scales the bed by (see PAD_VOICE_REF)
 var _rng := RandomNumberGenerator.new()
-# The events draw from their OWN generator, so moving the dial changes what is added on
-# top without re-rolling the bed's notes underneath it.
+# The events draw from their own generator, so moving the dial changes what is added on top without
+# re-rolling the bed's notes.
 var _ev_rng := RandomNumberGenerator.new()
 var _key_semi := -1000.0                # the key's root, semitones from A440; -1000 = none yet
 var _register := PackedFloat32Array()   # the last PAD_REGISTER voiced windows' pitch (semitones)
@@ -530,41 +455,32 @@ func setup(sr: int) -> void:
 	room.setup(sr)
 
 
-## Teach the pad its key BEFORE processing, from a buffer that has not been heard yet.
+## Teach the pad its key before processing, from a buffer that has not been heard yet.
 ##
-## The pad is an independent instrument but a key-SLAVED one: `_tonic` is derived from
-## the tracked pitch of the voice, two octaves down, and `_start_tone` refuses to
-## schedule anything while it is zero. That is exactly right in the steady state and
-## exactly wrong at the head of a take, because a leading silence has no pitch - the
-## estimator returns 0 on any window under its energy floor - so a bed asked to play
-## over an intro would sit mute through all of it and only fade up once the narration
-## it was supposed to introduce had already begun.
+## The pad is key-slaved: `_tonic` is derived from the tracked pitch of the voice, two octaves down, and
+## `_start_tone` schedules nothing while it is zero. A leading silence has no pitch (the estimator
+## returns 0 under its energy floor), so without this a bed over an intro would sit mute until the
+## narration began.
 ##
-## So: scan forward over the voiced windows of the first PAD_PRIME seconds of sound and set
-## the key from the middle of their pitch (KEY_HEARD's rule, from more of them). One pass,
-## and it does not touch the resonators or the echo line, so the chain is still cold when
-## [method process] starts. The glide in `process` then carries the key onward as the
-## reader moves.
+## So: scan forward over the voiced windows of the first PAD_PRIME seconds of sound and set the key from
+## the middle of their pitch (KEY_HEARD's rule, from more of them). One pass; it does not touch the
+## resonators or the echo line, so the chain is still cold when [method process] starts. The glide in
+## `process` then carries the key onward as the reader moves.
 ##
-## The resonance deliberately gets no equivalent. It is a sympathetic bank excited only
-## by the dry signal, so it has nothing to ring from until the voice arrives, and
-## priming it would be inventing an excitation that was never played.
+## The resonance gets no equivalent: it is excited only by the dry signal, and priming it would invent
+## an excitation that was never played.
 ##
-## THE VOICE'S LEVEL IS PRIMED WITH IT (see PAD_VOICE_REF): the voiced windows of the first
-## PAD_PRIME seconds of sound, so the bed over the intro is already at the level it will
-## keep under the voice, never a step up as the first word comes.
+## The voice's level is primed with it (see PAD_VOICE_REF): the voiced windows of the first PAD_PRIME
+## seconds of sound, so the bed over the intro is already at the level it will keep under the voice.
 func prime_key(buf: PackedFloat32Array) -> void:
 	if _track.is_empty():
 		setup(sample_rate)
 	var win := _track.size()
 	if win <= 0 or buf.size() < win:
 		return
-	# SKIP THE SILENCE CHEAPLY FIRST. The buffer this is called on opens with the whole
-	# intro of digital zeros, and the intro is the thing that is several seconds long -
-	# so a scan that starts at sample 0 and gives up after a fixed couple of seconds
-	# examines nothing but the padding and always comes back empty. (It did. The pad
-	# stayed silent through the entire intro and the measurement is what caught it.)
-	# A scalar amplitude test costs one compare per sample and finds the voice exactly.
+	# skip the silence cheaply first: the buffer opens with the whole intro of digital zeros, so a scan
+	# from sample 0 that gives up after a fixed couple of seconds examines only padding. A scalar
+	# amplitude test costs one compare per sample and finds the voice exactly.
 	var first := -1
 	for i in buf.size():
 		if absf(buf[i]) > 0.004:
@@ -572,8 +488,8 @@ func prime_key(buf: PackedFloat32Array) -> void:
 			break
 	if first < 0:
 		return                                  # the whole take is silent
-	# From there, PAD_PRIME seconds: the key and the level both as many voiced windows as they
-	# can have, and bounding it keeps a 20-minute chapter off the critical path.
+	# from there, PAD_PRIME seconds: the key and the level get as many voiced windows as they can, and
+	# bounding it keeps a 20-minute chapter off the critical path
 	var limit := mini(buf.size() - win, first + int(PAD_PRIME * float(sample_rate)))
 	var pos := first
 	var ms := 0.0
@@ -633,37 +549,32 @@ func _level_pad() -> void:
 	_pad_k = 1.0 if _voice_ms <= 0.0 else clampf(sqrt(_voice_ms) / PAD_VOICE_REF, PAD_SCALE_MIN, PAD_SCALE_MAX)
 
 
-## Turn the echo dial into an actual room: tap times, feedback, damping and gain.
+## Turn the echo dial into an actual room: tap times, feedback, damping and gain. Everything moves
+## together (a dial that moved only the gain is unusable on speech; see the constants above). The dial's
+## own `echo_feedback` still sets the top of the feedback travel.
 ##
-## Everything moves together, which is the whole point - see the constants above
-## for why a dial that moved only the gain was unusable on speech. The dial's own
-## `echo_feedback` still sets the TOP of the feedback travel, so a caller that
-## deliberately wants a long tail still gets one at a high setting.
-##
-## Cheap and idempotent: the slider is live, so this runs once per buffer and
-## returns immediately unless the setting actually moved.
+## Cheap and idempotent: the slider is live, so this runs once per buffer and returns at once unless the
+## setting moved.
 func _resolve_echo() -> void:
 	var k := clampf(echo_wet, 0.0, 1.0)
 	if is_equal_approx(k, _echo_k):
 		return
 	_echo_k = k
 	var sz := maxi(1, _echo.size())
-	# The tap shortens toward the fusion window as the dial comes down. `k` is
-	# used raw here (not tapered) because this is about CHARACTER: the room should
-	# already be small by the time the level is subtle.
+	# the tap shortens toward the fusion window as the dial comes down; `k` is raw (not tapered) because
+	# this is about character: the room should be small by the time the level is subtle
 	var d1 := lerpf(ECHO_NEAR, ECHO_DELAY, k)
 	_echo_n1 = clampi(int(round(d1 * sample_rate)), 1, sz - 1)
 	_echo_n2 = clampi(int(round(d1 * ECHO_TAP2 * sample_rate)), 1, sz - 1)
 	_echo_fb = lerpf(ECHO_FB_NEAR, echo_feedback, k)
 	_echo_a = 1.0 - exp(-TAU * lerpf(ECHO_LP_NEAR, ECHO_LP, k) / sample_rate)
-	# The LEVEL is tapered, so the bottom of the dial is genuinely quiet on top of
-	# being genuinely small.
+	# the level is tapered, so the bottom of the dial is quiet on top of being small
 	_echo_gain = pow(k, ECHO_TAPER)
 
 
-## Process in place. `buf` is mono float samples; returns the same array so the
-## copy-on-write semantics of PackedFloat32Array cannot silently drop the work.
-## This is the centered mix - what [method process_stereo] gives both ears with no lean.
+## Process in place. `buf` is mono float samples; returns the same array so the copy-on-write semantics
+## of PackedFloat32Array cannot drop the work. This is the centered mix - what [method process_stereo]
+## gives both ears with no lean.
 func process(buf: PackedFloat32Array) -> PackedFloat32Array:
 	return _run(buf, false)[0]
 
@@ -681,8 +592,7 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	side = PackedVector2Array()
 	var has_over := not over.is_empty()
 	_resolve_echo()
-	# Same discipline as _resolve_echo: the dial is live, so the room's settings
-	# are resolved once here rather than per sample.
+	# as _resolve_echo: the dial is live, so the room's settings are resolved once here, not per sample
 	room.prepare()
 	var room_on := room.is_active()
 	var n := buf.size()
@@ -737,7 +647,7 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 		if heard_on:
 			dry = _heard_tick(dry)
 
-		# ...THE ROOM HEARS THE VOICES OVER THIS ONE too: it is one room
+		# ...The room hears the voices over this one too: it is one room
 		var wet := dry + (sv.x + sv.y) * 0.5 * SIDE_ROOM
 
 		# --- resonance: a chord excited by the voice's own energy ---
@@ -748,8 +658,7 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 				if hz >= sample_rate * 0.45:
 					continue
 				var w := TAU * hz / sample_rate
-				# one-pole complex resonator: cheap, stable, and its magnitude
-				# is the ring envelope for free
+				# one-pole complex resonator: cheap, stable, and its magnitude is the ring envelope
 				var re := _res_re[k] * cos(w) - _res_im[k] * sin(w)
 				var im := _res_re[k] * sin(w) + _res_im[k] * cos(w)
 				re = re * RES_Q + dry * RES_DRIVE
@@ -797,14 +706,11 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 					var s2 := 2.0 * pre * pim
 					tone += _p_h2[k] * c2 + _p_h4[k] * (c2 * c2 - s2 * s2)
 				mix += (tone + pre2 * 0.6) * _p_n[k] * e * e      # squared: a gentler swell
-			# the duck hears the voice as the staged one would sound: scaled alike, a louder voice
+			# the duck hears the voice as the staged one would sound: scaled alike, or a louder voice
 			# would hold the bed pressed down through every gap
 			var duck := 1.0 - pad_duck * clampf(_speech * 12.0 / _pad_k, 0.0, 1.0)
-			# Staged by measurement, not by eye: at 0.22 the bed measured RMS
-			# 0.14 against the narration's 0.047 - three times LOUDER than the
-			# voice it is supposed to sit under, and peaking at 0.88. This puts
-			# it well below the voice, which is where a bed belongs: audible
-			# when you listen for it, never competing.
+			# staged by measurement: the bed sits well below the voice (at 0.22 it measured RMS 0.14
+			# against the narration's 0.047), audible when listened for, never competing
 			mix = mix * _ear_k + _tick_events(dry)
 			wet += mix * smoothstep(0.0, PAD_FADE_IN, pad) * pad_level * _pad_k * duck
 			_next_note -= 1.0 / sample_rate
@@ -823,9 +729,8 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 			_echo_i = (_echo_i + 1) % sz
 
 		# --- the room: last, around all of it, as a room is ---
-		# The same place Masking's bus chain puts it, and for the same reason: the
-		# room has to hear the echo, the resonance and the bed, or the bed is
-		# somewhere else than the voice is.
+		# The same place Masking's bus chain puts it: the room has to hear the echo, the resonance and
+		# the bed.
 		if room_on:
 			wet = room.tick(wet)
 
@@ -834,11 +739,10 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 			_lp += pres_a * (wet - _lp)
 			wet = _lp * maxf(presence, 0.05)
 
-		# THE DIRECT VOICE'S SHARE of `wet`. Everything above is linear, so it is the dry
-		# sample through the room's dry gain and the same presence filter - and moving or
-		# shaping only that share leaves the room, the echo and the bed where they were.
-		# Its filter state is kept whenever presence filters at all, so a lean or an approach
-		# that starts mid-reading starts from the right place.
+		# the direct voice's share of `wet`. Everything above is linear, so it is the dry sample through
+		# the room's dry gain and the same presence filter; moving or shaping only that share leaves the
+		# room, the echo and the bed where they were. Its filter state is kept whenever presence filters
+		# at all, so a lean or an approach that starts mid-reading starts from the right place.
 		var direct := dry * direct_g
 		if presence < 0.995:
 			_lp_v += pres_a * (direct - _lp_v)
@@ -868,8 +772,9 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	return [buf, out]
 
 
-## [member heard]'s filters for this buffer: resolved when it changed (its states cleared, so a voice heard through a
-## phone does not begin with the last one's ringing), and whether there is a phone to hear it through at all.
+## [member heard]'s filters for this buffer: resolved when it changed (its states cleared, so a voice
+## heard through a phone does not begin with the last one's ringing), and whether there is a phone to
+## hear it through at all.
 func _resolve_heard() -> bool:
 	var key := heard if HEARD.has(heard) else ""
 	if key == _hd_for:
@@ -919,7 +824,7 @@ func _heard_tick(v: float) -> float:
 	return tanh(z * _hd_drive) / _hd_drive * _hd_gain
 
 
-## THE LINE'S STATIC for one sample of the voice [param v] (see [constant STATIC_OPEN]): the hiss while the channel is open,
+## The line's static for one sample of the voice [param v] (see [constant STATIC_OPEN]): the hiss while the channel is open,
 ## a radio's burst and tail, a crackle's pop - 0 where the row has none and the channel is shut.
 func _static_tick(v: float) -> float:
 	if _st_hiss <= 0.0 and _st_crackle <= 0.0:
@@ -971,8 +876,8 @@ func _st_white() -> float:
 	return _st_rand() * 2.0 - 1.0
 
 
-## A SECOND-ORDER BUTTERWORTH ("high" or "low") at [param hz] for [param sr]: `[b0, b1, b2, a1, a2]`, a0 divided out
-## (Bristow-Johnson's cookbook, Q 1/sqrt 2).
+## A second-order Butterworth ("high" or "low") at [param hz] for [param sr]: `[b0, b1, b2, a1, a2]`, a0
+## divided out (Bristow-Johnson's cookbook, Q 1/sqrt 2).
 static func biquad(kind: String, hz: float, sr: float) -> PackedFloat32Array:
 	var w := TAU * clampf(hz, 10.0, sr * 0.45) / sr
 	var cw := cos(w)
@@ -983,10 +888,9 @@ static func biquad(kind: String, hz: float, sr: float) -> PackedFloat32Array:
 	return PackedFloat32Array([b0 / a0, b1 / a0, b0 / a0, -2.0 * cw / a0, (1.0 - alpha) / a0])
 
 
-## The reader's next distance: [param c] from -1 (backed off) through 0 (where they sit) to 1
-## (right at the microphone), and [param hush] 0..1, how far they drop their voice for it -
-## only coming in, since nobody leans back to speak more quietly. Eased from wherever the
-## reader is now ([constant NEAR_TAU]).
+## The reader's next distance: [param c] from -1 (backed off) through 0 (where they sit) to 1 (right at
+## the microphone), and [param hush] 0..1, how far they drop their voice for it - only coming in, since
+## nobody leans back to speak more quietly. Eased from wherever the reader is now ([constant NEAR_TAU]).
 func near_to(c: float, hush: float) -> void:
 	var was := _near_to
 	_near_to = clampf(c, -1.0, 1.0)
@@ -994,9 +898,9 @@ func near_to(c: float, hush: float) -> void:
 	_join_lean(was)
 
 
-## An approach that takes the reader to one side as well (see [constant LEAN_WITH_NEAR]), and
-## the way back from it. Draws from the lean's own generator, so the same marks make the same
-## moves in the reading, the audition and the export.
+## An approach that takes the reader to one side as well (see [constant LEAN_WITH_NEAR]), and the way
+## back from it. Draws from the lean's own generator, so the same marks make the same moves in the
+## reading, the audition and the export.
 func _join_lean(was: float) -> void:
 	var k := clampf(lean, 0.0, 1.0)
 	if _near_to > 0.0 and was <= 0.0:
@@ -1029,11 +933,11 @@ func _near_gains() -> void:
 	_near_bg = db_to_linear(NEAR_BASS_DB * in_ - 0.5 * NEAR_BASS_DB * back)
 
 
-## WHERE THE READER IS FOR EACH SENTENCE: `{c, hush}` per entry of [param ks], the
-## Near dial of the voice reading that sentence, keyed by [param who] (the speaker, so each
-## voice moves on its own). Seeded, and every sentence takes the same five draws whatever
-## the dial, so moving the dial changes how often and how far the same moments move rather than
-## rolling different ones. The softer delivery scales with the move too. At 0 the reader never moves.
+## Where the reader is for each sentence: `{c, hush}` per entry of [param ks], the Near dial of the voice
+## reading that sentence, keyed by [param who] (the speaker, so each voice moves on its own). Seeded, and
+## every sentence takes the same five draws whatever the dial, so moving the dial changes how often and
+## how far the same moments move. The softer delivery scales with the move too. At 0 the reader never
+## moves.
 static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -1075,9 +979,9 @@ static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int)
 	return out
 
 
-## The voice's gain in each ear at lean position [param p] (-1 left .. 1 right): the near
-## ear's share of the voice runs from a half to [constant LEAN_SHARE], and the pair keeps
-## constant power, so a lean moves the voice without making it louder or quieter overall.
+## The voice's gain in each ear at lean position [param p] (-1 left .. 1 right): the near ear's share
+## runs from a half to [constant LEAN_SHARE], and the pair keeps constant power, so a lean moves the
+## voice without making it louder or quieter overall.
 static func lean_gains(p: float) -> Vector2:
 	var r := 0.5 + (LEAN_SHARE - 0.5) * clampf(p, -1.0, 1.0)
 	var l := 1.0 - r
@@ -1085,15 +989,15 @@ static func lean_gains(p: float) -> Vector2:
 	return Vector2(l / norm, r / norm)
 
 
-## The dial moved since the rest was drawn: a rest drawn for a sparser setting is cut to
-## the longest the new one would draw, so turning Lean up is heard in seconds rather than
-## after a rest the old setting chose - and turning it to 0 sends the reader home now.
+## The dial moved since the rest was drawn: a rest drawn for a sparser setting is cut to the longest the
+## new one would draw, so turning Lean up is heard in seconds, and turning it to 0 sends the reader home
+## now.
 func _resolve_lean() -> void:
 	var k := clampf(lean, 0.0, 1.0)
 	if is_equal_approx(k, _lean_k):
 		return
-	# The reading opens at rest, at center: the first rest is drawn here, for the first
-	# dial the chain is given, rather than the reader leaning on the first word.
+	# the reading opens at rest, at center: the first rest is drawn here rather than the reader
+	# leaning on the first word
 	if _lean_k < 0.0 and not _lean_joint:
 		_lean_hold = _lean_rng.randf_range(0.4, 1.0) * LEAN_REST_MAX * pow(1.0 - k, 1.5)
 	_lean_k = k
@@ -1109,8 +1013,8 @@ func _resolve_lean() -> void:
 		_lean_hold = minf(_lean_hold, 0.0 if k <= 0.0 else longest)
 
 
-## One sample of the reader's movement: the position, eased (raised cosine, so every move
-## starts and ends at rest - a person leaning, not a pan sweep).
+## One sample of the reader's movement: the position, eased (raised cosine, so every move starts and
+## ends at rest - a person leaning, not a pan sweep).
 func _tick_lean() -> float:
 	var dt := 1.0 / sample_rate
 	if _lean_dur > 0.0:
@@ -1165,8 +1069,8 @@ func _key_hz() -> float:
 
 
 ## Move the key, once it is set (KEY_HEARD), only when the reader's register has moved more than
-## KEY_HYSTERESIS off it - so it follows a change of speaker, not every inflection - and then to
-## where the register is, exactly.
+## KEY_HYSTERESIS off it - so it follows a change of speaker, not every inflection - and then to where
+## the register is, exactly.
 func _follow_key() -> void:
 	if _tonic <= 0.0 or _key_semi <= -1000.0:
 		return
@@ -1206,15 +1110,14 @@ func _tick_events(dry: float) -> float:
 			if _bass_env < 1e-4:
 				_bass_env = 0.0
 		_bass_ph = fmod(_bass_ph + _bass_w, TAU)
-		# The fundamental plus two harmonics: a small speaker cannot play the root itself, so
-		# the harmonics are what make the note there at all.
+		# the fundamental plus two harmonics: a small speaker cannot play the root itself
 		var v := sin(_bass_ph) + 0.45 * sin(2.0 * _bass_ph) + 0.18 * sin(3.0 * _bass_ph)
 		out += v * _bass_env * _bass_env * BASS_LEVEL
 	return out
 
 
-## How often a cue is taken at the current dial: never below `onset`, rising (x^1.5, so
-## the lower part of the range stays sparse) to `top` at 1.0.
+## How often a cue is taken at the current dial: never below `onset`, rising (x^1.5, so the lower part
+## of the range stays sparse) to `top` at 1.0.
 func _chance(onset: float, top: float) -> float:
 	var x := clampf((pad - onset) / (1.0 - onset), 0.0, 1.0)
 	return top * pow(x, 1.5)
@@ -1241,9 +1144,8 @@ func _plan_bass() -> void:
 	_bass_at = (_clock / bar + 1) * bar
 
 
-## Bring one idle voice in on a scale degree. Notes are chosen, not swept: the
-## pad is a sequence of sustained tones, and overlapping envelopes are what turn
-## a sequence into a chord.
+## Bring one idle voice in on a scale degree. Notes are chosen, not swept: the pad is a sequence of
+## sustained tones, and overlapping envelopes turn a sequence into a chord.
 func _start_tone() -> void:
 	var slot := -1
 	for k in PAD_VOICES:
@@ -1296,9 +1198,9 @@ func _ear() -> void:
 	_ear_k = 1.0 if now <= 0.0 else clampf(sqrt(_audibility(PAD_EAR_KEY, false) / now), 1.0 / PAD_EAR_MOST, PAD_EAR_MOST)
 
 
-## HOW LOUD THE BED'S TONES ARE TO THE EAR in the key [param key] (Hz), for their power: over every tone
-## [method _start_tone] can choose (PAD_SCALE by PAD_OCTAVES, under PAD_CEILING), its partials' A-weighted
-## power ([method a_power]) over their plain power - with the octave partials of a low tone
+## How loud the bed's tones are to the ear in the key [param key] (Hz), for their power: over every tone
+## [method _start_tone] can choose (PAD_SCALE by PAD_OCTAVES, under PAD_CEILING), its partials'
+## A-weighted power ([method a_power]) over their plain power - with the octave partials of a low tone
 ## ([param partials], [method _partials]) or plain, as the bed was staged.
 static func _audibility(key: float, partials: bool) -> float:
 	if key <= 0.0:
@@ -1327,8 +1229,7 @@ static func a_power(hz: float) -> float:
 
 
 
-## Autocorrelation over one tracking window, decimated by 4 - the pitch of a
-## voice is well under 400 Hz, so full rate buys nothing but cost.
+## Autocorrelation over one tracking window, decimated by 4 (a voice is well under 400 Hz).
 func _estimate_pitch(win: PackedFloat32Array) -> float:
 	var dec := 4
 	var m := win.size() / dec

@@ -1,23 +1,21 @@
 extends SceneTree
 
-## body_check - a Likeness's body is a skeleton that holds a posture (next/likeness.md, "The fourth pass";
-## [LikenessFace], [LikenessPlan]).
+## body_check - a Likeness's body is a skeleton that holds a posture (next/likeness.md; [LikenessFace], [LikenessPlan]).
 ##
 ##   godot --headless --path . --script tests/likeness/body_check.gd
 ##
-## THE ARM BENDS AS AN ARM: when the shoulder moves and the hand stays, the elbow found keeps both bones'
-## lengths and bends the way it bent ([method LikenessFace.elbow]); the shoulder and the hand unmoved, it is
-## where it was. A bone moved ([method LikenessFace.bone]) takes its two ends exactly where they go.
+## The arm bends as an arm: when the shoulder moves and the hand stays, the elbow found keeps both bones' lengths and bends
+## the way it bent ([method LikenessFace.elbow]); the shoulder and the hand unmoved, it is where it was. A bone moved
+## ([method LikenessFace.bone]) takes its two ends exactly where they go.
 ##
-## THE SKIN: at the still's own pose every vertex is where it is; with the torso leaned and the shoulders
-## lifted, a vertex of a RESTING HAND stays put, one of the torso moves with it, one in the room stays, and
-## one on the forearm moves part of the way its elbow does. The control: the same hand NOT resting goes with the body.
+## The skin: at the still's own pose every vertex is where it is; with the torso leaned and the shoulders lifted, a vertex of a
+## resting hand stays put, one of the torso moves with it, one in the room stays, and one on the forearm moves part of the way
+## its elbow does. Control: the same hand not resting goes with the body.
 ##
-## THE POSTURE HOLDS AND SHIFTS ([method LikenessPlan.posture]), A PURE FUNCTION OF TIME: asked in another
-## order it is the same; stepped a millisecond at a time it never jumps; over ten minutes it shifts (it
-## spans a good part of its range) - and IT DOES NOT ROCK (2026-10-22, the user: "rocking weirdly back and
-## forth"): what is quick in it, less its own 4-second mean, is a small share of it. The control is the
-## head, played from their own quick motion, whose quick share must be large - so the measure can tell.
+## The posture holds and shifts ([method LikenessPlan.posture]), a pure function of time: asked in another order it is the same;
+## stepped a millisecond at a time it never jumps; over ten minutes it spans a good part of its range - and it does not rock:
+## what is quick in it, less its own 4-second mean, is a small share of it. Control: the head, played from their own quick
+## motion, whose quick share must be large - so the measure can tell.
 
 var _fails := 0
 var _checks := 0
@@ -195,7 +193,7 @@ func _posture() -> void:
 	_ok(step < 0.05, "the posture jumped %.3f of its spread in 7 ms" % step)
 	_ok(hi[0] - lo[0] > 2.0 * p._posture_sd[0] and hi[3] - lo[3] > 2.0 * p._posture_sd[3],
 		"over ten minutes the posture scarcely shifted: across %.4f, tilt %.3f" % [hi[0] - lo[0], hi[3] - lo[3]])
-	# IT DOES NOT ROCK: the quick share of the posture against the head's
+	# It does not rock: the quick share of the posture against the head's
 	var body := _quick_share(p, 3)
 	var head := _quick_share(p, 0)
 	print("  quicker than 4 s: the body's posture %.2f of it, the head %.2f" % [body, head])

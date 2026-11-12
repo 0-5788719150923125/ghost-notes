@@ -3,18 +3,14 @@ class_name Shell
 
 ## Shell - what a panel asks of the window it is in.
 ##
-## A panel does not build the window's furniture and must not reach for the thing that does:
-## it asks for a place in the bottom-right row, for room along the bottom edge, for the way
-## back to the notes, for what can be done to the note that is open. Those questions are this
-## class, and nothing else is: it knows no exporter, no assistant and no console. [Chrome]
-## (`app/`) is the shell with the furniture in it, and answers the three questions that need
-## furniture ([method _inset_changed], [method _export_suppressed], [method ask_delete]).
+## A panel asks for a place in the bottom-right row, for room along the bottom edge, for the way back
+## to the notes, for what can be done to the note that is open. It knows no exporter, no assistant and
+## no console. [Chrome] (`app/`) is the shell with the furniture in it, and answers the three questions
+## that need furniture ([method _inset_changed], [method _export_suppressed], [method ask_delete]).
+## Panels live below the shell in `src/` (docs/structure.md): they name this, and `app/` names them.
 ##
-## That split is what lets the reading, the storyboard's dock, the transport and Masking live
-## BELOW the shell in `src/` (docs/structure.md): they name this, and `app/` names them.
-##
-## A panel built with no shell in the tree (a probe, a gate) finds none ([method of] is null)
-## and carries on: every question here has "nobody to ask" as an answer.
+## A panel built with no shell in the tree (a probe, a gate) finds none ([method of] is null) and
+## carries on: every question here has "nobody to ask" as an answer.
 
 ## The group the one shell in a tree is found by ([method of]).
 const GROUP := "ghost_chrome"
@@ -24,27 +20,21 @@ const GROUP := "ghost_chrome"
 const ROW_TOP := 68.0
 const ROW_MARGIN := 28.0
 const ROW_GAP := 4.0
-## THE BOTTOM-RIGHT ROW, left to right (next/notes.md, "The Environment button"). Each piece of
-## furniture used to pin its own 40-pixel button at a fixed offset, so a hidden ⤓ left a hole and
-## a new piece meant new offsets everywhere; now it hands its button to the row, which keeps
-## this order, closes up around a hidden one, and is lifted as one by [method claim_bottom].
-## The Environment button is at the LEFT end so the three that were there keep their places, and
-## the ⌂ left of it for the same reason (hidden on the home screen, where there is nothing to
-## leave). Masking's own ⤓ takes the export slot while it suppresses the shared one. Graphics beside the
-## Environment: the two panels about the machine the picture is drawn on.
+## The bottom-right row, left to right (next/notes.md, "The Environment button"). A piece of furniture
+## hands its button to the row, which keeps this order, closes up around a hidden one, and is lifted
+## as one by [method claim_bottom]. Masking's own export takes the export slot while it suppresses the
+## shared one.
 const ROW_ORDER := [&"home", &"environment", &"graphics", &"console", &"mask_export", &"export", &"assistant"]
-## The layer the row draws on: above the home screen (200) and every panel that opens above it,
-## so a button is never under something - the 💬 sat on 126, under the home screen, unseen.
+## The layer the row draws on: above the home screen (200) and every panel that opens above it.
 const ROW_LAYER := 253
 
 var row: HBoxContainer
 var _row_layer: CanvasLayer
 var _row_buttons := {}           # who -> Button
 
-## THE WAY HOME (next/notes.md step 6): every mode can be left and entered again. Main hands the shell
-## the two halves only it knows ([method set_home]): how to leave, and why the mode up now cannot
-## be left this moment - an export making its take from the mode, which would be stranded. The ⌂ is
-## grayed with that reason while it holds. Step 8's "‹" at the top of a panel takes its job.
+## The way home (next/notes.md step 6): main hands the shell the two halves only it knows
+## ([method set_home]): how to leave, and why the mode up now cannot be left this moment (an export
+## making its take from the mode). The home button is grayed with that reason while it holds.
 var _home_button: Button
 var _home_leave := Callable()     # () -> String: "" once it has left, else why not
 var _home_blocker := Callable()   # () -> String: why the mode cannot be left now, "" when it can
@@ -53,62 +43,46 @@ var _note_delete := Callable()    # (path, answer) -> void: main's delete_note
 var _note_open := Callable()      # (path) -> String: main's open_file
 var _home_t := 0.0
 
-## THE PANELS ABOVE THE ROW, one open at a time: the console's log, the Assistant's panel and the
-## Environment panel all open into the same space, and nothing stopped them overlapping. Each
-## registers how to close itself ([method register_panel]) and says when it opens
-## ([method panel_opened]); opening one closes the others. The export's status line is not a
-## panel - it is progress - so it steps aside while any panel is open ([method panel_open]).
+## The panels above the row, one open at a time. Each registers how to close itself
+## ([method register_panel]) and says when it opens ([method panel_opened]); opening one closes the
+## others. The export's status line is not a panel (it is progress): it steps aside while any panel
+## is open ([method panel_open]).
 var _panel_closers := {}         # who -> Callable
 var _panels_open := {}           # who -> true while open
 
-## HOW MUCH ROOM SOMETHING HAS CLAIMED at the bottom of the frame, in pixels -
-## the largest live claim (see [method claim_bottom]). READ-ONLY: write through the
-## claim API, never here.
-##
-## Every piece of furniture here anchors bottom-right, which is empty in most modes -
-## but the Masking editor puts its marker strip and its trim/track lanes down there, so
-## the row sat ON them. A surface claims its room once and the whole row steps up
-## together. Claim only for something that has to be AT the bottom edge: a row that moves
-## from screen to screen is harder to find, which is why the home screen does not claim.
+## Room something has claimed at the bottom of the frame, in pixels: the largest live claim (see
+## [method claim_bottom]). Read-only: write through the claim API.
+## Claim only for something that has to be at the bottom edge (Masking's marker strip and lanes): a
+## row that moves from screen to screen is harder to find, so the home screen does not claim.
 var bottom_inset := 0.0
 
-## THE CLAIMS ARE KEYED, and that is not tidiness - a single scalar (or a single
-## `suppressed` bool) is unsafe here because of the order the notes list dismisses itself in.
-## [method NotesList._open] calls into main FIRST and only then `queue_free`s, so the
-## outgoing list's `_exit_tree` runs AFTER the incoming note's `_ready`. A surface that
-## released by writing 0 (or `false`) would therefore undo the claim the mode had just
-## made - handing the shared export button straight back on top of Masking's own one,
-## which is the exact bug Exporter.suppressed exists to prevent.
-##
-## With a key, a release can only ever remove its own claim, so no ordering of arrivals
-## and departures can produce a wrong answer.
+## Claims are keyed: a release removes only its own claim, whatever order arrivals and departures
+## come in. The outgoing notes list's `_exit_tree` runs after the incoming note's `_ready`, so a
+## release that wrote 0 or `false` to a shared scalar would undo the claim the new mode just made.
 var _bottom_claims := {}
 var _export_claims := {}
-## THE SHOW'S ROOM. Something docked along the bottom that a person works in while WATCHING the
-## show - the storyboard's editor - claims the height it covers, and main fits the frame into what
-## is left above it ([signal stage_room_changed], [member stage_bottom]): the picture being edited
-## is seen whole, not from behind the editor. Keyed, as every claim here is.
+## The show's room: something docked along the bottom that a person works in while watching the show
+## (the storyboard's editor) claims the height it covers, and main fits the frame into what is left
+## above it ([signal stage_room_changed], [member stage_bottom]). Keyed, as every claim here is.
 signal stage_room_changed
 var stage_bottom := 0.0
 var _stage_claims := {}
 
-## THE STAGE ALONE WHILE IT PLAYS (2026-11-07, the user: "After a few seconds of realtime playback, can we auto-hide all of
-## the UI elements, including the mouse cursor? This should ONLY apply if we have also hidden the F2 panel"). [constant
-## IDLE_AFTER] s into a show playing with no hand on the mouse or the keys, the furniture fades out and the pointer is hidden;
-## the first move, click or key brings both back. What fades is the group [constant FADES]: the row here, the corner a hidden
-## panel leaves ([SidePanel]) and the transport ([Transport]). ITS ALPHA ONLY: nothing is hidden or moved, so a claim on the
-## bottom edge holds and the row comes back where it was - and a button nobody sees takes no click, because the pointer cannot
-## reach one without moving.
+## The stage alone while it plays. [constant IDLE_AFTER] s into a show playing with no hand on the
+## mouse or the keys, the furniture fades out and the pointer is hidden; the first move, click or key
+## brings both back. What fades is the group [constant FADES]: the row here, the corner a hidden panel
+## leaves ([SidePanel]) and the transport ([Transport]). Alpha only: nothing is hidden or moved, so a
+## bottom claim holds and a button nobody sees takes no click.
 ##
-## NEVER WHILE SOMETHING IS UP TO BE USED ([method _stays_up]): a side panel (the user's condition), a panel above the row, a
-## dock along the bottom ([member stage_bottom]), a dialog, popup or tooltip (an embedded window), a field being typed in, the
-## pointer on the furniture or a hold on it ([method hold_up]: the transport's rail), or a show catching up (its line says so).
-## THE INPUT IS THE WINDOW'S ([signal Window.window_input]), heard before any node can take it: the transport takes the arrows
-## for itself, and an embedded popup the motion over it (Masking's pointer once vanished inside a color picker that way). The
-## pointer is hidden and shown only on the way in and out, so Masking's own hiding of it is never fought.
+## Never while something is up to be used ([method _stays_up]): a side panel, a panel above the row, a
+## dock along the bottom ([member stage_bottom]), a dialog, popup or tooltip (an embedded window), a
+## field being typed in, the pointer on the furniture or a hold on it ([method hold_up]), or a show
+## catching up. The input is the window's ([signal Window.window_input]), heard before any node can
+## take it. The pointer is hidden and shown only on the way in and out, so Masking's own hiding of it
+## is not fought.
 const FADES := &"fades_while_watching"
-## The group a side panel is found by ([constant SidePanel.GROUP] is this): named here, never read off SidePanel, whose
-## preloaded Card names the Settings autoload - a gate with no autoloads that builds a panel naming this class failed with it.
+## The group a side panel is found by ([constant SidePanel.GROUP] is this). Named here, never read off
+## SidePanel: its preloaded Card names the Settings autoload, which a gate with no autoloads lacks.
 const PANELS := &"side_panel"
 const IDLE_AFTER := 3.0
 const FADE_OUT := 0.6               # s from shown to gone
@@ -134,9 +108,8 @@ func release_bottom(who: StringName) -> void:
 		_apply_inset()
 
 
-## Take the shared ⤓ export button off screen while [param who] is up - because that
-## surface has its own export (Masking), or because it is not a session at all and there
-## is nothing to render (the notes list). See [member Exporter.suppressed].
+## Take the shared export button off screen while [param who] is up - because that surface has its own
+## export (Masking), or is not a session at all (the notes list). See [member Exporter.suppressed].
 func suppress_export(who: StringName) -> void:
 	_export_claims[who] = true
 	_apply_suppression()
@@ -186,17 +159,16 @@ func _apply_suppression() -> void:
 	_export_suppressed(not _export_claims.is_empty())
 
 
-## THE ` FEEDBACK CONSOLE for the session that is up: made on the first ask, the same one on every
-## ask after, and wired to the Assistant by the shell that has both ([Chrome]) - so a workspace
-## hands it what to describe and never builds a console or an Assistant of its own. Null from a
-## shell with no furniture.
+## The feedback console for the session that is up: made on the first ask, the same one on every ask
+## after, and wired to the Assistant by the shell that has both ([Chrome]). Null from a shell with no
+## furniture.
 func attach_feedback() -> Node:
 	return null
 
 
-## THE TRANSPORT IS THE SHELL'S FURNITURE: a workspace whose clock is its own (Masking's clip) hands
-## it its verbs here - the hooks of [method Spectrum.conduct] - and takes them back when it leaves
-## ([method release_transport]), naming no autoload. Nothing, from a shell with no transport.
+## The transport is the shell's furniture: a workspace whose clock is its own (Masking's clip) hands it
+## its verbs here - the hooks of [method Spectrum.conduct] - and takes them back when it leaves
+## ([method release_transport]). Nothing, from a shell with no transport.
 func conduct_transport(_owner: Object, _hooks: Dictionary) -> void:
 	pass
 
@@ -222,10 +194,9 @@ func _export_suppressed(_on: bool) -> void:
 
 
 func _ready() -> void:
-	# Findable by a mode without knowing where in the tree it was parented - it is
-	# main's child today, and a mode looking for it walked two levels and missed it.
+	# Findable by a mode without knowing where in the tree it was parented.
 	add_to_group(GROUP)
-	# THE ROW FIRST: each piece of furniture hands its button to it as it is built.
+	# The row first: each piece of furniture hands its button to it as it is built.
 	_build_row()
 	_build_home()
 	get_window().window_input.connect(_on_window_input)
@@ -243,8 +214,7 @@ func _build_row() -> void:
 	add_child(_row_layer)
 	row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", int(ROW_GAP))
-	# Anchored to the corner and grown UP-LEFT from it, so the row's width is free to change - a
-	# button hidden, a badge on the 💬 - without the right end ever moving.
+	# Anchored to the corner and grown up-left, so the row's width can change without the right end moving.
 	row.anchor_left = 1.0
 	row.anchor_top = 1.0
 	row.anchor_right = 1.0
@@ -267,8 +237,7 @@ func _place_row() -> void:
 
 
 ## Put [param b] in the row as [param who]'s button, at [param who]'s place in [constant ROW_ORDER].
-## The row owns its position from then on; the furniture keeps the button and shows, hides and
-## relabels it as before.
+## The row owns its position; the furniture keeps the button and shows, hides and relabels it.
 func row_button(who: StringName, b: Button) -> void:
 	if b.get_parent() != null:
 		b.get_parent().remove_child(b)
@@ -328,12 +297,9 @@ func _go_home() -> void:
 	go_home()
 
 
-## "‹" FOR A PANEL'S HEADER (next/notes.md step 8: "Opening a note turns the panel into that
-## note's cards, with '‹ Notes' at the top to go back"): the same way out as the row's ⌂, at the top
-## of the panel where a person looks for it. ONE MARKER, NO WORD (2026-11-11, the user: "The 'Notes'
-## text is not needed, the marker alone tells the user enough"): the same boxed "‹" the hidden panel
-## leaves in its corner ([method SidePanel.pin_title_row]). A panel built without a Chrome (a probe)
-## gets one that does nothing.
+## "‹" for a panel's header (next/notes.md step 8): the same way out as the row's home button, boxed
+## like the one the hidden panel leaves in its corner ([method SidePanel.pin_title_row]). A panel
+## built without a Chrome (a probe) gets one that does nothing.
 static func back_button(owner: Node) -> Button:
 	var b := Button.new()
 	b.text = "‹"
@@ -347,7 +313,7 @@ static func back_button(owner: Node) -> Button:
 	return b
 
 
-## THE NOTE OPEN NOW, and how to delete it ([param delete]: (path, "trash" or "forget") -> void) -
+## The note open now, and how to delete it ([param delete]: (path, "trash" or "forget") -> void) -
 ## what every panel's "⋯" acts on ([method note_menu]). "" and an invalid Callable on the list.
 func set_note(path: String, delete := Callable(), open := Callable()) -> void:
 	_note_path = path
@@ -355,17 +321,17 @@ func set_note(path: String, delete := Callable(), open := Callable()) -> void:
 	_note_open = open
 
 
-## OPEN ANOTHER FILE AS THE NOTE, from inside a note (its Script card's Open…): "" once it is open,
-## or why it could not be (the note cannot be left this moment, there is no such file).
+## Open another file as the note, from inside a note (its Script card's Open...): "" once it is open,
+## or why it could not be.
 func open_file(path: String) -> String:
 	if not _note_open.is_valid():
 		return "No note is open."
 	return String(_note_open.call(path))
 
 
-## "⋯" FOR A PANEL'S HEADER (2026-10-06): what can be done to the note itself - deleting it, asked
-## first ([method ask_delete]). Grayed, with the reason, while the note cannot be left (an export making
-## its take). A panel built without a Chrome (a probe) gets one that does nothing.
+## "⋯" for a panel's header: what can be done to the note itself - deleting it, asked first
+## ([method ask_delete]). Grayed, with the reason, while the note cannot be left. A panel built
+## without a Chrome (a probe) gets one that does nothing.
 static func note_menu(owner: Node) -> MenuButton:
 	var m := MenuButton.new()
 	m.text = "⋯"
@@ -507,9 +473,9 @@ func _watch(delta: float) -> void:
 			c.modulate.a = _faded
 
 
-## Whatever keeps the furniture up: everything but a show playing on its own with nobody at the controls.
-## The transport is found in the tree, never named: a gate that runs with no autoloads (mask_tracks_check) builds
-## a panel that names this class, and a `Spectrum` here failed to compile and took the whole class with it.
+## Whatever keeps the furniture up: everything but a show playing on its own with nobody at the
+## controls. The transport is found in the tree, never named: a gate with no autoloads builds a panel
+## that names this class, and a `Spectrum` here would not compile.
 func _stays_up() -> bool:
 	var transport := get_node_or_null(^"/root/Spectrum")
 	if transport == null or not transport.transport_playing() or transport.waiting():

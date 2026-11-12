@@ -1,27 +1,25 @@
 extends SceneTree
 
-## A SHOW OF ANY KIND OF CARD, from its document alone: a box of cards shown off, a deck the producer
-## chooses each episode - and a tarot reading, told by the same rules.
+## A show of any kind of card, from its document alone: a box of cards shown off, a deck the producer chooses each episode - and a
+## tarot reading, told by the same rules.
 ##
 ##   godot --headless --path . --script res://tests/table_show/cards_choose_check.gd
 ##
-## - THE PRODUCER CHOOSES THE DECK when the brief lists no card - a Cards section of prose, or none
+## - the producer chooses the deck when the brief lists no card - a Cards section of prose, or none
 ##   ([method CardDeck.chooses]); a listed deck is the show's (the control). No deck is built in.
-## - THE BOX IS BIGGER THAN THE DRAW: a plan's deck lands only with at least twice the spread (and
+## - the box is bigger than the draw: a plan's deck lands only with at least twice the spread (and
 ##   [constant TablePrompts.BOX]'s least), so the seed, not the producer, decides what comes out; a
 ##   box the size of the spread is refused. The draw comes from that box.
-## - NO CHEATING holds for a chosen deck: the reader of card K is handed cards 1..K and no other
+## - no cheating holds for a chosen deck: the reader of card K is handed cards 1..K and no other
 ##   card of the box. Two-sided: the close names every card drawn.
-## - THE RULES ARE EVERY SHOW'S (the user, 2026-10-08: "there shouldn't be ANY tarot-gated rules"): the
-##   shared context is the same words around any brief, and "tarot" reaches the producer, the designer
-##   and the painter only from the brief or the deck's `kind` the producer named - two-sided: a look whose
-##   kind is a tarot deck is painted and designed as one, and a brief that says tarot is handed whole.
-## - A CARD GOES BACK IN THE BOX ONLY WHEN IT WAS PASSED OVER (the user, 2026-10-13: "Don't spend a full
-##   minute talking about the card, just to put it back"): in a spread where cards stay out, a plan that
-##   gives a card a story and puts it back lands with that card kept out, a card put back is looked at
-##   briefly, and its reader is told it is passed over and asked for a few words. Two-sided: a spread
-##   that puts every card back is left as planned, and a kept card's reader is told nothing of the kind.
-## - THE DRAW KEEPS WHAT IT LEFT IN A BOX, for the table to print the cards nobody drew as - and no
+## - The rules are every show's: the shared context is the same words around any brief, and "tarot" reaches the producer, the
+##   designer and the painter only from the brief or the deck's `kind` the producer named - two-sided: a look whose kind is a tarot
+##   deck is painted and designed as one, and a brief that says tarot is handed whole.
+## - A card goes back in the box only when it was passed over: in a spread where cards stay out, a plan that gives a card a story
+##   and puts it back lands with that card kept out, a card put back is looked at briefly, and its reader is told it is passed over
+##   and asked for a few words. Two-sided: a spread that puts every card back is left as planned, and a kept card's reader is told
+##   nothing of the kind.
+## - the draw keeps what it left in a box, for the table to print the cards nobody drew as - and no
 ##   reader is handed one of them (the no-cheating check reads the prompts of an episode that has them).
 
 var _fails := 0
@@ -70,7 +68,7 @@ func _chooses() -> bool:
 
 
 func _framing() -> bool:
-	# THE SAME WORDS AROUND ANY BRIEF: take each brief out of its context and nothing else differs
+	# The same words around any brief: take each brief out of its context and nothing else differs
 	var tarot_brief := "# True Tarot\n\nA tarot channel that tells the truth."
 	var shown := TablePrompts.show_context("S", BRIEF)
 	var tarot := TablePrompts.show_context("S", tarot_brief)
@@ -94,7 +92,7 @@ func _framing() -> bool:
 	_ok(aside_prompt.contains("Continue the thought") and not aside_prompt.contains("HIDDEN CARD")
 		and not aside_prompt.contains("HIDDEN DETAILS"),
 		"an aside leaves the held card entirely out of the writer's prompt")
-	# THE PRODUCER asks every show for its kind of cards, and names none of its own
+	# The producer asks every show for its kind of cards, and names none of its own
 	var chosen := String(TablePrompts.producer("Show and Tell", BRIEF, 7, CardTable.FACES, CardTable.FRAMES, [], [], true)["prompt"])
 	var listed := String(TablePrompts.producer("T", "B", 7, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
 	for pr in [chosen, listed]:
@@ -103,7 +101,7 @@ func _framing() -> bool:
 	_ok(chosen.contains("THE DECK is yours to choose") and chosen.contains("\"deck\": [{"), "the producer is not asked for its box")
 	_ok(not listed.contains("\"deck\": [{") and listed.contains("78 cards: The Fool, The Magician"),
 		"control: a show with its own deck is asked for a box, or not told its cards")
-	# THE DESIGNER takes the kind the producer named; no suit's element is the code's
+	# The designer takes the kind the producer named; no suit's element is the code's
 	var card := {"name": "Ace of Wands", "group": "Wands", "meaning": "a spark"}
 	var d := String(TablePrompts.designer("S", BRIEF, {"deck_name": "Sandlot", "kind": "minor-league baseball card set"}, card, false)["prompt"])
 	_ok(d.contains("minor-league baseball card set \"Sandlot\"") and not d.to_lower().contains("tarot") and not d.contains("element"),
@@ -161,7 +159,7 @@ func _box() -> bool:
 
 func _put_back() -> bool:
 	var st := {"source": "box", "pace": "mixed"}
-	# THE REPORTED PLAN (the-shoebox 65803): a quick look put back, two kept on a pile, a story put back
+	# The reported plan (the-shoebox 65803): a quick look put back, two kept on a pile, a story put back
 	var reported := [{"comment": "brief", "destination": "box"}, {"destination": "stack"},
 		{"comes": "searched", "comment": "story", "destination": "stack", "on": true}, {"comment": "story", "destination": "box"}]
 	TableProducer.back_only_passed(reported, st)
@@ -194,7 +192,7 @@ func _put_back() -> bool:
 		and not (dealt[0] as Dictionary).has("destination") and not (dealt[1] as Dictionary).has("destination")
 		and String(dealt[2]["destination"]) == "box",
 		"a card went back into a box from a deck, or from where it was dealt: %s %s" % [str(deck), str(dealt)])
-	# AS A PLAN LANDS: the reported one, whole - the storied card joins the pile it follows
+	# As a plan lands: the reported one, whole - the storied card joins the pile it follows
 	TableEpisode.root = ROOT
 	var ep := TableEpisode.open("choose-show", 6565)
 	ep.invalidate("plan")
@@ -216,7 +214,7 @@ func _put_back() -> bool:
 		and String((pos[0] as Dictionary)["destination"]) == "box",
 		"the landed plan still tells a story and puts the card back: %s" % str(pos[3]))
 	prod._finish("draw", prod._make_draw())
-	# THE DRAW KEEPS WHAT IT LEFT IN THE BOX: the eight nobody drew, by name, none of them drawn
+	# The draw keeps what it left in the box: the eight nobody drew, by name, none of them drawn
 	var draw: Dictionary = ep.read_json("draw")
 	var drawn_names: Array = (draw["cards"] as Array).map(func(c: Dictionary) -> String: return String(c["name"]))
 	var left: Array = draw.get("left", []) if draw.get("left") is Array else []
@@ -224,7 +222,7 @@ func _put_back() -> bool:
 			return String(c["name"]).begins_with("Card ") and not drawn_names.has(String(c["name"])) and String(c["meaning"]).begins_with("number")),
 		"the draw did not keep the cards it left in the box: %s" % str(left))
 	_ok(((ep.document() as Dictionary).get("left", []) as Array).size() == 8, "the table is not handed the cards left in")
-	# THE READER of the card put back is told it is passed over, in a few words; the kept cards' are not
+	# The reader of the card put back is told it is passed over, in a few words; the kept cards' are not
 	var back_prompt := String(prod.say_prompt("1")["prompt"]).replace("This card", "this card")
 	var kept_prompt := String(prod.say_prompt("2")["prompt"]).replace("This card", "this card")
 	var story_prompt := String(prod.say_prompt("4")["prompt"]).replace("This card", "this card")

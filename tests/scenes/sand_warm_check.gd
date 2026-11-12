@@ -1,50 +1,35 @@
 extends SceneTree
 
-## sand_warm_check - that a falling-sand chamber opens IN PROGRESS, and that the state it
-## opens in is one the automaton would have produced.
+## sand_warm_check - that a falling-sand chamber opens in progress, in a state the automaton would have
+## produced.
 ##   godot --headless --path . --script res://tests/scenes/sand_warm_check.gd
 ##
-## THE REPORT. "Every scene starts exactly the same way: with several lanes of sand, falling
-## from the very top of the screen." It did - the chamber was built out of stone and nothing
-## else, so the first several seconds of every session this scene was ever cut to were the
-## same empty room filling up.
+## The chamber is not pre-rolled: a tick costs 5-15 ms, so the couple of hundred ticks to raise a cone
+## is over a second of CPU at the cut. [method Grains.prefill] deposits the piles in one pass instead.
 ##
-## WHY IT IS NOT A PRE-ROLL, measured rather than assumed: a tick on a real chamber costs
-## 5-15 ms, so the couple of hundred ticks it takes to raise a cone is well over a second of
-## CPU - a stall at the cut on the main thread, or a second of empty chamber before the first
-## packet on the worker. [method Grains.prefill] deposits the piles instead, in one pass.
+## That only works if the deposit is plausible: a pile drawn by a rule the sim does not share collapses
+## when the sim touches it. So the gate settles the deposit with nothing pouring in and measures how much
+## of it stayed, beside a scatter of the same amount of matter through the same chamber. The margin
+## between them is the measurement.
 ##
-## WHICH IS ONLY WORTH ANYTHING IF THE DEPOSIT IS PLAUSIBLE. A pile drawn by a rule the sim
-## does not share collapses the moment the sim touches it, and the first frames of the scene
-## are then visibly it falling over - worse than the blank slate. So the gate measures the
-## deposit against the automaton itself: settle it with nothing pouring in and ask how much of
-## it STAYED. Beside it runs a SCATTER of the same amount of matter through the same chamber,
-## which is what "some material, arranged by nothing" scores. The margin between them is the
-## measurement; the absolute number alone would just be a threshold nobody could argue with.
-##
-## It also checks the two failures on either side of the one reported. An empty chamber is the
-## bug. A chamber packed to the ceiling is the overshoot, and it is not hypothetical - the
-## first cut of the deposit walk restarted its budget at every shelf, so a ledged chamber came
-## out solid (occupancy 0.78 against 0.48 now) and every build cost 42 ms.
+## It also checks the failures on either side: an empty chamber, and one packed to the ceiling (a deposit
+## walk that restarted its budget at every shelf came out solid, occupancy 0.78 against 0.48, and cost
+## 42 ms per build). The opening must differ between sessions in depth and in lanes running.
 
-## Seeds to sweep. Enough to see every chamber shape and a spread of fills.
+## Seeds to sweep: every chamber shape and a spread of fills.
 const SEEDS := 14
-## Ticks of settling, with nothing pouring in. About two seconds of world time - long enough
-## for anything unsupported to fall and anything oversteep to avalanche.
+## Ticks of settling with nothing pouring in (about two seconds of world time): anything unsupported
+## falls and anything oversteep avalanches.
 const SETTLE := 60
 
-## Matter (excluding the chamber itself) as a fraction of the grid. Below the floor it is the
-## blank slate that was reported; above the ceiling the sweep and the batching cost more than
-## the worker's budget, and there is nothing left to fall through anyway.
-##
-## Measured over 60 seeds: 0.059 min, 0.168 median, 0.340 max. The ceiling sits just above
-## that spread ON PURPOSE - the shelf-budget bug it is there to catch put a ledged chamber at
-## 0.406, so a ceiling with a comfortable margin would not have caught it.
+## Matter (excluding the chamber) as a fraction of the grid. Below the floor is a blank slate; above the
+## ceiling the sweep and batching cost more than the worker's budget. Measured over 60 seeds: 0.059 min,
+## 0.168 median, 0.340 max; the ceiling sits just above that so that a ledged chamber at 0.406 fails.
 const MIN_MATTER := 0.015
 const MAX_MATTER := 0.40
-## How much of the deposit must still be exactly where it was put, after settling.
+## How much of the deposit must still be exactly where it was put after settling.
 const MIN_KEPT := 0.60
-## ...and how far it must beat an arrangement made by nothing at all.
+## ...and how far it must beat an arrangement made by nothing.
 const MIN_MARGIN := 0.12
 
 var _fails: Array = []
@@ -60,9 +45,7 @@ func _initialize() -> void:
 	print("sand_warm_check: shapes %s" % [_shapes])
 	print("sand_warm_check: lanes pouring at entry %s" % [_live_counts])
 
-	# NOT THE SAME EVERY TIME, which is the other half of the report. Both the depth and how
-	# many lanes are running have to differ between sessions, or the scene has simply swapped
-	# one fixed opening for another.
+	# Not the same every time: the depth and the number of lanes running must differ between sessions.
 	if _live_counts.size() < 2:
 		_fails.append("every seed opened with the same number of lanes pouring (%s) - the "
 			% [_live_counts] + "spouts' duty phases are not spread")
@@ -111,13 +94,12 @@ func _run(seed_value: int) -> void:
 			live += 1
 	_live_counts[live] = int(_live_counts.get(live, 0)) + 1
 
-	# SETTLE IT WITH NOTHING POURING IN. The pour would refill whatever fell over and hide
-	# exactly what is being measured.
+	# Settle with nothing pouring in: the pour would refill whatever fell over.
 	for _t in SETTLE:
 		g.step()
 	var kept := _kept(g, before)
 
-	# The shadow: the same chamber, the same amount of matter, arranged by nothing.
+	# The shadow: the same chamber and amount of matter, arranged by nothing.
 	var scatter := _scatter_score(seed_value, before.size())
 
 	print("sand_warm_check: seed %-5d %-9s fill=%.2f matter=%.3f live=%d  kept %.2f "
@@ -173,9 +155,8 @@ func _kept(g, before: PackedInt32Array) -> float:
 	return float(same) / float(before.size())
 
 
-## The same chamber and the same amount of matter, dropped in with no arrangement at all.
-## Rebuilt from the seed rather than copied, because the scene owns its grid and there is no
-## way to fork one.
+## The same chamber and amount of matter, dropped in with no arrangement. Rebuilt from the seed, since
+## the scene owns its grid and cannot fork one.
 func _scatter_score(seed_value: int, count: int) -> float:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

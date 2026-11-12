@@ -1,26 +1,25 @@
 extends SceneTree
 
-## table_positions_check - where cards lie, as data (next/notes.md step 9, "Positions are data" and
-## "Agents choose"), on a fixture episode of its own.
+## table_positions_check - where cards lie, as data (next/notes.md step 9, "Positions are data" and "Agents choose"), on a fixture
+## episode of its own.
 ##
 ##   godot --headless --path . --script tests/table/table_positions_check.gd
 ##
-## THE PRESETS ARE THE OLD SPREADS: over four thousand seeded spreads, each identical to the old
-## algorithm's (kept below, verbatim, as the oracle) unless that one had a card partly outside the
-## camera's frame - and every spread, after, lies on the cloth, in the frame and clear of the deck.
-## Two-sided: the oracle itself must have cut some card off, or the fallback is tested by nothing.
+## The presets are the spreads of the original algorithm: over four thousand seeded spreads, each identical to that algorithm's (kept
+## below, verbatim, as the oracle) unless that one had a card partly outside the camera's frame - and every spread, after, lies on
+## the cloth, in the frame and clear of the deck. Two-sided: the oracle itself must have cut some card off, or the fallback is tested
+## by nothing.
 ##
-## GIVEN POSITIONS ARE USED ONLY WHOLE AND SOUND: a plan's coordinates for every card are used; one
-## card off the cloth, or one card without coordinates, and the table lays its preset instead.
+## Given positions are used only whole and sound: a plan's coordinates for every card are used; one card off the cloth, or one card
+## without coordinates, and the table lays its preset instead.
 ##
-## A DEALER LAYS THE CARDS THROUGH ITS TOOLS: told what the table objects to as it places (off the
-## cloth, out of the frame, over the deck), refused at submit until every card is placed and nothing
-## is objected to, then its layout written into the episode, laid over the plan's positions by the
-## episode's document, and taken by the table - every position on the cloth, in the frame and clear.
-## And NO CHEATING: nothing a dealer is told names a card.
+## A dealer lays the cards through its tools: told what the table objects to as it places (off the cloth, out of the frame, over the
+## deck), refused at submit until every card is placed and nothing is objected to, then its layout written into the episode, laid
+## over the plan's positions by the episode's document, and taken by the table - every position on the cloth, in the frame and
+## clear. And no cheating: nothing a dealer is told names a card.
 ##
-## THE DECK PUT ASIDE (2026-10-08): a long spread that crowds the deck has it slid further out now and
-## then - always into the frame and clear of every card; a lone card, which crowds nothing, never.
+## The deck put aside: a long spread that crowds the deck has it slid further out now and then - always into the frame and clear of
+## every card; a lone card, which crowds nothing, never.
 
 const DIR := "user://table_positions_check"
 const CARD := Vector2(0.07, 0.12)
@@ -190,7 +189,7 @@ func _clean() -> void:
 	DirAccess.remove_absolute(abs)
 
 
-## THE OLD SPREAD, verbatim (TableMedium._spread_slots before step 9), with the long row's split - the oracle.
+## The original spread, verbatim (TableMedium._spread_slots before positions became data), with the long row's split - the oracle.
 func _old(n: int, rng: RandomNumberGenerator, deck_base: Vector3) -> Array:
 	var out: Array = []
 	if n <= 0:
@@ -204,7 +203,7 @@ func _old(n: int, rng: RandomNumberGenerator, deck_base: Vector3) -> Array:
 	var kind := String(kinds[rng.randi_range(0, kinds.size() - 1)])
 	if n * gap > 0.66:
 		kind = "rows"
-	# ...and, since 2026-10-08, a long row or arc split in two on a die of its own (no draw moves)
+	# ...and a long row or arc split in two on a die of its own (no draw moves)
 	elif kind in ["row", "arc"] and n >= 5:
 		var split := RandomNumberGenerator.new()
 		split.seed = hash([rng.seed, "tarot-long-row"])

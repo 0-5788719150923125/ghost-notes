@@ -1,34 +1,30 @@
 extends SceneTree
 
-## AssemblyBake - THE HANDS, AT WORK ON REAL BRICKS: a second Godot, no window, stepping [AssemblyWorld] as fast as the machine goes under
+## AssemblyBake - the hands at work on real bricks: a second Godot, no window, stepping [AssemblyWorld] as fast as the machine goes under
 ## `--fixed-fps`, handed what the steps come to ([Assembly]) and writing down everything that happens ([AssemblyTrack] reads it). Started by
 ## [TableAssembly], which goes on drawing as the pieces of the record land.
 ##
 ##   godot --headless --fixed-fps 240 --script res://src/table/assembly_bake.gd -- <request file>
 ##
-## THE RECORD IS A LOG, NOT A SCHEDULE: what comes to rest where does not depend on when in the reading it happens, because nothing happens
-## while time is stopped. So every step here runs at a hand's own pace on the record's own clock, and leaves STOPS in it - moments when
-## nothing is moving at all - and the reading decides how long each stop lasts ([method Assembly.lay]): "slow by stopping, never by slowing".
-## Before a stop the world is let come to rest ([method _settle]), so nothing can be seen hanging in the air through one.
+## The record is a log, not a schedule: what comes to rest where does not depend on when in the reading it happens. Every step runs at a
+## hand's own pace on the record's own clock and leaves stops in it (moments when nothing moves); the reading decides how long each stop
+## lasts ([method Assembly.lay]). Before a stop the world is let come to rest ([method _settle]).
 ##
-## THE UNSEEN HAND IS A BODY: a cupped palm or a set of fingers, moved through the heap as a hand goes, and everything it does to the pieces is
-## what the pieces do. A dig is three things a hand does in a tub ([constant GESTURES]). What it holds it holds firmly, and pushes aside what is
-## in the way; what it lets go of falls.
+## The unseen hand is a body: a cupped palm or a set of fingers moved through the heap; everything it does to the pieces is what the
+## pieces do. A dig is three things a hand does in a tub ([constant GESTURES]). What it holds it holds firmly and pushes aside what is in
+## the way; what it lets go of falls. What is in hand is left to [Fingers]: the record says where the hand takes a piece and how much room
+## it has at each point of the way ([method _room]); what the fingers do there is laid over this on the show's clock and touches nothing.
 ##
-## WHAT IS IN HAND IS LEFT TO [Fingers]: the record says where the hand takes a piece, and how much room it has at each point of the way ([method _room]). What it does with the
-## piece there is laid over this on the show's clock, for a stop's length is the reading's, and it touches nothing.
+## What falls is still there to be used: a piece keeps its stock wherever it lands and [method _find] goes on finding it, on the table, on
+## another's pile or on the floor. What falls past the table's edge ([method _begin]) drops to the floor, where a hand fetches it when
+## nothing nearer is left ([method _off_the_floor]). What has fallen where a part goes is moved off first ([method _clear_spot]).
 ##
-## WHAT FALLS IS STILL THERE TO BE USED (the user, of a tub spilling as soon as it was dug in: "people do make messes - just so long as those fallen bricks still remain usable, if we need them"): a piece
-## keeps its stock wherever it lands and [method _find] goes on finding it, on the table, on another's pile, or on the floor. THE TABLE HAS AN EDGE ([method _begin]): past the top as it is drawn it had rested on
-## air, 14 cm past it in 462684, and now it drops to the floor, where a hand fetches it from when nothing nearer is left ([method _off_the_floor]). WHAT HAS FALLEN WHERE A PART GOES IS MOVED OFF FIRST
-## ([method _clear_spot]), as anyone would: pressed on regardless it was shoved about by every part laid over it.
-##
-## WRITTEN IN STRETCHES ([constant STRETCH]), each ending at a step and holding where everything then is, under a name made from everything it
-## depends on: a show can begin playing what has landed, and a new act or a new sentence never redoes what came before it.
+## Written in stretches ([constant STRETCH]), each ending at a step and holding where everything then is, under a name made from
+## everything it depends on: a show can begin playing what has landed, and a new act or sentence never redoes what came before it.
 
 ## How much record makes a stretch (seconds), before it is written down.
 const STRETCH := 6.0
-## THE WAYS A HAND GOES INTO A HEAP, how often (`share`): each the user's: "dig through ... with sound in mind".
+## The ways a hand goes into a heap, and how often (`share`).
 const GESTURES := {
 	"stir": {"label": "Stir", "blurb": "fingers dragged through the top of it in a slow curve: everything shuffles, little of it hard", "share": 0.42},
 	"flip": {"label": "Flip", "blurb": "a cupped hand under a handful, brought up quick and turned over: they fall back with a clatter", "share": 0.34},
@@ -46,8 +42,8 @@ const ASIDE_FROM := 0.012
 ## How many lie over a piece before the hand clears it first; how fast one is drawn out of a heap (m/s).
 const BURIED := 3
 const DRAW_OUT := 0.2
-## A PULL ([method _pull]): the grip tips one end up (degrees) in this long (seconds); it turns on coming out (degrees); and it moves toward the middle of what it comes out of
-## as a share of how far it rises, up to the most (meters), which keeps it off a wall.
+## A pull ([method _pull]): the grip tips one end up (degrees) in this long (seconds); it turns on coming out (degrees); and it moves toward
+## the middle of what it comes out of as a share of how far it rises, up to the most (meters), which keeps it off a wall.
 const GRIP_TIP := Vector2(10.0, 24.0)
 const GRIP_TAKES := Vector2(0.1, 0.2)
 const DRAW_TURN := Vector2(18.0, 55.0)
@@ -55,21 +51,21 @@ const DRAW_ASIDE := 0.2
 const DRAW_ASIDE_MOST := 0.008
 const DRAW_LEAST := 0.2
 const DRAW_MOST := 0.75
-## How much of a draw is done before the move after it begins, what is left going on under it ([method _held_move]): a hand does not come up, stop and set off.
+## How much of a draw is done before the move after it begins, the rest going on under it ([method _held_move]), so a hand does not come up, stop and set off.
 const RUN_ON := 0.6
 ## A hand's pace across the table (m/s), and the least and most any carry takes.
 const CARRY_SPEED := 0.34
 const CARRY_LEAST := 0.75
 const CARRY_MOST := 2.0
-## A piece's way over what is on the table ([method _way]; the same names as [Assembly] once used).
+## A piece's way over what is on the table ([method _way]).
 const CLEAR_OVER := 0.014
 const LIFT_MOST := 0.34
 const TALL := 0.22
 const WAY_LOOKS := 7
 const HOVER := 0.024
 const PRESS_FROM := 0.0018
-## WHERE A THING IS HELD UP TO BE LOOKED AT ([method _view_xf]): how far from the lens (meters), how far to the side it came from and how far up as shares of what the lens sees there,
-## the same side three times in four, and how far over whatever is under it (meters). Never the same place twice, and rarely the middle of the frame: nobody holds a thing up there.
+## Where a thing is held up to be looked at ([method _view_xf]): how far from the lens (meters), how far to the side it came from and how far
+## up as shares of what the lens sees there, the same side three times in four, and how far over whatever is under it (meters).
 const VIEW_FAR := Vector2(0.21, 0.33)
 const VIEW_ACROSS := Vector2(0.2, 0.62)
 const VIEW_UP := Vector2(-0.6, 0.1)
@@ -85,7 +81,7 @@ const STOP_HELD := 2.0
 ## How often a pour is laid in, while a stock is filled.
 const POUR_BATCH := 14
 const POUR_WAIT := 0.8
-## THE FLOOR, under the top (meters; [constant Tables.DROP_MOST] is what a cloth may hang to reach it); how far past a table's edge a hand comes up from it, and how far over the top it brings a piece.
+## The floor, under the top (meters; [constant Tables.DROP_MOST] is what a cloth may hang to reach it); how far past a table's edge a hand comes up from it, and how far over the top it brings a piece.
 const FLOOR_DROP := 0.72
 const PAST_THE_EDGE := 0.04
 const OVER_THE_TOP := 0.03
@@ -175,8 +171,8 @@ func _begin() -> void:
 	log.world = {"base_at": req["base_at"], "yaw": float(req["yaw"])}
 	yaw = float(req["yaw"])
 	stocks = req["stocks"]
-	# THE TABLE, WHAT STANDS ON IT, AND THE PLATE
-	# ...AS FAR AS THE TOP GOES: a table with no outline to hand is as wide as anything falls
+	# the table, what stands on it, and the plate
+	# ...as far as the top goes: a table with no outline to hand is as wide as anything falls
 	if req.has("top"):
 		var edge := Tables.edge_points(req["top"] as Dictionary, 64)
 		for i in edge.size():
@@ -191,7 +187,7 @@ func _begin() -> void:
 		var sd: Dictionary = stocks[nm]
 		if sd.has("bed_faces"):
 			world.add_surface(sd["bed_faces"], "plastic")
-	# WHAT A HOLLOW THING HOLDS STAYS IN IT ([method AssemblyWorld.add_vessel])
+	# what a hollow thing holds stays in it ([method AssemblyWorld.add_vessel])
 	for nm in stocks:
 		var sd: Dictionary = stocks[nm]
 		for s in req["solids"]:
@@ -231,8 +227,8 @@ func _make_hands() -> void:
 	_hand_shapes["fingers"] = fingers
 
 
-## THE STOCK POURED IN, IN THE ORDER IT WAS HANDED ([method Assembly._lay_stock]: what is asked for soonest, last, and so on top), a batch at a
-## time, each let lie before the next. It is as a tub comes to be full, and what is under no longer costs anything.
+## The stock poured in, in the order it was handed ([method Assembly._lay_stock]: what is asked for soonest, last, and so on top), a batch at a
+## time, each let lie before the next, as a tub comes to be full.
 func _pour() -> void:
 	world.recording = false
 	var by: Dictionary = {}
@@ -257,7 +253,7 @@ func _pour() -> void:
 				waited += AssemblyWorld.DT
 				if waited > 0.25 and world.at_rest():
 					break
-	# ...AND LET LIE, every piece of it: frozen where it had got to, what was still falling hung in the air for the whole show
+	# ...and let lie, every piece of it: frozen where it got to
 	for _i in AssemblyWorld.TICKS * 6:
 		await _step()
 		if world.loose.is_empty():
@@ -298,7 +294,7 @@ func _lay_batch(batch: Array, sd: Dictionary) -> void:
 			if clear:
 				placed = true
 				break
-		# ...no room at this height: the next ones go a little over these, and this one in the middle, never where its last try had it across the wall
+				# ...no room at this height: the next ones go a little over these, and this one in the middle, never where its last try had it across the wall
 		if not placed:
 			y += 0.012
 			taken = []
@@ -336,7 +332,7 @@ static func _cell_inside(sd: Dictionary, at: Vector2) -> bool:
 
 # --- the record ---------------------------------------------------------------------------------------------------
 
-## WHERE TO GO ON FROM: the last stretch already written, its world stood again - so a new act costs only what comes after what is already
+## Where to go on from: the last stretch already written, its world stood again, so a new act costs only what comes after what is already
 ## written. The stock first, or from where a checkpoint left it.
 func _resume_from() -> int:
 	var steps: Array = req["steps"]
@@ -404,7 +400,7 @@ func _rest_of() -> Dictionary:
 	return {"poses": poses, "state": world.state, "seated": world.seats.duplicate(), "stock_of": stock_of, "yaw": yaw, "slots": _body_of.duplicate(), "tick": world.tick, "model_top": _top_model, "at_of": _at_of.duplicate()}
 
 
-## WHAT THIS STRETCH CAME TO, under the name of the step it reached.
+## What this stretch came to, under the name of the step it reached.
 func _write_stretch(k: int) -> void:
 	world.flush_all()
 	var e_t := PackedFloat32Array()
@@ -465,24 +461,24 @@ func _do_step(k: int, st: Dictionary) -> void:
 	_plan_steps.append(_cur)
 
 
-## A STOP: from here nothing moves in the record until the reading says ([method Assembly.lay]). [param weight] how much of what is spare it
+## A stop: from here nothing moves in the record until the reading says ([method Assembly.lay]). [param weight] how much of what is spare it
 ## takes; [param natural] seconds it is always worth by itself (-1: its share of the step's natural time); [param least] the least it takes.
 func _stop(weight: float, natural := -1.0, least := 0.0) -> void:
 	(_cur["stops"] as Array).append([world.tau - float(_cur["t0"]), natural, least, weight])
 
 
-## PIECE [param id] IS IN HAND from here, in this step ([method Assembly.held_at]).
+## Piece [param id] is in hand from here, in this step ([method Assembly.held_at]).
 func _in_hand(id: int) -> void:
 	var o := world.tau - float(_cur["t0"])
 	_cur["hand"] = {"id": id, "from": o, "to": o, "knots": [[o, 0.0]]}
 
 
-## THE ROOM THE HAND HAS HERE, [param ahead] seconds on: how much of what it does with what it holds ([method Fingers.at]) it can do without touching anything, from here to the next said.
+## The room the hand has here, [param ahead] seconds on: how much of what it does with what it holds ([method Fingers.at]) it can do without touching anything, from here to the next said.
 func _room(room: float, ahead := 0.0) -> void:
 	((_cur["hand"] as Dictionary)["knots"] as Array).append([world.tau - float(_cur["t0"]) + ahead, room])
 
 
-## IT LEAVES THE HAND HERE, exactly where the record has it.
+## It leaves the hand here, exactly where the record has it.
 func _out_of_hand() -> void:
 	if not _cur.has("hand"):
 		return
@@ -490,7 +486,7 @@ func _out_of_hand() -> void:
 	(_cur["hand"] as Dictionary)["to"] = world.tau - float(_cur["t0"])
 
 
-## WHAT THE STEP'S NATURAL TIME LEAVES OVER ITS MOVES goes to its stops, by weight. A step that stopped nowhere stops as it begins.
+## What the step's natural time leaves over its moves goes to its stops, by weight. A step that stopped nowhere stops as it begins.
 func _share_stops(st: Dictionary) -> void:
 	var stops: Array = _cur["stops"]
 	if stops.is_empty():
@@ -511,7 +507,7 @@ func _share_stops(st: Dictionary) -> void:
 			a[1] = left * float(a[3]) / maxf(weights, 1e-6)
 
 
-## LET WHAT IS FALLING LAND: up to [constant AssemblyWorld.SETTLE_MOST] of the record, nothing can be seen hanging through what comes next.
+## Let what is falling land: up to [constant AssemblyWorld.SETTLE_MOST] of the record, nothing can be seen hanging through what comes next.
 func _settle(most := AssemblyWorld.SETTLE_MOST) -> void:
 	var waited := 0.0
 	while waited < most:
@@ -528,7 +524,7 @@ func _wait(seconds: float) -> void:
 
 # --- a dig --------------------------------------------------------------------------------------------------------
 
-## A DIG IS WHAT A HAND DOES IN A TUB, some of it, with stops: into the heap, moving what is there, out, and a look at what that turned up. The
+## A dig is what a hand does in a tub, some of it, with stops: into the heap, moving what is there, out, and a look at what that turned up. The
 ## last of them near what it is looking for, if it knows what that is.
 func _dig(st: Dictionary, seed: int) -> void:
 	var stock := String(st["stock"])
@@ -569,7 +565,7 @@ func _pick_gesture(seed: int, n: int, last: String, sd: Dictionary) -> String:
 	return "stir"
 
 
-## WHERE IT GOES IN: anywhere clear of the walls.
+## Where it goes in: anywhere clear of the walls.
 func _spot(sd: Dictionary, seed: int, n: int) -> Vector2:
 	var middle := _middle_of(sd)
 	var r := maxf(float(sd["radius"]) - WALL_CLEAR, float(sd["radius"]) * 0.3)
@@ -603,7 +599,7 @@ func _gesture(gesture: String, sd: Dictionary, spot: Vector2, seed: int) -> void
 			await _stir(at, s, deep, seed)
 
 
-## THE HAND'S FRAME: its fingers along [param dir], its palm up, tipped [param tilt] radians fingers down.
+## The hand's frame: its fingers along [param dir], its palm up, tipped [param tilt] radians fingers down.
 static func _palm(dir: Vector3, tilt: float) -> Basis:
 	var z := dir.normalized()
 	var y := Vector3.UP
@@ -611,7 +607,7 @@ static func _palm(dir: Vector3, tilt: float) -> Basis:
 	return Basis(x, tilt) * Basis(x, y, z)
 
 
-## FLIP: in under a handful at a slant, levelled, brought up and turned over as it stops: what was on it goes on rising a moment, then falls. The one a tub is
+## Flip: in under a handful at a slant, levelled, brought up and turned over as it stops: what was on it goes on rising a moment, then falls. The one a tub is
 ## loudest for, and a hand at an easy pace, not a throw.
 func _flip(at: Vector3, dir: Vector3, s: float, deep: float, seed: int) -> void:
 	var up := Vector3.UP
@@ -631,7 +627,7 @@ func _flip(at: Vector3, dir: Vector3, s: float, deep: float, seed: int) -> void:
 	await _hand_along("scoop", pts, times, dir)
 
 
-## SWEEP: the side of a hand on edge, pushing the top of it across.
+## Sweep: the side of a hand on edge, pushing the top of it across.
 func _sweep(at: Vector3, dir: Vector3, s: float, deep: float, seed: int) -> void:
 	var side := (Basis(Vector3.UP, PI * 0.5) * dir) * (1.0 if Hands.share(seed, 4) < 0.5 else -1.0)
 	var y := s - deep * 0.45
@@ -646,7 +642,7 @@ func _sweep(at: Vector3, dir: Vector3, s: float, deep: float, seed: int) -> void
 	await _hand_along("scoop", pts, PackedFloat32Array([0.26 * pace, 0.36 * pace, 0.36 * pace, 0.26 * pace]), dir)
 
 
-## STIR: fingers through the top in a slow curve.
+## Stir: fingers through the top in a slow curve.
 func _stir(at: Vector3, s: float, deep: float, seed: int) -> void:
 	var r := lerpf(0.03, 0.065, Hands.share(seed, 7))
 	var turns := lerpf(0.8, 1.5, Hands.share(seed, 8)) * (1.0 if Hands.share(seed, 9) < 0.5 else -1.0)
@@ -674,7 +670,7 @@ func _stir(at: Vector3, s: float, deep: float, seed: int) -> void:
 	await _hand_along("fingers", pts, times, Vector3.FORWARD)
 
 
-## THE HAND'S WAY THROUGH [param pts] (`[place, tilt]`) in [param times]: its speed runs through its places, from nothing and back to it. Gone
+## The hand's way through [param pts] (`[place, tilt]`) in [param times]: its speed runs through its places, from nothing and back to it. Gone
 ## once it has been: the hand is a body only while it is in there.
 func _hand_along(shape: String, pts: Array, times: PackedFloat32Array, dir: Vector3) -> void:
 	_hand_now = shape
@@ -698,7 +694,7 @@ func _hand_along(shape: String, pts: Array, times: PackedFloat32Array, dir: Vect
 			var u := float(j + 1) / float(n)
 			var p := Motions.hermite(a[0] as Vector3, b[0] as Vector3, m0 * d, m1 * d, u)
 			var turned := _palm(dir, lerpf(float(a[1]), float(b[1]), u))
-			# ...NEVER THROUGH THE FLOOR: a hand on edge reaches far below its middle, and what it pressed through there went through the table with it
+						# ...never through the floor: a hand on edge reaches far below its middle
 			p.y = maxf(p.y, _hand_floor + HAND_OVER_FLOOR + _reach_down(shape, turned))
 			var at := Transform3D(turned, p)
 			PhysicsServer3D.body_set_state(_hand, PhysicsServer3D.BODY_STATE_TRANSFORM, AssemblyWorld._big(at))
@@ -738,7 +734,7 @@ func _ids_in(stock: String) -> Array:
 	return out
 
 
-## OF THE PIECES OF A PART, THE ONE MOST TO HAND: the highest of what lies in that stock. -1 for none.
+## Of the pieces of a part, the one most to hand: the highest of what lies in that stock. -1 for none.
 func _find(key: String, stock: String) -> int:
 	if key.is_empty():
 		return -1
@@ -753,7 +749,7 @@ func _find(key: String, stock: String) -> int:
 	return best
 
 
-## A PIECE OF THAT PART OUT OF ITS STOCK, IN HAND AND CLEAR OF THE REST: it goes in for it, clearing it first if much lies on it, and draws it up
+## A piece of that part out of its stock, in hand and clear of the rest: it goes in for it, clearing it first if much lies on it, and draws it up
 ## through what is there, which rides up on it and rolls off as a heap does.
 func _fetch(key: String, stock: String, seed: int, brisk: bool) -> int:
 	var id := _find(key, stock)
@@ -791,7 +787,7 @@ func _fetch(key: String, stock: String, seed: int, brisk: bool) -> int:
 	return id
 
 
-## WHAT HAS GONE OFF THE TABLE IS FETCHED UP FROM THE FLOOR: if it rolled in under, a hand brings it out past the edge first, so that it comes up beside the table and never through it. Nobody sees this much of it.
+## What has gone off the table is fetched up from the floor: if it rolled in under, a hand brings it out past the edge first, so it comes up beside the table and never through it.
 func _off_the_floor(id: int, was: Transform3D, seed: int, brisk: bool) -> void:
 	if not req.has("top"):
 		return
@@ -805,8 +801,8 @@ func _off_the_floor(id: int, was: Transform3D, seed: int, brisk: bool) -> void:
 	await _held_move([id], was, to, clampf(-past / CARRY_SPEED, CARRY_LEAST * 0.5, CARRY_MOST) * (0.7 if brisk else 1.0), seed)
 
 
-## WHAT HAS FALLEN WHERE PART [param seat] GOES, moved off first: taken up, and let lie beside the plate, where it can still be had. A part pressed on regardless shoves it about, and every part laid over it
-## after that. What lies clear of the place is left: people make messes.
+## What has fallen where part [param seat] goes, moved off first: taken up and let lie beside the plate, where it can still be had. A part
+## pressed on regardless would shove it about. What lies clear of the place is left.
 func _clear_spot(st: Dictionary, seat: Transform3D, seed: int) -> void:
 	var half := Vector3(float(st["w"]) * Assembly.STUD * 0.5, 0.0, float(st["d"]) * Assembly.STUD * 0.5)
 	var row: Dictionary = Assembly.KINDS[String(st["key"]).get_slice(" ", 0)]
@@ -843,8 +839,8 @@ func _lies_in(id: int, inv: Transform3D, half: Vector3, tall: float) -> bool:
 	return false
 
 
-## DRAWN OUT AS FINGERS DRAW ONE, not lifted on a wire: the grip tips one end of it up, and it comes on up and turning, toward the middle of what it is in, what it meets riding up on it as a
-## heap does. Near a wall it turns as much as the wall leaves it. The end of the draw is left to go on under the next move ([method _held_move]).
+## Drawn out as fingers draw one, not lifted on a wire: the grip tips one end of it up, and it comes on up and turning, toward the middle of what it
+## is in, what it meets riding up on it as a heap does. Near a wall it turns as much as the wall leaves it. The end of the draw is left to go on under the next move ([method _held_move]).
 func _pull(id: int, was: Transform3D, up: float, sd: Dictionary, seed: int, brisk: bool) -> void:
 	var reach := world.size[id]
 	var room := 1.0
@@ -873,8 +869,8 @@ func _pull(id: int, was: Transform3D, up: float, sd: Dictionary, seed: int, bris
 	_run_on = {"id": id, "to": out, "j": runs, "n": n}
 
 
-## WHAT IS IN HAND [param ids] MOVED from [param a] to [param b] by [param secs], as one, a hand's way ([param way] for a carry: else straight). WHAT IS LEFT OF A DRAW GOES ON UNDER IT, as one
-## movement of a hand goes on under the next (Flash and Henis, 1991): the two added, so it never comes to rest between them.
+## What is in hand ([param ids]) moved from [param a] to [param b] by [param secs], as one, a hand's way ([param way] for a carry: else straight). What is left of a draw goes on under it,
+## as one movement of a hand goes on under the next (Flash and Henis, 1991): the two added, so it never comes to rest between them.
 func _held_move(ids: Array, a: Transform3D, b: Transform3D, secs: float, seed: int, way := {}) -> void:
 	var n := maxi(int(ceil(secs * float(AssemblyWorld.TICKS))), 1)
 	var q0 := a.basis.get_rotation_quaternion()
@@ -915,7 +911,7 @@ func _held_move(ids: Array, a: Transform3D, b: Transform3D, secs: float, seed: i
 		await _step()
 
 
-## CARRIED, [param id] from [param a] to [param b]: there is more room on the way than at either end, and [param room] at the other.
+## Carried, [param id] from [param a] to [param b]: there is more room on the way than at either end, and [param room] at the other.
 func _carry(id: int, a: Transform3D, b: Transform3D, secs: float, seed: int, way: Dictionary, room: float) -> void:
 	_room(Fingers.ROOM_CARRY, secs * 0.5)
 	await _held_move([id], a, b, secs, seed, way)
@@ -941,7 +937,7 @@ func _top_at(x: float, z: float, half: float) -> float:
 	return out
 
 
-## HOW HIGH THE MODEL STANDS UNDER [param x], [param z]: stud by stud, for a tower at one end of a plate is no reason to go over the air at the other.
+## How high the model stands under [param x], [param z]: stud by stud, for a tower at one end of a plate is no reason to go over the air at the other.
 func _model_top_at(x: float, z: float, half: float) -> float:
 	if _tops.is_empty():
 		return 0.0
@@ -958,7 +954,7 @@ func _model_top_at(x: float, z: float, half: float) -> float:
 	return out
 
 
-## WHAT STANDS OVER EACH STUD, seen again from what is seated.
+## What stands over each stud, seen again from what is seated.
 func _recount_tops() -> void:
 	_tops = {}
 	for k in world.seats:
@@ -979,7 +975,7 @@ func _top_of_piece(id: int) -> void:
 			_tops[c] = maxf(float(_tops.get(c, 0.0)), top)
 
 
-## ITS WAY: `{lift, rise}`, what [method Hands.carried] needs to bring it from [param a] to [param b] clear of what is under its way: up first clear
+## Its way: `{lift, rise}`, what [method Hands.carried] needs to bring it from [param a] to [param b] clear of what is under its way: up first clear
 ## of what it leaves, down last among what it goes to.
 func _way(a: Vector3, b: Vector3, half: float) -> Dictionary:
 	var rise := Vector2(maxf(_top_at(a.x, a.z, half) + CLEAR_OVER - a.y, 0.0), maxf(_top_at(b.x, b.z, half) + CLEAR_OVER - b.y, 0.0))
@@ -999,7 +995,7 @@ func _way(a: Vector3, b: Vector3, half: float) -> Dictionary:
 	return {"lift": minf(lift, LIFT_MOST), "rise": rise}
 
 
-## WHERE A HAND HOLDS A THING UP TO LOOK AT IT: where the lens sees it, a little to the side it came from [param from], and low, at an angle of its own, clear of what is under it.
+## Where a hand holds a thing up to look at it: where the lens sees it, a little to the side it came from [param from], and low, at an angle of its own, clear of what is under it.
 func _view_xf(seed: int, from: Vector3, reach: float) -> Transform3D:
 	var lens: Transform3D = req["lens"]
 	var far := lerpf(VIEW_FAR.x, VIEW_FAR.y, Hands.share(seed, 24))
@@ -1013,7 +1009,7 @@ func _view_xf(seed: int, from: Vector3, reach: float) -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, TAU * Hands.share(seed, 22)) * Basis(Vector3.RIGHT, deg_to_rad(lerpf(35.0, 70.0, Hands.share(seed, 23)))), at)
 
 
-## WHAT IS IN HAND BACK INTO A STOCK: over where it goes, and let go. It falls as far as it falls, lands how it lands, and lies there. A piece
+## What is in hand back into a stock: over where it goes, and let go. It falls as far as it falls and lies where it lands; a piece
 ## asked for from that stock later is wherever that turned out to be.
 func _let_go_over(ids: Array, stock: String, from: Vector2, seed: int, height: float) -> void:
 	var sd: Dictionary = stocks.get(stock, {})
@@ -1097,7 +1093,7 @@ func _top_of_seated(id: int) -> float:
 	return world.xf[id].origin.y + float((Assembly.KINDS[String(q["kind"])] as Dictionary)["h"]) * Assembly.PLATE + Assembly.STUD_H
 
 
-## HELD UP WHERE THE LENS SEES IT, and looked at: the record goes there and stops, for [param seconds] the record cannot say what fingers do in ([Fingers]), and in the air they are free.
+## Held up where the lens sees it, and looked at: the record goes there and stops, for [param seconds] the record cannot say what fingers do in ([Fingers]), and in the air they are free.
 func _hold_up(id: int, here: Transform3D, seed: int, seconds: float) -> Transform3D:
 	var shown := _view_xf(seed, here.origin, world.size[id])
 	await _carry(id, here, shown, _carry_time(here.origin, shown.origin, false) * 1.15, seed, _way(here.origin, shown.origin, world.size[id]), Fingers.ROOM_FREE)
@@ -1136,7 +1132,7 @@ func _try(st: Dictionary, seed: int) -> void:
 		await _held_move([id], seat, near, 0.12, seed)
 		_room(0.0)
 	else:
-		# ...ON THE STUDS AND NOT GOING: it is rocked a little, to see
+				# ...on the studs and not going: it is rocked a little, to see
 		_room(Fingers.ROOM_TRIED)
 		world.say("tick", seat.origin, 0.3, half)
 		_stop(STOP_HOVER * 0.5)
@@ -1166,7 +1162,7 @@ func _back_where(id: int, st: Dictionary, came_from: Vector2, seed: int) -> void
 	await _let_go_over([id], to, came_from, seed, height)
 
 
-## WHAT COMES OFF THE MODEL: up as one with a pop, carried over the stock, and let go - and it comes apart as what falls comes apart.
+## What comes off the model: up as one with a pop, carried over the stock, and let go - and it comes apart as what falls comes apart.
 func _bring_off(st: Dictionary, seed: int) -> void:
 	_stop(STOP_THINK * 0.5)
 	var ids: Array = []
@@ -1198,7 +1194,7 @@ func _bring_off(st: Dictionary, seed: int) -> void:
 	await _let_go_over(ids, to, from, seed, DROP_FROM if to != "aside" else ASIDE_FROM * 2.0)
 
 
-## THE PLATE TURNED: with what lies loose on it, and everything built on it.
+## The plate turned: with what lies loose on it, and everything built on it.
 func _turn(st: Dictionary, seed: int) -> void:
 	_stop(STOP_THINK)
 	var y0 := float(st["y0"])

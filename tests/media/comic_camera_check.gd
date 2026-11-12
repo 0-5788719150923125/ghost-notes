@@ -4,35 +4,17 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/media/comic_camera_check.gd 120
 ##
-## Needs a real boot (it reaches Director and Settings) but NOT a real renderer: everything
-## here is the planning arithmetic, read out of `_tgt` before anything draws.
-##
-## THIS MEASURES THE PLAN, AND THAT IS ALL IT CLAIMS. It is the right instrument for "is the
-## slider monotone" - a statement about a distribution over hundreds of shots, which no amount
-## of watching can judge - and the WRONG one for "does the camera behave", which is
-## tests/media/comic_motion_check.gd's job: that one drives the real medium and measures the picture.
-##
-## FOUR CHECKS THAT USED TO LIVE HERE WENT WITH THE MOVE LAYER THEY TESTED. They asked whether
-## a move fitted its deadline, whether a chain went forward, whether a settle repeated, whether
-## a chained move re-rolled its zoom - all bookkeeping internal to a mechanism that no longer
-## exists. Every one of them was green through a night of reports that the camera jumped, never
-## held, and swung wildly, because none of them looked at the picture. That is the lesson worth
-## keeping from them: a gate that measures a mechanism only tells you the mechanism ran.
+## Needs a real boot (it reaches Director and Settings) but not a real renderer: it reads the planning arithmetic
+## out of `_tgt` before anything draws. It measures the plan only; how the camera behaves on screen is
+## tests/media/comic_motion_check.gd's job.
 
 var _fails: Array = []
-## How many shots to plan per setting. Enough that the means are steady; this is arithmetic,
-## so it costs nothing.
+## How many shots to plan per setting (arithmetic, so cheap).
 const SHOTS := 600
-## The Camera settings compared. The ends of Director's range and the tuned middle.
+## The Camera settings compared: the ends of Director's range and the tuned middle.
 const LEVELS := [0.0, 1.0, 2.0]
-## Shots planned and DISCARDED at the start of each setting, before anything is counted.
-##
-## The camera carries state across a change of setting - that is the point of it; the slider is
-## not supposed to teleport the picture. So the first shots after a change are the old
-## setting's pose being walked off, and counting them measures the handover rather than the
-## setting. Forty, because most shots preserve the azimuth rather than taking a fresh one, so a
-## camera that starts off-anchor is re-anchored only by the minority that swing it, and the
-## handover can run for a couple of dozen shots.
+## Shots planned and discarded at the start of each setting. The camera carries state across a setting change, so the
+## first shots are the old pose walking off; most shots keep the azimuth, so the handover runs a couple of dozen shots.
 const WARMUP := 40
 
 
@@ -65,31 +47,23 @@ func _run() -> void:
 			% [sev, rad_to_deg(float(r["swing"])), 100.0 * float(r["jump"])]
 			+ "reach %.2f, walk stayed within %.1f deg"
 			% [comic._camera._reach(), rad_to_deg(float(r["worst"]))])
-		# THE WALK IS BOUNDED BY ITS ARC, at every setting. If this ever fails the clamp in
-		# _walk has been lost and the whole "spread over several shots" guarantee with it.
+		# The walk is bounded by its arc at every setting (the clamp in _walk).
 		if float(r["worst"]) > ComicCamera.AZ_ARC * float(sev) + 1e-4:
 			_fails.append("camera %.1f: the azimuth walk reached %.3f rad, outside its %.3f arc"
 				% [sev, float(r["worst"]), ComicCamera.AZ_ARC * float(sev)])
 
-	# THE KNOB IS MONOTONE. Not "different at the ends" - every step of it has to move the
-	# camera the same way, or it is a switch with a slider drawn on it.
+	# The knob is monotone: every step moves the camera the same way.
 	for i in LEVELS.size() - 1:
 		if float(swing[i + 1]) <= float(swing[i]):
 			_fails.append("swing did not grow from camera %.1f to %.1f (%.4f -> %.4f rad)"
 				% [LEVELS[i], LEVELS[i + 1], swing[i], swing[i + 1]])
-		# ...AND SO IS REACH, which is the axis that decides holding. Under a follower there is
-		# no move duration to compare: a shot arrives when the picture gets there, so what
-		# separates a calm camera from a busy one is how FAR it goes, not how slowly. Scaling
-		# only the speed is what made the previous build hold 71% at camera 0 against 86% at
-		# camera 1 - the calm end holding LESS, which is why turning the slider down never
-		# helped.
+		# So is reach, the axis that decides holding: with a follower a shot arrives when the picture gets
+		# there, so calm versus busy is how far it goes, not how slowly.
 		if float(reach[i + 1]) <= float(reach[i]):
 			_fails.append("reach did not grow from camera %.1f to %.1f (%.2f -> %.2f)"
 				% [LEVELS[i], LEVELS[i + 1], reach[i], reach[i + 1]])
 
-	# AT ZERO THE CAMERA NEVER JUMPS AND NEVER TURNS. This is the end of the range the report
-	# asked for by name ("gentle, slow movements"), and it has to be exact rather than merely
-	# smaller - a camera that jump-cuts 2% of the time still reads as a camera that jump-cuts.
+	# At zero the camera never jumps and never turns, exactly.
 	if float(jumps[0]) > 0.0:
 		_fails.append("camera 0 still jump-cut on %.1f%% of shots" % (100.0 * float(jumps[0])))
 	if float(swing[0]) > 1e-6:
@@ -109,10 +83,9 @@ func _run() -> void:
 	else:
 		for f in _fails:
 			print("comic_camera_check: FAIL - %s" % f)
-	# THE VERDICT IS PRINTED, SO END HERE. This probe built and freed real scenes, and the engine's
-	# own shutdown then dies or hangs until the timeout (tests/run_scene_smoke.sh has the
-	# measurements; one pinned core aborts, a CI runner hung for 120 s). A SIGKILL on ourselves, as
-	# main._shutdown does, skips it. check.sh reads the verdict from the log, never the exit code.
+	# End here, once the verdict is printed: the engine's own shutdown after freeing real scenes dies or hangs
+	# (tests/run_scene_smoke.sh). A SIGKILL on ourselves, as main._shutdown does, skips it. check.sh reads the
+	# verdict from the log, never the exit code.
 	OS.kill(OS.get_process_id())
 
 
@@ -131,8 +104,7 @@ func _measure(comic: ComicMedium) -> Dictionary:
 	for m in SHOTS + WARMUP:
 		var before: float = float(comic._camera._cam.az)
 		comic._camera.begin_shot(comic._read % comic._spread.panels.size())
-		# The planner's answer is the TARGET. Where the camera is on the way there is the
-		# follower's business, and is continuous by construction.
+		# The planner's answer is the target; the follower's business is how the camera gets there.
 		var az: float = float(comic._camera._tgt.az)
 		if m >= WARMUP:
 			swing += absf(angle_difference(before, az))
@@ -140,8 +112,7 @@ func _measure(comic: ComicMedium) -> Dictionary:
 			if bool(ComicCamera.SHOTS[String(comic._camera._shot["kind"])].get("hard", false)):
 				jumps += 1
 			n += 1
-		# Stand the camera on its target so the next shot is planned from where this one led -
-		# what the running medium does once the follower has closed.
+		# Stand the camera on its target so the next shot is planned from where this one led.
 		comic._camera._cam = (comic._camera._tgt as Dictionary).duplicate()
 	return {
 		"swing": swing / maxf(1.0, float(n)),
@@ -150,17 +121,12 @@ func _measure(comic: ComicMedium) -> Dictionary:
 	}
 
 
-## IS THE WHOLE VIDEO ON SCREEN WHEN THE VIDEO IS WHAT WE ARE LOOKING AT?
+## Is the whole video on screen when the video is what is looked at?
 ##
-## "It can look very strange to zoom in to a specific corner of the embedded video, where
-## nothing is happening in it... a video with a girl speaking in it, you really don't want to
-## focus the camera on her door to the side." Every other panel is framed on HEIGHT alone and
-## allowed to overflow the sides, which is right for an abstract field and wrong for footage.
-##
-## Asserted here rather than in the look probe because the look probe cannot see it: the film
-## panel is the FIRST entry of the reading plan, so it has been read and left behind before the
-## probe's first capture. This drives place_eye directly on the widest panel of a spread, with
-## and without the film flag, so the contain path is compared against the shot it replaces.
+## Other panels are framed on height alone and may overflow the sides; footage must not be cropped. Asserted here
+## because the film panel is the first entry of the reading plan and is gone before the look probe's first capture.
+## Drives place_eye on the widest panel of a spread with and without the film flag, comparing the contain path
+## against the shot it replaces.
 func _check_film_fit(comic: ComicMedium) -> void:
 	comic._spread = ComicSpread.new(hash(["filmfit"]))
 	comic._spread_i = 3
@@ -177,9 +143,8 @@ func _check_film_fit(comic: ComicMedium) -> void:
 	var out := {}
 	for as_film in [false, true]:
 		comic._film_at = wide if as_film else -1
-		# PIN THE WHOLE CAMERA STATE, not just the aim. az/el/roll/fov carry over from whatever
-		# the checks above left in _cam, so without this the two framings below are measured
-		# from different stations and the comparison - and the run-to-run numbers - drift.
+		# Pin the whole camera state, not just the aim (az/el/roll/fov carry over from earlier checks), so both
+		# framings are measured from the same station.
 		comic._camera._cam["aim"] = comic._spread.panel_center(wide)
 		comic._camera._cam["fill"] = 1.2
 		comic._camera._cam["az"] = 0.6
@@ -196,20 +161,17 @@ func _check_film_fit(comic: ComicMedium) -> void:
 	if float(out[true]) > 1.0:
 		_fails.append("a film panel being read is cropped by the frame (%.2f of it)"
 			% float(out[true]))
-	# ...and the contain path must actually be DOING something, or the assertion above is
-	# passing for the wrong reason on a panel that happened to fit anyway.
+	# The contain path must actually act, or the assertion above passes on a panel that fits anyway.
 	if float(out[false]) <= 1.0:
 		print("  (note: this panel fits even without containing, so the contrast is weak)")
 	comic._film_at = -1
 
 
-## IS THE PANEL BEING READ EVER FROZEN?
+## Is the panel being read ever frozen?
 ##
-## "The scene in that comic book frame becomes stuck, frozen, and stops moving at all." The
-## liveness sort puts every panel below its warm-up ahead of every warm one, and LIVE_MAX is
-## three - so the three panels cast by a page turn could take the whole budget and freeze the
-## Director's own current scene. This casts a full spread (so every panel is cold, the worst
-## case) and asserts the read panel survives it.
+## The liveness sort puts every panel below its warm-up ahead of every warm one and LIVE_MAX is three, so the three
+## panels cast by a page turn could take the whole budget and freeze the current scene. Casts a full spread (every
+## panel cold) and asserts the read panel survives it.
 func _check_focal_live(comic: ComicMedium) -> void:
 	comic._spread = ComicSpread.new(hash(["focal"]))
 	comic._spread_i = 11

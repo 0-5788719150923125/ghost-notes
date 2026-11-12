@@ -1,6 +1,6 @@
 extends Node
 
-## lay_layer_probe - ONE LAYER OF A REAL EPISODE LAID AGAIN, ON A COPY ([method TableProducer.lay_layer]; next/editing.md step 4):
+## lay_layer_probe - one layer of a real episode laid again, on a copy ([method TableProducer.lay_layer]; next/editing.md step 4):
 ## the producer's own path - the painter host's spec built as the app builds it, the host run, its layer merged in and landed -
 ## on an episode folder copied out of user:// (never one under it: the probe refuses), then what it did said:
 ##

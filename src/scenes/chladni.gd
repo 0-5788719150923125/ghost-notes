@@ -2,78 +2,49 @@ extends GhostScene
 
 ## Chladni - grains walking to the places a plate is not moving.
 ##
-## A metal plate seen square-on, dusted with fine sand and lit from a low raking angle so
-## every grain throws its own speck of shadow. The plate rings and the sand crawls: a grain
-## is thrown about where the surface is heaving and lies still where it is not, so within a
-## few seconds a chaotic dust field organizes itself into a sharp figure of curved nodal
-## lines - crosses, stars, rosettes, honeycombs. When the music changes key the figure boils
-## apart into haze and a different one assembles out of the same grains.
+## A metal plate seen square-on, dusted with fine sand and lit from a low raking angle so every grain
+## throws a speck of shadow. Grains are thrown about where the surface heaves and lie still where it does not,
+## so dust organizes into a figure of curved nodal lines. When the key changes the figure boils apart into
+## haze and another assembles.
 ##
-## THE POINT, AND WHY IT IS DIFFERENT FROM EVERY OTHER SCENE HERE. Elsewhere the audio
-## MODULATES something that was drawn anyway - a hue, a light, a growth rate. Here the audio
-## is the physical input: the plate's mode is CHOSEN by the music, so the same seed draws a
-## genuinely different picture for a different chord, and nothing else in the catalog can
-## do that. It is also the strictest possible reading of "sound drives color, not scale" -
-## the figure's SIZE never changes at all; only its shape, and only when the harmony does.
+## The audio is the physical input: the plate's mode is chosen by the music, so the same seed draws a
+## different picture for a different chord. The figure's size never changes, only its shape.
 ##
-## HOW THE MUSIC PICKS THE MODE. [method Spectrum.harmonic_signature]'s first twelve
-## channels are the chroma - the octave-folded pitch classes, so this is the key rather than
-## the loudness. They are smoothed, then the STRONGEST bin and the second strongest are read
-## off by argmax and pushed through a seeded permutation into a seeded mode table, giving
-## (m, n); the second and third give the superposed second harmonic. Argmax, deliberately,
-## and not a weighted sum over all twelve: summing twelve eigenfunctions produces an even
-## gray mush with no legible nodal lines at all, which is the whole thing worth looking at.
-## One or two modes, sharply chosen, or nothing.
+## Mode choice: the first twelve channels of [method Spectrum.harmonic_signature] are the chroma. They are
+## smoothed, then the strongest and second strongest bins are read by argmax and pushed through a seeded
+## permutation into a seeded mode table, giving (m, n); the second and third give the superposed second
+## harmonic. Argmax, not a weighted sum (twelve summed eigenfunctions give a gray mush). `mode_tau`
+## (0.4 .. 2.0 s) sets both the chroma smoothing and the crossfade between two baked figures: short snaps over
+## on a chord change, long dissolves through a formless boil.
 ##
-## THE SNAP-VERSUS-MELT KNOB. One sampled time constant, `mode_tau` in 0.4 .. 2.0 s, decides
-## both how fast the chroma is smoothed and how fast the crossfade between two baked figures
-## runs. Short: figures snap over on a chord change, the sand visibly panicking. Long: one
-## figure dissolves through a formless boil into the next. That single number is the scene's
-## personality, so it is the first thing to read in a feedback record.
+## The rest of the audio is about dwell, not size: `f.energy` is the plate's driving amplitude (how tightly
+## grains pack onto the nodes); `f.beat` is a tap, a drive spike that scatters the figure; `f.flux` trims the
+## crossfade rate. Gains are written for measured ranges (energy rarely passes 0.5, flux is 0.01-0.05): the
+## drive is `0.30 + 1.30 * energy`.
 ##
-## WHAT ELSE THE AUDIO DOES, all of it deliberately about DWELL rather than size: `f.energy`
-## is the plate's driving amplitude, which only decides how violently grains are thrown off
-## the antinodes and therefore how tightly they pack onto the nodes; `f.beat` is a tap on the
-## plate, a brief drive spike that scatters the figure and lets it re-settle, so it breathes
-## without moving; `f.flux` trims the crossfade rate. The gains are written for the MEASURED
-## ranges - energy is a mean over 64 bands and rarely passes 0.5, flux lives around 0.01-0.05
-## - so the drive is `0.30 + 1.30 * energy` rather than something that assumes energy reaches 1.
+## Cost: [PlateField] bakes the field and gradient onto a grid (a grain step is a bilinear read), in slabs so
+## a mode change never hitches. The walk runs on a [SimClock] and steps a rotating third of the grains per
+## tick with a longer dt, so per-frame cost is flat in the grain count. The draw (about 30k triangles) is
+## built off the main thread through [FrameForge].
 ##
-## THE COST, HONESTLY. Three things make thousands of grains affordable. The field and its
-## gradient are baked onto a grid by [PlateField] (a grain step is a bilinear read, not four
-## cos() calls), and baked in slabs so a mode change never hitches. The walk runs on a
-## [SimClock] and steps a rotating THIRD of the grains per tick with a proportionally longer
-## dt, which keeps per-frame simulation cost flat and independent of the grain count. And the
-## draw is built off the main thread through [FrameForge] - about 30k triangles a frame at the
-## top of the range, which is not a main-thread budget but is a fine worker one.
-##
-## WHAT THE SEED DECIDES: the plate (square, circular, hexagonal - each with its own
-## eigenfunctions) and its rim condition (free or clamped, which changes the figures
-## completely rather than decorating them); the mode table and the chroma-to-mode
-## permutation, so a given chord means a different figure in every session; grain count,
-## size and per-grain settling sensitivity; how far the grains creep and how much they
-## twitch; the mobility exponent, which is whether this is loose dry sand or heavy filings;
-## the weight of the superposed second harmonic, which is what turns a clean symmetric figure
-## lopsided; the plate finish and the room; and the rake light's azimuth, elevation and
-## whether the elevation is low enough for the grains to cast shadows at all.
+## The seed decides: the plate (square, circular, hexagonal) and its rim condition (free or clamped); the mode
+## table and permutation; grain count, size and settling sensitivity; creep and twitch; the mobility exponent
+## (loose sand or heavy filings); the second harmonic's weight; the plate finish and room; the rake light.
 
-## The three plates. Each is a different eigenfunction family in [PlateField], not a mask
-## over one shape.
+## The three plates; each is a different eigenfunction family in [PlateField], not a mask over one shape.
 const SHAPES := ["square", "circle", "hex"]
 
-## Valid mode indices per plate - the mode table is drawn from these, and they mean different
-## things per shape: half-wave counts on the square and hexagon, angular order and radial
-## index on the circle (where m = 0 is a set of plain rings).
+## Valid mode indices per plate: half-wave counts on the square and hexagon, angular order and radial
+## index on the circle (m = 0 is plain rings).
 const RANGES := {
 	"square": {"m": [1, 6], "n": [1, 6]},
 	"circle": {"m": [0, 4], "n": [1, 4]},
 	"hex": {"m": [1, 5], "n": [1, 5]},
 }
 
-## The plate's surface. Absolute ranges rather than multipliers on the mood, because a
-## finish IS a brightness: "matte black" that came out mid-gray would not be matte black.
-## `chalk` is the inverted one - a pale board with dark iron filings on it - and it is the
-## only member that wants [method GhostScene.paint_ground] behind it.
+## The plate's surface. Absolute ranges rather than multipliers on the mood, since a finish is a
+## brightness. `chalk` is the inverted one (pale board, dark filings) and the only one that wants
+## [method GhostScene.paint_ground] behind it.
 const FINISHES := {
 	"brushed": {"sat": [0.06, 0.14], "val": [0.30, 0.46], "streaks": [40, 90], "sheen": [0.30, 0.55], "high": false},
 	"matte": {"sat": [0.10, 0.24], "val": [0.06, 0.12], "streaks": [0, 0], "sheen": [0.04, 0.14], "high": false},
@@ -87,8 +58,7 @@ var _field: PlateField
 var _light: Lighting
 var _tb := TriBatch.new()
 
-# The grains, as parallel packed floats - never an array of dictionaries, which at 14k
-# elements is the difference between a scene and a slideshow.
+# The grains, as parallel packed floats, never an array of dictionaries (at 14k elements that is the difference).
 var _count := 0
 var _px := PackedFloat32Array()      # plate coordinates, -1..1
 var _py := PackedFloat32Array()
@@ -100,8 +70,7 @@ var _cursor := 0
 var _chunk := 900
 var _kicked := false
 
-# The sampled definition, unpacked into fields the hot loops can read without a Dictionary
-# lookup per grain.
+# The sampled definition, unpacked into fields the hot loops read without a Dictionary lookup per grain.
 var _shape := "square"
 var _base_drive := 1.0
 var _settle := 0.06
@@ -161,8 +130,8 @@ var _drive := 0.4
 var _ch := Vector2.ZERO
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"plate": {"label": "Plate", "type": "choice", "options": "SHAPES", "default": null,
 		"blurb": "The shape of the vibrating plate: a square, a circle or a hexagon, each with its own family of patterns."},
@@ -191,13 +160,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 	_shape = String(choice("plate", rng))
 	var boundary := "clamped" if rng.randf() < 0.45 else "free"
-	# 52-88 cells per axis. The nodal structure of the highest mode in the tables has a
-	# half-wavelength around a sixth of the plate, so even the coarse end has eight or nine
-	# cells across a lobe - far more than the bilinear read needs, and the grid is the one
-	# number that sets both the bake cost and the one-off build cost.
+	# 52-88 cells per axis: even the coarse end has eight or nine cells across the highest mode's lobe;
+	# the grid sets both the bake cost and the one-off build cost.
 	var grid := rng.randi_range(52, 88)
-	# Spread a full bake (2 * grid row-units) over roughly a quarter second, so a mode
-	# change costs a sliver of every frame instead of one 10 ms stall.
+	# Spread a full bake over roughly a quarter second, so a mode change costs a sliver of each frame.
 	_bake_rows = maxi(4, int(ceil(float(grid) * 2.0 / 14.0)))
 	_field = PlateField.new(_shape, boundary, grid, rng.randf() * TAU)
 	_outline = _field.outline(72)
@@ -205,9 +171,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var fname := String(choice("finish", rng))
 	var fin: Dictionary = FINISHES[fname]
 	_high_key = bool(fin["high"])
-	# One color identity for the plate, the room and the sand. Cool metals and bone, plus
-	# the darker moods for the room - nothing that would read as a hot glow, since the only
-	# light in this scene is a lamp at the side of a table.
+	# One color identity for plate, room and sand: cool metals and bone and the darker moods, nothing
+	# that reads as a hot glow (the only light is a lamp at the side of a table).
 	var sch := Scheme.among(["ash", "bone", "glacier", "brass", "abyss", "violet", "teal", "dawn"], rng)
 	var fs: Array = fin["sat"]
 	var fv: Array = fin["val"]
@@ -223,11 +188,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_streak_a.resize(_streaks)
 	for i in _streaks:
 		_streak_a[i] = rng.randf_range(0.015, 0.075)
-	# A brushed square is brushed along an edge; a disc or a hexagon can be brushed any way.
+	# A brushed square is brushed along an edge; a disc or hexagon can be brushed any way.
 	_brush = (0.0 if rng.randf() < 0.5 else PI * 0.5) if _shape == "square" else rng.randf() * PI
 
-	# The rake. A low lamp is the whole reason the sand reads as MATTER rather than as dots:
-	# it is what puts a lit face and a shadowed face on every ridge the grains pile into.
+	# The rake: a low lamp puts a lit and a shadowed face on every ridge the grains pile into.
 	var azimuth := rng.randf() * TAU
 	var elevation: float = number("lamp_height", rng)
 	_lx = cos(azimuth)
@@ -246,8 +210,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_tint = rng.randf_range(0.20, 0.55)
 
 	_count = number("grains", rng)
-	# Grain size shrinks as the count rises, so a dense plate stays a dust of separate specks
-	# instead of collapsing into a smear. 7000 is the nominal count the base range is set for.
+	# Grain size shrinks as the count rises so a dense plate stays a dust of specks; 7000 is the nominal count.
 	_grain_r = rng.randf_range(0.0016, 0.0034) * sqrt(7000.0 / float(_count))
 	_chunk = clampi(_count / 3, 600, 3000)
 	_px.resize(_count)
@@ -270,59 +233,39 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_px[i] = x
 		_py[i] = y
 		_gsz[i] = rng.randf_range(0.62, 1.48)
-		# Not every grain leaves at the same shake: a real dusting has fines that lift on
-		# nothing and coarse grains that sit through a lot. This is what keeps a nodal line
-		# soft-edged rather than a drawn stroke.
+		# Per-grain settling sensitivity: fines lift on nothing, coarse grains sit through a lot, which
+		# keeps a nodal line soft-edged.
 		_sens[i] = rng.randf_range(0.55, 1.60)
 
-	# The walk. `descent` and `jitter` are rates in plate-widths per second rather than
-	# per-step distances, so the look does not change when the stepping cadence does (a
-	# grain gets stepped every third tick, with dt scaled to match).
+	# The walk. `descent` and `jitter` are rates in plate-widths per second, so the look does not change
+	# with the stepping cadence (a grain is stepped every third tick, dt scaled to match).
 	_base_drive = rng.randf_range(0.75, 1.35)
-	# A grain stops where its local |w| * drive falls under its own threshold, so `settle`
-	# IS the width of the band the sand comes to rest in - and that band is what a nodal
-	# line looks like. Kept small (a grain rests only where |w| is under a tenth of peak)
-	# because a wide band is a blurred figure, and it is the reason a louder passage draws a
-	# TIGHTER line: the drive climbs, the band narrows, the sand packs in.
+	# A grain stops where its local |w| * drive falls under its own threshold, so `settle` is the width of
+	# the band the sand rests in, which is what a nodal line looks like. Kept small (rest only where |w| is
+	# under a tenth of peak): a wide band blurs the figure, and a louder passage narrows it.
 	_settle = rng.randf_range(0.02, 0.11)
-	# How much overshoot past the threshold buys full mobility. Without it the mobility ramp
-	# would be scaled by the threshold itself, which saturates instantly at these values and
-	# throws away the energy response entirely.
+	# How much overshoot past the threshold buys full mobility (else the ramp saturates instantly at these values).
 	_ramp = rng.randf_range(0.25, 0.80)
 	_descent = rng.randf_range(0.10, 0.40)
-	# Twitch is expressed as a FRACTION of the creep rather than independently: a grain that
-	# wanders faster than it descends never arrives, and the figure stays a haze forever.
+	# Twitch is a fraction of the creep: a grain that wanders faster than it descends never arrives.
 	_jitter = _descent * rng.randf_range(0.25, 1.10)
-	# How much of the creep and the tremor survive at a true node. Both are needed and
-	# they are needed TOGETHER: a tremor with no restoring force lets the sand random-walk
-	# off the line and the figure dissolves into haze, and a restoring force with no tremor
-	# is the frozen plate this replaces. Held in balance they give a DYNAMIC equilibrium -
-	# a line of finite width that is always being shaken apart and always being pulled back
-	# together, which is what a driven plate actually looks like.
+	# How much creep and tremor survive at a true node. Both are needed together: tremor alone random-walks
+	# the sand off the line, restoring force alone is a frozen plate. Together they give a dynamic
+	# equilibrium, a line of finite width always shaken apart and pulled back.
 	_creep_floor = rng.randf_range(0.18, 0.34)
 	_shake_floor = rng.randf_range(0.45, 0.85)
-	# THE TREMOR - the plate is VIBRATING, not switching between moving and still.
-	#
-	# Everything above governs a grain's DIRECTED transport: it creeps down the gradient of
-	# |w| toward a node, and stops once the local amplitude drops under its threshold. On
-	# its own that is a one-way trip to stillness, and it looked like one - the figure
-	# assembled, every grain fell under threshold, and the plate froze until the music
-	# happened to change mode. Which is not what a driven plate does. A real one is in
-	# continuous motion everywhere the amplitude is non-zero; the figure is not the only
-	# part that moves, it is the part that moves LEAST.
-	#
-	# So this is an agitation floor with no threshold at all, scaled by the local |w| and
-	# the drive. At a true node it is zero, so the lines stay sharp and the sand still
-	# packs into them. Everywhere else the surface shimmers, which is both what the
-	# phenomenon looks like and what makes the nodal figure legible as an absence.
+	# The tremor: the plate vibrates, it does not switch between moving and still. Directed transport (creep
+	# down the gradient of |w| until under threshold) alone ends in stillness. This is an agitation floor
+	# with no threshold, scaled by local |w| and the drive: zero at a true node, so the lines stay sharp,
+	# and a shimmer everywhere else, which makes the figure legible as an absence.
 	_tremor = _descent * rng.randf_range(0.35, 0.95)
 	_damping = rng.randf_range(0.6, 2.4)
 	_w2 = rng.randf_range(0.10, 0.40)
 	_tau = rng.randf_range(0.4, 2.0)
 	_min_dwell = number("hold", rng)
 
-	# The mode table and the chroma-to-mode permutation: this is what makes a given chord
-	# mean a different figure in every session while still meaning the SAME figure within one.
+	# The mode table and chroma-to-mode permutation: a given chord means a different figure in each session
+	# and the same figure within one.
 	var rr: Dictionary = RANGES[_shape]
 	var mr: Array = rr["m"]
 	var nr: Array = rr["n"]
@@ -344,8 +287,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_mtab[k] = rng.randi_range(m_lo, m_hi)
 		_ntab[k] = rng.randi_range(_n_lo, _n_hi)
 
-	# The opening figure comes from the seed, not from the audio - the scene has to be a
-	# picture on its very first frame, and there is no chroma to read yet.
+	# The opening figure comes from the seed: the scene is a picture on its first frame, before any chroma.
 	_pick_mode(0, 1, 2)
 	_field.begin(_cm, _cn, _cm2, _cn2, _w2)
 	_field.complete()
@@ -358,8 +300,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		add_layer("bed", rng, {"hue": sch.accent, "sat": sch.sat * 0.5,
 			"val": sch.val * rng.randf_range(0.08, 0.17),
 			"pools": rng.randi_range(2, 4), "z": "back"})
-	# Fines that never landed, still turning in the lamp light. No shaft: the lamp is off to
-	# the side of the table, not overhead.
+	# Fines that never landed, turning in the lamp light. No shaft: the lamp is to the side, not overhead.
 	add_layer("dust", rng, {"hue": _grain_hue, "shaft": false, "z": "front",
 		"count": rng.randi_range(40, 110),
 		"speed": rng.randf_range(0.006, 0.018),
@@ -412,17 +353,14 @@ func update(f: AudioFeatures, delta: float) -> void:
 	update_layers(f, delta)
 	_ch = chroma_hue()
 
-	# The chroma channels, smoothed on the scene's one personality constant. Guarded on the
-	# signature's size the way every other consumer is - it is empty until the analyzer has
-	# seen enough audio.
+	# The chroma channels, smoothed on `mode_tau`. Guarded on the signature's size (empty until the analyzer has enough audio).
 	var sig := signature()
 	if sig.size() >= 12:
 		var k := 1.0 - exp(-delta / _tau)
 		for c in 12:
 			_csig[c] = lerpf(_csig[c], sig[c], k)
 
-	# A tap on the plate. Fast attack, slow release: the strike scatters the figure and the
-	# sand takes a moment to find the lines again.
+	# A tap on the plate: fast attack, slow release, so the sand takes a moment to find the lines again.
 	_tap = Nonlinear.flare(_tap, clampf(f.beat, 0.0, 1.0), delta, 12.0, 2.2)
 	_drive = clampf(_base_drive * (0.30 + 1.30 * f.energy + 0.85 * _tap), 0.0, 1.8)
 
@@ -430,8 +368,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	if _field.baking():
 		_field.advance(_bake_rows)
 	elif _field.blend < 1.0:
-		# Flux only TRIMS the crossfade; at its measured 0.01-0.05 this is a +/-25% nudge, not
-		# a control. The duration is the sampled tau.
+		# Flux only trims the crossfade (at 0.01-0.05, a +/-25% nudge). The duration is the sampled tau.
 		_field.blend = minf(1.0, _field.blend + delta * (0.55 + 10.0 * f.flux) / _tau)
 	elif _dwell >= _min_dwell:
 		_change_mode()
@@ -445,9 +382,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	queue_redraw()
 
 
-# Read the mode the music is asking for and start baking it, if it is not the one already on
-# the plate. No rng is touched here: this fires on an audio-conditioned event, and the live
-# analyzer and the offline export bake do not produce identical feature streams.
+# Read the mode the music is asking for and start baking it, if it is not already on the plate. No rng
+# is touched: this fires on an audio-conditioned event (live and offline feature streams differ).
 func _change_mode() -> void:
 	var i1 := 0
 	for k in 12:
@@ -477,9 +413,8 @@ func _pick_mode(i1: int, i2: int, i3: int) -> void:
 	_cn = _ntab[_perm[i2]]
 	_cm2 = _mtab[_perm[i2]]
 	_cn2 = _ntab[_perm[i3]]
-	# On the square the antisymmetric pair vanishes identically when the two indices match, so
-	# nudge n along by one rather than showing an empty plate. The disc and the hexagon are
-	# built from sums and have no such degeneracy.
+	# On the square the antisymmetric pair vanishes when the two indices match, so nudge n by one rather
+	# than show an empty plate; the disc and hexagon are sums and have no such degeneracy.
 	if _shape == "square":
 		var span := _n_hi - _n_lo + 1
 		if _cm == _cn:
@@ -488,9 +423,8 @@ func _pick_mode(i1: int, i2: int, i3: int) -> void:
 			_cn2 = _n_lo + (_cn2 - _n_lo + 1) % span
 
 
-# One generation of the walk, for a rotating slice of the grains. Overdamped on purpose: sand
-# on a plate creeps, it does not fly, so a grain is a position with no momentum - which also
-# halves the state and the arithmetic.
+# One generation of the walk, for a rotating slice of the grains. Overdamped: sand creeps, so a grain is
+# a position with no momentum, which also halves the state and arithmetic.
 func _walk(dt: float) -> void:
 	if _count <= 0:
 		return
@@ -520,29 +454,22 @@ func _walk(dt: float) -> void:
 		var gl := sqrt(gx * gx + gy * gy) + 1e-5
 		var ux := -gx / gl
 		var uy := -gy / gl
-		# Sand piles where the plate is still, so the pile's uphill direction is exactly
-		# minus the gradient of |w|, and the rake lights the faces that turn toward it. The
-		# (1 - a) factor is the pile's depth: there is no relief out on an antinode because
-		# there is nothing lying there.
+		# Sand piles where the plate is still, so the pile's uphill direction is minus the gradient of |w|
+		# and the rake lights the faces turned toward it. The (1 - a) factor is the pile's depth.
 		_shade[i] = clampf(0.5 + rk * (ux * lx + uy * ly) * (1.0 - a), 0.0, 1.0)
 		_amp[i] = a
 		var thr := settle * _sens[i]
 		var mob := clampf((a * drive - thr) / ramp, 0.0, 1.0)
 		if mob > 0.0:
-			# The mobility exponent is the grain character: below 1 the whole plate twitches
-			# (loose dry sand), above 1 only the most violent regions move at all (heavy filings).
+			# The mobility exponent is the grain character: below 1 the whole plate twitches (loose
+			# dry sand), above 1 only the most violent regions move (heavy filings).
 			mob = pow(mob, damp)
-		# Both channels keep a FLOOR at a node instead of going to zero there, and that
-		# floor is the fix. Scaling the agitation by the local |w| alone was still a frozen
-		# plate in disguise: the sand's whole job is to migrate to where |w| is smallest, so
-		# an |w|-scaled tremor is nearest to nothing exactly where all the sand has ended
-		# up. Measured, the field settled to 0.0003 plate-widths of motion per half second -
-		# about a third of a pixel, which is indistinguishable from stopped.
+		# Both channels keep a floor at a node: scaling agitation by local |w| alone is a frozen plate in
+		# disguise, since the sand ends up where |w| is smallest (motion fell to a third of a pixel per half second).
 		var pull := maxf(mob, creep_fl)
 		var trem := tremor * (shake_fl + a * drive)
-		# Symmetry-breaking jitter from an integer hash of (grain, generation) rather than an
-		# rng draw: a SimClock's tick count is wall-clock derived, so drawing from the seeded
-		# stream here would desynchronize the export from the preview.
+		# Symmetry-breaking jitter from an integer hash of (grain, generation), not an rng draw: a SimClock's
+		# tick count is wall-clock derived, so a seeded draw would desynchronize the export.
 		var h := _hash2(i, gen)
 		var jx := float(h & 2047) * 0.00097704 - 1.0
 		var jy := float((h >> 11) & 2047) * 0.00097704 - 1.0
@@ -563,8 +490,7 @@ static func _hash2(a: int, b: int) -> int:
 func _snapshot() -> Dictionary:
 	var u := unit()
 	var glow := _light.glow()
-	# Sound drives COLOR: the sand's hue leans toward the music's tonal center by however
-	# tonal the moment is, and the whole dusting lifts a little on the beat glow.
+	# Sound drives color: the sand's hue leans toward the tonal center by how tonal the moment is, and the dusting lifts on the beat glow.
 	var dh: float = _ch.x - _grain_hue
 	dh = dh - round(dh)
 	var gc := Color.from_hsv(fposmod(_grain_hue + dh * _tint * _ch.y, 1.0), _grain_sat, 1.0)
@@ -591,9 +517,8 @@ func _snapshot() -> Dictionary:
 	}
 
 
-## The grain builder - STATIC and PURE (the [FrameForge] contract): it touches only its
-## snapshot, runs on a worker thread live and synchronously in an export. Two passes so every
-## shadow lands under every grain rather than under the ones drawn before it.
+## The grain builder - static and pure (the [FrameForge] contract): it touches only its snapshot and runs
+## on a worker live, synchronously in an export. Two passes so every shadow lands under every grain.
 static func _build_grains(s: Dictionary) -> Array:
 	var tb := TriBatch.new()
 	var n: int = s["n"]
@@ -630,12 +555,10 @@ static func _build_grains(s: Dictionary) -> Array:
 		var cy := py[i] * half
 		var r := gz[i] * gpx
 		var v := v_lo + vspan * sh[i]
-		# A grain still being thrown about is a blur rather than a speck, so it thins out -
-		# which is exactly why the nodal lines read as SOLID against a haze.
+		# A grain still being thrown about is a blur, so it thins out; that is why the nodal lines read as solid.
 		var al := clampf(1.0 - blur * am[i], 0.22, 1.0)
 		var col := Color(cr * v, cg * v, cb * v, al)
-		# A grain is one triangle, not a quad: at two pixels across nobody can tell the
-		# difference, and it is a third fewer vertices for exactly the same picture.
+		# A grain is one triangle, not a quad: at two pixels across it is a third fewer vertices.
 		tb.tri(Vector2(cx, cy - r), Vector2(cx + 0.866 * r, cy + 0.5 * r),
 			Vector2(cx - 0.866 * r, cy + 0.5 * r), col)
 	return tb.take_chunks()
@@ -671,8 +594,7 @@ func _draw_plate() -> void:
 	for p in _outline:
 		shadow.append(p * half + off)
 	draw_colored_polygon(shadow, Color(0.0, 0.0, 0.0, 0.34))
-	# The face as a fan with per-vertex shading, so the raking light actually rakes across it
-	# instead of the plate reading as one flat swatch.
+	# The face as a fan with per-vertex shading, so the raking light rakes across it.
 	var lit := Vector2(_lx, _ly)
 	for i in n:
 		var pa: Vector2 = _outline[i]
@@ -682,8 +604,7 @@ func _draw_plate() -> void:
 			_face_col(pc, pa.normalized().dot(lit)),
 			_face_col(pc, pb.normalized().dot(lit)))
 	_tb.flush(self)
-	# A brushed finish is scratches, and a scratch on a dark plate catches the lamp while a
-	# scratch on a pale board is a dark line - so the stroke color follows the finish.
+	# A scratch on a dark plate catches the lamp, on a pale board it is a dark line: the stroke color follows the finish.
 	var mark := 0.0 if _high_key else 1.0
 	if _streaks > 0:
 		var bd := Vector2(cos(_brush), sin(_brush))
@@ -709,10 +630,9 @@ func _face_col(pc: Color, d: float) -> Color:
 	return Color(pc.r * k, pc.g * k, pc.b * k, 1.0)
 
 
-# How far the brush stroke at perpendicular offset `t` may run without leaving the plate. The
-# square is brushed along an edge so it always spans the full width; the disc gets its true
-# chord, and the hexagon borrows the inscribed circle's, which is conservative and keeps the
-# streaks off the corners where they would otherwise poke out.
+# How far the brush stroke at perpendicular offset `t` may run without leaving the plate: the square always
+# spans the full width; the disc gets its true chord; the hexagon borrows the inscribed circle's (conservative,
+# keeps streaks off the corners).
 func _chord(t: float) -> float:
 	if _shape == "square":
 		return 1.0

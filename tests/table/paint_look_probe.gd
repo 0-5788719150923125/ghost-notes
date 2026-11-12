@@ -1,7 +1,7 @@
 extends Node
 
-## NOT a gate. THE PAINTED SURFACE photographed ([TablePaint], next/painted_surface.md): a mask on its cradle and an artist's station
-## - [code]paint_check[/code]'s, or the fixed table of a brief - a design that uses every finish and manner, and acts that lay it all on
+## NOT a gate. The painted surface photographed ([TablePaint], next/painted_surface.md): a mask on its cradle and an artist's station
+## ([code]paint_check[/code]'s, or the fixed table of a brief), a design that uses every finish and manner, and acts that lay it all on
 ## with the station's own tools, read with a synthetic voice; a frame written part way through every act, or at the times asked for.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/paint_look_probe.gd 900 [--brief <a brief.md>] [--design <skin.json>]
@@ -21,7 +21,7 @@ func _ready() -> void:
 	_run.call_deferred()
 
 
-## THE DEMO DESIGN, on a face 150 x 210 mm: every finish and every manner.
+## The demo design, on a face 150 x 210 mm: every finish and every manner.
 static func design() -> Dictionary:
 	return {"designs": [{"thing": "mask", "part": "face", "name": "a blue-diamond pierrot", "elements": [
 		{"id": "base", "stage": "base", "paint": "#f4f1ea", "fill": "all", "soft": 2},
@@ -41,7 +41,7 @@ static func design() -> Dictionary:
 	]}]}
 
 
-## THE DEMO ACTS, a beat a stage, each with the station's own tool.
+## The demo acts, a beat a stage, each with the station's own tool.
 static func acts() -> Dictionary:
 	var a := func(nm: String, beat: int, thing: String, part: String, paint: Array, extra := {}) -> Dictionary:
 		var tr := {"thing": thing, "part": part, "law": "paint", "on": "mask", "paint": paint}
@@ -65,7 +65,7 @@ static func acts() -> Dictionary:
 	]}
 
 
-## Tonight's pots: what the set dresser would add beside the fixed ones.
+## The pots the set dresser would add beside the fixed ones.
 static func tonight() -> Array:
 	var pot := func(nm: String, x: float, z: float, mat: String) -> Dictionary:
 		return {"name": nm, "at": [x, z], "parts": [
@@ -117,7 +117,7 @@ func _run() -> void:
 		var h := FileAccess.open(DIR.path_join(String(f[0])), FileAccess.WRITE)
 		h.store_string(JSON.stringify(f[1]))
 		h.close()
-	# A BEAT A STAGE, each with words enough for its work at a hand's pace
+	# a beat a stage, each with words enough for its work at a hand's pace
 	var beats := 6
 	var positions: Array = []
 	for k in beats:
@@ -170,7 +170,7 @@ func _run() -> void:
 				((sd["design"] as Dictionary).get("elements", []) as Array).size(), (sd["items"] as Dictionary).size()])
 			for id in sd["items"]:
 				print("paint_look_probe:   %-14s laid %s" % [id, (sd["items"][id] as Dictionary).get("span", "-")])
-	# ...THE FIRST LOADS (`--loads N`): each moment a sponge is pressed hardest into its paint, found by posing the work alone
+	# ...the first loads (`--loads N`): each moment a sponge is pressed hardest into its paint, found by posing the work alone
 	if loads > 0 and tm._work.paint != null:
 		var was := 0.0
 		var rising := false

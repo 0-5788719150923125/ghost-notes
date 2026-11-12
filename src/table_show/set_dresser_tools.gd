@@ -1,27 +1,23 @@
 extends RefCounted
 class_name SetDresserTools
 
-## SetDresserTools - what the set dresser can do while it sets the reader's table: MAKE a thing,
-## LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
+## SetDresserTools - what the set dresser can do while it sets the reader's table: make a thing,
+## look at it, fix it, and see the whole table as the camera will before handing it in.
 ##
-## Written as one reply, a table was ~5,000 tokens of geometry its author never saw: a squid of balls
-## and rods that read as a giant bug, stones perched on stones, things left off the table for want of
-## room with nobody told. Served as tools ([AgentTools]) instead, the set dresser keeps a DRAFT here
-## and works on it:
+## Served as tools ([AgentTools]), the set dresser keeps a draft here and works on it:
 ##
 ##   put     things (and their materials) onto the draft - a thing of the same name is replaced -
 ##           answered with what was built: each thing's size, anything the builder had to leave out or
 ##           guess, whether it is taller than its place can show, and a picture of what was put; and
-##           THE TABLE ITSELF ([Tables]): its `top`, and its `layers` (each replacing one of the same
+##           the table itself ([Tables]): its `top`, and its `layers` (each replacing one of the same
 ##           name), answered with the table in words and whatever had to change (a top made larger to
-##           hold the cards, a pattern it does not know); and THE LIGHT ([Lights]), part by part - its
+##           hold the cards, a pattern it does not know); and the light ([Lights]), part by part - its
 ##           sky, sun, clouds and birds each replacing the last, what the sun falls through and the lamps
 ##           by name - answered with where the sun falls (how much of the table, and of where the cards
-##           lie) and how the weather runs; and THE RIDE ([Rides]): what the table is aboard, if it moves -
+##           lie) and how the weather runs; and the ride ([Rides]): what the table is aboard, if it moves -
 ##           answered with how it shakes and what on the table moves with it
 ##   remove  things off it, by name
-##   blueprint  where each thing stands, WRITTEN, not hunted for (the user, 2026-10-18: "do the planning
-##           and desired placements up-front, then verify with screenshots at the end"): each thing's `at`
+##   blueprint  where each thing stands, written up front: each thing's `at`
 ##           ([x, z] centimeters from the middle of the reading), `turn` and `scale` set by name, and the
 ##           table drawn as a plan to lay them out on ([TableBlueprint]) - answered with where each thing
 ##           stands, its foot and height against what its spot shows, and what moved it or kept it off
@@ -32,9 +28,9 @@ class_name SetDresserTools
 ##           stretch the camera sees outlined ([method TablePreview.overhead]): a plan
 ##   set     the whole draft standing on the episode's own table, photographed from the camera's
 ##           place, with where each thing stood, what was made smaller or left off, which light leads
-##           ([method TablePreview.table]) - and its AIR as it is some way into the reading
+##           ([method TablePreview.table]) - and its air as it is some way into the reading
 ##   watch   one effect of the air ([Effects]) in motion: a burst at the moment it marks, fog or
-##           motes a few seconds apart ([method TablePreview.watch]); or a moving part of the LIGHT
+##           motes a few seconds apart ([method TablePreview.watch]); or a moving part of the light
 ##           ([Lights]): a cloud passing over the sun, a bird's shadow crossing, leaves stirring, a lamp's
 ##           flicker, a flash ([method TablePreview.watch_light])
 ##   title   the color the show's name is printed in over this table at the opening, and a picture
@@ -44,23 +40,18 @@ class_name SetDresserTools
 ##           exactly as an answer in words would have landed ([method TableProducer._land_table])
 ##
 ## Every picture counts against [constant LOOKS]; words cost nothing. A picture comes with the
-## question to ask of it ([constant JUDGE_THING], [constant JUDGE_TABLE], [constant JUDGE_SET]): told only to fix what was
-## wrong, a model looked at a 1 cm disc it had named an oil lamp and called it perfect. Before it is handed in the
-## table is SET at least once since its last change, wherever a table can be stood - the one look the
-## old single reply never had.
+## question to ask of it ([constant JUDGE_THING], [constant JUDGE_TABLE], [constant JUDGE_SET]). Before it is handed in the
+## table is set at least once since its last change, wherever a table can be stood.
 ##
-## IT KNOWS NO CARD, as the set dresser never did: the table it sets is photographed with the cards
-## face down, and nothing here reads the draw.
+## It knows no card: the table it sets is photographed with the cards face down, and nothing here reads the draw.
 
 ## The file a handed-in table is written to, in the job's folder.
 const SUBMITTED := "submitted.json"
 ## What to ask of a picture before going on: say what it shows, then judge it against what was meant.
 const JUDGE_THING := "Before you go on, say what each picture actually shows - its shape and proportions against the grid (1 cm squares, a brighter line every 5), its material - and whether a stranger would name it as you did. Put again what does not read: a part floating or sunk, a thing too flat or too small to read, a vessel that reads as a plate, a bundle that reads as a stick."
 const JUDGE_TABLE := "Before you submit, say what the frame actually shows: can each thing be told for what it is at this size, is any hidden, crowded or left off, and does the light come from where you meant? Fix what does not - move things with blueprint - and set the table again."
-## ...and when every thing stood in the shot: THE TABLE IS SET, and it is told so. Told only to fix what was
-## wrong, a set dresser read a thing made 88% of its size as a fault and set the table round after round
-## chasing it, the shot holding no layout where nothing is made smaller. The table makes a thing smaller
-## only as far as it still reads (see TableThings.stand), and leaves off what will not fit even so.
+## ...and when every thing stood in the shot: the table is set, and it is told so. The table makes a thing smaller only as far as it
+## still reads (see TableThings.stand), and leaves off what will not fit even so.
 const JUDGE_SET := "Every thing stands where you wrote it, none left off, cut at its top or out of the shot. Say what the frame actually shows: can each thing be told for what it is, and does the light come from where you meant? If so, the table is set - %s. Set it again only to fix what is plainly wrong."
 const JUDGE_AIR := "Say what the pictures show of it: is it where you meant, as thick or as bright as you meant, in colors that belong to this table - and can every card still be seen through it? Put it again to change it."
 const JUDGE_OVERHEAD := "Say what the plan shows: the top's shape and edge, each layer where you meant it and turned as you meant, what hangs over the edge, and whether the cloths, the things and the cards sit together as one table. Put again what does not."
@@ -69,8 +60,7 @@ const JUDGE_TITLE := "Say what the picture shows: can the name be read at a glan
 const JUDGE_LIGHT := "Say what the pictures show of the light: where it comes from, what it falls through and where its shade lies, whether it moves as you meant - and whether it is the light of this episode's world and hour, with every card still readable in it. Put it again to change it."
 ## Less of a thing in the shot than this, and it is out of it ([method written_notes]).
 const OUT_OF_SHOT := 0.05
-## How many pictures one set dresser may take. Its run has no time limit (see AgentJobs). A table of
-## dozens of things takes more looks than one of five: 40 became 60 with the blueprint (2026-10-18).
+## How many pictures one set dresser may take. Its run has no time limit (see AgentJobs); a table of dozens of things takes more looks than one of five.
 const LOOKS := 60
 
 var episode: TableEpisode
@@ -104,7 +94,7 @@ var _warned_title := false
 var _warned_unplaced := false
 var _warned_cut := false
 var _preview: TablePreview
-## THE SHOW'S FIXED THINGS ([FixedTable]): standing from the start, as the brief writes them - never moved, made again or taken away.
+## The show's fixed things ([FixedTable]): standing from the start, as the brief writes them - never moved, made again or taken away.
 var _fixed := {}
 var _fixed_names: Array = []
 
@@ -129,8 +119,7 @@ func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, name := 
 		_sound_put = true
 	_look = CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})
 	_preview = TablePreview.new(ep, plan, dir.path_join("preview"), name, byline)
-	# A RUN STARTS CLEAN: a rerun works in the folder the last run left, and its handed-in table or
-	# its pictures must not pass for this run's
+	# a run starts clean: a rerun works in the folder the last run left, and its handed-in table or pictures must not pass for this run's
 	DirAccess.make_dir_recursive_absolute(dir)
 	for f in DirAccess.get_files_at(dir):
 		var fs := String(f)
@@ -188,11 +177,9 @@ func list_tools() -> Array:
 	]
 
 
-## ONE CALL AT A TIME, and none once the tools are closed. Reported 2026-10-07: the table's job ended while a
-## call was photographing (an agent's last `title`), its stages were freed under it, and every picture after
-## that was "a previously freed instance"; two calls at once share one studio and its camera. So a call waits
-## for the one before it, a call after [method release] is turned away, and a release during a call gives the
-## stages back when the call is done.
+## One call at a time, and none once the tools are closed: two calls at once share one studio and its camera, so a call waits for
+## the one before it, a call after [method release] is turned away, and a release during a call gives the stages back when the call
+## is done.
 func call_tool(name: String, args: Dictionary) -> Dictionary:
 	while _busy and not _released:
 		await TablePreview._tree().process_frame
@@ -248,7 +235,7 @@ func draft() -> Dictionary:
 		out["ride"] = _ride.duplicate(true)
 	if not _assembly.is_empty():
 		out["assembly"] = _assembly.duplicate(true)
-	# ...WHAT IS BUILT ON IT, seen on the plate it will stand on, with the colors it will be in
+	# what is built on it, seen on the plate it will stand on, with the colors it will be in
 	var designed := episode.model() if episode != null else {}
 	if not designed.is_empty():
 		if not out.has("assembly"):
@@ -335,13 +322,13 @@ func _put(args: Dictionary) -> Dictionary:
 		if nm.is_empty():
 			nm = "thing %d" % (_things.size() + 1)
 		thing["name"] = nm
-		# ...NEVER ONE OF THE SHOW'S OWN, which stand as its brief writes them
+		# never one of the show's own, which stand as its brief writes them
 		if _fixed_names.has(nm.to_lower()):
 			notes.append("\"%s\" is one of the show's fixed things: it stands as the brief writes it, and is not put again" % nm)
 			continue
 		var at := _index_of(nm)
 		if at >= 0:
-			# A THING MADE AGAIN KEEPS ITS PLACE on the blueprint, unless it is given one
+			# a thing made again keeps its place on the blueprint, unless it is given one
 			for k in ["at", "turn", "scale"]:
 				if not thing.has(k) and (_things[at] as Dictionary).has(k):
 					thing[k] = (_things[at] as Dictionary)[k]
@@ -388,7 +375,7 @@ func _put(args: Dictionary) -> Dictionary:
 		lines.append("The assembly: %s." % ("none" if made.is_empty() else "a plate of %s studs, stock: %s" % [str((made["base"] as Dictionary)["size"]), ", ".join(PackedStringArray((made["stock"] as Array).map(func(q: Dictionary) -> String: return String(q["name"]))))]))
 		for n in said:
 			lines.append("- " + String(n))
-		# ...WHAT IS BUILT IS WHAT THE VIDEO IS FOR: the whole of it in the picture, by the end
+		# what is built is in the picture whole, by the end
 		if not (episode.model() if episode != null else {}).is_empty():
 			var cut := _model_cut()
 			if cut > 0.0:
@@ -578,7 +565,7 @@ static func _numbered(numbers: Dictionary, name: String) -> String:
 
 
 ## What to ask of a set table's picture: to fix what is wrong while [param faults] remain ([method
-## stood_lines]), else that THE TABLE IS SET - and what is left to do: the title's color, unless
+## stood_lines]), else that the table is set - and what is left to do: the title's color, unless
 ## [param titled], then submit.
 static func judge_of(faults: int, titled: bool) -> String:
 	if faults > 0:
@@ -591,7 +578,7 @@ func looks_used() -> int:
 	return _looks
 
 
-## THE BLUEPRINT: each thing named in [param args]' `things` placed - its `at`, `turn` and `scale`, only
+## The blueprint: each thing named in [param args]' `things` placed - its `at`, `turn` and `scale`, only
 ## those given - then the table drawn as a plan with every placed thing standing on it
 ## ([method TablePreview.blueprint]), and said in words thing by thing ([method _plan_lines]).
 func _blueprint(args: Dictionary) -> Dictionary:
@@ -657,7 +644,7 @@ func _blueprint(args: Dictionary) -> Dictionary:
 	return {"text": "\n".join(lines), "images": [got["image"]]}
 
 
-## EVERY THING ON THE BLUEPRINT, in words, numbered as put numbers it: where it stands, how it is turned,
+## Every thing on the blueprint, in words, numbered as put numbers it: where it stands, how it is turned,
 ## its foot and height against what its spot shows - and what moved it, kept it off, or has yet to place
 ## it. [param got]: where the table stood each ([method TablePreview.blueprint]'s `placed`); empty, where
 ## each was written.
@@ -775,7 +762,7 @@ func _unplaced() -> PackedStringArray:
 	return out
 
 
-## THE DRAFT AS A PICTURE SHOWS IT: every thing but those not yet placed, which wait off the table - a
+## The draft as a picture shows it: every thing but those not yet placed, which wait off the table - a
 ## spot the table found for one would pass for the set dresser's.
 func _on_table() -> Dictionary:
 	var out := draft()
@@ -784,7 +771,7 @@ func _on_table() -> Dictionary:
 	return out
 
 
-## THE TABLE FROM ABOVE: a plan of the draft on the episode's own table.
+## The table from above: a plan of the draft on the episode's own table.
 func _overhead() -> Dictionary:
 	if _looks >= LOOKS:
 		return {"text": _looks_line(false), "error": true}
@@ -802,7 +789,7 @@ func _overhead() -> Dictionary:
 	return {"text": "\n".join(lines), "images": [got["image"]]}
 
 
-## THE TABLE ITSELF in words, as it will be built - and whatever had to change on the way.
+## The table itself in words, as it will be built - and whatever had to change on the way.
 func _describe_table() -> PackedStringArray:
 	var notes := PackedStringArray()
 	var raw := draft()
@@ -856,7 +843,7 @@ func _watch(args: Dictionary) -> Dictionary:
 	return {"text": "\n".join(lines), "images": [got["image"]]}
 
 
-## THE NAME'S COLOR over this table: kept in the draft, and - where a table can be stood - the
+## The name's color over this table: kept in the draft, and - where a table can be stood - the
 ## opening photographed with it, and how far it stands out from what is behind it.
 func _choose_title(args: Dictionary) -> Dictionary:
 	var c := String(args["color"]).strip_edges() if args.get("color") is String else ""
@@ -886,21 +873,21 @@ func _submit() -> Dictionary:
 	var safe := _safe()
 	if (safe["things"] as Array).is_empty():
 		return {"text": "Nothing on the table can be built yet - put things first.", "error": true}
-	# PLACED BEFORE IT IS HANDED IN, once asked
+	# placed before it is handed in, once asked
 	var waiting := _unplaced()
 	if not waiting.is_empty() and not _warned_unplaced:
 		_warned_unplaced = true
 		return {"text": "Not placed on the blueprint: %s. Place them with blueprint and set the table again - or submit again, and the table finds each a spot of its own." % ", ".join(waiting), "error": true}
-	# SEEN BEFORE IT IS HANDED IN: once, where a table can be stood at all
+	# seen before it is handed in: once, where a table can be stood at all
 	if not _set_since_change and not _warned and _can_stand() and _looks < LOOKS:
 		_warned = true
 		return {"text": "You have not seen the table as it now stands: call set, look at the frame, fix what it shows, then submit. (Submit again unchanged to hand it in as it is.)", "error": true}
-	# ...AND ALL OF WHAT IS BUILT IN THE PICTURE, once asked: it is what the video is for
+	# and all of what is built in the picture, once asked
 	var cut := _model_cut()
 	if cut > 0.0 and not _warned_cut:
 		_warned_cut = true
 		return {"text": "The model's top is cut off by the frame by %.0f cm where its plate stands. Bring the plate toward the reader (`assembly` `base` `at`: the larger its z, the nearer). (Submit again to hand the table in as it is.)" % ceilf(cut * 100.0), "error": true}
-	# ...AND ITS NAME GIVEN A COLOR, once asked
+	# and its name given a color, once asked
 	if _title.is_empty() and not _warned_title:
 		_warned_title = true
 		return {"text": "You have not chosen the color the show's name is printed in over this table: call title and look at the opening. (Submit again to hand the table in with the name in its usual cream.)", "error": true}
@@ -918,7 +905,7 @@ func _submit() -> Dictionary:
 
 # --- the light ----------------------------------------------------------------------------------------
 
-## THE LIGHT PUT, part by part ([Lights]): each part given replaces the last, and null takes it away;
+## The light put, part by part ([Lights]): each part given replaces the last, and null takes it away;
 ## what the sun falls through, the lamps and the shadows go in by name - an entry replaces the one of its
 ## name - and an empty list takes them all away.
 func _merge_light(d: Dictionary) -> void:
@@ -949,7 +936,7 @@ func _merge_light(d: Dictionary) -> void:
 			_light[key] = (v as Dictionary).duplicate(true) if v is Dictionary else v
 
 
-## THE SOUND IN WORDS, as it will be heard: what it is, everything that had to change, and the wind it
+## The sound in words, as it will be heard: what it is, everything that had to change, and the wind it
 ## follows - the light's, heard in open air when the sound says nothing of it.
 func _describe_sound() -> PackedStringArray:
 	var notes := PackedStringArray()
@@ -972,7 +959,7 @@ func _describe_sound() -> PackedStringArray:
 	return out
 
 
-## THE RIDE IN WORDS, as it will be felt: what it is aboard and how it shakes - the knocks, how often a hard
+## The ride in words, as it will be felt: what it is aboard and how it shakes - the knocks, how often a hard
 ## jolt comes - what had to change, and what on the table moves with it.
 func _describe_ride() -> PackedStringArray:
 	var notes := PackedStringArray()
@@ -1040,7 +1027,7 @@ func _unlight(name: String) -> bool:
 	return false
 
 
-## THE LIGHT IN WORDS, as it will be built: what it is and everything that had to change; where the sun
+## The light in words, as it will be built: what it is and everything that had to change; where the sun
 ## falls - how much of the table the camera sees, and of where the cards lie, it reaches through what it
 ## falls through; how the weather runs in the first ten minutes; and every lamp moved up out of the shot.
 func _describe_light() -> PackedStringArray:
@@ -1094,7 +1081,7 @@ func _describe_light() -> PackedStringArray:
 	return out
 
 
-## WHERE EACH SHADOW OUT OF THE SHOT FALLS, in words: how much of the table the camera sees, and of where
+## Where each shadow out of the shot falls, in words: how much of the table the camera sees, and of where
 ## the cards lie, its outline covers, on which part of the table, whether it moves - and whether it was
 ## raised along its light's ray to stay out of the shot and clear of the table.
 func _describe_shadows(light: Dictionary, lamps_at: Dictionary, in_shot: Callable) -> PackedStringArray:
@@ -1166,7 +1153,7 @@ func _light_line(safe: Dictionary) -> String:
 
 ## Whether [param name] is a part of the light that moves: "clouds", "birds", or something the sun falls
 ## through or a lamp, by its name.
-## THE WIND IN WORDS: how often it gusts in the first ten minutes and how hard, and - for what drifts in
+## The wind in words: how often it gusts in the first ten minutes and how hard, and - for what drifts in
 ## the air - how many of those gusts lift what lies on the cloth.
 func _describe_wind(light: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
@@ -1242,7 +1229,7 @@ func _light_names() -> String:
 	return ", ".join(out) if not out.is_empty() else "nothing that moves"
 
 
-## A MOVING PART OF THE LIGHT watched on the episode's own table: four pictures as it moves.
+## A moving part of the light watched on the episode's own table: four pictures as it moves.
 func _watch_light(nm: String) -> Dictionary:
 	if _looks >= LOOKS:
 		return {"text": _looks_line(false), "error": true}
@@ -1319,7 +1306,7 @@ func _describe(names: Array) -> PackedStringArray:
 	return out
 
 
-## WHAT MOVES IN A BUILT THING ([method Props.build]'s [param b]), in words: each kind, how many, where it is
+## What moves in a built thing ([method Props.build]'s [param b]), in words: each kind, how many, where it is
 ## held and how fast it rings on this draft's ride - and whether anything moves it at all.
 func _moves_line(b: Dictionary) -> String:
 	var movers: Array = b.get("movers", [])
@@ -1391,7 +1378,7 @@ func _part_troubles(list: Array, depth: int, budget: Array, path: String, out: P
 			if strokes.is_empty():
 				out.append("part %s: a sculpt needs `strokes`, each with `points` [[x, y, z, r], ...] - left out" % where)
 				continue
-			# A ROD THINNER THAN THE SCULPT IS CUT comes out broken: said before it is built, with how thick to make it
+			# a rod thinner than the sculpt is cut comes out broken: said before it is built, with how thick to make it
 			var cut := Props.sculpt_cut({"strokes": strokes, "mirror": Props._flag(d.get("mirror"))})
 			var thin: Array = cut["thin"]
 			for si in thin.size():

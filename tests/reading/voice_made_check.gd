@@ -5,22 +5,19 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/reading/voice_made_check.gd 60
 ##
-## WHAT IT HOLDS (2026-10-22, the user: "I just spent a couple hours training the actor's voice ... When I
-## click on the play button, it's still using the regular Piper voice"): the Voice card asked the host
-## for its voices once, as the note opened, so the voice the Actor card trained in the hours after was
-## never on it, and nothing read in it. A stand-in host counts what it is asked, and the gate holds that:
+## Holds: when a voice is made while the note is open (one the Actor card trained), the Voice card asks the host
+## for its voices again and the reader reads in it. A stand-in host counts what it is asked:
 ##
-## - a list asked again keeps what the person picked (it went back to the voice the tab opened with);
+## - a list asked again keeps what the person picked;
 ## - a voice made asks the host for the voices again, and until the list holds it nothing changes;
-## - once it does, the READER reads in it - picked, kept in the reader's slot, the note touched to be
-##   saved - even while another voice's tab is shown, and that voice keeps its own;
+## - once it does, the reader reads in it (picked, kept in the reader's slot, the note touched to be saved), even
+##   while another voice's tab is shown, and that voice keeps its own;
 ## - it is read in once: a list after that keeps what is picked.
 ##
-## THE CONTROL: the list holding the new voice, arriving with no voice made, leaves the reader's voice as
-## it was - so "reads in it" above is the voice made's doing.
+## Control: the list holding the new voice, arriving with no voice made, leaves the reader's voice as it was.
 ##
-## The panel is built by hand and never added to the tree (its `_ready` starts the python voice host),
-## as tests/reading/audition_check.gd builds it.
+## The panel is built by hand and never added to the tree (its `_ready` starts the python voice host), as
+## tests/reading/audition_check.gd builds it.
 
 class Host extends VoiceHost:
 	var listed := 0
@@ -68,7 +65,7 @@ func _run() -> void:
 	c.fill_voices(_list(false))
 	_ok(c._selected_voice_id() == "en_US-lessac-medium" and _voice(0) == "en_US-lessac-medium",
 		"a list asked again put back %s over the voice picked" % c._selected_voice_id())
-	# THE CONTROL: the new voice listed, none made - the reader keeps its voice
+	# the control: the new voice listed, none made - the reader keeps its voice
 	c.fill_voices(_list(true))
 	_ok(c._selected_voice_id() == "en_US-lessac-medium" and _voice(0) == "en_US-lessac-medium",
 		"control: a voice listed with none made became the reader's")

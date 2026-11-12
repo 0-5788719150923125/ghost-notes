@@ -1,41 +1,31 @@
 extends Shell
 class_name Chrome
 
-## Chrome - the shared session furniture every mode of ghost carries.
+## Chrome - the shared session furniture every mode of ghost carries. Main creates one Chrome and any mode
+## gets the standard set, so no mode assembles its overlay stack by hand and forgets a piece.
 ##
-## The design lesson made explicit: modes were assembling their overlay stack
-## BY HAND in per-branch code (an exporter here, an assistant there, the
-## feedback console only in one path), so every new mode forgot a piece -
-## synthesis shipped without ` feedback and without the export button, twice.
-## Ghost's own rule - composition over hand-assembly - now applies to the app
-## furniture too: main creates ONE Chrome, and any mode gets the standard set.
+## What a panel asks of it is [Shell], which this extends: the row, the claims on the bottom edge, the way
+## home, the note's "⋯". A panel below `app/` names Shell and never this file (docs/structure.md); what is
+## here is the furniture itself and the answers that need it:
 ##
-## WHAT A PANEL ASKS OF IT IS [Shell], which this extends: the row, the claims on the bottom
-## edge, the way home, the note's "⋯". A panel below `app/` names Shell and never this file
-## (docs/structure.md); what is here is the furniture itself, and the three answers that need it:
-##
-## - **row**         - the bottom-right row: ONE container holding every piece of
-##                     furniture's button (see [method row_button]), the ⌂ that leaves a
-##                     mode among them (see [method set_home]).
-## - **environment** - the Environment panel (deps_panel.gd) behind the row's ⚙: what
-##                     ghost runs on and what it is installing. Open until the user
-##                     first closes it (`[deps] open`).
-## - **graphics**    - the Graphics panel ([GraphicsPanel]) behind the row's picture: how
-##                     finely the stage is drawn, live and in an export ([Graphics]).
-## - **exporter**    - the ⤓ render-to-video button + background pipeline
-##                     (persistent: an in-flight export survives session churn).
-## - **assistant**   - the feedback browser / dispatch backend, and the picker for
-##                     which assistant runs (persistent: queued work survives sessions).
-## - **feedback**    - the ` console, created on demand per session via
-##                     [method attach_feedback] and wired to the assistant.
-## - **console**     - the `>_` log viewer (a live tail of godot's own log
-##                     file), for anyone running ghost without a terminal.
-## - **transport**   - play/pause, stop, the time and the scrub rail along the
-##                     bottom of the stage - one for every mode, shown exactly when
-##                     something conducts the clock (see transport.gd). Space plays
-##                     and pauses; the arrows and Home seek.
-## - **provision**   - the notice at the top of the frame while ghost installs or
-##                     updates its own dependencies (see provisioner.gd).
+## - **row**         - the bottom-right row: one container holding every piece of furniture's button
+##                     ([method row_button]), the ⌂ that leaves a mode among them ([method set_home]).
+## - **environment** - the Environment panel (deps_panel.gd) behind the row's ⚙: what ghost runs on and
+##                     what it is installing. Open until the user first closes it (`[deps] open`).
+## - **graphics**    - the Graphics panel ([GraphicsPanel]) behind the row's picture: how finely the stage
+##                     is drawn, live and in an export ([Graphics]).
+## - **exporter**    - the ⤓ render-to-video button and background pipeline (persistent: an in-flight
+##                     export survives session churn).
+## - **assistant**   - the feedback browser / dispatch backend and its picker (persistent: queued work
+##                     survives sessions).
+## - **feedback**    - the ` console, created per session via [method attach_feedback], wired to the
+##                     assistant.
+## - **console**     - the `>_` log viewer (a live tail of godot's own log file).
+## - **transport**   - play/pause, stop, the time and the scrub rail along the bottom of the stage, shown
+##                     exactly when something conducts the clock (transport.gd). Space plays and pauses;
+##                     the arrows and Home seek.
+## - **provision**   - the notice at the top of the frame while ghost installs or updates its own
+##                     dependencies (provisioner.gd).
 
 var exporter: Node
 var assistant: Node
@@ -52,8 +42,8 @@ var _env_dot: Label
 var _gfx_layer: CanvasLayer
 
 
-## The Chrome in this tree, or null - for `app/`'s own, which reach the furniture through it.
-## Anything else asks [method Shell.of].
+## The Chrome in this tree, or null - for `app/`'s own, which reach the furniture through it. Anything
+## else asks [method Shell.of].
 static func of(n: Node) -> Chrome:
 	return Shell.of(n) as Chrome
 
@@ -68,14 +58,11 @@ func _ready() -> void:
 	add_child(assistant)
 	console = preload("res://src/app/console.gd").new()
 	add_child(console)
-	# THE TRANSPORT. Furniture rather than a mode's own control precisely because the lesson
-	# at the top of this file is that anything a mode has to remember to add is a thing some
-	# mode will forget - and playing, pausing and reviewing a long take are not specific to
-	# any one of them. It shows exactly when something conducts (see Spectrum.timed).
+	#The transport is furniture, not a mode's own control: playing, pausing and reviewing a take are not
+	#specific to any mode. It shows exactly when something conducts (see Spectrum.timed).
 	transport = preload("res://src/show/transport.gd").new()
 	add_child(transport)
-	# An install can start from any mode (the voice's environment, FFmpeg for a first
-	# clip, an update at launch), so its progress is furniture too.
+	#An install can start from any mode, so its progress is furniture too.
 	provision = preload("res://src/app/provision_badge.gd").new()
 	add_child(provision)
 
@@ -105,12 +92,10 @@ func ask_delete() -> void:
 
 # --- the Environment ----------------------------------------------------------------------------
 
-## THE ENVIRONMENT PANEL, behind a button at the row's left end - it was the home screen's alone,
-## and what ghost runs on is worth seeing from every mode. OPEN UNTIL THE USER FIRST CLOSES IT
-## (`[deps] open`, default true, written by the button): a first launch shows it, the user learns
-## where it lives by closing it, and from then on it starts closed. A PROBLEM THE PROBE FINDS
-## OPENS IT without writing that - a missing dependency must be seen - and the panel's one-line
-## state is the button's tooltip and its dot, so a problem shows while it is closed.
+## The Environment panel, behind a button at the row's left end. Open until the user first closes it
+## (`[deps] open`, default true, written by the button). A problem the probe finds opens it without
+## writing that, and the panel's one-line state is the button's tooltip and dot, so a problem shows while
+## it is closed.
 func _build_environment() -> void:
 	_env_layer = CanvasLayer.new()
 	_env_layer.layer = ROW_LAYER - 1
@@ -140,8 +125,8 @@ func _build_environment() -> void:
 	set_environment_open(bool(Settings.read("deps", "open", true)), false)
 
 
-## Open or close the Environment panel. [param remember] writes `[deps] open` - the user's own
-## click does, a problem the probe found does not.
+## Open or close the Environment panel. [param remember] writes `[deps] open` (the user's own click does,
+## a problem the probe found does not).
 func set_environment_open(on: bool, remember: bool) -> void:
 	_show_environment(on)
 	if on:
@@ -172,8 +157,7 @@ func _paint_environment_button() -> void:
 
 # --- the graphics -------------------------------------------------------------------------------
 
-## THE GRAPHICS PANEL, behind the picture beside the ⚙: closed until it is opened, every time - it is a
-## place to go, not a state to watch.
+## The Graphics panel, behind the picture beside the ⚙: closed until opened, every time.
 func _build_graphics() -> void:
 	_gfx_layer = CanvasLayer.new()
 	_gfx_layer.layer = ROW_LAYER - 1
@@ -214,9 +198,8 @@ func _place_graphics() -> void:
 
 # --- the feedback console -----------------------------------------------------------------------
 
-## The ` feedback console for the current session. Idempotent: returns the
-## live console if one is already attached. Wired to the assistant so a
-## submitted critique dispatches (when a backend is enabled).
+## The ` feedback console for the current session. Idempotent: returns the live console if one is attached.
+## Wired to the assistant so a submitted critique dispatches (when a backend is enabled).
 func attach_feedback() -> Node:
 	if feedback != null and is_instance_valid(feedback):
 		return feedback
@@ -242,8 +225,8 @@ func transport_room() -> float:
 	return Transport.room()
 
 
-## Tear down the per-session console (the persistent pieces stay). Callers own
-## the don't-yank-it-while-open courtesy (see main._end_session).
+## Tear down the per-session console (the persistent pieces stay). Callers own the don't-yank-it-while-open
+## courtesy (see main._end_session).
 func detach_feedback() -> void:
 	if feedback != null and is_instance_valid(feedback):
 		feedback.queue_free()

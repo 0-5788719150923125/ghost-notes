@@ -1,26 +1,26 @@
 extends CanvasLayer
 class_name TimelineDock
 
-## TimelineDock - ANY SHOW'S [Timeline], DOCKED UNDER IT, ON MASKING'S CONTROLS (next/editing.md, "The Timeline" and step 6):
-## the show's groups as flags on one [FlagStrip] across the whole of it (an episode's beats; picked by a flag's handle, or by
-## scrubbing to a moment inside one), and the group picked on [TimelineLanes] below - its spans blocks, its flags flags, each
-## labeled with what it is and who it happens to. What is wrong with the timeline ([method Timeline.check]) is said over it.
+## TimelineDock - any show's [Timeline], docked under it, on Masking's controls (next/editing.md, "The
+## Timeline" and step 6): the show's groups as flags on one [FlagStrip] across the whole of it (an
+## episode's beats; picked by a flag's handle, or by scrubbing to a moment inside one), and the group
+## picked on [TimelineLanes] below - its spans blocks, its flags flags, each labeled with what it is and
+## who it happens to. What is wrong with the timeline ([method Timeline.check]) is said over it.
 ##
-## WRITTEN BACK BY ITS OWNER ([member edit]): a block stretched or a flag moved is handed back as the item it is, with its
-## `source`, and whoever read the Timeline writes it where it lives and hands the Timeline back ([method reload]) - an
-## episode's act and cue are a hand's version of their step (next/editing.md, steps 1 and 4). With no [member edit] it is
-## read-only.
+## Written back by its owner ([member edit]): a block stretched or a flag moved is handed back as the
+## item it is, with its `source`, and whoever read the Timeline writes it where it lives and hands the
+## Timeline back ([method reload]). With no [member edit] it is read-only.
 ##
-## ONE THING PICKED, ONE INSPECTOR (next/editing.md step 6's shell, as the storyboard's editor has it): a block or a flag picked on
-## the lanes - or anything its owner hands [method inspect], a thing picked on the stage - is shown at the right, and the owner
-## fills it ([member inspector]): it knows what the item's `source` is, and the dock knows only that it was picked. UNDO takes the
-## last edit back ([member undo]). The storyboard's editor writes its own tree with the same lanes, strip and form; the episode's
-## dock reads its show's files - the shell is these parts, shared, rather than one class.
+## One thing picked, one inspector: a block or a flag picked on the lanes - or anything its owner hands
+## [method inspect], a thing picked on the stage - is shown at the right, and the owner fills it
+## ([member inspector]): it knows what the item's `source` is, and the dock knows only that it was
+## picked. Undo takes the last edit back ([member undo]). The storyboard's editor writes its own tree
+## with the same lanes, strip and form; the episode's dock reads its show's files.
 
 ## The dock's name among the shell's claims on the bottom and the stage.
 const CLAIM := &"timeline_dock"
-## EVERY TIMELINE EDITOR OPEN, this dock and the storyboard's ([StoryboardEditor]): what the transport steps its rail aside for
-## ("I do not think we should have two timelines"), and what the panel's Timeline card lists ([TimelineList]). A member answers
+## Every timeline editor open, this dock and the storyboard's ([StoryboardEditor]): what the transport
+## steps its rail aside for, and what the panel's Timeline card lists ([TimelineList]). A member answers
 ## `timeline_items()` and `pick_item(i)`.
 const GROUP := Transport.EDITORS
 const HEIGHT := 300.0
@@ -79,11 +79,10 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	# THE PANEL BESIDE IT HIDES AND SHOWS (F2): followed, as the storyboard's editor follows it
+	# The panel beside it hides and shows (F2): followed, as the storyboard's editor follows it
 	if Engine.get_process_frames() % 10 == 0:
 		_place()
-	# THE PLAYHEAD, the show's own: on the strip across the show, and on the lanes inside the group picked - which follows the show
-	# while it plays (the user, 2026-11-11: "it just seems to sit there, tracking nothing")
+	# The playhead, the show's own: on the strip across the show, and on the lanes inside the group picked - which follows the show while it plays
 	var t := float(clock.call()) if clock.is_valid() else -1.0
 	if absf(t - playhead) < 0.001:
 		return
@@ -106,7 +105,7 @@ func _process(_delta: float) -> void:
 		_groups.queue_redraw()
 
 
-## EVERY ITEM, IN THE ORDER IT COMES ([TimelineList]): each group, then its items - `{label, at (seconds of the timeline), kind
+## Every item in the order it comes ([TimelineList]): each group, then its items - `{label, at (seconds of the timeline), kind
 ## ("group", "span" or "flag"), group, item}`.
 func timeline_items() -> Array:
 	var out: Array = []
@@ -125,7 +124,7 @@ func timeline_items() -> Array:
 	return out
 
 
-## ROW [param i] OF [method timeline_items] PRESSED: its group picked, it shown in the inspector, and the show moved to it.
+## Row [param i] of [method timeline_items] pressed: its group picked, it shown in the inspector, and the show moved to it.
 func pick_item(i: int) -> void:
 	var all := timeline_items()
 	if i < 0 or i >= all.size():
@@ -199,7 +198,7 @@ func _build() -> void:
 	_said.modulate = Color(1.0, 0.75, 0.45)
 	_said.visible = false
 	box.add_child(_said)
-	# THE TIMELINE AT THE LEFT, WHAT IS PICKED AT THE RIGHT
+	# The timeline at the left, what is picked at the right
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 10)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -265,7 +264,7 @@ func _build() -> void:
 	_show_inspector()
 
 
-## [param what] SHOWN IN THE INSPECTOR - `{item, group}` for an item of the timeline, or whatever the owner picks elsewhere (a
+## [param what] shown in the inspector - `{item, group}` for an item of the timeline, or whatever the owner picks elsewhere (a
 ## thing on the stage) - {} for nothing.
 func inspect(what: Dictionary) -> void:
 	inspected = what
@@ -297,7 +296,7 @@ func _show_inspector() -> void:
 	_inspector.add_child(l)
 
 
-## UNDO: the owner takes the last edit back ([member undo]); what it said, when it could not, over the timeline.
+## Undo: the owner takes the last edit back ([member undo]); what it said, when it could not, over the timeline.
 func take_back() -> String:
 	if not undo.is_valid():
 		return "nothing here can be taken back"
@@ -348,7 +347,7 @@ func group_at(t: float) -> int:
 	return -1
 
 
-## THE GROUP PICKED AS A STAGE ENTRY'S TRACK, so [TimelineLanes] shows it as it shows one: a span `from`/`to`, a flag `at`,
+## The group picked as a stage entry's track, so [TimelineLanes] shows it as it shows one: a span `from`/`to`, a flag `at`,
 ## each its item's label and aimed at its lane. -> {actors, spans, nominal}.
 static func as_track(g: Dictionary) -> Dictionary:
 	var actors: Array = []

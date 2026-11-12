@@ -1,23 +1,12 @@
 extends SceneTree
 
-## Gate for the WEATHER rework - does the music actually move the snow and rain now.
-##
-## The complaint this answers was "the rain and snow scenes seem rather static", and the
-## measurement behind it was stark: across the seed's presets the flake count varied
-## 8.7x, the fall speed 11.3x and the size 5.7x, while across the MUSIC everything varied
-## 1.3-1.5x and only brightness and speed. The seed owned the drizzle-to-downpour knob;
-## the music owned a brightness knob. Particle count was fixed at build and never changed.
-##
-## So the assertions here are about RANGE, not about any particular look:
-##   DENSITY   - the visible flake count must differ substantially between silence and a
-##               loud passage, and must settle rather than strobe.
-##   VARIETY   - the crystal bank must contain genuinely different geometries, and the
-##               weathers must produce different habits from each other.
-##   REACH     - the crystal gate must actually admit crystals. The old one multiplied the
-##               configured fraction by 0.064 through two hidden extra conditions, so a
-##               preset asking for 20% delivered about one flake on screen.
-##   MOTION    - flakes must not fall down fixed columns forever, which made the field
-##               exactly periodic (a blizzard repeated every 2.9-16.7 s).
+## Gate for the weather: the music must move the snow and rain, not only a brightness knob. The assertions are about
+## range, not any particular look:
+##   Density - the visible flake count differs substantially between silence and a loud passage, and settles rather
+##             than strobes.
+##   Variety - the crystal bank contains genuinely different geometries, and the weathers produce different habits.
+##   Reach   - the crystal gate admits the configured fraction of crystals, not a fraction of it.
+##   Motion  - flakes do not fall down fixed columns forever, which would make the field exactly periodic.
 ##
 ## Run: godot --headless --path . --script tests/scene_kit/weather_check.gd
 
@@ -51,8 +40,7 @@ func _rng(sv: int) -> RandomNumberGenerator:
 	return r
 
 
-## Silence versus a loud passage, run to steady state, counting how many flakes are
-## actually visible. This is the headline number.
+## Silence versus a loud passage, run to steady state, counting how many flakes are actually visible: the headline number.
 func _check_density() -> void:
 	for kind in ["snow", "rain"]:
 		var quiet := _visible(kind, _quiet(), 8.0)
@@ -130,8 +118,7 @@ func _check_habits_differ() -> void:
 		+ "(%d vs %d segments)" % [hseg, pseg])
 
 
-## The gate must admit roughly the fraction it is given. The old one silently multiplied
-## it by 0.064.
+## The gate must admit roughly the fraction it is given.
 func _check_crystal_reach() -> void:
 	var l := Layer.make("snow", _rng(11), {"count": 600, "crystal_frac": 0.5})
 	var n := 0

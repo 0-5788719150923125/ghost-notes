@@ -1,6 +1,6 @@
 extends Node
 
-## WORK AS A LIVE READING'S WORDS ARRIVE (a probe, for looking): a real episode's work played twice through
+## Work as a live reading's words arrive (a probe, for looking): a real episode's work played twice through
 ## [method TableMedium.advance] - once with every word's time known from the first frame (an export: the take's
 ## sidecar), once with the words arriving a sentence at a time a few seconds before they are said (the live
 ## window) - at a voice slower than the plan's estimate. It prints when each act ran in each, and the largest

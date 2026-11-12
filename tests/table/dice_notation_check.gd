@@ -1,8 +1,9 @@
 extends SceneTree
 
-## dice_notation_check - WHAT A ROLL IS: every kind of game's way of asking for dice, read and rolled, from the seed alone (next/tabletop.md). NO GAME IS NAMED IN THE CODE, so
-## four games' rolls stand here as the fixtures: a d20 plus a number with a keep, a d20 judged by the agent in degrees, a wargame's bucket of sixes counted, a percentile. The
-## control: dice that come up the wrong way would fail the fairness measure, and a notation nobody reads is refused in words.
+## dice_notation_check - what a roll is: every kind of game's way of asking for dice, read and rolled, from the seed alone
+## (next/tabletop.md). No game is named in the code, so four games' rolls stand here as the fixtures: a d20 plus a number with a keep,
+## a d20 judged by the agent in degrees, a wargame's bucket of sixes counted, a percentile. Control: dice that come up the wrong way
+## fail the fairness measure, and a notation nobody reads is refused in words.
 ##
 ##     godot --headless --path . --script tests/table/dice_notation_check.gd
 
@@ -122,7 +123,7 @@ func _same_seed() -> void:
 	_check(differ, "another seed is another roll")
 
 
-## FAIR: a chi-squared on a die's faces, against a limit a fair die clears: and a control, the same measure on a loaded die, which it must not.
+## Fair: a chi-squared on a die's faces, against a limit a fair die clears, and a control, the same measure on a loaded die, which it must not clear.
 func _fair() -> void:
 	for sides: int in [6, 20]:
 		var counts: Array = []

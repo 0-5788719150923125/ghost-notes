@@ -4,33 +4,28 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/ui/graphics_check.gd 90
 ##
-## THE LIVE VIEWER IS NEVER SLOWER THAN IT WAS: every row's live default is what Godot drew before the menu (the
-## project's own SSAO, SSIL, subsurface, shadow and fog qualities, its filtering level, no supersampling), and an
-## export's is the finest each row offers - but supersampling, 1.5x (its cost, measured in graphics.gd's header) -
-## and never coarser than the live one. A shared row (bounce light) is one choice, off.
-##
-## THE TIER REACHES THE STAGE: bound in an export, the stage is supersampled and filtered 16x and the shadow filter is
-## ultra; in the live viewer, none of that. SUPERSAMPLING IS HELD UNDER ITS CAP: told 2x, a 1080p export's
-## 2880 x 1620 takes the whole of it, a 4K stage 1.5x.
-##
-## THE VIEWER'S RESOLUTION IS ITS OWN (2026-11-11): unchosen, the stage is drawn as it always was, a pixel to a unit of the
-## window's canvas (1920 x 1080 at any window); chosen, at that many lines, its shape kept; and an export at the size it is
-## handed whatever is chosen. The control: the live viewer, with 4K chosen, is not. Whoever sizes the stage is asked to
-## again when a row is applied, and never while the stage is being bound.
-##
-## A SHADOW KEEPS ITS WIDTH AS THE FILTER'S QUALITY CHANGES: a light on the stage, softened by [ShadowFilter] at one
-## quality, has the same blur times radius at the other. The control: the same light off the stage is not rescaled,
-## and its width changes - so the rescale is what holds it.
-##
-## WHAT IS KEPT IS READ, AND WHAT NO OPTION HAS IS NOT: a choice written to `[graphics]` is the value; a value no
-## option offers (a hand-edited file) is the default. BOUNCE LIGHT REACHES A MEDIUM'S ENVIRONMENT handed to
-## [method Graphics.dress], at a table's reach, and follows the row - HANDED IN ON A WORKER TOO, as a table is built away
-## (2026-11-07: "The caller thread can't call the function `get_node_or_null()`"): there it is as the main thread last read
-## it, and follows the row after. The control: what the main thread read forgotten, a worker reads the default.
-##
-## THE PANEL: a cell per row and tier, a shared row one control in both, a row only one column has none in the other; a
-## live choice applies at once, an export choice leaves the live stage as it is; "defaults" puts every row back. (A probe's Settings never reach the disk;
-## what it writes is put back in memory at the end.)
+## - The live viewer is never slower than it was: every row's live default is what Godot drew before the menu (the
+##   project's own SSAO, SSIL, subsurface, shadow and fog qualities, its filtering level, no supersampling), and an
+##   export's is the finest each row offers - but supersampling, 1.5x (its cost, measured in graphics.gd's header) -
+##   and never coarser than the live one. A shared row (bounce light) is one choice, off.
+## - The tier reaches the stage: bound in an export, the stage is supersampled and filtered 16x and the shadow filter is
+##   ultra; in the live viewer, none of that. Supersampling is held under its cap: told 2x, a 1080p export's
+##   2880 x 1620 takes the whole of it, a 4K stage 1.5x.
+## - The viewer's resolution is its own: unchosen, the stage is drawn a pixel to a unit of the window's canvas
+##   (1920 x 1080 at any window); chosen, at that many lines, its shape kept; and an export at the size it is
+##   handed whatever is chosen. Control: the live viewer, with 4K chosen, is not. Whoever sizes the stage is asked to
+##   again when a row is applied, and never while the stage is being bound.
+## - A shadow keeps its width as the filter's quality changes: a light on the stage, softened by [ShadowFilter] at one
+##   quality, has the same blur times radius at the other. Control: the same light off the stage is not rescaled,
+##   and its width changes.
+## - What is kept is read, and what no option has is not: a choice written to `[graphics]` is the value; a value no
+##   option offers (a hand-edited file) is the default. Bounce light reaches a medium's environment handed to
+##   [method Graphics.dress], at a table's reach, and follows the row - handed in on a worker too, as a table is built
+##   away: there it is as the main thread last read it, and follows the row after. Control: what the main thread read
+##   forgotten, a worker reads the default.
+## - The panel: a cell per row and tier, a shared row one control in both, a row only one column has none in the other; a
+##   live choice applies at once, an export choice leaves the live stage as it is; "defaults" puts every row back. (A
+##   probe's Settings never reach the disk; what it writes is put back in memory at the end.)
 
 var _fails: Array = []
 var _refits := 0                 # how often the stage's owner was asked to size it again
@@ -188,8 +183,7 @@ func _kept_values() -> void:
 
 func _bounce() -> void:
 	print("-- bounce light reaches a medium")
-	# FROM THE DEFAULT, whatever the author chose (it read their bounce=true as "handed in, it is on", 2026-11-07): set here
-	# in memory, as a probe's Settings never reach the disk, and theirs put back at the end
+	# From the default, whatever the author chose: set here in memory, as a probe's Settings never reach the disk, and theirs put back at the end
 	var authors: Variant = Settings.read(Graphics.SECTION, "bounce", false)
 	Settings.write(Graphics.SECTION, "bounce", false)
 	Graphics.apply()
@@ -203,7 +197,7 @@ func _bounce() -> void:
 	Settings.write(Graphics.SECTION, "bounce", false)
 	Graphics.apply()
 	_ok(not env.ssil_enabled, "and off again")
-	# ...HANDED IN ON A WORKER, as a table is built away: as the main thread last read it, never asking the tree
+	# ...handed in on a worker, as a table is built away: as the main thread last read it, never asking the tree
 	Settings.write(Graphics.SECTION, "bounce", true)
 	Graphics.apply()
 	var away := Environment.new()
@@ -216,7 +210,7 @@ func _bounce() -> void:
 	Settings.write(Graphics.SECTION, "bounce", false)
 	Graphics.apply()
 	_ok(not away.ssil_enabled, "and follows the row after, off again")
-	# THE CONTROL: what the main thread read forgotten, a worker reads the default (off) - it is that read a worker goes by
+	# The control: what the main thread read forgotten, a worker reads the default (off)
 	Settings.write(Graphics.SECTION, "bounce", true)
 	Graphics._lock.lock()
 	Graphics._read.clear()
@@ -250,7 +244,7 @@ func _resolution() -> void:
 	_ok(Graphics.stage_size(Vector2(2880, 1620)) == Vector2i(5760, 3240), "CONTROL: the live viewer, with 4K chosen, is not")
 	Settings.write(Graphics.SECTION, "live_resolution", 999)
 	_ok(Graphics.stage_size(frame) == Vector2i(1920, 1080), "a kept value no option offers is 1080p")
-	# WHOEVER SIZES THE STAGE IS ASKED AGAIN when a row is applied - and not while it is bound, before what shows it is built
+	# Whoever sizes the stage is asked again when a row is applied - and not while it is bound, before what shows it is built
 	Settings.write(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
 	_refits = 0
 	Graphics.bind_stage(Graphics.stage(), func() -> void: _refits += 1)
@@ -299,7 +293,7 @@ func _panel() -> void:
 		and is_equal_approx(st.scaling_3d_scale, 1.0) and p.choice("supersample", "export").selected == 1
 		and Settings.read(Graphics.SECTION, "live_resolution", -1) == Graphics.LINES_AS_DRAWN and res.selected == 1,
 		"defaults puts every row back, kept, shown and applied")
-	# WHO ASKS FOR THE STAGE'S TIME: measured while anyone does, the panel closing never ending the governor's asking
+	# Who asks for the stage's time: measured while anyone does, the panel closing never ending the governor's asking
 	Graphics.measure(true, "governor")
 	Graphics.measure(false)
 	_ok(Graphics._measuring.has("governor") and not Graphics._measuring.has("panel"), "the panel's asking ends its own, never another's")

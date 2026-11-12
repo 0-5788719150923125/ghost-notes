@@ -1,31 +1,31 @@
 extends SceneTree
 
-## The gate of WHAT IS PAINTED, DESIGNED ([DecoratorTools], [Skins], [FixedTable]; next/painted_surface.md), with no renderer.
+## The gate of what is painted, designed ([DecoratorTools], [Skins], [FixedTable]; next/painted_surface.md), with no renderer.
 ##
 ##   godot --headless --path . --script res://tests/table_show/skin_step_check.gd
 ##
-## - THE STEP: a plan that says what is `painted` designs it after the table is set and before the work is blocked (`skin`, needing the
+## - the step: a plan that says what is `painted` designs it after the table is set and before the work is blocked (`skin`, needing the
 ##   plan and the table; the acts need it); redoing it throws the acts away. The controls: a plan that paints nothing has no such step,
 ##   and an episode whose work was blocked before there were designs goes on without one.
-## - A TABLE'S SURFACES: a mask with `skin` is a surface 150 x 210 mm with its outline and its landmarks. The control: a table with no
+## - a table's surfaces: a mask with `skin` is a surface 150 x 210 mm with its outline and its landmarks. The control: a table with no
 ##   `skin` has none.
-## - THE DECORATOR'S TOOLS: `design` writes elements and replaces one of the same id where it stands; an element mostly off the surface is
+## - the decorator's tools: `design` writes elements and replaces one of the same id where it stands; an element mostly off the surface is
 ##   said, and stops `submit` once; `look` draws the design on the surface on the processor; what is handed in lands as `skin.json` with its
 ##   surface's frame and outline, and the puppeteer is told it element by element. The controls: nothing written hands nothing in; a
-##   design with no name is not handed in. An element in nearly the color and finish of what it is laid over is said HARDLY SEEN (a
+##   design with no name is not handed in. An element in nearly the color and finish of what it is laid over is said hardly seen (a
 ##   base in the bare surface's own color, never a gloss over its own red); the control, a white base, is not.
-## - A SHOW'S FIXED THINGS: the brief's fenced JSON under its heading is read, the agents read a line in its place, and a table handed in
+## - a show's fixed things: the brief's fenced JSON under its heading is read, the agents read a line in its place, and a table handed in
 ##   is given them whatever it wrote - a thing of the same name replaced. The set dresser starts with them standing and can neither put
 ##   them again, move them nor take them away. The control: a brief with no such heading fixes nothing and reads as it was.
-## - THE PAINTER AT THE TABLE ([method _painter]): its tools, its handing in, the acts its painting makes - and the controls.
-## - A COTTON SWAB FOR THE PAINTER'S SWAB AND FOR NOTHING ELSE ([method _swab]; feedback 0020): a brush whose tuft is a bud is found as a tool
+## - the painter at the table ([method _painter]): its tools, its handing in, the acts its painting makes - and the controls.
+## - A cotton swab for the painter's swab and for nothing else ([method _swab]): a brush whose tuft is a bud is found as a tool
 ##   with that tip, lifts the host's spills ([method TableProducer._table_tool] "bud") and is never the brush nearest a round's width -
 ##   the control, a table with no swab, gives the lift to the brush nearest its width.
-## - EVERY PROMPT RENDERS WHOLE: the painter's; the decorator's, with tools and without; the puppeteer's told the design; the set dresser's told what is
+## - every prompt renders whole: the painter's; the decorator's, with tools and without; the puppeteer's told the design; the set dresser's told what is
 ##   painted and what stands fixed.
-## - WHAT THE TABLE READS REACHES A PREVIEW: every file the table reads from its episode's folder (`path_join("...")` in table.gd) is
-##   written by the preview (the table, the acts) or copied into it from the episode ([constant TablePreview.PICTURES]) - the designs
-##   had not been, and a puppeteer's mask had none (joker-motivation 856886, 2026-11-05). The control: the list without `skin.json` misses it.
+## - What the table reads reaches a preview: every file the table reads from its episode's folder (`path_join("...")` in table.gd) is
+##   written by the preview (the table, the acts) or copied into it from the episode ([constant TablePreview.PICTURES]). The
+##   control: the list without `skin.json` misses it.
 
 const ROOT := "user://skin_step_check"
 const Check := preload("res://tests/table/paint_check.gd")
@@ -90,9 +90,8 @@ func _steps() -> void:
 	var made := _episode(3, "a face")
 	made.write_json("acts", {"acts": []})
 	_ok(not made.steps().has("skin"), "control: an episode whose work was blocked before goes on as it was made")
-	# THE FACE PAINTED FIRST (feedback 0023): painted after the table is set, looked at, then copied - and repainting it throws the design
-	# and the work away. THE CONTROLS: an episode designed before there were paintings goes on as it was made; designed again, it starts
-	# from one
+		# The face painted first: painted after the table is set, looked at, then copied - and repainting it throws the design and the work
+		# away. The controls: an episode designed before there were paintings goes on as it was made; designed again, it starts from one
 	var fi := steps.find("image:face")
 	_ok(fi > steps.find("table") and steps.find("check:face") == fi + 1 and steps.find("skin") > fi + 1, "the face is painted after the table and looked at before the design: %s" % [steps])
 	_ok(ep.needs("image:face") == ["plan", "table"] and ep.needs("check:face") == ["image:face"], "painted from the plan on the table, and looked at: %s %s" % [ep.needs("image:face"), ep.needs("check:face")])
@@ -102,8 +101,8 @@ func _steps() -> void:
 	_ok(not before.steps().has("image:face") and before.needs("skin") == ["plan", "table"], "control: an episode designed before there were paintings goes on as it was made: %s" % [before.steps()])
 	before.invalidate("skin")
 	_ok(before.steps().has("image:face") and before.needs("skin").has("check:face"), "control: and designed again, it starts from one")
-	# ...AND AGAIN IN LAYERS (2026-11-09): the order written after the picture is passed, then each layer painted over the one before -
-	# listed once the order is written; painting one again throws the layers after it away, and painting the picture again all of them
+		# ...and again in layers: the order written after the picture is passed, then each layer painted over the one before - listed once
+		# the order is written; painting one again throws the layers after it away, and painting the picture again all of them
 	_ok(steps.find("layers") == steps.find("check:face") + 1 and not steps.has("image:layer:1"),
 		"the order is written once the picture is passed, its layers listed only once it is: %s" % [steps])
 	_ok(ep.needs("layers") == ["image:face", "check:face"], "written from the picture, passed: %s" % [ep.needs("layers")])
@@ -124,7 +123,7 @@ func _steps() -> void:
 	_ok(not _episode(8, "").steps().has("layers"), "control: a plan that paints nothing has no layers")
 
 
-## THE FACE PAINTED FIRST, AS THE CODE HANDLES IT ([Skins], [TableProducer]): the bare surface in the middle of an upright 2:3 canvas,
+## The face painted first, as the code handles it ([Skins], [TableProducer]): the bare surface in the middle of an upright 2:3 canvas,
 ## lit so its features show; a painting that lies on it fits and one moved or spilled past its edge does not; cut back to the surface's
 ## millimeters with the light taken out, the bare surface's own color comes back even across it (the control: cut with the light left in,
 ## its edge is darker); its colors told, most of it first. Landed, it is kept with what the surface wears of it, and one that does not lie
@@ -170,7 +169,7 @@ func _face() -> void:
 	_ok(pal.size() >= 2 and Color.html(String((pal[0] as Dictionary)["hex"])).get_luminance() > 0.5 and pal.any(func(c: Dictionary) -> bool: return Color.html(String(c["hex"])).r > Color.html(String(c["hex"])).g * 3.0)
 		and not pal.any(func(c: Dictionary) -> bool: return Color.html(String(c["hex"])).get_luminance() < 0.1),
 		"its colors, most of it first, the band's red among them and none of the room round it: %s" % [pal])
-	# ...AS THE PRODUCER LANDS IT
+	# ...as the producer lands it
 	var ep := _episode(7, "a red band")
 	ep.write_json("table", Check.station())
 	var prod := TableProducer.new(ep, {"title": "Show", "brief": "A brief."})
@@ -237,8 +236,8 @@ func _tools() -> void:
 	got = await t.call_tool("design", {"remove": ["far off"]})
 	got = await t.call_tool("submit", {})
 	_ok(not got.has("error") and t.submitted, "and it is handed in: %s" % String(got["text"]).left(60))
-	# WHAT GOES ON MUST SHOW GOING ON: a base in nearly the bare surface's color is said hardly seen; a gloss over its own red is a
-	# change of finish, and is not - THE CONTROL: a base well apart from the bare surface is not said
+	# What goes on must show going on: a base in nearly the bare surface's color is said hardly seen; a gloss over its own red is a
+	# change of finish, and is not - the control: a base well apart from the bare surface is not said
 	var u := DecoratorTools.new(dir.path_join("unseen"), surfaces)
 	var red := "M 55 152 Q 75 140 95 152 Q 75 164 55 152 Z"
 	got = await u.call_tool("design", {"elements": [{"id": "pale", "stage": "base", "paint": "#efe9de", "fill": "all"},
@@ -248,7 +247,7 @@ func _tools() -> void:
 	_ok(unseen.contains("\"pale\"") and not unseen.contains("\"red\"") and not unseen.contains("\"shine\""), "a base in the bare surface's own color is said hardly seen, and only it: %s" % unseen)
 	got = await u.call_tool("design", {"elements": [{"id": "pale", "stage": "base", "paint": "#ffffff", "fill": "all"}]})
 	_ok(_line_of(String(got["text"]), "HARDLY SEEN").is_empty(), "control: a white base over the bare surface is not said hardly seen")
-	# ...AS THE PRODUCER LANDS IT
+	# ...as the producer lands it
 	var ep := _episode(4, "a red mouth")
 	ep.write_json("table", Check.station())
 	var prod := TableProducer.new(ep, {"title": "Show", "brief": "A brief."})
@@ -265,7 +264,7 @@ func _tools() -> void:
 	_ok(not p2._land_skin("{\"name\": \"none\", \"elements\": [{\"id\": \"x\", \"fill\": \"hello\"}]}").is_empty(), "control: a design with nothing paintable does not land")
 
 
-## A COTTON SWAB ON THE TABLE: a brush whose tuft is a bud, found with its tip; the painter's lifts go to it, and no brush's strokes do -
+## A cotton swab on the table: a brush whose tuft is a bud, found with its tip; the painter's lifts go to it, and no brush's strokes do -
 ## and with none on the table, a lift goes to the brush nearest its width.
 func _swab() -> void:
 	var brush := func(nm: String, kind: String, width: float) -> Dictionary:
@@ -286,7 +285,7 @@ func _swab() -> void:
 	_ok(String(TableProducer._table_tool("round", tools).get("part", "")) == "round brush", "and a round's strokes never do: %s" % TableProducer._table_tool("round", tools).get("part", ""))
 	var plain: Array = PainterTools.scan(table.call(false))["tools"]
 	_ok(String(TableProducer._table_tool("bud", plain).get("part", "")) == "round brush", "control: with no swab, a lift goes to the brush nearest its width")
-	# A MIX OF A MIX IS TAKEN FROM THE POT MOST OF IT IS (feedback 0006): each paint after the first mixed in at its share
+		# A mix of a mix is taken from the pot most of it is: each paint after the first mixed in at its share
 	var pots := [{"name": "amber cream", "pot": "amber pot"}, {"name": "olive cream", "pot": "olive pot"},
 		{"name": "white paint", "pot": "white pot"}, {"name": "black paint", "pot": "black pot"}]
 	_ok(TableProducer._pot_of_paint("amber cream+olive cream+white paint 0.75 0.75", pots) == "white pot",
@@ -307,11 +306,10 @@ static func _line_of(text: String, head: String) -> String:
 const BRIEF := "# A Show\n\nWords.\n\n## The fixed table\n\nIt stands there.\n\n```json\n{\"things\": [{\"name\": \"stand\", \"at\": [0, 4], \"parts\": [{\"shape\": \"box\", \"size\": [4, 4, 4], \"material\": \"oak\"}]}], \"materials\": {\"oak\": {\"kind\": \"wood\", \"color\": \"#6a4a2a\"}}}\n```\n\nMore words.\n\n## Never\n\n- Never.\n"
 
 
-## THE PAINTER AT THE TABLE ([PainterTools]; the user, 2026-11-08: "with an agent, we can peak at each step"): on the station's table and a
-## picture of a white face with a black bar, it is told the episode's beats and the table's tools and paints; a look hands the picture back;
-## an operation lays only where the picture asks and says what it took; one with no such tool, way or region is not laid; undo puts the
-## canvas back as it was; what is handed in is an element an operation, its plan beside it; and its acts are a tool's run each, beat by
-## beat, told the seconds its operations took. The controls: a design no painter laid makes no acts; a gloss is never the painting's ground.
+## The painter at the table ([PainterTools]): on the station's table and a picture of a white face with a black bar, it is told the
+## episode's beats and the table's tools and paints; a look hands the picture back; an operation lays only where the picture asks and
+## says what it took; one with no such tool, way or region is not laid; undo puts the canvas back as it was; what is handed in is an
+## element per operation, its plan beside it; and its acts are a tool's run each, beat by beat, told the seconds its operations took. The controls: a design no painter laid makes no acts; a gloss is never the painting's ground.
 func _painter() -> void:
 	var dir := ProjectSettings.globalize_path(ROOT).path_join("painter")
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -381,9 +379,9 @@ func _painter() -> void:
 		"told what its operations took: %.0f s for %.0f s laid" % [told, took])
 	var designed := {"designs": [{"thing": "mask", "part": "face", "elements": [{"id": "base", "paint": "#f4f1ea", "fill": "all"}]}]}
 	_ok(TableProducer.acts_from_painting(designed, table, 2).is_empty(), "control: a design no painter laid makes no acts")
-	# WORDS DO NOT NAME THE WORK'S PLACE IN LINE (next/editing.md step 2): an act made from the painting carries the layers it lays,
+	# Words do not name the work's place in line (next/editing.md step 2): an act made from the painting carries the layers it lays,
 	# kept through its sanitizer; a cue naming a layer starts the act laying it; acts renamed by a repaint start from the same words,
-	# not a byte of them changed. THE CONTROL: a cue naming nothing starts nothing
+	# not a byte of them changed. The control: a cue naming nothing starts nothing
 	var layered := doc.duplicate(true)
 	var lels: Array = ((layered["designs"] as Array)[0] as Dictionary)["elements"]
 	(lels[0] as Dictionary)["stage"] = "White base"
@@ -415,7 +413,7 @@ func _fixed() -> void:
 	_ok(String((merged["materials"]["oak"] as Dictionary)["kind"]) == "wood", "and their materials")
 	var none := "# A Show\n\n## The table\n\n```json\n{\"things\": []}\n```\n"
 	_ok(FixedTable.parse(none).is_empty() and FixedTable.strip(none) == none, "control: a brief with no fixed table fixes nothing and reads as it was")
-	# THE SET DRESSER starts with them standing, and cannot touch them
+	# The set dresser starts with them standing, and cannot touch them
 	var ep := _episode(6, "")
 	var sd := SetDresserTools.new(ep, ep.read_json("plan"), ProjectSettings.globalize_path(ROOT).path_join("table_job"), "Show", "", f)
 	_ok((sd.draft()["things"] as Array).size() == 1, "the set dresser starts with them on the table")
@@ -431,7 +429,7 @@ func _fixed() -> void:
 
 
 func _prompts() -> void:
-	# THE LAYERS' PROMPTS: the order asked of the art director with the table's paints and how many; a layer asked of the painter, only it
+	# The layers' prompts: the order asked of the art director with the table's paints and how many; a layer asked of the painter, only it
 	var fl := TablePrompts.face_layers("A Show", "a brief", {"painted": "a white ground, a red mouth"}, {"thing": "mask"}, ["red paint #b3122a"])
 	_ok(String(fl.get("prompt", "")).contains("a white ground, a red mouth") and String(fl["prompt"]).contains("red paint #b3122a")
 		and String(fl["prompt"]).contains(str(TableProducer.LAYERS_MOST)), "the art director is asked for the order with what was painted, the paints and how many")

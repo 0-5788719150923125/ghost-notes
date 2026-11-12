@@ -1,71 +1,64 @@
 extends RefCounted
 class_name WorkSounds
 
-## WorkSounds - THE WORK, HEARD, quietly under the voice: a thing set down on the table, a pestle going round in its
-## mortar, a pot at the boil, a pour landing.
+## WorkSounds - the work, heard, quietly under the voice: a thing set down on the table, a pestle going
+## round in its mortar, a pot at the boil, a pour landing.
 ##
-## The user, 2026-10-29: "the cauldron might have a gentle bubbling sound (only if it is brought to a boil though, not
-## when it's just steaming), but more importantly: when we are grinding the mortar and pestle, you would expect to hear
-## sound specifically when the pestle touches the mortar (not in the gaps where it isn't touching). Also, you might
-## expect to hear a sound when we move that big object and drop it on the table somewhere, or even when we move smaller
-## objects that still have weight" - and "make sure the sounds are not distracting; they need to be subdued and quieter
-## than the voice".
+## Made from the work itself, at the moment it happens ([TableWork]): what is set down when its carry
+## ends `down`, how heavy it is and what it is made of ([method TableWork.set_down]); what is pressed
+## onto something, whether it touches it now, and how fast it goes ([method TableWork.pressed]); how hard
+## a liquid boils, its `boil` ([method TableWork.boiling]); and, from the physics ([TablePhysics]), where
+## a pour's stream lands and each piece a pestle breaks off ([method TablePhysics.breaks_in]), crunched
+## as it breaks however the grinding was written. The table plays them itself, as its picture is drawn
+## (live, a frame at a time; in a render, the frames Movie Maker records, which records the sound too),
+## so they keep the reading's own time as the work does.
 ##
-## FROM THE WORK ITSELF, at the moment it happens ([TableWork]): what is set down when its carry ends `down`, how heavy
-## it is and what it is made of ([method TableWork.set_down]); what is pressed onto something and whether it touches it
-## now, and how fast it goes ([method TableWork.pressed]); how hard a liquid boils, its `boil` ([method
-## TableWork.boiling]); and, the physics' ([TablePhysics]), where a pour's stream lands and each piece a pestle breaks off
-## ([method TablePhysics.breaks_in]) - crunched as it breaks, however the grinding was written. The table plays them itself, as
-## its picture is drawn (live, a frame at a time; in a render, the frames Movie Maker records - which records the sound
-## too), so they keep the reading's own time as the work does, a live reading's acts moved as its words arrive.
+## Synthesized, as the place is ([Soundscape]; Farnell, "Designing Sound", 2010): a thing set down is a
+## thump of the table's wood under it and the ring of what it is made of - glass clinks high and long,
+## metal rings lower and longer, stone and pottery tock, wood knocks, paper and cloth are all but silent
+## - lower for a bigger thing, louder for a heavier one; a boil is the bubbles the table draws breaking
+## ([Boil]: each Minnaert's sine, at the pitch its size gives, rising as it dies) and a little hiss
+## under them; a pour is a run of small high bubbles where it lands.
 ##
-## SYNTHESIZED, as the place is ([Soundscape]; Farnell, "Designing Sound", 2010): a thing set down is a thump of the
-## table's wood under it and the ring of what it is made of - glass clinks high and long, metal rings lower and longer,
-## stone and pottery tock, wood knocks, and paper and cloth are all but silent - lower for a bigger thing, louder for a
-## heavier one; a boil is the bubbles the table draws breaking ([Boil]: each Minnaert's sine, at the pitch its size gives,
-## rising as it dies - a simmer a quiet fizz, a rolling boil a busy bubbling) and a little hiss under them; a pour is a run of
-## small high bubbles where it lands.
+## Grinding is a scrape, only while the point touches and as fast as it goes, as van den Doel, Kry and
+## Pai's FoleyAutomatic (SIGGRAPH 2001) makes one: the surface under the point read at the speed it
+## slides, so its grain sounds higher as it goes faster ([constant SCRAPE_FINE]), its bumps roughening it
+## at random, never in a beat ([constant SCRAPE_BUMP]); the point catching and slipping on grit
+## ([constant CATCHES]); and all of it ringing what is ground in, damped by the hand on it - the
+## vessel's own low body and its material's modes for its size, the bigger the lower ([method _modes_for]).
 ##
-## GRINDING IS A SCRAPE, only while the point touches and as fast as it goes (the user, 2026-10-29, of the grit it had
-## been - noise through a band at 2.2 kHz, steady: "Stone on stone should be a scraping sound, low and rough, abrasive.
-## What it does now sounds a lot closer to T.V. static. I also think it's a touch too loud"): as van den Doel, Kry and
-## Pai's FoleyAutomatic (SIGGRAPH 2001) makes one - the surface under the point read at the speed it slides, so its
-## grain sounds higher as it goes faster ([constant SCRAPE_FINE]), its bumps roughening it at random, never in a beat
-## ([constant SCRAPE_BUMP]); the point catching and slipping on grit ([constant CATCHES]); and all of it ringing what is
-## ground in, damped by the hand on it - the vessel's own low body and its material's modes for its size, the bigger the
-## lower ([method _modes_for]).
-##
-## SUBDUED: the voice speaks at about [constant VoiceFX.PAD_VOICE_REF] RMS; nothing here peaks past [constant PEAK_MOST],
-## a heavy pot set down about that, a jar a third of it, a slip of paper nothing - and what goes on (grinding, a boil)
-## stays far under the voice ([constant GRIND], [constant SIMMER]).
+## Subdued: the voice speaks at about [constant VoiceFX.PAD_VOICE_REF] RMS; nothing here peaks past
+## [constant PEAK_MOST], a heavy pot set down about that, a jar a third of it, a slip of paper nothing,
+## and what goes on (grinding, a boil) stays far under the voice ([constant GRIND], [constant SIMMER]).
 
-## The sample rate made at, how far ahead of the show the sound is kept (seconds), how far the show may jump from where
-## the sound is before it begins again there, and how long the player's buffer is.
+## The sample rate made at, how far ahead of the show the sound is kept (seconds), how far the show may
+## jump from where the sound is before it begins again there, and how long the player's buffer is.
 const RATE := 22050
 const LEAD := 0.15
 const RESET := 0.35
 const BUFFER := 0.5
 ## Samples a control step: what touches, what boils and what pours is looked at this often.
 const STEP := 256
-## THE LEVELS (full scale): the most anything here peaks at; a thing of THUD_HEAVY kilograms set down (louder by the
-## square root of its weight, up to that), and quieter than THUD_LEAST nothing is heard.
+## The levels (full scale): the most anything here peaks at; a thing of THUD_HEAVY kilograms set down
+## (louder by the square root of its weight, up to that); quieter than THUD_LEAST nothing is heard.
 const PEAK_MOST := 0.06
 const THUD := 0.045
 const THUD_HEAVY := 2.0
 const THUD_LEAST := 0.002
-## GRINDING: how loud its scrape is at a brisk round (GRIND_SPEED meters a second), and how near its surface a pressed
-## point is touching it (meters, past the gap it is held at); the most crunches a second of what it breaks.
+## Grinding: how loud its scrape is at a brisk round (GRIND_SPEED meters a second), and how near its
+## surface a pressed point is touching it (meters, past the gap it is held at); the most crunches a
+## second of what it breaks.
 const GRIND := 0.0025
 const GRIND_SPEED := 0.12
 const TOUCH := 0.0025
 const CRUNCHES := 7.0
 const CRUNCH := 0.009
-## ...ITS SCRAPE: the surface's grain (meters - read at the speed the point slides, its finest ripple sounds at speed / this:
-## 600 Hz at a brisk round), the lowest of it heard (Hz), its bumps (meters, a random roughening of the scrape at speed /
-## this), how hard they roughen it, how often the point catches on a grit and slips (a meter slid), how hard a catch
-## strikes against the scrape, and how much of the scrape is heard as itself beside what it rings. Measured on its own,
-## a scrape of stone at a brisk round has the middle of its spectrum at about 560 Hz, and its loudness in 20 ms pieces
-## varies by 0.45 of itself; the grit it had been, 4.7 kHz and 0.03.
+## Its scrape: the surface's grain (meters - read at the speed the point slides, its finest ripple sounds
+## at speed / this: 600 Hz at a brisk round), the lowest of it heard (Hz), its bumps (meters, a random
+## roughening of the scrape at speed / this), how hard they roughen it, how often the point catches on a
+## grit and slips (a meter slid), how hard a catch strikes against the scrape, and how much of the scrape
+## is heard as itself beside what it rings. A scrape of stone at a brisk round measures about 560 Hz at
+## the middle of its spectrum, its loudness in 20 ms pieces varying by 0.45 of itself.
 const SCRAPE_FINE := 0.0002
 const SCRAPE_LOWEST := 130.0
 const SCRAPE_BUMP := 0.006
@@ -73,9 +66,9 @@ const ROUGH := 1.6
 const CATCHES := 900.0
 const CATCH := 4.0
 const DIRECT := 1.0
-## ...WHAT IT RINGS: the vessel's body (Hz for one 10 cm across - a bigger one lower) and how much of the scrape it takes,
-## how much its material's modes take, how long a mode rings under the hand (seconds; its material's own, this much of
-## it, at most SCRAPE_RING), and the most modes.
+## What it rings: the vessel's body (Hz for one 10 cm across - a bigger one lower) and how much of the
+## scrape it takes, how much its material's modes take, how long a mode rings under the hand (seconds;
+## its material's own, this much of it, at most SCRAPE_RING), and the most modes.
 const BODY := 160.0
 const BODY_SHARE := 0.25
 const MODE_SHARE := 0.8
@@ -84,19 +77,19 @@ const SCRAPE_RING := 0.05
 const MODES := 4
 ## A piece broken off this big (meters, a sphere's radius) crunches at its loudest and lowest; a speck, faint and high.
 const BREAK_BIG := 0.004
-## A BOIL ([Boil]'s bubbles): the peak of the biggest a rolling boil breaks, and the hiss under them at a rolling boil.
+## A boil ([Boil]'s bubbles): the peak of the biggest a rolling boil breaks, and the hiss under them at a rolling boil.
 const BUBBLE := 0.009
 const SIMMER := 0.0015
-## A POUR: bubbles a second where it lands at full flow, their peak, and its hiss.
+## A pour: bubbles a second where it lands at full flow, their peak, and its hiss.
 const POUR_BUBBLES := 30.0
 const POUR_BUBBLE := 0.005
 const POUR_HISS := 0.002
 ## How far to one side a thing sounds at most, and how far from the middle of the reading that is (meters).
 const PAN := 0.7
 const PAN_REACH := 0.5
-## What a thing set down rings with, by its material ([constant Props.MATERIALS]): its lowest partial for a thing
-## RING_SIZE across (Hz; a bigger one rings lower), the others' ratios to it, how long it rings (seconds) and how loud
-## against its thump. Paper, cloth, leather, wax, plants and powder only thump.
+## What a thing set down rings with, by its material ([constant Props.MATERIALS]): its lowest partial for
+## a thing RING_SIZE across (Hz; a bigger one rings lower), the others' ratios to it, how long it rings
+## (seconds) and how loud against its thump. Paper, cloth, leather, wax, plants and powder only thump.
 const RING_SIZE := 0.08
 const RINGS := {
 	"glass": {"f": 2600.0, "ratios": [1.0, 2.32, 4.25], "decay": 0.22, "amp": 0.35},
@@ -107,18 +100,20 @@ const RINGS := {
 	"bone": {"f": 1300.0, "ratios": [1.0, 2.6], "decay": 0.05, "amp": 0.25},
 	"wood": {"f": 650.0, "ratios": [1.0, 2.6], "decay": 0.04, "amp": 0.35},
 }
-## PLASTIC ([method _plastic]): what a press home, a piece pulled off and a plate dragged ring with - its lowest mode for a piece 18 mm across (Hz; a
-## smaller one higher), its modes [ratio, level, share of the decay], how long it rings (seconds), its level, how much of it is a tick of noise, and a low
-## knock of the body under it. A PIECE THAT HITS SOMETHING is not here: how it sounds is how hard it hit ([method _hit]).
+## Plastic ([method _plastic]): what a press home, a piece pulled off and a plate dragged ring with - its
+## lowest mode for a piece 18 mm across (Hz; a smaller one higher), its modes [ratio, level, share of the
+## decay], how long it rings (seconds), its level, how much of it is a tick of noise, and a low knock of
+## the body under it. A piece that hits something is not here: it sounds as hard as it hit ([method _hit]).
 const PLASTIC := {
 	"click": {"f": 2600.0, "amp": 0.024, "decay": 0.018, "noise": 0.9, "modes": [[1.0, 1.0, 1.0], [2.31, 0.6, 0.7], [3.9, 0.3, 0.5]], "body": 0.5, "body_f": 520.0},
 	"tick": {"f": 3400.0, "amp": 0.0045, "decay": 0.009, "noise": 0.5, "modes": [[1.0, 1.0, 1.0], [2.2, 0.4, 0.6]]},
 	"pop": {"f": 1500.0, "amp": 0.016, "decay": 0.016, "noise": 0.7, "modes": [[1.0, 1.0, 1.0], [2.1, 0.35, 0.7]], "body": 0.3, "body_f": 300.0},
 	"scuff": {"f": 900.0, "amp": 0.0035, "decay": 0.02, "noise": 1.6, "modes": [[1.0, 0.3, 1.0]]},
 }
-## A HIT ([method _hit]; the user, 2026-11-03: "gentle motions to make no sound (or quiet sound), while collisions with more force to make more sound"). How
-## fast a piece's speed changed is the only thing it is heard by: at [constant HIT_FULL] m/s - a fall of about 8 cm - it is at [constant HIT_AMP], and its level goes
-## by this power of that; softer hits are not only quieter but duller, their higher modes come in only past their own speed. A heavier piece is lower and fuller.
+## A hit ([method _hit]): how fast a piece's speed changed is the only thing it is heard by. At
+## [constant HIT_FULL] m/s - a fall of about 8 cm - it is at [constant HIT_AMP], and its level goes by
+## this power of that; softer hits are not only quieter but duller, their higher modes come in only past
+## their own speed. A heavier piece is lower and fuller.
 const HIT_FULL := 1.25
 const HIT_POWER := 1.1
 const HIT_AMP := 0.016
@@ -207,10 +202,9 @@ func _init(w: TableWork) -> void:
 	_br.resize(BURSTS)
 
 
-## THE SHOW AT [param t]: the sound kept [constant LEAD] ahead of it in a player under [param host] (made the first time) -
-## begun again where the show jumped, and HELD WHERE IT IS while the show stands still (the user, 2026-10-29: "I clicked
-## "pause" in the real-time viewer, and the environmental cauldron boiling sounds continue to play ... Audio should pause
-## when the video does"): what is queued waits in the player, and goes on as the show does.
+## The show at [param t]: the sound kept [constant LEAD] ahead of it in a player under [param host] (made
+## the first time), begun again where the show jumped, and held where it is while the show stands still:
+## what is queued waits in the player, and goes on as the show does.
 func tick(t: float, host: Node) -> void:
 	if _player == null:
 		var gen := AudioStreamGenerator.new()
@@ -220,7 +214,7 @@ func tick(t: float, host: Node) -> void:
 		_player.name = "WorkSounds"
 		_player.stream = gen
 		host.add_child(_player)
-	# A SHOW STANDING STILL: two ticks at one time (a single one can be a frame the clock did not tick over)
+	# A show standing still: two ticks at one time (a single one can be a frame the clock did not tick over)
 	_still = _still + 1 if t == _last_t else 0
 	_last_t = t
 	if _still >= STILL_TICKS and not _pb_paused():
@@ -269,7 +263,7 @@ func _restart(t: float) -> void:
 	_crunched = -INF
 
 
-## THE NEXT [param n] SAMPLES from where the sound is ([member _at]), the show's time going on with them: stereo.
+## The next [param n] SAMPLES from where the sound is ([member _at]), the show's time going on with them: stereo.
 func render(n: int) -> PackedVector2Array:
 	if is_nan(_at):
 		_restart(0.0)
@@ -291,10 +285,10 @@ func render(n: int) -> PackedVector2Array:
 func _look(t0: float, t1: float) -> Array:
 	var spawn: Array = []
 	var dt := t1 - t0
-	# A THING SET DOWN
+	# A thing set down
 	for d in work.set_down(t0, t1):
 		spawn.append([int((float((d as Dictionary)["t"]) - t0) * float(RATE)), _thud.bind(d)])
-	# A POINT PRESSED ONTO SOMETHING, touching it and moving over it: its scrape
+	# A point pressed onto something, touching it and moving over it: its scrape
 	var pace := 0.0
 	var seen := {}
 	for p in work.pressed(t0):
@@ -317,9 +311,9 @@ func _look(t0: float, t1: float) -> Array:
 			_pressed_was.erase(wi)
 	# ...louder the faster, as the grain it reads is struck harder and oftener
 	_scrape_want = GRIND * sqrt(pace)
-	# A PIECE BROKEN OFF, as the physics broke it: a crunch, the bigger the piece the lower and louder - no more than
-	# CRUNCHES a second however many break at once (a lump crushed splits into dozens in a moment, which heard each had
-	# stacked far past the voice), each as big as the biggest since the last
+	# A piece broken off, as the physics broke it: a crunch, the bigger the piece the lower and louder - no
+	# more than CRUNCHES a second however many break at once (a lump crushed splits into dozens in a
+	# moment), each as big as the biggest since the last
 	if work.physics != null:
 		for b in work.physics.breaks_in(t0, t1):
 			var bd: Dictionary = b
@@ -340,8 +334,8 @@ func _look(t0: float, t1: float) -> Array:
 		var at_t := func(T: float) -> float: return float(work.value(ch, T))
 		var across := float(bd["size"])
 		var s := Boil.share(float(bd["boil"]))
-		# ...EACH BUBBLE THE TABLE DRAWS BREAKING ([Boil]): its own ring, the pitch its size gives, as loud as it is big - a simmer
-		# a quiet fizz of small quick ticks, a rolling boil a busy low bubbling
+		# ...each bubble the table draws breaking ([Boil]): its own ring, the pitch its size gives, as loud as
+		# it is big - a simmer a quiet fizz of small quick ticks, a rolling boil a busy low bubbling
 		for bb in Boil.bubbles(wi, t0, t1, at_t, across):
 			var r := float((bb as Dictionary)["r"])
 			var at2: Vector2 = (bb as Dictionary)["at"]
@@ -363,12 +357,12 @@ func _look(t0: float, t1: float) -> Array:
 			hiss = POUR_HISS * flow
 			_hiss_pan = _ears(pour["at"])
 	_hiss_want = hiss
-	# WHAT IS BUILT: each press, knock and clatter as the assembly has it, at its own moment ([method Assembly.sounds_in])
+	# What is built: each press, knock and clatter as the assembly has it, at its own moment ([method Assembly.sounds_in])
 	if work.assembly != null:
 		for e in work.assembly.sounds_in(t0, t1):
 			var ed: Dictionary = e
 			spawn.append([clampi(int((float(ed["t"]) - t0) * float(RATE)), 0, STEP - 1), _plastic.bind(ed)])
-	# ...AND DICE ([TableGame]): each hit as the record has it, and the rattle in a hand
+	# ...And dice ([TableGame]): each hit as the record has it, and the rattle in a hand
 	if work.game != null:
 		for e in work.game.sounds_in(t0, t1):
 			var ed: Dictionary = e
@@ -401,7 +395,7 @@ func _run(out: PackedVector2Array, i: int, m: int, spawn: Array) -> void:
 	var gk := 1.0 - exp(-1.0 / (0.02 * float(RATE)))
 	var f_hs := 2.0 * sin(PI * 3200.0 / float(RATE))
 	var h := _hiss
-	# THE SCRAPE'S FILTERS for how fast the point slides this step: its grain and bumps each at the speed over their
+	# The scrape's filters for how fast the point slides this step: its grain and bumps each at the speed over their
 	# length, made as loud as white noise again (a one-pole's noise gain is a / (2 - a); two in a row, a^4 (1 + b) /
 	# (1 - b)^3 with b = (1 - a)^2), and how likely a catch is a sample
 	_scrape_v += (_scrape_v_want - _scrape_v) * minf(1.0, float(m) / (0.05 * float(RATE)))
@@ -486,7 +480,7 @@ func _run(out: PackedVector2Array, i: int, m: int, spawn: Array) -> void:
 
 # --- what is begun ---------------------------------------------------------------------------------------------------
 
-## A THING SET DOWN ([method TableWork.set_down]): the table's thump under it, a click, and its material's ring.
+## A thing set down ([method TableWork.set_down]): the table's thump under it, a click, and its material's ring.
 func _thud(d: Dictionary) -> void:
 	var amp := THUD * minf(sqrt(float(d["mass"]) / THUD_HEAVY), 1.0)
 	if amp < THUD_LEAST:
@@ -503,12 +497,9 @@ func _thud(d: Dictionary) -> void:
 			var f := f0 * float(ratios[k])
 			if f < float(RATE) * 0.45:
 				_sine(f, float(row["decay"]) / (1.0 + 0.5 * k), amp * float(row["amp"]) / (1.0 + k), ears)
-
-
-## A CRUNCH of something breaking under a grinding point, [param big] (0-1) of the loudest, around [param f] Hz.
-## HARD PLASTIC ([Assembly]; the user, 2026-11-02: "a big box of bricks that we would sometimes dig through (bearing in mind we might want sound there)"): a molded
-## piece is small and stiff, so it rings high and is gone in a few milliseconds, and the pitch goes up as it gets smaller. What is not a hit: a press home, a piece
-## pulled off, a plate dragged ([constant PLASTIC]).
+## A hard plastic piece ([Assembly]): a molded piece is small and stiff, so it rings high and is gone in
+## a few milliseconds, and the pitch goes up as it gets smaller. What is not a hit: a press home, a
+## piece pulled off, a plate dragged ([constant PLASTIC]).
 func _plastic(e: Dictionary) -> void:
 	if String(e["kind"]) == "hit":
 		_hit(e)
@@ -533,9 +524,9 @@ static func hit_level(v: float, weight: float, against: String) -> float:
 	return amp * HIT_HAND if against == "hand" else amp
 
 
-## A PIECE HITTING SOMETHING, EXACTLY AS HARD AS IT DID ([method AssemblyWorld._hits]): its speed changed by `strength` m/s on the record, at this moment. Gentle is quiet
-## and dull, hard is loud and bright; a bigger piece is lower; what it struck rings as what it is made of - a tin wall under a brick, a table under one. Nothing here is
-## drawn at a rate, or made up: no hit, no sound.
+## A piece hitting something, exactly as hard as it did ([method AssemblyWorld._hits]): its speed changed
+## by `strength` m/s on the record, at this moment. Gentle is quiet and dull, hard is loud and bright; a
+## bigger piece is lower; what it struck rings as what it is made of. No hit, no sound.
 func _hit(e: Dictionary) -> void:
 	var v := float(e.get("strength", 0.0))
 	var against := String(e.get("against", "plastic"))
@@ -560,15 +551,15 @@ func _hit(e: Dictionary) -> void:
 			if fk < float(RATE) * 0.45:
 				_sine(fk, float(row["decay"]) / (1.0 + 0.5 * k), amp * HIT_THING_SHARE * float(row["amp"]) / (1.0 + k), ears)
 
-
+## A crunch of something breaking under a grinding point, [param big] (0-1) of the loudest, around [param f] Hz.
 func _crunch(big: float, ears: Vector2, f: float) -> void:
 	_burst(f * lerpf(0.85, 1.15, _rand()), 0.9, 0.008, CRUNCH * big * lerpf(0.5, 1.0, _rand()), ears)
 
 
-## THE MODES A SCRAPE RINGS in what is ground in, of material [param kind] and [param size] meters across ([constant
-## WorkSounds.RINGS]): its body low, the bigger the lower, and its material's partials for its size - each a resonator
-## (two poles at the mode's frequency, damped as the hand on it damps it), as loud for the grain as the next. Made again
-## only when what is ground in changes.
+## The modes a scrape rings in what is ground in, of material [param kind] and [param size] meters across
+## ([constant WorkSounds.RINGS]): its body low, the bigger the lower, and its material's partials for its
+## size - each a resonator (two poles at the mode's frequency, damped as the hand on it damps it), as loud
+## for the grain as the next. Made again only when what is ground in changes.
 func _modes_for(kind: String, size: float) -> void:
 	var key := "%s %.3f" % [kind, size]
 	if key == _scrape_of:
@@ -603,7 +594,7 @@ func _modes_for(kind: String, size: float) -> void:
 		_my2[k] = 0.0
 
 
-## A BUBBLE closing (Minnaert): a sine at [param f] rising a fifth as it dies, [param amp] at its peak - over [param life]
+## A bubble closing (Minnaert): a sine at [param f] rising a fifth as it dies, [param amp] at its peak - over [param life]
 ## seconds (or a pour's, drawn).
 func _bubble(f: float, amp: float, ears: Vector2, life := -1.0) -> void:
 	if life <= 0.0:

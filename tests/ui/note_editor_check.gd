@@ -1,20 +1,16 @@
 extends Node
 
-## note_editor_check - a note opened in its card ([NoteEditor]; 2026-10-31), on a notes folder of the gate's own
-## (`NoteStore.root`).
+## note_editor_check - a note opened in its card ([NoteEditor]), on a notes folder of the gate's own (`NoteStore.root`).
 ##
 ##   tests/run_boot_probe.sh tests/ui/note_editor_check.gd 120
 ##
-## ITS TITLE AND ITS WORDS IN PLACE: opened, the card holds the note's title and its words without the
-## frontmatter; a new note's title box is empty.
-##
-## THE CARD GROWS WITH ITS WORDS (the user: "expand description to fit the content - breaking from the strictly
-## square aspect ratio"): many lines make it taller than a few - THE CONTROL - and never taller than the screen,
-## where the words scroll inside it. On a phone ([member NoteEditor.whole]) it fills its rect.
-##
-## WRITTEN AS IT IS TYPED: on the quiet period the words reach the file, the frontmatter kept byte for byte, and
-## the title renames a file named after it ([signal NoteEditor.moved]). CLOSED, a new note left empty is gone and
-## one with words stays; Escape and a click beside the card close it.
+## - Its title and its words in place: opened, the card holds the note's title and its words without the
+##   frontmatter; a new note's title box is empty.
+## - The card grows with its words: many lines make it taller than a few (control), and never taller than the screen,
+##   where the words scroll inside it. On a phone ([member NoteEditor.whole]) it fills its rect.
+## - Written as it is typed: on the quiet period the words reach the file, the frontmatter kept byte for byte, and
+##   the title renames a file named after it ([signal NoteEditor.moved]). Closed, a new note left empty is gone and
+##   one with words stays; Escape and a click beside the card close it.
 
 const ROOT := "user://note_editor_check"
 var _fails: Array = []

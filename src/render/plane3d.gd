@@ -3,12 +3,9 @@ class_name Plane3D
 
 ## Plane3D - a flat quad genuinely placed in 3D space, projected through a [Lens3D].
 ##
-## The "3D planes for geometry" primitive. A plane is a center plus two half-extent
-## edge vectors (so a corner is center ± u_axis ± v_axis) - orient it however you
-## like in the world: lay them flat and stack for parallax, stand them up as bars,
-## tilt them into depth. Unlike the old approach (a 2D polygon sheared by the view
-## to *fake* depth), this is a real quad under a real camera, depth-sorted alongside
-## the [Mesh3D] bodies. Carries a fill color and an optional bright edge.
+## A plane is a center plus two half-extent edge vectors (a corner is center ± u_axis ± v_axis), oriented however you
+## like: laid flat and stacked for parallax, stood up as bars, tilted into depth. A real quad under a real camera,
+## depth-sorted alongside the [Mesh3D] bodies. Carries a fill color and an optional bright edge.
 
 var center := Vector3.ZERO
 var u_axis := Vector3.RIGHT     ## half-width edge vector
@@ -44,9 +41,7 @@ func draw_through(ci: CanvasItem, lens: Lens3D, u_px: float) -> void:
 		if pr.z <= lens.near:
 			return
 		poly.append(Vector2(pr.x, pr.y) * u_px)
-	# an edge-on plane projects to (near-)collinear points, which the canvas
-	# cannot triangulate ("Invalid polygon data" spam, quad dropped anyway) -
-	# same guard Mesh3D carries; edge-on it contributes nothing visible
+	# an edge-on plane projects to (near-)collinear points, which the canvas cannot triangulate; same guard Mesh3D carries.
 	var area := absf((poly[1].x - poly[0].x) * (poly[2].y - poly[0].y)
 		- (poly[2].x - poly[0].x) * (poly[1].y - poly[0].y)) \
 		+ absf((poly[2].x - poly[0].x) * (poly[3].y - poly[0].y)

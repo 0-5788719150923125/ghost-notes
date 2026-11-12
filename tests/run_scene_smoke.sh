@@ -47,7 +47,7 @@ trap 'exit 143' TERM
 tests/run_boot_probe.sh tests/scenes/scene_smoke.gd "$TIMEOUT" 2>&1 | tee "$LOG" \
   | grep -Ev '^\s*at:|GDScript backtrace|^\s*\[[0-9]+\]|handle_crash|Load address|^=+$|Dumping the backtrace|Engine version'
 
-# A RUNTIME SCRIPT ERROR IS A FAILURE, even though the probe survives it. Godot prints
+# A runtime script error is a failure, even though the probe survives it. Godot prints
 # "SCRIPT ERROR: Out of bounds ..." and carries on with a null result, so a scene can be
 # quietly broken - wrong geometry, missing birds, a torn array - while every structural
 # check passes and the probe reports ALL OK. That is precisely how the FrameForge race

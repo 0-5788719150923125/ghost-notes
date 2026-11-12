@@ -1,19 +1,18 @@
 extends RefCounted
 class_name ShadowCasters
 
-## ShadowCasters - WHAT CASTS A CANDLE'S SHADOW, CUT FINE ENOUGH TO BE DRAWN IN A PARABOLOID.
+## ShadowCasters - what casts a candle's shadow, cut fine enough to be drawn in a paraboloid.
 ##
-## A candle's shadow is drawn as two paraboloids ([method TableLight.candle_shadow]): Godot's other way, a cube copied into them, reads
-## the cube's depth through a LINEAR sampler (copy_effects.cpp `copy_cubemap_to_dp`), averaging a thin thing's depth with what is far
-## behind it at every edge, and those depths in between cast too - a brush lying in a tray drew a jagged smear under a candle that grazed
-## it (feedback 0024; no blur, and no atlas twice the size, put it right). A paraboloid is drawn straight, but bends straight lines: a
-## triangle's corners are projected and what is between them is not, so a big one's depth is drawn wrong - a 40 cm plate cast nothing
-## at all (table_shadow_check). Cut so that no edge is longer than [constant MOST], what is between the corners is near enough to where
-## they are.
+## A candle's shadow is drawn as two paraboloids ([method TableLight.candle_shadow]); Godot's other way, a cube copied
+## into them, reads the cube's depth through a linear sampler (copy_effects.cpp `copy_cubemap_to_dp`), averaging a
+## thin thing's depth with what is far behind it at every edge. A paraboloid is drawn straight but bends straight
+## lines: a triangle's corners are projected and what is between them is not, so a big triangle's depth is drawn wrong
+## (a 40 cm plate casts nothing; table_shadow_check). Cut so that no edge is longer than [constant MOST], what is
+## between the corners is near enough to where they are.
 ##
-## [method cut] makes a mesh's triangles into a grid of smaller ones, its points alone (all a shadow pass reads); neighbours may cut a shared
-## edge into different numbers of pieces, each too short for the difference to reach a texel. [method cut_under] gives every caster under a
-## node that needs it a twin that casts its shadow in its place.
+## [method cut] makes a mesh's triangles into a grid of smaller ones, its points alone (all a shadow pass reads);
+## neighbours may cut a shared edge into different numbers of pieces, each too short for the difference to reach a
+## texel. [method cut_under] gives every caster under a node that needs it a twin that casts its shadow in its place.
 
 ## The longest edge a caster keeps (meters): a centimeter and a half subtends a twentieth of a radian from a flame 30 cm off, and drawn
 ## straight in a paraboloid strays a third of a texel.
@@ -22,10 +21,10 @@ const MOST := 0.015
 const MOST_CUTS := 96
 
 
-## EVERY MESH THAT CASTS A SHADOW UNDER [param root] AND HAS AN EDGE LONGER THAN [param most], CAST BY A TWIN CUT FINE ([method cut]): a
-## MeshInstance3D casting nothing itself any more, beside it one that only casts - the same place, layers and material (a vertex shader that
-## moves it moves its shadow) - each mesh cut once, whoever shares it. Only what a shadow pass reads is cut (where its points are): the
-## picture is drawn as it was, and a scene's casters cut in a fraction of the time their every attribute took.
+## Every mesh that casts a shadow under [param root] and has an edge longer than [param most] is cast by a twin cut
+## fine ([method cut]): a MeshInstance3D casting nothing itself any more, beside it one that only casts, with the same
+## place, layers and material (a vertex shader that moves it moves its shadow); each mesh is cut once, whoever shares
+## it. Only what a shadow pass reads (its points) is cut, so the picture is drawn as it was.
 static func cut_under(root: Node, most := MOST) -> void:
 	if root == null:
 		return
@@ -58,9 +57,9 @@ static func cut_under(root: Node, most := MOST) -> void:
 		mi.add_child(twin)
 
 
-## [param mesh]'s SHAPE WITH NO TRIANGLE EDGE LONGER THAN [param most] (meters), as a shadow pass reads it - its points alone, indexed, each
-## triangle a grid of as many pieces a side as its longest edge asks ([constant MOST_CUTS] at most); [param mesh] itself where it has no
-## such edge.
+## [param mesh]'s shape with no triangle edge longer than [param most] (meters), as a shadow pass reads it: its points
+## alone, indexed, each triangle a grid of as many pieces a side as its longest edge asks ([constant MOST_CUTS] at
+## most); [param mesh] itself where it has no such edge.
 static func cut(mesh: Mesh, most := MOST) -> Mesh:
 	if mesh == null:
 		return mesh

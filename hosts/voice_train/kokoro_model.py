@@ -405,7 +405,7 @@ class Generator(nn.Module):
             har_source, _noise, _uv = self.m_source(f0)
             har_spec, har_phase = self.stft.transform(har_source.transpose(1, 2).squeeze(1))
             har = torch.cat([har_spec, har_phase], dim=1)
-        # TAUGHT, THE RESIDUAL BLOCKS ARE WORKED OUT AGAIN BACKWARD rather than kept: their Snakes keep a dozen tensors
+        # Taught, the residual blocks are worked out again backward rather than kept: their Snakes keep a dozen tensors
         # a block at 4,800 steps a second, 6 GB for eight 1.5 s stretches, and the run died of it on a 16 GB card
         keep = self.training and torch.is_grad_enabled()
         run = (lambda blk, *a: checkpoint(blk, *a, use_reentrant=False)) if keep else (lambda blk, *a: blk(*a))  # noqa: E731

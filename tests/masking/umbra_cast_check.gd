@@ -1,21 +1,13 @@
 extends SceneTree
 
-## THE UMBRA'S CAST TRANSFORM - the geometry, asserted without a clip, a
-## renderer or mediapipe.
+## The Umbra's cast transform: the geometry, asserted without a clip, a renderer or mediapipe.
 ##   godot --headless --path . --script res://tests/masking/umbra_cast_check.gd
 ##
-## The effect's whole claim is positional: the ghost's head lands where it was
-## placed, its eyes land on that head, and it stands clear of her. Every one of
-## those fails SILENTLY - a transposed pair of matrix columns is still a
-## rotation, still draws a plausible dark shape, and puts the eyes a frame and a
-## half below the picture. That one shipped, and the render it produced looked
-## like a working effect until the printed eye coordinates were read.
-##
-## The tests are two-sided wherever a check could pass by the effect doing
-## nothing: "the eyes are on the head" also holds if everything collapses to one
-## point, so the size and the separation are asserted alongside; "Lean moved it"
-## also holds if it moved for some other reason, so the retired formulation is
-## evaluated beside it and has to FAIL.
+## The effect's claim is positional: the ghost's head lands where it was placed, its eyes land on that head,
+## and it stands clear of her. Each fails silently (a transposed pair of matrix columns is still a
+## rotation). Two-sided wherever a check could pass by the effect doing nothing: eyes on the head is paired
+## with size and separation, and the Lean check evaluates the retired rise formula beside it, which must
+## fail.
 
 const POINTS := 33
 const COUNT := 48
@@ -24,18 +16,16 @@ const MW := 96
 const MH := 54
 const ASP := 1.7778
 
-# A synthetic subject, in frame UV: shoulders wide and low, eyes and ears where
-# a head would put them. Deliberately a CLOSE-UP - her eyes at 0.19 of the frame
-# height - because that is the framing every placement rule has to survive, and
-# the one that pinned the retired rise formulation against its own clamp.
+# A synthetic subject, in frame UV: shoulders wide and low, eyes and ears where a head would put them. A
+# close-up (her eyes at 0.19 of the frame height), the framing every placement rule has to survive.
 const SH_L := Vector2(0.72, 0.60)
 const SH_R := Vector2(0.40, 0.56)
 const EYE_L := Vector2(0.60, 0.16)
 const EYE_R := Vector2(0.52, 0.15)
 const EAR_L := Vector2(0.63, 0.20)
 const EAR_R := Vector2(0.49, 0.19)
-## How far she moves between samples in the synthetic track - enough that a lead
-## of a few samples is unmistakable, small enough that she never leaves the frame.
+## How far she moves between samples in the synthetic track: enough that a lead of a few samples is
+## unmistakable, small enough that she never leaves the frame.
 const WALK := 0.004
 
 var _fails: PackedStringArray = []
@@ -79,8 +69,7 @@ func _initialize() -> void:
 		quit(1)
 
 
-## Every knob at once, so a case is one line and nothing is left at whatever the
-## last case set it to.
+## Every knob at once, so a case is one line and nothing keeps the last case's setting.
 func _solve(scale: float, lean: float, narrow: float, stand: float,
 		pan := Vector2.ZERO, loom := 0.45) -> bool:
 	_ed._umb_scale = scale
@@ -92,19 +81,16 @@ func _solve(scale: float, lean: float, narrow: float, stand: float,
 	return _ed._umb_cast_from(0, ASP)
 
 
-## THE INVERSE THE SHADER USES MUST UNDO THE FORWARD MAP THE EYES USE.
-## They are computed from the same pair of columns and used at opposite ends of
-## the effect - the CPU pushes her eyes forward, the fragment pulls its own
-## position back - so a transposition or a bad determinant makes the body and
-## the eyes describe two different ghosts. Checked by round-tripping her own
-## landmarks: source -> screen -> source.
+## The inverse the shader uses must undo the forward map the eyes use. Both come from the same pair of
+## columns and are used at opposite ends of the effect (the CPU pushes her eyes forward, the fragment
+## pulls its own position back), so a transposition or bad determinant makes the body and the eyes
+## describe two ghosts. Checked by round-tripping her landmarks: source -> screen -> source.
 func _forward_and_inverse_agree() -> void:
 	if not _solve(1.7, 0.5, 0.35, 1.05):
 		_fails.append("the solve refused a perfectly ordinary case")
 		return
 	var av := Vector2(ASP, 1.0)
-	# Her eye line maps to the ghost's eye line, and the shader's inverse of THAT
-	# has to be her eye line again.
+	# Her eye line maps to the ghost's eye line, and the shader's inverse of that must be her eye line.
 	var mid_screen: Vector2 = (_ed._umb_eye_l + _ed._umb_eye_r) * 0.5 * av
 	var d: Vector2 = mid_screen - _ed._umb_anchor
 	var back: Vector2 = _ed._umb_src + _ed._umb_inv0 * d.x + _ed._umb_inv1 * d.y
@@ -115,19 +101,16 @@ func _forward_and_inverse_agree() -> void:
 	_expect(err < 1e-3,
 		"the shader's inverse does not undo the forward map (error %.4f) - a "
 		% err + "transposed column pair reads exactly like this")
-	# ...and the ghost's own eye line is at the anchor plus scale x unit along the
-	# body axis, which is the promise the whole construction rests on.
+	# ...and the ghost's eye line is at the anchor plus scale x unit along the body axis.
 	var reach: float = (mid_screen - _ed._umb_anchor).length()
 	_expect(absf(reach - _ed._umb_unit * 1.7) < 0.02,
 		"the ghost's head sits %.3f from its anchor, expected %.3f (scale x unit)"
 			% [reach, _ed._umb_unit * 1.7])
 
 
-## THE EYES ARE ON THE HEAD, and there are two of them. The first half alone is
-## satisfied by a transform that collapses everything onto one point, so the
-## separation is asserted with it - and both are asserted at two very different
-## Scales, because the failure this replaces was scale-dependent (at 1.0 the old
-## effect's eyes were fine and at 2.2 they were off the top of the frame).
+## The eyes are on the head, and there are two of them. Landing alone is satisfied by a transform that
+## collapses everything onto one point, so the separation is asserted too, at three Scales (the
+## placement is scale-dependent).
 func _eyes_land_on_the_head() -> void:
 	for sc in [0.8, 1.6, 2.8]:
 		if not _solve(sc, 0.5, 0.35, 1.05):
@@ -151,9 +134,8 @@ func _eyes_land_on_the_head() -> void:
 			"at scale %.1f the socket radius is %.4f" % [sc, _ed._umb_eye_rad])
 
 
-## IT STANDS CLEAR OF HER HEAD. The separation is the two skulls' half-widths, so
-## this must hold at every Scale rather than at one tuned setting - a ghost drawn
-## on top of her is a ghost her own exclusion mask eats.
+## It stands clear of her head. The separation is the two skulls' half-widths, so this holds at every
+## Scale: a ghost drawn on her is eaten by her own exclusion mask.
 func _it_stands_clear_of_her() -> void:
 	var her_hw := absf(EAR_L.x - EAR_R.x) * ASP * 0.5
 	for sc in [0.8, 1.6, 2.8]:
@@ -169,11 +151,9 @@ func _it_stands_clear_of_her() -> void:
 				% [sc, dx, want])
 
 
-## IT STANDS ON THE SIDE THERE IS ROOM FOR. Driven by moving HER, not by moving
-## the ghost: with her hard against the right edge there is no room on the throw
-## side, and the honest answer is the other one. A version that only clamped
-## would put the head against the frame edge instead, so the check is that the
-## ghost crossed to her LEFT.
+## It stands on the side there is room for. Driven by moving her: with her against the right edge there is
+## no room on the throw side, so the ghost must cross to her left (clamping alone would leave the head
+## against the frame edge).
 func _it_stands_where_there_is_room() -> void:
 	_shift_subject(0.34)   # her eye line to ~0.94 of the frame width
 	_solve(1.6, 0.5, 0.35, 1.05)
@@ -185,9 +165,7 @@ func _it_stands_where_there_is_room() -> void:
 	_shift_subject(0.0)
 
 
-## SCALE AND LEAN BOTH MOVE SOMETHING. Two controls on this effect have shipped
-## inert before (Reach/Lead/Gaze, absent from LAYER_FIELDS; and the rise, pinned
-## against its own clamp), and both times the render looked plausible throughout.
+## Scale and Lean both move something (a control can be inert while the render looks plausible).
 func _scale_and_lean_do_something() -> void:
 	_solve(1.0, 0.5, 0.35, 1.05)
 	var small: float = ((_ed._umb_eye_l - _ed._umb_eye_r) * Vector2(ASP, 1.0)).length()
@@ -218,11 +196,9 @@ func _scale_and_lean_do_something() -> void:
 	_expect(absf(far.x - near.x) > 0.03, "Stand did not move the ghost sideways")
 
 
-## THE RISE IS MEASURED AGAINST THE HEADROOM, and the control here is the RETIRED
-## formulation evaluated on the same subject - it has to be pinned, or this
-## assertion is about nothing. Written as `eye.y - k * unit * scale` and clamped,
-## it returned the identical height for every Lean on a close-up, which is a
-## slider that does nothing.
+## The rise is measured against the headroom. The control is the retired formulation, `eye.y - k * unit *
+## scale` clamped, evaluated on the same subject: it returns one height for every Lean on a close-up, so
+## it must be pinned or this assertion is about nothing.
 func _the_rise_is_not_pinned() -> void:
 	var her_hw := absf(EAR_L.x - EAR_R.x) * ASP * 0.5
 	var eye_y := (EYE_L.y + EYE_R.y) * 0.5
@@ -246,15 +222,10 @@ func _the_rise_is_not_pinned() -> void:
 		"the rise is still pinned on a close-up (%.4f -> %.4f)" % [new_lo, new_hi])
 
 
-## THE LEAD IS THE EFFECT. A ghost that follows her is a shadow; a ghost that
-## arrives first is the thing moving her, and the only reason the track is
-## offline at all is that the second one needs a frame that has not been decoded.
-## So: with a subject who WALKS across the synthetic track, the ghost solved at
-## `t + Lead` has to be further along than the ghost solved at `t`, by about the
-## distance she covers in that time.
-##
-## The control is Lead = 0 on the same track: it must NOT be ahead, or this is
-## measuring the subject moving rather than the effect anticipating.
+## The lead is the effect: a ghost that follows her is a shadow, one that arrives first needs a frame that
+## has not been decoded, which is why the track is offline. With a subject who walks across the synthetic
+## track, the ghost solved at `t + Lead` must be further along than the one at `t`, by about the distance
+## she covers in that time. The control is Lead = 0 on the same track, which must not be ahead.
 func _the_lead_actually_leads() -> void:
 	var rate := RATE
 	var now := 0.5
@@ -279,8 +250,7 @@ func _the_lead_actually_leads() -> void:
 			% [ahead - here, lead, her_step] + "reading ahead of the playhead")
 
 
-## Move the whole subject sideways by rewriting the track in place - the honest
-## way to test the room rule, since the rule is about where SHE is.
+## Move the whole subject sideways by rewriting the track in place (the room rule is about where she is).
 func _shift_subject(dx: float) -> void:
 	var xy: PackedFloat32Array = _ed._pose._pt_chunks[0]["xy"]
 	for k in [_ed.PT_SH_L, _ed.PT_SH_R, _ed.PT_EYE_L, _ed.PT_EYE_R,
@@ -319,9 +289,7 @@ func _write_track(path: String) -> void:
 		f.store_8(1)
 		for k in POINTS:
 			var p: Vector2 = pts.get(k, Vector2(0.5, 0.5))
-			# She WALKS, from sample 1 onward - sample 0 stays exactly where the
-			# placement checks above expect to find her, so the motion the Lead
-			# check needs costs those nothing.
+			# She walks from sample 1 onward; sample 0 stays where the placement checks expect her.
 			f.store_float(p.x + WALK * float(i))
 			f.store_float(p.y)
 		for k in POINTS:

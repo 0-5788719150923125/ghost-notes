@@ -3,59 +3,44 @@ class_name VoiceStream
 
 ## VoiceStream - real-time speech on its own thread: render lag cannot break it.
 ##
-## Synthesis and audio delivery run on a **worker thread**, fully decoupled from
-## the render loop: a heavy scene can drop frames and the voice keeps flowing,
-## because the thread keeps a sliding lead (~[constant TARGET_LEAD]s) of PCM
-## synthesized ahead of the playhead and pushed into the
-## [AudioStreamGeneratorPlayback] that [Spectrum] opened on the analyzed bus
-## (the generator's push API is designed for exactly this threaded use). The
-## main thread only drains word-timing snapshots for the karaoke and relays
-## completion signals - a few microseconds a frame.
+## Synthesis and audio delivery run on a worker thread decoupled from the render loop: the thread keeps
+## a sliding lead (~[constant TARGET_LEAD]s) of PCM synthesized ahead of the playhead and pushed into
+## the [AudioStreamGeneratorPlayback] that [Spectrum] opened on the analyzed bus. The main thread only
+## drains word-timing snapshots for the karaoke and relays completion signals.
 ##
-## The stream is a **live instrument**, not a render job:
-## - [method retune] swaps the voice spec mid-stream (an atomic reference swap;
-##   the worker reads it per chunk), so timbre traits bend the voice WHILE it
-##   speaks, landing ~[constant TARGET_LEAD]s later - no restart.
-## - [method restart] replaces the content in place (new text or a re-planned
-##   voice): worker joined, generator buffer cleared, timing rebased via
-##   [member time_base] - the session, scene, and Director stay untouched.
-## The session seed comes from the FIRST content's fingerprint; the take's WAV
-## + sidecar are written when synthesis completes (the WAV is exactly what was
-## heard, retunes included), and finished takes loop endlessly on the thread.
+## The stream is a live instrument, not a render job:
+## - [method retune] swaps the voice spec mid-stream (an atomic reference swap the worker reads per
+##   chunk), so timbre traits bend the voice while it speaks, landing ~[constant TARGET_LEAD]s later.
+## - [method restart] replaces the content in place (new text or a re-planned voice): worker joined,
+##   generator buffer cleared, timing rebased via [member time_base]; the session, scene and Director
+##   are untouched.
+## The session seed comes from the first content's fingerprint; the take's WAV + sidecar are written when
+## synthesis completes (the WAV is what was heard, retunes included), and finished takes loop on the
+## thread.
 
 signal completed(dur: float, wav_path: String)
 signal restarted(base: float)
 
 const PREBUFFER := 0.3              # synthesized + pushed before the thread takes over
-# Deep lead: the ring holds seconds of finished audio, so even a machine
-# saturated by a heavy scene (which can preempt this worker AND the audio
-# callback) has a fat cushion. Nothing needs low mid-stream latency anymore -
-# the sliders that once retuned live are gone; the loop is throw/restart.
+# Deep lead: the ring holds seconds of finished audio, so a machine saturated by a heavy scene (which
+# can preempt this worker and the audio callback) keeps a cushion.
 const TARGET_LEAD := 2.5
 const SEG_CHUNK := 4                # segments per synth() call on the worker
-# PRESENCE: how close the voice is to the caster. The fishing loop drives it
-# (far cast = quiet and dark, anchored = nearer, the reel brings it in); it is
-# applied at PUSH time - the WAV take stays the canonical full-presence render.
-# Gain glides per sample (~0.2 s) and a one-pole lowpass darkens distance
-# (~500 Hz far away, effectively open when landed).
+# Presence: how close the voice is to the caster (far = quiet and dark, landed = open). Applied at push
+# time - the WAV take stays the canonical full-presence render. Gain glides per sample (~0.2 s) and a
+# one-pole lowpass darkens distance (~500 Hz far away, effectively open when landed).
 const P_GLIDE := 0.00011            # per-sample presence glide (~0.2 s at 44.1k)
 
-# LOCATION RECEPTION: as the line nears the beacon (the source of the frequency
-# it is receiving), a resonant band TUNED to that source swells into the voice -
-# the "interesting auditory conditions" of a fishing spot, and a diverse timbral
-# color to catch and blend. A state-variable bandpass (stable while the center
-# stays well under Nyquist) blended by proximity, with a faint carrier of the
-# source riding the voice at close range. Applied at push time like presence, so
-# the canonical WAV take is untouched.
+# Location reception: as the line nears the beacon, a resonant band tuned to its frequency swells into
+# the voice. A state-variable bandpass (stable while the center stays well under Nyquist) blended by
+# proximity, with a faint carrier of the source at close range. Applied at push time like presence, so
+# the WAV take is untouched.
 const LOC_GLIDE := 0.0002           # per-sample smoothing of proximity/frequency
 const LOC_WET := 0.55               # max bandpass blend, at full proximity
 const LOC_BP_GAIN := 1.8            # make up the bandpass's attenuation
 const LOC_Q := 0.4                  # SVF damping (lower = more resonant)
 const LOC_CARRIER := 0.02           # faint carrier-tone amplitude at close range
-const LOC_CEIL := 0.95              # soft ceiling on the reception path: the old
-                                    # hard clamp CLIPPED near a beacon (the 1.8x
-                                    # resonant boost overshoots) - a click per
-                                    # overshooting peak; tanh rounds them instead
+const LOC_CEIL := 0.95              # soft ceiling on the reception path: tanh rounds the resonant boost's overshoot (a hard clamp clicks)
 
 var words: Array = []               # main-thread copy for Subtitles (shared by reference)
 var events: Array = []              # planned strike times [{t, kind, a}] - the bites
@@ -110,9 +95,8 @@ func fingerprint() -> int:
 	return hash(trait_sig + JSON.stringify(_segs.size()) + str(_segs))
 
 
-## Synthesize and push the prebuffer synchronously (a few ms), so the caller can
-## start the player in this same frame (pushed sample N plays at N / SR), then
-## hand production to the worker thread.
+## Synthesize and push the prebuffer synchronously (a few ms), so the caller can start the player in
+## this same frame (pushed sample N plays at N / SR), then hand production to the worker thread.
 func attach_playback(pb: AudioStreamGeneratorPlayback) -> void:
 	_playback = pb
 	_synth_chunks(int(PREBUFFER * Voice.SR))
@@ -121,12 +105,9 @@ func attach_playback(pb: AudioStreamGeneratorPlayback) -> void:
 	_start_worker()
 
 
-## Swap the voice mid-stream (timbre traits: pitch, tract, breath, grit). An
-## atomic reference swap read by the worker at its next chunk - the bend lands
-## about TARGET_LEAD seconds after the gesture. Plan-baked traits (pace, drawl,
-## lilt) and text changes need restart() instead. The reel uses this: the
-## working voice's timbre bends toward the annealing adrenochrome as the
-## catch is pulled closer - the wait is the audition.
+## Swap the voice mid-stream (timbre traits: pitch, tract, breath, grit). An atomic reference swap read
+## by the worker at its next chunk, so the bend lands about TARGET_LEAD seconds later. Plan-baked traits
+## (pace, drawl, lilt) and text changes need restart() instead.
 func retune(spec: Voice.Spec) -> void:
 	_spec = spec
 
@@ -137,21 +118,17 @@ func set_presence(p: float) -> void:
 	_presence = clampf(p, 0.0, 1.0)
 
 
-## The fishing spot's acoustics: proximity to the source (0 far .. 1 sitting on
-## it) and the source's frequency (Hz). Set from the main thread, read per sample
-## by the push path. Freq clamped well under Nyquist to keep the resonator stable.
+## The fishing spot's acoustics: proximity to the source (0 far .. 1 on it) and the source's frequency
+## (Hz). Set from the main thread, read per sample by the push path.
 func set_location(prox: float, freq: float) -> void:
 	_loc_prox = clampf(prox, 0.0, 1.0)
-	# kept under SR/6 (~3675 Hz) so the state-variable filter stays unconditionally
-	# stable; the voice's color lives well below this anyway
+	# under SR/6 (~3675 Hz) so the state-variable filter stays unconditionally stable
 	_loc_freq = clampf(freq, 80.0, 3000.0)
 
 
-## Bake the LOCATION reception effect into a rendered take, OFFLINE, at a FIXED
-## anchor (prox, freq). The export path calls this so the file reproduces what the
-## live stream sounds like where the line is anchored - the same resonant band and
-## carrier the push loop applies per sample, just at a held position (no glide).
-## Mutates and returns pcm (PackedFloat32Array is copy-on-write - reassign the
+## Bake the location reception effect into a rendered take, offline, at a fixed anchor (prox, freq): the
+## same band and carrier the push loop applies per sample, at a held position (no glide). The export
+## calls this so the file matches the live stream. Mutates and returns pcm (copy-on-write: reassign the
 ## result). A no-op far from any source.
 static func bake_location(pcm: PackedFloat32Array, prox: float, freq: float) -> PackedFloat32Array:
 	if Voice.RAW_MODE:
@@ -180,12 +157,9 @@ static func bake_location(pcm: PackedFloat32Array, prox: float, freq: float) -> 
 	return pcm
 
 
-## Replace the content in place: new plan, cleared generator buffer, timing
-## rebased - the session and scene continue, only the voice's content changes.
-## A coroutine: the old audio fades out over a breath before the stop/play
-## cycle (the raw cut truncated the waveform mid-cycle - an audible pop on
-## every throw and edit). Callers fire and forget; overlapping calls queue,
-## latest wins.
+## Replace the content in place: new plan, cleared generator buffer, timing rebased. A coroutine: the
+## old audio fades out over a breath before the stop/play cycle (a raw cut pops). Callers fire and
+## forget; overlapping calls queue, latest wins.
 func restart(text: String, spec: Voice.Spec) -> void:
 	if _restarting:
 		_restart_queue = [text, spec]
@@ -207,8 +181,8 @@ func restart(text: String, spec: Voice.Spec) -> void:
 	_words_snapshot = []
 	words.clear()                    # same Array instance Subtitles holds
 	if _playback != null:
-		# a generator's ring can't be cleared while active: cycle the player
-		# instead, which rebases playback time to 0 and yields a fresh playback
+		# a generator's ring can't be cleared while active: cycle the player, which rebases playback
+		# time to 0 and yields a fresh playback
 		_playback = Spectrum.restart_stream()
 	time_base = 0.0
 	_pg = 0.0                        # fade the new content in from silence
@@ -253,8 +227,8 @@ func _exit_tree() -> void:
 func _start_worker() -> void:
 	_cancel = false
 	_thread = Thread.new()
-	# HIGH priority: when a heavy scene saturates every core, the voice must
-	# win the scheduler - the render is ALLOWED to lag; the audio is not.
+	# high priority: when a heavy scene saturates every core the voice must win the scheduler (the
+	# render may lag; the audio may not)
 	_thread.start(_worker_loop, Thread.PRIORITY_HIGH)
 
 
@@ -279,9 +253,7 @@ func _worker_loop() -> void:
 				worked = true
 				if _next_seg >= _segs.size():
 					_finish_take()
-		# underrun telemetry: the generator ring going dry mid-take is the one
-		# thing that must never happen silently - if you ever see this line,
-		# the audio stuttered and we know exactly which layer failed
+		# underrun telemetry: the generator ring going dry mid-take must never happen silently
 		if started and queued <= 0 and _pushed > 0:
 			_underruns += 1
 			if _underruns == 1 or _underruns % 50 == 0:
@@ -333,8 +305,7 @@ func _push_available() -> void:
 		var target := _presence
 		var kk := 0.0
 		if Voice.RAW_MODE:
-			# raw diagnostic: the take reaches the bus untouched - no
-			# presence gain/lowpass, no location reception
+			# raw diagnostic: the take reaches the bus untouched
 			for i in n:
 				var vr := _pcm[src + i]
 				buf[i] = Vector2(vr, vr)
@@ -346,23 +317,17 @@ func _push_available() -> void:
 			_pg += (target - _pg) * P_GLIDE
 			var v := _pcm[src + i]
 			if _pg < 0.995:
-				# distance: darker and a little quieter the further out it
-				# swims - the FILTER carries the distance cue; the gain is
-				# linear (squaring it buried a fresh cast at ~8% amplitude,
-				# inaudible at full volume). The coefficient refreshes every
-				# 64 samples as the glide moves.
+				# distance: darker and a little quieter the further out; the filter carries the cue and
+				# the gain is linear (a squared gain buries a fresh cast at ~8% amplitude). The
+				# coefficient refreshes every 64 samples as the glide moves.
 				if (i & 63) == 0:
-					# fidelity pass: the old curve (500 Hz floor) muffled any
-					# not-fully-landed voice into the reported dullness; the
-					# floor is higher and the filter opens sooner now -
-					# distance still darkens, it just stops strangling
+					# the floor is high and the filter opens early: distance darkens without strangling
 					var cut := 900.0 * pow(2.0, 4.0 * _pg)
 					kk = 1.0 - exp(-TAU * cut / Voice.SR)
 				_lp += kk * (v - _lp)
 				v = _lp * _pg
-			# LOCATION RECEPTION: a resonant band tuned to the source, swelling as
-			# the line nears the beacon, plus a faint carrier at close range (see
-			# the LOC_ consts). Off (skipped) when far from any source.
+			# location reception: a resonant band tuned to the source plus a faint carrier at close
+			# range (see the LOC_ consts); skipped when far from any source
 			_loc_prox_s += (_loc_prox - _loc_prox_s) * LOC_GLIDE
 			if _loc_prox_s > 0.004:
 				_loc_freq_s += (_loc_freq - _loc_freq_s) * LOC_GLIDE
@@ -385,8 +350,7 @@ func _push_available() -> void:
 
 
 func _generator_capacity() -> int:
-	# frames in the generator's internal ring (buffer_length * mix rate);
-	# frames_available counts FREE space, so capacity - available = queued
+	# frames in the generator's ring (buffer_length * mix rate); frames_available counts free space
 	return int(Spectrum.STREAM_BUFFER * Voice.SR)
 
 

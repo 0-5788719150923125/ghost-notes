@@ -1,26 +1,23 @@
 extends SceneTree
 
-## actor_upload_check - an Actor's note as it goes up (next/likeness.md): the Actor card reads NO TITLE, and the steps made
+## actor_upload_check - an Actor's note as it goes up (next/likeness.md): the Actor card reads no title, and the steps made
 ## from the note's words stand with the actor's on the note's Pipeline card (next/pipeline.md).
 ##
 ##   godot --headless --path . --script tests/likeness/actor_upload_check.gd
 ##
-## NO TITLE: the walk the card hands the reading announces none, and the plan's first passage is the note's
-## own words (THE CONTROL: the same panel before the Actor card announces it, as a reader announces a chapter).
-## THE TAGS STEP: with "Write each episode's tags" ticked its row is under the actor's steps on the Pipeline card, and the
-## YouTube card's line says so (THE CONTROL: the box clear, no row). GENERATE MAKES IT ONCE THE ACTOR'S OWN STEPS ARE DONE - not
-## while they run - here refused, read-only, and said on its row; a job landed gives its ✓ and replaces the
-## note's tags; Stop stops one. The actor's steps are made by the gate ([member ActorBuilder.make_with]): no
-## program runs, and no agent - and a step made so is made at once, so a run still under way (as one waiting
-## for an install is) is held by hand.
-## A PICTURE ON THE CARD IS CLICKED by the left button's press alone (`ActorCard.clicked`): a wheel's notch, a release
-## or the right button opens nothing (2026-10-23: scrolling over the sets opened dozens of their sheets).
-## A VIDEO TICKED REBUILDS NO ROW (2026-10-23: every tick held the app for seconds while all of them were made again);
-## TICK ALL AND UNTICK ALL set every box and the actor's file (THE CONTROL: a video added does make the rows again) -
-## the card's sources and videos, a part it shares with the Voice training card ([ActorSourceList]).
-## NOTHING OUTSIDE THE TEST ROOT: the actors in a library moved aside ([method Actors.use_for_test]), the note's
-## folder under it, and no actor added to the author's library (its folders are only listed: the author's
-## build may be writing inside one).
+## No title: the walk the card hands the reading announces none, and the plan's first passage is the note's own words (control:
+## the same panel before the Actor card announces it).
+## The tags step: with "Write each episode's tags" ticked its row is under the actor's steps on the Pipeline card, and the
+## YouTube card's line says so (control: the box clear, no row). Generate makes it once the actor's own steps are done, not
+## while they run (refused, read-only, said on its row); a job landed gives its ✓ and replaces the note's tags; Stop stops one.
+## The actor's steps are made by the gate ([member ActorBuilder.make_with]): no program runs and no agent, and a step made so
+## is made at once, so a run still under way (as one waiting for an install is) is held by hand.
+## A picture on the card is clicked by the left button's press alone (`ActorCard.clicked`): a wheel's notch, a release or the
+## right button opens nothing.
+## A video ticked rebuilds no row; Tick all and Untick all set every box and the actor's file (control: a video added does make
+## the rows again) - the card's sources and videos, shared with the Voice training card ([ActorSourceList]).
+## Nothing outside the test root: the actors in a library moved aside ([method Actors.use_for_test]), the note's folder under it,
+## and no actor added to the author's library (its folders are only listed).
 
 const ROOT := "user://actor_upload_check"
 const WORDS := "The quick brown fox jumps over the lazy dog."
@@ -36,7 +33,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	# A GATE NEVER WRITES THE SETTINGS OF WHOEVER RUNS IT, and starts no agent
+	# a gate never writes the settings of whoever runs it, and starts no agent
 	var settings := root.get_node_or_null("Settings")
 	if settings != null:
 		settings.set("_read_only", true)
@@ -64,7 +61,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _check() -> void:
-	# A PICTURE CLICKED: the left button's press; THE CONTROLS: the wheel's notches, a release, the right button
+	# a picture clicked: the left button's press; controls: the wheel's notches, a release, the right button
 	var card_script = load("res://src/likeness/actor_card.gd")
 	var press := func(button: MouseButton, down: bool) -> InputEventMouseButton:
 		var ev := InputEventMouseButton.new()
@@ -75,7 +72,7 @@ func _check() -> void:
 		and not card_script.clicked(press.call(MOUSE_BUTTON_WHEEL_UP, true)) and not card_script.clicked(press.call(MOUSE_BUTTON_LEFT, false))
 		and not card_script.clicked(press.call(MOUSE_BUTTON_RIGHT, true)) and not card_script.clicked(InputEventMouseMotion.new()),
 		"a picture is clicked by the left button's press alone, never by the wheel")
-	# AN ACTOR WITH TWO VIDEOS (a few bytes is a video to the library, which reads only their names)
+	# an actor with two videos (a few bytes is a video to the library, which reads only their names)
 	var footage := ProjectSettings.globalize_path(ROOT).path_join("footage_in")
 	DirAccess.make_dir_recursive_absolute(footage)
 	for n in ["First talk.mp4", "Second talk.mkv"]:
@@ -102,7 +99,7 @@ func _check() -> void:
 
 	var card = load("res://src/likeness/actor_card.gd").for_note({"workspace": ed})
 	card.apply({"id": made.id})
-	# A VIDEO TICKED REBUILDS NO ROW; TICK ALL AND UNTICK ALL TAKE EVERY ONE
+	# a video ticked rebuilds no row; tick all and untick all take every one
 	card._refresh()
 	var rows_before: Array = card._sources._videos_box.get_children()
 	var first_vid := String(card._sources._ticks.keys()[0])
@@ -169,7 +166,7 @@ func _check() -> void:
 	_ok(step.state(feed) == "failed" and (r["text"] as Label).text.contains("read-only"),
 		"then Generate starts the tags - here refused, read-only, and said on its row (%s)" % (r["text"] as Label).text)
 
-	# A JOB LANDED: its ✓, and the note's tags replaced
+	# a job landed: its ✓, and the note's tags replaced
 	step._errors.clear()
 	AgentJobs._ended["text-actor-upload-check"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"fable\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-actor-upload-check", "feed": feed, "stamp": feed.stamp()}
@@ -180,18 +177,18 @@ func _check() -> void:
 		and ed._doc.field("tags") == "quick brown fox, lazy dog, fable",
 		"landed: its ✓, and the note's tags replaced (%s)" % (r["text"] as Label).text)
 
-	# STOP stops a job writing them
+	# stop stops a job writing them
 	step._jobs[feed.folder()] = {"id": "text-actor-upload-check-2", "feed": feed, "stamp": feed.stamp()}
 	pipe._stop.pressed.emit()
 	_ok(not step.busy(feed) and not pipe.busy(), "Stop stops the tags being written")
 
-	# WORDS WRITTEN AGAIN: stale, and the row says what makes them again
+	# Words written again: stale, and the row says what makes them again
 	ed._text.text = "Words written again."
 	_tick(card, up, pipe)
 	r = pipe.row(step.key)
 	_ok(step.state(feed) == "missing" and (r["text"] as Label).text.contains("so does Generate, or an export that goes up"),
 		"words written again make them stale, and the row says Generate makes them again (%s)" % (r["text"] as Label).text)
-	# THE ⟳ ON THE ACTOR'S OWN STEPS ASKS: what they make is hours of the processor's time
+	# THE ⟳ on the actor's own steps asks: what they make is hours of the processor's time
 	_ok(not pipe.row("survey", "Actor").is_empty() and pipe.asks_first("survey", "Actor"),
 		"the actor's own steps are the Actor section's, and their ⟳ asks first: what it makes is hours of work")
 	card.free()

@@ -4,68 +4,42 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/table/lights_check.gd
 ##
-## - WHATEVER IS WRITTEN BUILDS: unknown looks and kinds are dropped and said so, numbers clamped,
-##   directions named or in degrees, colors colors, caps kept (screens, lamps, lamps that cast); a screen
-##   or a bird with no sun is left out, and a sun through a wall is lowered to WALL_SUN. Nothing written
-##   is `{}`: no light of its own.
-## - THE VOCABULARY names every sun, screen, lattice, bird, lamp and direction.
-## - THE NOISE both reckon alike stays in range and repeats; fewer octaves are smoother.
-## - WHERE THE SUN FALLS: through a window, its patch lands where it is aimed and moves with it, its bars
-##   shade some of it, and everything past it is shaded - against no screen, where all of it is lit; an
-##   awning shades the share of the table asked of it, a parasol shades round its middle, leaves hold
-##   back about what they cover and stir with the time (and not without sway), blinds let through about
-##   what they are open, every lattice lets some through and holds some back. A wall stands past
-##   everything on the set, on the sun's side; a canopy over it.
-## - CLOUDS: none, and the sun is whole; a covered sky holds it back steadily; the time in cloud follows
-##   the cover; no cloud passes in a flicker - against the field's four octaves, where some do; the same
-##   time gives the same light.
-## - BIRDS cross about as often as asked, each over the table, the same every time; a hawk's shadow
-##   wheels back over the table more than once in a visit; a flock flies together.
-## - LAMPS stand out of the shot - one asked for in it is moved up out of it, one asked for outside it
-##   stays; each flickers its own way as a function of the time: headlights only as they pass, a screen
-##   changing with its cuts. A LAMP MOVED OUT OF THE SHOT MIRRORS NOTHING (the-quiet-crucible 181083: the
-##   brazier's lamp, lifted behind the cauldron, a hot spot dancing in the brew) - the control: one where it
-##   was written keeps its glint.
-## - AN ELECTRIC LIGHT IS STEADY (the user, 2026-10-19: flickering "in nearly every episode ... it flickers
-##   "all the way" on and off (when typically flickering would be more like a brown-out, with partial
-##   failure, not complete loss of light)"): a lamp, tubes and a sign never dim unless written `failing`.
-##   A FAILING one, over an hour: a few bad spells about as often as asked, and dim under a tenth of the
-##   time; in a spell, sags bunched three and more together, never darker than a brown-out but for a rare
-##   moment all but out; a bulb's light falling no faster than its filament cools - the voltage drops at
-##   once, the light's least comes tens of milliseconds after (the control) - and warmer as it dims; a
-##   tube's bank and a sign losing one tube or one stroke; the same at any time asked.
-## - LIGHTNING (the user, 2026-10-15: "usually just two flickers, which fade-in/fade-out slowly... It
-##   would come and go, while flickering with different levels of intensity and persistence"), as a
-##   camera takes it at 60 frames a second over an hour's storm: dark but for its flashes; a stroke gone
-##   in a frame or two; flashes unalike - some a single blink and some flickering five times and more,
-##   near and bright or far and faint, some over in a tenth of a second and some holding lit a quarter
-##   of a second and more; flashes in bursts, about as often as asked; every flash's light reaching
-##   the frames whole however its strokes fall between them; and a flash photographed for the set
-##   dresser caught lit (against the moments picked by the clock). The controls: the retired flash on the
-##   same storm (two to four pulses alike, each dying over 60 ms) flickers alike, as bright every time,
-##   and slowly; the retired storm's gaps come in no bursts; and a flash taken at each frame's instant
-##   loses or doubles a stroke's light.
-## - BUILT: a sun that casts, its screens and birds shadow-only on SCREEN_LAYERS, no lamp casting with
-##   them; a soft canopy casts the sun SOFT_SUNS times, each sun its own copy of it and every crisp screen
-##   and bird (against crisp screens alone: one sun, one caster each); at most MAX_SHADOWED lamps casting; a cloud over the sun dims it; fitted, the palest thing in
-##   the light takes no more than SUN_HEAT - against the same light unfitted, which is over it.
-## - SHADOWS OUT OF THE SHOT: unknown shapes and moves dropped and said, sizes held to CASTER_SIZE, the cap
-##   kept; each given a light to throw it (round a lamp, a lamp named that casts, the sun, the first lamp
-##   that casts) and left out with none. Built: copies round the upright and along a step, never past
-##   MAX_CASTER_MESHES. Placed: the sun throws its middle's shadow where it was aimed; raised clear of the
-##   table and out of the shot along that ray, the shadow staying put - against one asked to hang low,
-##   which had to be; round a lamp, its origin at the flame. Outlined a part at a time, so two beams leave
-##   the sun between them (against one outline round both, which does not). SWUNG: the same time is the
-##   same swing whatever order it is asked in; no wind, no swing; bounded; and a pendulum four times as
-##   long swings about twice as slowly, as the sine-pulled pendulum does. Built on CASTER_LAYER, drawn
-##   nowhere, every lamp casting with it.
-## - SHADE OF TWO QUALITIES: a crisp screen's copies are all one, a soft one's grown on one and shrunk on
-##   another; where a soft canopy's edge falls the table gets a share of the sun (a third, two thirds) -
-##   against the same canopy crisp, which gives all or none - and about as much of the sun in all. THE
-##   SKY'S SHADOW: asked for, the fill from everywhere takes more of the sky and the stage's SSAO
-##   occludes it, off again when the light is released - against none asked, which occludes nothing. THE WIND: a gust
-##   stirs a swaying canopy (the pattern moves), and not one with no sway; a light that wrote a wind has
-##   it, one that did not has none; a swing in the table's wind is the same swing asked twice.
+## - Whatever is written builds: unknown looks and kinds dropped and said, numbers clamped, directions named or in degrees, caps kept
+##   (screens, lamps, lamps that cast); a screen or a bird with no sun is left out, a sun through a wall is lowered to WALL_SUN. Nothing
+##   written is `{}`: no light of its own. The vocabulary names every sun, screen, lattice, bird, lamp and direction.
+## - The noise both reckon alike stays in range and repeats; fewer octaves are smoother.
+## - Where the sun falls: a window's patch lands where it is aimed and moves with it, its bars shade some of it, all past it is shaded
+##   (against no screen: all lit); an awning shades the share asked, a parasol round its middle, leaves hold back about what they cover
+##   and stir with the time (not without sway), blinds let through about what they are open, a lattice some. A wall stands past
+##   everything on the sun's side; a canopy over it.
+## - Clouds: none, and the sun is whole; a covered sky holds it back steadily; the time in cloud follows the cover; no cloud passes in
+##   a flicker (against the field's four octaves, where some do); the same time gives the same light.
+## - Birds cross about as often as asked, each over the table, the same every time; a hawk's shadow wheels back more than once; a
+##   flock flies together.
+## - Lamps stand out of the shot (one asked for in it is moved up out of it, one outside stays), each flickering its own way as a
+##   function of the time; a lamp moved out of the shot mirrors nothing (control: one where it was written keeps its glint).
+## - An electric light is steady: a lamp, tubes and a sign never dim unless written `failing`. A failing one, over an hour: a few bad
+##   spells about as often as asked, dim under a tenth of the time; sags bunched three and more, never darker than a brown-out but for
+##   a rare moment all but out; a bulb's light falling no faster than its filament cools (control: the voltage drops at once, the
+##   light's least comes tens of milliseconds after) and warmer as it dims; a tube's bank and a sign losing one tube or one stroke.
+## - Lightning, as a camera takes it at 60 frames a second over an hour's storm: dark but for its flashes; flashes unalike (a single
+##   blink or five flickers and more, near and bright or far and faint, over in a tenth of a second or lit a quarter of a second and
+##   more), in bursts, about as often as asked; every flash's light reaching the frames whole; a flash photographed for the set dresser
+##   caught lit. Controls: the earlier model (`_retired_flash`: two to four alike pulses, each dying over 60 ms) flickers alike and
+##   slowly, the earlier storm's gaps come in no bursts, and a flash taken at each frame's instant loses or doubles a stroke's light.
+## - Built: a sun that casts, its screens and birds shadow-only on SCREEN_LAYERS; a soft canopy casts the sun SOFT_SUNS times, each sun
+##   its own copy and every crisp screen and bird (against crisp screens alone: one sun, one caster each); at most MAX_SHADOWED lamps
+##   cast; a cloud over the sun dims it; fitted, the palest thing in the light takes no more than SUN_HEAT.
+## - Shadows out of the shot: unknown shapes and moves dropped and said, sizes held to CASTER_SIZE, the cap kept; each given a light to
+##   throw it (round a lamp, a lamp named that casts, the sun, the first lamp that casts) and left out with none. Copies round the
+##   upright and along a step, never past MAX_CASTER_MESHES, on CASTER_LAYER, drawn nowhere. The sun throws its middle's shadow where it
+##   was aimed, raised clear of the table along that ray with the shadow staying put; round a lamp, its origin at the flame; outlined a
+##   part at a time, so two beams leave the sun between them. Swung: the same time is the same swing in any order; no wind, no swing;
+##   bounded; a pendulum four times as long swings about twice as slowly.
+## - Shade of two qualities: a crisp screen's copies are all one, a soft one's grown on one and shrunk on another; where a soft
+##   canopy's edge falls the table gets a share of the sun (a third, two thirds), against the same canopy crisp, which gives all or none,
+##   and about as much of the sun in all. The sky's shadow: asked for, the fill takes more of the sky and the stage's SSAO occludes it,
+##   off again when released. The wind: a gust stirs a swaying canopy and not one with no sway; a light that wrote a wind has it.
 
 var _fails := 0
 var _rng := RandomNumberGenerator.new()
@@ -198,7 +172,7 @@ func _noise() -> bool:
 	return true
 
 
-## WHERE THE SUN FALLS THROUGH A WINDOW, two-sided.
+## Where the sun falls through a window, two-sided.
 func _window() -> bool:
 	var at := Vector2(10.0, -8.0)
 	var light := _light({"through": [{"name": "w", "kind": "window", "at": [at.x, at.y], "size": [100, 140], "panes": [2, 3], "bars": 4}]})
@@ -227,7 +201,7 @@ func _window() -> bool:
 	# the control: no screen, all of it lit
 	_ok(Lights.coverage(_geom(_light()), s, _seen(), 0.0) == 1.0, "control: with nothing to fall through, not all the table is lit")
 	_ok(Lights.coverage(g, s, _seen(), 0.0) < 0.9, "a window lights nearly all the table: the wall shades nothing")
-	# THE WALL STANDS PAST EVERYTHING on the sun's side, from every side
+	# the wall stands past everything on the sun's side, from every side
 	for from in [0.0, 60.0, 90.0, 150.0, 200.0, 270.0, 330.0]:
 		for h in [10.0, 40.0, 65.0]:
 			var lw := _light({"through": [{"name": "w", "kind": "window"}]}, {"from": from, "height": h})
@@ -243,7 +217,7 @@ func _window() -> bool:
 	return true
 
 
-## WHAT ELSE THE SUN FALLS THROUGH, each against what it was asked.
+## What else the sun falls through, each against what it was asked.
 func _screens() -> bool:
 	var seen := _seen()
 	var sun := {"look": "sun", "from": "right", "height": 50}
@@ -317,7 +291,7 @@ func _clouds() -> bool:
 				n += 1
 		var share := under / float(n)
 		_ok(absf(share - cover) < 0.2, "clouds covering %.0f%% of the sky hide the sun %.0f%% of the time" % [cover * 100.0, share * 100.0])
-	# NO CLOUD IN A FLICKER: the shortest passing over an hour, against the four-octave field
+	# no cloud in a flicker: the shortest passing over an hour, against the four-octave field
 	var shortest := INF
 	var shortest4 := INF
 	var f2 := Lights.cloud_field(Lights.sanitize({"sun": {}, "clouds": {"cover": 0.3, "size": 0.3, "speed": 0.7}})["clouds"], 11)
@@ -425,7 +399,7 @@ func _lamps() -> bool:
 	return true
 
 
-## AN ELECTRIC LIGHT IS STEADY, and a FAILING one browns out ([method Lights._failing]).
+## An electric light is steady, and a failing one browns out ([method Lights._failing]).
 func _failing() -> bool:
 	for look in ["lamp", "hanging lamp", "street lamp", "fluorescent", "neon"]:
 		var fk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": look}]})["lamps"][0], 6)
@@ -479,7 +453,7 @@ func _failing() -> bool:
 	_ok(lowest >= 0.2 and lowest < 0.8, "a failing bulb, all but out only in its dropouts, sank to %s" % str(snappedf(lowest, 0.01)))
 	_ok(fastest < 0.45, "a failing bulb dimmed %s in one frame - faster than a filament cools" % str(snappedf(fastest, 0.01)))
 	_ok(warm, "a failing bulb dimmed without warming")
-	# THE FILAMENT LAGS: the voltage drops at once, the light's least comes tens of milliseconds after
+	# the filament lags: the voltage drops at once, the light's least comes tens of milliseconds after
 	var lamp: Dictionary = Lights.sanitize({"lamps": [{"look": "lamp", "failing": true}]})["lamps"][0]
 	var fk := Lights.flicker_of(lamp, 41)
 	var s0 := float((fk["spells"] as PackedFloat32Array)[0])
@@ -495,7 +469,7 @@ func _failing() -> bool:
 		t += 0.001
 	_ok(float(sg[1]) - float(sg[0]) < 0.03 or least_at >= 0.03, "a bulb's light was least %s s into a sag: no slower than the voltage" % str(snappedf(least_at, 0.001)))
 	_ok(float(Lights.flicker("lamp", fk, s0 + float(sg[0]) + 0.001)["bright"]) > 0.95, "the control: a bulb went dark the moment the voltage sagged")
-	# A TUBE'S BANK loses one tube; a sign one stroke
+	# a tube's bank loses one tube; a sign one stroke
 	for look in ["fluorescent", "neon"]:
 		var tf := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": look, "failing": true, "every": 120}]})["lamps"][0], 7)
 		var parts := float(tf["parts"])
@@ -514,7 +488,7 @@ func _failing() -> bool:
 				any = any or b < 0.999
 				t2 += 0.004
 		_ok(any and low >= 1.0 - 1.0 / parts - 1e-3, "a failing %s fell to %s, more than one of its %d tubes or strokes" % [look, str(snappedf(low, 0.01)), int(parts)])
-	# THE SAME AT ANY TIME ASKED
+	# the same at any time asked
 	var times: Array = []
 	for i in 400:
 		times.append(s0 - 0.2 + float(i) * 0.013)
@@ -530,7 +504,7 @@ func _failing() -> bool:
 	return true
 
 
-## LIGHTNING over an hour's storm, against the retired flash and the retired storm.
+## Lightning over an hour's storm, against the retired flash and the retired storm.
 func _lightning() -> bool:
 	var fk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "lightning", "every": 20}]})["lamps"][0], 5)
 	var events: PackedFloat32Array = fk["events"]
@@ -557,7 +531,7 @@ func _lightning() -> bool:
 	_ok((now["runs"] as Array).min() <= 100.0 and (now["runs"] as Array).max() >= 250.0,
 		"flashes are not some over in a tenth of a second, some holding lit a quarter (lit %d to %d ms)" % [(now["runs"] as Array).min(), (now["runs"] as Array).max()])
 	_ok((old["runs"] as Array).min() > 100.0, "control: every retired flash lingers (%d ms the least)" % (old["runs"] as Array).min())
-	# IN BURSTS, about as often as asked - against the retired storm's gaps, each 20 s times e^N(0, 0.5)
+	# in bursts, about as often as asked - against the retired storm's gaps, each 20 s times e^N(0, 0.5)
 	var soon := 0
 	var gaps := 0
 	var r := RandomNumberGenerator.new()
@@ -572,7 +546,7 @@ func _lightning() -> bool:
 	_ok(float(soon) >= 0.15 * float(gaps) and gaps > 3600 / 26 and gaps < 3600 / 14,
 		"lightning does not come in bursts about every 20 s (%d flashes, %d within 8 s of the last)" % [gaps, soon])
 	_ok(float(soon_old) < 0.1 * float(gaps), "control: the retired storm's flashes come in no bursts (%d of %d)" % [soon_old, gaps])
-	# EVERY FLASH'S LIGHT REACHES THE FRAMES WHOLE: what the frames take adds up to what it throws - against
+	# every flash's light reaches the frames whole: what the frames take adds up to what it throws - against
 	# each frame taken at its instant
 	var off := 0.0
 	var off_instant := 0.0
@@ -593,7 +567,7 @@ func _lightning() -> bool:
 			instant += (Lights._flash_light(pulses, u) - Lights._flash_light(pulses, u - 1e-6)) / 1e-6 / 60.0
 		off = maxf(off, absf(framed - whole) / whole)
 		off_instant = maxf(off_instant, absf(instant - whole) / whole)
-	# PHOTOGRAPHED at its flickers - against the moments the retired preview picked by the clock
+	# photographed at its flickers - against the moments the retired preview picked by the clock
 	var shot := 0
 	var shot_old := 0
 	var after := 1.0
@@ -684,8 +658,8 @@ func _spread(a: Array) -> float:
 	return float(b[b.size() * 9 / 10]) / maxf(float(b[b.size() / 10]), 1e-6)
 
 
-## THE RETIRED FLASH (until 2026-10-15): at each strike two to four pulses, each dying over 60 ms, the
-## first full and the rest at 0.7 - taken at the frame's instant.
+## The earlier flash model: at each strike two to four pulses, each dying over 60 ms, the first full and the rest at 0.7, taken at
+## the frame's instant.
 func _retired_flash(fk: Dictionary, t: float) -> float:
 	var starts: PackedFloat32Array = fk["events"]
 	var i := Lights._segment(starts, t)
@@ -712,7 +686,7 @@ func _built() -> bool:
 	var rig := Lights.build(light, stage, 11)
 	root.add_child(rig.root)
 	_ok(rig.sun != null and rig.sun.shadow_enabled, "the sun casts no shadow")
-	# THE LEAVES ARE SOFT (their default): the sun cast SOFT_SUNS times, each with a layer of its own
+	# the leaves are soft (their default): the sun cast SOFT_SUNS times, each with a layer of its own
 	_ok(rig.suns.size() == Lights.SOFT_SUNS, "a soft canopy's sun is cast %d times, not %d" % [rig.suns.size(), Lights.SOFT_SUNS])
 	var screens := 0
 	var per_sun: Array = []
@@ -756,7 +730,7 @@ func _built() -> bool:
 	var bright := rig.sun.light_energy
 	rig.tick(cloudy)
 	_ok(clear >= 0.0 and cloudy >= 0.0 and rig.sun.light_energy < bright * 0.3, "a cloud over the sun leaves %.2f of %.2f" % [rig.sun.light_energy, bright])
-	# THE EXPOSURE: fitted to a pale table, the palest thing takes no more than SUN_HEAT - unfitted, more
+	# the exposure: fitted to a pale table, the palest thing takes no more than SUN_HEAT - unfitted, more
 	var pale := 0.8
 	var e := rig.sun_asked * sin(deg_to_rad(rig.sun_height)) + Lights.SKY_MAX * 0.6
 	_ok(e * pale > Lights.SUN_HEAT, "control: unfitted, a pale table takes no more than the cap (%.2f)" % (e * pale))
@@ -770,7 +744,7 @@ func _built() -> bool:
 	return true
 
 
-## SHADOWS OUT OF THE SHOT.
+## Shadows out of the shot.
 func _shadows() -> bool:
 	var notes := PackedStringArray()
 	var l := Lights.sanitize({"sun": {"from": "back left", "height": 35},
@@ -800,7 +774,7 @@ func _shadows() -> bool:
 	var dark_notes := PackedStringArray()
 	_ok((Lights.sanitize({"sky": {}, "shadows": [{"name": "x", "parts": [{"shape": "box"}]}]}, dark_notes)["shadows"] as Array).is_empty()
 		and str(dark_notes).contains("no light throws its shadow"), "a shadow with no light to throw it was kept, or not said")
-	# BUILT: copies round and along, and never past the cap
+	# built: copies round and along, and never past the cap
 	var arms := Lights.caster_meshes(Lights.sanitize({"sun": {}, "shadows": [{"name": "c", "parts": [{"shape": "ring", "radius": 30},
 		{"parts": [{"shape": "tube", "path": [[0, 0, 0], [30, 0, 0]], "radius": 1}], "copies": {"around": {"count": 6}}}]}]})["shadows"][0]["parts"])
 	var angles := {}
@@ -816,7 +790,7 @@ func _shadows() -> bool:
 	var many := Lights.caster_meshes(Lights.sanitize({"sun": {}, "shadows": [{"name": "m", "parts": [{"shape": "tube", "path": long_path,
 		"copies": {"around": {"count": 16}}}]}]})["shadows"][0]["parts"])
 	_ok(many.size() == Lights.MAX_CASTER_MESHES, "a shadow built past the cap: %d parts" % many.size())
-	# PLACED by where its shadow falls
+	# placed by where its shadow falls
 	var lay := CardTable.layout_of(1234)
 	var cam: Transform3D = lay["camera"]
 	var fov := float(lay["fov"])
@@ -841,7 +815,7 @@ func _shadows() -> bool:
 	var rc: Dictionary = sunny["shadows"][2]
 	var rp := Lights.caster_place(rc, Lights.caster_meshes(rc["parts"]), sunny, stage, lamps_at)
 	_ok(((rp["xform"] as Transform3D).origin).distance_to(lamps_at["glow"]) < 1e-4, "a thing round its lamp is not centered on the flame")
-	# OUTLINED a part at a time: two beams leave the sun between them
+	# outlined a part at a time: two beams leave the sun between them
 	var two := Lights.sanitize({"sun": {"from": "front", "height": 70}, "shadows": [{"name": "two", "parts": [{"shape": "box", "size": [300, 10, 10],
 		"copies": {"line": {"count": 2, "step": [0, 0, 60]}}}], "shadow": [0, 0], "height": 200}]})
 	var tc: Dictionary = two["shadows"][0]
@@ -857,7 +831,7 @@ func _shadows() -> bool:
 	for o in outlines:
 		all_pts.append_array(o)
 	_ok(Geometry2D.is_point_in_polygon(between, Geometry2D.convex_hull(all_pts)), "control: one outline round both does not take in the sun between them")
-	# SWUNG
+	# swung
 	var sw := Lights.swing_of(1.0, 0.5, 4242)
 	var later := Lights.swing_of(1.0, 0.5, 4242)
 	Lights.swing_at(later, 90.0)
@@ -889,7 +863,7 @@ func _shadows() -> bool:
 				crosses += 1
 			prev = x
 	_ok(crosses <= 2, "a push rings back and forth %d times (well damped: at most 2)" % crosses)
-	# BUILT on its layer, drawn nowhere, cast by every lamp
+	# built on its layer, drawn nowhere, cast by every lamp
 	var root := Node3D.new()
 	get_root().add_child(root)
 	var rig := Lights.build(sunny, {"middle": Vector3(0.0, 0.0, -0.02), "bounds": _bounds(), "seen": _seen(), "env": Environment.new(), "room": null,
@@ -948,7 +922,7 @@ func _shade() -> bool:
 	var sc := (soft_l["through"] as Array)[0] as Dictionary
 	_ok(Lights.grow_of(sc, 1) > 0.0 and is_equal_approx(Lights.grow_of(sc, 2), -Lights.grow_of(sc, 1)) and Lights.grow_of(sc, 0) == 0.0,
 		"a soft canopy's copies are not grown, shrunk and left: %s" % str([Lights.grow_of(sc, 0), Lights.grow_of(sc, 1), Lights.grow_of(sc, 2)]))
-	# SHARES OF THE SUN where a soft edge falls - against all or none under a crisp one
+	# shares of the sun where a soft edge falls - against all or none under a crisp one
 	var s := Lights.sun_dir(soft_l["sun"])
 	var gs := _geom(soft_l)
 	var gc := _geom(crisp_l)
@@ -965,7 +939,7 @@ func _shade() -> bool:
 	var cov_s := Lights.coverage(gs, s, pts, 3.0)
 	var cov_c := Lights.coverage(gc, s, pts, 3.0)
 	_ok(absf(cov_s - cov_c) < 0.12, "softening moved the sun reaching the table from %.2f to %.2f" % [cov_c, cov_s])
-	# THE SKY'S SHADOW
+	# the sky's shadow
 	var stage := {"middle": Vector3(0.0, 0.0, -0.02), "bounds": _bounds(), "seen": _seen(), "env": Environment.new(), "room": null, "in_shot": Callable()}
 	var env: Environment = stage["env"]
 	var shaded := Lights.build(_light({"sky": {"color": "#c8ccd0", "strength": 0.7, "shadows": 0.7}}), stage, 5)
@@ -976,7 +950,7 @@ func _shade() -> bool:
 	var plain := Lights.build(_light({"sky": {"color": "#c8ccd0", "strength": 0.7}}), stage, 5)
 	_ok(not env.ssao_enabled and plain.sky_top == Lights.SKY_TOP, "a sky asked for no shadow occludes its fill")
 	plain.root.free()
-	# THE WIND stirs what sways
+	# the wind stirs what sways
 	var u: Dictionary = (gc[0] as Dictionary)["u"]
 	var calm := u.duplicate()
 	var gusty := u.duplicate()

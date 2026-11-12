@@ -6,11 +6,11 @@ an actor's head of splats is trained through (next/likeness.md, "A head of splat
     means2d, conics, depth, radii = raster.project(means3d, scales, rotations)
     image, alpha = raster.rasterize(means2d, conics, colors, opacities, depth, radii, H, W, background)
 
-ONE FIXED CAMERA, FAR AWAY: the frames are a locked camera's and a head is small against its distance, so
+One fixed camera, far away: the frames are a locked camera's and a head is small against its distance, so
 the projection is orthographic and everything is in image pixels - x right, y down, z the depth (smaller
 is nearer), a pixel (px, py) sampled at its center (px + 0.5, py + 0.5).
 
-THE RULES, so another renderer (the app's compute shader) draws the same picture. All float32, and every
+The rules, so another renderer (the app's compute shader) draws the same picture. All float32, and every
 product and sum rounded on its own: the kernels are compiled without fused multiply-adds, and a shader
 must say `precise` to match.
 - project: q = rotation / |rotation|, R its matrix, M = R diag(s); Sigma2 = (M M^T)[:2, :2] + 0.3 I, as
@@ -31,13 +31,13 @@ must say `precise` to match.
 Only exp is not exact: here it is CUDA's expf (libdevice's, the same bits as torch.exp), and a shader's
 exp may differ in its last bits - enough, on a knife edge, to pass over a splat this keeps.
 
-THE BACKWARD IS 3DGS'S: each pixel walks back from its last contributor (`n`, saved with the final T),
+The backward is 3DGS's: each pixel walks back from its last contributor (`n`, saved with the final T),
 dividing T back out and carrying the color of what lies behind, and each splat's gradient is summed over
 the tile's 256 pixels and added atomically. Two departures: no gradient goes through alpha where the 0.99
 clamp holds (3DGS lets one through), and b is the conic's off-diagonal counted twice in the form, so
 dpower/db = -dx dy (3DGS keeps half that for its own symmetric convention).
 
-THE SUMS ARE IN NO FIXED ORDER: a splat's gradient is added by every tile it touches, in whatever order the
+The sums are in no fixed order: a splat's gradient is added by every tile it touches, in whatever order the
 tiles finish, so its last bits differ from run to run. A forward is the same every time.
 
 `reference` composites the same splats densely in plain torch, for the tests: a table of every pixel
@@ -60,8 +60,7 @@ ALPHA_MAX = torch.tensor(0.99, dtype=torch.float32).item()
 T_MIN = torch.tensor(1e-4, dtype=torch.float32).item()
 # A splat's packed row: mean x, y; conic a, b, c; opacity; color r, g, b.
 ROW = 9
-# Two warps to a tile, four pixels a thread: measured against one, four and eight, the backward's nine
-# sums a splat cost least across two.
+# Two warps to a tile, four pixels a thread (the least backward cost among one, two, four and eight).
 WARPS = 2
 
 
@@ -79,7 +78,7 @@ def project(means3d: torch.Tensor, scales: torch.Tensor, rotations: torch.Tensor
     a = a0 + LOW_PASS
     b = (r0 * r1).sum(-1)
     c = c0 + LOW_PASS
-    # a c - b b cancels to nothing for a thin splat (float32 kept 1e-4 of it); by Cauchy-Binet, with row 0
+    # a c - b b cancels to nothing for a thin splat in float32; by Cauchy-Binet, with row 0
     # x row 1 = row 2, the same determinant is a sum of positive terms.
     s2 = scales * scales
     det0 = (s2[:, 1] * s2[:, 2] * r2[:, 0] * r2[:, 0] + s2[:, 0] * s2[:, 2] * r2[:, 1] * r2[:, 1]
@@ -320,8 +319,8 @@ def reference(means2d, conics, colors, opacities, depth, radii, H: int, W: int, 
     """`rasterize`, densely in plain torch (autograd): every pixel against every splat, under the same
     tile cut, skips, clamp and stop. Its alphas are float32 by the kernel's own steps (torch.exp is
     libdevice's expf), so the two pass over the same splats. The stop is found with float32's running
-    product, as the kernel finds it: a float64 one disagrees on real knife edges - two clamped splats in
-    a row leave (1 - 0.99)^2, 2e-6 under 1e-4. The compositing itself is in float64."""
+    product, as the kernel finds it (a float64 one disagrees on knife edges). The compositing itself is
+    in float64."""
     dev = means2d.device
     order = torch.sort(depth.detach(), stable=True).indices
     x0, x1, y0, y1 = (v[order] for v in tile_rects(means2d, radii, H, W))

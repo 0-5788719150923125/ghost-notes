@@ -1,32 +1,27 @@
 extends SceneTree
 
-## The gate of THE WIND'S REACH ([Winds]): what the light's wind does to everything in the air beside
-## the petals - flames, lamps, motes, bursts and fog - with no renderer.
+## The gate of the wind's reach ([Winds]): what the light's wind does to everything in the air beside the petals - flames, lamps,
+## motes, bursts and fog - with no renderer.
 ##
 ##   godot --headless --path . --script res://tests/table/wind_reach_check.gd
 ##
-## - ONLY A WIND THE LIGHT WROTE moves anything: still air planned for what drifts moves no flame, no
-##   lamp, no mote, no particle, no fog - motes stand exactly where they stand with no wind at all.
-##   Two-sided: the same population in a written wind is moved.
-## - THE WIND'S VELOCITY is what [method Winds.carried] sums (a numeric integral agrees), and its EDDIES
-##   churn about it by [constant Winds.TURBULENCE] of its speed - alike a centimeter apart, unlike two
-##   meters apart.
-## - A FLAME LEANS as tan(tilt) = the draft over its draw: a candle by about that, sheltered by glass hardly
-##   at all, guttering only in a strong gust; a torch's taller flame leans less than a candle's in the same
-##   air, a lantern hardly; an electric lamp has no flame. A flame stands in a hurricane glass, not beside a
-##   candelabra's stem, nor in its own wax.
-## - CANDLES ON ONE TABLE LEAN ALIKE (the user, 2026-10-11): in a draft along the view, flames a few
-##   centimeter-wide eddies apart still agree which way they lean; the eddies' cross-wind half, left whole,
-##   is a control that must fall short of it.
-## - WHAT RIDES THE AIR is carried downwind at the air's speed and comes round again, so the shot holds about
-##   as many as it did; WHAT FLIES holds its place in a breeze it can beat, is carried off by a gust past its
-##   strength and flies home after. Two-sided: the same mote with no airspeed is carried off by the breeze,
-##   and with a huge one is not moved by the gust. Asked twice, a mote is where it was.
-## - A BURST'S PARTICLE is born with the air's run at its birth, and the shader's closed form for a
-##   particle slowed toward the wind (mirrored here) follows a stepped integration of the same drag within a
-##   centimeter. Two-sided: without the lag still to make up it misses by many. In still air the run is
-##   zero (else every particle would be thrown a meter by the old column).
-## - FOG rolls with the wind instead of its own drift.
+## - Only a wind the light wrote moves anything: still air planned for what drifts moves no flame, lamp, mote, particle or fog;
+##   motes stand exactly where they stand with no wind at all. Two-sided: the same population in a written wind is moved.
+## - The wind's velocity is what [method Winds.carried] sums (a numeric integral agrees), and its eddies churn about it by
+##   [constant Winds.TURBULENCE] of its speed - alike a centimeter apart, unlike two meters apart.
+## - A flame leans as tan(tilt) = the draft over its draw: a candle by about that, sheltered by glass hardly at all, guttering only
+##   in a strong gust; a torch's taller flame leans less than a candle's in the same air, a lantern hardly; an electric lamp has no
+##   flame. A flame stands in a hurricane glass, not beside a candelabra's stem, nor in its own wax.
+## - Candles on one table lean alike: in a draft along the view, flames a few centimeter-wide eddies apart still agree which way
+##   they lean; the eddies' cross-wind half, left whole, is a control that must fall short of it.
+## - What rides the air is carried downwind at the air's speed and comes round again, so the shot holds about as many as it did;
+##   what flies holds its place in a breeze it can beat, is carried off by a gust past its strength and flies home after.
+##   Two-sided: the same mote with no airspeed is carried off by the breeze, and with a huge one is not moved by the gust. Asked
+##   twice, a mote is where it was.
+## - A burst's particle is born with the air's run at its birth, and the shader's closed form for a particle slowed toward the wind
+##   (mirrored here) follows a stepped integration of the same drag within a centimeter. Two-sided: without the lag still to make
+##   up it misses by many. In still air the run is zero.
+## - Fog rolls with the wind instead of its own drift.
 
 var _fails := 0
 
@@ -74,7 +69,7 @@ func _written() -> bool:
 	_ok(Winds.blows(_breeze(0.5)), "a written wind does not blow")
 	_ok(not Winds.blows(Winds.plan({}, 3)), "still air planned for what drifts blows")
 	_ok(not Winds.blows({}), "no plan blows")
-	# MOTES IN STILL AIR stand where they stand with no wind at all
+	# Motes in still air stand where they stand with no wind at all
 	var fx := _clean([{"kind": "motes", "look": "dust", "where": "over the cloth", "count": 6},
 		{"kind": "motes", "look": "pixie", "where": "over the cloth", "count": 6}])
 	var none := Effects.build(fx, _stage(null), 9)
@@ -92,7 +87,7 @@ func _written() -> bool:
 				moved = maxf(moved, a.distance_to(c))
 	_ok(same, "motes in still air (no wind written) are not where they are with no wind at all")
 	_ok(moved > 0.05, "a written wind moved no mote (at most %.3f m)" % moved)
-	# NOR A LAMP'S FLAME, NOR A BURST'S AIR
+	# nor a lamp's flame, nor a burst's air
 	_ok(Lights.flame_in_wind("candles", Winds.plan({}, 3), 4.0, Vector3(1, 0.3, 1)).is_empty(), "a lamp's flame leans in still air")
 	_ok(still.wind.is_empty() and not blown.wind.is_empty(), "the air's wind is not the written one alone")
 	none.release()
@@ -132,7 +127,7 @@ func _eddies() -> bool:
 	var want := Winds.TURBULENCE * speed / float(n)
 	_ok(absf(sd - want) < 0.35 * want, "the eddies churn by %.3f m/s, not %.3f (the turbulence of the wind's speed)" % [sd, want])
 	_ok(mean.length() < 0.25 * want, "the eddies lean one way: %s" % mean)
-	# ALIKE NEARBY, UNLIKE FAR OFF
+	# Alike nearby, unlike far off
 	var near := _corr(p, at, at + Vector3(0.008, 0.0, 0.004))
 	var far := _corr(p, at, at + Vector3(2.0, 0.0, 1.5))
 	_ok(near > 0.8, "two places a centimeter apart feel unlike eddies (%.2f)" % near)
@@ -187,7 +182,7 @@ func _flames() -> bool:
 	_ok(tilt > deg_to_rad(10.0), "a candle in a breeze hardly leans (%.0f degrees)" % rad_to_deg(tilt))
 	_ok(tilt_glass < 0.3 * tilt, "a candle under glass leans %.0f degrees, as much as one in the open (%.0f)" % [rad_to_deg(tilt_glass), rad_to_deg(tilt)])
 	_ok(dim > 0.9, "a candle gutters in a mere breeze (%.2f)" % dim)
-	# A STRONG GUST guts it
+	# A strong gust guts it
 	var gale := Winds.plan(Winds.sanitize({"from": "right", "strength": 1.0, "gusts": 1.0, "every": 6}), 2)
 	var worst := 1.0
 	var leaned := 0.0
@@ -197,7 +192,7 @@ func _flames() -> bool:
 		leaned = maxf(leaned, acos(clampf((f["axis"] as Vector3).y, -1.0, 1.0)))
 	_ok(worst < 0.75, "a candle never gutters in a gale (dimmest %.2f)" % worst)
 	_ok(leaned <= Winds.FLAME_TILT + 1e-4 and leaned > 1.0, "a candle in a gale leans %.2f radians" % leaned)
-	# CANDLES ON ONE TABLE LEAN ALIKE, in the air along the view as across it
+	# Candles on one table lean alike, in the air along the view as across it
 	for from in ["back", "left"]:
 		var wp := Winds.plan(Winds.sanitize({"from": from, "strength": 0.3, "gusts": 0.5, "every": 14}), 7)
 		var spots := [Vector3(-0.6, 0.05, 0.1), Vector3(-0.2, 0.05, -0.2), Vector3(0.25, 0.05, 0.15), Vector3(0.7, 0.05, -0.1)]
@@ -221,7 +216,7 @@ func _flames() -> bool:
 		loose /= float(m)
 		_ok(kept > 0.95, "candles on one table lean alike %.2f from the %s, not 0.95" % [kept, from])
 		_ok(kept > loose + 0.04, "the cross-wind eddies left whole lean candles as alike (%.2f against %.2f)" % [loose, kept])
-	# LAMPS: a torch's tall flame leans less, a lantern's glass keeps it off, a lamp has no flame
+	# Lamps: a torch's tall flame leans less, a lantern's glass keeps it off, a lamp has no flame
 	var lamp_at := Vector3(1.2, 0.6, 0.4)
 	var candle := 0.0
 	var torch := 0.0
@@ -278,7 +273,7 @@ func _carried() -> bool:
 	var air := Effects.build(fx, stage, 4)
 	var pop: Dictionary = air.motes[0]
 	var d: Vector2 = p["dir"]
-	# DOWNWIND AT THE AIR'S SPEED, between its comings round
+	# Downwind at the air's speed, between its comings round
 	var along := 0.0
 	var v := 0.0
 	for m in pop["each"]:
@@ -292,7 +287,7 @@ func _carried() -> bool:
 				along += Vector2(step.x, step.z).dot(d) / 0.2 / float(m["carry"])
 				v += Winds.velocity_at(p, t + 0.1).length()
 	_ok(absf(along - v) < 0.1 * v, "dust rides downwind at %.0f%% of the air's speed" % (100.0 * along / maxf(v, 1e-6)))
-	# THE SHOT KEEPS ABOUT AS MANY: seen and bright, at the start and long after
+	# The shot keeps about as many: seen and bright, at the start and long after
 	var seen := func(t: float) -> float:
 		var s := 0.0
 		for m in pop["each"]:
@@ -311,7 +306,7 @@ func _carried() -> bool:
 
 
 func _fliers() -> bool:
-	# A BREEZE IT CAN BEAT moves a pixie barely, and a dust mote (no airspeed) a lot
+	# A breeze it can beat moves a pixie barely, and a dust mote (no airspeed) a lot
 	var calm := _breeze(0.5)
 	var fx := _clean([{"kind": "motes", "look": "pixie", "where": "over the cloth", "count": 4}])
 	var air := Effects.build(fx, _stage(calm), 8)
@@ -326,7 +321,7 @@ func _fliers() -> bool:
 	var m0: Dictionary = pop["each"][0]
 	var rode := ((Effects._blown(ride, m0, 21.0)["off"] as Vector3) - (Effects._blown(ride, m0, 20.0)["off"] as Vector3)).length()
 	_ok(rode > 0.15, "the same mote riding the air was carried only %.2f m in a second" % rode)
-	# A GUST PAST ITS STRENGTH carries it off, and it flies home after
+	# A gust past its strength carries it off, and it flies home after
 	var gale := Winds.plan(Winds.sanitize({"from": "right", "strength": 0.9, "gusts": 1.0, "every": 40}), 6)
 	var g := Winds.next_gust(gale, 10.0, 1.5)
 	_ok(g >= 0, "no gust past a pixie's strength to test with")
@@ -352,7 +347,7 @@ func _fliers() -> bool:
 	_ok(off_peak > 0.4, "a gust of %.1f m/s pushed a pixie only %.2f m" % [float((gale["peaks"] as PackedFloat32Array)[g]), off_peak])
 	_ok(off_after < 0.25 * off_peak, "a pixie did not fly home after the gust (%.2f m off, %.2f at the most)" % [off_after, off_peak])
 	_ok(held < 0.3 * off_peak, "a flier far stronger than the gust was pushed %.2f m, against %.2f" % [held, off_peak])
-	# ASKED TWICE - with the population's remembered wind and without - a mote is where it was
+	# Asked twice - with the population's remembered wind and without - a mote is where it was
 	var t := span.z
 	wp["felt"] = {t: Winds.memory(gale, t, float((wp["look"] as Dictionary)["back"]))}
 	var a: Vector3 = Effects.mote_at(wp, weak, t)["pos"]
@@ -381,7 +376,7 @@ func _bursts() -> bool:
 	_ok(ok, "a particle is not born with its place, its velocity and the air's run at its birth")
 	var still := Effects.build(fx, _stage(Winds.plan({}, 3)), 3)
 	_ok(Effects.particle_xform(born[0], still.wind).basis.y == Vector3.ZERO, "in still air a particle is born with a run")
-	# THE SHADER'S CLOSED FORM against a stepped integration of the same drag
+	# The shader's closed form against a stepped integration of the same drag
 	var look: Dictionary = Effects.BURSTS["smoke"]
 	var k := float(look["drag"])
 	var gravity := Vector3(0.0, float(look["gravity"]), 0.0)

@@ -1,24 +1,18 @@
 extends SceneTree
 
-## NOTHING IN A PLACE PULSES - a gate of [Soundscape] beside tests/table/soundscape_check.gd (which runs
-## close to its five minutes on a busy machine, so this is its own).
+## Nothing in a place pulses - a gate of [Soundscape] beside tests/table/soundscape_check.gd (which runs close to its five minutes
+## on a busy machine, so this is its own).
 ##
 ##   godot --headless --path . --script tests/table/soundscape_pulse_check.gd
 ##
-## The user, 2026-10-12, of a boat at sea under an awning (True Tarot 647530: the sea against the
-## hull, the wind through canvas): "weird bursts of oscillation sound happening, over and over. It
-## almost sounds like a fan spinning." Noise chopped by a sine is a machine, and two parts of that
-## place were that. The flap was fixed first ("the wind sounds fine"); a slosh with its pulse made
-## uneven was not ("the water still has the oscillation sounds, and it's still pretty bad"), and
-## measured part by part it was also the loudest thing in the water - 5 dB over the slap it trails.
+## Noise chopped by a sine is a machine (a fan spinning); a boat at sea under an awning (the sea against the hull, the wind through
+## canvas) must not have it.
 ##
-## - THE WASH after a hull's slaps, heard alone, does not pulse: its loudness, moved along by one
-##   pulse's length, does not come back on itself - against the slosh as it was, pulsed at one rate.
-## - ...AND IT IS UNDER ITS SLAP, and there: its loudest moment is below the slaps' own and no
-##   more than 12 dB below (it was 5 dB above).
-## - AN AWNING'S FLAPS, heard alone, come at no one rate - against a flap as it was: one band
-##   pulsed deep at one rate.
-## - ...AND THEY ARE THERE: cloth that makes no sound in a gusty wind would pass the rest.
+## - The wash after a hull's slaps, heard alone, does not pulse: its loudness, moved along by one pulse's length, does not come back
+##   on itself - against the slosh with its pulse at one rate.
+## - ...and it is under its slap, and there: its loudest moment is below the slaps' own and no more than 12 dB below.
+## - An awning's flaps, heard alone, come at no one rate - against a flap of one band pulsed deep at one rate.
+## - ...and they are there: cloth that makes no sound in a gusty wind would pass the rest.
 
 var _fails := 0
 const SR := 22050
@@ -61,7 +55,7 @@ func _make(sound: Dictionary, wind: Dictionary, seed := 3, dial := 0.5) -> Sound
 	return sc
 
 
-## HOW MUCH A SOUND PULSES AT ONE RATE: its loudness every [param step] seconds, in windows of
+## How much a sound pulses at one rate: its loudness every [param step] seconds, in windows of
 ## [param win] seconds, against itself moved along by a pulse's length (every length from 1 /
 ## [param fmax] to 1 / [param fmin] seconds, the best of them) - the median over its loud quarter. A
 ## steady pulse returns on itself (toward 1); uneven events and a ragged pulse do not, and neither
@@ -86,7 +80,7 @@ static func _returns(pcm: PackedVector2Array, step: float, win: float, fmin: flo
 			den += pow(env[s + i] - mean, 2.0)
 			level += env[s + i] * env[s + i]
 		# a swell returns on itself too, at every length: only a return that stands over the one
-		# at HALF its length is a pulse (between two beats of a steady pulse there is none)
+		# at half its length is a pulse (between two beats of a steady pulse there is none)
 		var first := int(er / fmax)
 		var last := int(er / fmin)
 		var r := PackedFloat32Array()
@@ -129,7 +123,7 @@ static func _peak(pcm: PackedVector2Array) -> float:
 
 
 func _one_rate() -> bool:
-	# THE WASH after a hull's slaps: plain, and under them
+	# The wash after a hull's slaps: plain, and under them
 	var sea := {"water": {"kind": "hull", "size": 0.6}}
 	var now := _make(sea, {}, 647530)
 	var wash_pcm := _only(now, now._wa["sloshes"]).render(SR * 30)
@@ -144,7 +138,7 @@ func _one_rate() -> bool:
 	var slaps := _make(sea, {}, 647530)
 	var under := _peak(wash_pcm) - _peak(_only(slaps, slaps._wa["slaps"]).render(SR * 30))
 	_ok(under < -1.0 and under > -12.0, "the wash is not under its slap, or not there: %.1f dB beside it (between -12 and -1)" % under)
-	# AN AWNING'S FLAPS: one at a time, uneven
+	# An awning's flaps: one at a time, uneven
 	var wind := {"every": 10.0, "from": "front left", "gusts": 0.9, "strength": 0.6}
 	var awning := {"wind": {"through": "canvas"}}
 	var cloth := _make(awning, wind, 647530)

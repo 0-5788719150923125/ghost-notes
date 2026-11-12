@@ -1,61 +1,27 @@
 extends Node
 
-## Gate for the contour map's RE-PRINT - the property that the sheet is rebuilt a couple of
-## times a second and the viewer cannot tell.
+## Gate for the contour map's re-print: the sheet is rebuilt a couple of times a second and the viewer
+## cannot tell. The sheet is extracted in a worker on a [0.3, 1.0] s cadence and the finished packet is
+## re-submitted every frame until the next lands, so two consecutive builds must be the same drawing.
+## Asserted:
 ##
-## The sheet is extracted inside a worker on a [0.3, 1.0] s cadence and the finished packet
-## is re-submitted every frame until the next one lands. That is only invisible if two
-## consecutive builds are the SAME DRAWING. They were not, and it read exactly as reported:
-## "the entire scene shifts every 0.5 to 1.0 seconds, jumpy rather than continuous, which
-## turns an otherwise peaceful scene into something distracting."
+##   Sampling phase: the land is static and only the window moves, so a re-print at the same lattice
+##   phase reads the same points and is only translated (_draw does so exactly). The window is snapped
+##   to its own lattice, so a drift under one cell gives a byte-identical packet and a drift of exactly
+##   one cell the same drawing moved by one cell. The unsnapped case is the control: if it matched as
+##   well, the gate would assert nothing.
 ##
-## Three things differed between builds, and all three are asserted here:
+##   Hatch pitch: the ruling is anchored, so a change of pitch slides the whole band. Spacing is the
+##   seed's and no audio feature may reach it (`f.flux` must not).
 ##
-##   THE SAMPLING PHASE. The land is static and only the window moves, so a re-print at the
-##   same lattice phase reads the same points of the field and needs only translating - and
-##   _draw translates it exactly. Sampled a fraction of a cell along, marching squares on
-##   cells a dozen pixels across answers with a wobble of PIXELS on every line at once. The
-##   window is snapped to its own lattice now, so a drift under one cell must produce a
-##   byte-identical packet, and a drift of exactly one cell must produce the same drawing
-##   moved by exactly one cell. The unsnapped case is measured alongside as the control: if
-##   it ever matched as well, this gate would be asserting nothing.
+##   Ink: the highlighted contour's color is baked into the packet, so the tonal center it comes from
+##   must be eased or it arrives as a step every re-print.
 ##
-##   THE HATCH PITCH. `f.flux` used to set the hatch SPACING. The ruling is anchored, so a
-##   change of pitch moves every line by its own multiple of the change and the whole band
-##   slides. Spacing is the seed's now and no audio feature may reach it.
-##
-##   THE INK. The highlighted contour's color is baked into the packet, so the tonal
-##   center it comes from has to be eased or it arrives as a step every re-print.
-##
-## AND THEN THE OPPOSITE REPORT, twice, which is the other half of the same subject.
-##
-##   "I just ran into a contour map scene that zoomed, but no longer moves at all... I would
-##   expect the map to slowly evolve, not in large jumps, but in slow morphing over time."
-##   Making a re-print invisible had made the SHEET static: the only thing that ever moved the
-##   land was a window warp gated on a `f.movement` rising edge, which a spoken chapter never
-##   produces.
-##
-##   That was answered by localizing the evolution into a few compact swells, and the answer was
-##   wrong: "if that feature works at all, it is not very good... multiple contour maps where they
-##   barely have any movement at all... the masking seems to localize to certain regions, then
-##   NEVER moves to other regions, which isn't how erosion and plate tectonics work. The goal was
-##   not to limit the ability of the entire map to evolve; the goal was to stop shifting lines
-##   uniformly, every ~0.5s, in large jumps."
-##
-## So the EVOLUTION half below asserts what that actually asks for, and the second and third are
-## the ones the swells failed:
-##
-##   IT MOVES. Eight seconds visibly redraws the sheet, and over a minute and a half every part
-##   of it has had a turn - nothing is permanently masked out.
-##
-##   IT IS NOT UNIFORM. At any moment some of the sheet is clearly reorganizing and some of it is
-##   clearly holding still. Measured per CELL of a coarse grid over the paper, because that is
-##   the difference between "the land is evolving" and "the whole frame shifted": a window warp,
-##   which is the control here, leaves no cell still at all.
-##
-##   NO PRINT IS A JUMP. One re-extraction's worth of it moves almost nothing, whatever the
-##   cadence - the sheet is rebuilt one to three times a second and every difference between two
-##   builds arrives as a step.
+##   Evolution: the sheet must still change slowly, as erosion and plate tectonics do. It moves (eight
+##   seconds visibly redraws it, and over a minute and a half every part has had a turn: nothing is
+##   permanently masked); it is not uniform (at any moment some cells reorganize and others hold still,
+##   measured per cell of a coarse grid; a window warp, the control, leaves no cell still); and no
+##   print is a jump (one re-extraction moves almost nothing, at any cadence).
 ##
 ## Run inside a real boot (the scene reaches the Spectrum autoload):
 ##   tests/run_boot_probe.sh tests/scenes/contour_flow_check.gd 180
@@ -90,10 +56,9 @@ func _run_seed(sv: int) -> void:
 	add_child(sc)
 	sc.init_with_seed(sv, "drift")
 	sc.size = Vector2(1920, 1080)
-	# The elevation ladder and the summit table, without going through update() - which
-	# would also start the cadence and hand a real extraction to a worker thread, and a
-	# worker still building when the tree tears down faults at exit. Every job here is run
-	# on this thread, deliberately, so the exit status means something.
+	# The elevation ladder and the summit table, without update(), which would start the cadence and
+	# hand a real extraction to a worker (a worker still building at tree teardown faults at exit).
+	# Every job runs on this thread so the exit status means something.
 	sc._ensure_sites()
 	print("")
 	print("--- seed %d: grid %d, hatch %s ---"
@@ -113,7 +78,7 @@ func _run_seed(sv: int) -> void:
 	var cpx: float = 2.0 * a.half.x / float(a.nx - 1)   # ...and in pixels
 	var pa := _points(a.run({}))
 
-	# --- a drift of less than one cell: nothing may change at all ---
+	# --- a drift of less than one cell: nothing may change ---
 	var chy: float = 1.0 / float(a.ny - 1)
 	sc._warp_b = Vector2(cw * 0.4, chy * 0.4)
 	var b = sc._make_job()
@@ -133,7 +98,7 @@ func _run_seed(sv: int) -> void:
 	var c = sc._make_job()
 	var pc := _points(c.run({}))
 	var hit_snap := _match(pa, pc, -cpx)
-	# ...against the same drift taken OFF the lattice, which is what used to happen.
+	# ...against the same drift taken off the lattice, the control.
 	sc._warp_b = Vector2.ZERO
 	var d = sc._make_job()
 	var half_cell: float = cw * 0.5 * a.fspan.x
@@ -167,64 +132,51 @@ func _run_seed(sv: int) -> void:
 
 	_evolution_test(sc, sv, a)
 	_ease_test(sc, sv)
-	# Freed the way the Director does, and WAITED FOR - a scene pulled out from under a
-	# FrameForge job still building on a worker faults at exit, which turns a printed
-	# verdict into a core dump and an exit status nobody can trust.
+	# Freed the way the Director does, and waited for: a scene pulled out from under a FrameForge job
+	# still building faults at exit.
 	sc.queue_free()
 	await get_tree().process_frame
 
 
-## THE EVOLUTION. Four questions, and the middle two are the ones the swells failed.
+## The evolution: does it move and does every part get a turn; is one print's worth small, in pixels of
+## ink; is the change a uniform shift of the whole drawing, or the ground?
 ##
-##   Does it move at all, and does every part of the paper get a turn?
-##   Is one print's worth of it small, measured in PIXELS OF INK?
-##   Is the change a UNIFORM SHIFT - the whole drawing translated - or is it the ground?
+## The first three are measured on the land, not on the drawing: a contour is smoothed and simplified, so
+## where it moves it is re-traced along its whole length and a vertex dropped or kept lands up to a grid
+## cell from where it was on a line that did not move (a 3 px step at p95 by nearest vertex).
+## `SheetJob.sample()` returns the elevation grid the drawing is a function of, and a contour moves
+## `dv / |grad v|` for a change dv, so the question is answered in pixels with no drawing involved.
 ##
-## THE FIRST THREE ARE MEASURED ON THE LAND, NOT ON THE DRAWING, and that is not a shortcut.
-## A contour is smoothed and then simplified, so when it moves anywhere it is re-traced along
-## its whole length, and a vertex dropped as collinear in one print and kept in the next lands
-## the better part of a grid cell from where it was ON A LINE THAT DID NOT MOVE. Measured by
-## nearest vertex, that reads as a 3 px step at the 95th percentile and it is insensitive to the
-## scene's own budget - which is how it was caught. `SheetJob.sample()` hands back the elevation
-## grid the drawing is a function of, and the distance a contour moves for a change in it is
-## exactly `dv / |grad v|`, so the question can be answered in pixels with no drawing involved.
+## Uniformity stays on the drawn packets: a window warp does not change the field (the window is snapped
+## to the sampling lattice), it moves the picture.
 ##
-## The UNIFORMITY question stays on the drawn packets, because it has to: a window warp does not
-## change the field at all (the window is snapped to the sampling lattice precisely so that it
-## does not), it moves the picture. It is a property of the drawing and is measured there.
-##
-## Driven through the scene's own clock (_step_tectonics) rather than through update() or _step,
-## both of which submit a FrameForge job to a worker - and a scene pulled out from under a
-## running worker faults at exit, which turns a printed verdict into a core dump.
+## Driven through the scene's clock (_step_tectonics), not update() or _step, which submit a FrameForge
+## job to a worker (a scene pulled out from under one faults at exit).
 func _evolution_test(sc, sv: int, ref) -> void:
-	# Explicitly typed: `ref` is an untyped local (a job loaded through the scene), so nothing
-	# it returns carries a type for inference to work from.
+	# Explicitly typed: `ref` is untyped, so nothing it returns carries a type for inference.
 	var g0: PackedFloat32Array = ref.sample()
 	if g0.is_empty():
 		_ok(false, "seed %d: the reference sheet is empty" % sv)
 		return
 	var cpx: float = 2.0 * ref.half.x / float(ref.nx - 1)
 	var grad := _grad(g0, ref.nx, ref.ny, ref.relief)
-	# ONE PRINT'S WORTH, in pixels of ink movement: whatever the cadence, this is the step the
-	# viewer is handed, and "jumpy" is a statement about its SIZE rather than about how much of
-	# the sheet it touched.
+	# One print's worth, in pixels of ink movement: whatever the cadence, this is the step the viewer
+	# is handed.
 	var prints := int(round(sc._cadence * 60.0))
 	for _i in prints:
 		sc._step_tectonics(1.0 / 60.0)
 	var dp := _sorted(_disp(g0, sc._make_job().sample(), grad, cpx))
 	var p50 := _pct(dp, 0.50)
 	var p95 := _pct(dp, 0.95)
-	# ...and eight seconds of it, which is the timescale "slow morphing over time" asks for.
+	# ...and eight seconds of it, the timescale of "slow morphing over time".
 	for _i in 480 - prints:
 		sc._step_tectonics(1.0 / 60.0)
 	var d8 := _disp(g0, sc._make_job().sample(), grad, cpx)
 	var blk8 := _sorted(_blocks(d8, ref.nx, ref.ny))
 	var quiet := _pct(blk8, 0.10)
 	var busy := _pct(blk8, 0.90)
-	# NOTHING IS PERMANENTLY MASKED. Sampled at checkpoints and UNIONED rather than compared once
-	# at the end, because the land oscillates: a region can be mid-reorganization at forty
-	# seconds and back where it started at ninety, and a single late comparison would score that
-	# as a region that never moved.
+	# Nothing is permanently masked. Sampled at checkpoints and unioned, since the land oscillates: a
+	# region mid-reorganization at forty seconds may be back where it started at ninety.
 	var reach := _blocks(d8, ref.nx, ref.ny)
 	for _c in 5:
 		for _i in 1080:
@@ -237,19 +189,11 @@ func _evolution_test(sc, sv: int, ref) -> void:
 		if v < 2.0:
 			still += 1
 	var reached := 1.0 - float(still) / float(maxi(1, reach.size()))
-	# THE CONTROL, and it is the whole reason the per-region measure is here: THE SAME LAND MOVED
-	# ONE GRID CELL, which is what "shifting lines uniformly" actually is - the entire drawing
-	# translated by one vector. Put through the identical measure, so the two numbers sit beside
-	# each other: a translation moves every region of the paper by the same distance, and ground
-	# that is rising in one place and subsiding in another does not.
-	#
-	# It has to be synthesized rather than taken from the scene's own window warp. A window move
-	# does not change this grid AT ALL - the window is snapped to the sampling lattice precisely
-	# so that it does not - and the drawing it produces cannot be measured against the one before
-	# it either: a contour sheet is a dense web of lines, so a web slid by twenty pixels still has
-	# ink within a pixel of most of where the old ink was, and every nearest-point estimate of the
-	# offset comes back as zero. That was tried first and it reported a rigid translation as
-	# unexplainable, which reads as a pass.
+	# The control: the same land moved one grid cell, a rigid translation of the whole drawing, put
+	# through the identical measure. A translation moves every region by the same distance; ground rising
+	# in one place and subsiding in another does not. It is synthesized rather than taken from the scene's
+	# window warp: a warp leaves this grid unchanged, and a contour web slid by twenty pixels still has
+	# ink within a pixel of most of the old ink, so every nearest-point estimate of the offset reads zero.
 	var blk_w := _sorted(_blocks(_disp(g0, _shifted(g0, ref.nx, ref.ny), grad, cpx),
 		ref.nx, ref.ny))
 	var quiet_w := _pct(blk_w, 0.10)
@@ -260,13 +204,10 @@ func _evolution_test(sc, sv: int, ref) -> void:
 	print("             a rigid one-cell shift of the same land, for comparison: quietest tenth "
 		+ "%.1f px, busiest %.1f px" % [quiet_w, busy_w])
 	print("             over 90 s, %4.1f%% of the paper has had a turn" % (reached * 100.0))
-	# THE LINE IS ON THE TAIL'S SIZE, NOT ON THE SPREAD BELOW IT, and that distinction was
-	# measured rather than assumed. The median step is 0.2 to 0.4 px and the 95th percentile 1.0
-	# to 1.7 px across these seeds, and the ratio between them is not a defect to be tuned out -
-	# it IS the non-uniformity this whole half exists to demand, so a threshold tight enough to
-	# close it would be asserting against the feature. What matters is that the tail stays under
-	# a step the eye reads as a step. For scale, the rigid-shift control below moves the same
-	# sheet 20 to 30 px in ONE go, which is what the original report was about.
+	# The line is on the tail's size, not the spread below it: the median step is 0.2 to 0.4 px and p95
+	# 1.0 to 1.7 px, and that ratio is the non-uniformity this half demands, so a tighter threshold would
+	# assert against the feature. What matters is that the tail stays under a step the eye reads as one
+	# (the rigid-shift control moves the sheet 20 to 30 px in one go).
 	_ok(p95 < 2.0,
 		"seed %d: one print moves the ink %.2f px at the 95th percentile - the sheet is rebuilt "
 		% [sv, p95] + "one to three times a second, so that arrives as a visible step")
@@ -289,10 +230,8 @@ func _evolution_test(sc, sv: int, ref) -> void:
 		% [sv, reached * 100.0] + "evolution permanently, which is not how ground behaves")
 
 
-## The land's gradient magnitude per grid cell, floored. The floor is what stops the displacement
-## measure dividing by zero at every summit and every basin floor, where a contour ring genuinely
-## does expand a long way for a small change - true, but a handful of points, and left unfloored
-## they would be the only thing any percentile above the median could see.
+## The land's gradient magnitude per grid cell, floored so the displacement measure does not divide by
+## zero at summits and basin floors, where a contour genuinely expands far for a small change.
 const GRAD_FLOOR := 0.25
 
 func _grad(h: PackedFloat32Array, nx: int, ny: int, relief: float) -> PackedFloat32Array:
@@ -310,9 +249,8 @@ func _grad(h: PackedFloat32Array, nx: int, ny: int, relief: float) -> PackedFloa
 	return out
 
 
-## How far the ink at each grid point moved, in PIXELS. A contour is a level set, so a change of
-## `dv` in the elevation slides it by `dv / |grad v|` across the ground - the one conversion this
-## whole half rests on, and the reason the measure needs no drawing.
+## How far the ink at each grid point moved, in pixels. A contour is a level set, so a change of `dv`
+## slides it by `dv / |grad v|` across the ground.
 func _disp(a: PackedFloat32Array, b: PackedFloat32Array, grad: PackedFloat32Array,
 		cell_px: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
@@ -322,8 +260,8 @@ func _disp(a: PackedFloat32Array, b: PackedFloat32Array, grad: PackedFloat32Arra
 	return out
 
 
-## The same, averaged over a coarse grid of REGIONS of the paper - which is the unit "some of the
-## sheet is reorganizing and some of it is holding still" is a claim about.
+## The same, averaged over a coarse grid of regions of the paper (the unit of "some of the sheet is
+## reorganizing and some is holding still").
 const BLK := 10
 
 func _blocks(d: PackedFloat32Array, nx: int, ny: int) -> PackedFloat32Array:
@@ -342,8 +280,8 @@ func _blocks(d: PackedFloat32Array, nx: int, ny: int) -> PackedFloat32Array:
 	return acc
 
 
-## The same land, moved one grid cell diagonally - a rigid translation of the drawing, built on
-## the grid so it can go through the same measure as the evolution.
+## The same land moved one grid cell diagonally: a rigid translation, built on the grid so it goes
+## through the same measure.
 func _shifted(h: PackedFloat32Array, nx: int, ny: int) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(nx * ny)
@@ -360,20 +298,18 @@ func _sorted(v: PackedFloat32Array) -> PackedFloat32Array:
 	return out
 
 
-## The displacement measures work on a SUBSAMPLE - a sheet carries half a million vertices and
-## a nearest-point search over all of them, several times a seed, is minutes of wall clock for a
-## statistic that is settled by twenty thousand.
-## The percentile of an ALREADY SORTED array.
+## The displacement measures work on a subsample (a sheet carries half a million vertices, and a
+## nearest-point search over all of them is minutes for a statistic settled by twenty thousand).
+## The percentile of an already sorted array.
 func _pct(v: PackedFloat32Array, q: float) -> float:
 	if v.is_empty():
 		return 0.0
 	return v[clampi(int(float(v.size() - 1) * q), 0, v.size() - 1)]
 
 
-## The ink of the highlighted contour is baked into a packet rebuilt at most every 0.3 s, so
-## what matters is how far its color can move ACROSS ONE RE-PRINT under the most hostile
-## input there is: a tonal center sweeping continuously through the hue wrap, which has no
-## settled answer at all. Unsmoothed this is a full-saturation color arriving in one step.
+## The highlighted contour's ink is baked into a packet rebuilt at most every 0.3 s, so what matters is
+## how far its color can move across one re-print under the most hostile input: a tonal center sweeping
+## through the hue wrap. Unsmoothed it arrives as a full-saturation step.
 func _ease_test(sc, sv: int) -> void:
 	var dt := 1.0 / 60.0
 	var hist: Array = []
@@ -400,9 +336,8 @@ func _points(chunks: Array) -> PackedVector2Array:
 	return out
 
 
-# What fraction of `b` lands on a vertex of `a` shifted by `dx`. Quantized rather than
-# compared exactly, because the two builds reach the same land through different arithmetic
-# and agree only to within a float ulp of the field sample.
+# What fraction of `b` lands on a vertex of `a` shifted by `dx`. Quantized, since the two builds reach
+# the same land through different arithmetic and agree only to a float ulp.
 func _match(a: PackedVector2Array, b: PackedVector2Array, dx: float) -> float:
 	if b.is_empty():
 		return 0.0

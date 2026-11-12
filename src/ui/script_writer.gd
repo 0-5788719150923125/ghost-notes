@@ -1,46 +1,33 @@
 extends VBoxContainer
 class_name ScriptWriter
 
-## ScriptWriter - where a note's words are written: the BODY card on its panel (2026-10-31, "Script" until the
-## user: "the word script only makes sense in some contexts" - a show's Brief keeps its
-## own words, [constant WORDING]), and an editor window it opens. Its fields name the note: a Title edited
-## here renames a file named after its title ([method NoteStore.follows]).
+## ScriptWriter - where a note's words are written: the Body card on its panel, and an editor window it
+## opens. A show's Brief keeps its own words ([constant WORDING]). Its fields name the note: a Title
+## edited here renames a file named after its title ([method NoteStore.follows]).
 ##
-## THE TEXT BOX OUTGREW THE PANEL. A script carries speaker cues, hesitations, picture
-## markers, pronunciations, macros and emphasis, and a 380-pixel box with a tooltip was the
-## only place any of that was written down - so an author who had not read the source had no
-## way to find out what ghost understands. The panel now holds a CARD (where the words come
-## from, how many there are, how many voices and pictures they ask for) and the writing
-## happens in a centered window: the text on the left, highlighted by what the panel will make
-## of it ([ScriptHighlighter]), and on the right a palette of every mark this panel honors
-## ([ScriptMarks]), each one a click away from being inserted at the caret.
+## The panel holds a card (where the words come from, how many there are, how many voices and pictures
+## they ask for) and the writing happens in a centered window: the text on the left, highlighted by what
+## the panel will make of it ([ScriptHighlighter]), and on the right a palette of every mark this panel
+## honors ([ScriptMarks]), each one click from being inserted at the caret.
 ##
-## THE FRONTMATTER IS NOT IN THE EDITOR. It is metadata the panel owns - the voice, the look -
-## and every field in it is a control on the panel already, so the editor shows the body and
-## [DocSource] keeps the frontmatter on disk exactly as it was, ghost's block written by the
-## panel and everything else untouched.
+## The frontmatter is not in the editor. It is metadata the panel owns, each field a control on the
+## panel already, so the editor shows the body and [DocSource] keeps the frontmatter on disk as it was.
 ##
-## The window's [CodeEdit] IS the panel's text box: the panel reads `text_edit.text` and
-## listens to its `text_changed` exactly as it did the old one, and [member doc] drives it.
+## The window's [CodeEdit] is the panel's text box: the panel reads `text_edit.text` and listens to its
+## `text_changed`, and [member doc] drives it.
 ##
-## WHERE IT IS SAVED IS ON THE CARD (2026-10-12): the file's name, a [SaveMark] that turns while a
-## change waits and ticks when it is in the file, and Save…, which always asks for a file. It was
-## "Sync to…" inside the editor window, where a note's script could be sent to a file the note
-## itself never followed (see [DocSource]). OPEN… IS THE OTHER DIRECTION, and a note has it too
-## (the user, the same day: "I need to load a file from disk, and there's no way to do that
-## currently. The 'Save' button would just overwrite the file on disk"): Save… puts what is here
-## into a file, Open… takes what is in a file and writes nothing.
+## Where it is saved is on the card: the file's name, a [SaveMark] that turns while a change waits and
+## ticks when it is in the file, and Save..., which always asks for a file. Open... is the other
+## direction (a note has it too): Save... puts what is here into a file, Open... takes what is in a
+## file and writes nothing.
 
-## The document's own metadata - top-level frontmatter keys, not ghost's block - edited on the
-## card, never in the editor. Each is read by something: the label, its tooltip, the panels
-## that use it. A row stands in its `modes`, and in any other once what reads it shows it ([method
-## show_field]: a YouTube card shows Title, Episode, Author and Book, the names its title is made of).
-##
-## THE NOTE'S NAMES ARE HERE (2026-10-25, the user: "the YouTube card specifies an upload title of
-## '%title%: %episode%' - however nowhere is an episode title actually an option here"): Title and
-## EPISODE, what this video is called. A note read as it is written keeps its own (`episode:`); a show
-## that names its episodes hands the row its picked one's ([method hand_field]: Cards' plan, Proof's
-## problem), so its Episode is edited here too, never on a card of its own.
+## The document's own metadata - top-level frontmatter keys, not ghost's block - edited on the card,
+## never in the editor. Each is read by something: the label, its tooltip, the panels that use it. A row
+## stands in its `modes`, and in any other once what reads it shows it ([method show_field]: a YouTube
+## card shows Title, Episode, Author and Book, the names its title is made of). Title and Episode are
+## what this video is called: a note read as it is written keeps its own (`episode:`); a show that
+## names its episodes hands the row its picked one's ([method hand_field]), so Episode is edited here,
+## never on a card of its own.
 const FIELDS := {
 	"title": {"label": "Title", "modes": ["generative", "table", "note"],
 		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds. The %title% of the YouTube title."},
@@ -55,9 +42,9 @@ const FIELDS := {
 		"tip": "The book this chapter belongs to. Printed on the cover in the Novel and Notebook. The %book% of the YouTube title."},
 }
 
-## WHAT THE DOCUMENT IS CALLED, where it is not a script: a card show's body is the BRIEF its
-## agents work from - written by hand, never read aloud. Its marks are its own ([ScriptMarks],
-## "table"): what each does in a brief is the registry's `blurbs`.
+## What the document is called, where it is not a script: a card show's body is the brief its agents
+## work from, written by hand, never read aloud. Its marks are its own ([ScriptMarks], "table"): what
+## each does in a brief is the registry's `blurbs`.
 const WORDING := {
 	"table": {"window": "Brief",
 		"edit_tip": "Open the show's brief in an editor, with every mark a brief understands listed beside it - the deck, other voices, notes to yourself - ready to insert at the cursor. The brief is what the show is, who reads it and by what rules, and every agent behind every episode is handed it.",
@@ -144,8 +131,7 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	clear.pressed.connect(func() -> void: doc.clear())
 	row.add_child(clear)
 	var edit := Button.new()
-	# "EDIT", WHATEVER THE TEXT IS (2026-10-06, the user: "I feel like this button should be renamed to
-	# just 'Edit' globally"): a note's words, a chapter or a show's brief - the tooltip says which.
+	# "Edit", whatever the text is: a note's words, a chapter or a show's brief - the tooltip says which.
 	edit.text = "Edit"
 	edit.tooltip_text = String(_wording("edit_tip", "Open the text in an editor, with every mark "
 		+ "this panel understands listed beside it - speakers, hesitations, pictures, "
@@ -188,10 +174,9 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	_refresh()
 
 
-## THE CARD IS A NOTE'S (2026-10-06): the note IS the file, so Clear (let go of this one) is not
-## offered. A panel started without a note (`--table`, `--synth`) keeps it. Save… moves the note to
-## the file chosen ([signal DocSource.moved]); Open… (hidden here until 2026-10-12, which left no way
-## to load a file from inside a note) opens the file chosen AS THE NOTE ([method open_as_note]).
+## The card is a note's: the note is the file, so Clear (let go of this one) is not offered. A panel
+## started without a note (`--table`, `--synth`) keeps it. Save... moves the note to the file chosen
+## ([signal DocSource.moved]); Open... opens the file chosen as the note ([method open_as_note]).
 func bind_note() -> void:
 	_in_note = true
 	_clear_btn.visible = false
@@ -199,11 +184,10 @@ func bind_note() -> void:
 	_save_btn.tooltip_text = DocSource.SAVE_NOTE_TIP
 
 
-## A NOTE'S OPEN…: [param path] becomes the note in this window, through the one way every note
-## opens ([method main.open_file], reached through [Chrome]) - so what it is follows from its own
-## blocks, and a file with none is a plain note. Nothing is written into it. What is waiting here
-## is written into this note's own file first, which stays in the list; the file already open is
-## simply read again.
+## A note's Open...: [param path] becomes the note in this window, through the one way every note opens
+## ([method main.open_file], reached through [Chrome]), so what it is follows from its own blocks and a
+## file with none is a plain note. Nothing is written into it. What is waiting here is written into this
+## note's own file first; the file already open is simply read again.
 func open_as_note(path: String) -> void:
 	if not doc.settle():
 		return
@@ -217,10 +201,10 @@ func open_as_note(path: String) -> void:
 		doc.tell("⚠  " + why)
 
 
-## The FIELDS, as a two-column form under the summary: those of this panel's mode shown, the rest
-## until something shows them ([method show_field]). An edit is committed on Enter or on leaving the box
-## (not per keystroke - saved in a file, each commit is a write to it), and the box then shows what the
-## source holds, so a refused write is visible as a revert.
+## The fields, as a two-column form under the summary: those of this panel's mode shown, the rest until
+## something shows them ([method show_field]). An edit is committed on Enter or on leaving the box (each
+## commit is a write to the file), and the box then shows what the source holds, so a refused write
+## shows as a revert.
 func _build_fields() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -255,18 +239,16 @@ func _build_fields() -> void:
 		grid.visible = grid.visible or l.visible
 
 
-## THE WORDS' FIRST LINES, A CLICK FROM THE EDITOR (2026-10-31, the user: "on desktop, where projects are going to
-## be a lot more complex, I don't think we want to render a giant script text like that ... the body should be more
-## like a preview on desktop"): the body as it reads, its marks left out ([method Manuscript.preview_of]), a few
-## lines of it; clicked, the editor opens, as Edit opens it. A note of words alone is written in its own card on
-## the notes list ([NoteEditor]), the phone's every note too - this is the card of a note that is more than that.
+## The words' first lines, a click from the editor: the body as it reads, its marks left out
+## ([method Manuscript.preview_of]), a few lines of it; clicked, the editor opens, as Edit opens it. A
+## note of words alone is written in its own card on the notes list ([NoteEditor]), the phone's every
+## note too - this is the card of a note that is more than that.
 func _build_preview() -> void:
 	_preview = TextField.preview_label(open_editor)
 	add_child(_preview)
 
 
-## THE FIELD [param key] IS SHOWN from now on, whatever the mode: something reads it (a YouTube card, the
-## Title, Episode, Author and Book its title is made of).
+## The field [param key] is shown from now on, whatever the mode: something reads it (a YouTube card).
 func show_field(key: String) -> void:
 	for c in _field_rows.get(key, []):
 		(c as Control).visible = true
@@ -278,18 +260,18 @@ func shows_field(key: String) -> bool:
 	return _field_rows.has(key) and ((_field_rows[key] as Array)[1] as Control).visible
 
 
-## A FIELD ANOTHER PART KEEPS, not the document - a show's Episode is its picked episode's: the box shows
-## what [param read] returns (a String; null while there is nothing to name - the box empty, not
+## A field another part keeps, not the document (a show's Episode is its picked episode's): the box
+## shows what [param read] returns (a String; null while there is nothing to name - the box empty, not
 ## editable, saying what it waits for), an edit goes to [param write] (the text; it returns "" once
-## written, else why not, said on the card), and the row is shown. Looked at again twice a second: what
-## it keeps changes with no word to this card (another episode picked, its plan written).
+## written, else why not, said on the card), and the row is shown. Looked at again twice a second, as
+## what it keeps changes with no word to this card.
 func hand_field(key: String, read: Callable, write: Callable) -> void:
 	_handed[key] = {"read": read, "write": write}
 	show_field(key)
 	_refresh_handed()
 
 
-## WHAT THE FIELD [param key] HOLDS NOW: the part's that keeps it ([method hand_field]), else the
+## What the field [param key] holds now: the part's that keeps it ([method hand_field]), else the
 ## document's line; "" for none.
 func field_value(key: String) -> String:
 	if _kept(key):
@@ -298,7 +280,7 @@ func field_value(key: String) -> String:
 	return doc.field(key).strip_edges() if doc != null else ""
 
 
-## THE NOTE'S NAME: its Title, else the name of the file it is kept in (as the notes list names it); ""
+## The note's name: its Title, else the name of the file it is kept in (as the notes list names it); ""
 ## for words kept in no file.
 func title_or_name() -> String:
 	var t := field_value("title")
@@ -318,8 +300,8 @@ func _commit_field(key: String) -> void:
 		var now: Variant = (_handed[key]["read"] as Callable).call()
 		e.text = str(now) if now != null else ""
 		return
-	# A NOTE NAMED AFTER ITS TITLE IS RENAMED WITH IT ([method NoteStore.follows]): its name read before the
-	# title changes, and the move told as Save…'s is ([method DocSource.rename_to])
+	# A note named after its title is renamed with it ([method NoteStore.follows]): its name read before the
+	# title changes, and the move told as Save...'s is ([method DocSource.rename_to])
 	var follow := key == "title" and _in_note and doc.is_sync() and NoteStore.follows(doc.doc_path(), title_or_name())
 	doc.set_field(key, e.text)
 	e.text = doc.field(key)
@@ -327,8 +309,8 @@ func _commit_field(key: String) -> void:
 		doc.rename_to(NoteStore.path_for(doc.doc_path(), e.text))
 
 
-## WHETHER A PART STILL KEEPS THE FIELD [param key]: one freed before this card (a panel taken down, its
-## card's lambdas bound to it) keeps it no more, and the field is the document's again.
+## Whether a part still keeps the field [param key]: one freed before this card (a panel taken down)
+## keeps it no more, and the field is the document's again.
 func _kept(key: String) -> bool:
 	if not _handed.has(key):
 		return false
@@ -444,8 +426,8 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 	foot.add_child(close)
 
 
-## THE PALETTE: one button per mark this panel honors, grouped and colored as the
-## highlighter colors them, with what each does shown below when it is pointed at.
+## The palette: one button per mark this panel honors, grouped and colored as the highlighter colors
+## them, with what each does shown below when it is pointed at.
 func _build_palette() -> Control:
 	var side := VBoxContainer.new()
 	side.custom_minimum_size = Vector2(270, 0)

@@ -3,16 +3,12 @@ class_name Lens3D
 
 ## Lens3D - a positionable perspective camera for the unified 3D path.
 ##
-## The old [Mesh3D] projector was a fixed, centered lens (focal 3.2, eye on the +z
-## axis); it could spin a solid in place but never *move the camera*. Lens3D is a
-## real camera: an eye position looking at a target with a field of view, so a scene
-## can push in, orbit, and frame in depth. Wide fov + a near eye is **forced
-## perspective** - near geometry looms over far geometry, the dimensional read that
-## a sheared 2D plane can only fake.
+## A real camera, unlike [Mesh3D]'s fixed centered projector: an eye position looking at a target with a field of
+## view, so a scene can push in, orbit, and frame in depth. A wide fov and a near eye is forced perspective: near
+## geometry looms over far geometry.
 ##
-## It projects a world [Vector3] into centered *unit-fraction* screen space (the same
-## space the rest of ghost draws in: origin = screen middle, y down); the caller
-## multiplies by the pixel unit. Call [method prepare] once per frame before
+## It projects a world [Vector3] into centered unit-fraction screen space (origin = screen middle, y down, the space
+## the rest of ghost draws in); the caller multiplies by the pixel unit. Call [method prepare] once per frame before
 ## projecting (it caches the view basis), then [method project] / [method depth].
 
 ## Camera placement and lens.

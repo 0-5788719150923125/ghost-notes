@@ -1,35 +1,33 @@
 extends RefCounted
 class_name DispatchSounds
 
-## DispatchSounds - THE DESK, HEARD (next/dispatch.md): a phone flipped open and snapped shut, its keys dialing and the ring
-## in its earpiece, a phone buzzing and rattling against its neighbors in the row, the terminal's keys, the printer's
-## screech, the radar's ping, the toggle's click, the mug set down, the receiver's hiss and the storms it opens up on, the
-## gain knob's clicks, the terminal's bell, the lamp's switch, and the one jet that passes over while the man sleeps.
+## DispatchSounds - the desk, heard (next/dispatch.md): a phone flipped open and snapped shut, its keys and ring, a phone
+## buzzing against its neighbors, the terminal's keys and bell, the printer's screech, the radar's ping, the toggle's
+## click, the mug set down, the receiver's hiss and the storms it opens up on, the gain knob's clicks, the lamp's switch,
+## and the one jet that passes over while the man sleeps.
 ##
-## FROM THE DESK'S OWN SCHEDULE ([method DispatchMedium.sound_plan]): a list of what sounds when - a one-shot at a moment, or
-## something that goes on from one moment to another - remade when the plan is. Played by the medium as its picture is
-## drawn (live, a frame at a time; in a render, the frames Movie Maker records - which records the sound too), so they keep
-## the reading's own time, a live reading's actions moved as its words arrive. A pure function of show time: begun again
-## where the show jumped, what goes on picks up where it would be.
+## Played from the desk's own schedule ([method DispatchMedium.sound_plan]): a list of what sounds when (a one-shot at a
+## moment, or something that goes on from one moment to another), remade when the plan is. The medium plays it as its
+## picture is drawn (live a frame at a time; in a render, the frames Movie Maker records, which records the sound too). A
+## pure function of show time: begun again where the show jumped, what goes on picks up where it would be.
 ##
-## SYNTHESIZED, as the table's are ([WorkSounds], [Soundscape]; Farnell, "Designing Sound", 2010). The phone's tones are
-## the networks' own (DTMF's two tones a key; the ring the far end sends back, 400 and 450 Hz in pairs). THE STORMS ARE
-## JUPITER'S, as NASA's Radio JOVE describes them at 20.1 MHz: Io-B's S-bursts, short pops in clusters like popcorn on a tin
-## roof, over the receiver's hiss; Io-A's L-bursts, long swells of noise like surf on a beach. THE JET IS A MOVING SOURCE
-## ([method _jet]): its turbine's whine and its roar heard from where it is - the pitch it was sent at raised as it comes
-## and lowered as it goes by the Doppler effect at the speed of sound, louder as it nears, darker as it is far - so the
-## fall the story says can be measured from a video is really there to measure.
+## Synthesized, as the table's are ([WorkSounds], [Soundscape]; Farnell, "Designing Sound", 2010). The phone's tones are
+## the networks' own (DTMF's two tones a key; the ring the far end sends back, 400 and 450 Hz in pairs). The storms are
+## Jupiter's as NASA's Radio JOVE describes them at 20.1 MHz: Io-B's S-bursts, short pops in clusters over the receiver's
+## hiss; Io-A's L-bursts, long swells of noise. The jet is a moving source ([method _jet]): its whine and roar are heard
+## from where it is, the pitch Doppler-shifted at the speed of sound, louder as it nears, darker as it is far, so the
+## fall can be measured from a video.
 ##
-## SUBDUED, as the table's: nothing that goes on under the voice peaks past [constant PEAK_MOST]; the storms and the jet,
-## which the voice waits for, a little more ([constant LOUD_MOST]).
+## Subdued, as the table's: nothing under the voice peaks past [constant PEAK_MOST]; the storms and the jet, which the
+## voice waits for, a little more ([constant LOUD_MOST]).
 
-## THE SOUNDS a `sound:` mark can name ([method DispatchScript.sound_of]): its key among the mark's words. `secs` is how
+## The sounds a `sound:` mark can name ([method DispatchScript.sound_of]): its key among the mark's words. `secs` is how
 ## long the voice waits for it.
 const SOUNDS := {
 	"jet": {"label": "A jet passing over", "blurb": "A jet passes low over the building: its turbine's whine and its roar rising as it comes and falling as it goes - a real Doppler fall - and fading away.",
 		"secs": 11.0},
 }
-## THE STORMS the receiver opens up on (`<!-- static: 5, surf -->`; bare is popcorn).
+## The storms the receiver opens up on (`<!-- static: 5, surf -->`; bare is popcorn).
 const STORMS := {
 	"popcorn": {"label": "Io-B's crackle", "blurb": "Short pops in clusters, like popcorn or pebbles on a tin roof, over the receiver's hiss - Jupiter's S-bursts."},
 	"surf": {"label": "Io-A's surf", "blurb": "Long swells of noise, rising and falling like surf on a beach - Jupiter's L-bursts."},
@@ -43,21 +41,21 @@ const RESET := 0.35
 const BUFFER := 0.5
 const STEP := 256
 const STILL_TICKS := 2
-## THE LEVELS (full scale): the most anything under the voice peaks at, and what the voice waits for.
+## The levels (full scale): the most anything under the voice peaks at, and what the voice waits for.
 const PEAK_MOST := 0.06
 const LOUD_MOST := 0.085
 ## The receiver's own hiss, always there (the note's "The receiver hisses, low"), and opened up under a storm.
 const HISS := 0.0016
 const HISS_OPEN := 0.02
-## A STORM'S POPS: a control slot (seconds), the most pops a second inside a cluster, and a pop's loudness and length.
+## A storm's pops: a control slot (seconds), the most pops a second inside a cluster, and a pop's loudness and length.
 const POP_SLOT := 0.004
 const POP_RATE := 70.0
 const POP := 0.05
 const POP_LEN := 0.004
-## A STORM'S SURF: how long a swell takes (seconds, least and most) and its loudness at its crest.
+## A storm's surf: how long a swell takes (seconds, least and most) and its loudness at its crest.
 const SWELL := Vector2(1.4, 3.6)
 const SURF := 0.05
-## THE PHONES: a key's two tones and their length and gap (seconds), how loud in the earpiece; the ring sent back (two
+## The phones: a key's two tones and their length and gap (seconds), how loud in the earpiece; the ring sent back (two
 ## tones, the pair's on and off) and how loud; a phone buzzing - its motor (Hz), its rattle against its neighbors (knocks
 ## a second) - and how loud.
 const DTMF_ROWS := [697.0, 770.0, 852.0, 941.0]
@@ -71,22 +69,22 @@ const RINGBACK_LEVEL := 0.009
 const BUZZ_HZ := 172.0
 const RATTLE := 26.0
 const BUZZ := 0.03
-## THE PRINTER: its pins' screech (Hz), the head's motor (Hz) and how loud each.
+## The printer: its pins' screech (Hz), the head's motor (Hz) and how loud each.
 const PINS_HZ := 940.0
 const MOTOR_HZ := 118.0
 const SCREECH := 0.022
 const MOTOR := 0.008
-## THE RADAR'S PING: its pitch, how long it rings, its echo (seconds after, and how loud) and its loudness.
+## The radar's ping: its pitch, how long it rings, its echo (seconds after, and how loud) and its loudness.
 const PING_HZ := 1180.0
 const PING_RING := 0.75
 const PING_ECHO := 0.36
 const PING := 0.03
-## THE TERMINAL'S BELL ([method _bell]): one short beep from its little speaker, as an old terminal gives for an alert or a
-## refused entry - its pitch, a near-square tone (its odd overtones), how long, and how loud.
+## The terminal's bell ([method _bell]): one short beep from its little speaker - its pitch, a near-square tone (its odd
+## overtones), how long, and how loud.
 const BELL_HZ := 880.0
 const BELL_LEN := 0.2
 const BELL := 0.022
-## THE JET ([method _jet]): its speed (m/s), how near it comes (m), the speed of sound (m/s), its turbine's whine (Hz) and
+## The jet ([method _jet]): its speed (m/s), how near it comes (m), the speed of sound (m/s), its turbine's whine (Hz) and
 ## its loudness at its nearest; the far air's darkening.
 const JET_SPEED := 95.0
 const JET_NEAR := 240.0
@@ -156,8 +154,8 @@ func _init(m: Object = null) -> void:
 	_br.resize(BURSTS)
 
 
-## THE SHOW AT [param t]: the sound kept [constant LEAD] ahead of it in a player under [param host] (made the first time) -
-## begun again where the show jumped, and held where it is while the show stands still.
+## The show at [param t]: the sound kept [constant LEAD] ahead of it in a player under [param host] (made the first
+## time), begun again where the show jumped and held where it is while the show stands still.
 func tick(t: float, host: Node) -> void:
 	if _player == null:
 		var gen := AudioStreamGenerator.new()
@@ -224,7 +222,7 @@ func _take_plan(from_now := false) -> void:
 		_next += 1
 
 
-## THE NEXT [param n] SAMPLES from where the sound is ([member _at]): stereo.
+## The next [param n] samples from where the sound is ([member _at]): stereo.
 func render(n: int) -> PackedVector2Array:
 	if is_nan(_at):
 		_restart(0.0)
@@ -255,7 +253,6 @@ func _going(t: float) -> Array:
 func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 	var dt := 1.0 / float(RATE)
 	var t1 := t0 + float(m) * dt
-	# what begins in this step, by the sample it begins at
 	var spawn: Array = []
 	while _next < _plan.size() and float((_plan[_next] as Dictionary)["t"]) < t1:
 		var d: Dictionary = _plan[_next]
@@ -263,7 +260,6 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 		_next += 1
 	var going := _going(t0)
 	var hiss := HISS
-	# a storm's level once a step (a step is 12 ms): what its sound and the hiss under it follow
 	for g in going:
 		var gd: Dictionary = g[0]
 		if String(gd["kind"]) == "static":
@@ -305,7 +301,6 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 				_drop_burst(b, _nb)
 				continue
 			b += 1
-		# the receiver's hiss, a band of noise - on the right, where it stands
 		var hx := _noise() * hiss
 		_hs[0] += f_hs * _hs[1]
 		_hs[1] += f_hs * (hx - _hs[0] - 1.1 * _hs[1])
@@ -351,26 +346,22 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 
 # --- what is begun ---------------------------------------------------------------------------------------------------
 
-## ONE MOMENT'S SOUND, begun: `what` says which, `at` where on the desk it is.
+## One moment's sound, begun: `what` says which, `at` where on the desk it is.
 func _begin(d: Dictionary) -> void:
 	var ears := ears_of(d.get("at", Vector3.ZERO))
 	match String(d.get("what", "")):
 		"flip":
-			# a phone flipped open: its hinge's snap and the plastic's ring
 			_burst(3200.0, 1.0, 0.006, 0.03, ears)
 			_burst(1400.0, 0.8, 0.012, 0.018, ears)
 			_sine(2900.0, 0.02, 0.006, ears)
 		"snap":
-			# ...snapped shut: louder, lower, the two halves meeting
 			_burst(2200.0, 0.9, 0.008, 0.045, ears)
 			_burst(600.0, 0.9, 0.02, 0.02, ears)
 			_sine(1900.0, 0.025, 0.008, ears)
 		"lay":
-			# a phone set down on the wood
 			_sine(190.0, 0.04, 0.02, ears)
 			_burst(1700.0, 1.1, 0.01, 0.014, ears)
 		"key":
-			# a key of the terminal: its click and the plastic under it
 			var a := lerpf(0.6, 1.0, _rand())
 			_burst(lerpf(2400.0, 3300.0, _rand()), 1.0, 0.005, 0.03 * a, ears)
 			_sine(lerpf(260.0, 340.0, _rand()), 0.03, 0.012 * a, ears)
@@ -387,15 +378,12 @@ func _begin(d: Dictionary) -> void:
 			for f in [float(DTMF_ROWS[row]), float(DTMF_COLS[col])]:
 				_sine(f, float(d.get("secs", DTMF_ON)) * 0.9, DTMF, Vector2(0.35, 0.94))
 		"chime":
-			# a text arriving: the phone's two-note chime, bright and short
 			_sine(1318.5, 0.16, 0.022, ears)
 			_sine(1975.5, 0.32, 0.016, ears)
 		"pad":
-			# a phone key pressed: its little click and the keypad's beep
 			_burst(3600.0, 0.9, 0.003, 0.012, ears)
 			_sine(1400.0, 0.05, 0.008, ears)
 		"sent":
-			# a text sent: a short rising swoop
 			_sine(880.0, 0.14, 0.012, ears, pow(1.6, 1.0 / (0.12 * float(RATE))))
 		"ping":
 			_sine(PING_HZ, PING_RING, PING, ears, pow(0.97, 1.0 / (PING_RING * float(RATE))))
@@ -403,20 +391,16 @@ func _begin(d: Dictionary) -> void:
 		"echo":
 			_sine(PING_HZ * 0.995, PING_RING * 0.8, PING * 0.3, ears, pow(0.97, 1.0 / (PING_RING * float(RATE))))
 		"tick":
-			# the sweep passing the target: a short, quiet blip of the scope's own
 			_sine(PING_HZ * 1.5, 0.045, PING * 0.1, ears)
 		"alarm":
-			# the target moving: the scope's short beep (the medium plays a low one, then two higher)
 			_sine(PING_HZ * 1.25, 0.09, PING * 0.32, ears)
 		"alarm_hi":
 			_sine(PING_HZ * 1.68, 0.09, PING * 0.32, ears)
 		"toggle":
-			# a toggle switch thrown: two clicks of its spring, a metal box ringing
 			_burst(4200.0, 0.7, 0.003, 0.05, ears)
 			_burst(2600.0, 0.9, 0.006, 0.03, ears)
 			_sine(1250.0, 0.06, 0.006, ears)
 		"thud":
-			# the mug set down: the desk's wood, and the glaze's tock
 			_sine(150.0, 0.06, 0.035, ears)
 			_burst(1500.0, 1.2, 0.012, 0.02, ears)
 			_sine(2350.0, 0.09, 0.008, ears)
@@ -424,28 +408,24 @@ func _begin(d: Dictionary) -> void:
 		"lift":
 			_burst(800.0, 1.4, 0.03, 0.006, ears)
 		"crt":
-			# the terminal's tube waking: a soft thump of its deflection
 			_sine(70.0, 0.12, 0.02, ears)
 			_burst(6000.0, 0.9, 0.04, 0.004, ears)
 		"click":
 			_burst(3000.0, 1.0, 0.004, 0.02, ears)
 		"detent":
-			# the gain knob turned a step: its detent's small click
 			_burst(3800.0, 0.9, 0.0025, 0.016, ears)
 			_sine(1700.0, 0.012, 0.004, ears)
 		"lamp":
-			# the lamp's switch: its snap, and the switch's body under it
 			_burst(2600.0, 0.8, 0.005, 0.034, ears)
 			_burst(900.0, 0.9, 0.012, 0.012, ears)
 			_sine(1500.0, 0.02, 0.004, ears)
 		"tear":
-			# the printer's paper drawn on, torn a little at its fold
 			_burst(2600.0, 1.4, 0.15, 0.01, ears)
 
 
 # --- what goes on ----------------------------------------------------------------------------------------------------
 
-## A STORM AT [param u] SECONDS into it: its pops (Io-B) or its surf (Io-A).
+## A storm at [param u] seconds into it: its pops (Io-B) or its surf (Io-A).
 func _storm(d: Dictionary, u: float, f_ss: float, level: float) -> float:
 	var kind := String(d.get("storm", "popcorn"))
 	var seed := int(d.get("seed", 0))
@@ -454,7 +434,7 @@ func _storm(d: Dictionary, u: float, f_ss: float, level: float) -> float:
 		_ss[0] += f_ss * _ss[1]
 		_ss[1] += f_ss * (x - _ss[0] - 0.7 * _ss[1])
 		return float(_ss[1]) * 1.6 + x * 0.25
-	# POPS: in each slot a pop as likely as the cluster's rate says - begun as a burst of its own, so it rings a moment
+	# Pops: in each slot a pop as likely as the cluster's rate says - begun as a burst of its own, so it rings a moment
 	var slot := int(floor(u / POP_SLOT))
 	if slot != _pop_slot:
 		_pop_slot = slot
@@ -465,13 +445,12 @@ func _storm(d: Dictionary, u: float, f_ss: float, level: float) -> float:
 	return 0.0
 
 
-## HOW HARD A STORM IS AT [param u] seconds of [param span] (0-1), a pure function of them and [param seed] - what its sound
-## and the receiver's needle both follow. Io-B's in clusters of pops, on and off; Io-A's in long swells. Both open and
-## close over their first and last half second.
+## How hard a storm is at [param u] seconds of [param span] (0-1), a pure function of them and [param seed]; its sound and
+## the receiver's needle both follow. Io-B's in clusters of pops, on and off; Io-A's in long swells. Both open and close
+## over their first and last half second.
 static func storm_level(kind: String, u: float, seed: int, span := 1e9) -> float:
 	var edge := clampf(u / 0.5, 0.0, 1.0) * clampf((span - u) / 0.5, 0.0, 1.0)
 	if kind == "surf":
-		# swells: each its own length and crest, one after another
 		var s := 0.0
 		var k := 0
 		var t := 0.0
@@ -485,7 +464,6 @@ static func storm_level(kind: String, u: float, seed: int, span := 1e9) -> float
 			t += len
 			k += 1
 		return clampf(0.18 + 0.82 * s, 0.0, 1.0) * edge
-	# clusters: a quarter second slot is a cluster, or quiet
 	var c := int(floor(u / 0.25))
 	var on := hash01(seed + 13, c) < 0.62
 	var inside := lerpf(0.5, 1.0, hash01(seed + 17, c))
@@ -503,7 +481,7 @@ func _ringback(u: float) -> float:
 	return (sin(_ph[0]) + sin(_ph[1])) * 0.5 * RINGBACK_LEVEL
 
 
-## THE TERMINAL'S BELL [param u] seconds into it: a near-square tone, a few milliseconds on and off at either end so it
+## The terminal's bell [param u] seconds into it: a near-square tone, a few milliseconds on and off at either end so it
 ## never clicks; its phase from [param u] itself.
 func _bell(u: float) -> float:
 	var edge := clampf(u / 0.004, 0.0, 1.0) * clampf((BELL_LEN - u) / 0.01, 0.0, 1.0)
@@ -511,7 +489,7 @@ func _bell(u: float) -> float:
 	return (sin(ph) + sin(ph * 3.0) / 3.0 + sin(ph * 5.0) / 5.0) * BELL * edge
 
 
-## A PHONE BUZZING on the wood [param u] seconds into its ring (or its one text's buzz): the motor's hum while it is on, and
+## A phone buzzing on the wood [param u] seconds into its ring (or its one text's buzz): the motor's hum while it is on, and
 ## its rattle against its neighbors.
 func _buzz(d: Dictionary, u: float) -> float:
 	var on := true
@@ -528,7 +506,7 @@ func _buzz(d: Dictionary, u: float) -> float:
 	return hum * BUZZ * 0.35
 
 
-## THE PRINTER [param u] seconds into a print: before its first line, quiet; each line the head's pins screeching across
+## The printer [param u] seconds into a print: before its first line, quiet; each line the head's pins screeching across
 ## and its motor; between lines the paper fed; done, its last feed.
 func _printing(d: Dictionary, u: float) -> float:
 	var lines := int(d.get("lines", 1))
@@ -545,7 +523,6 @@ func _printing(d: Dictionary, u: float) -> float:
 	var printing := w < 0.82
 	var s := sin(_ph[4]) * MOTOR
 	if printing:
-		# the pins fire in bursts as each character passes: a square-ish screech gated by the characters
 		var ch := int(floor(w * 60.0))
 		var gate := 1.0 if hash01(k * 131 + 7, ch) < 0.8 else 0.0
 		var sq := signf(sin(_ph[3])) * 0.6 + sin(_ph[3] * 2.0) * 0.3
@@ -555,14 +532,13 @@ func _printing(d: Dictionary, u: float) -> float:
 	return s
 
 
-## THE JET [param u] seconds into its pass - a source moving in a straight line past the building at [constant
-## JET_SPEED], nearest ([constant JET_NEAR]) at its middle. Heard as it was when the sound left it: its distance then
-## gives its loudness (as one over the distance) and how dark the air makes it, and the speed it was coming or going at
-## then the factor its pitch is heard at, c / (c - v cos), where cos is how directly it came on.
+## The jet [param u] seconds into its pass: a source moving in a straight line past the building at [constant JET_SPEED],
+## nearest ([constant JET_NEAR]) at its middle. Heard as it was when the sound left it: its distance then gives its
+## loudness (one over the distance) and how dark the air makes it, and the speed it was coming or going at then gives the
+## pitch factor c / (c - v cos), cos being how directly it came on.
 func _jet(d: Dictionary, u: float) -> Vector2:
 	var span := float(d["t1"]) - float(d["t"])
 	var tc := span * 0.5
-	# when the sound now heard left it: t_e + r(t_e) / c = u, solved by a few steps from u
 	var te := u
 	for _k in 4:
 		var x := JET_SPEED * (te - tc)
@@ -576,21 +552,18 @@ func _jet(d: Dictionary, u: float) -> Vector2:
 	var amp := JET * near * edge
 	_jph += TAU * WHINE_HZ * f / float(RATE)
 	var whine := sin(_jph) + 0.4 * sin(_jph * 2.02) + 0.2 * sin(_jph * 0.5)
-	# the roar: noise darkened by how far it is (the air takes the top first)
 	var dark := clampf(near, 0.12, 1.0)
 	var a := 1.0 - exp(-TAU * (400.0 + 2600.0 * dark) / float(RATE))
 	_js[0] += a * (_noise() - _js[0])
 	_js[1] += a * (_js[0] - _js[1])
 	var roar := _js[1] * 2.2
 	var s := (whine * 0.22 * dark + roar) * amp
-	# it passes from the left to the right overhead
 	var pan := clampf(xe / (JET_NEAR * 2.0), -1.0, 1.0) * 0.6
 	var ang := (pan + 1.0) * PI * 0.25
 	return Vector2(s * cos(ang), s * sin(ang))
 
 
-## THE PITCH FACTOR heard [param u] seconds into a jet's pass of [param span] seconds: what [method _jet] plays it at (for a
-## gate, which measures the fall).
+## The pitch factor heard [param u] seconds into a jet's pass of [param span] seconds: what [method _jet] plays it at.
 static func jet_pitch(u: float, span: float) -> float:
 	var tc := span * 0.5
 	var te := u

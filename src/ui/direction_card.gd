@@ -1,27 +1,26 @@
 extends VBoxContainer
 class_name DirectionCard
 
-## DirectionCard - the Direction's card ([Direction]; next/direction.md): where to take what is made next, written beside the
-## note's own words and handed to every agent above them. A box for the direction, a Refine that has the writer make a short
-## direction a full one in the show's own terms, and who refines.
+## DirectionCard - the Direction's card ([Direction]; next/direction.md): where to take what is made
+## next, written beside the note's own words and handed to every agent above them. A box for the
+## direction, a Refine that has the writer make a short direction a full one in the show's own terms,
+## and who refines.
 ##
-## REFINE IS WHERE THE WORDS ARE (the user, 2026-11-11: "It's pointless to force the user to back-out of the Direction text, just to
-## push the button and then re-enter it, to check results"): Refine and what the writer is doing stand in the window the
-## direction is written in ([method TextField.add_action]), and the refined words land in its box ([method TextField.replace]).
-## NO UNDO OF ITS OWN (the user, the same day: "The expectation is that the user will just copy/paste their own prompt there, if
-## they need to re-do it"). The card keeps a line of what is happening, for a window closed while a refine runs.
+## Refine and what the writer is doing stand in the window the direction is written in
+## ([method TextField.add_action]), and the refined words land in its box ([method TextField.replace]).
+## It has no undo of its own. The card keeps a line of what is happening, for a window closed while a
+## refine runs.
 ##
-## THE NOTE'S WORDS ARE LEFT ALONE (the user, 2026-11-11: "the models essentially choose their own topic, unless I edit that
-## markdown guide. Which I don't necessarily want to do"): Proof's Refine wrote over the note; this writes only the direction, so a
-## show's brief stays as its author keeps it, and the direction is changed for the next episode as often as it is wanted.
+## The note's words are left alone: Refine writes only the direction, so a show's brief stays as its
+## author keeps it, and the direction is changed for the next episode as often as it is wanted.
 ##
-## REFINE KEEPS WHAT WAS ASKED: the writer reads the note (the show's brief, or a note's words) and the direction, and writes the
-## direction back whole - every topic, request and emphasis kept, made precise, with what the note's agents need to make it
-## (rules/agents/direction.yaml).
+## Refine keeps what was asked: the writer reads the note (the show's brief, or a note's words) and the
+## direction, and writes the direction back whole - every topic, request and emphasis kept, made precise,
+## with what the note's agents need to make it (rules/agents/direction.yaml).
 
 ## The block this card keeps under `ghost:`.
 const KEY := Direction.KEY
-## WHERE A REFINE'S JOB IS KEPT, its prompt beside its answer: moved aside by a gate.
+## Where a refine's job is kept, its prompt beside its answer: moved aside by a gate.
 static var root := "user://directions"
 
 var _field: TextField
@@ -66,7 +65,7 @@ func _init() -> void:
 	_status.add_theme_font_size_override("font_size", 12)
 	_status.visible = false
 	add_child(_status)
-	# WHO REFINES: the agent, its model and how hard it reasons - the row every card that runs agents builds ([AgentPick])
+	# Who refines: the agent, its model and how hard it reasons - the row every card that runs agents builds ([AgentPick])
 	_writer = AgentPick.writer("Who refines the direction. Takes effect at the next Refine.")
 	_writer.changed.connect(func() -> void:
 		if not _syncing:
@@ -92,7 +91,7 @@ func text() -> String:
 	return _field.text
 
 
-## REFINE: the writer's job, from the note's words and the direction as it stands ([method prompt]); landed by [method land].
+## Refine: the writer's job, from the note's words and the direction as it stands ([method prompt]); landed by [method land].
 func refine() -> void:
 	if not _job.is_empty():
 		return
@@ -112,14 +111,14 @@ func refine() -> void:
 	_show_buttons()
 
 
-## THE REFINER'S PROMPT for a note titled [param title] whose words are [param words], and [param direction] as the author wrote it.
+## The refiner's prompt for a note titled [param title] whose words are [param words], and [param direction] as the author wrote it.
 ## Static and pure for the gate.
 static func prompt(title: String, words: String, direction: String) -> Dictionary:
 	var vars := {"title": title, "words": words.strip_edges(), "direction": direction.strip_edges(), "has_words": not words.strip_edges().is_empty()}
 	return {"system": Rules.say("agents/direction.system", vars), "prompt": Rules.say("agents/direction.prompt", vars)}
 
 
-## A REFINE'S ANSWER [param res] (`{ok, text, error}`) landed: the direction written over - or why not, said.
+## A refine's answer [param res] (`{ok, text, error}`) landed: the direction written over - or why not, said.
 func land(res: Dictionary) -> void:
 	if not bool(res.get("ok", false)):
 		_say("⚠  The refine stopped: %s" % String(res.get("error", "its run failed")))

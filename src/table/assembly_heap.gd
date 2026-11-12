@@ -1,10 +1,11 @@
 extends RefCounted
 class_name AssemblyHeap
 
-## AssemblyHeap - WHERE AN ASSEMBLY'S PARTS WAIT, as the plan knows it: a tub, a tray or a pile on the table, as a height field. Pure data, no node ([Assembly] asks it for places; a
-## gate stands one with no table). It says what a stock's inside is ([method TableAssembly._heap_of]: which [AssemblyBake] pours real pieces into), and where things seem to lie in a
-## preview, where a puppeteer or a set dresser asks for no record: each lands on what is already there, in a few tries at the lowest place it can find, tilted by the ground it lands on.
-## What the pieces really do is the record's ([AssemblyWorld]). A cell keeps its pieces in the order they landed, so whatever came after one in a cell it shares lies on it.
+## AssemblyHeap - where an assembly's parts wait, as the plan knows it: a tub, a tray or a pile on the table, as a height field. Pure data, no
+## node ([Assembly] asks it for places). It says what a stock's inside is ([method TableAssembly._heap_of]: which [AssemblyBake] pours real
+## pieces into), and where things seem to lie in a preview, where no record is asked for: each lands on what is already there, in a few tries at
+## the lowest place it can find, tilted by the ground it lands on. What the pieces really do is the record's ([AssemblyWorld]). A cell keeps its
+## pieces in the order they landed, so whatever came after one in a cell it shares lies on it.
 
 ## A cell of the height field (meters): under the narrowest piece, a stud across.
 const CELL := 0.006
@@ -35,7 +36,7 @@ var _stacks := {}                 # a cell -> [[top, id], ...] in the order they
 var _of := {}                     # id -> {"cells": PackedInt32Array, "top": float, "at": Vector2}
 
 
-## A PILE on the table at [param at] (meters), [param radius] across at most, on ground at height [param y].
+## A pile on the table at [param at] (meters), [param radius] across at most, on ground at height [param y].
 static func pile(heap_name: String, at: Vector2, radius: float, y := 0.0) -> AssemblyHeap:
 	var h := AssemblyHeap.new()
 	h.name = heap_name
@@ -53,7 +54,7 @@ static func pile(heap_name: String, at: Vector2, radius: float, y := 0.0) -> Ass
 	return h
 
 
-## WHAT IS INSIDE A CONTAINER: [param heights], nx x nz of them from [param from] on the table, NAN where it is not inside;
+## What is inside a container: [param heights], nx x nz of them from [param from] on the table, NAN where it is not inside;
 ## [param rim_y] how high its wall stands.
 static func inside(heap_name: String, from: Vector2, cols: int, rows: int, heights: PackedFloat32Array, rim_y: float) -> AssemblyHeap:
 	var h := AssemblyHeap.new()
@@ -127,7 +128,7 @@ func top() -> float:
 	return out
 
 
-## WHERE A PIECE COMES TO REST, let fall here ([param aim], within [param spread] of it, meters; the heap's own middle and reach by
+## Where a piece comes to rest, let fall here ([param aim], within [param spread] of it, meters; the heap's own middle and reach by
 ## default): its pose, and it lies there from now on. [param w], [param d] its size (meters across, deep), [param tall] its body's
 ## height, the piece's origin the middle of its underside.
 func deposit(id: int, w: float, d: float, tall: float, rng: RandomNumberGenerator, aim := Vector2.INF, spread := -1.0) -> Transform3D:
@@ -184,7 +185,7 @@ func deposit(id: int, w: float, d: float, tall: float, rng: RandomNumberGenerato
 	var pos: Vector2 = best["p"]
 	var y0 := float(best["rest"])
 	var yaw := float(best["yaw"])
-	# TILTED BY WHAT IT LANDED ON: the ground's fall across its two sides, up to [constant TILT_MOST]
+	# Tilted by what it landed on: the ground's fall across its two sides, up to [constant TILT_MOST]
 	var ex: Vector2 = best["ex"]
 	var ez: Vector2 = best["ez"]
 	var fall_a := _fall(pos, ex, a)
@@ -255,7 +256,7 @@ func holds(id: int) -> bool:
 	return _of.has(id)
 
 
-## WHAT LIES ON PIECE [param id]: each piece that landed after it in a cell it shares, each once, in the order they lie (the first
+## What lies on piece [param id]: each piece that landed after it in a cell it shares, each once, in the order they lie (the first
 ## on it first, so the last of them has nothing on it).
 func on_it(id: int) -> Array:
 	var seen := {}
@@ -297,7 +298,7 @@ func where(id: int) -> Vector2:
 	return (me as Dictionary)["at"] if me != null else Vector2.INF
 
 
-## THE PIECES ON TOP near [param at] (within [param within] meters), nearest first, at most [param most]: what a hand going in there
+## The pieces on top near [param at] (within [param within] meters), nearest first, at most [param most]: what a hand going in there
 ## meets first, each with nothing on it.
 func on_top_near(at: Vector2, within: float, most: int) -> Array:
 	var found: Array = []

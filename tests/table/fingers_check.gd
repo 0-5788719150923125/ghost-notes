@@ -1,21 +1,22 @@
 extends SceneTree
 
-## fingers_check: A THING IN HAND IS NEVER STILL ([Fingers], pure; the user, 2026-11-03: "A real hand is not perfectly still: the brick would maybe float a little, the rotation would
-## change, maybe the person would flip the brick in their fingers, fidgeting with it. But to have the brick just sit there, center-screen, at an angle, unmoving - it looks very strange").
+## fingers_check: a thing in hand is never still ([Fingers], pure).
 ##
 ##   godot --headless --path . --script res://tests/table/fingers_check.gd
 ##
-## - NEVER STILL: every moment of a long hold, in the air or waiting over a place, it has moved within the last moment by as much as can be seen. The control: what stood here before, the
-##   drift of [method Hands.drift] alone, is called still by the same measure.
-## - IT IS TURNED OVER, in beats: in the air, half a turn from where it began and several separate turnings, in every hold; and no two holds alike. The control: with no room for its fingers,
-##   it never is.
-## - NO JUMP, whatever the room does: frame to frame through a hold whose room rises, stays and falls - a turned thing righted as room runs out, past half a turn too. The control: a
-##   jump is called one.
-## - BOTH ENDS ARE THE RECORD'S: nothing done to it at the grip or as it leaves, and nothing pressed home.
-## - OVER THINGS IT NEVER GOES LOWER: its lowest corner, with little room, is never under where the record has it. The control: in the air, it is.
-## - IT TURNS ABOUT ITS MIDDLE, which goes only where the hand goes.
-## - A HAND KEPT WAITING DRAWS BACK: not in a short stop; all the way in a long one, and its fingers have room only while it is all the way back. Both ends of the stop are where it stopped.
-## - THE SAME MOMENT TWICE: looked at out of order, the same pose.
+## - Never still: every moment of a long hold, in the air or waiting over a place, it has moved within the last moment by as much as
+##   can be seen. Control: the drift of [method Hands.drift] alone is called still by the same measure.
+## - It is turned over, in beats: in the air, half a turn from where it began and several separate turnings, in every hold; and no
+##   two holds alike. Control: with no room for its fingers, it never is.
+## - No jump, whatever the room does: frame to frame through a hold whose room rises, stays and falls - a turned thing righted as
+##   room runs out, past half a turn too. Control: a jump is called one.
+## - Both ends are the record's: nothing done to it at the grip or as it leaves, and nothing pressed home.
+## - Over things it never goes lower: its lowest corner, with little room, is never under where the record has it. Control: in the
+##   air, it is.
+## - It turns about its middle, which goes only where the hand goes.
+## - A hand kept waiting draws back: not in a short stop; all the way in a long one, and its fingers have room only while it is all
+##   the way back. Both ends of the stop are where it stopped.
+## - The same moment twice: looked at out of order, the same pose.
 
 const FPS := 60.0
 
@@ -79,8 +80,8 @@ static func _hold(seed: int, seconds: float, room: float, free_too: bool) -> Arr
 	return poses
 
 
-## NEVER STILL: 1.5 seconds is long enough to see stillness in a brick. A window is still if it neither moved nor turned by as much as can be seen: a little over a pixel on a brick
-## on the plate, at 1080p (36 pixels a centimeter there, more nearer the lens).
+## Never still: 1.5 seconds is long enough to see stillness in a brick. A window is still if it neither moved nor turned by as much as
+## can be seen: a little over a pixel on a brick on the plate, at 1080p (36 pixels a centimeter there, more nearer the lens).
 func _never_still() -> void:
 	var window := int(1.5 * FPS)
 	var worst_air := Vector2(INF, INF)
@@ -102,7 +103,7 @@ func _never_still() -> void:
 	_ok(worst_was.x < 0.002 and worst_was.y < 2.0, "control: the drift alone, what was there before, is still by the same measure: even its liveliest hold has %.1f mm and %.1f degrees over some 1.5 s" % [worst_was.x * 1000.0, worst_was.y])
 
 
-## TURNED OVER: for every hold, in 20 seconds of it in the air.
+## Turned over: for every hold, in 20 seconds of it in the air.
 func _turned_over() -> void:
 	var least_far := INF
 	var least_beats := 1000

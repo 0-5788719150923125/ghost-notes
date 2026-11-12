@@ -2,72 +2,39 @@ extends GhostScene
 
 ## Murmuration - thousands of birds deciding together, against a bright sky.
 ##
-## A wide, nearly empty dusk sky - pale at the horizon, deepening upward - with one flock
-## in it. The birds wheel as a single body: the flock draws out into a ribbon, folds back
-## through itself, thickens into a dark sheet where the wings come broadside to the lens
-## and thins to a haze where they roll edge-on. Waves of that darkening travel across the
-## whole flock in half a second. A hawk cuts through the middle on a beat, the flock opens
-## around it and closes behind, and a pale wave of alarm spreads outward from the strike
-## by neighbor contact alone - faster than any bird in it is flying.
+## A wide, nearly empty dusk sky with one flock in it. The birds wheel as a single body: the
+## flock draws out into a ribbon, folds through itself, darkens where wings come broadside to the
+## lens and thins where they roll edge-on. A hawk cuts through on a beat; the flock opens around
+## it and a pale alarm wave spreads outward by neighbor contact alone, outliving the beat. The
+## birds decide their shape by consensus with their neighbors ([Primitives]' forces are
+## field-like).
 ##
-## WHY IT IS NEW. Nothing in the catalog flocks. `prism_swarm` is a scripted formation on
-## a fixed double-helix track, and [Primitives]' eight forces are field-like: every agent
-## reads the same wind and the same attractor, and none of them has ever had an opinion
-## about the agent beside it. This is the first subject whose shape is decided by consensus
-## rather than by a seeded parameter, and the first crowd - the alarm wave is the point of
-## it, a signal propagating through neighbors at a speed that has nothing to do with the
-## audio that triggered it, so what you watch outlives its own trigger.
+## The seed decides the bird count and sight radius, neighbor and scan caps, weights and the two
+## cohesion/alignment endpoints, speed and turn-rate range, the roost, whether there is a hawk
+## (about 7 seeds in 10) and its approaches (through, stoop, cross, climb), the sky, the
+## silhouette and wingbeat rates, the lens depth and the roll wave.
 ##
-## WHAT THE SEED DECIDES. How many birds and how far they can see; the k-nearest cap and
-## the scan cap that bound the neighbor loop; the fixed separation weight and the two
-## endpoints the cohesion/alignment pair walks between; speed range and the acceleration
-## ceiling that is really a turn-rate ceiling; the roost's position, its pull and how far
-## it may wander; whether there is a hawk at all (about seven seeds in ten), and if so its
-## cadence, its speed and four sampled approaches - straight through the middle, a stoop
-## from above, a lateral cross, or a climb from below; the sky's mood, how high the horizon
-## sits, how deep the zenith goes, whether there is cloud and whether there is a distant
-## treeline; the bird silhouette - body length, wing span, how far the wings beat and the
-## RANGE of wingbeat rates, so the flock's flicker is asynchronous rather than one strobe;
-## the depth of the lens volume the flock occupies; and the roll wave's amplitude, its
-## wavelength and how long it takes to cross.
+## Audio: separation never moves. Cohesion follows f.bass (a dense ball), alignment follows
+## f.high + f.treble (ribbons). f.movement and f.flux walk the weight point along a seeded
+## segment between the endpoints, with the weights rate-limited (sharp folds when agitated, lazy
+## arcs when calm). f.beat on an armed latch launches the hawk, after which the strike runs on
+## its own clock. f.bass drives a slow thermal. Only the sky reads chroma_hue() and f.energy;
+## bird brightness comes from banking angle, never the music. f.energy rarely passes 0.5 and
+## f.flux sits near 0.01-0.05, so alignment reads (f.high + f.treble) * 1.7 clamped and the walk
+## speed is movement + 14 * flux.
 ##
-## AUDIO, WHICH IS THE THREE WEIGHTS. Separation never moves - personal space is not a
-## musical parameter. Cohesion is driven by f.bass, so low sustained energy pulls the flock
-## into a dense ball; alignment is driven by f.high + f.treble, so bright detail makes it
-## stream out into ribbons. f.movement and f.flux together walk the weight point along a
-## seeded segment between the two sampled endpoints, and the weights are RATE-LIMITED on
-## the way, which is what gives sharp folds on an agitated passage and long lazy arcs on a
-## calm one. f.beat on an armed latch launches the hawk; after that the strike is on its
-## own clock and the audio has no further say in it. A slow vertical thermal in the air
-## comes from f.bass. Only the sky reads chroma_hue() and f.energy - the birds' brightness
-## comes from their BANKING ANGLE, never from the music, because a flock that flashed with
-## the beat would stop being an animal.
-##
-## MEASURED REALITY. f.energy is a mean over 64 bands and rarely passes 0.5; f.flux lives
-## around 0.01-0.05. So the drives here are written for those ranges - alignment reads
-## (f.high + f.treble) * 1.7 clamped, and the walk speed is movement + 14 * flux, not the
-## nominal unit quantities a 0..1 reading would suggest.
-## COST, AND AN HONEST COUNT. The solver and the batching both live in a [FrameForge] job;
-## the scene never touches a bird. A real murmuration is tens of thousands of starlings, but
-## that is not a number GDScript reaches: the working ceiling on a ghost worker is around
-## half a million interpreted operations per tick (falling_sand's 23k-cell sweep at 25 Hz is
-## the reference point), and a bird costs roughly three hundred of them once the eight-cell
-## block query, the scan cap and the query stride are in. That puts the honest range at
-## [900, 2400], which is what is sampled - a flock drawn as animals with wings that beat,
-## rather than nine thousand dots that never render. The sim runs on a [SimClock] at a
-## sampled 22-30 Hz and the renderer interpolates between the last two solver states, so the
-## motion is smooth at display rate while the physics stays frame-rate independent - not
-## optional here, since the Director sub-steps update() up to fifteen times in one frame,
-## pre-warms every scene twelve times before it is drawn, and an Echo re-localize can
-## fast-forward hundreds of calls.
+## Cost: the solver and batching run in a [FrameForge] job; the scene never touches a bird. A
+## bird costs about 300 interpreted operations against a worker ceiling of about half a million
+## per tick, so the count is sampled in [900, 2400]. The sim runs on a [SimClock] at 22-30 Hz and
+## the renderer interpolates between the last two states (required: the Director sub-steps
+## update() up to 15 times a frame and pre-warms scenes 12 times).
 
-## Ceiling on solver ticks handed to one build. [SimClock] caps a single update() call;
-## this caps what several capped calls may ACCUMULATE between two drawn frames.
+## Ceiling on solver ticks handed to one build; [SimClock] caps one update() call, this caps
+## what several accumulate between two drawn frames.
 const MAX_PENDING := 5
 
-## The hawk's approaches. Each is a start point (in units of the flock box's half-extents),
-## a direction, and a speed multiplier - a stoop comes in steep and fast from above, a
-## cross is slow and lateral and only shaves the edge of the flock.
+## The hawk's approaches. Each pass has a start point (in flock half-extents), a direction
+## and a speed multiplier: a stoop is steep and fast, a cross is slow and lateral.
 const APPROACHES := ["through", "stoop", "cross", "climb"]
 
 var _flock: Boids
@@ -128,8 +95,7 @@ var _ground_sat := 0.20
 
 # --- camera -----------------------------------------------------------------------
 var _fov := 46.0
-## How far past the visible edge the flock's walls sit. The birds have to be turning where the
-## camera cannot see them, not at the border of the frame.
+## How far past the visible edge the flock's walls sit, so birds turn out of frame.
 const WALL_OUT := 1.18
 
 var _dist := 1.9
@@ -139,8 +105,8 @@ var _ext := Vector3(0.78, 0.44, 0.60)
 var _since_tick := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.number]): a storyboard entry's `set`, by
+## name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"horizon": {"label": "Horizon", "type": "num", "range": [0.60, 0.93], "default": null,
 		"blurb": "How low in the frame the horizon sits."},
@@ -162,25 +128,21 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var sch := Scheme.among(["glacier", "dawn", "rose", "ash", "bone", "brass", "teal"], rng)
 	_sky_hue = sch.hue
 	_sky_hue_top = sch.opposed(sch.hue, 0.06)
-	# The horizon sits LOW, always: the subject is the sky and the flock in it, and a
-	# horizon near the middle turns the picture into a landscape with birds over it.
+	# The horizon sits low: near the middle the picture becomes a landscape with birds.
 	_horizon = number("horizon", rng)
 	_horizon_val = rng.randf_range(0.76, 0.97)
 	_horizon_sat = rng.randf_range(0.04, 0.16)
-	# Sampled as a FRACTION of the horizon rather than freely, so the sky deepens upward
-	# for every seed. Drawn independently the two ranges overlap and about a third of
-	# seeds come out brighter at the zenith, which reads as an overcast ceiling.
+	# A fraction of the horizon value, so the sky deepens upward for every seed (drawn
+	# independently, a third of seeds come out brighter at the zenith).
 	_zenith_val = _horizon_val * rng.randf_range(0.48, 0.90)
 	_zenith_sat = rng.randf_range(0.18, 0.48)
 	_bands = rng.randi_range(12, 22)
-	# The land below the horizon: never black, because at dusk it is lit by the same sky
-	# it sits under, but always darker than the air it meets - which is the only thing that
-	# makes the horizon read as an edge rather than as a color change.
+	# Land below the horizon: always darker than the air it meets, so the horizon reads
+	# as an edge.
 	_ground_val = _horizon_val * rng.randf_range(0.35, 0.78)
 	_ground_sat = rng.randf_range(0.08, 0.34)
 
-	# The lens volume. A shallow box makes a flat sheet of birds and a deep one lets the
-	# flock fold through itself in depth, which is where the density read comes from.
+	# The lens volume: shallow gives a flat sheet, deep lets the flock fold through itself.
 	_ext = Vector3(rng.randf_range(0.66, 0.92), rng.randf_range(0.34, 0.50),
 		rng.randf_range(0.34, 0.78))
 	_fov = rng.randf_range(38.0, 58.0)
@@ -190,25 +152,16 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var count: int = number("birds", rng)
 	_flock = Boids.new()
 	_flock.ext = _ext
-	# THE WALLS HAVE TO BE ABLE TO MOVE OUT. `_ext` is seeded, and a seeded box has no idea where
-	# the camera is: reported as "I can watch as birds bounce off of invisible boundaries". The
-	# box is widened from the live view every frame (see update), so the grid has to be laid for
-	# the widest it can reach - computed from THIS instance's own lens rather than a blind
-	# multiplier, so the extra cells are only the ones that can actually be needed.
-	#
-	# The worst case is a field scene's camera at its limit on an ultrawide frame: a `pull_back`
-	# shot bottoms out near 0.98 zoom, drift_view takes another 0.08 off it and pans about 0.17,
-	# and 21:9 puts the horizontal half-extent near 1.75 in unit fractions. It is the one bound
-	# here that has to be assumed rather than measured, because a scene's `size` is still zero
-	# while build_params runs - the Director does not add it to the tree until afterwards.
+	# The walls must be able to move out: the box is widened from the live view every frame (see
+	# update), so the grid is laid for the widest it can reach. Assumed worst case: a field
+	# camera at its limit (pull_back near 0.98 zoom, drift_view 0.08, pan 0.17) on a 21:9 frame
+	# (half-extent near 1.75); a scene's size is still zero during build_params.
 	var m := _wall_scale()
 	_flock.ext_max = Vector3(maxf(_ext.x, 1.75 * m), maxf(_ext.y, 0.80 * m), _ext.z)
 	_flock.radius = rng.randf_range(0.028, 0.044)
 	_flock.sep_radius = _flock.radius * rng.randf_range(0.30, 0.50)
 	_flock.k_cap = rng.randi_range(6, 14)
-	# The scan cap must stay comfortably above k_cap or a dense knot starves: a bird that
-	# spends its whole budget on the first cell never reaches the seven neighbors it is
-	# allowed to have.
+	# Kept well above k_cap, or a dense knot starves.
 	_flock.scan_cap = _flock.k_cap + rng.randi_range(8, 16)
 	_flock.query_stride = 2 if count > 1600 else rng.randi_range(1, 2)
 	_flock.speed_min = number("bird_speed", rng)
@@ -222,10 +175,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_flock.flap_lo = rng.randf_range(5.5, 8.0)
 	_flock.flap_hi = _flock.flap_lo + rng.randf_range(2.5, 6.0)
 
-	# The traveling roll wave. Its speed is sampled as a CROSSING TIME rather than as a
-	# frequency, because what the eye reads is "the darkening got from one side of the
-	# flock to the other in about half a second" - so the wavelength and the box width fix
-	# the temporal frequency rather than the other way round.
+	# The roll wave's speed is sampled as a crossing time (about half a second across the
+	# flock), so wavelength and box width fix the temporal frequency.
 	var wave_len := rng.randf_range(0.22, 0.55)
 	var cross := rng.randf_range(0.35, 0.9)
 	_flock.wave_k = TAU / wave_len
@@ -235,9 +186,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var wa := rng.randf() * TAU
 	_flock.wave_dir = Vector3(cos(wa), rng.randf_range(-0.35, 0.35), sin(wa)).normalized()
 
-	# The weight point. Separation is fixed; the pair that walks is cohesion against
-	# alignment, and the two endpoints are a BALL (all cohesion) and a RIBBON (all
-	# alignment), sampled with enough slack that no two seeds walk the same segment.
+	# The weight point: separation is fixed; cohesion against alignment walks between a
+	# ball (all cohesion) and a ribbon (all alignment).
 	_sep = rng.randf_range(1.1, 2.1)
 	_coh_a = rng.randf_range(0.9, 1.8)
 	_ali_a = rng.randf_range(0.25, 0.7)
@@ -303,7 +253,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_tree_h = rng.randf_range(0.025, 0.075)
 		_tree_val = rng.randf_range(0.06, 0.24)
 		_trees.resize(nt)
-		# A ragged canopy, not a comb: two octaves of seeded bumps plus the odd tall one.
+		# A ragged canopy: two octaves of seeded bumps plus the odd tall one.
 		var ph0 := rng.randf() * TAU
 		var ph1 := rng.randf() * TAU
 		var f0 := rng.randf_range(3.0, 7.0)
@@ -374,8 +324,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 func update(f: AudioFeatures, delta: float) -> void:
 	tick(f, delta)
-	# A field scene, and a very wide one: the camera barely moves, because the flock is
-	# already doing all the moving there is.
+	# A very wide field scene: the flock does the moving, the camera barely drifts.
 	drift_view(f, 0.012, 0.02)
 	update_layers(f, delta)
 	_ch = chroma_hue()
@@ -383,10 +332,9 @@ func update(f: AudioFeatures, delta: float) -> void:
 		delta, 5.0, 0.9)
 
 	# --- the weight walk ----------------------------------------------------------------
-	# The point moves along its segment at a speed set by how much the music is CHANGING,
-	# not by how loud it is, and turns round at the ends rather than being re-drawn - an
-	# rng draw on an audio-conditioned event would put the export on a different path from
-	# the preview for the rest of the song.
+	# The point moves at a speed set by how much the music is changing, and turns at the
+	# ends rather than being redrawn (an rng draw on an audio event would put export on
+	# a different path from preview).
 	var speed := clampf(_walk_gain * (f.movement + 14.0 * f.flux), 0.0, _walk_cap)
 	_walk += speed * _walk_dir * delta
 	if _walk >= 1.0:
@@ -397,21 +345,18 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_walk_dir = 1.0
 	var coh_t := lerpf(_coh_a, _coh_b, _walk) * (0.45 + 1.25 * clampf(f.bass * 1.5, 0.0, 1.0))
 	var ali_t := lerpf(_ali_a, _ali_b, _walk) * (0.40 + 1.30 * clampf((f.high + f.treble) * 1.7, 0.0, 1.0))
-	# The rate limit is the whole character of the motion: without it the flock snaps
-	# between ball and ribbon on every transient and reads as a switch being thrown.
+	# The rate limit is the character of the motion: without it the flock snaps between
+	# ball and ribbon on every transient.
 	_w_coh = move_toward(_w_coh, coh_t, _turn_cap * delta)
 	_w_ali = move_toward(_w_ali, ali_t, _turn_cap * delta)
-	# Everything the audio steers is written onto the JOB, never onto the solver: the worker
-	# may be mid-tick, and a weight changing under a half-finished generation is exactly the
-	# kind of race that shows up once an hour and never reproduces. run() copies them across
-	# before it steps anything.
+	# Audio-steered values go onto the job, never the solver: the worker may be mid-tick.
+	# run() copies them before it steps.
 	_job.w_sep = _sep
 	_job.w_coh = _w_coh
 	_job.w_ali = _w_ali
 	_job.w_roost = _roost_pull
-	# THE BOX FOLLOWS THE CAMERA, and only ever outward: shrinking it would put birds through a
-	# wall that moved onto them. Through the job like every other steered value, because the
-	# solver may be mid-tick on a worker.
+	# The box follows the camera, only outward (shrinking would put birds through a wall),
+	# through the job like every other steered value.
 	var need := view_half() * _wall_scale()
 	_ext.x = clampf(maxf(_ext.x, need.x), 0.0, _flock.ext_max.x)
 	_ext.y = clampf(maxf(_ext.y, need.y), 0.0, _flock.ext_max.y)
@@ -420,8 +365,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_job.thermal = -_thermal * (0.25 + 1.4 * clampf(f.bass * 1.4, 0.0, 1.0))
 
 	# --- the roost drifts on the wind ----------------------------------------------------
-	# One Flow2D sample a frame moves the attractor the whole flock hangs off, which reads
-	# as the flock riding a wind without any bird having to sample a field.
+	# One Flow2D sample a frame moves the attractor the flock hangs off: it rides a wind.
 	_flow.advance(delta)
 	var w := _flow.at(Vector2(_roost_home.x, _roost_home.y) + Vector2(0.3, 0.0))
 	var w2 := _flow.at(Vector2(_roost_home.z, _roost_home.y) - Vector2(0.25, 0.1))
@@ -429,10 +373,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 		w.x * _roost_reach.x, w.y * _roost_reach.y, w2.x * _roost_reach.z)
 
 	# --- the hawk -------------------------------------------------------------------------
-	# The strike is the ONLY audio event in the scene, and it is one-shot: the beat launches
-	# it and then has no further say. Everything after - the hole opening, the alarm running
-	# outward, the flock closing behind - is the solver's own business, which is what makes
-	# the wave outlive the transient that caused it.
+	# The strike is the only audio event and is one-shot: the beat launches it, and the
+	# hole, the alarm wave and the closing behind are the solver's.
 	_hawk_arm += delta
 	var beat_up: bool = f.beat > 0.55 and _beat_prev <= 0.55
 	_beat_prev = f.beat
@@ -443,7 +385,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_job.hawk_vel = _hawk_vel
 		_job.hawk_on = _hawk_left > 0.0
 	elif _hawk_present and beat_up and _hawk_arm >= _hawk_cad and not _passes.is_empty():
-		# WHICH pass is an index step, never a draw. Same reason as the walk above.
+		# Which pass is an index step, never a draw, as above.
 		var pass_d: Dictionary = _passes[_hawk_i % _passes.size()]
 		_hawk_i += 1
 		_hawk_arm = 0.0
@@ -459,8 +401,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_job.hawk_on = true
 
 	# --- camera ----------------------------------------------------------------------------
-	# Held nearly still, with a slow lateral breath; the flock supplies the motion, and a
-	# camera that also swings makes the picture unreadable.
+	# Held nearly still with a slow lateral breath.
 	_job.eye = Vector3(0.10 * mod.value("panx"), _eye_lift + 0.05 * mod.value("pany"), _dist)
 	_job.look = Vector3(0.04 * mod.value("look"), 0.02 * mod.value("tiltc"), 0.0)
 	_job.fov = _fov
@@ -472,18 +413,16 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_job.pending = mini(_job.pending + n, MAX_PENDING)
 	else:
 		_since_tick += delta
-	# A one-tick lag, interpolated: at a 25 Hz solver that is 40 ms behind, which nobody
-	# sees, and it is the difference between smooth flight and a 25 fps flicker.
+	# One tick behind, interpolated: 40 ms at 25 Hz, smooth at display rate.
 	_job.blend = clampf(_since_tick / _clock.dt, 0.0, 1.0)
 	_job.unit_px = unit()
 	_forge.kick(_job.run, {}, self, _job)
 	queue_redraw()
 
 
-## How far out a wall has to sit, per unit of visible half-extent, for the birds to turn OFF
-## SCREEN. A bird at the box edge sits at the nearest face of the box, so its projected offset is
-## `focal * ext / (dist - ext.z)`; inverting that gives the box extent a given screen extent
-## demands, and the margin puts the turn safely outside the frame rather than on its edge.
+## How far out a wall must sit, per unit of visible half-extent, for the birds to turn off
+## screen. A bird at the nearest box face projects to `focal * ext / (dist - ext.z)`;
+## inverting that gives the extent a screen extent demands, and WALL_OUT adds margin.
 func _wall_scale() -> float:
 	var focal := 1.0 / tan(deg_to_rad(clampf(_fov, 10.0, 170.0)) * 0.5)
 	return WALL_OUT * maxf(0.25, _dist - _ext.z) / focal
@@ -491,22 +430,20 @@ func _wall_scale() -> float:
 
 func _draw() -> void:
 	begin_draw()
-	# What the camera can see, not the viewport times a constant - dividing by the zoom covers a
-	# pull-back and nothing else. See [method SceneView.visible_half].
+	# The camera's visible half-extent, not the viewport times a constant. See
+	# [method SceneView.visible_half].
 	var hpx := view_half_px()
 	var hx := hpx.x
 	var hy := hpx.y
 	var tint := _ch.y * 0.45
 
-	# The ground is the pale air at the horizon, flat and full-bleed. `bed` cannot be this
-	# - it vignettes, and its brightest possible pixel is a mid tone - and a dusk sky that
-	# darkens at its corners reads as a spotlight on paper rather than as sky.
+	# The ground is flat, full-bleed pale air at the horizon; `bed` vignettes and cannot
+	# be bright enough.
 	paint_ground(_sky_hue, _horizon_sat, clampf(_horizon_val + 0.06 * _glow, 0.0, 1.0),
 		tint, _ch.x)
 
-	# The vertical ramp: pale at the horizon, deepening upward. Painted as a small stack of
-	# opaque strips rather than as a gradient texture, because a dozen quads through
-	# [TriBatch] is one draw call and needs no resource.
+	# The vertical ramp, as a stack of opaque strips: one draw call through [TriBatch],
+	# no resource.
 	var yh := hy * (2.0 * _horizon - 1.0)
 	var top := -hy
 	var span := yh - top
@@ -523,9 +460,7 @@ func _draw() -> void:
 				PackedVector2Array([Vector2(-hx, y0), Vector2(hx, y0),
 					Vector2(hx, y1), Vector2(-hx, y1)]),
 				PackedColorArray([c0, c0, c1, c1]))
-	# The land, as a short ramp off the horizon. Four strips is enough because it occupies
-	# a tenth of the frame at most and is mostly hidden behind the treeline when there is
-	# one; its whole job is to stop the bottom of the picture reading as more sky.
+	# The land: four strips, a short ramp off the horizon.
 	var gspan := hy - yh
 	if gspan > 1.0:
 		for i in 4:
@@ -541,8 +476,7 @@ func _draw() -> void:
 
 	draw_layers("back")
 
-	# A distant treeline, when the seed drew one: the flock reads as being over LAND rather
-	# than in a void, and the birds crossing it are the only depth cue that costs nothing.
+	# A distant treeline when the seed drew one: the flock reads as over land.
 	if not _trees.is_empty():
 		var nt := _trees.size()
 		var cw := hx * 2.0 / float(nt)
@@ -556,14 +490,13 @@ func _draw() -> void:
 				Vector2(x0 + cw * 1.02, hy), Vector2(x0, hy), col)
 		_tb.flush(self)
 
-	# The flock: simulated AND batched off-thread, submitted here in microseconds.
+	# The flock is simulated and batched off-thread.
 	_forge.submit(self)
 	draw_layers("front")
 
 
-## The sky color at height [param t] (0 at the horizon, 1 at the zenith), dragged toward
-## the music's tonal center by [param tint]. Saturation climbs and value falls with height,
-## which is what makes a dusk sky read as depth rather than as a two-color gradient.
+## The sky color at height [param t] (0 at the horizon, 1 at the zenith), pulled toward the
+## music's tonal center by [param tint]. Saturation rises and value falls with height.
 func _sky_at(t: float, dh: float, tint: float) -> Color:
 	var e := t * t * (3.0 - 2.0 * t)                 # smoothstep: the band edges vanish
 	var h := fposmod(_sky_hue + dh * e, 1.0)
@@ -583,17 +516,13 @@ func _ground_color(t: float) -> Color:
 		clampf(lerpf(_horizon_val * 0.94, _ground_val, t) + 0.04 * _glow, 0.0, 1.0))
 
 
-## The off-thread job: it owns the [Boids] solver, advances it on the pending [SimClock]
-## ticks, and batches every bird into one triangle buffer - all on the worker, so the
-## scene never touches a bird and a Director cut mid-build is harmless.
+## The off-thread job: owns the [Boids] solver, advances it on the pending [SimClock] ticks
+## and batches every bird into one triangle buffer, so the scene never touches a bird.
 ##
-## The triangle layout is FIXED - three triangles, nine vertices, per bird, always, with a
-## culled bird written as degenerate zero-alpha geometry rather than skipped. Two things
-## follow. The index buffer is built ONCE at setup and never touched again, since it is
-## just 0..9n-1 and the triangle count never changes. And the vertex and color buffers
-## are written BY INDEX rather than appended to, so a bird costs no GDScript method calls
-## at all - where [TriBatch]'s tri() would be three calls and eighteen appends each, which
-## at two thousand birds a frame is the whole budget.
+## The layout is fixed: three triangles (nine vertices) per bird, a culled bird written as
+## degenerate zero-alpha geometry. The index buffer is built once, and vertex and color
+## buffers are written by index, not appended ([TriBatch]'s tri() would cost three calls
+## and eighteen appends per bird).
 class FlockJob:
 	extends RefCounted
 
@@ -644,16 +573,12 @@ class FlockJob:
 	var _dep := PackedFloat32Array()
 	var _keys := PackedInt64Array()
 
-	## Allocate the scratch once. The index buffer is the only thing that survives between
-	## builds: it is shared into every packet and never written after this, so the main
-	## thread submitting an old packet can never see a torn one. The vertex and color
-	## buffers are minted fresh per build for the same reason - the previous packet is
-	## still in flight and must not be rewritten under it, and a resize of a few hundred
-	## kilobytes is a memset, far below the cost of the geometry that fills it.
+	## Allocate the scratch once. The index buffer survives between builds (shared into every
+	## packet, never written after this); vertex and color buffers are minted fresh per build
+	## because the previous packet is still in flight.
 	func setup() -> void:
 		var n := flock.n
-		# One extra slot past the flock: the hawk, drawn last so it is never buried by the
-		# birds it is scattering.
+		# One extra slot past the flock for the hawk, drawn last.
 		_verts = (n + 1) * 9
 		_idx.resize(_verts)
 		for i in _verts:
@@ -679,8 +604,8 @@ class FlockJob:
 		flock.hawk_on = hawk_on
 		var hp := hawk
 		for k in n:
-			# The hawk flies on SIM time inside the loop, so a build that runs two ticks
-			# does not have it teleport - the hole it opens is a continuous furrow.
+			# The hawk flies on sim time inside the loop, so two ticks in one build do not
+			# teleport it.
 			flock.hawk = hp
 			flock.step(dt)
 			hp += hawk_vel * dt
@@ -694,10 +619,8 @@ class FlockJob:
 		var u := unit_px
 		var nb := flock.n
 		var bl := blend
-		# Local aliases for the hot loops. A packed array reached through `flock.px[i]` is
-		# a property lookup and a Variant round trip per access, and there are a dozen per
-		# bird per pass; aliasing costs one refcount each and nothing else, since neither
-		# pass ever writes to them.
+		# Local aliases for the hot loops: a packed array through `flock.px[i]` is a property
+		# lookup per access.
 		var fqx := flock.qx
 		var fqy := flock.qy
 		var fqz := flock.qz
@@ -730,10 +653,8 @@ class FlockJob:
 				wy + vyi / sp * body_len, wz + vzi / sp * body_len))
 			_hx[i] = h.x
 			_hy[i] = h.y
-			# Painter key, packed natively: quantized depth in the high bits, index in the
-			# low 22, so the whole ordering is one sort of a PackedInt64Array. A list of
-			# Dictionaries through sort_custom would be thousands of allocations and
-			# hundreds of thousands of interpreted comparisons every frame.
+			# Painter key: quantized depth in the high bits, index in the low 22, so the
+			# ordering is one sort of a PackedInt64Array.
 			var q := int(clampf(c.z, -100.0, 100.0) * 16384.0)
 			_keys[i] = (-q << 22) | i
 
@@ -775,9 +696,8 @@ class FlockJob:
 			var px_ := -uy
 			var py_ := ux
 
-			# How much of the bird's heading points down the view axis. It sets the
-			# foreshortening of the circle the wingtips sweep, and with the roll angle it
-			# decides how much wing area the lens actually sees.
+			# How much of the heading points down the view axis: it foreshortens the
+			# wingtip circle.
 			var vxi2 := fvx[i]
 			var vyi2 := fvy[i]
 			var vzi2 := fvz[i]
@@ -795,11 +715,9 @@ class FlockJob:
 			var sl := sin(tl)
 			var cr := cos(tr)
 			var sr := sin(tr)
-			# The wingtips sweep a circle in the plane normal to the heading; projected,
-			# that circle is an ellipse with a full-length axis across the screen heading
-			# and an axis along it foreshortened by exactly `along`. The length of the
-			# projected span IS how much wing the lens sees - which is where the dark
-			# sheets and the pale hazes come from, and it is geometry, not audio.
+			# The wingtips sweep a circle normal to the heading; projected, an ellipse with
+			# a full axis across the heading and an axis along it foreshortened by `along`.
+			# The projected span is how much wing the lens sees (dark sheets, pale hazes).
 			var lx := cx + px_ * (span * cl) + ux * (span * along * sl)
 			var ly := cy + py_ * (span * cl) + uy * (span * along * sl)
 			var rx := cx + px_ * (span * cr) + ux * (span * along * sr)
@@ -845,8 +763,7 @@ class FlockJob:
 				cols[o + k] = col
 
 		# --- the hawk, in the reserved last slot ------------------------------------------
-		# Same three triangles as a bird, at two and a half times the span and with the
-		# wings HELD rather than beating - a hunting bird does not flap, and that alone
+		# Same triangles as a bird at 2.4 times the span, wings held rather than beating.
 		# separates it from the thousand animals it is flying through.
 		var ho := nb * 9
 		var drawn := false

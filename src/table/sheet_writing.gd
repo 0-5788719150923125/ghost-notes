@@ -1,25 +1,22 @@
 extends RefCounted
 class_name SheetWriting
 
-## SheetWriting - WORDS WRITTEN ON A SHEET by the work ([constant Motions.LAWS] `write`): a name on a slip, a label, a line
-## on a page, written by an unseen pen as the act goes on.
+## SheetWriting: words written on a sheet by the work ([constant Motions.LAWS] `write`) - a name on a slip, a label, a line on a page,
+## written by an unseen pen as the act goes on. Nothing on a table carries words as it is set; the work writes them, when the script says
+## so.
 ##
-## The user, 2026-10-29, of the-quiet-crucible 707668's poison "name on a slip": "a little white square kind of looks like
-## nothing ... The slip should show writing, if the script says it should". Nothing on a table carries words as it is set;
-## the work writes them, when the script says so.
+## In a recipe's own hand: the words are set in one of [constant CardTable.HANDS] - the hands a written card is written in - and drawn on
+## the processor from the font's own glyphs ([method picture]: no viewport and no renderer, so it is the same in a gate, a render and the
+## app), into a picture whose red is the ink and whose green is when each point of it is put down: line by line, left to right. A thin
+## skin over the sheet's top - bent and folded as the sheet is ([method Props.sheet_lift]) - shows that picture as far as the pen has got
+## (`shaders/sheet_writing.gdshader`).
 ##
-## IN A RECIPE'S OWN HAND: the words are set in one of [constant CardTable.HANDS] - the hands a written card is written in -
-## and drawn on the processor from the font's own glyphs ([method picture]: no viewport and no renderer, so it is the same
-## in a gate, a render and the app), into a picture whose red is the ink and whose green is when each point of it is put
-## down: line by line, left to right. A thin skin over the sheet's top - bent and folded as the sheet is
-## ([method Props.sheet_lift]) - shows that picture as far as the pen has got (`shaders/sheet_writing.gdshader`).
-##
-## A PAGE, WRITTEN A LINE AT A TIME ([method page]; 2026-11-11, Proof's pad at the table - next/proof.md): several writes on one
-## sheet go one under another from its head, as lines on a page do, all at one size - words in the sheet's hand, and what TeX
-## lays out ([TableInk]: a formula, a drawing, words with math) in the Hershey hand - so a lesson's working fills a page as it is
-## done. Write K of N puts its ink down while the sheet's `written` goes from K/N to (K+1)/N ([method TableWork._order_writing]),
-## its picture's time packed into that share, and the shader's pen front made N times as sharp to keep it a line. A page that
-## would run off the sheet is written smaller to fit, and says so (`shrunk`): the next lines belong on another sheet.
+## A page, written a line at a time ([method page], next/proof.md): several writes on one sheet go one under another from its head, as
+## lines on a page do, all at one size - words in the sheet's hand, and what TeX lays out ([TableInk]: a formula, a drawing, words with
+## math) in the Hershey hand - so a lesson's working fills a page as it is done. Write K of N puts its ink down while the sheet's
+## `written` goes from K/N to (K+1)/N ([method TableWork._order_writing]), its picture's time packed into that share, and the shader's pen
+## front made N times as sharp to keep it a line. A page that would run off the sheet is written smaller to fit, and says so (`shrunk`):
+## the next lines belong on another sheet.
 
 const SHADER := preload("res://shaders/sheet_writing.gdshader")
 ## The share of a sheet's width and length kept clear round its words, and more for an outline that narrows at its ends
@@ -36,8 +33,8 @@ const GRID := Vector2i(16, 6)
 const MOST_LINES := 4
 ## How sharp the pen's front is in a sheet's `written` (the shader's `sharp`): a page's is this times its writes.
 const SHARP := 100.0
-## A PAGE: the room between its writes (a share of a line), the largest a hand writes (meters a TeX point: a 15 pt line about
-## 9 mm), and the most pixels a page's picture is on its longer side.
+## A page: the room between its writes (a share of a line), the largest a hand writes (meters a TeX point: a 15 pt line about 9 mm), and
+## the most pixels a page's picture is on its longer side.
 const PAGE_GAP := 0.45
 const PAGE_MOST_SCALE := 0.0006
 const PAGE_MOST_PX := 2048
@@ -45,15 +42,15 @@ const PAGE_MOST_PX := 2048
 const SHRUNK_BY := 0.8
 ## How much taller a line of words in a hand is laid than TeX's line, so their letters stand as tall as TeX's on one page.
 const WORDS_TALLER := 1.35
-## A WRITE'S TIME, FOR A PEN SEEN ([method TableWork._pen_nib]): the seconds it takes to come down to its first stroke, and to lift
-## clear after its last, at the hand's own pace - the ink is put down between - and the seconds a hand takes over a letter of words.
+## A write's time, for a pen seen ([method TableWork._pen_nib]): the seconds it takes to come down to its first stroke, and to lift clear
+## after its last, at the hand's own pace - the ink is put down between - and the seconds a hand takes over a letter of words.
 const PEN_LEAD := 0.6
 const PEN_TAIL := 0.45
 const WORD_LETTER := 0.12
 
 
-## THE WORDS' PICTURE: [param text] (lines split by "\n", and broken further at spaces to suit a box [param aspect] wide
-## for its height) in hand [param hand] ([constant CardTable.HANDS]): R the ink's coverage, G when it is put down.
+## The words' picture: [param text] (lines split by "\n", and broken further at spaces to suit a box [param aspect] wide for its height)
+## in hand [param hand] ([constant CardTable.HANDS]): R the ink's coverage, G when it is put down.
 static func picture(text: String, hand: String, aspect: float) -> Image:
 	var row: Dictionary = CardTable.HANDS.get(hand, CardTable.HANDS["neat"])
 	var font: FontFile = load(String(row["file"]))
@@ -153,8 +150,8 @@ static func _wrapped(own: PackedStringArray, font: FontFile, px: int, n: int) ->
 	return out
 
 
-## THE WORDS ON SHEET [param sheet] ([method Props.sheet_top]), in [param hand] and [param ink]: a skin over its top, in the
-## space the sheet was built in, its [code]written[/code] how far the pen has got (0 at first).
+## The words on sheet [param sheet] ([method Props.sheet_top]), in [param hand] and [param ink]: a skin over its top, in the space the
+## sheet was built in, its [code]written[/code] how far the pen has got (0 at first).
 static func node(sheet: Dictionary, text: String, hand: String, ink: Color) -> MeshInstance3D:
 	var w := float(sheet["w"])
 	var l := float(sheet["l"])
@@ -202,7 +199,7 @@ static func node(sheet: Dictionary, text: String, hand: String, ink: Color) -> M
 	return mesh
 
 
-## THE ROOM a sheet's writing has (meters, across and down the sheet): the sheet less its margins.
+## The room a sheet's writing has (meters, across and down the sheet): the sheet less its margins.
 static func room_of(sheet: Dictionary) -> Vector2:
 	var w := float(sheet["w"])
 	var l := float(sheet["l"])
@@ -210,14 +207,14 @@ static func room_of(sheet: Dictionary) -> Vector2:
 	return Vector2(w * (1.0 - 2.0 * margin), l * (1.0 - 2.0 * margin))
 
 
-## A PAGE OF WRITES (see the class note): [param items] in the order they are written - each `{text, hand}` for words in a hand, or
-## `{rec}` for TeX's record of a formula, a drawing or words with math ([method TableInk.record_in]) - laid one under another
-## from the head of a room [param room] (meters) and written by the hand seeded [param seed] ([param outlines] the ink's `fonts`).
-## `{image, sharp, shrunk, missing, layout}`: R the ink, G when it is put down - item K of N in K/N to (K+1)/N, its ink between
-## its lead and its tail ([constant PEN_LEAD], [constant PEN_TAIL]). `layout` is where everything is, for a pen seen and for what
-## points ([method TableWork._pen_nib], [method TableWork._point_nib]): `{scale (meters a point), pt (the page's size in points),
-## items: [{x, y, w, h (its box), ox, oy (a record's origin: x 0 on its baseline), strokes, seconds, lead, ink (its time's shares),
-## lines (words'), anchors ({name: Rect2}, the page's points)}]}`.
+## A page of writes (see the class note): [param items] in the order they are written - each `{text, hand}` for words in a hand, or
+## `{rec}` for TeX's record of a formula, a drawing or words with math ([method TableInk.record_in]) - laid one under another from the
+## head of a room [param room] (meters) and written by the hand seeded [param seed] ([param outlines] the ink's `fonts`).
+## `{image, sharp, shrunk, missing, layout}`: R the ink, G when it is put down - item K of N in K/N to (K+1)/N, its ink between its lead
+## and its tail ([constant PEN_LEAD], [constant PEN_TAIL]). `layout` is where everything is, for a pen seen and for what points
+## ([method TableWork._pen_nib], [method TableWork._point_nib]): `{scale (meters a point), pt (the page's size in points), items: [{x, y,
+## w, h (its box), ox, oy (a record's origin: x 0 on its baseline), strokes, seconds, lead, ink (its time's shares), lines (words'),
+## anchors ({name: Rect2}, the page's points)}]}`.
 static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = {}) -> Dictionary:
 	var n := maxi(items.size(), 1)
 	# each item's size in TeX points: TeX's own for a record; for words, their picture in the hand, a line of it a line's height
@@ -247,7 +244,7 @@ static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = 
 		words.append(said)
 		widest = maxf(widest, sz.x)
 		tall += sz.y + (TableInk.LINE_PT * PAGE_GAP if sizes.size() > 1 else 0.0)
-	# ONE SIZE FOR THE PAGE: as wide as its widest line, no larger than a hand writes - and smaller, said, when it runs off
+	# One size for the page: as wide as its widest line, no larger than a hand writes - and smaller, said, when it runs off
 	var natural := minf(room.x / widest, PAGE_MOST_SCALE)
 	var scale := minf(natural, room.y / maxf(tall, 1.0))
 	var shrunk := scale < natural * SHRUNK_BY
@@ -260,7 +257,7 @@ static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = 
 	var y := 0.0
 	for k in items.size():
 		var d: Dictionary = items[k]
-		# A LINE CROSSED OUT: a stroke of the hand through an earlier line, drawn straight onto the page in its own share of time
+		# A line crossed out: a stroke of the hand through an earlier line, drawn straight onto the page in its own share of time
 		if d.has("strike"):
 			laid.append(_strike(img, laid, int(d["strike"]), px, k, n, seed))
 			continue
@@ -286,7 +283,7 @@ static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = 
 		var lead := PEN_LEAD / total
 		var ink := seconds / total
 		_blit(img, part, Vector2i(x0, int(round(y * px))), float(k) / float(n), 1.0 / float(n), lead, ink)
-		# ...AND WHERE IT IS, for a pen seen and for what points at it
+		# ...and where it is, for a pen seen and for what points at it
 		var at := {"x": float(x0) / px, "y": y, "w": float(part.get_width()) / px, "h": (sizes[k] as Vector2).y, "strokes": strokes,
 			"seconds": seconds, "lead": lead, "ink": ink, "lines": maxi(int(round((sizes[k] as Vector2).y / (TableInk.LINE_PT * WORDS_TALLER))), 1),
 			"anchors": {}}
@@ -312,9 +309,9 @@ const STRIKE_SPEED := 2.2
 const STRIKE_PAST := 2.0
 
 
-## LINE [param target] OF [param laid] CROSSED OUT on [param img] ([param px] pixels a point) as item [param k] of [param n]: a slightly
-## uneven stroke through the middle of its box, drawn at a hand's pace in that item's share of the page's time - and its layout entry,
-## its stroke for a pen seen to follow. A target that is not an earlier line strikes nothing.
+## Line [param target] of [param laid] crossed out on [param img] ([param px] pixels a point) as item [param k] of [param n]: a slightly
+## uneven stroke through the middle of its box, drawn at a hand's pace in that item's share of the page's time - and its layout entry, its
+## stroke for a pen seen to follow. A target that is not an earlier line strikes nothing.
 static func _strike(img: Image, laid: Array, target: int, px: float, k: int, n: int, seed: int) -> Dictionary:
 	var none := {"x": 0.0, "y": 0.0, "w": 0.0, "h": 0.0, "strokes": [], "seconds": 0.0, "lead": 0.0, "ink": 0.0, "lines": 1, "anchors": {}}
 	if target < 0 or target >= laid.size() or float((laid[target] as Dictionary)["w"]) <= 0.0:
@@ -374,8 +371,8 @@ static func _font_of(hand: String) -> FontFile:
 	return load(String(row["file"]))
 
 
-## THE PAGE ON SHEET [param sheet] ([method Props.sheet_top]): a skin over the whole of its room, showing [param pic] ([method
-## page]'s answer) in [param ink], its [code]written[/code] how far the pen has got (0 at first).
+## The page on sheet [param sheet] ([method Props.sheet_top]): a skin over the whole of its room, showing [param pic] ([method page]'s
+## answer) in [param ink], its [code]written[/code] how far the pen has got (0 at first).
 static func page_node(sheet: Dictionary, pic: Dictionary, ink: Color) -> MeshInstance3D:
 	var w := float(sheet["w"])
 	var l := float(sheet["l"])

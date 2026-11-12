@@ -22,7 +22,7 @@ const INTRO := 5.0
 const VOICE := 3.0
 ## Measured reference: real narration through this chain sits at RMS ~0.047 (see
 ## VoiceFX.pad_level's staging notes). A bed should be clearly under the voice and
-## clearly above nothing. UNDER IT AS A SHARE OF IT (2026-10-28): the bed follows the
+## clearly above nothing. Under it as a share of it: the bed follows the
 ## voice's level now (VoiceFX.PAD_VOICE_REF), so 0.030 under that narration is CEIL of
 ## whatever voice it is under - this one is ten times as loud.
 const FLOOR := 0.0015

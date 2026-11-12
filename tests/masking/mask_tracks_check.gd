@@ -1,28 +1,25 @@
 extends SceneTree
 
-## mask_tracks_check - MASKING'S TRACKS AND ITS TRANSPORT ([MaskTracks], [method MaskEditor.transport_hooks];
-## next/structure.md, steps 25 and 26), on a clip of its own:
-##
+## Masking's tracks and its transport ([MaskTracks], [method MaskEditor.transport_hooks]; next/structure.md,
+## steps 25 and 26), on a clip of its own.
 ##   godot --headless --path . --script res://tests/masking/mask_tracks_check.gd
 ##
-##   - THE LANES ARE THE SESSION'S: the main clip's lane and one per track, built again after each edit;
-##   - A SPLIT CUTS AT THE PLAYHEAD: a track split there is two lanes edge to edge - the right half's in
-##     point is the playhead's place in its source - and the main clip split there ends at the playhead,
-##     its tail a track picking up where it stopped. A playhead outside a track's span splits nothing
-##     (the control: the split's arithmetic is what is checked, not that a split happened);
-##   - A DELETE TAKES ITS LANE AND ITS PLAYERS, and the players stay one per track - and the old lanes
-##     go at once: they had drawn on for the rest of the frame, each reading its track by an index now
-##     past the end (an out-of-bounds error per lane, which check.sh fails behind the pass);
-##   - A TRACK PLAYS ONLY IN ITS WINDOW ([method MaskTracks.sync]): active with the playhead over it,
-##     paused and inactive past it;
-##   - THE SHARED TRANSPORT CONDUCTS THE CLIP: the shell is handed the editor's hooks, their length is the
-##     clip's, a seek moves the master clock, Stop goes back to the in point and waits there;
-##   - A CLIP WHOSE SOUND LOADS ON THE WORKER STARTS when the sound lands: its start is held for the
-##     sound, never cancelled by the pause that shows its first frame (it had been, and such a clip
-##     opened paused);
-##   - THE TIMELINE STANDS ABOVE THE RAIL: the marker strip, the lanes and the video are lifted by the room
-##     the shell's transport takes - and by none under a shell with no transport (the control: where they
-##     always stood).
+## - The lanes are the session's: the main clip's lane and one per track, built again after each edit.
+## - A split cuts at the playhead: a track split there is two lanes edge to edge (the right half's in point
+##   is the playhead's place in its source); the main clip split there ends at the playhead, its tail a
+##   track picking up where it stopped. A playhead outside a track's span splits nothing (the control:
+##   the split's arithmetic is checked, not that a split happened).
+## - A delete takes its lane and its players (one player per track), and the old lanes go at once, since
+##   a stale lane reads its track by an index past the end (an out-of-bounds error per lane, which
+##   check.sh fails behind the pass).
+## - A track plays only in its window ([method MaskTracks.sync]): active with the playhead over it,
+##   paused and inactive past it.
+## - The shared transport conducts the clip: the shell is handed the editor's hooks, their length is the
+##   clip's, a seek moves the master clock, Stop goes back to the in point and waits there.
+## - A clip whose sound loads on the worker starts when the sound lands: its start is held for the sound,
+##   never cancelled by the pause that shows its first frame.
+## - The timeline stands above the rail: the marker strip, the lanes and the video are lifted by the room
+##   the shell's transport takes, and by none under a shell with no transport (the control).
 ##
 ## The fixture is a 4 s clip and its sound, made by ffmpeg under user:// once; the session is the gate's own.
 
@@ -59,10 +56,10 @@ func _initialize() -> void:
 	var stand := Stand.new()
 	stand.room = ROOM
 	root.add_child(stand)
-	# loaded by path, untyped: a --script gate compiles before the autoloads, and the editor names one
+	# Loaded by path, untyped: a --script gate compiles before the autoloads, and the editor names one.
 	var ed: Node = load("res://src/masking/mask_editor.gd").new()
 	root.add_child(ed)
-	# a frame first: under _initialize nothing is inside the tree yet, and the editor finds its shell there
+	# A frame first: under _initialize nothing is inside the tree, and the editor finds its shell there.
 	await _frames(1)
 	ed.open_source(session)
 	await _frames(30)

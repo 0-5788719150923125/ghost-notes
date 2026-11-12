@@ -1,166 +1,68 @@
 extends SceneTree
 
-## youtube_check - the YouTube upload's pieces that hold without a network: the client file, the
-## sign-in's parts, what a video says, the records, the tarot episode's upload notes and the
-## YouTube card.
+## youtube_check - the YouTube upload's pieces that hold without a network: the client file, the sign-in's parts, what a
+## video says, the records, the table episode's upload notes and the YouTube card.
 ##
 ##   godot --headless --path . --script res://tests/export/youtube_check.gd
 ##
-## - THE CLIENT FILE: a "Desktop app" client is read; a Web client, a file with no secret, one that
-##   is not JSON and one whose endpoints are not Google's are refused, each saying why. Imported, it
-##   is kept owner read/write only, and a bad file leaves the kept one alone. A CHANNEL KEEPS THE
-##   CLIENT IT SIGNED IN WITH: neither another client imported nor the client forgotten costs a channel
-##   its sign-in.
-## - EVERY CLIENT IS KEPT (2026-11-02, the user: "select from a list of previous clients"): imports sit
-##   side by side, each named by its Cloud project, told apart when two are one project's, the one
-##   imported last the default. A SIGN-IN GOES THROUGH THE NOTE'S PICK, ELSE THE CHANNEL'S OWN, ELSE THE
-##   LAST IMPORTED - a lapsed channel back through its own, the report (the control: with no channel, the
-##   last imported); a pick not kept here is passed over. What a machine already held - the old slot, a
-##   channel's copy with no project in it - is listed where it lies, and reading it writes nothing. A
-##   channel removed leaves its client on the list. The card's list shows the channel's own, a pick is
-##   kept in the block by its key and never its id, offers "Sign in again" and leaves the sign-in alone;
-##   ✕ only for one no channel holds.
-## - THE CHANNELS (2026-10-17, the user: "target different channels for different kinds of
-##   project"): each sign-in kept under its channel, owner-only, listed in the order signed in to and
-##   named by its handle, else its title; each may do what it was granted and only that; one signed in
-##   to again keeps its place; a lapsed one keeps its channel; one forgotten is off the list; an odd id
+## - the client file: a "Desktop app" client is read; a Web client, a file with no secret, non-JSON and non-Google endpoints are
+##   refused, each saying why. Import keeps it owner read/write only and a bad file leaves the kept one alone. A channel keeps
+##   the client it signed in with. Every client is kept, named by its Cloud project; a sign-in goes through the note's pick, else
+##   the channel's own, else the last imported (control: with no channel, the last imported); what a machine already held is
+##   listed where it lies without writing; the card's list shows the channel's own and a pick is kept by key, never id.
+## - the channels: each sign-in kept under its channel, owner-only, in order, named by handle else title; each may do only what
+##   it was granted; signed in again keeps its place; a lapsed one keeps its channel; one forgotten is off the list; an odd id
 ##   cannot name a file outside the folder.
-## - THE SIGN-IN'S PARTS: PKCE against RFC 7636's own example, the consent URL (upload scope only,
-##   S256, offline, the account chooser and the consent screen, the loopback redirect - all encoded),
-##   the redirect's query decoded.
-## - THE WIRE: the next offset from a 308's `Range`, headers in any case, Google's error shapes in
-##   words.
-## - WHAT A VIDEO SAYS: `<`/`>` made safe, the title one line of at most 100 characters cut at a
-##   word, the description at most 5000 bytes, tags split as a document writes them, each once,
-##   counted as YouTube counts them and fitted to 500; private unless asked otherwise (a privacy
-##   YouTube does not know is private), not for kids, synthetic, no paid promotion, People & Blogs
-##   unless another category is asked for (one an upload cannot take is People & Blogs).
-##   The playlist a video joins is named and linked between the description and the chapters (the
-##   control: no playlist, no line).
-## - RECORDS: an upload recorded and read back; a queued upload pending with its channel, owner-only;
-##   a missing file refused; one queued with no channel is aimed at the channel its sign-in lands on,
-##   one that names a channel keeps it.
-## - THE TAROT EPISODE: its upload notes from the plan, with a chapter per card timed from a take's
-##   word timings (an hour on, `h:mm:ss`), the close "The close" (2026-10-31: "The spread" named a brew's
-##   close), and `upload.md` with the show's tags first.
-## - CHAPTERS AS YOUTUBE TAKES THEM (`fit_chapters`): the first at 0 and never dropped, each at least ten
-##   seconds to the next one kept - one shorter gives way to what begins after it, one too soon after the
-##   first goes - and the last ten from the video's end (the control: chapters far enough apart are kept
-##   whole). A take with no outro after its last word loses a close that starts within ten seconds of it.
-## - THE READER'S CHAPTERS (2026-10-31, the-quiet-crucible 841899: a seven-minute brew in one chapter): a
-##   passage opening on `<!-- chapter: name -->` names its own mark's chapter, and makes one of a card's
-##   work, which is none unnamed (the control: the mark-free episode above has no work chapter); a mark
-##   inside a passage starts one at its word's time; one under ten seconds gives way to the next.
-## - THE EXPORT MENU says nothing of YouTube (2026-10-07: the upload moved to a component's card), and AN
-##   UPLOAD WHOSE TITLE CANNOT BE MADE is refused at the click, saying why, before anything is asked.
-## - THE NOTE'S NAMES ARE ITS SCRIPT CARD'S (2026-10-25, the user: "nowhere is an episode title actually an
-##   option here ... It shouldn't be possible to use the YouTube card if the underlying macros we claim to
-##   support would not even work here"): a card no panel bound fills nothing and nothing goes up (the
-##   control); bound, it shows Title, Episode, Author and Book on a Script card that had none of them, and
-##   reads them (%author% and %book% too, 2026-10-27); an empty Episode leaves the Title alone, and the
-##   values an export hands are laid over the note's (its %author% kept). WHAT IT CLAIMS IS WHAT THE NOTE
-##   FILLS: its tooltip names only those macros, and %seed% on a note with no episodes is said under the
-##   title and refused (the control: a panel that adds the seed fills it, and the same title goes up). THE
-##   TOOLTIP STAYS WRAPPED (2026-10-27: "overflowing the screen"): folded by Boot.wrap_tip on hover, the
-##   card's twice-a-second refresh leaves it folded (the control: the note's values changed, it is made
-##   again).
-## - THE YOUTUBE CARD: a new one goes up nothing and privately, its block round-trips (an unknown
-##   privacy reads as private, an unknown category as People & Blogs); unticked it describes no upload
-##   whatever the panel has, ticked it lays its title - the template's macros filled, nothing
-##   dangling, no name twice - privacy, category and playlist
-##   and channel over the panel's part, and nothing when the panel has nothing. ITS CHANNEL: a toggle
-##   per channel kept, named as YouTube names it, the note's pressed; a block with none takes the
-##   first kept; another channel's toggle makes it the note's and clears the playlist (the other
-##   channel's); the block's channel when it is not kept here shows dimmed and pressed, its name kept,
-##   with Sign in and no Remove; a lapsed one offers both. A channel that may only upload lacks the
-##   playlists' scope; a resume - to its channel - while an upload waits on a file that exists, not
-##   once it is gone; Import / Replace follows the client file. THE LINE A TITLE GOES UP IN
-##   (`title_shape`): the template with the episode's title marked, handed to the Cards producer from
-##   the card's own template - none when the episode's title stands alone or is left out.
-## - THE TAG FIELD (tag_field.gd, 2026-10-06, the user: "show all of the tags, with the ability to
-##   click an 'x' to remove them on each one... comma-delimited splits the tags into the button with
-##   the x"): a chip per tag, filled without a change signal; a comma, Enter or a paste of "a, b, c"
-##   makes chips and leaves the rest typed; × and Backspace in the empty box remove; each tag once
-##   whatever its case; fixed tags first with no ×; a dimmed chip says why; read-only has no ×; a long
-##   tag cannot widen the field.
-## - THE TAROT PANEL'S FIELDS ARE THE SHOW'S GLOBAL VALUES (the user: "it should have been grabbed
-##   immediately, since that stuff is global"): the description and the tags the show's, the title
-##   one value the picked episode overwrites (and an edit writes into its plan; an emptied one is
-##   not); a show with none takes the picked episode's once; a NEW EPISODE shows them at once; the
-##   byline on the document card right under Title (the user: "right under the title field"); the
-##   upload described from all that - once the note has a YouTube card and its box is ticked - with
-##   no thumbnail of the episode card's own and its folder kept off the wire, for the episode an export
-##   rendered even after another is picked. The description and tags are the YouTube card's; THE TITLE IS THE SCRIPT CARD'S EPISODE,
-##   handed the picked episode's: an edit written into its plan, an emptied one not, none kept in the block,
-##   and a new episode's empty and waiting for its plan; a note read as it is written shows its own once it has a YouTube card
-##   (the control: not before), and goes up with it.
-## - EACH EPISODE'S TAGS (2026-10-18, the user: "allow the 'Generate' button to override/rewrite those
-##   tags ... it would not be okay to tightly-couple the two cards"): the writer's answer is cleaned (no
-##   hashtag sign, no comma inside), each tag once, a bare list taken too - and no JSON, no list or too few
-##   usable tags are not kept. NOTHING THE TITLE OR DESCRIPTION SAYS ALREADY (2026-10-30: "keeps choosing
-##   keywords that already exist in the title and description"): a tag whose every word is in the show's
-##   name, the title or the description is left out, whatever its case or order, and said on the row - one
-##   with a word of its own is kept (the control), and an answer left with too few says why. Its prompt
-##   renders whole with the show, the episode's title, description and words, the note's tags, YouTube's
-##   limit and the rule to leave their words out, and says nothing of what an episode does not have. The
-##   step ([YouTubeTags], an [EpisodeStep]) is one only while the card's box is ticked; it waits for the
-##   episode's words (neither Generate nor ⟳ starts it before); started in a read-only gate it says why
-##   it cannot; a job that ended is kept in the episode's folder with the fingerprint of the words it was
-##   sent and REPLACES THE NOTE'S TAGS (2026-10-19: "I never know which tags are truly going to be
-##   applied ... just one, unified list"); a note that cannot keep them fails the step, saying why (the
-##   control); a run that fails past its retry says why and leaves the note's as they were; words written
-##   again make it stale and the same words again make it made once more. On the card: its block keeps the
-##   box, the upload takes the panel's tags ticked or not, the card holds no list of its own, and the line
-##   under the panel's says what the writer does to it - or, with nothing listing the step, that nothing
-##   on the note makes episodes. NO CARD NAMES ANOTHER: the step is a row of the note's Pipeline card
-##   ([PipelineCard]), in a YouTube section of its own, under the Close only while the box is ticked, told
-##   which episode is shown, waiting for the reading (its words with the marks out), made once the words are
-##   written (here refused, read-only, said on the row), with ✓, the tags and ⟳ once made - and
-##   what it wrote is the show's one list, on the card and going up, for any episode's upload.
-## - A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, of an actor's note: "I don't see anywhere
-##   it would be possible to write a description ... be sure that the auto-tagging mechanism should work as
-##   well"): ITS EXPORT IS NAMED AFTER IT (2026-10-31: it had been "ghost_notes_1080p.mp4") - its Title, its Episode
-##   once it has one, and with neither (and no file) the exporter's own (the control); its YouTube card shows a description box (hidden on a card whose show describes its episodes -
-##   the control - and nothing of it going up while hidden), kept in its block lines and all, and the note's
-##   tags as one list; the upload takes the description first, then the component's (an actor's says how
-##   they were made - splats for Gaussian, their pixels bent for 2D), and the note's tags with any of its own.
-##   The tags step is on the Pipeline card with the note as its episode, in the note's own folder, reading its
-##   words with the marks out, the title as it goes up, the description and the component's writer; only an
-##   export that goes up starts it (the control: one that does not starts nothing), refused here, said on its
-##   row; while its job runs the export waits; landed, it is ✓ with its ⟳ and replaces the note's tags on the
-##   card and going up; words written again make it stale.
-## - A REAL SHOW FILE: the tags and the byline land as top-level lines above ghost's block - the
-##   chapter format - the block holds the show's title and description and no record per episode, the
-##   rest of the file is untouched, and a panel opening it fills a new episode from it at once.
-## - THE THUMBNAIL IS THE CARD'S CHOICE (2026-10-28, the user: "I'm not a fan of this implicit,
-##   undocumented behavior"): a new card's is YouTube's, and its upload names none; its block keeps the
-##   choice and the writer and painter of a painted one (one it does not know is YouTube's). The title
-##   screen's frame is taken at its moment where the take opened on its title, and not where it opened on
-##   nothing, which is said (the control); a painted one goes up once it is painted for the episode, and
-##   is said missing until then. THE PAINTED STEP ([YouTubeThumbnail]): wanted only while Painted; the
-##   writer is told the episode, shown its own pictures numbered (none said where it has none - the
-##   control), and its answer kept with what to paint, the words trimmed and the pictures it named, each
-##   once and only those that exist - no picture to paint is refused; the writer's answer hands the
-##   card's painter a job (here refused, read-only, said); the painter is told the words exactly, or no
-##   text at all, the pictures' look when it follows them, and the frame's shape first; the painting
-##   landed is cut about its middle to 1280x720 (720x1280 for a portrait video), kept with the fingerprint
-##   of the words, said on the card, and goes up. MATCHED TO THE VIDEO'S PICTURES (2026-10-30: "akin to the
-##   full-screen images' 'match earlier' option"): ticked, the writer is told to design one more of them, and
-##   the painter, handed none by name, is handed a few spread through them and told to paint one more frame
-##   of the video; cleared, the writer is shown none and the painter handed none (the control); with no
-##   pictures to match the card says so; and a note read as it is written hands the step its painted
-##   pictures, in its order (one its words call for that is not painted, none - the control). EVERY ONE
-##   PAINTED IS KEPT (2026-10-30): painted again,
-##   the writer is shown the briefs and words already kept and told to make another (the first time, none -
-##   the control); the next painting has files of its own, is kept beside the first and goes up; the card
-##   steps between them (‹ chooses the first, which goes up again; nothing before the first - the control);
-##   ✕ pressed once only asks, pressed again deletes the one shown with its painting; the last deleted
-##   leaves none; NOTHING PAINTS OVER A CHOICE (2026-10-31: an export had painted again "I already had painted
-##   one"): one painted before the words were written again is kept, and Generate or an export paints none over
-##   it - with none left, they paint one (the control); and a record kept before there were versions is one, its files named in it. A CLICK ON
-##   IT OPENS IT FULL SIZE: the window holds the one chosen, its words and brief, and which version it is,
-##   ‹ there choosing the one before; with none left it holds nothing (the control).
-## - THE TITLE SCREEN'S MOMENT and ffmpeg's arguments for taking a frame.
+## - the sign-in's parts: PKCE against RFC 7636's example, the consent URL (upload scope only, S256, offline, account chooser,
+##   consent screen, loopback redirect, all encoded), the redirect's query decoded. The wire: the next offset from a 308's
+##   `Range`, headers in any case, Google's error shapes in words.
+## - what a video says: `<`/`>` made safe, title one line of at most 100 characters cut at a word, description at most 5000
+##   bytes, tags split, deduplicated, counted as YouTube counts them and fitted to 500; private, not for kids, synthetic, no paid
+##   promotion and People & Blogs unless asked otherwise (unknown privacy or category falls back); the playlist is named and
+##   linked between the description and the chapters (control: no playlist, no line).
+## - records: an upload recorded and read back; a queued upload pending with its channel, owner-only; a missing file refused; one
+##   queued with no channel is aimed at the channel its sign-in lands on, one that names a channel keeps it.
+## - the table episode: upload notes from the plan with a chapter per card timed from a take's word timings (an hour on, `h:mm:ss`),
+##   the close "The close", and `upload.md` with the show's tags first. `fit_chapters`: the first at 0 and never dropped, each at
+##   least ten seconds to the next one kept, the last ten from the video's end (control: far-apart chapters are kept whole). The
+##   reader's chapters: a passage opening on `<!-- chapter: name -->` names its own chapter, a mark inside a passage starts one at
+##   its word's time, one under ten seconds gives way to the next.
+## - the export menu says nothing of YouTube; an upload whose title cannot be made is refused at the click, saying why.
+## - the note's names are its Script card's: a card no panel bound fills nothing and nothing goes up (control); bound, it shows
+##   Title, Episode, Author and Book and reads them; an empty Episode leaves the Title alone; an export's values are laid over the
+##   note's. The tooltip names only the macros the note fills, `%seed%` on a note with no episodes is refused (control: a panel that
+##   adds the seed fills it), and the tooltip stays wrapped across the card's refresh (control: changed values re-make it).
+## - the YouTube card: a new one goes up nothing and privately; its block round-trips; unticked it describes no upload, ticked it
+##   lays its title, privacy, category, playlist and channel over the panel's part. Channel toggles per channel kept, the note's
+##   pressed; a channel not kept here shows dimmed with its name kept; another's toggle clears the playlist; a resume goes to its
+##   channel; `title_shape` marks the episode's title in the template.
+## - the tag field (tag_field.gd): chips, comma/Enter/paste splitting, × and Backspace removal, each tag once, fixed tags first,
+##   dimmed chip with a reason, read-only has no ×, a long tag cannot widen the field.
+## - the table panel's fields are the show's global values (description, tags, title, byline); a new episode shows them at once; an
+##   upload is described from them once the note has a YouTube card with its box ticked; a note read as it is written shows its own
+##   description box once it has a YouTube card (control: not before).
+## - each episode's tags ([YouTubeTags], an [EpisodeStep]): the writer's answer is cleaned and deduplicated, a bare list taken, no
+##   JSON or too few tags not kept; a tag whose every word is in the show's name, title or description is left out and said on
+##   the row (control: one with a word of its own is kept). The prompt renders whole. The step exists only while the card's box
+##   is ticked, waits for the episode's words, is refused read-only with a reason, is kept in the episode's folder with the words'
+##   fingerprint, replaces the note's tags, goes stale when the words change, and fails with a reason when the note cannot keep
+##   them (control). It is a row of the Pipeline card ([PipelineCard]) in a YouTube section, with ✓, the tags and ⟳ once made.
+## - a note read as it is written is its own episode: its export is named after it (control: with no title, the exporter's own);
+##   its YouTube card shows a description box (hidden where the show describes its episodes), the upload takes it first, then the
+##   component's, then the note's tags; the tags step runs only for an export that goes up (control: one that does not).
+## - a real show file: tags and byline land as top-level lines above ghost's block, the block holds the show's title and
+##   description and no record per episode, the rest of the file is untouched, and a panel opening it fills a new episode from it.
+## - the thumbnail is the card's choice: a new card's is YouTube's, its block keeps the choice and the painter's picks; the title
+##   screen's frame is taken at its moment where the take opened on its title, not where it opened on nothing (control); a painted
+##   one goes up once painted for the episode. The painted step ([YouTubeThumbnail]): wanted only while Painted; the writer is told
+##   the episode and shown its numbered pictures (control: none where it has none); its answer is kept with the words and the
+##   pictures it named, each once and only those that exist; the painter is told the words exactly (or no text), the pictures' look
+##   and the frame's shape; the painting is cut to 1280x720 (720x1280 portrait), kept with the words' fingerprint, and goes up.
+##   Matching: ticked, writer and painter are given pictures to follow; cleared, none (control). Every painting is kept as a
+##   version: painted again, the writer is shown the earlier briefs (control: none the first time); the card steps between versions;
+##   ✕ asks, then deletes the shown one; nothing paints over a choice (with none left, they paint one: control); the full-size
+##   window holds the chosen version.
+## - the title screen's moment and ffmpeg's arguments for taking a frame.
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
 const YouTube := preload("res://src/export/youtube.gd")
@@ -176,8 +78,8 @@ func _init() -> void:
 
 
 func _run() -> void:
-	# A GATE NEVER WRITES THE SETTINGS OF WHOEVER RUNS IT: a --script run is not read-only by itself,
-	# and the panel built below binds its controls to them
+	# a gate never writes the settings of whoever runs it: a --script run is not read-only by itself, and the panel built below
+	# binds its controls to them
 	var settings := root.get_node_or_null("Settings")
 	if settings != null:
 		settings.set("_read_only", true)
@@ -288,7 +190,7 @@ func _import() -> bool:
 	_ok(OS.get_name() == "Windows" or FileAccess.get_unix_permissions(ProjectSettings.globalize_path(ROOT)) == YouTube.OWNER_DIR,
 		"its folder is owner-only too")
 	_ok(not FileAccess.get_file_as_string(kept).contains("redirect_uris"), "only what the flow needs is kept")
-	# A CHANNEL KEEPS THE CLIENT IT SIGNED IN WITH
+	# a channel keeps the client it signed in with
 	YouTube._keep({"id": "UC-a", "handle": "@a", "title": "A"}, YouTube.client(), {"refresh_token": "rt"}, YouTube.SCOPE)
 	_ok(YouTube.import_client(good) == "" and YouTube.signed_in("UC-a"), "re-importing the same client keeps the channel's sign-in")
 	_ok(YouTube.import_client(_file("web.json", _client_json("x", "web"))) != ""
@@ -316,7 +218,7 @@ func _import() -> bool:
 	return true
 
 
-## EVERY CLIENT IS KEPT, and a sign-in goes through the one it should (see the header).
+## Every client is kept, and a sign-in goes through the one it should (see the header).
 func _clients() -> bool:
 	var a := "111-aaa111.apps.googleusercontent.com"
 	var b := "222-bbb222.apps.googleusercontent.com"
@@ -336,7 +238,7 @@ func _clients() -> bool:
 		"a client is kept and named by a key, not its id")
 	_ok((MiniYaml.parse(MiniYaml.emit({"client": "123e45678901"}))["data"] as Dictionary).get("client") == "123e45678901",
 		"a key that reads as a number comes back from a note's YAML as it went in")
-	# THE REPORT: @the-ink signed in through one project, a client imported since for @the-arc, and @the-ink lapsed
+	# the report: @the-ink signed in through one project, a client imported since for @the-arc, and @the-ink lapsed
 	YouTube._keep({"id": "UC-ink", "handle": "@the-ink", "title": "Ink"}, YouTube.client(ka), {"refresh_token": "rt"}, YouTube.SCOPE)
 	YouTube._keep({"id": "UC-arc", "handle": "@the-arc", "title": "Arc"}, YouTube.client(kb), {"refresh_token": "rt2"}, YouTube.SCOPE)
 	_ok(YouTube.signed_in("UC-ink") and YouTube.signed_in("UC-arc") and YouTube.channel_client("UC-ink") == ka and YouTube.channel_client("UC-arc") == kb,
@@ -360,7 +262,7 @@ func _clients() -> bool:
 	YouTube.forget_channel("UC-arc")
 	_no_clients()
 	_ok(YouTube.clients().is_empty(), "nothing left")
-	# WHAT THIS MACHINE ALREADY HELD: the one slot, and a channel's copy of a client that slot since lost
+	# what this machine already held: the one slot, and a channel's copy of a client that slot since lost
 	var old := "1048-gu0.apps.googleusercontent.com"
 	_wipe(ROOT)
 	YouTube._write(YouTube._path(YouTube.OLD_CLIENT), _client_json(b, "installed", {"project_id": "annular"}), true)
@@ -545,7 +447,7 @@ func _body() -> bool:
 	_ok(YouTube.video_body({}, "Episode 7")["snippet"]["title"] == "Episode 7"
 		and YouTube.video_body({})["snippet"]["title"] == "Untitled", "a video always has a title")
 	_ok(YouTube.video_body({"tags": ["a", "b"]})["snippet"]["tags"] == ["a", "b"], "tags as an Array too")
-	# THE PLAYLIST, BEFORE THE TIMESTAMPS: the stand-in for the end screen the API cannot write
+	# the playlist, before the timestamps: the stand-in for the end screen the API cannot write
 	var listed: String = YouTube.video_body({"description": "Hello", "playlist": "PL-1", "playlist_title": "Truthful <Tarot>",
 		"chapters": PackedStringArray(["0:00 Intro", "0:40 The Tower"])})["snippet"]["description"]
 	_ok(listed == "Hello\n\nPlaylist: Truthful ‹Tarot›\nhttps://www.youtube.com/playlist?list=PL-1\n\n0:00 Intro\n0:40 The Tower",
@@ -583,8 +485,8 @@ func _records() -> bool:
 	return true
 
 
-## THE READER'S CHAPTERS, on an episode of its own (a script is read again only once its file's time
-## moves on, in whole seconds): one card out of a box, its work, the close - the passages naming theirs.
+## The reader's chapters, on an episode of its own (a script is read again only once its file's time moves on, in whole
+## seconds): one card out of a box, its work, the close - the passages naming theirs.
 func _named_chapters() -> bool:
 	var ep := TableEpisode.open("youtube-check", 8)
 	DirAccess.make_dir_recursive_absolute(ep.dir)
@@ -758,7 +660,7 @@ func _card() -> bool:
 	_ok(card.meta({"values": {"title": "Show", "episode": "Rendered One"}}).get("title").begins_with("Show - Rendered One")
 		and not card.meta({"values": {"title": "S"}}).has("values"),
 		"the values a panel hands with its part (the episode an export rendered) win, and do not go up")
-	# WHAT IT CLAIMS IS WHAT THE NOTE FILLS
+	# what it claims is what the note fills
 	card._title.text = "%title% #%seed%"
 	card.refresh()
 	_ok(card.why_not().contains("%seed%") and card.meta({"tags": []}).has("refused") and not card.meta({"tags": []}).has("title")
@@ -767,7 +669,7 @@ func _card() -> bool:
 	_ok(card._title.tooltip_text.contains("%title%") and card._title.tooltip_text.contains("%episode%")
 		and card._title.tooltip_text.contains("%date%") and not card._title.tooltip_text.contains("%seed%"),
 		"the title's tooltip names only the macros the note fills (%s)" % card._title.tooltip_text)
-	# THE TOOLTIP STAYS WRAPPED: Boot folds it on hover, and the card's refresh must not unfold it
+	# the tooltip stays wrapped: Boot folds it on hover, and the card's refresh must not unfold it
 	var folded: String = load("res://src/platform/boot.gd").wrap_tip(card._title.tooltip_text)
 	card._title.tooltip_text = folded
 	card.refresh()
@@ -813,7 +715,7 @@ func _card() -> bool:
 		"every macro in its place, the date marked (%s)" % YouTube.title_shape("%episode% | %title% #%seed% (%date%)", {"title": "T", "seed": "7"}, "[x]"))
 	_ok(YouTube.title_shape("%title%: %episode%", {}, "[x]") == "" and YouTube.title_shape("%title% #%seed%", {"title": "T", "seed": "7"}, "[x]") == "",
 		"control: no line when the episode's title stands alone, or is left out")
-	# THE CHANNEL AND THE ACCOUNT ROWS
+	# the channel and the account rows
 	_no_clients()
 	card.apply({})
 	card._seen = []
@@ -849,7 +751,7 @@ func _card() -> bool:
 		"one channel may see playlists while the other may only upload")
 	_ok(ex.scopes_for({"playlist": "PL1"}) == [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE] and ex.scopes_for({}) == [YouTube.SCOPE],
 		"an upload joining a playlist asks for the playlists' scope, one without asks for uploads alone")
-	# THE CLIENT IS PICKED FROM THOSE KEPT
+	# the client is picked from those kept
 	var own_key := YouTube.client_key("123-abc.apps.googleusercontent.com")
 	var other_id := "456-def.apps.googleusercontent.com"
 	var other_key := YouTube.client_key(other_id)
@@ -895,7 +797,7 @@ func _card() -> bool:
 	card._forget_client()
 	_ok(YouTube.client(other_key).has("error") and card.capture()["client"] == "" and card._clients.item_count == 1 and card._clients.selected == 0,
 		"✕ forgets the client shown, and the row goes back to the channel's own")
-	# A CHANNEL NOT SIGNED IN HERE: a note from another machine, or one whose channel was removed
+	# a channel not signed in here: a note from another machine, or one whose channel was removed
 	card.apply({"channel": "UC-gone", "channel_name": "@gone"})
 	card._seen = []
 	card._refresh_account()
@@ -930,8 +832,7 @@ func _card() -> bool:
 	return true
 
 
-## A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, of an actor's note: "I don't see anywhere it
-## would be possible to write a description ... be sure that the auto-tagging mechanism should work as well").
+## A note read as it is written is its own episode.
 func _note_steps() -> bool:
 	var keep: String = load("res://src/reading/note_upload.gd").root
 	load("res://src/reading/note_upload.gd").root = ROOT + "_readings"
@@ -974,7 +875,7 @@ func _note_steps() -> bool:
 	var bent: String = load("res://src/likeness/actor_card.gd").disclosure("Someone", "2d")
 	_ok(said.contains("Gaussian splats") and not said.contains("pixel") and bent.contains("Every pixel of them is a real one"),
 		"an actor's upload says how they were made: splats for Gaussian, their own pixels bent for 2D (control)")
-	# THE TAGS STEP, listed here with the note as its episode
+	# the tags step, listed here with the note as its episode
 	var step = ed._youtube.episode_steps()[0]
 	var pipe = ed.pipeline()
 	up.refresh()
@@ -1023,12 +924,12 @@ func _note_steps() -> bool:
 	pipe.refresh()
 	_ok(step.state(up._feed) == "missing" and (pipe.row(step.key)["text"] as Label).text.contains("written again"),
 		"words written again make them stale: the next export that goes up writes new ones")
-	# ITS OWN PICTURES, for a thumbnail painted in their look
+	# its own pictures, for a thumbnail painted in their look
 	var painted := _file("pictures/harbor.png", "")
 	Image.create(8, 8, false, Image.FORMAT_RGB8).save_png(painted)
 	ed._text.text = "Words. <!-- image: A harbor at dawn. --> More. <!-- image: A storm not yet painted. --> <!-- image: A harbor at dawn. -->"
 	Illustrations.use_for_test({"index": {Manuscript.image_key("A harbor at dawn."): {"versions": [{"file": painted, "sig": ""}], "current": 0}}}, true)
-	# AS ITS PRESENTATION SHOWS THEM (the Pictures card's list, Medium.pictures_of): a novel prints them
+	# as its presentation shows them (the Pictures card's list, Medium.pictures_of): a novel prints them
 	var pin := RefCounted.new()
 	root.get_node("Director").pin_medium("book", pin)
 	_ok(Array(up._feed.pictures()) == [painted], "the note hands the step its painted pictures, each once - one not painted, none (%s)" % str(up._feed.pictures()))
@@ -1155,9 +1056,8 @@ func _panel_fields() -> bool:
 			left.append(key)
 	_ok(not twice and left == ["direction", "voice_training"], "and \"+\" does not offer it twice - Voice training and a Direction are all it can be given now (%s)" % str(left))
 	ed._youtube._upload.set_pressed_no_signal(true)
-	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
-	# this has open, and DocSource.set_field writes a synced document at once - so this gate read
-	# the author's real show (and failed on its tags) and could have written into it.
+	# not the author's show: a panel comes up synced to whatever document the person running this has open, and
+	# DocSource.set_field writes a synced document at once
 	ed._doc._sync = false
 	ed._doc._fields = {}
 	var ep := TableEpisode.open("panel-check", 21)
@@ -1209,7 +1109,7 @@ func _panel_fields() -> bool:
 		"the upload's title is the show's name, then the episode's - the file keeps the episode's alone")
 	show._refresh_upload_note()
 	_ok(ed._youtube._preview.text.begins_with("Goes up as \"Truthful Tarot: My Own Title\""), "the card shows the title as it goes up")
-	# THE PRODUCER IS SHOWN THAT LINE before it names the next episode
+	# the producer is shown that line before it names the next episode
 	_ok(show._spec().get("uploads_as") == "Truthful Tarot: [episode_title]", "the producer is not handed the line a title goes up in (%s)" % str(show._spec().get("uploads_as")))
 	ed._youtube._title.text = "%episode% | %title% #%seed%"
 	_ok(show._spec().get("uploads_as") == "[episode_title] | Truthful Tarot #21", "the line is not the card's own template (%s)" % str(show._spec().get("uploads_as")))
@@ -1223,9 +1123,8 @@ func _panel_fields() -> bool:
 	_ok(long_title.begins_with("Truthful Tarot: ") and long_title.length() <= 100, "cut to 100 characters, the name stands")
 	ed._doc._fields.erase("title")
 	_ok(show._spec().get("uploads_as") == "", "control: a show with no name has no line round its episode's title")
-	# THE BYLINE, on the document card right under Title - SHOWN, with the brief's marks and its name: the card
-	# is in the table's mode, never its settings section ("cards" since the rename; 2026-10-29, the user, of a
-	# byline on the title screen: "It's not displayed in the UI anywhere")
+	# the byline, on the document card right under Title: shown, with the brief's marks and its name; the card is in the table's
+	# mode, never its settings section
 	var card = ed._writer
 	var edits: Array = card._field_edits.keys()
 	_ok(edits.find("byline") == edits.find("title") + 1, "the byline is the card's field right under Title (%s)" % str(edits))
@@ -1241,7 +1140,7 @@ func _panel_fields() -> bool:
 	card._commit_field("byline")
 	_ok(ed._doc.field("byline") == "with Pen & Ink" and ed.book_document()["byline"] == "with Pen & Ink",
 		"it is the show's `byline:`, handed to the title screen")
-	# A NEW EPISODE: the show's values at once
+	# a new episode: the show's values at once
 	show._knobs["seed"] = 22
 	show._open_episode()
 	ed._writer._refresh_handed()
@@ -1261,7 +1160,7 @@ func _panel_fields() -> bool:
 	_ok(ed.upload_meta(take).get("title") == "My Own Title" and ed.upload_meta("").get("title") == "Another Episode",
 		"an export's upload describes the episode it rendered, not the one picked since")
 	_ok(not DirAccess.dir_exists_absolute(TableEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
-	# THE STEPS THE NOTE'S OTHER CARDS ADD: the YouTube card's tags, on the Episode card, neither naming the other
+	# the steps the note's other cards add: the YouTube card's tags, on the Episode card, neither naming the other
 	var tags_step = ed._youtube.episode_steps()[0]
 	var pipe = ed.pipeline()
 	var youtube_rows = ed._youtube.pipeline()
@@ -1314,10 +1213,10 @@ func _panel_fields() -> bool:
 	return true
 
 
-## EACH EPISODE'S OWN TAGS: the step the YouTube card adds to the episodes a note makes, and the box.
+## Each episode's own tags: the step the YouTube card adds to the episodes a note makes, and the box.
 func _episode_tags() -> bool:
 	var Tags: GDScript = load("res://src/export/youtube_tags.gd")
-	# THE ANSWER, LANDED
+	# the answer, landed
 	var got: Variant = Tags.land(TextGen.extract_json("```json\n{\"tags\": [\"#Readings\", \"readings\", \"the tower\", \"a, b\", \" \"]}\n```"))
 	_ok(got is Dictionary and (got as Dictionary)["tags"] == ["Readings", "the tower", "a b"],
 		"an answer's tags are cleaned - no hashtag sign, no comma inside - each kept once whatever its case (%s)" % str(got))
@@ -1335,7 +1234,7 @@ func _episode_tags() -> bool:
 	_ok(few is String and String(few).contains("2 more only said what the title or description says")
 		and Tags.land({"tags": ["the tower", "three cards", "major arcana"]}) is Dictionary,
 		"left with too few, the answer is refused saying why - and with nothing said already, all three are tags (%s)" % str(few))
-	# WHAT THE WRITER IS TOLD
+	# what the writer is told
 	Rules.clear()
 	var p: Dictionary = Tags.prompt("The Show", "The Tower Falls", "A reading of three.", PackedStringArray(["readings", "cards"]),
 		"The first card is the tower.")
@@ -1349,7 +1248,7 @@ func _episode_tags() -> bool:
 	var bare := String(Tags.prompt("", "", "", PackedStringArray(), "Words.")["prompt"])
 	_ok(not bare.contains("THE SHOW:") and not bare.contains("TAGS NOW") and not bare.contains("DESCRIPTION") and bare.contains("Words."),
 		"the control: what an episode does not have is not said")
-	# THE STEP
+	# the step
 	var on := [false]
 	var step = Tags.new(func() -> bool: return bool(on[0]))
 	var feed := FakeFeed.new()
@@ -1364,7 +1263,7 @@ func _episode_tags() -> bool:
 	_ok(step.generate(feed) and step.state(feed) == "failed" and step.said(feed).contains("read-only"),
 		"once they are, Generate starts it - in a read-only gate it stops, saying why (%s)" % step.said(feed))
 	step._errors.clear()
-	# THE CONTROL: a note that cannot keep tags - the answer is not landed, and the step says why
+	# control: a note that cannot keep tags - the answer is not landed, and the step says why
 	feed.refuse = "the note is gone"
 	AgentJobs._ended["text-youtube-check-0"] = {"ok": true, "text": "{\"tags\": [\"tarot\", \"cards\", \"readings\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-youtube-check-0", "feed": feed, "stamp": feed.stamp()}
@@ -1399,7 +1298,7 @@ func _episode_tags() -> bool:
 		"once the words are written again the step is not made for them")
 	feed.said = "The first card is the tower."
 	_ok(step.state(feed) == "ready", "the same words again, and it is made once more")
-	# THE BOX ON THE CARD
+	# the box on the card
 	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
 	var card = load("res://src/export/youtube_card.gd").new()
@@ -1435,7 +1334,7 @@ func _episode_tags() -> bool:
 	return true
 
 
-## THE THUMBNAIL: the card's choice, what an upload of a take takes, and the step that paints one.
+## The thumbnail: the card's choice, what an upload of a take takes, and the step that paints one.
 func _thumbnails() -> bool:
 	var Thumb: GDScript = load("res://src/export/youtube_thumbnail.gd")
 	var Ex: GDScript = load("res://src/export/exporter.gd")
@@ -1453,7 +1352,7 @@ func _thumbnails() -> bool:
 	_ok(card.thumbnail() == "youtube" and card.capture()["thumbnail"] == "youtube" and not m.has("thumbnail")
 		and not m.has("thumbnail_at") and not m.has("thumbnail_why") and not m.has("folder") and not card._thumb_writer.visible,
 		"a new card's thumbnail is YouTube's choice: its upload names none, and the episode's folder stays off the wire")
-	# THE BLOCK
+	# the block
 	card.apply({"upload": true, "thumbnail": "painted", "thumbnail_writer": "claude", "thumbnail_writer_model": "m1",
 		"thumbnail_writer_effort": "high", "thumbnail_painter": "grok"})
 	var c: Dictionary = card.capture()
@@ -1463,7 +1362,7 @@ func _thumbnails() -> bool:
 	card.apply({"upload": true, "thumbnail": "sparkles"})
 	_ok(card.thumbnail() == "youtube" and card.capture()["thumbnail_painter"] == "codex",
 		"a thumbnail it does not know is YouTube's, and a block naming no painter has the card's own")
-	# THE TITLE SCREEN, asked of the take
+	# the title screen, asked of the take
 	card._select(card._thumbnail, "title")
 	var titled := _file("takes/titled.json", JSON.stringify({"bookend": {"in": 9.0, "out": 6.0}, "opening": "title"})).get_basename() + ".wav"
 	var bare := _file("takes/bare.json", JSON.stringify({"bookend": {"in": 9.0, "out": 6.0}, "opening": "none"})).get_basename() + ".wav"
@@ -1473,7 +1372,7 @@ func _thumbnails() -> bool:
 	var mb: Dictionary = card.meta({"tags": []}, bare)
 	_ok(not mb.has("thumbnail_at") and String(mb.get("thumbnail_why", "")).contains("does not open on its title"),
 		"the control: a take that opened on nothing has no title screen, and the upload says so (%s)" % mb.get("thumbnail_why", ""))
-	# PAINTED, asked of the episode's folder
+	# painted, asked of the episode's folder
 	card._select(card._thumbnail, "painted")
 	var step = card.episode_steps()[1]
 	_ok(step.wanted() and step.key == "youtube_thumbnail", "Painted: the card's thumbnail step is wanted")
@@ -1483,7 +1382,7 @@ func _thumbnails() -> bool:
 	card._select(card._thumbnail, "youtube")
 	_ok(not step.wanted() and EpisodeStep.listed_of([step]).is_empty(), "the control: on YouTube's choice the step is not one")
 	card._select(card._thumbnail, "painted")
-	# WHAT THE WRITER ANSWERS, landed
+	# what the writer answers, landed
 	var pics := PackedStringArray(["/p/one.png", "/p/two.png", "/p/three.png"])
 	var got: Variant = Thumb.land(JSON.parse_string("{\"picture\": \"A lantern on a dark table.\", \"words\": \" \\\"THE LAST CARD\\\" \", \"after\": [2, \"1\", 2, 9, 0]}"), pics)
 	_ok(got is Dictionary and got["picture"] == "A lantern on a dark table." and got["words"] == "THE LAST CARD"
@@ -1492,7 +1391,7 @@ func _thumbnails() -> bool:
 	_ok(Thumb.land({"picture": " ", "words": "x"}, pics) is String and Thumb.land(null, pics) is String
 		and (Thumb.land({"picture": "A lantern."}, pics) as Dictionary)["after"] == [],
 		"the controls: nothing to paint and no JSON are refused; naming no picture follows none")
-	# WHAT THE WRITER IS TOLD
+	# what the writer is told
 	Rules.clear()
 	var p: Dictionary = Thumb.prompt("The Show", "The Tower Falls", "A reading of three.", "The first card is the tower.", pics)
 	var text := String(p["prompt"])
@@ -1506,7 +1405,7 @@ func _thumbnails() -> bool:
 	_ok(not String(none["prompt"]).contains("attached") and not String(none["prompt"]).contains("\"after\"")
 		and not String(none["prompt"]).contains("THE SHOW:") and (none["images"] as Array).is_empty() and Rules.missing.is_empty(),
 		"the control: an episode with no pictures and no name is told of neither")
-	# WHAT THE PAINTER IS TOLD
+	# what the painter is told
 	var said: String = Thumb.painting(got, false)
 	_ok(Rules.missing.is_empty() and said.contains("A lantern on a dark table.") and said.contains("exactly these and no others: \"THE LAST CARD\"")
 		and said.contains("frames of the video itself") and ImageGen.Bedrock.ratio_in(said) == "16:9",
@@ -1514,7 +1413,7 @@ func _thumbnails() -> bool:
 	var plain: String = Thumb.painting({"picture": "A lantern.", "words": "", "after": []}, true)
 	_ok(plain.contains("No text, letters or numbers") and not plain.contains("frames of the video") and ImageGen.Bedrock.ratio_in(plain) == "9:16",
 		"the control: no words is no text at all, no pictures no look to follow, and a portrait video's is 9:16")
-	# THE PAINTING, CUT
+	# the painting, cut
 	var src := files.path_join("painted.png")
 	var img := Image.create(1536, 1024, false, Image.FORMAT_RGB8)
 	img.fill(Color.GREEN)
@@ -1529,7 +1428,7 @@ func _thumbnails() -> bool:
 	_ok(Thumb.fit(src, jpg, true).is_empty() and Image.load_from_file(jpg).get_size() == Vector2i(720, 1280),
 		"a portrait video's, to 720x1280")
 	_ok(not Thumb.fit(src + ".none", jpg, false).is_empty(), "the control: no painting, no thumbnail, and why")
-	# THE STEP: the writer, then the painter, then kept
+	# the step: the writer, then the painter, then kept
 	var feed := FakeFeed.new()
 	feed.dir = dir
 	feed.said = "The first card is the tower."
@@ -1539,7 +1438,7 @@ func _thumbnails() -> bool:
 	_ok(job.get("kind") == "image" and job.get("backend") == card._thumb_painter.choice()["agent"] and job.get("refs") == ["/p/one.png"]
 		and job.get("target") == dir.path_join("youtube_thumbnail_1.png") and String(job.get("prompt")).contains("A lantern."),
 		"the writer's answer is the card's painter's job, into the episode's folder")
-	# MATCHED TO THE VIDEO'S PICTURES
+	# matched to the video's pictures
 	var eight := PackedStringArray(["/p/0", "/p/1", "/p/2", "/p/3", "/p/4", "/p/5", "/p/6", "/p/7"])
 	_ok(Thumb.spread(eight, 4) == ["/p/0", "/p/2", "/p/5", "/p/7"] and Thumb.spread(pics, 4) == Array(pics),
 		"a few spread through the pictures: the first and the last among them, in order (%s)" % str(Thumb.spread(eight, 4)))
@@ -1595,8 +1494,7 @@ func _thumbnails() -> bool:
 	_ok(card._thumb_note.text.contains("before the episode's words were written again")
 		and card.meta({"tags": [], "folder": dir}, titled).get("thumbnail") == made,
 		"words written again: it says so, and goes up as it is until another is painted")
-	# NOTHING PAINTS OVER A CHOICE (2026-10-31, the user, of an export that painted again: "That definitely shouldn't
-	# happen. I already had painted one.")
+	# nothing paints over a choice
 	_ok(step.generate(feed) and not step.busy(feed) and step.state(feed) == "missing" and not step.owed(feed)
 		and not step.to_make(feed) and step.said(feed).contains("and kept")
 		and not card._thumb_note.text.contains("an export") and not card._thumb_note.text.contains("making the episode"),
@@ -1604,8 +1502,7 @@ func _thumbnails() -> bool:
 	var video := files.path_join("v.mp4")
 	_ok(Ex._beside(made, video) == files.path_join("v.thumbnail.jpg") and FileAccess.file_exists(files.path_join("v.thumbnail.jpg")),
 		"the exporter puts a painted thumbnail beside the video it goes up with")
-	# ANOTHER, KEPT BESIDE IT (2026-10-30, the user: "no way to cycle backward/forward through generated
-	# thumbnails"; "essentially been exactly the same thing, right down to the exact same text")
+	# another, kept beside it
 	feed.said = "The first card is the tower."
 	var again: String = step._prompt(feed)["prompt"]
 	_ok(Rules.missing.is_empty() and again.contains("ALREADY PAINTED") and again.contains("1. A lantern.")
@@ -1725,8 +1622,8 @@ func _tag_field() -> bool:
 	return true
 
 
-## A real show file: opened, seeded, its byline set on the card, written by the document's own writer, read
-## back - and opened again by another panel, whose new episode is filled from it at once.
+## A real show file: opened, seeded, its byline set on the card, written by the document's own writer, read back, and opened
+## again by another panel, whose new episode is filled from it at once.
 func _doc_file() -> bool:
 	var ed = load("res://src/reading/reading_panel.gd").new()
 	ed.workspace = "table"
@@ -1760,7 +1657,7 @@ func _doc_file() -> bool:
 		"the YouTube card's block is the file's too, beside the show's (%s)" % str(yt))
 	_ok(raw.ends_with("---\n" + body), "the body is untouched")
 	ed.free()
-	# ANOTHER PANEL OPENS THE FILE, AND MAKES A NEW EPISODE: filled from the file at once
+	# another panel opens the file, and makes a new episode: filled from the file at once
 	var again = load("res://src/reading/reading_panel.gd").new()
 	again.workspace = "table"
 	again._build_panel()

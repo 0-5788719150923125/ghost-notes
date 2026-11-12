@@ -1,33 +1,31 @@
 extends VBoxContainer
 class_name SchemaForm
 
-## SchemaForm - rows of controls built from a TABLE OF FIELDS, for editing one map of data.
+## SchemaForm - rows of controls built from a table of fields, for editing one map of data.
 ##
-## THE TABLE IS THE FORM. A registry says what can be set - each field's label, type, default,
-## bounds or choices, and a sentence for its tooltip ([constant Storyboard.ENTRY],
-## [constant Actions.ARGS], [constant Cast.PARAMS]) - and this draws a row for each, so a field
-## added to a table is a control that exists, in every editor that shows that table. Nothing here
-## knows what a storyboard is.
+## A registry says what can be set - each field's label, type, default, bounds or choices, and a sentence
+## for its tooltip ([constant Storyboard.ENTRY], [constant Actions.ARGS], [constant Cast.PARAMS]) - and
+## this draws a row for each, so a field added to a table is a control in every editor that shows that
+## table. Nothing here knows what a storyboard is.
 ##
-## IT EDITS NOTHING ITSELF. A row moved raises [signal edited] with the field's key and its new
-## value, and whoever owns the data makes the edit (a new tree, [DataPath]) and shows the result
-## again with [method show_fields]. The form never holds a value the data does not.
+## It edits nothing itself. A row moved raises [signal edited] with the field's key and its new value,
+## and whoever owns the data makes the edit (a new tree, [DataPath]) and shows the result again with
+## [method show_fields]. The form never holds a value the data does not.
 ##
-## UNSET IS A VALUE. A key the map does not have means "the default" - which for an entry's tempo
-## is the storyboard's, and for a seed is "drawn from the song" - so a row shows the default
-## dimmed, and a row whose key IS written carries a ↺ that unsets it ([signal edited] with null).
-## Writing a default explicitly and leaving it unset are different things, and both are kept.
+## Unset is a value. A key the map does not have means "the default", so a row shows the default dimmed,
+## and a row whose key is written carries an unset button ([signal edited] with null). Writing a default
+## explicitly and leaving it unset are different things, and both are kept.
 ##
-## TYPES: `bool`, `enum`, `float`, `int`, `text`, `scene` (a choice among [code]context.scenes[/code]),
-## `actor` (one of [code]context.actors[/code]), `targets` (some of them; none is everyone), `num` (a number, or a range
-## `lo..hi` sampled once per instance), `vec3` (three of those, `x, y, z`), `pair` (two plain numbers, `x, z`) and `data` (anything
-## else, as JSON - how a value with no field of its own is still reachable). A key the map has
-## and the table does not gets a row by what its value is ([method infer]).
+## Types: `bool`, `enum`, `float`, `int`, `text`, `scene` (a choice among [code]context.scenes[/code]),
+## `actor` (one of [code]context.actors[/code]), `targets` (some of them; none is everyone), `num` (a
+## number, or a range `lo..hi` sampled once per instance), `vec3` (three of those, `x, y, z`), `pair`
+## (two plain numbers, `x, z`) and `data` (anything else, as JSON). A key the map has and the table does
+## not gets a row by what its value is ([method infer]).
 ##
-## A BOUNDED NUMBER IS A SLIDER beside its box (next/editing.md step 5: "SchemaForm gains a color, a slider ... a reference"):
-## dragged, it is ONE edit, written as the drag ends - never one per step of it - and unset, it stands at the default, dimmed, and
-## sets the value only once moved. `color` is a picker, written `#rrggbb`; `ref` a choice among the names the context lists
-## under the field's `of` (an actor, a thing, a point), "" unsetting it.
+## A bounded number is a slider beside its box (next/editing.md step 5): dragged, it is one edit,
+## written as the drag ends, and unset, it stands at the default, dimmed, and sets the value only once
+## moved. `color` is a picker, written `#rrggbb`; `ref` a choice among the names the context lists under
+## the field's `of` (an actor, a thing, a point), "" unsetting it.
 
 ## A row was moved: the field's key and its new value; null unsets the key.
 signal edited(key: String, value: Variant)
@@ -62,11 +60,12 @@ func show_fields(schema: Dictionary, values: Dictionary, context := {}) -> void:
 	_building = false
 
 
-## ONE ROW SHAPE (next/editing.md step 5: "one shape for every registry, the five dialects turned to it"): what this form reads -
-## `type`, `label`, `blurb`, `default`, and `min`/`max`/`step`, `options` or `of` as its type has them - from a row written in any
-## registry's dialect: the storyboard's and the table's (this shape, untouched), a layer's (`num`, `flag`, `txt`, `dict`), a scene's
-## (`choice` with its options listed, `num` with a `range`; [method SceneRoster.fields_of] names a table's options first), the
-## Look's tonemap adjustments (`min`/`max`/`step` and no type) and the Look's filters (no type and no bounds: a dial, 0 to 1).
+## One row shape (next/editing.md step 5): what this form reads - `type`, `label`, `blurb`, `default`,
+## and `min`/`max`/`step`, `options` or `of` as its type has them - from a row written in any registry's
+## dialect: the storyboard's and the table's (this shape), a layer's (`num`, `flag`, `txt`, `dict`), a
+## scene's (`choice` with its options listed, `num` with a `range`; [method SceneRoster.fields_of] names
+## a table's options first), the Look's tonemap adjustments (`min`/`max`/`step`, no type) and the Look's
+## filters (no type and no bounds: a dial, 0 to 1).
 static func normalize(row: Dictionary) -> Dictionary:
 	var out := row.duplicate()
 	match String(row.get("type", "")):
@@ -156,7 +155,7 @@ static func vec3_text(v: Variant) -> String:
 	return ", ".join(parts)
 
 
-## TWO NUMBERS as a person types them, `x, z` - a place on a table in centimeters, say. "" for anything else.
+## Two numbers as a person types them, `x, z` - a place on a table in centimeters, say. "" for anything else.
 static func pair_text(v: Variant) -> String:
 	if not (v is Array) or (v as Array).size() != 2 or not _is_num((v as Array)[0]) or not _is_num((v as Array)[1]):
 		return ""
@@ -282,8 +281,8 @@ func _control(key: String, field: Dictionary, value: Variant, has: bool, context
 		return JSON.parse_string(t))
 
 
-## A BOUNDED NUMBER: a slider and its box, as one. The box writes what is typed; the slider writes once, as its drag ends (or at
-## once for a click or a key). Unset, both stand at the default, dimmed.
+## A bounded number: a slider and its box, as one. The box writes what is typed; the slider writes once,
+## as its drag ends (or at once for a click or a key). Unset, both stand at the default, dimmed.
 func _slider(key: String, field: Dictionary, value: Variant, has: bool) -> Control:
 	var whole := String(field["type"]) == "int"
 	var row := HBoxContainer.new()
@@ -310,9 +309,8 @@ func _slider(key: String, field: Dictionary, value: Variant, has: bool) -> Contr
 		spin.set_value_no_signal(v)
 		if not dragging[0]:
 			_emit(key, out.call(v)))
-	# ...THE BOX'S EDIT HANDED OVER ONCE ITS PRESS IS DONE: an arrow pressed sets the value and then starts the box's own repeat timer,
-	# and an owner that draws its form again on an edit (the storyboard's inspector) had freed the box between the two - Godot's
-	# "Unable to start the timer because it's not inside the scene tree", twice a press (the user's log, 2026-11-11)
+	# The box's edit is handed over once its press is done: an arrow pressed sets the value and then
+	# starts the box's own repeat timer, which fails if an owner that redraws its form on an edit freed the box in between.
 	spin.value_changed.connect(func(v: float) -> void:
 		slide.set_value_no_signal(v)
 		_emit.call_deferred(key, out.call(v)))

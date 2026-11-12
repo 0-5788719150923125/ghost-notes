@@ -2,81 +2,46 @@ extends GhostScene
 
 ## Falling sand - a world of matter you never draw, only rule.
 ##
-## A chamber seen straight on, its walls running off every edge of the frame. Two to five
-## spouts pour into it and never stop: dry sand builds a cone that holds its flank angle
-## until one grain too many starts an avalanche running down the side; water finds its
-## level and soaks into whatever it lands on; oil, being lighter, floats on the water as a
-## thin film; an ember dropped into that oil eats through it and leaves ash. The pile builds
-## all song. On a beat a hatch opens in the floor and the column drains, a collapse front
-## traveling UPWARD through material that was settled a second ago.
+## A chamber seen straight on, its walls running off every edge. Two to five spouts pour into it and never
+## stop: dry sand builds a cone that holds its flank angle until an avalanche runs down the side; water finds
+## its level and soaks into what it lands on; oil floats on water; an ember dropped into the oil eats through
+## it and leaves ash. On a beat a hatch opens in the floor and the column drains.
 ##
-## It is the catalog's first scene whose every frame is a STATE rather than a picture.
-## Everything else here draws something - a skyline, a lattice, a flame. This draws a
-## [Grains] grid where each cell holds exactly one thing, and its silhouette is produced by
-## nothing but local rules applied a few thousand times. The angle of repose is a slide
-## probability, the avalanche is what happens when a cone gets steeper than it, the oil
-## film is a density comparison, and the drainage collapse is the absence of a floor. None
-## of the four has a branch of its own anywhere in either file, which is the entire point:
-## it is a world with rules rather than a picture of one.
+## Every frame is a state, not a picture: a [Grains] grid where each cell holds one thing, and the
+## silhouette comes from local rules (the angle of repose is a slide probability, the avalanche a cone
+## steeper than it, the oil film a density comparison, the drainage the absence of a floor).
 ##
-## WHAT THE SEED DECIDES. The chamber (a straight silo, an hourglass whose waist chokes the
-## pour, stepped ledges the material cascades down, or open sides it walks off), its grid
-## and wall thickness; a two-to-four material subset of [constant Grains.MATTER] with every
-## property of every material sampled from its own range - so this sand is not the last
-## sand, it has its own repose, density, color and susceptibility to the draft; the ember
-## and ash chain, added only when a flammable material was drawn; the spouts, each with its
-## own column, width, material, spectral band, gain and slow duty cycle; the hatch
-## positions, widths and dwell; how far gravity may tilt and for how long; a steady ambient
-## draft and its direction; the wall strata ramp; whether the air behind it all is a
-## bright ground or a dark one; and HOW LONG IT HAS BEEN RUNNING before you got here.
+## The seed decides: the chamber (silo, hourglass, stepped ledges, or open sides), grid and wall thickness;
+## a two-to-four material subset of [constant Grains.MATTER] with every property sampled from its own range;
+## the ember and ash chain (only when a flammable material was drawn); the spouts (column, width, material,
+## band, gain, duty cycle); hatches; gravity tilt; a steady draft; the wall strata ramp; a bright or dark air;
+## and how long the world has already been running.
 ##
-## THE LAST OF THOSE IS NOT DECORATION. A world with rules has been running before anyone
-## looked at it, so its own clock starts somewhere in the middle of its life (`_job.t_sim`),
-## which puts each spout's duty cycle wherever it happens to be rather than all at their
-## beginnings - some lanes pouring, some dry and about to open. The matter that clock implies
-## is DEPOSITED by [method Grains.prefill]: piles under the spouts shaped by each material's
-## own repose, a thin run on every shelf, and a stream still in the air under whichever lanes
-## are open. Deposited rather than simulated, because a pre-roll long enough to raise a cone
-## is over a second of CPU - either a stall at the cut or a second of empty chamber arriving
-## late. Gated by tests/scenes/sand_warm_check.gd, which settles the deposit against the automaton.
+## The world arrives mid-pour: its clock starts partway through its life (`_job.t_sim`), so each spout's duty
+## cycle is wherever it happens to be, and the matter that clock implies is deposited by
+## [method Grains.prefill], not simulated (a pre-roll long enough to raise a cone is over a second of CPU).
+## Gated by tests/scenes/sand_warm_check.gd.
 ##
-## AUDIO. Each spout owns a FIXED band, and its rate in grains per second is its gain times
-## that band's level, so the pours move against each other rather than throbbing together -
-## the bass spout runs while the treble spout is dry. A beat on an armed latch opens one
-## floor hatch. f.movement past a sampled gate eases gravity off vertical by a sampled
-## ANGLE (0.12-0.35 rad, applied as its tangent, which is the per-step sideways probability
-## that a cellular gravity actually takes), so a section change shears the whole pile and it
-## re-settles into a different landscape. f.flux scales ember ignition. The tonal center
-## from chroma_hue() drags every material's hue by a quarter of its strength, and f.energy
-## feeds [method Nonlinear.flare] into the emissive materials' VALUE only. Nothing anywhere
-## touches grain size or grid scale: the sound colors this world and gates its activity, it
-## does not resize it.
+## Audio: each spout owns a fixed band and pours at its gain times that band's level, so pours move against
+## each other. A beat on an armed latch opens one floor hatch. `f.movement` past a sampled gate eases gravity
+## off vertical by a sampled angle (0.12-0.35 rad, applied as its tangent, the per-step sideways probability).
+## `f.flux` scales ember ignition. The tonal center drags every material's hue by a quarter of its strength;
+## `f.energy` feeds [method Nonlinear.flare] into emissive materials' value only. Nothing touches grain size.
+## Gains are written for measured ranges (`f.energy` rarely passes 0.5, `f.flux` is 0.01-0.05); spout rates
+## carry a 0.12 floor so a quiet passage still trickles.
 ##
-## MEASURED CONSTANTS. f.energy is a mean over 64 bands and rarely passes 0.5, and f.flux
-## lives around 0.01-0.05, so the gains here are written for those ranges rather than for a
-## nominal 0-1 (the ember drive is 0.35 + 8*flux, not 1 + flux). Spout rates carry a 0.12
-## floor so a quiet passage still trickles instead of freezing the world.
-##
-## COST. The sim and the batching BOTH run inside a [FrameForge] job that owns the grid, and
-## the scene never touches a cell - a 200x115 chamber is 23000 cells, and at even half a
-## microsecond each that is past the main thread's whole budget. The sim advances on a
-## [SimClock] rather than per update() call, which is not optional: the Director sub-steps
-## update() up to fifteen times in one frame, pre-warms every new scene twelve times before
-## it is ever drawn, and an Echo re-localize can fast-forward hundreds of calls - any of the
-## three would have the chamber full before the first frame anyone sees.
+## The sim and batching run inside a [FrameForge] job that owns the grid (23000 cells); the scene never
+## touches a cell. The sim advances on a [SimClock], not per update() call.
 
 const OVER := 1.12          # the chamber runs this much past the frame's width
 
-## Ceiling on sim ticks handed to one build. SimClock already caps each update() call; this
-## caps what several capped calls may ACCUMULATE between two drawn frames, which is what the
-## pre-warm and an Echo jump actually produce.
+## Ceiling on sim ticks handed to one build: caps what several capped update() calls accumulate between
+## two drawn frames (pre-warm, Echo jump).
 const MAX_PENDING := 8
 
-## The chamber, which is the thing that decides what the material DOES on the way down.
-## A silo is a plain column and the pile is one cone; an hourglass chokes the pour at a
-## waist and holds a second pile above it; ledges break the fall into cascades; open sides
-## let everything walk off the edge, so it never fills and reads as an outdoor drift.
-## The chamber roll, weighted. See where it is used.
+## The chamber decides what the material does on the way down. A silo is a plain column and one cone; an
+## hourglass chokes the pour at a waist and holds a second pile above it; ledges break the fall into
+## cascades; open sides let everything walk off, so it never fills. The roll is weighted.
 const SHAPE_BAG := ["ledges", "ledges", "ledges", "hourglass", "hourglass", "silo", "open"]
 
 const CHAMBERS := {
@@ -88,12 +53,10 @@ const CHAMBERS := {
 	"open": {"wall": [2, 3], "hatch_n": [1, 3], "hatch_w": [0.08, 0.20]},
 }
 
-## What can be poured. The rest of the matter table (ember, ash, steam) arrives only as a
-## CONSEQUENCE - nothing pours ash, ash is what is left over.
+## What can be poured. Ember, ash and steam arrive only as consequences.
 const POURABLE := ["sand", "water", "oil", "salt", "dust"]
 
-## Elevation ramps for the chamber wall, so the stone reads as strata rather than as one
-## flat gray behind the material.
+## Elevation ramps for the chamber wall, so the stone reads as strata.
 const WALL_RAMPS := ["earth", "desert", "alpine", "ocean"]
 
 var _w := 192
@@ -127,9 +90,8 @@ var _wind_dir := 1
 var _ignite := 0.5
 var _glow := 0.0
 var _hue_base := 0.1
-## Guaranteed separation in VALUE between the air and the mean of the materials falling
-## through it. 0.34 is a shade over a third of the axis: comfortably visible at every
-## saturation, and still leaving both ends room to be sampled rather than pinned.
+## Guaranteed separation in value between the air and the mean of the materials falling through it
+## (a third of the axis; leaves both ends room to be sampled).
 const AIR_CONTRAST := 0.34
 
 var _air_sat := 0.08
@@ -140,8 +102,8 @@ var _run_cap := 8
 var _ch := Vector2.ZERO
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"chamber": {"label": "Chamber", "type": "choice", "options": "SHAPE_BAG", "default": null,
 		"blurb": "The chamber the material falls through: ledges that break the fall into cascades, an hourglass that chokes the pour at a waist, a plain silo, or open sides it walks off."},
@@ -165,27 +127,18 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	var sch := Scheme.pick(rng)
 	_hue_base = sch.hue
-	# The grid stays landscape and modest: the sweep is O(cells) and runs every tick, and
-	# past ~25k the worker stops keeping up with a 30 Hz clock on a busy chamber.
-	# FINER GRAIN. This was 160-216 wide, which puts a cell at 9-12 screen pixels on a
-	# 1920 frame - coarse enough that the sand read as tiles rather than as sand, which is
-	# what "rather large particles" meant. 240-300 lands a cell at 6.4-8.0 px. The sweep is
-	# O(cells) and measured at 0.53 us/cell worst case (a half-full grid, every row
-	# active), so the ceiling is real - but a chamber is mostly empty or settled and the
-	# per-row activity mask skips those, and the whole sim runs inside a FrameForge job
-	# where falling behind costs a slower pour rather than a dropped frame.
+	# The grid stays landscape and modest: the sweep is O(cells) every tick (0.53 us/cell worst case) and past
+	# ~25k cells the worker stops keeping up with a 30 Hz clock. 240-300 wide puts a cell at 6.4-8.0 px on a
+	# 1920 frame; the per-row activity mask skips settled rows, and a slow build costs a slower pour, not a dropped frame.
 	_w = rng.randi_range(240, 300)
 	_h = clampi(int(round(float(_w) * rng.randf_range(0.55, 0.60))), 132, 180)
 	_run_cap = rng.randi_range(5, 11)
 	_depth = rng.randf_range(0.16, 0.36)
-	# 20-30 ticks a second. A granular automaton does not need 60: the grid IS the
-	# quantization, and a slower clock buys back the cells it costs.
+	# 20-30 ticks a second: the grid is the quantization, so a slower clock buys back cells.
 	_clock = SimClock.new(rng.randf_range(20.0, 30.0), 2)
 
-	# WEIGHTED, not uniform. "ledges" was one of four shapes picked evenly, so three
-	# sessions in four were a plain box and the sand simply heaped in the bottom of it -
-	# reported, fairly, as boring. The cascading shapes are what this scene is FOR: matter
-	# that runs along a surface, reaches an edge, and pours off it.
+	# Weighted: the cascading shapes are what this scene is for (matter that runs along a surface, reaches
+	# an edge and pours off it).
 	var shape := String(choice("chamber", rng))
 	var ch: Dictionary = CHAMBERS[shape]
 	var thick := _rint(ch["wall"], rng)
@@ -218,8 +171,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	for n in pours:
 		mats.append(String(n))
 		sim.add(String(n), rng)
-	# Ember and ash exist only as the consequence of a flammable pour, and steam only
-	# where an ember can reach water.
+	# Ember and ash exist only as the consequence of a flammable pour, steam only where an ember can reach water.
 	if fuelly:
 		sim.add("ember", rng)
 		sim.add("ash", rng)
@@ -257,17 +209,14 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 				var py := int(float(_h) * rng.randf_range(0.35, 0.72))
 				sim.fill_rect(px, py, px + 1, py + int(float(_h) * rng.randf_range(0.08, 0.20)), stone)
 
-	# EVERY chamber gets something to spill over, not just the one named for it. A silo
-	# with a couple of shelves in it is still a silo, and it gives the pour somewhere to
-	# break; an hourglass with a shelf under its waist catches the throat's output and
-	# throws it sideways. Only the count differs by shape.
+	# Every chamber gets something to spill over: a silo with a few shelves still breaks the pour; an
+	# hourglass with a shelf under its waist throws the throat's output sideways. Only the count differs.
 	if shape != "ledges":
 		var extra := 1 if shape == "open" else rng.randi_range(1, 3)
 		if extra > 0:
 			_cascade(sim, stone, thick, extra, CHAMBERS["ledges"], rng)
 
-	# Strata: the wall takes its color from an elevation ramp by row, which is the one
-	# place a [Palette] belongs here - everything else is matter, and matter has its own.
+	# Strata: the wall takes its color from an elevation ramp by row, the one place a [Palette] belongs here.
 	var ramp := Palette.named(String(choice("wall", rng)), rng)
 	var wall_v: float = number("wall_brightness", rng)
 	var band := PackedColorArray()
@@ -286,26 +235,19 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		var half_w := rng.randi_range(0, 2)
 		var x0 := clampi(cx - half_w, thick, _w - 1 - thick)
 		var x1 := clampi(cx + half_w, thick, _w - 1 - thick)
-		# Bands are SPREAD across the spectrum rather than drawn freely, so two spouts
-		# cannot end up on the same frequency and pour as one.
+		# Bands are spread across the spectrum so two spouts cannot pour on one frequency.
 		var band_t := clampf((float(i) + 0.5) / float(ns) + rng.randf_range(-0.08, 0.08), 0.0, 1.0)
 		_spouts.append({
 			"x0": x0, "x1": x1, "y": 0, "mat": sim.id_of(mname), "name": mname,
 			"band": band_t, "gain": rng.randf_range(70.0, 240.0),
 			"period": rng.randf_range(5.0, 16.0),
-			# PHASES SPREAD, like the bands just above and for the same reason: drawn freely,
-			# several spouts sit in the same part of their cycle and the chamber opens and
-			# shuts as one instead of one lane starting as another runs dry.
+			# Phases spread for the same reason, so the chamber does not open and shut as one.
 			"phase": fposmod((float(i) + 0.5) / float(ns) + rng.randf_range(-0.12, 0.12), 1.0),
-			# ...and every spout now HAS an off phase. The old ceiling was 1.0, so a duty
-			# drawn near the top never closed at all and that lane simply ran for the whole
-			# song. A lane that opens and another that runs dry is the scene's own slow clock,
-			# and it only exists if the top of this range is short of 1.
+			# Every spout has an off phase: the top of this range stays short of 1, or a lane would never close.
 			"duty": rng.randf_range(0.40, 0.92)})
 		sim.fill_rect(x0, 0, x1, thick - 1, 0)         # a pipe through the ceiling
 	if fuelly:
-		# The ignition source is its own thin, intermittent spout on the top band - a
-		# torch, not a firehose. Rate is deliberately an order of magnitude below a pour.
+		# The ignition source is a thin, intermittent spout on the top band, an order of magnitude below a pour.
 		var ex := int(float(_w) * rng.randf_range(0.18, 0.82))
 		var ex0 := clampi(ex, thick, _w - 1 - thick)
 		_spouts.append({
@@ -323,9 +265,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_hatches.append({"x0": maxi(1, hx - hw / 2), "x1": mini(_w - 2, hx + hw / 2)})
 	_hatch_gap = number("hatch_gap", rng)
 	_hatch_dwell = number("hatch_open", rng)
-	# The tilt is sampled as an ANGLE off vertical and applied as its tangent, because a
-	# cellular gravity cannot rotate - it can only take a sideways step with some
-	# probability, and tan(angle) IS that probability for a given lean.
+	# The tilt is sampled as an angle off vertical and applied as its tangent: a cellular gravity can only
+	# take a sideways step with some probability, and tan(angle) is that probability.
 	_tilt_mag = tan(rng.randf_range(0.12, 0.35))
 	_tilt_gate = rng.randf_range(0.34, 0.68)
 	_tilt_dwell = rng.randf_range(1.5, 5.0)
@@ -337,30 +278,17 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_ignite = rng.randf_range(0.25, 0.75)
 
 	# --- air ----------------------------------------------------------------------------
-	# CHOSEN AGAINST THE SAND, never blind of it. The air used to be a coin between a
-	# near-white and a near-black at almost no saturation, drawn with no reference to what
-	# was going to fall through it - so the one thing that actually matters here, that the
-	# grains and the chamber stay legible, was left to luck. It also read as a blank page
-	# far more often than the 45% coin suggests, because white is what the eye reports
-	# when it cannot find the picture.
-	#
-	# So: measure the materials this chamber actually got, then put the air a guaranteed
-	# distance away in VALUE - which is the axis legibility lives on - and let hue and
-	# saturation open right up now that contrast is no longer their job. The hue is the
-	# mood's OPPOSED one rather than its base, so the background separates from the sand
-	# in chroma as well as in brightness instead of sitting a shade off it.
+	# Chosen against the sand: measure the materials this chamber got, then put the air a guaranteed
+	# distance away in value (the axis legibility lives on), and let hue and saturation open up. The hue is
+	# the mood's opposed one, so the background separates from the sand in chroma too.
 	var sand_v := 0.0
 	for m in mats:
 		var mv = Grains.MATTER.get(String(m), {}).get("val", [0.5, 0.7])
 		sand_v += (float(mv[0]) + float(mv[1])) * 0.5
 	sand_v /= maxf(1.0, float(mats.size()))
-	# TAKE THE SIDE THAT HAS ROOM. Dark is the better picture - the sand glows out of it
-	# and an ember actually reads as hot - so it is the default rather than a coin flip.
-	# But "always darker than the sand" is not a guarantee that can always be honored:
-	# with a chamber of ash and stone the mean material value is already down at 0.2, and
-	# there is no room left underneath it for a full margin. Measured over 400 seeds, the
-	# first version of this promised 0.34 and delivered 0.15 on those chambers. So the
-	# side is chosen by which one can actually pay, and dark only wins where it can.
+	# Take the side that has room. Dark is the default (the sand glows out of it, embers read hot), but a
+	# chamber of ash and stone has a mean value near 0.2 with no room underneath for a full margin, so the
+	# side is chosen by which can pay.
 	var room_dark := sand_v - AIR_CONTRAST      # the highest air value the dark side allows
 	var room_lit := sand_v + AIR_CONTRAST       # ...and the lowest the lit side allows
 	var can_dark := room_dark >= 0.03
@@ -371,9 +299,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if lit:
 		_air_val = rng.randf_range(clampf(room_lit, 0.55, 0.97), 0.99)
 	else:
-		# A saturated background carries more apparent weight than its value alone, so the
-		# deeper the color the further down it sits - taken off the CEILING of the range
-		# rather than off the result, which is what keeps the margin a guarantee.
+		# A saturated background carries more apparent weight, so the deeper the color the further down
+		# it sits, taken off the ceiling of the range so the margin stays a guarantee.
 		_air_val = rng.randf_range(0.02, maxf(0.03, minf(room_dark, 0.55) - 0.10 * _air_sat))
 	if rng.randf() < 0.5:
 		add_layer("dust", rng, {"count": rng.randi_range(40, 90), "shaft": false,
@@ -391,25 +318,13 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_job.wind_dir = _wind_dir
 
 	# --- ARRIVE MID-POUR --------------------------------------------------------------
-	# The chamber used to open empty every single time: the same few lanes falling from the
-	# very top of an untouched floor, for the first several seconds of every session this
-	# scene was ever cut to. It is a world with rules, and a world with rules has been running
-	# before you looked at it.
-	#
-	# Two halves. The world's own CLOCK starts somewhere in the middle of its life, so the
-	# spouts' duty phases are wherever they happen to be rather than all at their beginning -
-	# that alone is the difference between "the pours switch on together" and "two are
-	# running, one is dry and about to open". And the matter that clock implies is DEPOSITED
-	# (see Grains.prefill for why it is deposited rather than simulated): piles under the
-	# spouts, shaped by each material's own repose, and a stream still in the air under
-	# whichever lanes are open at that moment.
+	# The world has been running before anyone looked. Its clock starts mid-life, so the spouts' duty phases
+	# are scattered, and the matter that clock implies is deposited (see Grains.prefill): piles under the
+	# spouts and a stream in the air under open lanes.
 	_job.t_sim = rng.randf_range(20.0, 400.0)
-	# How deep this session arrives. The top of the range is not taste: the sweep and the
-	# batching both scale with how much matter there is, and measured on the real thing one
-	# build (a tick plus a repaint) runs 12 ms on a nearly empty chamber, 26 at a third full
-	# and 42 at half - past which the worker stops keeping up with its own 20-30 Hz clock and
-	# the world runs in slow motion. A chamber that fills that far during a song has earned it;
-	# one that OPENS there has not.
+	# How deep this session arrives. The top of the range is a cost bound: one build (a tick plus a repaint)
+	# runs 12 ms on a nearly empty chamber, 26 at a third full and 42 at half, past which the worker cannot
+	# keep up with its 20-30 Hz clock.
 	var fill: float = number("fill", rng)
 	var seeded: Array = []
 	for sp in _spouts:
@@ -420,8 +335,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		seeded.append({
 			"x": (int(d["x0"]) + int(d["x1"])) / 2, "x0": int(d["x0"]), "x1": int(d["x1"]),
 			"mat": int(d["mat"]), "live": live,
-			# How solid that stream is: the rate this spout pours at a middling level, in
-			# grains per tick, spread across its own width.
+			# How solid the stream is: the rate this spout pours at a middling level, in grains per tick across its width.
 			"flow": clampf(float(d["gain"]) * 0.5 * _clock.dt / float(span), 0.15, 1.0),
 			"pile": String(d["name"]) != "ember"})
 	sim.prefill(seeded, fill, rng)
@@ -442,8 +356,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	update_layers(f, delta)
 	_ch = chroma_hue()
 
-	# The hatch: a beat on an ARMED latch, so it opens on the music rather than on a timer
-	# but cannot chatter on a dense passage.
+	# The hatch: a beat on an armed latch, so it opens on the music but cannot chatter on a dense passage.
 	_hatch_arm += delta
 	var beat_up := f.beat > 0.55 and _beat_prev <= 0.55
 	_beat_prev = f.beat
@@ -453,8 +366,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 			_drain_x0 = 0
 			_drain_x1 = -1
 	elif beat_up and _hatch_arm >= _hatch_gap and not _hatches.is_empty():
-		# The WHICH is an index step, never an rng draw: drawing on an audio-conditioned
-		# event would desynchronize an export from its preview for the rest of the song.
+		# The which is an index step, never an rng draw (an audio-conditioned draw would desynchronize an export).
 		var hh: Dictionary = _hatches[_hatch_i % _hatches.size()]
 		_hatch_i += 1
 		_hatch_arm = 0.0
@@ -477,9 +389,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_glow = Nonlinear.flare(_glow, clampf(f.energy * 1.7 + f.beat * 0.35, 0.0, 1.0),
 		delta, 7.0, 1.1)
 
-	# Each spout's rate is its own band's level, so the pours move AGAINST each other - the
-	# bass spout runs while the treble one is dry. The 0.12 floor is measured, not taste:
-	# a band sits near zero for long stretches and a chamber that stops pouring is dead.
+	# Each spout's rate is its own band's level, so the pours move against each other. The 0.12 floor
+	# keeps a band that sits near zero from stopping the pour.
 	var rates := PackedFloat32Array()
 	rates.resize(_spouts.size())
 	for i in _spouts.size():
@@ -488,29 +399,22 @@ func update(f: AudioFeatures, delta: float) -> void:
 		var gain: float = sp["gain"]
 		rates[i] = gain * (0.12 + 0.95 * f.sample(b))
 
-	# Sized to overscan BOTH axes, whichever binds: the chamber must run off the sides and
-	# off the top whatever the aspect ratio, or the camera's drift exposes a corner of a
-	# room that is supposed to continue past the frame.
+	# Sized to overscan both axes, so the chamber runs off the sides and top at any aspect and the camera
+	# drift never exposes a corner.
 	_cell = maxf(size.x * OVER / float(_w), size.y * OVER / float(_h))
-	# The floor sits one cell inside the bottom edge so the drain is visible; the ceiling
-	# and the side walls run off the frame, which is what makes it read as an interior.
+	# The floor sits one cell inside the bottom edge so the drain is visible; the ceiling and side walls run off the frame.
 	_org = Vector2(-float(_w) * _cell * 0.5, size.y * 0.5 - _cell - float(_h) * _cell)
-	# Blended on the wheel, not along the shortest arc (GhostScene.blend_hue). The arc form flips
-	# sign at the antipode, so a tonal center drifting opposite this chamber's base hue swung every
-	# material's color by a quarter turn between two consecutive frames - a second, slower color
-	# instability in the same scene as the grain flicker, and one the sim fix does not touch.
+	# Blended on the wheel, not the shortest arc (GhostScene.blend_hue): the arc form flips sign at the
+	# antipode and swings every material's color by a quarter turn between frames.
 	var hue_rot := blend_hue(_hue_base, _ch.x, 0.25 * _ch.y)
 
-	# Everything the audio decides travels in a FRESH snapshot dictionary each frame; only
-	# the grid and the tick debt live on the job. Mutating a field on the job while the
-	# worker is mid-build would be writing to memory another thread is reading, and for a
-	# refcounted value (a packed array) that is not merely stale, it is unsafe.
+	# Everything the audio decides travels in a fresh snapshot dictionary each frame; only the grid and
+	# the tick debt live on the job (mutating the job mid-build would write memory the worker is reading).
 	_job.pending = mini(_job.pending + _clock.ticks(delta), MAX_PENDING)
 	_forge.kick(_job.run, {
 		"rate": rates,
 		"tilt": _tilt,
-		# The draft breathes on its own slow clock rather than on the audio - it is weather
-		# in the chamber, not a reaction to the track.
+		# The draft breathes on its own slow clock: weather in the chamber, not a reaction.
 		"wind": _wind * (0.7 + 0.45 * mod.unit("draft")),
 		"ignite": clampf(_ignite * (0.35 + 8.0 * f.flux), 0.0, 1.0),
 		"glow": _glow,
@@ -525,9 +429,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 
 func _draw() -> void:
 	begin_draw()
-	# Flat and full-bleed, never a vignette: the air in this chamber is a back wall, and the
-	# moment it has a gradient the pile reads as lit by a spotlight instead of standing in a
-	# room. Layer's `bed` cannot do this (and its brightest tone is a mid one).
+	# Flat and full-bleed: a gradient would light the pile like a spotlight. Layer's `bed` cannot do this.
 	paint_ground(_air_hue, _air_sat, _air_val, _ch.y * 0.5, _ch.x)
 	draw_layers("back")
 	_forge.submit(self)          # the whole chamber: simulated AND batched off-thread
@@ -544,15 +446,10 @@ func _rint(v, rng: RandomNumberGenerator) -> int:
 	return rng.randi_range(int(a[0]), int(a[1]))
 
 
-## The off-thread job (the [FrameForge] job-object form): it OWNS the grid, runs the
-## simulation, and batches the result, all on the worker. The scene never reads a cell -
-## which is exactly what makes it safe, since a Director cut can free the scene mid-build.
-##
-## Pending ticks accumulate here rather than in the forge's snapshot because kick() is
-## idempotent and keeps only the NEWEST snapshot: the Director's several update() calls per
-## frame would otherwise have their ticks silently discarded, and the sim would run at
-## whatever rate the display happened to be, which is the one thing [SimClock] exists to
-## prevent.
+## The off-thread job (the [FrameForge] job-object form): it owns the grid, runs the simulation and batches
+## the result on the worker. The scene never reads a cell, so a Director cut can free the scene mid-build.
+## Pending ticks accumulate here rather than in the forge's snapshot because kick() keeps only the newest
+## snapshot, which would discard ticks from the Director's several update() calls per frame.
 class SandJob:
 	extends RefCounted
 
@@ -579,8 +476,7 @@ class SandJob:
 			t_sim += dt
 			for si in mini(spouts.size(), rate.size()):
 				var sp: Dictionary = spouts[si]
-				# The duty cycle runs on the SIM clock, so a spout's on/off phase is a
-				# property of the world rather than of the frame rate.
+				# The duty cycle runs on the sim clock, so a spout's phase belongs to the world, not the frame rate.
 				var period: float = sp["period"]
 				var duty: float = sp["duty"]
 				var phase: float = sp["phase"]
@@ -601,31 +497,20 @@ class SandJob:
 		return [{"pts": tb.pts, "cols": tb.cols, "idx": tb.idx}]
 
 
-## Sloped shelves, alternating sides, for the material to run along and pour off.
-##
-## A FLAT shelf is a shelf: sand lands on it, heaps at its angle of repose, and eventually
-## spills off both ends at once. That is what the old ledges did and it reads as a pile
-## with a step in it. A SLOPED one is a chute - the grains keep taking the downhill
-## sideways step the automaton already offers them, so the material travels the length of
-## the shelf and leaves it at one known edge, in a stream. That stream falling to the next
-## shelf down is the waterfall this scene was missing.
-##
-## The slope is one cell of drop per `run` cells of length, built as a staircase because
-## the grid has no other way to express a slope - and a staircase is right anyway, since
-## each step is a tiny lip that keeps the stream lively instead of laminar.
+## Sloped shelves, alternating sides, for the material to run along and pour off. A flat shelf heaps and
+## spills off both ends; a sloped one is a chute, so the grains leave at one known edge in a stream (the
+## waterfall). The slope is one cell of drop per `run` cells, built as a staircase (the grid has no other
+## way), each step a small lip that keeps the stream lively.
 func _cascade(sim, stone: int, thick: int, count: int, ch: Dictionary,
 		rng: RandomNumberGenerator) -> void:
 	if count <= 0:
 		return
 	for k in count:
-		# Spread down the chamber, avoiding the very top (nothing has fallen yet) and the
-		# floor (the bottom pile wants room to build).
+		# Spread down the chamber, avoiding the very top and the floor (the bottom pile wants room).
 		var ly := int(float(_h) * (0.24 + 0.54 * (float(k) + 0.5) / float(count)))
 		var ln := maxi(6, int(float(_w) * _rand(ch["shelf"], rng)))
 		var left := (k % 2) == 0
-		# A shallow slope only: steep enough that the sand runs, shallow enough that it
-		# still piles a little on the way, which is what makes the stream pulse rather
-		# than pour evenly.
+		# A shallow slope: steep enough that the sand runs, shallow enough that it piles a little, so the stream pulses.
 		var run := rng.randi_range(4, 9)
 		var thickness := rng.randi_range(1, 2)
 		for i in ln:

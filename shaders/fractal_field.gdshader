@@ -2,49 +2,30 @@ shader_type canvas_item;
 
 // Fractal field - the escape-time set [scenes/fractal_zoom.gd] flies through.
 //
-// One quad, one fragment program, the whole frame. Every pixel iterates its own orbit; the
-// picture is arithmetic rather than geometry, which is the only way a shape with detail at
-// every scale can be drawn at all.
+// One quad, one fragment program, the whole frame: every pixel iterates its own orbit.
 //
-// THE PRECISION WALL, AND WHY HALF THIS FILE EXISTS. A zoom is a scale going to zero, and
-// float32 carries about seven decimal digits. Iterating `z = z*z + c` directly, the pixel
-// spacing has to stay well above the resolution of a number near 1 - about 6e-8 - so a frame
-// 1080 px tall stops resolving anything below a half-height of roughly 3e-4. From a starting
-// half-height of 1.5 that is a magnification of five thousand and then the picture turns to
-// blocks. Five thousand sounds like a lot and is about twelve seconds of zoom.
-//
-// PERTURBATION lifts that, and it is the standard answer. Instead of iterating each pixel's
-// own orbit, iterate ONE reference orbit at very high precision (on the CPU, in float64 -
-// see the scene's _reference) and give the shader only the DIFFERENCE from it:
+// Perturbation. Iterating `z = z*z + c` directly in float32 stops resolving below a half-height of about 3e-4 (a
+// magnification of five thousand from 1.5). Instead one reference orbit is iterated at high precision (CPU, float64 -
+// see the scene's _reference) and the shader holds only the difference from it:
 //
 //     Z(n+1) = Z(n)^2 + C          <- the reference, computed once, uploaded as a texture
 //     d(n+1) = 2 Z(n) d(n) + d(n)^2 + dc
 //     z(n)   = Z(n) + d(n)
 //
-// `d` is tiny and float32 measures it RELATIVELY, so the pixel offset survives to depths
-// float32 could never hold absolutely. The reference orbit itself is stored as float32 and
-// that is fine: an error in Z perturbs `d` by a relative amount, never by an absolute one.
+// `d` is tiny and float32 measures it relatively, so the pixel offset survives to depths float32 cannot hold absolutely;
+// the reference itself is stored as float32, which is fine because an error in Z perturbs `d` by a relative amount.
 //
-// REBASING is the other half and without it perturbation is visibly broken. Where the true
-// orbit passes very close to zero, |z| falls far below |Z| and the linearization loses all
-// its significant digits - the classic "glitch blobs" of wrong color. The fix (Zhuoran's)
-// is two lines: whenever |z| < |d|, the current z IS a better delta than d, so restart the
-// reference from its beginning with d = z. It also covers running off the end of a reference
-// that escaped. The reference must therefore start at Z(0) = 0, which the Mandelbrot's does.
+// Rebasing (Zhuoran's) avoids glitch blobs where the true orbit passes near zero: whenever |z| < |d|, restart the
+// reference from its beginning with d = z. It also covers running off the end of a reference that escaped. The
+// reference must therefore start at Z(0) = 0, which the Mandelbrot's does.
 //
-// PERTURBATION IS FOR THE QUADRATIC MANDELBROT ONLY, deliberately. Every other family here
-// needs its own perturbation formula (the burning ship's absolute values do not linearize
-// cleanly, and rebasing a Julia set is invalid because its reference does not start at zero),
-// and those families do not need the depth: a Julia set is at its best over a few decades,
-// not a dozen. The scene knows which path it is on and clamps its zoom range to match, so
-// nothing here can ever reach a scale it cannot resolve. See the scene's ZOOM FLOOR.
+// Perturbation is for the quadratic Mandelbrot only: the other families need their own formula (the burning ship's
+// absolute values do not linearize, and rebasing a Julia set is invalid because its reference does not start at zero),
+// and they do not need the depth. The scene knows which path it is on and clamps its zoom range to match (its ZOOM FLOOR).
 //
-// WHAT THE SPECTRUM OF POSSIBILITIES IS MADE OF. Six FAMILIES, each a pre- or post-transform
-// on the same iteration (mandelbrot, julia, burning ship, tricorn, celtic, buffalo) times an
-// integer POWER, times six COLORINGS (smooth escape, stripe average, three orbit traps, and
-// exterior distance), times a palette ramp built on the CPU from a [Scheme], times an
-// interior treatment. The coloring is where most of the visual range actually lives - the
-// same set is a different picture entirely under a stripe average and under a circle trap.
+// The range of looks: six families (mandelbrot, julia, burning ship, tricorn, celtic, buffalo), each a pre- or
+// post-transform on the same iteration, times an integer power, six colorings (smooth escape, stripe average, three
+// orbit traps, exterior distance), a palette ramp built on the CPU from a [Scheme], and an interior treatment.
 
 // The reference orbit, one texel per iteration, (Zx, Zy) in RG float32. Bound only when
 // u_perturb is on; ignored otherwise.
@@ -84,8 +65,7 @@ uniform float u_vig = 0.25;
 
 vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
 
-// z^p for a small integer p, by repeated multiplication. p is a uniform, so every pixel
-// takes the same trip round this loop and it costs what a fixed power would.
+// z^p for a small integer p, by repeated multiplication (p is a uniform, so every pixel takes the same trip).
 vec2 cpowi(vec2 z, int p) {
 	vec2 r = z;
 	for (int i = 1; i < p; i++) {
@@ -108,9 +88,8 @@ vec2 fam_post(vec2 z) {
 	return z;
 }
 
-// Every orbit trap this file offers, as one distance. A trap colors a pixel by how CLOSE its
-// orbit ever came to a shape rather than by how long it took to leave, which turns the same
-// set into something structurally different to look at - webs and filigree instead of bands.
+// Every orbit trap this file offers, as one distance: a trap colors a pixel by how close its orbit came to a shape
+// rather than by how long it took to leave.
 float trap_of(vec2 z) {
 	if (u_color == 2) { return length(z - u_trap_p); }
 	if (u_color == 3) { return min(abs(z.x - u_trap_p.x), abs(z.y - u_trap_p.y)); }
@@ -121,9 +100,7 @@ float trap_of(vec2 z) {
 void fragment() {
 	vec4 fade = COLOR;                  // white quad x the scene's modulate: the Director's fade
 
-	// Pixel -> complex plane. u_half.y is the quad's vertical half-extent in unit fractions,
-	// so dividing by it makes u_scale mean exactly "half the frame's height", whatever the
-	// aspect ratio or the resolution.
+	// Pixel -> complex plane. Dividing by u_half.y makes u_scale mean half the frame's height at any aspect or resolution.
 	vec2 q = (UV - 0.5) * 2.0 * u_half;
 	float cr = cos(u_rot);
 	float sr = sin(u_rot);
@@ -135,9 +112,8 @@ void fragment() {
 	float stripe = 0.0;
 	float stripe_prev = 0.0;
 	float stripe_n = 0.0;
-	// Both of these cost real time inside the loop - an atan a step for the stripe, a length a
-	// step for the trap - and most colorings read neither. The tests are on uniforms, so every
-	// pixel takes the same branch and the cost is genuinely skipped rather than merely masked.
+	// Both cost time inside the loop (an atan a step for the stripe, a length a step for the trap) and most colorings
+	// read neither; the tests are on uniforms, so every pixel takes the same branch and the cost is skipped.
 	bool want_stripe = (u_color == 1);
 	bool want_trap = (u_color >= 2 && u_color <= 4) || (u_interior != 0);
 	float dist = 0.0;                   // exterior distance estimate
@@ -202,24 +178,19 @@ void fragment() {
 		}
 	}
 
-	// THE PALETTE COORDINATE, computed for EVERY pixel before anything branches on whether it
-	// escaped - because the next thing done with it is a screen-space derivative, and a
-	// derivative taken inside per-pixel control flow is undefined at exactly the boundary
-	// between the two branches, which here is the subject of the picture.
+	// The palette coordinate is computed for every pixel before anything branches on whether it escaped: it feeds a
+	// screen-space derivative, which is undefined inside per-pixel control flow.
 	float t = u_phase;
 	if (u_color == 1) {
-		// STRIPE AVERAGE: the running mean of a sinusoid of the orbit's angle. It draws the
-		// FLOW around the set rather than the bands of constant escape time, and it is the one
-		// coloring that finds structure inside what the smooth count renders as a flat sheet.
-		// Interpolated between the mean before the last step and after it by the fractional
-		// escape, which is what removes the band boundary the raw average would show.
+		// Stripe average: the running mean of a sinusoid of the orbit's angle; it draws the flow around the set and
+		// finds structure inside what the smooth count renders flat. Interpolated between the mean before and after
+		// the last step by the fractional escape, which removes the band boundary.
 		float avg = stripe / max(1.0, stripe_n);
 		float d = fract(it);
 		t += u_cycle * (0.35 * it + 22.0 * mix(stripe_prev, avg, d));
 	} else if (u_color == 5) {
-		// DISTANCE: how far the pixel is from the set, in units of its own pixel size. Near-set
-		// pixels go bright and everything else falls away, so the boundary draws as a filament
-		// rather than as a filled region.
+		// Distance: how far the pixel is from the set in units of its own pixel size; near-set pixels go bright, so
+		// the boundary draws as a filament.
 		t += u_cycle * 40.0 * clamp(log(1.0 + dist / max(1e-12, u_scale * 0.004)) * 0.32, 0.0, 1.0);
 	} else if (u_color >= 2) {
 		t += 1.4 * exp(-2.2 * min(trap, 8.0));
@@ -227,23 +198,15 @@ void fragment() {
 		t += u_cycle * it;
 	}
 
-	// ANTIALIASING, and the picture is unusable without it. Escape time is not a smooth field:
-	// approaching the boundary its bands crowd together without limit, so below some depth the
-	// palette repeats several times ACROSS ONE PIXEL and point-sampling it returns noise. Every
-	// naive fractal renderer shows this as sparkling confetti along the interesting edge - which
-	// is to say, over most of the frame.
-	//
-	// The fix is to sample the palette at the right MIP LEVEL rather than to supersample the
-	// fractal: the ramp is one dimensional, so the average of the colors a pixel spans IS a
-	// lower mip of it, and `fwidth` says how many texels that is. One texture read, no extra
-	// iterations, and it converges to the same answer a 16x supersample would.
+	// Antialiasing: near the boundary the palette repeats several times across one pixel, so point-sampling returns
+	// noise. The ramp is one dimensional, so the average of the colors a pixel spans is a lower mip of it and `fwidth`
+	// says how many texels that is: one texture read, no extra iterations, the same answer as a 16x supersample.
 	float lod = log2(max(1.0, fwidth(t) * 256.0));
 
 	vec3 col;
 	if (!escaped) {
-		// THE INTERIOR. Flat is the honest default and reads as a hole, which is right on a wide
-		// view; deep in, the frame can be mostly interior, and then how close the orbit came to
-		// the trap is the only structure there is - hence the other two.
+		// The interior: flat reads as a hole, right on a wide view; deep in, the frame can be mostly interior and
+		// how close the orbit came to the trap is the only structure there is (modes 1 and 2).
 		col = u_in_col;
 		if (u_interior == 1) {
 			col = u_in_col * (0.35 + 1.6 * exp(-3.0 * min(trap, 4.0)));

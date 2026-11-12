@@ -1,53 +1,43 @@
 extends CanvasLayer
 class_name Transport
 
-## Transport - play, pause, stop and the scrub rail along the bottom of the stage: ONE for every
-## mode (next/notes.md, "The transport"). It grew out of the Scrubber, Chrome's seek bar.
+## Transport - play, pause, stop and the scrub rail along the bottom of the stage: one for every mode
+## (next/notes.md, "The transport").
 ##
-## THE TRANSPORT BELONGS TO THE CLOCK. It shows exactly when the show is timed
-## ([method Spectrum.timed]) - something conducts: a reading, a synthesis take, a song, a clip in
-## Masking - and an untimed note has none. Every button goes through Spectrum's transport verbs, which call the
-## registered conductor's hooks or drive a plain file themselves, so a mode never builds its own
-## Play: four start/stop arrangements, two scrubbers and a Space that meant two things are what
-## this replaced. Auto and Manual gained a pause with it.
+## It belongs to the clock: it shows exactly when the show is timed ([method Spectrum.timed]; something
+## conducts: a reading, a synthesis take, a song, a clip in Masking) and an untimed note has none. Every
+## button goes through Spectrum's transport verbs, which call the registered conductor's hooks or drive a
+## plain file themselves, so a mode never builds its own Play.
 ##
-## SPACE IS PLAY/PAUSE EVERYWHERE, except while someone is typing; skipping a scene is N (main.gd).
-## Taken in _input, BEFORE the GUI, or a focused button would take it first - the Generative panel
-## learned that from its collapse button. ←/→ (shift: a minute) and Home seek, as they always did.
+## Space is play/pause everywhere except while someone is typing; skipping a scene is N (main.gd). It is
+## taken in _input, before the GUI, or a focused button would take it first. Left/right (shift: a minute)
+## and Home seek.
 ##
-## WHAT SEEKING DOES AND DOES NOT MOVE. Everything that READS the clock follows a seek exactly and
-## immediately: the baked spectrum is a timeline lookup, the karaoke overlay reads
-## `Spectrum.current.time - time_base`, the whole-show bookend fade is a function of position. The
-## [Director] is the exception - a SIMULATION, not a function of t - so after a seek the show
-## carries on from the scene that is up ([Echo] drifts it back toward the content). To reach a
-## SCENE, `--scene <name>` pins one. A live reading seeks by SENTENCE through its conductor's
-## `seek` (reading_panel.gd); a synthesis take cannot seek, and its rail does not take clicks.
+## Seeking: everything that reads the clock follows a seek exactly (the baked spectrum is a timeline
+## lookup, the karaoke overlay reads `Spectrum.current.time - time_base`, the bookend fade is a function
+## of position). The [Director] is a simulation, not a function of t, so after a seek the show carries on
+## from the scene that is up ([Echo] drifts it back toward the content); `--scene <name>` pins one. A live
+## reading seeks by sentence through its conductor's `seek` (reading_panel.gd); a synthesis take cannot
+## seek, and its rail does not take clicks.
 ##
-## WHAT IS BUFFERED IS SHOWN (2026-11-01, the user: "I would want to be able to SEE the buffered region available to me in the
-## timeline, like a buffered YouTube video would do it"): lighter than what is played, from the playhead as far as the show is made
-## ahead ([method Spectrum.ready_ahead]) - a reading's voice made, and a table's physics baked, while it plays and while it is paused.
+## What is buffered is shown, lighter than what is played, from the playhead as far as the show is made
+## ahead ([method Spectrum.ready_ahead]): a reading's voice made, a table's physics baked. Hovering the
+## rail shows the time under the pointer. It never appears in an export (the render process returns out
+## of main before Chrome is built).
 ##
-## IT NEVER APPEARS IN AN EXPORT, and not by a check: the render process returns out of main
-## before Chrome is built. HOVERING THE RAIL SHOWS THE TIME under the pointer, so a click can be
-## aimed.
+## The bottom-right row steps up for it: the rail's click zone reaches [constant HIT] px above it, so the
+## transport claims that room from Chrome ([method Chrome.claim_bottom], [method room]) while it is timed,
+## and nothing positions the row by a figure of its own. Change PAD, HIT or the rail's height and the row
+## follows.
 ##
-## THE ROW STEPS UP FOR IT (2026-10-09, reported as a repeat: "a half dozen times"). The rail runs
-## under the bottom-right row and its click zone reaches [constant HIT] px above it, so the row's
-## lower edge sat inside the zone - a click on a button's bottom edge seeked instead, and the two
-## drew a pixel apart. The transport is the one that knows its own reach ([method room]), so it
-## CLAIMS it from Chrome ([method Chrome.claim_bottom]) while it is timed, like any other surface
-## at the bottom edge; nothing positions the row by a figure of its own. Change PAD, HIT or the
-## rail's height and the row follows.
+## The note's timeline opens from here: whatever has a timeline for the note offers it ([method
+## offer_timeline]: a storyboard, an episode, a lesson, the words' marks), the highest rank standing is
+## the button's, and it shows even before Play. While one is open the rail steps aside (the editor's own
+## strip tracks the show and seeks it) and the buttons and time stay ([constant EDITORS]).
 ##
-## THE NOTE'S TIMELINE OPENS FROM HERE (the user, 2026-11-11: "it should just be a button next to the play/stop buttons,
-## everywhere"): whatever has a timeline for the note offers it ([method offer_timeline]: a storyboard, an episode, a lesson, the
-## words' marks), the highest rank standing is the button's, and the button shows even before Play. WHILE ONE IS OPEN THE RAIL STEPS
-## ASIDE ("I do not think we should have two timelines"): the editor's own strip tracks the show and seeks it, and the buttons and
-## the time stay ([constant EDITORS]).
-##
-## IT FADES WITH THE REST OF THE FURNITURE while a show plays alone (the group [constant Shell.FADES]: the shell sets its
-## root's alpha, and keeps its claim), and a pointer on the rail holds it up ([method Shell.hold_up]) - the rail is drawn,
-## not a control the shell could find under the pointer.
+## It fades with the rest of the furniture while a show plays alone (the group [constant Shell.FADES]),
+## and a pointer on the rail holds it up ([method Shell.hold_up]); the rail is drawn, not a control the
+## shell could find under the pointer.
 
 const BAR_H := 4.0                  # the resting rail, px
 const BAR_H_ACTIVE := 8.0           # while the pointer is over it
@@ -85,8 +75,8 @@ var _tl: Button                     # the timeline's button, beside Play
 
 
 func _ready() -> void:
-	# Above the subtitles (9) and the workspace (100) so it is never buried, below the feedback
-	# console (128) and the exporter (250), which are modal-ish and own the corner.
+	# Above the subtitles (9) and the workspace (100), below the feedback console (128) and the exporter
+	# (250), which own the corner.
 	layer = 120
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -124,9 +114,9 @@ func _ready() -> void:
 		_hover_x = -1.0)
 
 
-## [param who] OFFERS THE NOTE'S TIMELINE: [param toggle] opens or closes it, [param is_open] says whether it is, [param rank] decides
-## between two offers on one note (the words' marks 1, a storyboard 2, an episode or a lesson 3). Taken back by
-## [method withdraw_timeline], or by [param who] leaving.
+## [param who] offers the note's timeline: [param toggle] opens or closes it, [param is_open] says whether
+## it is, [param rank] decides between two offers on one note (the words' marks 1, a storyboard 2, an
+## episode or a lesson 3). Taken back by [method withdraw_timeline], or by [param who] leaving.
 static func offer_timeline(who: Object, rank: int, toggle: Callable, is_open: Callable, tip := "") -> void:
 	withdraw_timeline(who)
 	_offers.append({"who": weakref(who), "rank": rank, "toggle": toggle, "is_open": is_open, "tip": tip})
@@ -154,14 +144,14 @@ func editing() -> bool:
 	return is_inside_tree() and get_tree().get_first_node_in_group(EDITORS) != null
 
 
-## How much of the frame's bottom edge the transport takes while it shows: from the edge up past
-## the rail's click zone, with [constant CLEARANCE] to spare. Static so a gate can read it.
+## How much of the frame's bottom edge the transport takes while it shows: from the edge up past the
+## rail's click zone, with [constant CLEARANCE] to spare. Static so a gate can read it.
 static func room() -> float:
 	return PAD + HIT + CLEARANCE
 
 
-## Hold (or drop) the claim on the bottom of the frame that lifts Chrome's row above the rail. Only
-## the part beyond the row's own margin is asked for: the claim is an inset ON TOP of it.
+## Hold (or drop) the claim on the bottom of the frame that lifts Chrome's row above the rail. Only the
+## part beyond the row's own margin is asked for: the claim is an inset on top of it.
 func _claim_room(on: bool) -> void:
 	if on == _claimed:
 		return
@@ -208,11 +198,11 @@ func _process(delta: float) -> void:
 	_claim_room(want > 0.0)
 	_hold_up(want > 0.0 and (_dragging or _hover_x >= 0.0))
 	_shown = lerpf(_shown, want, 1.0 - exp(-FADE * delta))
-	# Snapped to zero only on the way OUT: a frame of a fraction of a millisecond (a headless run)
-	# eases in by less than the threshold, and snapping then kept the bar hidden for good.
+	# Snapped to zero only on the way out: a frame of a fraction of a millisecond (a headless run) eases
+	# in by less than the threshold, and snapping then kept the bar hidden.
 	if want == 0.0 and _shown < 0.004:
 		_shown = 0.0
-	# THE TIMELINE'S BUTTON stands whenever the note offers one, played or not
+	# the timeline's button stands whenever the note offers one, played or not
 	var offer := offered()
 	_root.visible = _shown > 0.0 or not offer.is_empty()
 	if not _root.visible:
@@ -226,8 +216,8 @@ func _process(delta: float) -> void:
 	for c in [_play, _stop, _label]:
 		(c as Control).visible = _shown > 0.0
 	var playing := Spectrum.transport_playing()
-	# THE EDIT DOT: a reading whose script changed after it began plays the old words until it
-	# is stopped and played again - the panel's Play button carried the same dot.
+	# The edit dot: a reading whose script changed after it began plays the old words until stopped and
+	# played again.
 	var stale := false
 	var sh: Variant = Spectrum.conductor().get("stale")
 	if sh is Callable and (sh as Callable).is_valid():
@@ -249,7 +239,7 @@ func _process(delta: float) -> void:
 	var t := Spectrum.scrub_position()
 	var total := maxf(0.0, Spectrum.scrub_length())
 	_label.text = "%s / %s" % [Clock.text(t), Clock.text(total)] if total > 0.0 else Clock.text(t)
-	# ...and while the show waits for what it draws to catch up ([method Spectrum.set_waiting]), says so: it is not paused
+	# ...and while the show waits for what it draws to catch up ([method Spectrum.set_waiting]), says so
 	if playing and Spectrum.waiting():
 		_label.text += "  · catching up"
 	_label.position = Vector2(r.position.x, r.position.y - 20.0)
@@ -282,9 +272,7 @@ func _input(event: InputEvent) -> void:
 			_seek_to(event.position.x)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo and not _typing():
-		# Arrow keys are the control that actually gets used while watching, because they need no
-		# aim. Taken in _input, BEFORE the GUI, or the focused control eats them first (in the
-		# Synthesis panel a row of sliders walked the focus instead of moving the playhead).
+	# Arrow keys need no aim. Taken in _input, before the GUI, or the focused control eats them first.
 		match event.keycode:
 			KEY_LEFT:
 				Spectrum.seek(Spectrum.scrub_position() - _step(event))
@@ -297,9 +285,8 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 
-## Whether [param event] is Space meant for the transport: plain Space, pressed (not held), and
-## nobody typing into [param focus]. Wherever else the focus is - a panel's collapse button took
-## Space for itself once, and Play stopped answering it (2026-10-05).
+## Whether [param event] is Space meant for the transport: plain Space, pressed (not held), and nobody
+## typing into [param focus].
 static func space_toggles(event: InputEvent, focus: Control) -> bool:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo or k.keycode != KEY_SPACE:
@@ -309,16 +296,14 @@ static func space_toggles(event: InputEvent, focus: Control) -> bool:
 	return not (focus is TextEdit or focus is LineEdit)
 
 
-## Is someone typing? Then Space, the arrows and Home are theirs, not the playhead's: a live
-## reading seeks by RESTARTING from a sentence, and a cursor key pressed in the script editor did
-## exactly that, silently, mid-sentence.
+## Is someone typing? Then Space, the arrows and Home are theirs: a live reading seeks by restarting from
+## a sentence, which a cursor key in the script editor would trigger mid-sentence.
 func _typing() -> bool:
 	var f := get_viewport().gui_get_focus_owner()
 	return f is TextEdit or f is LineEdit
 
 
-## 10 s normally, 60 s with shift - the difference between "I missed a word" and "that scene was
-## a couple of minutes back".
+## 10 s normally, 60 s with shift.
 func _step(event: InputEventKey) -> float:
 	return 60.0 if event.shift_pressed else 10.0
 
@@ -329,13 +314,13 @@ func _seek_to(x: float) -> void:
 	Spectrum.seek(f * Spectrum.scrub_length())
 
 
-## The clickable rail, in viewport coordinates. Inset from both edges, after room for the two
-## buttons, so a click meant for the very start or end cannot miss the control entirely.
+## The clickable rail, in viewport coordinates. Inset from both edges, after room for the two buttons, so
+## a click meant for the start or end cannot miss the control.
 func _rail() -> Rect2:
 	var vp := _root.get_viewport_rect().size
 	var margin := maxf(40.0, vp.x * 0.06)
-	# CLEAR OF AN OPEN SIDE PANEL: the bar starts to the right of it, and has the whole width
-	# back when the panel is hidden - it was drawing (and taking clicks) over the panel's rows
+	# Clear of an open side panel: the bar starts to the right of it and has the whole width back when
+	# the panel is hidden.
 	var left := margin
 	for n in get_tree().get_nodes_in_group(SidePanel.GROUP):
 		var c := n as Control
@@ -367,12 +352,12 @@ class Painter:
 		r.size.y = h
 		var total: float = Spectrum.scrub_length()
 		var f: float = clampf(Spectrum.scrub_position() / total, 0.0, 1.0) if total > 0.0 else 0.0
-		# A dark rail under a light fill, both translucent: the bar has to be readable over a
-		# white tidepool and a black void alike. Dimmer where it cannot be seeked (a take).
+	# A dark rail under a light fill, both translucent, so the bar reads over a white tidepool and a
+	# black void alike. Dimmer where it cannot be seeked (a take).
 		var fill := 0.85 if seekable else 0.4
 		draw_rect(r.grow(1.0), Color(0.02, 0.02, 0.03, 0.55 * a), true)
-		# WHAT IS BUFFERED ([method Spectrum.ready_ahead]): from the playhead as far as the show is made ahead - the voice, and what
-		# a table bakes while it is paused - lighter than what is played, as a video player shows what it has loaded
+	# What is buffered ([method Spectrum.ready_ahead]): from the playhead as far as the show is made
+	# ahead, lighter than what is played.
 		var ahead: float = Spectrum.ready_ahead() if total > 0.0 else -1.0
 		if ahead > 0.0:
 			var fb := clampf((Spectrum.scrub_position() + ahead) / total, f, 1.0)

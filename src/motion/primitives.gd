@@ -33,7 +33,7 @@ class Force:
 
 ## Constant downward pull, with an optional bouncy floor at a fixed altitude.
 class Gravity extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"g": {"label": "Pull", "type": "num", "default": 1.8,
@@ -66,7 +66,7 @@ class Gravity extends Force:
 
 ## Pull each particle back toward its home (recombine / cohesion).
 class Spring extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"k": {"label": "Stiffness", "type": "num", "default": 4.0,
@@ -82,7 +82,7 @@ class Spring extends Force:
 
 ## Velocity damping.
 class Drag extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"k": {"label": "Drag", "type": "num", "default": 0.9,
@@ -101,7 +101,7 @@ class Drag extends Force:
 ## center. `once` fires a single time (oneshot crumble); `period` adds a fallback
 ## tempo when the track has no detectable beats.
 class Scatter extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"period": {"label": "Fallback period", "type": "num", "default": 0.0,
@@ -147,7 +147,7 @@ class Scatter extends Force:
 ## A horizontal flow that varies with height and time (plus optional vertical
 ## lift), so detached particles drift as if in wind.
 class Wind extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"amp": {"label": "Strength", "type": "num", "default": 0.4,
@@ -180,7 +180,7 @@ class Wind extends Force:
 ## Kinematic: grow/shrink a sub-group coherently about its center (rocks
 ## breathing), driven by energy/beat plus a slow organic wobble.
 class Pulse extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"amp": {"label": "Loudness", "type": "num", "default": 0.3,
@@ -206,7 +206,7 @@ class Pulse extends Force:
 
 ## Kinematic: revolve every particle around the origin, optionally spinning each.
 class Orbit extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"rate": {"label": "Rate", "type": "num", "default": 0.2,
@@ -227,7 +227,7 @@ class Orbit extends Force:
 
 ## Kinematic: independent per-particle organic drift (decorrelated by noise).
 class Wobble extends Force:
-	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## What it can be told, as data (next/structure.md, step 16): each setting it reads, with
 	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
 	const FIELDS := {
 		"amp": {"label": "Distance", "type": "num", "default": 0.04,

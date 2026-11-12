@@ -9,9 +9,9 @@ Legend per entry: render kind, registered behaviors, lifecycle. `morph in/out` a
 
 ### `bloom` (canvas, drift, static)
 
-Bloom - elegant procedural rosette curves (the koch replacement).
+Bloom - elegant procedural rosette curves.
 
-The old snowflake hard-coded a star and stepped its recursion depth in integer jumps (which popped). This draws the shape from a *formula* instead: the superformula, whose symmetry and pinch are a handful of numbers, traces a single smooth closed contour that can be a star, a flower, a gear, or a soft polygon - and morphs continuously between them. A few are layered concentrically with a hue gradient and a gentle sway; the audio sharpens and brightens them (through a nonlinear curve) without ever stepping. Classy, fluid, different every seed.
+The shape comes from the superformula, whose symmetry and pinch are a handful of numbers: it traces one smooth closed contour that can be a star, a flower, a gear or a soft polygon, and morphs continuously between them. A few are layered concentrically with a hue gradient and a gentle sway; the audio sharpens and brightens them through a nonlinear curve without stepping.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -29,9 +29,9 @@ Source: [src/scenes/bloom.gd](../src/scenes/bloom.gd) (extends `GhostScene`)
 
 Cityscape - a skyline of rectangles that grows with the music.
 
-Layered rows of buildings; each building's height tracks a slice of the spectrum, so the skyline rises and falls with the track. Windows light up in a grid, flickering with the beat. Back layers are dimmer and shorter for depth. All axis-aligned rectangles - drawn static and upright, no triangulation.
+Layered rows of buildings; each building's height tracks a slice of the spectrum. Windows light up in a grid, flickering with the beat. Back layers are dimmer and shorter for depth. All axis-aligned rectangles, drawn static and upright.
 
-Which city it is varies per session: a `Scheme` mood colors the blocks and its accent lights the windows (so the lit grid contrasts the mass by construction, the way sodium windows sit against a blue-gray tower), and a sampled PROFILE decides the silhouette - a crowded low downtown, a handful of wide towers, or a broad flat sprawl.
+A `Scheme` mood colors the blocks and its accent lights the windows (so the lit grid contrasts the mass), and a sampled profile decides the silhouette: a crowded low downtown, a handful of wide towers, or a flat sprawl.
 
 layers: `rain`, `snow`, `stars`
 
@@ -49,13 +49,13 @@ Source: [src/scenes/cityscape.gd](../src/scenes/cityscape.gd) (extends `GhostSce
 
 ### `clockwork` (canvas, drift, static)
 
-Clockwork - meshing gears under forced restraint, dramatic by physics not by clipart.
+Clockwork - meshing gears under forced restraint: a real mechanism in the dark.
 
-Gears go cheesy the instant they become decoration: brass cogs, googly spinning, a rainbow steampunk sticker. This scene avoids all of that by being a real mechanism in the dark. Every gear is a luminous cog edge over a near-black body; the only color is one cold metal tint and the white specular that sweeps the lit teeth as the wheel turns. What sells it is the MOTION, and the motion is true:
+Every gear is a luminous cog edge over a near-black body; the only color is one cold metal tint and the white specular that sweeps the lit teeth as the wheel turns. The motion is true:
 
-meshing   - two gears mesh only if they share a module (tooth size); a child's tooth count is m = 2R, so a bigger wheel has more teeth. Meshed wheels counter-rotate with angular speed inversely proportional to teeth (omega_b = -omega_a * N_a/N_b), and their phases interlock tip-into-gap and STAY interlocked for all time (a rolling constraint, derived once). in unison - a group can also be a chorus: equal wheels, unmeshed, all turning at the same speed and direction - a hypnotic wall, not a meshed train. ticking   - a group can run an escapement: instead of turning smoothly it advances one tooth per tick, snapping on a slight underdamped spring (the clock recoil), locked to the beat and a fallback cadence. async     - several groups at once, each its own speed / direction / mode - and a vast slow wheel bigger than the frame arcing behind everything for depth.
+meshing   - two gears mesh only if they share a module (tooth size); a child's tooth count is m = 2R. Meshed wheels counter-rotate with angular speed inversely proportional to teeth (omega_b = -omega_a * N_a/N_b), and their phases interlock tip-into-gap for all time (a rolling constraint, derived once). in unison - a chorus: equal wheels, unmeshed, all turning at the same speed and direction. ticking   - an escapement: one tooth per tick, snapping on a slightly underdamped spring (the clock recoil), locked to the beat and a fallback cadence. async     - several groups at once, each with its own speed / direction / mode, and a vast slow wheel bigger than the frame arcing behind everything for depth.
 
-A scene's seed picks a mode (one big mechanism, scattered trains, a clock, a chorus) and then samples every constant, so it is never the same machine twice. Audio drives the turn rate, the tick, the glow, and the traveling specular highlight.
+The seed picks a mode (one big mechanism, scattered trains, a clock, a chorus) and samples every constant. Audio drives the turn rate, the tick, the glow and the traveling specular highlight.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -74,7 +74,7 @@ Source: [src/scenes/clockwork.gd](../src/scenes/clockwork.gd) (extends `GhostSce
 
 Embers - a drift of sparks that twinkle and flare, each on its own.
 
-A cloud of point particles riding the wind (per-particle, so it drifts and rises asynchronously) with a weak spring + drag so they wander about home instead of escaping. The life is in the *light*, and it is async by construction: each spark twinkles on its own phase, and a beat lights only the sparks whose own threshold it crosses (through a nonlinear `spike`), so a hit ripples a *subset* alight - not the whole cloud throbbing in unison. Size barely moves; color and brightness carry the audio. (The old version pulsed every spark's size with the global beat and burst them all from center together - one synchronized throb. Fixed.)
+A cloud of point particles riding the wind per particle (so it drifts and rises asynchronously) with a weak spring and drag so they wander about home. Each spark twinkles on its own phase, and a beat lights only the sparks whose own threshold it crosses (through a nonlinear `spike`), so a hit ripples a subset alight. Size barely moves; color and brightness carry the audio.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -93,7 +93,7 @@ Source: [src/scenes/embers.gd](../src/scenes/embers.gd) (extends `GhostScene`)
 
 Filaments - the procedural-growth primitive, showcased.
 
-One scene, three lives chosen by seed, all the same `Filament` mechanism on a curl-noise `Flow2D` field - proof that the primitive composes: lightning - arcs that strike on the beat: a jagged forked path floods in fast, blazes, then fades, and re-strikes on the next hit (slow-motion bolts). neural    - tendrils that creep from scattered seeds and slowly regrow, a living network coiling through the frame. thread    - long smooth threads flowing across on the flow, barely branching. Audio drives the strikes / growth surge and the brightness; nonlinearity (the flow's meander, the spike-shaped drive, the asymmetric flare) is what animates it. Each life draws its color from a `Scheme` mood in its own plausible set, and its count/weight from a density, so no two storms are the same storm.
+One scene, three lives chosen by seed, all the same `Filament` mechanism on a curl-noise `Flow2D` field: lightning - arcs that strike on the beat: a jagged forked path floods in fast, blazes, then fades, and re-strikes on the next hit. neural    - tendrils that creep from scattered seeds and slowly regrow, a network coiling through the frame. thread    - long smooth threads flowing across on the flow, barely branching. Audio drives the strikes / growth surge and the brightness; nonlinearity (the flow's meander, the spike-shaped drive, the asymmetric flare) animates it. Each life draws its color from a `Scheme` mood in its own plausible set, and its count/weight from a density.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -108,7 +108,7 @@ Source: [src/scenes/filaments.gd](../src/scenes/filaments.gd) (extends `GhostSce
 
 Fog lights - soft lights breathing under a drifting cloud cover.
 
-A few glowing orbs sit in the dark, each tied to a slice of the spectrum so it pulses with its own frequencies. Over them drift several big, low-alpha blobs - fog - that diffuse and occlude the lights as they pass. The result is atmospheric rather than graphic: light bleeding through cloud, the whole field swelling on the louder passages.
+A few glowing orbs sit in the dark, each tied to a slice of the spectrum so it pulses with its own frequencies. Over them drift several big, low-alpha blobs (fog) that diffuse and occlude the lights as they pass; the whole field swells on louder passages.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -125,11 +125,11 @@ Source: [src/scenes/fog_lights.gd](../src/scenes/fog_lights.gd) (extends `GhostS
 
 ### `furry` (canvas, drift, fluid)
 
-Furry - dense, thick, long tufts of fur/hair, magnetized rather than random.
+Furry - dense, long tufts of fur, magnetized rather than random.
 
-Built on `Filament`'s new "fur" variant: long, mostly-unbranched strands whose lean is dominated by a per-tuft BIAS direction (not the free-wandering flow_follow root/tendril growth uses). That bias is computed per tuft from two procedural point sets - a few bright spots (attractors) and a few dense patches of the OPPOSING hue (repulsors, at fposmod(hue+0.5, 1.0) - ghost's standard complement idiom) - so red fur visibly recoils from the densest dark blue and leans toward the nearest light. No pixel readback: this codebase never samples its own rendered canvas per frame (the two existing readback call sites are both one-shot/throttled, not per-frame), so brightness/opposing-color are their own small procedural point sets, audio-driven, EMA-tracked - the same substrate every other weather/growth scene in the Layer registry uses, not something sampled from pixels.
+Built on `Filament`'s "fur" variant: long, mostly unbranched strands whose lean is dominated by a per-tuft bias direction. The bias is computed per tuft from two procedural point sets: a few bright spots (attractors) and a few dense patches of the opposing hue (repulsors, at fposmod(hue+0.5, 1.0)), so red fur recoils from the densest dark blue and leans toward the nearest light. No pixel readback: the points are their own small audio-driven, EMA-tracked sets.
 
-Each tuft is grown ONCE, in LOCAL space (root at the origin), then swayed/leaned at DRAW time via draw_set_transform - a rotation around its own root, not a rebuild of the strand data. That's what lets 150+ long strands recompute their lean every frame cheaply: only the transform changes, never the segment list.
+Each tuft is grown once in local space (root at the origin), then swayed and leaned at draw time via draw_set_transform (a rotation around its own root), so 150+ strands recompute their lean every frame by changing only the transform, never the segment list.
 
 layers: `bed`
 
@@ -139,9 +139,9 @@ Source: [src/scenes/furry.gd](../src/scenes/furry.gd) (extends `GhostScene`)
 
 Gaussian landscape - rolling terrain with fog in the valleys.
 
-A heightfield built from a handful of Gaussian bumps, drawn as rows of filled ridgelines receding toward a horizon (near rows occlude far ones). Each bump's height is driven by a slice of the spectrum, so peaks rise and fall with the music. Over the low ground sits a translucent fog whose top edge undulates and scrolls sideways - the valleys breathing in a gentle wind while the peaks stay clear above it.
+A heightfield built from a handful of Gaussian bumps, drawn as rows of filled ridgelines receding toward a horizon (near rows occlude far ones). Each bump's height is driven by a slice of the spectrum. Over the low ground sits a translucent fog whose top edge undulates and scrolls sideways.
 
-The land is not one shape or one color: a `Scheme` mood colors the ridgelines (with the fog and the sky layers on its accent, so the weather belongs to the same evening), and a sampled RELIEF picks the landform - broad dunes, rolling hills, a crowded range of narrow ridges, or a couple of massifs - along with how finely it is drawn.
+A `Scheme` mood colors the ridgelines (fog and sky layers take its accent), and a sampled relief picks the landform (broad dunes, rolling hills, a crowded range of narrow ridges, or a couple of massifs) and how finely it is drawn.
 
 layers: `snow`, `stars`
 
@@ -162,7 +162,7 @@ Source: [src/scenes/gaussian_landscape.gd](../src/scenes/gaussian_landscape.gd) 
 
 Harmonic lattice - a grid of cells that breathe with the spectrum.
 
-A rows x cols lattice. Each cell samples the spectrum by its column (low bands left, high right) and a traveling wave whose phase is pushed by the bass, so energy visibly sweeps across the grid. Cells scale, spin, and shift hue. The field is overscanned so the view's tilt and drift never expose the edges.
+A rows x cols lattice. Each cell samples the spectrum by its column (low bands left, high right) and a traveling wave whose phase is pushed by the bass, so energy sweeps across the grid. Cells scale, spin and shift hue. The field is overscanned so the view's tilt and drift never expose the edges.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -182,9 +182,9 @@ Source: [src/scenes/harmonic_lattice.gd](../src/scenes/harmonic_lattice.gd) (ext
 
 Metropolis - a city of thousands of blocks growing over a countryside.
 
-A large isometric landscape: Gaussian hills carry a grid of blocks whose heights and colors are driven by a `Swarm` field - no per-block scripting. By seed: growth - development creeps outward from a few seeds, the city spreading across the hills over time, breathing with the music. pulse  - the city is already built; color pulses are injected on the beat and ripple outward across the blocks as expanding fronts. A second WAVE swarm always carries the color pulses. Fog pools in the low ground. The grid is drawn far larger than the frame, so it runs off every edge.
+A large isometric landscape: Gaussian hills carry a grid of blocks whose heights and colors are driven by a `Swarm` field. By seed: growth - development creeps outward from a few seeds, the city spreading across the hills. pulse  - the city is already built; color pulses are injected on the beat and ripple outward as fronts. A second WAVE swarm always carries the color pulses. Fog pools in the low ground. The grid is drawn far larger than the frame, so it runs off every edge.
 
-What KIND of place it is is one roll, not several. The hue was already free here, but the character never was: always a 48x48 grid on the same rolling hills at the same mid saturation, so every seed built the same city in a different color. A `CHARACTER` now decides palette, block size, how flat the land is, how tall the buildings stand and how broad the hue districts are together - because those are the same decision. Ground takes the `Scheme`'s base and the buildings its counter hue, which is what the old "+0.3 to 0.6" offset was reaching for.
+What kind of place it is is one roll: a `CHARACTER` decides palette, block size, how flat the land is, how tall the buildings stand and how broad the hue districts are together. Ground takes the `Scheme`'s base and the buildings its counter hue.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -198,9 +198,9 @@ Source: [src/scenes/metropolis.gd](../src/scenes/metropolis.gd) (extends `GhostS
 
 Planes - the spectrum as a ring of real planes under a forced-perspective camera.
 
-A deliberate echo of `spectrum_ring`: the bars are genuine `Plane3D` quads standing on a ground plane in a circle, with an optional `Mesh3D` body tumbling at the center, projected and depth-sorted through one `Lens3D`. Nearly everything is sampled per scene so it is never the same shot twice: the lens / orbit (distance, pitch, yaw direction and speed), the ring radius and bar geometry, and the central body - which may be a rock, a hybrid, a platonic solid, or nothing at all, and is kept small so it no longer dominates the frame. It can also bleed a faint sky (stars / fog) behind the ring, composed from the shared `Layer` registry.
+A deliberate echo of `spectrum_ring`: the bars are `Plane3D` quads standing on a ground plane in a circle, with an optional `Mesh3D` body tumbling at the center, projected and depth-sorted through one `Lens3D`. Sampled per scene: the lens and orbit (distance, pitch, yaw direction and speed), the ring radius and bar geometry, and the central body (a rock, a hybrid, a platonic solid, or nothing), kept small. It can bleed a faint sky (stars / fog) behind the ring from the shared `Layer` registry.
 
-The ring's LAYOUT is sampled too (`RINGS`): even, woven, stepped or scalloped, so alternate panels can step in and out of the circle or stand at different heights instead of the one flat band of identical panels it always was, and the panels themselves run from tall blades to stubby tiles. Color comes from one `Scheme` - the band grades from its base hue to its accent round the ring, the core body wears the accent, and the sky behind agrees instead of being fixed blue.
+The ring's layout is sampled too (`RINGS`): even, woven, stepped or scalloped, and panels run from tall blades to stubby tiles. Color comes from one `Scheme`: the band grades from its base hue to its accent round the ring, the core wears the accent, and the sky agrees.
 
 layers: `fog`, `stars`
 
@@ -221,9 +221,9 @@ Source: [src/scenes/planes.gd](../src/scenes/planes.gd) (extends `Scene3D`)
 
 Rocks - faceted stones in real 3D, sampled from a small material/geometry spec.
 
-Each rock is a `Mesh3D` rotated by a genuine 3D basis and drawn depth-sorted and shaded. The look is a *sampled configuration* of composable layers rather than a fixed scene: a geometry family, a surface texture, a material (gloss / roughness), and - sometimes - a partial **wireframe reveal**. Style (seeded) sets the character: plain   - smooth rounded mass, satin sheen. rough   - craggy boulder, matte, dark facet relief. crystal - faceted gem, bright edges, glossy. hybrid  - a geometric base (cube / octa / tetra) with rock crusting over part of it (gaussian-masked growth) - part machined, part grown. Independently, any rock may be **partially revealed**: a gaussian alpha mask punches holes in its coat (a sampled masking threshold, sparse bare patches through to half-and-half) so the wireframe lattice shows through - half-realistic, half-skeletal. Mode (seeded) sets the motion: `pulse` (breathe), `explode` (faces burst out on the beat), `crumble` (faces push apart once, then the scene ends).
+Each rock is a `Mesh3D` rotated by a 3D basis, depth-sorted and shaded. The look is a sampled configuration of composable layers: a geometry family, a surface texture, a material (gloss, roughness) and sometimes a partial wireframe reveal. The seeded style sets the character: plain   - smooth rounded mass, satin sheen. rough   - craggy boulder, matte, dark facet relief. crystal - faceted gem, bright edges, glossy. hybrid  - a geometric base (cube / octa / tetra) with rock crusting over part of it (gaussian-masked growth). Independently, a rock may be partially revealed: a gaussian alpha mask punches holes in its coat (a sampled threshold, from sparse bare patches to half-and-half) so the wireframe lattice shows through. The seeded mode sets the motion: `pulse` (breathe), `explode` (faces burst out on the beat), `crumble` (faces push apart once, then the scene ends).
 
-Nothing here is one fixed constant per style: the material, responsiveness, and reveal are all *sampled per rock* around the style's center, so two rocks of a kind still differ - every computation perturbed by sampling. Color is a `Scheme` mood chosen to suit the style (matte stone gets the earthy moods, the gem gets the jewel ones), and the stones either share a tight hue FAMILY or spread base-to-accent across the set. The composition is sampled too - a couple of colossal boulders, a resting cluster, or a wide scatter of scree - so the same subject is framed differently each time it is seeded.
+Material, responsiveness and reveal are sampled per rock around the style's center. Color is a `Scheme` mood suited to the style (matte stone gets earthy moods, the gem jewel ones); the stones share a tight hue family or spread base-to-accent. The composition is sampled too: a couple of colossal boulders, a resting cluster, or a wide scatter of scree.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -237,13 +237,13 @@ Source: [src/scenes/rocks.gd](../src/scenes/rocks.gd) (extends `GhostScene`)
 
 Rooted growth - crawling roots and tendrils that spread from a seed.
 
-Built on the `Filament` primitive: each root follows a curl-noise `Flow2D` field so it meanders and curls, branches into trunk-and-limb structure, tapers, and is revealed along a growth front so it *crawls* outward rather than appearing whole.
+Built on the `Filament` primitive: each root follows a curl-noise `Flow2D` field so it meanders, branches into trunk-and-limb structure, tapers, and is revealed along a growth front so it crawls outward.
 
-Roots emerge the way real ones do: mostly as **laterals** sprouting from a point partway along an *existing* root (at an angle to that parent), only occasionally as a fresh taproot from the central seed. So the system spreads from many points across the branches instead of every strand radiating from one origin.
+Roots emerge mostly as laterals from a point partway along an existing root, occasionally as a taproot from the central seed, so the system spreads from many points.
 
-Each root runs an independent **lifecycle**, staggered and rate-varied so the field is asynchronous (no uniform bands): it grows slowly to full, holds, then **retires** gracefully - either FADING out (alpha to zero) or REWINDING (the front retracts back toward its attachment point, collapsing inward) - before regrowing from a fresh site. It never clears and pops back in. Audio surges the growth front (a nonlinear `spike`, so beats lunge it and quiet barely moves) and carries color and glow.
+Each root runs an independent lifecycle, staggered and rate-varied (no uniform bands): it grows slowly to full, holds, then retires - fading out (alpha to zero) or rewinding (the front retracts toward its attachment point) - before regrowing from a fresh site. Audio surges the growth front (a nonlinear `spike`: beats lunge, quiet barely moves) and carries color and glow.
 
-Neither the color nor the silhouette is fixed. A SEASON is the first thing the seed chooses, and it bundles everything a season actually changes - the `Scheme` moods on offer, how dense the growth is, how thick and how long and how branched, how hard the color turns from base to tip, and what is in the air. Spring is pale and dense and fine, summer lush and deep, autumn sparse and bare and hard-turning, winter a few thick structural limbs with the saturation drained out. Within the season a growth HABIT sets the form, from a few long thick taproots through a dense fine mat to sparse long creepers.
+The seed first chooses a season, which bundles what a season changes: the `Scheme` moods on offer, density, thickness, length, branching, how hard color turns base to tip, and what is in the air. Spring is pale, dense and fine; summer lush and deep; autumn sparse, bare and hard-turning; winter a few thick limbs with the saturation drained. Within the season a growth habit sets the form, from a few long taproots through a dense fine mat to sparse creepers.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -258,7 +258,7 @@ Source: [src/scenes/rooted_growth.gd](../src/scenes/rooted_growth.gd) (extends `
 
 Shatter glass - a real pane of glass, shattering in true 3D.
 
-A flat pane stands in space and is seen at a three-quarter angle through the `Lens3D` camera (not pinned flat to the screen). On a beat it fractures into irregular angular shards - `Geo.fracture` cracks that radiate from an impact, not pizza slices - and the shards burst off the plane and **tumble through space**, each spiraling on its own 3D axis, before easing back together (loop) or drifting to rest (oneshot). Real depth: a shard in front occludes one behind, and the glass catches the light by how each shard faces the camera. The old version was flat shards sliding in the 2D plane; this one is dimensional.
+A flat pane stands in space and is seen at a three-quarter angle through the `Lens3D` camera. On a beat it fractures into irregular angular shards (`Geo.fracture` cracks radiating from an impact) that burst off the plane and tumble through space, each on its own 3D axis, before easing back together (loop) or drifting to rest (oneshot). A shard in front occludes one behind, and the glass catches the light by how each shard faces the camera.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -276,9 +276,7 @@ Source: [src/scenes/shatter_glass.gd](../src/scenes/shatter_glass.gd) (extends `
 
 Spectrum ring - the spectrum bent into a circle.
 
-The whole band array is laid around a ring; each band pushes a bar outward by its energy. The ring breathes with energy, spins at a seeded rate, flashes on the beat, and the whole frame drifts/tilts on its own through the view.
-
-The hue used to be a bare `randf()` - varied, but unrelated to anything, so the bars swept an arbitrary span from it. It now runs base -> accent along a `Scheme` mood, which also sets the ring's saturation and how bright it sits. Two other rolls decide what the ring IS: how a bar is drawn, and which way it grows off the rim - the same audio mapping, three silhouettes.
+The whole band array is laid around a ring; each band pushes a bar outward by its energy. The ring breathes with energy, spins at a seeded rate, flashes on the beat, and the frame drifts/tilts through the view. The hue runs base -> accent along a `Scheme` mood, which also sets saturation and brightness. Two rolls decide what the ring is: how a bar is drawn and which way it grows off the rim - the same audio mapping, several silhouettes.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -298,9 +296,9 @@ Source: [src/scenes/spectrum_ring.gd](../src/scenes/spectrum_ring.gd) (extends `
 
 Strata - stacked waveform planes receding into depth.
 
-Horizontal planes are stacked back-to-front; each is a waveform whose height comes from a slice of the spectrum plus a traveling sine, and each is filled down to the foot of the frame as a translucent sheet. Nearer planes sit over farther ones, and the view's tilt skews the whole stack, so it reads as planes of light lying in space. Far planes scroll slower than near ones - parallax.
+Horizontal planes are stacked back-to-front; each is a waveform whose height comes from a slice of the spectrum plus a traveling sine, filled down to the foot of the frame as a translucent sheet. Nearer planes sit over farther ones and the view's tilt skews the stack, so it reads as planes of light in space. Far planes scroll slower than near ones (parallax).
 
-By seed the stack is a few big slabs or a deep receding pile (`STACKS`), each plane's edge follows one of three laws (`PROFILES`) - swells, ridgelines or stepped terraces - and the whole thing is colored from one `Scheme`, depth carrying the palette from its base hue to its accent.
+By seed the stack is a few big slabs or a deep receding pile (`STACKS`), each plane's edge follows one of three laws (`PROFILES`) - swells, ridgelines or stepped terraces - and one `Scheme` colors it, depth carrying the palette from base hue to accent.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -318,7 +316,7 @@ Source: [src/scenes/strata.gd](../src/scenes/strata.gd) (extends `GhostScene`)
 
 Voxel blocks - an isometric heightfield equalizer.
 
-A grid of iso cubes whose stack height tracks the spectrum, a 3D equalizer terrain. By seed it is one of three scales (see `SCALES`): plot    - a small grid held centered in the frame (the original look). terrace - a mid grid that just overflows the frame, stacks running tall. city    - thousands of blocks spilling off every edge, the camera down among them like a skyline. City blocks carry a structural base height so the skyline stands even in quiet, the spectrum bouncing on top. The iso squash and the color scheme are sampled too, so the same grid can be looked down on steeply or almost edge-on, in any of `Scheme`'s moods. Whichever it is, an `Activation` decides who moves: with sparsity some columns stay rooted (a still skyline) while others rise and fall - so it is not one uniform wall of motion (the "some could stay stationary" ask). Three flat faces per cube, painted back-to-front; always at least a one-block floor so it reads in silence.
+A grid of iso cubes whose stack height tracks the spectrum, a 3D equalizer terrain. By seed it is one of three scales (see `SCALES`): plot    - a small grid held centered in the frame. terrace - a mid grid that just overflows the frame, stacks running tall. city    - thousands of blocks spilling off every edge, the camera down among them like a skyline. City blocks carry a structural base height so the skyline stands in quiet, the spectrum bouncing on top. The iso squash and the color scheme are sampled too, in any of `Scheme`'s moods. An `Activation` decides who moves: with sparsity some columns stay rooted while others rise and fall. Three flat faces per cube, painted back-to-front; always at least a one-block floor so it reads in silence.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -336,9 +334,9 @@ Source: [src/scenes/voxel_blocks.gd](../src/scenes/voxel_blocks.gd) (extends `Gh
 
 Wire solid - a translucent polyhedron on the unified 3D path.
 
-A true cube / octahedron / tetrahedron / icosahedron (`Mesh3D`) projected through a `Lens3D`: perspective, depth sorted, faces faint and edges bright so you see *through* it. Because it is genuinely 3D it rotates slowly and continuously - that is how the volume reveals itself. Migrated off the old centered draw_shaded projector onto `Scene3D`: the body now lives in a camera world (it could share the frame with planes or other bodies), and the lens eases in instead of a fixed focal. Rotation is gentle; energy only nudges its pace, and audio drives the glow.
+A true cube / octahedron / tetrahedron / icosahedron (`Mesh3D`) projected through a `Lens3D`: perspective, depth sorted, faces faint and edges bright so you see through it. It rotates slowly and continuously, which is how the volume reveals itself; energy only nudges the pace and audio drives the glow. The body lives in a `Scene3D` camera world, and the lens eases in.
 
-The hue was already free, but everything AROUND it was not: the solid was always a regular polyhedron at 1:1:1 proportions and always mid-saturation, so every seed produced the same object in a different color. Now a `SOLID` rolls the form and the proportions together, and a `Scheme` supplies the saturation as well as the hue - which is what makes an ash body read as smoked glass and a toxic one as acid, rather than both reading as "a colored shape".
+A `SOLID` rolls the form and the proportions together, and a `Scheme` supplies the saturation as well as the hue (an ash body reads as smoked glass, a toxic one as acid).
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -357,7 +355,7 @@ Weather & atmosphere - composed from the shared Layer registry (see src/scene_ki
 
 Aurora - slow curtains of light over a starlit night.
 
-Wavy ribbons drift and undulate, each tied to a band of the spectrum so the curtains brighten and ripple with the music, hung over a faint starfield and a dark bed. The northern-lights corner. `bed` + `stars` + `aurora`, in whichever of the sky's own colors the seed draws - and as broad drapes, fine ribbons, or a doubled curtain.
+Wavy ribbons drift and undulate, each tied to a band of the spectrum so the curtains brighten and ripple with the music, hung over a faint starfield and a dark bed (`bed` + `stars` + `aurora`), as broad drapes, fine ribbons or a doubled curtain.
 
 layers: `aurora`, `bed`, `stars`
 
@@ -376,7 +374,7 @@ Source: [src/scenes/aurora.gd](../src/scenes/aurora.gd) (extends `GhostScene`)
 
 Bubbles - an underwater drift of rising bubbles in colored depths.
 
-Bubbles wobble upward with rim highlights, fine suspended particles hang in the water, and a bed with slow color pools gives the sense of light filtering down from above. The water's color comes from a `Scheme` and its CHARACTER from a column below, so a mineral spring and a black trench are different places rather than the same picture recolored. `bed` (+ `surface`) + `kelp` + `dust` + `bubbles`.
+Bubbles wobble upward with rim highlights, fine particles hang in the water, and a bed with slow color pools suggests light filtering down. The water's color comes from a `Scheme` and its character from a column below. `bed` (+ `surface`) + `kelp` + `dust` + `bubbles`.
 
 layers: `bed`, `bubbles`, `dust`, `kelp`, `surface`
 
@@ -393,9 +391,9 @@ Source: [src/scenes/bubbles.gd](../src/scenes/bubbles.gd) (extends `GhostScene`)
 
 ### `clouds` (canvas, drift, static)
 
-Clouds - REAL 3D cloud masses drifting across the sky, lit by the sun.
+Clouds - 3D cloud masses drifting across the sky, lit by the sun.
 
-A colored sky bed, sometimes stars behind, sometimes haze rolling in front, and a `Volumetric` cloudscape: soft gaussian puffs placed in 3D, self-shadowed (bright sunlit tops, darker undersides) and drifting/billowing over time. The seed picks a WEATHER first and the weather decides both which moods the sky may be drawn from and what else is in the frame. `bed` + `stars?` + `volumetric` + `haze?`.
+A colored sky bed, sometimes stars behind, sometimes haze in front, and a `Volumetric` cloudscape: soft gaussian puffs placed in 3D, self-shadowed (bright sunlit tops, darker undersides) and billowing over time. The seed picks a weather first, which decides both the moods the sky may be drawn from and what else is in the frame. `bed` + `stars?` + `volumetric` + `haze?`.
 
 layers: `bed`, `fog`, `stars`, `volumetric`
 
@@ -417,7 +415,7 @@ Fire - a living flame attuned to the harmonics.
 
 One GPU temperature field (see `Layer.Fire` / shaders/flame.gdshader): heat sources along the bed, each listening to its own harmonic band (bass at the center, treble at the rim), raise columns that rising turbulence carves into licks. CPU sparks crackle out of whichever region is roaring, and smoke sometimes hazes the top. Quiet passages sit as embers; powerful ones send columns up the frame.
 
-The flame's own colors are the shader's (a real fire is the temperature of its fuel), so what the seed varies here is the HEARTH around it: the ambient the fire burns in, how wide it is laid, and how much smoke it throws.
+The flame's colors are the shader's (the temperature of its fuel), so the seed varies the hearth around it: the ambient, how wide it is laid, and how much smoke it throws.
 
 layers: `bed`, `fire`, `fog`
 
@@ -434,7 +432,7 @@ Source: [src/scenes/fire.gd](../src/scenes/fire.gd) (extends `GhostScene`)
 
 Fireflies - a dusk meadow sparkling with wandering lights.
 
-Motes drift along a curl-noise breeze and blink on their own phase; a beat lights the subset whose threshold it crosses (the embers trick), so the field twinkles in ripples rather than in unison. The night comes from a `Scheme` and the lights from that scheme's accent, so the pair is harmonious whichever night is drawn - a warm amber over teal dusk, a cold bioluminescent green over indigo. `bed` + `fog` + `dust` + `fireflies`.
+Motes drift along a curl-noise breeze and blink on their own phase; a beat lights the subset whose threshold it crosses, so the field twinkles in ripples. The night comes from a `Scheme` and the lights from its accent. `bed` + `fog` + `dust` + `fireflies`.
 
 layers: `bed`, `dust`, `fireflies`, `fog`
 
@@ -452,7 +450,7 @@ Source: [src/scenes/fireflies.gd](../src/scenes/fireflies.gd) (extends `GhostSce
 
 Fog bank - rolling colored fog, light glowing from within.
 
-The explicit "rolling fog with colors underneath / inside" idea: a rich color bed with slow pools breathing on the spectrum, then several fog layers of different tint and speed rolling over and through it, so the color bleeds up through the cloud. The bank lurches on the beat and coasts down (velocity + decay, not a uniform drift). `bed` + stacked `fog` layers - atmosphere from pure composition.
+A rich color bed with slow pools breathing on the spectrum, under several fog layers of different tint and speed rolling over it, so the color bleeds up through the cloud. The bank lurches on the beat and coasts down (velocity + decay). `bed` + stacked `fog` layers.
 
 layers: `bed`, `fog`
 
@@ -467,7 +465,7 @@ Source: [src/scenes/fog_bank.gd](../src/scenes/fog_bank.gd) (extends `GhostScene
 
 ### `fog_volume` (canvas, drift)
 
-Fog volume - REAL 3D fog: a low, wide bank of soft gaussian puffs receding into depth, lit volumetrically (a brighter sunward edge fading into a dim core) and slowly drifting. A genuine haze with simulated dynamics, not a flat 2D wash. `bed` + `volumetric` (fog mode), and depending on the AIR the seed draws: stars above it, or 2D sheets rolling through it.
+Fog volume - 3D fog: a low, wide bank of soft gaussian puffs receding into depth, lit volumetrically (a brighter sunward edge fading into a dim core) and slowly drifting. `bed` + `volumetric` (fog mode), and depending on the air the seed draws: stars above it, or 2D sheets rolling through it.
 
 layers: `bed`, `fog`, `stars`, `volumetric`
 
@@ -484,7 +482,7 @@ Source: [src/scenes/fog_volume.gd](../src/scenes/fog_volume.gd) (extends `GhostS
 
 Motes - dust adrift in a shaft of light.
 
-The quietest scene: light cuts the frame and countless fine motes hang and turn in it on a slow curl-noise current, brightening as they cross the beam. The color of the light is a `Scheme` - late sun, a cold north window, green light under leaves - and the room's shadow is that scheme's accent, so the two agree. `bed` + `fog` + a `dust` layer.
+The quietest scene: light cuts the frame and countless fine motes hang and turn in it on a slow curl-noise current, brightening as they cross the beam. The light's color is a `Scheme` and the room's shadow is that scheme's accent. `bed` + `fog` + a `dust` layer.
 
 layers: `bed`, `dust`, `fog`
 
@@ -502,7 +500,7 @@ Source: [src/scenes/motes.gd](../src/scenes/motes.gd) (extends `GhostScene`)
 
 Petals - blossom, leaves or ash drifting down on a soft breeze.
 
-Flat petals tumble (in-plane spin + flutter, the flat-subject discipline) as they fall, riding a curl-noise breeze, with fine dust hanging in the light. The seed picks the FALL first - cherry blossom, autumn leaves, spring green, or ash coming down over a burnt ground - and that decides the palette, how many are in the air, how heavily they drop, whether a sunbeam reaches in, and whether a second tree is shedding alongside the first. `bed` + `dust` + `petals` (+ a second `petals`, + `veil`).
+Flat petals tumble (in-plane spin and flutter) as they fall on a curl-noise breeze, with fine dust hanging in the light. The seed picks the fall - cherry blossom, autumn leaves, spring green, or ash over burnt ground - which decides the palette, the count in the air, how heavily they drop, whether a sunbeam reaches in and whether a second tree sheds alongside. Layers: `bed` + `dust` + `petals` (+ a second `petals`, + `veil`).
 
 layers: `bed`, `dust`, `petals`, `veil`
 
@@ -521,7 +519,7 @@ Source: [src/scenes/petals.gd](../src/scenes/petals.gd) (extends `GhostScene`)
 
 Rainfall - slanting rain over a brooding sky, fog rolling through it.
 
-Fast streaks fall at a wind-blown slant whose angle sways with the bass; a low color bed and drifting fog give it weather and depth. Density and slant ride the audio, so a loud passage is a downpour. The seed picks the STORM first - hanging mist, drizzle, steady rain, downpour, or rain in a lit street at night - and the storm decides its own palette along with its density. `bed` + `fog` + `rain` + `veil` (+ `flare`).
+Fast streaks fall at a wind-blown slant whose angle sways with the bass; a low color bed and drifting fog give weather and depth. Density and slant ride the audio, so a loud passage is a downpour. The seed picks the storm first - hanging mist, drizzle, steady rain, downpour, or rain in a lit street at night - which decides the palette and density. Layers: `bed` + `fog` + `rain` + `veil` (+ `flare`).
 
 layers: `bed`, `flare`, `fog`, `rain`, `veil`
 
@@ -538,7 +536,7 @@ Source: [src/scenes/rainfall.gd](../src/scenes/rainfall.gd) (extends `GhostScene
 
 Snowfall - a quiet field of falling snow over a soft color bed.
 
-The atmospheric weather scene (distinct from `snowflakes`, the hero crystal field): flakes drift down and gust sideways with the treble over a gradient that breathes with the music. The seed picks the KIND of snow first - fine powder, fat lazy flurry, a driven blizzard, a still hard frost - and that decides how many flakes there are, how big, how fast they fall and how many of them crisp into six-fold dendrites, so the silhouette changes with the weather and not just the tint. Pure component composition - `bed` + `snow` (+ `volumetric` fog, + `veil`) from the `Layer` registry.
+The atmospheric weather scene (distinct from `snowflakes`, the hero crystal field): flakes drift down and gust sideways with the treble over a gradient that breathes with the music. The seed picks the kind of snow first - fine powder, fat lazy flurry, driven blizzard, still hard frost - which decides flake count, size, fall speed and how many crisp into six-fold dendrites. Layers: `bed` + `snow` (+ `volumetric` fog, + `veil`) from the `Layer` registry.
 
 layers: `bed`, `snow`, `veil`, `volumetric`
 
@@ -555,7 +553,7 @@ Source: [src/scenes/snowfall.gd](../src/scenes/snowfall.gd) (extends `GhostScene
 
 Snowflakes - a field of several dozen crystal dendrites, restored and multiplied.
 
-The hero crystal scene (distinct from `snowfall`, the soft atmospheric one). The old single hard-coded Koch flake is gone; this is the elegant-procedural answer: dozens of six-fold dendrites, each generated with sampled branch geometry (`Layer.draw_flake`) so no two are alike, in varied sizes across a cool bed. Motion follows the flat-subject discipline (in-plane spin + gentle sway, never fake depth): every flake turns on its *own* signed angular velocity, varied in direction and speed, so the field is organic rather than locked in lockstep. Mode (by seed) sets only the translation - a stationary field (`drift`) or one carried on a curl-noise breeze (`wind`). Color, not size, carries the audio: the crystals brighten with energy.
+The hero crystal scene (distinct from `snowfall`, the soft atmospheric one): dozens of six-fold dendrites, each generated with sampled branch geometry (`Layer.draw_flake`) so no two are alike, in varied sizes across a cool bed. Every flake tumbles on its own signed angular velocity, so the field is organic rather than in lockstep. The seed's mode sets only the translation: a stationary field (`drift`) or one carried on a curl-noise breeze (`wind`). Color, not size, carries the audio: the crystals brighten with energy.
 
 layers: `bed`
 
@@ -571,7 +569,7 @@ Source: [src/scenes/snowflakes.gd](../src/scenes/snowflakes.gd) (extends `GhostS
 
 Starfield - a deep night sky, twinkling, with the occasional shooting star.
 
-A parallax field of stars over a near-black nebula bed and a wisp of colored fog; brighter stars glow, and every so often a meteor streaks across (more often on a beat). Calm and vast - the celestial corner of the catalog. The seed picks WHERE in the galaxy the sky is looked at from first, and that decides the crowding, the dust and the company as one choice. `bed` + `fog` + `stars` (+ `cosmos` / `volumetric` / `planet` / `flare`).
+A parallax field of stars over a near-black nebula bed and a wisp of colored fog; brighter stars glow, and every so often a meteor streaks across (more often on a beat). The seed picks where in the galaxy the sky is looked at from, which decides crowding, dust and company as one choice. Layers: `bed` + `fog` + `stars` (+ `cosmos` / `volumetric` / `planet` / `flare`).
 
 layers: `bed`, `cosmos`, `flare`, `fog`, `planet`, `stars`, `volumetric`
 
@@ -601,21 +599,21 @@ An entry can tell it, under `set` (unset, the seed draws one; a number may be to
 
 Source: [src/scenes/underwater.gd](../src/scenes/underwater.gd) (extends `GhostScene`)
 
-## Denser ink, where the twisting is already all the movement the frame needs
+## Vapors
 
-denser ink, where the twisting is already all the movement the frame needs.
+Vapors - the field half of the atmosphere (see scenes/vapors.gd): a fragment program with a hard front and fiber, on both behaviors.
 
 ### `vapors` (canvas, drift, static)
 
 Vapors - colored ink-in-water: heavy masses twisting through the frame with fibrous strands drawn out of them, lit from inside.
 
-The gap this fills. ghost already had soft weather - `clouds`, `fog_bank`, `fog_volume`, `aurora` - and every one of them is built from stacked gaussian puffs, which can only ever be SOFT. The look asked for here is the opposite: diffuse but HARD, a mass with a visible front, bright threads streaming inside it, and its color changing across the frame - ink in water, or heavy vapor turning over, or the stretched-cotton cobweb people hang at Halloween. None of that is a blob's to draw, so this scene is a FIELD: one quad, one density evaluated per pixel, and the structure is in the arithmetic. Read shaders/vapor_field.gdshader's header for how (a ridged multifractal for the filaments, a double domain warp for the twist, the plume envelope re-tapped toward the lamp for the volume) and `Layer.Vapor` for the plumes that place, color and drive it.
+Unlike `clouds`, `fog_bank`, `fog_volume` and `aurora` (stacked gaussian puffs, which can only be soft), this is diffuse but hard: a mass with a visible front, bright threads streaming inside it, color changing across the frame. So the scene is a field: one quad, one density evaluated per pixel. Read shaders/vapor_field.gdshader's header for how (a ridged multifractal for the filaments, a double domain warp for the twist, the plume envelope re-tapped toward the lamp for the volume) and `Layer.Vapor` for the plumes that place, color and drive it.
 
-Its gate is tests/scenes/vapor_check.gd, and it is a gate about a LOOK: presence, a front, drawn-out filaments, more than one hue, and motion, each against a control that breaks that one property. Three earlier cuts of the field compiled, ran, reported plausible coverage and drew engraved satin; that is why the gate measures the properties rather than the plumbing.
+Its gate is tests/scenes/vapor_check.gd: presence, a front, drawn-out filaments, more than one hue, and motion, each against a control that breaks that one property.
 
-WHAT THE MUSIC IS ALLOWED TO TOUCH, and this is the scene's hardest-won rule: light and SPEED, never shape. The vapor travels steadily forward and turns over on its own clock; a swell brightens it, moves its rate of flow a little, and thickens each mass slightly over a second or two; a beat lights the plume it landed on. What it may NOT do is resize anything - the first version drove the plume amplitudes hard and fast and re-warped space with the loudness, and since amplitude IS the size of a mass, the whole frame inflated and collapsed with the harmonics ("EXTREMELY unstable... it should be continuous movement forward, not an expand and contract"). Every audio path here now ends in a brightness or a rate, and tests/scenes/vapor_check.gd holds it to that. The tonal center pulls every hue toward the music's key, eased as a vector so a key change sweeps instead of jumping.
+The music touches light and speed, never shape. The vapor travels steadily forward and turns over on its own clock; a swell brightens it, nudges its rate of flow and thickens each mass slightly over a second or two; a beat lights the plume it landed on. Nothing is resized (amplitude is a mass's size, so driving it makes the frame inflate and collapse); every audio path ends in a brightness or a rate, and the gate holds it to that. The tonal center pulls every hue toward the music's key, eased as a vector so a key change sweeps instead of jumping.
 
-What kind of vapor it is comes from one roll, because these are not independent choices: ink is dense and wet and dark, a nebula is wide and diffuse and starlit, and gossamer is pale and almost all fiber. Sampling them separately would mostly produce neither.
+The kind of vapor comes from one roll, since the choices are not independent: ink is dense, wet and dark, a nebula wide, diffuse and starlit, gossamer pale and almost all fiber.
 
 layers: `bed`, `dust`, `stars`, `vapor`
 
@@ -638,7 +636,7 @@ Worlds & projections - real 3D terrain, cities on it, latent geometry.
 
 Projection - a PCA-style density map of a latent geometry, eye-shaped.
 
-A nod to the research paper's geometry figure and the dashboard's projection maps: a 3D point cloud shaped like a CALM model's latent centers - an elongated blob with a dense pupil nucleus and an iris ring, the "single eye" those gaussian-ish latents settle into - projected through a slowly tumbling 3D pose down to 2D (the top-2 projection) and rendered as a **binned density grid with log color**, exactly the figure's look. Audio drives DRAMATIC poses: the pupil dilates, the eye stretches, and beats snap the projection to a new angle. Nonlinear activations shape the cloud and the drive. One eye, varied by seed - its structure (`FORMS`: a plain iris, two concentric bands, or an iris with a sparse corona), its elongation, where the pupil sits (so it can look aside), how many latents there are and how coarsely they bin (`BINS`) are all sampled, and the colormap is one `Scheme`'s ramp.
+A 3D point cloud shaped like a CALM model's latent centers - an elongated blob with a dense pupil nucleus and an iris ring - projected through a slowly tumbling pose down to 2D and rendered as a binned density grid with log color. Audio drives dramatic poses: the pupil dilates, the eye stretches, and beats snap the projection to a new angle. One eye, varied by seed: its structure (`FORMS`: a plain iris, two concentric bands, or an iris with a sparse corona), elongation, pupil offset (it can look aside), latent count and bin coarseness (`BINS`) are sampled, and the colormap is one `Scheme`'s ramp.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -658,13 +656,11 @@ Source: [src/scenes/projection.gd](../src/scenes/projection.gd) (extends `GhostS
 
 Spires - a fractal metropolis of harmonic spires over a landscape.
 
-Each spire is a lofted PROFILE, not a stack of jittered boxes: its radius-as-a-function-of-height is a short series of cosine MODES. A GLOBAL set of mode amplitudes/frequencies is the city's shared architectural "style"; each spire carries a per-spire DEVIATION (amplitude scale + phase) so the towers are a family, not clones. The live SPECTRUM drives the modes (each mode is pinned to a band), so the silhouettes - tapers, bulges, tiers - re-sculpt with the music: the point being proved.
+Each spire is a lofted profile: its radius as a function of height is a short series of cosine modes. A global set of mode amplitudes and frequencies is the city's shared architectural style; each spire carries a deviation (amplitude scale and phase), so towers are a family, not clones. The live spectrum drives the modes (each pinned to a band), so tapers, bulges and tiers re-sculpt with the music.
 
-Spires are lofted ring by ring from the GROUND UP and grow in over the intro (from the center outward), so the city assembles itself rather than starting fully formed. The key light gives each face directional + vertical-ambient shading, drops a contact shadow on the ground, and distance fog dissolves the far skyline into haze.
+Spires are lofted ring by ring from the ground up and grow in over the intro, from the center outward. The key light gives each face directional and vertical-ambient shading, drops a contact shadow on the ground, and distance fog dissolves the far skyline.
 
-Prototyped from a photograph of ornate towered architecture: the recursive tiering, the repeating turret motif and the way height and ornament scale together, read off one building and turned into a rule that makes endless variations of it.
-
-RENDERING follows the `FrameForge` contract: update() snapshots the frame's inputs into a `SpireJob` (a plain RefCounted - the worker's Callable keeps it alive, and it never touches the scene node), the job builds the whole frame - shadow pass, terrain merge, loft, sort, batch - off the main thread, and _draw() only submits the finished packet. The UI cannot block on this scene, whatever the city costs.
+Rendering follows the `FrameForge` contract: update() snapshots the frame's inputs into a `SpireJob` (a plain RefCounted that never touches the scene node), the job builds the frame (shadow pass, terrain merge, loft, sort, batch) off the main thread, and _draw() only submits the finished packet.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -701,9 +697,9 @@ Source: [src/scenes/terrain.gd](../src/scenes/terrain.gd) (extends `Scene3D`)
 
 Terrain city - blocks rising as a city over real 3D terrain, growing nonlinearly.
 
-The metropolis idea on the `Terrain` foundation: a `Swarm` development field creeps across a landscape (rolling hills / mesa), and where it has grown, blocks stand on the surface - **PLUMB**, because real buildings are vertical whatever the ground does, and what keeps the field from being a rigid lattice is the STREET GRID rather than any lean (see _heading). Heights are driven by development x a per-block spectral band (nonlinear), so the skyline rises with the music. Some plots **detach**, their blocks floating a little off the ground. Camera orbits under a wide lens; the city grows over time from a few seeds.
+The metropolis idea on the `Terrain` foundation: a `Swarm` development field creeps across a landscape (rolling hills / mesa), and where it has grown, blocks stand on the surface, plumb (the street grid, not any lean, keeps the field from being a rigid lattice; see _heading). Heights are driven by development x a per-block spectral band (nonlinear), so the skyline rises with the music. Some plots detach, their blocks floating a little off the ground. The camera orbits under a wide lens; the city grows over time from a few seeds.
 
-Land, layout and color are all sampled per session rather than fixed. The terrain is any of four landforms under any climate that suits it; the LAYOUT decides whether the city reads as sparse dendritic arms, a broad sprawl, thin ribbons along the ridges or several separate towns; the SKYLINE law decides whether heights are even or a rare few spires tower over everything; and a `Scheme` mood colors the blocks, developed districts walking toward its accent.
+Sampled per session: the terrain (one of four landforms under a climate that suits it), the layout (sparse dendritic arms, a broad sprawl, thin ribbons along ridges, or several towns), the skyline law (even heights, or a rare few spires), and a `Scheme` mood coloring the blocks, developed districts walking toward its accent.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -719,27 +715,56 @@ An entry can tell it, under `set` (unset, the seed draws one; a number may be to
 
 Source: [src/scenes/terrain_city.gd](../src/scenes/terrain_city.gd) (extends `Scene3D`)
 
-## Depth, standing waves
+## Simulation, structure and graphic work
 
-depth, standing waves.
+Simulation, structure and graphic work - each a language nothing else speaks: a running physical state, a symmetry group, a written script, a routed graph, a plant in depth, standing waves.
+
+### `canopy` (scene3d, drift)
+
+Canopy - trees growing on real terrain, from taproot to leaf, through one season.
+
+A wooded slope under a low raking sun. Two to six hundred trees stand on a `Terrain` heightfield, each a 3D branching structure grown by `Branch3D`. Trunks and crowns rasterize into a `ShadowField`, and the wood merges into `Terrain.collect_surface`'s quad list before the depth sort, so a hill occludes the trees behind it. A handful of models (three to five per stand) are grown once in `build_params`; every tree is one of them, yawed, scaled and bent at draw time.
+
+What tests/scenes/canopy_scatter_check.gd holds: Size: a tree is a small fraction of the landscape's relief (mean 0.11). Density: two to six hundred trees. Distribution: stands. Clump centers are rejection-sampled against a density field, trees scatter around them with a gaussian falloff, plus a minority of stragglers. A minimum-distance test cannot make stands (nearest-neighbor spread 0.20 against 0.52 for random scatter); this reads 0.9 to 1.3. Where: `_density_at` - tree line, wetness, groves and slope. Foliage: `FOLIAGE`. A wood has two stands, a canopy and an understory, each with its own architecture, hue and leaf form, and a share of clusters in a second hue.
+
+Wind is a traveling front: a gust has a position, crossing speed and gaussian width, so far trees answer late. `f.bass` drives trunk sway as an angular cantilever displacement (never a scale); `f.high` plus `f.treble` drive the leaf clusters' flutter alone.
+
+The season is the first draw of the seed and sets the mood, climate, leaf density, hue turn, saturation and the air. Shedding is not an rng draw: each leaf carries a fixed release threshold set at build and detaches when the running peak of an EMA of `f.beat` crosses it (live and offline feature streams differ), so it is a pure function of (threshold, shed level).
+
+LOD is structural: the nearest dozen trees get full tubes on heavy wood and ribbons on twigs, the middle band drops the finest order and thins foliage, the rest collapse to three to six crown puffs over a trunk ribbon. The frame is built off the main thread through `FrameForge`; under `--export` the builder runs synchronously, so the LOD budget is the render wall time.
+
+The seed decides: season and mood; the wooded landform and climate; the sun (8-35 degrees) and its drift; the species rule table; model and tree counts; the density field and stands; the refused slope; the gust; the LOD distances.
+
+layers: `bed`, `rays`, `veil`
+
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `season` Season | `spring`, `summer`, `autumn`, `winter` | The time of year the wood is in - spring, summer, autumn or winter - which sets its colors, how thick the leaves are, which climates it may take and what drifts through the air. |
+| `ridges` Ridges or valleys | `-1.0` to `0.55` | Whether the wood gathers down in the valleys or up along the ridges. |
+| `tree_line` Tree line | `0.55` to `0.95` | How high up the hills the trees grow before the wood gives out. |
+| `trees` Trees | `260` to `620` | How many trees the wood tries to grow on the hillside. |
+| `stands` Stands | `5` to `14` | How many separate stands of trees the wood is gathered into. |
+| `gust` Gust strength | `0.1` to `0.26` | How hard each gust of wind bends the trees as it crosses the wood. |
+
+Source: [src/scenes/canopy.gd](../src/scenes/canopy.gd) (extends `Scene3D`)
 
 ### `chladni` (particles, drift, static)
 
 Chladni - grains walking to the places a plate is not moving.
 
-A metal plate seen square-on, dusted with fine sand and lit from a low raking angle so every grain throws its own speck of shadow. The plate rings and the sand crawls: a grain is thrown about where the surface is heaving and lies still where it is not, so within a few seconds a chaotic dust field organizes itself into a sharp figure of curved nodal lines - crosses, stars, rosettes, honeycombs. When the music changes key the figure boils apart into haze and a different one assembles out of the same grains.
+A metal plate seen square-on, dusted with fine sand and lit from a low raking angle so every grain throws a speck of shadow. Grains are thrown about where the surface heaves and lie still where it does not, so dust organizes into a figure of curved nodal lines. When the key changes the figure boils apart into haze and another assembles.
 
-THE POINT, AND WHY IT IS DIFFERENT FROM EVERY OTHER SCENE HERE. Elsewhere the audio MODULATES something that was drawn anyway - a hue, a light, a growth rate. Here the audio is the physical input: the plate's mode is CHOSEN by the music, so the same seed draws a genuinely different picture for a different chord, and nothing else in the catalog can do that. It is also the strictest possible reading of "sound drives color, not scale" - the figure's SIZE never changes at all; only its shape, and only when the harmony does.
+The audio is the physical input: the plate's mode is chosen by the music, so the same seed draws a different picture for a different chord. The figure's size never changes, only its shape.
 
-HOW THE MUSIC PICKS THE MODE. `Spectrum.harmonic_signature`'s first twelve channels are the chroma - the octave-folded pitch classes, so this is the key rather than the loudness. They are smoothed, then the STRONGEST bin and the second strongest are read off by argmax and pushed through a seeded permutation into a seeded mode table, giving (m, n); the second and third give the superposed second harmonic. Argmax, deliberately, and not a weighted sum over all twelve: summing twelve eigenfunctions produces an even gray mush with no legible nodal lines at all, which is the whole thing worth looking at. One or two modes, sharply chosen, or nothing.
+Mode choice: the first twelve channels of `Spectrum.harmonic_signature` are the chroma. They are smoothed, then the strongest and second strongest bins are read by argmax and pushed through a seeded permutation into a seeded mode table, giving (m, n); the second and third give the superposed second harmonic. Argmax, not a weighted sum (twelve summed eigenfunctions give a gray mush). `mode_tau` (0.4 .. 2.0 s) sets both the chroma smoothing and the crossfade between two baked figures: short snaps over on a chord change, long dissolves through a formless boil.
 
-THE SNAP-VERSUS-MELT KNOB. One sampled time constant, `mode_tau` in 0.4 .. 2.0 s, decides both how fast the chroma is smoothed and how fast the crossfade between two baked figures runs. Short: figures snap over on a chord change, the sand visibly panicking. Long: one figure dissolves through a formless boil into the next. That single number is the scene's personality, so it is the first thing to read in a feedback record.
+The rest of the audio is about dwell, not size: `f.energy` is the plate's driving amplitude (how tightly grains pack onto the nodes); `f.beat` is a tap, a drive spike that scatters the figure; `f.flux` trims the crossfade rate. Gains are written for measured ranges (energy rarely passes 0.5, flux is 0.01-0.05): the drive is `0.30 + 1.30 * energy`.
 
-WHAT ELSE THE AUDIO DOES, all of it deliberately about DWELL rather than size: `f.energy` is the plate's driving amplitude, which only decides how violently grains are thrown off the antinodes and therefore how tightly they pack onto the nodes; `f.beat` is a tap on the plate, a brief drive spike that scatters the figure and lets it re-settle, so it breathes without moving; `f.flux` trims the crossfade rate. The gains are written for the MEASURED ranges - energy is a mean over 64 bands and rarely passes 0.5, flux lives around 0.01-0.05 - so the drive is `0.30 + 1.30 * energy` rather than something that assumes energy reaches 1.
+Cost: `PlateField` bakes the field and gradient onto a grid (a grain step is a bilinear read), in slabs so a mode change never hitches. The walk runs on a `SimClock` and steps a rotating third of the grains per tick with a longer dt, so per-frame cost is flat in the grain count. The draw (about 30k triangles) is built off the main thread through `FrameForge`.
 
-THE COST, HONESTLY. Three things make thousands of grains affordable. The field and its gradient are baked onto a grid by `PlateField` (a grain step is a bilinear read, not four cos() calls), and baked in slabs so a mode change never hitches. The walk runs on a `SimClock` and steps a rotating THIRD of the grains per tick with a proportionally longer dt, which keeps per-frame simulation cost flat and independent of the grain count. And the draw is built off the main thread through `FrameForge` - about 30k triangles a frame at the top of the range, which is not a main-thread budget but is a fine worker one.
-
-WHAT THE SEED DECIDES: the plate (square, circular, hexagonal - each with its own eigenfunctions) and its rim condition (free or clamped, which changes the figures completely rather than decorating them); the mode table and the chroma-to-mode permutation, so a given chord means a different figure in every session; grain count, size and per-grain settling sensitivity; how far the grains creep and how much they twitch; the mobility exponent, which is whether this is loose dry sand or heavy filings; the weight of the superposed second harmonic, which is what turns a clean symmetric figure lopsided; the plate finish and the room; and the rake light's azimuth, elevation and whether the elevation is low enough for the grains to cast shadows at all.
+The seed decides: the plate (square, circular, hexagonal) and its rim condition (free or clamped); the mode table and permutation; grain count, size and settling sensitivity; creep and twitch; the mobility exponent (loose sand or heavy filings); the second harmonic's weight; the plate finish and room; the rake light.
 
 layers: `bed`, `dust`
 
@@ -757,76 +782,21 @@ An entry can tell it, under `set` (unset, the seed draws one; a number may be to
 
 Source: [src/scenes/chladni.gd](../src/scenes/chladni.gd) (extends `GhostScene`)
 
-## That should be done where it can actually be looked at, which is what --scene is for
-
-that should be done where it can actually be looked at, which is what --scene is for.
-
-### `canopy` (scene3d, drift)
-
-Canopy - trees growing on real terrain, from taproot to leaf, through one season.
-
-A wooded slope under a low raking sun. Two to six hundred trees stand on a real `Terrain` heightfield - not a decal, not a sprite: each is a genuine 3D branching structure grown by `Branch3D`, a tapered trunk lofted as a closed 6-sided tube with limbs forking at species-specific angles, a divergence roll between whorls, and twigs thinning into soft leaf masses. Trunks and crowns rasterize into a `ShadowField`, so the hillside is striped with the wood's own shadows, and the whole thing merges into `Terrain.collect_surface`'s quad list before the depth sort - which is what makes a hill occlude the trees behind it instead of the wood floating over the land.
-
-THE FOREST IS INSTANCED, and that is the only reason it fits. A handful of MODELS (three to five per stand) are grown once in `build_params`; every tree is one of them, yawed, scaled and BENT at draw time. That is furry's trick lifted into three dimensions, and it turns six hundred L-systems into eight.
-
-WHAT A WOOD LOOKS LIKE is the subject of this scene, and each part of it is a number that tests/scenes/canopy_scatter_check.gd holds:
-
-SIZE. A tree is a small fraction of the landscape's own vertical range - a mean of 0.11 of the relief. Height is sampled AS a fraction of relief, so it cannot drift when a landform changes.
-
-DENSITY. Two to six hundred trees.
-
-DISTRIBUTION. Stands, built as stands: clump centers rejection-sampled against a density field, trees scattered around them with a gaussian falloff, and a minority of stragglers on the open ground between. A minimum-distance test cannot do this - forbidding close neighbors is its whole job - and measures as a lattice (nearest-neighbor spread 0.20, where a random scatter is 0.52 and stands are above 0.6). This reads 0.9 to 1.3.
-
-WHERE. `_density_at`: a tree line the wood thins out under, wetness that gathers it in the valleys (or up the ridges - the elevation preference is one signed sample), a grove field that opens clearings, and a slope term. A power of height cannot do this, being monotonic and therefore unable to know where a valley is.
-
-FOLIAGE. `FOLIAGE` - broadleaf, needle, frond, blossom, scrub - deciding cluster size (as a fraction of the crown, so it scales with the tree), rim shape, and the band the mood may move its color inside. A wood carries TWO STANDS, a canopy and an understory, each with its own architecture, hue and leaf form, and a share of clusters in a second hue taken along the arc toward the scheme's base. Crowns are shaded by which side of the crown a cluster sits on, which makes a cluster cloud read as a lit mass.
-
-WIND IS A TRAVELING FRONT, not a global multiplier. A gust has a real position, crossing speed and gaussian width, so it sweeps the hillside as a visible wave and the far trees answer LATE. That delay falls out of the geometry rather than being scheduled, and it is the single detail that stops a field of trees reading as one object jiggling. The two frequencies of wind are separated the way real wind separates them: `f.bass` drives the long-period trunk sway as an ANGULAR cantilever displacement (never a scale - a tree that grows and shrinks on the beat is a joke), while `f.high` plus `f.treble` drive the fast flutter of the leaf clusters alone.
-
-THE SEASON is the first thing the seed chooses, and everything is read off it - the mood on offer, the climate the terrain may take, leaf density, how hard the foliage turns from base to tip, whether saturation is drained, and what is in the air. Leaves come off over the scene, but shedding is NOT an rng draw: each leaf carries a fixed release threshold set at build and detaches when the running peak of an EMA of `f.beat` crosses it, because the live analyzer and the offline bake do not produce identical feature streams. Being a pure function of (threshold, shed level) it also costs no per-leaf state.
-
-THE BUDGET IS THE DESIGN. Sixty trees at ~200 segments lofted six-sided is ninety thousand quads, which is not a frame. So LOD is structural: the nearest dozen get full tubes on the heavy wood and screen-space ribbons on the twigs, the middle band drops the finest order and thins its foliage, and everything beyond collapses to three to six crown puffs over a single trunk ribbon. The whole frame is built off the main thread through `FrameForge`, because under `--export` that builder runs synchronously and the LOD budget IS the render wall time.
-
-What the seed decides: the season and its mood; the wooded landform and a climate that suits both; the sun's elevation (8-35 degrees, kept low for long shadows) and its drift direction; one species rule table (fork angle, divergence roll, length/width ratios, depth, children, crown fraction, buttress flare, trunk lean, leaf size); how many models and how many trees; the density field the trees scatter under and the stands they gather into; the slope they refuse to root on; the gust's speed, width and strength; and the LOD distances.
-
-layers: `bed`, `rays`, `veil`
-
-An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
-
-| Setting | Options | What it sets |
-| --- | --- | --- |
-| `season` Season | `spring`, `summer`, `autumn`, `winter` | The time of year the wood is in - spring, summer, autumn or winter - which sets its colors, how thick the leaves are, which climates it may take and what drifts through the air. |
-| `ridges` Ridges or valleys | `-1.0` to `0.55` | Whether the wood gathers down in the valleys or up along the ridges. |
-| `tree_line` Tree line | `0.55` to `0.95` | How high up the hills the trees grow before the wood gives out. |
-| `trees` Trees | `260` to `620` | How many trees the wood tries to grow on the hillside. |
-| `stands` Stands | `5` to `14` | How many separate stands of trees the wood is gathered into. |
-| `gust` Gust strength | `0.1` to `0.26` | How hard each gust of wind bends the trees as it crosses the wood. |
-
-Source: [src/scenes/canopy.gd](../src/scenes/canopy.gd) (extends `Scene3D`)
-
 ### `cloth` (canvas, drift)
 
 Cloth - a sheet on a line, and the wind deciding how long it stays whole.
 
-A rectangle of fabric hangs from pins along the top of frame and fills most of it. It breathes and luffs, catching light in its folds, its lower edge lifting and snapping. As the wind builds the fabric stretches, a seam gives way with a visible run down the weave, and a strip peels off and streams away still rippling. By the end the sheet is a set of ragged ribbons on the same line, still moving.
+A rectangle of fabric hangs from pins along the top of frame. It breathes and luffs; as the wind builds the fabric stretches, a seam gives way with a visible run down the weave, and a strip peels off and streams away, leaving ragged ribbons on the same line.
 
-THIS IS THE FIRST DEFORMABLE SUBJECT IN THE CATALOG. Everything else is rigid, a particle, or a field. Cloth is a real solver - positions and previous positions in packed arrays, distance constraints relaxed Gauss-Seidel for N iterations, pins as zero-inverse-mass nodes - and it is the only subject that DESTROYS ITSELF, so a long scene has an arc with no keyframes and no authored tear time. Whether a seam gives depends only on accumulated stress in that seam.
+A real solver: positions and previous positions in packed arrays, distance constraints relaxed Gauss-Seidel for N iterations, pins as zero-inverse-mass nodes. A seam gives depending only on its accumulated stress; there is no authored tear time. Simulated in 3D, drawn in 2D: two extra floats per node give a fold a real normal (Lambert shading, translucent glow through the back, specular sheen) and let a gust bulge the cloth toward the viewer. The projection is weak (`1 + z * persp` about frame center). Framing is `plane` (`PLANE_BAG`).
 
-THE SHEET IS SIMULATED IN 3D, drawn in 2D. Two extra floats per node buy the whole look: a fold has a genuine surface normal, so Lambert shading, a translucent glow where light comes through the back, and a specular sheen on a fold's crest are all real rather than faked from projected area - and a gust can push the cloth TOWARD the viewer and be seen as a bulge instead of a sideways smear. The projection is deliberately weak (a linear `1 + z * persp` scale about frame center, not a perspective divide) because a hanging sheet is square-on: it wants dimension, not a tumbling-card read. Framing is `plane`, which puts the camera in `PLANE_BAG`: centered, occasionally a slow push.
+The tear is constraint removal and propagates along the weave. Each structural constraint carries a yield strain sampled at build and accumulates damage in proportion to how far past yield it is. At damage 1 it is removed, with the shear diagonals of the two cells it bordered and the bend constraint that spanned it (else a diagonal would bridge the rip). A break raises a weakening field on neighboring edges (strongly on the two continuing the run, weakly on the sides, weaker on the crossing edges at the tip); an edge's effective yield is its strength times `1 - weak`, so the next to give is nearly always the next in line. The weakening decays every tick, so a run that finds no stress arrests. `weave_bias` is the weft to warp yield ratio: above 1 the warp gives first (vertical runs, ribbons on the line); below 1 the weft gives first (a horizontal seam parts and the lower strip peels off).
 
-THE TEAR IS CONSTRAINT REMOVAL, AND IT PROPAGATES ALONG THE WEAVE. Every structural constraint carries a yield strain sampled at build - the weave irregularity, so a given instance always gives at the same place - and accumulates DAMAGE at a rate proportional to how far past yield it is, so a long quiet passage and a short violent one can both eventually break the same seam. When damage reaches 1 the constraint is removed, and with it the shear diagonals of the two cells it bordered and the bend constraint that spanned it - otherwise a diagonal would bridge the rip and it would never open.
+The seed decides: mood and palette; grid and mesh resolution; solver iterations (`SOLVE_BUDGET`); stiffness; slack; GATHER (how far pins are pulled in, making standing folds); the initial fold ripple; the pin pattern; mass; damping; gravity; wind and gusts; `max_stretch`; tearing and its parameters; `weave_bias`; opacity, translucency, sheen; the light; perspective; high-key (`GhostScene.paint_ground`) or a dark `Layer` bed; whether shed strips settle on a floor or leave.
 
-The propagation is the part worth explaining. A break raises a WEAKENING field on the neighboring edges: strongly on the two edges continuing the run (the same warp/weft line, one step along), weakly on the edges to either side, weaker still on the crossing edges at the tip - stress concentration at a crack tip, written as data. An edge's effective yield is its sampled strength times `1 - weak`. Because the boost along the run is several times the sideways boost, the next thing to give is nearly always the next edge in line, so the tear reads as a RUN rather than the fabric shredding everywhere at once. The weakening decays every tick, so a run that stops finding stress arrests.
+Audio: nothing multiplies a size by loudness. The wind is a `Flow2D` curl field whose speed follows a slow `Nonlinear.flare` envelope of `f.movement` and whose turbulence scale follows `f.flux`. A `f.beat` rising edge releases a gust (a pressure blob crossing the sheet, so the beat arrives late at the far edge) from a vocabulary pre-rolled at build and cycled by a counter, never a live draw. `f.treble` lifts the sheen, `Lighting` sweeps hotspots across the sheet, `chroma_hue()` pulls the color toward the tonal center.
 
-Which way the runs go is a sampled property of the FABRIC. `weave_bias` is the ratio of weft yield to warp yield: above 1 the warp gives first, so the runs are vertical and the sheet ends as ribbons still hanging from the line; below 1 the weft gives first, so a horizontal seam parts and the whole lower strip peels off and streams away.
-
-WHAT THE SEED DECIDES. The mood (`Scheme`) and the whole palette from it. Node grid and mesh resolution; solver iterations (see `SOLVE_BUDGET`); structural, shear and bend stiffness; slack (rest lengths shorter than the grid, so it drapes from the first frame); GATHER, how far the pins are pulled in from the fabric's natural width, which makes a curtain buckle into standing folds rather than hanging flat; the initial fold ripple that gives the buckling a direction; the pin pattern (a line of pegs, two corners, a diagonal, or a single point at center); mass per node, which sets drape by dividing the wind but not gravity; damping; gravity; the base wind and how much movement adds to it; the wind's direction and turbulence gain; the gust vocabulary; how far the threads give before they cannot lengthen (`max_stretch`); tearing on or off and its yield, irregularity, damage rate, crack-tip gains, weakening decay and breaks per tick; `weave_bias`; opacity, translucency, sheen and shininess; the light direction; the perspective strength; whether the frame is high-key (`GhostScene.paint_ground`) or a dark `Layer` bed; and whether shed strips settle on a floor or simply leave.
-
-AUDIO, AND WHY NOTHING MULTIPLIES A SIZE BY LOUDNESS. The wind is a `Flow2D` curl field whose overall speed follows a slow `Nonlinear.flare` envelope of `f.movement`; its turbulence scale follows `f.flux` (typically 0.01-0.05, so the gain is large and the result is still a modest 1.0-1.7x change in spatial frequency). Loudness never sets an amplitude: the fabric's RESPONSE to the wind is the amplitude, which is why a loud smooth passage and a quiet busy one look different here. A `f.beat` rising edge releases a GUST, a localized pressure blob crossing the sheet at its own speed, so the beat is seen as a wave traveling through the fabric and arriving LATE at the far edge - a physical delay, not a scheduled one. Gusts come from a vocabulary pre-rolled at build and cycled by a counter, never a live draw, because the live analyzer and the offline bake do not produce identical beat streams. `f.treble` lifts the specular sheen on folds facing the light, `Lighting` sweeps hotspots across the sheet, and `chroma_hue()` pulls the fabric's color toward the music's tonal center.
-
-COST. A Gauss-Seidel relaxation is `constraints x iterations` inner steps per tick and that product is the entire frame cost. `SOLVE_BUDGET` caps it, and iterations are clamped DOWN to fit whatever grid the seed rolled, so resolution and stiffness trade against each other instead of multiplying and a fine mesh is automatically a softer one. The wind field is sampled on a coarse lattice (a handful of `Flow2D` probes per tick) and bilinearly interpolated per node, because wind has a far coarser spatial scale than the mesh and a curl-noise probe is four 3D noise lookups.
-
-The simulation runs on a `SimClock` at 60 Hz with a two-tick ceiling per call. Not decoration: the `Director` sub-steps `update()` up to 15 times in one frame, pre-warms every scene with 12 calls before its first frame, and an `Echo` re-localize can fast-forward hundreds of calls. The pre-warm produces 24 ticks, 0.4 s of simulated time, which is why `tear_delay` is sampled no lower than 1.2 s - the opening frame is a settled, whole sheet, always.
+Cost: a relaxation is `constraints x iterations` steps per tick, the whole frame cost; `SOLVE_BUDGET` caps it and iterations are clamped down to fit the grid, so a fine mesh is a softer one. Wind is sampled on a coarse lattice and interpolated per node. The simulation runs on a `SimClock` at 60 Hz with a two-tick ceiling per call; the pre-warm is 24 ticks (0.4 s), so `tear_delay` is sampled no lower than 1.2 s and the opening frame is a whole sheet.
 
 layers: `bed`, `dust`
 
@@ -847,25 +817,15 @@ Source: [src/scenes/cloth.gd](../src/scenes/cloth.gd) (extends `GhostScene`)
 
 Contour map - the terrain from directly above, as a printed survey sheet.
 
-Warm paper, almost white, with thin dark isolines at a fixed interval. Every fifth line is an index contour drawn heavier, the band above the inked index line is ruled with fine diagonal hatching, a graticule of ticks runs the margins with a scale bar in one corner, and small survey crosses sit on local summits, each with a leader line out to a two-glyph label in an invented script. A survey sweep crosses the sheet planting marks and clearing them when it comes round again.
+Warm paper with thin dark isolines at a fixed interval; every fifth is a heavier index contour, the band above the inked index line is hatched, a graticule and scale bar frame the margins, and survey crosses sit on local summits with a leader to a two-glyph label in an invented script. A sweep plants marks and clears them when it comes round again. The land evolves everywhere at different rates (`_step_tectonics`), unlike a window move, which shifts every line by the same vector (tests/scenes/contour_flow_check.gd).
 
-THREE ABSENCES AT ONCE, which is why it exists. Nothing else here is a PLAN VIEW - every other framing is eye-level horizon, three-quarter isometric or centered abstract. Nothing else is HIGH-KEY. And nothing else is a DIAGRAM. It is the same substance as `terrain` - a `Field` heightfield - rendered as line art on paper, which is a different visual language and not a recolor.
+A re-print must not be visible: the sheet is rebuilt a couple of times a second, so the sampling window is snapped to its own lattice (the sheet is only translated, see _kick), the hatching pitch is fixed by the seed and anchored to the ground (`Contour.hatch`), and the tonal center is eased (see _ease_audio). The contour interval never changes: datum and interval are solved once from the land's elevation range, then frozen. Nothing here changes size.
 
-THE LAND EVOLVES, EVERYWHERE, AT DIFFERENT RATES. Ground rises and subsides under the ink and ridges wander - contours crowding into a new hill here while a mile away the sheet is almost still - so the map reads as a survey being re-flown rather than as a picture. That is `_step_tectonics`, and it is deliberately NOT the window: moving the window moves every line in the frame by the same vector. Gated in tests/scenes/contour_flow_check.gd.
+The music moves: the inked index contour (`chroma_hue().x`); the hatching's ink density (`f.flux` x 12); the sweep (one sheet width per `f.beat_period` x a sampled [8,32] beats; a `f.beat` rising edge stamps a survey cross at the summit nearest it); the window (`f.movement` over a sampled threshold eases the offset to the next entry of a pre-rolled ring over 14 to 30 s, with a floor `_warp_gap` of 35 to 75 s); the annotation alpha (`f.high`); the paper tint (`f.energy`).
 
-A RE-PRINT MUST NOT BE VISIBLE, and most of what follows serves that. The sheet is rebuilt a couple of times a second, and every difference between builds lands as a step all over the frame at once. So the three things that could differ do not: the sampling window is SNAPPED TO ITS OWN LATTICE, so consecutive extractions read the same points and the sheet only has to be translated (see _kick); the hatching's pitch is fixed by the seed and anchored to the ground rather than the window (see _kick and `Contour.hatch`); and the tonal center is EASED, because the ink of the highlighted contour is baked into the packet (see _ease_audio).
+The sheet is re-extracted on a sampled [0.3, 1.0] s cadence inside a `FrameForge` job (synchronous in an export) and the packet re-submitted every frame. The grid is about 128 samples across; two rounds of Chaikin cutting in `Contour` plus a simplify pass make it draw like a pen, which is why the window must be snapped. The paper is painted by `GhostScene.paint_ground` (`fill_aa` would stroke a hairline on the frame edge); the margin is painted back over the contours as the neatline.
 
-THE CONTOUR INTERVAL NEVER CHANGES. An interval is a claim about the land, so it is chosen ONCE from the land itself - datum and interval solved from the observed elevation range at first sight, then frozen for the session - and no audio feature goes near it. Nothing on this sheet changes SIZE.
-
-WHAT THE MUSIC MOVES INSTEAD. The INKED INDEX CONTOUR - the elevation drawn heaviest, in the accent - is chosen by `chroma_hue().x` across the elevation range, so a chord change re-prints the sheet at a different height. `f.flux` sets the INK DENSITY of the hatching between index lines. Flux measures 0.01 to 0.05 in practice, so it is scaled by 12 to cross its range at all. The SWEEP advances one sheet width per `f.beat_period` x a sampled [8,32] beats, and a `f.beat` rising edge stamps the next survey cross at the summit nearest the sweep. `f.movement` over a sampled threshold eases the field offset to the next entry of a pre-rolled ring over 14 to 30 seconds - a slow flight across a continent. It is the GLOBAL motion and it is rare on purpose, with a floor under it (`_warp_gap`, 35 to 75 s) so a spoken chapter cannot stall the window for a whole song. `f.high` raises the graticule and annotation ink alpha, so the paperwork layer fades in on bright passages. `f.energy` only warms the paper through the tint: it is a mean over 64 bands that rarely passes 0.5.
-
-THE COST, AND THE CADENCE. Extraction is the expense - sampling the field onto the grid is one GDScript call per sample, and marching squares another few thousand, together tens of milliseconds. It need not run at 60 Hz, because the land warps over seconds: the sheet is re-extracted on a sampled [0.3, 1.0] s cadence inside a `FrameForge` job and the finished packet is re-submitted every frame for microseconds. That also gives the sheet its character - a printed map that RE-PRINTS rather than animating. The grid is about 128 samples across, so a cell is near a dozen pixels; two rounds of Chaikin corner cutting in `Contour` turn the faceted polyline into a curve and a simplify pass hands the points back. That pair is why a grid coarse enough to sample in a worker still draws like a pen, and also why the window has to be snapped. In an export the forge builds synchronously - slower to render, identical output.
-
-THE HIGH-KEY GROUND fights three dark assumptions in this project (the clear color, `Layer`'s bed being a vignette whose brightest pixel is a mid tone, and the veil's alpha cap), so the paper is painted by `GhostScene.paint_ground` - a flat full-bleed quad through plain `draw_colored_polygon`. Not `fill_aa`: that strokes the outline over the fill, and on a full-frame quad the rim lands on the frame edge as a bright hairline. The margin is then painted back OVER the contours in the same color, which gives the sheet a real neatline for four quads.
-
-WHAT THE SEED DECIDES: the two spectral bases the land evolves through - how many waves, how long, how fast, and the per-re-print budget bounding it; the field kind (fbm / ridged / billow / cells), its octaves, frequency and whether it is domain-warped; how much of the continent the sheet covers; the number of contour levels and which are index lines; the minor and index pen widths; whether the sheet is cream paper with dark ink or a blueprint (roughly one in four); the ink itself from a `Scheme` at a quarter of its nominal saturation; the hatch angle and spacing; the sea level and whether there is water; the graticule divisions and margin; how many survey marks the sheet may carry; the re-extraction cadence; whether a second color plate prints out of register; the sweep's period in beats; the section-change threshold and warp duration; and the whole invented hand the labels are written in.
-
-HONEST DETERMINISM CAVEAT, the same one `glyphs` carries. The land, the ladder, the palette, the alphabet and the ring of warp offsets are seed-derived and reproduce exactly. WHICH summits get marked and when does not: the live analyzer and the offline bake do not produce identical beat streams. No rng is ever drawn on an audio-conditioned event - the warp offsets come from a pre-rolled ring taken by a counter.
+The land, ladder, palette, alphabet and warp ring are seed-derived and reproduce exactly; which summits get marked and when does not (live and offline beat streams differ). No rng is drawn on an audio event.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -884,19 +844,17 @@ Source: [src/scenes/contour_map.gd](../src/scenes/contour_map.gd) (extends `Ghos
 
 Falling sand - a world of matter you never draw, only rule.
 
-A chamber seen straight on, its walls running off every edge of the frame. Two to five spouts pour into it and never stop: dry sand builds a cone that holds its flank angle until one grain too many starts an avalanche running down the side; water finds its level and soaks into whatever it lands on; oil, being lighter, floats on the water as a thin film; an ember dropped into that oil eats through it and leaves ash. The pile builds all song. On a beat a hatch opens in the floor and the column drains, a collapse front traveling UPWARD through material that was settled a second ago.
+A chamber seen straight on, its walls running off every edge. Two to five spouts pour into it and never stop: dry sand builds a cone that holds its flank angle until an avalanche runs down the side; water finds its level and soaks into what it lands on; oil floats on water; an ember dropped into the oil eats through it and leaves ash. On a beat a hatch opens in the floor and the column drains.
 
-It is the catalog's first scene whose every frame is a STATE rather than a picture. Everything else here draws something - a skyline, a lattice, a flame. This draws a `Grains` grid where each cell holds exactly one thing, and its silhouette is produced by nothing but local rules applied a few thousand times. The angle of repose is a slide probability, the avalanche is what happens when a cone gets steeper than it, the oil film is a density comparison, and the drainage collapse is the absence of a floor. None of the four has a branch of its own anywhere in either file, which is the entire point: it is a world with rules rather than a picture of one.
+Every frame is a state, not a picture: a `Grains` grid where each cell holds one thing, and the silhouette comes from local rules (the angle of repose is a slide probability, the avalanche a cone steeper than it, the oil film a density comparison, the drainage the absence of a floor).
 
-WHAT THE SEED DECIDES. The chamber (a straight silo, an hourglass whose waist chokes the pour, stepped ledges the material cascades down, or open sides it walks off), its grid and wall thickness; a two-to-four material subset of `Grains.MATTER` with every property of every material sampled from its own range - so this sand is not the last sand, it has its own repose, density, color and susceptibility to the draft; the ember and ash chain, added only when a flammable material was drawn; the spouts, each with its own column, width, material, spectral band, gain and slow duty cycle; the hatch positions, widths and dwell; how far gravity may tilt and for how long; a steady ambient draft and its direction; the wall strata ramp; whether the air behind it all is a bright ground or a dark one; and HOW LONG IT HAS BEEN RUNNING before you got here.
+The seed decides: the chamber (silo, hourglass, stepped ledges, or open sides), grid and wall thickness; a two-to-four material subset of `Grains.MATTER` with every property sampled from its own range; the ember and ash chain (only when a flammable material was drawn); the spouts (column, width, material, band, gain, duty cycle); hatches; gravity tilt; a steady draft; the wall strata ramp; a bright or dark air; and how long the world has already been running.
 
-THE LAST OF THOSE IS NOT DECORATION. A world with rules has been running before anyone looked at it, so its own clock starts somewhere in the middle of its life (`_job.t_sim`), which puts each spout's duty cycle wherever it happens to be rather than all at their beginnings - some lanes pouring, some dry and about to open. The matter that clock implies is DEPOSITED by `Grains.prefill`: piles under the spouts shaped by each material's own repose, a thin run on every shelf, and a stream still in the air under whichever lanes are open. Deposited rather than simulated, because a pre-roll long enough to raise a cone is over a second of CPU - either a stall at the cut or a second of empty chamber arriving late. Gated by tests/scenes/sand_warm_check.gd, which settles the deposit against the automaton.
+The world arrives mid-pour: its clock starts partway through its life (`_job.t_sim`), so each spout's duty cycle is wherever it happens to be, and the matter that clock implies is deposited by `Grains.prefill`, not simulated (a pre-roll long enough to raise a cone is over a second of CPU). Gated by tests/scenes/sand_warm_check.gd.
 
-AUDIO. Each spout owns a FIXED band, and its rate in grains per second is its gain times that band's level, so the pours move against each other rather than throbbing together - the bass spout runs while the treble spout is dry. A beat on an armed latch opens one floor hatch. f.movement past a sampled gate eases gravity off vertical by a sampled ANGLE (0.12-0.35 rad, applied as its tangent, which is the per-step sideways probability that a cellular gravity actually takes), so a section change shears the whole pile and it re-settles into a different landscape. f.flux scales ember ignition. The tonal center from chroma_hue() drags every material's hue by a quarter of its strength, and f.energy feeds `Nonlinear.flare` into the emissive materials' VALUE only. Nothing anywhere touches grain size or grid scale: the sound colors this world and gates its activity, it does not resize it.
+Audio: each spout owns a fixed band and pours at its gain times that band's level, so pours move against each other. A beat on an armed latch opens one floor hatch. `f.movement` past a sampled gate eases gravity off vertical by a sampled angle (0.12-0.35 rad, applied as its tangent, the per-step sideways probability). `f.flux` scales ember ignition. The tonal center drags every material's hue by a quarter of its strength; `f.energy` feeds `Nonlinear.flare` into emissive materials' value only. Nothing touches grain size. Gains are written for measured ranges (`f.energy` rarely passes 0.5, `f.flux` is 0.01-0.05); spout rates carry a 0.12 floor so a quiet passage still trickles.
 
-MEASURED CONSTANTS. f.energy is a mean over 64 bands and rarely passes 0.5, and f.flux lives around 0.01-0.05, so the gains here are written for those ranges rather than for a nominal 0-1 (the ember drive is 0.35 + 8*flux, not 1 + flux). Spout rates carry a 0.12 floor so a quiet passage still trickles instead of freezing the world.
-
-COST. The sim and the batching BOTH run inside a `FrameForge` job that owns the grid, and the scene never touches a cell - a 200x115 chamber is 23000 cells, and at even half a microsecond each that is past the main thread's whole budget. The sim advances on a `SimClock` rather than per update() call, which is not optional: the Director sub-steps update() up to fifteen times in one frame, pre-warms every new scene twelve times before it is ever drawn, and an Echo re-localize can fast-forward hundreds of calls - any of the three would have the chamber full before the first frame anyone sees.
+The sim and batching run inside a `FrameForge` job that owns the grid (23000 cells); the scene never touches a cell. The sim advances on a `SimClock`, not per update() call.
 
 layers: `dust`
 
@@ -918,19 +876,15 @@ Source: [src/scenes/falling_sand.gd](../src/scenes/falling_sand.gd) (extends `Gh
 
 Glyphs - an invented script, written live, one stroke at a time.
 
-A page of writing in a language that does not exist. The alphabet comes from `GlyphSet`: a stroke grammar over a small lattice, rolled per session into twenty to forty characters in one consistent hand - its own slant, weight, nib angle, terminal style and taste in curves. This scene is the other half - the PEN and the PAGE. Characters are not blitted: a nib crosses the paper, ink arrives behind it stroke by stroke, words group, lines fill, the page scrolls, and when the music goes quiet the pen simply stops where it is, mid-stroke, resting on the paper.
+A page of writing in a language that does not exist. `GlyphSet` rolls the alphabet; this scene is the pen and the page: a nib crosses the paper, ink arrives behind it stroke by stroke, words group, lines fill, the page scrolls, and when the music goes quiet the pen stops mid-stroke.
 
-It is the catalog's whole missing axis. Not one of the other scenes draws a letter, numeral, rune or ideogram, and it is the first whose content has a READING DIRECTION rather than being a physical process - a page has a beginning, an order, and an accumulating history, which is a different kind of picture from fog or fire.
+The music decides the text. The next character is the argmax of the twelve chroma channels of `Spectrum.harmonic_signature`, crossed with the low/mid/high tilt, through a seeded permutation, so a recurring chord in the same register writes the same character. Characters commit subdivided by a sampled [1,4] beats each, and the reveal is paced across `AudioFeatures.beat_period`. Word breaks land where `AudioFeatures.movement` crosses a sampled threshold. `AudioFeatures.flux` presses the nib (up to a sampled 35% extra weight, the only thing that tracks amplitude); tonality (`chroma_hue().y`) raises ink saturation and warms the paper. Below `Director.silence_floor` (0.03) the reveal does not advance: the pen stops with the nib down.
 
-THE MUSIC DECIDES THE TEXT. Which character comes next is the argmax of the twelve chroma channels of `Spectrum.harmonic_signature`, crossed with the coarse low/mid/high tilt that follows them, through a seeded permutation - so a chord recurring in the same register writes the same character every time, and the page becomes a transcription of the progression rather than a random spill of shapes. Characters are COMMITTED on the beat, subdivided by a sampled [1,4] beats each, and the reveal is paced across `AudioFeatures.beat_period` so the pen's speed is the track's tempo and not the frame rate. Word breaks land where `AudioFeatures.movement` crosses a sampled threshold, which puts them at section changes; a hand with punctuation marks (see `GlyphSet`'s reserve) closes the word with one. `AudioFeatures.flux` presses the nib - up to a sampled 35% of extra weight, and no more, because ink weight is the only thing here that may track amplitude at all. Everything else the sound does, it does to color: tonality (`chroma_hue().y`) raises the ink's saturation and warms the paper.
+The seed decides, beyond the hand: the layout (page, column, a centered banner that recenters as each line grows, or a spiral written outward and drawn back toward its center), margins, line height, beats per character, word-break strength, ruled paper, how much is already written, and the ground.
 
-SILENCE IS A STATE, NOT AN IDLE. Below `Director.silence_floor` (0.03) the reveal simply does not advance. The pen does not lift, does not idle-doodle, does not fade - it stops with the nib down, which is what a hand does when the dictation stops, and is far more alive than any animation would be.
+Cost: one draw call. Each character's geometry is baked once in em space, so a frame is one native `Transform2D * PackedVector2Array` per character plus three `append_array`s; stroke quads carry their antialiasing in a 1-D alpha ramp texture. `MAX_GLYPHS` = 300 is the page budget (about 4.5k quads); a finer hand on a wider frame is scaled up until it fits.
 
-WHAT THE SEED DECIDES beyond the hand itself: the layout (a full page, a narrow column, a centered banner that recenters itself as each line grows, or a spiral written outward and drawn slowly back toward its own center), the margins, the line height, beats per character, how strongly a section change breaks a word, whether the paper is ruled and carries a margin line, how much of the page is already written when we arrive, and the ground: high-key paper with dark ink, or bright ink on a dark bed. Both grounds exist because a page is the one subject in this catalog that genuinely reads either way.
-
-COST. The writing is ONE draw call however full the page. Every character's geometry is baked once in em space, so a frame is one native `Transform2D * PackedVector2Array` per character plus three `append_array`s, and the stroke quads carry their own antialiasing in a 1-D alpha ramp texture instead of `TriBatch`'s three-quads-per-line feather. `MAX_GLYPHS` = 300 is the page budget: at roughly fifteen quads a character that is about 4.5k quads (9k triangles) in one flush, and the finest hand on the widest frame would otherwise ask for twice that - so rather than truncating the page, the whole hand is scaled up until it fits.
-
-HONEST DETERMINISM CAVEAT. The alphabet, the hand, the layout and the pre-written opening are all seed-derived and reproduce exactly. The written TEXT is not: the live analyzer and the offline export bake do not produce identical feature streams, so the sequence of characters in a render will differ from the preview, and the layout also follows the frame's aspect. Acceptable for an unreadable script, but it is a real difference and it is stated rather than hidden. No rng is ever drawn on an audio-conditioned event, so nothing else can drift.
+The alphabet, hand, layout and opening reproduce exactly; the written text does not (live and offline feature streams differ). No rng is drawn on an audio-conditioned event.
 
 layers: `bed`, `dust`
 
@@ -951,15 +905,13 @@ Source: [src/scenes/glyphs.gd](../src/scenes/glyphs.gd) (extends `GhostScene`)
 
 Murmuration - thousands of birds deciding together, against a bright sky.
 
-A wide, nearly empty dusk sky - pale at the horizon, deepening upward - with one flock in it. The birds wheel as a single body: the flock draws out into a ribbon, folds back through itself, thickens into a dark sheet where the wings come broadside to the lens and thins to a haze where they roll edge-on. Waves of that darkening travel across the whole flock in half a second. A hawk cuts through the middle on a beat, the flock opens around it and closes behind, and a pale wave of alarm spreads outward from the strike by neighbor contact alone - faster than any bird in it is flying.
+A wide, nearly empty dusk sky with one flock in it. The birds wheel as a single body: the flock draws out into a ribbon, folds through itself, darkens where wings come broadside to the lens and thins where they roll edge-on. A hawk cuts through on a beat; the flock opens around it and a pale alarm wave spreads outward by neighbor contact alone, outliving the beat. The birds decide their shape by consensus with their neighbors (`Primitives`' forces are field-like).
 
-WHY IT IS NEW. Nothing in the catalog flocks. `prism_swarm` is a scripted formation on a fixed double-helix track, and `Primitives`' eight forces are field-like: every agent reads the same wind and the same attractor, and none of them has ever had an opinion about the agent beside it. This is the first subject whose shape is decided by consensus rather than by a seeded parameter, and the first crowd - the alarm wave is the point of it, a signal propagating through neighbors at a speed that has nothing to do with the audio that triggered it, so what you watch outlives its own trigger.
+The seed decides the bird count and sight radius, neighbor and scan caps, weights and the two cohesion/alignment endpoints, speed and turn-rate range, the roost, whether there is a hawk (about 7 seeds in 10) and its approaches (through, stoop, cross, climb), the sky, the silhouette and wingbeat rates, the lens depth and the roll wave.
 
-WHAT THE SEED DECIDES. How many birds and how far they can see; the k-nearest cap and the scan cap that bound the neighbor loop; the fixed separation weight and the two endpoints the cohesion/alignment pair walks between; speed range and the acceleration ceiling that is really a turn-rate ceiling; the roost's position, its pull and how far it may wander; whether there is a hawk at all (about seven seeds in ten), and if so its cadence, its speed and four sampled approaches - straight through the middle, a stoop from above, a lateral cross, or a climb from below; the sky's mood, how high the horizon sits, how deep the zenith goes, whether there is cloud and whether there is a distant treeline; the bird silhouette - body length, wing span, how far the wings beat and the RANGE of wingbeat rates, so the flock's flicker is asynchronous rather than one strobe; the depth of the lens volume the flock occupies; and the roll wave's amplitude, its wavelength and how long it takes to cross.
+Audio: separation never moves. Cohesion follows f.bass (a dense ball), alignment follows f.high + f.treble (ribbons). f.movement and f.flux walk the weight point along a seeded segment between the endpoints, with the weights rate-limited (sharp folds when agitated, lazy arcs when calm). f.beat on an armed latch launches the hawk, after which the strike runs on its own clock. f.bass drives a slow thermal. Only the sky reads chroma_hue() and f.energy; bird brightness comes from banking angle, never the music. f.energy rarely passes 0.5 and f.flux sits near 0.01-0.05, so alignment reads (f.high + f.treble) * 1.7 clamped and the walk speed is movement + 14 * flux.
 
-AUDIO, WHICH IS THE THREE WEIGHTS. Separation never moves - personal space is not a musical parameter. Cohesion is driven by f.bass, so low sustained energy pulls the flock into a dense ball; alignment is driven by f.high + f.treble, so bright detail makes it stream out into ribbons. f.movement and f.flux together walk the weight point along a seeded segment between the two sampled endpoints, and the weights are RATE-LIMITED on the way, which is what gives sharp folds on an agitated passage and long lazy arcs on a calm one. f.beat on an armed latch launches the hawk; after that the strike is on its own clock and the audio has no further say in it. A slow vertical thermal in the air comes from f.bass. Only the sky reads chroma_hue() and f.energy - the birds' brightness comes from their BANKING ANGLE, never from the music, because a flock that flashed with the beat would stop being an animal.
-
-MEASURED REALITY. f.energy is a mean over 64 bands and rarely passes 0.5; f.flux lives around 0.01-0.05. So the drives here are written for those ranges - alignment reads (f.high + f.treble) * 1.7 clamped, and the walk speed is movement + 14 * flux, not the nominal unit quantities a 0..1 reading would suggest. COST, AND AN HONEST COUNT. The solver and the batching both live in a `FrameForge` job; the scene never touches a bird. A real murmuration is tens of thousands of starlings, but that is not a number GDScript reaches: the working ceiling on a ghost worker is around half a million interpreted operations per tick (falling_sand's 23k-cell sweep at 25 Hz is the reference point), and a bird costs roughly three hundred of them once the eight-cell block query, the scan cap and the query stride are in. That puts the honest range at [900, 2400], which is what is sampled - a flock drawn as animals with wings that beat, rather than nine thousand dots that never render. The sim runs on a `SimClock` at a sampled 22-30 Hz and the renderer interpolates between the last two solver states, so the motion is smooth at display rate while the physics stays frame-rate independent - not optional here, since the Director sub-steps update() up to fifteen times in one frame, pre-warms every scene twelve times before it is drawn, and an Echo re-localize can fast-forward hundreds of calls.
+Cost: the solver and batching run in a `FrameForge` job; the scene never touches a bird. A bird costs about 300 interpreted operations against a worker ceiling of about half a million per tick, so the count is sampled in [900, 2400]. The sim runs on a `SimClock` at 22-30 Hz and the renderer interpolates between the last two states (required: the Director sub-steps update() up to 15 times a frame and pre-warms scenes 12 times).
 
 layers: `clouds`, `rays`
 
@@ -979,25 +931,15 @@ Source: [src/scenes/murmuration.gd](../src/scenes/murmuration.gd) (extends `Ghos
 
 Neural field - a layered network in real depth, lit only where the harmony routes.
 
-Three to six flat SHEETS of neurons hang one behind the other in genuine perspective, seen from a slow three-quarter yaw so the sheets overlap and the depth reads at once. Between consecutive sheets runs a sparse fan of straight edges, and EVERY edge is always there - the geometry never changes for the whole life of the scene. What changes is which edges are LIT, and an edge lights only when BOTH endpoints are firing at the same time. That single rule is the whole scene: not a uniform twitch, but a shifting subset of ROUTES through a slab. Nothing is destroyed, nothing is re-randomized, and loudness alone lights nothing.
+Three to six flat sheets of neurons hang one behind the other in perspective, seen from a slow three-quarter yaw. A sparse fan of straight edges runs between consecutive sheets and every edge is always there; what changes is which are lit, and an edge lights only when both endpoints fire at the same time. Nothing is destroyed or re-randomized, and loudness alone lights nothing.
 
-WHAT THE SEED DECIDES. The mood (`Scheme`, every hue from one family, each sheet taking `hue_at(l, layers)` so depth reads as a color gradient too). How many sheets, and their TOPOLOGY - `slab` keeps every sheet the same size, `funnel` narrows toward the output, `fan_out` widens, `bottleneck` pinches in the middle and opens again - so the silhouette of the network is sampled too. Rows and columns, the positional jitter that keeps the grid from reading as graph paper, the fan-out degree and how far a neuron may reach sideways for its targets, the exponent shaping the weight distribution (high exponent = most weights near zero = a darker, more selective graph), the fraction of INHIBITORY weights (drawn in the opposed hue), the sparsity/attack/decay of each sheet's `Activation`, the lens distance / pitch / yaw sway, layer spacing, edge width in pixels, sub-segments per edge, disc facet count, and the darkness floor unlit edges rest at.
+The seed decides the mood (`Scheme`; each sheet takes `hue_at(l, layers)`), the sheet count, the topology (`slab`, `funnel`, `fan_out`, `bottleneck`), grid size and jitter, fan-out and weights (an inhibitory fraction is drawn in the opposed hue), each sheet's `Activation`, and the lens and look constants.
 
-AUDIO. The input sheet is read across its width: the neuron at column fraction cx takes `f.sample(cx)`, so bass enters one side of the sheet and treble the other. Every neuron also carries a PITCH CLASS assigned at build and mixes in `signature()` for that class - so which neurons are ELIGIBLE to fire is decided by the harmony rather than loudness, and a chord change re-routes the slab without the level moving. (The signature array is EMPTY until the analyzer is up, hence the `.size() > pc` guard.) One `Activation` per sheet, driven by the sheet's aggregate, supplies the slow seeded GATE - who is on this passage - while a faster per-neuron envelope supplies the actual firing. Sheet L+1's drive is the mean of sheet L's levels times a sampled gain, so activity really propagates instead of every sheet reacting to the same frame independently. On a beat onset a bright PACKET leaves the input sheet and walks one pre-rolled route forward, one layer per `beat_period * hops`, lighting each neuron it lands on. A `movement` spike eases the lens toward a new seeded three-quarter angle. `chroma_hue()` pulls every hue toward the tonal center by `0.35 * strength`.
+Audio: the input sheet is read across its width (the neuron at column fraction cx takes `f.sample(cx)`). Each neuron has a pitch class and mixes in `signature()` for it, so harmony decides which neurons are eligible to fire and a chord change re-routes the slab without the level moving (the signature array is empty until the analyzer is up, hence the `.size() > pc` guard). One `Activation` per sheet supplies the slow seeded gate; a faster per-neuron envelope supplies the firing. Sheet L+1's drive is what sheet L fired times a sampled gain, so activity propagates. On a beat onset a bright packet walks one pre-rolled route, one layer per `beat_period * hops`. A `movement` spike eases the lens toward a new seeded angle. `chroma_hue()` pulls every hue toward the tonal center by `0.35 * strength`. No radius is multiplied by energy.
 
-NOTHING MULTIPLIES A RADIUS BY ENERGY. The discs are a constant world size and shrink only with distance; sound moves color, brightness and which routes exist.
+Cost: edges are split into sub-segments before the painter's sort, so an edge interleaves with the neurons it passes (see terrain.gd's collect_surface). Neurons per sheet are capped at `MAX_PER_SHEET` and the fan-out is clamped so `edges * segments` stays under `MAX_SEGMENTS`. `Scene3D`'s `add_body` / `render_world` are not used (a lambda sort and a batch flush per body); everything goes into one `TriBatch` in a `FrameForge` job, sorted by `TriBatch.painter_sort`. Dark edges use the cheap hard-edged line (2 triangles), lit ones the feathered form (6).
 
-MEASUREMENT AND THE COSTS THAT SHAPED THE CODE.
-
-Edges are SPLIT into sub-segments before sorting. A painter's sort over whole edges makes each edge win or lose against the discs as a block, which is wrong for any edge passing between two sheets - measured at 20-45% of quads for the old water sheet (terrain.gd's collect_surface doc). Three to five segments per edge lets the sort interleave an edge with the neurons it passes.
-
-The item budget is enforced, not hoped for. Neurons per sheet are capped at `MAX_PER_SHEET`, and the fan-out degree is then clamped so `edges * segments` never exceeds `MAX_SEGMENTS`. Unbudgeted, 324 neurons with k = 5 and 4 segments is ~6.8k sortable items, and at the ~2.2 us/item anchor measured for terrain that is a whole frame gone on emission alone.
-
-`Scene3D`'s own `add_body` / `render_world` are deliberately NOT used: render_world sort_customs its item list (a GDScript lambda per comparison) and each body flushes the batch, so a few hundred neurons would be a few hundred draw calls plus a few hundred thousand lambda calls. Everything here is emitted into one `TriBatch` inside a `FrameForge` job instead - one or two draw calls, sorted natively by `TriBatch.painter_sort`, built entirely off the main thread.
-
-Dark edges use TriBatch's cheap hard-edged line (2 triangles) and only lit ones pay for the feathered form (6). The dark ones are the overwhelming majority and near-black by design, so there is nothing for antialiasing to smooth.
-
-The propagation and the packets run on a `SimClock`, not on `update()`: the Director sub-steps a scene up to 15 times in a frame, pre-warms it 12 times before its first frame, and an `Echo` re-localize can fast-forward hundreds of calls.
+The propagation and the packets run on a `SimClock`, not on `update()`: the Director sub-steps a scene up to 15 times a frame and pre-warms it 12 times.
 
 layers: `bed`
 
@@ -1018,23 +960,19 @@ Source: [src/scenes/neural_field.gd](../src/scenes/neural_field.gd) (extends `Sc
 
 Tidepool - sunlight through a hand's depth of moving water.
 
-Looking STRAIGHT DOWN into a clear pool over rounded stones, sand and weed, in full daylight. It is the first overhead shot in the catalog and one of the first bright grounds, where the pale bed IS the subject. The surface is a real wave field: a swell arriving from one edge, finer chop crossing it, and ring waves spreading and dying where drips land. What you watch is the CAUSTIC NET on the bed - a mesh of bright ribs that slides and pinches as the surface curves, with the stones swimming slightly out from under the crests because the image of the bed is refracted too.
+Looking straight down into a clear pool over stones, sand and weed in full daylight. The surface is a wave field (a swell from one edge, finer chop crossing it, ring waves where drips land); what you watch is the caustic net on the bed, with the stones swimming slightly under the crests because the bed's image is refracted too.
 
-THE CAUSTICS ARE COMPUTED, NOT DRAWN, and that is the whole scene. At every node of a grid the local surface normal comes from `WaveField`'s closed-form gradient, the sun vector is refracted through it by Snell's law, the refracted ray is walked down to the bed plane, and its energy is splatted bilinearly into an accumulation buffer. Bright ribs are where many rays landed in the same place - the definition of a caustic - and they pinch, fork and close exactly where the surface curvature says. A short separable blur afterwards is the only cosmetic step, standing in for the sun's half-degree of angular width, which is why a real caustic net has soft edges.
+The caustics are computed, not drawn. At every grid node the surface normal comes from `WaveField`'s closed-form gradient, the sun vector is refracted through it by Snell's law, the ray is walked to the bed plane and its energy splatted bilinearly into an accumulation buffer; bright ribs are where many rays land together. A short separable blur stands in for the sun's angular width. The bed's image is refracted along the straight-down viewing ray.
 
-The bed's own IMAGE is refracted separately, through the same normal but along the viewing ray, which points straight down. That second refraction is small - the view is near-normal, so the ray bends by a few degrees - and it is what makes the stones drift out from under a passing crest rather than sitting still under a moving light show.
+The seed decides the pool (span, depth 0.05-0.35, an optional dry shelf, turbidity, index of refraction 1.30-1.36), the sun, the surface (6-14 Gerstner components around one swell heading, one tempo scaling the dispersion), the bed (20-90 stones from an ocean or earth `Palette`) and the light.
 
-WHAT THE SEED DECIDES. The pool: span in world units, base depth (0.05 to 0.35, a hand's depth), whether one corner rises into a dry shelf and along which diagonal, the turbidity, and the index of refraction (1.30 to 1.36 - real seawater is 1.34, and the range is wide enough that a caustic net visibly tightens across it). The sun: elevation 35 to 88 degrees and a free azimuth, which decide how far the ribs are thrown sideways from the crest that made them. The surface: 6 to 14 Gerstner components clustered around one swell heading, their wavelengths, steepnesses, and one tempo scaling the dispersion relation. The bed: a composition over cobble, sand, weed and shell, 20 to 90 stones from an ocean or earth `Palette`, the sand's grain, the weed's patchiness. The light: ambient floor, caustic contrast, specular exponent, glare threshold and ground value.
+Audio: each component owns a fixed band by wavelength rank (longest reads the lowest) through a slow-attack envelope, so bass grows long swell and brightness grows fine chop. A drip ring reads the water it crosses (see `WaveField.sweep_rings`). Nothing scales with loudness: a louder song is a rougher surface, not a bigger one. `f.movement` raises the global Gerstner steepness (pinching ribs into knots). Rising edges of `f.beat` drop drips at pre-rolled Halton positions (an index into a table, never an rng draw). `chroma_hue()` sets the water's tint and the sky reflection's hue; `f.energy` moves only the glare threshold.
 
-AUDIO. Every component owns a FIXED band assigned by wavelength rank - longest wave reads the lowest band - and its amplitude is a slow-attack envelope on that band, so a bass-heavy passage grows long swell while a bright passage grows fine chop and the two move against each other instead of throbbing together. A DRIP RING reads the water it spreads across: the swell carries its front forward over a crest and holds it back in a trough, and chop damps it out (see `WaveField.sweep_rings`). Nothing scales with loudness - the wavelengths are fixed at build, so a louder song makes a rougher surface, not a bigger one. `f.movement` raises the global Gerstner steepness, physically the thing that pinches caustic ribs into bright knots, so a section change tightens the net without moving anything. Rising edges of `f.beat` drop drips at pre-rolled Halton positions - a table walked by an index, never an rng draw, because the live analyzer and the offline bake do not produce identical feature streams. `chroma_hue()` sets the water's tint and the sky reflection's hue. `f.energy` moves only the glare threshold.
+Ranges: `f.energy` rarely passes 0.5 and one band through `f.sample()` sits under 0.3, so a component's drive is `0.22 + 1.7 * level`. The amplitude-to-wavelength ratio is sampled in 0.03-0.075, where caustics appear (below about a fortieth of a wavelength the bed gets a mottle, not a net). `jz` is clamped off zero at 0.15: a negative Jacobian is a folded surface.
 
-MEASURED CONSTANTS. `f.energy` is the mean over 64 bands and rarely passes 0.5, and a single band through `f.sample()` spends most of its time under 0.3, so a component's drive is `0.22 + 1.7 * level` rather than something assuming the band reaches 1. The amplitude-to-wavelength ratio is sampled in 0.03 to 0.075 because that is where caustics appear: focusing strength goes as depth * amplitude * wavenumber^2 * (1 - 1/ior), and below roughly a fortieth of a wavelength that product stays under one and the bed gets a gentle mottle instead of a net. `jz` is clamped off zero at 0.15 because a Gerstner surface whose Jacobian goes negative has folded over itself - a breaking wave, on which a normal is undefined.
+Cost: the sweep, light cast, blur, shading and batching run in a `FrameForge` job (about 30 ms at 1920x1080), so the water is rebuilt at 20-30 Hz; that is affordable because the surface is slow (the fastest period is 1.5-2.7 s). The grid is sized against `SWEEP_BUDGET`. The mesh is one vertex per node plus one per cell center with shared indices, so a frame rewrites only colors. Arrays handed to the main thread are never written again.
 
-COST, MEASURED. The sweep, light cast, blur, shading and batching all run inside a `FrameForge` job; the scene ships a snapshot and submits a finished packet. A build costs 29 to 36 ms at 1920x1080 idle and half again under load, so the water is rebuilt at 20-30 Hz and the forge hands the drawn frame whatever is ready. That is flat in the component count, which is what the budget is for. It is affordable only because the surface is SLOW: the fastest component's period is 1.5-2.7 s, so a 25 Hz rebuild is nowhere near its Nyquist limit.
-
-The grid is sized against `SWEEP_BUDGET`, which counts the O(nodes) work as well as the sweep. The mesh is one vertex per NODE plus one per cell center with shared indices, so a frame rewrites only the colors. Cells are CROSS-SPLIT into four triangles about that center rather than two about a diagonal, without which a 25-pixel cell reads as a herringbone of creases rather than water. Arrays handed to the main thread are never written again; a change allocates a new one, which is the only discipline that makes a pipelined worker safe.
-
-The wave is analytic and needs no integration, but the drips and amplitude envelopes are STATE, so they advance on a `SimClock`. Not optional: the Director sub-steps update() up to fifteen times in one frame, pre-warms a new scene twelve times before it is drawn, and an Echo re-localize can fast-forward hundreds of calls.
+The drips and amplitude envelopes are state, so they advance on a `SimClock` (the Director sub-steps update() up to fifteen times a frame and pre-warms a new scene twelve times).
 
 layers: `dust`
 
@@ -1050,27 +988,23 @@ An entry can tell it, under `set` (unset, the seed draws one; a number may be to
 
 Source: [src/scenes/tidepool.gd](../src/scenes/tidepool.gd) (extends `GhostScene`)
 
-## Completely fixed frame suits a fall that is already all the motion there is
+## Long-form motion
 
-completely fixed frame suits a fall that is already all the motion there is.
+Long-form motion - `fractal_zoom` (detail at every scale, so the camera can move forward forever) and `tunnel_run` (a first-person ride); both on `drift`, the fractal also on `static`.
 
 ### `fractal_zoom` (canvas, drift, static)
 
 Fractal zoom - falling into (or back out of) an escape-time set, forever.
 
-The frame is one fragment program over the complex plane (shaders/fractal_field.gdshader); this half chooses WHICH set, WHERE in it, HOW it is colored, and how the camera moves through it. Every one of those is sampled per session, because the whole point of the scene is the spectrum: the same three lines of arithmetic are a spiral, a seahorse valley, a dendrite, a filigree web or a burning coastline depending on six or seven rolls.
+The frame is one fragment program over the complex plane (shaders/fractal_field.gdshader); this half chooses which set, where in it, how it is colored and how the camera moves, all sampled per session.
 
-THE ZOOM IS THE SUBJECT, IT GOES ONE WAY, AND IT NEVER TURNS ROUND. A fractal zoom is normally a fall inward; the pull - the same journey run backwards, structure assembling out of the middle of the frame and receding - is a different and rarer picture, so it is a first-class mode here rather than a negative sign somebody could set. `direction` is one of: PUSH - inward. The classic, and two rolls in three. PULL - outward, opening from a deep point back toward the whole set.
+The zoom goes one way and never turns round: `direction` is PUSH (inward, two rolls in three) or PULL (outward, structure assembling out of the middle and receding). No mode reverses on a clock.
 
-There is deliberately no mode that turns round on its own clock. A reversal is the one camera move guaranteed to show you nothing new, because it is the shot you have just watched, played backwards.
+Speed is a journey time, not a rate: what a family can resolve varies twenty-fold (see the floors), so the whole descent's duration is sampled and divided by the depth available. The music scales the rate (loud passages fall faster), the only thing audio touches: the set never deforms to the music.
 
-SPEED IS A JOURNEY TIME, NOT A RATE, and that is what keeps the fall continuous now. What a family can resolve varies by twenty-fold (see the floors below), so a sampled rate makes a shallow family run out in twenty seconds and a deep one crawl. Sampling how long the whole descent should TAKE and dividing by the depth available inverts that: every instance falls for minutes, the deep families plunge and the shallow ones drift, and neither reaches a bound while anybody is watching. The music scales the rate around that - loud passages fall faster - which is the only thing audio is allowed to touch here. The SET itself never deforms to the music, because a fractal that wobbles on the beat stops being a fractal and becomes a plasma effect.
+The zoom floor is the one hard constraint: float32 runs out at about 3e-4 of the starting view. The quadratic Mandelbrot escapes that through perturbation (see the shader's header): the reference orbit is iterated here in 64-bit floats and the shader handles only the difference. Other families iterate directly and are clamped to the depth float32 holds. `_zl_min` is set from the family's floor and the zoom eases to rest against it. The anchor is held as two loose `float`s, never a Vector2 (32-bit would round away the last six digits, which at depth are the whole location).
 
-THE ZOOM FLOOR, and it is the one hard constraint in the file. Zooming is a scale going to zero, and float32 runs out at about 3e-4 of the starting view - twelve seconds, and then the picture visibly turns to blocks. The quadratic Mandelbrot escapes that through PERTURBATION (see the shader's header): the reference orbit is iterated here in GDScript, whose floats are 64-bit, and the shader only ever handles the small difference from it. Every other family iterates directly and is CLAMPED to the depth float32 can hold. So the floor is a property of the family, `_zl_min` is set from it, and the zoom EASES TO REST against it rather than grinding into it or bouncing off it. Arriving is not a failure - the journey is sized so it takes minutes - but if a scene is held long enough to get there, the camera settling is the graceful end of the shot and a rewind is not.
-
-FLOAT64 IS NOT OPTIONAL ON THIS SIDE. The anchor is held as two loose `float`s and never as a Vector2: Godot's vectors are 32-bit, so a Vector2 anchor would quietly round away the last six digits of the coordinate - which at depth is the entire location.
-
-WHAT THE SEED DECIDES: the family (mandelbrot / julia / burning ship / tricorn / celtic / buffalo) and its integer power; for a Julia set, where its parameter sits on the cardioid and how it drifts; the anchor, found by a local search that walks toward the boundary; the coloring (smooth escape count, stripe average, three orbit traps, exterior distance) and its parameters; the palette, built as a seamless cyclic ramp from a `Scheme`; how the interior is treated; the iteration budget; the zoom's direction, speed and turning points; the frame's slow rotation; and the vignette.
+The seed decides: the family (mandelbrot / julia / burning ship / tricorn / celtic / buffalo) and power; a Julia parameter's place on the cardioid; the anchor (a local search toward the boundary); the coloring and its parameters; a seamless cyclic palette from a `Scheme`; the interior treatment; the iteration budget; the zoom's direction, speed and turning points; the frame's rotation; the vignette.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -1088,19 +1022,15 @@ Source: [src/scenes/fractal_zoom.gd](../src/scenes/fractal_zoom.gd) (extends `Gh
 
 ### `tunnel_run` (scene3d, drift)
 
-Tunnel run - the camera on a track, falling forward through a tube that twists, banks and sometimes turns right over.
+Tunnel run - the camera on a track, falling forward through a tube that twists, banks and sometimes turns right over. A first-person ride: the camera is on a track inside the tube, with almost no shot or drift, since a tunnel is only a tunnel while the vanishing point holds still.
 
-The one thing in this catalog that is a RIDE. Everything else is looked AT - a body in a void, a field, a landscape under an orbiting camera - and the difference a first-person track makes is not a matter of degree: the frame stops being a picture and becomes a place the viewer is inside of. That is also why it is the scene with the strongest opinion about its own camera: no shot, no drift worth mentioning, because a tunnel is only a tunnel while the vanishing point holds still.
+The track is integrated, not splined, so it can loop and roll: a frame (right / up / forward) is carried along and turned each step by three seeded curvature functions of arclength (yaw about its own up, pitch about its right, roll about its forward). A sustained pitch is a loop, a sustained yaw a spiral staircase, roll the barrel the tube turns through. The functions are sums of incommensurate sinusoids, so the track never repeats; stations are generated ahead of the camera and dropped behind it, so it is endless at constant memory.
 
-THE TRACK IS INTEGRATED, NOT SPLINED, and that is what lets it loop. A curve fitted through control points can bend but it cannot roll, and a path defined as `(x(s), y(s), s)` - the obvious way - can never turn back on itself at all, because z increases by construction. Here a FRAME is carried along instead (right / up / forward, orthonormal) and turned each step by three seeded curvature functions of arclength: yaw about its own up, pitch about its own right, roll about its own forward. Integrate that and a sustained pitch is a loop, a sustained yaw is a spiral staircase, and roll is the barrel the whole tube turns through while it does either. The functions are sums of sinusoids at incommensurate wavelengths, so the track never repeats and never needs to be stored.
+The wall's cross-section is a small Fourier series in the angle that twists along the track and swells and closes on a long wavelength. Ribs mark distance at a fixed arclength interval, seams run the length at fixed angles (they make the roll legible), motes stream past, and everything fades into fog at the view distance.
 
-NOTHING IS EVER STORED, in fact: stations are generated a few dozen ahead of the camera and dropped behind it, so the track is endless at constant memory and there is no seam to hide.
+Music: speed (loud is fast), and the wall's radius per angle from the spectrum, wound along the track; beats brighten the ribs. The track's shape is never touched.
 
-WHAT IS IN THE TUNNEL. The wall's cross-section is a small Fourier series in the angle - one roll gives a circle, a lobed star, a flattened duct or a fluted column - and it TWISTS along the track, so the flutes spiral past instead of running straight. Its radius swells and closes on a long wavelength, which is what makes the tube open into chambers and neck back down. RIBS punctuate it at a fixed interval in arclength, so they arrive at a steady rate and read as distance covered; SEAMS run the whole length at a few fixed angles, which is the thing that makes the roll legible (a smooth tube rolling looks like a still tube). MOTES hang in the air and stream past. Everything fades into a fog at the view distance, so the tunnel recedes into haze rather than ending at a hole.
-
-WHAT THE MUSIC DOES. The SPEED, which is the whole feeling of the thing - loud is fast. And the wall's radius, per angle, from the spectrum: the cross-section carries the bands, wound into a spiral along the track so the camera flies through the music rather than past a bar chart of it. Beats brighten the ribs. The track's SHAPE is never touched: a tunnel whose curvature moved on the beat would be a camera being shaken, which is a different and much cheaper sensation.
-
-THE COST, AND WHY IT IS OFF-THREAD. A frame is around a thousand quads, each projected, culled, shaded and depth-sorted - five to fifteen milliseconds of GDScript, which is most of a frame budget. It is built inside a `FrameForge` job like the other scene3d scenes. The one frame of latency that costs is uniform (the job is kicked every frame and delivered in order), so it reads as a constant time offset rather than as judder.
+Cost: about a thousand quads a frame (five to fifteen ms of GDScript), built in a `FrameForge` job; its one frame of latency is uniform.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -1124,9 +1054,9 @@ Source: [src/scenes/tunnel_run.gd](../src/scenes/tunnel_run.gd) (extends `Scene3
 
 Eye - a single human eye in the black void (the-point, scene 1).
 
-A real-3D floating eyeball (`EyeBody`) - sclera sphere, recessed iris, glossy cornea - drawn through the `Scene3D` camera with a real light, no eyelids, no blink. It looks around in center-preferring saccades by rotating in 3D. The pupil dilates with the audio. Declares `morph_out = "eye"` so the Director can morph it into two_eyes (the split) rather than cutting.
+A 3D floating eyeball (`EyeBody`: sclera sphere, recessed iris, glossy cornea) drawn through the `Scene3D` camera with a real light, no eyelids, no blink. It looks around in center-preferring saccades by rotating in 3D; the pupil dilates with the audio. Declares `morph_out = "eye"` so the Director can morph it into two_eyes (the split) rather than cutting.
 
-The iris color comes from a `Scheme` mood and the eye's size on screen from a named tier, so two seeds are two different eyes at two different distances rather than the same golf-ball in the same brown.
+The iris color comes from a `Scheme` mood and the eye's size on screen from a named tier.
 
 morph out: `eye`
 
@@ -1142,9 +1072,9 @@ Source: [src/scenes/eye.gd](../src/scenes/eye.gd) (extends `Scene3D`)
 
 Eye + prism - the right eye becomes its digital self (the-point, scenes 3-5).
 
-The two eyes' composition continues, but the RIGHT eye dissolves and CRYSTALLIZES into the glowing BLUE wireframe `PrismBody` while the LEFT human eye remains, watching. Then the prism "looks around" the void on its own; and toward the end the remaining eye begins to TREMBLE and vibrate, faster and faster, light building around it - the riser into the drop. Arrives by morph from `two_eyes` (`morph_in = "eyes"`): it reuses the SAME two EyeBody instances, so nothing jumps - the left eye simply keeps looking while the right one turns to crystal in place. Hands off to `two_prisms` (`morph_out = "eye2prism"`): the live blue PrismBody plus the trembling eye's slot, so the drop can burst a red prism there.
+The two eyes' composition continues, but the right eye dissolves and crystallizes into the glowing wireframe `PrismBody` while the left human eye remains, watching. The prism then looks around the void on its own, and toward the end the remaining eye begins to tremble and vibrate, faster and faster, with light building around it: the riser into the drop. Arrives by morph from `two_eyes` (`morph_in = "eyes"`), reusing the same two EyeBody instances so nothing jumps. Hands off to `two_prisms` (`morph_out = "eye2prism"`): the live prism plus the trembling eye's slot, so the drop can burst a red prism there.
 
-"Blue" is now a mood rather than a constant: the crystal takes a cool `Scheme` - glacier, abyss, teal, violet, ash - carried on the `PrismBody` itself as a hue offset from `HUE_BLUE`, so `two_prisms` (which draws that same live body at HUE_BLUE) inherits the color across the morph instead of popping back to blue. The eyes take an iris mood, and the pair's composition a named spacing.
+The crystal takes a cool `Scheme` (glacier, abyss, teal, violet, ash), carried on the `PrismBody` as a hue offset from `HUE_BLUE`, so `two_prisms` (which draws that body at HUE_BLUE) inherits the color across the morph. The eyes take an iris mood and the pair's composition a named spacing.
 
 morph in: `eyes` · morph out: `eye2prism`
 
@@ -1160,11 +1090,11 @@ Source: [src/scenes/eye_prism.gd](../src/scenes/eye_prism.gd) (extends `Scene3D`
 
 Prism - a single living wireframe tetrahedron (from "the-point").
 
-A see-through 4-point prism with a living neural core, ported from the browser Prism via `PrismBody`: glowing edges only, tendrils flowing from the center, hovering and slowly "looking around". The camera holds (the brief: static, forward-facing); the core comes to life with the audio.
+A see-through 4-point prism with a living neural core, ported from the browser Prism via `PrismBody`: glowing edges only, tendrils flowing from the center, hovering and slowly looking around. The camera holds (static, forward-facing); the core follows the audio.
 
-Color is a `Scheme` mood rather than the old blue-or-red coin flip. Only the hue reaches the body (it draws its own saturation from the browser's palette), and every hue is a plausible crystal, so nothing is excluded.
+Color is a `Scheme` mood; only the hue reaches the body (it draws its own saturation from the browser's palette).
 
-THE SHELL DOES NOT VARY. It is the browser tetrahedron, every time - see `PrismBody`'s `form` for the five-way shell roll that briefly lived there and why it was taken out. A prism is a tetrahedron; the variety belongs in its color and its framing, not in its solid. The liberty this scene takes on top is PRESENCE.
+The shell does not vary: it is the browser tetrahedron every time (see `PrismBody`'s `form`). Variety belongs in color, framing and presence.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -1178,9 +1108,9 @@ Source: [src/scenes/prism.gd](../src/scenes/prism.gd) (extends `GhostScene`)
 
 Prism split - one prism strains, then breaks into two (from "the-point").
 
-It begins as a SINGLE blue `PrismBody` at center. Energy builds a TENSION: a red clone is pulled out of it as a faint SHADE, stretching toward its anchor but held back by an attractor BOND between them (a taut filament). When the tension crosses its breaking point, the bond SNAPS - a flash - and the freed clone SPRINGS to its anchor with an overshoot, both prisms settling to the left/right anchors. Thereafter each prism strains against its own anchor (the rubber-band core in `PrismBody`), so the pair keeps straining and springing with the music. The whole split is driven by energy: a quiet passage barely stretches it; a surge breaks it.
+It begins as a single `PrismBody` at center. Energy builds a tension: a clone is pulled out as a faint shade, stretching toward its anchor but held back by an attractor bond (a taut filament). When the tension crosses its breaking point the bond snaps with a flash and the clone springs to its anchor with an overshoot, both prisms settling at the left/right anchors. After that each prism strains against its own anchor (the rubber-band core in `PrismBody`). A quiet passage barely stretches it; a surge breaks it.
 
-Color and geometry both come off one roll. The pair takes a `Scheme` mood - the original on its base hue, the clone on the mood's counter hue (see `Scheme.opposed`) - so "blue splits into red" is now one outcome of many rather than the only one. The structural liberty is the SPLIT ITSELF: which way the thing comes apart, which is this scene's whole composition.
+The pair takes a `Scheme` mood: the original on its base hue, the clone on the counter hue (see `Scheme.opposed`). The seeded structure is the split itself: which way it comes apart.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
@@ -1192,13 +1122,13 @@ Source: [src/scenes/prism_split.gd](../src/scenes/prism_split.gd) (extends `Ghos
 
 ### `prism_swarm` (scene3d, drift)
 
-Prism swarm - the swarm forms, flies the track, splits into a helix, and jumps (the-point, scenes 12-15).
+Prism swarm - the swarm forms, flies the track, splits into a helix, and jumps (the-point scenes 12-15).
 
-12 gather - more BLUE prisms fly in one at a time beside the first, a sparse swarm of 6-7, forming up into a tight unison formation streaming along one track. 13 fly    - the formation flies FORWARD in unison along an invisible track into the void. 14 split  - the single track splits into TWO entangled tracks twisting like a double helix, one strand all BLUE, the other all RED, weaving in OPPOSING directions. 15 jump   - the swarm commits to ONE side (banks left or right by seed), then JUMPS across to the other track - a quick lane-change leap - and holds, leaving room for a card.
+12 gather - blue prisms fly in one at a time beside the first and form up into a tight unison formation along one track. 13 fly    - the formation flies forward in unison along an invisible track into the void. 14 split  - the track splits into two entangled tracks twisting like a double helix, one strand blue, the other red, weaving in opposing directions. 15 jump   - the swarm banks left or right (by seed), jumps across to the other track and holds, leaving room for a card.
 
-The only scene where the camera travels (the brief allows motion from the swarm on): it flies forward a touch slower than the swarm, so the formation pulls ahead and recedes into the void. Arrives by morph from `two_prisms` (`morph_in = "prisms"`): the live blue prism leads the swarm.
+The only scene where the camera travels: it flies a touch slower than the swarm, so the formation pulls ahead and recedes. Arrives by morph from `two_prisms` (`morph_in = "prisms"`): the live blue prism leads the swarm.
 
-Both liberties this scene takes are about the SWARM: a `FORMATION` decides how many prisms there are and how the track carries them (a lean three-body pair, the seven-strong file the sequence was designed around, or a shoal of a dozen small ones on a tight fast helix), and a `Scheme` mood decides the two strands' colors. The strand hues ride on the BODIES as offsets from `HUE_BLUE` / `HUE_RED`, the convention the rest of the prism family uses, so the lead handed over by `two_prisms` keeps its color - and the strand it joins is re-based onto that color, rather than the swarm reverting to blue the moment it arrives.
+The seeded choices are the swarm: a `FORMATION` decides how many prisms there are and how the track carries them, and a `Scheme` mood decides the two strands' colors. Strand hues ride on the bodies as offsets from `HUE_BLUE` / `HUE_RED`, so the lead handed over by `two_prisms` keeps its color and the strand it joins is re-based onto it.
 
 morph in: `prisms`
 
@@ -1214,9 +1144,9 @@ Source: [src/scenes/prism_swarm.gd](../src/scenes/prism_swarm.gd) (extends `Scen
 
 Two eyes - the single eye split into two (the-point, scene 2).
 
-Two real-3D eyeballs (`EyeBody`) that *verge*: both aim at one shared 3D focus point, so they toe in on a near point and run parallel on a far one - real binocular gaze, not two eyes locked to the same direction. The focus drifts in depth (near -> far -> extreme distance) and lingers at the extremes, with the pupils accommodating. Declares `morph_in = "eye"`: arriving from the single eye it plays the split (the same eye dividing). Occasionally one eye diverges - the nonlinear deviation, not the default.
+Two real-3D eyeballs (`EyeBody`) that verge: both aim at one shared 3D focus point, so they toe in on a near point and run parallel on a far one (real binocular gaze). The focus drifts in depth (near, far, extreme) and lingers at the extremes, with the pupils accommodating. Declares `morph_in = "eye"`: arriving from the single eye it plays the split (the same eye dividing). Occasionally one eye diverges.
 
-Color comes from a `Scheme` mood (the same iris moods the single eye draws from), and the pair's PLACEMENT from a named spacing - crowded, human, or wide-set - so the composition itself changes with the seed and not only the eyes' color.
+Color comes from a `Scheme` mood (the iris moods the single eye draws from), and the pair's placement from a named spacing - crowded, human, or wide-set.
 
 morph in: `eye` · morph out: `eyes`
 
@@ -1232,11 +1162,11 @@ Source: [src/scenes/two_eyes.gd](../src/scenes/two_eyes.gd) (extends `Scene3D`)
 
 Two prisms - the pair, from the drop through specialization (the-point, scenes 6-11).
 
-The trembling eye BURSTS into the glowing RED `PrismBody` on the beat drop; now two prisms face forward, the BLUE (continued from `eye_prism`) and the RED. They run a timeline: 6  burst      - the red forms in a flash where the eye was; blue keeps living. 7  phase-lock - the two SNAP into sync, red locked to blue's pose, rotating as one. 8  scan       - locked, they scan the void in unison. 9  desync     - the blue breaks sync and looks around on its own; the red holds steady. 10 unlock     - both slip their anchors and SWAY, weightless, straining and drifting. 11 specialize - the blue SWELLS and pulses slowly; the red SHRINKS and quickens. They grow visibly distinct (bias vs. variance made physical).
+The trembling eye bursts into the glowing red `PrismBody` on the beat drop; two prisms then face forward, the blue (continued from `eye_prism`) and the red, on a timeline: 6  burst      - the red forms in a flash where the eye was; blue keeps living. 7  phase-lock - the two snap into sync, red locked to blue's pose, rotating as one. 8  scan       - locked, they scan the void in unison. 9  desync     - the blue breaks sync and looks around on its own; the red holds steady. 10 unlock     - both slip their anchors and sway, weightless, straining and drifting. 11 specialize - the blue swells and pulses slowly; the red shrinks and quickens (bias vs. variance made physical).
 
 Arrives by morph from `eye_prism` (`morph_in = "eye2prism"`): reuses the live blue prism and bursts the red at the eye's slot. Hands off to `prism_swarm` (`morph_out = "prisms"`).
 
-The pair takes a `Scheme` mood: the lead on its base hue, the counter on the mood's opposed hue. Both ride on the BODIES as offsets from `HUE_BLUE` / `HUE_RED` (the convention `eye_prism` established), so a body handed across a morph keeps its color and this scene inherits whatever the eye crystallized into instead of snapping back to blue. When that happens the red is re-derived from the arriving hue, so the pair is always ONE mood's opposition rather than two unrelated ones.
+The pair takes a `Scheme` mood: the lead on its base hue, the counter on the opposed hue. Both ride on the bodies as offsets from `HUE_BLUE` / `HUE_RED` (the convention `eye_prism` established), so a body handed across a morph keeps its color. When one arrives, the red is re-derived from the arriving hue, so the pair is one mood's opposition.
 
 morph in: `eye2prism` · morph out: `prisms`
 
@@ -1257,9 +1187,9 @@ Present under `src/scenes/` but not registered in `SceneRoster.SCENES` - reachab
 
 Orbits - harmonograph curves that morph with the music.
 
-Each curve is a damped sum of sines in x and y - the figure a harmonograph pen traces. A slow global phase advances every frame, so the figure breathes and folds through itself continuously, and the per-axis amplitudes are driven by the spectrum, so loud passages swell the curve outward.
+Each curve is a damped sum of sines in x and y, the figure a harmonograph pen traces. A slow global phase makes it breathe and fold through itself; per-axis amplitudes follow the spectrum, so loud passages swell the curve.
 
-The seed picks a FIGURE first, and the four figures are different curves, not different tunings of one: incommensurate frequencies fold a rosette that never repeats, small integer ratios close into a braid, a carrier plus a fast epicycle loops petals around an open ring, and a heavily damped pair spirals inward to a point. Color comes from a shared `Scheme` mood, so a session is not one hue every time.
+The seed picks one of four figures, which are different curves, not tunings of one: incommensurate frequencies fold a rosette that never repeats, small integer ratios close into a braid, a carrier plus a fast epicycle loops petals around an open ring, and a heavily damped pair spirals in to a point. Color comes from a shared `Scheme` mood.
 
 layers: `bed`
 
@@ -1277,13 +1207,13 @@ Source: [src/scenes/orbits.gd](../src/scenes/orbits.gd) (extends `GhostScene`)
 
 Stage - the data-driven scene: its entire content comes from the storyboard entry.
 
-Where every other scene is code that rolls a look from a seed, a stage is a RENDERER for a description: the entry's `cast:` names actors from the `Cast` registry (with sampled-range params), its `track:` schedules `Actions` verbs over them (see `Track`), and `camera:` places the `Lens3D`. Nothing here knows about eyes or prisms specifically - new performers and verbs extend the registries, and scene behavior is authored in the data.
+A stage is a renderer for a description: the entry's `cast:` names actors from the `Cast` registry (with sampled-range params), its `track:` schedules `Actions` verbs over them (see `Track`), and `camera:` places the `Lens3D`. Nothing here knows about eyes or prisms; new performers and verbs extend the registries, and the behavior is authored in the data.
 
 - scene: stage hold: 4 camera: {eye: [0, 0, 4.0], look: [0, 0, 0], fov: 48} cast: - {id: left, kind: eye, at: [0, 0, 0], radius: [0.30, 0.40]} track: nominal: 4 spans: - {at: 0.5, action: blink, target: left}
 
-A stage is deliberately WITHOUT a look of its own, and that is why it has no color scheme or shape table like the other scenes: everything visible belongs to the actors the board names, so variety here means giving `Cast` and `Actions` more to offer, and adding a palette roll in this file would only fight the entry that asked for a color.
+A stage has no look of its own (no color scheme or shape table): everything visible belongs to the actors the board names, so variety means giving `Cast` and `Actions` more to offer.
 
-Continuity: a stage declares `morph_out = morph_in = "stage"`, so when two stage entries run back to back the Director plays a morph and `begin_morph` adopts the previous entry's LIVE actors by matching id - a body continues across the cut (new slots come from the new entry; identity, pose and verb latches ride along). Set `carry: false` on an entry to open with a clean cut instead.
+Continuity: a stage declares `morph_out = morph_in = "stage"`, so when two stage entries run back to back the Director plays a morph and `begin_morph` adopts the previous entry's live actors by matching id (new slots come from the new entry; identity, pose and verb latches ride along). Set `carry: false` on an entry to open with a clean cut instead.
 
 morph in: `stage` · morph out: `stage`
 
@@ -1293,17 +1223,15 @@ Source: [src/scenes/stage.gd](../src/scenes/stage.gd) (extends `Scene3D`)
 
 wallpaper - one motif, one symmetry group, and the whole plane follows.
 
-A flat printed pattern, edge to edge: three to five solid inks, thin keylines, and no glow, no gradient and no soft edge anywhere. This is the catalog's first flat-vector poster surface, and it is deliberately set against a project whose whole vocabulary is soft blobs, glow fringes and vignetted beds - the drama here has to come from drawing, not from light. One small motif - a couple of bars, a wedge, a disc, an arc - is repeated by an ACTUAL plane symmetry group, so the mirrors, glides and rotation centers in the picture are real rather than suggested: under p6m the frame maps onto itself exactly at sixty degrees. The group table, its closure and the lattice walk live in `WallpaperGroup`.
+A flat printed pattern, edge to edge: three to five solid inks, thin keylines, no glow, gradient or soft edge. One small motif (bars, a wedge, a disc, an arc) is repeated by an actual plane symmetry group, so the mirrors, glides and rotation centers are real. The group table, its closure and the lattice walk live in `WallpaperGroup`.
 
-NOTHING MOVES AS A PARTICLE, which is the other half of the idea. There is no drift, no sway, no per-element wobble. What the music does instead is RE-INK the pattern. Every motif element is bound at build to a pitch class; a few times a second the twelve chroma bins of `Spectrum.harmonic_signature` are ranked, and each element takes the ink its own pitch class's RANK points at. Because every copy of the motif is the same motif, one chord change repaints six hundred of them on the same tick and the whole surface flips character in a beat. That is "sound drives color, not scale" taken to its limit - a large, perfectly synchronized change with zero motion, which is a kind of drama nothing else here does.
+Nothing moves as a particle. The music re-inks the pattern: every motif element is bound at build to a pitch class; a few times a second the twelve chroma bins of `Spectrum.harmonic_signature` are ranked, and each element takes the ink its pitch class's rank points at, so one chord change repaints hundreds of copies on the same tick. `f.beat` starts a lattice glide: the tiling translates by exactly one lattice vector over a fraction of the beat period and lands back in register (a step, not a scroll). `f.movement` cross-fades the motif between two seeded vertex sets (a radial lerp with matched counts). `f.energy` moves the keyline alpha inside a narrow sampled band.
 
-Two smaller audio channels. `f.beat` starts a LATTICE GLIDE: the tiling translates by exactly one lattice vector over a fraction of the beat period and lands back in register, so it reads as a step rather than a scroll - at the end of the move the picture is identical to the one before it. `f.movement` cross-fades the motif between two seeded vertex sets (a straight radial lerp with matched counts), so a section change morphs the pattern continuously while it stays inside its group. `f.energy` moves the keyline alpha and nothing else, inside a narrow sampled band.
+The seed decides the group (of seventeen, weighted toward the richer ones), the lattice aspect and angle, the motif's elements, the morph jitter, the `Scheme` mood and ink count, a high-key or near-black ground, the keyline, the re-rank rate and the glide.
 
-WHAT THE SEED DECIDES: which of the seventeen groups (weighted - the richer ones come up more), the lattice aspect and, for the oblique groups, its angle; how many motif elements and what each one is (bar / wedge / disc / arc), its vertex count, size, rotation and place in the fundamental domain; the morph target's per-vertex jitter; the `Scheme` mood and how many inks are drawn from it; whether the ground is high-key or near-black; the keyline's width and its alpha band; how often the inks are re-ranked; which lattice vectors the glide walks, on which beats, over how much of the beat period.
+The cell size is derived, not sampled: cells x group order x elements is the polygon count (18x18 cells of five elements under p6m, order 12, is 19,440 polygons). A total motif budget is sampled, the element count is capped against the group's order, and the cell length is solved from the budget, clamped so cells across the frame stay in [5, 18].
 
-THE ONE GUARD THIS SCENE NEEDS is multiplicative, and it is why the cell size is derived rather than sampled: cells x group order x elements is the polygon count, and 18x18 cells of a five-element motif under p6m (order 12) would be 19,440 polygons. So a total motif budget is sampled first, the element count is capped against the group's order, and the cell length is solved backwards from the budget - then clamped so cells-across-frame still lands in [5, 18], because a pattern with three cells in it is not a pattern and one with forty is a texture.
-
-HOW IT DRAWS. The motif is identical in every cell, so the frame is built ONCE per cell - every coset, every element, fills then keylines, a few thousand triangles - and that single triangle array is then submitted per cell under a shifted transform. The cost is two RenderingServer calls per cell instead of the tens of thousands of GDScript vertex appends a naive full-plane batch would need; measured against the budget, that is the difference between about a millisecond and about twenty.
+The motif is identical in every cell, so the frame is built once per cell and that triangle array is submitted per cell under a shifted transform: two RenderingServer calls per cell instead of tens of thousands of vertex appends.
 
 An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 

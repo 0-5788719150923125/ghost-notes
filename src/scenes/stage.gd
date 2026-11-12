@@ -2,12 +2,10 @@ extends Scene3D
 
 ## Stage - the data-driven scene: its entire content comes from the storyboard entry.
 ##
-## Where every other scene is code that rolls a look from a seed, a stage is a
-## RENDERER for a description: the entry's `cast:` names actors from the [Cast]
-## registry (with sampled-range params), its `track:` schedules [Actions] verbs over
-## them (see [Track]), and `camera:` places the [Lens3D]. Nothing here knows about
-## eyes or prisms specifically - new performers and verbs extend the registries, and
-## scene behavior is authored in the data.
+## A stage is a renderer for a description: the entry's `cast:` names actors from the [Cast]
+## registry (with sampled-range params), its `track:` schedules [Actions] verbs over them (see
+## [Track]), and `camera:` places the [Lens3D]. Nothing here knows about eyes or prisms; new
+## performers and verbs extend the registries, and the behavior is authored in the data.
 ##
 ##   - scene: stage
 ##     hold: 4
@@ -19,16 +17,13 @@ extends Scene3D
 ##       spans:
 ##         - {at: 0.5, action: blink, target: left}
 ##
-## A stage is deliberately WITHOUT a look of its own, and that is why it has no color
-## scheme or shape table like the other scenes: everything visible belongs to the actors
-## the board names, so variety here means giving [Cast] and [Actions] more to offer, and
-## adding a palette roll in this file would only fight the entry that asked for a color.
+## A stage has no look of its own (no color scheme or shape table): everything visible belongs to
+## the actors the board names, so variety means giving [Cast] and [Actions] more to offer.
 ##
-## Continuity: a stage declares `morph_out = morph_in = "stage"`, so when two stage
-## entries run back to back the Director plays a morph and [method begin_morph]
-## adopts the previous entry's LIVE actors by matching id - a body continues across
-## the cut (new slots come from the new entry; identity, pose and verb latches ride
-## along). Set `carry: false` on an entry to open with a clean cut instead.
+## Continuity: a stage declares `morph_out = morph_in = "stage"`, so when two stage entries run
+## back to back the Director plays a morph and [method begin_morph] adopts the previous entry's
+## live actors by matching id (new slots come from the new entry; identity, pose and verb latches
+## ride along). Set `carry: false` on an entry to open with a clean cut instead.
 
 var _actors := {}                  # id -> Cast.Actor (insertion-ordered)
 var _track: Track = null
@@ -41,12 +36,10 @@ var _t := 0.0
 var _flashes: Array = []           # transient overlays: {actor, k, col}
 var _ties: Array = []              # snap ties: {a, b, k}
 var _drops: Array = []             # spatter droplets: {p, v (Vector3), r, k} - brief ballistic debris
-# The elastic timeline clock (entry `elastic`, 0 = off): the keyframe clock breathes
-# with the music - an energetic passage runs it up to (1 + elastic)x, a quiet one
-# down to (1 - elastic)x. The signal is ENDOGENOUS and zero-mean by construction
-# (fast energy EMA vs slow baseline EMA), so the timeline stretches and contracts
-# WITH the song but stays anchored to the authored length overall - and with no
-# audio the two EMAs agree, the rate is exactly 1, and timing is unchanged.
+# The elastic timeline clock (entry `elastic`, 0 = off): the keyframe clock breathes with the
+# music, running up to (1 + elastic)x on an energetic passage and down to (1 - elastic)x on a
+# quiet one. The signal is endogenous and zero-mean (fast energy EMA vs slow baseline EMA), so
+# the timeline stays anchored to the authored length; with no audio the rate is exactly 1.
 var _elastic := 0.0
 var _e_fast := 0.0
 var _e_slow := 0.0
@@ -82,9 +75,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 				_actor0[who] = {}
 			if not (_actor0[who] as Dictionary).has(param):
 				_actor0[who][param] = (_actors[who] as Cast.Actor).get_param(param)
-	# A stage chooses nothing of its own - it reports what the BOARD chose, so a probe
-	# reading params can see that this scene's variety lives in the storyboard and in
-	# the Cast registry rather than in a table here.
+	# A stage chooses nothing of its own: it reports what the board chose, so a probe reading
+	# params sees that the variety lives in the storyboard and the Cast registry.
 	var kinds: Array = []
 	for a in _actors.values():
 		kinds.append(a.kind)
@@ -97,10 +89,9 @@ func morph_payload() -> Dictionary:
 	return {"actors": _actors}
 
 
-## Adopt the previous stage's live actors by matching id: the LIVE actor continues
-## wholesale - body, identity, verb latches, group members (a swarm's formation and
-## travel) - only its SLOT and spec come from this entry's own cast, so a board can
-## re-stage a carried actor without resetting what it has become.
+## Adopt the previous stage's live actors by matching id: the live actor continues wholesale
+## (body, identity, verb latches, group members) and only its slot and spec come from this
+## entry's cast, so a board can re-stage a carried actor without resetting it.
 func begin_morph(from: GhostScene) -> void:
 	var p := from.morph_payload()
 	if typeof(p.get("actors")) != TYPE_DICTIONARY:
@@ -117,9 +108,9 @@ func begin_morph(from: GhostScene) -> void:
 		old.home = fresh.home
 		old.spec = fresh.spec
 		_actors[id] = old
-	# A swarm may continue a carried prism as its lead (cfg `lead: <actor id>`): the
-	# live body becomes member 0 and its LAST SCREEN SLOT (projected through the old
-	# stage's lens - the cameras differ) becomes the fly-in origin.
+	# A swarm may continue a carried prism as its lead (cfg `lead: <actor id>`): the live body
+	# becomes member 0 and its last screen slot (projected through the old stage's lens) becomes
+	# the fly-in origin.
 	for a in _actors.values():
 		if a is Cast.SwarmActor and carried.has(String(a.spec.get("lead", ""))):
 			var old: Cast.Actor = carried[String(a.spec["lead"])]
@@ -137,15 +128,14 @@ func begin_morph(from: GhostScene) -> void:
 func update(f: AudioFeatures, delta: float) -> void:
 	tick(f, delta)
 	drift_view(f, 0.004, 0.008)                 # nearly static; behavior gates it anyway
-	# The keyframe clock only runs on screen: the Director pre-warms scenes with a few
-	# update() calls before they enter the tree, and those must not consume early spans
-	# (a blink half a second in would fire during the warm-up). Ambient body life below
+	# The keyframe clock only runs on screen: the Director pre-warms scenes with a few update()
+	# calls before they enter the tree, and those must not consume early spans. Ambient body life
 	# still advances, so the first shown frame is settled.
 	if is_inside_tree():
 		_t += delta * _clock_rate(f, delta)
 		if _track != null:
 			_track.advance(_t, phase_span(_nominal), self, f, delta)
-		# THE TRACK'S FLAGS ([StageKeys]): its keys at the entry's own time, in the track's nominal seconds - a pure function of it
+		# The track's flags ([StageKeys]): its keys at the entry's own time, in the track's nominal seconds - a pure function of it
 		if not _keys.is_empty():
 			var nt := _t * _nominal / maxf(0.05, phase_span(_nominal))
 			lens.eye = StageKeys.value_at(_cam0["camera.eye"], _keys, "camera.eye", nt)
@@ -157,7 +147,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 					var field := "actor." + String(param)
 					if nt >= StageKeys.first_start(_keys, field, String(who)):
 						(_actors[who] as Cast.Actor).set_param(String(param), float(StageKeys.value_at(float(_actor0[who][param]), _keys, field, nt, String(who))))
-			# ...and the Look's dials, from each one's first key on - turned over the picture as the show's own
+			# ...and the Look's dials, from each one's first key on.
 			var dials := {}
 			for k in _keys:
 				var kd: Dictionary = k
@@ -226,8 +216,8 @@ func _draw() -> void:
 		draw_circle(c - Vector2(rr, rr) * 0.3, rr * 0.4, Color(1, 1, 1, 0.35 * dr.k))
 
 
-# The breathing rate of the keyframe clock (see _elastic above). Ambient body life
-# always runs on the raw delta - only WHEN events land stretches, never how things move.
+# The breathing rate of the keyframe clock (see _elastic above). Ambient body life runs on the raw
+# delta; only when events land stretches.
 func _clock_rate(f: AudioFeatures, delta: float) -> float:
 	if _elastic <= 0.0:
 		return 1.0
@@ -256,8 +246,8 @@ func tie(a: Cast.Actor, b: Cast.Actor) -> void:
 	_ties.append({"a": a, "b": b, "k": 1.0})
 
 
-## A burst of small ballistic droplets at a world point (the mitosis snap's spatter,
-## the crystallization's cold shards). [param col] tints them; default is flesh.
+## A burst of small ballistic droplets at a world point (the mitosis snap's spatter, the
+## crystallization's cold shards). [param col] tints them; default is flesh.
 func spatter(p: Vector3, count: int, rng: RandomNumberGenerator,
 		col := Color(0.80, 0.72, 0.72)) -> void:
 	for i in count:
@@ -274,8 +264,8 @@ func _exit_tree() -> void:
 		_turning = false
 
 
-## WHAT IS AT [param at] (pixels of the view the stage is drawn in): `{actor: id}` for the nearest actor drawn there, {} for none -
-## what a click on the stage picks (next/editing.md step 7: "a click on the stage names a thing"). An actor not shown is not there.
+## What is at [param at] (pixels of the view the stage is drawn in): `{actor: id}` for the nearest
+## actor drawn there, {} for none. What a click on the stage picks (next/editing.md). An actor not shown is not there.
 func pick(at: Vector2) -> Dictionary:
 	if not is_inside_tree():
 		return {}

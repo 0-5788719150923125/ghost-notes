@@ -3,39 +3,33 @@ class_name Storyboard
 
 ## Storyboard - a show's scenes written down: the data spec, and its one owner.
 ##
-## A SHOW IS A LIST OF ENTRIES, each naming a scene, how long it stays and how it leaves. The
-## Director walks whatever list it is handed, and where it is handed none it writes one as it goes,
-## from the seed (`Director._next_entry`): the seeded show is a storyboard nobody wrote down, and a
-## written one is the same show made explicit. So everything that makes a show by hand - this
-## spec, the editor over it ([StoryboardEditor]) - is the general case, and "automatic" is its
-## shortest form.
+## A show is a list of entries, each naming a scene, how long it stays and how it leaves. The Director walks
+## whatever list it is handed, and where it is handed none it writes one as it goes, from the seed
+## (`Director._next_entry`): the seeded show is a storyboard nobody wrote down, and a written one is the
+## same show made explicit. This spec and the editor over it ([StoryboardEditor]) are the general case.
 ##
-## WHERE ONE LIVES. In a note's own `scenes:` block ([method of_block] - the note is the project,
-## and the block is edited in the app), or in a file a note names: YAML (it holds comments) or
-## JSON, both parsing to the SAME tree, so everything downstream is format-blind. Bare names
-## resolve inside `res://storyboards/` (`.yaml` first, then `.json`); explicit paths are taken
-## as-is. A file is read here and never written: to change one in the app, a note takes it in.
+## Where one lives: in a note's own `scenes:` block ([method of_block]; the block is edited in the app), or
+## in a file a note names: YAML (it holds comments) or JSON, both parsing to the same tree. Bare names
+## resolve inside `res://storyboards/` (`.yaml` first, then `.json`); explicit paths are taken as-is. A file
+## is read here and never written: to change one in the app, a note takes it in.
 ##
-## TWO SHAPES, AND WHICH IS WHICH. The RAW tree is what is written: `defs`, `use` and all - what a
-## note keeps and an editor edits ([DataPath] makes each edit a new tree). The LOADED form is what
-## the Director walks: `use` expanded, the tree validated, the top-level `elastic` stamped into its
-## entries ([method from_data]). Loading never changes the raw tree it is given.
+## Two shapes: the raw tree is what is written (`defs`, `use` and all; what a note keeps and an editor
+## edits, [DataPath] making each edit a new tree). The loaded form is what the Director walks: `use`
+## expanded, the tree validated, the top-level `elastic` stamped into its entries ([method from_data]).
+## Loading never changes the raw tree it is given.
 ##
 ## Beyond parsing, the spec owns three data conveniences:
-##   defs/use  - `defs:` is a top-level map of named fragments; `use: <name>` inside
-##               any map deep-merges the fragment UNDER the map's own keys (explicit
-##               keys win). A map that is ONLY `{use: name}` becomes the fragment
-##               verbatim (so a whole cast / track block can be a reference). This is
-##               how a storyboard composes reusable pieces - "a scene calling a scene".
-##   sample    - "cattle, not pets": anywhere a number is expected, `[lo, hi]` is a
-##               RANGE, sampled once per instance from the scene's seeded rng via
-##               [method sample]. (A two-number array is therefore always a range -
-##               positions are 3-component `[x, y, z]`.)
-##   validate  - structural errors come back as one clear per-path message instead of
-##               a silent misload.
+##   defs/use  - `defs:` is a top-level map of named fragments; `use: <name>` inside any map deep-merges
+##               the fragment under the map's own keys (explicit keys win). A map that is only
+##               `{use: name}` becomes the fragment verbatim (so a whole cast or track block can be a
+##               reference).
+##   sample    - anywhere a number is expected, `[lo, hi]` is a range, sampled once per instance from the
+##               scene's seeded rng via [method sample] ("cattle, not pets"). A two-number array is always
+##               a range; positions are 3-component `[x, y, z]`.
+##   validate  - structural errors come back as one per-path message instead of a silent misload.
 ##
-## [method load_file] and [method from_data] return the loaded form, `{ok, error, path, name,
-## loop, transition, sensitivity, sequence, tail}`; on failure only `ok` / `error` matter.
+## [method load_file] and [method from_data] return the loaded form, `{ok, error, path, name, loop,
+## transition, sensitivity, sequence, tail}`; on failure only `ok` / `error` matter.
 
 const DIR := "res://storyboards/"
 const MAX_USE_DEPTH := 8
@@ -46,16 +40,16 @@ const IN_NOTE := "in this note"
 ## No entry is scheduled shorter than this, in seconds.
 const MIN_ENTRY := 0.5
 
-## THE FIELDS, AS DATA: what a storyboard, an entry, a stage's camera, an actor and a span can
-## say - the editor builds its rows from these ([SchemaForm]), so a field added here is a field
-## that can be set. A row: `label`, `type`, `default` (what an absent key means - an absent key
-## is not written), `blurb`, and for a number `min` / `max` / `step`, for a choice `options`.
-## Types: `bool`, `enum`, `float`, `int`, `text`, `num` (a number, or a sampled `[lo, hi]`
-## range), `vec3` (three of those), `scene`, `targets` (actor ids, none meaning all).
+## The fields, as data: what a storyboard, an entry, a stage's camera, an actor and a span can say. The
+## editor builds its rows from these ([SchemaForm]), so a field added here can be set. A row: `label`,
+## `type`, `default` (what an absent key means; an absent key is not written), `blurb`, and for a number
+## `min` / `max` / `step`, for a choice `options`. Types: `bool`, `enum`, `float`, `int`, `text`, `num` (a
+## number, or a sampled `[lo, hi]` range), `vec3` (three of those), `scene`, `targets` (actor ids, none
+## meaning all).
 ##
-## The choices are written out here, and not read off the registries that own them, because this
-## file names no autoload and so loads under `--script`; `tests/timeline/storyboard_editor_check.gd` holds
-## each list to its registry (GhostScene.BEHAVIORS, Shots.REGISTRY, Cast, Actions, Track).
+## The choices are written out here rather than read off the registries that own them, because this file
+## names no autoload and so loads under `--script`; `tests/timeline/storyboard_editor_check.gd` holds each
+## list to its registry (GhostScene.BEHAVIORS, Shots.REGISTRY, Cast, Actions, Track).
 const BOARD := {
 	"loop": {"label": "Loop", "type": "bool", "default": true,
 		"blurb": "At the end, start again from the first entry. Off, the show follows the song instead: it holds its last entry, or cycles the tail, and rolls back to the top when the song does."},
@@ -66,10 +60,10 @@ const BOARD := {
 	"elastic": {"label": "Elastic", "type": "float", "min": 0.0, "max": 0.9, "step": 0.01, "default": 0.0,
 		"blurb": "How far a stage's timeline breathes with the song: a loud passage runs it faster, a quiet one slower, the total unchanged. 0 keeps it even."},
 }
-## What every entry says. Beside these, `set`: what the entry tells its scene, by the scene's own
-## settings ([method GhostScene.fields_of]; the editor shows them under the entry) - each the seed's
-## until it is told ([method GhostScene.choice] says what a told one moves). A number may be told as a
-## narrower `[lo, hi]`: the scene's own draw lands in it ([method GhostScene.number]), never sampled here.
+## What every entry says. Beside these, `set`: what the entry tells its scene, by the scene's own settings
+## ([method GhostScene.fields_of]; the editor shows them under the entry), each the seed's until told
+## ([method GhostScene.choice]). A number may be told as a narrower `[lo, hi]`: the scene's own draw lands
+## in it ([method GhostScene.number]), never sampled here.
 const ENTRY := {
 	"scene": {"label": "Scene", "type": "scene", "default": "",
 		"blurb": "What is on screen. Stage is the one made of data: its actors and what they do are written in the entry itself."},
@@ -84,8 +78,8 @@ const ENTRY := {
 	"sensitivity": {"label": "Tempo", "type": "float", "min": 0.05, "max": 20.0, "step": 0.05, "default": null,
 		"blurb": "This entry's own pace. Unset, the storyboard's."},
 }
-## HOW LONG AN ENTRY STAYS, one of three ways ([method timing_of]): for a fixed time, until the
-## music gives a cue, or for as long as the scene itself runs. Each lists the keys it writes.
+## How long an entry stays, one of three ways ([method timing_of]): a fixed time, until the music gives a
+## cue, or as long as the scene itself runs. Each lists the keys it writes.
 const TIMINGS := {
 	"hold": {"label": "A fixed time", "keys": ["hold"],
 		"blurb": "Exactly this many seconds, whatever the music does."},
@@ -157,8 +151,8 @@ static func load_file(name_or_path: String) -> Dictionary:
 	return from_data(raw.data, String(raw.path), name_or_path, String(raw.path))
 
 
-## A storyboard file as it is WRITTEN - parsed, its `defs` and `use` still in it: what a note takes
-## in to make it its own. `{ok, error, path, data}`.
+## A storyboard file as it is written (parsed, `defs` and `use` still in it): what a note takes in to make
+## it its own. `{ok, error, path, data}`.
 static func read_raw(name_or_path: String) -> Dictionary:
 	var path := resolve_path(name_or_path)
 	if path.is_empty():
@@ -179,9 +173,9 @@ static func read_raw(name_or_path: String) -> Dictionary:
 	return {"ok": true, "error": "", "path": path, "data": data}
 
 
-## THE LOADED FORM of a raw storyboard, whoever holds it: `use` expanded, the tree validated, the
-## top-level `elastic` stamped into the entries. [param where] is how its errors name it - a file's
-## path, or [constant IN_NOTE]. [param data] is left exactly as it was handed in.
+## The loaded form of a raw storyboard, whoever holds it: `use` expanded, the tree validated, the top-level
+## `elastic` stamped into the entries. [param where] is how its errors name it (a file's path, or
+## [constant IN_NOTE]). [param data] is left as it was handed in.
 static func from_data(data: Variant, where: String, fallback_name := "", path := "") -> Dictionary:
 	if typeof(data) != TYPE_DICTIONARY:
 		return _fail("storyboard %s: top level must be a map" % where)
@@ -197,8 +191,8 @@ static func from_data(data: Variant, where: String, fallback_name := "", path :=
 	if verr != "":
 		return _fail(verr)
 
-	# A top-level `elastic` (the music-breathing timeline clock, see scenes/stage.gd)
-	# stamps into every entry that doesn't set its own, so one number tunes the show.
+	# A top-level `elastic` (the music-breathing timeline clock, see scenes/stage.gd) stamps into every
+	# entry that does not set its own, so one number tunes the show.
 	if expanded.has("elastic"):
 		for e in expanded["sequence"]:
 			if not (e as Dictionary).has("elastic"):
@@ -218,9 +212,9 @@ static func from_data(data: Variant, where: String, fallback_name := "", path :=
 	}
 
 
-## WHAT A NOTE'S `scenes:` BLOCK HOLDS, `{kind, name, data}`: its OWN storyboard (`kind` "own", the
-## raw tree in `data` - a block with a `sequence`, even an empty one), the name or path of a FILE
-## (`kind` "file", in `name`), or nothing written down ("none": the show is the seed's).
+## What a note's `scenes:` block holds, `{kind, name, data}`: its own storyboard (`kind` "own", the raw tree
+## in `data`; a block with a `sequence`, even an empty one), the name or path of a file (`kind` "file", in
+## `name`), or nothing written down ("none": the show is the seed's).
 static func of_block(block: Variant) -> Dictionary:
 	if not (block is Dictionary):
 		return {"kind": "none", "name": "", "data": {}}
@@ -237,9 +231,8 @@ static func of_block(block: Variant) -> Dictionary:
 	return {"kind": "none", "name": "", "data": {}}
 
 
-## The block a note keeps its OWN storyboard in: [param data]'s keys in [constant KEYS]' order,
-## and a `sequence` always - an empty one is a storyboard with nothing written in it yet, which is
-## still the note's own.
+## The block a note keeps its own storyboard in: [param data]'s keys in [constant KEYS]' order, and a
+## `sequence` always (an empty one is a storyboard with nothing written in it yet, still the note's own).
 static func own_block(data: Dictionary) -> Dictionary:
 	var out := {}
 	for k in KEYS:
@@ -250,21 +243,21 @@ static func own_block(data: Dictionary) -> Dictionary:
 	return out.duplicate(true)
 
 
-## The block of a note that plays a storyboard FILE: its name in `res://storyboards/`, or a path.
+## The block of a note that plays a storyboard file: its name in `res://storyboards/`, or a path.
 static func file_block(name_or_path: String) -> Dictionary:
 	return {"storyboard": name_or_path}
 
 
-## HOW AN ENTRY IS TIMED - a key of [constant TIMINGS]: "hold" (a fixed time), "cue" (until the
-## music gives one) or "own" (the scene's own lifecycle).
+## How an entry is timed, a key of [constant TIMINGS]: "hold" (a fixed time), "cue" (until the music gives
+## one) or "own" (the scene's own lifecycle).
 static func timing_of(entry: Dictionary) -> String:
 	if entry.has("hold"):
 		return "hold"
 	return "cue" if entry.has("exit") else "own"
 
 
-## [param entry] timed another way: the keys of its old timing dropped, and the ones the new one
-## needs filled with their defaults. A bound both ways share (`min_hold`, `max_hold`) is kept.
+## [param entry] timed another way: the keys of its old timing dropped, and the ones the new one needs
+## filled with their defaults. A bound both ways share (`min_hold`, `max_hold`) is kept.
 static func with_timing(entry: Dictionary, timing: String) -> Dictionary:
 	var out := entry.duplicate(true)
 	var keep: Array = (TIMINGS.get(timing, TIMINGS["own"]) as Dictionary)["keys"]
@@ -278,10 +271,9 @@ static func with_timing(entry: Dictionary, timing: String) -> Dictionary:
 	return out
 
 
-## How long [param entry] is SCHEDULED to stay, in seconds: its fixed hold, else the least it
-## stays, else [param unauthored] (what an entry that says nothing gets) - over its tempo
-## ([param sensitivity] where it names none). An entry that leaves on a cue has no fixed length;
-## this is where the schedule counts it from.
+## How long [param entry] is scheduled to stay, in seconds: its fixed hold, else the least it stays, else
+## [param unauthored] (what an entry that says nothing gets), over its tempo ([param sensitivity] where it
+## names none). An entry that leaves on a cue has no fixed length; this is where the schedule counts it from.
 static func entry_length(entry: Dictionary, sensitivity: float, unauthored: float) -> float:
 	var sens := clampf(float(entry.get("sensitivity", sensitivity)), 0.05, 20.0)
 	var dur := unauthored
@@ -292,9 +284,8 @@ static func entry_length(entry: Dictionary, sensitivity: float, unauthored: floa
 	return maxf(MIN_ENTRY, dur / sens)
 
 
-## THE SCHEDULE of [param sequence]: `starts` (each entry's start, in seconds), `lengths`, and
-## `end`, where the sequence hands over to the tail. One function for the Director's walk and the
-## editor's ruler, so what is drawn is what plays.
+## The schedule of [param sequence]: `starts` (each entry's start, in seconds), `lengths`, and `end`, where
+## the sequence hands over to the tail. One function for the Director's walk and the editor's ruler.
 static func schedule(sequence: Array, sensitivity: float, unauthored: float) -> Dictionary:
 	var starts: Array = []
 	var lengths: Array = []
@@ -307,11 +298,12 @@ static func schedule(sequence: Array, sensitivity: float, unauthored: float) -> 
 	return {"starts": starts, "lengths": lengths, "end": acc}
 
 
-## THE STORYBOARD [param data] (a raw tree, defs and all) AS A [Timeline] on the song's clock: an entry a group, timed as
-## [method schedule] times it ([param unauthored] seconds for one that gives none), on the `verb` engine - a scene is a
-## simulation that answers the music. A stage entry's cast are its lanes and its track's spans their items, scaled from the
-## track's nominal seconds into the entry's own as the stage scales them ([Track]); a span aimed at several actors, or at
-## all, stands in lane "all". Each item's `source` is its span's path in [param data].
+## The storyboard [param data] (a raw tree, defs and all) as a [Timeline] on the song's clock: an entry a
+## group, timed as [method schedule] times it ([param unauthored] seconds for one that gives none), on the
+## `verb` engine (a scene is a simulation that answers the music). A stage entry's cast are its lanes and
+## its track's spans their items, scaled from the track's nominal seconds into the entry's own as the stage
+## scales them ([Track]); a span aimed at several actors, or at all, stands in lane "all". Each item's
+## `source` is its span's path in [param data].
 static func timeline(data: Dictionary, unauthored := 8.0) -> Dictionary:
 	var tree: Variant = expanded(data, data.get("defs", {}))
 	var seq: Array = (tree as Dictionary).get("sequence", []) if tree is Dictionary and (tree as Dictionary).get("sequence") is Array else []
@@ -337,8 +329,8 @@ static func timeline(data: Dictionary, unauthored := 8.0) -> Dictionary:
 				var lane := String(target) if target is String else "all"
 				Timeline.add(g, lane, lane, Timeline.item("span-%d" % (j + 1), String(sd.get("action", "")), t0 * scale,
 					maxf(t1 - t0, 0.0) * scale, ["sequence", i, "track", "spans", j]))
-			# ...AND ITS FLAGS ([StageKeys]): each key a flag in lane "camera" on the `time` engine - a pure function of the entry's
-			# time, seekable, as a verb is not - with its ease and its seconds
+	# ...and its flags ([StageKeys]): each key a flag in lane "camera" on the `time` engine (a pure
+	# function of the entry's time, seekable, as a verb is not), with its ease and its seconds
 			for k in StageKeys.sanitize(track.get("keys", []))["keys"]:
 				var kd: Dictionary = k
 				var flag := Timeline.item("key-%d" % (int(kd["index"]) + 1), StageKeys.key_name(kd), float(kd["at"]) * scale, 0.0,
@@ -352,8 +344,8 @@ static func timeline(data: Dictionary, unauthored := 8.0) -> Dictionary:
 	return Timeline.make("song", groups)
 
 
-## A new entry for [param scene], as the editor adds one: a stage with a camera, an empty cast and
-## an empty timeline; any other scene with nothing but its name - every key unset is a default.
+## A new entry for [param scene], as the editor adds one: a stage with a camera, an empty cast and an empty
+## timeline; any other scene with nothing but its name (every key unset is a default).
 static func new_entry(scene: String) -> Dictionary:
 	if scene != "stage":
 		return {"scene": scene}
@@ -362,8 +354,8 @@ static func new_entry(scene: String) -> Dictionary:
 		"cast": [], "track": {"nominal": 8.0, "spans": []}}
 
 
-## A LOADED storyboard as a raw tree again - every `use` already expanded - for handing a render
-## what a session walks, where it is in no file of its own.
+## A loaded storyboard as a raw tree again (every `use` expanded), for handing a render what a session
+## walks where it is in no file of its own.
 static func raw_of(loaded: Dictionary) -> Dictionary:
 	var out := {"name": String(loaded.get("name", "")), "loop": bool(loaded.get("loop", true))}
 	if not String(loaded.get("transition", "")).is_empty():
@@ -376,14 +368,14 @@ static func raw_of(loaded: Dictionary) -> Dictionary:
 	return out
 
 
-## A storyboard as YAML text, in [constant KEYS]' order - what the editor's source view shows, and
-## what a note's export hands its render.
+## A storyboard as YAML text, in [constant KEYS]' order: what the editor's source view shows and what a
+## note's export hands its render.
 static func to_yaml(data: Dictionary) -> String:
 	return MiniYaml.emit(own_block(data))
 
 
-## ...and back: `{ok, error, data}`, the raw tree, refused with the reason where the text does not
-## parse or does not make a storyboard that loads.
+## ...and back: `{ok, error, data}`, the raw tree, refused with the reason where the text does not parse or
+## does not make a storyboard that loads.
 static func from_yaml(text: String) -> Dictionary:
 	var y := MiniYaml.parse(text)
 	if not y.ok:
@@ -409,18 +401,18 @@ static func resolve_path(name_or_path: String) -> String:
 	return ""
 
 
-## [param node] with every `use` in it expanded against [param defs]: what one map of a raw
-## storyboard is worth once loaded, for an editor showing a value its own keys do not write.
-## Returned as it was where a def is missing.
+## [param node] with every `use` in it expanded against [param defs]: what one map of a raw storyboard is
+## worth once loaded, for an editor showing a value its own keys do not write. Returned as it was where a
+## def is missing.
 static func expanded(node: Variant, defs: Variant) -> Variant:
 	var ctx := {"error": ""}
 	var out: Variant = _expand(node, defs if defs is Dictionary else {}, 0, ctx)
 	return out if String(ctx.error).is_empty() else node
 
 
-## Sample a spec value with a seeded rng: a two-number array is a `[lo, hi]` range
-## (one draw per call site = once per instance); everything else recurses. Call this
-## on any user-authored numeric config before baking it into an instance.
+## Sample a spec value with a seeded rng: a two-number array is a `[lo, hi]` range (one draw per call site,
+## once per instance); everything else recurses. Call this on any authored numeric config before baking it
+## into an instance.
 static func sample(v: Variant, rng: RandomNumberGenerator) -> Variant:
 	match typeof(v):
 		TYPE_ARRAY:

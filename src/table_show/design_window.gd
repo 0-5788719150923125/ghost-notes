@@ -1,13 +1,11 @@
 extends Window
 class_name DesignWindow
 
-## DesignWindow - ✎ ON A PAINTED DESIGN: its elements as rows (next/editing.md step 4: "A painted design: its elements as rows
-## (layer, tool, pot, beat, seconds): reorder, move to a beat, re-time, remove"). What a late fix to 732687 cost a rule, a repaint
-## and a splice by hand (`el_224`, one liner run on the jaw; `el_208`, one blend) is a press here.
+## DesignWindow - a painted design's elements as rows (next/editing.md step 4): reorder, move to a beat, re-time, remove.
 ##
-## Each element of each design (`skin.json`, [Skins]) a row: its id, the layer it lays, the tool and how, the pot, then what may
-## change - the beat it is laid in, the seconds it may take, its place among the rest (↑ ↓), and ✕. Apply hands the design back
-## to whoever opened it ([member take]), who writes it as a hand's version and makes the work again from it; the elements' own
+## Each element of each design (`skin.json`, [Skins]) is a row: its id, the layer it lays, the tool and how, the pot, then what may
+## change - the beat it is laid in, the seconds it may take, its place among the rest (up, down), and remove. Apply hands the design
+## back to whoever opened it ([member take]), who writes it as a hand's version and makes the work again from it; the elements' own
 ## programs (the host's) are untouched - only which run, when and for how long.
 
 ## (doc: Dictionary) -> String: the design written, "" when it was, else why not.
@@ -152,7 +150,7 @@ func _press(gi: int, ei: int, glyph: String) -> void:
 	_build()
 
 
-## APPLY: the design as the rows say, handed over; written, the window closes - refused, it stays, saying why.
+## Apply: the design as the rows say, handed over; written, the window closes - refused, it stays, saying why.
 func apply() -> String:
 	_gather()
 	var err: String = take.call(_doc.duplicate(true)) if take.is_valid() else "nothing here can take it"

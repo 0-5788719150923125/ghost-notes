@@ -15,19 +15,19 @@
 #
 # Artifacts: dist/ghost-notes-<target>.<ext>. Modeled on monotone's build.sh.
 #
-# THE TARGETS ARE THE EXPORT PRESETS. This script has no list of platforms: it reads
+# The targets are the export presets. This script has no list of platforms: it reads
 # export_presets.cfg, so a preset added in the editor is a target here with no edit. The
 # preset file is tracked, and names no secret - the debug keystore comes from the editor's
 # settings and a release keystore from the environment, never from the file.
 #
-# A BUILD SCRIPT THAT LIES IS WORSE THAN NONE. Godot's exporter reports plenty of failures on
+# A build script that lies is worse than none. Godot's exporter reports plenty of failures on
 # stderr and still exits 0 - a missing template, an SDK it could not find. So the exit code
 # is not trusted alone: the artifact must exist, must have been written by this run, and must
 # be at least FLOOR bytes. An empty file is a failed build wearing a filename.
 #
-# IT REFUSES TO SHIP A RED TREE. scripts/check.sh runs first.
+# It refuses to ship a red tree. scripts/check.sh runs first.
 #
-# RELEASE SIGNING IS THE USER'S. A release APK needs GODOT_ANDROID_KEYSTORE_RELEASE_PATH,
+# Release signing is the user's. A release APK needs GODOT_ANDROID_KEYSTORE_RELEASE_PATH,
 # _USER and _PASSWORD in the environment (the names Godot reads); this refuses --release
 # without them and never prints them. The macOS bundle is signed ad hoc by Godot's built-in
 # signer (an Apple Silicon Mac runs no unsigned code) and is not notarized: that takes an Apple
@@ -252,7 +252,7 @@ if ! git diff --quiet || ! git diff --cached --quiet; then build_dirty=true; fi
 printf '{"commit":"%s","dirty":%s}\n' "$build_sha" "$build_dirty" > "$build_info"
 trap 'rm -f "$build_info"' EXIT
 
-# THE PACKAGE'S ICONS ARE THE BUILD'S OWN (src/platform/app_icon.gd). A phone reads its launcher icon
+# The package's icons are the build's own (src/platform/app_icon.gd). A phone reads its launcher icon
 # out of the package and an app cannot draw a new one there, so each build draws a ghost of its own,
 # seeded by the commit it was built from (a dirty tree's by the moment too): every update ships a new
 # one. GHOST_ICON_SEED (any text) picks one outright. The export presets name these files, and with

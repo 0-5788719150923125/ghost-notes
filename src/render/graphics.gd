@@ -3,52 +3,41 @@ class_name Graphics
 
 ## Graphics - how finely the stage is drawn, live and in an export: the same picture, each at a quality of its own.
 ##
-## WHAT IS DRAWN NEVER CHANGES WITH IT. A row is how finely the renderer draws what the show already is - how many
-## samples a pixel takes, how far a texture is filtered across a slant, how many taps soften a shadow's edge or the
-## ambient occlusion - never a light, a color or a place. The one row that changes the look, BOUNCE LIGHT, says so,
-## is one choice for both (`shared`: an export must look as the viewer did), and is off until it is chosen.
+## What is drawn never changes with it: a row is how finely the renderer draws what the show already is (samples a
+## pixel takes, texture filtering across a slant, taps softening a shadow's edge or the ambient occlusion), never a
+## light, a color or a place. The one row that changes the look, bounce light, is one choice for both columns
+## (`shared`: an export must look as the viewer did) and is off until chosen.
 ##
-## TWO COLUMNS, LIVE AND EXPORT (the user, 2026-11-06: "increase stuff like anisotropic filtering and supersampling at
-## export-time, so that we don't harm realtime performance ... a proper graphics menu at the bottom-right"). The live
-## viewer's defaults are the picture as it was drawn before this menu, so nothing is slower than it was; an export's
-## are the finest each row offers, since a slow frame costs a render only time (Movie Maker writes one frame per step
-## of show time however long it took) - BUT SUPERSAMPLING, 1.5x. Measured on a candlelit table (true-tarot 279427, its
-## frame at 60 s, at a 1080p export's 2880 x 1620, the stage's GPU time): the live column 19.0 ms, the export's rows
-## without supersampling 21.0, at 1.5x 38.5, at 2x 63.5. At 1080p, 1.5x took most of what 2x changed (0.21% of pixels
-## off the unsupersampled frame by more than 16 levels, 2x 0.37%) for well under half the added time; the frame's
-## brightness and its highlights were unchanged by either (a mean of 90.2 against 90.4). Both are chosen on the row's panel ([GraphicsPanel]) and kept in `[graphics]`
-## as `live_<key>` and `export_<key>`; an export render reads ghost.cfg as every render does, and writes nothing.
+## Two columns, live and export. The live defaults are the plain picture; an export's are the finest each row offers
+## (a slow frame costs a render only time), except supersampling at 1.5x: at a 1080p export's 2880 x 1620 the stage's
+## GPU time is 21.0 ms without it, 38.5 at 1.5x and 63.5 at 2x, and 1.5x does most of what 2x does. Choices are made
+## on the panel ([GraphicsPanel]) and kept in `[graphics]` as `live_<key>` and `export_<key>`; an export render reads
+## ghost.cfg as every render does, and writes nothing.
 ##
-## RESOLUTION IS THE LIVE VIEWER'S ALONE (`only`; the user, 2026-11-11: "an option for various resolutions ... default to 1080p,
-## but at least allow users to go to 4k if their systems can support it, or 720p if their system is a potato"). THE LIVE STAGE WAS
-## ALWAYS 1920 x 1080, at any window: the window stretches its canvas (`canvas_items`, 1080 units high), and the stage is the frame
-## in those units, scaled to the window's pixels as it is shown. The row is how many lines that is ([method stage_size], asked by
-## whoever sizes the stage and again when the row changes, [method bind_stage]'s `refit`); 1080p is the picture as it was, and
-## an export is drawn at the size it is exported at whatever the row says. Measured on the painted table (joker-motivation
-## 732687 at 150 s, the author's rows, nothing else on the card, `tests/table/table_render_probe.gd`), the stage's GPU time a
-## frame: 720p 3.5 ms, 1080p 6.2, 1440p 9.8, 4K 20.1 - about 2.4 ms a million pixels and 1.4 ms that do not grow with them.
+## Resolution is the live viewer's alone (`only`). The window stretches its canvas (`canvas_items`, 1080 units high)
+## and the stage is the frame in those units, scaled to the window as shown. The row is how many lines that is
+## ([method stage_size], asked by whoever sizes the stage and again when the row changes, [method bind_stage]'s
+## `refit`); an export is drawn at its own size. GPU time grows about 2.4 ms a million pixels over a 1.4 ms base.
 ##
-## WHERE IT REACHES: the stage's own viewport ([method bind_stage]: supersampling, texture filtering) and the
-## renderer's globals (ambient occlusion and bounce light's quality, subsurface scattering, shadow filtering, the fog's
-## grid) - one process has one stage, so its globals are the stage's. A medium hands its environment to [method dress],
-## which sets bounce light on it and keeps it, to set again when the row changes.
+## It reaches the stage's own viewport ([method bind_stage]: supersampling, texture filtering) and the renderer's
+## globals (ambient occlusion and bounce light quality, subsurface scattering, shadow filtering, the fog's grid); one
+## process has one stage. A medium hands its environment to [method dress], which sets bounce light on it and keeps it
+## to set again when the row changes.
 ##
-## AN EXPORT ALREADY SUPERSAMPLES THE WHOLE FRAME (exporter.gd's QUALITIES `ss`: 1080p is drawn at 2880 x 1620 and
-## ffmpeg resolves it), held to 1.5x by the scratch file's size. The 3D's own supersampling here is resolved on the
-## graphics card before the frame is written, so it costs the file nothing - only time and memory, the memory held
-## under [constant SUPERSAMPLE_MOST].
+## An export already supersamples the whole frame (exporter.gd's QUALITIES `ss`, held to 1.5x by the scratch file's
+## size). The 3D's own supersampling is resolved on the graphics card before the frame is written, so it costs only
+## time and memory, held under [constant SUPERSAMPLE_MOST].
 ##
-## SHADOW FILTERING KEEPS EVERY SHADOW'S WIDTH: Godot spreads a light's `shadow_blur` over a radius its quality sets,
-## and [ShadowFilter] divides a light's blur by that radius as it is made - so the quality is written where
-## ShadowFilter reads it, before any light is made, and a light already made has its blur rescaled
-## ([method _set_shadows]). Only the positional lights': the sun's blur is set by hand at the directional quality, which
-## is left as it was.
+## Shadow filtering keeps every shadow's width: Godot spreads a light's `shadow_blur` over a radius its quality sets,
+## and [ShadowFilter] divides a light's blur by that radius as it is made, so the quality is written where
+## ShadowFilter reads it before any light is made, and a light already made has its blur rescaled
+## ([method _set_shadows]). Only positional lights': the sun's blur is set by hand.
 
 ## Where the choices are kept, in ghost.cfg.
 const SECTION := "graphics"
 const TIERS := ["live", "export"]
 
-## THE ROWS. `options`: [value, what a person reads], in order; `live` and `export`: each column's default - or
+## The rows. `options`: [value, what a person reads], in order; `live` and `export`: each column's default - or
 ## `shared` and `default` for a row that is one choice for both, or `only` the one column that has it and `other`,
 ## what the other column's cell says.
 const SETTINGS := {
@@ -79,17 +68,16 @@ const SETTINGS := {
 		"options": [[false, "Off"], [true, "On"]], "shared": true, "default": false},
 }
 
-## THE MOST PIXELS THE 3D IS DRAWN AT, supersampled: a 1080p export's 2880 x 1620 at 2x, if 2x is chosen. A 4K export
-## (drawn at its own size) takes 1.5x under it, and a large live window less: the buffers, multisampled four times,
-## grow with the pixels, on a card a voice's training may share.
+## The most pixels the 3D is drawn at, supersampled: a 1080p export's 2880 x 1620 at 2x. A 4K export (drawn at its own
+## size) takes 1.5x under it, and a large live window less: the buffers, multisampled four times, grow with the pixels.
 const SUPERSAMPLE_MOST := 5760 * 3240
 
-## THE LINES THE LIVE STAGE WAS DRAWN AT BEFORE THE RESOLUTION ROW: a pixel to a unit of the window's canvas, which is
-## 1080 units high at any window (`display/window/stretch` in project.godot).
+## The lines the live stage is drawn at by default: a pixel to a unit of the window's canvas, which is 1080 units high
+## at any window (`display/window/stretch` in project.godot).
 const LINES_AS_DRAWN := 1080
 
-## BOUNCE LIGHT AT A TABLE'S SCALE: Godot's own reach is 5 m, a room's; things on a table are a few centimeters to a
-## few tens apart, and light from across the cloth reaches them.
+## Bounce light at a table's scale: Godot's own reach is 5 m, a room's; things on a table are a few centimeters to a few
+## tens apart, and light from across the cloth reaches them.
 const BOUNCE_REACH := 0.35
 const BOUNCE_STRENGTH := 1.0
 
@@ -102,11 +90,10 @@ static var _stage: WeakRef = null
 static var _refit := Callable()      # what sizes the stage again when its resolution changes ([method bind_stage])
 static var _measuring := {}          # who has asked for the stage's drawing time ([method measure]): a name -> true
 static var _envs: Array = []         # WeakRefs of the environments the mediums handed in
-## WHAT THIS PROCESS'S MAIN THREAD LAST READ of each row (its key in [constant SECTION]), for what is built on a worker: the settings'
-## owner is a node of the tree, and a worker may not ask the tree for it (a table built away - [code]TablePreview._stand[/code] - handing
-## its environment to [method dress]: "The caller thread can't call the function `get_node_or_null()` on this node", and bounce light
-## read as its default whatever was chosen). Read on the main thread, every row, as the stage is bound ([method apply]); it and
-## [member _envs] are held by [member _lock].
+## What this process's main thread last read of each row (its key in [constant SECTION]), for what is built on a worker:
+## the settings' owner is a node of the tree, which a worker may not ask for (a table built away, `TablePreview._stand`,
+## hands its environment to [method dress]). Read on the main thread, every row, as the stage is bound ([method apply]);
+## it and [member _envs] are held by [member _lock].
 static var _read := {}
 static var _lock := Mutex.new()
 
@@ -172,16 +159,15 @@ static func value(key: String, t := "") -> Variant:
 	return v if values_of(key).has(v) else dflt
 
 
-## The settings' owner (an autoload), or null where there is none (a `--script` run's first compile). The main thread's
-## alone ([member _read]).
+## The settings' owner (an autoload), or null where there is none (a `--script` run's first compile). The main thread's alone ([member _read]).
 static func _settings() -> Node:
 	var tree := Engine.get_main_loop() as SceneTree
 	return tree.root.get_node_or_null("Settings") if tree != null and tree.root != null else null
 
 
-## THE STAGE, handed by whoever builds it ([code]main._stage_host[/code], a probe): dressed now and whenever it is
-## resized (the supersampling's cap is by its size), and everything else applied with it. [param refit] is what sizes
-## it ([method stage_size]): called whenever a row is applied after, never from here - its owner sizes it once it has
+## The stage, handed by whoever builds it (`main._stage_host`, a probe): dressed now and whenever it is resized (the
+## supersampling's cap is by its size), and everything else applied with it. [param refit] is what sizes it
+## ([method stage_size]): called whenever a row is applied after, never from here - its owner sizes it once it has
 ## built what shows it.
 static func bind_stage(stage: SubViewport, refit := Callable()) -> void:
 	_stage = weakref(stage)
@@ -197,7 +183,7 @@ static func stage() -> SubViewport:
 	return _stage.get_ref() as SubViewport if _stage != null else null
 
 
-## EVERYTHING AS THIS PROCESS'S TIER HAS IT: the renderer's globals, the stage, and every environment handed in.
+## Everything as this process's tier has it: the renderer's globals, the stage, and every environment handed in.
 ## Called as the stage is bound, and by the panel whenever a row of this tier changes.
 static func apply() -> void:
 	# (every row read here, on the main thread, for what is built on a worker after - [member _read])
@@ -238,8 +224,8 @@ static func _ps(name: String, dflt: float) -> float:
 	return float(ProjectSettings.get_setting("rendering/environment/" + name, dflt))
 
 
-## A MEDIUM'S ENVIRONMENT, handed as it is made - on a worker too, as a table is built away: bounce light set on it as the
-## row has it, and again whenever the row changes. [param reach] and [param strength] are the medium's own, at its scale.
+## A medium's environment, handed as it is made (on a worker too, as a table is built away): bounce light set on it as
+## the row has it, and again whenever the row changes. [param reach] and [param strength] are the medium's own, at its scale.
 static func dress(env: Environment, reach := BOUNCE_REACH, strength := BOUNCE_STRENGTH) -> void:
 	env.ssil_radius = reach
 	env.ssil_intensity = strength
@@ -269,9 +255,8 @@ static func _dress_stage() -> void:
 	st.anisotropic_filtering_level = int(value("anisotropy")) as Viewport.AnisotropicFiltering
 
 
-## HOW MANY PIXELS THE STAGE IS DRAWN AT where its frame is [param shown] units of the window's canvas large: that many
-## in the live viewer unless its Resolution says otherwise (1080p is a pixel a unit), its shape kept; in an export the
-## frame's own, always - the window is the frame there.
+## How many pixels the stage is drawn at where its frame is [param shown] units of the window's canvas large: that many
+## in the live viewer unless its Resolution says otherwise, its shape kept; in an export the frame's own, always.
 static func stage_size(shown: Vector2) -> Vector2i:
 	var k := 1.0
 	if has_tier("resolution", tier()):
@@ -286,7 +271,7 @@ static func supersample_for(size: Vector2i, want: float) -> float:
 	return clampf(minf(want, sqrt(SUPERSAMPLE_MOST / px)), 1.0, maxf(want, 1.0))
 
 
-## THE POSITIONAL SHADOWS' FILTER at quality [param q], every shadow as wide as it was (see the header).
+## The positional shadows' filter at quality [param q], every shadow as wide as it was (see the header).
 static func _set_shadows(q: int) -> void:
 	var was := clampi(int(ProjectSettings.get_setting(ShadowFilter.QUALITY_SETTING, 2)), 0, ShadowFilter.QUALITY_RADIUS.size() - 1)
 	q = clampi(q, 0, ShadowFilter.QUALITY_RADIUS.size() - 1)
@@ -300,9 +285,8 @@ static func _set_shadows(q: int) -> void:
 			(n as Light3D).shadow_blur *= k
 
 
-## THE STAGE'S DRAWING TIME, for the panel while it is shown and for the governor while frames are slow ([param who]
-## asks, [param on] or off; measured while anyone does), read as the last frame's GPU milliseconds - what these rows
-## cost - or -1 with no stage.
+## The stage's drawing time, for the panel while it is shown and for the governor while frames are slow ([param who]
+## asks, [param on] or off; measured while anyone does), read as the last frame's GPU milliseconds, or -1 with no stage.
 static func measure(on: bool, who := "panel") -> void:
 	if on:
 		_measuring[who] = true

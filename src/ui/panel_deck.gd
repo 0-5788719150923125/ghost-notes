@@ -1,35 +1,32 @@
 extends Control
 class_name PanelDeck
 
-## PanelDeck - A SIDE PANEL'S CARDS AS A DECK (next/panel_deck.md; the user, 2026-11-02: "a kind of card-fanning approach,
-## where cards stack or unstack, overlap or expand"; of the pinned Pipeline card, "It's weird that there are now two panels
-## on the left ... They should all be scrollable").
+## PanelDeck - a side panel's cards as a deck (next/panel_deck.md).
 ##
-## ONE SCROLL, AND EVERY CARD ONE CLICK AWAY. A card scrolled past leaves its title bar in a pile at the top of the panel, one
-## still to come has its bar in a pile at the bottom, each bar's top [constant PEEK] showing, so the way to any card is always
-## in sight however long the list and wherever it is scrolled - what pinning the Pipeline card was for, without a second panel.
-## A panel that fits has no pile, and looks as it would.
+## One scroll, and every card one click away. A card scrolled past leaves its title bar in a pile at
+## the top of the panel, one still to come has its bar in a pile at the bottom, each bar's top
+## [constant PEEK] showing, so the way to any card is in sight wherever the list is scrolled. A panel
+## that fits has no pile.
 ##
-## THE BARS ARE ONE LAYER, over the scroll, in the order of the cards: a later one lies on an earlier one, and all of them on
-## whatever is scrolling. Each is the card's own [member Card.head], never a copy, so what is on it (the Pipeline's Generate, a
-## card's ×) works from a pile. A card keeps the room for its bar in the scroll, and the bar is put over it
-## ([method _place]): where the card is, held inside the piles.
+## The bars are one layer, over the scroll, in the order of the cards: a later one lies on an earlier
+## one, and all of them on whatever is scrolling. Each is the card's own [member Card.head], never a
+## copy, so what is on it (the Pipeline's Generate, a card's x) works from a pile. A card keeps the
+## room for its bar in the scroll, and the bar is put over it ([method _place]): where the card is,
+## held inside the piles.
 ##
-## A PRESS ON A BAR BRINGS ITS CARD INTO VIEW WHOLE, wherever the bar lies, or its start where it is taller than the view
-## ([method reveal]); a chip's press does the same ([method Card.reveal]). A card never folds (2026-11-09, the user: folding
-## "doesn't belong here anymore, now that cards overlap while scrolling"). THE FAN: pointing at a bar in a pile spreads the pile
-## there, so the whole bar shows, however tightly a small window stacks them.
+## A press on a bar brings its card into view whole, wherever the bar lies, or its start where it is
+## taller than the view ([method reveal]); a chip's press does the same ([method Card.reveal]). A card
+## never folds. The fan: pointing at a bar in a pile spreads the pile there, so the whole bar shows.
 ##
-## A VIEW AT THE END STAYS THERE (the user, 2026-11-03: Generate "can insert new steps into the pipeline card, which causes it to
-## start overflowing, requiring me to scroll again"): what grows while the view is at the end of the scroll keeps it at the end
-## ([method _on_length]), and a turn of the wheel lets go. A PANEL THAT FITS is at its end only trivially, so it follows its last
-## card alone: a note's words filling in as it opens must leave it at its top.
+## A view at the end stays there: what grows while the view is at the end of the scroll keeps it at the
+## end ([method _on_length]), and a turn of the wheel lets go. A panel that fits is at its end only
+## trivially, so it follows its last card alone.
 
 ## How much of each bar in a pile shows, at most: a title's whole line, the foot of the bar under the next one's.
 const PEEK := 21.0
 ## ...and at the least, in a window too small to give each that.
 const PEEK_LEAST := 5.0
-## WHAT A PILE LEAVES FOR WHAT IS BEING READ: the piles close up before they take this.
+## What a pile leaves for what is being read: the piles close up before they take this.
 const ROOM := 200.0
 ## A bar's height, for working out how close the piles must lie.
 const BAR := 30.0
@@ -68,7 +65,7 @@ func _init(scroll: ScrollContainer, body: VBoxContainer, room: Callable) -> void
 	add_child(_clip)
 
 
-## TAKES [param card]'S BAR ONTO THE LAYER: from here on it is put where it should lie, and its presses are the deck's.
+## Takes [param card]'s bar onto the layer: from here on it is put where it should lie, and its presses are the deck's.
 func adopt(card: Card) -> void:
 	var bar := card.head
 	if bar.get_parent() != null:
@@ -101,7 +98,7 @@ func _process(delta: float) -> void:
 		_place(delta)
 
 
-## HOW MUCH OF EACH OF [param count] BARS A PILE SHOWS, in a scroll view of at most [param room]: all of them, and
+## How much of each of [param count] bars a pile shows, in a scroll view of at most [param room]: all of them, and
 ## [constant ROOM] besides, fit between the piles while they can.
 static func peek_for(count: int, room: float) -> float:
 	if count <= 0:
@@ -140,7 +137,7 @@ func _natural(card: Card) -> float:
 	return _body.position.y + card.position.y - _scroll.get_v_scroll_bar().value
 
 
-## EVERY BAR WHERE IT SHOULD LIE: over its card, held inside the piles. [param delta] moves the fan on.
+## Every bar where it should lie: over its card, held inside the piles. [param delta] moves the fan on.
 func _place(delta := 0.0) -> void:
 	if not is_inside_tree():
 		return
@@ -187,7 +184,7 @@ func _place(delta := 0.0) -> void:
 			_below = minf(_below, y)
 
 
-## THE FAN: the bar pointed at in a pile shows whole, the bars that lie on it moved off it. Eased; a pile not pointed at closes.
+## The fan: the bar pointed at in a pile shows whole, the bars that lie on it moved off it. Eased; a pile not pointed at closes.
 func _fan(shown: Array, delta: float, close: float) -> void:
 	var at := shown.find(_pointed_at())
 	var side: int = _sides[shown[at]] if at >= 0 else 0
@@ -239,7 +236,7 @@ func _on_head(ev: InputEvent, card: Card) -> void:
 	reveal(card)
 
 
-## BRINGS [param card] INTO VIEW WHOLE: from the top pile its bar comes just under the bars above it; from anywhere below, as far
+## Brings [param card] into view whole: from the top pile its bar comes just under the bars above it; from anywhere below, as far
 ## up as shows it whole above the bottom pile, or, taller than that room, its bar just under the bars above it. A card already
 ## whole in view is left where it is.
 func reveal(card: Card) -> void:
@@ -261,7 +258,7 @@ func reveal(card: Card) -> void:
 		_glide_to(_scroll.get_v_scroll_bar().value + at - to)
 
 
-## HOW FAR THERE IS TO SCROLL HAS CHANGED: a view that was at the end goes to the new one, unless the viewer is what moved it.
+## How far there is to scroll has changed: a view that was at the end goes to the new one, unless the viewer is what moved it.
 func _on_length() -> void:
 	var bar := _scroll.get_v_scroll_bar()
 	var end := bar.max_value - bar.page
@@ -316,7 +313,7 @@ static func _is_wheel(ev: InputEvent) -> bool:
 	return mb != null and mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN)
 
 
-## WHAT HAS FOCUS IS NOT LEFT UNDER A PILE: the scroll view follows focus into its own rectangle, and knows nothing of what lies
+## What has focus is not left under a pile: the scroll view follows focus into its own rectangle and knows nothing of what lies
 ## over it. A control taller than the room between the piles is left to it.
 func _keep_in_view(c: Control) -> void:
 	if not is_instance_valid(c) or not c.is_inside_tree() or c.size.y >= _below - _above:

@@ -1,7 +1,6 @@
 extends SceneTree
 
-## Gate for THE BED UNDER ANY VOICE ([constant VoiceFX.PAD_VOICE_REF]; 2026-10-28, the user: "Even at max
-## volume, the 'ambience' level is almost inaudible with the newly-implemented Kokoro models" - Kokoro's Puck
+## Gate for the bed under any voice ([constant VoiceFX.PAD_VOICE_REF]; Kokoro's Puck
 ## came out more than twice libritts-high's level, and the bed, at a fixed level, sat 17 dB under it where it
 ## sits 9 under Piper):
 ##

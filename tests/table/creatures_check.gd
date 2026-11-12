@@ -1,27 +1,27 @@
 extends SceneTree
 
-## The gate of [Soundscape]'s CREATURES - animals heard and never seen, made of numbers rather than a kind
-## (the table's `sound`, `creatures`) - with no audio device.
+## The gate of [Soundscape]'s creatures - animals heard and never seen, made of numbers rather than a kind (the table's `sound`,
+## `creatures`) - with no audio device.
 ##
 ##   godot --headless --path . --script res://tests/table/creatures_check.gd
 ##
-## - MADE SAFE: one creature written as an object is a list of one; an unknown call is left out with a note,
-##   and a creature with no call it can make chirps; past MAX_CREATURES the rest are left out; numbers are held
-##   to their ranges; made safe twice reads the same; the vocabulary names every call, the summary the creature.
-## - SLICED THE SAME: a hatchlings' bed (two bodies purring, chirping and huffing) is the same rendered at once,
-##   in odd slices, and ahead on a worker - against another seed, which is not.
-## - EVERY CALL SOUNDS, AND NONE CLIPS: each call alone, while it sounds, stands between -32 and -14 dB over the
-##   dial's level, peaks under the ceiling, and is never NaN.
-## - A PURR BREATHES: over one long purr, its loudness by the quarter second rises and falls by 10 dB or more as
-##   it breathes in and out - against a steady bed (rain on leaves) measured the same way, which swings under 6.
-## - A BODY MAKES ONE CALL AT A TIME: over ten minutes of three bodies purring, snoring and huffing, no body's
-##   calls overlap, across the plan's windows too - against the calls as drawn, before the rule, which do.
-## - WHAT IS SEEN IS WHAT IS HEARD: at every huff [method Soundscape.seen_calls] gives, a huffing place is loud
-##   within a third of a second, on a soundscape started at the top and on one started part way, as a scrub
-##   starts one - against another seed's huffs, which fall where this place is quiet.
-## - A CREATURE ADDED CHANGES NOTHING ELSE: a fire with a creature, less the creature alone, is the fire alone.
-## - THE CONTROL: a sound with no creatures (an empty list) is made safe to nothing, is not active, and renders
-##   silent - and the same place with a creature in it is active and is not.
+## - Made safe: one creature written as an object is a list of one; an unknown call is left out with a note, and a creature with no
+##   call it can make chirps; past MAX_CREATURES the rest are left out; numbers are held to their ranges; made safe twice reads the
+##   same; the vocabulary names every call, the summary the creature.
+## - Sliced the same: a hatchlings' bed (two bodies purring, chirping and huffing) is the same rendered at once, in odd slices, and
+##   ahead on a worker - against another seed, which is not.
+## - Every call sounds, and none clips: each call alone, while it sounds, stands between -32 and -14 dB over the dial's level, peaks
+##   under the ceiling, and is never NaN.
+## - A purr breathes: over one long purr, its loudness by the quarter second rises and falls by 10 dB or more - against a steady bed
+##   (rain on leaves) measured the same way, which swings under 6.
+## - A body makes one call at a time: over ten minutes of three bodies purring, snoring and huffing, no body's calls overlap, across
+##   the plan's windows too - against the calls as drawn, before the rule, which do.
+## - What is seen is what is heard: at every huff [method Soundscape.seen_calls] gives, a huffing place is loud within a third of a
+##   second, on a soundscape started at the top and on one started part way, as a scrub starts one - against another seed's huffs,
+##   which fall where this place is quiet.
+## - A creature added changes nothing else: a fire with a creature, less the creature alone, is the fire alone.
+## - The control: a sound with no creatures (an empty list) is made safe to nothing, is not active, and renders silent - and the
+##   same place with a creature in it is active and is not.
 
 var _fails := 0
 const SR := 22050
@@ -191,7 +191,7 @@ func _breathes() -> bool:
 	return true
 
 
-## THE OVERLAPS in [param calls] (`[{t, dur, body}]`): how many pairs of one body's calls sound at once.
+## The overlaps in [param calls] (`[{t, dur, body}]`): how many pairs of one body's calls sound at once.
 static func _overlaps(calls: Array) -> int:
 	var n := 0
 	for i in calls.size():
@@ -216,7 +216,7 @@ func _one_at_a_time() -> bool:
 	return true
 
 
-## THE HUFFS heard in [param pcm] (a soundscape whose first sample is at show time [param t0]) at the times
+## The huffs heard in [param pcm] (a soundscape whose first sample is at show time [param t0]) at the times
 ## [param seen]: how many of them are loud, within 14 dB of the loudest, in the third of a second from it.
 static func _heard_at(pcm: PackedVector2Array, t0: float, seen: Array) -> int:
 	var loudest := 0.0
@@ -244,11 +244,11 @@ func _seen() -> bool:
 		_ok(d.has("side") and d.has("near") and d.has("size") and String(d["call"]) == "huff", "a seen call is not {t, call, side, near, size}: %s" % str(d))
 	var pcm := _make(sound, 5).render(SR * 60)
 	_ok(_heard_at(pcm, 0.0, seen) == seen.size(), "of %d huffs seen, only %d were heard where they were seen" % [seen.size(), _heard_at(pcm, 0.0, seen)])
-	# PART WAY, as a scrub starts one: the huffs past its start, heard where they are seen
+	# part way, as a scrub starts one: the huffs past its start, heard where they are seen
 	var later := Soundscape.seen_calls(sound, 5, 27.0, 60.0)
 	var part := _make(sound, 5, 0.5, 25.0).render(SR * 35)
 	_ok(not later.is_empty() and _heard_at(part, 25.0, later) == later.size(), "started part way, the huffs seen are not heard where they are")
-	# THE CONTROL: another seed's huffs, where none of this seed's is near, fall where this place is quiet
+	# the control: another seed's huffs, where none of this seed's is near, fall where this place is quiet
 	var quiet := 0
 	var elsewhere := 0
 	for s in Soundscape.seen_calls(sound, 6, 0.0, 58.0):

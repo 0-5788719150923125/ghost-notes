@@ -1,14 +1,14 @@
 extends SceneTree
 
-## table_pick_check - A CLICK ON THE TABLE NAMES A THING AND ITS PART ([method TableMedium.ray_pick], [method SourceWindow.find_text];
+## table_pick_check - a click on the table names a thing and its part ([method TableMedium.ray_pick], [method SourceWindow.find_text];
 ## next/editing.md step 7: "a click on the stage names a thing and its part - a ray against what is built").
 ##
 ##   godot --headless --path . --script tests/table/table_pick_check.gd
 ##
 ## Two things standing one behind the other on a ray, as [member TableThings.on_table] holds them: the ray names the nearer and the
-## part its mesh is; THE CONTROLS a ray that meets neither names nothing, and the nearer hidden, the one behind is named. A mesh Godot
-## named for itself names no part. In ✎'s window the thing named is found and picked in its data; THE CONTROL a name not written
-## there is not found. A free look turns the eye about the middle of the table and draws it in or out (THE CONTROL: turned past
+## part its mesh is; the controls a ray that meets neither names nothing, and the nearer hidden, the one behind is named. A mesh Godot
+## named for itself names no part. In ✎'s window the thing named is found and picked in its data; the control a name not written
+## there is not found. A free look turns the eye about the middle of the table and draws it in or out (the control: turned past
 ## the table it stays above it).
 
 var _fails := 0
@@ -37,8 +37,8 @@ func _run() -> void:
 	hit = TableMedium.ray_pick(Vector3.ZERO, Vector3(0, 0, -1), things)
 	_ok(String(hit.get("thing", "")) == "towel" and String(hit.get("part", "x")).is_empty(), "a mesh Godot named for itself names no part: %s" % str(hit))
 
-	# A FREE LOOK ([method TableMedium.free_eye]): untold, the eye as it was, looking at the middle; turned half round, it looks from
-	# the far side; drawn twice as far, twice as far - THE CONTROL: a pitch past the table keeps it above the table
+	# A free look ([method TableMedium.free_eye]): untold, the eye as it was, looking at the middle; turned half round, it looks from
+	# the far side; drawn twice as far, twice as far - the control: a pitch past the table keeps it above the table
 	var base := Transform3D(Basis(), Vector3(0.0, 0.3, 0.5)).looking_at(Vector3.ZERO, Vector3.UP)
 	var same := TableMedium.free_eye(base, Vector3.ZERO, 0.0, 0.0, 1.0)
 	var round := TableMedium.free_eye(base, Vector3.ZERO, PI, 0.0, 1.0)

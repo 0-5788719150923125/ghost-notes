@@ -3,83 +3,41 @@ class_name DocSource
 
 ## DocSource - where a reading's words come from: the editor alone, or the file they are saved in.
 ##
-## THE TEXT BOX IS A DRAFT, and a chapter is not a draft. Everything the voice panels read
-## until now was pasted in, which has three costs that only show up on real material: the
-## paste is a COPY, so it goes stale the moment the document is edited anywhere else; the
-## panel's settings are ghost's rather than the document's, so moving to the next chapter
-## silently inherits the last one's voice and coming back has lost it; and a fix to a
-## sentence means finding the panel, clearing it and pasting again.
+## A script can be saved in a file, a standing state: Open reads a document and stays with it, Save… writes the script
+## into a file the author chooses and stays with that, Clear detaches and empties the editor. Both end up as text in
+## the same [TextEdit] (the [ScriptWriter]'s editor); text saved nowhere is the panel's own, persisted in Settings.
+## (The code calls the standing state "sync".)
 ##
-## So a script can be SAVED IN A FILE, and that is a standing state rather than an act: OPEN
-## reads a document and stays with it, SAVE… writes the script into a file of the author's
-## choosing and stays with that, and CLEAR detaches and empties the editor, leaving a script that
-## is saved nowhere until it is saved. Nothing downstream of the panel knows which is in use,
-## because both end up as text in the same [TextEdit] (the [ScriptWriter]'s editor). Text saved
-## nowhere is the panel's own: it persists it in Settings as before. (The code calls the standing
-## state "sync", the word the button had until 2026-10-12.)
+## Save… always asks where, and [signal moved] says the script left one file for another; the panel hands that to
+## main, which makes the new file the note ([method main.note_moved]). A [SaveMark] beside the button shows
+## [method save_state].
 ##
-## SAVE… ALWAYS ASKS WHERE, AND A NOTE GOES WITH IT (2026-10-12, the user: "That selection keeps
-## getting reverted back to the untitled cards label, and I am unsure if my edits are even being
-## used"). The button was "Sync to…", inside the editor window, and in a note it moved only this
-## source: the note was still the file it was opened from, so the next time it opened it read
-## that file again - and the edits made in between were in a file nothing read. [signal moved]
-## says the script left one file for another, and the panel hands that to main, which makes the
-## new file the note ([method main.note_moved]). The button is on the Script card, beside a
-## [SaveMark] that turns while a change waits and ticks when it is in the file ([signal written],
-## [method save_state]).
+## The editor shows the body only. An edit is saved on the same quiet period as a dial, through [method
+## FrontMatter.write_body], which refuses if the file changed on disk since ghost last read it; that conflict is the
+## author's to resolve (keep ghost's text, or take the file's), never a silent winner.
 ##
-## THE DOCUMENT CAN BE WRITTEN HERE TOO. The editor shows the BODY only - the frontmatter is
-## the panel's business and is written by it - and an edit made in ghost is saved on the same
-## quiet period as a dial, through [method FrontMatter.write_body], which refuses if the file
-## changed on disk since ghost last read it. That refusal is a CONFLICT the author resolves
-## (keep ghost's text, or take the file's), never a silent winner either way.
+## The file is read at every speak and export ([method pull]), never per keystroke or on a timer (a re-read
+## mid-reading is when the file is most likely half-written), so the author can keep working in their own editor. A
+## Play first writes any change still waiting, so what it reads back already holds it.
 ##
-## SYNC IS READ AT EVERY SPEAK, not at every keystroke and not when the document was picked.
-## The point of it is that the author keeps working in their own editor while ghost is open:
-## save the file, press Play, hear the change. A watcher polling for modifications would be
-## the same thing done worse - it would re-read mid-reading, which is exactly when the file
-## is most likely to be half-written.
+## Frontmatter is never spoken ([FrontMatter] cuts it off before the synthesizer); ghost keeps its own key in there.
+## One block per component, not per panel (next/notes.md step 5): `voice:`, `picture:`, `illustrations:`, `look:`,
+## `bookends:`, `cards:`, `synthesis:` are siblings under `ghost:`, a panel reads and writes the ones it has cards for
+## ([method setup]'s [code]blocks[/code]), and a block no open panel owns is carried through untouched.
 ##
-## FRONTMATTER IS NOT SPOKEN, AND IT IS WHERE THE VOICE LIVES. [FrontMatter] cuts the YAML
-## block off the top before a word reaches the synthesizer, and ghost keeps its own key in
-## there: the reader, the tone, the room, the whole cast of a multi-speaker chapter.
+## Saving is automatic and checked: [method FrontMatter.write_block] re-reads from disk, replaces one key textually,
+## refuses if the body or any other key would change, and renames a verified temp file over the original. It is
+## refused wherever [Settings] is read-only (a render, the offline analyzer, a test probe), which boot the app against
+## the author's settings; flushing on Play is not, because pressing Play is a person.
 ##
-## ONE BLOCK PER COMPONENT, NOT PER PANEL (next/notes.md step 5). Under `ghost:` a document keeps
-## `voice:`, `picture:`, `illustrations:`, `look:`, `bookends:`, `cards:`, `synthesis:` as
-## siblings, and a panel reads and writes the ones it has cards for ([method setup]'s
-## [code]blocks[/code]) - so a chapter's voices are there in every panel that speaks, and a block
-## no panel open now owns is carried through untouched. It used to be one block per panel, and
-## the show's panel erased six keys from the Generative block to make its own; the documents in
-## that shape were rewritten once, by a tool that went when its run was done.
-##
-## BOTH DIRECTIONS FOLLOW THE AUTHOR, with no button for either. SAVING is automatic - a
-## dial moved is a dial written, on a quiet period, exactly the way the rest of ghost saves
-## (see [Settings]). LOADING happens at every Play and export ([method pull]), because the
-## file is the authoritative source - and never on a timer, because an import firing by
-## itself would undo a dial the author had just moved. A Play cannot do that: it writes any
-## change still waiting first, so what it reads back already holds it.
-##
-## What makes the automatic direction safe is not that the write is small, it is that the
-## write is CHECKED: [method FrontMatter.write_block] re-reads from disk, replaces one key
-## textually, refuses outright if the body or any other key would change, and renames a
-## verified temp file over the original. Doing that on a timer is the same operation as
-## doing it on a button, minus the button.
-##
-## ...AND NOT IN AN UNATTENDED PROCESS. An export render boots this whole app against the
-## author's settings, which is exactly how a render would come to edit a manuscript nobody
-## is watching. Automatic saving is refused wherever [Settings] is read-only - a render, the
-## offline analyzer, a test probe. Flushing on Play is not, because pressing Play is a person.
-##
-## The panel supplies the two halves it alone can know, as Callables: [member capture]
-## returns the settings to store, [member apply] takes the ones a document carried.
+## The panel supplies [member capture] (the settings to store) and [member apply] (takes the ones a document carried).
 
 const FrontMatter_ := preload("res://src/data/front_matter.gd")
 
-## How long the settings must stop moving before the document is written, in ms. Longer than
-## [constant Settings.DEBOUNCE_MS] on purpose: ghost's own config is a file nobody else has
-## open, and the author's manuscript may well be open in their editor right now.
+## How long the settings must stop moving before the document is written, in ms. Longer than [constant
+## Settings.DEBOUNCE_MS]: the author's manuscript may be open in their editor.
 const AUTOSAVE_MS := 1200
-## How often the snapshot is taken. Comparing it is cheap, but not free enough to do per frame.
+## How often the snapshot is taken (comparing it is cheap, but not per-frame cheap).
 const POLL_MS := 250
 ## Clear's tooltip; the button is on the [ScriptWriter] card.
 const CLEAR_TIP := ("Start an empty body that is saved nowhere, and forget the file it was "
@@ -108,14 +66,13 @@ const SAVE_NOTE_TIP := ("Choose the file this note is saved in. The whole note i
 
 ## A document was opened and its voice (if it had one) applied.
 signal opened(path: String)
-## A status line was shown (or cleared, with ""). The panel's script card mirrors it, so a
-## failed save is visible with the editor window closed.
+## A status line was shown (or cleared, with ""). The panel's script card mirrors it, so a failed save is visible with
+## the editor window closed.
 signal noted(msg: String)
 ## The script was saved in a file, or detached from one.
 signal mode_changed(sync: bool)
-## Save… put the script in another file: [param from] is the file it was in until now ("" when it
-## was in none), which is left exactly as it was. A panel showing a note hands this on, so the
-## note is the new file (see the header).
+## Save… put the script in another file: [param from] is the file it was in until now ("" when none), left as it
+## was. A panel showing a note hands this on, so the note is the new file.
 signal moved(from: String, to: String)
 ## A change made here reached the file - the text, the panel's settings or a field. Raised only
 ## after the write was verified, so a [SaveMark] ticking is the file holding what is on screen.
@@ -133,8 +90,8 @@ var apply: Callable
 var _section := "generative"     # the [Settings] section this source's draft and path live in
 ## The blocks under the document's `ghost:` key this source reads and writes - its panel's cards.
 var _blocks := PackedStringArray(["voice"])
-## Where the file dialogs are added. A dialog parented inside the editor's own Window could
-## not be shown with that window closed, and Open… is on the panel's card too.
+## Where the file dialogs are added (a dialog parented inside the editor's Window cannot show with that window
+## closed).
 var dialog_host: Node = null
 
 ## An unsynced editor's first draft, used only before this section has stored any text.
@@ -151,16 +108,14 @@ var _path := ""
 var _body := ""                  # the body as last read from or written to _path (LF)
 var _dialog: Window = null       # the one dialog open at a time (file or confirmation)
 var _syncing := false            # a programmatic write to the box must not mark it edited
-# AUTOSAVE. `_seen` is the last settings snapshot observed, `_saved` the last one written to
-# the document, and `_settled_ms` when `_seen` stopped changing. Three values rather than one
-# flag because a drag must not be written mid-drag: a quiet period is "unchanged since", which
-# a dirty bit cannot express.
+# Autosave: `_seen` is the last settings snapshot observed, `_saved` the last one written to the document, and
+# `_settled_ms` when `_seen` stopped changing. A quiet period is "unchanged since", which a dirty bit cannot express.
 var _seen := ""
 var _saved := ""
 var _settled_ms := 0
 var _polled_ms := 0
 var _autosave_note := ""         # last failure said, so a retry does not repeat it
-# THE BODY'S AUTOSAVE, the same quiet period keyed on the editor's version counter.
+# The body's autosave: the same quiet period keyed on the editor's version counter.
 var _body_seen_v := -1
 var _body_settled_ms := 0
 var _body_failed_v := -1         # a write refused at this version is not retried until an edit
@@ -168,19 +123,16 @@ var _conflict := false           # the file moved under an unsaved edit; the aut
 var _body_fault := ""            # why the text's last write was refused, "" once one lands
 var _waiting := false            # a change made here is not in the file yet (the poll's finding)
 var _written_clock := ""         # when the last write landed, as the wall clock says it
-## Let a gate that is specifically testing the autosave run it in a probe. Mirrors - and is
-## deliberately separate from - [method Settings.allow_writes_for_test]: flipping the global
-## would also let the gate write the author's real config, and the thing under test here is a
-## file of the gate's own.
+## Lets a gate that tests the autosave run it in a probe. Separate from [method Settings.allow_writes_for_test],
+## which would also let the gate write the author's real config.
 var _autosave_for_test := false
 
 
 ## Build the widget and restore the last source. Call before [method bind_text].
 ##
-## [param section] is the [Settings] section the owner already uses (its draft and the
-## remembered document path go there); [param blocks] are the keys under the document's
-## `ghost:` it reads and writes - one per component its panel has a card for. Two panels that
-## share a block share it in the document too: that is the point.
+## [param section] is the [Settings] section the owner already uses (its draft and the remembered document path go
+## there); [param blocks] are the keys under the document's `ghost:` it reads and writes, one per component its panel
+## has a card for. Two panels that share a block share it in the document.
 func setup(section: String, blocks: PackedStringArray) -> void:
 	_section = section
 	_blocks = blocks
@@ -227,35 +179,27 @@ func setup(section: String, blocks: PackedStringArray) -> void:
 	_refresh_row()
 
 
-## Hand the widget the panel's text box. It owns what is IN it from here on: a synced body
-## is shown in it, and unsynced text is the panel's persisted draft.
+## Hand the widget the panel's text box. It owns what is in it from here on: a synced body is shown in it, and
+## unsynced text is the panel's persisted draft. Separate from [method setup] so the widget can be built above the
+## box it drives.
 ##
-## Deliberately separate from [method setup] so the widget can be built above the box it
-## drives - the source row belongs over the text, and a Control is added where it is shown.
-##
-## IN SYNC MODE THE DOCUMENT IS THE SOURCE OF TRUTH, from the first frame, and that is a
-## correction the autosave forced. This used to read only the BODY at boot and leave the
-## voice as ghost's own settings had it - on the argument that the panel's last state is what
-## the author left there. That is defensible while saving is a button and indefensible once it
-## is automatic: the panel would come up holding the LAST document's voice and write it over
-## THIS one's a second later. Whichever way the asymmetry falls it has to fall the same way in
-## both directions, and for a file the author owns, the file wins.
+## In sync mode the document is the source of truth from the first frame, body and voice both: otherwise the panel
+## would come up holding the last document's voice and write it over this one's. For a file the author owns, the
+## file wins.
 func bind_text(te: TextEdit) -> void:
 	_text = te
 	_body_seen_v = te.get_version()
 	if is_sync():
-		# The body AND the voice - and `reload` seeds the autosave's snapshot, so opening
-		# ghost on a document is not followed by ghost writing that document. A file that has
-		# gone shows nothing and says so; Clear or Open moves on from it.
+		# The body and the voice - `reload` seeds the autosave's snapshot, so opening a document is not followed by
+		# writing it. A file that has gone shows nothing and says so; Clear or Open moves on from it.
 		reload()
 	else:
 		_show(str(Settings.read(_section, "text", "")) if Settings.has(_section, "text") else default_text)
 	_apply_editable()
 
 
-## True while THIS widget is writing the text box, so the panel's own `text_changed`
-## handler can tell a document being shown from the author typing. Without it, a synced
-## Play marks its own reading stale the instant it starts.
+## True while this widget is writing the text box, so the panel's `text_changed` handler can tell a document being
+## shown from the author typing.
 func is_quiet() -> bool:
 	return _syncing
 
@@ -265,10 +209,9 @@ func is_sync() -> bool:
 	return _sync and not _path.is_empty()
 
 
-## A TOP-LEVEL FRONTMATTER FIELD - `title:`, `author:`, `book:` - which is the document's own
-## metadata rather than ghost's block. Synced, it is read from the file as it is now (TEXTUALLY,
-## one line, so a head MiniYaml refuses still yields it); unsynced, it is what the panel set,
-## else the script's own frontmatter if it was pasted with one.
+## A top-level frontmatter field (`title:`, `author:`, `book:`): the document's own metadata rather than ghost's
+## block. Synced, it is read from the file as it is now (textually, one line, so a head MiniYaml refuses still yields
+## it); unsynced, it is what the panel set, else the script's own frontmatter.
 func field(key: String) -> String:
 	if is_sync():
 		if not FileAccess.file_exists(_path):
@@ -280,10 +223,9 @@ func field(key: String) -> String:
 	return v
 
 
-## Set a field. Synced, it is written into the file at once - one key, by the same checked line
-## surgery as the voice, and REMOVED when emptied rather than left as an empty key; unsynced, it
-## is kept with the script and goes into the file at Save…. Called on a person's edit, so not
-## refused in a read-only process (the same reasoning as the flush on Play).
+## Set a field. Synced, it is written into the file at once by the same checked line surgery as the voice, and
+## removed when emptied; unsynced, it is kept with the script and goes into the file at Save…. Not refused in a
+## read-only process (a person's edit).
 func set_field(key: String, value: String) -> bool:
 	value = value.strip_edges()
 	if field(key) == value:
@@ -308,38 +250,26 @@ func doc_path() -> String:
 	return _path if is_sync() else ""
 
 
-## WHAT TO PERSIST as the panel's text: the script when it is synced to nothing, and nothing
-## when it is - the file is where a synced script lives, and a copy in Settings would only be
-## a stale one.
+## What to persist as the panel's text: the script when synced to nothing, and nothing when synced (the file is where
+## it lives).
 func draft() -> String:
 	if is_sync() or _text == null:
 		return ""
 	return _text.text
 
 
-## THE WORDS IN THE BOX AS THEY STAND - nothing read, flushed or applied (what [method pull] does is a read of the file that lays
-## its blocks over every card): for a question asked often, as a row's state is.
+## The words in the box as they stand - nothing read, flushed or applied - for a question asked often, as a row's
+## state is.
 func shown() -> String:
 	return _text.text if _text != null else ""
 
 
-## THE REAL-TIME READ: the document as it is on disk at this instant - its words AND its
-## voice. The file is the authoritative source, so every Play and every export starts here
-## and there is no separate "re-read" to remember to press.
+## The real-time read: the document as it is on disk at this instant, words and voice. Every Play and every export
+## starts here. A setting not yet written is written first (otherwise the older file value would overwrite a dial
+## just moved), and so is an edit made in ghost; if that cannot be (the file changed outside ghost as well), the
+## reading is the text on screen and the file is left for the author to reconcile.
 ##
-## A SETTING NOT YET WRITTEN IS WRITTEN FIRST. The autosave waits for a quiet period, so a
-## dial moved a moment before Play exists only in the panel; reading the voice back without
-## flushing it would put the OLDER value from the file straight over the one just chosen.
-## Flushed, the panel's latest change is in the file, and what comes back is the file - the
-## author's own edits to the frontmatter included.
-##
-## Synced to nothing, it is just the box. A read that fails keeps the last body rather than
-## falling silent - a file being saved under us is a moment, not a reason to stop a reading.
-##
-## AN EDIT MADE IN GHOST IS WRITTEN FIRST, for the same reason. If it cannot be - the file
-## changed outside ghost as well - the reading is the text on screen, and the file is left
-## for the author to reconcile; replacing their unsaved words with the file's would be the
-## one outcome nobody chose.
+## Synced to nothing, it is just the box. A read that fails keeps the last body rather than falling silent.
 func pull() -> String:
 	if not is_sync():
 		return _text.text if _text != null else ""
@@ -369,8 +299,8 @@ func _flush_body() -> void:
 	_write_body(false)
 
 
-## THE BODY WRITE. [param force] is "Keep mine": the file's current body becomes the
-## expected one, so the editor's text replaces it - asked for by a person, never automatic.
+## The body write. [param force] is "Keep mine": the file's current body becomes the expected one, so the editor's
+## text replaces it - asked for by a person, never automatic.
 func _write_body(force: bool) -> bool:
 	if _text == null or _path.is_empty():
 		return false
@@ -418,8 +348,8 @@ func _flush() -> void:
 		_note("⚠  " + err)
 
 
-## Re-read the document AND take its voice. What picking a document does, and what boot
-## does in sync mode. Returns false when the file could not be read.
+## Re-read the document and take its voice: what picking a document does, and what boot does in sync mode. Returns
+## false when the file could not be read.
 func reload() -> bool:
 	if not is_sync():
 		_note("Nothing to re-read - the reading is coming from the box.")
@@ -437,12 +367,8 @@ func reload() -> bool:
 	return true
 
 
-## Write the panel's settings into the document's frontmatter, now. For gates; the panel
-## itself relies on the autosave and on the flush in [method pull].
-##
-## Everything careful about this is in [method FrontMatter.write_block]; what belongs here
-## is that a refusal is REPORTED rather than swallowed, because the whole value of the
-## button is knowing whether the document now carries the voice.
+## Write the panel's settings into the document's frontmatter, now. For gates; the panel relies on the autosave and on
+## the flush in [method pull]. A refusal is reported rather than swallowed (see [method FrontMatter.write_block]).
 func save() -> bool:
 	if not is_sync():
 		_note("Open a document first - there is nowhere to save a voice to.")
@@ -453,8 +379,7 @@ func save() -> bool:
 	if not (capture.call() is Dictionary):
 		_note("This panel cannot save a voice.")
 		return false
-	# READ-MODIFY-WRITE OF OUR BLOCKS. Whatever else the document keeps under `ghost:` - a
-	# block another panel owns - is carried through untouched.
+	# Read-modify-write of our blocks: whatever else the document keeps under `ghost:` is carried through untouched.
 	var err := FrontMatter_.write_block(_path, _merged_ghost())
 	if not err.is_empty():
 		_autosave_note = err
@@ -469,19 +394,10 @@ func save() -> bool:
 	return true
 
 
-## THE AUTOSAVE, polled rather than wired to each control.
-##
-## WIRED WOULD HAVE MEANT TEN CALL SITES AND A RULE TO REMEMBER, and the panel already proves
-## that does not hold: of the Generative panel's controls, the text box, the tabs, the voice,
-## the speaker and the tone mark it dirty and the ten VALUE DIALS - pace, pause, dynamics,
-## arc, effort, echo, room, resonance, presence, ambience - do not. Those are precisely the
-## ones an author adjusts while listening, so a wired autosave would have saved everything
-## except the thing being asked for. Polling a snapshot cannot be forgotten by a control
-## added later, which is the same argument [method Settings.bind] is built on.
-##
-## It is a QUIET PERIOD, not a debounce from the first change: the snapshot has to stop moving
-## before anything is written, so a slider dragged for ten seconds is one write at the end and
-## not twelve along the way.
+## The autosave, polled rather than wired to each control: wired would need a call site per control, and the panel's
+## value dials (pace, pause, dynamics, arc, effort, echo, room, resonance, presence, ambience) do not mark it dirty.
+## Polling a snapshot cannot be forgotten by a control added later (the argument [method Settings.bind] is built on).
+## It is a quiet period, not a debounce from the first change: a slider dragged for ten seconds is one write.
 func _process(_delta: float) -> void:
 	if not is_sync():
 		return
@@ -489,9 +405,8 @@ func _process(_delta: float) -> void:
 	if now - _polled_ms < POLL_MS:
 		return
 	_polled_ms = now
-	# An export render, the offline analyzer and a test probe all boot the whole app against
-	# the author's own settings - and would find their own document open. A person pressing Play
-	# is a person; a background process is not. (Its mark still says a change is waiting: it is.)
+	# An export render, the offline analyzer and a test probe boot the whole app against the author's settings and
+	# would find their own document open. (Its mark still says a change is waiting.)
 	if Settings.is_read_only() and not _autosave_for_test:
 		_take_stock(_snapshot())
 		return
@@ -510,7 +425,7 @@ func _process(_delta: float) -> void:
 	if err.is_empty():
 		_autosave_note = ""
 		return
-	# A FAILURE IS LOUD. The whole value of the verify is knowing when it refused.
+	# A failure is loud: the value of the verify is knowing when it refused.
 	if err != _autosave_note:
 		_autosave_note = err
 		_note("⚠  " + err)
@@ -543,23 +458,17 @@ func allow_autosave_for_test() -> void:
 	_autosave_for_test = true
 
 
-## WRITE THE PANEL INTO THE DOCUMENT WITHOUT UNDOING AN EDIT MADE TO IT OUTSIDE GHOST.
+## Write the panel into the document without undoing an edit made outside ghost. The panel writes its whole block on
+## any change while the document is only re-read at Play, so a value the author reverted in their own editor would be
+## written back from the panel's memory. When the block on disk is no longer what ghost last read or wrote (`_saved`),
+## this is a three-way merge: the file's version plus only what changed in the panel since; the panel is then shown
+## the result.
 ##
-## The panel writes its WHOLE block whenever anything in it changes, and the document is only
-## re-read at Play - so a value the author reverted in their own editor was written straight
-## back from the panel's memory by the next unrelated change (a slider, a tab, the Handwriting
-## picker): "I keep reverting the frontmatter, yet Ghost keeps resetting it". So when the block
-## on disk is no longer what ghost last read or wrote (`_saved`), this is a THREE-WAY MERGE:
-## the file's version, plus only what changed in the panel since then. The panel is then shown
-## the result, so what it displays and what the file says are the same.
+## Marked saved before the write, not after: a write that fails for a standing reason (read-only file, missing
+## directory) must not be retried four times a second. The next real change moves the snapshot and tries again.
 ##
-## Marked saved BEFORE the write, not after: a write that fails for a standing reason (the file
-## is read-only, the directory is gone) must not be retried four times a second for the rest
-## of the session. The next actual change moves the snapshot and tries again.
-##
-## THE MERGE RUNS OVER OUR BLOCKS AS ONE DICTIONARY, `{voice: ..., look: ...}`, so it is the same
-## key-by-key merge one level up: a block the file lost is not an edit (it is written back), and a
-## block another panel owns never enters it.
+## The merge runs over our blocks as one dictionary, `{voice: ..., look: ...}`: a block the file lost is not an edit
+## (it is written back), and a block another panel owns never enters it.
 func _write_reconciled() -> String:
 	var raw: Variant = _read_raw()
 	var ghost := {}
@@ -591,10 +500,10 @@ func _wrote() -> void:
 	written.emit()
 
 
-## WHERE THE SCRIPT STANDS WITH ITS FILE, for the [SaveMark]: "none" (it is saved nowhere),
-## "pending" (a change made here is waiting for its quiet period), "failed" (a write was refused,
-## or the file changed under an edit and the author has not chosen) or "saved" (the file holds
-## what is on screen). The waiting is the autosave poll's own finding, a quarter second old at most.
+## Where the script stands with its file, for the [SaveMark]: "none" (saved nowhere), "pending" (a change is waiting
+## for its quiet period), "failed" (a write was refused, or the file changed under an edit and the author has not
+## chosen) or "saved" (the file holds what is on screen). The waiting is the autosave poll's finding, a quarter second
+## old at most.
 func save_state() -> String:
 	if not is_sync():
 		return "none"
@@ -629,8 +538,8 @@ func _own(ghost: Dictionary) -> Dictionary:
 	return out
 
 
-## Only the blocks that are dictionaries - what [member apply] is handed. A block written by
-## hand as something else is the author's to fix, not a panel's to read.
+## Only the blocks that are dictionaries - what [member apply] is handed. A block written by hand as something else is
+## the author's to fix.
 func _dict_blocks(blocks: Dictionary) -> Dictionary:
 	var out := {}
 	for k in blocks:
@@ -649,9 +558,8 @@ func _lay_over(ghost: Dictionary, mine: Variant) -> void:
 			ghost[k] = mine[k]
 
 
-## `theirs` with every value `mine` changed from `base` laid over it, key by key down through
-## nested blocks (a voice's dial is three levels in). A value only one side changed survives;
-## where both changed the same value, the panel - the more recent hand - wins.
+## `theirs` with every value `mine` changed from `base` laid over it, key by key down through nested blocks. A value
+## only one side changed survives; where both changed the same value, the panel (the more recent hand) wins.
 static func merge3(base: Variant, mine: Variant, theirs: Variant) -> Variant:
 	if not (mine is Dictionary and theirs is Dictionary):
 		return mine if not same_value(mine, base) else theirs
@@ -670,8 +578,8 @@ static func merge3(base: Variant, mine: Variant, theirs: Variant) -> Variant:
 	return out
 
 
-## Equal as settings: numbers by value whatever their type (YAML reads 3, JSON gives 3.0), and
-## to the precision a dial is shown at.
+## Equal as settings: numbers by value whatever their type (YAML reads 3, JSON gives 3.0), and to the precision a dial
+## is shown at.
 static func same_value(a: Variant, b: Variant) -> bool:
 	var num := [TYPE_INT, TYPE_FLOAT]
 	if typeof(a) in num and typeof(b) in num:
@@ -701,8 +609,8 @@ func _snapshot() -> String:
 	return JSON.stringify(block) if block is Dictionary else ""
 
 
-## Our blocks merged onto whatever the document already says, so a block another panel owns -
-## and any key a later build adds - is carried through a save rather than dropped by it.
+## Our blocks merged onto whatever the document already says, so a block another panel owns and any key a later build
+## adds is carried through a save.
 func _merged_ghost() -> Dictionary:
 	var raw: Variant = _read_raw()
 	var ghost := {}
@@ -725,8 +633,8 @@ func _tool(label: String, tip: String, action: Callable) -> Button:
 	return b
 
 
-## Before the editor stops showing the document: write what it holds, and refuse to move
-## if that cannot be done - the edits would otherwise be replaced by the draft and lost.
+## Before the editor stops showing the document: write what it holds, and refuse to move if that cannot be done (the
+## edits would be replaced by the draft and lost).
 func _leave_document() -> bool:
 	if _text == null or _path.is_empty() or _text.text == _body:
 		return true
@@ -763,8 +671,7 @@ func _show(body: String) -> void:
 	if _text.text == body:
 		return
 	_syncing = true
-	# The caret and the scroll, kept: a re-read at every Play would otherwise throw the
-	# reader back to the top of the chapter every time.
+	# The caret and the scroll, kept: a re-read at every Play would otherwise throw the reader back to the top.
 	body = FrontMatter_.lf(body)
 	var col := _text.get_caret_column()
 	var line := _text.get_caret_line()
@@ -811,8 +718,8 @@ func _import(raw: String, quiet := false) -> void:
 	elif not quiet and _blocks.is_empty():
 		_note("")          # a plain note keeps no settings: there is nothing to say about them
 	elif not quiet:
-		# SAY WHAT IT DOES CARRY: a block this panel has no card for (another mode's, or one
-		# written in an older shape) is kept, and is the likeliest reason a voice "went missing".
+		# Say what it does carry: a block this panel has no card for is kept, and is the likeliest reason a voice "went
+		# missing".
 		var other := PackedStringArray()
 		for k in ghost:
 			other.append("`%s`" % k)
@@ -820,17 +727,15 @@ func _import(raw: String, quiet := false) -> void:
 			% _path.get_file() + "will be written in."
 			+ ("" if other.is_empty() else " (It keeps %s, which this panel leaves as it is.)"
 				% ", ".join(other)))
-	# THE SNAPSHOT IS SEEDED HERE, after the panel has taken the document's voice. Without it
-	# the autosave sees "the panel does not match what we last wrote" the instant a document is
-	# opened and writes it straight back - touching a file the author has only just opened, and
-	# doing it every time, which is exactly the behavior a careful writer is built to avoid.
+	# The snapshot is seeded here, after the panel has taken the document's voice: otherwise the autosave sees a
+	# mismatch the instant a document is opened and writes it straight back.
 	_seen = _snapshot()
 	_saved = _seen
 	_settled_ms = Time.get_ticks_msec()
 
 
-## OPEN A DOCUMENT AND STAY WITH IT. Text saved nowhere would be replaced by the file's and
-## exists nowhere else, so that is asked about first; a saved script is in its file already.
+## Open a document and stay with it. Text saved nowhere would be replaced by the file's, so that is asked about first;
+## a saved script is in its file already.
 func open() -> void:
 	if _dialog != null and is_instance_valid(_dialog):
 		return
@@ -849,8 +754,8 @@ func open() -> void:
 	_open_dialog()
 
 
-## ASK FOR A FILE TO OPEN and hand its path to [param then], opening nothing here: a note's Open…,
-## where the file is a note of its own and main opens it ([method ScriptWriter.bind_note]).
+## Ask for a file to open and hand its path to [param then], opening nothing here: a note's Open…, where the file is a
+## note of its own and main opens it ([method ScriptWriter.bind_note]).
 func ask_open(then: Callable) -> void:
 	if _dialog != null and is_instance_valid(_dialog):
 		return
@@ -878,8 +783,7 @@ func _open_dialog() -> void:
 	_popup(d)
 
 
-## SAVE…: ask where, always - the file is the author's to name, every time the button is pressed.
-## The dialog asks before an existing file is replaced.
+## Save…: ask where, always. The dialog asks before an existing file is replaced.
 func save_dialog() -> void:
 	if _dialog != null and is_instance_valid(_dialog):
 		return
@@ -894,9 +798,7 @@ func _file_dialog(mode: FileDialog.FileMode, title: String) -> FileDialog:
 	var d := FileDialog.new()
 	d.file_mode = mode
 	d.access = FileDialog.ACCESS_FILESYSTEM
-	# In-window, never native - the portal dialog shows nothing at all on a Linux box
-	# without xdg-desktop-portal, which is the "I pressed it and nothing happened" report
-	# the film importer already carries this note for.
+	# In-window, never native: the portal dialog shows nothing on a Linux box without xdg-desktop-portal.
 	d.use_native_dialog = false
 	d.title = title
 	if not _path.is_empty():
@@ -932,11 +834,9 @@ func _on_picked(path: String) -> void:
 	mode_changed.emit(true)
 
 
-## SAVE THE SCRIPT INTO A FILE: write it there now - the panel's voice in the frontmatter - and
-## keep it there from then on. Saved somewhere already, the new file takes the old one's
-## frontmatter too (a title, the other panel's voice), and the old file is left as it was -
-## [signal moved] says so, for a note to follow. The file it is in already is simply brought up
-## to date: whatever was waiting is written now.
+## Save the script into a file: write it there now - the panel's voice in the frontmatter - and keep it there from
+## then on. Saved somewhere already, the new file takes the old one's frontmatter too and the old file is left as it
+## was ([signal moved] says so, for a note to follow). A script already in that file is simply brought up to date.
 func save_to(path: String) -> bool:
 	_close_dialog()
 	if _text == null:
@@ -989,10 +889,10 @@ func save_to(path: String) -> bool:
 	return true
 
 
-## THE FILE RENAMED TO [param to] - its words and frontmatter as they are, nothing copied ([method
-## NoteStore.rename]): what waits here is written first, and [signal moved] says so, for a note to follow as
-## it follows Save…. A note retitled is renamed this way when its name follows its title ([method
-## NoteStore.follows]). False when it did not move.
+## The file renamed to [param to] - its words and frontmatter as they are, nothing copied ([method NoteStore.rename]):
+## what waits here is written first, and [signal moved] says so, for a note to follow as it follows Save…. A note
+## retitled is renamed this way when its name follows its title ([method NoteStore.follows]). False when it did not
+## move.
 func rename_to(to: String) -> bool:
 	if not is_sync() or to.simplify_path() == _path.simplify_path():
 		return false
@@ -1010,9 +910,9 @@ func rename_to(to: String) -> bool:
 	return true
 
 
-## A SCRIPT SAVED NOWHERE, AND NO FILE REMEMBERED - and no title, author or book either. Synced, the file is left exactly as it is
-## (edits still waiting are written first, and a clash must be settled before the link is
-## dropped); not synced, the text is deleted as an EDIT, so Ctrl+Z brings it back.
+## A script saved nowhere, and no file remembered, and no title, author or book. Synced, the file is left as it is
+## (edits still waiting are written first, and a clash must be settled before the link is dropped); not synced, the
+## text is deleted as an edit, so Ctrl+Z brings it back.
 func clear() -> void:
 	if _text == null:
 		return
@@ -1046,8 +946,8 @@ func clear() -> void:
 	mode_changed.emit(false)
 
 
-## Say [param msg] on the source's own status line (and the card's, which mirrors it): the panel's
-## word on something the source started - what became of the file a note was saved out of.
+## Say [param msg] on the source's own status line (and the card's, which mirrors it): the panel's word on something
+## the source started.
 func tell(msg: String) -> void:
 	_note(msg)
 

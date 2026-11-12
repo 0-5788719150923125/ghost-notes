@@ -1,29 +1,25 @@
 extends Node
 
-## note_grid_check - the notes as a notes app shows them ([NoteGrid], [NoteTile]; 2026-10-31), on a notes
-## folder of the gate's own (`NoteStore.root`) and with the author's added sources set aside in memory (a
-## probe never writes Settings), so only the gate's notes are listed.
+## note_grid_check - the notes as a notes app shows them ([NoteGrid], [NoteTile]), on a notes folder of the gate's own
+## (`NoteStore.root`) and with the author's added sources set aside in memory, so only the gate's notes are listed.
 ##
 ##   tests/run_boot_probe.sh tests/ui/note_grid_check.gd 120
 ##
-## SQUARES OF ONE SIZE, 2-3 COLUMNS, CENTERED: on a desktop's 1920 three columns of TILE squares and the
-## header as wide as they are; THE CONTROL, a 600-wide grid, gives up a column; and a phone's grid (1080
-## wide at the phone's scale) stands in two, with no × on its tiles.
-##
-## WHAT A TILE BEARS: its note's title; its words with the frontmatter and every mark left out (the control:
-## the file itself has both), and a first heading that only says the title again (the control: one that says
-## something else stays); a chip for each component and none for the words; the notes in the list's
-## order, newest first.
-##
-## THE COLOR IS THE COMPONENTS': the same components make the same color whatever order they are named in;
-## two of one family (Scenes and a Storyboard, the pictures' orange) are near and still apart; a letter is far from a Table; what
-## shows the note counts most (a letter read by a Voice is nearer the Medium's own hue than the Voice's); and
-## a note of words alone is the paper's gray.
-##
-## THE SEARCH: a word of the title, of the words, a component's name or its Medium's format finds its notes; two words find only
-## the notes with both; a word no note has leaves none and says so; Escape brings every note back; Enter
-## opens the first note left. A TAP OPENS A NOTE AND A DRAG DOES NOT (the control: the same press, released
-## 40 px away). The × asks to delete. A note made after the grid is up appears at its next look.
+## - Squares of one size, 2-3 columns, centered: on a desktop's 1920 three columns of tile squares and the
+##   header as wide as they are; control: a 600-wide grid gives up a column; a phone's grid (1080
+##   wide at the phone's scale) stands in two, with no x on its tiles.
+## - What a tile bears: its note's title; its words with the frontmatter and every mark left out (control:
+##   the file itself has both), and a first heading that only says the title again (control: one that says
+##   something else stays); a chip for each component and none for the words; the notes in the list's
+##   order, newest first.
+## - The color is the components': the same components make the same color whatever order they are named in;
+##   two of one family (Scenes and a Storyboard) are near and still apart; a letter is far from a Table; what
+##   shows the note counts most (a letter read by a Voice is nearer the Medium's own hue than the Voice's); and
+##   a note of words alone is the paper's gray.
+## - The search: a word of the title, of the words, a component's name or its Medium's format finds its notes; two words find only
+##   the notes with both; a word no note has leaves none and says so; Escape brings every note back; Enter
+##   opens the first note left. A tap opens a note and a drag does not (control: the same press, released
+##   40 px away). The x asks to delete. A note made after the grid is up appears at its next look.
 
 const ROOT := "user://note_grid_check"
 var _fails: Array = []

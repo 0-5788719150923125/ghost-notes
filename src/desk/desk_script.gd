@@ -13,59 +13,44 @@ class_name DeskScript
 ##                                                   draw a figure: SVG, over as many lines as it
 ##                                                   takes (hosts/math/figure.py says what it may hold)
 ##     <!-- pad #name: ... -->, <!-- draw #name: ... -->
-##                                                   the same, NAMED, so the pen can point back at it
-##     ... the <!-- point: name --> hypotenuse ...    INSIDE SPEECH: at that word the pen points at the
+##                                                   the same, named, so the pen can point back at it
+##     ... the <!-- point: name --> hypotenuse ...    inside speech: at that word the pen points at the
 ##                                                   thing called name - a mark's #name, a drawing's
 ##                                                   part (its SVG `id`) or a formula's (\pin{name}{...})
 ##
-## Everything else is speech. The voice's own marks (a delivery, a hesitation, a speaker) pass to
-## the voice; any other comment is a note and is not read.
+## Everything else is speech. The voice's own marks (a delivery, a hesitation, a speaker) pass to the voice; any other
+## comment is a note and is not read.
 ##
-## THE WRITING IS SAID AS IT IS WRITTEN (the user, 2026-10-16: "It is very hard to watch text being
-## written, while the voice is speaking about something else; a person cannot pay attention to both
-## ... we need to narrate the text being written, as it is being written"). The paragraph on the line
-## right after a pen's mark is its DICTATION - the formula read aloud, "the sum of two k minus one, for k
-## from one to n, equals n squared" - and the pen writes during exactly those words, keeping pace with them
-## word by word ([DeskMedium]). The voice rests before a dictation only for the pen to come down (and
-## for the page to turn). A DICTATION IS NEVER BROKEN to wait for the pen (the user, 2026-10-16: "A
-## point is named by two numbers" had "like 5 seconds of silence between 'two' and 'numbers'"; and
-## 2026-10-17: "We shouldn't be forcing arbitrary breaks in the speech, to wait for the pen, nor ...
-## in the pen movement, to wait for the speech"): it is said straight through, the pen speeding up to
-## keep with it ([method DeskMedium.elastic]), and what the pen still owes at its fastest
-## ([method tail_for]) is the one rest, after the dictation's last word - a paragraph's end. Rests
-## shared out at a dictation's commas went: the pen, its clock the words said, stood still in them too.
+## The writing is said as it is written. The paragraph on the line right after a pen's mark is its dictation - the formula
+## read aloud, "the sum of two k minus one, for k from one to n, equals n squared" - and the pen writes during exactly
+## those words, keeping pace with them word by word ([DeskMedium]). The voice rests before a dictation only for the pen to
+## come down (and for the page to turn). A dictation is never broken to wait for the pen: it is said straight through, the
+## pen speeding up to keep with it ([method DeskMedium.elastic]), and what the pen still owes at its fastest ([method
+## tail_for]) is the one rest, after the dictation's last word.
 ##
-## THE PAGES ARE FILLED (the user, the same day: "It would make more sense to use all of the available
-## space on a page, and then to turn the page if we need more space"): there is no mark for a new
-## page. [method lay_out] puts every formula on the next rules of the page and turns the page only when
-## one would run off its foot - and that turn is a rest the voice takes, so the parse lays the pad out.
+## The pages are filled: there is no mark for a new page. [method lay_out] puts every formula on the next rules of the page
+## and turns the page only when one would run off its foot - and that turn is a rest the voice takes, so the parse lays the
+## pad out.
 ##
-## ONE WALK, TWO READERS, as [CardReading] and [TabletScript] have it: [method parse] produces the
-## spoken words the desk follows the voice by, the pen's actions anchored to them, and the text the
-## voice reads ([member speakable]) with its rests (`<!-- action-hold: S -->`). They come from the same
-## numbers, so they cannot disagree.
+## One walk, two readers, as [CardReading] and [TabletScript] have it: [method parse] produces the spoken words the desk
+## follows the voice by, the pen's actions anchored to them, and the text the voice reads ([member speakable]) with its
+## rests (`<!-- action-hold: S -->`). They come from the same numbers, so they cannot disagree.
 ##
-## THE VOICE IS NEVER HANDED NOTATION ([method audit]): the pen writes TeX in a mark, the voice says
-## math in words. A lesson whose speech carries `$`, `\`, `^`, `_` or braces is refused at its step.
+## The voice is never handed notation ([method audit]): the pen writes TeX in a mark, the voice says math in words. A
+## lesson whose speech carries `$`, `\`, `^`, `_` or braces is refused at its step.
 ##
-## A DRAWING IS WRITTEN LIKE A FORMULA (the user, 2026-10-16: "it might be useful if it could draw
-## something, to support the idea ... today, the model just writes a title, then sits there
-## explaining"): `draw` is a pen's mark like `pad`, its SVG laid out by the ink step - its lines and
-## curves pen strokes, its labels TeX's - and the line after it is its dictation, said while it is
-## drawn. It is centered on the page, half a rule clear of what is above it.
+## A drawing is written like a formula: `draw` is a pen's mark like `pad`, its SVG laid out by the ink step - its lines and
+## curves pen strokes, its labels TeX's - and the line after it is its dictation, said while it is drawn. It is centered on
+## the page, half a rule clear of what is above it.
 ##
-## THE PEN POINTS AT WHAT IS SPOKEN OF (the user, 2026-10-16: "the model has gone for minutes just staring
-## at a static page, while describing what is on the page, but never POINTING to any of it ... I was not
-## able to follow what the model was talking about"): a `point` mark sits in the speech at the word, and
-## the pen goes to the named thing as that word is said and stays on it to the sentence's end
-## (`span`). It names what the pen points at, never where: [method lay_out] finds the latest thing
-## written under that name (`of`, and `part` when it is a piece of it), and the desk reads its place
-## from the ink. A lesson that talks long over a still pen ([method still]) or points at a name nothing
-## carries ([method unknown_points]) goes back once.
+## The pen points at what is spoken of: a `point` mark sits in the speech at the word, and the pen goes to the named thing
+## as that word is said and stays on it to the sentence's end (`span`). It names what the pen points at, never where:
+## [method lay_out] finds the latest thing written under that name (`of`, and `part` when it is a piece of it), and the
+## desk reads its place from the ink. A lesson that talks long over a still pen ([method still]) or points at a name
+## nothing carries ([method unknown_points]) goes back once.
 ##
-## A LETTER IS SAID AS A LETTER: `[a]` in speech is the letter's name, shown as the letter
-## ([TextNorm]), and [method bare_letters] sends back a lesson that reads a formula's `a` as a bare
-## word - the voice says the article there ("uh"), which is what the user heard (2026-10-16).
+## A letter is said as a letter: `[a]` in speech is the letter's name, shown as the letter ([TextNorm]), and [method
+## bare_letters] sends back a lesson that reads a formula's `a` as a bare word, which the voice says as the article.
 
 ## The marks: group 1 the verb, group 2 its name (after `#`), group 3 what follows the colon.
 const MARK := "^\\s*<!--\\s*(pad-text|pad|strike|draw)(?:\\s+#([\\w-]+))?\\s*(?::\\s*(.*?))?\\s*-->\\s*$"
@@ -84,36 +69,31 @@ const LEAD_HOLD := 0.45
 ## A page turned before the next formula: the sheet is lifted, goes over the binding and is folded
 ## round the back of the pad, its head lifted for it and set down again ([LegalPad]).
 const TURN := 2.2
-## How much faster or slower than its own pace the pen may write, on the average over a dictation,
-## to keep with the words. Past MAX_PACE it lags, and the voice waits for it at the dictation's end
-## ([method tail_for]). THE PEN KEEPS UP WITH THE VOICE (the user, 2026-10-16: "rather than breaking
-## the audio, should we increase the speed of writing ... to track with the audio better?"): at 1.8 a
-## line of prose left the voice waiting six seconds at a colon; four times its own pace covers nearly
-## every dictation, and the voice is held only for what is left.
+## How much faster or slower than its own pace the pen may write, on the average over a dictation, to keep with the words.
+## Past MAX_PACE it lags, and the voice waits for it at the dictation's end ([method tail_for]). Four times its own pace
+## covers nearly every dictation, and the voice is held only for what is left.
 const MAX_PACE := 4.0
 const MIN_PACE := 0.55
 ## A spoken word's length, for the rests sized before the voice is heard.
 const EST_WORD := 0.33
-## A SPOKEN WORD IN A REAL READING, the voice's pauses between sentences and paragraphs with it (seconds):
-## what [method runtime] times a lesson by. Measured on three exported lessons (2026-10-20: 3857 to
-## 3930 spoken words, 0.49 to 0.53 s a word once the pen's rests and the bookends are taken off, the
-## Narrator at pace 0.9); a voice set faster or slower moves it.
+## A spoken word in a real reading, the voice's pauses between sentences and paragraphs with it (seconds): what [method
+## runtime] times a lesson by (0.49 to 0.53 s a word measured on exported lessons, the Narrator at pace 0.9); a voice set
+## faster or slower moves it.
 const SAID_WORD := 0.52
 ## A cross-out: the pen draws a line through the last thing written, deliberately.
 const STRIKE := 0.9
-## THE PEN IS NEVER STILL FOR LONG: more spoken words than this with the pen neither writing, drawing
-## nor pointing (about 45 seconds of the voice) send a lesson back once - the user lost the thread after
-## two minutes over a still page.
+## The pen is never still for long: more spoken words than this with the pen neither writing, drawing nor pointing (about
+## 45 seconds of the voice) send a lesson back once.
 const STILL_WORDS := 80
 ## A drawing's drawing time before it is laid out: a guess per element of its SVG.
 const EST_PER_ELEMENT := 0.9
-## A formula's writing time before it is typeset: a guess from its TeX's length, close to what the
-## ink measures for short formulas (a^2 + b^2 = c^2: 4.3 s written, 4.2 guessed).
+## A formula's writing time before it is typeset: a guess from its TeX's length, close to what the ink measures for short
+## formulas.
 const EST_BASE := 1.2
 const EST_PER_CHAR := 0.2
 
-## THE PAGE, in its canvas's pixels (an 8.5 x 11 sheet), and how the pen fills it: TeX points to
-## pixels (12 pt type about one rule tall), the rules, the margin, and room at the foot.
+## The page, in its canvas's pixels (an 8.5 x 11 sheet), and how the pen fills it: TeX points to pixels (12 pt type about
+## one rule tall), the rules, the margin, and room at the foot.
 const PW := 1100.0
 const PH := 1424.0
 const PX_PER_PT := 3.1
@@ -152,9 +132,8 @@ static func item(kind: String, tex: String) -> Dictionary:
 	if kind == "draw":
 		mode = "figure"
 	elif kind == "pad":
-		# MATH, unless it is a display environment of its own (align*, gather*), which TeX sets only
-		# outside math: `aligned` - what the teacher is told to use - lives inside math, and set as a
-		# display it was refused ("\\begin{aligned} allowed only in math mode", the first real episode)
+		# math, unless it is a display environment of its own (align*, gather*), which TeX sets only outside math:
+		# `aligned` lives inside math, and set as a display it is refused ("\\begin{aligned} allowed only in math mode")
 		mode = "display" if DISPLAY.search(tex) != null else "math"
 	return {"id": "p" + (kind + "|" + tex).sha256_text().substr(0, 12), "tex": tex, "mode": mode}
 
@@ -195,8 +174,8 @@ static func figure_size(svg: String) -> Dictionary:
 	return {"w": vw * s, "h": vh * s, "d": 0.0}
 
 
-## THE REST AFTER A DICTATION of [param span] words for writing that takes [param write] seconds: what
-## the pen, at its fastest, would still need after the words are said - none when it keeps up.
+## The rest after a dictation of [param span] words for writing that takes [param write] seconds: what the pen, at its
+## fastest, would still need after the words are said - none when it keeps up.
 static func tail_for(write: float, span: int) -> float:
 	var t := write / MAX_PACE - float(span) * EST_WORD
 	return t if t > 0.05 else 0.0
@@ -209,25 +188,24 @@ static func speakable(body: String, lengths: Dictionary = {}, sizes: Dictionary 
 	return String(parse(body, lengths, sizes)["speakable"])
 
 
-## THE WALK. [param lengths]: item id -> seconds its writing takes (the ink's, else estimated);
-## [param sizes]: item id -> the typeset item (`w`, `h`, `d` in TeX points), for the layout - without
-## one an item is laid out as a line of type. Returns:
-##   actions   - [{kind, id, tex, mode, after, span, about, write, dur, tail, page, turn, at, k, w, h, d, of,
-##               i}]: `after` the spoken words before it (a pad item's dictation starts there), `span` its
-##               dictation's words, `about` the words of the talk about it (the paragraph right after its
-##               dictation), `write` how long the pen takes, `dur` the rest before it, `tail`
-##               the rest after its dictation, `page`/`turn` where it is written and whether the page
-##               turns for it, `at` its baseline's start on the page, `of` what a strike crosses out
-##               or a point points at (`target` the name it was given, `part` the piece of it, `span`
-##               the words it holds for), `name` a written thing's own
+## The walk. [param lengths]: item id -> seconds its writing takes (the ink's, else estimated); [param sizes]: item id ->
+## the typeset item (`w`, `h`, `d` in TeX points), for the layout - without one an item is laid out as a line of type.
+## Returns:
+##   actions   - [{kind, id, tex, mode, after, span, about, write, dur, tail, page, turn, at, k, w, h, d, of, i}]:
+##               `after` the spoken words before it (a pad item's dictation starts there), `span` its dictation's words,
+##               `about` the words of the talk about it (the paragraph right after its dictation), `write` how long the
+##               pen takes, `dur` the rest before it, `tail` the rest after its dictation, `page`/`turn` where it is
+##               written and whether the page turns for it, `at` its baseline's start on the page, `of` what a strike
+##               crosses out or a point points at (`target` the name it was given, `part` the piece of it, `span` the
+##               words it holds for), `name` a written thing's own
 ##   spoken    - PackedStringArray: every spoken word, normalized ([method TabletScript.norm])
 ##   speakable - the text the voice reads
 ##   said      - the speech alone, marks and notes out: what [method audit] reads
 static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}) -> Dictionary:
 	var blocks := _blocks(body)
 	var point := _rx(POINT)
-	# THE ACTIONS, and how many words each pad item's dictation has (the paragraph after its mark); a
-	# point in speech is an action in its paragraph, anchored when the voice is walked below
+	# the actions, and how many words each pad item's dictation has (the paragraph after its mark); a point in speech is
+	# an action in its paragraph, anchored when the voice is walked below
 	var actions: Array = []
 	for bi in blocks.size():
 		var blk: Dictionary = blocks[bi]
@@ -253,8 +231,8 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 			act["tail"] = tail_for(float(act["write"]), int(act["span"])) if int(act["span"]) > 0 else 0.0
 		actions.append(act)
 	actions = lay_out(actions, sizes)
-	# THE VOICE: each paragraph in order, ONE rest between two - a dictation's tail, the actions'
-	# leads and a page's turn summed
+	# the voice: each paragraph in order, one rest between two - a dictation's tail, the actions' leads and a page's turn
+	# summed
 	var by_block := {}
 	var points_in := {}
 	for a in actions:
@@ -267,7 +245,7 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()
 	var said := PackedStringArray()
-	# THE DESK SEEN FIRST: the voice rests a settle after the intro before its first word ([constant Openings.SETTLE];
+	# The desk seen first: the voice rests a settle after the intro before its first word ([constant Openings.SETTLE];
 	# [method DeskMedium._blank]), with whatever the pen does before it
 	var hold := Openings.SETTLE
 	var dictating: Dictionary = {}
@@ -285,7 +263,6 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 		if hold > 0.0:
 			speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
 			hold = 0.0
-		# A POINT is at the word after its mark, and holds to its sentence's end
 		for pa in points_in.get(bi, []):
 			var text := String(blk["text"])
 			var rest := text.substr(int(pa["mark_end"]))
@@ -293,7 +270,6 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 			pa["after"] = spoken.size() + _words(text.substr(0, int(pa["mark"]))).size()
 			pa["span"] = maxi(1, _words(rest.substr(0, stop.get_end()) if stop != null else rest).size())
 		if not dictating.is_empty():
-			# said straight through; what the pen owes is the rest after it
 			_flush(String(blk["text"]), spoken, speak, said)
 			hold += float(dictating["tail"])
 			talked = dictating
@@ -310,9 +286,9 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 		"said": "\n\n".join(said)}
 
 
-## THE LESSON IN BLOCKS: each own-line mark `{kind, name, arg}`, and each paragraph `{kind: "para",
-## text, joined}` - lines up to a blank line or a mark, `joined` when it starts on the line right after a
-## mark (a dictation; a blank line between makes it speech of its own).
+## The lesson in blocks: each own-line mark `{kind, name, arg}`, and each paragraph `{kind: "para", text, joined}` - lines
+## up to a blank line or a mark, `joined` when it starts on the line right after a mark (a dictation; a blank line between
+## makes it speech of its own).
 static func _blocks(body: String) -> Array:
 	var src := Manuscript.strip_frontmatter(body)
 	var mark := _rx(MARK)
@@ -325,7 +301,6 @@ static func _blocks(body: String) -> Array:
 	var drawing_name := ""
 	var in_drawing := false
 	for line in (src + "\n").split("\n"):
-		# A DRAWING OVER SEVERAL LINES: its mark is everything up to the line that closes the comment
 		if in_drawing:
 			var close := String(line).find("-->")
 			if close < 0:
@@ -369,11 +344,9 @@ static func _words(text: String) -> PackedStringArray:
 	return out
 
 
-## A paragraph into the spoken list, the voice's text and the speech.
-## A PARAGRAPH WITH ITS POINTS TAKEN OUT, so the voice's text reads as said: a mark and the spaces
-## round it become one space, and none before punctuation or the paragraph's end. A lesson spaces a
-## mark either way - `only <!-- point: x --> the` or `only <!-- point: x -->the` - and taking only the
-## space before it fused the words ("onlythe", "drawing,the" in the subtitles, 2026-10-19).
+## A paragraph into the spoken list, the voice's text and the speech. The paragraph has its points taken out so the voice's
+## text reads as said: a mark and the spaces round it become one space, and none before punctuation or the paragraph's end
+## (a lesson spaces a mark either way, and taking only the space before it would fuse the words).
 static func _unpointed(text: String) -> String:
 	var bare := _rx("[ \\t]*" + POINT + "[ \\t]*(?=[.,;:!?]|$)").sub(text, "", true)
 	return _rx("[ \\t]*" + POINT + "[ \\t]*").sub(bare, " ", true)
@@ -391,11 +364,10 @@ static func _flush(text: String, spoken: PackedStringArray, speak: PackedStringA
 		said.append(plain)
 
 
-## WHERE EACH ACTION WRITES: its page and its place on it ([constant PX_PER_PT] scaled, baselines on
-## the rules), the page turned only where the next formula would run off its foot - `turn` on the one
-## that starts a new page. A strike crosses out the last thing written (`of`); a point, the latest
-## thing written under its name (`of`, -1 for none; `part` when the name is a piece of it). Pure: a
-## function of the actions and the typeset items.
+## Where each action writes: its page and its place on it ([constant PX_PER_PT] scaled, baselines on the rules), the page
+## turned only where the next formula would run off its foot - `turn` on the one that starts a new page. A strike crosses
+## out the last thing written (`of`); a point, the latest thing written under its name (`of`, -1 for none; `part` when the
+## name is a piece of it). Pure: a function of the actions and the typeset items.
 static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 	var out: Array = []
 	var page := 0
@@ -425,7 +397,6 @@ static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 				var x := MATH_X if String(act["kind"]) == "pad" else TEXT_X
 				var room := PW - RIGHT - x
 				var k := minf(1.0, room / w) if w > 0.0 else 1.0
-				# a drawing: centered in the column, half a rule clear of what is above it
 				var clear := RULE * 0.5 if drawn else 0.0
 				if drawn:
 					x = TEXT_X + maxf(0.0, (room - w * k) * 0.5)
@@ -456,10 +427,9 @@ static func _snap_rule(y: float) -> float:
 	return FIRST_RULE + maxf(n, 0.0) * RULE
 
 
-## A STEADY VOICE READING [param parsed] (what [method parse] returned): every spoken word
-## [param word] seconds long, a breath of [param pause] after each paragraph, and every rest the
-## lesson asks for - the words as a take's timing hands them to the desk (`text`, `t0`, `t1`), from
-## [param lead] on. For a gate or a probe, which has no voice to time.
+## A steady voice reading [param parsed] (what [method parse] returned): every spoken word [param word] seconds long, a
+## breath of [param pause] after each paragraph, and every rest the lesson asks for - the words as a take's timing hands
+## them to the desk (`text`, `t0`, `t1`), from [param lead] on. For a gate or a probe, which has no voice to time.
 static func rehearsal(parsed: Dictionary, word := 0.32, pause := 0.35, lead := 1.0) -> Array:
 	var spoken: PackedStringArray = parsed["spoken"]
 	var token := _rx("<!--\\s*action-hold\\s*:\\s*([0-9.]+)\\s*-->|<!--.*?-->|\\S+")
@@ -480,10 +450,9 @@ static func rehearsal(parsed: Dictionary, word := 0.32, pause := 0.35, lead := 1
 	return out
 
 
-## HOW LONG [param body] RUNS when it is read (seconds, the bookends aside): every spoken word at
-## [constant SAID_WORD], and every rest the lesson asks the voice for ([param lengths] and
-## [param sizes] as [method parse] takes them - without the ink, the pen's times are guessed). Within a
-## few percent of the three exports it was measured on.
+## How long [param body] runs when it is read (seconds, the bookends aside): every spoken word at [constant SAID_WORD], and
+## every rest the lesson asks the voice for ([param lengths] and [param sizes] as [method parse] takes them - without the
+## ink, the pen's times are guessed).
 static func runtime(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}) -> float:
 	if not is_lesson(body):
 		return 0.0
@@ -494,8 +463,8 @@ static func runtime(body: String, lengths: Dictionary = {}, sizes: Dictionary = 
 	return t
 
 
-## WHAT THE PEN WOULD WRITE IN SILENCE: each pad line in [param body] with no dictation on the line
-## after it - the voice waits while it is written, so a lesson with any goes back once.
+## What the pen would write in silence: each pad line in [param body] with no dictation on the line after it - the voice
+## waits while it is written, so a lesson with any goes back once.
 static func undictated(body: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	var blocks := _blocks(body)
@@ -508,10 +477,9 @@ static func undictated(body: String) -> PackedStringArray:
 	return out
 
 
-## WHERE THE VOICE WOULD SAY THE LETTER a AS THE WORD "a": each paragraph that reads aloud a formula
-## (or a drawing's label) with the letter a in its math and says a bare "a" with no `[a]` in it; and
-## each line of speech with a bare "a" right before a stop or a comma, which an article never is
-## ("with a, b irrational"). The voice reads the article "uh" there; `[a]` is the letter's name.
+## Where the voice would say the letter a as the word "a": each paragraph that reads aloud a formula (or a drawing's label)
+## with the letter a in its math and says a bare "a" with no `[a]` in it; and each line of speech with a bare "a" right
+## before a stop or a comma, which an article never is ("with a, b irrational"). `[a]` is the letter's name.
 static func bare_letters(body: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	var blocks := _blocks(body)
@@ -558,8 +526,8 @@ static func parts_of(tex: String) -> PackedStringArray:
 	return out
 
 
-## WHAT THE PEN WOULD POINT AT THAT IS NOT THERE: each point in [param body] at a name nothing written
-## before it carries - a mark's `#name`, a drawing's part, a formula's `\pin`.
+## What the pen would point at that is not there: each point in [param body] at a name nothing written before it carries -
+## a mark's `#name`, a drawing's part, a formula's `\pin`.
 static func unknown_points(body: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	for a in parse(body)["actions"]:
@@ -569,9 +537,8 @@ static func unknown_points(body: String) -> PackedStringArray:
 	return out
 
 
-## WHERE THE PEN STANDS STILL TOO LONG: each run of more than [param most] spoken words in [param body]
-## while the pen neither writes (a dictation's words), draws nor points (a point's sentence) - the
-## run's first words and its length, for the teacher to find it.
+## Where the pen stands still too long: each run of more than [param most] spoken words in [param body] while the pen
+## neither writes (a dictation's words), draws nor points (a point's sentence) - the run's first words and its length.
 static func still(body: String, most := STILL_WORDS) -> PackedStringArray:
 	var parsed := parse(body)
 	var spoken: PackedStringArray = parsed["spoken"]
@@ -590,8 +557,8 @@ static func still(body: String, most := STILL_WORDS) -> PackedStringArray:
 	return out
 
 
-## WHAT THE VOICE WOULD BE HANDED THAT IS NOTATION: each line of speech carrying a character of
-## [constant NOTATION], "" when there is none. Math the voice says is words ("n squared"), never TeX.
+## What the voice would be handed that is notation: each line of speech carrying a character of [constant NOTATION], ""
+## when there is none. Math the voice says is words ("n squared"), never TeX.
 static func audit(body: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	for line in String(parse(body)["said"]).split("\n"):

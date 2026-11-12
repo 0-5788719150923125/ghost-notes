@@ -1,10 +1,9 @@
 extends RefCounted
 class_name Timeline
 
-## Timeline - ONE DOCUMENT FOR WHAT A SHOW DOES WHEN, whoever wrote it (next/editing.md, "The Timeline"; the user, 2026-11-11:
-## "we are defining nonlinear sequences: we could call that a timeline, we could call it a storyboard, we could call it a plan").
-## A storyboard is the Timeline a person wrote ([method Storyboard.timeline]); an episode's beats, acts and cues the one agents
-## wrote ([method TableEpisode.timeline]). What reads it - the editor's dock, a problems list, a puppeteer - names neither.
+## Timeline - one document for what a show does when, whoever wrote it (next/editing.md, "The Timeline"). A storyboard
+## is the Timeline a person wrote ([method Storyboard.timeline]); an episode's beats, acts and cues the one agents wrote
+## ([method TableEpisode.timeline]). What reads it (the editor's dock, a problems list, a puppeteer) names neither.
 ##
 ## Plain data, so it round-trips through JSON and a gate holds it whole:
 ##
@@ -12,14 +11,13 @@ class_name Timeline
 ##   item: {id, label, kind, at, length, engine, source}
 ##
 ## - `clock`: what show time is measured against ([constant CLOCKS]): the song, the voice's words, or plain seconds.
-## - A GROUP is one stretch of the show (a storyboard's entry, an episode's beat): its `start` and `length` in show seconds.
-## - A LANE is what its items happen to (an actor; a thing on the table); `id` "" for the group's own.
-## - An ITEM is a SPAN (`length` > 0: a verb's window, an act) or a FLAG (`length` 0: a moment - a verb at a point, a cue), `at`
-##   in seconds from its group's start ([constant KINDS]).
-## - ITS ENGINE ([constant ENGINES]) says how it is reached at a moment: `time`, a pure function of show time, is shown at any
-##   moment at once; `verb`, a latched simulation that may answer the music, is reached by playing its group from its start.
-##   The group's is every item's that does not say (the user: "support the pure function of time, and the other one a
-##   simulation-verb thing ... ones that are responsive to other components").
+## - A group is one stretch of the show (a storyboard's entry, an episode's beat): its `start` and `length` in show seconds.
+## - A lane is what its items happen to (an actor; a thing on the table); `id` "" for the group's own.
+## - An item is a span (`length` > 0: a verb's window, an act) or a flag (`length` 0: a moment - a verb at a point, a
+##   cue), `at` in seconds from its group's start ([constant KINDS]).
+## - Its engine ([constant ENGINES]) says how it is reached at a moment: `time`, a pure function of show time, is shown
+##   at any moment at once; `verb`, a latched simulation that may answer the music, is reached by playing its group
+##   from its start. The group's is every item's that does not say.
 ## - `source`: where it is written, a [DataPath] into the document it was read from (a storyboard's tree, an episode's
 ##   `acts.json`), so an edit goes back to the one place it lives - never a second copy.
 
@@ -80,7 +78,7 @@ static func seekable(g: Dictionary, it: Dictionary) -> bool:
 	return engine_of(g, it) == "time"
 
 
-## WHAT IS UNDER WAY AT [param t] seconds of the show: `[{group, lane, item}]` - a span over it, or a flag within
+## What is under way at [param t] seconds of the show: `[{group, lane, item}]` - a span over it, or a flag within
 ## [param near] seconds of it.
 static func at_time(tl: Dictionary, t: float, near := 0.05) -> Array:
 	var out: Array = []
@@ -99,7 +97,7 @@ static func at_time(tl: Dictionary, t: float, near := 0.05) -> Array:
 	return out
 
 
-## WHAT IS WRONG WITH [param tl], in words - [] for nothing: a clock, kind or engine with no row, a group or item with no
+## What is wrong with [param tl], in words - [] for nothing: a clock, kind or engine with no row, a group or item with no
 ## time of its own, an item that starts outside its group. The same list for a person and for an agent's tool.
 static func check(tl: Variant) -> PackedStringArray:
 	var out := PackedStringArray()

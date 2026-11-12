@@ -3,22 +3,19 @@ class_name BookLayout
 
 ## BookLayout - a chapter typeset into the pages of a printed novel, for [BookMedium].
 ##
-## The book medium does not caption a reading, it PRINTS it: the whole chapter is set once,
-## up front, into pages of a fixed trim, and the narration is then followed across those
-## pages by a highlight. So this file is a small typesetter and nothing else - it knows
-## nothing about audio, cameras or 3D. Its output is plain data (word boxes, image rects,
-## labels) that [BookMedium.PageCanvas] draws and that the highlight indexes into.
+## The whole chapter is set once, up front, into pages of a fixed trim; the narration is then
+## followed across them by a highlight. A small typesetter that knows nothing of audio, cameras or
+## 3D: its output is plain data (word boxes, image rects, labels) that [BookMedium.PageCanvas]
+## draws and the highlight indexes into.
 ##
-## WHAT IT DOES, in the order a book does it: justified paragraphs with a first-line indent
-## (none after a heading, a scene line or a picture - the convention that makes a novel read
-## as a novel rather than as a web page), scene lines set centered in italics, the chapter
-## title sunk down the opening page, folios at the foot, inline pictures floated against one
-## edge of the text block with the lines wrapping round them, and full-page pictures given a
-## page of their own while the text keeps flowing past them.
+## Justified paragraphs with a first-line indent (none after a heading, scene line or picture),
+## scene lines centered in italics, the chapter title sunk down the opening page, folios at the
+## foot, inline pictures as half-page bands, full-page pictures on a page of their own while the
+## text flows past.
 ##
-## PAGE SPACE is pixels on a [constant PAGE]-sized sheet, y down. Page i is the LEFT page of
-## spread i/2 when i is even and the right one when it is odd, so a spread is always a pair
-## and the inner (spine) margin is on the side facing the other page.
+## Page space is pixels on a [constant PAGE]-sized sheet, y down. Page i is the left page of
+## spread i/2 when i is even and the right one when odd, so the inner (spine) margin faces the
+## other page.
 
 const PAGE := Vector2(1100, 1650)
 const MARGIN_TOP := 138.0
@@ -26,16 +23,14 @@ const MARGIN_BOTTOM := 176.0
 const MARGIN_INNER := 116.0
 const MARGIN_OUTER := 128.0
 const BODY_FS := 33
-## Line pitch as a multiple of the body size - bookish, a little looser than a screen.
+## Line pitch as a multiple of the body size.
 const LEADING := 1.46
-## No first-line indent: the book and its PDFs mark a paragraph with the blank line alone
-## (PARA_GAP), and the page should read like them. Set above 0 to indent again.
+## No first-line indent: a paragraph is marked by the blank line alone (PARA_GAP). Above 0 indents.
 const INDENT_EM := 0.0
-## A blank line between paragraphs. Indent alone read as "squished" on a page this size.
+## A blank line between paragraphs.
 const PARA_GAP := 1.0
-## How far justification may stretch a space before a line is set ragged instead. A narrow
-## line beside a picture with two long words on it would otherwise be two words at the
-## margins with a river between them.
+## How far justification may stretch a space before a line is set ragged instead (avoids two
+## words at the margins with a river between them beside a picture).
 const MAX_STRETCH := 2.6
 ## ...and how far a space may tighten to take one more word, as a share of its width.
 const SQUEEZE := 0.2
@@ -45,8 +40,8 @@ const FOLIO_FS := 22
 ## An image with no picture yet is typeset at this aspect (width / height).
 const DEFAULT_ASPECT := 4.0 / 3.0
 
-## The serif families asked for, best first. SystemFont walks the list, so a machine with
-## none of the book faces still gets DejaVu or FreeSerif rather than the UI sans.
+## The serif families asked for, best first. SystemFont walks the list, so a machine with none of
+## them gets DejaVu or FreeSerif rather than the UI sans.
 const SERIFS := ["EB Garamond", "Crimson Pro", "Crimson Text", "Libre Baskerville", "Literata",
 	"Source Serif 4", "Georgia", "Palatino Linotype", "Noto Serif", "Liberation Serif",
 	"DejaVu Serif", "FreeSerif", "serif"]
@@ -58,8 +53,7 @@ var pages: Array = []
 ## `base` is the baseline origin draw_string wants; `rect` is the box a highlight covers.
 var words: Array = []
 var title := ""
-## The body size. A variable rather than [constant BODY_FS] so a layout in another hand
-## ([NotebookLayout]) can set its own.
+## The body size. A variable so a layout in another hand ([NotebookLayout]) can set its own.
 var body_fs := BODY_FS
 ## Whose voice reads the block being set; every word records it (a notebook inks by it).
 var _speaker := ""
@@ -75,9 +69,8 @@ var _norm_re: RegEx
 var _hes_re: RegEx
 
 
-## The face for an emphasis level (0 plain, 1 italic, 2 bold, 3 both). REAL faces where the
-## system has them - an italic cut is a different design, not a slanted roman - which
-## SystemFont finds by its own flags.
+## The face for an emphasis level (0 plain, 1 italic, 2 bold, 3 both): real faces where the
+## system has them, found by SystemFont's own flags.
 func face(level: int) -> Font:
 	if _faces.has(level):
 		return _faces[level]
@@ -116,9 +109,8 @@ func build(source: String, image_size: Callable, title_override := "") -> void:
 	_pending_float = []
 	title = title_override if not title_override.is_empty() else _title_of(source)
 	var blocks: Array = Manuscript.blocks(source)
-	# PAGE 0 IS THE LEFT OF THE FIRST SPREAD, and a chapter opens on the RIGHT. An opening
-	# full-page picture is the natural thing to face it with - a frontispiece - so it takes
-	# that page; otherwise the left page is the blank verso every chapter opens against.
+	# Page 0 is the left of the first spread and a chapter opens on the right: an opening full-page
+	# picture takes that page as a frontispiece; otherwise the left page is the blank verso.
 	var first := 0
 	if not blocks.is_empty() and String(blocks[0]["kind"]) == "image" \
 			and String(blocks[0].get("placement", "")) == "full":
@@ -139,10 +131,8 @@ func build(source: String, image_size: Callable, title_override := "") -> void:
 				_heading(String(b["text"]), int(b.get("level", 1)))
 				no_indent = true
 			"rule":
-				# A SECTION BREAK, set as the same quiet ornament that sits under the chapter
-				# title, with one blank line either side (the next paragraph adds its own).
-				# Never alone at the foot of a page: there it would read as the end of the
-				# chapter, so it goes to the top of the next one instead.
+				# A section break: the quiet ornament under the chapter title, one blank line either side
+				# (the next paragraph adds its own); never alone at the foot of a page, so it goes to the next.
 				_rule()
 				no_indent = true
 			"image":
@@ -150,11 +140,9 @@ func build(source: String, image_size: Callable, title_override := "") -> void:
 					_sketch(b)
 				elif String(b.get("placement", "")) == "full":
 					_pending_full.append(b)
-					# A PICTURE THAT OPENS A SCENE comes before it, as a book sets a section
-					# break: when little of the page is left, the page ends here and the
-					# picture takes the next one. With most of the page still to fill, the
-					# text runs on and the picture follows at the next page turn instead -
-					# a book does not leave half a page blank for a plate.
+					# A picture that opens a scene comes first, as a section break does: when little of the page is
+					# left, the page ends here and the picture takes the next; otherwise the text runs on and the
+					# picture follows at the next page turn.
 					if _y > _top() + 1.0 and _bottom() - _y < (_bottom() - _top()) * 0.45:
 						_open_page()
 				else:
@@ -163,13 +151,10 @@ func build(source: String, image_size: Callable, title_override := "") -> void:
 			"para":
 				var text := String(b["text"])
 				if Manuscript.is_scene_line(text):
-					# Kept with what follows: a scene line alone at the foot of a page opens a
-					# scene the reader has to turn the page to find.
+					# Kept with what follows: a scene line alone at the foot of a page would open a scene on the next.
 					if _y + _lh(body_fs) * 4.2 > _bottom():
 						_open_page()
-					# ONE blank line above and below, like any paragraph break: the paragraph that
-					# follows adds its own PARA_GAP, so a trailing space here doubled the gap
-					# under every scene line.
+					# One blank line above and below; the next paragraph adds its own PARA_GAP.
 					_space(PARA_GAP)
 					_paragraph(text, false, true)
 					no_indent = true
@@ -218,8 +203,7 @@ func _blank_page() -> void:
 	pg["folio"] = 0
 
 
-## A page given wholly to a picture: a plate inset from the trim, the picture cropped to fill
-## it, so it reads as artwork printed on the page rather than a photo pasted in.
+## A page given wholly to a picture: a plate inset from the trim, the picture cropped to fill it.
 func _image_page(b: Dictionary) -> void:
 	var pg := _new_page("image")
 	pg["folio"] = 0
@@ -228,9 +212,8 @@ func _image_page(b: Dictionary) -> void:
 		"key": String(b.get("key", "")), "prompt": String(b.get("prompt", "")), "full": true})
 
 
-## Open a fresh TEXT page, first paying any full-page pictures that are owed. A picture waits
-## for a page on its preferred side, but never more than one page, so it never drifts far
-## from the text it belongs to.
+## Open a fresh text page, first paying any full-page pictures owed. A picture waits for a page on
+## its preferred side, but never more than one page.
 func _open_page(first := false) -> void:
 	if not first:
 		var waited := 0
@@ -297,7 +280,7 @@ func _title_block() -> void:
 	while fs > 30 and f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > c.y - c.x:
 		fs -= 2
 	var y := MARGIN_TOP + TITLE_SINK
-	# WORDS, not a label: the title is read aloud first, and the highlight follows it.
+	# Words, not a label: the title is read aloud first, and the highlight follows it.
 	_y = y - _lh(fs) * 0.72
 	_set_line_words(title, fs, 0, true)
 	y = _y - _lh(fs) * 0.28
@@ -306,9 +289,8 @@ func _title_block() -> void:
 	_y = y + fs * 1.1 + _lh(body_fs) * 2.2
 
 
-## A section break: the same quiet ornament that sits under the chapter title, with one blank
-## line either side (the next paragraph adds its own). Never alone at the foot of a page: there
-## it would read as the end of the chapter, so it goes to the top of the next one instead.
+## A section break: the ornament under the chapter title with one blank line either side (the
+## next paragraph adds its own). Never alone at the foot of a page: it goes to the next one.
 func _rule() -> void:
 	if _y + _lh(body_fs) * 3.0 > _bottom():
 		_open_page()
@@ -323,14 +305,10 @@ func _heading(text: String, level: int) -> void:
 	_y += _lh(body_fs) * 0.4
 
 
-## A HEADING IS KEPT WITH WHAT IT HEADS: it is set only where the gap after it and two lines of
-## its text fit below it on the same page, else it opens the next one. A dated entry written at
-## the foot of a page with its whole text over the leaf is something no hand would do, and in a
-## printed book it is the widow compositors have always refused. [param h] is the heading's own
-## height.
-##
-## "Fit" means room a line can USE: a picture band across the lower page leaves the height but
-## not the width, and the two lines reserved there moved over the leaf anyway.
+## A heading is kept with what it heads: set only where the gap after it and two lines of its
+## text fit below it on the same page, else it opens the next. [param h] is the heading's height.
+## "Fit" means room a line can use: a picture band across the lower page leaves the height but
+## not the width.
 func _keep_with_next(h: float) -> void:
 	var lh := _lh(body_fs)
 	var y := _y + h + lh * PARA_GAP
@@ -351,11 +329,9 @@ func _label_centered(text: String, fs: int, tone := 0.8) -> void:
 		"fs": fs, "emph": 0, "align_w": c.y - c.x, "tone": tone})
 
 
-## An inline picture, as a HALF-PAGE BAND: the full width of the text block and about half its
+## An inline picture as a half-page band: the full width of the text block and about half its
 ## height, at the foot of the page it belongs to if there is room below the text already set,
-## otherwise at the head of the next page. It was a float beside the text at under half the
-## column's width, and the pictures were too small to see; made bigger, the text beside them
-## would have run in a narrow ribbon. One band a page, so a page is never all picture.
+## else at the head of the next page. One band a page, so a page is never all picture.
 const BAND_H := 0.46
 const BAND_GAP := 34.0
 
@@ -378,15 +354,14 @@ func _float(b: Dictionary) -> void:
 	var rect := Rect2(c.x, top, w, h)
 	(pages[_p]["images"] as Array).append({"rect": rect, "key": String(b.get("key", "")),
 		"prompt": String(b.get("prompt", "")), "full": false, "sketch": bool(b.get("sketch", false))})
-	# The band keeps text off itself and its gutter; a line that meets it finds no room and
-	# moves on, so text above a foot band flows straight to the next page.
+	# The band keeps text off itself and its gutter; text above a foot band flows to the next page.
 	_floats.append(rect.grow_individual(0.0, 0.0 if at_top else BAND_GAP, 0.0,
 		BAND_GAP if at_top else 0.0))
 
 
 ## Inline markdown -> `[{text, emph}]`. Asterisks and edge underscores toggle emphasis and are
-## never printed; hesitation marks are dropped (they are heard, not read); a macro prints its
-## default, exactly as it is spoken.
+## never printed; hesitation marks are dropped (heard, not read); a macro prints its default,
+## as it is spoken.
 func tokens(text: String) -> Array:
 	text = _hes_re.sub(text, " ", true)
 	text = TextNorm._expand_macros(text)
@@ -444,7 +419,7 @@ func _paragraph(text: String, indent: bool, scene: bool) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
 	var i := 0
 	var first := true
-	# A LEAD-IN set in the margin beside the first line (a notebook's timestamp), read first.
+	# A lead-IN set in the margin beside the first line (a notebook's timestamp), read first.
 	var lead := _margin_lead(toks)
 	while i < toks.size():
 		if _y + lh > _bottom():
@@ -464,9 +439,7 @@ func _paragraph(text: String, indent: bool, scene: bool) -> void:
 		var used := 0.0
 		while j < toks.size():
 			var add := float(widths[j]) + (sp if j > i else 0.0)
-			# A word that fits once the line's spaces tighten a little goes on this line: a
-			# compositor squeezes as readily as it stretches, and a line that may only stretch
-			# leaves every close call ragged.
+			# A word that fits once the line's spaces tighten a little goes on this line.
 			if j > i and used + add - float(j - i) * sp * SQUEEZE > avail:
 				break
 			used += add
@@ -501,11 +474,8 @@ func _paragraph(text: String, indent: bool, scene: bool) -> void:
 		first = false
 
 
-## Set [param text] as WORDS on lines of its own, centered or from the column's left edge. A
-## heading is SPOKEN - a chapter's dated entries are read out - so it has to be words the
-## reading can follow. Set as a label it was invisible to the highlight: the voice read the
-## date, nothing on the page matched, and the highlight fell back to the previous paragraph's
-## last word and re-lit it for every word of the date, with the camera parked on it.
+## Set [param text] as words on lines of its own, centered or from the column's left edge. A
+## heading is spoken, so it has to be words the reading highlight can follow, not a label.
 ## [param extra] is merged into every word (a notebook marks its headings underlined).
 func _set_line_words(text: String, fs: int, emph: int, center: bool, extra := {}) -> void:
 	var toks := tokens(text)
@@ -578,7 +548,7 @@ func _ink_offset(_i: int, _line_y: float, _dx: float) -> Vector2:
 	return Vector2.ZERO
 
 
-## How many of a paragraph's opening tokens are set in the MARGIN rather than the column. None,
+## How many of a paragraph's opening tokens are set in the margin rather than the column. None,
 ## in a book.
 func _margin_lead(_toks: Array) -> int:
 	return 0

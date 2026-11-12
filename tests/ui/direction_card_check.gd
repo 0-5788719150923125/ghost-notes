@@ -1,20 +1,19 @@
 extends SceneTree
 
-## The gate of THE DIRECTION'S CARD ([DirectionCard], [Direction]; next/direction.md): a component any note can have, the card that
-## keeps it, and its Refine. No writer runs: a refine's answer is handed in as the writer's would be.
+## direction_card_check - the Direction's card ([DirectionCard], [Direction]; next/direction.md): a component any
+## note can have, the card that keeps it, and its Refine. No writer runs: a refine's answer is handed in as the writer's would be.
 ##
 ##   godot --headless --path . --script res://tests/ui/direction_card_check.gd
 ##
-## - IT IS A COMPONENT: a row of its own with a card, attached by its block alone, shown by the reading's panel and a table's (the
-##   control: the voice lab's shows none).
-## - THE CARD KEEPS IT: what is applied is what is captured, the writer with it, and a direction of several lines with quotes and
-##   colons comes back whole through the note's frontmatter; [method Direction.text_of] reads its words (the control: a block with
+## - It is a component: a row of its own with a card, attached by its block alone, shown by the reading's panel and a table's
+##   (control: the voice lab's shows none).
+## - The card keeps it: what is applied is what is captured, the writer with it, and a direction of several lines with quotes and
+##   colons comes back whole through the note's frontmatter; [method Direction.text_of] reads its words (control: a block with
 ##   none, or none at all, is "").
-## - REFINE IS TOLD THE NOTE AND THE DIRECTION, and the note only where there is one (the control: a note with no words has no note
-##   in the prompt); its answer is the direction, unfenced - and a refine that failed changes nothing (the control).
-## - REFINE IS WHERE THE WORDS ARE (the user, 2026-11-11: "It's pointless to force the user to back-out of the Direction text"):
-##   Refine stands in the direction's window, not on the card; a refine landing with the window open puts its words in the box,
-##   and says nothing of a hand's edit (the control: a typed edit does).
+## - Refine is told the note and the direction, and the note only where there is one (control: a note with no words has no note
+##   in the prompt); its answer is the direction, unfenced - and a refine that failed changes nothing (control).
+## - Refine stands in the direction's window, not on the card; a refine landing with the window open puts its words in the box,
+##   and says nothing of a hand's edit (control: a typed edit does).
 
 var _fails := 0
 

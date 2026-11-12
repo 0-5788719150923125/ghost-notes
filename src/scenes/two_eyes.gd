@@ -2,27 +2,23 @@ extends Scene3D
 
 ## Two eyes - the single eye split into two (the-point, scene 2).
 ##
-## Two real-3D eyeballs ([EyeBody]) that *verge*: both aim at one shared 3D focus point,
-## so they toe in on a near point and run parallel on a far one - real binocular gaze,
-## not two eyes locked to the same direction. The focus drifts in depth (near -> far ->
-## extreme distance) and lingers at the extremes, with the pupils accommodating. Declares
-## `morph_in = "eye"`: arriving from the single eye it plays the split (the same eye
-## dividing). Occasionally one eye diverges - the nonlinear deviation, not the default.
+## Two real-3D eyeballs ([EyeBody]) that verge: both aim at one shared 3D focus point, so they
+## toe in on a near point and run parallel on a far one (real binocular gaze). The focus drifts
+## in depth (near, far, extreme) and lingers at the extremes, with the pupils accommodating.
+## Declares `morph_in = "eye"`: arriving from the single eye it plays the split (the same eye
+## dividing). Occasionally one eye diverges.
 ##
-## Color comes from a [Scheme] mood (the same iris moods the single eye draws from),
-## and the pair's PLACEMENT from a named spacing - crowded, human, or wide-set - so
-## the composition itself changes with the seed and not only the eyes' color.
+## Color comes from a [Scheme] mood (the iris moods the single eye draws from), and the pair's
+## placement from a named spacing - crowded, human, or wide-set.
 
-## Iris moods, matching `eye.gd` so a split keeps the family (see its note on why
-## magenta/rose are out).
+## Iris moods, matching `eye.gd` so a split keeps the family (see its note on why magenta/rose
+## are out).
 const IRIS_MOODS := ["dawn", "ember", "sodium", "brass", "bone", "verdant", "toxic",
 	"teal", "glacier", "abyss", "ash", "violet"]
 
-## Where the eyes sit, as [radius band, half-separation in EYE RADII]. Radius was
-## locked at 0.24-0.30 and separation at 0.55-0.72, one face forever; expressing the
-## separation as a multiple of the radius keeps the eyes from ever overlapping while
-## letting the face be crowded (predatory, front-set) or wide (prey, alien). Real
-## human proportion is about 2.6 radii, which is what "human" holds.
+## Where the eyes sit, as [radius band, half-separation in eye radii]. Separation as a multiple
+## of the radius keeps the eyes from overlapping while letting the face be crowded (predatory,
+## front-set) or wide (prey, alien). Human proportion is about 2.6 radii.
 const SPACING := {
 	"crowded": {"rad": [0.26, 0.34], "gap": [1.5, 1.9]},
 	"human":   {"rad": [0.22, 0.30], "gap": [2.1, 2.7]},
@@ -45,8 +41,8 @@ var _eye_off := 0.0         # current world x separation (kept in sync with _dra
 var _eye_rad := 0.27
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice]): a storyboard entry's `set`, by
+## name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"spacing": {"label": "Spacing", "type": "choice", "options": "SPACING", "default": null,
 		"blurb": "How far apart the eyes sit: crowded and front-set, at human spacing, or set wide like prey or something alien."},
@@ -60,10 +56,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_rng.seed = rng.randi()
 	var sch := Scheme.among(IRIS_MOODS, rng)
 	var h := sch.vary(rng)                     # two eyes of ONE face: normally same color
-	# Heterochromia, rarely: the second eye takes the mood's accent instead. A real
-	# thing real faces do, kept rare so the pair still reads as a pair. A morph-in
-	# from the single eye overrides both hues below - one eye dividing cannot land
-	# two colors.
+	# Heterochromia, rarely: the second eye takes the mood's accent. A morph-in from the single
+	# eye overrides both hues below (one eye dividing cannot land two colors).
 	var hetero := rng.randf() < 0.14
 	var h2 := sch.accent if hetero else h
 	_left = EyeBody.new(rng.randi(), h)
@@ -83,8 +77,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"heterochromia": hetero, "hue": h}
 
 
-# Arrived from the single eye: become that exact eye (color, gaze, size) at center,
-# then split apart - the SAME eye dividing, not two new ones.
+# Arrived from the single eye: become that exact eye (color, gaze, size) at center, then split
+# apart (the same eye dividing, not two new ones).
 func begin_morph(from: GhostScene) -> void:
 	_split = 0.0
 	var p := from.morph_payload()
@@ -103,10 +97,10 @@ func begin_morph(from: GhostScene) -> void:
 	_focus_target = _focus
 
 
-# Hand the two eyes' identity to a morph target (eye_prism): the LIVE EyeBody instances
-# (so the surviving eye literally continues, no re-seeding), their world separation, radius,
-# hue, and the shared focus. eye_prism keeps the LEFT eye and crystallizes the RIGHT into a
-# blue prism at the same slot - so nothing jumps at the swap.
+# Hand the two eyes' identity to a morph target (eye_prism): the live EyeBody instances (so the
+# surviving eye continues, no re-seeding), their world separation, radius, hue, and the shared
+# focus. eye_prism keeps the left eye and crystallizes the right into a blue prism at the same
+# slot, so nothing jumps at the swap.
 func morph_payload() -> Dictionary:
 	return {"left": _left, "right": _right, "offset": _eye_off, "radius": _eye_rad,
 		"hue": _left.hue, "focus": _focus}
@@ -124,8 +118,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_new_focus()
 	_focus = _focus_target   # snap to the target; each eye's spring gives the saccade momentum + overshoot
 
-	# The split eases open over ~45% of the scene's hold, so it always finishes on screen no matter how
-	# short the scene is (a plain cut opens already-split: _split starts at 1.0, so this is a no-op then).
+	# The split eases open over about 45% of the scene's hold, so it finishes on screen however
+	# short the scene (a plain cut opens already-split: _split starts at 1.0).
 	_split = minf(1.0, _split + delta / maxf(0.3, phase_span(2.0) * 0.45))
 	var s01 := smoothstep(0.0, 1.0, _split)
 	_eye_off = float(params.offset) * s01
@@ -141,27 +135,26 @@ func update(f: AudioFeatures, delta: float) -> void:
 	queue_redraw()
 
 
-# Choose a new focus: a depth tier (near / mid / far-extreme, the extremes held longer)
-# plus a lateral offset. A near point is eccentric (the eyes converge hard); a far point
-# is nearly straight ahead - the geometry does the vergence for free.
+# Choose a new focus: a depth tier (near / mid / far-extreme, the extremes held longer) plus a
+# lateral offset. A near point is eccentric (the eyes converge hard); a far point is nearly
+# straight ahead.
 func _new_focus() -> void:
 	var tier := _rng.randf()
 	var d: float
 	var dwell: float
-	# Hold each fixation much longer so the gaze reads as calm and deliberate, not flickering:
-	# real eyes rest on a point for whole seconds between saccades.
+	# Hold each fixation long, so the gaze reads as calm and deliberate: real eyes rest on a
+	# point for whole seconds.
 	if tier < 0.32:
 		d = _rng.randf_range(2.2, 4.0)
 		dwell = _rng.randf_range(3.0, 5.5)       # near - linger
 	elif tier < 0.68:
 		d = _rng.randf_range(5.0, 11.0)
-		dwell = _rng.randf_range(2.0, 3.6)       # mid (was a twitchy 0.5-1.4)
+		dwell = _rng.randf_range(2.0, 3.6)       # mid
 	else:
 		d = _rng.randf_range(22.0, 80.0)
 		dwell = _rng.randf_range(3.5, 7.0)       # far / extreme distance - linger
 	var sacc := EyeBody.saccade_target(_rng)
-	# Smaller lateral excursions keep the eyes near forward, so refixations are short hops,
-	# not wild swings across the orbit.
+	# Smaller lateral excursions keep the eyes near forward: short hops, not wild swings.
 	var lat := _rng.randf_range(0.12, 0.45)
 	_focus_target = Vector3(sacc.x * lat, sacc.y * lat * 0.7, d)
 	_focus_dwell = dwell

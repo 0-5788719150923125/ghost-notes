@@ -1,25 +1,24 @@
 extends CanvasLayer
 class_name PhoneShell
 
-## PhoneShell - Ghost Notes on a phone (next/notes.md step 11, "Platforms: desktop and Android"): a
-## notes app and nothing more. A list of the notes in `user://notes/` ([NoteStore]), and the editor -
-## full screen, in portrait - with no stage, no transport, no Chrome furniture and no agent: on a phone
-## a note has one component, its text. Nothing is downloaded; the Provisioner stays off.
+## PhoneShell - Ghost Notes on a phone (next/notes.md, "Platforms: desktop and Android"): a notes app and
+## nothing more. A list of the notes in `user://notes/` ([NoteStore]) and the editor, full screen in
+## portrait, with no stage, transport, Chrome furniture or agent: on a phone a note has one component, its
+## text. Nothing is downloaded; the Provisioner stays off.
 ##
-## A FILE COMES IN OR GOES OUT THROUGH THE SYSTEM'S PICKER: Import… copies a note from anywhere the
-## phone can reach into `user://notes/`, and Export… writes one back out (on Android the picker hands
-## back a `content://` address, which [FileAccess] reads and writes since Godot 4.6). No permission is
-## asked for. On the desktop (`--handheld`) the picker is the in-window dialog.
+## A file comes in or goes out through the system's picker: Import… copies a note from anywhere the phone
+## can reach into `user://notes/`, and Export… writes one back out (on Android the picker hands back a
+## `content://` address, which [FileAccess] reads and writes since Godot 4.6). No permission is asked for.
+## On the desktop (`--handheld`) the picker is the in-window dialog.
 ##
-## THE LIST IS THE DESKTOP'S (2026-10-31, the user: "the mobile view is important"): the same [NoteGrid]
-## of square notes, at [constant SCALE] - two columns on a phone's width, the search above them, and
-## icons for New and Import… (an [Icons] "+" and a folder, no words). A tap opens a note; a drag scrolls.
+## The list is the desktop's: the same [NoteGrid] of square notes at [constant SCALE] - two columns on a
+## phone's width, the search above them, and icons for New and Import…. A tap opens a note; a drag scrolls.
 ##
-## A NOTE CAN BE DELETED from its editor (Delete…), asked first ([DeleteDialog]) - to the trash.
+## A note can be deleted from its editor (Delete…), asked first ([DeleteDialog]), to the trash.
 ##
-## THE NOTE IS WRITTEN IN ITS CARD (2026-10-31), the desktop's [NoteEditor] filling the screen: its title and
-## its words in place, written as they are typed on a quiet period - the frontmatter kept byte for byte, the
-## file renamed with its title while its name follows it ([method NoteStore.retitle]).
+## The note is written in its card, the desktop's [NoteEditor] filling the screen: title and words in place,
+## written as they are typed on a quiet period - the frontmatter kept byte for byte, the file renamed with
+## its title ([method NoteStore.retitle]).
 
 ## Everything on the list is this much bigger than on a desktop: a phone's canvas is 1080 wide and held
 ## closer, and a finger is wider than a pointer.
@@ -40,9 +39,8 @@ var leave_for_test := Callable()
 
 func _ready() -> void:
 	layer = 100
-	# BACK IS OURS (2026-10-31, the user: "When I click back ... the app immediately crashes"): Godot quits on
-	# every back press unless told not to (`quit_on_go_back`, on by default), whatever a script does with it -
-	# a back meant to close a note killed the app, and the next open was a cold launch.
+	#Back is ours: Godot quits on every back press unless `quit_on_go_back` is off, whatever a script does
+	#with it.
 	get_tree().quit_on_go_back = false
 	var bg := ColorRect.new()
 	bg.color = Color(0.05, 0.05, 0.07)
@@ -60,7 +58,7 @@ func _ready() -> void:
 	show_list()
 
 
-## ANDROID'S BACK goes from a note to the list; on the list it leaves the app ([method leave]).
+## Android's back goes from a note to the list; on the list it leaves the app ([method leave]).
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		if not _note.is_empty():
@@ -71,9 +69,8 @@ func _notification(what: int) -> void:
 		save()           # a phone may stop the app at any moment: what was typed is kept
 
 
-## LEAVE AS ANDROID'S OWN APPS DO: the app goes behind the others, still running, so coming back to it is not a
-## launch (`Activity.moveTaskToBack`, through Godot's AndroidRuntime - Android's calls from a script, since 4.4).
-## Where that cannot be asked, it quits.
+## Leave as Android's own apps do: the app goes behind the others, still running, so coming back is not a
+## launch (`Activity.moveTaskToBack`, through Godot's AndroidRuntime). Where that cannot be asked, it quits.
 func leave() -> void:
 	save()
 	if leave_for_test.is_valid():
@@ -149,8 +146,8 @@ func save() -> void:
 	_editor.save()
 
 
-## DELETE THE OPEN NOTE (once asked): the note is trashed and the list comes back without it. [param answer]
-## is the dialog's ("trash"; "forget" cannot arise here - every note on a phone is in its own folder).
+## Delete the open note (once asked): it is trashed and the list comes back without it. [param answer] is
+## the dialog's ("trash"; "forget" cannot arise here - every note on a phone is in its own folder).
 func delete_note(answer: String) -> void:
 	if _note.is_empty() or answer != "trash":
 		return

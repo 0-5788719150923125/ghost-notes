@@ -9,14 +9,12 @@ set's own moments, "stills" - the video, its survey, the stretches of it in one 
 set's usable shots, or the set's), how many moments to take, MediaPipe's two models and the set's stills (their
 points, scores and pose are written as frames.py writes them: `still_points` ...).
 
-ONE HEAD FOR EVERY SET (the user, 2026-10-23: "It's pointless to build a gaussian splatting model if the scenes
-can only generate from a single set of images"): a set's avatar had learned from one shot of one video, so it
-knew only what that shot showed - an ASMR video's mouth barely opens. The head is now learned from moments of
-every video at once (head.py), and THESE ARE ONE VIDEO'S: picked from its survey (every 0.2 s: the face's 52
-scores, its turn), never read whole -
-- HALF FOR WHAT THEY SHOW (`DIVERSE`): taken farthest-first in the scores and the turn (`WEIGHTS`, the mouth
+One head for every set: a set's avatar learned from one shot of one video knows only what that shot showed (an
+ASMR video's mouth barely opens), so the head is learned from moments of every video at once (head.py). These
+are one video's, picked from its survey (every 0.2 s: the face's 52 scores, its turn), never read whole:
+- half for what they show (`DIVERSE`): taken farthest-first in the scores and the turn (`WEIGHTS`, the mouth
   most), so a rare open mouth, a pucker or a turned head is taken as surely as the common rest;
-- HALF EVENLY THROUGH THE VIDEO, so the light of each part of it and their usual face are there too;
+- half evenly through the video, so the light of each part of it and their usual face are there too;
 - none within SPACED seconds of another, none with a hand at the mouth (it teaches nothing of the face).
 
 Each moment is read at full size (`actor.frame_at`) and looked at as frames.py looks at a frame: the face close
@@ -25,10 +23,9 @@ Each moment is read at full size (`actor.frame_at`) and looked at as frames.py l
 Writes, as frames.py does (head.py and train.Frames read either): <out>/img/<k>.jpg, <out>/mask/<k>.png,
 <out>/frames.npz (t, found, hands, points, blend, matrix, pose) and <out>/spec.json ({"crop": [0, 0, w, h]}).
 
-A VIDEO THAT SHOWS NO FACE OF THEIRS IS ANSWERED, NOT FAILED (2026-10-24: a video of ants found none in 131 s, and
-its error stood on the card): with no moment in its shots or no face found in any, a video's are written empty -
-the head learns nothing from it (head.py leaves out a video with too few) - but a set's (the spec's "stills") fail:
-a set is made from them.
+A video that shows no face of theirs is answered, not failed: with no moment in its shots or no face found in
+any, a video's are written empty - the head learns nothing from it (head.py leaves out a video with too few) -
+but a set's (the spec's "stills") fail: a set is made from them.
 """
 
 from __future__ import annotations
@@ -210,7 +207,7 @@ def main() -> int:
             actor.progress(a.progress, min(0.999, (n + 1) / len(picks)))
     if k == 0:
         return none_of_theirs(a, spec, w, h, "no face of theirs found in the %d moments picked" % len(picks))
-    # A SET'S STILLS (spec "stills": the set's own moments are read too, for its room and its still's pose): each
+    # A set's stills (spec "stills": the set's own moments are read too, for its room and its still's pose): each
     # looked at whole to find the face, then close, as the moments are
     stills = {"still_points": [], "still_blend": [], "still_pose": [], "still_found": []}
     for path in spec.get("stills", []):

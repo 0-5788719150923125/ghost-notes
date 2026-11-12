@@ -1,31 +1,23 @@
 extends Node
 
-## Smoke gate for the WHOLE scene catalog - build, update, draw, free, every entry.
+## Smoke gate for the whole scene catalog: build, update, draw, free, every entry.
 ##
-## Nothing in tests/ referenced [constant SceneRoster.SCENES] before this, which meant the
-## catalog's only real check was somebody watching the show for long enough to see the
-## broken one come up. With 45 entries and a novelty-weighted scheduler, "long enough"
-## can be a very long time, and the failure surfaces as a crash mid-render.
-##
-## What it exercises, per entry, at several seeds:
+## Per entry, at several seeds:
 ##   build_params  - the seeded definition, including every branch a seed can take
-##   update        - a fixed number of frames against SYNTHETIC audio features, chosen to
-##                   sweep silence, a steady middle, and a loud transient, because scenes
-##                   branch on all three (an activation threshold, a beat gate, a lull)
-##   _draw         - forced, because most of the interesting arithmetic (projection,
-##                   polygon winding, color construction) only runs there
+##   update        - a fixed number of frames against synthetic audio features that sweep silence, a
+##                   steady middle and a loud transient (scenes branch on all three)
+##   _draw         - forced, since projection, polygon winding and color construction only run there
 ##   free          - a scene that leaks a thread or a job shows up as a hang, not an error
 ##
-## Run inside a REAL boot, because scenes touch the Spectrum and Director autoloads:
+## Run inside a real boot, because scenes touch the Spectrum and Director autoloads:
 ##   tests/run_boot_probe.sh tests/scenes/scene_smoke.gd 300
 ##
-## Exit status is non-zero if any entry failed, so this is a gate and not just a report.
+## Exit status is non-zero if any entry failed.
 
 const SEEDS := [1, 7, 999983]
 const FRAMES := 24
-## Frames after which a real redraw is forced. Not every frame - a draw costs a yielded
-## engine frame each - but spread across the run so an early, a settled and a
-## post-transient state are all rendered.
+## Frames after which a real redraw is forced (a draw costs a yielded engine frame), spread so an early,
+## a settled and a post-transient state are all rendered.
 const DRAW_AT := [4, 13, 23]
 
 var _fails: Array = []
@@ -56,12 +48,10 @@ func _run() -> void:
 		print("scene_smoke: %d FAILURE(S)" % _fails.size())
 		for f in _fails:
 			print("   ", f)
-	# SETTLE BEFORE QUITTING. Freeing 162 Node2Ds hands the RenderingServer that many
-	# canvas items to retire, and quitting in the same frame as the last free tears the
-	# server down while that queue is still draining - which exits on a fatal
-	# out-of-bounds inside the engine rather than on our verdict. The verdict is already
-	# printed above, so these frames cost nothing but they make the exit STATUS
-	# trustworthy, and the status is the whole point of a gate.
+	# Settle before quitting: freeing many Node2Ds hands the RenderingServer that many canvas items to
+	# retire, and quitting in the same frame as the last free tears the server down mid-drain (a fatal
+	# out-of-bounds inside the engine rather than our verdict). These frames make the exit status
+	# trustworthy.
 	for _i in 6:
 		await get_tree().process_frame
 	get_tree().quit(1 if not _fails.is_empty() else 0)
@@ -74,40 +64,33 @@ func _run_one(path: String, script: Script, behavior: String, sv: int) -> void:
 	if sc == null:
 		_fails.append("%s: script.new() returned null" % short)
 		return
-	# Parented BEFORE init, because a scene may reach for the viewport size in
-	# build_params (framing = "field" sizes off it) and an orphan reports zero.
+	# Parented before init: a scene may reach for the viewport size in build_params (framing = "field"
+	# sizes off it) and an orphan reports zero.
 	add_child(sc)
 	sc.init_with_seed(sv, behavior)
 	sc.size = Vector2(1920, 1080)
 	for i in FRAMES:
 		sc.update(_features(i), 1.0 / 30.0)
 		if DRAW_AT.has(i):
-			# THE ENGINE MUST MAKE THIS CALL. Godot rejects draw_* issued from
-			# anywhere but a real NOTIFICATION_DRAW ("Drawing is only allowed
-			# inside this node's _draw()"), so calling sc._draw() directly proves
-			# nothing - every draw command is refused and the geometry after the
-			# first one never runs. Marking it dirty and yielding a frame is what
-			# actually renders it.
+	# The engine must make this call: Godot rejects draw_* issued from anywhere but a real
+	# NOTIFICATION_DRAW, so calling sc._draw() directly refuses every draw command. Marking it
+	# dirty and yielding a frame renders it.
 			sc.queue_redraw()
 			await get_tree().process_frame
 			_drawn += 1
 		if sc.lifecycle == "oneshot" and sc.finished():
 			break
-	# Tear down the way the Director actually does - queue_free, then let the frame
-	# end - and WAIT for that frame. Both halves are load-bearing and each was
-	# learned the hard way here:
-	#   without the yield, nothing is ever collected and all 162 instantiations
-	#   stay alive at once, which hangs the run;
-	#   without the deferral, an immediate free() can pull a scene out from under a
-	#   FrameForge job still building on a worker thread, which segfaults at exit.
+	# Tear down as the Director does (queue_free, then let the frame end) and wait for that frame:
+	#   without the yield, nothing is collected and every instantiation stays alive, which hangs the run;
+	#   without the deferral, an immediate free() can pull a scene out from under a FrameForge job still
+	#   building on a worker, which segfaults at exit.
 	sc.queue_free()
 	await get_tree().process_frame
 
 
-## A synthetic frame that sweeps the three regimes scenes actually branch on. Frame 0-5
-## is silence (an intro, a lull - where a scene must not divide by a zero energy), 6-17
-## is a steady middle, and 18+ carries a hard beat and high flux (a drop - where the
-## activation gates and cut triggers fire).
+## A synthetic frame that sweeps the three regimes scenes branch on: frames 0-5 silence (a scene must not
+## divide by a zero energy), 6-17 a steady middle, 18+ a hard beat and high flux (activation gates and
+## cut triggers fire).
 func _features(i: int) -> AudioFeatures:
 	var f := AudioFeatures.new()
 	f.time = float(i) / 30.0
@@ -119,8 +102,7 @@ func _features(i: int) -> AudioFeatures:
 	var bands := PackedFloat32Array()
 	bands.resize(Spectrum.BAND_COUNT)
 	for b in Spectrum.BAND_COUNT:
-		# a tilted spectrum with a moving peak, so per-band code sees structure
-		# rather than one flat value repeated
+	# a tilted spectrum with a moving peak, so per-band code sees structure
 		var t := float(b) / float(maxi(1, Spectrum.BAND_COUNT - 1))
 		bands[b] = clampf(loud * (1.0 - 0.6 * t) * (0.6 + 0.4 * sin(t * 9.0 + f.time * 3.0)), 0.0, 1.0)
 	f.bands = bands

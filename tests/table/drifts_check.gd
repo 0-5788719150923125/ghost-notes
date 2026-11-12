@@ -4,44 +4,31 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/table/drifts_check.gd
 ##
-## - THE WIND: the same wind and seed plan the same gusts; how far the air has carried a thing (closed
-##   form) is the integral of its speed, summed in small steps - against a carry missing the breeze's
-##   swells, which is not; gusts come about as often as asked; a still wind's gusts are gentler than a
-##   gusty one's; its strength stays 0-1. Nothing written is `{}`, and a written one is kept in range.
-## - MADE SAFE: an unknown look is dropped, numbers clamped, a wrong `from` is "above"; at most
-##   MAX_DRIFTS in one air ([method Effects.sanitize]).
-## - PURE: the pieces at a time are the same asked first or after a later time.
-## - RARE: a piece every minute or so comes loose about that often - against one every six seconds, ten
-##   times as many; and a gust shakes some loose (with the breeze's own put off, all start in a gust).
-##   Some land on the table and lie on its top, at the cloth's height.
-## - THEIR WAYS: a look's pieces fall in more than one way; one tumbling turns over and over, one falling
-##   flat stays near level in still air - and a gust turns a flat one over, against one no gust can.
-## - NEVER ON OR UNDER THE CARDS: with the table saying where cards lie (its `cover`), no piece comes
-##   down there or lies there uncovered - against the same without it, which lands some there.
-## - A CARD COMING DOWN ON ONE BLOWS IT ASIDE (the user, 2026-10-11: a card laid on the table "clipped
-##   through a leaf that had fallen" there): told a card is set down over a leaf that lies still, the
-##   leaf is out from under it before the card is down, never jumping, and lies clear of it after - on
-##   the table, the same whenever it is asked - against the same leaf with no card told of, which is
-##   still there; and a card set down elsewhere moves nothing.
-## - A WASH'S CARDS SHOVE WHAT LIES (the user, 2026-10-14: a petal on the table was "completely
-##   unaffected by the card-washing: cards are clipping through the petals"): rows of cards slid across
-##   the whole cloth, and no piece lying there is under one at any time sampled - shoved ahead of it,
-##   ridden up on its face, or flicked over it - against the same pieces with the cards not told of,
-##   most of which are; the pieces are moved, lie on the table after, never jump, and the same whenever
-##   asked. A piece carried on a card is on it (the user: one "keeps following the card even while it is
-##   NOT TOUCHING"): those a card's face high are within its edge, near enough all the time.
-## - A PIECE HAS MOMENTUM (the user, same day: it "probably needs a little bit of momentum, such that
-##   when the underlying card moves - the petal is shaken off of it"): a card that slides in under a piece
-##   and is drawn off gently carries it along, and the same card hauled harder than any piece grips leaves
-##   it behind, lying on the cloth within a few centimeters of where it lay - never carried on beside the
-##   card (the user: one slid off "yet remain attached"). tests/table/wash_drift_check.gd holds the same
-##   under the real wash's cards.
-## - NEVER THROUGH A THING: no piece, at any time sampled, is inside a thing standing on the table or in
-##   the table under its top - against a fall aimed through a thing, which the check finds.
-## - GUSTS LIFT what lies: with a light grip on a gusty wind some lying pieces are carried off the table,
-##   and with grip 1 none ever is.
-## - SMOOTH: no piece jumps between one frame and the next, landing, lying, skidding or carried off.
-## - LYING when the reading begins: as many as asked, on the table.
+## - The wind: the same wind and seed plan the same gusts; how far the air has carried a thing (closed form) is the integral of its
+##   speed (against a carry missing the breeze's swells, which is not); gusts come about as often as asked, gentler on a still wind;
+##   strength stays 0-1. Nothing written is `{}`, a written one kept in range.
+## - Made safe: an unknown look is dropped, numbers clamped, a wrong `from` is "above"; at most MAX_DRIFTS in one air ([method Effects.sanitize]).
+## - Pure: the pieces at a time are the same asked first or after a later time.
+## - Rare: a piece every minute or so comes loose about that often (against one every six seconds, ten times as many); a gust shakes
+##   some loose. Some land on the table and lie on its top, at the cloth's height.
+## - Their ways: a look's pieces fall in more than one way; one tumbling turns over and over, one falling flat stays near level in
+##   still air, and a gust turns a flat one over (against one no gust can).
+## - Never on or under the cards: with the table saying where cards lie (its `cover`), no piece comes down or lies there uncovered
+##   (against the same without it, which lands some there).
+## - A card coming down on one blows it aside: told a card is set down over a leaf that lies still, the leaf is out from under it before
+##   the card is down, never jumping, and lies clear after (against the same leaf with no card told of, still there); a card set down
+##   elsewhere moves nothing.
+## - A wash's cards shove what lies: rows of cards slid across the whole cloth, and no piece lying there is under one at any time
+##   sampled - shoved ahead, ridden up on its face, or flicked over it (against the same pieces with the cards not told of, most of which
+##   are); pieces are moved, lie on the table after, never jump. A piece carried on a card is on it: those a card's face high are within
+##   its edge, near enough all the time.
+## - A piece has momentum: a card sliding in under a piece and drawn off gently carries it along; hauled harder than any piece grips it
+##   leaves it behind, on the cloth within a few centimeters of where it lay. tests/table/wash_drift_check.gd holds the same under the
+##   real wash's cards.
+## - Never through a thing: no piece is inside a thing standing on the table or in the table under its top (against a fall aimed
+##   through a thing, which the check finds).
+## - Gusts lift what lies: with a light grip on a gusty wind some lying pieces are carried off the table, and with grip 1 none ever is.
+## - Smooth: no piece jumps between frames. Lying when the reading begins: as many as asked, on the table.
 
 var _fails := 0
 
@@ -69,7 +56,7 @@ func _wind() -> bool:
 	var a := Winds.plan(w, 7)
 	var b := Winds.plan(w, 7)
 	_ok(str(a["starts"]) == str(b["starts"]) and str(a["peaks"]) == str(b["peaks"]), "the same wind and seed plan other gusts")
-	# THE CARRY IS THE INTEGRAL OF THE SPEED
+	# the carry is the integral of the speed
 	var dt := 0.01
 	var sum := Vector2.ZERO
 	var swells_only := 0.0
@@ -124,8 +111,7 @@ func _sanitize() -> bool:
 	return true
 
 
-## A card table's stage: its camera, the table, one thing on it, and what covers the cloth when [param cover]
-## says.
+## A card table's stage: its camera, the table, one thing on it, and what covers the cloth when [param cover] says.
 func _stage(wind: Dictionary, cover := Callable()) -> Dictionary:
 	var cam := Transform3D(Basis.looking_at(Vector3(0.0, -0.45, -0.6), Vector3.UP), Vector3(0.0, 0.45, 0.55))
 	var table := AABB(Vector3(-0.95, -0.75, -0.45), Vector3(1.9, 0.75, 0.9))
@@ -146,7 +132,7 @@ func _drift() -> bool:
 	var t_build := Time.get_ticks_msec()
 	Drifts.at(pop, 300.0)
 	print("  planned 302 s of petals in %d ms, %d lives" % [Time.get_ticks_msec() - t_build, (pop["lives"] as Array).size()])
-	# PURE: asked late first, then early - the same as asked early first
+	# pure: asked late first, then early - the same as asked early first
 	var fresh := _pop({"look": "petals", "every": 8, "shake": 3, "settle": 1.0, "grip": 0.2, "lying": 6}, breeze)
 	Drifts.at(pop, 300.0)
 	var late_first := Drifts.at(pop, 37.3)
@@ -156,7 +142,7 @@ func _drift() -> bool:
 	var rest_y := float(pop["rest_y"])
 	var table: AABB = pop["table"]
 	var thing: AABB = (pop["things"] as Array)[0]
-	# IN THE AIR, LYING, NEVER THROUGH A THING, SMOOTH
+	# in the air, lying, never through a thing, smooth
 	var airborne := 0.0
 	var frames := 0
 	var through := 0
@@ -202,14 +188,14 @@ func _drift() -> bool:
 	lv["p0"] = Vector3(thing.get_center().x, 1.0, thing.get_center().z)
 	lv["t1"] = INF
 	_ok(Drifts._hits(pop, lv, rest_y), "a fall straight through the thing was not found")
-	# GUSTS LIFT what lies - and with grip 1, nothing ever does
+	# gusts lift what lies - and with grip 1, nothing ever does
 	var offs := 0
 	for l in pop["lives"]:
 		for s in (l as Dictionary).get("segs", []):
 			offs += 1 if String((s as Dictionary)["kind"]) == "off" else 0
 	_ok(offs > 0, "no gust carried anything off a light grip")
-	# A GUST LIFTS WHAT IT BLOWS ALONG: no skid hops more than its slope of the way it goes (a piece that
-	# goes nowhere rises nowhere), and one carried off climbs along a slant, never straight up
+	# a gust lifts what it blows along: no skid hops more than its slope of the way it goes (a piece that goes nowhere rises nowhere),
+	# and one carried off climbs along a slant, never straight up
 	var steep := 0
 	var skids := 0
 	for l in pop["lives"]:
@@ -230,8 +216,8 @@ func _drift() -> bool:
 						steep += 1
 						break
 	_ok(steep == 0, "%d lifts rose without being blown along (of %d skids)" % [steep, skids])
-	# BOTH ARE POSSIBLE: how high a gust lifts follows how hard it blows past the grip - a carry-off's
-	# rise is the same scale as a skid's hop, and the gusts here do not all lift to the full height
+	# both are possible: how high a gust lifts follows how hard it blows past the grip - a carry-off's rise is the same scale as a
+	# skid's hop, and the gusts here do not all lift to the full height
 	var wrong := 0
 	var gentle := 0
 	var carried := 0
@@ -254,7 +240,7 @@ func _drift() -> bool:
 		if bool((l as Dictionary).get("settled", true)) and segs.size() > 1:
 			lifted += 1
 	_ok(lifted == 0, "%d pieces lifted at grip 1" % lifted)
-	# LYING when the reading begins
+	# lying when the reading begins
 	var at0 := 0
 	for l in pop["lives"]:
 		if float((l as Dictionary)["t0"]) <= -Lights.HORIZON:
@@ -280,7 +266,7 @@ func _often() -> bool:
 	print("  in ten minutes: %d petals at one a minute, %d at one every six seconds" % [rare, thick])
 	_ok(rare >= 4 and rare <= 22, "%d petals started in ten minutes at one a minute" % rare)
 	_ok(thick >= rare * 5, "one every six seconds started %d, against %d" % [thick, rare])
-	# A GUST SHAKES SOME LOOSE: with the breeze's own ten minutes apart, nearly all start in a gust
+	# a gust shakes some loose: with the breeze's own ten minutes apart, nearly all start in a gust
 	var gusty := {"from": "left", "strength": 0.6, "gusts": 1.0, "every": 15}
 	var pop := _pop({"look": "petals", "every": 600, "shake": 4}, gusty)
 	Drifts.at(pop, 600.0)
@@ -315,7 +301,7 @@ func _ways() -> bool:
 	_ok(ways.size() >= 3, "petals fall only %s" % str(ways.keys()))
 	var r := RandomNumberGenerator.new()
 	r.seed = 5
-	# ONE TUMBLING turns over and over; ONE FLAT stays near level in still air
+	# one tumbling turns over and over; one flat stays near level in still air
 	var calm := Winds.plan({"from": "left", "strength": 0.0, "gusts": 0.0, "every": 20}, 1)
 	var flat := Drifts._body(pop, r)
 	flat.merge({"way": "flat", "t0": 0.0, "p0": Vector3(0.0, 1.0, 0.0), "rock": 0.1, "tumble": 0.0, "twirl": 0.0, "whirl": 5.0}, true)
@@ -331,7 +317,7 @@ func _ways() -> bool:
 		most_tumble = maxf(most_tumble, _tilt(Drifts._falling_basis(still_pop, tumbling, t)))
 	_ok(most_flat < 0.4, "a flat piece tipped %.2f rad in still air" % most_flat)
 	_ok(most_tumble > 2.5, "a tumbling piece turned only %.2f rad" % most_tumble)
-	# A GUST TURNS A FLAT ONE OVER - against one no gust turns
+	# a gust turns a flat one over - against one no gust turns
 	var wind: Dictionary = pop["wind"]
 	var gusty := Winds.plan({"from": "left", "strength": 0.5, "gusts": 1.0, "every": 10}, 4)
 	var g := Winds.gust_span(gusty, 0)
@@ -351,7 +337,7 @@ func _ways() -> bool:
 	return true
 
 
-## WHERE CARDS LIE in this check: a spread of them, the deck among them, from the start.
+## Where cards lie in this check: a spread of them, the deck among them, from the start.
 const SPREAD := Rect2(-0.35, -0.15, 0.45, 0.3)
 const SPREAD_TOP := 0.031
 
@@ -424,23 +410,22 @@ func _laid() -> bool:
 		worst = maxf(worst, now.distance_to(prev))
 		prev = now
 	_ok(worst < 0.012, "the leaf jumps as it goes aside (%.1f mm in a frame)" % (worst * 1000.0))
-	# PURE: told of the card first and asked after, the same
+	# pure: told of the card first and asked after, the same
 	var fresh := _pop(fx, still)
 	Drifts.laid(fresh, [_lay(down, card)])
 	_ok(str(Drifts.at(fresh, down + 3.0).map(func(p: Dictionary) -> String: return str(p["xf"])))
 		== str(Drifts.at(pop, down + 3.0).map(func(p: Dictionary) -> String: return str(p["xf"]))),
 		"the pieces after the card is down depend on when the card was told of")
-	# THE CONTROL: no card there, and the leaf stays - under where the card would be
+	# the control: no card there, and the leaf stays - under where the card would be
 	var kept: Dictionary = (control["lives"] as Array)[0]
 	_ok(under.call(Drifts.pose(control, kept, down + 5.0).origin) and Drifts.pose(control, kept, down + 5.0).origin.is_equal_approx(lies),
 		"the control: with the card set down elsewhere the leaf moved")
 	return true
 
 
-## ROWS OF CARDS sliding across the whole cloth from [param w0] for eight seconds, as the table's wash
-## [method TableShuffle.sweeps] hands them: seven rows, from off the cloth on one side to off it on the other,
-## each card five floats a frame - its middle, its turn, how spread out it is (gone off the cloth for the
-## last half second) and its place in the order.
+## Rows of cards sliding across the whole cloth from [param w0] for eight seconds, as the table's wash [method TableShuffle.sweeps]
+## hands them: seven rows, from off the cloth on one side to off it on the other, each card five floats a frame - its middle, its turn,
+## how spread out it is (gone off the cloth for the last half second) and its place in the order.
 func _rows(w0: float) -> Dictionary:
 	var frames := 161
 	var n := 7
@@ -548,7 +533,7 @@ func _washed() -> bool:
 	_ok(carried > 30, "no piece was ever carried on a card (%d samples)" % carried)
 	_ok(adrift * 10 <= carried, "%d of %d samples of a piece carried on a card were off every card's edge" % [adrift, carried])
 	_ok(worst < 0.03, "a piece jumps %.1f mm in a frame" % (worst * 1000.0))
-	# PURE: told of the wash before the piece was asked at all, the same
+	# pure: told of the wash before the piece was asked at all, the same
 	var same := true
 	for t in [9.0, 12.3, 17.7, 25.0]:
 		same = same and str(Drifts.at(fresh, t).map(func(p: Dictionary) -> String: return str(p["xf"]))) \

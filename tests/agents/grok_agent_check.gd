@@ -1,40 +1,36 @@
 extends SceneTree
 
-## grok_agent_check - xAI's Grok Build CLI as a writer ([TextGen.Grok]) and a painter
-## ([ImageGen.Grok]), with no agent run: `GROK_HOME` is a fixture folder, and the streams are shaped
-## as CLI 1.0.50 wrote them.
+## grok_agent_check - xAI's Grok Build CLI as a writer ([TextGen.Grok]) and a painter ([ImageGen.Grok]),
+## with no agent run: `GROK_HOME` is a fixture folder, and the streams are shaped as the CLI writes them.
 ##
 ##   godot --headless --path . --script res://tests/agents/grok_agent_check.gd
 ##
-## - THE COMMAND: flags and paths only - the prompt's words are in no argument. A writer's one tool
-##   is `read_file`, kept when it has pictures and taken back when it has none (the control: the
-##   picture job keeps it); the painter's are the two image tools and `read_file`, nothing that writes
-##   a file, its calls approved. The tier is the effort (fast: low; best: the model's own), a chosen
-##   level wins, and the painter is low unasked.
-## - THE AGENT FILE carries ghost's system prompt as its body (`promptMode: full`), the writer's with
-##   Grok's added tools taken away and the painter's with them kept. A system prompt holding `${{` -
-##   which Grok would fill in as a template - leads the message instead, word for word, against a plain
-##   one, which is the body and not in the message.
-## - THE MESSAGE: each picture named by its prepared file, in order; none, and the message is the
-##   prompt exactly; a painter's references listed as the requests name them. A picture or reference
-##   that cannot be read is refused, never sent as a promise.
-## - NONE OF THE AUTHOR'S SETUP: every source Grok borrows from Claude, Cursor and Codex is off for the
+## - The command: flags and paths only; the prompt's words are in no argument. A writer's one tool is
+##   `read_file`, kept when it has pictures and taken back when it has none (control: the picture job
+##   keeps it); the painter's are the two image tools and `read_file`, nothing that writes a file, its
+##   calls approved. The tier is the effort (fast: low; best: the model's own), a chosen level wins, and
+##   the painter is low unasked.
+## - The agent file carries ghost's system prompt as its body (`promptMode: full`), the writer's with
+##   Grok's added tools taken away and the painter's with them kept. A system prompt holding `${{` leads
+##   the message instead, word for word; a plain one is the body and not in the message.
+## - The message: each picture named by its prepared file, in order; none, and the message is the prompt
+##   exactly; a painter's references listed as the requests name them. An unreadable picture or reference
+##   is refused, never sent as a promise.
+## - None of the author's setup: every source Grok borrows from Claude, Cursor and Codex is off for the
 ##   run, and its memory.
-## - GHOST'S TOOLS: a job with them names the server in the agent file (a list), keeps Grok's two MCP
-##   tools and allows ghost's calls by rule - the URL never in argv; a job without them has no server
-##   and no rule (the control). No skill is ever listed to the model.
-## - THE REPLY: the words after a run's last tool call, its chunks joined - not what it said on the way
-##   to a call (the control: Grok's one-JSON reply joins both); a reply cut off or failed is no reply,
-##   and says why.
-## - THE PICTURE: the path the last image tool reported, saved as a real PNG at the target - not a
-##   `read_file` result naming a file (the control), and a result that is words, not JSON, is passed
-##   over quietly, as are the updates a running tool sends with `"status": null` (the first real run
-##   stopped on one). Without one, the stream's error or the agent's last words say why.
-## - NO SESSION KEPT: the sessions to delete are the reply's and its folder's, deduplicated, and a name
-##   that is not a session id is never handed to the CLI; the folder goes only once no session is left
-##   in it (the control: with one left it stays), and no directory names no folder - never Grok's
-##   whole sessions root.
-## - THE CATALOG: the models and levels the CLI's own cache lists, hidden ones left out; the author's
+## - Ghost's tools: a job with them names the server in the agent file (a list), keeps Grok's two MCP tools
+##   and allows ghost's calls by rule, the URL never in argv; a job without them has no server and no rule
+##   (control). No skill is ever listed to the model.
+## - The reply: the words after a run's last tool call, its chunks joined, not what it said on the way to a
+##   call (control: Grok's one-JSON reply joins both); a reply cut off or failed is no reply and says why.
+## - The picture: the path the last image tool reported, saved as a real PNG at the target - not a
+##   `read_file` result naming a file (control); a result that is words, not JSON, is passed over quietly,
+##   as are the updates a running tool sends with `"status": null`. Without one, the stream's error or the
+##   agent's last words say why.
+## - No session kept: the sessions to delete are the reply's and its folder's, deduplicated, and a name that
+##   is not a session id is never handed to the CLI; the folder goes only once no session is left in it
+##   (control: with one left it stays), and no directory names no folder - never Grok's whole sessions root.
+## - The catalog: the models and levels the CLI's own cache lists, hidden ones left out; the author's
 ##   default (config, then GROK_DEFAULT_MODEL) labels Default.
 
 const CATALOG := {"models": {

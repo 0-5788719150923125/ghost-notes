@@ -1,86 +1,42 @@
 extends Node
 
-## THE WASH SHUFFLES. Reported 2026-10-05: "When cards are splayed-out, they are BARELY shuffled at
-## all. 3 or 4 cards might shift slightly, and then we start collecting them again... no changing
-## of z-order (which should only happen when cards are not touching, to prevent clipping)... 5 or
-## 10 seconds long, max - when in the real world, that kind of shuffle should take at least twice
-## that long". Measured over many planned washes, straight off their tracks:
-##
-##   - it is long, and most of it is the mixing (not the spreading or the gathering);
-##   - the hands move the cards far - a card's path through the mixing;
-##
-## Reported again the same day: "cards barely move... the movements are very small, very
-## localized... It would be much more common for cards to sweep back, and forth, back, and forth in
-## various directions, crossing large regions of the table, creating chaos along their path. Today,
-## these sort of just shift in tiny little circles". The path above was long enough - round and
-## round a 6 cm circle. So, besides:
-##
-##   - a card goes in SWEEPS: half its travel is in straight runs (a run ends where the card's way
-##     bends - its chord falls short of nine tenths of its path) at least SWEEP long - the old
-##     wash's was 4 cm - and most of it in runs of 10 cm or more (the old wash: 11%);
-##   - the sweeps CROSS THE SPREAD: most cards get 15 cm or more from where the mixing found them
-##     (the old wash: a quarter);
-##   - and leave CHAOS ALONG THEIR PATH: a card lying still that a sweeping card runs over is
-##     knocked - moved 1.5 cm or turned 9 degrees within half a second - often (the old wash: a
-##     fifth, of the few cards it ever ran over);
-##   - the measure can tell: cards made to go round tiny circles fail all three - and the circling
-##     wash itself, put through this measure, had 0.39 m of path and failed the rest (4.2 cm runs,
-##     11% long, 24% reach, 20% knocked);
-##   - the stacking order CHANGES: two cards that lay one way when they met lie the other way at a
-##     later meeting - and NEVER while they touch: two cards overlapping from one step to the next
-##     keep their order and a card's thickness between them (that would be a card through a card);
-##   - no card jumps: its step at the plan's rate is a hand's speed at most (HAND_SPEED);
-##   - and the plan is cheap enough to make at an episode's load;
-##
-## THE THREE COSTS ARE THE CODE'S, NOT THE MACHINE'S ([WorkClock], tests/work_clock.gd). They were
-## wall-clock times, and this gate failed with nothing changed the day three gates ran beside it:
-## 828 ms against 700 for the plan, 59.6 ms against 25 for a step (2026-10-12) - mostly time spent
-## waiting for a core. A step's cost was also the WORST single timing of some 350, which one pause
-## of the machine decides: it read 17 to 19 ms with the machine to itself, and the dearest step
-## costs 4 to 9 when each is the least of three. Now every cost is the least of a few timings on
-## the thread's own processor clock. The control: the same plan made twice over costs clearly
-## more, about twice, so the clock follows the work and a budget on it can be broken.
-##
-## A WASH IS OF THE WHOLE DECK (2026-10-14: the gathered pile kept growing because 26 meshes stood
-## for 78 cards - each spread as one card and swelling to three on the pile): a made-up episode's
-## deck, as this gate's are, is a tarot's 78, one mesh a card. Three times the cards lie in heaps
-## three times as deep, and the budgets and two of the measures were set again on it: the plan
-## costs some 1.9 s (budget 4 s; 26 cards had 0.35 s), a step of rest at worst some 70 ms as the
-## deck fans out, where every card still lies on the deck (budget 150; 9 to 18 ms mixing and
-## gathering); mixing cards tip under 4 degrees 99% of the time and 12 at most (the steepest lies on
-## a heap's edge; 26 cards had 3 and 8); and a hard blow throws a card in a wash or two of every six
-## - most cards struck in a full deck have a card lying on them, and one held down does not fly.
-##   - a JUMPER flies out of a shuffle: when it springs the deck is mid-riffle, even when the
-##     shuffle before it had gone quiet ("not when the cards are just sitting there").
-##
-## Reported 2026-10-06: the cards "'repel' each other in a way that makes them almost bouncy - they
-## are very unstable and they tilt far too much... the cards often clip through each other... cards
-## moving THROUGH each other, which should be impossible"; and asked: "when a lot of repulsion is
-## applied, a card can get ejected, it can land face-up, and the reader can choose to draw that
-## card... some ejections to land face-down, and thus NOT be drawn". So, posed as the camera sees
-## it, frame by frame:
-##
-##   - no card passes through another or into the cloth - the deck spreading and the pile gathering
-##     included - and two cards touching never swap which lies on top (control: posed as two steps'
-##     rests blended, cards cross);
-##   - cards lie gently: a mixing card tips a few degrees at most, and its tilt does not jump about;
-##   - a meeting is a nudge: the card run into never overtakes the card that struck it, which never
-##     comes back the way it went;
-##   - a hard blow throws a card out of the spread now and then: struck faster than EJECT_SPEED,
-##     face down, onto the cloth and wholly in the picture, its way clear of what stands;
-##   - a JUMPER OUT OF A WASH: when the first card is a jumper and the deck is being washed as it
-##     comes, a blow throws it over, face up and the right way round, clear of every card; it lies
-##     there, nothing passing through it, until it is picked up and shown; the deck is gathered one
-##     card short, then pushed aside. An episode that washes into its jumper holds its wash back for it.
+## The gate of the card wash (shuffle): its plans and its poses, measured straight off the tracks, with no GPU.
 ##
 ##   tests/run_boot_probe.sh tests/table/table_wash_check.gd 420
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - the tracks are numbers.
+## A boot probe (the medium reaches the Director). Each measure is two-sided: a control that must fail it.
+## The plan, over many washes:
+##   - it is long, and most of it is the mixing; the hands move the cards far;
+##   - a card goes in sweeps: half its travel is in straight runs (a run ends where the card's way bends - its chord falls
+##     short of nine tenths of its path) at least SWEEP long, and most of it in runs of 10 cm or more;
+##   - the sweeps cross the spread: most cards get 15 cm or more from where the mixing found them;
+##   - they leave chaos along their path: a still card a sweeping card runs over is knocked (moved 1.5 cm or turned 9 degrees
+##     within half a second) often;
+##   - the stacking order changes between two meetings, and never while the cards touch (that would be a card through a card);
+##   - no card jumps: its step at the plan's rate is a hand's speed at most (HAND_SPEED);
+##   - cards made to go round tiny circles fail all of these (the measure can tell);
+##   - the plan is cheap enough to make at an episode's load.
+## The costs are the code's, not the machine's ([WorkClock], tests/work_clock.gd): the least of a few timings on the thread's own
+## processor clock. The control: the same plan made twice costs about twice.
+## A wash is of the whole deck (78 cards, one mesh a card): the budgets are set on it (plan about 1.9 s against a budget of 4 s; a
+## step of rest at worst about 70 ms against 150); mixing cards tip under 4 degrees 99% of the time and 12 at most; a hard blow
+## throws a card in a wash or two of every six - most cards struck have a card lying on them, and one held down does not fly.
+## A jumper flies out of a shuffle: when it springs the deck is mid-riffle.
+## The poses, frame by frame as the camera sees them:
+##   - no card passes through another or into the cloth - the deck spreading and the pile gathering included - and two cards
+##     touching never swap which lies on top (control: posed as two steps' rests blended, cards cross);
+##   - cards lie gently: a mixing card tips a few degrees at most, and its tilt does not jump about;
+##   - a meeting is a nudge: the card run into never overtakes the card that struck it, which never comes back the way it went;
+##   - a hard blow throws a card out of the spread now and then: struck faster than EJECT_SPEED, face down, onto the cloth and
+##     wholly in the picture, its way clear of what stands;
+##   - a jumper out of a wash: when the first card is a jumper and the deck is being washed as it comes, a blow throws it over,
+##     face up and the right way round, clear of every card; it lies there until it is picked up and shown; the deck is gathered
+##     one card short, then pushed aside. An episode that washes into its jumper holds its wash back for it.
 
 const WorkClock := preload("res://tests/work_clock.gd")
 const SEEDS := 12
-## THE BUDGETS, in milliseconds of the thread's processor ([WorkClock]): a wash's plan as an
-## episode loads, one cut short while the reading plays, and a step of rest inside a frame.
+## The budgets, in milliseconds of the thread's processor ([WorkClock]): a wash's plan as an episode loads, one cut short while the reading
+## plays, and a step of rest inside a frame.
 const PLAN_MS := 4000.0
 const CUT_MS := 400.0
 const STEP_MS := 150.0
@@ -138,8 +94,8 @@ func _run() -> void:
 		for k in m:
 			n[k] = float(n[k]) + float(m[k]) / float(SEEDS) if k in ["dur", "mix", "path", "sweep", "long", "reach", "knocked"] \
 				else int(n[k]) + int(m[k])
-	# THE COST of the longest wash (see the header), and the control: made twice over it costs
-	# twice as much - the clock follows the work, whatever else the machine is doing
+	# The cost of the longest wash (see the header), and the control: made twice over it costs twice as much - the clock follows the work,
+	# whatever else the machine is doing
 	var longest := float(TableShuffle.RUNS["wash"]["dur"][1])
 	n["ms"] = WorkClock.cost_ms(func() -> void: medium._shuffles._wash_plan(7777, longest), Callable(), 5)
 	n["twice"] = WorkClock.cost_ms(func() -> void:
@@ -166,8 +122,7 @@ func _run() -> void:
 	_ok(int(n["jumps"]) == 0, "no card jumps (%d)" % n["jumps"])
 	_ok(float(n["ms"]) < PLAN_MS, "a plan is cheap enough to make as an episode loads (%.0f ms of %.0f)" % [n["ms"], PLAN_MS])
 	var ratio := float(n["twice"]) / maxf(float(n["ms"]), 0.001)
-	# (no ceiling on it: what else the machine is doing only adds to a timing, and it read 1.6 to 2.8
-	# over seven runs on a busy desk - a ceiling here would be the wall clock's failure again)
+	# (no ceiling on it: what else the machine is doing only adds to a timing)
 	_ok(ratio > 1.3, "control: the same plan made twice over costs more, about twice (%.2f times) - the clock follows the work" % ratio)
 	_cut_short()
 	_jumper()
@@ -183,9 +138,8 @@ func _run() -> void:
 	get_tree().quit(0 if _fails == 0 else 1)
 
 
-## A WASH CUT SHORT by the first card: the same wash up to its own gather (every card where the
-## whole one had it - nothing jumps at the switch), gathered and squared by its end, and cheap,
-## because it is made while the reading plays.
+## A wash cut short by the first card: the same wash up to its own gather (every card where the whole one had it - nothing jumps at the
+## switch), gathered and squared by its end, and cheap, because it is made while the reading plays.
 func _cut_short() -> void:
 	var full: Dictionary = medium._shuffles._wash_plan(4242, 30.0)
 	var cut: Dictionary = medium._shuffles._wash_plan(4242, 17.0, full)
@@ -220,10 +174,9 @@ func _cut_short() -> void:
 	medium._shuffles.shuffle_room = INF
 
 
-## A JUMPER SPRINGS OUT OF A RIFFLE. The shuffle is made to go quiet long before the jumper (one
-## riffle, then nothing), so the deck is squared and still when the jumper's action begins - which
-## is exactly when the card used to leave it. At the spring the deck must be riffling, the card off
-## the top of a half rather than the resting deck, and the deck square again once it lands.
+## A jumper springs out of a riffle: the shuffle is made to go quiet long before the jumper (one riffle, then nothing), so the deck is
+## squared and still when the jumper's action begins. At the spring the deck must be riffling, the card off the top of a half rather than
+## the resting deck, and the deck square again once it lands.
 func _jumper() -> void:
 	var script := CardReading.compose([{"kind": "shuffle", "card": 0, "text": "Shuffle the deck, and talk a while about nothing much at all."},
 		{"kind": "jumper", "card": 1, "text": "Oh, a jumper."}, {"kind": "spread", "card": 0, "text": "Done."}])
@@ -266,17 +219,13 @@ func _jumper() -> void:
 	_ok(after == 0, "the riffle done, the deck is square again (%d moving)" % after)
 
 
-## CARDS IN A WASH REST ON ONE ANOTHER (feedback 0007: "many of these cards are lifted off of the
-## table itself... they cannot rest upon each other with a gentle tilt"). At the plan's steps of many
-## washes - the deck spreading and the pile gathering as well as the mixing - every card on the table
-## passes through no card under it and not into the cloth (its plane at every corner and at every
-## point where it crosses a card under it, each card its own thickness), and lies AS LOW AS WHAT IS
-## UNDER IT LETS IT - its middle exactly as high as the lowest plane over all of those points, found
-## here a second, independent way (the highest point any three of them, or two, or one, hold up over
-## the middle). Two-sided: the plan's flat layers sit above that, held up in the air. A CARD WITH A
-## CARD LYING ON IT IS HELD DOWN BY IT ([method TableShuffle._held_down]): it rests on what is under it
-## as every card does, and no corner rises more than [constant TableShuffle.LEVER] past the highest of
-## it (a deck of 78 rested otherwise stood cards a meter high - wash_deck_check holds that, two-sided).
+## Cards in a wash rest on one another: at the plan's steps of many washes - the deck spreading and the pile gathering as well as the mixing
+## - every card on the table passes through no card under it and not into the cloth (its plane at every corner and at every point where it
+## crosses a card under it, each card its own thickness), and lies as low as what is under it lets it - its middle exactly as high as the
+## lowest plane over all of those points, found here a second, independent way (the highest point any three of them, or two, or one, hold up
+## over the middle). Two-sided: the plan's flat layers sit above that, held up in the air. A card with a card lying on it is held down by it
+## ([method TableShuffle._held_down]): it rests on what is under it as every card does, and no corner rises more than [constant
+## TableShuffle.LEVER] past the highest of it (wash_deck_check holds that, two-sided).
 func _resting() -> void:
 	var through := 0
 	var afloat := 0
@@ -300,10 +249,8 @@ func _resting() -> void:
 		var tracks: Array = plan["tracks"]
 		var last := (tracks[0] as PackedVector4Array).size() - 1
 		for st in range(1, last, 7):
-			# AS IT PLAYS, the step before made first: a calmed fan-out step reuses the bare rests round
-			# it (TableShuffle.CALM_HZ), and only a seek lands on none of them (seven rests, ~20 ms, once).
-			# Each timing starts from that same place - what was kept thrown away, the step before made
-			# again - or the second timing would only measure the keeping.
+			# As it plays, the step before made first: a calmed fan-out step reuses the bare rests round it (TableShuffle.CALM_HZ), and only a seek
+			# lands on none of them. Each timing starts from that same place, or the second timing would only measure the keeping.
 			var as_it_plays := func() -> void:
 				medium._shuffles._rest_steps = {}
 				medium._shuffles._rest_lifts = {}
@@ -413,13 +360,11 @@ func _resting() -> void:
 	_ok(worst_ms < STEP_MS, "a step of rest is cheap enough to make as it plays (%.1f ms of %.0f)" % [worst_ms, STEP_MS])
 
 
-## AS THE CAMERA SEES IT (2026-10-06: "the cards often clip through each other... cards moving
-## THROUGH each other"; "they tilt far too much"): washes posed frame by frame, as the table poses
-## them, between the plan's steps. Wherever two cards lie over one another their faces never cross,
-## the upper never dips into the lower, and the pair never swaps which is on top from one frame to
-## the next; no card on the cloth dips into it. Mixing cards tip a few degrees at most and their tilt
-## does not jump about; nor, under the palm, do the cards fanning out (2026-10-08: they "wobble and
-## vibrate") - against the bare rest as the control, which does. Control: posed as two steps' rests blended, cards pass through one another.
+## As the camera sees it: washes posed frame by frame, as the table poses them, between the plan's steps. Wherever two cards lie over one
+## another their faces never cross, the upper never dips into the lower, and the pair never swaps which is on top from one frame to the
+## next; no card on the cloth dips into it. Mixing cards tip a few degrees at most and their tilt does not jump about; nor do the cards
+## fanning out under the palm - against the bare rest as the control, which does. Control: posed as two steps' rests blended, cards pass
+## through one another.
 func _posed() -> void:
 	var fps := 15.0
 	var crossings := 0
@@ -442,8 +387,7 @@ func _posed() -> void:
 		var plan: Dictionary = medium._shuffles._wash_plan(6000 + s, dur)
 		var m := {"kind": "wash", "t0": 0.0, "dur": dur, "pause": 0.0, "seed": 6000 + s, "plan": plan}
 		var mix: Vector2 = plan["mix"]
-		# THE FAN-OUT, at 30 frames a second: how often a card turns faster than 60 deg/s - calmed, and
-		# the bare rest as the control
+		# The fan-out, at 30 frames a second: how often a card turns faster than 60 deg/s - calmed, and the bare rest as the control
 		for calm in [true, false]:
 			medium._shuffles.wash_calm = calm
 			var was: Array = []
@@ -489,7 +433,7 @@ func _posed() -> void:
 						var turn := rad_to_deg(acos(clampf(up.dot(prev_up[i] as Vector3), -1.0, 1.0))) * fps
 						jerks += 1 if turn > 60.0 else 0
 			prev_up = ups
-			# CONTROL: the same frame posed as two steps' rests blended
+			# Control: the same frame posed as two steps' rests blended
 			if s == 1:
 				var old: Array = []
 				for i in medium._plan.deck_n:
@@ -590,8 +534,7 @@ static func _lowest(xf: Transform3D) -> float:
 	return xf.origin.y - absf(b.x.y) * TableMedium.CARD.x * 0.5 - absf(b.y.y) * TableMedium.DECK_T * 0.5 - absf(b.z.y) * TableMedium.CARD.y * 0.5
 
 
-## CONTROL: card [param i] posed as two steps' rests blended - what the table did before posing each
-## frame's own rest.
+## Control: card [param i] posed as two steps' rests blended.
 func _blended(plan: Dictionary, m: Dictionary, i: int, v: float) -> Transform3D:
 	var track: PackedVector4Array = (plan["tracks"] as Array)[i]
 	var f := clampf(v * TableShuffle.WASH_HZ, 0.0, float(track.size() - 1))
@@ -606,11 +549,9 @@ func _blended(plan: Dictionary, m: Dictionary, i: int, v: float) -> Transform3D:
 		medium._cur_base + Vector3(q.x, r.x, q.z))
 
 
-## A MEETING IS A NUDGE (2026-10-06: the cards "'repel' each other in a way that makes them almost
-## bouncy"): a card sliding into one lying still, struck at its middle, an edge or a corner, at the
-## strongest the hands' feel samples ([constant TableShuffle.WASH_KNOCK] x 1.25) - where they touch,
-## the card run into never comes away faster than the one that struck it, which goes on its way.
-## Control: at half their speeds apart (the knock that made them bounce), it overtakes.
+## A meeting is a nudge: a card sliding into one lying still, struck at its middle, an edge or a corner, at the strongest the hands' feel
+## samples ([constant TableShuffle.WASH_KNOCK] x 1.25) - where they touch, the card run into never comes away faster than the one that
+## struck it, which goes on its way. Control: at half their speeds apart, it overtakes.
 func _nudge() -> void:
 	var bad := 0
 	var control := 0
@@ -640,9 +581,8 @@ func _nudge() -> void:
 	_ok(control > 0, "control: at half their speeds apart it does (%d of %d)" % [control, cases])
 
 
-## THROWN CARDS (2026-10-06: "when a lot of repulsion is applied, a card can get ejected... some
-## ejections to land face-down, and thus NOT be drawn"), over the washes [param plans] (their throws
-## checked as each was planned, in [method _throw_facts]): now and then, never more than the most.
+## Thrown cards, over the washes [param plans] (their throws checked as each was planned, in [method _throw_facts]): now and then, never
+## more than the most.
 func _throws(plans: Array) -> void:
 	var some := 0
 	var most := 0
@@ -691,13 +631,10 @@ func _throw_facts(plan: Dictionary) -> void:
 		_thrown["things"] = int(_thrown["things"]) + (1 if things else 0)
 
 
-## A JUMPER OUT OF A WASH (2026-10-06: "a card can get ejected, it can land face-up, and the reader
-## can choose to draw that card"). The first card is a jumper and the deck is being washed as its
-## moment comes: a blow throws it - and only it - out of the wash, over onto its face, the right way
-## round for its draw, clear of every card; it lies there, no card sliding through or onto it, until
-## it is picked up and shown as a drawn card is; the deck is gathered one card short, squared, and
-## pushed aside. Then an episode whose jumper the wash is to throw holds its wash back for it, and
-## one whose jumper flies from a riffle keeps the shuffle as it was.
+## A jumper out of a wash: the first card is a jumper and the deck is being washed as its moment comes: a blow throws it - and only it - out
+## of the wash, over onto its face, the right way round for its draw, clear of every card; it lies there, no card sliding through or onto
+## it, until it is picked up and shown as a drawn card is; the deck is gathered one card short, squared, and pushed aside. An episode whose
+## jumper the wash is to throw holds its wash back for it, and one whose jumper flies from a riffle keeps the shuffle as it was.
 func _wash_jumper() -> void:
 	var words := "I'm just mixing the cards slowly, no rush at all, while we settle in. Nobody needs anything from you right now. Breathe out, and let the hour be whatever hour it is. There."
 	var script := CardReading.compose([{"kind": "shuffle", "card": 0, "text": words},
@@ -783,8 +720,8 @@ func _wash_jumper() -> void:
 		_ok(shown < 0.002, "then it is picked up and shown (%.1f mm from the shown place)" % (shown * 1000.0))
 		_ok(visible == medium._plan.deck_n - 1 and at_side < 0.002, "the deck is gathered one card short and pushed aside (%d meshes, %.1f mm off its place)"
 			% [visible, at_side * 1000.0])
-	# THE SHUFFLE MAKES ROOM FOR IT: a jumper's episode that washes into it holds its one wash back to
-	# begin before the jumper is reckoned to come and run past it; another keeps the shuffle as it was
+	# The shuffle makes room for it: a jumper's episode that washes into it holds its one wash back to begin before the jumper is reckoned to
+	# come and run past it; another keeps the shuffle as it was
 	var held := -1
 	var free := -1
 	var long_intro := " ".join(PackedStringArray([words, words, words, words]))
@@ -814,12 +751,10 @@ func _wash_jumper() -> void:
 	_ok(held >= 0 and free >= 0, "some jumpers' episodes wash into them, some riffle (%d, %d)" % [held, free])
 
 
-## The lowest plane above every support [param hs] at [param pts] (about a card's middle), at the
-## middle - found as the highest point any three supports (or two, or one) hold up over the middle,
-## the other way round from [method TableShuffle._rest_on], so the two cannot share a mistake. In
-## double precision ([method _cross]): a Vector2's own cross is single, and a thin triangle's
-## weights came out a few millionths from summing to one - the triangle holding a card up was
-## dropped and the card judged 3 micrometers too high (2026-10-15).
+## The lowest plane above every support [param hs] at [param pts] (about a card's middle), at the middle - found as the highest point any
+## three supports (or two, or one) hold up over the middle, the other way round from [method TableShuffle._rest_on], so the two cannot share
+## a mistake. In double precision ([method _cross]): a Vector2's own cross is single, and a thin triangle's weights can come out a few
+## millionths from summing to one.
 func _held_up(pts: PackedVector2Array, hs: PackedFloat32Array) -> float:
 	var best := -INF
 	var n := pts.size()
@@ -851,17 +786,10 @@ static func _cross(a: Vector2, b: Vector2) -> float:
 	return float(a.x) * float(b.y) - float(a.y) * float(b.x)
 
 
-## THE HELD CARD'S LOOKS AT ITS BACK. Reported 2026-10-05: the hold "seems to be the exact same
-## length, always" (1.1-1.8 s); and asked for, a PIROUETTE - "rather than just reversing direction
-## back to the front... KEEP GOING in the same direction... such that 3 whole rotations are made in
-## the same direction (but we hold on the back artwork for the first 180, still)". So: the holds
-## spread wide - two-sided, the retired range does not; some looks are pirouettes and most are not;
-## a pirouette turns over, holds its back, then turns ONE way on round to face on three whole turns
-## from where it began; a plain look comes back the way it went; and over long held stretches the
-## card never jumps, a look's start and end included, and never turns as it goes down. Then (the
-## user's, 2026-10-05: "4-5 times for a single draw is far too many. I would expect the baseline to
-## be 0", and a card twirled 3 times in one draw): most held cards are never turned, few more than
-## once, pirouettes are rare and never twice on one card.
+## The held card's looks at its back: the holds spread wide (two-sided: the retired range does not); some looks are pirouettes and most are
+## not; a pirouette turns over, holds its back, then turns one way on round to face on three whole turns from where it began; a plain look
+## comes back the way it went; and over long held stretches the card never jumps, a look's start and end included, and never turns as it
+## goes down. Most held cards are never turned, few more than once, pirouettes are rare and never twice on one card.
 func _looks() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
@@ -908,8 +836,8 @@ func _looks() -> void:
 	_ok(share > 0.03 and share < 0.2, "a few looks are pirouettes, most are plain half turns (%.0f%%)" % (share * 100.0))
 	_ok(bad_spin == 0, "a pirouette holds its back, then turns one way to face on three whole turns round (%d did not)" % bad_spin)
 	_ok(bad_plain == 0, "a plain look holds its back and comes back the way it went (%d did not)" % bad_plain)
-	# OVER LONG HELD STRETCHES: never a jump (a pose a whole turn round is the same pose), the
-	# twirl seen turning, and nothing as the card goes down
+	# Over long held stretches: never a jump (a pose a whole turn round is the same pose), the twirl seen turning, and nothing as the card goes
+	# down
 	var worst := 0.0
 	var round_seen := 0
 	var going_down := 0
@@ -949,9 +877,8 @@ func _looks() -> void:
 	_ok(never > cards * 0.6, "most held cards are never turned (%d of %d)" % [never, cards])
 	_ok(many <= cards / 40, "hardly any card looks at its back more than twice (%d of %d)" % [many, cards])
 	_ok(twice_spun == 0, "no card pirouettes twice (%d did)" % twice_spun)
-	# A BURST ON THE PIROUETTE makes one happen (2026-10-07: one card in forty by chance, so sparks on
-	# it were never seen): the card chosen twirls, smoothly, however short its hold - two-sided, the
-	# same cards unforced mostly do not
+	# A burst on the pirouette makes one happen: the card chosen twirls, smoothly, however short its hold - two-sided, the same cards unforced
+	# mostly do not
 	var forced_seen := 0
 	var free_seen := 0
 	for k in 40:
@@ -982,11 +909,9 @@ func _looks() -> void:
 	_ok(short > 3.0, "control: a twirl half a turn short is a snap of %.2f rad" % short)
 
 
-## What one wash's tracks do: through its MIXING (the plan's own `mix` window, or between the
-## spreading's end and the gathering for a plan that does not say), how far each card goes and in
-## what runs, how far from where the mixing found it, which lies over which whenever two meet,
-## whether two touching cards ever swap or share a height, and what a sweeping card does to the
-## still cards it runs over.
+## What one wash's tracks do: through its mixing (the plan's own `mix` window, or between the spreading's end and the gathering for a plan
+## that does not say), how far each card goes and in what runs, how far from where the mixing found it, which lies over which whenever two
+## meet, whether two touching cards ever swap or share a height, and what a sweeping card does to the still cards it runs over.
 func _measure(plan: Dictionary, dur: float) -> Dictionary:
 	var tracks: Array = plan["tracks"]
 	var nc := tracks.size()
@@ -1060,7 +985,7 @@ func _measure(plan: Dictionary, dur: float) -> Dictionary:
 		var r0: Vector2 = run0[i]
 		var e: Vector4 = (tracks[i] as PackedVector4Array)[b]
 		runs.append(Vector2(e.x, e.z).distance_to(r0))
-	# HALF THE TRAVEL is in runs at least this long (the runs' length-weighted median)
+	# Half the travel is in runs at least this long (the runs' length-weighted median)
 	var sorted_runs := runs.duplicate()
 	sorted_runs.sort()
 	var total_runs := 0.0
@@ -1093,9 +1018,8 @@ func _measure(plan: Dictionary, dur: float) -> Dictionary:
 		"knocked": float(knocked) / float(maxi(knocks.size(), 1)), "flips": flips, "clips": clips, "jumps": jumps}
 
 
-## THE MEASURE CAN TELL CIRCLES FROM SWEEPS: the cards of a wash made to go round tiny circles - a
-## 6 cm palm's loop, as the old hands made them, and at their pace - fail every one of the checks
-## above, however long their path.
+## The measure can tell circles from sweeps: the cards of a wash made to go round tiny circles (a 6 cm palm's loop, at the old hands' pace)
+## fail every check above, however long their path.
 func _circles() -> void:
 	var r := RandomNumberGenerator.new()
 	r.seed = 99

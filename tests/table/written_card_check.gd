@@ -1,25 +1,22 @@
 extends SceneTree
 
-## written_card_check - A WRITTEN CARD ([constant CardTable.FRAMES] `written`; the user, 2026-10-26: "we need to give
-## the agents more control over what they draw onto a card, because the current card design may not fit a box full
-## of recipe cards. Also note: many recipe cards would be held sideways, not vertical"), with no renderer: what is
-## laid out, measured in the fonts it is set in.
+## A written card ([constant CardTable.FRAMES] `written`; for a box of recipe cards), with no renderer: what is laid out, measured in
+## the fonts it is set in.
 ##
 ##   godot --headless --path . --script res://tests/table/written_card_check.gd
 ##
-## - HELD SIDEWAYS: an index card is wider than it is tall, its face as many pixels across its height as a written
-##   card's short side; a tall card's face is as it was.
-## - THE LOOK KEEPS WHAT IT IS WRITTEN IN: a written card's hand and ruling, each one the table knows, unknown ones
-##   the defaults, and no ornament; and its text is its front, whatever the staging said.
-## - THE WRITING FITS ITS CARD: every line of a recipe is on the card, in order, each row on a rule, inside the card;
-##   a long line wraps onto the next rule, indented. The control: a card given far more than it holds says so with an
-##   ellipsis, at the smallest pitch.
-## - NO PICTURE ON IT (the user, 2026-10-29: "just treat these like a baker's recipe card... just text"): its title runs
-##   the card's width, nothing is painted for it and nothing waits for a painting - an episode of written cards has no
-##   painting or check of a card, its passages wait on its designs alone; the control: a printed card's episode paints
-##   and checks every card, and its passages wait for them.
-## - THE DESIGNER WRITES IT: asked for a written card, the designer is asked for its `writing`, never a booklet entry
-##   nor a picture - the control: a card that is not written is asked for its booklet entry and its illustration.
+## - Held sideways: an index card is wider than it is tall, its face as many pixels across its height as a written card's short
+##   side; a tall card's face is unchanged.
+## - The look keeps what it is written in: a written card's hand and ruling, each one the table knows, unknown ones the defaults, and
+##   no ornament; and its text is its front, whatever the staging said.
+## - The writing fits its card: every line of a recipe is on the card, in order, each row on a rule, inside the card; a long line
+##   wraps onto the next rule, indented. The control: a card given far more than it holds says so with an ellipsis, at the smallest
+##   pitch.
+## - No picture on it: its title runs the card's width, nothing is painted for it and nothing waits for a painting - an episode of
+##   written cards has no painting or check of a card, its passages wait on its designs alone; the control: a printed card's
+##   episode paints and checks every card, and its passages wait for them.
+## - The designer writes it: asked for a written card, the designer is asked for its `writing`, never a booklet entry nor a picture
+##   (control: a card that is not written is asked for its booklet entry and its illustration).
 
 const RECIPE := ["2 pinches dried sage, crumbled", "1 black peppercorn per traveler", "a thumb of lodestone, rubbed",
 	"1 chip of clear quartz", "Warm the base till it steams.", "Grind the sage and add it first.",

@@ -1,15 +1,14 @@
 extends SceneTree
 
-## app_icon_probe - for looking at [AppIcon]'s ghosts: what other machines draw, and this machine's
-## at every size and on every platform's mask. No renderer (ThorVG draws on the processor).
+## app_icon_probe - for looking at [AppIcon]'s ghosts: what other machines draw, and this machine's at every
+## size and on every platform's mask. No renderer (ThorVG draws on the processor).
 ##
 ##   godot --headless --log-file dist/app_icon_probe.log --path . --script res://tests/platform/app_icon_probe.gd -- [out dir] [count]
 ##
 ## Writes, into the out dir (dist/app_icons by default):
 ## - `sheet.png`: [count] ghosts (36) on a dark panel, this machine's first, ringed.
-## - `this_machine.png`: this machine's at 256 down to 16 on a dark and a light panel; then a phone's
-##   view of a build seeded alike - Android's adaptive icon in a circle and a squircle, its themed
-##   (monochrome) icon, and iOS's under its rounded mask.
+## - `this_machine.png`: this machine's at 256 down to 16 on a dark and a light panel; then a phone's view of a
+##   build seeded alike (Android's adaptive icon in a circle and a squircle, its themed icon, iOS's rounded mask).
 ## - `this_machine.svg`: the SVG the window's icon is drawn from.
 
 const DARK := Color("#232629")

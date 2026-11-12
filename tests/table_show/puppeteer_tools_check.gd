@@ -1,6 +1,6 @@
 extends Node
 
-## THE PUPPETEER'S TOOLS ([PuppeteerTools], next/table_work.md) on a table stood as the set dresser's is -
+## The puppeteer's tools ([PuppeteerTools], next/table_work.md) on a table stood as the set dresser's is -
 ## built on a worker thread by [TablePreview], over an episode under a root of its own:
 ##
 ##   - `parts` names every working part of the set table, where its points are on it, and which thing holds
@@ -12,16 +12,16 @@ extends Node
 ##     and the frames differ as the pestle goes round (the control: two pictures of one moment do not);
 ##   - `submit` asks once for what was never watched, then hands the acts in - `submitted.json`, which the
 ##     producer lands as `acts.json` ([method TableProducer._land_acts]);
-##   - A BAKE GOES ON TO THE NEXT CALL ([method TablePhysics.carry]): the grinding put again, its table takes up
+##   - a bake goes on to the next call ([method TablePhysics.carry]): the grinding put again, its table takes up
 ##     what the last call baked, and answers as before. The control: the first call's table, with nothing baked
 ##     before it, takes nothing up;
-##   - THE APP DRAWS WHILE THE WORK BAKES ([method TablePreview._bake]): a long act put, the app's own thread
+##   - the app draws while the work bakes ([method TablePreview._bake]): a long act put, the app's own thread
 ##     sees its bake part way through and closes the tools, and the call answers that it was given up (baked on
 ##     the app's thread, no frame could ever see it part way).
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/puppeteer_tools_check.gd 400
 ##
-## A BOOT probe (the medium reaches the Director) on the GPU (a picture needs a real renderer).
+## A boot probe (the medium reaches the Director) on the GPU (a picture needs a real renderer).
 
 const Live := preload("res://tests/table/table_work_live_check.gd")
 const ROOT := "user://puppeteer_tools_check"
@@ -56,7 +56,7 @@ func _run() -> void:
 	var table := Live._table()
 	ep.write_json("table", table)
 	var tools := PuppeteerTools.new(ep, ep.read_json("plan"), ep.job_dir("acts"), table)
-	# PARTS
+	# Parts
 	var parts: Dictionary = await tools.call_tool("parts", {})
 	var said := String(parts.get("text", ""))
 	_ok(said.contains("\"cauldron\"") and said.contains("part \"brew\"") and said.contains("mouth") and said.contains("free joint"),
@@ -75,7 +75,7 @@ func _run() -> void:
 	_ok(smash_line.contains("PASSES THROUGH"), "the control: act does not catch the pestle driven through the bowl: %s" % smash_line)
 	_ok(answer.contains("a jar nobody built"), "act does not say an act naming a thing the table lacks was left out:\n%s" % answer)
 	await tools.call_tool("remove", {"names": ["smash", "ghost-jar"]})
-	# ONE TABLE FOR THE SESSION, ITS BAKE GOING ON (next/framework_audit.md): the grinding put again as it was is bound to the table
+	# One table for the session, its bake going on (next/framework_audit.md): the grinding put again as it was is bound to the table
 	# the first call stood, and baked again only from where the draft changed - never from the start
 	var first_ph = tools._preview._medium._work.physics
 	_ok(first_ph != null and first_ph._clear_at == 0.0, "the control: the first act call's table took up a bake, none made before it (at %s s)" % (str(first_ph._clear_at) if first_ph != null else "-"))
@@ -84,7 +84,7 @@ func _run() -> void:
 	_ok(next_ph != null and next_ph == first_ph, "the second act call stood the table again")
 	_ok(next_ph != null and float(next_ph.resumed_at) > 0.0, "the second act call baked its table from the start (taken up at %s s)" % (str(next_ph.resumed_at) if next_ph != null else "-"))
 	_ok(_block(String(again.get("text", "")), "grind").contains("Nothing passes through anything"), "put again as it was, the grinding's answer changed:\n%s" % String(again.get("text", "")))
-	# WATCH: six frames of the grinding, each a picture, and they differ
+	# Watch: six frames of the grinding, each a picture, and they differ
 	var watched: Dictionary = await tools.call_tool("watch", {"name": "grind"})
 	var sheet: Image = (watched.get("images", []) as Array)[0] if not (watched.get("images", []) as Array).is_empty() else null
 	_ok(sheet != null, "watch handed back no picture: %s" % String(watched.get("text", "")))
@@ -100,7 +100,7 @@ func _run() -> void:
 		_ok(moved > 0.0005, "the grinding's frames do not differ as the pestle goes round (%s)" % moved)
 		var same := _diff(tiles[1], tiles[1])
 		_ok(same == 0.0, "the control: a frame differs from itself")
-	# SUBMIT: asks once for what was never watched, then hands the work in
+	# Submit: asks once for what was never watched, then hands the work in
 	var first: Dictionary = await tools.call_tool("submit", {})
 	_ok(bool(first.get("error", false)) and String(first["text"]).contains("Not watched"), "submit does not ask for the acts never watched: %s" % String(first.get("text", "")))
 	var second: Dictionary = await tools.call_tool("submit", {})
@@ -108,7 +108,7 @@ func _run() -> void:
 	var prod := TableProducer.new(ep, {"title": "Brews", "brief": "A brief."})
 	var err := prod._land_acts(FileAccess.get_file_as_string(ep.job_dir("acts").path_join(PuppeteerTools.SUBMITTED)))
 	_ok(err.is_empty() and ep.has("acts"), "the handed-in acts did not land: %s" % err)
-	# THE APP DRAWS WHILE THE WORK BAKES: a long act put, the tools closed from a frame that sees its bake part way
+	# The app draws while the work bakes: a long act put, the tools closed from a frame that sees its bake part way
 	var long: Dictionary = (acts[2] as Dictionary).duplicate(true)
 	long["name"] = "grind-long"
 	long["beat"] = "close"

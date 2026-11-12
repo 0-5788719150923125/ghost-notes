@@ -1,15 +1,11 @@
 extends SceneTree
 
-## export_status_check - the export's status line can always be read: it WRAPS within the screen and
-## stays ABOVE the bottom-right button row, whatever its length and wherever the row sits.
+## export_status_check - the export's status line wraps within the screen and stays above the bottom-right button row,
+## whatever its length and wherever the row sits.
 ##
 ##   godot --headless --path . --script res://tests/export/export_status_check.gd
 ##
-## Reported 2026-10-06: "the 'Rendering <title> ...' text at the bottom-right is both floating UNDER
-## the export button, as well as overflowing the right side of the screen. So I cannot see any
-## progress indicator." The line shared the button row unless a mode had claimed the bottom of the
-## frame, and an unwrapped Label grows to its right - under the buttons and past the edge. The
-## control is the old arrangement (the row's band, no wrapping), which fails both halves.
+## The control is the old arrangement (the row's band, no wrapping), which fails both halves.
 
 const ROW_TOP := 68.0           # the button row's top, above the bottom edge (Shell.ROW_TOP)
 const RIGHT := 28.0             # the row's right margin
@@ -31,8 +27,8 @@ func _run() -> void:
 	var settings := root.get_node_or_null("Settings")
 	if settings != null:
 		settings.set("_read_only", true)
-	# built by hand, its status line moved into the tree on a layer of its own as the exporter's is:
-	# the exporter's _ready would clear a live render's override.cfg
+	# built by hand, its status line moved into the tree on a layer of its own as the exporter's is: the exporter's _ready would
+	# clear a live render's override.cfg
 	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
 	var layer := CanvasLayer.new()
@@ -64,7 +60,7 @@ func _run() -> void:
 		"after a long line, a short one shrinks back to its own row just above the buttons (%.0f px tall, bottom %.0f)"
 		% [one.size.y, one.end.y])
 
-	# THE CONTROL: the old arrangement - the row's own band, unwrapped - fails both halves
+	# control: the old arrangement (the row's own band, unwrapped) fails both halves
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	status.grow_horizontal = Control.GROW_DIRECTION_END
 	status.grow_vertical = Control.GROW_DIRECTION_END

@@ -3,17 +3,17 @@
 
 The presentation axis - what the show is drawn ON, as opposed to what drives it. Independent of the modes, so every mode gets every medium.
 
-Medium - what the show is carried ON. The presentation axis.
+Medium - what the show is carried on: the presentation axis.
 
-ghost has always had exactly one presentation and never had to name it: the `Director` paints ONE scene, full-bleed, edge to edge, and cuts to the next. A medium is that choice made addressable. `FullMedium` is that behavior, unchanged and default; `ComicMedium` renders the same scenes into the panels of an open comic book - two facing pages across a spine - and flies a real perspective camera over it.
+The `Director` paints one scene full-bleed and cuts to the next; a medium makes that choice addressable. `FullMedium` is that behavior and the default; `ComicMedium` renders the same scenes into the panels of an open comic book and flies a real perspective camera over it.
 
-NOT A MODE, and the distinction is the whole point. A mode decides what DRIVES the show - a song (Auto), a storyboard (Manual), a written script (Synthesis / Generative). A medium decides what the show is PRESENTED AS. They are independent axes, so every mode gets every medium for free, exactly as every scene gets every behavior and every render kind. Putting the comic in as a fifth mode would have meant a comic that only works over a song, and a second copy of the Director's scheduling to drive it.
+A medium is not a mode: a mode decides what drives the show (a song, a storyboard, a written script), a medium decides what it is presented as. They are independent axes, so every mode gets every medium.
 
-THE CONTRACT is deliberately four small vetoes rather than a rendering interface, because the Director must not learn what a comic is:
+The contract is four small vetoes rather than a rendering interface, so the Director never learns what a comic is:
 
-host_for(incoming)   - the node an arriving scene is added to. `full` returns the stage; `comic` returns the next panel's SubViewport, having first FROZEN the one behind it. style_for(style)     - veto on the transition style the Director chose. hold_outgoing()      - true when the leaving scene must NOT fade out (its panel is already drawn and must stay drawn). owns_bookend()       - true when the medium applies the whole-show fade itself, so the Director stops applying it to the scene.
+host_for(incoming)   - the node an arriving scene is added to. `full` returns the stage; `comic` returns the next panel's SubViewport, having frozen the one behind. style_for(style)     - veto on the transition style the Director chose. hold_outgoing()      - true when the leaving scene must not fade out (its panel stays drawn). owns_bookend()       - true when the medium applies the whole-show fade itself.
 
-A medium is a Node2D mounted INSIDE the stage SubViewport, so the stage governor still owns it: when the governor stops the stage, it stops the medium and every panel viewport nested under it, together.
+A medium is a Node2D mounted inside the stage SubViewport, so the stage governor stops the medium and every panel viewport under it together.
 
 Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (10 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
@@ -21,9 +21,9 @@ Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (10
 
 _The original show with nothing to set: scenes chosen by the song's own fingerprint and cut on its beat, at the default pacing - the same song is the same show in every note._
 
-AutoMedium - the original show with nothing to set: one scene at a time, filling the frame, chosen by the song's own fingerprint and cut on its beat (2026-10-06, the user: an "auto" type "which removes all options from the user, and just automatically plays the scene, seeded by the audio, just like the original mode did it").
+AutoMedium - the original show with nothing to set: one scene at a time, filling the frame, chosen by the song's own fingerprint and cut on its beat.
 
-IT DRAWS EXACTLY WHAT `FullMedium` DRAWS. What makes it a medium of its own is what it takes: no settings at all (its row's `bare`). The Medium card shows nothing under it but the picker, picking it puts the Director's dials back to their defaults, and its block in a note is the medium's name alone - so the same song is the same show in every note, whatever another note's dials were left at. The frame is landscape: a portrait show is Full frame's.
+Draws exactly what `FullMedium` draws; what makes it a medium of its own is that it takes no settings (its row's `bare`). The Medium card shows only the picker, picking it resets the Director's dials to their defaults, and its block in a note is the medium's name alone, so the same song is the same show in every note. The frame is landscape: a portrait show is Full frame's.
 
 Source: [src/media/auto.gd](../src/media/auto.gd)
 
@@ -31,11 +31,9 @@ Source: [src/media/auto.gd](../src/media/auto.gd)
 
 _One scene at a time, filling the frame. The original show._
 
-FullMedium - one scene, filling the frame. What ghost has always done.
+FullMedium - one scene, filling the frame: the identity medium.
 
-The IDENTITY medium, and it is worth having as a real object rather than as a `if medium == null` branch everywhere: it makes "the original show" a named, selectable thing in the registry instead of the absence of a choice, and it is what the `Director`'s four vetoes are measured against - every one of them returns its argument unchanged here, so a session on this medium behaves exactly as it did before media existed.
-
-It draws nothing at all. Scenes are added straight to the stage SubViewport and composite themselves, as they always have.
+A real object rather than an `if medium == null` branch: every one of the `Director`'s four vetoes returns its argument unchanged here. It draws nothing; scenes are added straight to the stage SubViewport and composite themselves.
 
 Source: [src/media/full.gd](../src/media/full.gd)
 
@@ -45,17 +43,15 @@ _The same scenes drawn into the panels of an open comic book - two facing pages,
 
 ComicMedium - the show as an open comic book, flown over by a real perspective camera.
 
-The same scenes, the same Director, the same cutting. What changes is where a scene LANDS: instead of replacing the picture, each cut fills the next PANEL of the spread, and when the spread is full the next cut turns the leaf. So `Scene hold` and `Flourishes` keep their exact meanings - a burst of quick cuts becomes a run of small panels filling in fast, which is what a comic does with a fight.
+The same scenes, Director and cutting; what changes is where a scene lands: each cut fills the next panel of the spread, and when the spread is full the next cut turns the leaf. `Scene hold` and `Flourishes` keep their meanings (a burst of quick cuts is a run of small panels filling in fast).
 
-TWO PAGES AT ONCE, because that is what a comic is. The first cut of this drew ONE portrait page and it cost three things at the same time. A portrait sheet inside a landscape frame cannot cover it, so there was always a wedge of desk in shot unless the camera pushed in until the page stopped reading as a page. A pan had one page's width of content to travel before it ran onto the trim edge. And a page turn had no hinge that meant anything, because a leaf hinges on a SPINE and one page does not have one. See `ComicSpread`: the spread is 2 pages wide by ~1.5 tall, which is 1.33 against the frame's 1.78, so the sheet can cover the whole frame at a shot that still shows several panels.
+Two pages at once, as in a comic: a portrait sheet in a landscape frame leaves a wedge of desk in shot, a pan has one page's width to travel, and a leaf hinges on a spine. See `ComicSpread`: the spread is 2 pages wide by ~1.5 tall (1.33, against the frame's 1.78), so the sheet can cover the whole frame at a shot that still shows several panels.
 
-ONE LIVE PANEL, THE REST HELD. The Director runs exactly one scene (two across a transition) and this keeps that: the newest panel is live in its own SubViewport, and every panel behind it is a STOPPED render target - update mode DISABLED, its scene freed, its last frame still sitting in VRAM. Measured in tests/media/medium_probe.gd: the texture survives both the stop and the free, bit-exact, so a held panel costs nothing at all. That is the only reason this can ship. Six live scenes is not a thing that runs - the stage governor already spends its budget on one - and the alternative, capturing each panel with get_image(), is the synchronous readback stall that cost Masking its frame rate.
+One live panel, the rest held: the newest panel is live in its own SubViewport and every panel behind it is a stopped render target (update mode DISABLED, its scene freed, its last frame still in VRAM). Measured in tests/media/medium_probe.gd: the texture survives the stop and the free bit-exact, so a held panel costs nothing. (Capturing each panel with get_image() is a synchronous readback stall.)
 
-It is also simply correct. A comic panel IS a held moment; the page is a sequence of them. The frame is never static anyway, because the camera and the page are always moving.
+The spread is really in 3D: two quads placed in a world and projected through a `Lens3D`, free to rotate on X, Y and Z. Panels are drawn as subdivided grids of textured triangles whose vertices are each projected individually, because a two-triangle quad is affinely textured and warps (at a hard yaw the seam of a test texture landed 28.5 px from where perspective puts it, on a 512 px frame).
 
-THE SPREAD IS REALLY IN 3D. Not a sheared 2D plane faking depth - two quads placed in a world and projected through a `Lens3D`, free to rotate on X, Y and Z at once. Panels are drawn as SUBDIVIDED grids of textured triangles whose vertices are each projected individually, because a two-triangle quad is affinely textured and warps: measured at a hard yaw, the seam of a two-tone test texture landed 28.5 px away from where perspective puts it, on a 512 px frame.
-
-THE CAMERA IS A PART OF ITS OWN, `ComicCamera`: the shots, the follower and the lens this draws through. What is here is the BOOK - the spread, its plan, its cast and its panels' render targets - and the drawing; where a point lies on the sheet is `ComicSpread`'s.
+The camera is a part of its own, `ComicCamera`: the shots, the follower and the lens this draws through. What is here is the book (the spread, its plan, its cast and its panels' render targets) and the drawing; where a point lies on the sheet is `ComicSpread`'s.
 
 Source: [src/media/comic.gd](../src/media/comic.gd)
 
@@ -65,13 +61,13 @@ _The chapter itself, typeset into the pages of an open novel on a desk, with eac
 
 BookMedium - the reading as a printed novel, open on a desk, with the words lit as they are spoken.
 
-Where the comic draws SCENES onto pages, this draws the TEXT: the chapter is typeset once into real pages (`BookLayout`) and the narration is followed across them by a soft swash under the word being said - a finger moving along a line - so the picture draws the viewer into the story rather than into the video. It replaces the karaoke line entirely (`bind_captions` answers true, and main hides the overlay), because a subtitle floating over a page of the same words would be the same sentence printed twice.
+Where the comic draws scenes onto pages, this draws the text: the chapter is typeset once into real pages (`BookLayout`) and the narration is followed across them by a soft swash under the word being said. It replaces the karaoke line (`bind_captions` answers true and main hides the overlay).
 
-NO SCENES. The Director still keeps its schedule, but a cut hands over to one hidden placeholder this medium owns (`take_over`), so nothing is built and nothing draws. A book that later wants scenes in its plates would cast them the way the comic does.
+No scenes: the Director still keeps its schedule, but a cut hands over to one hidden placeholder this medium owns (`take_over`), so nothing is built and nothing draws.
 
-REAL 3D. The stage SubViewport has a world of its own, so the book is geometry in it: a Camera3D, a lamp, a desk, a cloth cover, two page stacks and three leaves (the left page, the right page, and the one being turned), each leaf a subdivided plane bent by `LEAF_SHADER` into the gutter curve and, while turning, rolled over the spine with a curl. Each visible page is a SubViewport drawn by `BookMedium.PageCanvas`; a page is redrawn only when what is printed on it or lit on it changes, and otherwise its render target is left alone. Four page targets cover the worst case, a turn, where the old left, the old right (the leaf's front), the new left (its back) and the new right are all in shot.
+Real 3D: the stage SubViewport has a world of its own, so the book is geometry in it: a Camera3D, a lamp, a desk, a cloth cover, two page stacks and three leaves (the left page, the right page, and the one being turned), each leaf a subdivided plane bent by `LEAF_SHADER` into the gutter curve and, while turning, rolled over the spine with a curl. Each visible page is a SubViewport drawn by `BookMedium.PageCanvas`, redrawn only when what is printed or lit on it changes. Four page targets cover the worst case, a turn (old left, old right, new left and new right all in shot).
 
-A GENTLE CAMERA, deliberately unlike the comic's. It holds a wide view of the spread most of the time, drifts toward the page and then the lines being read, and changes framing on a slow schedule drawn from the session seed and the show clock, so an export frames the same shots as the live reading. Every channel is a critically damped spring: nothing it does can be a jump. `Director.camera` scales how far and how often it moves.
+A gentle camera, unlike the comic's: a wide view of the spread most of the time, drifting toward the page and then the lines being read, changing framing on a slow schedule drawn from the session seed and the show clock (so an export frames the same shots). Every channel is a critically damped spring, so nothing is a jump. `Director.camera` scales how far and how often it moves.
 
 Source: [src/media/book.gd](../src/media/book.gd)
 
@@ -81,9 +77,9 @@ _The chapter handwritten into a ruled research notebook - margin times, underlin
 
 NotebookMedium - the reading as a research notebook, written by hand, open on a desk.
 
-Everything that makes the book work is the book's - the 3D spread, the turning leaf, the camera, the voice followed word by word - and only what a notebook does differently is here: ruled paper with a red margin, the chapter in a handwriting face (`NotebookLayout`), a marbled composition cover with a paper label, emphasis underlined, photos clipped on with a paper clip at an angle, and sketches drawn onto the page in the same ink as the writing.
+Everything that makes the book work is the book's (the 3D spread, the turning leaf, the camera, the voice followed word by word); only what a notebook does differently is here: ruled paper with a red margin, the chapter in a handwriting face (`NotebookLayout`), a marbled composition cover with a paper label, emphasis underlined, photos clipped on at an angle, and sketches drawn onto the page in the same ink as the writing.
 
-THE TONE IS THE AUTHOR'S. A chapter drafted as a lab notebook or a field journal - dated entries under headings, times in the margin, "<!-- sketch: ... -->" beside the note it goes with - reads as one here; the same chapter in the Novel medium reads as a book.
+A chapter drafted as a lab notebook or field journal (dated entries under headings, times in the margin, `<!-- sketch: ... -->` beside its note) reads as one here.
 
 Source: [src/media/notebook.gd](../src/media/notebook.gd)
 
@@ -93,13 +89,13 @@ _Somebody browsing on a tablet lying on a desk: the chapter is web pages (`<!-- 
 
 TabletMedium - the reading as somebody browsing on a tablet lying on a desk.
 
-The chapter is a `TabletScript`: web pages written as markdown, and a few marks for what the hand does between them (open a url, search, a new tab, turn to landscape, skip the rest of a paragraph). The voice reads what is on the page; the hand acts in the rests the voice leaves for it (`<!-- action-hold -->`, sized by the same `TabletScript.phases` this medium schedules from), so nothing has to be timed by the author.
+The chapter is a `TabletScript`: web pages written as markdown, and marks for what the hand does between them (open a url, search, a new tab, turn to landscape, skip the rest of a paragraph). The voice reads what is on the page; the hand acts in the rests the voice leaves for it (`<!-- action-hold -->`, sized by the same `TabletScript.phases` this medium schedules from).
 
-EVERYTHING ON THE SCREEN IS A FUNCTION OF SHOW TIME, like the book's leaf: actions are placed in the gaps between the spoken words that bracket them (`_build_schedule`), and the screen is REPLAYED from them every frame (`_state_at`), scroll included (`_build_flings`) - so an export draws exactly what the live reading drew, and a reading that restarts lands on the right page without having to have watched the last one.
+Everything on the screen is a function of show time: actions are placed in the gaps between the spoken words that bracket them (`_build_schedule`) and the screen is replayed from them every frame (`_state_at`), scroll included (`_build_flings`), so an export draws what the live reading drew and a reading that restarts lands on the right page.
 
-THE TABLET NEVER MOVES; THE CAMERA DOES. Turning to landscape swings the camera a quarter turn round the slab, and the screen's content counter-rotates against the same curve, so it stays upright in the picture while the device turns beneath it - shrinking to fit as an iPad's does, and re-laid out for the new shape at the half-way point, where the old and new pictures are the same size.
+The tablet never moves; the camera does. Turning to landscape swings the camera a quarter turn round the slab, and the screen's content counter-rotates against the same curve so it stays upright while the device turns beneath it, shrinking to fit and re-laid out for the new shape at the half-way point.
 
-Reuses the book's desk, lamp and springs (`BookMedium`); nothing about pages or leaves.
+Reuses the book's desk, lamp and springs (`BookMedium`).
 
 Source: [src/media/tablet.gd](../src/media/tablet.gd)
 
@@ -107,29 +103,19 @@ Source: [src/media/tablet.gd](../src/media/tablet.gd)
 
 _Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it._
 
-LetterMedium - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) - its pad, its pen, its camera, the voice followed word by word - with the letter's own hand and the letter's own moments (`LetterScript`).
+LetterMedium - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) with the letter's own hand and moments (`LetterScript`).
 
-WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the letter with its marks, and its `letter`, what the Letter's rows on the Medium card hand the reading (`LetterFormat.document`): the hand's `seed`, each sketch's SVG (`svgs`), the ink step's layout of them (`ink`) and each picture's file (`pictures`). The words are the hand's own, so nothing else is needed to write them: a letter whose sketches and pictures are not made yet plays all the same, its sketches' paragraphs said and its pictures' passages read over the desk.
+Draws from the reading's document (`_subs.document`): `source`, and `letter`, what the Letter's rows on the Medium card hand the reading (`LetterFormat.document`): the hand's `seed`, each sketch's SVG (`svgs`), the ink step's layout (`ink`) and each picture's file (`pictures`). A letter whose sketches and pictures are not made yet plays all the same.
 
-THE PEN WRITES TWO WORDS AHEAD (`LetterScript`'s class note; 2026-10-27, the user: "maybe 2 words ahead of the speaking?"): the desk's elastic dictation, each word written while the voice says the one `LetterScript.AHEAD_WORDS` before it (`_due`, `_paced_end`, `_share`) - on the voice's own times, so at any voice's speed - and never quicker than `LetterScript.QUICKEST` the hand's pace; a paragraph the voice waits for, begun as the voice gets to it; for a page to turn, no sooner than the voice has read it. Where the pen cannot be that far ahead the voice waits for it (the rests the script wrote into it). Under a picture the dictation is the desk's own, the pen kept with the voice, unseen. A line's way back to the margin is a quick return (`LINE_RETURN`), as a hand's is.
+The pen writes two words ahead (`LetterScript`): each word is written while the voice says the one `LetterScript.AHEAD_WORDS` before it (`_due`, `_paced_end`, `_share`), on the voice's own times, never quicker than `LetterScript.QUICKEST` the hand's pace; where the pen cannot be that far ahead the voice waits (the rests the script wrote). Under a picture the dictation is the desk's own, unseen. A line's way back to the margin is a quick return (`LINE_RETURN`).
 
-THE PEN IS PICKED UP FROM THE DESK (2026-10-28, the user: "at the beginning, the pen starts floating in the air already. I think it would be better if the pen started from a resting place upon the table, to the right of the paper, and if we gently picked it up at the beginning, after the intro-blur"): it lies beside the pad's right edge (`DeskLook.pen_rest`, nothing else on the desk set down there) through the intro and its focus pull, and over the page's blank moment is lifted, turned up into the hand and carried to the first stroke (`_pick_up_pose`). AND IT IS SET DOWN AGAIN (2026-10-30, the user: "can we set the pen down again, after writing the final line of text?"): a beat after its last action, the same way back to its place (`_set_down_pose`).
+The pen lies beside the pad's right edge (`DeskLook.pen_rest`) through the intro, is picked up over the blank page (`_pick_up_pose`) and carried to the first stroke, and set down again a beat after its last action (`_set_down_pose`). While the writer thinks (italics) the pen is lifted. `<!-- tap -->` turns it over and taps its top on the pad or desk (`_tap_pose`); `<!-- point: camera -->` lifts it and turns its nib to the lens (`_camera_pose`), lingering in a thought (`LetterScript.POINT_LINGER`).
 
-A THOUGHT IS NOT WRITTEN: while the writer thinks a passage in italics the pen is lifted.
+The camera's arc over a page is the book's and the tablet's (`_arc`): the whole pad as a page opens, closer as the writing gets under way, let go before the turn, between `LETTER_WIDE` and `LETTER_LOCAL` on slow springs (`LETTER_TAU`). Only a point at the camera (`CAMERA_K`) and a still change how close it is; a thought, a point and a tap move where it looks only.
 
-THE CAMERA'S ARC OVER A PAGE (2026-10-27, the user: "The forward and backward zooming of the camera is nauseating. Like the journal and tablet mediums, we really need to dial that behavior back, and make it much more gradual/gentle"): as the book's and the tablet's (`_arc`) - a page opens on the whole pad, closes in on the writing as it gets under way and lets go before its turn - between two framings under twice as far apart (`LETTER_WIDE`, `LETTER_LOCAL`; it had been the desk's 1.45 m and 0.38, near four times, all the way out and back at every turn), on the tablet's slow springs (`LETTER_TAU`). Nothing else moves it in or out - a thought, a point and a tap move where it looks and never how close (each had stepped it back and in again) - but a point at the camera, a little back (`CAMERA_K`), and a still, held close on its drawing. Across, it holds the column's middle: close, the whole pad's width is in the frame, and it had swung between a short line and a long one.
+A picture (`<!-- image (full): -->` ... `<!-- /image -->`) fades up over the desk as its passage begins, moves slowly (`MOVES`: a pan its length guessed from the script, never from the voice's times) and fades back as it ends; the pen writes on under it. A picture whose passage begins where the last one's ends (`blend`) comes up over it, the one under held whole, so the page is never seen between them (`pictures_at`). A hesitation before a picture's mark brings it up as the pen is taken up again, `RESUME_LEAD` before the voice goes on.
 
-THE PEN TAPS (`<!-- tap -->`): it is lifted, turned over in the hand and its top tapped on the pad, or the desk beside it, a few times, then turned back - `_tap_pose`, laid over the pen's own place while it lasts.
-
-THE PEN POINTS AT WHOEVER WATCHES (`<!-- point: camera -->`): lifted off the page and its nib turned to the lens for the sentence - and in a thought for the rest after it (`LetterScript.POINT_LINGER`), as a point at a sketch lingers on what it points at - then put back (`_camera_pose`).
-
-A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk as the passage under it begins, moves slowly in its own way (`MOVES`: a pan its length guessed from the script, never from the voice's times, so it never jumps as a live reading's words arrive) and fades back to the desk as the passage ends. The pen writes on under it: the page the camera comes back to has the passage on it. PICTURES DISSOLVE INTO ONE ANOTHER (2026-10-27, the user: "blend from one picture into a second one, or a third one, directly without ever seeing the page again ... each with different panning/zooming behavior"): one whose passage begins where the last one's ends (its span's `blend`) comes up over it, the one under held whole until it has, so the page is never seen between them (`pictures_at`); and no picture moves as the one before it did. A HESITATION BEFORE ITS MARK IS THE WRITER'S FIRST (2026-10-28, the user, of Secular Haze's "Housing came into my room looking for you." and the `<!-- hesitation: 3 -->` after it: "the picture that follows is immediately displayed - not waiting for the hesitation at all"): the picture comes up as the pen is taken up again, `RESUME_LEAD` before the voice goes on, the desk seen through the pause - and one it dissolves from is held whole through it.
-
-A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen well clear of them, or the test cannot work"): from the mark to the next written line the camera frames the last drawing on the page, its slow wander stopped where it was, and the pen is sent off the pad.
-
-THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any text that is already being written on the page ... anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn when any of its words is not written - a thought, one said as a sketch is drawn - or while a picture covers the screen (`_captioned`, `Subtitles.captions`); a line of the letter, written two words ahead of the voice, is read on the page instead.
-
-THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is written before the camera stands back and the picture goes to black.
+A still (`<!-- still -->`): from the mark to the next written line the camera frames the last drawing on the page, its wander stopped, the pen off the pad. The subtitles caption only what cannot be read on the page (`_captioned`). The letter ends when the pen does: an unspoken line after the last word is written before the camera stands back.
 
 Source: [src/desk/letter.gd](../src/desk/letter.gd)
 
@@ -137,19 +123,19 @@ Source: [src/desk/letter.gd](../src/desk/letter.gd)
 
 _One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear (every voice but the room's heard through one), a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk._
 
-DispatchMedium - ONE DESK, LATE AT NIGHT, IN A HOLLOW UNDER THE GROUND, SEEN FROM THE CHAIR (next/dispatch.md; the user's Targeted Individuality: "the desk, with the terminal-style computer, and the cell phones, and the gadgets on the table - with the ability to shift between the different things ... look left and right, or shift left and right - as well as in/out, and possibly even tilting forward/back. But as before, we're looking for gentle transitions"). The man who works it is never seen: the viewer sits where he sits, and everything on the desk moves on its own.
+DispatchMedium - one desk, late at night, in a hollow under the ground, seen from the chair (next/dispatch.md). The man who works it is never seen: the viewer sits where he sits, and everything on the desk moves on its own.
 
-WHAT IT DRAWS FROM: the reading's document - its `source`, the note with its marks (`DispatchScript`); its `dispatch`, what the Dispatch desk's rows on the Medium card hand (`DispatchFormat.document`): the desk's `seed` and each picture's file (`pictures`). The desk itself (`DispatchSet`) is built from the note's `desk:` block (the phones' labels) and the seed; the roots (`DispatchRoots`) from the seed.
+It draws from the reading's document: its `source`, the note with its marks (`DispatchScript`); its `dispatch`, what the Dispatch desk's rows on the Medium card hand (`DispatchFormat.document`): the desk's `seed` and each picture's file (`pictures`). The desk (`DispatchSet`) is built from the note's `desk:` block (the phones' labels) and the seed; the roots (`DispatchRoots`) from the seed.
 
-THE DESK ACTS IN THE RESTS THE VOICE LEAVES FOR IT (`_place`): each action of the script before its spoken word, placed back from that word by what the script wrote after it in the same silence - or on from the word before when the next is not heard yet - and, begun, kept where it began (`_held`; a live reading's words arrive a sentence at a time). Everything on the desk is then a pure function of show time (`_pose`), so a render draws what the live reading drew, and a scrub lands where the reading is.
+The desk acts in the rests the voice leaves for it (`_place`): each action of the script before its spoken word, placed back from that word by what the script wrote after it in the same silence (or on from the word before when the next is not heard yet) and, once begun, kept where it began (`_held`; a live reading's words arrive a sentence at a time). Everything on the desk is then a pure function of show time (`_pose`), so a render draws what the live reading drew and a scrub lands where the reading is.
 
-THE CAMERA SITS IN THE CHAIR AND TURNS TO WHAT IS ACTIVE (`_attention`, `SPOTS`): a phone ringing, the terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing on a screen, the printer printing, the terminal's bell, the lamp switched (the whole desk, to see it go dark); `look:` turns it on purpose and it stays, as the gain knob turned holds it on the radar. It leans toward what it looks at and its lens closes in on the small things (the terminal's text is read on it), on critically damped springs (`SPRING_TAU`) - nothing jumps, nothing whips; with nothing new for a while it eases back to the whole desk; a slow breath of wander under it. WHAT IT TURNS TO IS SEEN: every look holds long enough to settle (`LOOK_LEAST`), a ping to the end of the sentence said over it (`PING_HOLD`), and it never leaves a thing only to come straight back to it (`AWAY_LEAST`).
+The camera sits in the chair and turns to what is active (`_attention`, `SPOTS`): a phone ringing, the terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing on a screen, the printer, the bell, the lamp switched (the whole desk, to see it go dark). `look:` turns it on purpose and it stays, as the gain knob holds it on the radar. It leans toward what it looks at and its lens closes in on the small things, on critically damped springs (`SPRING_TAU`); with nothing new for a while it eases back to the whole desk, with a slow breath of wander under it. Every look holds long enough to settle (`LOOK_LEAST`), a ping to the end of the sentence said over it (`PING_HOLD`), and it never leaves a thing only to come straight back (`AWAY_LEAST`).
 
-A PHONE IN HAND IS HELD TO THE EAR: it rises out of its row, flips open and floats up beside the camera, in the frame's lower right, its screen saying who is on it and for how long - and goes back the same way. A CALL IS SPEED-DIALED: the phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows, ON HOLD on its screen. A phone ringing buzzes and rattles in its row. A TEXT chimes, and the phone comes up open before the eye, the message on its screen - never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home (2026-11-06, the author: "It would be better to ding with a notification sound, then pick up the cell phone, open it, and look at the message on the screen").
+A phone in hand is held to the ear: it rises out of its row, flips open and floats up beside the camera, in the frame's lower right, its screen saying who is on it and for how long, and goes back the same way. A call is speed-dialed: the phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows. A phone ringing buzzes and rattles in its row. A text chimes and the phone comes up open before the eye with the message on its screen, never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home.
 
-THE SUBTITLES CAPTION WHAT CANNOT BE READ ON THE DESK, the letter's rule: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
+The subtitles caption what cannot be read on the desk, as the letter's do: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
 
-REDACTED WORDS ON THE TERMINAL ARE HIDDEN OVER THE FRAME, as an editor would hide them after the shoot (`DispatchCensor`, `_censor_at`): drawn after the 3D and before a picture over the whole screen, so a picture covers it.
+Redacted words on the terminal are hidden over the frame (`DispatchCensor`, `_censor_at`): drawn after the 3D and before a picture over the whole screen, so a picture covers it.
 
 Source: [src/dispatch/dispatch.gd](../src/dispatch/dispatch.gd)
 
@@ -159,17 +145,17 @@ _A card reading at a table, seen from the reader's chair: the deck shuffles whil
 
 TableMedium - a card reading at a table, seen from the reader's chair.
 
-The Table mode's own medium (its row of `Medium.REGISTRY` names the mode): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
+The Table mode's own medium (its row of `Medium.REGISTRY` names the mode): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands: the cards move on their own.
 
-the intro      the deck shuffles in the middle of the table under the voice, in RUNS - riffles, overhand passes, strings of cuts, now and then a wash across the cloth - with long stretches of nothing between them (`RUNS`) the push       before the first card, the deck is squared and pushed to its side a draw         the deck squares, the top card slides off, turns over, and comes up to the camera on the LEFT; its booklet page opens on the RIGHT - shown, never read the reading    the card and the page float there while the voice talks about it, turning a little on their axes; now and then the card is turned to look at its back the lay        the page closes and the card goes down into its place in the spread a jumper       the first card flies out of the shuffle on its own, lands face up, and is picked up and shown like a drawn one the close      the whole spread lies on the table
+the intro      the deck shuffles in the middle of the table under the voice, in runs (riffles, overhand passes, strings of cuts, now and then a wash across the cloth) with long stretches of nothing between them (`RUNS`) the push       before the first card, the deck is squared and pushed to its side a draw         the deck squares, the top card slides off, turns over, and comes up to the camera on the left; its booklet page opens on the right - shown, never read the reading    the card and the page float there while the voice talks about it, turning a little on their axes; now and then the card is turned to look at its back the lay        the page closes and the card goes down into its place in the spread a jumper       the first card flies out of the shuffle on its own, lands face up, and is picked up and shown like a drawn one the close      the whole spread lies on the table
 
-EVERYTHING IS A FUNCTION OF SHOW TIME, as the tablet's screen is: the actions are the reading's own marks (`CardReading`), placed in the rests the voice left for them by a `ReadingFollower`, and every card, page and packet of the deck is posed from that schedule each frame - so a render draws exactly what the live reading drew, and a scrub lands the table where the reading is.
+Everything is a function of show time, as the tablet's screen is: the actions are the reading's own marks (`CardReading`), placed in the rests the voice left for them by a `ReadingFollower`, and every card, page and packet of the deck is posed from that schedule each frame - so a render draws exactly what the live reading drew, and a scrub lands the table where the reading is.
 
-THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are its pictures; THE TABLE ITSELF - its top's shape, edge and wood, and the cloths laid on it - is the set dresser's, built by `Tables` (the old board table and its painted cloth when it wrote none); the frame, the type, the props and the light come from its look through `CardTable`'s registries, and the rest - where the deck sits, how the spread is laid, which shuffles, the camera's height - is sampled from the episode's seed, so no two episodes share a table. A picture still being painted is a placeholder until it lands, live.
+The look is the episode's. The cloth, the room, the card back and every face are its pictures; the table itself (its top's shape, edge and wood, and the cloths laid on it) is the set dresser's, built by `Tables` (the board table and its painted cloth when it wrote none); the frame, the type, the props and the light come from its look through `CardTable`'s registries, and the rest (where the deck sits, how the spread is laid, which shuffles, the camera's height) is sampled from the episode's seed. A picture still being painted is a placeholder until it lands.
 
-FOIL. The brightest, most colorful parts of each painting - found per picture from its own luminance, never a fixed threshold - are printed as foil: they catch the light as a card tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom lets them bleed. The deck's look says how much foil it was printed with.
+Foil: the brightest, most colorful parts of each painting - found per picture from its own luminance, never a fixed threshold - are printed as foil: they catch the light as a card tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom lets them bleed. The deck's look says how much foil it has.
 
-NOTHING IS BUILT ON THE APP'S THREAD (the user, 2026-11-05: "We shouldn't be doing work in the main thread, as a rule"): an episode's table is built on a worker, out of the tree, the show waiting for it as it waits for its bake, and put back (`_build_away`) - 209459's 8.5 s build drew 1,237 frames meanwhile, none over 11 ms. A render and a gate build where they stand, their frames waiting for nothing; a preview's table is built aside too (`TablePreview._stand`).
+Nothing is built on the app's thread: an episode's table is built on a worker, out of the tree, the show waiting for it as it waits for its bake, and put back (`_build_away`). A render and a gate build where they stand, their frames waiting for nothing; a preview's table is built aside too (`TablePreview._stand`).
 
 Source: [src/table/table.gd](../src/table/table.gd)
 
@@ -177,14 +163,14 @@ Source: [src/table/table.gd](../src/table/table.gd)
 
 _An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium._
 
-LikenessMedium - an actor reads the note, in their own room (next/likeness.md, "The second build"): ONE STILL OF THEM and a model of how they move - their head's own motion, their blinks, their mouths for the voice's sounds (`LikenessPlan`). Every pixel of them is a real pixel of theirs, bent; no footage plays, so no hand, prop or jump cut is ever seen (2026-10-21, the user on the first build: "the random gestures and the globe and such, which are cropped by the jump-cuts").
+LikenessMedium - an actor reads the note, in their own room (next/likeness.md, "The second build"): one still of them and a model of how they move - their head's own motion, blinks, and mouths for the voice's sounds (`LikenessPlan`). Every pixel of them is a real pixel of theirs, bent; no footage plays, so no hand, prop or jump cut is seen.
 
-WHAT IT DRAWS FROM: the reading's document (`_subs.document`) carries `likeness` - the actor's folder, the set, the still, the seed - which the Actor card hands the reading (`ActorCard.Publish`); the words and the phones come from the voice as they are said (`_subs.words`, `_subs.phones`). The set's files and the actor's motion are the Actor's (`ActorFolder`, `ActorSteps`).
+Draws from the reading's document (`_subs.document`), whose `likeness` - the actor's folder, set, still and seed - the Actor card hands the reading (`ActorCard.Publish`); the words and phones come from the voice as they are said (`_subs.words`, `_subs.phones`). The set's files and the actor's motion are the Actor's (`ActorFolder`, `ActorSteps`).
 
-THEM OVER THEIR ROOM (the third pass, 2026-10-22: "The region around the head smears quite a lot ... on the wall, and on the picture on the wall especially"): the room drawn first, still - the still's own room, and behind them the room the set's frames showed (`_room`) - and them over it, cut out by their matte, through ONE MESH WITH ONE CANVAS SHADER (`LikenessFace`, likeness_warp.gdshader): the head turned on the neck, the body carrying it, the lips and lids bent to the mouths and eyes drawn in where their own were. What their moving uncovers is the room, never the wall stretched.
+Them over their room: the room is drawn first, still (the still's own, and behind them the room the set's frames showed, `_room`), and them over it, cut out by their matte, through one mesh with one canvas shader (`LikenessFace`, likeness_warp.gdshader): the head turned on the neck, the body carrying it, the lips and lids bent to the mouths and eyes drawn in. What their moving uncovers is the room, never the wall stretched.
 
-WHAT STANDS BEFORE THEM IS DRAWN OVER THEM, still (the fourth pass, 2026-10-22: their bones bend them, and a microphone left in their matte bent with them): the still's `front_K.png` - the things that never move and hide them - over everything, and under it their picture filled from round it (`body_K.jpg`), so they move behind it.
+What stands before them is drawn over them, still: the still's `front_K.png` (things that never move and hide them) goes over everything, and under it their picture filled from round it (`body_K.jpg`), so they move behind it.
 
-A PURE FUNCTION OF THE SHOW'S TIME: what is drawn at a moment depends on the plan and the phones, never on what was drawn before - so a seek lands where it should and an export draws what was heard.
+A pure function of the show's time: what is drawn at a moment depends on the plan and the phones, never on what was drawn before, so a seek lands where it should and an export draws what was heard.
 
 Source: [src/likeness/likeness.gd](../src/likeness/likeness.gd)

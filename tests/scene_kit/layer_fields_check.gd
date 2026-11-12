@@ -3,20 +3,16 @@ extends SceneTree
 ## Every layer says what it can be told, and is told it:
 ##   godot --headless --path . --script tests/scene_kit/layer_fields_check.gd
 ##
-## WHAT IT HOLDS (next/structure.md, step 16). A layer's settings are rows - `Base.COMMON` and its
-## own `FIELDS` - read through [method Layer.fields_of]: what a timeline's inspector builds its rows
-## from, and what an agent choosing a layer is shown. `docs.py --check` holds the rows to the code
-## (every setting read has a row, every row is read, the literal defaults agree); this holds them at
-## run time:
+## A layer's settings are rows (`Base.COMMON` and its own `FIELDS`) read through [method Layer.fields_of];
+## `docs.py --check` holds the rows to the code, and this holds them at run time:
 ##
-## - [method Layer.fields_of] answers every registered layer, the shared depth band first, then
-##   its own - the table an inspector would get, read off the class the registry names;
-## - a layer TOLD every default its table states builds and runs without an error, and is the same
-##   layer as one told nothing: its depth band is the stated "front", and after a few frames of the
-##   same music from the same seed it holds the same state.
+## - [method Layer.fields_of] answers every registered layer, the shared depth band first, then its own;
+## - a layer told every default its table states builds and runs without an error and is the same layer as one told
+##   nothing: its depth band is the stated "front", and after a few frames of the same music from the same seed it
+##   holds the same state.
 ##
-## THE CONTROL: a key no layer has gets the shared rows alone, and a layer told a setting other than
-## its default is not the same layer - so "the same" above is a comparison that can fail.
+## Control: a key no layer has gets the shared rows alone, and a layer told a setting other than its default is not
+## the same layer, so "the same" above is a comparison that can fail.
 
 var _fails: Array = []
 

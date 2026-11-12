@@ -1,9 +1,8 @@
 extends Control
 class_name TablePlanView
 
-## TablePlanView - THE TABLE FROM ABOVE, TO MOVE THINGS ON (next/editing.md step 7: "a second view: the plan from above
-## (`TableBlueprint`) ... drag on the plan to place"). The set dresser's own blueprint of the table standing ([method
-## TableMedium.blueprint]: the top, where the cards go, gray where the camera does not see, each thing's foot), drawn to fit;
+## TablePlanView - the table from above, to move things on (next/editing.md step 7). The set dresser's blueprint of the table standing
+## ([method TableMedium.blueprint]: the top, where the cards go, gray where the camera does not see, each thing's foot), drawn to fit;
 ## a click on a thing's foot picks it ([signal picked]) and a drag moves it ([signal moved]: where it would stand now, in
 ## centimeters from the middle of the reading - a thing's `at`). Nothing is written here: the owner writes the table, and the
 ## table stands with it the next time it is set. A thing moved is drawn where it was put until then.

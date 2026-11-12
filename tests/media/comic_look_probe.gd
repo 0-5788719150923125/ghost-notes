@@ -1,33 +1,21 @@
 extends Node
 
-## NOT a gate - it asserts almost nothing. It drives a real comic-medium session and
-## writes PNGs, because "does this read as a comic page" is a question a picture answers
-## and a source file does not. (city_look_probe.gd and clown_look_probe.gd exist for the
-## same reason, and the same reason again.)
+## Not a gate: drives a real comic-medium session and writes PNGs. It asserts only that a frame is not uniform.
+## (city_look_probe.gd and clown_look_probe.gd are the same kind of probe.)
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/media/comic_look_probe.gd 240 \
 ##       --out /tmp/comic --cuts 9 --seed 404
 ##
-## GHOST_PROBE_GPU is not optional: this reaches Director and Spectrum (so it needs a real
-## boot) and reads pixels back (so it needs a real renderer - --headless is the dummy
-## driver, whose readback returns nothing).
-##
-## It drives the medium DIRECTLY rather than waiting for the Director's musical cues: a
-## cut here is `host_for` plus a scene, which is exactly what the Director does at a cut
-## and nothing else. Waiting for real cues would have meant minutes of silent audio per
-## page, and the schedule is not what is being looked at.
-##
-## The one thing it does assert is the trivially checkable one: that the frame is not
-## uniform. A page that failed to project, or a texture that never arrived, comes out as
-## a flat field, and a flat field is the failure this is most likely to ship.
+## GHOST_PROBE_GPU is required: it reaches Director and Spectrum (a real boot) and reads pixels back (a real
+## renderer; --headless returns nothing). It drives the medium directly, one cut being `host_for` plus a scene as
+## the Director does, rather than waiting for musical cues.
 
 const W := 1280
 const H := 720
 const DT := 1.0 / 30.0
 
 var _out := "user://comic"
-## Which medium to drive. `comic` is the point of the probe; `full` is here so the same
-## harness can answer "is this the comic, or is it ghost?" about anything odd it turns up.
+## Which medium to drive: `comic`, or `full` to compare against the plain ghost look.
 var _medium_key := "comic"
 var _cuts := 9
 var _shots: Array = []          # cut indices to photograph; default = every third
@@ -36,20 +24,12 @@ var _flat := 0
 var _thin := 0                    # frames where the page did not cover the frame
 var _static := 0                  # shots where the camera had stopped moving
 var _cropped := 0                 # shots where a FILM panel was cropped by the frame
-## How many frames to let the camera travel before photographing. The default covers the
-## slowest pan in the vocabulary; a LONG settle is the interesting one, because the defect
-## this probe exists to catch is what the camera does AFTER its move has run out - see
-## _static below.
+## Frames to let the camera travel before photographing. The default covers the slowest pan; a long settle shows
+## what the camera does after its move has run out (see _static).
 var _settle := 90
-## Spread-coordinate units per second of AIM travel, under which the camera counts as
-## STOPPED. One unit is one page width, so this is a hundredth of a page a second - a
-## framing that is not going anywhere.
-##
-## THE AIM, NOT THE EYE, and that distinction is the whole measurement. The sheet's attitude
-## drifts forever (ComicCamera.DRIFT), and the eye is placed relative to the sheet, so the
-## eye keeps moving at 0.05 world units a second even when the framing has been locked on
-## one corner for twenty seconds. Measuring the eye says the camera is alive; measuring what
-## it is LOOKING AT says it is not. The second one is what the report was about.
+## Spread-coordinate units per second of aim travel under which the camera counts as stopped (one unit is a page
+## width). The aim is measured, not the eye: the sheet's attitude drifts forever (ComicCamera.DRIFT), so the eye
+## keeps moving even when the framing is locked.
 const STILL := 0.010
 var _medium: Medium = null
 var _live: GhostScene = null      # the scene in the open panel; this probe drives it
@@ -90,10 +70,8 @@ func _parse_args() -> void:
 				_shots = []
 				for s in String(args[i + 1]).split(","):
 					_shots.append(int(s))
-			# FOOTAGE ON THE PAGE. Pass a prepared .ogv and every page gives a panel to it,
-			# so "does a film panel read as part of the comic" is a question these pictures
-			# answer. It goes through Films' probe seam rather than the library, because
-			# the library is in Settings and a probe may not write that.
+			# Footage on the page: pass a prepared .ogv and every page gives a panel to it. It goes through Films'
+			# probe seam, since a probe may not write the library in Settings.
 			"--film":
 				var path := String(args[i + 1])
 				var dur := Films._probe_duration(path)
@@ -102,11 +80,7 @@ func _parse_args() -> void:
 				print("comic_look_probe: film %s (%.1fs) on every page" % [path, dur])
 
 
-## Shoots one session. The seed is the DIRECTOR'S - pass `--seed N` on the command line
-## and it resolves it the way every songless boot does. It used to be pinned here by
-## writing Director._session_seed and re-rolling the medium afterwards, which is a state
-## the app can never be in, and testing a sequence the app does not perform is how the
-## last two defects in this file got in.
+## Shoots one session. The seed is the Director's: pass `--seed N`, resolved as every songless boot does.
 func _shoot() -> void:
 	var stage := SubViewport.new()
 	stage.size = Vector2i(W, H)
@@ -114,29 +88,20 @@ func _shoot() -> void:
 	stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(stage)
 
-	# A real session, so the medium samples its paper and its pages off a real seed. The
-	# Director's own scheduling is not driven here (there is no audio); the cuts below are.
+	# A real session, so the medium samples its paper and its pages off a real seed. The Director's own scheduling
+	# is not driven here (no audio); the cuts below are.
 	Director.detach()
 	var medium: Medium = Medium.make(_medium_key)
 	_medium = medium
 	medium.mount(stage)
 	Director.attach(stage, medium)
-	# PIN THE SEED, which attach() has just resolved at random (there is no audio here, so
-	# there is no fingerprint to derive it from). Without this the probe names its files
-	# after a seed it never set, and two runs of `--seeds 3` are two different shows - which
-	# is the one thing a look probe must not be, because comparing before and after is the
-	# whole reason it exists. Re-rolling begin_session is what makes it take: the medium
-	# samples its paper, its ink and its first page there, off exactly this number.
-	# FREEZE THE DIRECTOR'S OWN CUTTING. It is attached and running, so without this it
-	# advances the show on its max-hold backstop at the same time as this probe advances it
-	# explicitly - two drivers on one reading, and the panel it lands on is whichever won
-	# the frame. hold() is the same freeze the feedback console uses; the probe already
-	# ticks the focal scene itself, which is the other half of what hold() stops.
+	# Pin the seed attach() resolved at random (no audio, so no fingerprint), so file names match the seed and runs
+	# compare; re-rolling begin_session makes it take (the medium samples paper, ink and first page there).
+	# Freeze the Director's own cutting (hold(), as the feedback console does) so only this probe advances the
+	# reading; the probe ticks the focal scene itself.
 	Director.hold(true)
-	# ADOPT what attach() set up rather than replacing it. Under a cast-owning medium
-	# Director._current IS one of the page's panels, so an earlier version of this probe
-	# freeing it to "start clean" was reaching into the comic and deleting a panel out of
-	# its own page - the reading then had nowhere to go and stuck on the panel behind.
+	# Adopt what attach() set up rather than replacing it: under a cast-owning medium Director._current is one of
+	# the page's panels.
 	_live = Director._current
 	print("--- %s seed %d: %s ---" % [
 		_medium_key, Director.session_seed(), _page_line(medium)])
@@ -145,18 +110,13 @@ func _shoot() -> void:
 	for cut in _cuts:
 		var comic := medium is ComicMedium
 		var was_spread: int = medium._spread_i if comic else 0
-		# STAND IN FOR main._process. A probe scene REPLACES main, so the one place that
-		# promotes a finished window cut is not in the tree - without this the probe waits
-		# forever on `.part` files it started itself, a deadlock the app cannot have but
-		# every probe can.
+		# Stand in for main._process, which a probe scene replaces: it promotes a finished window cut, else the probe
+		# waits forever on `.part` files.
 		Films.pump()
 		_cut(medium)
 		if comic:
 			var turned: bool = medium._spread_i != was_spread
-			# WHICH PANEL HOLDS FOOTAGE, on every line. "the video is only ever shown ONE
-			# time, on ONE page" was reported from watching, and could not be checked from
-			# this probe's output at all - the one number that would have shown it was the
-			# only one not printed.
+			# Which panel holds footage, on every line.
 			var film := ""
 			if medium._film_at >= 0:
 				film = "[film p%d] " % (medium._film_at + 1)
@@ -169,24 +129,15 @@ func _shoot() -> void:
 			print("    cut %d" % cut)
 		# Let the panel's scene build and the camera ease toward the new framing.
 		#
-		# THE SCENE MUST BE TICKED HERE. A GhostScene has no _process of its own - the
-		# Director calls update() on it every frame (see Director._tick_animation) - so a
-		# probe that only waits draws each scene exactly once, on the frame it enters the
-		# tree, and any scene that builds its picture over time freezes into its panel as
-		# pure black. That is what the first run of this produced, and it looked exactly
-		# like a broken freeze.
-		# LONG ENOUGH FOR THE MOVE TO LAND. A slow pan eases over several seconds, so a
-		# 26-frame settle photographed the camera halfway there and every frame came out
-		# looser than the shot actually is - which reads exactly like a framing bug and is
-		# not one. Three seconds covers the slowest pan in the vocabulary.
-		# CAMERA TRAVEL, measured over the LAST SECOND of the settle. A move has a duration
-		# and the Director's hold is longer than most of them, so the interesting question is
-		# not where the camera goes but whether it is still going anywhere when it arrives.
+		# The scene must be ticked here: a GhostScene has no _process of its own (the Director calls update() on it,
+		# see Director._tick_animation), so without it a scene that builds over time freezes black.
+		# Long enough for the move to land: three seconds covers the slowest pan.
+		# Camera travel is measured over the last second of the settle: whether the camera is still going anywhere
+		# when it arrives.
 		var was_aim := Vector2.ZERO
 		var travel := 0.0
 		for i in _settle:
-			# The FOCAL scene only - a cast-owning medium drives its other live panels
-			# itself in advance(), exactly as the Director drives only its current one.
+			# The focal scene only; a cast-owning medium drives its other live panels in advance().
 			if _live != null and is_instance_valid(_live):
 				_live.update(Spectrum.current, DT)
 				_live.view.commit(DT)
@@ -204,24 +155,16 @@ func _shoot() -> void:
 	_live = null
 	Director.hold(false)
 	Director.detach()
-	# The stage OWNS the medium (Medium.mount parents itself), so freeing the stage frees
-	# it. Freeing both is a double queue_free of the same subtree.
+	# The stage owns the medium (Medium.mount parents itself), so freeing the stage frees it.
 	stage.queue_free()
 	for _i in 3:
 		await get_tree().process_frame
 
 
-## One cut, exactly as the Director performs one.
+## One cut, as the Director performs one.
 ##
-## For a CAST-OWNING medium that is a HANDOVER and nothing else (see Director._handover):
-## ask it to take over, adopt what it hands back, and build/free nothing - the panels were
-## cast when the page turned, and they all stay on the paper.
-##
-## Getting this wrong is not cosmetic. An earlier version of this function kept the
-## full-frame behavior - mint a scene, parent it, free the outgoing one - and under a
-## cast-owning medium "the outgoing one" is a panel of the live page, so every cut deleted
-## a panel out of the comic and the reading never moved. The probe reported a stuck,
-## half-dead page for a mechanism that was working correctly.
+## For a cast-owning medium that is a handover and nothing else (see Director._handover): ask it to take over,
+## adopt what it hands back, and build/free nothing - the panels were cast when the page turned.
 func _cut(medium: Medium) -> void:
 	if medium.owns_cast():
 		var handed := medium.take_over(_live)
@@ -230,10 +173,8 @@ func _cut(medium: Medium) -> void:
 		return
 	var entry: Dictionary = SceneRoster.SCENES[randi() % SceneRoster.SCENES.size()]
 	var sc: GhostScene = (entry["script"] as Resource).new()
-	# THE DIRECTOR'S ORDER, exactly: init_with_seed FIRST, add_child second (see
-	# Director._make_scene). Reversed, the node enters the tree uninitialized and Node2D
-	# draws it once immediately, so a scene that indexes its own built arrays in _draw
-	# reads an empty one - a probe artifact that never happens on the real path.
+	# The Director's order: init_with_seed first, add_child second (see Director._make_scene); reversed, Node2D
+	# draws the node once uninitialized.
 	sc.init_with_seed(randi(), String(entry["behavior"]))
 	var prev: GhostScene = _live
 	medium.host_for(sc).add_child(sc)
@@ -252,10 +193,8 @@ func _capture(stage: SubViewport, cut: int, travel := -1.0) -> void:
 	var spread := _spread(img)
 	if spread < 0.02:
 		_flat += 1
-	# PAGE COVERAGE, reported per frame. "Is there dead space in the picture" was the
-	# defect that took three passes to settle, and every one of those passes was judged by
-	# looking. A number makes it checkable: below 1.0 the sheet does not reach both frame
-	# edges and the surface it lies on is in shot.
+	# Page coverage, reported per frame: below 1.0 the sheet does not reach both frame edges and the surface under
+	# it is in shot.
 	var cov := 1.0
 	var still := false
 	var fit := -1.0
@@ -268,17 +207,11 @@ func _capture(stage: SubViewport, cut: int, travel := -1.0) -> void:
 		still = travel >= 0.0 and travel < STILL
 		if still:
 			_static += 1
-		# THE READ PANEL'S SHARE OF THE FRAME, on its worst axis. Over 1 the panel overflows
-		# the picture and is being cropped by the screen - which is correct and wanted for an
-		# abstract field, and wrong for a piece of footage: "you really don't want to focus the
-		# camera on her door to the side". A film panel that is the one being read must come
-		# out at or under 1.
+		# The read panel's share of the frame, on its worst axis. Over 1 the panel overflows the picture, which is
+		# wanted for an abstract field and wrong for footage: a film panel being read must come out at or under 1.
 		fit = float(_medium.read_panel_fit())
-		# HOW HARD THE PANEL'S RENDER TARGET IS BEING MAGNIFIED. A panel is rasterized into a
-		# SubViewport at a fixed size and then drawn as a TEXTURE, so a shot that puts it
-		# across more screen pixels than the target has texels is magnifying a bitmap - which
-		# is what "some of the in-frame scenes looked a bit pixelated" is. Over 1 is
-		# magnification; at 1 it is 1:1.
+		# How hard the panel's render target is magnified: a panel is rasterized into a SubViewport at a fixed size and
+		# drawn as a texture, so over 1 the shot puts it across more screen pixels than it has texels (1 is 1:1).
 		mag = _medium.read_panel_magnification()
 		if _medium._read == _medium._film_at and fit > 1.02:
 			_cropped += 1
@@ -307,15 +240,9 @@ func _page_line(medium: Medium) -> String:
 		left, right, sp.aspect, sp.gutter, sp.radius, aspects]
 
 
-## EVERY PANEL'S STATE, per cut. "4 of the 6 frames are pure black, and empty" is a report
-## about panels this probe was drawing but never describing - the picture showed the symptom
-## and nothing in the log said whether the panel had a scene, whether its viewport was
-## running, or how big its render target was.
-##
-## `c` = a live GhostScene is parented in it. `L` = its viewport is running this frame.
-## Then the render target size. A panel that is black with no `c` was never cast; one that is
-## black at 64x64 is a slot that was shrunk and never grown back; one that is black with a `c`
-## at full size is a scene drawing black, which is the scene's business and not the page's.
+## Every panel's state, per cut: `c` = a live GhostScene is parented in it, `L` = its viewport is running this
+## frame, then the render target size. Black with no `c` was never cast; black at 64x64 is a slot shrunk and never
+## regrown; black with a `c` at full size is a scene drawing black.
 func _panel_line(medium: ComicMedium) -> String:
 	var out := ""
 	for i in medium._spread.panels.size():
@@ -323,8 +250,7 @@ func _panel_line(medium: ComicMedium) -> String:
 		var cast_ok: bool = i < medium._cast.size() and medium._cast[i] != null \
 			and is_instance_valid(medium._cast[i])
 		var warm: int = int(medium._warm[i]) if i < medium._warm.size() else 0
-		# `w` = the panel has rendered enough frames to have a picture worth freezing. A
-		# COLD panel that is frozen is the "pure black, and empty" defect.
+		# `w` = the panel has rendered enough frames to have a picture worth freezing.
 		out += "%d[%s%s%s %d] " % [i + 1, "c" if cast_ok else "-",
 			"L" if medium._live.has(i) else " ",
 			"w" if warm >= ComicMedium.WARM_FRAMES else "-", warm]

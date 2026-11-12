@@ -1,18 +1,18 @@
 extends SceneTree
 
-## schema_form_check - A FORM'S NEW CONTROLS ([SchemaForm]; next/editing.md step 5).
+## schema_form_check - a form's controls ([SchemaForm]; next/editing.md step 5).
 ##
 ##   godot --headless --path . --script res://tests/ui/schema_form_check.gd
 ##
 ## What it holds:
-##   - a bounded number is a slider and its box: a drag is ONE edit, written as it ends (THE CONTROL: the steps of the drag write
+##   - a bounded number is a slider and its box: a drag is one edit, written as it ends (control: the steps of the drag write
 ##     nothing), the box writes what is typed, and unset both stand at the default, dimmed;
-##   - the box's edit is handed over after its press, so an owner that draws its form again never frees the box mid-press (THE
-##     CONTROL: a slider's drag, handed over at once);
+##   - the box's edit is handed over after its press, so an owner that draws its form again never frees the box mid-press
+##     (control: a slider's drag, handed over at once);
 ##   - a color is a picker, written `#rrggbb`;
 ##   - a reference is a choice among the names the context lists under its `of`, "" first;
-##   - ONE ROW SHAPE ([method SchemaForm.normalize]): a layer's, a scene's, a tonemap adjustment's and a filter's row each drawn as
-##     the form's own (THE CONTROL: a row already in that shape is left as it is).
+##   - one row shape ([method SchemaForm.normalize]): a layer's, a scene's, a tonemap adjustment's and a filter's row each drawn as
+##     the form's own (control: a row already in that shape is left as it is).
 
 var _fails := 0
 
@@ -46,9 +46,8 @@ func _run() -> void:
 	spin.value = 33.0
 	await process_frame
 	_ok(edits.back() == ["fov", 33.0] and is_equal_approx(slide.value, 33.0), "the box writes what is typed, the slider following: %s (slider %s)" % [str(edits.back()), slide.value])
-	# THE BOX'S EDIT ARRIVES AFTER ITS PRESS: an owner that draws its form again on an edit would free the box between its value and
-	# its own repeat timer (Godot: "Unable to start the timer ... not inside the scene tree") - THE CONTROL the slider's drag above,
-	# handed over at once
+	# The box's edit arrives after its press: an owner that draws its form again on an edit would free the box between its value and
+	# its own repeat timer. Control: the slider's drag above, handed over at once
 	var redraw := SchemaForm.new()
 	root.add_child(redraw)
 	var row := {"hold": {"type": "float", "label": "Hold", "default": 4.0, "min": 0.5, "max": 20.0, "step": 0.5}}
@@ -73,9 +72,9 @@ func _run() -> void:
 		if (o as OptionButton).item_count == 3:
 			ref = o
 	_ok(ref != null and ref.get_item_text(1) == "blue" and ref.get_item_text(2) == "red", "a reference is a choice among the names its context lists")
-	# ONE ROW SHAPE: a row in any registry's dialect is drawn as this form's own - a layer's flag a switch and its txt a line, a
+	# One row shape: a row in any registry's dialect is drawn as this form's own - a layer's flag a switch and its txt a line, a
 	# tonemap adjustment (bounds, no type) and a filter (a dial, no type, no bounds) sliders, a scene's listed choice a pick, a
-	# rolled number its range; THE CONTROL: a row already in this shape is left as it is
+	# rolled number its range; control: a row already in this shape is left as it is
 	var dialects := {"flag": {"label": "Flag", "type": "flag", "default": false}, "txt": {"label": "Words", "type": "txt"},
 		"exposure": Tonemaps.ADJUSTMENTS["exposure"], "slip": Filters.REGISTRY["slip"],
 		"choice": {"label": "Kind", "type": "choice", "options": ["", "a", "b"]}, "rolled": {"label": "Rolled", "type": "num", "range": [1, 4]}}

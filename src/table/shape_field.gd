@@ -1,37 +1,30 @@
 extends RefCounted
 class_name ShapeField
 
-## ShapeField - A SOLID'S SIGNED DISTANCE, in its own space (meters): negative inside it, positive outside, and the
-## way out (next/table_physics.md, "Grains and loose things"). What every grain and loose thing on the table
-## ([Particles]) is kept out of, made from the part as [Props] built it - never from its triangles, which would be
-## too slow to measure in GDScript:
+## ShapeField: a solid's signed distance, in its own space (meters): negative inside it, positive outside, and the way out
+## (next/table_physics.md, "Grains and loose things"). What every grain and loose thing on the table ([Particles]) is kept out of, made
+## from the part as [Props] built it - never from its triangles, which are too slow to measure in GDScript:
 ##
-##   - a LATHE exactly: a 2D field by radius and height of its profile as it was turned ([method Props.lathe_profile]),
-##     its lobes and flat sides aside;
-##   - an EXTRUDE exactly: its outline's 2D field raised to its height - and, with a `wall`, hollowed as [method
-##     Props._extrude] hollows it, its inside the outline drawn smaller about its middle above its floor;
-##   - a SHEET (a leaf, a feather, a page) exactly: its outline's 2D field, and across it the slab its thickness makes, bent
-##     and folded as [method Props._sheet] bends it - never its box, which a bent feather fills five millimeters deep, and
-##     which had held it that far over the table (the-quiet-crucible 841899, 2026-10-31: "This phoenix feather appears to
-##     be floating above the table ... it seems to be casting too much of a shadow");
-##   - a BOX, a BALL, a RING, a crystal POINT and a TUBE's segments in closed forms, inside the box the built
-##     geometry measured;
-##   - a MASK as [FaceForm] builds it: its relief over its own front, its flat back, past its outline the rim - never its box,
-##     in which a brush on the face read four centimeters deep and every paint act was told its tool passed through the
-##     mask (joker-motivation 856886, 2026-11-05);
+##   - a lathe, exactly: a 2D field by radius and height of its profile as it was turned ([method Props.lathe_profile]), its lobes and flat
+##     sides aside;
+##   - an extrude, exactly: its outline's 2D field raised to its height - and, with a `wall`, hollowed as [method Props._extrude] hollows
+##     it, its inside the outline drawn smaller about its middle above its floor;
+##   - a sheet (a leaf, a feather, a page), exactly: its outline's 2D field, and across it the slab its thickness makes, bent and folded
+##     as [method Props._sheet] bends it - never its box, which a bent feather fills five millimeters deep;
+##   - a box, a ball, a ring, a crystal point and a tube's segments in closed forms, inside the box the built geometry measured;
+##   - a mask as [FaceForm] builds it: its relief over its own front, its flat back, past its outline the rim - never its box;
 ##   - anything else as that box, its corners rounded.
 ##
-## A warp's `scale` is undone before a point is measured (its distance scaled back by the least of it); its other
-## bends are not. The 2D fields are kept only near the outline (a band of [constant BAND] cells, at least
-## [constant FAR_LEAST] wide): what is further than that is far, which is all a particle asks.
+## A warp's `scale` is undone before a point is measured (its distance scaled back by the least of it); its other bends are not. The 2D
+## fields are kept only near the outline (a band of [constant BAND] cells, at least [constant FAR_LEAST] wide): what is further than that
+## is far, which is all a particle asks.
 
 ## A 2D field's cells along its longest side (at most), and the least and most a cell may be (meters).
 const CELLS := 72
 const CELL := Vector2(0.0003, 0.0016)
-## How many cells either side of an outline its distance is measured (beyond, it is this far and no further) - and
-## never nearer than FAR_LEAST (meters): past the band every point reads the band's distance, and a thin pan's fine
-## cells had made that 2.7 mm, under the radius of the spheres a lump is made of - the-quiet-crucible 841899's sulfur
-## lay 8 mm over its balance's pan, touching it, as far as the pan could tell.
+## How many cells either side of an outline its distance is measured (beyond, it is this far and no further) - and never nearer than
+## FAR_LEAST (meters): past the band every point reads the band's distance, which must stay over the radius of the spheres a lump is made
+## of.
 const BAND := 6
 const FAR_LEAST := 0.012
 
@@ -80,8 +73,8 @@ var _surface_made := false
 static var _making := Mutex.new()
 
 
-## THE SOLID PART [param part] (made safe, [method Props.sanitize]) whose geometry as built lies in [param built] (its
-## own space, meters): the field of its shape. Its 2D field is made when first asked ([method prepare]).
+## The solid part [param part] (made safe, [method Props.sanitize]) whose geometry as built lies in [param built] (its own space,
+## meters): the field of its shape. Its 2D field is made when first asked ([method prepare]).
 static func of(part: Dictionary, built: AABB) -> ShapeField:
 	var f := ShapeField.new()
 	f.spec = part
@@ -168,9 +161,8 @@ static func of(part: Dictionary, built: AABB) -> ShapeField:
 	return f
 
 
-## A SHEET'S OUTLINE AND SLAB, as [method Props._sheet] builds it from [param part] (made safe): its outline across its own
-## space (x, z, meters) - a named one's sides down its length as a feather's narrower vane and sweep are drawn, or its points - and
-## what bends it.
+## A sheet's outline and slab, as [method Props._sheet] builds it from [param part] (made safe): its outline across its own space (x, z,
+## meters) - a named one's sides down its length as a feather's narrower vane and sweep are drawn, or its points - and what bends it.
 func _sheet_of(part: Dictionary) -> void:
 	var sz: Vector2 = (part.get("size", Vector2(4.0, 6.0)) as Vector2) * 0.01
 	thick = float(part.get("thickness", 0.08)) * 0.01
@@ -238,15 +230,15 @@ func hollow() -> bool:
 	return top - (prof[prof.size() - 1] as Vector2).y > 0.003
 
 
-## POINTS ON ITS SURFACE, about [param most] of them spread evenly over it (its own space, meters, warped): an even
-## grid over its box, each point near the surface brought onto it along the way out - what another solid is measured
-## against, a shape's own (a round lid's box corners stand out past a crock's rim: [method TableWork._aloft]). Made once.
+## Points on its surface, about [param most] of them spread evenly over it (its own space, meters, warped): an even grid over its box,
+## each point near the surface brought onto it along the way out - what another solid is measured against, a shape's own (a round lid's
+## box corners stand out past a crock's rim: [method TableWork._aloft]). Made once.
 func surface_points(most := 400) -> PackedVector3Array:
 	if _surface_made:
 		return _surface
-	# ...ONE THREAD MAKES THEM, as [method prepare] makes the field (its lock; a [Mutex] is taken again by the thread holding it):
-	# the bake's thread asks as a body meets this, the picture's as a plan finds a carry room - and a member given on two threads at
-	# once is let go twice (2026-11-01: a live show's `double free or corruption`, each time near a carry of the ladle's)
+	# ...one thread makes them, as [method prepare] makes the field (its lock; a [Mutex] is taken again by the thread holding it): the
+	# bake's thread asks as a body meets this, the picture's as a plan finds a carry room, and a member given on two threads at once is
+	# let go twice
 	_making.lock()
 	if _surface_made:
 		_making.unlock()
@@ -274,12 +266,12 @@ func surface_points(most := 400) -> PackedVector3Array:
 	return pts
 
 
-## THE 2D FIELD, made once: a lathe's by radius and height, an extrude's across its plan - each cell its distance to the
-## outline (within the band; further is the band's), less inside.
+## The 2D field, made once: a lathe's by radius and height, an extrude's across its plan - each cell its distance to the outline (within
+## the band; further is the band's), less inside.
 func prepare() -> void:
 	if ready:
 		return
-	# ...ONE THREAD MAKES IT, and it is said ready once whole: the bake's thread samples it as the picture's measures it
+	# ...one thread makes it, and it is said ready once whole: the bake's thread samples it as the picture's measures it
 	_making.lock()
 	if ready:
 		_making.unlock()
@@ -324,7 +316,7 @@ func prepare() -> void:
 				var k := j * gw + i
 				if d < grid[k]:
 					grid[k] = d
-	# INSIDE IS LESS: each row's crossings of the closed outline (a lathe's closed up its axis)
+	# Inside is less: each row's crossings of the closed outline (a lathe's closed up its axis)
 	for j in gh:
 		var py := g0.y + float(j) * cell
 		var xs := PackedFloat32Array()
@@ -372,8 +364,8 @@ func _at2(q: Vector2) -> Vector3:
 	return Vector3(d + off.length(), gx, gy)
 
 
-## THE DISTANCE AT [param p] (its own space, meters) and which way is out: `Vector4(d, nx, ny, nz)`, the normal unit
-## length (or up, where it cannot be told).
+## The distance at [param p] (its own space, meters) and which way is out: `Vector4(d, nx, ny, nz)`, the normal unit length (or up, where
+## it cannot be told).
 func sample(p: Vector3) -> Vector4:
 	if not ready:
 		prepare()
@@ -465,9 +457,9 @@ func _local(q: Vector3) -> Vector4:
 	return _with(d, n)
 
 
-## A MASK's distance at [param q] ([FaceForm]: x across its middle, y up from its chin, z out of its rim): inside its outline, in
-## front of the face by its height over the rim along its normal, or behind its flat back - between them, inside, the nearer; past
-## its outline, out of the rim across and over or under the rim's edge.
+## A mask's distance at [param q] ([FaceForm]: x across its middle, y up from its chin, z out of its rim): inside its outline, in front of
+## the face by its height over the rim along its normal, or behind its flat back - between them, inside, the nearer; past its outline,
+## out of the rim across and over or under the rim's edge.
 func _mask_d(q: Vector3) -> Vector4:
 	var w := face_size.x * 0.005
 	var h := face_size.y * 0.01

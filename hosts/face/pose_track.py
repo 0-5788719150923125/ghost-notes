@@ -1,35 +1,23 @@
 """Offline body-silhouette + pose track for the Masking editor's umbra effect.
 
-Reads a video once, runs MediaPipe's pose landmarker over it at a fixed sample
-rate, and writes a compact binary track the editor reads back BY TIME. Each
-sample carries two things:
+Reads a video once, runs MediaPipe's pose landmarker over it at a fixed sample rate, and writes a compact
+binary track the editor reads back by time. Each sample carries two things:
 
-  THE SILHOUETTE  a per-pixel person mask, downsampled to the editor's grid.
-                  This is the ghost's BODY.
-  THE POSE        33 landmarks with visibility. This is the ghost's SKELETON -
-                  where her head, shoulders and eyes are, so the ghost's own
-                  head lands somewhere real at any size and its eyes land on
-                  that head.
+  The silhouette  a per-pixel person mask, downsampled to the editor's grid: the ghost's body.
+  The pose        33 landmarks with visibility: the ghost's skeleton, where her head, shoulders and eyes are,
+                  so the ghost's own head lands somewhere real at any size.
 
-Same architecture and the same three reasons as hosts/face/face_track.py: the
-live preview and the export relaunch are separate PROCESSES that must agree
-frame-for-frame and do because they read one cached file; no detection ever runs
-inside the render loop; and because the whole track exists before playback, the
-effect can read the frame she has NOT REACHED YET. That last one is the point of
-the umbra - a ghost that moves a beat before she does reads as a puppeteer, and
-no live tracker can supply it.
+Same architecture as hosts/face/face_track.py: the live preview and the export relaunch are separate
+processes that agree frame-for-frame because they read one cached file; no detection runs inside the render
+loop; and because the whole track exists before playback, the effect can read the frame she has not reached
+yet (a ghost that moves a beat before she does).
 
-THE CAST DIRECTION is a property of the ROOM, not of the frame, so it is
-measured once over the whole clip rather than re-derived every tick. It is
-measured TEMPORALLY, needing no color model: her shadow is the part of the
-background that CHANGES AS SHE MOVES. Cells the person mask never covers, ranked
-by luminance variance over the clip, are her moving shadow plus whatever else
-flickers; the vector from her mean centroid to that variance mass is the
-direction the light throws her. Asking instead "which side of her is darker"
-answers a question about paint - on the reference clip camera-left is a cream
-door and camera-right is a teal wall.
+The cast direction is a property of the room, not of the frame, so it is measured once over the whole clip,
+temporally, with no color model: her shadow is the part of the background that changes as she moves. Cells
+the person mask never covers, ranked by luminance variance over the clip, are her moving shadow plus whatever
+else flickers; the vector from her mean centroid to that variance mass is the direction the light throws her.
 
-THE FORMAT (little-endian, matches GDScript's FileAccess defaults)
+The format (little-endian, matches GDScript's FileAccess defaults)
 
     magic     4s    b"GST2"
     version   u32   2
@@ -51,9 +39,8 @@ THE FORMAT (little-endian, matches GDScript's FileAccess defaults)
 Samples with found = 0 carry a zeroed mask and held coordinates: the flag is the
 truth, the numbers are a convenience.
 
-At the default 96x54 / 12 Hz a sample is 5581 bytes, so a ten-minute clip caches
-about 40 MB in user://pose_tracks. A byte per cell keeps the mask soft-edged,
-and a shadow's edge is the part a viewer looks at.
+At the default 96x54 / 12 Hz a sample is 5581 bytes, so a ten-minute clip caches about 40 MB in
+user://pose_tracks. A byte per cell keeps the mask soft-edged.
 
 Usage:
     python pose_track.py --video <path> --out <track.bin> --model <model.task>
@@ -95,20 +82,16 @@ def main() -> int:
     ap.add_argument("--video", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", required=True)
-    # 12 Hz rather than the face track's 15: a body is a much lower-frequency
-    # thing than a mouth, and every sample here costs 5 KB of cache instead of
-    # 4 bytes. The editor interpolates between samples anyway.
+    # 12 Hz rather than the face track's 15: a body is a lower-frequency thing than a mouth, and every sample
+    # costs 5 KB of cache. The editor interpolates between samples anyway.
     ap.add_argument("--rate", type=float, default=12.0)
-    # The editor's own coarse grid. A shadow is a REGION and regions survive
-    # downsampling in a way the clown's eye sockets never did.
+    # The editor's own coarse grid: a shadow is a region and survives downsampling.
     ap.add_argument("--mask-w", type=int, default=96)
     ap.add_argument("--mask-h", type=int, default=54)
     ap.add_argument("--progress", default="")
-    # ONE WINDOW OF THE CLIP, not the whole thing. The editor asks for the chunk
-    # the playhead is in and the one after it, so an umbra layer starts drawing
-    # about twenty seconds after it is placed instead of after the whole clip has
-    # been read. Omit both and this reads the lot, which is what the format check
-    # and any offline use want.
+    # One window of the clip, not the whole thing: the editor asks for the chunk the playhead is in and the one
+    # after, so an umbra layer starts drawing soon after it is placed. Omit both and this reads the lot (the
+    # format check and offline use).
     ap.add_argument("--start", type=float, default=0.0)
     ap.add_argument("--duration", type=float, default=0.0)
     # The editor always passes this: mediapipe saturates every core it is given and
@@ -135,9 +118,8 @@ def main() -> int:
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     duration = total / src_fps if total > 0 else 0.0
-    # Read BEFORE the capture is released - the properties of a released
-    # VideoCapture read back as 0 and the cast direction would then be
-    # measured in a 1:1 space on 16:9 footage.
+    # Read before the capture is released: the properties of a released VideoCapture read back as 0, which
+    # would measure the cast direction in a 1:1 space on 16:9 footage.
     src_w = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0.0
     src_h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0.0
 
@@ -151,8 +133,8 @@ def main() -> int:
     )
 
     mw, mh = max(8, args.mask_w), max(8, args.mask_h)
-    # The running statistics the cast direction is measured from. Accumulated
-    # as we go so a long clip never holds more than one frame at a time.
+    # The running statistics the cast direction is measured from, accumulated as we go so a long clip never
+    # holds more than one frame at a time.
     lum_sum = np.zeros((mh, mw), np.float64)
     lum_sq = np.zeros((mh, mw), np.float64)
     occupancy = np.zeros((mh, mw), np.float64)
@@ -162,24 +144,19 @@ def main() -> int:
 
     tmp = args.out + ".part"
     f = open(tmp, "wb")
-    # A placeholder header, rewritten at the end once the count and the cast
-    # direction are known. Writing to a .part and renaming means a reader can
-    # never open a half-written track (the discipline the clip transcode uses).
+    # A placeholder header, rewritten at the end once the count and the cast direction are known. Written to a
+    # .part and renamed, so a reader never opens a half-written track.
     f.write(b"\0" * HEADER)
 
-    # SAMPLE TIMES ARE ON ONE GLOBAL GRID, whoever produced them. A chunk's
-    # first sample is `start` on that grid, so two chunks written by two runs
-    # butt together exactly and the editor can index by a single number.
+    # Sample times are on one global grid, whoever produced them: a chunk's first sample is `start` on that
+    # grid, so two chunks written by two runs butt together exactly.
     step = 1.0 / max(args.rate, 1.0)
     start_index = int(math.ceil(args.start * args.rate - 1e-9))
     next_t = start_index * step
     stop_t = args.start + args.duration if args.duration > 0.0 else 1e18
-    # SEEK ONLY WHEN ASKED, and then TRUST THE FRAME'S OWN TIMESTAMP rather than
-    # the frame count. Seeking is accurate on some containers and wildly not on
-    # others (the reason face_track.py walks the whole file); reading the
-    # timestamp back per frame makes the sample times right whatever the seek
-    # actually did, which is what lets a chunk be produced without decoding
-    # everything before it.
+    # Seek only when asked, and then trust the frame's own timestamp rather than the frame count: seeking is
+    # inaccurate on some containers (why face_track.py walks the whole file), and reading the timestamp back per
+    # frame makes the sample times right whatever the seek did.
     seeked = args.start > 0.0
     if seeked:
         cap.set(cv2.CAP_PROP_POS_MSEC, args.start * 1000.0)
@@ -208,10 +185,8 @@ def main() -> int:
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         res = landmarker.detect_for_video(image, int(t * 1000.0))
 
-        # INTER_AREA, not the default: downsampling a mask with bilinear
-        # samples a scattering of source pixels and leaves a mask that is
-        # noisy at exactly the scale we are about to magnify. Area averaging
-        # is a box filter, which is what "coverage of this cell" means.
+        # INTER_AREA, not the default: bilinear downsampling samples a scattering of source pixels and leaves a
+        # noisy mask. Area averaging is a box filter, which is what "coverage of this cell" means.
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
         lum = (
             cv2.resize(gray, (mw, mh), interpolation=cv2.INTER_AREA).astype(np.float32)
@@ -329,18 +304,13 @@ def _cast_direction(
 ):
     """Which way the room throws her shadow, from the whole clip at once.
 
-    HER SHADOW IS THE PART OF THE BACKGROUND THAT MOVES WHEN SHE DOES. So:
-    take the cells the person mask essentially never covers, rank them by how
-    much their luminance varied over the clip, keep the ones well above the
-    background's own median variation, and point from her mean centroid at
-    what is left. No color model, no surface hypothesis, no per-frame
-    decision - and nothing here can be fooled by a wall that simply happens to
-    be painted darker than the door opposite it, which is what defeats every
-    "which side of her is dimmer" formulation on the reference clip.
+    Her shadow is the part of the background that moves when she does: take the cells the person mask
+    essentially never covers, rank them by how much their luminance varied over the clip, keep the ones well
+    above the background's own median variation, and point from her mean centroid at what is left. No color
+    model, no per-frame decision, and a wall painted darker than the door opposite does not fool it.
 
-    Returns (dx, dy, conf) with (dx, dy) unit length in ASPECT-CORRECTED space
-    (x already multiplied by the frame aspect), because that is the space the
-    editor and the field shader both do their geometry in.
+    Returns (dx, dy, conf) with (dx, dy) unit length in aspect-corrected space (x already multiplied by the
+    frame aspect), the space the editor and the field shader do their geometry in.
     """
     if frames <= 1 or centroid_n <= 0:
         return 1.0, 0.0, 0.0
@@ -348,14 +318,12 @@ def _cast_direction(
     mean = lum_sum / frames
     var = np.maximum(lum_sq / frames - mean * mean, 0.0)
     sd = np.sqrt(var)
-    # Never-her cells only. A cell she passes through has a huge variance that
-    # has nothing to do with any shadow.
+    # Never-her cells only: a cell she passes through has a huge variance unrelated to any shadow.
     bg = (occupancy / frames) < 0.02
     if np.count_nonzero(bg) < 32:
         return 1.0, 0.0, 0.0
-    # Above the background's OWN typical wobble: compression noise, grain and
-    # the camera's auto-exposure move every cell a little, and subtracting the
-    # median removes all of that at once without having to model any of it.
+    # Above the background's own typical wobble (compression noise, grain, auto-exposure): subtracting the
+    # median removes all of it at once.
     base = float(np.median(sd[bg]))
     wgt = np.where(bg, np.maximum(sd - base * 1.5, 0.0), 0.0)
     total = float(np.sum(wgt))
@@ -370,10 +338,8 @@ def _cast_direction(
     n = float(np.linalg.norm(v))
     if n < 1e-4:
         return 1.0, 0.0, 0.0
-    # Confidence = how much of the moving background is actually on one side.
-    # A clip where she moves in front of a busy scene spreads the weight all
-    # round her and this collapses toward 0, which is the honest answer: there
-    # is no single direction to be had, so the editor should use its default.
+    # Confidence = how much of the moving background is on one side. A busy scene spreads the weight all round
+    # her and this collapses toward 0: there is no single direction, so the editor uses its default.
     unit = v / n
     proj = 0.0
     for_sum = 0.0

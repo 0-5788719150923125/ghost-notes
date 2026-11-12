@@ -1,36 +1,32 @@
 extends RefCounted
 class_name TableBox
 
-## TableBox - the box the deck is kept in, when an episode has one: stood in its own place on the
-## table, the deck's unseen cards filed in it in uneven piles or on edge (the drawn ones on top),
-## the small things kept with them, and the cards a search lifts or draws part of the way up.
+## TableBox - the box the deck is kept in, when an episode has one: stood in its own place on the table, the deck's
+## unseen cards filed in it in uneven piles or on edge (the drawn ones on top), the small things kept with them, and
+## the cards a search lifts or draws part of the way up.
 ##
-## A PART OF THE TABLE, cut along its banners (next/structure.md, step 14): it builds the box once
-## per episode and HOLDS what it built - [member box] (its node, its inside, where each card is
-## filed, where a search looks), [member file], [member searched] - which the poses read through
-## the medium's `_box_part`; everything else of the table it reads through `medium`.
+## A part of the table, cut along its banners (next/structure.md): it builds the box once per episode and holds what it
+## built - [member box] (its node, its inside, where each card is filed, where a search looks), [member file],
+## [member searched] - which the poses read through the medium's `_box_part`; everything else it reads through `medium`.
 
-## The [TableMedium] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [TableMedium] this is a part of: everything read through it is what this part is handed.
 var medium: TableMedium
 
-## THE BOX THE CARDS ARE KEPT IN: how thick its walls are taken to be (meters), and the cards filed in
-## it - their pitch (a card and the air beside it), and how far the last of them lean into the gap.
+## The box the cards are kept in: how thick its walls are taken to be (meters), and the cards filed in it - their
+## pitch (a card and the air beside it), and how far the last of them lean into the gap.
 const BOX_WALL := 0.006
 const FILE_PITCH := 0.0011
 const FILE_LEAN := 0.35
-## A SEARCH OF THE BOX ([method _pose_rummage]): how many of its cards may be looked at
-## ([constant SEATS], each in a place of its own), how far of its height a card on edge is drawn up out
-## of the file (and the least, where the picture's top edge would cut its painting: [method _search_rise]),
-## how far its face is then leaned back to the eye, and how far from lying a card lifted
-## off a pile is turned up, face to the eye. How many cards one search looks at: on edge, and lying -
-## a lying card is turned over to be seen and back, which takes longer.
+## A search of the box ([method _pose_rummage]): how many of its cards may be looked at ([constant SEATS], each in a
+## place of its own), how far of its height a card on edge is drawn up out of the file (and the least, where the
+## picture's top edge would cut its painting: [method _search_rise]), how far its face is then leaned back to the eye,
+## and how far from lying a card lifted off a pile is turned up, face to the eye. Then how many cards one search looks
+## at, on edge and lying (a lying card is turned over to be seen and back, which takes longer).
 const SEATS := 9
 ## How full a shoebox of piles is: this share of what its piles could hold to the rim.
 const SHOEBOX_SHARE := 0.6
-## How much of the depth of an open box of cards on edge they fill at least: the producer's list of
-## fourteen undrawn cards stood in a front corner of a box twenty centimeters deep (feedback 0020:
-## "barely any cards in the box"), so the rest of the stock is filed behind them as a shoebox's is.
+## How much of the depth of an open box of cards on edge they fill at least: the rest of the stock is filed behind the
+## producer's undrawn cards, as a shoebox's is, so the box does not look nearly empty.
 const OPEN_FILE_SHARE := 0.5
 var stood := {}                        # the box the cards are kept in, stood: {node, at, inner (AABB, world), upright, lie}
 var files: Array = []                 # the cards filed in it: MultiMeshInstance3D, one per printing
@@ -40,11 +36,11 @@ var looking: MeshInstance3D         # the one being looked at at the moment pose
 
 # --- the things on the table ------------------------------------------------------------------
 
-## THE BOX THE CARDS ARE KEPT IN, for a show whose cards come from one ([member _cards_from] `box`): the set
-## dresser's thing that `holds_cards` - taken out of [param things] and [param built] - or, when it made
-## none, a plain box of the deck's own stock. An open box stands by the deck; a shoebox settles across
-## the center. Both are scaled to their allotted space, with their contents built inside ([method
-## _build_file]). A box on a table whose cards come from a deck is a thing like any other.
+## The box the cards are kept in, for a show whose cards come from one ([member _cards_from] `box`): the set dresser's
+## thing that `holds_cards` - taken out of [param things] and [param built] - or, when it made none, a plain box of the
+## deck's own stock. An open box stands by the deck; a shoebox settles across the center. Both are scaled to their
+## allotted space, with their contents built inside ([method _build_file]). A box on a table whose cards come from a
+## deck is a thing like any other.
 func build(things: Array, built: Array) -> void:
 	for f in files:
 		(f as Node).queue_free()
@@ -87,8 +83,7 @@ func build(things: Array, built: Array) -> void:
 	var d := size.size.x if turn != 0.0 else size.size.z
 	var most := CardTable.box_most(medium._plan.look, shoebox)
 	var k := minf(1.0, minf(most.x / w, minf(most.z / d, most.y / maxf(size.size.y, 0.001))))
-	# ITS OWN INSIDE ([method inside_of]) - and an open box is never stood so small its cards no longer stand in
-	# it: one built to its room's edge with a handle on the front was shrunk to 95%
+	# Its own inside ([method inside_of]); an open box is never stood so small its cards no longer stand in it
 	var own := TableBox.inside_of(b)
 	if not shoebox and own.has_volume():
 		k = maxf(k, minf(1.0, card_wh.x * 1.03 / (own.size.z if turn != 0.0 else own.size.x)))
@@ -148,14 +143,12 @@ func build(things: Array, built: Array) -> void:
 			(card as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
-## THE INSIDE OF A BOX [param b] AS BUILT ([method Props.build]: its space, meters): from over the middle of its
-## floor, the nearest of its own walls each way - at two heights - and the floor under it, whatever it was built
-## of; and THE FRONT AND BACK CLEAR ACROSS ITS WIDTH, where its cards stand, and its sides along its length, so a
-## post standing into a corner keeps the file behind it. Taken as its bounds less [constant BOX_WALL], the-quiet-
-## crucible 181083's chest - a handle on its front, brass posts at its corners - filed its front cards out in
-## front of its front wall and the next through it (the user: "the cards are protruding from the front of the
-## box, through the wall of the box itself"). Empty when a ray from the middle finds no wall or no floor: the box
-## is open on a side, or its middle is not inside it.
+## The inside of a box [param b] as built ([method Props.build]: its space, meters): from over the middle of its
+## floor, the nearest of its own walls each way - at two heights - and the floor under it, whatever it was built of;
+## the front and back clear across its width, where its cards stand, and its sides along its length, so a post
+## standing into a corner keeps the file behind it. Taken from its bounds less [constant BOX_WALL] a handle or corner
+## post would put cards through the wall. Empty when a ray from the middle finds no wall or no floor: the box is open
+## on a side, or its middle is not inside it.
 static func inside_of(b: Dictionary) -> AABB:
 	var size: AABB = b.get("size", AABB())
 	var root: Node = b.get("node")
@@ -227,22 +220,18 @@ static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: V
 	parent.add_child(part)
 
 
-## THE CARDS IN THE BOX: an open box of cards on edge and a shoebox fill out their printings with
-## physical copies ([constant OPEN_FILE_SHARE], [constant CardTable.SHOEBOX_FILL]) so each reads as a
-## collection accumulated over time. The drawn
-## cards have their own places near the accessible top. Cards lying in piles - or loose, which is
-## piles left as they fell - are laid by [method _pile_places]. Undrawn cards share one MultiMesh per
-## printing and card ([method _unseen_kinds]).
+## The cards in the box: an open box of cards on edge and a shoebox fill out their printings with physical copies
+## ([constant OPEN_FILE_SHARE], [constant CardTable.SHOEBOX_FILL]) so each reads as a collection accumulated over time.
+## The drawn cards have their own places near the accessible top. Cards lying in piles - or loose, which is piles left
+## as they fell - are laid by [method _pile_places]. Undrawn cards share one MultiMesh per printing and card ([method
+## _unseen_kinds]).
 ##
-## LOOSE CARDS IN AN OPEN BOX lie in piles too, as a shoebox's do. They were strewn at random over a
-## band 4 mm deep, 0.17 mm apart where a card is 0.7 mm thick, and the drawn cards waited at random
-## places in it (the-shoebox 32533, the user, 2026-10-18: a card put back "lying on the top of the pile
-## in the box", and "every future draw clips-through that card").
+## Loose cards in an open box lie in piles too, as a shoebox's do, so a card put back lies on a pile and no draw clips
+## through it.
 ##
-## A BOX WITH ROOM FOR ONE PILE, in a reading that puts a card back before another is drawn, has
-## nowhere for the card to go that buries no card still to be drawn ([method _pile_places]): its cards
-## stand on edge instead, where a card put back goes back into its own place. [method contents] says
-## what the box was built with.
+## A box with room for one pile, in a reading that puts a card back before another is drawn, has nowhere for the card to
+## go that buries no card still to be drawn ([method _pile_places]): its cards stand on edge instead, where a card put
+## back goes back into its own place. [method contents] says what the box was built with.
 func _build_file() -> void:
 	var inner: AABB = stood["inner"]
 	var content := String(medium._plan.staging.get("contents", "file"))
@@ -266,11 +255,8 @@ func _build_file() -> void:
 		stood["flat"] = true
 		return
 	var v := size.y if upright else size.x
-	# ON EDGE, FACE TO THE READER, as a collection stands in its owner's box: whoever looks through it
-	# looks at the fronts (the user, 2026-10-13), and a card comes up out of the file showing what every
-	# card left in it shows - a front ([method _unseen_fronts]). The file stood back to the camera while
-	# the cards nobody drew had no front to show: face on, it was a box of border strips, and the drawn
-	# card came up a picture out of it (2026-10-12: "the card changed to something else").
+	# On edge, face to the reader, as a collection stands in its owner's box: a card comes up out of the file showing
+	# what every card left in it shows - a front ([method _unseen_fronts]), so the drawn card does not change picture
 	var stand := Basis(Vector3(1, 0, 0), PI * 0.5) * TableMedium._face_up()
 	if lie:
 		stand = stand * Basis(Vector3.UP, PI * 0.5)
@@ -290,9 +276,8 @@ func _build_file() -> void:
 	stood["count"] = count
 	var fill := minf(1.0, float(count) * FILE_PITCH / maxf(inner.size.z, FILE_PITCH))
 	var tail := mini(6, count / 4)
-	# HOW FAR A FILED CARD MAY BE TURNED OFF TRUE: no further than keeps its sides clear of the cards
-	# filed either side of it. Turned up to 1.2 degrees, two neighbors 1.1 mm apart crossed at their
-	# sides, and a card drawn up out of the file scraped through them (box_clip_check)
+	# How far a filed card may be turned off true: no further than keeps its sides clear of the cards filed either
+	# side of it, so a card drawn up out of the file does not scrape through them (box_clip_check)
 	var off_true := asin(clampf((FILE_PITCH - TableMedium.CARD_T) / ((size.x if upright else size.y) * 0.5), 0.0, 1.0)) * 0.45
 	var xfs: Array = []
 	if piled:
@@ -316,7 +301,7 @@ func _build_file() -> void:
 		var bottom := Vector3(inner.get_center().x + rng.randf_range(-0.002, 0.002), inner.position.y, z)
 		var b := Basis(Vector3(1, 0, 0), -lean) * Basis(Vector3.UP, rng.randf_range(-1.0, 1.0) * off_true) * stand
 		xfs.append(Transform3D(b, bottom + Basis(Vector3(1, 0, 0), -lean) * Vector3(0.0, v * 0.5, 0.0)))
-	# THE DRAWN CARDS' PLACES in the file, away from the leaning tail
+	# The drawn cards' places in the file, away from the leaning tail
 	var free: Array = range(0, count - tail)
 	if shoebox:
 		free = range(maxi(0, count - maxi(medium._cards.size() * 4, 24)), count)
@@ -324,7 +309,7 @@ func _build_file() -> void:
 		var j := int(free.pop_at(rng.randi_range(0, free.size() - 1)))
 		(stood["at_k"] as Array).append(_waits(k, xfs[j]))
 		xfs[j] = null
-	# THE PLACES A SEARCH LOOKS: cards of the file's own, front to back, each drawn up out of its place
+	# The places a search looks: cards of the file's own, front to back, each drawn up out of its place
 	# and let back into it (the piles' are their tops)
 	if not piled:
 		var seats: Array = []
@@ -336,8 +321,8 @@ func _build_file() -> void:
 		seats.sort_custom(func(a: Transform3D, b: Transform3D) -> bool: return a.origin.z > b.origin.z)
 		stood["search"] = seats
 		stood["search_kept"] = true
-	# one MultiMesh per printing and card, its cards shared out among them - and their places kept
-	# (`filed`): a MultiMesh hands no instance's transform back under the dummy renderer of a headless run
+	# One MultiMesh per printing and card, its cards shared out among them and their places kept (`filed`): a
+	# MultiMesh hands no instance's transform back under the dummy renderer of a headless run
 	var per := {}
 	for n in medium._backs:
 		per[n] = []
@@ -374,19 +359,18 @@ func _build_file() -> void:
 			medium._root3.add_child(inst)
 			files.append(inst)
 	_keep_searched(shoebox)
-	# THE HIGHEST POINT OF ANY CARD IN THE BOX, which a card taken out, put back or turned over keeps
-	# above: the cards of an open box's file stand over its rim, and a card raised only to the rim was
-	# turned to the camera with its foot still between them (box_clip_check)
+	# The highest point of any card in the box, which a card taken out, put back or turned over keeps above: the cards
+	# of an open box's file stand over its rim, and a card raised only to the rim is turned with its foot still in view
+	# (box_clip_check)
 	var top := inner.position.y
 	for xf in (stood["filed"] as Array) + (stood["at_k"] as Array) + (stood.get("search", []) as Array):
 		top = maxf(top, card_top(xf as Transform3D, size))
 	stood["top_y"] = top
 
 
-## THE CARDS A SEARCH LOOKS AT ARE THE BOX'S OWN, one kept in each of its places (`stood["search"]`, when
-## `search_kept`): there before the search and after it, each a different card nobody drew, front and
-## back ([method _unseen_all], through every printing in turn). A card that was not on its pile a moment
-## before appeared on it as the look began, the top card's text changing under the eye (2026-10-12).
+## The cards a search looks at are the box's own, one kept in each of its places (`stood["search"]`, when
+## `search_kept`): there before the search and after it, each a different card nobody drew, front and back ([method
+## _unseen_all], through every printing in turn), so no card appears on a pile as the look begins.
 func _keep_searched(shoebox: bool) -> void:
 	if not bool(stood.get("search_kept", false)):
 		return
@@ -405,29 +389,26 @@ func _keep_searched(shoebox: bool) -> void:
 		searched.append(card)
 
 
-## DRAWN CARD [param k]'s PLACE [param xf] in the box, as it waits there: a half turn in its own plane,
-## about its middle, when it comes out upside down ([method TableMedium._upside]) - so it is pulled out
-## the way it comes up, never turned round on its way out ([method TableCardPose._pull_xf]). It fills the
-## same room in the file or on the pile either way up.
+## Drawn card [param k]'s place [param xf] in the box, as it waits there: a half turn in its own plane, about its
+## middle, when it comes out upside down ([method TableMedium._upside]), so it is pulled out the way it comes up
+## ([method TableCardPose._pull_xf]). It fills the same room in the file or on the pile either way up.
 func _waits(k: int, xf: Transform3D) -> Transform3D:
 	if medium._upside(k):
 		xf.basis = xf.basis * Basis(Vector3.UP, PI)
 	return xf
 
 
-## THE CARDS LYING IN PILES in the box ([method TablePositions.box_piles]: a collection kept in piles, or
-## cards left as they fell), all [param count] of them. THE DRAWN CARDS WAIT ON TOP OF THE PILES
-## (`at_k`), the first to be drawn uppermost where two share a pile, so every card is taken off a pile
-## and none out from under another. A card put back goes on a pile none is drawn from (`return_at`, and
-## the way that pile lies, `return_turn`), one on the last. Eight cards used to float loose at the rim
-## over the piles for the drawing, a spot in the air beside them for the returns (the user, 2026-10-11:
-## "the loose cards on top is a strange look"). Returns the places left for the cards nobody draws.
+## The cards lying in piles in the box ([method TablePositions.box_piles]: a collection kept in piles, or cards left as
+## they fell), all [param count] of them. The drawn cards wait on top of the piles (`at_k`), the first to be drawn
+## uppermost where two share a pile, so every card is taken off a pile and none out from under another. A card put
+## back goes on a pile none is drawn from (`return_at`, and the way that pile lies, `return_turn`), one on the last.
+## Returns the places left for the cards nobody draws.
 ##
-## NOTHING PUT BACK LIES ON A CARD STILL TO BE DRAWN ([method _late_draws]): where the other piles
-## cannot hold every draw, the returns' pile gives up its top cards too - but only to draws made before
-## the first card goes back, and the smallest pile takes the returns when the one drawn by lot would
-## leave the rest too few for the draws after it. The returns then lie on its top as it is when they
-## come. A box of one pile is filed on edge instead ([method _build_file]).
+## Nothing put back lies on a card still to be drawn ([method _late_draws]): where the other piles cannot hold every
+## draw, the returns' pile gives up its top cards too - but only to draws made before the first card goes back, and the
+## smallest pile takes the returns when the one drawn by lot would leave the rest too few for the draws after it. The
+## returns then lie on its top as it is when they come. A box of one pile is filed on edge instead ([method
+## _build_file]).
 func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: RandomNumberGenerator) -> Array:
 	var mess := 1.0 if contents() == "loose" else TablePositions.PILES_NEAT
 	var piles := TablePositions.box_piles(inner, size, count, pitch, mess, rng)
@@ -454,12 +435,11 @@ func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: Ran
 		var swap: int = stocked[i]
 		stocked[i] = stocked[j]
 		stocked[j] = swap
-	# WHAT A SEARCH LOOKS AT: THE TOP CARD OF A PILE NOTHING IS DRAWN FROM, kept there (`search_kept`,
-	# [method _keep_searched]) - as many piles as can be spared, the draws keeping two where there are
-	# three, and cards enough. The TALLEST piles are spared: a card turned over off a low pile beside a
-	# tall one had to be held over that one, and a box at the back of the table has no room above it in
-	# the picture (it was held lower, through it - box_clip_check). With none to spare (the returns' pile
-	# is drawn from, or there is one pile), a card's thickness over a pile as it was built, and no card
+	# What a search looks at: the top card of a pile nothing is drawn from, kept there (`search_kept`, [method
+	# _keep_searched]) - as many piles as can be spared (the draws keep two where there are three) and cards enough. The
+	# tallest piles are spared: a card turned over off a low pile beside a tall one must be held over that one, and a
+	# box at the back of the table has no room above it in the picture (box_clip_check). With none to spare (the
+	# returns' pile is drawn from, or there is one pile), a card's thickness over a pile as it was built, and no card
 	# kept for it.
 	var seats: Array = []
 	var spare := clampi(stocked.size() - (2 if stocked.size() > 2 else 1), 0, SEATS)

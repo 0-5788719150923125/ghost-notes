@@ -1,83 +1,62 @@
-"""Kokoro voices (hexgrad/Kokoro-82M v1.0), run as raw ONNX beside Piper - an inference trial
-(next/voice_engines.md, "Kokoro").
+"""Kokoro voices (hexgrad/Kokoro-82M v1.0), run as raw ONNX beside Piper (next/voice_engines.md, "Kokoro").
 
-WHAT IT IS. StyleTTS 2 without the diffusion, 82M parameters: PL-BERT reads the phonemes, a duration
-predictor plans each token's frames (rounded, at least one), the F0 and energy curves are predicted
-from the aligned features, and an iSTFTNet decoder makes 24 kHz audio of them. A voice is a style
-vector - 128 numbers of timbre for the decoder, 128 of prosody for the predictor - taken by the
-sentence's token count from a [510, 1, 256] pack, and at most 510 tokens are read at once.
+What it is: StyleTTS 2 without the diffusion, 82M parameters. PL-BERT reads the phonemes, a duration
+predictor plans each token's frames (rounded, at least one), F0 and energy are predicted from the aligned
+features, and an iSTFTNet decoder makes 24 kHz audio. A voice is a style vector (128 numbers of timbre for
+the decoder, 128 of prosody for the predictor) taken by the sentence's token count from a [510, 1, 256]
+pack; at most 510 tokens are read at once.
 
-WHAT IT SHARES WITH PIPER: everything around the model. ghost's tokens, eSpeak's reading of them (the
-homographs, the lexicon), the rests floored in the plan and spliced after it, the trail, the lead,
-stress held through `dur_scale`, the arc's pitch, the Tone played back - so this is PiperBackend with
-the model swapped: the ids, the graph, the frame (600 samples, 25 ms; Piper's is 256 at 22,050,
-11.6 ms) and the voices.
+What it shares with Piper is everything around the model: ghost's tokens, eSpeak's reading of them
+(homographs, lexicon), rests floored in the plan and spliced after it, the trail, the lead, stress held
+through `dur_scale`, the arc's pitch, the Tone played back. This is PiperBackend with the model swapped: the
+ids, the graph, the frame (600 samples, 25 ms; Piper's is 256 at 22,050) and the voices.
 
-THE GRAPH is onnx-community's timestamped export (Apache-2.0, pinned below), patched once where it
-is first used (`_patch`) the way a Piper voice is: `dur_scale` multiplies the planned durations before
-they are rounded, `rest_floor` floors them after, and `durations` hands back the whole frames the
-decoder used - the export's own output was the plan before rounding. Unfed, the patched graph's audio
-is the stock graph's sample for sample, and frames x 600 is the take's length exactly (measured
-2026-10-25). Nothing in it samples: one text and one voice make one take.
+The graph is onnx-community's timestamped export (Apache-2.0, pinned below), patched once where first used
+(`_patch`) as a Piper voice is: `dur_scale` multiplies the planned durations before they are rounded,
+`rest_floor` floors them after, and `durations` hands back the whole frames the decoder used. Unfed, the
+patched graph's audio is the stock graph's sample for sample, and frames x 600 is the take's length exactly.
+Nothing in it samples: one text and one voice make one take.
 
-THE SYMBOLS. Kokoro's English was taught misaki's notation, not eSpeak's: one letter a diphthong (A
-eɪ, I aɪ, W aʊ, Y ɔɪ, O oʊ, Q əʊ), ʤ and ʧ for the affricates, T for the American flap, no length
-marks in American. `kokoro_symbols` writes eSpeak's reading in it by misaki's own table for its
-eSpeak fallback (misaki/espeak.py, `EspeakFallback`), each symbol keeping the word it came from; the
-phones go back in eSpeak's symbols, so a mouth reads them as it reads Piper's.
+The symbols: Kokoro's English was taught misaki's notation, not eSpeak's (one letter a diphthong: A eɪ, I
+aɪ, W aʊ, Y ɔɪ, O oʊ, Q əʊ; ʤ and ʧ for the affricates; T for the American flap; no length marks in
+American). `kokoro_symbols` writes eSpeak's reading in it by misaki's own table for its eSpeak fallback
+(misaki/espeak.py, `EspeakFallback`), each symbol keeping its word; the phones go back in eSpeak's symbols,
+so a mouth reads them as it reads Piper's.
 
-VOICES TRAINED HERE (2026-10-26, next/voice_engines.md "Training Kokoro"): a checkpoint of its own under
-`trained/<id>/` - the stock graph with the decoder's and the prosody predictor's weights written from a run
-(hosts/voice_train/kokoro_export.py), its tokenizer, ONE pack (`voices/voice.bin`, the taught style in every row)
-and `voice.json` ({name, license, chain, british}) - listed beside the stock checkpoints (`_family`), never fetched.
+Voices trained here (next/voice_engines.md "Training Kokoro"): a checkpoint of its own under
+`trained/<id>/`: the stock graph with the decoder's and prosody predictor's weights from a run
+(hosts/voice_train/kokoro_export.py), its tokenizer, one pack (`voices/voice.bin`, the taught style in every
+row) and `voice.json` ({name, license, chain, british}). Listed beside the stock checkpoints (`_family`),
+never fetched.
 
-A BLEND OF READERS (2026-11-11, hosts/voice/blend.py): a request's `blend` ("mix: af_heart 2, bf_emma 1") reads in a
-pack made of the checkpoint's own packs (`_blended`, the latest BLENDS_KEPT kept made), in its accent, at its readers'
-level - the backend says `blend` (`describe`); a voice taught here, one pack on a decoder of its own, never blends.
+A blend of readers (hosts/voice/blend.py): a request's `blend` ("mix: af_heart 2, bf_emma 1") reads in a
+pack made of the checkpoint's own packs (`_blended`, the latest BLENDS_KEPT kept made), in its accent, at
+its readers' level; the backend says `blend` (`describe`). A voice taught here never blends.
 
-THE OPENING: THE FIRST PAD KEEPS ITS OWN LENGTH AT EVERY PACE (2026-11-03, the user, of Heart's "Hello, my loves":
-"almost like a record skipping, like several clicks in a row, 'h-h-h-ello'", others "Uh-hello"; of "A mind does not
-film the world", 2026-10-27, "the 'A' is dropped entirely"; of Emma's "Ha." at Pace 0.85, 2026-10-30, "He-sah-vah").
-They are one thing. Kokoro stays silent for a fixed stretch from the start of the sequence, 8 to 14 frames by the voice,
-and voices whatever comes after it, word or not. Its first pad's own plan at speed 1.0 lands the first word just there:
-Puck plans 10 frames and wakes at 9, Heart 14 to 16 and wakes at 12 to 14. But `speed` divides the pad with the words.
-Measured on the raw graph, Puck's "A mind...", the pad's frames set by hand (the same at either speed):
+The opening: the first pad keeps its own length at every pace. Kokoro stays silent for a fixed stretch from
+the start of the sequence (8 to 14 frames by voice) and voices whatever comes after it, word or not. The
+first pad's own plan at speed 1.0 lands the first word just there (Puck plans 10 frames and wakes at 9), but
+`speed` divides the pad with the words, so a fast pace shortens it and swallows the word, and a slow one
+lengthens it and voices a phantom before it. Measured on the raw graph, Puck's "A mind...":
 
     pad frames   sound starts at frame   sound before the first phone   "A" against the rest
         1                8.0             none: the word is in the silence      -104 dB
-        4                8.2                                                   -136
         8                8.4                                                     -8
        10 (its plan)     8.8              30 ms (PLAN_LEAD: the word itself)     -1
        14                9.0             125 ms                                  +5
-       30                9.8             505 ms                                  +5
 
-So a fast pace shortens the pad and swallows the word, and a slow one lengthens it and voices a phantom before it.
-Word-spaces after the pad (4 of them, 2026-10-27 to 2026-11-03, chosen at Pace 1.6 alone) brought the word out of the
-silence and each rendered as a click or a voiced syllable. No lead-in now: the ids are the model's own, and the pad is
-planned at speed 1.0 whatever the pace (`dur_scale` = speed on it). 12 voices, 7 sentences each:
+So there is no lead-in: the ids are the model's own and the pad is planned at speed 1.0 whatever the pace
+(`dur_scale` = speed on it). More pad than its plan brings the phantom back (x1.15: 35 ms at -21 dB at Pace
+1). An unpatched graph takes no `dur_scale`, and its pad follows the speed. The words after keep the stock
+plan (median 1.00 at Pace 1 and 1.6) and a voice's speaking level moves at most 0.23 dB, so levels.json
+stands.
 
-                     pace   sound before the first phone   its level   2+ sharp rises there   first word, worst
-    4 word-spaces    0.85           185 ms                  -2.6 dB          76 of 84              -8 dB
-                     1.00           110                     -4.8             70                    -5
-                     1.60             0                    -56               15                   -65
-    its own pad      0.85             0                    -60                9                   -12
-                     1.00             0                    -57               14                   -12
-                     1.60            15                    -33               30                   -11
-
-More pad than its plan is the phantom coming back (x1.15: 35 ms at -21 dB at Pace 1; x1.3: 90 ms at -7 dB). An
-unpatched graph takes no `dur_scale`, and its pad follows the speed. Whisper medium.en on delivered takes: "A mind..."
-and "It does not..." at Pace 1.6 in 10 voices, first word heard 19 of 20 before, 20 of 20 now; "Guilty.", "Corked." and
-"Ha." at Pace 0.85 in 4 voices, extra words before them in all 12 before ("They're cooked", "a guilty"), in none now -
-though "Ha." alone is still misheard ("Huh", "Kong"), which is not its head. The lead-in had also stretched the words
-after it 5 to 10% against the stock plan; they now keep it (median 1.00 at Pace 1 and 1.6, 1.035 at 0.85). A voice's
-speaking level moved at most 0.23 dB, so levels.json stands.
-
-NOT HERE: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
-input (the arc and the Tone still resample), Kokoro's own dwell at a mark (the pause figures are Piper's
+Not here: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
+input (the arc and the Tone resample), Kokoro's own dwell at a mark (the pause figures are Piper's
 measurements), the vowel probe.
 
-THE RATE. Rendered at 24 kHz and handed back at 22,050 (`OUT_RATE`) through the band-limited
-resampler: a reading joins its takes at one rate, and a cast may mix Kokoro and Piper voices.
+The rate: rendered at 24 kHz and handed back at 22,050 (`OUT_RATE`) through the band-limited resampler,
+since a reading joins its takes at one rate and a cast may mix Kokoro and Piper voices.
 """
 
 from __future__ import annotations
@@ -117,24 +96,19 @@ OUT_RATE = 22050
 MAX_TOKENS = 510
 # A floor that says a plan entry is a take's trimmed end (`_nominal`): fixed seconds, at any scale.
 HELD = float("inf")
-# ITS AUDIO RUNS AHEAD OF ITS PLAN (2026-10-25, the user: "the 'h' from 'happy' STARTS on the left side
-# of the comma"): the voicing the plan puts in each frame is heard PLAN_LEAD earlier - measured over 20
-# sentences of two voices, a median 55 ms (Emma) and 48 (Heart), the middle half of them within 15 ms of
-# it, the same in a sentence's first half as in its second. So every time the plan says - a word, its
-# edges, a rest, a phone - is told that much earlier, and what is placed by them (the cut of a rest, the
-# trail, the subtitles, a mouth) is placed on the sound. Uncorrected, the cut of the rest after "arms,"
-# had been looked for past the "h" and found the closure inside "happy": "ha ... ppy".
+# Its audio runs ahead of its plan: the voicing the plan puts in each frame is heard PLAN_LEAD earlier
+# (median 55 ms Emma, 48 Heart over 20 sentences, the middle half within 15 ms, the same across a sentence).
+# Every time the plan says (a word, its edges, a rest, a phone) is told that much earlier, so what is placed
+# by them (the cut of a rest, the trail, subtitles, a mouth) lands on the sound.
 PLAN_LEAD = 0.05
 GAP_REACH = 0.05  # how far past the (corrected) word boundary a rest's cut is looked for
-# ...and how far before it (2026-10-26, "You've always felt it, haven't you, my love?"): reaching
-# GAP_REACH back into "it" found the silence of its t's closure, and the release went over the rest,
-# a tick before "haven't". A word's last sound ends by its corrected end, give or take this much.
+# ...and how far before it: reaching GAP_REACH back into a word finds the silence of its stop's closure, and
+# the release goes over the rest. A word's last sound ends by its corrected end, give or take this much.
 GAP_BACK = 0.015
-# THE WORD BEFORE A REST IS HELD AT LEAST THIS LONG ON ITS LAST VOWEL (seconds at length scale 1; the
-# trail's share of it, as its hold is). Piper's hold is a ratio (TRAIL_STRETCH) and on 25 ms frames a
-# ratio is wrong both ways: the 50 ms "oo" of "you," rounded 1.25 times back to two frames, and held
-# 1.6 times, "stays," and "flame," (five and six frames) were drawn out ("someone stayyys", the user,
-# 2026-10-26). A floor lengthens the short vowel alone and leaves a long one as planned.
+# The word before a rest is held at least this long on its last vowel (seconds at length scale 1; the
+# trail's share of it, as its hold is). Piper's hold is a ratio (TRAIL_STRETCH) and on 25 ms frames a ratio
+# is wrong both ways (a 50 ms "oo" rounds back to two frames, "stays," held 1.6 times is drawn out). A floor
+# lengthens the short vowel alone and leaves a long one as planned.
 HOLD_LEAST = 0.09
 STYLE = 256
 PAD_ID = 0
@@ -144,10 +118,10 @@ LICENSE = (
     "commercial voices - a provenance question before any commercial use"
 )
 
-# THE ENGLISH PACKS of v1.0, a speaker number each: (pack, accent, sex, what else is said of it) - the
-# grade hexgrad's own in VOICES.md (the quality and amount of the voice's training data). THE ORDER IS THE
-# NUMBERS: a note keeps its speaker as an index, so a pack added later goes at the end and none is ever
-# moved. Most read best between 100 and 200 tokens and weakly under 10 to 20.
+# The English packs of v1.0, a speaker number each: (pack, accent, sex, what else is said of it), the grade
+# hexgrad's own in VOICES.md. The order is the numbers: a note keeps its speaker as an index, so a pack
+# added later goes at the end and none is moved. Most read best between 100 and 200 tokens and weakly under
+# 10 to 20.
 PACKS: list[tuple[str, str, str, str]] = [
     ("af_heart", "US", "F", "grade A"),
     ("af_bella", "US", "F", "grade A-"),
@@ -179,13 +153,12 @@ PACKS: list[tuple[str, str, str, str]] = [
     ("bm_daniel", "GB", "M", "grade D"),
 ]
 ACCENTS = {"US": "American", "GB": "British"}
-# How many blends are kept made (`_blended`): half a megabyte each, and a weight moved in the reader browser is
-# a new one.
+# How many blends are kept made (`_blended`): half a megabyte each.
 BLENDS_KEPT = 8
 # Where the voices taught here are, under the voices' root (`_family`).
 TRAINED = "trained"
 
-# THE ENGLISH PACKS of v1.1-zh: an hour each of crowdsourced synthetic English (its model card), ungraded.
+# The English packs of v1.1-zh: an hour each of crowdsourced synthetic English (its model card), ungraded.
 # Vale is "an older British female".
 PACKS_11: list[tuple[str, str, str, str]] = [
     ("af_maple", "US", "F", "ungraded"),
@@ -193,14 +166,11 @@ PACKS_11: list[tuple[str, str, str, str]] = [
     ("bf_vale", "GB", "F", "older, ungraded"),
 ]
 
-# THE CHECKPOINTS, one voice each in the Voice list, their packs its speakers - as libritts-high's readers are
-# under it - so the Voice list names a model and the Speaker row picks who reads in it (2026-10-25, the user:
-# "voice should be used more like a family of voices, then a secondary option should be for selecting the
-# various checkpoints within"). Each is onnx-community's export at the commit last verified (2026-10-25):
-# the graph, the tokenizer (its vocab is the ids) and a file per pack, under `dir` of the voices' root.
-# v1.1-zh is a second checkpoint, not a strict upgrade (its card): it drops most of v1.0's voices for
-# Chinese ones and adds three English, Vale a British woman (2026-10-25, the user: "I'm looking for a
-# better female GB voice. 'Emma' is decent, but it's a B-, and it does click/pop sometimes").
+# The checkpoints, one voice each in the Voice list, their packs its speakers (as libritts-high's readers
+# are under it): the Voice list names a model and the Speaker row picks who reads in it. Each is
+# onnx-community's export at the commit last verified: the graph, the tokenizer (its vocab is the ids) and a
+# file per pack, under `dir` of the voices' root. v1.1-zh is a second checkpoint, not a strict upgrade (its
+# card): it drops most of v1.0's voices for Chinese ones and adds three English, Vale a British woman.
 FAMILIES: dict[str, dict] = {
     "kokoro": {
         "name": "kokoro",
@@ -222,10 +192,10 @@ FAMILIES: dict[str, dict] = {
     },
 }
 
-# ESPEAK'S READING IN MISAKI'S SYMBOLS - misaki's table for its eSpeak fallback (`E2M`, then its
-# American and British replacements), read WITHOUT eSpeak's tie marks: ghost's eSpeak reading has none,
-# so two symbols of one word that spell a diphthong or an affricate are taken as one. The longest match
-# wins, so "eə" is British ɛː before "e" alone is A.
+# eSpeak's reading in misaki's symbols: misaki's table for its eSpeak fallback (`E2M`, then its American and
+# British replacements), read without eSpeak's tie marks (ghost's reading has none, so two symbols of one
+# word that spell a diphthong or an affricate are taken as one). The longest match wins, so "eə" is British
+# ɛː before "e" alone is A.
 _SHARED = {
     "eɪ": "A",
     "aɪ": "I",
@@ -252,14 +222,12 @@ _BRITISH = {**_SHARED, "eə": "ɛː", "iə": "ɪə", "əʊ": "Q"}
 SYLLABIC = "̩"
 SMALL_SCHWA = "ᵊ"
 
-# THE HAPPY VOWEL IS SAID "EE" (2026-10-28, the user: "babysitter" "sort of sounds like 'bay-bah-sitter'"). eSpeak
-# reads a word's unstressed "ee" (the dictionary's IY0) as lax ɪ in 65 words of one book - "babysitter"
-# bˈeɪbɪsˌɪɾɚ where "baby" alone is bˈeɪbi, "everything" ˈɛvɹɪθˌɪŋ (184 times), "anything", "video" vˈɪdɪoʊ,
-# "happiness" - and Kokoro, taught on misaki's dictionary, which writes that vowel i, says ɪ there as the short
-# vowel it was taught it is, "bah". So where the word's dictionary reading (the token's `fallback`, ghost's
-# CMUdict) has IY0 and eSpeak ɪ in the same place, it is written i - AFTER A STRESSED SYLLABLE (ba|by|sitter,
-# ev|ery|thing, hap|pi|ness) OR BEFORE A VOWEL (vid|e|o, re|action, the|ology); an unstressed prefix before a
-# consonant keeps eSpeak's ɪ, as it is said ("pretend", "prepare", "prediction": the dictionary's IY0 there is
+# The happy vowel is said "ee". eSpeak reads a word's unstressed "ee" (the dictionary's IY0) as lax ɪ
+# ("babysitter" bˈeɪbɪsˌɪɾɚ, "everything" ˈɛvɹɪθˌɪŋ, "video" vˈɪdɪoʊ), and Kokoro, taught on misaki's
+# dictionary, which writes that vowel i, says ɪ there as a short vowel. So where the word's dictionary
+# reading (the token's `fallback`, ghost's CMUdict) has IY0 and eSpeak ɪ in the same place, it is written i
+# after a stressed syllable (ba|by|sitter, ev|ery|thing) or before a vowel (vid|e|o, the|ology); an
+# unstressed prefix before a consonant keeps eSpeak's ɪ ("pretend", "prepare": the dictionary's IY0 there is
 # careful speech). A word whose vowels do not line up one for one is left as eSpeak read it.
 _ARPA_VOWELS = frozenset(("AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER", "EY", "IH", "IY", "OW", "OY", "UH", "UW"))
 # eSpeak's vowel nuclei, longest first: a diphthong, a long vowel or a vowel with its r is one
@@ -346,13 +314,13 @@ _FROM_ESPEAK = frozenset(
 class KokoroBackend(PiperBackend):
     name = "kokoro"
     hop = HOP
-    # NO LEAD IS QUIETED: no rest is floored here, and a floored rest is what made the next word's lead
-    # long. The trail - the word before a rest let go of - is made, on the plan told PLAN_LEAD earlier.
+    # No lead is quieted: no rest is floored here, and a floored rest is what makes the next word's lead
+    # long. The trail (the word before a rest let go of) is made, on the plan told PLAN_LEAD earlier.
     quiets_lead = False
     # ...and runs right up to where the next word starts: Kokoro holds a word through a comma it reads
-    # straight through, so the next word's start walked back over sound was the same word's vowel ("you,"
-    # faded half way, then back at full, and the cut in that dip put its second half before "my"). Where
-    # the voice runs into the next word, the trail's way back up runs on into it, never a step.
+    # straight through, so the next word's start walked back over sound is the same word's vowel (the fade
+    # would dip half way and the cut in the dip misplace the word). Where the voice runs into the next word,
+    # the trail's way back up runs on into it, never a step.
     trail_early = 0.0
     trail_through = True
     # Kokoro samples nothing: its level is the same render to render (level.py, PiperBackend.level_noise).
@@ -368,8 +336,9 @@ class KokoroBackend(PiperBackend):
                 "duration_control": True,  # speed, and the patched plan
                 "pitch_control": False,  # the F0 curve is in the graph, not yet an input
                 "timings": True,  # the rounded plan, exact
-                # ITS READERS BLEND (blend.py) - said of the backend, never on a voice's row: every field of a row
-                # keys the takes kept in that voice (TakeCache), and one added would make every one of them again
+                # Its readers blend (blend.py): said of the backend, never on a voice's row, because every
+                # field of a row keys the takes kept in that voice (TakeCache) and one added would re-make
+                # every one of them.
                 "blend": True,
             }
         )
@@ -441,8 +410,8 @@ class KokoroBackend(PiperBackend):
                     "license": fam.get("license", LICENSE),
                     "derivation": fam["derivation"],
                     "speakers": len(fam["packs"]),
-                    # WHO EACH SPEAKER NUMBER IS, said by the host (VoiceReaders.offer): the libritts
-                    # readers are described from files, these from the tables above
+                    # Who each speaker number is, said by the host (VoiceReaders.offer): the libritts
+                    # readers are described from files, these from the tables above.
                     "readers": [
                         {"reader": pack, "g": sex, "d": "%s, %s, %s" % (pack.split("_", 1)[-1], ACCENTS[accent], said)}
                         for pack, accent, sex, said in fam["packs"]
@@ -616,9 +585,9 @@ class KokoroBackend(PiperBackend):
     @staticmethod
     def _options():
         """A session that leaves a live show its share of the machine: a thread for each core but one, and
-        no spinning between operators. Measured 2026-10-25 on four cores, a sentence of 5.9 s: the default
-        (a thread a core, spinning) made it at 2.70x real time with 3.9 cores busy; this at 2.60x with 2.6
-        - the reading's own Godot, its show and its audio need the rest ("playback kept freezing")."""
+        no spinning between operators (on four cores a 5.9 s sentence ran at 2.70x real time with the
+        default using 3.9 cores, 2.60x with this using 2.6). The reading's own Godot, its show and its audio
+        need the rest."""
         import onnxruntime as ort
 
         opts = ort.SessionOptions()
@@ -648,14 +617,14 @@ class KokoroBackend(PiperBackend):
     def _patch(path: Path) -> bool:
         """Give the duration plan Piper's two inputs and hand back the plan the decoder used.
 
-        The export plans `durations` (the predictor's sum over its sigmoids, over `speed`), rounds it,
-        clips it at one frame and expands the tokens by it. Patched: the plan times `dur_scale` (a
-        multiplier per token, default 1) BEFORE the Round - a whole frame is 25 ms, and most tokens are
-        planned at one to three of them, so a stretch after the Round would mostly land back on the
-        same frame - then floored by `rest_floor` (frames per token, default none) and clipped, and
-        `durations` is that clip: whole frames, what the audio was made of. Unfed, the graph renders
-        exactly what it did. The patched graph is opened before it replaces the file, so one that will
-        not load is never written. False when it cannot be patched (no `onnx`, an unknown shape).
+        The export plans `durations` (the predictor's sum over its sigmoids, over `speed`), rounds it, clips
+        it at one frame and expands the tokens by it. Patched: the plan times `dur_scale` (a multiplier per
+        token, default 1) before the Round (a frame is 25 ms and most tokens are planned at one to three, so
+        a stretch after the Round would mostly land back on the same frame), then floored by `rest_floor`
+        (frames per token, default none) and clipped; `durations` is that clip: whole frames, what the audio
+        was made of. Unfed, the graph renders what it did. The patched graph is opened before it replaces
+        the file, so one that will not load is never written. False when it cannot be patched (no `onnx`, an
+        unknown shape).
         """
         try:
             import numpy as np
@@ -678,9 +647,9 @@ class KokoroBackend(PiperBackend):
             print("ghost/voice: Kokoro graph's plan is not Round -> Clip - not patching", file=sys.stderr)
             return False
         clip, plan = clips[0], planners[0]
-        # WHERE THE PLAN COMES BACK. v1.0's export hands back the plan BEFORE its Round (`durations` is
-        # the Div's output): that name is moved onto the clipped plan. v1.1's hands back the clip already
-        # (`duration`, cast and squeezed): left as it is. A graph that does neither is not patched.
+        # Where the plan comes back: v1.0's export hands back the plan before its Round (`durations` is the
+        # Div's output), so that name is moved onto the clipped plan. v1.1's hands back the clip already
+        # (`duration`, cast and squeezed) and is left as it is. A graph that does neither is not patched.
         outs = [o.name for o in graph.output]
         planned = plan.output[0]
         if planned in outs:
@@ -770,10 +739,9 @@ class KokoroBackend(PiperBackend):
         k = 0
         while k < len(out) and out[k] == (" ", 0):
             k += 1
-        # ...nor the word-space Piper's path puts after the last word: Kokoro was never taught an
-        # utterance that ends on one, and rendered it as a sound - a short take ended on a hiss 32 to
-        # 40 dB under its peak where without it the tail falls 55 to 90 (2026-10-25, the Cards Test's
-        # "Oh. Oh, wow."; Isabella's one-word sentences heard as "Ose. Wouse. Nouse.")
+        # ...nor the word-space Piper's path puts after the last word: Kokoro was never taught an utterance
+        # that ends on one and renders it as a sound (a short take ended on a hiss 32 to 40 dB under its
+        # peak).
         end = len(out)
         while end > k and out[end - 1][0] == " ":
             end -= 1
@@ -845,12 +813,11 @@ class KokoroBackend(PiperBackend):
             if kid is None:
                 missing.append(ksym)
                 continue
-            # NO REST IS FLOORED: Kokoro given frames on a word-space (or a mark) does not rest in them, it
-            # holds the word through them - 20 frames on the space after "dawn," rendered 500 ms of voice at
-            # 16 to 20 dB under the peak - and the rest spliced in was cut through it. Unfloored, the word
-            # falls away to 45 dB under by itself, and the splicer measures that and rests the remainder
-            # (`_splice_pauses`, in the window `_gap` searches). The opening vowel's floor is a vowel's,
-            # and so is the held one's.
+            # No rest is floored: Kokoro given frames on a word-space (or a mark) holds the word through
+            # them instead of resting (20 frames after "dawn," rendered 500 ms of voice 16 to 20 dB under
+            # the peak), and the rest spliced in was cut through it. Unfloored, the word falls away to 45 dB
+            # under by itself, and the splicer measures that and rests the remainder (`_splice_pauses`, in
+            # the window `_gap` searches). The opening vowel's floor is a vowel's, and so is the held one's.
             rest = 0.0
             core = any(j in nucleus for j in at)
             mul = float(stretch.get(src, 1.0)) if stretch and core else 1.0
@@ -930,8 +897,8 @@ class KokoroBackend(PiperBackend):
             return audio, spans
         self._last_frames = frames
         floors = np.array(lay_floor if fed_floor and REST_FLOOR_INPUT in takes else [0.0] * frames.size, np.float64)
-        # what `_trim_ends` left at the ends is seconds, not plan: counted by `_nominal` as whole frames, a pad
-        # cut to a sliver made a pitch move resample the words long (5.3% over 22 sentences, 2026-10-27)
+        # what `_trim_ends` left at the ends is seconds, not plan: counted by `_nominal` as whole frames, a
+        # pad cut to a sliver would make a pitch move resample the words long
         heard = [k for k, s in enumerate(lay_sound) if s]
         if heard:
             floors[: heard[0]] = HELD
@@ -970,11 +937,10 @@ class KokoroBackend(PiperBackend):
 
     @staticmethod
     def _gap(edges: dict, ti, frame: float):
-        """Where a rest after token `ti` may be cut: from GAP_BACK before the end the plan, told PLAN_LEAD
-        earlier, gives the word to GAP_REACH past the next word's start - what is left of its error - and
-        never past either word. Not wider: where Kokoro reads through a comma there is no silence between
-        the words, and a window reaching into either found the longest silence inside it - "happy"'s
-        closure, and "it"'s, which put its t's release after the rest."""
+        """Where a rest after token `ti` may be cut: from GAP_BACK before the end the plan (told PLAN_LEAD
+        earlier) gives the word to GAP_REACH past the next word's start, never past either word. Not wider:
+        where Kokoro reads through a comma there is no silence between the words, and a wider window finds
+        the longest silence inside a word (a stop's closure) and puts its release after the rest."""
         here, nxt = edges.get(ti), edges.get(ti + 1)
         if here is None or nxt is None:
             return None
@@ -984,11 +950,11 @@ class KokoroBackend(PiperBackend):
 
     @staticmethod
     def _nominal(frames, ratio: float, sr: int, floor=None) -> float:
-        """`_nominal_seconds` for a ROUNDED plan: a token planned at `m` frames was asked for between
-        m - 1/2 and m + 1/2, so at another scale it falls in that interval over the ratio, and the
-        mean of the Round over it is closed form (the integral of a staircase). One frame is the
-        clip's, a floored token keeps its floor, and a take's trimmed ends (a floor of HELD) are the
-        seconds they were cut to, the same at any scale."""
+        """`_nominal_seconds` for a rounded plan: a token planned at `m` frames was asked for between m -
+        1/2 and m + 1/2, so at another scale it falls in that interval over the ratio, and the mean of the
+        Round over it is closed form (the integral of a staircase). One frame is the clip's, a floored token
+        keeps its floor, and a take's trimmed ends (a floor of HELD) are the seconds they were cut to, the
+        same at any scale."""
         import numpy as np
 
         if frames is None or ratio <= 0.0:
@@ -1019,24 +985,21 @@ class KokoroBackend(PiperBackend):
         return _resample(audio, sr / float(OUT_RATE)), OUT_RATE
 
 
-# THE SILENCE AT A TAKE'S ENDS, as the seam between two sentences was measured on Piper (piper.py `DWELL`,
-# the full stop's 0.18: 0.138-0.145 s after a sentence and 0.044 before the next). The seam splices its
-# gap on that assumption, and Kokoro's own ends hold more: its first pad rests 14 frames (350 ms) and a
-# sentence's mark, word-space and pad another 225 ms or so - measured over a passage of nine sentences,
-# its seams ran 2.57-2.79 s where Piper's ran 1.89-2.06, at the same Pause (its commas, which the splicer
-# measures, matched: 0.80-0.94 s against 0.90-0.95). So a take is trimmed to them (`_trim_ends`).
+# The silence at a take's ends, as the seam between two sentences was measured on Piper (piper.py `DWELL`,
+# the full stop's 0.18: 0.138-0.145 s after a sentence and 0.044 before the next). The seam splices its gap
+# on that assumption and Kokoro's own ends hold more (its first pad rests 14 frames, 350 ms; a sentence's
+# mark, word-space and pad another 225 ms: seams of 2.57-2.79 s against Piper's 1.89-2.06 at the same
+# Pause), so a take is trimmed to them (`_trim_ends`).
 SEAM_LEAD = 0.044
 SEAM_TAIL = 0.14
 # What counts as sound at a take's ends: a share of its peak, as the splicer's SPLICE_QUIET.
 SEAM_QUIET = 0.02
 
 
-# NOTHING HISSES AFTER A VOICE THAT ENDED VOICED (2026-10-25, the Cards Test's "Let's shuffle. Oh. Oh,
-# wow." - "the two words spoken after that are completely imperceptible"). On a sentence ending in a vowel,
-# Kokoro often renders a burst of hiss as the voice lets go and through the mark after it: on "Oh." 18 to
-# 23 dB under the peak, 86 to 99% of it above 4 kHz, in Emma and Isabella alike - "Oh" heard as "Load",
-# "Loved", "Ose" (Whisper, and the user's ear). Where the plan says the last sound was voiced - a vowel, or
-# l r m n ŋ w j - what follows the waveform's last voiced moment is let go of over TAIL_FADE; a last sound
+# Nothing hisses after a voice that ended voiced. On a sentence ending in a vowel Kokoro often renders a
+# burst of hiss as the voice lets go and through the mark after it ("Oh." 18 to 23 dB under the peak, 86 to
+# 99% of it above 4 kHz; heard as "Load", "Ose"). Where the plan says the last sound was voiced (a vowel, or
+# l r m n ŋ w j), what follows the waveform's last voiced moment is let go of over TAIL_FADE; a last sound
 # that hisses itself (a final s, z, sh, f, th, or a stop's release) is the word and is never touched.
 TAIL_FADE = 0.03
 TAIL_FRAME = 0.01
@@ -1077,8 +1040,8 @@ def _quiet_tail(audio, last: str):
         return audio
     spec = np.abs(np.fft.rfft(framed * np.hanning(hop), axis=1)) ** 2
     high = spec[:, np.fft.rfftfreq(hop, 1.0 / SR) > TAIL_ABOVE].sum(axis=1) / (spec.sum(axis=1) + 1e-20)
-    # VOICE IS A RUN of TAIL_RUN frames: a lone low frame at the very end (a thump in the last pad, seen on
-    # Isabella's "No.") is not the voice going on, and taken for it, it kept the hiss before it
+    # voice is a run of TAIL_RUN frames: a lone low frame at the very end (a thump in the last pad) is not
+    # the voice going on, and taken for it would keep the hiss before it
     mask = (level > TAIL_LOUD * peak) & (high < TAIL_VOICED_HF)
     runs = np.convolve(mask.astype(np.int32), np.ones(TAIL_RUN, np.int32), mode="valid")
     ends = np.nonzero(runs == TAIL_RUN)[0]
@@ -1097,10 +1060,10 @@ def _quiet_tail(audio, last: str):
 
 def _trim_ends(audio, frames, sound: list, frame_s: float):
     """(audio, frames) with the take's head cut to SEAM_LEAD before its first sound and its tail to
-    SEAM_TAIL after its last - each cut only where the plan holds no sound (the first pad's frames at the
-    head, told PLAN_LEAD early as every plan time is; the marks, word-space and pad after the last
-    sounding token at the tail) and only where the waveform is quiet. The frames are
-    cut with the audio, so they still add up to it and every time read off them stays exact."""
+    SEAM_TAIL after its last: each cut only where the plan holds no sound (the first pad's frames at the
+    head, told PLAN_LEAD early; the marks, word-space and pad after the last sounding token at the tail) and
+    only where the waveform is quiet. The frames are cut with the audio, so they still add up to it and
+    every time read off them stays exact."""
     import numpy as np
 
     sr = HOP / frame_s

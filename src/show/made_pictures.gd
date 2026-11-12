@@ -1,12 +1,11 @@
 extends VBoxContainer
 class_name MadePictures
 
-## MadePictures - WHAT A SHOW'S AGENTS PAINTED FOR ITS EPISODE, seen (the user, 2026-11-09: "the Godot app can generate a mask, but we
-## will never see the reference image in the UI, and so our only option is to watch until the end of the video... to see what the
-## mask actually is"): each picture the episode's maker says its agents made ([method EpisodeFeed.made_pictures]) a thumbnail and its
-## row's name, one click away from full size ([PictureWindow]), stepped through in the order they were made. Making one again is its
-## row's, on the Pipeline card (docs.py "one pipeline"): the window says which row. On the Pictures card ([PicturesCard]); it names
-## no maker.
+## MadePictures - what a show's agents painted for its episode, seen: each picture the episode's maker
+## says its agents made ([method EpisodeFeed.made_pictures]) as a thumbnail and its row's name, one click
+## from full size ([PictureWindow]), stepped through in the order they were made. Making one again is its
+## row's, on the Pipeline card (docs.py "one pipeline"). It sits on the Pictures card ([PicturesCard])
+## and names no maker.
 
 ## A thumbnail's longest side (pixels).
 const THUMB := 96

@@ -1,4 +1,4 @@
-// THE TABLE'S TOP (see src/table/tables.gd): boards of a wood, a slab of stone, metal, lacquer, leather,
+// The table's top (see src/table/tables.gd): boards of a wood, a slab of stone, metal, lacquer, leather,
 // a baize, tiles - or the episode's painting - with a pattern inlaid in it if it has one, a band
 // inlaid along its edge (the common `border`), and its relief (table_common.gdshaderinc). UV is the
 // top's own space, centimeters from its middle; UV2.y is 1 on the cut edge, which takes no relief.
@@ -155,7 +155,7 @@ void fragment() {
 		rough = mix(0.85, 0.12, polish);
 		coat = polish * 0.6;
 	}
-	// AN INLAID PATTERN takes the material's own grain and shading under its colors
+	// An inlaid pattern takes the material's own grain and shading under its colors
 	float tone = clamp(lum(albedo) / max(lum(color), 0.02), 0.6, 1.4);
 	if (pattern >= 1 && pattern <= 8) {
 		albedo = pattern_at(q, aa, lod).rgb * tone;

@@ -122,7 +122,7 @@ func _track(pcm: PackedFloat32Array, base: float) -> PackedFloat32Array:
 
 
 ## Fraction of voiced time within 25 cents of one of the voice's anchors, with
-## the VIBRATO SMOOTHED OUT FIRST. Measuring raw frames scores a perfectly
+## the vibrato smoothed out first. Measuring raw frames scores a perfectly
 ## quantized note at ~40%, because a +-38 cent waver spends most of its cycle
 ## outside a 25 cent window - the metric would have been measuring the vibrato
 ## and reporting it as bad tuning.

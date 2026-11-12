@@ -10,9 +10,8 @@ class_name GraphicsPanel
 ## reads it. A shared row (bounce light, which changes the look) is one choice across both columns, and a row only one
 ## column has (the viewer's resolution) says in the other what that column goes by.
 ##
-## WHAT IT COSTS IS SHOWN: while the panel is open the stage's drawing time is measured on the graphics card and said
-## at its foot, a few times a second - so whether there is room for more is read off the machine, not guessed.
-## Measuring is off while it is closed.
+## What it costs is shown: while the panel is open the stage's drawing time is measured on the graphics card
+## and said at its foot, a few times a second. Measuring is off while it is closed.
 
 const COL_TEXT := Color(0.70, 0.78, 0.90)
 const COL_DIM := Color(0.50, 0.57, 0.68)
@@ -32,7 +31,7 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	# THE ENVIRONMENT PANEL'S CORNER (see deps_panel.gd): pinned bottom-right, grown up and left, standing on the row
+	# The Environment panel's corner (see deps_panel.gd): pinned bottom-right, grown up and left, standing on the row
 	anchor_left = 1.0
 	anchor_top = 1.0
 	anchor_right = 1.0
@@ -109,7 +108,7 @@ func _build_ui() -> void:
 		name_label.add_theme_color_override("font_color", COL_TEXT)
 		grid.add_child(name_label)
 		if bool(Registry.field(Graphics.SETTINGS, key, "shared", false)):
-			# ONE CHOICE FOR BOTH: in the live column, the export's cell saying it follows
+			# One choice for both: in the live column, the export's cell saying it follows
 			grid.add_child(_choice(key, "live"))
 			grid.add_child(_note("same", "It changes the look, so an export is drawn as the viewer is."))
 			_choices["export/" + key] = _choices["live/" + key]
@@ -118,7 +117,7 @@ func _build_ui() -> void:
 				if Graphics.has_tier(key, t):
 					grid.add_child(_choice(key, t))
 				else:
-					# ONE COLUMN'S ALONE: the other's cell says what it goes by instead
+					# One column's alone: the other's cell says what it goes by instead
 					grid.add_child(_note(String(Registry.field(Graphics.SETTINGS, key, "other", "")), Registry.blurb(Graphics.SETTINGS, key)))
 
 	col.add_child(HSeparator.new())

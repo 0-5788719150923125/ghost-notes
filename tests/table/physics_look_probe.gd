@@ -1,6 +1,6 @@
 extends Node
 
-## NOT a gate. WHAT IS IN THINGS photographed ([TablePhysics], next/table_physics.md): a bench with a cauldron of brew,
+## Not a gate. What is in things photographed ([TablePhysics], next/table_physics.md): a bench with a cauldron of brew,
 ## a jar of snow (grains), a shell holding three stones (loose by being a heap) and a mortar with a crystal lying loose in
 ## it - the jar tipped over the brew, the shell tipped over it, the crystal ground - read with table_look_probe's
 ## synthetic voice, a frame written a few times through every act, or at the times asked for.

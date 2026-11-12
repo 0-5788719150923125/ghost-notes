@@ -3,87 +3,69 @@ class_name LetterScript
 
 ## LetterScript - a letter as the voice reads it and the desk writes it (next/letter.md).
 ##
-## THE PEN WRITES TWO WORDS AHEAD OF THE VOICE (2026-10-27; the user, of the pen behind the voice: "A person wants
-## to read what is being said ... write ahead, and pause at the start of each sentence"; then, of the pen five or
-## six words ahead at a hand's pace: "It makes the pauses between sentences far too long ... maybe 2 words ahead
-## of the speaking?"): every paragraph is put on the page a line at a time, each word written while the voice says
-## the word [constant AHEAD_WORDS] before it - the desk's elastic pen ([LetterMedium]) on the voice's own times,
-## whatever its speed - and never quicker than [constant QUICKEST] the hand's pace. The voice waits at a
-## sentence's start only where the pen cannot be that far ahead: after a thought, a still or the blank page (the
-## pen begins as the voice gets there, and writes two words before it goes on), at a page turned between two
-## paragraphs (once the voice has read the page; one turned inside a paragraph it reads on through, the pen
-## catching up after), and where the words are more ink than the quickest pen can put down while they are said. Under a picture nobody reads along: the pen keeps with the
-## voice there, unseen. (A pen at a hand's own steady pace ahead of a voice two or three times quicker makes
-## the voice wait out the difference at every sentence - a letter as long as its writing, the chapter 43
-## minutes - whatever lead is asked for.) The rest is marks:
+## The pen writes two words ahead of the voice: every paragraph is put on the page a line at a time, each word written
+## while the voice says the word [constant AHEAD_WORDS] before it (the desk's elastic pen, [LetterMedium], on the voice's
+## own times) and never quicker than [constant QUICKEST] the hand's pace. The voice waits at a sentence's start only where
+## the pen cannot be that far ahead: after a thought, a still or the blank page, at a page turned between two paragraphs
+## (one turned inside a paragraph it reads on through), and where the words are more ink than the quickest pen can put
+## down while they are said. Under a picture nobody reads along: the pen keeps with the voice, unseen. The rest is marks:
 ##
-##     *A paragraph in italics, whole.*        A THOUGHT: said, never written - the writer stops and
-##                                             thinks it, the pen lifted.
-##     <!-- strike -->, <!-- strike: 4 -->     the writer stops, decides (a few seconds; the mark's own
-##                                             number of them), then crosses out the paragraph last
-##                                             written, every line of it.
-##     like <!-- struck: morning --> mourning   INSIDE A WRITTEN LINE: the struck words written and said,
-##                                             then the writer stops to decide ([constant DECIDE]), the
-##                                             pen crosses out those words alone and writes the words
-##                                             after the mark beside them, on the same rule.
+##     *A paragraph in italics, whole.*        a thought: said, never written - the writer stops and thinks it,
+##                                             the pen lifted.
+##     <!-- strike -->, <!-- strike: 4 -->     the writer stops, decides (a few seconds; the mark's own number of
+##                                             them), then crosses out the paragraph last written, every line of it.
+##     like <!-- struck: morning --> mourning   inside a written line: the struck words written and said, then the
+##                                             writer stops to decide ([constant DECIDE]), the pen crosses out those
+##                                             words alone and writes the words after the mark beside them, on the
+##                                             same rule.
 ##     <!-- color: red -->, <!-- color: default -->
-##                                             THE PEN'S INK from here on - a name of [constant
-##                                             NotebookLayout.INKS], a hex color, or the desk's own: the
-##                                             writer puts the pen in hand down and picks up that ink's
-##                                             ([constant SWAP]; a pen each ink the letter uses lies by the
-##                                             pad from the start, [method pens_of]). Inside a written line
-##                                             the line stops there and goes on beside it in the new ink.
-##     <!-- unspoken: Dear Ink, -->            written and not said: the voice waits while the pen
-##                                             writes it. Inside a written line, words written in it and
-##                                             never said ([constant UNSAID]): `like <!-- struck: morning
-##                                             --> <!-- unspoken: mourning. -->` says "like morning."
-##     <!-- sketch: what it shows -->          a drawing the pen makes on the page WHERE THE MARK IS - an
-##                                             agent draws it from the words as SVG ([LetterFormat]), TeX's
-##                                             figure reader lays it out - the voice waiting for the pen
-##                                             before the next written words (a big one dashed off, [method
-##                                             drawn_alone]); a rule is left empty under it ([constant
-##                                             UNDER_SKETCH]). A thought right after it (no
-##                                             point in it) is thought while it is drawn. Not drawn yet,
-##                                             nothing is.
-##     <!-- sketch (10s): what it shows -->    the same, drawn in at most that many seconds - the pen
-##                                             paced to take that long where it has more ink, its own
-##                                             pace where less ([method drawn_in_of]).
+##                                             the pen's ink from here on - a name of [constant NotebookLayout.INKS],
+##                                             a hex color, or the desk's own: the writer puts the pen in hand down
+##                                             and picks up that ink's ([constant SWAP]; a pen each ink the letter
+##                                             uses lies by the pad from the start, [method pens_of]). Inside a
+##                                             written line the line stops there and goes on beside it in the new ink.
+##     <!-- unspoken: Dear Ink, -->            written and not said: the voice waits while the pen writes it. Inside
+##                                             a written line, words written in it and never said ([constant
+##                                             UNSAID]): `like <!-- struck: morning --> <!-- unspoken: mourning. -->`
+##                                             says "like morning."
+##     <!-- sketch: what it shows -->          a drawing the pen makes on the page where the mark is - an agent draws
+##                                             it from the words as SVG ([LetterFormat]), TeX's figure reader lays it
+##                                             out - the voice waiting for the pen before the next written words (a
+##                                             big one dashed off, [method drawn_alone]); a rule is left empty under
+##                                             it ([constant UNDER_SKETCH]). A thought right after it (no point in
+##                                             it) is thought while it is drawn. Not drawn yet, nothing is.
+##     <!-- sketch (10s): what it shows -->    the same, drawn in at most that many seconds: the pen paced to take
+##                                             that long where it has more ink, its own pace where less ([method
+##                                             drawn_in_of]).
 ##     <!-- point: sketch -->, <!-- point: sketch, the dot on its own -->
-##                                             INSIDE SPEECH: at the next word the pen points at the
-##                                             last sketch, or at the part of it so described (the
-##                                             agent names that part, [method part_id]) - in a
-##                                             thought held [constant POINT_LINGER] past its
+##                                             inside speech: at the next word the pen points at the last sketch, or
+##                                             at the part of it so described (the agent names that part, [method
+##                                             part_id]) - in a thought held [constant POINT_LINGER] past its
 ##                                             sentence, the voice resting.
 ##     <!-- point: camera -->                  the pen is lifted and pointed at whoever is watching.
-##     <!-- tap -->, <!-- tap: desk -->        the pen turned over and its top tapped on the pad, or on
-##                                             the desk beside it, while the writer thinks.
+##     <!-- tap -->, <!-- tap: desk -->        the pen turned over and its top tapped on the pad, or on the desk
+##                                             beside it, while the writer thinks.
 ##     <!-- image (full): what it shows -->  ... <!-- /image -->
-##                                             a picture over the whole screen, panned slowly, from the
-##                                             word after it to the close: a flashback the voice reads
-##                                             over, while the pen goes on writing unseen. Another image
-##                                             mark before the close, or straight after it, DISSOLVES
-##                                             INTO ITS PICTURE (`blend`): the page is not seen between.
-##     <!-- still -->                          from here to the next written line the camera holds dead
-##                                             still on what was last drawn, the pen off the page (a
-##                                             test the viewer does on the screen).
+##                                             a picture over the whole screen, panned slowly, from the word after it
+##                                             to the close: a flashback the voice reads over, while the pen goes on
+##                                             writing unseen. Another image mark before the close, or straight after
+##                                             it, dissolves into its picture (`blend`): the page is not seen between.
+##     <!-- still -->                          from here to the next written line the camera holds dead still on what
+##                                             was last drawn, the pen off the page.
 ##     <!-- new page -->                       the next writing starts a page of its own.
 ##
-## The voice's own marks (a hesitation, a delivery, a speaker) pass to the voice; any other comment is a
-## note and is neither read nor written.
+## The voice's own marks (a hesitation, a delivery, a speaker) pass to the voice; any other comment is a note, neither read
+## nor written.
 ##
-## ONE WALK, TWO READERS ([DeskScript]'s rule): [method parse] gives the spoken words the desk follows
-## the voice by, the pen's actions anchored to them, the spans the camera and the pictures follow, and
-## the text the voice reads ([member speakable]) with its rests (`<!-- action-hold: S -->`) - from the
-## same numbers, so they cannot disagree. THE WRITING NEEDS NO STEP: a line is the hand's own
-## ([LetterHand]), so its strokes and how long they take are known here; only a sketch's drawing comes
-## from the ink step, handed in as [param lengths] and [param sizes] the way [DeskScript.parse] takes them.
+## One walk, two readers ([DeskScript]'s rule): [method parse] gives the spoken words the desk follows the voice by, the
+## pen's actions anchored to them, the spans the camera and the pictures follow, and the text the voice reads ([member
+## speakable]) with its rests (`<!-- action-hold: S -->`), from the same numbers. A line is the hand's own ([LetterHand]),
+## so its strokes and timing are known here; only a sketch's drawing comes from the ink step, handed in as [param lengths]
+## and [param sizes] as [DeskScript.parse] takes them.
 ##
-## THE PAGE IS FILLED: lines on the pad's rules, a rule left empty between two paragraphs and none
-## indented (2026-10-27, the user: "the hanging indents look wrong, when the first several paragraphs are
-## each just ~10 words long ... there should probably be a newline between each paragraph" - the book's
-## rule, [constant BookLayout.INDENT_EM]), a sketch centered half a rule clear of what is above it, and the
-## page turned where the next line or drawing would run off its foot - mid-sentence too, where the voice reads
-## on and the pen catches up after the turn ([method _voice_text]).
+## The page is filled: lines on the pad's rules, a rule left empty between two paragraphs and none indented ([constant
+## BookLayout.INDENT_EM]), a sketch centered half a rule clear of what is above it, the page turned where the next line or
+## drawing would run off its foot - mid-sentence too, where the voice reads on and the pen catches up ([method _voice_text]).
 
 ## The marks of their own line: group 1 the verb, group 2 what follows the colon.
 const MARK := "^\\s*<!--\\s*(strike|tap|still|new\\s+page|/\\s*image|unspoken|color)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
@@ -93,17 +75,14 @@ const POINT := "<!--\\s*point\\s*:\\s*([^>]*?)\\s*-->"
 const STRUCK := "<!--\\s*struck\\s*:\\s*([^>]*?)\\s*-->"
 ## The pen's ink from here on: group 1 its name ([method ink_of]).
 const COLOR := "<!--\\s*color\\s*:\\s*([^>]*?)\\s*-->"
-## WORDS WRITTEN AND NEVER SAID inside a line (2026-10-28, the user, of "morning" struck and "mourning" written beside
-## it: "it feels like the second 'mourning' should not have been spoken"): the unspoken mark inside a written
-## paragraph - group 1 its words - kept in the line between UNSAID_OPEN and UNSAID_CLOSE, characters no script holds,
-## written ([method _written]: none of them said) and taken out of everything the voice is given.
+## Words written and never said inside a line: the unspoken mark inside a written paragraph - group 1 its words - kept in
+## the line between UNSAID_OPEN and UNSAID_CLOSE, characters no script holds, written ([method _written]: none of them
+## said) and taken out of everything the voice is given.
 const UNSAID := "<!--\\s*unspoken\\s*:\\s*([^>]*?)\\s*-->"
 const UNSAID_OPEN := "\ue002"
 const UNSAID_CLOSE := "\ue003"
-## A PEN EACH INK (2026-10-28, the user: "a single pen would not be able to create 2 different font colors. So, could
-## we render multiple pens at the start, and pick them up/put them down as we use them?"): the writer changes ink by
-## putting down the pen in hand at its place by the pad (SWAP_DOWN, seconds) and picking up the other (SWAP_UP) - the
-## voice resting through it ([LetterMedium]).
+## A pen each ink: the writer changes ink by putting down the pen in hand at its place by the pad (SWAP_DOWN, seconds) and
+## picking up the other (SWAP_UP), the voice resting through it ([LetterMedium]).
 const SWAP_DOWN := 1.0
 const SWAP_UP := 1.6
 const SWAP := SWAP_DOWN + SWAP_UP
@@ -113,59 +92,46 @@ const THOUGHT := "^\\*(?!\\*)([^*]*[^*\\s])\\*$"
 const LEAD := 0.35
 ## A strike through one line.
 const STRIKE := 0.55
-## THE WRITER DECIDES BEFORE STRIKING (2026-10-27, the user: "The actor writes the line, then IMMEDIATELY
-## scratches it out. In reality, an actor would likely write the line, then pause, then scratch it out
-## after a few seconds of silent decision-making"): the pen done and the voice done, this long with the
-## pen held still over the line (seconds) - or the mark's own number, `<!-- strike: 4 -->`, held to
-## [constant DECIDE_MOST].
+## The writer decides before striking: the pen done and the voice done, this long with the pen held still over the line
+## (seconds) - or the mark's own number, `<!-- strike: 4 -->`, held to [constant DECIDE_MOST].
 const DECIDE := 3.0
 const DECIDE_MOST := 30.0
-## THE PAGE LIES BLANK A MOMENT FIRST (2026-10-27, the user: "the writing begins IMMEDIATELY after the intro
-## disappears. It's too quick. We should linger on the blank page for a bit before we do any writing"): the
-## voice rests this long (seconds) before its first word, and nothing is written before it, while the camera
-## comes in over the empty pad ([LetterMedium]).
+## The page lies blank a moment first: the voice rests this long (seconds) before its first word, and nothing is written
+## before it, while the camera comes in over the empty pad ([LetterMedium]).
 const BLANK_PAGE := 4.0
-## A PICTURE CLEARS BEFORE THE LETTER GOES ON: it fades out from just after the passage's last word, and the
-## voice rests until it is gone, so what the pen does next is seen from its start ([LetterMedium]) - unless
-## another picture comes up over it there. Every fade, in, out and from one picture into the next, is this long
-## (seconds; 2026-10-27, the user, of 1.2: "seems to be too fast. A 2 or 3 second fade might look better").
+## A picture clears before the letter goes on: it fades out from just after the passage's last word, and the voice rests
+## until it is gone, so what the pen does next is seen from its start ([LetterMedium]) - unless another picture comes up
+## over it there. Every fade, in, out and from one picture into the next, is this long (seconds).
 const IMAGE_AFTER := 0.1
 const IMAGE_FADE := 2.5
 ## A tap: how long the pen is turned over and tapping, and the rest the voice leaves for it before it
 ## goes on (the taps run on under the next words).
 const TAP := 2.4
 const TAP_HOLD := 1.0
-## A POINT LINGERS (2026-10-28, the user, of Secular Haze's "That one's me." at the dot: "the camera moves there
-## quickly, and the pen retreats immediately, and the camera moves again, and it feels jarring. We need the linger
-## when we point"): a point in a thought - at a sketch or at whoever watches - is held this long (seconds) after its
+## A point lingers: a point in a thought - at a sketch or at whoever watches - is held this long (seconds) after its
 ## sentence is said, the voice resting through it ([LetterMedium]: the pen on what it points at, the camera there).
 const POINT_LINGER := 3.0
 ## A page turned between two lines: the pen goes off the pad, the sheet goes over, the pen comes back
 ## ([DeskMedium]'s turn, [constant DeskMedium.PARK_CLEAR] and the turn itself).
 const TURN_REST := DeskScript.TURN + 1.3
-## THE PEN AHEAD OF THE VOICE: each word written while the voice says the one this many words before it - and
-## where the voice must wait for the pen (a new paragraph, a turn, a dense sentence) until a sentence's first
-## that many words are on the page, its last said no more than OVERTAKE before it is written (the user: "the
-## voice can preempt the end of the written sentence a bit").
+## The pen ahead of the voice: each word written while the voice says the one this many words before it - and where the
+## voice must wait for the pen (a new paragraph, a turn, a dense sentence) until a sentence's first that many words are on
+## the page, its last said no more than OVERTAKE before it is written.
 const AHEAD_WORDS := 2
 const OVERTAKE := 0.6
-## A DRAWING DASHED OFF (2026-10-27, the user, of the chapter's tree of dots: the text "sort of gets frozen for a few
-## seconds ... with the pen not moving" - the voice waited 7.5 s after its words while the pen dotted its last two
-## rows): a sketch with more ink than its words leave time for at the desk's quickest ([constant DeskScript.MAX_PACE])
-## is drawn quicker, up to DRAW_QUICKEST the hand's pace, to be done DRAW_TAIL (seconds) after them ([method draw_pace]).
+## A drawing dashed off: a sketch with more ink than its words leave time for at the desk's quickest ([constant
+## DeskScript.MAX_PACE]) is drawn quicker, up to DRAW_QUICKEST the hand's pace, to be done DRAW_TAIL (seconds) after them
+## ([method draw_pace]).
 const DRAW_QUICKEST := 7.0
 const DRAW_TAIL := 1.5
-## A SKETCH DRAWN ALONE, the voice waiting it out (2026-10-29, the user, of the chapter's tree of dots once it was
-## drawn where its mark is: it "felt like it took a solid 30 or 45 seconds to draw" - 35 s of ink at the hand's own
-## pace, where dashed off over its words it had taken 7): done in this long (seconds), or at the hand's pace if that
-## is sooner ([method drawn_alone]) - unless its mark says how long, `<!-- sketch (10s): ... -->` (2026-10-31, the user,
-## of the same tree done in 5: "drawn too quickly ... I'd like to be able to control how long we linger on a sketch, on
-## a per-sketch basis"), which it then takes, the words over it or not ([method drawn_in_of]).
+## A sketch drawn alone, the voice waiting it out: done in this long (seconds), or at the hand's pace if that is sooner
+## ([method drawn_alone]) - unless its mark says how long, `<!-- sketch (10s): ... -->`, which it then takes, the words
+## over it or not ([method drawn_in_of]).
 const DRAW_ALONE := 5.0
 ## A sketch's own time in its mark's brackets: group 1 the seconds (as a timed hesitation writes them).
 const DRAWN_IN := "^([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?$"
-## The pen at its quickest, against the hand's own pace ([constant LetterHand.PACE]): past a quick voice's 180 words
-## a minute, so the pen keeps with the voice it has (at 2.0 a voice of 0.36 s a word left it 18 words behind).
+## The pen at its quickest, against the hand's own pace ([constant LetterHand.PACE]): past a quick voice's 180 words a
+## minute, so the pen keeps with the voice it has.
 const QUICKEST := 2.5
 ## A voice this quick a word inside a sentence (the chapter's is about 0.45), for the rests the voice is written:
 ## the pen keeps to the voice's own times whatever they are.
@@ -180,12 +146,11 @@ const RETURN := 0.28
 ## The page, as the pad's: the first line's baseline (a rule below the pad's first) and how far a line may
 ## run (px).
 const FIRST_LINE := DeskScript.FIRST_RULE + DeskScript.RULE
-## RULES LEFT EMPTY UNDER A SKETCH before the writing goes on (2026-10-29, the user: "Both sketches are too squished
-## today, with text that is too close to them") - it had gone on the first rule clear of the drawing.
+## Rules left empty under a sketch before the writing goes on.
 const UNDER_SKETCH := 1.0
-## A DRAWING THAT OPENS A PAGE WAITS FOR THE CAMERA (seconds after the turn; the action's `settle`, which [DeskMedium]'s
-## plan and the voice's rests both read): the turn is seen wide, and [LetterMedium]'s camera comes in on the drawing
-## from its middle - drawn at once, the cross and the dot were done before the camera was in.
+## A drawing that opens a page waits for the camera (seconds after the turn; the action's `settle`, which [DeskMedium]'s
+## plan and the voice's rests both read): the turn is seen wide, and [LetterMedium]'s camera comes in on the drawing from
+## its middle.
 const DRAW_SETTLE := 1.5
 const LINE_W := DeskScript.PW - DeskScript.RIGHT - DeskScript.TEXT_X
 ## A struck line is crossed through this high: the share of the hand's body above the baseline.
@@ -193,9 +158,8 @@ const STRIKE_H := 20.0
 ## Where a rest goes inside a paragraph while its voice text is made (a turn's, a sentence's beat): a
 ## character no script holds, put back as the rest once the voice's own marks are taken out round it.
 const HOLD_AT := "\ue000"
-## Where an ink changes INSIDE A WORD (2026-10-28, Secular Haze's "Pen<!-- color: red -->.<!-- color: default -->": the
-## closing stop alone in red): a character no script holds, splitting the word there into two pieces written with no
-## space between ([method _written]'s `glued`), never said.
+## Where an ink changes inside a word: a character no script holds, splitting the word there into two pieces written with
+## no space between ([method _written]'s `glued`), never said.
 const GLUE := "\ue001"
 
 
@@ -223,10 +187,9 @@ static func decide_of(arg: String) -> float:
 	return clampf(a.to_float(), 0.0, DECIDE_MOST) if a.is_valid_float() else DECIDE
 
 
-## THE SKETCHES of [param body], in order: `[{key, prompt, said, parts}]` - the key its description's
-## ([method Manuscript.image_key]), what is said while it is drawn (its paragraph, as [method parse]
-## finds it), the parts each point at it names ([method part_id] of each): what an agent is handed to
-## draw it.
+## The sketches of [param body], in order: `[{key, prompt, said, parts}]` - the key its description's ([method
+## Manuscript.image_key]), what is said while it is drawn (its paragraph, as [method parse] finds it), the parts each point
+## at it names ([method part_id] of each): what an agent is handed to draw it.
 static func sketches(body: String) -> Array:
 	var out: Array = []
 	var cur: Dictionary = {}
@@ -254,10 +217,9 @@ static func sketches(body: String) -> Array:
 	return out
 
 
-## THE PICTURES of [param body] as the painter is handed them ([IllustrationPanel]): its image marks,
-## each pinned to the screen (`(screen)`: a letter shows every picture over the whole frame, so it is
-## painted wide - a book's full page is painted tall), and no sketch (the pen's, never painted). A
-## picture's key is its words', so the medium finds the painting whatever it was pinned to.
+## The pictures of [param body] as the painter is handed them ([IllustrationPanel]): its image marks, each pinned to the
+## screen (`(screen)`: a letter shows every picture over the whole frame, so it is painted wide), and no sketch (the pen's,
+## never painted). A picture's key is its words', so the medium finds the painting whatever it was pinned to.
 static func pictures_only(body: String) -> String:
 	var out := _rx("<!--\\s*sketch\\s*(?:\\([^)]*\\))?\\s*:[\\s\\S]*?-->").sub(body, "", true)
 	return _rx("<!--\\s*image\\s*(?:\\(\\s*\\w+\\s*\\))?\\s*:").sub(out, "<!-- image (screen):", true)
@@ -272,10 +234,10 @@ static func _target(arg: String) -> Dictionary:
 	return {"at": head, "part": part_id(rest)}
 
 
-## THE LETTER IN BLOCKS: each own-line mark `{kind, arg}` (kind one of strike, tap, still, page,
-## image_end, unspoken, sketch, image; an image's and a sketch's `placement` what its brackets say, a sketch's its
-## time) and each paragraph `{kind: "para", text}` - a comment over several lines read as one line, any other
-## own-line comment a note that ends the paragraph and is dropped.
+## The letter in blocks: each own-line mark `{kind, arg}` (kind one of strike, tap, still, page, image_end, unspoken,
+## sketch, image; an image's and a sketch's `placement` what its brackets say, a sketch's its time) and each paragraph
+## `{kind: "para", text}` - a comment over several lines read as one line, any other own-line comment a note that ends
+## the paragraph and is dropped.
 static func blocks(body: String) -> Array:
 	var src := Manuscript.strip_frontmatter(body)
 	var mark := _rx(MARK)
@@ -353,16 +315,15 @@ static func _words(text: String) -> PackedStringArray:
 static func _voiced(text: String) -> String:
 	if not text.contains(UNSAID_OPEN) and not text.contains(GLUE):
 		return text
-	# with the space before them, so a stop after them is the last word's ("morning." - never "morning .") - and the
+	# with the space before them, so a stop after them is the last word's ("morning.", never "morning .") and the
 	# sentence's own marks they end on kept: `<!-- unspoken: mourning. -->` still ends the sentence it is in
 	return _rx("\\s*" + UNSAID_OPEN + "[^" + UNSAID_CLOSE + "]*?([.,;:!?…]*)" + UNSAID_CLOSE).sub(text, "$1", true) \
 		.replace(GLUE, "")
 
 
-## THE WRITTEN WORDS of paragraph [param text]: `[{text, emph, spoken, at}]` - each word as the hand
-## writes it (marks out, emphasis's asterisks off and the word underlined instead), the index among the
-## paragraph's spoken words it is, -1 for one the voice does not say (a dash alone), and where it begins
-## in [param text], for a rest to be put before it.
+## The written words of paragraph [param text]: `[{text, emph, spoken, at}]` - each word as the hand writes it (marks out,
+## emphasis's asterisks off and the word underlined instead), the index among the paragraph's spoken words it is, -1 for
+## one the voice does not say (a dash alone), and where it begins in [param text], for a rest to be put before it.
 static func _written(text: String) -> Array:
 	var out: Array = []
 	var comment := _rx(Manuscript.COMMENT)
@@ -410,15 +371,13 @@ static func _written(text: String) -> Array:
 	return out
 
 
-## THE WALK. [param seed]: the hand's unsteadiness. [param hand]: which hand writes it ([LetterHand]).
-## [param svgs]: a sketch's key -> its SVG (one not drawn yet is left
-## off the page, and its paragraph is only said). [param lengths] and [param sizes]: a drawing's id ->
-## its drawing time and typeset record, as [method DeskScript.parse] takes them. Returns:
-##   actions   - the pen's, in [DeskMedium]'s shape (each with an `id`, "" for what puts no ink down)
-##               and the words' order: a line `pad-text` (its
-##               `strokes` the hand's schedule, `span` its spoken words, `k` 1), a sketch `draw` (`drawn_in`
-##               its mark's own time, when it says one), a `strike` per struck line, a `point` (in a paragraph the pen is not busy with), a `tap`
-##               (`target` desk or pad)
+## The walk. [param seed]: the hand's unsteadiness. [param hand]: which hand writes it ([LetterHand]). [param svgs]: a
+## sketch's key -> its SVG (one not drawn yet is left off the page, and its paragraph is only said). [param lengths] and
+## [param sizes]: a drawing's id -> its drawing time and typeset record, as [method DeskScript.parse] takes them. Returns:
+##   actions   - the pen's, in [DeskMedium]'s shape (each with an `id`, "" for what puts no ink down) and the words'
+##               order: a line `pad-text` (its `strokes` the hand's schedule, `span` its spoken words, `k` 1), a
+##               sketch `draw` (`drawn_in` its mark's own time, when it says one), a `strike` per struck line, a
+##               `point` (in a paragraph the pen is not busy with), a `tap` (`target` desk or pad)
 ##   spans     - what the camera and the screen follow, by spoken word (`from` to `to`, exclusive):
 ##               `image` (`key`, `prompt`, `blend` when it comes up over the picture before it,
 ##               `after_hesitation` when a hesitation stands between the word before it and its mark), `still`,
@@ -426,8 +385,8 @@ static func _written(text: String) -> Array:
 ##   spoken    - PackedStringArray: every spoken word, normalized
 ##   speakable - the text the voice reads
 ##   ignored   - the points the pen could not make (it was writing or drawing then), for the log
-##   pauses    - the spoken words a hesitation follows (on a line of its own, or in a written paragraph):
-##               the writer stops there too ([LetterMedium])
+##   pauses    - the spoken words a hesitation follows (on a line of its own, or in a written paragraph): the writer
+##               stops there too ([LetterMedium])
 static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
 		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> Dictionary:
 	var point := _rx(POINT)
@@ -452,7 +411,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 		var blk: Dictionary = b
 		var kind := String(blk["kind"])
 		var text := String(blk.get("text", ""))
-		# WORDS STRUCK INSIDE A WRITTEN LINE are its words, written and said, and a color mark in one changes the pen
+		# words struck inside a written line are its words, written and said, and a color mark in one changes the pen
 		# there: where each run of them ends, and each change, is a cut
 		var cuts: Array = []
 		var ink_to := ink
@@ -473,10 +432,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			if spoken.size() > 0 and _rx(Manuscript.HESITATION).search(text) != null:
 				pauses.append(spoken.size() - 1)
 			continue
-		# A SKETCH IS DRAWN WHERE ITS MARK IS (2026-10-29, the user: "there is no obvious reason why text written AFTER the
-		# sketch marker is read BEFORE the sketch ... we should just rely on markers"): what comes after it waits for the
-		# pen - the voice silent while it draws - but a thought, which needs no pen, is thought while it draws (one with a
-		# point in it needs the pen, and waits)
+		# a sketch is drawn where its mark is: what comes after it waits for the pen (the voice silent while it draws), but a
+		# thought, which needs no pen, is thought while it draws (one with a point in it needs the pen, and waits)
 		if pending >= 0 and not (kind == "para" and is_thought(text) and point.search(text) == null):
 			var w := _drawn(actions[pending])
 			voice.append({"hold": w, "act": -1, "pen": w})
@@ -507,8 +464,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			"page":
 				new_page = true
 			"image":
-				# A PICTURE STRAIGHT AFTER ANOTHER'S PASSAGE comes up over it: nothing between to see the page for,
-				# and no rest for the page to come back
+				# a picture straight after another's passage comes up over it: nothing between to see the page for, and no
+				# rest for the page to come back
 				var blend := false
 				if not image.is_empty() and int(image["to"]) < 0:
 					image["to"] = spoken.size()
@@ -565,7 +522,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 				var base := spoken.size()
 				var busy := true             # the pen writes or draws through it: no point in it
 				if pending >= 0:
-					# A THOUGHT AS THE SKETCH IS DRAWN: said, never written, the pen drawing across its words
+					# a thought as the sketch is drawn: said, never written, the pen drawing across its words
 					var s: Dictionary = actions[pending]
 					s["dur"] = LEAD
 					s["after"] = base
@@ -579,7 +536,6 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					voice.append({"para": text, "base": base})
 					thought = voice.back()
 					busy = false
-					# a point in it needs the pen there at its word: the voice waits for the pen first
 					if point.search(text) != null and not String(_target(point.search(text).get_string(1))["at"]) == "camera":
 						voice.back()["sync"] = true
 				else:
@@ -588,9 +544,9 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					new_page = false
 					last_para = []
 					held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
-					# A STRUCK RUN ENDS ITS PART OF THE PARAGRAPH: said and written up to it, the writer decides, the pen
-					# crosses those words out, and the rest is the paragraph's next part, written on beside them - and
-					# so does a change of ink, the writer putting one pen down and picking up the other there
+					# a struck run ends its part of the paragraph: said and written up to it, the writer decides, the pen
+					# crosses those words out, and the rest is the paragraph's next part, written on beside them - and so
+					# does a change of ink, the writer putting one pen down and picking up the other there
 					var ws := _written(text)
 					var part_lines: Array = []
 					var part_at := 0             # where the part begins in the text
@@ -606,7 +562,6 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 						if c < 0:
 							continue
 						var at_word := int((cuts[c] as Dictionary)["at"])
-						# the voice's part runs on to the next word said: a stop in another ink is said with its sentence
 						var next_said := at_word
 						while next_said < ws.size() and int((ws[next_said] as Dictionary)["spoken"]) < 0:
 							next_said += 1
@@ -631,15 +586,14 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 						part_at = end
 						part_base = said_to
 					_voice_part(voice, actions, text.substr(part_at), part_base, part_lines)
-					# THE WRITER HESITATES TOO: a hesitation in what is written stops the pen where it is
 					for m in _rx(Manuscript.HESITATION).search_all(text):
 						var before := _words(text.substr(0, m.get_start())).size()
 						if before > 0:
 							pauses.append(base + before - 1)
 					if not still.is_empty() and int(still["to"]) < 0:
 						still["to"] = base
-				# THE POINTS IN IT: at the word after the mark, held to its sentence's end - and in a thought, lingered
-				# on past it ([constant POINT_LINGER]): the voice rests at the next sentence, or after the paragraph
+				# the points in it: at the word after the mark, held to its sentence's end - and in a thought, lingered on
+				# past it ([constant POINT_LINGER]): the voice rests at the next sentence, or after the paragraph
 				var linger_after := false
 				for m in point.search_all(text):
 					var t := _target(m.get_string(1))
@@ -677,7 +631,6 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			s["to"] = spoken.size()
 	_keep_with(actions, spans)
 	actions = lay_out(actions, sizes, hand)
-	# the pen picked up at the start: the first one anything is written with
 	var first_pen := 0
 	for a in actions:
 		if (a as Dictionary).has("ink"):
@@ -688,32 +641,24 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 		"speakable": _voice_text(voice, actions, spans)}
 
 
-## THE VOICE'S TEXT from [param voice] (what [method parse] gathered, in order): each paragraph's words
-## with the voice's own marks, ONE rest between two - the rests the pen asked for summed, a page's turn
-## among them where [param actions]' layout turned one for a silent thing - and inside a written paragraph
-## a rest at a sentence's start where the voice waits for the pen to be ahead - but never at or after a page
-## turned inside the paragraph.
+## The voice's text from [param voice] (what [method parse] gathered, in order): each paragraph's words with the voice's
+## own marks, one rest between two - the rests the pen asked for summed, a page's turn among them where [param actions]'
+## layout turned one for a silent thing - and inside a written paragraph a rest at a sentence's start where the voice
+## waits for the pen to be ahead, but never at or after a page turned inside the paragraph.
 ##
-## THE PEN AND THE VOICE ARE FOLLOWED THROUGH THE LETTER TOGETHER, as [LetterMedium]'s plan follows them:
-## the voice a [constant READ_WORD] a word; the pen line after line, each word as the voice says the one
-## [constant AHEAD_WORDS] before it and never quicker than [constant QUICKEST] its ink's own time, each line begun no sooner than the last's
-## end and a return ([constant RETURN]) - nor, after a thought, a still or the blank page, than the voice gets
-## there, nor, for a line a page turns for, than the voice has read the page and the page is turned. At each
-## sentence's start the voice waits until the pen at its quickest can be ahead of it there ([method _ahead], the
-## words' times on the page by their lines' `ends`). A PAGE TURNED INSIDE A PARAGRAPH IS WAITED FOR WHERE THE PAGE
-## ENDS ON A MARK ([constant PAUSE_END]: a stop, a comma, a dash) - the writer turning the page is the pause there,
-## as it is between two paragraphs - BUT A SENTENCE IT BREAKS IS READ ON TO ITS END (2026-10-27, the user, of "You do
-## not" said and a rest for the turn before "remember agreeing to them": "It would probably feel most natural to just
-## keep speaking there, and to force the pen to catch up after the page turn"), and the voice then waits for the pen
-## before the next sentence (2026-10-28: "if a page ended with punctuation, we can hold the voice until after the
-## page turn. However if a sentence was broken by a page turn, we should just finish the thought/voice - and then we
-## should wait for the pen to catch up, before proceeding with the next sentence"; it had waited only at the next
-## paragraph, the pen at its quickest all the way there - "like 5x speed"). A paragraph's first
-## line the voice is waited for at is handed that rest (`gate` "voice", `gate_rest`), and a line a page turns
-## for is marked ("turn"): [LetterMedium] begins them as the voice gets there. Before what needs
-## the pen free (`sync`: a strike, a tap, a drawing, an unspoken line, a point in a thought, a still) the
-## voice waits until it is. Under a picture ([param spans]' images) the voice reads on and the pen keeps up
-## with it, as the desk's does, unseen.
+## The pen and the voice are followed through the letter together, as [LetterMedium]'s plan follows them: the voice a
+## [constant READ_WORD] a word; the pen line after line, each word as the voice says the one [constant AHEAD_WORDS] before
+## it and never quicker than [constant QUICKEST] its ink's own time, each line begun no sooner than the last's end and a
+## return ([constant RETURN]) - nor, after a thought, a still or the blank page, than the voice gets there, nor, for a line
+## a page turns for, than the voice has read the page and the page is turned. At each sentence's start the voice waits
+## until the pen at its quickest can be ahead of it there ([method _ahead], the words' times on the page by their lines'
+## `ends`). A page turned inside a paragraph is waited for where the page ends on a mark ([constant PAUSE_END]: a stop, a
+## comma, a dash), the writer turning the page being the pause there, as between two paragraphs; but a sentence it breaks
+## is read on to its end, and the voice then waits for the pen before the next sentence. A paragraph's first line the
+## voice is waited for at is handed that rest (`gate` "voice", `gate_rest`), and a line a page turns for is marked
+## ("turn"): [LetterMedium] begins them as the voice gets there. Before what needs the pen free (`sync`: a strike, a tap, a
+## drawing, an unspoken line, a point in a thought, a still) the voice waits until it is. Under a picture ([param spans]'
+## images) the voice reads on and the pen keeps up with it, as the desk's does, unseen.
 static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 	var turns := {}                  # spoken index -> the rest: a drawing said from there turns a page
 	for a in actions:
@@ -750,7 +695,6 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 		var lines: Array = e.get("lines", [])
 		var pictured := _pictured(base, spans)
 		if not lines.is_empty() and not pictured:
-			# WRITTEN AHEAD: the voice waits at each sentence's start and each turned line's
 			var w_end := {}              # a spoken word of the paragraph -> when it is on the page
 			var li := 0
 			var t_word := tv
@@ -781,7 +725,6 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 					var begin := soonest + RETURN
 					line["gate"] = ""
 					if bool(line.get("turn", false)):
-						# the page is read before it turns: the voice has said all of it
 						begin = maxf(begin, t_word + TURN_REST)
 						line["gate"] = "turn"
 						if k0 > 0 and not paused.has(k0):
@@ -802,7 +745,7 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 					if not fresh.is_empty() and String((fresh[0][0] as Dictionary)["gate"]) == "voice":
 						(fresh[0][0] as Dictionary)["gate_rest"] = wait
 				elif read_on.has(p):
-					# A SENTENCE A PAGE BREAKS IS READ ON TO ITS END: the pen comes back behind the voice, and the voice
+					# a sentence a page breaks is read on to its end: the pen comes back behind the voice, and the voice
 					# waits for it at the next sentence (or paragraph) if it must
 					wait = 0.0
 				elif wait > 0.0:
@@ -833,7 +776,6 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 			hold = 0.0
 			var said_from := tv
 			if not lines.is_empty():
-				# under a picture: the desk's dictation, the pen kept with the voice
 				var t_word := tv
 				for l in lines:
 					var line: Dictionary = actions[int(l)]
@@ -846,7 +788,6 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 				for k in range(1, n):
 					if turns.has(base + k):
 						inner[k] = float(turns[base + k])
-				# ...and a point's linger at its next sentence ([constant POINT_LINGER])
 				var rests: Dictionary = e.get("rests", {})
 				for k in rests:
 					inner[int(k)] = float(inner.get(int(k), 0.0)) + float(rests[k])
@@ -856,15 +797,12 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 				tv += float(n) * READ_WORD + resting
 				var work := float(e.get("pen", 0.0))
 				if work > 0.0:
-					# a sketch drawn as a thought is said: dashed off to be done soon after it, or in its own time
 					var takes := drawn_alone(work, float(e["drawn_in"])) if e.has("drawn_in") \
 						else work / draw_pace(work, float(n) * READ_WORD)
 					tp = maxf(maxf(tp, said_from) + takes, tv)
 				elif n > 0 and is_thought(text):
-					# a thought: the writer stops and thinks it, the pen waits
 					gated = true
 		var voiced := CardReading._voice_marks(_hold_before(text, inner) if not inner.is_empty() else text)
-		# each mark, in the text's order, the rest of the word it stands before
 		for k in _sorted_keys(inner):
 			var cut := voiced.find(HOLD_AT)
 			if cut < 0:
@@ -878,26 +816,25 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 	return "\n\n".join(speak)
 
 
-## HOW LONG THE VOICE WAITS, come to a stretch at [param tv] that the pen has written its first [constant
-## AHEAD_WORDS] words of by [param head] and its last of by [param last], [param words] words on: until those
-## first words are on the page, and its last is said no more than [constant OVERTAKE] before it is written.
+## How long the voice waits, come to a stretch at [param tv] that the pen has written its first [constant AHEAD_WORDS]
+## words of by [param head] and its last of by [param last], [param words] words on: until those first words are on the
+## page, and its last is said no more than [constant OVERTAKE] before it is written.
 static func _ahead(tv: float, head: float, last: float, words: int) -> float:
 	var w := maxf(head + 0.1 - tv, last - OVERTAKE - (tv + float(words) * READ_WORD))
 	return w if w > 0.05 else 0.0
 
 
-## HOW FAST A SKETCH IS DRAWN, against the hand's pace: [param work] seconds of ink at the hand's own, to be done
-## [constant DRAW_TAIL] after the [param said] seconds of its words - never slower than the desk's quickest, which
-## a drawing with room is drawn at, nor quicker than [constant DRAW_QUICKEST] ([LetterMedium] draws one as slowly
-## as the next line leaves it time for).
+## How fast a sketch is drawn, against the hand's pace: [param work] seconds of ink at the hand's own, to be done
+## [constant DRAW_TAIL] after the [param said] seconds of its words - never slower than the desk's quickest, which a
+## drawing with room is drawn at, nor quicker than [constant DRAW_QUICKEST] ([LetterMedium] draws one as slowly as the
+## next line leaves it time for).
 static func draw_pace(work: float, said: float) -> float:
 	return clampf(work / maxf(said + DRAW_TAIL, 0.1), DeskScript.MAX_PACE, DRAW_QUICKEST)
 
 
-## HOW LONG A SKETCH DRAWN ALONE TAKES, the voice waiting it out: its [param work] seconds of ink at the hand's own
-## pace while that is done within [param most] (its mark's own time, else [constant DRAW_ALONE]), else that long, never
-## quicker than [constant DRAW_QUICKEST] the hand's pace - the rest the voice is given, and what [LetterMedium] draws
-## it in.
+## How long a sketch drawn alone takes, the voice waiting it out: its [param work] seconds of ink at the hand's own pace
+## while that is done within [param most] (its mark's own time, else [constant DRAW_ALONE]), else that long, never quicker
+## than [constant DRAW_QUICKEST] the hand's pace - the rest the voice is given, and what [LetterMedium] draws it in.
 static func drawn_alone(work: float, most := DRAW_ALONE) -> float:
 	return work / clampf(work / maxf(most, 0.01), 1.0, DRAW_QUICKEST)
 
@@ -907,9 +844,9 @@ static func _drawn(act: Dictionary) -> float:
 	return drawn_alone(float(act["write"]), float(act.get("drawn_in", DRAW_ALONE)))
 
 
-## A SKETCH'S OWN TIME from what its mark's brackets say ([param arg]: `10s` of `<!-- sketch (10s): ... -->`, also
-## `10`, `12.5 seconds`) - the most it takes to draw, its words over it or not ([method drawn_alone]) - else 0.0, the
-## sketch then drawn alone in [constant DRAW_ALONE] at the most, or dashed off over its words ([method draw_pace]).
+## A sketch's own time from what its mark's brackets say ([param arg]: `10s` of `<!-- sketch (10s): ... -->`, also `10`,
+## `12.5 seconds`) - the most it takes to draw, its words over it or not ([method drawn_alone]) - else 0.0, the sketch
+## then drawn alone in [constant DRAW_ALONE] at the most, or dashed off over its words ([method draw_pace]).
 static func drawn_in_of(arg: String) -> float:
 	var m := _rx(DRAWN_IN).search(arg.strip_edges().to_lower())
 	return maxf(m.get_string(1).to_float(), 0.0) if m != null else 0.0
@@ -924,8 +861,8 @@ static func _pictured(base: int, spans: Array) -> bool:
 	return false
 
 
-## THE SENTENCES of paragraph [param text] after its first: their first spoken words (the indices among the
-## paragraph's spoken words) - where the voice may wait for the pen ([method _voice_text]).
+## The sentences of paragraph [param text] after its first: their first spoken words (the indices among the paragraph's
+## spoken words) - where the voice may wait for the pen ([method _voice_text]).
 static func _beats(text: String) -> Dictionary:
 	var out := {}
 	var ended := false
@@ -939,8 +876,8 @@ static func _beats(text: String) -> Dictionary:
 	return out
 
 
-## THE WORDS OF PARAGRAPH [param text] AFTER A MARK THE VOICE MAY PAUSE AT ([constant PAUSE_END]): their spoken
-## indices - where a page turned is waited for ([method _voice_text]).
+## The words of paragraph [param text] after a mark the voice may pause at ([constant PAUSE_END]): their spoken indices -
+## where a page turned is waited for ([method _voice_text]).
 static func _paused(text: String) -> Dictionary:
 	var out := {}
 	var after := false
@@ -983,8 +920,8 @@ static func ink_of(arg: String) -> String:
 	return "" if k in ["", "default"] else k
 
 
-## THE PENS [param body] WRITES WITH, scanned before anything is written: the desk's own first, then each ink its
-## color marks name, in the order they first do - every one lying by the pad from the start ([LetterMedium]).
+## The pens [param body] writes with, scanned before anything is written: the desk's own first, then each ink its color
+## marks name, in the order they first do - every one lying by the pad from the start ([LetterMedium]).
 static func pens_of(body: String) -> PackedStringArray:
 	var out := PackedStringArray([""])
 	for m in _rx(COLOR).search_all(Manuscript.strip_frontmatter(body)):
@@ -1001,12 +938,12 @@ static func _ink_after(text: String, ink: String) -> String:
 	return ink
 
 
-## [param text] (a written paragraph) begun in [param ink], with each `<!-- struck: words -->` made its words and
-## each color mark read: `{text, cuts, first, last}` - a cut `{at, struck, ink}` where the writer stops (the written
-## word after it, [method _written]'s count; how many words before it were struck; the ink after it), `first` the ink
-## of its first word, `last` the ink it ends in. A color mark straight after a struck run is that run's cut: the
-## writer strikes with the pen in hand, then changes it. One before any word is the paragraph's own; one after the
-## last is left for whatever is written next.
+## [param text] (a written paragraph) begun in [param ink], with each `<!-- struck: words -->` made its words and each
+## color mark read: `{text, cuts, first, last}` - a cut `{at, struck, ink}` where the writer stops (the written word after
+## it, [method _written]'s count; how many words before it were struck; the ink after it), `first` the ink of its first
+## word, `last` the ink it ends in. A color mark straight after a struck run is that run's cut: the writer strikes with
+## the pen in hand, then changes it. One before any word is the paragraph's own; one after the last is left for whatever
+## is written next.
 static func _marked(text: String, ink: String) -> Dictionary:
 	var out := ""
 	var at := 0
@@ -1049,10 +986,10 @@ static func _marked(text: String, ink: String) -> Dictionary:
 	return {"text": out, "cuts": cuts, "first": first, "last": cur}
 
 
-## A PART OF A WRITTEN PARAGRAPH, to the voice ([method parse]: the parts between where the writer stops): [param part]
-## of its text, its first word said [param base], its lines [param lines] - said as a paragraph is, or with nothing in
-## it to say (a stop in another ink, words written and never said) the pen's alone, the voice resting while its lines
-## are written as for an unspoken line, the rests either side of it one.
+## A part of a written paragraph, to the voice ([method parse]: the parts between where the writer stops): [param part] of
+## its text, its first word said [param base], its lines [param lines] - said as a paragraph is, or with nothing in it to
+## say (a stop in another ink, words written and never said) the pen's alone, the voice resting while its lines are written
+## as for an unspoken line, the rests either side of it one.
 static func _voice_part(voice: Array, actions: Array, part: String, base: int, lines: Array) -> void:
 	var said := _voiced(part)
 	if not _words(said).is_empty() or said.contains("<!--"):
@@ -1065,9 +1002,9 @@ static func _voice_part(voice: Array, actions: Array, part: String, base: int, l
 		voice.append({"hold": LEAD + w, "act": int(lines[0]), "pen": LEAD + w, "sync": true})
 
 
-## THE PEN IN HAND for ink [param want] ([param pens]' index): [param held] as it is, or the pen there is to change
-## to - a `swap` action ([constant SWAP]) and the voice's rest for it put in, after spoken word [param after]. The
-## first pen asked for is the one picked up at the start, with no swap. Returns the pen held after.
+## The pen in hand for ink [param want] ([param pens]' index): [param held] as it is, or the pen there is to change to - a
+## `swap` action ([constant SWAP]) and the voice's rest for it put in, after spoken word [param after]. The first pen asked
+## for is the one picked up at the start, with no swap. Returns the pen held after.
 static func _hold_pen(actions: Array, voice: Array, held: int, want: int, after: int) -> int:
 	if held < 0 or held == want:
 		return want
@@ -1077,16 +1014,15 @@ static func _hold_pen(actions: Array, voice: Array, held: int, want: int, after:
 	return want
 
 
-## THE LINES OF A PARAGRAPH: [param text] cut into lines as the page's width allows ([constant LINE_W]),
-## each a `pad-text` action with the [param hand]'s strokes - laid on the page by [method lay_out], the
-## first marked `para` (a rule is left empty above it). [param base] is the paragraph's first spoken word,
-## [param n] the letter's line count so far (each line's hand is salted by its place), [param page_break]
-## whether its first line starts a page.
+## The lines of a paragraph: [param text] cut into lines as the page's width allows ([constant LINE_W]), each a `pad-text`
+## action with the [param hand]'s strokes - laid on the page by [method lay_out], the first marked `para` (a rule is left
+## empty above it). [param base] is the paragraph's first spoken word, [param n] the letter's line count so far (each
+## line's hand is salted by its place), [param page_break] whether its first line starts a page.
 ##
-## AT A CUT ([param cuts], [method _marked]) the line ends - with the struck words, if it struck any - marked `cut`, the cut's
-## index - and the next goes on beside them on the same rule (`cont`, `cont_x` px along it), unless its first
-## word will not fit there; [param struck] is handed, for each line a struck run crosses, `{cut, line, x0, x1}`
-## (px along that line, its local index).
+## At a cut ([param cuts], [method _marked]) the line ends - with the struck words, if it struck any - marked `cut`, the
+## cut's index - and the next goes on beside them on the same rule (`cont`, `cont_x` px along it), unless its first word
+## will not fit there; [param struck] is handed, for each line a struck run crosses, `{cut, line, x0, x1}` (px along that
+## line, its local index).
 static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bool, hand: String,
 		cuts: Array = [], struck: Array = []) -> Array:
 	var out: Array = []
@@ -1103,7 +1039,6 @@ static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bo
 	for wi in ws.size():
 		var w: Dictionary = ws[wi]
 		var adv := LetterHand.advance(String(w["text"]), hand) * DeskScript.PX_PER_PT
-		# a piece of a word split by a change of ink sits against the piece before it
 		if bool(w.get("glued", false)) and x > 0.0:
 			x -= sp
 			if cur.is_empty():
@@ -1120,7 +1055,6 @@ static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bo
 		x += adv + sp
 		if ends.has(wi + 1):
 			var c := int(ends[wi + 1])
-			# the struck run, crossed out on each line it lies on
 			var runs := {}
 			for k in range(wi + 1 - int((cuts[c] as Dictionary)["struck"]), wi + 1):
 				var pl: Array = placed[k]
@@ -1181,8 +1115,8 @@ static func _line_action(words: Array, base: int, seed: int, n: int, hand: Strin
 	var salt := "line-%d" % n
 	var written := LetterHand.line(texts, emph, seed, salt, hand)
 	var sched := Ink.schedule(written["strokes"], seed, LetterHand.PACE)
-	# WHEN EACH SPOKEN WORD IS ON THE PAGE, seconds into the line: its last stroke's end (a word drawn with
-	# none, the one before's) - what the voice is held behind ([method _voice_text])
+	# when each spoken word is on the page, seconds into the line: its last stroke's end (a word drawn with none, the one
+	# before's) - what the voice is held behind ([method _voice_text])
 	var done := {}
 	for st in sched["strokes"]:
 		done[int((st as Dictionary).get("k", 0))] = maxf(float(done.get(int(st.get("k", 0)), 0.0)), float(st["t1"]))
@@ -1198,12 +1132,9 @@ static func _line_action(words: Array, base: int, seed: int, n: int, hand: Strin
 		"w_pt": float(written["width"])}
 
 
-## A SKETCH STAYS ON THE PAGE WITH WHAT IS SAID ABOUT IT (the first look, 2026-10-26: the cross and the dot
-## at a page's foot, the page turned under the test the letter asks the viewer to do with them, and the
-## pen pointing at a dot on a page already turned): each `draw` in [param actions] is told how many lines
-## are written after it before the last point at it, or before the end of a still after it (`keep`: rows,
-## a paragraph's empty rule above it among them), and [method lay_out] starts it on a page of its own when
-## they would not fit under it.
+## A sketch stays on the page with what is said about it: each `draw` in [param actions] is told how many lines are
+## written after it before the last point at it, or before the end of a still after it (`keep`: rows, a paragraph's empty
+## rule above it among them), and [method lay_out] starts it on a page of its own when they would not fit under it.
 static func _keep_with(actions: Array, spans: Array) -> void:
 	for di in actions.size():
 		var d: Dictionary = actions[di]
@@ -1231,12 +1162,11 @@ static func _keep_with(actions: Array, spans: Array) -> void:
 		d["keep"] = n
 
 
-## WHERE EACH ACTION GOES ON THE PAGE ([method DeskScript.lay_out]'s, for a letter's lines, in [param hand]):
-## a line on the next rule - a paragraph's first a rule further, under a line of the paragraph before it -
-## a sketch centered half a rule below what is above it, a page turned where the next line
-## or drawing would run off the foot - or where the letter asks for a new page - `turn` on what starts it.
-## A strike stands on the page of what it crosses out; a point on the page it is made over, which may no
-## longer hold what it names ([method DeskMedium.target_box]). Pure: a function of the actions and
+## Where each action goes on the page ([method DeskScript.lay_out]'s, for a letter's lines, in [param hand]): a line on the
+## next rule - a paragraph's first a rule further, under a line of the paragraph before it - a sketch centered half a rule
+## below what is above it, a page turned where the next line or drawing would run off the foot (or where the letter asks
+## for a new page), `turn` on what starts it. A strike stands on the page of what it crosses out; a point on the page it is
+## made over, which may no longer hold what it names ([method DeskMedium.target_box]). Pure: a function of the actions and
 ## the typeset drawings.
 static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAULT) -> Array:
 	var out: Array = []
@@ -1257,7 +1187,7 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 				var base := _snap_rule(maxf(y + DeskScript.RULE, bottom + LetterHand.ascent_px(hand) * 0.8) + gap)
 				var x := DeskScript.TEXT_X
 				if bool(act.get("cont", false)) and started and under_text:
-					# BESIDE THE WORDS STRUCK: on the same rule, from where they end ([method _lay_para])
+					# beside the words struck: on the same rule, from where they end ([method _lay_para])
 					base = y
 					x += float(act.get("cont_x", 0.0))
 				elif started and (bool(act.get("page_break", false)) or base + LetterHand.descent_px(hand) > foot):
@@ -1322,7 +1252,7 @@ static func speakable(body: String, seed := 1, svgs: Dictionary = {}, lengths: D
 	return String(parse(body, seed, svgs, lengths, sizes, hand)["speakable"])
 
 
-## HOW LONG [param body] RUNS when it is read (seconds, the bookends aside): every spoken word at
+## How long [param body] runs when it is read (seconds, the bookends aside): every spoken word at
 ## [constant DeskScript.SAID_WORD] and every rest the letter asks the voice for.
 static func runtime(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
 		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> float:
@@ -1333,9 +1263,9 @@ static func runtime(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dic
 	return t
 
 
-## THE SKETCHES' DRAWING TIMES from the ink step's records ([param records], id -> record) in the hand of
-## [param seed], glyphs no hand has traced from [param fonts] (the answer's `fonts`): what [method parse]
-## takes as `lengths` (the records themselves are its `sizes`).
+## The sketches' drawing times from the ink step's records ([param records], id -> record) in the hand of [param seed],
+## glyphs no hand has traced from [param fonts] (the answer's `fonts`): what [method parse] takes as `lengths` (the
+## records themselves are its `sizes`).
 static func lengths_of(records: Dictionary, seed: int, fonts: Dictionary = {}) -> Dictionary:
 	var out := {}
 	for id in records:
@@ -1354,8 +1284,8 @@ static func records_of(ink: Variant) -> Dictionary:
 	return out
 
 
-## THE ITEMS THE INK STEP LAYS OUT: each sketch's drawing, from [param svgs] (key -> SVG), as
-## [method DeskScript.item] makes a `draw` mark's.
+## The items the ink step lays out: each sketch's drawing, from [param svgs] (key -> SVG), as [method DeskScript.item]
+## makes a `draw` mark's.
 static func items(body: String, svgs: Dictionary) -> Array:
 	var out: Array = []
 	var seen := {}

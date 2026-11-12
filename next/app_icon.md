@@ -26,7 +26,7 @@ drop the shortcut when it changes), iOS by `setAlternateIconName` (the system sh
 time). So a device-picked ghost would be N ghosts baked per build, the device choosing by its id - not
 built.
 
-## Built (2026-10-31)
+## Built
 
 - `src/platform/app_icon.gd` (`AppIcon`): a ghost as data rows - bodies (an SVG path each), poses
   (arms pinned at the shoulders), eyes, mouths, props (a note, two beamed notes, sparkles), backdrop

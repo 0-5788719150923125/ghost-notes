@@ -1,25 +1,17 @@
 extends Node
 
-## Gate for the contour map's HIGHLIGHTED ELEVATION - the one saturated line on the sheet.
+## Gate for the contour map's highlighted elevation, the one saturated line on the sheet. An index
+## contour appears at every occurrence of its elevation, so lighting a different one relights loops all
+## over the map. The music's tonal center chooses it; mapping `chroma_hue`'s angle straight onto the
+## (non-circular) ladder would throw the highlight across the map on a small move over the wrap.
 ##
-## It is not one mark. An index contour appears at EVERY occurrence of its elevation, so
-## lighting a different one relights loops all over the map at once. The music's tonal
-## center chose it, and chose it by mapping `chroma_hue`'s angle straight onto the ladder -
-## which is circular against a ladder that is not, so a small harmonic move across the wrap
-## (0.99 to 0.01) threw the highlight from the top of the country to the bottom, instantly.
-## Reported as pink loops appearing and vanishing every few seconds, and reading as the
-## whole map jumping, because the pink was most of what the eye was tracking.
+## Two properties, which pull against each other (a slow travel rate alone is not enough: the eased
+## position hovers at the half-way mark and the rounding chatters):
 ##
-## Two properties are asserted, and they pull against each other - which is the point, and
-## why a slow travel rate alone was not enough (measured: it changed just as often, because
-## the eased position hovered at the half-way mark and the rounding chattered):
+##   Restless music must not move it: a tonal center sweeping through the wrap has no settled answer,
+##   so the sheet holds its elevation.
 ##
-##   RESTLESS MUSIC MUST NOT MOVE IT. A tonal center sweeping continuously through the wrap
-##   has no settled answer, so the sheet should hold its elevation rather than straddle two.
-##
-##   SETTLED MUSIC MUST MOVE IT. A sustained change has to arrive, or the highlight is
-##   simply frozen and the harmony has stopped meaning anything - a different bug, and an
-##   easy one to introduce while fixing the first.
+##   Settled music must move it: a sustained change has to arrive, or the highlight is frozen.
 ##
 ## Run inside a real boot (chroma_hue reads the Spectrum autoload):
 ##   tests/run_boot_probe.sh tests/scenes/contour_pick_check.gd 120

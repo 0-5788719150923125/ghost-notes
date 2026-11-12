@@ -5,171 +5,117 @@ signal filters_changed                # the look over the whole picture changed 
 signal medium_changed                 # the remembered medium changed; rows that follow it re-show
 signal frame_changed                  # the frame (or what the medium allows of it) changed: the stage refits
 
-## Director - the scene registry, scheduler, and transition engine (autoload).
+## Director - the scene registry, scheduler and transition engine (autoload).
 ##
-## Holds every visualizer paired with a motion behavior, and changes scenes *with
-## the music*. Two typed axes govern a change:
-##
-##   lifecycle - a scene either loops until it is cut, or is a oneshot that plays
-##               one sequence and reports finished() (e.g. glass shatters, settles,
-##               ends). Loops become eligible to exit after a minimum hold.
-##   trigger   - once a scene is eligible, the actual exit waits for a spectral
-##               cue, chosen weighted per scene: a beat (the default - exits land
-##               on the music), a movement (section change), or a lull (a drop into
-##               quiet). A maximum hold is the backstop if the cue never comes.
-##
-## Most changes are clean jump cuts; occasionally it blends. Everything is seeded
-## from the song hash, so a given track always yields the same scenes, behaviors,
-## triggers, and cut/blend choices.
+## Pairs every visualizer with a motion behavior and changes scenes with the music. Two typed axes
+## govern a change: lifecycle (a scene loops until cut, or is a oneshot that plays one sequence and
+## reports finished()) and trigger (once a loop is past its minimum hold, the exit waits for a
+## spectral cue: a beat, a movement or a lull; a maximum hold is the backstop). Most changes are
+## jump cuts, some blend. Everything is seeded from the song hash, so a track always yields the same
+## scenes, behaviors, triggers and cut/blend choices.
 
 
-# ----------------------------------------------------------------------------------
-# The launch-lottery constant. The auto show is spectrally deterministic - a given song
-# always plays the same sequence (see _resolve_seed). This salt is mixed into that seed,
-# so changing it RE-ROLLS the entire show for a fixed song without touching the audio.
-# Tune it: edit the value, relaunch on the launch track, watch the auto show; repeat
-# until it looks best, then ship that value. Starts at the digits of Pi.
+# The auto show is deterministic per song (see _resolve_seed); this salt is mixed into the seed, so
+# changing it re-rolls the whole show for a fixed song.
 const SEED_SALT := 3141592653589793
-# ----------------------------------------------------------------------------------
 
 
 enum Style { CUT, DIP, FADE, LAYER }
 enum Trigger { BEAT, MOVEMENT, LULL }
 
-# How a change is performed, weighted. Mostly a DIP to black - the old scene fades
-# out, a beat of true darkness, then the new one fades up - so the eye gets a clean
-# gap between scenes and two scenes never overlap (the old crossfades read as
-# clipping). The occasional hard CUT keeps things punchy; a plain crossfade is rare.
+# How a change is performed, weighted: mostly a DIP to black (old scene out, a beat of darkness, new
+# one up) so two scenes never overlap; an occasional hard CUT; a plain crossfade is rare.
 const STYLE_BAG := [Style.DIP, Style.DIP, Style.DIP, Style.DIP, Style.CUT, Style.FADE, Style.LAYER]
-# Exit cues, weighted: usually land the cut on a beat; sometimes on a section
-# change (movement) or a drop into quiet (lull).
+# Exit cues, weighted: usually a beat, sometimes a section change (movement) or a drop into quiet (lull).
 const TRIGGER_BAG := [Trigger.BEAT, Trigger.BEAT, Trigger.BEAT, Trigger.MOVEMENT, Trigger.MOVEMENT, Trigger.LULL]
 
-## Don't exit a looping scene before this (seconds) - keeps cuts from thrashing. Both this and
-## max_hold are DRIVE-SCALED at use (see _pacing_scale): a loud/fast/energetic passage shortens the
-## holds so scenes cut faster, a calm one lengthens them. These are the calm-reference values.
+## Don't exit a looping scene before this (seconds). Both this and max_hold are scaled by
+## _pacing_scale at use: loud, fast passages shorten the holds, calm ones lengthen them. These are
+## the calm-reference values.
 @export var min_hold: float = 7.0
-## Exit at least this often even if the chosen cue never arrives (seconds). Drive-scaled (see min_hold).
+## Exit at least this often even if the chosen cue never arrives (seconds); scaled like min_hold.
 @export var max_hold: float = 28.0
 
-## Scene-pacing knobs (see _pacing_scale). The hold multiplier runs from pace_drive_scale (music at
-## full drive - loud/fast - so scenes cut fast) up to pace_calm_scale (quiet - scenes linger).
-## pace_energy_gain sets how strongly loudness alone shortens holds. Turn pace_drive_scale DOWN (or
-## pace_energy_gain UP) for punchier, faster-cutting shows.
+## Scene-pacing knobs (see _pacing_scale). The hold multiplier runs from pace_drive_scale (full
+## drive, scenes cut fast) up to pace_calm_scale (quiet, scenes linger); pace_energy_gain sets how
+## strongly loudness alone shortens holds.
 @export var pace_drive_scale: float = 0.35
 @export var pace_calm_scale: float = 1.2
 @export var pace_energy_gain: float = 3.4
-## Hold the final scene through the song's closing stretch: once the playback is within
-## this many seconds of the end (the audio fading out), stop changing scenes and let the
-## current one ride to the finish - a late cut into a near-empty tail reads as a glitch.
+## Hold the final scene through the song's closing stretch: within this many seconds of the end,
+## stop changing scenes (a late cut into a near-empty tail reads as a glitch).
 @export var end_hold: float = 10.0
 ## Movement score (0..1) that satisfies a MOVEMENT trigger.
 @export var movement_threshold: float = 0.6
 ## Energy (0..1) at or below which a LULL trigger fires.
 @export var lull_threshold: float = 0.12
-## Narrative TEMPO. Higher = faster: scene holds (and the auto-mode pacing bounds) shrink by this,
-## so more scenes play in the same time and each scene marches through its keyframe phases sooner.
-## It compresses ONLY the narrative/keyframe clock - the ambient animation of the bodies is untouched
-## (see GhostScene.event_scale), so a busy session never makes the individual motions look sped-up.
-## A storyboard overrides this with a top-level `sensitivity` (and per-entry `sensitivity`).
+## Narrative tempo; higher is faster. Scene holds and the auto-mode pacing bounds shrink by it and each
+## scene's keyframe phases arrive sooner. It compresses only the narrative clock, not the bodies'
+## ambient animation (see GhostScene.event_scale). A storyboard overrides it with a top-level
+## `sensitivity` (and per-entry `sensitivity`).
 @export var sensitivity: float = 1.0
-## Scene-transition PACING: a plain MULTIPLIER on how long a scene holds before it cuts. 1.0 is the
-## tuned baseline, >1 lets scenes linger (fewer cuts pulling attention off the listening), <1 cuts
-## faster. It multiplies the auto-mode hold bounds - and a burst's quick-cut bounds - so the
-## music-driven variance is kept EXACTLY: both the minimum and the maximum move together, their
-## ratio never changes, and a driving passage still cuts faster than a calm one. Deliberately a
-## multiplier and never a floor/offset/clamp, which would flatten the calm end of the distribution
-## onto one length and kill that variance.
-## Distinct from `sensitivity`, which is narrative TEMPO and also compresses each scene's internal
-## keyframe clock: this knob only changes how long a scene stays on screen, never how it animates,
-## and never how long a dissolve takes (transition_time / layer_time). Authored storyboard timings
-## (`hold:` / `min_hold:` / `max_hold:`) stay literal - an author who wrote `hold: 16` means 16.
-## Set it through [method set_pacing]; persisted by [Settings] as `[director] pacing`.
+## Scene-transition pacing: a multiplier on how long a scene holds before it cuts (1.0 = baseline). It
+## multiplies the auto-mode hold bounds and a burst's quick-cut bounds together, so the music-driven
+## variance is kept; it never changes how a scene animates or how long a dissolve takes, and authored
+## storyboard timings (`hold:`, `min_hold:`, `max_hold:`) stay literal. Set it through
+## [method set_pacing]; persisted by [Settings] as `[director] pacing`.
 var pacing: float = 1.0
-## Bounds applied on every write to `pacing` (a quarter-speed to a quadruple-length show).
-## How readily the show throws a FLOURISH - a burst of quick cuts, or a run of beat-synced
-## punches. 1.0 is the tuned default, 0.0 turns them off entirely, and the top of the range makes
-## them a regular feature. Separate from `pacing` on purpose: pacing is how long an ordinary scene
-## holds, this is how often the show breaks that rhythm, and the reported problem was that raising
-## one while the other ran hot canceled it out.
+## How readily the show throws a flourish (a burst of quick cuts or a run of beat-synced punches):
+## 1.0 is the default, 0.0 turns them off, the top of the range makes them regular. Separate from
+## `pacing`, which is how long an ordinary scene holds.
 var flourish: float = 1.0
-## THE MEDIUM - what the show is carried on, a key from [constant Medium.REGISTRY]
-## (`full` = the original full-frame show, `comic` = a comic page). See [Medium].
-##
-## Held HERE rather than in main, for the same reason `pacing` is: it is a property of
-## the show, it must persist between sessions, and the export render is a separate
-## process that reads `user://ghost.cfg` on boot - so a setting that lives in this file
-## is inherited by a render with no flag to pass and nothing to keep in sync.
-## `--medium NAME` overrides it for one run (tests, and a render of a session that was
-## deliberately not the remembered setting).
+## The medium the show is carried on, a key from [constant Medium.REGISTRY] (`full` = full frame,
+## `comic` = a comic page). See [Medium]. Held here, persisted in `user://ghost.cfg`, so the export
+## render (a separate process that reads it on boot) inherits it with no flag. `--medium NAME`
+## overrides it for one run.
 var medium := "full"
-## A MEDIUM PINNED BY THE MODE THAT IS UP, for its sessions only: "" when the author's [member
-## medium] applies. Never saved - the Table mode shows every reading on its table, and leaving it
-## must hand the next session back the medium the author chose. [method resolved_medium] honors
-## it under an explicit `--medium`, and the exporter passes what that resolves to, so a render of
-## a pinned session is drawn in the same medium. A card pins it with [method pin_medium], and only it takes it
-## back ([method unpin_medium]).
+## A medium pinned by the mode that is up, for its sessions only; "" when the author's [member
+## medium] applies. Never saved. [method resolved_medium] honors it under an explicit `--medium`, and
+## the exporter passes what that resolves to. A card pins it with [method pin_medium], and only it
+## takes it back ([method unpin_medium]).
 var medium_override := ""
 var _pinned_by := 0            # the instance that pinned [member medium_override] ([method pin_medium]), 0 for none
-## THE FRAME a show is made in - "landscape" (1920x1080) or "portrait" (1080x1920) - a property of
-## the show like the medium, kept beside it in the note's picture block (next/notes.md step 10).
-## What a run actually uses is [method resolved_frame].
+## The frame a show is made in - "landscape" (1920x1080) or "portrait" (1080x1920) - kept beside the
+## medium in the note's picture block (next/notes.md). A run uses [method resolved_frame].
 var frame := "landscape"
-## THE LOOK - a post-process over the whole picture, as `{filter key: amount}` with only the
-## live ones present (see [Filters]). Combinable by construction: monochrome AND grain is one
-## dictionary with two entries, not a choice between two modes.
-##
-## Held here for exactly the reasons `medium` is: it is a property of the show, it must
-## persist between sessions, and the export render is a SEPARATE PROCESS that reads
-## `user://ghost.cfg` on boot - so a look that lives in this file is inherited by a render
-## with no flag to pass and nothing to keep in sync. `--filter KEY=AMOUNT,...` (or
-## `--filter none`) overrides it for one run.
+## The look: a post-process over the whole picture as `{filter key: amount}` with only the live
+## ones present (see [Filters]); filters combine. Held here for the same reason as `medium` (the
+## export render inherits it from `user://ghost.cfg`). `--filter KEY=AMOUNT,...` (or `--filter none`)
+## overrides it for one run.
 var filters: Dictionary = {}
-## HOW THE SUBTITLES REVEAL A LINE ([constant Subtitles.REVEALS]): the show's, like its look, so an export
-## render draws them the same way.
+## How the subtitles reveal a line ([constant Subtitles.REVEALS]); an export render draws them the same way.
 var subtitle_reveal := "karaoke"
-## THE TONEMAPPER ([constant Tonemaps.REGISTRY]): the show's, like the filters, so an export render inherits it - pushed
-## down to every 3D set as it changes ([method Tonemaps.choose]). Filmic until a note picks another.
+## The tonemapper ([constant Tonemaps.REGISTRY]), pushed to every 3D set as it changes ([method
+## Tonemaps.choose]); an export render inherits it. Filmic until a note picks another.
 var tonemap: String = Tonemaps.DEFAULT
-## ...and the adjustments a person made, kept for each tonemapper apart (key -> its adjustments): trying AgX never moves
-## Filmic's. A tonemapper not here is at its preset.
+## The adjustments a person made, kept per tonemapper (key -> its adjustments); a tonemapper not here
+## is at its preset.
 var tonemap_adjust: Dictionary = {}
 const FLOURISH_MIN := 0.0
 const FLOURISH_MAX := 4.0
 const PACING_MIN := 0.25
 const PACING_MAX := 4.0
-## Seconds a dip/blend takes end to end (cuts are instant). A DIP spends the middle
-## of this in darkness, so a little long reads as a deliberate breath between scenes.
+## Seconds a dip or blend takes end to end (cuts are instant); a dip spends the middle in darkness.
 @export var transition_time: float = 2.0
-## A LAYER transition is slower than a dip - the two scenes overlap and shift for a while before
-## the first leaves - so it gets its own, longer duration.
+## A LAYER transition is slower than a dip: the two scenes overlap and shift before the first leaves.
 @export var layer_time: float = 6.0
 
 var _host: Node = null
-## WHERE THE FRAME IS IN THE WINDOW (window pixels): the app says it as it lays the stage out, so a click on the frame can be asked
-## of the scene showing ([method pick]).
+## Where the frame is in the window (window pixels), so a click on it can be asked of the scene showing ([method pick]).
 var frame_rect := Rect2()
 var _turned := {}                # who -> {filter: amount}: the Look as parts of the show turn it now ([method turn_look])
-## THE MEDIUM - what the show is carried on (see [Medium]). Set by [method attach];
-## null is treated exactly as `full`, so nothing here needs a medium to exist.
-##
-## The Director must never learn what a comic page is. Everything a medium changes it
-## reaches through four small vetoes - where a scene is ADDED (_scene_host), the
-## transition STYLE (_choose_style), whether the outgoing scene may FADE (_tick_schedule),
-## and who applies the BOOKEND - and nothing else in this file knows the difference.
+## The medium (see [Medium]), set by [method attach]; null is treated as `full`. The Director reaches
+## a medium only through four vetoes: where a scene is added (_scene_host), the transition style
+## (_choose_style), whether the outgoing scene may fade (_tick_schedule), and who applies the bookend.
 var _medium: Medium = null
-## Extra entropy for ONE scene pick, so a caller can mint several scenes without the
-## Director's clock having advanced between them - which is what a comic page does when it
-## casts all of its panels at once (see [method mint_scene]).
-##
-## Folded in by XOR everywhere it is used, and 0 for the Director's own path, so at 0 every
-## expression is bit-identical to what it was before this existed. That is deliberate and it
-## is checked: the show is deterministic per song, and a new feature must not silently
-## re-roll every existing one. tests/scenes/scene_mix_check.gd replays a seed and compares.
+## Extra entropy for one scene pick, so a caller can mint several scenes without the Director's clock
+## advancing between them (a comic page casts all its panels at once; see [method mint_scene]).
+## Folded in by XOR and 0 on the Director's own path, so at 0 every expression is unchanged and the
+## show stays deterministic per song. tests/scenes/scene_mix_check.gd replays a seed and compares.
 var _pick_salt := 0
-var _prev_time := -1.0       # last frame's MUSIC-CLOCK position (Spectrum.current.time); the per-frame
-                             # time step is derived from this, NOT the drawn-frame delta, so scenes and
-                             # the cut schedule stay locked to the song even when a heavy scene drops FPS
+var _prev_time := -1.0       # last frame's music-clock position (Spectrum.current.time); the time step
+                             # derives from it, not the drawn-frame delta, so scenes and cuts stay
+                             # locked to the song when a heavy scene drops FPS
 var _current: GhostScene = null
 var _next: GhostScene = null
 var _index := -1
@@ -181,89 +127,50 @@ var _style: Style = Style.CUT
 var _trigger: Trigger = Trigger.BEAT
 var _beat_prev := 0.0
 var _audio_ema := 0.0        # smoothed audio level (fast attack, slow release) for the silence guard
-# The material's OWN normal level: a slow running mean of _audio_ema (~LEVEL_REF_TAU seconds of
-# music time, about one section). Absolute loudness is a property of the CONTENT, not of the moment -
-# measured narration lives around 0.09-0.14 where a mastered track sits near 0.40 - so every "is the
-# music leaning in?" test measures the fast level against THIS, never against a constant (see _lean).
-# BIAS-CORRECTED (the Adam trick: carry the EMA of a constant 1 and divide by it), so at ten seconds
-# in it is the honest mean of ten seconds rather than a plain EMA still climbing out of its zero
-# start. Without the correction the whole opening reads as one enormous surge - the reference is far
-# below the level purely because it began at zero - and a session reliably flurried in its first
-# minute, which is the one place a show should be settling in.
+# The material's own normal level: a slow running mean of _audio_ema (~LEVEL_REF_TAU seconds, about one
+# section). Loudness belongs to the content (narration ~0.09-0.14, a mastered track ~0.40), so the
+# "is the music leaning in?" tests compare the fast level against this (see _lean). Bias-corrected
+# (the EMA of a constant 1 is carried and divided out), so early on it is the true mean.
 var _audio_ref := 0.0
 var _ref_acc := 0.0
 var _ref_w := 0.0
 const LEVEL_REF_TAU := 30.0
 var _bookend_time := 6.0     # seconds of the start fade-up-from-black and end fade-down-to-black
-# Rapid-fire BURST: a sparse, harmonic-gated flurry of quick jump cuts (a cinematic "3 quick
-# scenes" effect) breaking up the slow holds. While a burst is live the holds shrink to a few
-# seconds and every exit is a hard CUT landing on the beat.
+# Rapid-fire burst: a sparse, harmonic-gated flurry of quick jump cuts. While live, holds shrink to a
+# few seconds and every exit is a hard CUT landing on the beat.
 var _burst_left := 0         # quick scenes remaining in the burst (0 = normal pacing)
 var _burst_min := 1.5        # this burst's minimum hold (s)
 var _burst_max := 4.0        # this burst's maximum hold (s)
-# Scenes until the next flurry of each kind may start - what keeps them rare. ONE counter used to
-# serve both, and that quietly starved the burst: the stinger rolls on every BEAT (a few times a
-# second) while the burst rolls once per CUT (a few times a minute), so whenever the shared counter
-# reached zero the stinger had two orders of magnitude more chances to spend it first, and the burst
-# essentially never got the budget. Two counters, plus the mutual exclusion below (neither kind may
-# begin while the other is live), keep the "never two flurries at once" property that sharing was
-# really there for, without one kind eating the other's turn.
+# Scenes until the next flurry of each kind may start. The burst and the stinger keep separate
+# counters (the stinger rolls on every beat, the burst once per cut, so a shared one starves the
+# burst); neither kind may begin while the other is live.
 var _burst_cd := 0
 var _flurry_cd := 0
 var _cue_prev := 0.0    # _elapsed at the last cue offer (see _cue_taken)
-# Chance of a burst at an eligible cut: BURST_BASE on an ordinary moment, BURST_BASE + BURST_GAIN
-# when the material is leaning in hard, the whole thing scaled by `flourish` (the user's slider).
-# A burst gets ONE roll per CUT - a slow clock, a handful of rolls a minute - and then owes a long
-# cooldown, so these are per-scene odds, not the per-second kind.
-#
-# These are the ORIGINAL 1.2%/5%, restored. They were briefly raised to 5%/15% on the argument that
-# the old numbers had never been exercised (they sat behind a level gate no spoken session could
-# open - see _lean). That reasoning was sound and the conclusion was wrong: once _lean made the
-# gate reachable, the SAME odds that had been inert became live, and quadrupling them on top put a
-# flurry almost every subtitle - measured 29 cuts in 184 s against a 25-cut baseline. Fixing the
-# gate was the whole fix; the odds needed nothing.
+# Chance of a burst at an eligible cut: BURST_BASE on an ordinary moment, BURST_BASE + BURST_GAIN when
+# the material is leaning in hard, scaled by `flourish`. One roll per cut, so these are per-scene odds.
+# Raising them puts a flurry on almost every subtitle (5%/15% measured 29 cuts in 184 s against a
+# 25-cut baseline).
 const BURST_BASE := 0.012
 const BURST_GAIN := 0.05
 const FLURRY_CD_MIN := 6     # never fewer scenes between flurries, whatever the pacing (see _flurry_spacing)
-# Rapid-fire STINGER: instead of cutting through different scenes (jarring at speed), a run of
-# beat-synced PUNCHES that contort / recolor / zoom the CURRENT scene - BANG, BANG, BANG - then
-# settle. A universal modulation: it rides the SceneView pulse + node tint, so it works on any scene.
+# Rapid-fire stinger: a run of beat-synced punches that contort, recolor and zoom the current scene,
+# then settle. It rides the SceneView pulse and node tint, so it works on any scene.
 #
-# Zoom kick ranges, sampled per punch (never baked to one value). Asymmetric on
-# purpose - see the sampler in _drive_stinger and the gate in
-# tests/show/sting_shape_check.gd, which checks the outward one against the margin
-# below rather than against a remembered number.
-# ...AND THE SIZE OF ONE IS ANCHORED TO THE CAMERA'S ORDINARY TRAVEL, below, rather than
-# picked. The first version of this gesture was reported as "the entire scene explodes
-# quickly, then recovers immediately" and the fix was its ENVELOPE - it had been a one-frame
-# step, and tests/show/sting_shape_check.gd has gated the attack ever since. The complaint came
-# back anyway, in the same words, about a punch that is now perfectly smooth: "they were
-# exploding/contracting quickly, in response to harmonics... nobody expects a scene to
-# explode and quickly contract." Smooth was necessary and was never sufficient. A 20% zoom
-# is a fifth of the frame, arriving three times in a row, and no envelope makes that calm.
-#
-# DRIFT_PULL is what the camera moves by on its own, all the time, and a punch is meant to
-# be an ACCENT over that rather than a different order of thing - so the inward kick tops
-# out at one and a half times it. That ratio is the number worth arguing about; the rest
-# follow from it.
+# Zoom kicks are sampled per punch (see _drive_stinger; sting_shape_check.gd checks the outward one
+# against the margin below). A punch is an accent over the camera's ordinary travel: the inward kick
+# tops out at 1.5 x DRIFT_PULL, since larger kicks read as the scene exploding at any smoothness.
 const STING_PUSH := Vector2(0.03, 0.12)   # inward: crops, can expose nothing
 const STING_PULL := Vector2(0.015, 0.04)  # outward: walks the painted edge into shot
-## What a punch is worth when the session is a READING rather than a song, applied to the
-## camera half of it and to the length of a run.
-##
-## A stinger is a music-video gesture - BANG, BANG, BANG - and ghost is also the thing a
-## chapter is read over, where the scene is a background and the words are the content. The
-## trigger deliberately fires in spoken sessions (it used to be gated on an absolute music
-## level and never fired there at all, see `_lean`), and that is right: a reading may still
-## be punctuated. It may not be interrupted. At this fraction the accent is a lean of a few
-## percent - present, and nothing anyone would look up at.
+## What a punch is worth when the session is a reading rather than a song, applied to its camera half
+## and to the length of a run: a reading may be punctuated but not interrupted. At this fraction the
+## accent is a lean of a few percent.
 const STING_READING := 0.45
-## The overdraw margin layer-composed scenes are painted to - the literal 1.15 in
-## [method GhostScene.update_layers], repeated here because the punch has to stay
-## inside it and nothing else connects the two numbers.
+## The overdraw margin layer-composed scenes are painted to: the literal 1.15 in [method
+## GhostScene.update_layers]. A punch must stay inside it.
 const LAYER_OVERDRAW := 1.15
-## The largest zoom-out the camera drift alone can ask for ([method GhostScene.drift_view]:
-## `zoom` gain 0.08 at a view gain of 1, modulator in -1..1).
+## The largest zoom-out camera drift alone can ask for ([method GhostScene.drift_view]: `zoom` gain
+## 0.08 at a view gain of 1, modulator in -1..1).
 const DRIFT_PULL := 0.08
 var _sting_left := 0         # beat-synced punches remaining in the run
 var _sting_t := -1.0         # seconds into the live punch, < 0 when none is live
@@ -279,9 +186,9 @@ var _held := false           # the feedback console freezes cuts while open
 var _kind_last := {}         # scene script path -> _swaps value when last shown
 var _session_seed := 0       # base seed for this session (random per play; --seed pins)
 
-# Manual mode: a storyboard is an ordered, user-authored sequence of scenes (see
-# storyboards/README.md). When _storyboard_seq is non-empty the Director walks it in
-# order instead of the novelty scheduler, and each entry can dictate its own exit.
+# Manual mode: a storyboard is an ordered, authored sequence of scenes (see storyboards/README.md).
+# While _storyboard_seq is non-empty the Director walks it instead of the novelty scheduler, and each
+# entry can dictate its own exit.
 var _storyboard_seq: Array = []
 var _storyboard_tail: Array = []     # entries cycled after a non-looping sequence ends (never freeze)
 var _storyboard_name := ""           # DISPLAY name (the JSON "name" field) - for UI only
@@ -292,67 +199,47 @@ var _storyboard_sensitivity := -1.0 # storyboard-wide tempo override (<0 = fall 
 var _cur_sens := 1.0                 # the ACTIVE scene's resolved sensitivity (used by the pacing bounds)
 var _step := 0
 
-# Content re-localization (manual mode). [Echo] maps what the song SOUNDS like at each
-# schedule position and matches the live harmonics against that map, so the cursor
-# answers to the music itself, never the playhead: when the audio sustains a match
-# somewhere the cursor is not (the song looped, a doubled track re-entered its opening,
-# a finished board sat frozen), the cursor corrects there and the show re-converges.
+# Content re-localization (manual mode). [Echo] maps what the song sounds like at each schedule
+# position and matches the live harmonics against it, so the cursor answers to the music, not the
+# playhead: when the audio sustains a match elsewhere (the song looped, a track re-entered its
+# opening), the cursor corrects there.
 var _echo: Echo = null
 var _sched_starts: Array = []        # schedule start time (s) of each sequence entry
 var _sched_end := 0.0                # schedule time where the sequence ends and the tail begins
 var _manual_i := -1                  # index of the on-screen SEQUENCE entry (-1 = tail / auto)
 var _entry_i := -1                   # ...and of the on-screen entry, the tail's counted on from the sequence's end
 var _heard_t := 0.0                  # monotonic listening clock (never rewinds; lags vote against it)
-var _cursor_t := 0.0                 # the cursor's continuous schedule-time claim - snapped to an
-                                     # entry's start when one begins, free-running through the tail,
-                                     # so the echo map covers the WHOLE first hearing (outro included)
+var _cursor_t := 0.0                 # the cursor's continuous schedule-time claim: snapped to an entry's
+                                     # start when one begins, free-running through the tail, so the echo
+                                     # map covers the whole first hearing
 
 
 # --- picture settings ---------------------------------------------------------
-# [Settings] owns the file, the debounce and the flushing (see settings.gd). These setters
-# write straight through it; there is deliberately no dirty flag or save timer here any
-# more, because a second one is how the picture knobs and the panel they are drawn in ended
-# up saving by two different mechanisms.
+# [Settings] owns the file, the debounce and the flushing; these setters write straight through it
+# (no dirty flag or save timer here).
 
-## THE BOOKEND, in seconds - held silence before the first sound and after the last.
-## Applied by [method main._begin_session] to [member Spectrum.lead_in] / [member
-## Spectrum.tail], and read back by [method _bookend_fade] so the picture arrives exactly
-## as the silence ends rather than over the opening words.
-##
-## The defaults are not round numbers by accident. The ambience pad swells over
-## [constant VoiceFX.PAD_ATTACK] = 3.5 s and releases over [constant
-## VoiceFX.PAD_RELEASE] = 7 s, and its first tone is scheduled half a second in - so an
-## intro much under 5 s hands the voice a bed that is still climbing, and an outro much
-## under 6 s cuts the bed off mid-decay. These are the shortest values that let the
-## ambience actually complete its own gesture at each end.
-## ONE RANGE FOR BOTH ENDS, so the two sliders put a value at the same place; with Intro
-## to 15 and Outro to 20, "9.0" sat at different positions on sliders stacked one above the other.
-## A minute, for a long fade-out at the end of a chapter.
+## The bookend, in seconds: held silence before the first sound and after the last. Applied by
+## [method main._begin_session] to [member Spectrum.lead_in] / [member Spectrum.tail], and read back
+## by [method _bookend_fade] so the picture arrives as the silence ends. The defaults are the shortest
+## that let the ambience pad finish its gesture ([constant VoiceFX.PAD_ATTACK] = 3.5 s,
+## [constant VoiceFX.PAD_RELEASE] = 7 s, first tone half a second in). One range for both ends, so the
+## two sliders place a value at the same position.
 const INTRO_MIN := 0.0
 const INTRO_MAX := 60.0
 const OUTRO_MIN := 0.0
 const OUTRO_MAX := 60.0
 
 
-# The Director is an autoload, so this runs long before attach() builds the first scene - which is
-# exactly the point: the very first hold of a session must already use the remembered pacing.
+# The Director is an autoload, so this runs before attach() builds the first scene: the first hold of
+# a session already uses the remembered pacing.
 func _ready() -> void:
 	_load_pacing()
 
 
-## Set the scene-transition pacing multiplier (see [member pacing]) and remember it for next time.
-## Safe to call on every frame of a slider drag: an unchanged value is a no-op and the disk write is
-## debounced (see the top of _process).
-##
-## The change takes effect on the scene ALREADY on screen, not just the next one. The hold bounds are
-## re-derived from `pacing` every frame in _should_change / _ready_to_exit, so nothing caches them -
-## and that is the behavior we want: someone reaching for this slider is reacting to the cutting
-## they are watching right now, so dragging it up should stretch THIS scene rather than make them sit
-## through one more cut to hear the difference. The one exception is a live BURST, whose bounds were
-## sampled when the burst started (see _maybe_start_burst) and stay fixed for its 2-3 cuts, because a
-## flurry re-scaled halfway through would come out visibly uneven. Dragging DOWNWARD can push the new
-## maximum below the elapsed hold and cut immediately; that is the faster cutting being asked for,
-## and it can only happen once per scene.
+## Set the scene-transition pacing multiplier (see [member pacing]) and remember it. Safe on every
+## frame of a slider drag (an unchanged value is a no-op; the disk write is debounced). It applies to
+## the scene on screen, as the hold bounds are re-derived each frame; a live burst keeps the bounds
+## sampled at its start (see _maybe_start_burst). Dragging down can cut at once, once per scene.
 func set_pacing(v: float) -> void:
 	var p := clampf(v, PACING_MIN, PACING_MAX)
 	if is_equal_approx(p, pacing):
@@ -362,13 +249,10 @@ func set_pacing(v: float) -> void:
 
 
 
-## A NOTE STARTS FROM NOTHING (2026-10-06, the user: "every time we enter a note, we should wipe the
-## scene and start fresh with whatever that new note is trying to do"). The picture settings are
-## the show's, and a note that names none must not inherit the last note's - a tablet chapter's
-## medium came up under a song. So the medium, the frame, the Look and the holds go back
-## to their defaults as a note opens, and the note's own blocks then set what it asks for. Each
-## goes through its setter, so the signals fire and the settings file an export render reads says
-## the same.
+## A note starts from nothing: the medium, the frame, the look and the holds go back to their
+## defaults as a note opens, and the note's own blocks then set what it asks for (a note that names
+## none must not inherit the last note's). Each goes through its setter, so the signals fire and the
+## settings file an export render reads agrees.
 func reset_show() -> void:
 	medium_override = ""
 	_pinned_by = 0
@@ -391,11 +275,8 @@ func is_attached() -> bool:
 	return _host != null
 
 
-## The intro / outro holds, in seconds.
-##
-## These take effect on the NEXT session rather than the running one, and that is not a
-## limitation being worked around: the lead-in is a decision made when playback starts,
-## and there is no coherent meaning to growing it once the audio is already speaking.
+## The intro / outro holds, in seconds. They take effect on the next session: the lead-in is decided
+## when playback starts.
 func set_intro_hold(v: float) -> void:
 	var s := clampf(v, INTRO_MIN, INTRO_MAX)
 	if is_equal_approx(s, intro_hold):
@@ -422,8 +303,8 @@ func set_opening(key: String) -> void:
 	_save_pacing()
 
 
-## THE OPENING THE PICTURE WILL SHOW: the one set, where the medium this run uses draws one ([method
-## Medium.uses] "opening"), else none - what a take records it opened with.
+## The opening the picture will show: the one set, where the medium this run uses draws one ([method
+## Medium.uses] "opening"), else none; what a take records it opened with.
 func opening_shown() -> String:
 	return opening if Medium.uses(resolved_medium(), "opening") else Openings.DEFAULT
 
@@ -437,9 +318,7 @@ func set_flourish(v: float) -> void:
 	_save_pacing()
 
 
-## The camera severity knob. Takes effect on the NEXT move the medium plans, which is at
-## most one shot away - the same "reach for the slider and hear the difference" the pacing
-## slider gives, without re-planning a move that is already traveling.
+## The camera severity knob. Takes effect on the next move the medium plans, at most one shot away.
 func set_camera(v: float) -> void:
 	var c := clampf(v, CAMERA_MIN, CAMERA_MAX)
 	if is_equal_approx(c, camera):
@@ -458,12 +337,9 @@ func set_hand(key: String) -> void:
 	_save_pacing()
 
 
-## Choose the medium (see [member medium]). Persisted like every other picture setting.
-##
-## Takes effect on the NEXT session, not the running one - and unlike the intro hold,
-## that IS a limitation rather than a definition. Swapping presentation mid-show means
-## re-hosting the live scene into a different surface while it is drawing; the honest
-## version of that is a restart, so the surface says so rather than half-doing it.
+## Choose the medium (see [member medium]); persisted like every picture setting. Takes effect on the
+## next session: swapping the presentation mid-show would mean re-hosting the live scene into another
+## surface.
 func set_medium(key: String) -> void:
 	# a mode's own medium is pinned for its sessions, never remembered (see Medium.mode_of)
 	if not Medium.REGISTRY.has(key) or not Medium.mode_of(key).is_empty() or key == medium:
@@ -471,7 +347,7 @@ func set_medium(key: String) -> void:
 	medium = key
 	_save_pacing()
 	medium_changed.emit()
-	# a medium that cannot be shown in the frame chosen falls back to landscape: the stage refits
+	# a medium that cannot be shown in the chosen frame falls back to landscape: the stage refits
 	frame_changed.emit()
 
 
@@ -484,9 +360,8 @@ func set_frame(f: String) -> void:
 	frame_changed.emit()
 
 
-## The frame this run shows and renders in: `--frame NAME` if given, else the remembered one - and
-## landscape whenever the medium cannot be shown in it ([method Medium.frames]), so a note that
-## asks for a frame its presentation lacks still plays, in the other.
+## The frame this run shows and renders in: `--frame NAME` if given, else the remembered one; landscape
+## whenever the medium cannot be shown in it ([method Medium.frames]).
 func resolved_frame() -> String:
 	var want := frame
 	var args := OS.get_cmdline_user_args()
@@ -496,12 +371,8 @@ func resolved_frame() -> String:
 	return want if Medium.supports(resolved_medium(), want) else "landscape"
 
 
-## SET ONE FILTER'S AMOUNT, 0 being off (see [Filters.REGISTRY] for the keys).
-##
-## Takes effect IMMEDIATELY and on the running session, unlike the medium - the material
-## lives on the stage view rather than inside any scene, so there is nothing to re-host and
-## nothing to re-plan. That is the point of it being a post-process: a look is something you
-## dial while watching it.
+## Set one filter's amount, 0 being off (see [Filters.REGISTRY] for the keys). Takes effect at once on
+## the running session: the post-process lives on the stage view, not inside any scene.
 func set_filter(key: String, amount: float) -> void:
 	if not Filters.REGISTRY.has(key):
 		return
@@ -517,8 +388,7 @@ func set_filter(key: String, amount: float) -> void:
 	filters_changed.emit()
 
 
-## The subtitles reveal their words as [param key] says ([constant Subtitles.REVEALS]); an unknown key is
-## the karaoke line.
+## The subtitles reveal their words as [param key] says ([constant Subtitles.REVEALS]); an unknown key is karaoke.
 func set_subtitle_reveal(key: String) -> void:
 	var k := key if Subtitles.REVEALS.has(key) else "karaoke"
 	if k == subtitle_reveal:
@@ -527,8 +397,8 @@ func set_subtitle_reveal(key: String) -> void:
 	_save_pacing()
 
 
-## THE TONEMAPPER: [param key] ([constant Tonemaps.REGISTRY]), with the adjustments kept for it - at once, on every 3D
-## set up now, as a filter is.
+## The tonemapper [param key] ([constant Tonemaps.REGISTRY]) with the adjustments kept for it; applies at
+## once to every 3D set up now, as a filter does.
 func set_tonemap(key: String) -> void:
 	var k: String = Tonemaps.known(key)
 	if k == tonemap:
@@ -547,7 +417,7 @@ func set_tonemap_adjust(name: String, value: float) -> void:
 	if is_equal_approx(v, float(a[name])):
 		return
 	a[name] = v
-	# back at its preset, it is forgotten: a note's block names only what someone moved
+	# back at its preset it is forgotten: a note's block names only what someone moved
 	if a == Tonemaps.sanitize({}):
 		tonemap_adjust.erase(tonemap)
 	else:
@@ -561,8 +431,8 @@ func tonemap_adjustments(key := "") -> Dictionary:
 	return Tonemaps.sanitize(tonemap_adjust.get(tonemap if key.is_empty() else key, {}))
 
 
-## Every tonemapper's adjustments as they were made, and [param key] chosen - a note's block arriving
-## ([method LookCard.apply]): one push for the lot.
+## Every tonemapper's adjustments and the chosen [param key], as a note's block arrives ([method
+## LookCard.apply]): one push for the lot.
 func set_tonemap_all(key: String, adjust: Dictionary) -> void:
 	tonemap_adjust = _tonemap_kept(adjust)
 	tonemap = Tonemaps.known(key)
@@ -594,7 +464,7 @@ func filter_amount(key: String) -> float:
 func resolved_filters(turned := true) -> Dictionary:
 	var over: Variant = Filters.from_args(OS.get_cmdline_user_args())
 	var out: Dictionary = (over as Dictionary).duplicate() if over is Dictionary else Filters.sanitize(filters)
-	# ...AND WHAT A PART OF THE SHOW TURNS OF IT NOW ([method turn_look]: a stage's flags) - in a render as live
+	# what a part of the show turns of it now ([method turn_look]: a stage's flags), live or in a render
 	if turned:
 		for who in _turned:
 			for k in (_turned[who] as Dictionary):
@@ -603,7 +473,7 @@ func resolved_filters(turned := true) -> Dictionary:
 	return out
 
 
-## THE LOOK TURNED by [param who] ([method ShowFeed.turn_look]): kept until it lets go, the picture told when it changes.
+## The look turned by [param who] ([method ShowFeed.turn_look]): kept until it lets go; the picture is told when it changes.
 func turn_look(who: String, dials: Dictionary) -> void:
 	var was: Dictionary = _turned.get(who, {})
 	var same := was.size() == dials.size()
@@ -622,27 +492,25 @@ func look_amount(filter: String) -> float:
 	return float(Filters.sanitize(filters).get(filter, 0.0))
 
 
-## PIN [param key] AS THE MEDIUM while [param by] is up ([member medium_override]): a mode's card that is its
-## medium (the Proof's desk, the card table, the Actor), as it enters the tree. (A Letter and a Dispatch desk pinned theirs
-## too, until they became the Medium card's formats, 2026-11-09: a format IS [member medium].)
+## Pin [param key] as the medium while [param by] is up ([member medium_override]): a mode's card that is
+## its medium (the card table, the Actor), as it enters the tree. A Letter or Dispatch desk is the
+## Medium card's format, so it is [member medium] itself.
 func pin_medium(key: String, by: Object) -> void:
 	medium_override = key
 	_pinned_by = by.get_instance_id()
 
 
-## ...and let it go as [param by] leaves - ONLY ITS OWN PIN (2026-10-28, the user: "adding the "Look" component
-## suddenly add[ed] the underwater scene to my video", attached while it played): a note opened again for a
-## component attached or taken off builds its new card while the old one is only queued to be freed, and the old
-## card, leaving the tree a frame later, let go of the medium by its name - the new card's pin. The next Play
-## mounted the author's remembered medium, and the seeded scenes came up.
+## Let go of the pin as [param by] leaves - only its own pin: a note reopened for a component change
+## builds its new card while the old one is queued to be freed, and the old card, leaving the tree a
+## frame later, must not release the new card's pin.
 func unpin_medium(by: Object) -> void:
 	if _pinned_by == by.get_instance_id():
 		medium_override = ""
 		_pinned_by = 0
 
 
-## The medium this run actually uses: `--medium NAME` if given and known, else the
-## remembered setting. Read by [main] when it builds the stage.
+## The medium this run uses: `--medium NAME` if given and known, else the remembered setting. Read by
+## [main] when it builds the stage.
 func resolved_medium() -> String:
 	var args := OS.get_cmdline_user_args()
 	var i := args.find("--medium")
@@ -665,14 +533,13 @@ func _load_pacing() -> void:
 	intro_hold = clampf(float(Settings.read("director", "intro", intro_hold)), INTRO_MIN, INTRO_MAX)
 	outro_hold = clampf(float(Settings.read("director", "outro", outro_hold)), OUTRO_MIN, OUTRO_MAX)
 	opening = Openings.known(String(Settings.read("director", "opening", opening)))
-	# `vehicle` was this key's name until 2026-09-24; read it once so the choice survives
+	# `vehicle` is this key's old name; read it once so the choice survives
 	var v := String(Settings.read("director", "medium", Settings.read("director", "vehicle", "full")))
 	medium = v if Medium.pickable().has(v) else "full"
 	var f := String(Settings.read("director", "frame", "landscape"))
 	frame = f if Medium.FRAME_SIZES.has(f) else "landscape"
-	# Through `sanitize`, always: a filter dropped from the registry between builds comes back
-	# as a key nothing declares a uniform for, and writing one is a silent no-op rather than
-	# an error - so it is discarded here instead of being carried around forever.
+	# Through `sanitize`: a filter no longer in the registry would come back as a key nothing declares a
+	# uniform for (a silent no-op), so it is discarded.
 	filters = Filters.sanitize(Settings.read("director", "filters", {}))
 	var rv := String(Settings.read("director", "subtitle_reveal", "karaoke"))
 	subtitle_reveal = rv if Subtitles.REVEALS.has(rv) else "karaoke"
@@ -681,9 +548,8 @@ func _load_pacing() -> void:
 	_push_tonemap()
 
 
-## Hand the current values to [Settings], which owns the file and the flushing. There is no
-## debounce here any more and no dirty flag: writing an unchanged value is already a no-op,
-## and every remaining question about WHEN the disk is touched belongs to one place.
+## Hand the current values to [Settings], which owns the file and the flushing; writing an unchanged
+## value is a no-op.
 func _save_pacing() -> void:
 	Settings.write("director", "pacing", pacing)
 	Settings.write("director", "flourish", flourish)
@@ -705,8 +571,8 @@ func shown_medium() -> Medium:
 	return _medium if _medium != null and is_instance_valid(_medium) else null
 
 
-## WHAT IS AT [param at] ON THE FRAME (window pixels), as what shows it says (its own `pick`: a table names its thing and part, a
-## stage its actor) - {} for nothing there, a click off the frame, or nothing that picks (next/editing.md step 7).
+## What is at [param at] on the frame (window pixels), as what shows it says (its own `pick`: a table names its
+## thing and part, a stage its actor); {} for nothing there, a click off the frame, or nothing that picks (next/editing.md).
 func pick(at: Vector2) -> Dictionary:
 	if not frame_rect.has_point(at) or frame_rect.size.x <= 0.0:
 		return {}
@@ -725,10 +591,8 @@ func attach(host: Node, medium: Medium = null) -> void:
 	_medium = medium
 	if medium != null:
 		medium.feed = self             # what it reads of the show ([ShowFeed]) is handed to it
-	# A fresh session hears fresh material: forget the last song's level, its reference, and any
-	# flurry state. attach() runs again on every new take in synthesis mode, so without this a quiet
-	# piece following a loud one would spend its opening judged against the loud one's level - and a
-	# session interrupted mid-flurry would resume owing the old one's quick cuts or its cooldown.
+	# A fresh session hears fresh material: forget the last song's level, its reference and any flurry
+	# state (attach() runs again on every new take in synthesis mode).
 	_audio_ema = 0.0
 	_ref_acc = 0.0
 	_ref_w = 0.0
@@ -738,30 +602,28 @@ func attach(host: Node, medium: Medium = null) -> void:
 	_sting_left = 0
 	_flurry_cd = 0
 	if not is_equal_approx(pacing, 1.0):
-		# Worth a line: "the scenes change too fast/slow" is a common feedback report, and this says
-		# straight away whether the session was running with a non-default hold multiplier.
+		# says at once whether the session runs with a non-default hold multiplier
 		print("ghost: scene pacing x%.2f (holds stretched from the remembered slider)" % pacing)
 	_session_seed = _resolve_seed()
 	print("ghost: session seed %d (%s)" % [_session_seed, _seed_source()])
 	_rng.seed = _session_seed ^ 0x1234567
-	# A long-ish start/end fade, sampled per song into [3, 10] s. Derived from a HASH of the seed
-	# (not a draw off _rng) so it doesn't perturb the deterministic scene sequence.
+	# A start/end fade sampled per song into [3, 10] s from a hash of the seed (not a draw off _rng, which
+	# would perturb the deterministic scene sequence).
 	_bookend_time = 3.0 + 7.0 * (float(hash([_session_seed, "bookend"]) & 0xFFFF) / 65535.0)
 	_locked = _locked_scene_arg()
 	_load_storyboard_arg()
-	# A storyboard's opening is AUTHORED (the-point's eye flies in over the first
-	# second); the long sampled fade-from-black would swallow it, so manual sessions
-	# get a short fixed bookend and the board owns its own entrance.
+	# A storyboard's opening is authored (the-point's eye flies in over the first second), so manual
+	# sessions get a short fixed bookend and the board owns its entrance.
 	if is_manual():
 		_bookend_time = minf(_bookend_time, 2.0)
 	_echo = Echo.new()
 	_heard_t = 0.0
-	# AFTER _session_seed is resolved, BEFORE the first scene is made: the medium samples
-	# its own look from the session seed, and the very next line asks it for a host.
+	# After _session_seed is resolved and before the first scene is made: the medium samples its look
+	# from the session seed, and the next line asks it for a host.
 	if _medium != null and is_instance_valid(_medium):
 		_medium.begin_session()
-	# A medium that owns its cast has just built the whole page; the show opens on
-	# whichever panel it says the reading starts at, already alive in its own viewport.
+	# A medium that owns its cast has built the whole page; the show opens on the panel the reading
+	# starts at, already alive in its own viewport.
 	var opening := _handover(null)
 	if opening != null:
 		_current = opening
@@ -771,41 +633,30 @@ func attach(host: Node, medium: Medium = null) -> void:
 	_arm()
 
 
-## Ask a cast-owning medium for the scene to move to, and adopt whatever it hands back.
-##
-## Null means "not that kind of medium, or it declined this change" and the caller falls
-## through to building a scene itself. Non-null means the scene is ALREADY built and
-## parented and the outgoing one is still on the page - so there is nothing to add, nothing
-## to free, and no fade to play: on a comic the change of scene IS the camera moving, and a
-## crossfade between two panels that are both permanently on the paper would be nonsense.
+## Ask a cast-owning medium for the scene to move to, and adopt what it hands back. Null means "not
+## that kind of medium, or it declined this change": the caller builds a scene itself. Non-null means
+## the scene is already built and parented and the outgoing one is still on the page, so there is
+## nothing to add or free and no fade to play (on a comic the change of scene is the camera moving).
 func _handover(outgoing: GhostScene) -> GhostScene:
 	if _medium == null or not is_instance_valid(_medium) or not _medium.owns_cast():
 		return null
-	# THE CLOCK RESTARTS BEFORE THE MEDIUM IS ASKED. take_over plans the incoming shot from
-	# hold_remaining() ([ComicMedium] sizes its move to a share of it), and with the clock still
-	# on the scene being left that is the leftover of a hold that is over: measured at camera 1,
-	# a median of 4.9 s left for scenes that ran 21, so half the moves sat on the 1.8 s floor.
-	# _arm() resets it again after; this only lets the medium see the hold it is planning for.
+	# The clock restarts before the medium is asked: take_over plans the incoming shot from
+	# hold_remaining() ([ComicMedium] sizes its move to a share of it), which on the old clock is the
+	# leftover of a hold that is over. _arm() resets it again after.
 	_elapsed = 0.0
 	_cue_prev = 0.0
 	var sc := _medium.take_over(outgoing)
 	if sc == null or not is_instance_valid(sc):
 		return null
-	# The scene was minted with its own sensitivity already stamped on it; the hold bounds
-	# read _cur_sens, so re-derive it from the scene actually taking the stage rather than
-	# leaving it on whatever the last mint happened to set.
+	# The hold bounds read _cur_sens, so re-derive it from the scene actually taking the stage, not from
+	# whatever the last mint set.
 	_cur_sens = clampf(sc.event_scale, 0.05, 20.0)
 	return sc
 
 
-## Where an ARRIVING scene is added. Without a medium this is the stage, which is what
-## every `_host.add_child` in this file used to say literally; with one it is whatever
-## surface that medium opens for the incoming scene (a comic page's next panel).
-##
-## Called at the MOMENT OF ARRIVAL and nowhere else, which is deliberate: a medium that
-## has to do something when the show advances (freeze the panel behind, open the next)
-## hangs it off this one call rather than needing a second signal that could get out of
-## step with it.
+## Where an arriving scene is added: the stage without a medium, else the surface that medium opens for
+## it (a comic page's next panel). Called at the moment of arrival and nowhere else, so a medium that
+## must act when the show advances (freeze the panel behind, open the next) hangs it off this one call.
 func _scene_host(incoming: GhostScene) -> Node:
 	if _medium != null and is_instance_valid(_medium):
 		var h := _medium.host_for(incoming)
@@ -814,14 +665,13 @@ func _scene_host(incoming: GhostScene) -> Node:
 	return _host
 
 
-## The seed every scene choice / shot / param roll derives from this session. Random
-## per play (so each play is fresh and you see how scenes combine), unless pinned
-## with `--seed N` - which the exporter passes so a render reproduces what you saw.
+## The seed every scene choice, shot and param roll derives from this session: random per play unless
+## pinned with `--seed N`, which the exporter passes so a render reproduces what was seen.
 func session_seed() -> int:
 	return _session_seed
 
 
-# THE SHOW'S TIME IS THE SESSION CLOCK ([ShowFeed]): what the parts this mounts are handed.
+# The show's time is the session clock ([ShowFeed]): what the parts this mounts are handed.
 
 func show_time() -> float:
 	return Spectrum.current.time
@@ -856,12 +706,10 @@ func ready_ahead(who: String, seconds: float) -> void:
 
 
 # The session seed, by priority:
-#   1. an explicit --seed N (the exporter passes it so a render reproduces a session, and
-#      it is the way to roll a *different* show for the same song on purpose) - taken
-#      verbatim, so the export reproduces session_seed() exactly (the salt is already in it);
-#   2. otherwise the audio's own fingerprint (Spectrum.song_hash) mixed with the tunable
-#      SEED_SALT - SPECTRAL DETERMINISM: the same song + same salt always yields the same
-#      show; changing the salt re-rolls it (the launch-lottery knob);
+#   1. an explicit --seed N (the exporter passes it; also the way to roll another show for the same
+#      song), taken verbatim, so the export reproduces session_seed() (the salt is already in it);
+#   2. the audio's fingerprint (Spectrum.song_hash) mixed with SEED_SALT: the same song and salt
+#      always yield the same show;
 #   3. random, only when no audio is loaded (idle preview).
 func _resolve_seed() -> int:
 	var args := OS.get_cmdline_user_args()
@@ -875,15 +723,13 @@ func _resolve_seed() -> int:
 	return r.randi()
 
 
-# Mix the audio fingerprint with the launch-lottery SEED_SALT into the session seed. A
-# string hash so any change in either input disperses across the whole seed (a different
-# salt is a different show, not a one-bit nudge).
+# Mix the audio fingerprint with SEED_SALT into the session seed. A string hash, so a change in either
+# input disperses across the whole seed.
 func _salt_seed(fingerprint: int) -> int:
 	return hash("%d:%d" % [fingerprint, SEED_SALT])
 
 
-# Where the session seed came from, for the log line (so determinism is observable and
-# the active lottery salt is visible while tuning).
+# Where the session seed came from, for the log line.
 func _seed_source() -> String:
 	for a in OS.get_cmdline_user_args():
 		if a == "--seed":
@@ -893,16 +739,15 @@ func _seed_source() -> String:
 	return "random (no audio)"
 
 
-## Tear down the current session: free the live scene(s) and reset all state, so a
-## later attach() starts cleanly. Called when a session ends (main._end_session) and as a
-## new one starts. Does not clear a storyboard loaded for the *next* session (load it after).
+## Tear down the current session: free the live scene(s) and reset state, so a later attach() starts
+## cleanly. Called when a session ends (main._end_session) and as a new one starts. Does not clear a
+## storyboard loaded for the next session (load it after).
 func detach() -> void:
 	if not _turned.is_empty():
 		_turned = {}
 		filters_changed.emit()
-	# A cast-owning medium's scenes belong to its page, not to this session's current/next
-	# pair - they are still parented in their own panels and its release() lets them go.
-	# Freeing them here would leave the medium holding freed nodes.
+	# A cast-owning medium's scenes belong to its page: still parented in their own panels, and its
+	# release() lets them go. Freeing them here would leave the medium holding freed nodes.
 	var borrowed := _medium != null and is_instance_valid(_medium) and _medium.owns_cast()
 	if _transitioning and is_instance_valid(_next) and not borrowed:
 		_next.queue_free()
@@ -911,9 +756,8 @@ func detach() -> void:
 	_current = null
 	_next = null
 	_host = null
-	# The medium is OWNED BY MAIN (it is mounted on main's stage and outlives a
-	# take's session churn in synthesis modes); detach only lets go of the reference
-	# and tells it to release whatever it was holding for THIS session.
+	# The medium is owned by main (mounted on main's stage, outliving a take's session churn in
+	# synthesis modes); detach drops the reference and tells it to release what it held for this session.
 	if _medium != null and is_instance_valid(_medium):
 		_medium.release()
 	_medium = null
@@ -939,7 +783,7 @@ func detach() -> void:
 	_cursor_t = 0.0
 
 
-## True when the Director is walking a user-authored storyboard (manual mode).
+## True when the Director is walking an authored storyboard (manual mode).
 func is_manual() -> bool:
 	return not _storyboard_seq.is_empty()
 
@@ -949,27 +793,25 @@ func storyboard_name() -> String:
 	return _storyboard_name
 
 
-## The loadable name/path the active storyboard was loaded FROM (may differ from its display name).
-## The exporter passes THIS to the render process so it re-loads the same storyboard, not the display name.
+## The loadable name/path the active storyboard was loaded from (may differ from its display name).
+## The exporter passes this to the render process so it re-loads the same storyboard.
 func storyboard_source() -> String:
 	return _storyboard_source
 
 
-## Load a storyboard by name (res://storyboards/<name>.yaml or .json) or by a full/absolute
-## path, switching the Director into manual mode. Returns true on success. Safe to call
-## before attach(), where it is the board the session starts on (`--storyboard`, a note that names a file).
-## Parsing / defs expansion / validation live in [Storyboard] - the Director only keeps
-## the walk state.
+## Load a storyboard by name (res://storyboards/<name>.yaml or .json) or by a full path, switching the
+## Director into manual mode. Returns true on success. Safe before attach(), where it is the board the
+## session starts on (`--storyboard`, a note that names a file). Parsing, defs expansion and validation
+## live in [Storyboard]; the Director keeps the walk state.
 func load_storyboard(name_or_path: String) -> bool:
 	return load_board(Storyboard.load_file(name_or_path), name_or_path)
 
 
-## Walk [param sb], a storyboard in its LOADED form ([method Storyboard.from_data]) - a file's, or
-## the one a note keeps in its own block. [param source] is the name or path a render can load it
-## from again, "" for one that is in no file ([method storyboard_data] is what a render is handed
-## then). Before attach() it is the board the session starts on; while a show is up, the walk
-## carries on from the entry it had reached, in the new board - an edit lands at the next cut, or
-## at once through [method goto_entry].
+## Walk [param sb], a storyboard in its loaded form ([method Storyboard.from_data]). [param source] is
+## the name or path a render can load it from again, "" for one in no file ([method storyboard_data]
+## is what a render is handed then). Before attach() it is the board the session starts on; while a
+## show is up the walk continues from the entry it had reached: an edit lands at the next cut, or at
+## once through [method goto_entry].
 func load_board(sb: Dictionary, source := "") -> bool:
 	if not bool(sb.get("ok", false)):
 		push_warning("ghost: %s" % String(sb.get("error", "that is not a storyboard")))
@@ -979,13 +821,13 @@ func load_board(sb: Dictionary, source := "") -> bool:
 	_storyboard_tail = sb.tail
 	_storyboard_loop = sb.loop
 	_storyboard_name = sb.name
-	_storyboard_source = source                 # remember HOW it was loaded, so the export can re-load it
+	_storyboard_source = source                 # how it was loaded, so the export can re-load it
 	_storyboard_transition = sb.transition      # e.g. "cut" forces jump cuts
 	_storyboard_sensitivity = sb.sensitivity    # narrative tempo (<0 = use the export)
 	_step = mini(_step, _storyboard_seq.size() + _storyboard_tail.size()) if live else 0
 	_sched_starts = _schedule_starts()
 	if _host != null:
-		# the map of what the song sounds like at each schedule time was filed under the OLD schedule
+		# the map of what the song sounds like was filed under the old schedule
 		_echo = Echo.new()
 		_heard_t = 0.0
 	print("ghost: storyboard '%s' loaded (%d scenes, loop=%s)" % [
@@ -993,8 +835,8 @@ func load_board(sb: Dictionary, source := "") -> bool:
 	return true
 
 
-## Stop walking a storyboard: from the next cut the show is the seed's again. What a note does when
-## its storyboard has nothing written in it.
+## Stop walking a storyboard: from the next cut the show is the seed's again (what a note does when
+## its storyboard has nothing written in it).
 func clear_storyboard() -> void:
 	_storyboard_seq = []
 	_storyboard_tail = []
@@ -1010,8 +852,8 @@ func clear_storyboard() -> void:
 	_step = 0
 
 
-## The storyboard being walked, as raw data a render can load ([method Storyboard.to_yaml]): the
-## loaded form's own keys, every `use` already expanded. {} in the seeded show.
+## The storyboard being walked, as raw data a render can load ([method Storyboard.to_yaml]): the loaded
+## form's own keys, every `use` expanded. {} in the seeded show.
 func storyboard_data() -> Dictionary:
 	if not is_manual():
 		return {}
@@ -1030,20 +872,19 @@ func unauthored_hold() -> float:
 	return min_hold * pacing
 
 
-## WHERE THE WALK IS: `entry` (the index of the entry on screen - the sequence's, then the tail's
-## counted on from its end; -1 in the seeded show or before one is up), `elapsed` (seconds it has
-## been up) and `tail` (whether it is a tail entry). An editor's playhead.
+## Where the walk is: `entry` (index of the entry on screen: the sequence's, then the tail's counted on
+## from its end; -1 in the seeded show or before one is up), `elapsed` (seconds it has been up) and
+## `tail` (whether it is a tail entry). An editor's playhead.
 func cursor() -> Dictionary:
 	return {"entry": _entry_i if is_manual() and _current != null else -1, "elapsed": _elapsed,
 		"tail": is_manual() and _entry_i >= _storyboard_seq.size()}
 
 
-## PUT ENTRY [param i] ON SCREEN NOW - the sequence's, then the tail's counted on from its end. An
-## editor's jump, so it is a cut whatever the entries' own transitions say: no morph from an
-## entry that is not its neighbor, no dip to wait through. The walk carries on from there.
-## [param into] seconds IN: the entry played from its start and run on to there at once, as the Echo's rejoin does
-## ([method _listen_echo]) - a scene is a simulation, its verbs latched as they play, so a moment inside it is reached by
-## playing up to it (at most [constant INTO_MOST] seconds).
+## Put entry [param i] on screen now (the sequence's, then the tail's counted on from its end): an
+## editor's jump, so always a cut. The walk carries on from there. With [param into] seconds the entry
+## is played from its start and run on to there at once, as the Echo's rejoin does ([method
+## _listen_echo]); a scene is a simulation with latched verbs, so a moment inside it is reached by
+## playing up to it (at most [constant INTO_MOST] s).
 func goto_entry(i: int, into := 0.0) -> void:
 	if _host == null or not is_manual():
 		return
@@ -1079,9 +920,9 @@ func goto_entry(i: int, into := 0.0) -> void:
 			left -= dt
 
 
-## THE SHOW PUT AT [param t] SECONDS (a render begun there, `--from`; [Stitch]): a written storyboard's entry then on screen,
-## played up to its moment ([method goto_entry]). A function of show time (a table, a desk) needs nothing; a seeded show's walk
-## is rolled as it goes, so a stretch of one is its own.
+## The show put at [param t] seconds (a render begun there, `--from`; [Stitch]): a written storyboard's
+## entry then on screen, played up to its moment ([method goto_entry]). A function of show time (a
+## table, a desk) needs nothing; a seeded show's walk is rolled as it goes, so a stretch of one is its own.
 func seek_show(t: float) -> void:
 	if not is_manual() or _sched_starts.is_empty():
 		return
@@ -1092,23 +933,16 @@ func seek_show(t: float) -> void:
 	goto_entry(i, t - float(_sched_starts[i]))
 
 
-## The furthest into an entry [method goto_entry] plays at once (seconds): past it, a long hold's moment would stall a frame.
+## The furthest into an entry [method goto_entry] plays at once (seconds); past it a long hold would stall a frame.
 const INTO_MOST := 120.0
 
 
-# Cumulative schedule start time (s) of each sequence entry, mirroring _make_scene's
-# hold scaling (hold / sensitivity) - the coordinate system of the [Echo] map and of a
-# re-localization. Cue-exit entries have no deterministic length, so they contribute a
-# min-hold estimate; the map only needs entry-level granularity there. Also stamps
-# `_sched_end`, where the sequence hands over to the tail.
-#
-# Authored timings are literal here too. Only the UNAUTHORED fallback - an entry that gave no
-# timing at all, and so exits through _scaled_bound's auto branch at runtime - carries `pacing`,
-# so this estimate keeps mirroring what those entries actually do. Computed once at storyboard
-# load and then frozen: it is the [Echo] map's coordinate system, and re-deriving it mid-session
-# would move the schedule times the already-recorded fingerprints were filed under.
-#
-# The arithmetic is [method Storyboard.schedule]'s, which the editor's ruler is drawn from too.
+# Cumulative schedule start time (s) of each sequence entry, mirroring _make_scene's hold scaling
+# (hold / sensitivity): the coordinate system of the [Echo] map and of re-localization. Cue-exit
+# entries contribute a min-hold estimate. Also stamps `_sched_end`, where the sequence hands over to
+# the tail. Authored timings are literal; only an entry with no timing carries `pacing`. Computed once
+# at storyboard load and then frozen, since the recorded fingerprints are filed under these times.
+# The arithmetic is [method Storyboard.schedule]'s, which the editor's ruler uses too.
 func _schedule_starts() -> Array:
 	var s := Storyboard.schedule(_storyboard_seq, storyboard_sensitivity(), unauthored_hold())
 	_sched_end = float(s["end"])
@@ -1125,11 +959,9 @@ func _load_storyboard_arg() -> void:
 
 
 # Reset the hold clock and choose the exit cue for the scene now on screen.
-# A deterministic index in [0, n) from the session _rng (itself seeded from the song fingerprint).
-# This USED to XOR the live Spectrum.seed_bias() so the spectrum steered the choice, but that value
-# samples the spectrum at the instant of the call and is not frame-reproducible in live playback, so
-# the same song rolled a different show every run. Harmonic content already enters deterministically
-# through the fingerprint-derived session seed; the pick stays song-driven AND reproducible.
+# A deterministic index in [0, n) from the session _rng (seeded from the song fingerprint). It does
+# not mix in the live Spectrum.seed_bias(), which samples the spectrum at the instant of the call and
+# is not frame-reproducible in live playback.
 func _biased(n: int) -> int:
 	return absi(_rng.randi()) % maxi(1, n)
 
@@ -1148,36 +980,26 @@ func _arm() -> void:
 	_trigger = Trigger.BEAT if _burst_left > 0 else TRIGGER_BAG[_biased(TRIGGER_BAG.size())]
 
 
-# How hard the music is LEANING IN right now, 0..1, measured against the material's own normal
-# level rather than an absolute one - the surge, not the loudness. Returns -1 when the question is
-# meaningless, which is the one place an ABSOLUTE test still belongs: this instant is silent, or the
-# material's own normal level is silence. `silence_floor` is reused for both (it is already the
-# "nothing is playing" line the cut logic trusts), so a dead track, a silent tail, and a session with
-# no audio at all can never flurry no matter how favorable the ratio between two tiny numbers looks.
-#
-# This replaced a pair of hard `_audio_ema < 0.15` / `>= 0.2` gates. Those are levels a mastered
-# track clears at rest (measured ~0.40) and speech mostly does not (measured ~0.09-0.14), so a spoken
-# session could not fire a burst or a stinger even once - across ~50 minutes of real headless
-# sessions, neither ever fired. A ratio has no genre baked into it: it fires on the passage where
-# this material leans in, whatever this material happens to be.
+# How hard the music is leaning in right now, 0..1, against the material's own normal level
+# (_audio_ref): the surge, not the loudness. Returns -1 when the question is meaningless: this instant
+# is silent or the normal level is silence (`silence_floor`), so a dead track or no audio never
+# flurries. A ratio has no genre in it, where absolute gates fire for a mastered track (~0.40) and not
+# for speech (~0.09-0.14).
 func _lean() -> float:
 	if _audio_ema < silence_floor or _audio_ref < silence_floor:
 		return -1.0
 	return clampf((_audio_ema - _audio_ref) / _audio_ref, 0.0, 1.0)
 
 
-# The shared flurry drive: how emphatic this moment is, 0..1, on the spike curve (sharp onset, quick
-# saturation). `movement` is already content-relative (short-term flux over the passage's own
-# baseline); `lean` supplies the loudness half in the same relative currency.
+# The shared flurry drive, 0..1, on the spike curve (sharp onset, quick saturation). `movement` is
+# content-relative (short-term flux over the passage's own baseline); `lean` is the loudness half.
 func _flurry_drive(lean: float) -> float:
 	return Nonlinear.apply("spike", clampf(Spectrum.current.movement + 0.5 * lean, 0.0, 1.0), 2.5)
 
 
-# A sparse, NON-LINEAR chance to start a rapid-fire CUT burst: only in the auto show, only with
-# audible material, weighted up by how much that material is moving right now (a spike curve on
-# movement + lean). Rare on purpose, with a long cooldown after, so it never chains into a dozen
-# cuts - and never on top of a live stinger, which would read as the show glitching rather than
-# as one deliberate flourish.
+# A sparse, non-linear chance to start a rapid-fire CUT burst: only in the auto show, only with
+# audible material, weighted up by how much that material is moving (a spike curve on movement +
+# lean). Rare, with a long cooldown, and never on top of a live stinger.
 func _maybe_start_burst() -> void:
 	if not _storyboard_seq.is_empty() or _locked >= 0 or _burst_cd > 0 or _sting_left > 0:
 		return
@@ -1186,25 +1008,17 @@ func _maybe_start_burst() -> void:
 		return
 	if _rng.randf() < (BURST_BASE + BURST_GAIN * _flurry_drive(lean)) * flourish:
 		_burst_left = _rng.randi_range(2, 3)       # short - normalizes after a couple of cuts
-		# The flurry is part of the show's character, so it rides the same `pacing` multiplier as the
-		# normal holds instead of staying stubbornly quick while everything around it lengthens. Scaled
-		# HERE, where the pair is sampled, so one burst keeps consistent cut lengths from start to end.
+		# The flurry rides the same `pacing` multiplier as normal holds; scaled here, where the pair is
+		# sampled, so one burst keeps consistent cut lengths.
 		_burst_min = _rng.randf_range(1.0, 2.0) * pacing
 		_burst_max = _rng.randf_range(3.0, 5.0) * pacing
 		_burst_cd = _flurry_spacing()              # then a long stretch of normal pacing
 		print("ghost: BURST x%d  (%.1f-%.1fs cuts)" % [_burst_left, _burst_min, _burst_max])
 
 
-# Scenes to wait before the next flurry of the same kind. Counted in CUTS, not seconds, because a
-# flurry is a STRUCTURAL event - "one flourish every ~N scenes" is a statement about the shape of
-# the show - and a seconds-based spacing would silently make the flourish a bigger and bigger part
-# of the cutting the calmer the passage.
-#
-# Divided by `pacing` for the one thing cuts are NOT a good clock for: the user's own tempo. At
-# pacing 3.0 scenes hold three times as long, so a fixed 14-26 cuts is three times the wall-clock
-# wait - the slider would quietly delete the flourish from exactly the slow, lingering show that
-# most needs punctuating. Dividing keeps the spacing roughly constant in listening time while the
-# count itself stays a cut count. Floored at FLURRY_CD_MIN so it can never degenerate into chaining.
+# Scenes to wait before the next flurry of the same kind. Counted in cuts, not seconds (a seconds-based
+# spacing would make flurries a bigger share of the cutting the calmer the passage), and divided by
+# `pacing` so a slow show keeps the same spacing in listening time. Floored at FLURRY_CD_MIN.
 func _flurry_spacing() -> int:
 	return maxi(FLURRY_CD_MIN, int(round(float(_rng.randi_range(14, 26)) / pacing)))
 
@@ -1223,28 +1037,23 @@ func _locked_scene_arg() -> int:
 	return -1
 
 
-# The whole-show bookend fade: the picture eases UP from black over the first `_bookend_time`
-# seconds of the song and back DOWN to black over the final `_bookend_time` seconds before it
-# ends - reusing the very same modulate.a-to-black that the scene transitions use, so the first
-# and last scenes fade like any other cut. This runs whenever a song is loaded (LIVE and export
-# alike - not export-only any more), so the live animation gets the start/end fades too. Returns
-# 1.0 (no fade) only when idle, where there is no defined start or end. Audio is never touched.
+# The whole-show bookend fade: the picture eases up from black over the first `_bookend_time` seconds
+# of the song and down to black over the final `_bookend_time` seconds, with the same modulate.a-to-black
+# the scene transitions use. Runs whenever a song is loaded (live and export). Returns 1.0 (no fade)
+# only when idle. Audio is never touched.
 func _bookend_fade() -> float:
 	var slen := Spectrum.song_length()
 	if slen <= 0.0:
 		return live_fade                              # idle / no song: no bookend
 	var t := Spectrum.current.time
-	# PAST THE END IS NOT BLACK. A synthesis take reports its length once, then loops
-	# inside the generator without restarting the player, so the playback position runs
-	# on past it monotonically - and the old `(slen - t)/fade` then held at 0 forever,
-	# leaving the stage permanently dark with no way back. An overrun means the length
-	# is stale, not that the show is over.
+	# Past the end is not black: a synthesis take reports its length once, then loops inside the
+	# generator while the playback position runs on, so an overrun means the length is stale, not that
+	# the show is over.
 	if t > slen + 0.5:
 		return 1.0
-	# The fade windows follow the BOOKEND when there is one, so the picture arrives
-	# before the held silence ends rather than over the opening words - a settle before
-	# it, to be looked at before the first sound ([method Openings.settle]). Without a
-	# bookend it falls back to the per-song sampled length, which is the old behavior.
+	# The fade windows follow the bookend when there is one, so the picture arrives before the held
+	# silence ends, with a settle to be looked at before the first sound ([method Openings.settle]).
+	# Without a bookend they use the per-song sampled length.
 	var lead := Spectrum.lead_in
 	var fade_in := maxf(0.5, lead - Openings.settle(lead) if lead > 0.001 else _bookend_time)
 	var fade_out := maxf(0.5, Spectrum.tail if Spectrum.tail > 0.001 else _bookend_time)
@@ -1253,18 +1062,15 @@ func _bookend_fade() -> float:
 	return minf(minf(a_in, a_out), live_fade)
 
 
-# Fixed simulation timestep. The SIM is advanced in chunks of this size (decoupled from the drawn
-# frame), so animations integrate stably and the cut schedule is exact regardless of render FPS.
+# Fixed simulation timestep. The sim advances in chunks of this size, decoupled from the drawn frame,
+# so animations integrate stably and the cut schedule is exact at any render FPS.
 const SIM_STEP := 1.0 / 30.0
-# Cap on how many sim steps one render frame may run - a death-spiral guard. At ~0.5s of catch-up
-# per frame (a renderer crawling below ~2 fps) we stop advancing and accept a small drift, rather
-# than letting a heavy frame trigger an ever-growing pile of sim work.
+# Cap on sim steps per render frame (a death-spiral guard): below ~2 fps the sim stops catching up and
+# accepts a small drift.
 const MAX_SIM_STEPS := 15
-# Per-drawn-frame cap on how much MUSIC time the sim advances, so a single slow frame (a scene build,
-# an FPS hitch) can't lurch the camera forward in one visible step. Any excess is BANKED as debt and
-# paid down over the following (faster) frames, so the show still tracks the music on average - it just
-# eases into place instead of snapping. STEP_CAP must exceed a normal frame's music step or a steadily
-# heavy scene would stretch; DEBT bounds how far behind a sustained-slow patch may fall.
+# Per-drawn-frame cap on how much music time the animation advances, so one slow frame (a scene build,
+# an FPS hitch) cannot lurch the camera. The excess is banked as debt and paid down over later frames.
+# STEP_CAP must exceed a normal frame's music step; DEBT_CAP bounds how far behind a slow patch may fall.
 const STEP_CAP := 0.11
 const DEBT_CAP := 0.4
 var _time_debt := 0.0
@@ -1274,60 +1080,51 @@ func _process(delta: float) -> void:
 	if _current == null:
 		return
 
-	# While the feedback console is open it holds the scene; freeze it entirely (no
-	# update, no redraw) so a heavy scene's draw can't starve the main loop and make
-	# typing in the console lag. The console dims the frozen frame anyway.
+	# While the feedback console is open it holds the scene: freeze it entirely (no update, no redraw)
+	# so a heavy draw cannot starve the main loop and lag typing.
 	if _held:
 		return
 
-	# The raw advance is the advance of the MUSIC CLOCK, not the drawn-frame delta. When a heavy scene
-	# lags the renderer the song keeps playing, so this grows. `_prev_time < 0` marks a fresh reference
-	# (very first frame, or a loop/seek).
+	# The raw advance is that of the music clock, not the drawn-frame delta: when a heavy scene lags
+	# the renderer the song keeps playing, so this grows. `_prev_time < 0` marks a fresh reference
+	# (first frame, a loop or a seek).
 	var raw := clampf(delta, 0.0, 0.12)
 	if _prev_time >= 0.0:
 		var d := Spectrum.current.time - _prev_time
 		raw = d if (d >= 0.0 and d <= 2.0) else clampf(delta, 0.0, 0.1)  # d<0 loop / d>2 seek -> fallback
 	_prev_time = Spectrum.current.time
-	# SMOOTH the ANIMATION step: bank the raw advance as debt, spend at most STEP_CAP per drawn frame, so
-	# a scene BUILD (12-step pre-warm + the first heavy draw) or an FPS hitch can't jerk the fresh camera
-	# into place in one visible frame - the excess eases in over the next faster frames.
+	# Smooth the animation step: bank the raw advance as debt and spend at most STEP_CAP per drawn
+	# frame, so a scene build or an FPS hitch eases in instead of jerking the camera.
 	_time_debt = minf(_time_debt + raw, DEBT_CAP)
 	var anim := minf(_time_debt, STEP_CAP)
 	_time_debt -= anim
 
-	# CRITICAL split: the SCHEDULE (how long a scene holds, transition progress) runs on the RAW music
-	# advance, so a scene always cuts at the right MUSIC time - a heavy scene rendering below the cap
-	# does NOT overrun its hold (that made a scene last 30s+). Only the ANIMATION (camera / growth) is
-	# smoothed. So duration tracks the song; the picture just eases rather than lurches under lag.
+	# The schedule (hold length, transition progress) runs on the raw music advance, so a scene cuts at
+	# the right music time and a heavy scene cannot overrun its hold. Only the animation is smoothed.
 	_tick_schedule(raw)
 	_tick_animation(anim)
 	if _medium != null and is_instance_valid(_medium):
-		# the ANIMATION step, capped - the medium's camera is picture, not schedule, and a
-		# lag spike must ease it rather than teleport it (same reason _tick_animation exists)
+		# the capped animation step: the medium's camera is picture, not schedule
 		_medium.advance(Spectrum.current, anim, _bookend_fade())
 
 
-# The SCHEDULE, advanced by the REAL music-clock step: the hold clock, transition progress + alphas,
-# the smoothed audio level, the stinger, and arming the next cut. This decides WHEN things happen, so
-# it must track the music exactly (never the capped animation step) or scene durations drift long.
+# The schedule, advanced by the real music-clock step: the hold clock, transition progress and alphas,
+# the smoothed audio level, the stinger, and arming the next cut. It must track the music exactly
+# (never the capped animation step) or scene durations drift long.
 func _tick_schedule(dt: float) -> void:
 	var bookend := _bookend_fade()                  # 1, except fading from/to black at the video's ends
-	# WHO APPLIES THE BOOKEND. Folding it into the scene's own alpha is right for a full
-	# frame, where the scene IS the picture - and wrong for any medium that draws more
-	# than the scene, because it would fade one comic panel and leave the paper lit. A
-	# medium that claims it applies the same number to its own root instead; the scene
-	# then just never sees it.
+	# Who applies the bookend: folded into the scene's alpha it is right for a full frame, but wrong for
+	# a medium that draws more than the scene (it would fade one comic panel and leave the paper lit).
+	# A medium that claims it applies the number to its own root, and the scene never sees it.
 	var bf := 1.0 if (_medium != null and is_instance_valid(_medium) and _medium.owns_bookend()) else bookend
 	if _transitioning:
 		var dur: float = layer_time if _style == Style.LAYER else transition_time
 		_trans_t += dt / maxf(0.01, dur)
 		var k := clampf(_trans_t, 0.0, 1.0)
-		# Alphas are sequenced so the picture is clean (a DIP never shows both scenes at once).
+		# Alphas are sequenced so a dip never shows both scenes at once.
 		var a := _transition_alphas(k)
-		# HELD OUTGOING. A comic panel that is already inked on the paper cannot un-draw
-		# itself, so the medium pins the leaving scene at full and only the ARRIVING one
-		# fades - a panel developing in place. The full frame holds nothing and this is
-		# the identity.
+		# Held outgoing: a comic panel already inked on the paper cannot un-draw itself, so the medium
+		# pins the leaving scene at full and only the arriving one fades. The full frame holds nothing.
 		if _medium != null and is_instance_valid(_medium) and _medium.hold_outgoing():
 			a.x = 1.0
 		_current.modulate.a = a.x * bf
@@ -1338,12 +1135,12 @@ func _tick_schedule(dt: float) -> void:
 			_finish_transition()
 		return
 	_elapsed += dt
-	# Smoothed audio level: rises fast, falls slowly, so a momentary gap between beats doesn't
-	# read as silence but a genuinely dead track (or its silent tail) does.
+	# Smoothed audio level: rises fast, falls slowly, so a gap between beats is not silence but a dead
+	# track (or its silent tail) is.
 	var e: float = Spectrum.current.energy
 	_audio_ema = lerpf(_audio_ema, e, 1.0 - exp(-(8.0 if e > _audio_ema else 0.6) * dt))
-	# ... and the slow reference it is judged against (see _audio_ref). Symmetric and much slower than
-	# the level itself, so it settles on what the material normally does and a surge stands out.
+	# ...and the slow reference it is judged against (see _audio_ref): much slower than the level, so a
+	# surge stands out.
 	var ra := 1.0 - exp(-dt / LEVEL_REF_TAU)
 	_ref_acc = lerpf(_ref_acc, _audio_ema, ra)
 	_ref_w = lerpf(_ref_w, 1.0, ra)
@@ -1358,9 +1155,8 @@ func _tick_schedule(dt: float) -> void:
 	_beat_prev = Spectrum.current.beat
 
 
-# The ANIMATION, advanced by the SMOOTHED step in fixed sub-steps (stable integration, no lurch), and
-# DRAWN once (queue_redraw is idempotent per frame) - so under lag we skip intermediate renders while
-# the scene(s) still tick forward.
+# The animation, advanced by the smoothed step in fixed sub-steps and drawn once (queue_redraw is
+# idempotent per frame), so under lag intermediate renders are skipped while the scenes still tick.
 func _tick_animation(anim: float) -> void:
 	var remaining := anim
 	var steps := 0
@@ -1375,9 +1171,9 @@ func _tick_animation(anim: float) -> void:
 		steps += 1
 
 
-# The rapid-fire stinger: on a strong beat, sparsely start a short run of beat-synced punches;
-# each punch zooms / rolls / skews and brightens the CURRENT scene, decaying before the next - a
-# BANG-BANG-BANG without a jarring cut. Universal (rides the view pulse + node tint).
+# The rapid-fire stinger: on a strong beat, sparsely start a short run of beat-synced punches; each
+# zooms, rolls, skews and brightens the current scene, decaying before the next. Rides the view pulse
+# and node tint, so it works on any scene.
 func _drive_stinger(delta: float, bf: float) -> void:
 	var f := Spectrum.current
 	var beat_edge: bool = f.beat > 0.55 and _beat_prev <= 0.55
@@ -1385,20 +1181,13 @@ func _drive_stinger(delta: float, bf: float) -> void:
 		if _sting_left > 0:                          # land the next punch on this beat
 			_sting_left -= 1
 			_sting_t = 0.0
-			# THE PUNCH IS AS LONG AS THE MUSIC IS SLOW. A fixed 1/6 s decay is a
-			# different gesture at 60 BPM than at 160: on slow material it is over
-			# before the eye has followed it, which is half of why it read as a
-			# glitch rather than as a hit. Bounded either side so a mis-estimated
-			# period cannot leave the frame contorted or blink it.
+			# The punch is as long as the music is slow (a fixed decay is a different gesture at 60 and at
+			# 160 BPM), bounded either side against a mis-estimated period.
 			_sting_span = clampf(f.beat_period * 0.55, 0.28, 0.7)
-			# INWARD AND OUTWARD ARE NOT SYMMETRIC. A push-in crops and can never show
-			# anything that is not painted; a pull-back walks the edge of the painted
-			# region into shot. Layer-composed scenes are painted to a FIXED 1.15x
-			# overdraw margin (GhostScene.update_layers), sized for the camera drift's
-			# +-0.08 and documented as such - so a 0.20 pull-back needed 1.25x and got
-			# 1.15x, and a seam appeared and vanished with the punch. That is the other
-			# half of "the whole scene explodes". Outward kicks are bounded by what the
-			# margin can actually cover; inward ones keep the full range.
+			# Inward and outward are not symmetric: a push-in crops, while a pull-back walks the edge of the
+			# painted region into shot. Layer-composed scenes are painted to a fixed 1.15x overdraw margin
+			# (GhostScene.update_layers) sized for the drift's +-0.08, so outward kicks are bounded by what
+			# the margin covers; inward ones keep the full range.
 			_sting_zoom = _rng.randf_range(STING_PUSH.x, STING_PUSH.y)
 			if _rng.randf() < 0.5:
 				_sting_zoom = -_rng.randf_range(STING_PULL.x, STING_PULL.y)
@@ -1406,11 +1195,10 @@ func _drive_stinger(delta: float, bf: float) -> void:
 			_sting_skew = _rng.randf_range(-0.04, 0.04)
 			_sting_flash = _rng.randf_range(0.15, 0.35)
 		elif _flurry_cd == 0 and _burst_left == 0:   # else maybe begin a run (rare, harmonic-gated)
-			# Same content-relative gate as the burst (see _lean): the old absolute `_audio_ema >= 0.2`
-			# is a music level, so spoken sessions never punched once either.
+			# Same content-relative gate as the burst (see _lean).
 			var lean := _lean()
 			if lean >= 0.0 and _rng.randf() < (0.02 + 0.07 * _flurry_drive(lean)) * flourish:
-				# BANG, BANG (, BANG) - or half of one, over a reading.
+				# BANG, BANG (, BANG), or half of one over a reading.
 				_sting_left = _rng.randi_range(1, 2) if _reading() else _rng.randi_range(2, 4)
 				_flurry_cd = _flurry_spacing()
 				print("ghost: STINGER x%d" % _sting_left)
@@ -1419,70 +1207,41 @@ func _drive_stinger(delta: float, bf: float) -> void:
 		if _sting_t >= _sting_span:
 			_sting_t = -1.0                          # settled; back to the scene's own framing
 	var p := _sting_env()
-	# THE CAMERA HALF RIDES THE SCENE'S DECLARED CHARACTER, the flash does not.
-	# `drift_view` already scales every per-frame camera move by `behavior.view`
-	# (0 for a static scene, 0.3 for a fluid one), and the punch was the one thing
-	# that moved the camera without asking - so a scene whose whole design is "hold
-	# still and let the audio speak" got slammed exactly as hard as one built to
-	# swoop. The floor keeps the accent present everywhere rather than deleting it
-	# from half the catalog. The brightness flash is not a camera move and stays
-	# universal, which is what a static scene gets instead.
+	# The camera half rides the scene's declared character; the flash does not. `drift_view` scales every
+	# camera move by `behavior.view` (0 for a static scene, 0.3 for a fluid one), so the punch does too,
+	# with a floor so the accent is present everywhere. The brightness flash stays universal: it is what
+	# a static scene gets instead.
 	var g: float = 0.35 + 0.65 * float(_current.behavior.get("view", 1.0))
-	# ...and a reading is not a music video. See STING_READING.
+	# ...and a reading is softer (see STING_READING).
 	if _reading():
 		g *= STING_READING
-	# ...and a FIELD scene is not rolled or sheared at all. Shot selection already
-	# denies fields `canted` and `pan` "so their edges never swing into view"
-	# (Shots.FIELD_BAG) - and then the punch rolled them 5 degrees anyway, which is
-	# the one move that rule exists to prevent. Zoom survives, because push_in and
-	# pull_back ARE in that bag.
+	# A field scene is not rolled or sheared: shot selection denies fields `canted` and `pan` so their
+	# edges never swing into view (Shots.FIELD_BAG). Zoom survives, as push_in and pull_back are in that bag.
 	var swing := 0.0 if _current.framing == "field" else 1.0
 	_current.view.pulse_zoom = 1.0 + _sting_zoom * p * g
 	_current.view.pulse_rot = _sting_rot * p * g * swing
 	_current.view.pulse_skew = _sting_skew * p * g * swing
-	# Brightness/tint flash via the node modulate, preserving the fade alpha. Softened over a
-	# reading too, but by less: a change of light is what a static scene gets INSTEAD of a
-	# camera move (see above), so taking it down as far as the camera would leave those
-	# scenes with no accent at all.
+	# Brightness/tint flash via the node modulate, preserving the fade alpha. Softened over a reading by
+	# less than the camera: a change of light is what a static scene gets instead of a camera move.
 	var fl := 1.0 + _sting_flash * p * (0.65 if _reading() else 1.0)
 	_current.modulate = Color(fl * (1.0 + 0.06 * _sting_rot), fl, fl * (1.0 - 0.06 * _sting_rot), bf)
 
 
-## Is this session a reading rather than a song?
-##
-## `Spectrum.is_streaming()` is true exactly when the audio is a take being synthesized into
-## a stream - the Generative panel reading a chapter, or the synth editor - and false for a
-## song loaded from a file. It is the only signal here that separates "the picture is the
-## content" from "the picture is the background", and it is one the show should be allowed
-## to know about: a flourish that suits a track is an interruption over a paragraph.
+## Is this session a reading rather than a song? `Spectrum.is_streaming()` is true when the audio is a
+## take being synthesized into a stream (the Generative panel reading a chapter, or the synth editor)
+## and false for a song loaded from a file: the one signal that separates "the picture is the content"
+## from "the picture is the background".
 func _reading() -> bool:
 	return Spectrum.is_streaming()
 
 
-# The punch envelope, 0 -> 1 -> 0 across `_sting_span`. The whole point of it is
-# the ATTACK.
+# The punch envelope, 0 -> 1 -> 0 across `_sting_span`. A step on the beat edge (`pulse_zoom` 1.00 ->
+# 1.20 between two frames) reads as the picture tearing, so the attack eases.
 #
-# A step (`_sting = 1.0` on the beat edge, read by the same frame's draw) does not
-# read as an accent - `pulse_zoom` going 1.00 -> 1.20 between two consecutive
-# frames, with the roll, skew and brightness flash all arriving at once, reads as
-# the picture tearing. Nothing else in ghost's camera moves like that:
-# `SceneView.commit` exists precisely so framing eases rather than snaps, and
-# `snap()` is documented as a pre-warm-only exception.
-#
-# The envelope was always meant to BE the easing (SceneView: "not eased - the
-# Director drives the envelope"); it simply never eased the onset.
-#
-# THE SPLIT AND THE FLOOR ARE BOTH MEASURED, by tests/show/sting_shape_check.gd: the
-# largest change in drawn zoom between two consecutive frames, at the largest kick
-# the sampler can produce (0.20). ghost's own eased camera covers 8% of its
-# remaining error per frame (SceneView.smoothing = 5), so a 0.20 move starts at
-# 1.6%/frame there; 5%/frame is three times that - snappy, and still a move rather
-# than a jump. Hitting it needs a rise of at least ~0.11 s, which is why the span
-# has a floor as well as a ceiling and why the rise takes 40% of it rather than a
-# quarter. The old step measured 20%/frame - the entire kick, in one frame.
-#
-# The squared fall is the same soft tail the old `_sting * _sting` gave, so the
-# release is the shape that always shipped; only the onset is new.
+# tests/show/sting_shape_check.gd measures it: the largest change in drawn zoom between consecutive
+# frames at the largest kick (0.20) stays under 5%/frame, three times the eased camera's 1.6%/frame
+# (SceneView.smoothing = 5). That needs a rise of at least ~0.11 s, hence a floor on the span and a
+# rise of 40% of it. The fall is squared, a soft tail.
 const STING_ATTACK := 0.40
 
 
@@ -1498,28 +1257,23 @@ func _sting_env() -> float:
 	return (1.0 - d) * (1.0 - d)
 
 
-# The content clock (manual mode): feed the [Echo] map at the frontier, listen for a
-# re-localization, and act on one by re-seating the cursor and cutting through the
-# NORMAL transition machinery (a stage->stage morph still carries live actors, so the
-# show converges onto the corrected position rather than teleporting). Returns true
-# when a correction fired this frame. The playhead is never consulted: a looped song,
-# a doubled track, and a trimmed copy all re-converge because the AUDIO matches the
-# map, not because a file position wrapped.
+# The content clock (manual mode): feed the [Echo] map at the frontier, listen for a re-localization,
+# and act on one by re-seating the cursor and cutting through the normal transition machinery (a
+# stage->stage morph still carries live actors). Returns true when a correction fired this frame. The
+# playhead is never consulted: a looped, doubled or trimmed song re-converges because the audio
+# matches the map.
 func _listen_echo(dt: float) -> bool:
-	# Content-anchoring belongs to boards that FOLLOW the song (loop: false). A
-	# `loop: true` board cycles its sequence by its own clock, deliberately unmoored
-	# from audio position - re-localizing it would fight the author every wrap.
+	# Content-anchoring belongs to boards that follow the song (loop: false); a `loop: true` board
+	# cycles by its own clock and re-localizing it would fight the author every wrap.
 	if _echo == null or _storyboard_seq.is_empty() or _storyboard_loop \
 			or Spectrum.song_length() <= 0.0:
 		return false
 	_heard_t += dt
 	_cursor_t += dt
-	# The ROLL: the map's recording cap is one full song, so a cursor that has walked
-	# past it - with the sequence finished - has heard everything this content holds.
-	# A looping session's next content is necessarily the top, so the arc rolls over
-	# NOW, aligned by construction and with no recognition latency: the eye returns
-	# the moment the song does. Echo's vote matcher below remains the backstop for
-	# everything the roll can't know: trimmed, doubled, or cut-up audio, and drift.
+	# The roll: the map records at most one full song, so a cursor past it with the sequence finished
+	# has heard everything. A looping session's next content is the top, so the arc rolls over now,
+	# aligned, with no recognition latency. Echo's vote matcher below remains the backstop for trimmed,
+	# doubled or cut-up audio and drift.
 	if _cursor_t >= Spectrum.song_length() and _step >= _storyboard_seq.size():
 		print("ghost: echo - the song's map is exhausted, rolling the arc to the top")
 		_step = 0
@@ -1528,22 +1282,18 @@ func _listen_echo(dt: float) -> bool:
 		return true
 	if _audio_ema < silence_floor:
 		return false                   # true silence: nothing to record, nothing to recognize
-	# The FAST descriptor (~0.7s of context): recognition must notice the content
-	# moving within a couple of seconds - the seeding descriptor's long memory would
-	# spend the whole intro still tasting the outro.
+	# The fast descriptor (~0.7 s of context): recognition must notice the content moving within a
+	# couple of seconds.
 	var sig := Spectrum.harmonic_signature_fast()
-	# Write-once: only the frontier extends the map. The tail records too - the outro
-	# must own its cells, or its mere RESEMBLANCE to earlier sections yanks the show
-	# backward. The map covers exactly ONE hearing (a static content property): past
-	# one song's worth of schedule the cursor's claim is stale (the audio has wrapped
-	# but recognition hasn't fired yet), and recording there would poison the map.
+	# Write-once: only the frontier extends the map. The tail records too (the outro must own its cells
+	# or its resemblance to earlier sections yanks the show backward). The map covers one hearing: past
+	# one song's schedule the cursor's claim is stale and recording would poison it.
 	if _cursor_t <= Spectrum.song_length():
 		_echo.record(_cursor_t, sig)
 	var to := _echo.listen(_heard_t, _cursor_t, sig, dt)
 	if to < 0.0:
 		return false
-	# A matched time past the sequence belongs to the TAIL: meaningful only if the
-	# walk isn't already there (then the audio saying "outro" changes nothing).
+	# A match past the sequence belongs to the tail: meaningful only if the walk is not already there.
 	if to >= _sched_end - 0.5:
 		if _manual_i < 0 or _storyboard_tail.is_empty():
 			return false
@@ -1552,13 +1302,10 @@ func _listen_echo(dt: float) -> bool:
 		_begin_transition()
 		_cursor_t = to
 		return true
-	# HEAD rule: a match resolving into the OPENING stretch restarts the arc from the
-	# very top instead of joining mid-entry. Recognition costs a couple of seconds, and
-	# the opening entries are short - joining "where the audio is" would skip them
-	# forever (the eye never returned; the show lived on prisms). Restarting the top a
-	# little late is stable by construction: the lateness is inside Echo's self radius
-	# (NEAR), so the localizer reads the offset show as "here" and leaves it alone; the
-	# tail absorbs the shift before the next loop.
+	# Head rule: a match into the opening stretch restarts the arc from the top instead of joining
+	# mid-entry (recognition costs a couple of seconds and the opening entries are short, so joining
+	# there would skip them). The lateness is inside Echo's self radius (NEAR), so the localizer reads
+	# the offset show as "here"; the tail absorbs the shift before the next loop.
 	if to <= Echo.NEAR:
 		if _manual_i == 0:
 			return false
@@ -1576,11 +1323,9 @@ func _listen_echo(dt: float) -> bool:
 	print("ghost: echo - audio matches schedule %.1fs, re-localizing to entry %d" % [to, idx + 1])
 	_step = idx
 	_begin_transition()
-	# Join the entry MID-FLIGHT: recognition costs a few seconds (the signature EMA
-	# must shed the old content, then accumulate its votes), so by now the audio sits
-	# some way INTO the entry. Enter at that offset - fast-forward the hold clock and
-	# the scene's keyframe clock - so the rejoined schedule is aligned with the song
-	# and STAYS aligned, instead of lagging by the recognition latency forever.
+	# Join the entry mid-flight: recognition costs a few seconds, so the audio sits some way into the
+	# entry. Enter at that offset (fast-forward the hold clock and the scene's keyframe clock) so the
+	# schedule stays aligned with the song.
 	var into := clampf(to - float(_sched_starts[idx]), 0.0, 8.0)
 	var incoming: GhostScene = _next if _transitioning else _current
 	if into > 0.25 and incoming != null:
@@ -1599,39 +1344,30 @@ func _should_change() -> bool:
 	if _locked >= 0 or _held:
 		return false
 	if _game_paced and _paced_t < GAME_PACED_MIN * pacing:
-		# `* pacing` because this floor is a hold duration like any other: left fixed it would be the
-		# one gate the slider cannot move, and below pacing 1.0 a flat 12 s would swallow the whole
-		# shortened range and make the control inert in synthesis mode.
-		# the fishing owns the MOMENTS (catches and seed jumps cut at once);
-		# past the floor, the normal harmonic exit logic below owns the tour
+		# `* pacing` because this floor is a hold duration like any other: fixed, it would be the one
+		# gate the slider cannot move. The fishing owns the moments (catches and seed jumps cut at once);
+		# past the floor the harmonic exit logic below owns the tour.
 		return false
-	# In manual mode, a non-looping storyboard with NO tail holds its final scene forever (checked
-	# FIRST, before the fixed-hold check below, so the last entry's `hold` can't try to re-cut into
-	# nothing). With a `tail:`, the sequence instead rolls into the tail entries, cycling on their
-	# own exit rules until the song ends - so a finished arc keeps living rather than freezing.
+	# A non-looping storyboard with no tail holds its final scene forever (checked first, so the last
+	# entry's `hold` cannot try to re-cut into nothing). With a `tail:`, the sequence rolls into the
+	# tail entries, cycling on their own exit rules until the song ends.
 	if not _storyboard_seq.is_empty() and not _storyboard_loop and _storyboard_tail.is_empty() \
 			and _step >= _storyboard_seq.size():
 		return false
 	var ex: Dictionary = _current.exit_spec
-	# A fixed hold is DETERMINISTIC authored timing: honor it exactly, ABOVE the auto-mode silence
-	# and tail pacing gates. Those gates are heuristics for *cue-based* exits (don't cut into dead air
-	# or a fading tail when we're waiting on a beat/lull); an author who wrote `hold: 16` means 16, and
-	# because the value is fixed it is already identical between the live analyzer and the export bake,
-	# so honoring it early keeps live/export parity while letting a tightly-timed piece (e.g. the-point,
-	# whose 33s runs shorter than the 10s tail window) actually reach its finale.
+	# A fixed hold is authored timing: honor it exactly, above the auto-mode silence and tail gates
+	# (heuristics for cue-based exits). Being fixed it is identical in the live analyzer and the export
+	# bake, and a tightly timed piece (the-point, 33 s against a 10 s tail window) still reaches its finale.
 	if ex.has("hold"):
 		return _elapsed >= float(ex["hold"])
-	# Never change scenes during silence: with no perceptible audio there is nothing to cut
-	# on, and forcing a transition (a max-hold backstop, or a LULL trigger that silence
-	# trivially satisfies) drops a fresh scene into dead air. Hold until the audio returns.
+	# Never change scenes during silence: there is nothing to cut on, and a forced transition (a max-hold
+	# backstop, or a LULL trigger that silence trivially satisfies) would drop a fresh scene into dead air.
 	if _audio_ema < silence_floor:
 		return false
-	# Tail gate: hold the final scene through the song's closing stretch, so a cut into a near-empty
-	# FADING tail doesn't read as a glitch. This gate is DETERMINISTIC - a fixed `end_hold` window off
-	# the (known) song length, NOT drive-scaled - because it decides the FINAL scene, and the live
-	# real-time analyzer and the export's baked FFT read the audio slightly differently: a drive-scaled
-	# gate would cross its threshold at different moments in each, so live and export could hold/land on
-	# DIFFERENT last scenes. A fixed window crosses at the same song-time in both, so they always match.
+	# Tail gate: hold the final scene through the song's closing stretch so a cut into a near-empty
+	# fading tail does not read as a glitch. A fixed `end_hold` window off the known song length, not
+	# drive-scaled: the live analyzer and the export's baked FFT read the audio slightly differently, and
+	# a drive-scaled gate would cross at different moments in each and land on different last scenes.
 	var slen := Spectrum.song_length()
 	if slen > 0.0 and Spectrum.current.time >= slen - end_hold:
 		return false
@@ -1643,35 +1379,19 @@ func _should_change() -> bool:
 		return false
 	if not _trigger_fires(ex):
 		return false
-	# A CUE IS AN OFFER, NOT AN ORDER. See _cue_taken: the minimum hold used to be a hard gate,
-	# and on speech the very next onset - a few hundredths of a second later - always took it, so
-	# every scene exited at almost exactly the minimum. Now the offer is accepted on a probability
-	# that ramps with how long the scene has already run.
+	# A cue is an offer, not an order (see _cue_taken): past the minimum hold it is accepted with a
+	# probability that ramps with how long the scene has run.
 	var lo_h: float = _burst_min if _burst_left > 0 else _scaled_bound(ex, "min", min_hold)
 	return _cue_taken(lo_h, hi)
 
 
-## HOW LONG THE CURRENT SCENE IS LIKELY TO HAVE LEFT, in seconds from now.
-##
-## For a medium that flies a camera, this is the difference between a shot and an
-## interruption. [ComicMedium] samples a move's duration from its own vocabulary - seven to
-## twenty seconds - while the cut that ends it is decided here, from bounds that shrink with
-## the music's drive: on a driving passage the median cut lands about five and a half seconds
-## in. So the camera was routinely still converging on a panel when the next cut arrived, and
-## the shot never resolved. Reported as "you can see it converging, then BOOM. The camera cuts
-## to something else... we never gave the camera enough time to slow down, and settle
-## somewhere, before the transition."
-##
-## THE MEDIAN, not the maximum, because the maximum is a backstop that usually does not
-## happen. Between `lo` and `hi` the cue hazard is cubic (see [method _cue_taken]), so the
-## survival curve is exp(-CUE_TOTAL * u^3) and half the scenes are gone by
-## u = cbrt(ln2 / CUE_TOTAL) - about 56% of the way through the window. Sizing a move to the
-## backstop would make every shot too slow; sizing it to the minimum would make every shot
-## rushed. The median is the honest answer to "how long have I probably got".
-##
-## Returns a deliberately large number when the cutting is frozen (the feedback console, a
-## probe) or when nothing is playing: a caller should then use its own natural timing rather
-## than compress a move to fit a deadline that is not coming.
+## How long the current scene is likely to have left, in seconds from now: the median, not the
+## maximum (a backstop that usually does not happen). A medium that flies a camera ([ComicMedium]
+## samples a move of seven to twenty seconds) sizes its shot to it. Between `lo` and `hi` the cue
+## hazard is cubic (see [method _cue_taken]), so the survival curve is exp(-CUE_TOTAL * u^3) and half
+## the scenes are gone by u = cbrt(ln2 / CUE_TOTAL), about 56% through the window. Returns a
+## deliberately large number when cutting is frozen (the feedback console, a probe) or nothing is
+## playing: a caller then uses its own natural timing.
 func hold_remaining() -> float:
 	if _held or _current == null or not is_instance_valid(_current):
 		return 1e9
@@ -1684,44 +1404,23 @@ func hold_remaining() -> float:
 	var med := lo + (hi - lo) * u
 	if _elapsed < med:
 		return med - _elapsed
-	# PAST THE MEDIAN THE SCENE IS STILL RUNNING, so the answer is not zero.
-	#
-	# `maxf(0.0, med - _elapsed)` reports ZERO for the whole tail of any hold that outlives
-	# its median - and the median is only 56% of the way through the window, so that is most
-	# of the second half of every scene. A caller asking "how long have I got" is told "none"
-	# over and over while the scene runs on, and [ComicMedium] answers that by settling again
-	# every few seconds: measured in an export log, 19 of 42 camera moves were settles, in runs
-	# of up to seven, each re-easing the shot a fifth of the way toward the panel it was on.
-	#
-	# Beyond the median the honest remaining time is the distance to the BACKSTOP, which is the
-	# one moment the cut is certain. It shrinks to zero as that arrives, so a caller pacing
-	# itself against this still tightens as the scene ends - it simply is not told the scene is
-	# over half a minute before it is.
+	# Past the median the scene is still running, so the answer is not zero: `maxf(0.0, med - _elapsed)`
+	# would report none for most of the second half of every scene, and [ComicMedium] would keep settling
+	# the shot again. Beyond the median the remaining time is the distance to the backstop, the one
+	# moment the cut is certain; it shrinks to zero as that arrives.
 	return maxf(0.0, hi - _elapsed)
 
 
-## Take this cue, or let it pass? A ramp, not a gate.
+## Take this cue, or let it pass? A ramp, not a gate: a hard `min_hold` gate is a metronome, since on
+## speech onsets arrive several times a second and the next trigger past the gate lands within a frame
+## or two of it. Past the minimum an arriving cue is accepted with a probability that starts near zero
+## and rises with how long the scene has run (`u`, the position through the window; hazard ~ u^2).
 ##
-## A hard `min_hold` gate is a metronome. On speech the beat detector fires an onset several
-## times a second, so "the next trigger past the gate" is always within a frame or two of the
-## gate opening - measured, a 7.29 s median with an IQR of 0.94 s, every scene exiting at
-## essentially the same instant, and raising the hold only moves the metronome.
-## So eligibility no longer decides anything by itself. Past the minimum, an arriving cue is
-## ACCEPTED with a probability that starts near zero and rises the longer the scene has run:
-## possible at the minimum, likely by the backstop. `u` is the position through the window and the
-## hazard goes as u², so the first seconds past the gate are genuinely unlikely to cut while a
-## scene that has already run a long time is under real pressure to.
-##
-## IT IS A RATE PER SECOND, not a chance per cue, and that distinction is the whole point: speech
-## offers cues constantly and music offers them sparsely, and integrating the hazard over the time
-## since the last offer makes both content types produce the same distribution of scene lengths.
-## A per-cue probability would cut speech ten times faster than music for no musical reason.
-##
-## CUE_TOTAL is the integrated hazard across the whole window - the expected number of "cut now"
-## events if the scene somehow survived to the backstop. Around 4 puts the median a little past
-## halfway and leaves only a couple of percent to reach the backstop. Because both bounds scale
-## together with `pacing`, the SHAPE of the distribution is identical at every setting: the slider
-## stretches the spread, it does not flatten it.
+## It is a rate per second, not a chance per cue: integrating the hazard over the time since the last
+## offer gives speech (constant cues) and music (sparse cues) the same distribution of scene lengths.
+## CUE_TOTAL is the integrated hazard across the window, the expected number of "cut now" events if the
+## scene survived to the backstop; around 4 puts the median a little past halfway and leaves a couple of
+## percent reaching it. Both bounds scale with `pacing`, so the shape is the same at every setting.
 const CUE_TOTAL := 4.0
 
 
@@ -1729,18 +1428,18 @@ func _cue_taken(lo: float, hi: float) -> bool:
 	var span := maxf(0.001, hi - lo)
 	var u := clampf((_elapsed - lo) / span, 0.0, 1.0)
 	var hazard := 3.0 * CUE_TOTAL / span * u * u     # per second; integrates to CUE_TOTAL over span
-	# Time since the LAST offer, floored at the moment this scene became eligible so the first cue
-	# past the gate cannot claim credit for the whole hold before it.
+	# Time since the last offer, floored at the moment this scene became eligible so the first cue past
+	# the gate cannot claim credit for the whole hold before it.
 	var dt := maxf(0.0, _elapsed - maxf(_cue_prev, lo))
 	_cue_prev = _elapsed
 	return _rng.randf() < 1.0 - exp(-hazard * dt)
 
 
-# Scene holds scale with the music's DRIVE: how hard it is pushing RIGHT NOW. A loud, fast, active
-# passage shrinks both the minimum and maximum hold so scenes cut faster; a calm one lets them
-# linger. Energy is the reliable backbone (a beat-period estimate alone barely moves for fast music
-# and stalls when onsets are missed); a quick pulse and busy spectral flux push it further. Returns
-# a hold multiplier from `pace_drive_scale` (full drive -> fast cuts) up to `pace_calm_scale`.
+# Scene holds scale with the music's drive: how hard it is pushing right now. A loud, fast, active
+# passage shrinks both hold bounds, a calm one lets them linger. Energy is the backbone (a beat-period
+# estimate barely moves for fast music and stalls when onsets are missed); a quick pulse and busy
+# spectral flux push it further. Returns a multiplier from `pace_drive_scale` (full drive) up to
+# `pace_calm_scale`.
 func _pacing_scale() -> float:
 	var f := Spectrum.current
 	var fast := clampf((0.58 - f.beat_period) / 0.24, 0.0, 1.0)      # 1 when the pulse is quick
@@ -1748,18 +1447,15 @@ func _pacing_scale() -> float:
 	return lerpf(pace_calm_scale, pace_drive_scale, drive)
 
 
-# A hold bound: a storyboard-explicit value is taken literally (already sensitivity-scaled in
-# _make_scene); the auto-mode default is pace-scaled AND divided by the active sensitivity, so a
-# higher tempo also makes auto cuts come faster (more of the catalog in the same time), then
-# multiplied by the user's `pacing`. Multiplying LAST and multiplying BOTH bounds by the same factor
-# is what preserves the show's variance: _pacing_scale still swings the hold by ~3.4x across the
-# music's drive, and max/min keeps its exact ratio - the whole distribution just slides longer.
+# A hold bound: a storyboard-explicit value is literal (already sensitivity-scaled in _make_scene); the
+# auto default is pace-scaled, divided by the active sensitivity, then multiplied by `pacing`. Both
+# bounds get the same factors, last, which preserves the variance: _pacing_scale still swings the hold
+# ~3.4x across the music's drive and max/min keeps its ratio.
 func _scaled_bound(ex: Dictionary, key: String, base: float) -> float:
 	return float(ex[key]) if ex.has(key) else base * _pacing_scale() * pacing / maxf(0.05, _cur_sens)
 
 
-# Eligibility: a oneshot when its sequence ends, a loop after the minimum hold (a short one in a
-# burst, so a quick scene becomes eligible to cut almost immediately - on the next beat).
+# Eligibility: a oneshot when its sequence ends, a loop after the minimum hold (a short one in a burst).
 func _ready_to_exit(ex: Dictionary) -> bool:
 	if _current.lifecycle == "oneshot":
 		return _current.finished()
@@ -1767,8 +1463,8 @@ func _ready_to_exit(ex: Dictionary) -> bool:
 	return _elapsed >= lo
 
 
-# Has the exit cue arrived this frame? Uses the storyboard-specified trigger if the
-# scene carries one, otherwise the randomly-armed trigger (auto mode).
+# Has the exit cue arrived this frame? The storyboard's trigger if the scene carries one, else the
+# randomly armed trigger (auto mode).
 func _trigger_fires(ex: Dictionary) -> bool:
 	var trig: int = int(ex.get("trigger", _trigger))
 	var f := Spectrum.current
@@ -1790,26 +1486,20 @@ func next() -> void:
 		_begin_transition()
 
 
-## Freeze/unfreeze scene cuts (the feedback console holds the current scene on
-## screen while you type, so it doesn't change out from under your critique).
-## Scenes keep animating; only the Director's exit logic is paused.
+## Freeze or unfreeze scene cuts (the feedback console holds the scene while you type). Scenes keep
+## animating; only the exit logic is paused.
 func hold(on: bool) -> void:
 	_held = on
 
 
-## GAME PACING (synthesis mode): the fishing game owns the cuts. Autonomous
-## music-driven scene changes stop entirely - a scene changes when a catch
-## jumps it (or Space skips manually) - so each new scene reads as a REWARD,
-## not weather. Distinct from hold(): the feedback console toggles that and
-## must not accidentally release the game's grip.
+## Game pacing (synthesis mode): the fishing game owns the cuts. Music-driven scene changes stop; a
+## scene changes when a catch jumps it (or Space skips), so each new scene reads as a reward. Distinct
+## from hold(), which the feedback console toggles and must not release the game's grip.
 var _game_paced := false
 var _paced_t := 0.0          # seconds the current scene has held in game-paced mode
-const GAME_PACED_MIN := 12.0    # floor before the MUSICAL pacing may cut a
-                                # game-paced scene: a just-jumped seed scene gets
-                                # read as the reward it is, then the normal
-                                # harmonic exits (beat / movement / lull) own the
-                                # tour again. (A fixed 70 s hold was tried and
-                                # read as frozen - the music makes better cuts.)
+const GAME_PACED_MIN := 12.0    # floor before musical pacing may cut a game-paced scene: a just-jumped
+                                # seed scene is read as the reward it is, then the normal harmonic exits
+                                # (beat / movement / lull) own the tour again
 
 func set_game_paced(on: bool) -> void:
 	_game_paced = on
@@ -1820,18 +1510,13 @@ func set_aura(v: float) -> void:
 	aura = clampf(v, 0.0, 1.5)
 
 
-## Jump the show to the scene a seed OWNS: the index derives from the seed
-## value, so each seed's scene is part of its identity - catching it, or
-## restoring it from the belt, brings back its place in the catalog.
+## Jump the show to the scene a seed owns: the index derives from the seed value, so catching a seed or
+## restoring it from the belt brings back its place in the catalog.
 var _jump_next := -1
 
 func jump(seed_val: int) -> void:
-	# the pending jump is stored EVEN WITHOUT a session: a seed clicked before
-	# the first throw must own the session's INITIAL scene too - _pick_index
-	# consumes _jump_next when attach() builds it. (The old early return made
-	# pre-session jumps silent no-ops, so the first scene of a run fell back
-	# to the session fingerprint - which the throw jitter re-rolls every cast:
-	# "the initial scene is ALWAYS different across runs.")
+	# The pending jump is stored even without a session: a seed clicked before the first throw must own
+	# the session's initial scene too (_pick_index consumes _jump_next when attach() builds it).
 	_jump_next = absi(seed_val) % maxi(SceneRoster.SCENES.size(), 1)
 	if _host == null:
 		return                       # no session yet: the jump waits for attach()
@@ -1844,11 +1529,9 @@ func scene_title(seed_val: int) -> String:
 	return String(SceneRoster.SCENES[i].script.resource_path).get_file().get_basename()
 
 
-## A typed snapshot of the scene currently on screen, for the feedback console.
-## Everything the on-disk record needs to tie a critique back to a reproducible
-## scene: identity (name/behavior/shot/seed/song), its typed definition (params),
-## and the audio frame it was reacting to. Values may contain Godot types
-## (Vector2 / Color); FeedbackConsole.to_jsonable flattens them before writing.
+## A typed snapshot of the scene on screen, for the feedback console: identity (name, behavior, shot,
+## seed, song), its typed definition (params) and the audio frame it was reacting to. Values may
+## contain Godot types (Vector2, Color); FeedbackConsole.to_jsonable flattens them before writing.
 func current_descriptor() -> Dictionary:
 	if _current == null:
 		return {}
@@ -1877,9 +1560,7 @@ func current_descriptor() -> Dictionary:
 			"movement": f.movement,
 		},
 	}
-	# If a blend is mid-flight, record which style and how far - so feedback taken
-	# during a rough transition says exactly what was happening (the "incoming"
-	# scene named here is the one being revealed; the outgoing one is leaving).
+	# A blend in flight records which style and how far (the "incoming" scene is the one being revealed).
 	if _transitioning:
 		d["transition"] = {
 			"active": true,
@@ -1900,10 +1581,9 @@ func _style_name(s: int) -> String:
 	return "?"
 
 
-# Outgoing (x) and incoming (y) alpha for transition progress k, by style. DIP
-# sequences them so they never overlap: the old scene fades to black by ~0.38, a
-# beat of darkness holds, then the new scene fades up after ~0.55 - the gap the eye
-# wants. FADE is a plain crossfade; anything else is a linear dissolve.
+# Outgoing (x) and incoming (y) alpha for transition progress k, by style. DIP sequences them so they
+# never overlap: the old scene is black by ~0.38, a beat of darkness holds, the new scene fades up
+# after ~0.55. FADE is a plain crossfade; anything else a linear dissolve.
 func _transition_alphas(k: float) -> Vector2:
 	match _style:
 		Style.DIP:
@@ -1913,9 +1593,8 @@ func _transition_alphas(k: float) -> Vector2:
 		Style.FADE:
 			return Vector2(smoothstep(0.0, 1.0, 1.0 - k), smoothstep(0.0, 1.0, k))
 		Style.LAYER:
-			# Async overlap. First the incoming fades IN to a TRANSLUCENT level over the still-full
-			# outgoing (so the outgoing shows through it - they layer); then the outgoing fades OUT
-			# while the incoming solidifies to full, surviving. The two are offset apart (bias) so
+			# Async overlap: the incoming fades in to a translucent level over the still-full outgoing,
+			# then the outgoing fades out while the incoming solidifies. The two are offset (bias) so
 			# they compose rather than collide.
 			if k < 0.45:
 				return Vector2(1.0, smoothstep(0.0, 1.0, k / 0.45) * 0.65)
@@ -1934,9 +1613,8 @@ func _begin_transition() -> void:
 	var burst_cut := _burst_left > 0      # leaving a burst scene -> a hard jump cut, no morph/blend
 	if _burst_left > 0:
 		_burst_left -= 1                  # consume this quick scene
-	# CAST-OWNING MEDIUM: the change is a handover, not a construction. Taken before the
-	# stinger reset below so the punch clears off the scene being left exactly as it would
-	# on any other change.
+	# Cast-owning medium: the change is a handover, not a construction. Taken before the stinger reset
+	# below so the punch clears off the scene being left as on any other change.
 	var handed := _handover(_current)
 	if handed != null:
 		if _current != null and is_instance_valid(_current):
@@ -1950,7 +1628,7 @@ func _begin_transition() -> void:
 		_swaps += 1
 		_arm()
 		return
-	# Clear any rapid-fire modulation so the leaving scene doesn't freeze mid-contortion or tint.
+	# Clear any rapid-fire modulation so the leaving scene does not freeze mid-contortion or tint.
 	_sting_left = 0
 	_sting_t = -1.0
 	if _current != null:
@@ -1960,10 +1638,9 @@ func _begin_transition() -> void:
 		_current.modulate = Color(1.0, 1.0, 1.0, _current.modulate.a)
 	var nxt := _make_scene()
 
-	# Content-aware morph: if the incoming can grow out of the outgoing's geometry,
-	# swap instantly and let it animate the morph (e.g. one eye splitting into two).
-	# Only ever between compatible, non-empty types - so we never morph a mismatch. (Not during a
-	# burst - a flurry wants clean jump cuts, not a slow morph.)
+	# Content-aware morph: if the incoming can grow out of the outgoing's geometry, swap instantly and
+	# let it animate the morph (one eye splitting into two). Only between compatible, non-empty types,
+	# and not during a burst (a flurry wants clean jump cuts).
 	if not burst_cut and _current != null and not nxt.morph_in.is_empty() and nxt.morph_in == _current.morph_out:
 		print("ghost: morph %s -> %s (%s)" % [_current.scene_name, nxt.scene_name, nxt.morph_in])
 		var from := _current
@@ -1978,8 +1655,7 @@ func _begin_transition() -> void:
 	_style = _choose_style()
 	if burst_cut:
 		_style = Style.CUT            # a burst is a run of hard jump cuts
-	# A LAYER overlap only reads well when the incoming is an atmospheric wash; otherwise two
-	# busy looks fight, so fall back to a clean dip.
+	# A LAYER overlap only reads well when the incoming is an atmospheric wash; otherwise fall back to a dip.
 	if _style == Style.LAYER and not SceneRoster.ATMOSPHERIC.has(nxt.get_script().resource_path):
 		_style = Style.DIP
 	if _style == Style.CUT:
@@ -1990,19 +1666,17 @@ func _begin_transition() -> void:
 		_arm()
 		return
 
-	# Layer overlap: pan / zoom only the INCOMING scene into an off-center region so it composes
-	# beside the outgoing one without sitting on the same focal point. The OUTGOING scene is left
-	# exactly where it is (it just fades) - it must never re-shift to "make room", which read as a
-	# jarring lurch. The incoming eases from neutral into this bias (a pan-in) and then holds it.
+	# Layer overlap: pan and zoom only the incoming scene into an off-center region so it composes beside
+	# the outgoing one. The outgoing scene stays where it is (it just fades); the incoming eases from
+	# neutral into this bias and then holds it.
 	if _style == Style.LAYER:
 		var ang := _rng.randf_range(0.0, TAU)
 		nxt.view.bias_offset = Vector2(cos(ang), sin(ang)) * _rng.randf_range(0.16, 0.30)
 		nxt.view.bias_zoom = _rng.randf_range(0.80, 1.05)
 		print("ghost: layer %s under %s" % [nxt.scene_name, _current.scene_name])
 
-	# Start the incoming scene fully transparent BEFORE it is ever drawn - otherwise
-	# it flashes at full alpha for the one frame between being added and the first
-	# alpha update (the "appeared, disappeared, reappeared" bug).
+	# Start the incoming scene fully transparent before it is ever drawn, or it flashes at full alpha for
+	# the frame between being added and the first alpha update.
 	nxt.modulate.a = 0.0
 	nxt.view.presence = 0.0
 	nxt.view.reveal = 0.0             # arm the geometry ratchet: it grows in with the fade-up
@@ -2012,18 +1686,16 @@ func _begin_transition() -> void:
 	_trans_t = 0.0
 
 
-# The transition style for leaving the current scene: its storyboard-set style
-# (cut/dip/fade), or the auto-mode weighted bag (mostly dip) when unspecified.
+# The transition style for leaving the current scene: its storyboard-set style (cut/dip/fade), or the
+# weighted bag (mostly dip) when unspecified.
 func _choose_style() -> int:
 	var s: int = STYLE_BAG[_biased(STYLE_BAG.size())]
 	match (_current.transition_style if _current != null else ""):
 		"cut": s = Style.CUT
 		"dip": s = Style.DIP
 		"fade": s = Style.FADE
-	# The medium has the last word, and only ever to REJECT: a comic page cannot play a
-	# LAYER (two scenes composited into one panel is mud). The draw off STYLE_BAG happens
-	# either way, above, so the seeded stream advances identically whatever the medium
-	# does with the answer - switching presentation must not re-roll the whole show.
+	# The medium has the last word, only to reject: a comic page cannot play a LAYER. The draw off
+	# STYLE_BAG happens either way, so the seeded stream advances identically whatever the medium does.
 	if _medium != null and is_instance_valid(_medium):
 		s = _medium.style_for(s)
 	return s
@@ -2038,17 +1710,14 @@ func _finish_transition() -> void:
 	_current.modulate.a = 1.0
 	_current.view.presence = 1.0
 	_current.view.reveal = 1.0
-	# The survivor of a LAYER HOLDS the position it took during the overlap - it does not shift
-	# back to the centered focal point (that snap-back read as wrong). Its bias stays as set.
+	# The survivor of a LAYER holds the position it took during the overlap; its bias stays as set.
 	_arm()
 
 
-# Novelty-weighted scene choice. The catalog lists several entries per scene
-# *kind* (the same script with different behaviors), and a uniform random pick
-# clusters - the same kind recurs while others go unseen. Instead, weight each
-# candidate by how long its kind has gone unshown, so long-unseen scenes are drawn
-# far more often than recent duplicates: a soft priority queue, not a hard rotation.
-# Still driven by the seeded _rng, so a given song yields the same sequence.
+# Novelty-weighted scene choice. The catalog lists several entries per scene kind (the same script
+# with different behaviors), and a uniform pick clusters. Each candidate is weighted by how long its
+# kind has gone unshown: a soft priority queue, not a hard rotation. Driven by the seeded _rng, so a
+# given song yields the same sequence.
 func _pick_index() -> int:
 	if _jump_next >= 0:
 		var j := _jump_next
@@ -2059,22 +1728,18 @@ func _pick_index() -> int:
 	return _pick(_session_seed, _pick_salt, _swaps, _index, _kind_last, _rng)
 
 
-# The pick itself, as a FUNCTION OF WHAT IT IS HANDED - the session's seed, the cut number, the
-# scene on screen and when each kind was last shown - so the show that WILL play can be asked for
-# without playing it ([method forecast]), and both answers come from this one body.
+# The pick itself, as a function of what it is handed (the session's seed, the cut number, the scene
+# on screen and when each kind was last shown), so the show that will play can be asked for without
+# playing it ([method forecast]) and both answers come from this one body.
 func _pick(session: int, salt: int, swaps: int, index: int, kind_last: Dictionary,
 		fallback: RandomNumberGenerator) -> int:
 	if SceneRoster.SCENES.size() <= 1:
 		return 0
-	# Identity-keyed weighted selection (Efraimidis-Spirakis): each candidate gets a STABLE
-	# per-cut uniform from a hash of (session, cut#, this scene's identity), and we keep the one
-	# with the largest key = u^(1/weight). Because each scene's key depends only on ITS OWN
-	# identity - never on the catalog's size or order - adding a new animation can only change
-	# the cuts it actually wins; it does not reshuffle the rest of the show. The hash is fully
-	# DETERMINISTIC per song (the session seed is the song fingerprint): the same audio picks the
-	# same scenes in the same order. It used to also fold in the live Spectrum.seed_bias(), but
-	# that samples the spectrum at the cut instant and is not frame-reproducible, so it re-rolled
-	# the running order every playback.
+	# Identity-keyed weighted selection (Efraimidis-Spirakis): each candidate gets a stable per-cut
+	# uniform from a hash of (session, cut#, this scene's identity) and the largest key u^(1/weight)
+	# wins. A key depends only on its own scene's identity, never on the catalog's size or order, so
+	# adding an animation changes only the cuts it wins. Deterministic per song (the session seed is the
+	# song fingerprint); the live Spectrum.seed_bias() is not folded in, as it is not frame-reproducible.
 	var best := -1
 	var best_key := -1.0
 	for i in SceneRoster.SCENES.size():
@@ -2092,21 +1757,19 @@ func _pick(session: int, salt: int, swaps: int, index: int, kind_last: Dictionar
 	return (fallback.randi() if fallback != null else 0) % SceneRoster.SCENES.size()   # all suppressed: fall back
 
 
-## THE SEEDED SHOW, WRITTEN DOWN: its first [param count] entries as a storyboard's - each a
-## scene, its motion and the seed that rolls its look - in the order this session's seed plays
-## them. What "automatic" chooses is a function of the seed and the cut number, so it can be read
-## ahead without playing a frame, and a note can take it as the first draft of its own storyboard.
-## The TIMING is not in it, nor the framing: where each cut lands is the music's, heard live, and
-## the seeded show draws its shots as it goes - so the entries carry no hold and no shot, and
-## leave as the seeded show's do. Asked before a show is up, the seed is the loaded song's own.
+## The seeded show written down: its first [param count] entries as a storyboard's (a scene, its motion
+## and the seed that rolls its look), in the order this session's seed plays them. A function of the
+## seed and the cut number, so a note can take it as the first draft of its own storyboard. No hold and
+## no shot: where each cut lands is the music's, and the seeded show draws its shots as it goes. Asked
+## before a show is up, the seed is the loaded song's own.
 func forecast(count: int) -> Array:
 	var session := _session_seed if _host != null else _resolve_seed()
 	var out: Array = []
 	var index := -1
 	var kind_last := {}
 	for k in maxi(count, 0):
-		# the cut number a pick is made under: the opening scene and the one after it are both
-		# picked before the first cut has been counted (attach() builds one, the first change the next)
+		# the cut number a pick is made under: the opening scene and the one after it are both picked
+		# before the first cut is counted (attach() builds one, the first change the next)
 		var swaps := maxi(0, k - 1)
 		index = _pick(session, 0, swaps, index, kind_last, null)
 		var e: Dictionary = SceneRoster.SCENES[index]
@@ -2118,45 +1781,28 @@ func forecast(count: int) -> Array:
 	return out
 
 
-# A STABLE identity for a catalog entry: a hash of (scene name, behavior), independent of its
-# position in SceneRoster.SCENES. Keying seeds and selection off this - not the array index - is what lets us
-# add or reorder scenes without changing how the existing ones are chosen or how they look.
+# A stable identity for a catalog entry: a hash of (scene name, behavior), independent of its position
+# in SceneRoster.SCENES, so scenes can be added or reordered without changing how the existing ones
+# are chosen or look.
 func _scene_key(i: int) -> int:
 	var e: Dictionary = SceneRoster.SCENES[i]
 	return hash(String(e.script.resource_path).get_file().get_basename() + "|" + String(e.behavior))
 
 
-## How many cuts back the novelty term can see. Past this a kind is simply DUE, and no more due
-## than any other kind that is also due - which is the whole difference between sampling the
-## catalog and queueing it. Chosen by measuring the first-repeat statistic, not by taste; see
-## tests/scenes/scene_mix_check.gd.
+## How many cuts back the novelty term can see. Past this a kind is simply due, no more than any other
+## due kind, which is the difference between sampling the catalog and queueing it. Chosen by measuring
+## the first-repeat statistic; see tests/scenes/scene_mix_check.gd.
 const NOVELTY_SPAN := 5.0
 
-## How sharply novelty rises inside that span. 1.0 is linear in cuts-since-last-seen.
+## How sharply novelty rises inside that span; 1.0 is linear in cuts-since-last-seen.
 const NOVELTY_EXP := 1.0
 
 
-# Selection weight for one catalog entry: 0 for the entry on screen (never an
-# immediate repeat), tiny for another behavior of the *same* scene (so we don't
-# show two of one kind back to back), and otherwise a MILD preference for kinds that
-# have not been seen lately.
-#
-# THE ROTATION. This used to be `pow(age, 1.6)` over an UNBOUNDED age, with a kind that had
-# never been shown handed `age = _swaps + 1000` by the dictionary default - a weight of about
-# 251,000 against 40 for a kind last seen ten cuts ago, or 6,300 to 1. At odds like that the
-# scheduler could not repeat anything until it had shown EVERYTHING, so the running order was a
-# rotation through the catalog wearing the clothes of a weighted random draw, and the function
-# above promised "a soft priority queue, not a hard rotation" while delivering the opposite.
-#
-# Measured before the change (tests/scenes/scene_mix_check.gd, 40 sessions x 140 cuts over 52 kinds):
-# the first repeated kind arrived at cut 50.0, where a genuine random draw over 52 kinds repeats
-# at about cut 9.0 and a complete sweep would be cut 53. A video therefore played very nearly
-# the whole catalog once through before it ever came back to anything, which is what "the
-# variety of generated scenes is not truly random" was describing.
-#
-# Novelty is BOUNDED now, so the tail cannot dominate. What it still buys is the thing it was
-# added for: two behaviors of one scene do not follow each other, and a kind shown a moment ago
-# is unlikely to return immediately. What it no longer does is decide the whole running order.
+# Selection weight for one catalog entry: 0 for the entry on screen (never an immediate repeat), tiny
+# for another behavior of the same scene, otherwise a mild preference for kinds not seen lately.
+# Novelty is bounded (the age clamp): unbounded, a never-shown kind outweighed a recent one 6,300 to 1
+# and the order became a rotation through the whole catalog (first repeat at cut 50 of 52 kinds, against
+# ~9 for a random draw; tests/scenes/scene_mix_check.gd).
 func _novelty_weight(i: int) -> float:
 	return _novelty(i, _index, _kind_last, _swaps)
 
@@ -2168,30 +1814,28 @@ func _novelty(i: int, index: int, kind_last: Dictionary, swaps: int) -> float:
 	var kind := String(SceneRoster.SCENES[i].script.resource_path)
 	if index >= 0 and kind == String(SceneRoster.SCENES[index].script.resource_path):
 		return 0.05
-	# An unseen kind is MAXIMALLY due, not infinitely due. The -1000 sentinel is unchanged and
-	# harmless now that the clamp is what decides how far novelty reaches.
+	# An unseen kind is maximally due, not infinitely due: the -1000 sentinel is harmless as the clamp
+	# decides how far novelty reaches.
 	var age := float(swaps - int(kind_last.get(kind, -1000)))
 	return pow(clampf(age, 1.0, NOVELTY_SPAN), NOVELTY_EXP)
 
 
-# Resolve the next scene to build: from the novelty scheduler (auto mode) or the
-# next storyboard entry (manual mode). Returns {script, behavior, seed, shot, exit_spec}.
+# Resolve the next scene to build: from the novelty scheduler (auto mode) or the next storyboard entry
+# (manual mode). Returns {script, behavior, seed, shot, exit_spec}.
 func _next_entry() -> Dictionary:
 	if _storyboard_seq.is_empty():
 		_index = _pick_index()
 		_kind_last[String(SceneRoster.SCENES[_index].script.resource_path)] = _swaps
 		var e: Dictionary = SceneRoster.SCENES[_index]
-		# session identity (from the song fingerprint) ^ scene IDENTITY (not its array slot) ^ history
-		# (swaps). Fully DETERMINISTIC: the same song yields the same seed here every run, so a scene's
-		# structure - clockwork's gears, a terrain's shape - reproduces exactly. The live
-		# Spectrum.seed_bias() used to be XOR'd in for extra harmonic steering, but it samples the
-		# spectrum at the cut instant and is not frame-reproducible, which re-rolled the look each play.
+		# session identity (from the song fingerprint) ^ scene identity (not its array slot) ^ history
+		# (swaps). Deterministic: the same song yields the same seed every run, so a scene's structure
+		# reproduces exactly. The live Spectrum.seed_bias() is not folded in (not frame-reproducible).
 		var seed := _session_seed ^ _scene_key(_index) ^ (_swaps * 0x85EBCA77) \
 			^ (_pick_salt * 0x165667B1)
 		return {"script": e.script, "behavior": e.behavior, "seed": seed,
 			"shot": "", "exit_spec": {}, "transition": "", "sensitivity": sensitivity}   # "" -> auto STYLE_BAG
-	# Manual: walk the sequence (wrap when looping; past the end of a non-looping board,
-	# cycle the tail entries if there are any, else hold on the last entry).
+	# Manual: walk the sequence (wrap when looping; past the end of a non-looping board, cycle the tail
+	# entries if there are any, else hold on the last entry).
 	var n := _storyboard_seq.size()
 	var i: int
 	var item: Dictionary
@@ -2215,11 +1859,9 @@ func _next_entry() -> Dictionary:
 	var script: Resource = load(path) if ResourceLoader.exists(path) else SceneRoster.SCENES[0].script
 	if not ResourceLoader.exists(path):
 		push_warning("ghost: storyboard scene '%s' not found, substituting" % nm)
-	# The seed is keyed to the entry's POSITION, never to how many times it has been
-	# visited: the same section of the schedule must rebuild the SAME scene when the
-	# audio brings the show back to it (an echo re-localization, a `loop: true` wrap).
-	# (i + 1) reproduces the value the old visit-counter formula gave on a first pass,
-	# so existing shows re-render unchanged.
+	# The seed is keyed to the entry's position, never to how many times it was visited: the same
+	# section of the schedule rebuilds the same scene when the audio brings the show back to it (an echo
+	# re-localization, a `loop: true` wrap). (i + 1) is the value of a first pass.
 	var seed2: int = int(item.get("seed",
 		_session_seed ^ (i * 0x9E3779B1) ^ ((i + 1) * 0x85EBCA77)))
 	# Sensitivity resolves per entry: the entry's own value, else the storyboard's, else the export.
@@ -2231,18 +1873,16 @@ func _next_entry() -> Dictionary:
 		"spec": item}   # the raw entry rides along: a data-driven scene (stage) reads it in build_params
 
 
-# Translate a storyboard entry's timing into an exit_spec the scene carries (see
-# _should_change): a fixed `hold`, a musical `exit` trigger, or just min/max bounds.
+# Translate a storyboard entry's timing into an exit_spec the scene carries (see _should_change): a
+# fixed `hold`, a musical `exit` trigger, or just min/max bounds.
 func _parse_exit(item: Dictionary) -> Dictionary:
 	if item.has("hold"):
 		return {"hold": float(item["hold"])}
 	if item.has("exit"):
-		# An authored bound is literal; an absent one falls back to the Director's OWN defaults, which
-		# are not the author's timing, so they carry `pacing` like every other default bound (without
-		# it, `exit: beat` alone would be the one entry shape that ignores the slider while a bare
-		# entry - which exits through _scaled_bound's auto branch - obeys it). Both bounds take the
-		# same factor, so the spread between them is untouched. Baked when the scene is built, so a
-		# pacing change reaches these entries at the next cut rather than mid-scene.
+		# An authored bound is literal; an absent one falls back to the Director's own default, which
+		# carries `pacing` like every default bound (so `exit: beat` alone obeys the slider). Both bounds
+		# take the same factor. Baked when the scene is built, so a pacing change reaches these entries at
+		# the next cut.
 		return {
 			"trigger": _trigger_from_name(String(item["exit"])),
 			"min": float(item["min_hold"]) if item.has("min_hold") else min_hold * pacing,
@@ -2265,15 +1905,11 @@ func _trigger_from_name(s: String) -> int:
 			return Trigger.BEAT
 
 
-# Instantiate + seed the next scene with its behavior, shot, and exit rule.
-## Build ONE scene, the way a cut does, WITHOUT putting it on screen - for a medium that
-## owns its own cast ([method Medium.owns_cast]). [param salt] separates several mints
-## made at the same instant; pass a different one per panel.
-##
-## It goes through the same novelty scheduler as everything else rather than picking
-## scenes some other way, so a comic page is cast by the same rules that order a full-frame
-## show - and because `_next_entry` records each pick in `_kind_last` as it goes, the
-## panels of one page vary against each other for free.
+# Instantiate and seed the next scene with its behavior, shot and exit rule.
+## Build one scene, the way a cut does, without putting it on screen, for a medium that owns its cast
+## ([method Medium.owns_cast]). [param salt] separates mints made at the same instant (one per panel).
+## It goes through the same novelty scheduler as every pick, and `_next_entry` records each pick in
+## `_kind_last`, so the panels of one page vary against each other.
 func mint_scene(salt := 0, quiet := false) -> GhostScene:
 	_pick_salt = salt
 	_quiet_mint = quiet
@@ -2283,9 +1919,8 @@ func mint_scene(salt := 0, quiet := false) -> GhostScene:
 	return sc
 
 
-## Suppresses the per-cut [signal scene_cut] while casting a page. The signal means "a new
-## scene took the stage, re-measure it" (see main's stage governor), and casting six panels
-## in one frame is not six of those.
+## Suppresses the per-cut [signal scene_cut] while casting a page: the signal means "a new scene took
+## the stage, re-measure it" (see main's stage governor), and casting six panels is not six of those.
 var _quiet_mint := false
 
 
@@ -2298,22 +1933,17 @@ func _make_scene() -> GhostScene:
 	scene.spec = entry.get("spec", {})           # BEFORE init_with_seed: build_params reads it
 	scene.init_with_seed(seed, String(entry["behavior"]))
 	scene.scene_name = String(script.resource_path).get_file().get_basename()
-	# Telemetry only: the live harmonic bucket at the cut. It is NO LONGER folded into the scene
-	# seed (that broke run-to-run reproducibility); the seed is deterministic per song. Same music
-	# should still print the same bucket here, a useful observability signal. (See
-	# next/harmonic_seeding.md.)
-	# STAMPED WITH THE SONG POSITION, always. Without it the cut list is an ordered list of names
-	# and nothing else, and the only question anyone actually asks of it - "what was on screen at
-	# 8:23?" - cannot be answered from a finished render at all. That is not hypothetical: a scene
-	# shipped 29 seconds of pure black into an export and the log could not name it.
+	# Telemetry only: the live harmonic bucket at the cut, not folded into the scene seed (see
+	# next/harmonic_seeding.md). Stamped with the song position, so a finished render's cut list can
+	# answer "what was on screen at 8:23?".
 	var _t := maxf(Spectrum.current.time, 0.0)
 	print("ghost: cut -> %s  at %d:%05.2f  harmonic bucket %d"
 		% [scene.scene_name, int(_t / 60.0), fmod(_t, 60.0), Spectrum.harmonic_bucket(12)])
 	if not _quiet_mint:
 		scene_cut.emit()              # the stage governor re-measures per scene
-	# Narrative tempo: higher sensitivity shrinks the hold (and any explicit min/max bounds), so the
-	# scene is shorter; the scene paces its keyframes as fractions of that shrunken hold, so events
-	# still all land. _cur_sens also feeds the auto-mode pacing bounds (see _scaled_bound).
+	# Narrative tempo: higher sensitivity shrinks the hold (and any explicit min/max bounds); the scene
+	# paces its keyframes as fractions of the shrunken hold, so events still land. _cur_sens also feeds
+	# the auto-mode pacing bounds (see _scaled_bound).
 	_cur_sens = clampf(float(entry.get("sensitivity", 1.0)), 0.05, 20.0)
 	var ex: Dictionary = entry["exit_spec"]
 	for k in ["hold", "min", "max"]:
@@ -2321,10 +1951,9 @@ func _make_scene() -> GhostScene:
 			ex[k] = float(ex[k]) / _cur_sens
 	scene.exit_spec = ex
 	scene.event_scale = _cur_sens
-	# Transition style, by override hierarchy (highest first): storyboard entry, then
-	# the scene's own choice (set in build_params), then the storyboard's default,
-	# then the mode default (manual = cut, auto = "" -> the weighted STYLE_BAG). A
-	# compatible morph still wins over all of these at change time.
+	# Transition style, by override hierarchy (highest first): storyboard entry, the scene's own choice
+	# (set in build_params), the storyboard's default, then the mode default (manual = cut, auto = ""
+	# -> the weighted STYLE_BAG). A compatible morph still wins at change time.
 	var entry_tr := String(entry.get("transition", ""))
 	if not entry_tr.is_empty():
 		scene.transition_style = entry_tr
@@ -2334,9 +1963,8 @@ func _make_scene() -> GhostScene:
 		scene.transition_style = _storyboard_transition
 	elif not _storyboard_seq.is_empty():
 		scene.transition_style = "cut"             # manual default: jump cuts
-	# Camera framing: an explicit storyboard shot if given and valid, else assigned by
-	# the scene's framing class (expressive for subjects, gentle for fields, square
-	# for lone planes).
+	# Camera framing: an explicit storyboard shot if valid, else by the scene's framing class
+	# (expressive for subjects, gentle for fields, square for lone planes).
 	var shot_name := String(entry.get("shot", ""))
 	if shot_name == "" or not Shots.REGISTRY.has(shot_name):
 		var bag: Array = Shots.SUBJECT_BAG
@@ -2347,21 +1975,19 @@ func _make_scene() -> GhostScene:
 		if _storyboard_seq.is_empty():
 			shot_name = bag[_rng.randi() % bag.size()]
 		else:
-			# Manual mode: the pick derives from the entry's own seed, not the session
-			# rng stream - a revisit (echo re-localization, loop wrap) must rebuild the
-			# same framing it had the first time, whatever was drawn in between.
+			# Manual mode: the pick derives from the entry's own seed, not the session rng stream, so a
+			# revisit (echo re-localization, loop wrap) rebuilds the same framing.
 			shot_name = bag[absi(hash([seed, "shot"])) % bag.size()]
 	scene.shot_name = shot_name
 	scene.set_shot(Shots.make(shot_name, seed ^ 0x51ED2701))
-	# Pre-warm stateful motion (growth envelopes, scroll phase, tumbling angles)
-	# and ease the camera to its shot framing, so the first shown frame is settled.
+	# Pre-warm stateful motion (growth envelopes, scroll phase, tumbling angles) and ease the camera to
+	# its shot framing, so the first shown frame is settled.
 	for w in 12:
 		scene.update(Spectrum.current, 0.05)
 		scene.view.commit(0.05)
 	scene.view.snap()        # finish the ease EXACTLY, so the first shown frame doesn't slide into place
-	# NB: this build burns real wall-time (pre-warm + the first heavy draw), which the music clock keeps
-	# advancing through. That big step is now absorbed by the STEP_CAP / debt smoothing in _process (it
-	# eases in over the next frames), so no clock reset is needed here.
+	# NB: this build burns real wall time (pre-warm + the first heavy draw) while the music clock keeps
+	# advancing; the STEP_CAP / debt smoothing in _process absorbs the step, so no clock reset is needed.
 	return scene
 
 

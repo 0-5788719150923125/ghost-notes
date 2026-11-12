@@ -1,47 +1,46 @@
 extends RefCounted
 class_name TablePositions
 
-## TablePositions - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are
-## data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z
-## toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread
-## position may carry coordinates beside its name and question), or placed by a dealer through its
-## tools ([DealerTools], `layout.json` in the episode). Today's seeded shapes - a row, an arc, two
-## rows, a pyramid - are PRESETS that make them ([method seeded]).
+## TablePositions - where cards lie on the table, as data (next/notes.md step 9, "Positions are data").
+## A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the
+## reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may
+## carry coordinates beside its name and question), or placed by a dealer through its tools
+## ([DealerTools], `layout.json` in the episode). The seeded shapes (a row, an arc, two rows, a
+## pyramid) are presets that make them ([method seeded]).
 ##
-## EVERY POSITION IS CHECKED THE SAME WAY, whoever wrote it ([method troubles]): on the cloth, inside
-## the camera's frame, clear of the deck, and clear of every other card - against the episode's own
-## camera and deck ([method CardTable.layout_of]), which are a function of its seed, so a plan or a
-## dealer is told exactly what the table will do. Once the table is set, ON ITS TOP too ([Tables]: a
-## round or oval top may not reach every corner of the cloth) - checked again as it is built. A set of positions with any trouble is not used:
-## the table falls back to its preset.
+## Every position is checked the same way, whoever wrote it ([method troubles]): on the cloth, inside
+## the camera's frame, clear of the deck and of every other card, against the episode's own camera and
+## deck ([method CardTable.layout_of], a function of its seed). Once the table is set, also on its top
+## ([Tables]: a round or oval top may not reach every corner of the cloth). A set with any trouble is
+## not used: the table falls back to its preset.
 ##
 ## Free of autoload names, so a SceneTree gate and a toolset can ask it.
 
-## THE CARD'S FACE, meters - one place for it (the table's own `CARD` is this).
+## The card's face, meters - one place for it (the table's own `CARD` is this).
 const CARD := Vector2(0.07, 0.12)
 ## The cloth: its size and where its middle lies on the table (x, z).
 const CLOTH := Vector2(1.2, 0.72)
 const CLOTH_MIDDLE := Vector2(0.0, -0.02)
-## How much of the cloth's edge a card keeps off - laid on the very hem it reads as dropped.
+## How much of the cloth's edge a card keeps off.
 const HEM := 0.02
 ## The space kept round the deck, meters.
 const DECK_CLEAR := 0.012
 ## How far inside the picture's edges a card must lie, as a share of the frame: inside it, no more.
 const FRAME_MARGIN := 0.0
-## The presets, the layouts the readers' videos actually use - rows, never a cross (measured: rows of
-## three to ten, often two).
+## The presets: rows of three to ten, often two, never a cross.
 const PRESETS := ["row", "arc", "rows", "pyramid"]
 ## How often a row or an arc of six or more is laid as two rows instead - half that at five (a long row
-## also crowds the deck, which is then put aside: [constant TableMedium.DECK_CROWD]).
+## also crowds the deck: [constant TableMedium.DECK_CROWD]).
 const SPLIT_LONG := 0.5
-## HOW A CARD LIES AND WITH WHAT, as a plan's position says it ([method staged]): `comes` - drawn (taken
+## How a card lies and with what, as a plan's position says it ([method staged]): `comes` - drawn (taken
 ## and held up), dealt (put straight down), swept (out in one waterfall with the swept positions next
-## to it), searched (drawn after a quick hunt through a box); `lies` - upright, or sideways (a quarter turn, as a tapped card); `on` - it lies on the card
-## before it, shifted back so that card's name still shows (a stack, as a player keeps lands).
+## to it), searched (drawn after a quick hunt through a box); `lies` - upright, or sideways (a quarter
+## turn, as a tapped card); `on` - it lies on the card before it, shifted back so that card's name still
+## shows (a stack).
 const COMES := ["drawn", "dealt", "swept", "searched"]
 const LIES := ["upright", "sideways"]
-## A stacked card lies this far behind the one under it (meters): its name, printed in the band at the
-## foot of the face, stays in sight. A swept card lies this far along from the one before, and turns
+## A stacked card lies this far behind the one under it (meters), so its name, printed in the band at
+## the foot of the face, stays in sight. A swept card lies this far along from the one before, and turns
 ## this much more in an arc.
 const STACK_STEP := 0.024
 const SWEEP_STEP := 0.03
@@ -58,13 +57,12 @@ const BOX_PILE_GAP := 0.006
 const PILES_NEAT := 0.4
 
 
-## THE SEEDED SPREAD, as the table has always laid it: a preset picked per episode from [param rng],
-## within reach of the camera, clear of the deck, each card a hair off true as a hand lays them -
-## for the episode's layout [param lay] ([method CardTable.layout_of]: its camera and its deck).
-## `[{pos: Vector3, yaw: radians}]`. The draws from [param rng] are the table's own, in its own order,
-## so an episode made before keeps its spread - unless a card of it lay partly outside the camera's
-## frame: an arc or a row of seven or eight reached the front corners (measured: 2.6% of such
-## spreads), and is laid as two rows instead, with the same hand's offsets and no draw of its own.
+## The seeded spread: a preset picked per episode from [param rng], within reach of the camera, clear
+## of the deck, each card a hair off true as a hand lays them, for the episode's layout [param lay]
+## ([method CardTable.layout_of]: its camera and its deck). `[{pos: Vector3, yaw: radians}]`. The draws
+## from [param rng] are the table's own, in its own order. An arc or a row of seven or eight that would
+## reach outside the camera's frame is laid as two rows instead, with the same offsets and no draw of
+## its own.
 static func seeded(n: int, rng: RandomNumberGenerator, lay: Dictionary) -> Array:
 	var deck: Vector3 = lay["deck"]
 	var out: Array = []
@@ -79,8 +77,7 @@ static func seeded(n: int, rng: RandomNumberGenerator, lay: Dictionary) -> Array
 	var kind := String(kinds[rng.randi_range(0, kinds.size() - 1)])
 	if n * gap > 0.66:
 		kind = "rows"
-	# A LONG ROW SPLIT IN TWO, now and then (the user, 2026-10-08: "At 6 cards, that row is quite long"),
-	# on a die of its own so every draw after lands where it did
+	# A long row is split in two now and then, on a die of its own so every draw after lands where it did
 	elif kind in ["row", "arc"] and n >= 5:
 		var split := RandomNumberGenerator.new()
 		split.seed = hash([rng.seed, "tarot-long-row"])
@@ -112,17 +109,17 @@ static func seeded(n: int, rng: RandomNumberGenerator, lay: Dictionary) -> Array
 		hand.append([Vector3(rng.randf_range(-0.003, 0.003), (float(i) + 1.0) * 0.0002, rng.randf_range(-0.003, 0.003)),
 			deg_to_rad(rng.randf_range(-2.5, 2.5))])
 	out = _laid(pos, hand, kind == "arc", deck)
-	# IN THE FRAME, every card whole - or two rows, which always are (measured)
+	# In the frame, every card whole - or two rows, which always are
 	if kind != "rows" and not _in_frame(out, lay):
 		out = _laid(_rows(n, gap), hand, false, deck)
 	return out
 
 
-## THE STAGED SPREAD: [param cards]' positions (`comes`, `lies`, `on`, [constant COMES]) laid as piles -
+## The staged spread: [param cards]' positions (`comes`, `lies`, `on`, [constant COMES]) laid as piles -
 ## a card alone, a stack, a waterfall - in a row (two rows when one would not fit), clear of the deck
-## and in the camera's frame for the episode's layout [param lay] - and, with a [param box] the cards
-## are kept in, off its whole column (a long row that will not fit beside it is two). A spread with none of them is the
-## seeded preset itself ([method seeded]), draw for draw. `[{pos, yaw, face}]`.
+## and in the camera's frame for the episode's layout [param lay]; with a [param box] the cards are
+## kept in, off its whole column (a long row that will not fit beside it is two). A spread with none of
+## them is the seeded preset itself ([method seeded]), draw for draw. `[{pos, yaw, face}]`.
 static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, box := Vector2.ZERO,
 		box_center := Vector3.ZERO) -> Array:
 	var n := cards.size()
@@ -162,9 +159,9 @@ static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, bo
 	for i in n:
 		hand.append([Vector3(rng.randf_range(-0.002, 0.002), (float(i) + 1.0) * 0.0002, rng.randf_range(-0.002, 0.002)),
 			deg_to_rad(rng.randf_range(-2.0, 2.0))])
-	# A BOX STANDS TALL, and a card tucked behind it is hidden by it and has to be carried over it: the
-	# spread keeps off its whole column, back to the cloth's far edge, so a row that will not fit beside
-	# it becomes two (feedback 0010: a seventh card laid down behind the box)
+	# A box stands tall: a card behind it is hidden and has to be carried over it, so the spread keeps
+	# off its whole column, back to the cloth's far edge, and a row that will not fit beside it
+	# becomes two
 	var keep := deck_keep(deck, box, box_center)
 	if box != Vector2.ZERO:
 		var far := CLOTH_MIDDLE.y - CLOTH.y * 0.5
@@ -188,15 +185,13 @@ static func box_plots(inner: AABB, size: Vector2) -> Vector2i:
 		maxi(1, int(floor(inner.size.z / (size.y + BOX_PILE_GAP)))))
 
 
-## THE PILES IN A BOX the cards are kept in (2026-10-11, the user: "perfect little stacks, equally-spaced
-## apart... more natural, maybe with some stacks taller than others"): [param count] cards of [param size]
-## lying on the floor of [param inner], each [param pitch] above the one under it (less when the tallest
-## pile would pass the rim). As many piles as fit side by side ([method box_plots]); the floor left over
-## is shared out unevenly, each row of piles its own way, so no two gaps match and the rows do not line
-## up. Every pile has its own height, stands somewhere in its plot, leans as it rises, and its cards
-## lie a hair off one another, now and then one askew. No card leaves its pile's plot, so a pile never
-## runs into its neighbor or through a wall. [param mess]: 0 is the squared grid (a gate's control),
-## [constant PILES_NEAT] a collection kept in piles, 1 cards left as they fell.
+## The piles in a box the cards are kept in: [param count] cards of [param size] lying on the floor of
+## [param inner], each [param pitch] above the one under it (less when the tallest pile would pass the
+## rim). As many piles as fit side by side ([method box_plots]); the floor left over is shared out
+## unevenly, each row of piles its own way. Every pile has its own height, stands somewhere in its plot,
+## leans as it rises, and its cards lie a hair off one another, now and then one askew. No card leaves
+## its pile's plot. [param mess]: 0 is the squared grid (a gate's control), [constant PILES_NEAT] a
+## collection kept in piles, 1 cards left as they fell.
 ## `[{rect: Rect2 (x, z), cards: [Transform3D], bottom to top}]`.
 static func box_piles(inner: AABB, size: Vector2, count: int, pitch: float, mess: float,
 		rng: RandomNumberGenerator) -> Array:
@@ -212,7 +207,7 @@ static func box_piles(inner: AABB, size: Vector2, count: int, pitch: float, mess
 			piles.append({"rect": Rect2(x, z, wide[c], deep[r]), "cards": []})
 			x += wide[c]
 		z += deep[r]
-	# THE HEIGHTS: the cards shared out by weight, the odd ones over going to the first piles
+	# The heights: the cards shared out by weight, the odd ones over going to the first piles
 	var weights := PackedFloat32Array()
 	var sum := 0.0
 	for p in piles:
@@ -360,8 +355,8 @@ static func _laid(pos: Array, hand: Array, turned: bool, deck: Vector3) -> Array
 		if turned:
 			yaw += -p.x * 0.6
 		out.append({"pos": p, "yaw": yaw})
-	# CLEAR OF THE DECK: two rows of eight or a tight arc reach the deck's corner of the table, and
-	# were laid through it - the whole spread steps back, or aside, by the least that clears it
+	# Clear of the deck: two rows of eight or a tight arc reach the deck's corner of the table, so the
+	# whole spread steps back, or aside, by the least that clears it
 	var off := CardTable.clear_of(out, CARD, deck_keep(deck))
 	for sl in out:
 		(sl as Dictionary)["pos"] = ((sl as Dictionary)["pos"] as Vector3) + Vector3(off.x, 0.0, off.y)
@@ -380,9 +375,8 @@ static func _rows(n: int, gap: float) -> Array:
 
 
 ## Does every card of [param slots] lie whole on the cloth, a hem in from its edge? A row that could not
-## step aside past the box's column steps BACK instead, off the far edge of the cloth, and is still in
-## the frame (feedback 0020: ten cards laid at z -0.44 on a cloth ending at -0.38, the first of them in
-## the far corner while the front of the table was bare) - it is two rows instead.
+## step aside past the box's column steps back instead, off the far edge of the cloth: it is two rows
+## instead.
 static func _on_cloth(slots: Array) -> bool:
 	var cloth := Rect2(CLOTH_MIDDLE - CLOTH * 0.5, CLOTH).grow(-HEM)
 	for s in slots:
@@ -410,26 +404,25 @@ static func deck_keep(deck: Vector3, box := Vector2.ZERO, box_center := Vector3.
 		CARD.x + DECK_CLEAR * 2.0, CARD.y + DECK_CLEAR * 2.0)
 
 
-## WHERE THE BOX THE CARDS ARE KEPT IN STANDS, for a deck kept at [param deck]: a little behind it and
+## Where the box the cards are kept in stands, for a deck kept at [param deck]: a little behind it and
 ## farther out, so a box as big as [constant CardTable.BOX_MAX] stands in the picture, beside the spread.
 static func box_at(deck: Vector3) -> Vector3:
 	return Vector3(deck.x + signf(deck.x) * 0.03, 0.0, deck.z - 0.04)
 
 
-## WHERE A BOX OF ITS OWN SIZE STANDS in the room kept for one ([param most] across and deep, about
+## Where a box of its own size stands in the room kept for one ([param most] across and deep, about
 ## [param mid]): [param size] across and deep, anywhere the room lets it - a different place every
 ## episode ([param rng]). [param inward] (-1, 1, or 0 for neither) is the side the spread lies on: a box
 ## at the side of the table stands in the inner half of its room, so a card coming up out of it is in
-## the picture (2026-10-12: the box stood in the middle of its room whatever its size, and a card
-## pulled out of it rose half outside the frame). A box as big as its room stands at [param mid].
+## the picture. A box as big as its room stands at [param mid].
 static func box_stand(mid: Vector3, size: Vector2, most: Vector2, inward: float, rng: RandomNumberGenerator) -> Vector3:
 	var room := ((most - size) * 0.5).max(Vector2.ZERO)
 	var across := rng.randf_range(0.5, 1.0) * inward if inward != 0.0 else rng.randf_range(-1.0, 1.0)
 	return mid + Vector3(room.x * across, 0.0, room.y * rng.randf_range(-0.8, 0.8))
 
 
-## THE POSITIONS THE CARDS WERE GIVEN, as slots (`[{pos, yaw}]`) - each card's `position` carrying
-## `x` and `z` (a plan's, or a dealer's laid over it) - or [] when any card has none or the set has a
+## The positions the cards were given, as slots (`[{pos, yaw}]`) - each card's `position` carrying `x`
+## and `z` (a plan's, or a dealer's laid over it) - or [] when any card has none or the set has a
 ## trouble ([method troubles]) - [param top], the table's top made safe, when it is set: the table
 ## then lays its preset.
 static func given(cards: Array, seed: int, top: Dictionary = {}, box := Vector2.ZERO,
@@ -451,10 +444,10 @@ static func slot_of(p: Dictionary, i: int) -> Dictionary:
 		"yaw": deg_to_rad(float(p.get("yaw", 0.0))), "face": String(p.get("face", "up"))}
 
 
-## WHAT IS WRONG WITH THESE SLOTS for episode [param seed], card by card - `["card 2: off the cloth
-## at the back", ...]` - empty when every card lies on the cloth, inside the camera's frame and clear
-## of the deck - and on [param top] ([Tables]), when the table is set. Cards may lie over each other -
-## a pile, a fan, the pyramid's rows do - and [method notes] says which.
+## What is wrong with these slots for episode [param seed], card by card - `["card 2: off the cloth at
+## the back", ...]` - empty when every card lies on the cloth, inside the camera's frame and clear of
+## the deck - and on [param top] ([Tables]), when the table is set. Cards may lie over each other (a
+## pile, a fan, the pyramid's rows); [method notes] says which.
 static func troubles(slots: Array, seed: int, top: Dictionary = {}, box := Vector2.ZERO,
 		box_center := Vector3.ZERO) -> PackedStringArray:
 	var out := PackedStringArray()
@@ -542,9 +535,9 @@ static func describe(seed: int) -> String:
 	return "\n".join(lines)
 
 
-## DO TWO LAID CARDS OVERLAP? As turned rectangles, not their boxes - a card in an arc is turned, and
-## its box reaches past a neighbor it does not touch. Separating axes: two rectangles are apart when
-## some edge's direction parts their shadows. Cards that merely touch (within a millimeter) do not.
+## Do two laid cards overlap? As turned rectangles, not their boxes (a card in an arc is turned, and
+## its box reaches past a neighbor it does not touch), by separating axes. Cards that merely touch
+## (within a millimeter) do not.
 static func overlaps(a: Dictionary, b: Dictionary) -> bool:
 	var ca := corners(a)
 	var cb := corners(b)

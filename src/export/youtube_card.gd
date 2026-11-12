@@ -1,89 +1,54 @@
 extends VBoxContainer
 class_name YouTubeCard
 
-## YouTubeCard - the YouTube component's card (2026-10-07, the user: "add a little '+' button near
-## those labels... 'youtube' should be an option. When we add it, a new card is created"): whether
-## an export goes up, what it is called, who may see it and the playlist it joins - and the Google
-## client and the sign-in an upload needs, which used to live in the export button's menu. Its block
-## in a document is `youtube:`.
+## YouTubeCard - the YouTube component's card: whether an export goes up, what it is called, who may see it and the playlist
+## it joins, plus the Google client and the sign-in an upload needs. Its block in a document is `youtube:`.
 ##
-## THE TITLE IS A TEMPLATE ([method YouTube.expand_title]) of the macros in [constant YouTube.MACROS] - so
-## one note makes many videos, each named as it goes up. ITS NAMES ARE THE SCRIPT CARD'S (2026-10-25, the
-## user: "nowhere is an episode title actually an option here ... it shouldn't even be possible to keep
-## missing details like this"): every panel that shows this card binds it to its Script card ([method
-## name_from]), which shows Title, Episode, Author and Book from then on, and the card reads %title%,
-## %episode%, %author% and %book% from there itself - no panel fills them its own way. A panel adds only
-## what it alone knows ([member values]: a show's own name, its episode's seed), and what it hands with an
-## export (the episode rendered) is laid over the note's names, never in place of them. WHAT IT CLAIMS IS
-## WHAT THE NOTE FILLS: the title box's tooltip
-## names only those macros, and a title naming one the note does not fill (%seed% on an actor's note) is
-## said under it and does not go up - the export refuses before it renders ([method why_not]). The rest of
-## an upload only the panel knows (a show's description and tags, its thumbnail's moment) comes through
-## [member extra], a slot under the card's own rows, and [method meta].
+## The title is a template ([method YouTube.expand_title]) of the macros in [constant YouTube.MACROS], so one note makes many
+## videos. Its names are the Script card's: every panel that shows this card binds it to its Script card ([method name_from]),
+## which shows Title, Episode, Author and Book, and the card reads %title%, %episode%, %author% and %book% from there. A panel
+## adds only what it alone knows ([member values]: a show's own name, its episode's seed), and what it hands with an export
+## (the episode rendered) is laid over the note's names. The card claims only what the note fills: the title box's tooltip
+## names only those macros, and a title naming one the note does not fill is said under it and does not go up, the export
+## refusing before it renders ([method why_not]). The rest of an upload only the panel knows (a show's description and tags,
+## its thumbnail's moment) comes through [member extra], a slot under the card's rows, and [method meta].
 ##
-## THE CATEGORY is the card's too ([constant YouTube.CATEGORIES]): People & Blogs until it is changed,
-## so a math channel's note can go up as Education.
+## The category is the card's too ([constant YouTube.CATEGORIES]): People & Blogs until changed.
 ##
-## THE CHANNEL IS THE NOTE'S (the user, 2026-10-17: "target different channels for different kinds of
-## project ... the list of available clients should be a toggle, such that switching is easy"): a
-## toggle per channel signed in here, named as YouTube names it ([method YouTube.channels]), the note's
-## own pressed, and "+" to sign in to another. The block keeps the channel's id and its name, so a
-## note whose channel is not signed in here still shows it, dimmed, to sign in to; a block that names
-## none takes the first channel kept. A playlist is a channel's, so another channel clears it. The
-## account rows below speak for the channel picked.
+## The channel is the note's: a toggle per channel signed in here, named as YouTube names it ([method YouTube.channels]),
+## the note's own pressed, and "+" to sign in to another. The block keeps the channel's id and name, so a note whose channel
+## is not signed in here still shows it, dimmed; a block that names none takes the first channel kept. A playlist is a
+## channel's, so another channel clears it. The account rows below speak for the channel picked.
 ##
-## THE CLIENT IS PICKED FROM THOSE KEPT (the user, 2026-11-02: "we shouldn't be required to import
-## credentials for every new project ... easily switch between them, probably via a simple pick list on
-## the YouTube card"): a list of [method YouTube.clients], each by its Cloud project and the channels
-## signed in through it, showing the client this note's next sign-in goes through ([method _client_key]):
-## the note's channel's own until another is picked, which the block keeps by its key - never its id - and
-## another channel's toggle clears. A CHANNEL STAYS SIGNED IN THROUGH WHAT IT SIGNED IN WITH, whichever is
-## picked, since a refresh token is one client's: picking another offers "Sign in again", and the old
-## sign-in goes only once the new one lands. "+" signs in through the one shown. ✕, pressed twice, forgets
-## one no channel holds.
+## The client is picked from those kept: a list of [method YouTube.clients], each by its Cloud project and the channels
+## signed in through it, showing the client this note's next sign-in goes through ([method _client_key]): the note's
+## channel's own until another is picked, which the block keeps by its key, never its id. A channel stays signed in through
+## what it signed in with (a refresh token is one client's): picking another offers "Sign in again", and the old sign-in goes
+## only once the new one lands. "+" signs in through the one shown. ✕, pressed twice, forgets one no channel holds.
 ##
-## ONE LIST OF TAGS (the user, 2026-10-19: "I never know which tags are truly going to be applied ...
-## I'd prefer to see just one, unified list"): the note's `tags:` line, which the panel shows in
-## [member extra] and every upload takes. With "Write each episode's tags" ticked (2026-10-18: "allow
-## the 'Generate' button to override/rewrite those tags"), the card adds a step to the episodes the note
-## makes ([YouTubeTags], an [EpisodeStep] - offered by [method episode_steps], never handed to a card by
-## name): the note's Pipeline card lists it, Generate writes it after the episode's words and its ⟳ again, and what it
-## writes REPLACES that list. The box stands at the top, beside "Upload after export" (the user: "where
-## it belongs"); a line under the list says what the writer is doing to it.
+## One list of tags: the note's `tags:` line, which the panel shows in [member extra] and every upload takes. With "Write each
+## episode's tags" ticked, the card adds a step to the episodes the note makes ([YouTubeTags], an [EpisodeStep], offered by
+## [method episode_steps]): the note's Pipeline card lists it, Generate writes it after the episode's words, and what it
+## writes replaces that list. A line under the list says what the writer is doing to it.
 ##
-## THE THUMBNAIL IS CHOSEN HERE, AND ONLY HERE (the user, 2026-10-28: "I'm not a fan of this implicit,
-## undocumented behavior"): a show's card had handed every upload a frame of its title screen. Now the
-## card's Thumbnail says ([constant YouTube.THUMBNAILS]): YouTube's own choice (a new card's), a frame of
-## the title screen - asked of the take, which says whether it opened on its title ([method
-## Openings.of_take]) - or one PAINTED for the episode by the writer and the painter picked under it, a
-## step this card hands the note's Pipeline card ([YouTubeThumbnail]), shown here once it is
-## painted. What cannot be had is said under it, and the video goes up with YouTube's. EVERY ONE PAINTED IS
-## KEPT (2026-10-30, the user: "there is no way to cycle backward/forward through generated thumbnails, as
-## the generated in-episode pictures can be cycled through"): ‹ › under it picks the one that goes up, as a
-## book's pictures are stepped through, and ✕, pressed twice, deletes the one shown. A CLICK ON IT OPENS IT
-## FULL SIZE (2026-10-30: "like we do elsewhere"), in a window of its own as a book's pictures open
-## ([method open_thumbnail]), with what the writer asked of it and the same steps through its versions. "MATCH
-## THE VIDEO'S PICTURES" (2026-10-30: "akin to the full-screen images' 'match earlier' option"), ticked on a new
-## card, paints it in the look of the episode's own pictures, as a book's picture is matched to the ones before it.
+## The thumbnail is chosen here ([constant YouTube.THUMBNAILS]): YouTube's own choice (a new card's), a frame of the title
+## screen (asked of the take, which says whether it opened on its title, [method Openings.of_take]), or one painted for the
+## episode by the writer and the painter picked under it, a step this card hands the note's Pipeline card
+## ([YouTubeThumbnail]). What cannot be had is said under it, and the video goes up with YouTube's. Every painted one is kept:
+## ‹ › under it picks the one that goes up, ✕ pressed twice deletes the one shown, and a click opens it full size in a window
+## of its own ([method open_thumbnail]) with what the writer asked of it. "Match the video's pictures", ticked on a new card,
+## paints it in the look of the episode's own pictures.
 ##
-## A NOTE READ AS IT IS WRITTEN IS DESCRIBED HERE (2026-10-23, the user, of an actor's note: "I don't see
-## anywhere it would be possible to write a description for videos uploaded in this way"): its panel shows
-## the box ([method describe]) when nothing on the note writes its episodes' descriptions - a show's card
-## keeps its own - and the block keeps what is written; an upload takes it first, then what the panel adds
-## (an actor's likeness, said by the code).
+## A note read as it is written is described here: its panel shows the box ([method describe]) when nothing on the note
+## writes its episodes' descriptions, and the block keeps what is written; an upload takes it first, then what the panel adds.
 ##
-## TICKING "UPLOAD AFTER EXPORT" SETS UPLOADS UP as far as they need, visibly: the Google client file
-## the first time, then the sign-in - and the box ticks once both are done (a cancel leaves it clear).
-## A PLAYLIST takes more of the account than an upload, so the wider sign-in is asked for only when
-## the list is first loaded ([constant YouTube.PLAYLIST_SCOPE]). The dialogs are the exporter's,
-## beside the upload that waits on them (see [method Exporter.youtube_sign_in]).
+## Ticking "Upload after export" sets uploads up as far as they need, visibly: the Google client file the first time, then the
+## sign-in; the box ticks once both are done (a cancel leaves it clear). A playlist takes the wider sign-in, asked for only
+## when the list is first loaded ([constant YouTube.PLAYLIST_SCOPE]). The dialogs are the exporter's (see [method
+## Exporter.youtube_sign_in]).
 ##
-## THE PLAYLIST IS NAMED AS YOUTUBE NAMES IT NOW (2026-10-26, the user: "every time I restart, it keeps
-## reverting to 'Tarot' ... I shouldn't have to reload"): the block kept the title it was picked under, ↻
-## showed the new one and never kept it, so a playlist renamed since came back by its old name at every
-## opening, and the description named it so. A loaded list's title is the block's, and a card opening on
-## a playlist loads the list itself when its sign-in may already see them, asking and saying nothing
-## ([method _look_quietly]).
+## The playlist is named as YouTube names it now: a loaded list's title is the block's, and a card opening on a playlist
+## loads the list itself when its sign-in may already see them, asking and saying nothing ([method _look_quietly]).
 
 const YouTube := preload("res://src/export/youtube.gd")
 
@@ -95,14 +60,13 @@ const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": 
 	"write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
 	"thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
 	"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true}
-## The Script card's rows the title's macros are read from ([method name_from]): [constant YouTube.MACROS]'
-## keys of the same names.
+## The Script card's rows the title's macros are read from ([method name_from]): [constant YouTube.MACROS]' keys of the same names.
 const NAMES := ["title", "episode", "author", "book"]
 
 signal noted(msg: String)
 
-## Set by a panel that adds to the title's macros: () -> Dictionary, laid over the Script card's names - a
-## show's own name (never the note's file name), its picked episode's title and seed. Unset, the names alone.
+## Set by a panel that adds to the title's macros: () -> Dictionary, laid over the Script card's names (a show's own name,
+## its picked episode's title and seed). Unset, the names alone.
 var values: Callable
 ## Where the panel puts rows of its own (a show's description and tags), under the card's.
 var extra: VBoxContainer
@@ -132,7 +96,7 @@ var _desc: TextField
 var _tags_note: Label
 ## The step that writes each episode's tags, while the box is ticked.
 var _tags: YouTubeTags
-## WHAT THIS CARD HANDS THE NOTE'S PIPELINE CARD: its tags and its thumbnail, under its own name ([method pipeline]).
+## What this card hands the note's Pipeline card: its tags and its thumbnail, under its own name ([method pipeline]).
 var _section: EpisodeSteps
 var _thumbnail: OptionButton
 var _thumb_writer: AgentPick
@@ -167,8 +131,7 @@ var _seen := []                 # what the account rows were last drawn for
 var _tip := ""                  # the title's tooltip as last set, before Boot.wrap_tip folded it on hover
 
 
-## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]):
-## it asks nothing of it.
+## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]); it asks nothing of it.
 static func for_note(_ctx: Dictionary) -> YouTubeCard:
 	return YouTubeCard.new()
 
@@ -196,8 +159,7 @@ func _init() -> void:
 		+ "writes its tags from its words too, once they have changed.")
 	_write_tags.toggled.connect(func(_on: bool) -> void: refresh())
 	boxes.add_child(_write_tags)
-	# WITH THE CARD'S OTHER BOXES (the user, 2026-10-30: "at the top, near the other options"), shown while the
-	# Thumbnail is Painted
+	# with the card's other boxes, shown while the Thumbnail is Painted
 	_thumb_match = CheckBox.new()
 	_thumb_match.text = "Match the video's pictures"
 	_thumb_match.add_theme_font_size_override("font_size", 12)
@@ -331,8 +293,8 @@ func _ready() -> void:
 	refresh()
 
 
-## THE THUMBNAIL'S ROWS: the choice, the writer and the painter of a painted one (shown only then), the
-## line that says what goes up, and the painted one itself.
+## The thumbnail's rows: the choice, the writer and the painter of a painted one (shown only then), the line that says what
+## goes up, and the painted one itself.
 func _build_thumbnail() -> void:
 	_thumbnail = OptionButton.new()
 	_thumbnail.fit_to_longest_item = false
@@ -388,8 +350,8 @@ func _build_thumbnail() -> void:
 	_thumb_steps.add_child(_thumb_del)
 
 
-## The step that writes each episode's tags, and the line that says where it stands (the box that turns
-## it on is at the top, beside "Upload after export"; the list it writes is the panel's, above).
+## The step that writes each episode's tags, and the line that says where it stands (the box that turns it on is at the top,
+## beside "Upload after export"; the list it writes is the panel's, above).
 func _build_tags() -> void:
 	_tags = YouTubeTags.new(func() -> bool: return _write_tags.button_pressed)
 	_section = EpisodeSteps.new("YouTube", episode_steps, self)
@@ -419,8 +381,8 @@ func _small(text: String) -> Label:
 	return l
 
 
-## THE ACCOUNT ROWS FOLLOW THE FILES BY LOOKING, twice a second: a sign-in finishes in the exporter's
-## dialog, an upload waits or goes up from any note, and none of it signals this card.
+## The account rows follow the files by looking, twice a second: a sign-in finishes in the exporter's dialog, an upload waits
+## or goes up from any note, and none of it signals this card.
 func _process(dt: float) -> void:
 	_poll -= dt
 	if _poll > 0.0:
@@ -442,9 +404,9 @@ func capture() -> Dictionary:
 		"thumbnail_match": _thumb_match.button_pressed}
 
 
-## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not
-## know is Private, a category it does not offer is People & Blogs, a thumbnail it does not know is
-## YouTube's choice, and no channel is the first one kept here.
+## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not know is Private, a
+## category it does not offer is People & Blogs, a thumbnail it does not know is YouTube's choice, and no channel is the first
+## one kept here.
 func apply(block: Dictionary) -> void:
 	var b := DEFAULTS.duplicate()
 	b.merge(block, true)
@@ -512,8 +474,8 @@ func writes_tags() -> bool:
 	return _write_tags.button_pressed
 
 
-## THE NOTE IS DESCRIBED HERE from now on: the box shows, and its words go up first. It is its own
-## episode, so the tags written are the note's.
+## The note is described here from now on: the box shows, and its words go up first. It is its own episode, so the tags
+## written are the note's.
 func describe() -> void:
 	_desc.visible = true
 	_write_tags.text = "Write the note's tags"
@@ -524,21 +486,19 @@ func description() -> String:
 	return _desc.text.strip_edges() if _desc.visible else ""
 
 
-## THE STEPS THIS CARD MAKES FROM THE NOTE'S EPISODES ([EpisodeStep]): each episode's tags, listed only while
-## [method writes_tags] (see [method YouTubeTags.wanted]), and its thumbnail, only while it is Painted.
+## The steps this card makes from the note's episodes ([EpisodeStep]): each episode's tags, listed only while [method
+## writes_tags] (see [method YouTubeTags.wanted]), and its thumbnail, only while it is Painted.
 func episode_steps() -> Array:
 	return [_tags, _thumb]
 
 
-## WHAT IT HANDS THE NOTE'S PIPELINE CARD: those steps, as a section of its own ([EpisodeSteps]).
+## What it hands the note's Pipeline card: those steps, as a section of its own ([EpisodeSteps]).
 func pipeline() -> PipelineSection:
 	return _section
 
 
-## THE NOTE'S NAMES ARE [param writer]'S - its Script card's - from now on: %title% its Title (else the
-## note's file name), %episode% its Episode, %author% its Author, %book% its Book, every row shown there,
-## so whatever the title can say has a place on the note to be written. Every panel that shows this card
-## calls it.
+## The note's names are [param writer]'s (its Script card's) from now on: %title% its Title (else the note's file name),
+## %episode% its Episode, %author% its Author, %book% its Book, every row shown there. Every panel that shows this card calls it.
 func name_from(writer: ScriptWriter) -> void:
 	_names = writer
 	for k in NAMES:
@@ -546,9 +506,8 @@ func name_from(writer: ScriptWriter) -> void:
 	refresh()
 
 
-## WHAT THE TITLE'S MACROS ARE WORTH NOW - and so which this note fills: the Script card's Title, Episode,
-## Author and Book, under what the panel adds ([member values]). {} while no panel has bound the card: it
-## fills nothing, and nothing goes up.
+## What the title's macros are worth now, and so which this note fills: the Script card's Title, Episode, Author and Book,
+## under what the panel adds ([member values]). {} while no panel has bound the card: it fills nothing, and nothing goes up.
 func values_now() -> Dictionary:
 	if _names == null:
 		return {}
@@ -569,9 +528,8 @@ func _values(given: Dictionary) -> Dictionary:
 	return v
 
 
-## WHY THE TITLE CANNOT GO UP AS IT STANDS ("" when it can), with the macros' [param given] values laid
-## over the note's now: it names a macro the note does not fill ([method YouTube.unfilled]), or no panel
-## ever said what the note is called.
+## Why the title cannot go up as it stands ("" when it can), with the macros' [param given] values laid over the note's now:
+## it names a macro the note does not fill ([method YouTube.unfilled]), or no panel ever said what the note is called.
 func why_not(given := {}) -> String:
 	var v := _values(given)
 	if v.is_empty():
@@ -604,14 +562,11 @@ func template() -> String:
 	return _title.text if not _title.text.strip_edges().is_empty() else YouTube.TITLE_TEMPLATE
 
 
-## WHAT AN UPLOAD OF [param take] SAYS (see [member Exporter.upload_provider]): [param base] - the
-## panel's own part, its description, tags (the note's one list), the episode's folder and record, and the
-## macros' `values` when they are not the panel's as it stands now (an episode an export rendered) - with
-## this card's title, privacy, category, playlist (its id and title, which the description names), channel
-## and thumbnail ([method thumbnail_of]) laid over it, and the description written here ([method describe])
-## before the panel's. {} when nothing is to go up: the box is clear, or the panel has nothing ({});
-## `{refused: why}` when its title cannot be made ([method why_not]) - the exporter says so, and nothing
-## renders for it.
+## What an upload of [param take] says (see [member Exporter.upload_provider]): [param base] (the panel's own part: its
+## description, tags, the episode's folder and record, and the macros' `values` when they are not the panel's as it stands now)
+## with this card's title, privacy, category, playlist (its id and title), channel and thumbnail ([method thumbnail_of]) laid
+## over it, and the description written here ([method describe]) before the panel's. {} when nothing is to go up: the box is
+## clear, or the panel has nothing ({}); `{refused: why}` when its title cannot be made ([method why_not]).
 func meta(base: Dictionary, take := "") -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
@@ -639,9 +594,9 @@ func meta(base: Dictionary, take := "") -> Dictionary:
 	return out
 
 
-## THE THUMBNAIL AN UPLOAD OF [param take] TAKES, as the card's Thumbnail says - a painted one the episode's
-## in [param folder]: `{thumbnail}` (an image), `{thumbnail_at}` (a moment of the take, its frame taken
-## there), or neither - with `thumbnail_why` when the choice cannot be had, and YouTube's goes up.
+## The thumbnail an upload of [param take] takes, as the card's Thumbnail says: `{thumbnail}` (an image, a painted one in
+## [param folder]), `{thumbnail_at}` (a moment of the take, its frame taken there), or neither, with `thumbnail_why` when the
+## choice cannot be had; YouTube's goes up then.
 func thumbnail_of(take: String, folder: String) -> Dictionary:
 	match thumbnail():
 		"title":
@@ -664,9 +619,7 @@ func refresh() -> void:
 	if _preview == null:
 		return
 	var v := values_now()
-	# ONLY WHEN IT CHANGES: Boot.wrap_tip rewrites a tooltip as it is hovered, so the field's own text is
-	# never the tip as made - compared with it, the tip went back unwrapped twice a second, under the
-	# tooltip's own delay, and ran off the screen in one line
+	# only when it changes: Boot.wrap_tip rewrites a tooltip as it is hovered, so the field's own text is never the tip as made
 	var tip := _title_tip(v)
 	if tip != _tip:
 		_tip = tip
@@ -766,9 +719,8 @@ func _exporter() -> Node:
 	return Exporter.of(self)
 
 
-## TICKED: set uploads up first - the box shows ticked only once the note's channel is signed in and
-## may do what this card asks (a playlist chosen asks for more); a note with no channel yet signs in
-## to one, and takes it. Cleared: simply cleared.
+## Ticked: set uploads up first; the box shows ticked only once the note's channel is signed in and may do what this card
+## asks (a playlist chosen asks for more); a note with no channel yet signs in to one, and takes it. Cleared: simply cleared.
 func _on_tick(on: bool) -> void:
 	if not on:
 		refresh()
@@ -812,9 +764,8 @@ func _on_remove() -> void:
 
 # --- the episode's tags --------------------------------------------------------------------------
 
-## UNDER THE LIST, while the box is ticked: what the writer is doing to it for the episode the card
-## that makes it shows - or that nothing on the note makes an episode, when nothing does. Drawn again
-## only when something it says has changed.
+## Under the list, while the box is ticked: what the writer is doing to it for the episode the card that makes it shows, or
+## that nothing on the note makes an episode. Drawn again only when something it says has changed.
 func _refresh_tags() -> void:
 	var on := writes_tags()
 	var feed: EpisodeFeed = _tags.shown if on else null
@@ -853,9 +804,9 @@ func _refresh_tags() -> void:
 
 # --- the thumbnail -------------------------------------------------------------------------------
 
-## UNDER THE THUMBNAIL: the writer and painter rows of a painted one, what goes up as it stands - a frame
-## of the title screen and when, or what the painter is doing for the episode shown
-## - and the painted one itself. Drawn again only when something it says has changed.
+## Under the thumbnail: the writer and painter rows of a painted one, what goes up as it stands (a frame of the title screen
+## and when, or what the painter is doing for the episode shown) and the painted one itself. Drawn again only when something
+## it says has changed.
 func _refresh_thumbnail() -> void:
 	var th := thumbnail()
 	var feed := _thumb_feed()
@@ -958,16 +909,16 @@ func _delete_thumb() -> void:
 	_refresh_thumbnail()
 
 
-## A DELETE PRESSED TWICE ([ArmedDelete]), as a picture's version is deleted on the Pictures card: the first press arms
-## it for 3 s ("Delete?"), the second calls [param act].
+## A delete pressed twice ([ArmedDelete]), as a picture's version is deleted on the Pictures card: the first press arms it for
+## 3 s ("Delete?"), the second calls [param act].
 func _armed_delete(text: String, act: Callable, tip := "Delete this thumbnail - its painting too. The one before it goes up instead, or none.") -> Button:
 	var b := ArmedDelete.button(text, act, tip)
 	b.add_theme_font_size_override("font_size", 12)
 	return b
 
 
-## THE THUMBNAIL AT FULL SIZE, in the window a picture opens in on the Pictures card ([PictureWindow]): the one chosen,
-## what the writer asked of it, and its versions to step through or delete there. Escape or the window's close hides it.
+## The thumbnail at full size, in the window a picture opens in on the Pictures card ([PictureWindow]): the one chosen, what
+## the writer asked of it, and its versions to step through or delete there. Escape or the window's close hides it.
 func open_thumbnail() -> void:
 	if _thumb_feed() == null or not is_inside_tree():
 		return
@@ -975,8 +926,8 @@ func open_thumbnail() -> void:
 	_thumb_window.open_over(self)
 
 
-## What the full-size window holds for the thumbnail chosen now - drawn again whenever the card's is
-## ([method _refresh_thumbnail]) - and hidden once there is none.
+## What the full-size window holds for the thumbnail chosen now (drawn again whenever the card's is, [method
+## _refresh_thumbnail]), hidden once there is none.
 func _fill_thumb_window() -> void:
 	if _thumb_window == null:
 		_thumb_window = PictureWindow.new()
@@ -1024,8 +975,8 @@ func _channel_name() -> String:
 	return String(_chan["name"]) if not String(_chan["name"]).is_empty() else String(_chan["id"])
 
 
-## THE NOTE'S CHANNEL IS [param id] from now on: its uploads go there. Another channel's playlists are
-## not this one's, so the playlist is cleared.
+## The note's channel is [param id] from now on: its uploads go there. Another channel's playlists are not this one's, so the
+## playlist is cleared.
 func pick_channel(id: String) -> void:
 	if id == String(_chan["id"]):
 		return
@@ -1039,8 +990,8 @@ func pick_channel(id: String) -> void:
 	refresh()
 
 
-## The toggles: a channel each, the order they were signed in to, the note's pressed - its own, dimmed,
-## when it is not signed in here - and "+" last.
+## The toggles: a channel each, in the order they were signed in to, the note's pressed (its own, dimmed, when it is not
+## signed in here), and "+" last.
 func _fill_channels(all: Array) -> void:
 	for c in _chips.get_children():
 		if c != _add:
@@ -1156,10 +1107,9 @@ func _on_resume() -> void:
 
 # --- the playlist --------------------------------------------------------------------------------
 
-## THE CHANNEL'S PLAYLISTS, loaded on ↻: a sign-in that may see them first, when the kept one may
-## only upload. The one the block names stays picked; one that has gone from the channel stays
-## listed, marked, until another is picked. [param quiet]: as the card opens - no sign-in, and nothing
-## said, either way.
+## The channel's playlists, loaded on ↻: a sign-in that may see them first, when the kept one may only upload. The one the
+## block names stays picked; one that has gone from the channel stays listed, marked, until another is picked. [param quiet]:
+## as the card opens, no sign-in and nothing said, either way.
 func load_playlists(quiet := false) -> void:
 	var ex := _exporter()
 	var id := String(_chan["id"])
@@ -1197,9 +1147,8 @@ func load_playlists(quiet := false) -> void:
 		noted.emit("%d playlist%s on the channel." % [_lists.size(), "" if _lists.size() == 1 else "s"])
 
 
-## A CARD OPENING ON A PLAYLIST LOADS THE LIST, so the playlist shows by its name now: once a channel,
-## when its sign-in may already see them and the card is where the exporter is. A sign-in that may only
-## upload waits for ↻, which asks for more.
+## A card opening on a playlist loads the list, so the playlist shows by its name now: once a channel, when its sign-in may
+## already see them and the card is where the exporter is. A sign-in that may only upload waits for ↻, which asks for more.
 func _look_quietly() -> void:
 	var id := String(_chan["id"])
 	if _loading or id.is_empty() or _looked == id or String(_list["id"]).is_empty():
@@ -1208,8 +1157,8 @@ func _look_quietly() -> void:
 		load_playlists(true)
 
 
-## The dropdown: None, the loaded playlists, and the block's own when it is not among them - among them,
-## it takes the title YouTube gives it now, which the block keeps and the description names.
+## The dropdown: None, the loaded playlists, and the block's own when it is not among them (among them, it takes the title
+## YouTube gives it now, which the block keeps and the description names).
 func _fill_playlists() -> void:
 	_playlist.clear()
 	_playlist.add_item("None")

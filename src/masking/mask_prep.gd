@@ -1,49 +1,25 @@
 extends RefCounted
 class_name MaskPrep
 
-## MaskPrep - the clip made ready, a part of [MaskEditor]: transcoded once into the session's folder
-## ([method prep]), guarded against a second writer on the same output ([method looks_live]),
-## finished into a session ([method finish_session]), and measured - its length and its frame size,
-## seeded by ffprobe and confirmed from the first decoded frame ([method probe_duration],
-## [method sync_size]).
+## MaskPrep - the clip made ready, a part of [MaskEditor]: transcoded once into the session's folder ([method prep]),
+## guarded against a second writer on the same output ([method looks_live]), finished into a session
+## ([method finish_session]), and measured - its length and frame size, seeded by ffprobe and confirmed from the first
+## decoded frame ([method probe_duration], [method sync_size]).
 ##
-## WHAT IT IS HANDED is written out: every `editor.` below is something it reads of the editor (the
-## session, the prep's state and processes, the player, the status line).
+## Two real ffmpeg processes (not a shell chain), each polled and reported like exporter.gd's bake/render/transcode
+## steps: video first (the slow part), then audio (PCM decode). Progress comes from `-progress <file>`.
 ##
-## Two real ffmpeg processes (not a shell chain) so each can be polled and reported
-## like exporter.gd's bake/render/transcode steps: video first (the slow part - can
-## be minutes on a long clip), then audio (fast, PCM decode). Progress comes from the
-## same `-progress <file>` mechanism the export transcode step already uses.
-##
-## Two writers on the SAME -y output path interleave and corrupt it - not
-## hypothetical, this is here because it happened (twice: a second launch mid-prep
-## raced the first, and separately a manual external ffmpeg run raced the app). The
-## first version of this guard tracked a PID and called Subprocess.alive() on
-## it - which crashes (engine-level ECHILD) the moment the PID belongs to a process
-## this instance didn't spawn itself, e.g. a PREVIOUS launch's child, exactly the
-## cross-instance case the guard exists for. An mtime check answers the actual
-## question - "did anything touch this file recently" - without caring who the
-## writer is or whether this instance could ever see its PID.
+## Two writers on the same -y output path interleave and corrupt it, so liveness is an mtime check ("did anything
+## touch this file recently"), not a PID: Subprocess.alive() on a PID another launch spawned crashes (engine ECHILD).
 
-## The [MaskEditor] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [MaskEditor] this is a part of: everything read through it is something this part is handed.
 var editor: MaskEditor
 
-# THE SOURCE CLIP'S OWN FRAME SIZE
-# Everything that has to know the picture's SHAPE reads this: the editor's
-# letterboxed video slot (_build_editor_ui), the export's recorded resolution
-# (_write_render_override), the meta mirror's hand-built pane
-# (_shrink_into_video_pane) and the umbra eye fit's aspect correction. A portrait
-# clip (1080x1920) is therefore not a special case anywhere - it is just this pair
-# being taller than it is wide, and the editor pillarboxes it (black bars either
-# side) exactly the way a short clip already letterboxes. Nothing here assumes
-# 16:9; the several places that used to hardcode 1.7778 / 1920x1080 were the ONLY
-# reason a vertical clip came out horizontally squashed.
-#
-# Seeded by ffprobe at session-ready - the editor layout and the export launch
-# both need it BEFORE a frame has decoded - then confirmed from the decoded
-# texture itself the first frame it exists (sync_size), which is
-# authoritative and also covers a machine with no ffprobe on PATH.
+# The source clip's own frame size. Everything that needs the picture's shape reads it (the letterboxed video slot,
+# the export's recorded resolution, the meta mirror's pane, the umbra eye fit's aspect): nothing assumes 16:9, a
+# portrait clip is this pair taller than wide and is pillarboxed. Seeded by ffprobe at session-ready (the layout and
+# the export launch need it before a frame decodes), then confirmed from the first decoded texture (sync_size), which
+# is authoritative and covers a machine with no ffprobe.
 const _SRC_SIZE_FALLBACK := Vector2i(1920, 1080)
 var src_size := _SRC_SIZE_FALLBACK
 var size_confirmed := false   # the decoded texture has had its say
@@ -57,15 +33,10 @@ func prep(source: String, dir: String, video: String, audio: String) -> void:
 	DirAccess.make_dir_recursive_absolute(abs_dir)
 	_prep_src_dur = probe_duration(source)
 	_progress_reset(_PREP_PROGRESS_FILE)
-	# Small GOP (-g 25 = ~1 keyframe/sec at typical fps) keeps scrubbing responsive on
-	# long clips; theora is the only format VideoStreamPlayer decodes natively (see
-	# next/mask_mode_spike notes - WebM/H.264 need a GDExtension, so every source
-	# clip gets this one-time transcode regardless of its original codec).
-	# Written as .part and promoted on completion (see promote_part): a
-	# half-written media file at its REAL name is scanned by the Godot editor's
-	# importer, and a truncated WAV wedges it in an infinite seek loop -
-	# hanging every editor boot AND every headless compile check (including
-	# the assistant's reload gate) until the file is deleted by hand.
+	# A small GOP (-g 25, ~1 keyframe/sec) keeps scrubbing responsive; theora is the only format VideoStreamPlayer
+	# decodes natively (next/mask_mode_spike notes), so every source gets this transcode. Written as .part and
+	# promoted on completion (see promote_part): a half-written media file at its real name is scanned by the Godot
+	# editor's importer, and a truncated WAV wedges it in an infinite seek loop.
 	var args := PackedStringArray([
 		"-y", "-loglevel", "error", "-i", source, "-an",
 		"-c:v", "libtheora", "-q:v", "6", "-g", "25",
@@ -76,8 +47,7 @@ func prep(source: String, dir: String, video: String, audio: String) -> void:
 	if editor._prep_video_pid <= 0:
 		editor._set_status("⚠  Could not start ffmpeg (is it on PATH?)")
 	else:
-		# In the log too: for a long clip THIS is the slow stage (libtheora is
-		# single-threaded), and the console should say what's grinding.
+		# In the log too: libtheora is single-threaded, so this is the slow stage.
 		print("ghost mask: prep started - transcoding %s (%.0fs) -> %s" % [
 			source, _prep_src_dur, video])
 		_touch_lock(abs_dir)
@@ -87,9 +57,8 @@ func prep(source: String, dir: String, video: String, audio: String) -> void:
 func start_audio() -> void:
 	_touch_lock(ProjectSettings.globalize_path(editor._pending.dir))   # bridge the gap while
 	# video.ogv's mtime goes stale and audio.wav doesn't exist yet - see looks_live.
-	# Two outputs, one decode: the PCM the waveform/envelope tooling needs,
-	# and the compressed sidecar playback actually attaches (see
-	# _ready_with_session for why the raw WAV is too slow to load live).
+	# Two outputs, one decode: the PCM the waveform/envelope tooling needs, and the compressed sidecar playback
+	# attaches (see _ready_with_session for why the raw WAV is too slow to load live).
 	var abs_a := ProjectSettings.globalize_path(String(editor._pending.audio))
 	var args := PackedStringArray([
 		"-y", "-loglevel", "error", "-i", String(editor._pending.source), "-vn",
@@ -126,14 +95,9 @@ func read_pct() -> int:
 func finish_session(source: String, video: String, audio: String) -> void:
 	var abs_video := ProjectSettings.globalize_path(video)
 	var dur := probe_duration(abs_video)
-	# A theora/ogg file caught mid-write can still probe successfully - ffmpeg
-	# doesn't flush on every frame, so a writer can look "stale" by mtime alone
-	# during a buffering gap and still be actively growing. duration <= 0.0 catches
-	# a totally unparseable file; this catches the sneakier case where it parses
-	# fine but is truncated (this is exactly how a real 16:22 clip got cached at
-	# 2:14 - the audio step's own duration is ground truth, extracted whole, so a
-	# video duration meaningfully short of it means "not actually done yet", not
-	# "shorter clip").
+	# A theora/ogg file caught mid-write can probe fine yet be truncated, and a writer can look stale by mtime in a
+	# buffering gap. The audio step's duration is ground truth (extracted whole): a video meaningfully shorter than it
+	# is not done yet.
 	var audio_dur := probe_duration(ProjectSettings.globalize_path(audio))
 	var incomplete := dur <= 0.0 or (audio_dur > 0.0 and dur < audio_dur - 2.0)
 	if incomplete:
@@ -164,13 +128,10 @@ func _lock_path(dir: String) -> String:
 	return dir.path_join(".prep.lock")
 
 
-## Move a finished prep output from its .part name into place. Outputs are
-## written under a name the editor's importer ignores because a truncated
-## media file at its REAL name is not just garbage, it's a trap: a killed
-## prep left a half-written audio.wav whose WAV import looped forever on
-## seeks past EOF (audio_stream_wav.cpp), hanging every editor scan until
-## the file was hand-deleted. A missing .part (ffmpeg died at startup) is
-## a no-op here - the duration validation downstream reports it.
+## Move a finished prep output from its .part name into place. Outputs are written under a name the editor's
+## importer ignores: a truncated media file at its real name hangs every editor scan (a half-written audio.wav
+## looped forever on seeks past EOF). A missing .part (ffmpeg died at startup) is a no-op; the duration validation
+## downstream reports it.
 func promote_part(dest: String) -> void:
 	var abs_dest := ProjectSettings.globalize_path(dest)
 	if FileAccess.file_exists(abs_dest + ".part"):
@@ -195,10 +156,8 @@ func _fresh(path: String, now: float) -> bool:
 	return FileAccess.file_exists(path) and now - FileAccess.get_modified_time(path) < _STALE_AFTER
 
 
-## True if the lock file, the video output, or the audio output was modified within
-## the last _STALE_AFTER seconds - covers both prep sub-steps (the lock's own touch
-## bridges the gap before video.ogv exists yet; the outputs' own mtimes take over,
-## and cover each other, for the rest).
+## True if the lock file, the video output or the audio output was modified within the last _STALE_AFTER seconds:
+## the lock's touch bridges the gap before video.ogv exists, the outputs' mtimes cover the rest.
 func looks_live(dir: String, video: String) -> bool:
 	var now := Time.get_unix_time_from_system()
 	var abs_dir := ProjectSettings.globalize_path(dir)
@@ -212,14 +171,10 @@ func looks_live(dir: String, video: String) -> bool:
 
 # --- the clip's frame size and length, probed and confirmed -----------------------------------
 
-## Robust video-duration probe. The fast path is the container's own duration,
-## but our own libtheora transcode (see MaskTracks._start_track_import) routinely produces an
-## .ogv whose header carries NO duration - ffprobe returns "N/A" for both
-## format=duration AND stream=duration. That returned 0 here, and MaskTracks.finish_import
-## reads 0 as "transcode failed" and silently adds no lane (the "Track import does
-## nothing" bug). So when both are absent, fall back to counting video packets (fast,
-## no decode) and dividing by the frame rate - every playable file has a definite
-## packet count even when it lacks a duration field.
+## Video-duration probe. The container's own duration first; our libtheora transcode (see
+## MaskTracks._start_track_import) often yields an .ogv with no duration (ffprobe says "N/A"), which
+## MaskTracks.finish_import would read as a failed transcode. Then fall back to video packets (fast, no decode)
+## divided by the frame rate.
 func probe_duration(path: String) -> float:
 	var d := _ffprobe_float(["-show_entries", "format=duration"], path)
 	if d > 0.0:

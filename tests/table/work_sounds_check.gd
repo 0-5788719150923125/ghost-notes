@@ -1,38 +1,29 @@
 extends SceneTree
 
-## The gate of THE WORK, HEARD ([WorkSounds]; next/table_physics.md, "Sounds of the work"), with no renderer: a bench's
-## sound made offline and measured.
+## The gate of the work, heard ([WorkSounds]; next/table_physics.md, "Sounds of the work"), with no renderer: a bench's sound made
+## offline and measured.
 ##
 ##   godot --headless --path . --script res://tests/table/work_sounds_check.gd
 ##
-## - A THING SET DOWN IS HEARD AS IT LANDS (the user, 2026-10-29: "a sound when we move that big object and drop it on the
-##   table somewhere, or even when we move smaller objects that still have weight"): a glass jar set down sounds at that
-##   moment and not before it; an iron pot set down sounds louder; a paper slip set down is not heard. The control: the
-##   jar carried and held up, never set `down`, makes no sound.
-## - GRINDING IS HEARD ONLY WHILE IT TOUCHES ("sound specifically when the pestle touches the mortar (not in the gaps
-##   where it isn't touching)"): a pestle going round pressed into its mortar scrapes; lifted clear between its rounds, it
-##   is silent.
-## - GRINDING IS A SCRAPE, LOW AND ROUGH (the-quiet-crucible 841899: "Stone on stone should be a scraping sound, low and
-##   rough, abrasive. What it does now sounds a lot closer to T.V. static. I also think it's a touch too loud"): most of
-##   its energy is under 1 kHz, its loudness in 20 ms pieces varies as a scrape's does, and it is quieter than the 0.0055
-##   RMS it had been. The control: steady noise through a band at 2.2 kHz - the static it had been - is neither low nor
-##   rough by the same measures.
-## - WHAT BREAKS IS HEARD AS IT BREAKS (119515: the user "couldn't hear the grinding"): a piece the physics breaks off
-##   crunches at that moment, and forty broken off in 0.4 s stay under the levels below. The control: the moment before
-##   it, nothing.
-## - A BOIL BUBBLES, STEAM DOES NOT ("only if it is brought to a boil though, not when it's just steaming"): a pot brought
-##   to the boil bubbles from then; before, it is silent.
-## - A PAUSED SHOW HOLDS ITS SOUND ("I clicked "pause" in the real-time viewer, and the environmental cauldron boiling
-##   sounds continue to play"): the show's time standing still, the player is held where it is; going on, it plays. The
-##   control: one tick at the same time (a frame the clock did not tick over) does not hold it.
-## - A SIMMER IS A QUIET FIZZ, A ROLLING BOIL BUBBLES (2026-10-31, a pot only steaming at `boil` 0.2: "there is a "bloop" sound
-##   playing constantly in the background, maybe 1 or 2 times per second ... a boil would have more rapid bubbling"): at 0.2 its
-##   bubbles ([Boil]) come ten or more a second, every one ringing above 2 kHz (a millimeter's), and none louder than a third of a
-##   rolling boil's biggest; at a rolling boil, over 150 a second, some under 800 Hz. The control: the rolling boil's do ring under
-##   2 kHz, so the simmer's test can fail. AND THE BUBBLES HEARD ARE THE BUBBLES DRAWN: each the sound hears breaking is among those
-##   the table shows on the surface just before it breaks ([method Boil.showing]).
-## - SUBDUED ("they need to be subdued and quieter than the voice"): nothing peaks past [constant WorkSounds.PEAK_MOST],
-##   and no 0.4 s of it is louder than a third of the voice's speaking level ([constant VoiceFX.PAD_VOICE_REF]).
+## - A thing set down is heard as it lands: a glass jar set down sounds at that moment and not before it; an iron pot sounds louder;
+##   a paper slip is not heard. The control: the jar carried and held up, never set `down`, makes no sound.
+## - Grinding is heard only while it touches: a pestle going round pressed into its mortar scrapes; lifted clear between its rounds,
+##   it is silent.
+## - Grinding is a scrape, low and rough: most of its energy is under 1 kHz, its loudness in 20 ms pieces varies as a scrape's does,
+##   and it is quieter than 0.0055 RMS. The control: steady noise through a band at 2.2 kHz is neither low nor rough by the same
+##   measures.
+## - What breaks is heard as it breaks: a piece the physics breaks off crunches at that moment, and forty broken off in 0.4 s stay
+##   under the levels below. The control: the moment before it, nothing.
+## - A boil bubbles, steam does not: a pot brought to the boil bubbles from then; before, it is silent.
+## - A paused show holds its sound: the show's time standing still, the player is held where it is; going on, it plays. The control:
+##   one tick at the same time (a frame the clock did not tick over) does not hold it.
+## - A simmer is a quiet fizz, a rolling boil bubbles: at `boil` 0.2 its bubbles ([Boil]) come ten or more a second, every one
+##   ringing above 2 kHz (a millimeter's), and none louder than a third of a rolling boil's biggest; at a rolling boil, over 150 a
+##   second, some under 800 Hz. The control: the rolling boil's do ring under 2 kHz, so the simmer's test can fail. The bubbles
+##   heard are the bubbles drawn: each the sound hears breaking is among those the table shows on the surface just before it breaks
+##   ([method Boil.showing]).
+## - Subdued: nothing peaks past [constant WorkSounds.PEAK_MOST], and no 0.4 s of it is louder than a third of the voice's speaking
+##   level ([constant VoiceFX.PAD_VOICE_REF]).
 
 var _fails := 0
 
@@ -174,21 +165,21 @@ func _bench() -> bool:
 			e += s[i].x * s[i].x + s[i].y * s[i].y
 			n += 2
 		return sqrt(e / maxf(n, 1))
-	# SET DOWN
+	# set down
 	var jar := float(peak.call(3.98, 4.3))
 	_ok(float(peak.call(3.0, 3.97)) < 1e-5 and jar > 0.003, "the glass jar set down at 4 s: %.4f before it lands, %.4f as it does" % [float(peak.call(3.0, 3.97)), jar])
 	var pot := float(peak.call(7.98, 8.5))
 	_ok(pot > jar, "the iron pot set down peaks at %.4f, the glass jar at %.4f" % [pot, jar])
 	_ok(float(peak.call(11.98, 12.5)) < 0.001, "the paper slip set down is heard: %.4f" % float(peak.call(11.98, 12.5)))
 	_ok(float(peak.call(15.5, 17.0)) < 1e-5, "the control: the jar held up, never set down, sounds %.4f" % float(peak.call(15.5, 17.0)))
-	# A PIECE BROKEN OFF
+	# a piece broken off
 	_ok(float(peak.call(12.6, 12.99)) < 1e-5 and float(peak.call(12.99, 13.2)) > 0.002, "a piece broken off at 13 s: %.5f before, %.4f as it breaks" % [float(peak.call(12.6, 12.99)), float(peak.call(12.99, 13.2))])
-	# GRINDING, only while it touches
+	# grinding, only while it touches
 	var grit := float(rms.call(19.0, 21.5))
 	var lifted := float(rms.call(22.8, 23.8))
 	_ok(grit > 0.002 and lifted < 1e-4, "the pestle grinding pressed into the mortar: %.4f; lifted clear of it: %.5f" % [grit, lifted])
 	_ok(float(rms.call(25.0, 26.5)) > 0.002, "the pestle back at it scrapes only %.4f" % float(rms.call(25.0, 26.5)))
-	# ...LOW AND ROUGH, and quieter than it was
+	# ...low and rough, and quieter than it was
 	var scrape := PackedFloat32Array()
 	for i in range(int(19.0 * WorkSounds.RATE), int(21.5 * WorkSounds.RATE)):
 		scrape.append(s[i].x + s[i].y)
@@ -208,11 +199,11 @@ func _bench() -> bool:
 	_ok(_low_share(hiss) < 0.5 and _roughness(hiss) < 0.3, "the control: steady noise in a band at 2.2 kHz reads %.0f%% under 1 kHz and varies by %.2f" % [
 		_low_share(hiss) * 100.0, _roughness(hiss)])
 	print("  grinding: %.0f%% under 1 kHz, roughness %.2f" % [low * 100.0, rough])
-	# A BOIL
+	# a boil
 	var before := float(peak.call(27.8, 28.9))
 	var boiling := float(peak.call(30.0, 33.0))
 	_ok(before < 1e-5 and boiling > 0.002, "the pot before its boil: %.5f; at the boil: %.4f" % [before, boiling])
-	# SUBDUED
+	# subdued
 	var loudest := 0.0
 	var t := 0.0
 	while t < 33.6:
@@ -222,7 +213,7 @@ func _bench() -> bool:
 		"the work peaks at %.4f (no more than %.3f) and its loudest 0.4 s is %.4f RMS (no more than %.3f)" % [float(peak.call(0.0, 34.0)),
 		WorkSounds.PEAK_MOST, loudest, VoiceFX.PAD_VOICE_REF / 3.0])
 	print("  levels: jar %.4f, pot %.4f, grinding %.4f RMS, boiling %.4f, loudest 0.4 s %.4f RMS" % [jar, pot, grit, boiling, loudest])
-	# A PAUSED SHOW
+	# a paused show
 	var host := Node.new()
 	root.add_child(host)
 	var live := WorkSounds.new(m._work)

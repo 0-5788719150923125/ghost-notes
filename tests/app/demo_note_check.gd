@@ -1,13 +1,14 @@
 extends Node
 
-## demo_note_check - THE DEMO NOTE IS THE README'S PRISM, AND ITS STORYBOARD IS ITS OWN TO EDIT ([method Showcase.make_demo_note]).
+## demo_note_check - the demo note is the README's prism, and its storyboard is its own to edit ([method
+## Showcase.make_demo_note]).
 ##
 ##   tests/run_boot_probe.sh tests/app/demo_note_check.gd 60
 ##
-## On a notes folder and a song of its own under user:// (never the author's): the note is made with the recording's title,
-## its song written and its medium full frame, and its `scenes:` block is the note's OWN storyboard (what the Timeline edits),
-## loading whole with every entry of storyboards/showcase.yaml. The control is the recording's own block, which names the
-## file: it must not read as the note's own - else "editable" would prove nothing.
+## On a notes folder and a song of its own under user://: the note is made with the recording's title, its
+## song written and its medium full frame, and its `scenes:` block is the note's own storyboard, loading
+## whole with every entry of storyboards/showcase.yaml. Control: the recording's own block names the file
+## and must not read as the note's own.
 
 const ROOT := "user://demo_note_check"
 
@@ -33,7 +34,7 @@ func _ready() -> void:
 	_ok(bool(loaded.ok), "it loads whole")
 	_ok(((own["data"] as Dictionary).get("sequence", []) as Array).size() == (shipped.get("sequence", []) as Array).size()
 		and not (shipped.get("sequence", []) as Array).is_empty(), "it has every entry of the shipped storyboard")
-	# THE CONTROL: the recording's block names the file, and is not the note's own
+	# The control: the recording's block names the file, and is not the note's own
 	_ok(String(Storyboard.of_block({"storyboard": Showcase.STORYBOARD})["kind"]) != "own", "control: a block naming the file is not the note's own")
 	_clear(root)
 	if _fails.is_empty():

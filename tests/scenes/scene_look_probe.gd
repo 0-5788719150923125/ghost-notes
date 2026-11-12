@@ -1,22 +1,18 @@
 extends Node
 
-## NOT a gate - it asserts nothing. It renders ANY scene in the catalog by name and writes
-## PNGs, so a look can be judged by looking at it. (clown_look_probe.gd, vapor_look_probe.gd
-## and city_look_probe.gd are the same idea aimed at one scene each; this is the general one,
-## for building a new scene where the whole question is "what does it actually draw".)
+## Not a gate (asserts nothing): renders any scene in the catalog by name and writes PNGs, so a look can
+## be judged by looking. clown_look_probe.gd, vapor_look_probe.gd and city_look_probe.gd are the same
+## aimed at one scene each.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/scene_look_probe.gd 300 \
 ##       --out /tmp/look --scene fractal_zoom --seeds 1,2,3 --times 4,20
 ##
-## GHOST_PROBE_GPU is not optional: a scene reaches the Spectrum and Director autoloads (so it
-## needs a real boot) and this reads pixels back (so it needs a real renderer, never --headless,
-## whose dummy driver returns nothing from a viewport readback).
+## GHOST_PROBE_GPU is required: a scene reaches the Spectrum and Director autoloads (a real boot) and
+## this reads pixels back (a real renderer, never --headless, whose dummy driver reads back nothing).
 ##
-## THE SETTLE TICKS THE SCENE. A scene whose geometry is built by [FrameForge] relaunches its
-## worker from kick(), which update() calls - so running the sim in a tight loop and THEN
-## waiting for frames stops the kicks and photographs whichever packet happened to finish
-## first. That is a picture of t=0 captioned t=20; it was diagnosed the hard way in
-## city_look_probe.gd. Frames and sim steps advance together here.
+## The settle ticks the scene: a scene built by [FrameForge] relaunches its worker from kick(), which
+## update() calls, so a tight sim loop followed by a wait for frames photographs whichever packet
+## finished first. Frames and sim steps advance together here.
 
 const DT := 1.0 / 30.0
 
@@ -94,9 +90,8 @@ func _shoot(sv: int) -> void:
 			sc.update(_features(t), DT)
 			t += DT
 			await get_tree().process_frame
-		# What a frame of this actually costs, measured over the settle rather than guessed. A
-		# fragment-heavy scene can look right and still be unaffordable, and a render pays the
-		# same bill; ten frames is enough to see an order of magnitude.
+	# What a frame of this costs, measured over the settle (ten frames show an order of magnitude): a
+	# fragment-heavy scene can look right and still be unaffordable, and a render pays the same bill.
 		var t0f := Time.get_ticks_usec()
 		for _i in 10:
 			sc.update(_features(t), DT)
@@ -149,9 +144,8 @@ func _luma(img: Image) -> float:
 	return acc / float(maxi(1, n))
 
 
-## A one-line read on whether the frame has anything IN it: the share of sampled pixels that
-## differ from the frame's mean by more than a little. A flat wash and a picture can have the
-## same mean luma, and a scene that failed to draw is exactly a flat wash.
+## A one-line read on whether the frame has anything in it: the share of sampled pixels that differ from
+## the frame's mean by more than a little (a flat wash and a picture can share a mean luma).
 func _spread(img: Image) -> String:
 	var vals := PackedFloat32Array()
 	for y in range(0, img.get_height(), 4):

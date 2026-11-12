@@ -5,13 +5,13 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/notes/episode_steps_check.gd
 ##
-## WHAT IS LISTED: a step the card offering it wants, for an episode kept somewhere (THE CONTROLS: one not wanted, an episode
-## with no folder, none at all), and the section is shown only while something is. THE EPISODE IS THE PANEL'S TO SAY: each
-## tick says it to the steps listed. IT MAKES WHAT IS MISSING - here its prompt is empty, so it fails at once with no agent, and
-## says so on its row. Its row: ✓ what it made, its ⟳ waiting for the words (THE CONTROL: words, and it is offered), and a
-## step made from words since written again is stale and says what makes it again - the feed's own words for it. STOP stops a
-## job; an episode left stops what is being made of it and no other (THE CONTROL). A CARD FREED UNDER THEM offers nothing.
-## Each step here is the gate's own and starts no agent; what it keeps is under a scratch folder.
+## Listed: a step the card offering it wants, for an episode kept somewhere (controls: one not wanted, an episode with
+## no folder, none at all), and the section is shown only while something is. Each tick says the episode to the steps
+## listed. It makes what is missing: here its prompt is empty, so it fails at once with no agent and says so on its
+## row. Its row: ✓ what it made, its ⟳ waiting for the words (control: words, and it is offered), and a step made from
+## words since written again is stale and says what makes it again. Stop stops a job; an episode left stops what is
+## being made of it and no other (control). A card freed under them offers nothing. Each step here is the gate's own
+## and starts no agent; what it keeps is under a scratch folder.
 
 const ROOT := "user://episode_steps_check"
 
@@ -53,7 +53,7 @@ func wanted() -> bool:
 	var steps = load("res://src/notes/episode_steps.gd").new("Stub card", func() -> Array: return [step])
 	steps.episode = func() -> Object: return shown[0]
 
-	# WHAT IS LISTED
+	# what is listed
 	_ok(steps.listed(feed) == [step] and steps.shown(), "a step wanted, for an episode kept somewhere, is listed, and the section shown")
 	step.on = false
 	var unwanted: Array = steps.listed(feed)
@@ -62,7 +62,7 @@ func wanted() -> bool:
 	_ok(unwanted.is_empty() and hid and steps.listed(_feed("", "Some words.")).is_empty() and steps.listed(null).is_empty(),
 		"control: one not wanted, an episode with no folder or none at all lists nothing, and no section")
 
-	# THE EPISODE IS THE PANEL'S TO SAY
+	# the episode is the panel's to say
 	steps.tick()
 	_ok(step.shown == feed, "each tick says the episode shown to the steps listed")
 	var r: PipelineRow = steps.rows()[0]
@@ -70,20 +70,20 @@ func wanted() -> bool:
 		"its row: not made, its ⟳ offered, and saying what it does (%s)" % r.again)
 	_ok(steps.missing() and steps.names(feed, true) == PackedStringArray(["stub"]), "not made: missing, and named")
 
-	# WORDS NOT WRITTEN: ITS ⟳ WAITS
+	# words not written: its ⟳ waits
 	var empty = _feed("three", "")
 	shown[0] = empty
 	var waits: PipelineRow = steps.rows()[0]
 	_ok(not waits.open and waits.again.contains("once there are words"), "with no words, its ⟳ waits and says so")
 	shown[0] = feed
 
-	# GENERATE
+	# generate
 	steps.make()
 	steps.tick()
 	r = steps.rows()[0]
 	_ok(step.state(feed) == "failed" and r.state == "failed" and r.said.contains("prompt"), "Generate makes it - here refused, said on its row (%s)" % r.said)
 
-	# MADE FROM THE WORDS AS THEY ARE
+	# made from the words as they are
 	step._errors.clear()
 	_ok(step._write(feed, {"from": feed.stamp()}).is_empty() and not steps.missing() and steps.names(feed, true).is_empty()
 		and steps.names(feed) == PackedStringArray(["stub"]),
@@ -99,7 +99,7 @@ func wanted() -> bool:
 	_ok(String(steps.rows()[0].said).contains("so does Generate, or an export that goes up"), "...in the feed's own words")
 	feed.said = "Some words."
 
-	# STOP, AND AN EPISODE LEFT
+	# stop, and an episode left
 	step._jobs[feed.folder()] = {"id": "text-episode-steps-check", "feed": feed, "stamp": feed.stamp()}
 	_ok(steps.busy() and step.busy(feed) and not step.busy(other), "a job making it for one episode is busy for that one alone")
 	r = steps.rows()[0]
@@ -115,7 +115,7 @@ func wanted() -> bool:
 	steps.leave()
 	_ok(not steps.busy(), "the panel going stops it too")
 
-	# A CARD FREED UNDER THEM
+	# a card freed under them
 	var holder = _script("""extends RefCounted
 var held: Array = []
 func offered() -> Array:

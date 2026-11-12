@@ -8,19 +8,20 @@ Run it directly with the voice-training venv's python (its torch and Triton) - n
 It needs a CUDA graphics card. The scenes are small and seeded; the last section times a head's worth of
 splats and is not a gate.
 
-  A SPLAT'S TILES ARE ITS BOX'S - each splat is binned to exactly the tiles holding a pixel of the image
-  whose center lies within its radius on both axes, found pixel by pixel.
-  THE FORWARD IS THE REFERENCE'S - on random scenes, an image size no multiple of 16, image and alpha are
-  within 1e-5 of the dense reference's; the scenes hold ties in depth, splats off the image, splats of
-  radius 0, pairs too faint to count, clamped ones, pixels the stop ends and tails past the tile cut. The
-  two make the same decisions bit for bit (the same float32 steps, the same exp), so no scene sits on an
-  edge between them (CONTROLS: nearest-last, or without the tile cut, the reference is far off).
-  THE GRADIENTS ARE THE REFERENCE'S - means2d, conics, colors, opacities and the background, under a
-  loss on image and alpha, against the reference's autograd (CONTROL: b's gradient halved - 3DGS's own
-  convention for the conic - is caught).
-  PROJECT IS THE FORMULA - conics, radii and depth against Sigma2 built from a rotation made another way
-  (Rodrigues' formula from the quaternion's axis and angle) and inverted by torch.linalg; its gradients
-  pass gradcheck in double precision (CONTROL: with the rotation transposed, the formula disagrees).
+Held:
+- a splat's tiles are its box's: each splat is binned to exactly the tiles holding a pixel of the image whose
+  center lies within its radius on both axes, found pixel by pixel.
+- the forward is the reference's: on random scenes, an image size no multiple of 16, image and alpha are within
+  1e-5 of the dense reference's; the scenes hold ties in depth, splats off the image, splats of radius 0, pairs
+  too faint to count, clamped ones, pixels the stop ends and tails past the tile cut. The two make the same
+  decisions bit for bit (the same float32 steps, the same exp). Controls: nearest-last, or without the tile
+  cut, the reference is far off.
+- the gradients are the reference's: means2d, conics, colors, opacities and the background, under a loss on
+  image and alpha, against the reference's autograd (control: b's gradient halved - 3DGS's own convention - is
+  caught).
+- project is the formula: conics, radii and depth against Sigma2 built from a rotation made another way
+  (Rodrigues' formula) and inverted by torch.linalg; its gradients pass gradcheck in double precision (control:
+  with the rotation transposed, the formula disagrees).
 """
 
 from __future__ import annotations

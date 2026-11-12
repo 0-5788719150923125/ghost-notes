@@ -1,9 +1,8 @@
 extends TextWalk
 class_name EpisodeWalk
 
-## EpisodeWalk - a show of cards reads its EPISODE, never the note: the note is the brief agents
-## work from, and what the reader says is the script they wrote, step by step, for the episode up
-## now. A [TextWalk] Cards hands its reading.
+## EpisodeWalk - a show of cards reads its episode, never the note: the note is the brief agents work from, and what the reader
+## says is the script written for the episode up now. A [TextWalk] Cards hands its reading.
 
 ## The episode up now, asked each time: `() -> TableEpisode`, null while there is none.
 var episode: Callable
@@ -25,9 +24,8 @@ func cast_text(_written: String) -> String:
 	return _script()
 
 
-## A reader's minute (2026-10-25, the user: "make the test audio a bit longer"): the greeting, the
-## shuffle's one-word sentences ("Oh. Oh, wow." - the shortest a voice is ever asked for), three cards,
-## one of them reversed, a question to the viewer and the sign-off.
+## A reader's minute: the greeting, the shuffle's one-word sentences, three cards (one reversed), a question to the viewer and
+## the sign-off.
 func test_passage(_fallback: String) -> String:
 	return ("Hello, my loves, and welcome back to the channel. This is a timeless reading, so "
 		+ "whenever you find it is exactly when you were meant to. Let's shuffle. Oh. Oh, wow. "
@@ -41,7 +39,7 @@ func test_passage(_fallback: String) -> String:
 		+ "the rest, and I'll see you in the next one.")
 
 
-## An edit to the brief changes the NEXT episode, never the reading of this one.
+## An edit to the brief changes the next episode, never the reading of this one.
 func reads_source() -> bool:
 	return false
 

@@ -1,40 +1,35 @@
 extends Container
 class_name Card
 
-## Card - one component's settings on a side panel: a titled box, bordered in its FAMILY's color
+## Card - one component's settings on a side panel: a titled box, bordered in its family's color
 ## (next/notes.md, "A card").
 ##
-## THE COLOR IS THE FAMILY'S, not the component's - Scratch's categories, Blender's sockets and
-## TouchDesigner's operator families all do it this way, because hues run out near eight. Every
-## hue is drawn at one saturation and value (as Blockly fixes its categories'), so any hue fits
-## the set; and the color never stands alone - the title says what the card is.
+## The color is the family's, not the component's. Every hue is drawn at one saturation and value, so
+## any hue fits the set; the color never stands alone - the title says what the card is.
 ##
-## IT NEVER FOLDS (2026-11-09, the user: folding "doesn't belong here anymore, now that cards overlap while scrolling"): a
-## press on its bar, or on its chip, asks for it to be brought into view whole ([method reveal]), which the [PanelDeck] that
-## holds its bar does. The folds it kept in ghost.cfg's `[folds]` until then are no longer read.
+## It never folds: a press on its bar, or on its chip, asks for it to be brought into view whole
+## ([method reveal]), which the [PanelDeck] that holds its bar does.
 ##
-## NOT A FOLDABLECONTAINER, SINCE 2026-11-02 (next/panel_deck.md; the user: "cards stack or unstack, overlap or expand"):
-## that class draws its title bar itself, so a bar could not leave its card, lie over the next one or slide. Here the bar is a
-## control of its own, [member head]: on a panel a [PanelDeck] holds it, on one layer over everything that scrolls, and takes
-## its presses; anywhere else it stands at the card's top. [member head]'s the only title bar there is, so what is on it is live
-## wherever it lies.
+## Not a FoldableContainer (next/panel_deck.md): that class draws its title bar itself, so a bar could
+## not leave its card. Here the bar is a control of its own, [member head]: on a panel a [PanelDeck]
+## holds it, on one layer over everything that scrolls, and takes its presses; anywhere else it stands
+## at the card's top. [member head] is the only title bar there is, so what is on it is live wherever it lies.
 ##
-## WHAT IT IS FOR, ON HOVER ([member blurb]; 2026-11-11, the user: "after it's added, there is no longer a way to know what
-## each component is for"): its title bar's tooltip, and its chip's ([CardRow]) - a component's card says its row's blurb,
-## the one "+" offered it with ([method SidePanel.add_card]).
+## What it is for, on hover ([member blurb]): its title bar's tooltip, and its chip's ([CardRow]) - a
+## component's card says its row's blurb, the one "+" offered it with ([method SidePanel.add_card]).
 ##
 ## Add rows to [member body], never to the card.
 
 ## The families: a label and a hue in degrees, in the order cards stand on a panel. A family is a
 ## component's ([constant Components.FAMILIES], step 7); the card draws it.
 const FAMILIES := Components.FAMILIES
-## One saturation and value for every hue. Measured against Godot's default dark panel: the
-## border reads at a glance and the title stays legible on its tint.
+## One saturation and value for every hue, against Godot's default dark panel: the border reads at a
+## glance and the title stays legible on its tint.
 const SAT := 0.55
 const VAL := 0.82
 ## The paper's gray, at the same value.
 const PAPER := Color(0.72, 0.74, 0.78)
-## WHAT A TITLE BAR'S TINT LIES ON. Solid: what scrolls passes under a bar in a pile, and must not show through it.
+## What a title bar's tint lies on. Solid: what scrolls passes under a bar in a pile, and must not show through it.
 const UNDER := Color(0.1, 0.1, 0.11)
 
 ## Asked to be brought into view whole ([method reveal]): by a press on its bar or its chip.
@@ -48,7 +43,7 @@ var body: VBoxContainer
 ## A note's own recoloring of this card (next/notes.md: "the family's hue is a default"), or
 ## an invalid color for the family's.
 var tint := Color(0, 0, 0, 0)
-## ITS TITLE BAR: the name, and whatever [method add_title_bar_control] put on it.
+## Its title bar: the name, and whatever [method add_title_bar_control] put on it.
 var head: PanelContainer
 
 ## Its name on the bar.
@@ -110,7 +105,7 @@ func _notification(what: int) -> void:
 				head.queue_free()
 
 
-## ASKS TO BE BROUGHT INTO VIEW WHOLE, or its start where it is taller than the view: the [PanelDeck] holding its bar
+## Asks to be brought into view whole, or its start where it is taller than the view: the [PanelDeck] holding its bar
 ## answers. A card no deck holds (a footer's) is always in view, and nothing answers.
 func reveal() -> void:
 	reveal_asked.emit()
@@ -163,7 +158,7 @@ func color() -> Color:
 	return family_color(family)
 
 
-## A LABELED DIAL, as every card's are: the name, the slider and its readout on one row of
+## A labeled dial, as every card's are: the name, the slider and its readout on one row of
 ## [param box]. [param apply] takes each new value.
 static func slider_row(box: Container, label: String, lo: float, hi: float, step: float,
 		initial: float, tip: String, apply: Callable) -> HSlider:

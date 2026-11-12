@@ -1,40 +1,38 @@
 extends RefCounted
 class_name Assembly
 
-## Assembly - A THING BUILT OF MANY SMALL PARTS, on a lattice (next/assembly.md): bricks on studs, from what the agents write. The user,
-## 2026-11-02, of the first brick show: "the goal is to slowly build something from nothing ... we might pull a brick, try to fit it, put
-## it back, try a different one. We might build some structure, then destroy it and start over" - hundreds of pieces, over an hour.
+## Assembly - a thing built of many small parts on a lattice (next/assembly.md): bricks on studs, from what the agents write.
 ##
-## THIS IS THE PLAN AND THE CLOCK, NEVER THE MOTION. It walks the steps once ([method perform]) for what can be said without touching a
-## brick: what fits where, what could not be done, what each act comes to in words, how many of each part a stock must hold. What the
-## pieces then do is real: [AssemblyBake] runs every step on real bodies in a second process ([AssemblyWorld]) and writes it down
-## ([AssemblyTrack]). The first version of this file moved each piece along a planned path and let it drop on a curve, and the user,
-## 2026-11-03, on watching it: "bricks gently floating around in the air ... It's fake." Nothing here says where a piece is going any more.
+## This is the plan and the clock, never the motion. [method perform] walks the steps once for what can be said without touching a brick:
+## what fits where, what could not be done, what each act comes to in words, how many of each part a stock must hold. What the pieces
+## then do is real: [AssemblyBake] runs every step on real bodies in a second process ([AssemblyWorld]) and writes it down
+## ([AssemblyTrack]). Nothing here says where a piece is going.
 ##
-## A LATTICE, FOR WHAT IS BUILT: a cell is taken or it is not, a stud holds or it does not, and what it refuses it refuses in words ([method
-## fit]). Pressed home, a piece is part of the model: a solver has nothing to add to that, and would only make it tremble.
+## The lattice: a cell is taken or it is not, a stud holds or it does not, and what it refuses it refuses in words ([method fit]).
+## Pressed home, a piece is part of the model; a solver has nothing to add to that.
 ##
-## THE AGENT SAYS WHAT, THE HAND FINDS WHERE: a step names a part and a stud; which of the pieces in the tub it is, what is in the way of it,
-## how high it goes and how far it rises are found when it happens. There is always a piece of the part asked for: what the steps need is
-## added to the stock before anything lands ([method perform]'s dry pass).
+## The agent says what, the hand finds where: a step names a part and a stud; which piece of the tub it is, what is in the way, how
+## high it goes and how far it rises are found when it happens. There is always a piece of the part asked for: what the steps need
+## is added to the stock before anything lands ([method perform]'s dry pass).
 ##
-## SLOW BY STOPPING, NEVER BY SLOWING ([method lay]; the user: "building a model from LEGO is probably not fast ... we might stop, we might
-## consider what to do next"): the record runs at a hand's pace on its own clock and has stops in it, and a reader's words and silences say how
-## long a stretch is. More time than a step needs goes into its stops. A fall always takes the time a fall takes.
+## Slow by stopping, never by slowing ([method lay]): the record runs at a hand's pace on its own clock with stops in it, and a
+## reader's words and silences say how long a stretch is. More time than a step needs goes into its stops. A fall always takes the
+## time a fall takes.
 ##
-## WHAT IS BUILT IS DESIGNED FIRST ([AssemblyModel]; the user: "I just want to have a proper model built by the end of every video"): a table's `model` is every part in the order it goes on, and the steps
-## say how someone gets there - how much at a time, what goes wrong, what comes off again. What comes off is owed again, whatever took it off. A hand that leaves anything undone has it done
-## before its last act ([constant OPS] `finish`, [method with_finish]), so the last thing on the table is always the whole of it.
+## What is built is designed first ([AssemblyModel]): a table's `model` is every part in the order it goes on, and the steps say how
+## someone gets there - how much at a time, what goes wrong, what comes off again. What comes off is owed again. A hand that leaves
+## anything undone has it done before its last act ([constant OPS] `finish`, [method with_finish]), so the last thing on the table is
+## always the whole of it.
 ##
-## A PREVIEW NEEDS NO BODIES: a puppeteer's `act` and `model`, and the set dresser's table, see where things rest by this walk alone ([method
-## pose_of]), so an act answers in a moment.
+## A preview needs no bodies: a puppeteer's `act` and `model`, and the set dresser's table, see where things rest by this walk alone
+## ([method pose_of]).
 
-## THE LATTICE (meters): a stud's pitch, a plate's height, how high a stud stands, and how thick the baseplate is.
+## The lattice (meters): a stud's pitch, a plate's height, how high a stud stands, and how thick the baseplate is.
 const STUD := 0.008
 const PLATE := 0.0032
 const STUD_H := 0.0018
 const BASE_T := 0.0014
-## THE KINDS OF PART: `h` its height in plates, `studs` where it has them on top (all, none, or only along its back row), `sizes` the
+## The kinds of part: `h` its height in plates, `studs` where it has them on top (all, none, or only along its back row), `sizes` the
 ## ones made ([studs across, studs deep]), `share` how common it is in a mixed lot. A size written the other way round is the same
 ## part turned ([method parse_part]).
 const KINDS := {
@@ -51,7 +49,7 @@ const KINDS := {
 	"arch": {"label": "Arch", "blurb": "two bricks tall and one stud wide, standing on its two ends, open between them: a doorway, a bridge, a window", "h": 6, "studs": "all", "share": 4,
 		"sizes": [[1, 4], [1, 6]]},
 }
-## THE STEPS OF A BUILD, each what the hands do: `natural` seconds at an easy pace, `floor` hurried, its words an agent's.
+## The steps of a build, each what the hands do: `natural` seconds at an easy pace, `floor` hurried, its words an agent's.
 const OPS := {
 	"dig": {"label": "Dig", "natural": 7.0, "floor": 3.0,
 		"blurb": "the hands really go into a heap: fingers dragged through it, a handful flipped over and falling back with a clatter, the top of it pushed aside, with stops to look at what that turned up. It is half of what a person does at a tub, it is heard, and it is worth its time",
@@ -126,9 +124,9 @@ const FILLERS_LEAST := 0.2
 ## How big a baseplate may be, in studs; how big it is unless written.
 const BASE_SIZES := Vector2i(8, 48)
 const BASE_SIZE := 32
-## How many pieces it takes to cover a square meter of a heap, one deep (a mixed lot's mean footprint): how many a pile on the table holds,
-## when its count is left out, at how many deep. And a container: how many a cubic meter of them comes to, lying as they fall - measured - and how
-## deep a full one is filled, over a false floor ([method TableAssembly._heap_of]): deep enough to be dug in.
+## Pieces it takes to cover a square meter of a heap, one deep (a mixed lot's mean footprint). For a container: pieces per cubic meter
+## lying as they fall (measured), and how deep a full one is filled, over a false floor ([method TableAssembly._heap_of]): deep enough
+## to be dug in.
 const PER_M2 := 1900.0
 const DEEP := 1.7
 const PER_M3 := 70000.0
@@ -213,14 +211,14 @@ static func describe_stock() -> String:
 
 # --- what an agent wrote, made safe ---------------------------------------------------------------------
 
-## THE TABLE'S `assembly`, made safe: `{}` where it has none.
+## The table's `assembly`, made safe: `{}` where it has none.
 static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray()) -> Dictionary:
 	if not (raw is Dictionary) or (raw as Dictionary).is_empty():
 		return {}
 	var d: Dictionary = raw
 	var out := {"colors": {}, "stock": []}
 	var colors: Dictionary = d.get("colors") if d.get("colors") is Dictionary else COLORS
-	# ...A MODEL BRINGS ITS OWN COLORS AND ITS PLATE ([AssemblyModel]): the table's come after
+	# ...a model brings its own colors and its plate ([AssemblyModel]): the table's come after
 	var designed: Dictionary = d.get("model") if d.get("model") is Dictionary and not (d.get("model") as Dictionary).is_empty() else {}
 	if not designed.is_empty():
 		var both: Dictionary = (designed["colors"] as Dictionary).duplicate()
@@ -322,7 +320,7 @@ static func _kinds_of(raw: Variant, notes: PackedStringArray, what: String) -> D
 	return out
 
 
-## A PART AS WRITTEN, "brick 2x4 red": `{kind, w, d, color, swap}` (`swap`: written the other way round from how it is made, so it is
+## A part as written, "brick 2x4 red": `{kind, w, d, color, swap}` (`swap`: written the other way round from how it is made, so it is
 ## the same part turned 90 degrees) - `{}` with why in [param why] when it is no part. [param colors]: the table's colors by name.
 static func parse_part(text: Variant, colors: Dictionary, why: Array = []) -> Dictionary:
 	if not (text is String):
@@ -359,7 +357,7 @@ static func parse_part(text: Variant, colors: Dictionary, why: Array = []) -> Di
 	return {}
 
 
-## THE STEPS OF AN ACT, made safe: each `{do, ...}` it could use. What could not be used is in [param notes].
+## The steps of an act, made safe: each `{do, ...}` it could use. What could not be used is in [param notes].
 static func sanitize_ops(raw: Variant, notes: PackedStringArray) -> Array:
 	var out: Array = []
 	for o in (raw if raw is Array else []):
@@ -415,8 +413,9 @@ static func timing(ops: Array) -> Vector2:
 	return out
 
 
-## WHATEVER A HAND LEAVES UNDONE IS DONE BEFORE ITS LAST ACT ([constant OPS] `finish`): the acts of [param d], as an agent wrote them, handed back with that as the first step of the last act that builds, in reading order. It costs nothing where all of it stands.
-## Given the [param designed] model, it says how much is owed, so whoever times the words knows what that last act really takes: a video must not end on its last word with the model half up.
+## The acts of [param d] as an agent wrote them, with whatever a hand leaves undone ([constant OPS] `finish`) added as the first step
+## of the last act that builds, in reading order. It costs nothing where all of it stands.
+## Given the [param designed] model, it says how much is owed, so whoever times the words knows what the last act takes.
 static func with_finish(d: Dictionary, designed := {}) -> Dictionary:
 	var acts: Array = d.get("acts") if d.get("acts") is Array else []
 	var ranked: Array = []
@@ -531,7 +530,7 @@ static func _key(x: int, z: int, l: int) -> int:
 	return (x + 128) + ((z + 128) << 9) + (l << 18)
 
 
-## WHERE ON THE PLATE A PIECE GOES: its pose on the model, from the plate's middle, its origin the middle of its underside.
+## Where on the plate a piece goes: its pose on the model, from the plate's middle, its origin the middle of its underside.
 func place_xf(x: int, z: int, l: int, w: int, d: int, turn: int) -> Transform3D:
 	return xf_on((spec["base"] as Dictionary)["size"], x, z, l, w, d, turn)
 
@@ -567,7 +566,7 @@ func level_for(w: int, d: int, turn: int, x: int, z: int) -> int:
 var _top_level := 0
 
 
-## WHETHER A PART GOES THERE, and how it holds: `{ok, why, studs}` - `why` says what is wrong, in words an agent can act on. A cell is
+## Whether a part goes there, and how it holds: `{ok, why, studs}` - `why` says what is wrong, in words an agent can act on. A cell is
 ## taken or it is not; a part holds by at least one stud, from below or from above (a part hangs from what is over it), and the
 ## plate's own studs count only under the plate's own cells.
 func fit(kind: String, w: int, d: int, turn: int, x: int, z: int, l: int) -> Dictionary:
@@ -653,7 +652,7 @@ func _on_plate(id: int) -> bool:
 	return false
 
 
-## WHAT WOULD COME AWAY with [param gone] taken off: those, and whatever nothing else then holds to the plate.
+## What would come away with [param gone] taken off: those, and whatever nothing else then holds to the plate.
 func _with_what_it_held(gone: Array) -> Array:
 	var out := {}
 	for g in gone:
@@ -711,9 +710,9 @@ func _unseat(id: int) -> void:
 
 # --- the walk ----------------------------------------------------------------------------------------
 
-## THE BUILD: acts [param acts] ([{name, ops}], in the order they are done) walked twice. Once dry, to learn what the steps ask of each
-## stock that it does not hold - a part asked for is always there - and once for real, the stock laid down first, with what is
-## asked for soonest on top. What fits, what is said of it and how much of each part is wanted come out of this, and no time and no motion do: [method lay], [AssemblyBake].
+## The build: acts [param acts] (`[{name, ops}]`, in the order they are done) walked twice. Once dry, to learn what the steps ask of
+## each stock that it does not hold, and once for real, the stock laid down first with what is asked for soonest on top. What fits,
+## what is said of it and how much of each part is wanted come out of this; time and motion do not ([method lay], [AssemblyBake]).
 func perform(acts: Array) -> void:
 	model = spec.get("model", {}) if spec.get("model") is Dictionary else {}
 	_part_index = {}
@@ -722,7 +721,7 @@ func perform(acts: Array) -> void:
 		_part_index[_where_key(String(q["kind"]), int(q["w"]), int(q["d"]), int(q["turn"]), int(q["x"]), int(q["z"]), int(q["l"]), String(q["color"]))] = i
 	_make_fillers()
 	_dry_pass(acts)
-	# ...A STOCK HOLDS WHAT IT HOLDS, and what a model wants of it takes the place of a mixed lot's filling (though a tub is never only what is wanted)
+	# ...a stock holds what it holds, and what a model wants of it takes the place of a mixed lot's filling (a tub is never only what is wanted)
 	if not model.is_empty():
 		var trimmed := false
 		for nm in _fillers:
@@ -815,7 +814,7 @@ static func part_key(p: Dictionary) -> String:
 	return "%s %dx%d %s" % [String(p["kind"]), int(p["w"]), int(p["d"]), String(p["color"])]
 
 
-## WHAT EACH STOCK HOLDS TO BEGIN WITH: a lot as written, by its shares of colors and kinds, sized by the place it fills unless its
+## What each stock holds to begin with: a lot as written, by its shares of colors and kinds, sized by the place it fills unless its
 ## count is written.
 func _make_fillers() -> void:
 	_fillers = {}
@@ -869,7 +868,7 @@ static func _drawn(shares: Dictionary, rng: RandomNumberGenerator) -> String:
 	return String(shares.keys()[0])
 
 
-## THE STOCK LAID DOWN, for real: what it holds to begin with, then what the steps asked for and it did not hold, soonest on top.
+## The stock laid down, for real: what it holds to begin with, then what the steps asked for and it did not hold, soonest on top.
 func _lay_stock() -> void:
 	pieces = []
 	_by_key = {}
@@ -995,8 +994,8 @@ static func _turn_of(raw: Variant, part: Dictionary) -> int:
 
 # ...the piece itself
 
-## A PIECE OF [param part] OUT OF STOCK [param stock], for the plan: any will do, since which it really is is found when it happens ([method
-## AssemblyBake._fetch]) and they are all alike. Short in the dry pass, it is written down to be there ([member _need]).
+## A piece of [param part] out of stock [param stock], for the plan: any will do, since which it really is is found when it happens
+## ([method AssemblyBake._fetch]). Short in the dry pass, it is written down to be there ([member _need]).
 func _piece_from(part: Dictionary, stock: String) -> int:
 	var key := part_key(part)
 	if not _by_key.has(stock):
@@ -1017,7 +1016,7 @@ func _piece_from(part: Dictionary, stock: String) -> int:
 	return id
 
 
-## A PIECE GOES BACK INTO [param stock]: where the plan draws it, until the record says where it really landed.
+## A piece goes back into [param stock]: where the plan draws it, until the record says where it really landed.
 func _into_stock(id: int, stock: String) -> void:
 	_file(id, stock)
 	_home[id] = stock
@@ -1156,7 +1155,7 @@ func _dig(op: Dictionary) -> void:
 
 # ...what is designed
 
-## WHAT COMES NEXT OF THE MODEL: which part, or -1 when all of it stands.
+## What comes next of the model: which part, or -1 when all of it stands.
 func _next_part(section := -1) -> int:
 	var parts: Array = model.get("parts", [])
 	for i in parts.size():
@@ -1235,7 +1234,7 @@ func _build(op: Dictionary) -> void:
 		_problem("%d parts of it have nothing to hold on to yet: what they stand on is not there" % stuck)
 
 
-## PART [param i] OF THE MODEL GOES ON: with whatever is wrongly in its place off first, and now and then a moment's hesitation, the same each time for the same part.
+## Part [param i] of the model goes on: with whatever is wrongly in its place off first, and now and then a moment's hesitation, the same each time for the same part.
 func _lay_part(i: int, op: Dictionary) -> bool:
 	var q: Dictionary = model["parts"][i]
 	var kind := String(q["kind"])
@@ -1266,7 +1265,7 @@ func _lay_part(i: int, op: Dictionary) -> bool:
 	return _put(put, String(op.get("pace", "")) != "easy")
 
 
-## THE NEXT PARTS GO ON WRONG: whichever way fits, a stud off, turned, or the wrong color in the right place. They are no part of the model, and it says so.
+## The next parts go on wrong: whichever way fits, a stud off, turned, or the wrong color in the right place. They are no part of the model, and it says so.
 func _wrong(op: Dictionary) -> void:
 	if model.is_empty():
 		_problem("there is no model to get wrong")
@@ -1332,7 +1331,7 @@ func _undo(op: Dictionary) -> void:
 	_counted("undo", n)
 
 
-## WHATEVER IS WRONG COMES OFF, AND WHATEVER IS OWED GOES ON ([method with_finish]): the model stands whole after this, however the steps before it went.
+## Whatever is wrong comes off, and whatever is owed goes on ([method with_finish]): the model stands whole after this, however the steps before it went.
 func _finish(op: Dictionary) -> void:
 	if model.is_empty():
 		return
@@ -1345,7 +1344,7 @@ func _finish(op: Dictionary) -> void:
 		_build({"parts": "rest", "from": op.get("from")})
 
 
-## HOW THE MODEL STANDS, for whoever is staging its build: how much of it, section by section.
+## How the model stands, for whoever is staging its build: how much of it, section by section.
 func progress_text() -> String:
 	var parts: Array = model.get("parts", [])
 	var by := {}
@@ -1398,7 +1397,7 @@ func _take(op: Dictionary) -> void:
 	_bring_off(chunk, op.get("to"), "take")
 
 
-## THE CHUNK [param chunk] OFF THE MODEL, a step of its own: it comes up as one, is carried over the stock and let go.
+## The chunk [param chunk] off the model, a step of its own: it comes up as one, is carried over the stock and let go.
 func _bring_off(chunk: Array, into: Variant, what: String) -> void:
 	var row: Dictionary = OPS[what]
 	var n := float(chunk.size())
@@ -1445,7 +1444,7 @@ func _wreck(op: Dictionary) -> void:
 	var into: Variant = op.get("into")
 	if into == null:
 		into = _biggest_stock()
-	# FROM THE TOP DOWN, A HANDFUL AT A TIME: the highest piece, and what is joined to it nearby, and what then holds to nothing
+	# from the top down, a handful at a time: the highest piece, what is joined to it nearby, then what holds to nothing
 	while not region.is_empty():
 		var seed_id := -1
 		var high := -1
@@ -1454,8 +1453,8 @@ func _wreck(op: Dictionary) -> void:
 			if l > high:
 				high = l
 				seed_id = int(id)
-		# ...THE SAME HANDFUL IN BOTH PASSES: where each chunk goes is where its first piece came from, so a draw of the walk's own
-		# dice, which differ, sent the dry pass's pieces to other stocks than the real one's, and a part it found was not there
+		# ...the same handful in both passes: where each chunk goes is where its first piece came from, so the dry pass and the real one
+		# send pieces to the same stocks
 		var want := CHUNK.x + hash([seed_value, steps.size(), "chunk"]) % (CHUNK.y - CHUNK.x + 1)
 		var chunk := [seed_id]
 		var open := [seed_id]
@@ -1475,8 +1474,8 @@ func _wreck(op: Dictionary) -> void:
 			region.erase(id)
 
 
-## WHAT THE PLATE WOULD SWING INTO, turned from [param y0] to [param y1] radians: a thing standing on the table or a pile, by name, "" for
-## nothing. A plate turned sweeps its corners out past its sides, and its corner had gone through a tub written beside it.
+## What the plate would swing into, turned from [param y0] to [param y1] radians: a thing standing on the table or a pile, by name,
+## "" for nothing. A plate turned sweeps its corners out past its sides.
 func _swept_into(y0: float, y1: float) -> String:
 	var b: Vector3 = world["base_at"]
 	var size: Array = (spec["base"] as Dictionary)["size"]
@@ -1627,7 +1626,7 @@ func _fill(op: Dictionary) -> void:
 			var ln := _nearest_length(lengths, left)
 			if odd and x == x0:
 				ln = _nearest_length(lengths, mini(left, maxi(1, longest / 2)))
-			# ...AN ODD STUD LEFT, SHORTER THAN ANY PIECE THIS WIDE: closed one row at a time with what fits, never by running past the edge
+			# ...an odd stud left, shorter than any piece this wide: closed one row at a time with what fits, never by running past the edge
 			if ln > left or ln <= 0:
 				var narrow := _lengths_of(kind, 1, left)
 				if narrow.is_empty():
@@ -1647,8 +1646,8 @@ func _fill(op: Dictionary) -> void:
 
 # --- what it comes to, in words ------------------------------------------------------------------------
 
-## THE MODEL AS IT STANDS, level by level from the plate up: a letter a cell, the first of its color's name - lower case where it is a
-## low part (a plate, a tile) - seen from above, far side first, x left to right. How an agent reads what it has made.
+## The model as it stands, level by level from the plate up: a letter a cell, the first of its color's name (lower case for a low
+## part: a plate, a tile), seen from above, far side first, x left to right. How an agent reads what it has made.
 func model_text() -> String:
 	if _placed.is_empty():
 		return "The plate is empty."
@@ -1681,7 +1680,7 @@ func model_text() -> String:
 	return "\n".join(lines)
 
 
-## WHAT ACT [param name] COMES TO: what its steps did, what they could not, how long at an easy pace, and the model as it leaves it.
+## What act [param name] comes to: what its steps did, what they could not, how long at an easy pace, and the model as it leaves it.
 func report_of(name: String) -> PackedStringArray:
 	var lines := PackedStringArray()
 	if not spans.has(name):
@@ -1721,11 +1720,11 @@ func floor_of(name: String) -> float:
 
 # --- time, laid over it --------------------------------------------------------------------------------
 
-## HOW LONG A STOP'S SHARE OF THE LEFTOVER IS, against another's: a pause takes it up as a person would, stopped to look.
+## How long a stop's share of the leftover is, against another's: a pause takes it up as a person would, stopped to look.
 const GAP_PAUSE := 4.0
 const GAP_OTHER := 1.0
 
-## WHAT THE PLAN KNOWS OF A STEP'S TIME, before the record has it: how long its moves take at the least, and the rest one stop as it begins.
+## What the plan knows of a step's time, before the record has it: how long its moves take at the least, and the rest one stop as it begins.
 func _plan_times() -> void:
 	var n := steps.size()
 	_t0 = PackedFloat64Array()
@@ -1759,7 +1758,7 @@ func _plan_times() -> void:
 		_stop_d[k] = PackedFloat32Array([0.0])
 
 
-## WHAT THE RECORD SAYS OF STEP [param k] ([method AssemblyBake._share_stops]): it replaces what the plan guessed, and it is placed again.
+## What the record says of step [param k] ([method AssemblyBake._share_stops]): it replaces what the plan guessed, and it is placed again.
 func take_record(k: int, st: Dictionary) -> void:
 	if k < 0 or k >= steps.size():
 		return
@@ -1774,9 +1773,9 @@ func take_record(k: int, st: Dictionary) -> void:
 	_t1[k] = INF
 
 
-## THE ACTS PLACED IN TIME: [param runs] `[{i, t0, t1}]` as [member TableWork.runs] has them, [param names] each act's name by its `i`,
-## and what has begun by [param now] kept where it is - a live reading places acts again every sentence, and a piece in the
-## air must not jump. A stretch given less than its moves take overruns ([member TableWork.schedule] keeps the next act behind it).
+## The acts placed in time: [param runs] `[{i, t0, t1}]` as [member TableWork.runs] has them, [param names] each act's name by its
+## `i`, and what has begun by [param now] kept where it is (a live reading places acts again every sentence; a piece in the air
+## must not jump). A stretch given less than its moves take overruns ([member TableWork.schedule] keeps the next act behind it).
 func lay(runs: Array, acts: Array, now: float) -> void:
 	if steps.is_empty():
 		return
@@ -1784,7 +1783,7 @@ func lay(runs: Array, acts: Array, now: float) -> void:
 		if _t0[k] > now:
 			_t0[k] = INF
 			_t1[k] = INF
-	# ...IN THE ORDER THEY WERE WALKED, whatever times they were handed: a piece can only go on from where the step before left it,
+	# ...in the order they were walked, whatever times they were handed: a piece can only go on from where the step before left it,
 	# and [method step_at] looks steps up by time
 	var ordered: Array = []
 	for r in runs:
@@ -1796,7 +1795,7 @@ func lay(runs: Array, acts: Array, now: float) -> void:
 	for o in ordered:
 		var from := maxf(float(o[2]), last_end)
 		last_end = _lay_act(int(o[0]), int(o[1]), from, maxf(float(o[3]), from), now)
-	# ...AND IN ORDER: a step passed over before one placed (an act nobody cued) takes no time, so what the lookups search stays sorted
+	# ...and in order: a step passed over before one placed (an act nobody cued) takes no time, so what the lookups search stays sorted
 	var after := INF
 	for k in range(steps.size() - 1, -1, -1):
 		if _t0[k] == INF and after != INF:
@@ -1862,7 +1861,7 @@ func step_at(t: float) -> int:
 	return out
 
 
-## HOW FAR INTO ITS OWN MOVES STEP [param k] IS AT [param t]: its stops take time and no record.
+## How far into its own moves step [param k] is at [param t]: its stops take time and no record.
 func offset_in(k: int, t: float) -> float:
 	var e := t - _t0[k]
 	var stops: Array = _stops[k]
@@ -1878,7 +1877,7 @@ func offset_in(k: int, t: float) -> float:
 	return minf(e, _len[k])
 
 
-## WHERE ON THE RECORD [param t] FALLS: -1 before the first step, and NAN at a step the record does not hold yet.
+## Where on the record [param t] falls: -1 before the first step, and NAN at a step the record does not hold yet.
 func tau_at(t: float) -> float:
 	var k := step_at(t)
 	if k < 0:
@@ -1888,9 +1887,10 @@ func tau_at(t: float) -> float:
 	return _tau0[k] + offset_in(k, t)
 
 
-## WHAT IS IN HAND AT [param t], from the grip until it is seated or let go, stops and moves alike: `{id, h, left, room, back, free, seed}` for [method Fingers.on] - how long it
-## has been in hand and has to go, the room the hand has now, how far it has drawn back, and how long of it all its fingers have had room - or `{}`. It is only the record that stops:
-## a hand holding a thing is never still. Worked out from the stops as they are laid, so it is the same however the show got to [param t].
+## What is in hand at [param t], from the grip until it is seated or let go, stops and moves alike: `{id, h, left, room, back, free,
+## seed}` for [method Fingers.on] - how long it has been in hand and has to go, the room the hand has now, how far it has drawn back,
+## and how long of it all its fingers have had room - or `{}`. Only the record stops: a hand holding a thing is never still. Worked
+## out from the stops as they are laid, so it is the same however the show got to [param t].
 func held_at(t: float) -> Dictionary:
 	var k := step_at(t)
 	if k < 0 or k >= _hand.size() or (_hand[k] as Dictionary).is_empty():
@@ -1966,7 +1966,7 @@ func yaw_at(t: float, k: int) -> float:
 	return y
 
 
-## WHERE THE PLAN HAS PIECE [param id] AT [param t], with no record to say: where it last came to rest. [param k], [param yaw]: the step at
+## Where the plan has piece [param id] at [param t], with no record to say: where it last came to rest. [param k], [param yaw]: the step at
 ## [param t] and the plate's turn then, for what asks many pieces at one moment.
 func pose_of(id: int, t: float, k := -2, yaw := NAN) -> Transform3D:
 	var kk := step_at(t) if k == -2 else k
@@ -1982,7 +1982,7 @@ func pose_of(id: int, t: float, k := -2, yaw := NAN) -> Transform3D:
 	return base_xf(y) * (last[2] as Transform3D) if bool(last[1]) else last[2]
 
 
-## WHAT A RECORD DEPENDS ON, STEP BY STEP: one name for each step, made from every step up to it, so what is already written can be gone on from
+## What a record depends on, step by step: one name for each step, made from every step up to it, so what is already written can be gone on from
 ## and a change to an act redoes only what comes after it.
 func step_names(from: int) -> PackedInt64Array:
 	var out := PackedInt64Array()

@@ -2,56 +2,31 @@ extends Node
 
 ## YouTube - sign in to the author's YouTube channel and upload a finished export to it.
 ##
-## THE GOOGLE CLIENT IS THE AUTHOR'S OWN: a Google Cloud project's "Desktop app" OAuth client, as
-## the JSON file Google hands out for it. Each is imported once ([method import_client]) and kept in
-## `user://youtube/clients/` - never in the repository - and every later sign-in uses that copy.
+## The Google client is the author's own: a Cloud project's "Desktop app" OAuth client, imported once from the JSON file
+## Google hands out ([method import_client]) and kept in `user://youtube/clients/`, never in the repository. Every client is
+## kept ([method clients]); [method client_for] says which a sign-in goes through: a note's pick, else the client the channel
+## signed in with, else the one imported last. A channel goes back through its own client (a test-user list is one Cloud
+## project's).
 ##
-## EVERY CLIENT IS KEPT (the user, 2026-11-02: "simultaneously logged-in to two different clients, for
-## two different projects ... select from a list of previous clients"): there had been one slot, which
-## an import overwrote, so a client was a machine's and not a channel's. Now [method clients] lists all
-## of them, a note's YouTube card picks among them, and [method client_for] says which a sign-in goes
-## through: the note's pick, else the client the channel signed in with, else the one imported last. A
-## CHANNEL GOES BACK THROUGH ITS OWN CLIENT (the same day: a lapsed @the-ink had been sent through the
-## client imported for @the-arc, another Cloud project, and Google's 403 access_denied named neither -
-## its account was a test user of the project it came from, and a test-user list is one project's). What
-## this machine already held is read where it lies, nothing written: the old slot, `client.json`, and a
-## channel's copy of its client, which is all there is of one replaced by a later import (no project's
-## name in it until its file is imported again: [method client_name]).
+## Signing in is Google's installed-app flow ([method sign_in]): the system browser opens the consent page, Google redirects
+## to a one-shot listener on 127.0.0.1 with a code, and the code is traded for tokens with its PKCE verifier. The upload scope
+## and the channel's name ([constant READ_SCOPE]) are asked for until a playlist is wanted, which takes the wider [constant
+## PLAYLIST_SCOPE] by a sign-in of its own ([method granted]). The refresh token is kept owner read/write only with the scopes
+## granted; it lapses after 7 days while the Cloud project is in "Testing".
 ##
-## SIGNING IN is Google's flow for installed apps ([method sign_in]): the system browser opens
-## Google's consent page, Google sends the browser back to a one-shot listener on 127.0.0.1 (a port
-## the system picks) with a code, and the code is traded for tokens together with its PKCE verifier.
-## Only the upload scope is asked for, and the channel's name ([constant READ_SCOPE]), until a note's
-## YouTube card wants a playlist: listing the channel's playlists and adding a video to one take the
-## wider [constant PLAYLIST_SCOPE], asked for by a sign-in of its own at that moment and never before
-## ([method granted]). The refresh token is kept owner read/write only, with the scopes Google
-## granted, so later uploads need no browser until it lapses - after 7 days while the Cloud project's
-## consent screen is in "Testing".
+## A sign-in is a channel, kept under the channel it landed on (`channels/<id>.json`), named by its handle else its title,
+## with a copy of the client it signed in with. A lapsed sign-in keeps its channel and client, to sign in again.
 ##
-## A SIGN-IN IS A CHANNEL (the user, 2026-10-17: "manage multiple clients, so that I could target
-## different channels for different kinds of project ... each client should be named after the
-## channel it uploads to"): each is kept under the channel it landed on, `channels/<id>.json`, and
-## named by what YouTube calls that channel - its handle, else its title - asked once as it signs in
-## ([method sign_in]; Google's account chooser is always shown, so another channel can be picked).
-## It keeps a copy of the client it signed in with, so a client imported later (another Cloud
-## project, for its own quota) costs no channel its sign-in: channels signed in through different
-## clients stay signed in side by side. A lapsed sign-in keeps its channel and its client, to sign in
-## again; a note's YouTube card picks the channel its uploads go to, and the waiting upload names its own.
+## An upload is resumable ([method resume]): a session opened with the video's metadata, the file in chunks, a failed chunk
+## asks YouTube how much arrived, an expired access token is renewed. It waits in `pending.json` from [method queue] until
+## the video is up.
 ##
-## AN UPLOAD IS RESUMABLE ([method resume], Google's protocol): a session is opened with the video's
-## metadata, the file goes up in chunks, a chunk that fails asks YouTube how much arrived and carries
-## on from there, and an access token that expires part way is renewed. The upload waits in
-## `pending.json` from the moment it is queued ([method queue]) until the video is up, so one cut
-## off by a quit or a dropped connection is resumed rather than repeated.
-##
-## It knows nothing of any mode: a note's YouTube card ([YouTubeCard]) and its panel say what the
-## video is called, what it says, who may see it and the playlist it joins (see
-## [member Exporter.upload_provider]), and [method video_body] turns that into the request. Loaded
-## by path (no class_name), so a launch from a terminal never waits on the editor's class cache.
+## It knows nothing of any mode: a note's YouTube card ([YouTubeCard]) says what the video is called, says, who may see it and
+## its playlist (see [member Exporter.upload_provider]); [method video_body] turns that into the request. Loaded by path (no
+## class_name), so a launch from a terminal never waits on the editor's class cache.
 
 const SCOPE := "https://www.googleapis.com/auth/youtube.upload"
-## What a playlist needs on top: `playlists.list` (mine) and `playlistItems.insert` take nothing
-## narrower than managing the account.
+## What a playlist needs on top: `playlists.list` (mine) and `playlistItems.insert` take nothing narrower than managing the account.
 const PLAYLIST_SCOPE := "https://www.googleapis.com/auth/youtube"
 ## What naming a sign-in's channel takes (`channels.list`, mine): the upload scope may not read it.
 const READ_SCOPE := "https://www.googleapis.com/auth/youtube.readonly"
@@ -60,36 +35,29 @@ const ROOT := "user://youtube"
 const CHANNELS := "channels"
 ## The folder under [constant ROOT] each imported client is kept in, named by its [method client_key].
 const CLIENTS := "clients"
-## The one slot under [constant ROOT] a client was kept in until 2026-11-02: read, never written.
+## The one slot under [constant ROOT] a client was kept in before clients were listed: read, never written.
 const OLD_CLIENT := "client.json"
 ## Where a client that does not say goes for the consent page, and for tokens.
 const AUTH_URI := "https://accounts.google.com/o/oauth2/auth"
 const TOKEN_URI := "https://oauth2.googleapis.com/token"
-## Every upload goes up private unless the note's card says otherwise, says it is not made for kids,
-## declares itself altered or synthetic content (the voice is synthesized, and a mode's pictures may
-## be painted by a model), and declares NO PAID PROMOTION - left unsaid, YouTube Studio showed the
-## question unanswered (2026-10-06). The category is People & Blogs unless the card says another.
+## Every upload goes up private unless the note's card says otherwise, says it is not made for kids, declares itself altered
+## or synthetic content (the voice is synthesized, and a mode's pictures may be painted by a model), and declares no paid
+## promotion. The category is People & Blogs unless the card says another.
 const PRIVACY := "private"
 ## Who may see an upload, in the order the card offers them: YouTube's own words, and ours.
 const PRIVACIES := {"private": "Private", "unlisted": "Unlisted", "public": "Public"}
-## THE CATEGORIES AN UPLOAD MAY GO UP IN, by YouTube's id, in YouTube Studio's words and order: the ones
-## `videoCategories.list` marks assignable (the rest - Shorts, Trailers, Movies - an upload cannot take,
-## and the list has stood unchanged for years). The note's card picks one (the user, 2026-10-16:
-## "every video is uploaded to YouTube under the 'People & Blogs' category ... expose those categories
-## as an adjustable option, so that I could load these math videos under a different category").
+## The categories an upload may go up in, by YouTube's id, in YouTube Studio's words and order: the ones `videoCategories.list`
+## marks assignable (the rest - Shorts, Trailers, Movies - an upload cannot take). The note's card picks one.
 const CATEGORIES := {"2": "Autos & Vehicles", "23": "Comedy", "27": "Education", "24": "Entertainment",
 	"1": "Film & Animation", "20": "Gaming", "26": "Howto & Style", "10": "Music", "25": "News & Politics",
 	"29": "Nonprofits & Activism", "22": "People & Blogs", "15": "Pets & Animals",
 	"28": "Science & Technology", "17": "Sports", "19": "Travel & Events"}
-## THE TITLE A NEW YOUTUBE CARD STARTS WITH: macros every note fills ([constant MACROS]).
+## The title a new YouTube card starts with: macros every note fills ([constant MACROS]).
 const TITLE_TEMPLATE := "%title%: %episode%"
-## THE TITLE'S MACROS, a row each: `%key%` in a template ([method expand_title]), and what it stands for.
-## A NOTE FILLS THOSE ITS CARD'S VALUES HOLD ([method YouTubeCard.values_now]: its Script card's Title,
-## Episode, Author and Book, which every note has, and what its panel adds - a show's seed), and an
-## `always` one whatever it is: the card offers only those, and a title naming one the note does not
-## fill does not go up ([method unfilled]; 2026-10-25, the user: "It shouldn't be possible to use the
-## YouTube card if the underlying macros we claim to support would not even work here" - %episode% had
-## been a show's alone).
+## The title's macros, a row each: `%key%` in a template ([method expand_title]), and what it stands for. A note fills those
+## its card's values hold ([method YouTubeCard.values_now]: its Script card's Title, Episode, Author and Book, which every
+## note has, and what its panel adds - a show's seed), and an `always` one whatever it is: the card offers only those, and a
+## title naming one the note does not fill does not go up ([method unfilled]).
 const MACROS := {
 	"title": {"label": "%title%", "blurb": "the note's Title, on its Script card (a show's name; the note's file name when it has none)"},
 	"episode": {"label": "%episode%", "blurb": "what this video is called: the Episode on the Script card"},
@@ -99,10 +67,9 @@ const MACROS := {
 	"date": {"label": "%date%", "blurb": "the day it goes up", "always": true},
 }
 const CATEGORY := "22"
-## WHAT A VIDEO'S THUMBNAIL IS, the note's YouTube card's choice, never a mode's (the user, 2026-10-28:
-## "The default is nothing: just allow YouTube to select a thumbnail automatically"): YouTube's own, a
-## frame of the video's title screen (only a take that opened on its title has one - [method
-## Openings.of_take]), or a picture painted for the episode ([YouTubeThumbnail]).
+## What a video's thumbnail is, the note's YouTube card's choice, never a mode's: YouTube's own (the default), a frame of the
+## video's title screen (only a take that opened on its title has one, [method Openings.of_take]), or a picture painted for
+## the episode ([YouTubeThumbnail]).
 const THUMBNAILS := {
 	"youtube": {"label": "YouTube's choice", "blurb": "No thumbnail is set: YouTube offers frames of the video and shows one until another is picked in YouTube Studio."},
 	"title": {"label": "Title screen", "blurb": "A frame of the video's opening with the show's name fully up over the picture out of focus - only when the video opens on its title (Opening, on the Intro & outro card)."},
@@ -119,8 +86,8 @@ const PAID_PROMOTION := false
 const TITLE_MAX := 100
 const DESCRIPTION_MAX := 5000
 const TAGS_MAX := 500
-## A CHAPTER IS AT LEAST THIS MANY SECONDS, or YouTube shows none of them: the shortest it accepts, the
-## last one counted to the video's end ([method fit_chapters]).
+## A chapter is at least this many seconds, or YouTube shows none of them; the last one counts to the video's end ([method
+## fit_chapters]).
 const CHAPTER_LEAST := 10.0
 ## A chunk: a multiple of 256 KiB, as the protocol requires of every chunk but the last.
 const CHUNK := 8 * 1024 * 1024
@@ -207,15 +174,13 @@ static func _google_endpoint(url: String) -> bool:
 	return url.begins_with("http://") and host in ["127.0.0.1", "localhost"]
 
 
-## WHAT A CLIENT'S FILE AND A NOTE'S BLOCK NAME IT BY: never its id, which a note that may be shared has
-## no need to carry. "" for no id.
+## What a client's file and a note's block name it by: never its id, which a note that may be shared need not carry. "" for no id.
 static func client_key(client_id: String) -> String:
 	return "" if client_id.is_empty() else client_id.md5_text().left(12)
 
 
-## What client [param c] is called: its Cloud project's id, as Google's console shows it, else its
-## project's number - the head of its id, which is all a channel's copy made before 2026-11-02 says of
-## it. "" for no client.
+## What client [param c] is called: its Cloud project's id, as Google's console shows it, else its project's number (the head
+## of its id, which is all an older channel copy says of it). "" for no client.
 static func client_name(c: Dictionary) -> String:
 	var project := str(c.get("project_id", "")).strip_edges()
 	if not project.is_empty():
@@ -224,9 +189,9 @@ static func client_name(c: Dictionary) -> String:
 	return "" if id.is_empty() else "project " + id.get_slice("-", 0)
 
 
-## THE CLIENTS KEPT HERE, the one imported last at the end: `[{key, name, channels, added}]` - `name` is
-## what the card calls one ([method client_name], told apart when two are one project's), `channels` the
-## names of those that signed in with it. Only reads.
+## The clients kept here, the one imported last at the end: `[{key, name, channels, added}]` - `name` is what the card calls
+## one ([method client_name], told apart when two are one project's), `channels` the names of those that signed in with it.
+## Only reads.
 static func clients() -> Array:
 	var kept := _kept_clients()
 	var called := {}
@@ -251,9 +216,8 @@ static func _sooner(t0: float, k0: String, t1: float, k1: String) -> bool:
 	return t0 < t1 if t0 != t1 else k0 < k1
 
 
-## Every client kept here by its key, `{client, added, channels}`: imported, in the old slot, or known
-## only from a channel's copy. The first place one is found says what it is, so a file imported again
-## names a project a channel's old copy could not.
+## Every client kept here by its key, `{client, added, channels}`: imported, in the old slot, or known only from a channel's
+## copy. The first place one is found says what it is.
 static func _kept_clients() -> Dictionary:
 	var out := {}
 	var dir := _path(CLIENTS)
@@ -304,9 +268,9 @@ static func has_client() -> bool:
 	return not client().has("error")
 
 
-## THE CLIENT A SIGN-IN GOES THROUGH (see the header): the one [param key] names - a note's pick - else
-## the one channel [param id] signed in with, else the one imported last. `{error}` when none is kept. A
-## key or a channel's client not kept here is passed over: a note may come from another machine.
+## The client a sign-in goes through (see the header): the one [param key] names (a note's pick), else the one channel
+## [param id] signed in with, else the one imported last. `{error}` when none is kept. A key or a channel's client not kept
+## here is passed over: a note may come from another machine.
 static func client_for(key: String, id := "") -> Dictionary:
 	for k in [key, channel_client(id)]:
 		if not String(k).is_empty():
@@ -322,9 +286,8 @@ static func channel_client(id: String) -> String:
 	return client_key(str((c as Dictionary).get("client_id", "")).strip_edges()) if c is Dictionary else ""
 
 
-## Import the client file at [param path]: checked, then kept - owner read/write only - beside the
-## others, the one imported last. "" on success, else why not. A file imported again replaces its own.
-## No channel changes the client it signed in with.
+## Import the client file at [param path]: checked, then kept (owner read/write only) beside the others, the one imported
+## last. "" on success, else why not. A file imported again replaces its own. No channel changes the client it signed in with.
 static func import_client(path: String) -> String:
 	if not FileAccess.file_exists(path):
 		return "that file does not exist"
@@ -348,9 +311,8 @@ static func _keep_client(c: Dictionary, added: float) -> String:
 			"project_id": c["project_id"], "auth_uri": c["auth_uri"], "token_uri": c["token_uri"]}}, "\t"), true)
 
 
-## Forget client [param key], wherever it was imported to. A channel that signed in with it keeps its
-## copy, and its sign-in, and so the client stays listed: the card offers this only for one no channel
-## holds.
+## Forget client [param key], wherever it was imported to. A channel that signed in with it keeps its copy and its sign-in,
+## so the client stays listed: the card offers this only for one no channel holds.
 static func forget_client(key: String) -> void:
 	if key.is_empty():
 		return
@@ -362,9 +324,9 @@ static func forget_client(key: String) -> void:
 
 # --- the channels --------------------------------------------------------------------------------
 
-## THE CHANNELS KEPT HERE, in the order they were first signed in to: `[{id, handle, title, name,
-## signed_in}]` - `name` is what the card calls one ([method name_of]), and `signed_in` is false
-## once its sign-in has lapsed or been refused (the channel stays, to sign in again).
+## The channels kept here, in the order they were first signed in to: `[{id, handle, title, name, signed_in}]` - `name` is
+## what the card calls one ([method name_of]), and `signed_in` is false once its sign-in has lapsed or been refused (the
+## channel stays, to sign in again).
 static func channels() -> Array:
 	var out: Array = []
 	for t: Dictionary in _channel_files():
@@ -414,14 +376,12 @@ static func name_of(ch: Dictionary) -> String:
 
 # --- the sign-in ---------------------------------------------------------------------------------
 
-## Whether channel [param id]'s sign-in is kept. It may still have lapsed: [method access_token]
-## finds out.
+## Whether channel [param id]'s sign-in is kept. It may still have lapsed: [method access_token] finds out.
 static func signed_in(id: String) -> bool:
 	return not str(_token(id).get("refresh_token", "")).is_empty()
 
 
-## Forget channel [param id] altogether: its sign-in and its place on the list. Not its client, whose
-## only copy this may be: that stays on the list of clients.
+## Forget channel [param id] altogether: its sign-in and its place on the list. Not its client, whose only copy this may be.
 static func forget_channel(id: String) -> void:
 	if id.is_empty():
 		return
@@ -443,8 +403,8 @@ static func _drop_sign_in(id: String) -> void:
 	_write(_channel_path(id), JSON.stringify(t, "\t"), true)
 
 
-## WHETHER CHANNEL [param id]'S SIGN-IN MAY DO [param scope]: Google says which scopes it granted
-## with every token, and they are kept with it.
+## Whether channel [param id]'s sign-in may do [param scope]: Google says which scopes it granted with every token, and they
+## are kept with it.
 static func granted(scope: String, id: String) -> bool:
 	if not signed_in(id):
 		return false
@@ -464,9 +424,8 @@ static func _channel_path(id: String) -> String:
 	return _path(CHANNELS.path_join(id.validate_filename() + ".json"))
 
 
-## Keep a sign-in to channel [param ch] (`{id, handle, title}`), made with client [param c] and given
-## [param tok] (Google's token reply, [param scope] what it granted): where it was on the list, it
-## stays.
+## Keep a sign-in to channel [param ch] (`{id, handle, title}`), made with client [param c] and given [param tok] (Google's
+## token reply, [param scope] what it granted): where it was on the list, it stays.
 static func _keep(ch: Dictionary, c: Dictionary, tok: Dictionary, scope: String) -> String:
 	var id := str(ch.get("id", ""))
 	var was := _token(id)
@@ -497,10 +456,9 @@ static func base64url(bytes: PackedByteArray) -> String:
 	return Marshalls.raw_to_base64(bytes).replace("+", "-").replace("/", "_").replace("=", "")
 
 
-## Google's consent page for client [param c], answered at [param redirect], asking for
-## [param scopes]. Offline access with the consent screen always shown, because only that returns a
-## refresh token every time - and the account chooser always shown before it, or a browser signed in
-## to one Google account could never add another's channel.
+## Google's consent page for client [param c], answered at [param redirect], asking for [param scopes]. Offline access with
+## the consent screen always shown (only that returns a refresh token every time), and the account chooser always shown before
+## it, so a browser signed in to one Google account can add another's channel.
 static func auth_url(c: Dictionary, redirect: String, code_challenge: String, state: String,
 		scopes: Array = [SCOPE]) -> String:
 	return String(c["auth_uri"]) + "?" + form({"client_id": c["client_id"], "redirect_uri": redirect,
@@ -529,16 +487,13 @@ static func query_of(path: String) -> Dictionary:
 	return out
 
 
-## Sign in through the browser, asking for [param scopes] (the upload's alone unless a playlist is
-## wanted) and the channel's name, and keep the sign-in under the channel it landed on - whichever
-## the person chose: `{channel: {id, handle, title}}` once signed in, else `{error}`. The client is
-## [method client_for]'s, for the pick [param key] and the channel [param id] meant. The browser is
-## waited for up to [constant SIGN_IN_TIMEOUT]; [method stop_sign_in] ends the wait.
+## Sign in through the browser, asking for [param scopes] (the upload's alone unless a playlist is wanted) and the channel's
+## name, and keep the sign-in under the channel it landed on, whichever the person chose: `{channel: {id, handle, title}}`
+## once signed in, else `{error}`. The client is [method client_for]'s, for the pick [param key] and the channel [param id]
+## meant. The browser is waited for up to [constant SIGN_IN_TIMEOUT]; [method stop_sign_in] ends the wait.
 ##
-## A NEWER SIGN-IN REPLACES ONE STILL WAITING. Google's "Access blocked" page (an account that is
-## not one of a Testing project's test users) is a dead end that never comes back here, and a page
-## can open behind another window - refusing a second attempt left nothing to do but wait out the
-## first one.
+## A newer sign-in replaces one still waiting: Google's "Access blocked" page (an account that is not a Testing project's
+## test user) never comes back here, and a page can open behind another window.
 func sign_in(scopes: Array = [SCOPE], key := "", id := "") -> Dictionary:
 	var c := client_for(key, id)
 	if c.has("error"):
@@ -599,8 +554,8 @@ func _trade(c: Dictionary, code: String, redirect: String, v: String, ask: Array
 	return {"channel": ch}
 
 
-## WHOSE SIGN-IN THIS IS: the channel access token [param access] belongs to - `{id, handle, title}`,
-## the handle as YouTube gives it - or `{error}`.
+## Whose sign-in this is: the channel access token [param access] belongs to, `{id, handle, title}` (the handle as YouTube
+## gives it), or `{error}`.
 func _whose(access: String) -> Dictionary:
 	var r: Dictionary = await _send(channels_url + "?" + form({"part": "snippet", "mine": "true"}),
 		PackedStringArray(["Authorization: Bearer " + access]), HTTPClient.METHOD_GET, PackedByteArray(), 30.0)
@@ -623,8 +578,8 @@ func _whose(access: String) -> Dictionary:
 		"title": str(snip.get("title", "")).strip_edges()}
 
 
-## Open the waiting sign-in's page again - it may have opened behind a window, or Google may have
-## blocked it until the account was made a test user. False when no sign-in is waiting.
+## Open the waiting sign-in's page again (it may have opened behind a window, or Google may have blocked it until the account
+## was made a test user). False when no sign-in is waiting.
 func reopen_sign_in() -> bool:
 	if sign_in_url.is_empty():
 		return false
@@ -645,9 +600,8 @@ func stop_sign_in() -> void:
 	sign_in_url = ""
 
 
-## The browser's answer at the listener: `{code}`, or `{error}`. Anything else that knocks - a
-## favicon, a stale tab from an earlier sign-in - is turned away and the wait goes on, until the
-## sign-in [param mine] is replaced or stopped.
+## The browser's answer at the listener: `{code}`, or `{error}`. Anything else that knocks (a favicon, a stale tab) is turned
+## away and the wait goes on, until the sign-in [param mine] is replaced or stopped.
 func _await_answer(tcp: TCPServer, state: String, mine: int) -> Dictionary:
 	var t0 := Time.get_ticks_msec()
 	var conns: Array = []
@@ -719,12 +673,10 @@ static func _drop(conns: Array) -> void:
 	conns.clear()
 
 
-## A live access token for channel [param id]: `{token}`, renewed from its refresh token - through
-## the client it signed in with - when it has run out. Else `{error}`, with `signed_out` when only
-## signing in again can help: the refresh token has lapsed or was revoked, or Google no longer knows
-## the client (`bad_client` too). Either way the channel stays, its sign-in forgotten; a client
-## Google no longer knows is forgotten as well when it is the one kept for new sign-ins, so the next
-## asks for a new file.
+## A live access token for channel [param id]: `{token}`, renewed from its refresh token (through the client it signed in
+## with) when it has run out. Else `{error}`, with `signed_out` when only signing in again can help: the refresh token has
+## lapsed or was revoked, or Google no longer knows the client (`bad_client` too). Either way the channel stays, its sign-in
+## forgotten; a client Google no longer knows is forgotten as well when it is the one kept for new sign-ins.
 func access_token(id: String) -> Dictionary:
 	var t := _token(id)
 	var refresh := str(t.get("refresh_token", ""))
@@ -763,9 +715,8 @@ func access_token(id: String) -> Dictionary:
 	return {"token": str(t["access_token"])}
 
 
-## GOOGLE NO LONGER ACCEPTS CLIENT [param c], which channel [param id] signed in with: the channel lets go
-## of it, so its next sign-in goes through another, and it comes off the list - unless what is kept under
-## its id has another secret (imported since a secret was changed), which may well work.
+## Google no longer accepts client [param c], which channel [param id] signed in with: the channel lets go of it, so its next
+## sign-in goes through another, and it comes off the list, unless what is kept under its id has another secret.
 static func _forget_refused(id: String, c: Dictionary) -> void:
 	var key := client_key(str(c["client_id"]))
 	if str(client(key).get("client_secret", "")) == str(c.get("client_secret", "")):
@@ -784,8 +735,7 @@ static func _expire(id: String) -> void:
 	_write(_channel_path(id), JSON.stringify(t, "\t"), true)
 
 
-## Forget channel [param id] - its sign-in and its place on the list - and ask Google to revoke the
-## sign-in: best effort, it is forgotten here either way.
+## Forget channel [param id] (its sign-in and its place on the list) and ask Google to revoke the sign-in: best effort.
 func sign_out(id: String) -> void:
 	var t := _token(id)
 	var refresh := str(t.get("refresh_token", ""))
@@ -813,12 +763,10 @@ static func forget_pending() -> void:
 	DirAccess.remove_absolute(_path("pending.json"))
 
 
-## Queue [param file] to go up to channel [param channel] as [param body] (see [method video_body]),
-## its result recorded in [param record], [param thumbnail] (an image) set as its thumbnail and the
-## video added to the playlist [param playlist], when those are given: the pending upload, or
-## `{error}`. Queued before anything is sent, so an upload stopped at any point - even before the
-## sign-in - waits to be resumed. One queued with no channel (its note had none yet) goes to the
-## channel its sign-in lands on ([method aim_pending]).
+## Queue [param file] to go up to channel [param channel] as [param body] (see [method video_body]), its result recorded in
+## [param record], [param thumbnail] (an image) set as its thumbnail and the video added to the playlist [param playlist],
+## when those are given: the pending upload, or `{error}`. Queued before anything is sent, so an upload stopped at any point
+## waits to be resumed. One queued with no channel goes to the channel its sign-in lands on ([method aim_pending]).
 static func queue(file: String, body: Dictionary, channel: String, record := "", thumbnail := "",
 		playlist := "") -> Dictionary:
 	var size := _size_of(file)
@@ -830,8 +778,7 @@ static func queue(file: String, body: Dictionary, channel: String, record := "",
 	return {"error": err} if not err.is_empty() else p
 
 
-## The waiting upload that names no channel, sent to channel [param id]. One that names a channel
-## keeps it: a session is opened for the channel it names.
+## The waiting upload that names no channel, sent to channel [param id]. One that names a channel keeps it.
 static func aim_pending(id: String) -> void:
 	var p := pending()
 	if p.is_empty() or not str(p.get("channel", "")).is_empty() or id.is_empty():
@@ -848,9 +795,9 @@ func upload(file: String, body: Dictionary, channel: String, record := "") -> Di
 	return await resume()
 
 
-## Send the pending upload to its channel: from where YouTube says it stopped, or from the start in a
-## new session when the old one has lapsed (they last about a week). The finished video's
-## `{id, url, privacy, title, channel, channel_id, file, at}`, or `{error}` - and then it still waits.
+## Send the pending upload to its channel: from where YouTube says it stopped, or from the start in a new session when the
+## old one has lapsed (about a week). The finished video's `{id, url, privacy, title, channel, channel_id, file, at}`, or
+## `{error}`, and then it still waits.
 func resume() -> Dictionary:
 	if phase == "uploading":
 		return {"error": "an upload is already running"}
@@ -1023,9 +970,8 @@ func _status(session: String, size: int, ch: String) -> Dictionary:
 	return {"error": error_text(code, r["body"])}
 
 
-## The upload is done: forget it, set its thumbnail, add it to its playlist, record it, and say what
-## YouTube made of it - `thumbnail_error` and `playlist_error` saying why a thumbnail was not set or
-## the playlist not joined (the video is up either way).
+## The upload is done: forget it, set its thumbnail, add it to its playlist, record it, and say what YouTube made of it
+## (`thumbnail_error` and `playlist_error` say why a thumbnail was not set or the playlist not joined; the video is up either way).
 func _finish(p: Dictionary, video: Variant) -> Dictionary:
 	forget_pending()
 	var v: Dictionary = video if video is Dictionary else {}
@@ -1055,9 +1001,8 @@ func _finish(p: Dictionary, video: Variant) -> Dictionary:
 	return out
 
 
-## Set the image at [param path] (JPEG or PNG) as the thumbnail of video [param video_id], on channel
-## [param ch]: "" when it is set, else why not. A channel YouTube has not verified
-## (youtube.com/verify) may not set custom thumbnails at all.
+## Set the image at [param path] (JPEG or PNG) as the thumbnail of video [param video_id], on channel [param ch]: "" when it
+## is set, else why not. A channel YouTube has not verified (youtube.com/verify) may not set custom thumbnails.
 func set_thumbnail(video_id: String, path: String, ch: String) -> String:
 	var bytes := FileAccess.get_file_as_bytes(path) if FileAccess.file_exists(path) else PackedByteArray()
 	if bytes.is_empty():
@@ -1087,9 +1032,9 @@ func set_thumbnail(video_id: String, path: String, ch: String) -> String:
 	return "YouTube refused the sign-in"
 
 
-## CHANNEL [param ch]'S PLAYLISTS, every page of them: `{playlists: [{id, title, privacy, count}]}`
-## in YouTube's order, or `{error}` - with `scope` when its sign-in may not list them (sign in again
-## with [constant PLAYLIST_SCOPE]) and `signed_out` when it has no sign-in at all.
+## Channel [param ch]'s playlists, every page of them: `{playlists: [{id, title, privacy, count}]}` in YouTube's order, or
+## `{error}` - with `scope` when its sign-in may not list them (sign in again with [constant PLAYLIST_SCOPE]) and
+## `signed_out` when it has no sign-in at all.
 func playlists(ch: String) -> Dictionary:
 	if not granted(PLAYLIST_SCOPE, ch):
 		return {"error": "the YouTube sign-in may upload but not see playlists", "scope": true,
@@ -1193,9 +1138,8 @@ static func video_body(meta: Dictionary, fallback := "") -> Dictionary:
 	}
 
 
-## THE DESCRIPTION AS IT GOES UP: the mode's own, then THE PLAYLIST the video joins - its title and
-## a link, standing in for the end screen the API cannot write (the user, 2026-10-09: "placed BEFORE
-## the timestamps") - then the chapters, a paragraph each; a part that is empty is left out.
+## The description as it goes up: the mode's own, then the playlist the video joins (its title and a link, standing in for
+## the end screen the API cannot write), then the chapters, a paragraph each; a part that is empty is left out.
 static func description_of(meta: Dictionary) -> String:
 	var parts := PackedStringArray()
 	var own := str(meta.get("description", "")).strip_edges()
@@ -1213,12 +1157,10 @@ static func description_of(meta: Dictionary) -> String:
 	return "\n\n".join(parts)
 
 
-## THE TITLE FROM ITS TEMPLATE: each `%name%` in [param template] replaced by [param values]'
-## `name` ([constant MACROS]: `%date%` today's unless told) - and an unknown one left as written. What an
-## empty value leaves dangling (": " at either end, a doubled space) goes, so "%title%: %episode%" on a
-## note whose Episode is empty is the title alone. NO
-## NAME TWICE: an episode whose title already begins with the show's ("Truthful Tarot: ...") stands
-## for both (the user, 2026-10-06).
+## The title from its template: each `%name%` in [param template] replaced by [param values]' `name` ([constant MACROS]:
+## `%date%` today's unless told); an unknown one is left as written. What an empty value leaves dangling (": " at either end,
+## a doubled space) goes, so "%title%: %episode%" on a note whose Episode is empty is the title alone. No name twice: an
+## episode whose title already begins with the show's stands for both.
 static func expand_title(template: String, values: Dictionary) -> String:
 	var v := {}
 	for k in MACROS:
@@ -1252,8 +1194,8 @@ static func macros_in(template: String) -> PackedStringArray:
 	return out
 
 
-## THE MACROS [param template] NAMES THAT [param values] DOES NOT FILL - a key it lacks, unless the row is
-## `always` filled: %seed% on a note with no episodes. Empty, the title can go up.
+## The macros [param template] names that [param values] does not fill: a key it lacks, unless the row is `always` filled
+## (%seed% on a note with no episodes). Empty, the title can go up.
 static func unfilled(template: String, values: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	for k in macros_in(template):
@@ -1273,16 +1215,14 @@ static func macros_said(values: Dictionary) -> String:
 	return "%s." % "; ".join(parts) if not parts.is_empty() else ""
 
 
-## What stands for the episode's title in the line an episode's namer is shown it goes up in
-## ([method title_shape]): the reply's own key, in Cards' producer and Proof's framer alike
-## (rules/agents/episode.yaml).
+## What stands for the episode's title in the line an episode's namer is shown it goes up in ([method title_shape]): the
+## reply's own key, in the Table producer's and the framer's alike (rules/agents/episode.yaml).
 const EPISODE_MARK := "[episode_title]"
 
 
-## THE LINE AN EPISODE'S TITLE GOES UP IN, for whoever names the episode before it exists (Cards'
-## producer, Proof's framer): [param template] with [param values] filled in and [param mark] standing
-## where the episode's title will - "Truthful Tarot: [episode_title]" - and "[date]" for a date not yet
-## known. "" when the line is the episode's title alone, or leaves it out: there is nothing round it.
+## The line an episode's title goes up in, for whoever names the episode before it exists: [param template] with [param
+## values] filled in and [param mark] standing where the episode's title will ("Truthful Tarot: [episode_title]"), and
+## "[date]" for a date not yet known. "" when the line is the episode's title alone, or leaves it out.
 static func title_shape(template: String, values: Dictionary, mark := EPISODE_MARK) -> String:
 	if not template.contains("%episode%"):
 		return ""
@@ -1353,12 +1293,10 @@ static func _unquote(s: String) -> String:
 	return s
 
 
-## [param chapters] (`[{t, label}]`, seconds from the video's start) as YouTube takes them: in time
-## order, the first at 0, and each at least [constant CHAPTER_LEAST] long, running to the next one kept
-## (the last to [param end], the video's length; unknown, below 0). One shorter is dropped and the chapter
-## before it runs on - a card passed over in a few words, a part named a moment after its own mark - so
-## what begins next keeps its start. The first is never dropped or moved: what begins too soon after it
-## goes. A label is one line. YouTube draws chapters only from three or more; fewer are still
+## [param chapters] (`[{t, label}]`, seconds from the video's start) as YouTube takes them: in time order, the first at 0, and
+## each at least [constant CHAPTER_LEAST] long, running to the next one kept (the last to [param end], the video's length;
+## unknown, below 0). One shorter is dropped and the chapter before it runs on, so what begins next keeps its start. The first
+## is never dropped or moved. A label is one line. YouTube draws chapters only from three or more; fewer are still
 ## timestamps a viewer can click.
 static func fit_chapters(chapters: Array, end := -1.0) -> Array:
 	var sorted: Array = []
@@ -1383,9 +1321,8 @@ static func fit_chapters(chapters: Array, end := -1.0) -> Array:
 	return [{"t": 0.0, "label": (sorted[0] as Dictionary)["label"]}] + kept
 
 
-## [param tags] as YouTube takes them: cleaned (no commas or quotes inside a tag), each once whatever
-## its case, in order, and as many as fit in [constant TAGS_MAX] - one too long for the room left is
-## skipped, and a shorter one after it may still fit.
+## [param tags] as YouTube takes them: cleaned (no commas or quotes inside a tag), each once whatever its case, in order, and
+## as many as fit in [constant TAGS_MAX]; one too long for the room left is skipped, and a shorter one after it may still fit.
 static func fit_tags(tags: Array) -> PackedStringArray:
 	var out := PackedStringArray()
 	var seen := {}
@@ -1552,9 +1489,8 @@ static func _read_json(path: String) -> Dictionary:
 	return j.data if not raw.is_empty() and j.parse(raw) == OK and j.data is Dictionary else {}
 
 
-## [param text] into [param path] ATOMICALLY - a temp file beside it, renamed over - and with
-## [param private], owner read/write only (its folder too, and [member root] above a channel's)
-## before a byte of it is written.
+## [param text] into [param path] atomically (a temp file beside it, renamed over), and with [param private], owner
+## read/write only (its folder too, and [member root] above a channel's) before a byte of it is written.
 static func _write(path: String, text: String, private := false) -> String:
 	var dir := path.get_base_dir()
 	DirAccess.make_dir_recursive_absolute(dir)

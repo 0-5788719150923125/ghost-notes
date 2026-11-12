@@ -2,30 +2,25 @@ extends RefCounted
 class_name EpisodeStep
 
 ## EpisodeStep - a thing one card makes from the episode another card makes: a row of the note's Pipeline card
-## ([EpisodeSteps], [PipelineCard]), with its ✓ once made and its ⟳ to make it again, made by Generate after the words it
-## is made from (the user, 2026-10-18: "add an interface that would allow other cards (like the YouTube one) to hook-in to
-## that list, to add their own step - such that we could add a nice little checkmark ... and a regenerate button next to
-## that step"). The YouTube card's tags are the first ([YouTubeTags]).
+## ([EpisodeSteps], [PipelineCard]), with its ✓ once made and its ⟳ to make it again, made by Generate after the words
+## it is made from. The YouTube card's tags are the first ([YouTubeTags]).
 ##
-## THE CARDS NEVER MEET ([EpisodeFeed]). A card hands its steps as a section ([EpisodeSteps]), and the panel says which
-## episode is shown ([method ReadingPanel.episode_feed]). The section lists the ones [method wanted] and calls each at its
-## moments: Generate ([method generate]), ⟳ ([method redo]), Stop ([method stop]), and every refresh ([method tick],
+## The cards never meet ([EpisodeFeed]): a card hands its steps as a section ([EpisodeSteps]), and the panel says which
+## episode is shown ([method ReadingPanel.episode_feed]). The section lists the ones [method wanted] and calls each at
+## its moments: Generate ([method generate]), ⟳ ([method redo]), Stop ([method stop]), and every refresh ([method tick],
 ## [method listed]). A step never asks what made the episode.
 ##
-## MADE FROM THE EPISODE'S WORDS, BY ONE AGENT JOB, once they are written: the step's prompt
-## ([method _prompt]) goes to the maker's own writer ([method EpisodeFeed.writer]), and the answer,
-## landed ([method _land]), is KEPT IN THE EPISODE'S FOLDER - `<key>.json`, its job under `jobs/<key>` -
-## so deleting the episode takes it along. It is kept with the fingerprint of the words it was made
-## from: WORDS WRITTEN AGAIN MAKE IT STALE ([method fresh]), so a maker that rewrites its reading need
-## not know what was made from it - the step shows as not made, and Generate makes it again - UNLESS WHAT IT
-## MADE IS A CHOICE KEPT ([method owed]; [YouTubeThumbnail]): then it says it is older than the words, and only
-## its ⟳ makes another.
+## It is made from the episode's words by one agent job, once they are written: the step's prompt ([method _prompt])
+## goes to the maker's own writer ([method EpisodeFeed.writer]), and the answer, landed ([method _land]), is kept in
+## the episode's folder (`<key>.json`, its job under `jobs/<key>`), so deleting the episode takes it along. It is kept
+## with the fingerprint of the words it was made from: words written again make it stale ([method fresh]) and Generate
+## makes it again, unless what it made is a choice kept ([method owed]; [YouTubeThumbnail]), in which case it says it
+## is older than the words and only its ⟳ makes another.
 ##
-## A step of another kind sets its names and overrides [method _prompt], [method _land] and
-## [method summary] - and, where the writer's answer is a brief for another agent (a painter's), [method
-## _after] and [method _land_after]: the second job is run before anything is kept, so a step is made
-## only once all of it is ([YouTubeThumbnail]). Its writer is the maker's unless it names its own
-## ([method _writer]).
+## A step of another kind sets its names and overrides [method _prompt], [method _land] and [method summary] - and,
+## where the writer's answer is a brief for another agent (a painter's), [method _after] and [method _land_after]: the
+## second job runs before anything is kept, so a step is made only once all of it is ([YouTubeThumbnail]). Its writer
+## is the maker's unless it names its own ([method _writer]).
 
 ## A job that fails is tried this many more times before the step stops on it.
 const RETRIES := 1
@@ -44,8 +39,8 @@ var waits := "made once the episode's words are written"
 var unmade := "not made for this episode yet"
 ## The writer's tier for its job ([constant TextGen.TIERS]).
 var tier := "best"
-## THE EPISODE IT IS LISTED FOR now - set at every refresh ([method listed]); null while it is not listed. What lets the
-## card that offers the step say how it stands for the episode shown.
+## The episode it is listed for now, set at every refresh ([method listed]); null while not listed. Lets the card that
+## offers the step say how it stands for the episode shown.
 var shown: EpisodeFeed = null
 
 var _jobs := {}      # folder -> {id, feed, stamp}: a job making it for that episode
@@ -59,8 +54,8 @@ static func listed_of(steps: Array) -> Array:
 	return steps.filter(func(s: Variant) -> bool: return s is EpisodeStep and (s as EpisodeStep).wanted())
 
 
-## Whether it is a step at all now - a card's own switch (the YouTube card's box). Off, it is not listed,
-## made or used; what it made is kept for when it is on again.
+## Whether it is a step at all now - a card's own switch (the YouTube card's box). Off, it is not listed, made or used;
+## what it made is kept for when it is on again.
 func wanted() -> bool:
 	return true
 
@@ -97,9 +92,9 @@ func fresh(feed: EpisodeFeed) -> bool:
 	return not m.is_empty() and not now.is_empty() and String(m.get("from", "")) == now
 
 
-## WHETHER GENERATE, OR AN EXPORT THAT GOES UP, MAKES IT for [param feed]'s episode: while it is not made from
-## the words as they are ([method fresh]). A step whose making is a choice answers for itself ([YouTubeThumbnail]:
-## only while none is painted - words written since leave the one chosen as it is, until its ⟳).
+## Whether Generate, or an export that goes up, makes it for [param feed]'s episode: while it is not made from the
+## words as they are ([method fresh]). A step whose making is a choice answers for itself ([YouTubeThumbnail]: only
+## while none is painted).
 func owed(feed: EpisodeFeed) -> bool:
 	return not fresh(feed)
 
@@ -146,8 +141,8 @@ func busy(feed: EpisodeFeed) -> bool:
 	return feed != null and _jobs.has(feed.folder())
 
 
-## GENERATE: made unless it is made already - from the episode's words, so not before they are written.
-## True when it is made, being made or started; false while the words are not written.
+## Generate: made unless it is made already, from the episode's words, so not before they are written. True when it is
+## made, being made or started; false while the words are not written.
 func generate(feed: EpisodeFeed) -> bool:
 	if feed == null or feed.words().is_empty():
 		return false
@@ -158,8 +153,8 @@ func generate(feed: EpisodeFeed) -> bool:
 	return true
 
 
-## ⟳: made again now. What was made stays until the new one lands, and a run that fails leaves it.
-## False while the episode's words are not written.
+## ⟳: made again now. What was made stays until the new one lands, and a run that fails leaves it. False while the
+## episode's words are not written.
 func redo(feed: EpisodeFeed) -> bool:
 	if feed == null or feed.words().is_empty():
 		return false
@@ -170,7 +165,7 @@ func redo(feed: EpisodeFeed) -> bool:
 	return true
 
 
-## STOP: a job making it for the episode is cancelled; what was made is kept.
+## Stop: a job making it for the episode is cancelled; what was made is kept.
 func stop(feed: EpisodeFeed) -> void:
 	var dir := feed.folder() if feed != null else ""
 	if not _jobs.has(dir):
@@ -232,9 +227,9 @@ func _start(feed: EpisodeFeed) -> void:
 		_errors[dir] = err
 
 
-## The job [param spec] queued for [param feed]'s episode, in a folder of its own under the episode's
-## `jobs/` - the writer's, or the one after it, [param got] what the writer's answer was landed as - its
-## [param stamp] the words' it was made from. "" once queued, else why not.
+## The job [param spec] queued for [param feed]'s episode, in a folder of its own under the episode's `jobs/` - the
+## writer's, or the one after it, [param got] what the writer's answer was landed as, [param stamp] the words' it was
+## made from. "" once queued, else why not.
 func _submit(feed: EpisodeFeed, spec: Dictionary, stamp: String, got: Variant = null) -> String:
 	var dir := feed.folder()
 	var job := spec.duplicate()
@@ -257,7 +252,7 @@ func _keep(feed: EpisodeFeed, got: Dictionary, stamp: String) -> String:
 	return _write(feed, d)
 
 
-## Written ATOMICALLY, as every step of an episode is: a file that exists is a step that is done.
+## Written atomically, as every step of an episode is: a file that exists is a step that is done.
 func _write(feed: EpisodeFeed, d: Dictionary) -> String:
 	var path := file_in(feed)
 	if path.is_empty():
@@ -293,8 +288,8 @@ func _land(_text: String, _feed: EpisodeFeed) -> Variant:
 	return "nothing is landed for this step"
 
 
-## THE JOB AFTER THE WRITER'S, for the answer landed as [param got]: an [AgentJobs] spec (its `kind`,
-## `backend`, `prompt`... - its folder is the step's), or {} when the answer is kept as it is.
+## The job after the writer's, for the answer landed as [param got]: an [AgentJobs] spec (its `kind`, `backend`,
+## `prompt`... - its folder is the step's), or {} when the answer is kept as it is.
 func _after(_got: Dictionary, _feed: EpisodeFeed) -> Dictionary:
 	return {}
 

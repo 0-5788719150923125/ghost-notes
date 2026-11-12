@@ -1,29 +1,21 @@
 extends Node
 
-## handheld_check - the phone shell, run on the desktop (next/notes.md step 11), through the real main
-## scene with `Boot.handheld_for_test` (what `--handheld` and a phone set) and a notes folder of the
-## gate's own (`NoteStore.root`).
+## handheld_check - the phone shell, run on the desktop, through the real main scene with
+## `Boot.handheld_for_test` and a notes folder of the gate's own (`NoteStore.root`).
 ##
 ##   tests/run_boot_probe.sh tests/app/handheld_check.gd 120
 ##
-## A NOTES APP AND NOTHING MORE: the shell is up, and no Chrome furniture, no stage, no transport, no
-## notes list of the desktop's; the Provisioner did not start and no program is running - a phone
-## downloads nothing.
-##
-## MAKES, EDITS AND KEEPS A NOTE ACROSS RESTARTS: New makes a note in the folder and opens it in its card
-## ([NoteEditor], the desktop's, filling the screen); its title and body, typed, are written on the quiet period
-## (the frontmatter kept byte for byte), and its file renamed after its title; the shell torn down and
-## built again lists it under its new title and opens it with its words. Import… and Export… copy a
-## note in and out, and Delete… (once asked) sends the open note away and shows the list.
-##
-## BACK IS THE SHELL'S (2026-10-31, the user: "When I click back ... the app immediately crashes"): Godot quits
-## on every back press by default - the control, read before the shell is up - and the shell turns that off;
-## back in a note shows the list, and back on the list leaves (its seam, here).
-##
-## THE SETTINGS A PHONE DEPENDS ON ARE THERE - Godot drops a value equal to its default when it
-## rewrites project.godot, which is how monotone's first APK came up sideways: portrait orientation, a
-## portrait canvas for mobile; and the Android preset leaves out the hosts, masks, feedback, build,
-## tests, next and docs.
+## - A notes app and nothing more: the shell is up, and no Chrome furniture, stage, transport or desktop
+##   notes list; the Provisioner did not start and no program is running.
+## - Makes, edits and keeps a note across restarts: New makes a note and opens it in its card ([NoteEditor]);
+##   title and body, typed, are written on the quiet period (frontmatter kept byte for byte) and the file is
+##   renamed after its title; the shell torn down and built again lists it and opens it with its words.
+##   Import… and Export… copy a note in and out, and Delete… (once asked) sends the open note away.
+## - Back is the shell's: Godot quits on every back press by default (control, read before the shell is up)
+##   and the shell turns that off; back in a note shows the list, back on the list leaves (its seam).
+## - The settings a phone depends on are there (Godot drops a value equal to its default when it rewrites
+##   project.godot): portrait orientation, a portrait canvas for mobile; and the Android preset leaves out
+##   the hosts, masks, feedback, build, tests, next and docs.
 
 const ROOT := "user://handheld_check"
 var _fails: Array = []
@@ -83,13 +75,13 @@ func _run() -> void:
 	var copy := shell.import_from(out)
 	_ok(not copy.is_empty() and copy != path and FileAccess.get_file_as_string(copy) == raw,
 		"Import… copies a note into the folder and opens it")
-	# DELETE…, once asked: the open note goes (to the trash - here the gate's seam, a plain delete)
+	# Delete…, once asked: the open note goes (to the trash - here the gate's seam, a plain delete)
 	NoteStore.discard = func(p: String) -> int: return DirAccess.remove_absolute(p)
 	shell.delete_note("trash")
 	NoteStore.discard = Callable()
 	_ok(not FileAccess.file_exists(copy) and shell._note.is_empty() and shell._list_view.visible,
 		"Delete… sends the open note away and shows the list")
-	# BACK
+	# Back
 	_ok(godot_quits, "CONTROL: Godot quits on back by default - else the shell's taking it proves nothing")
 	_ok(not get_tree().quit_on_go_back, "the shell takes back from Godot, which would quit on every one")
 	shell.open_note(path)

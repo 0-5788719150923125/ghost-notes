@@ -3,24 +3,19 @@ class_name Phonemes
 
 ## Phonemes - the phoneme inventory and the text-to-phoneme expansion.
 ##
-## The speech front end for [Voice] (see next/voice.md): a table
-## of English phonemes with formant targets (Hz), durations, and source types, plus
-## a rule-based letter-to-sound expansion (greedy digraph matching, a magic-e rule,
-## and a small exceptions dictionary for the most common irregular words). This is
-## deliberately 1980s technology - deterministic, inspectable, no model - and it
-## will mispronounce rare words; the author co-owns pronunciation: any word can be
-## written phonetically inline as `[K AE T]` (uppercase ARPABET-ish keys from the
-## table below) and passes through literally.
+## The speech front end for [Voice] (see next/voice.md): a table of English phonemes with formant targets
+## (Hz), durations and source types, plus a rule-based letter-to-sound expansion (greedy digraph matching,
+## a magic-e rule, and a small exceptions dictionary). Deterministic, inspectable, no model; it will
+## mispronounce rare words, and any word can be written phonetically inline as `[K AE T]` (uppercase
+## ARPABET-ish keys from the table below), which passes through literally.
 ##
-## Types: `vowel` (periodic source through the formant cascade), `glide` (a weak
-## vowel), `nasal` (murmur), `fric` (noise through its own resonator; voiced frics
-## mix both sources), `stop` (closure then burst), `asp` (aspiration noise through
-## the NEXT phone's formants), `sil` (pause). Diphthongs carry a second formant
-## target `f2` and sweep from `f` to `f2` across the segment.
+## Types: `vowel` (periodic source through the formant cascade), `glide` (a weak vowel), `nasal`
+## (murmur), `fric` (noise through its own resonator; voiced frics mix both sources), `stop` (closure
+## then burst), `asp` (aspiration noise through the NEXT phone's formants), `sil` (pause). Diphthongs
+## carry a second formant target `f2` and sweep from `f` to `f2` across the segment.
 
-# Formants are neutral adult targets; [Voice] scales them per-voice (vocal tract
-# length) and EMA-smooths across segments (coarticulation), so the numbers here
-# are centers, not absolutes.
+# Formants are neutral adult targets; [Voice] scales them per voice (vocal tract length) and
+# EMA-smooths across segments (coarticulation), so the numbers are centers, not absolutes.
 const TABLE := {
 	# vowels: f = [F1, F2, F3], dur in ms
 	"IY": {"type": "vowel", "f": [270.0, 2290.0, 3010.0], "dur": 110.0},
@@ -44,46 +39,39 @@ const TABLE := {
 	"Y": {"type": "glide", "f": [280.0, 2250.0, 2950.0], "dur": 60.0},
 	"R": {"type": "glide", "f": [310.0, 1060.0, 1380.0], "dur": 75.0},
 	"L": {"type": "glide", "f": [360.0, 1300.0, 2700.0], "dur": 70.0},
-	# nasals: a murmur through low poles MINUS a side-cavity zero. The zero is
-	# per-place - it is the whole difference between sum, sun and sung, and one
-	# shared 1000 Hz notch collapsed all three onto each other.
+	# nasals: a murmur through low poles minus a side-cavity zero. The zero is per place (it separates
+	# sum, sun and sung).
 	"M": {"type": "nasal", "f": [280.0, 900.0, 2200.0], "zero": 950.0, "dur": 70.0},
 	"N": {"type": "nasal", "f": [280.0, 1700.0, 2600.0], "zero": 1800.0, "dur": 65.0},
 	"NG": {"type": "nasal", "f": [280.0, 2300.0, 2750.0], "zero": 3000.0, "dur": 75.0},
-	# Obstruents. Two independent things, and conflating them is what made every
-	# fricative sound the same:
-	#   `f`   - the TRACT POSTURE (the locus). Where the articulators are, which
-	#           is what bends the neighboring vowel's formants. This is the
-	#           primary place cue for /f/ and /th/, whose own noise is weak.
-	#   `par` - the PARALLEL BRANCH: [center Hz, bandwidth Hz, amplitude] triples
-	#           describing the front-cavity resonances the turbulence excites.
-	#           These are summed AFTER the cascade, never through it: the cascade
-	#           is an all-pole lowpass whose top pole sits near 4.7 kHz, so
-	#           routing frication through it removed 42 dB at /f/, 69 dB at /th/
-	#           and 85 dB at /s/ and left all four sibilants correlated at 0.99.
-	#           (Klatt 1980 splits cascade and parallel for exactly this reason.)
+	# Obstruents have two independent parts:
+	#   `f`   - the tract posture (the locus): where the articulators are, which bends the neighboring
+	#           vowel's formants. The primary place cue for /f/ and /th/, whose own noise is weak.
+	#   `par` - the parallel branch: [center Hz, bandwidth Hz, amplitude] triples for the front-cavity
+	#           resonances the turbulence excites. Summed after the cascade, never through it: the
+	#           cascade is an all-pole lowpass whose top pole sits near 4.7 kHz, so routing frication
+	#           through it removes 42 dB at /f/, 69 dB at /th/ and 85 dB at /s/ (Klatt 1980 splits
+	#           cascade and parallel for this reason).
 	#   `namp`- the branch's overall level; FRIC_LEVEL in [Voice] seats the set.
-	# Bandwidths here are ABSOLUTE and are NOT scaled by vocal tract length; only
-	# the centers are (a short tract raises the resonance, it does not sharpen it).
+	# Bandwidths are absolute and not scaled by vocal tract length; only the centers are (a short tract
+	# raises the resonance, it does not sharpen it).
 	"S": {"type": "fric", "voiced": false, "f": [320.0, 1750.0, 2600.0],
 		"namp": 1.0,
 		"pa": [0, 0, 0, 0, 0, 0, 0.7943], "ab": 0, "dur": 105.0},
 	"Z": {"type": "fric", "voiced": true, "f": [320.0, 1750.0, 2600.0],
 		"namp": 0.5,
 		"pa": [0, 0, 0, 0, 0, 0, 0.7943], "ab": 0, "dur": 90.0},
-	# /sh/ carries the highest amplitude of any English fricative - and it needs
-	# it here, because its band overlaps the vowel's own F4/F5 where /s/'s does
-	# not, so equal amplitude left it 20 dB short of /s/ in contrast.
+	# /sh/ carries the highest amplitude of any English fricative: its band overlaps the vowel's own
+	# F4/F5 where /s/'s does not, so equal amplitude leaves it 20 dB short of /s/ in contrast.
 	"SH": {"type": "fric", "voiced": false, "f": [320.0, 2000.0, 2500.0],
 		"namp": 3.35,
 		"pa": [0, 0, 0.7079, 0.2512, 0.2512, 0.1995, 0], "ab": 0, "dur": 110.0},
 	"ZH": {"type": "fric", "voiced": true, "f": [320.0, 2000.0, 2500.0],
 		"namp": 1.675,
 		"pa": [0, 0, 0.7079, 0.2512, 0.2512, 0.1995, 0], "ab": 0, "dur": 95.0},
-	# /f/ and /th/ are labiodental and dental: almost no front cavity, so their
-	# spectra are FLAT and DIFFUSE rather than peaked, and quiet in absolute
-	# terms. They are audible because they sit in 4-10 kHz where vowels have
-	# nothing - the cue is spectral CONTRAST against the neighbor, not level.
+	# /f/ and /th/ are labiodental and dental: almost no front cavity, so their spectra are flat and
+	# diffuse and quiet in absolute terms. They are audible in 4-10 kHz where vowels have nothing: the
+	# cue is spectral contrast against the neighbor, not level.
 	"F": {"type": "fric", "voiced": false, "f": [320.0, 900.0, 2200.0],
 		"namp": 0.226,
 		"pa": [0, 0, 0, 0, 0, 0, 0], "ab": 0.7079, "dur": 95.0},
@@ -96,9 +84,8 @@ const TABLE := {
 	"DH": {"type": "fric", "voiced": true, "f": [320.0, 1400.0, 2400.0],
 		"namp": 0.106,
 		"pa": [0, 0, 0, 0, 0, 0.0251, 0], "ab": 0.2512, "dur": 60.0},
-	# stops: closure at the locus, then a burst through the parallel branch.
-	# The three classic burst shapes: labial diffuse-falling, alveolar
-	# diffuse-rising, velar compact (a single mid peak - the "velar pinch").
+	# stops: closure at the locus, then a burst through the parallel branch. The three classic burst
+	# shapes: labial diffuse-falling, alveolar diffuse-rising, velar compact (a single mid peak).
 	"P": {"type": "stop", "voiced": false, "f": [320.0, 900.0, 2200.0],
 		"namp": 0.9,
 		"pa": [0, 0, 0, 0, 0, 0, 0], "ab": 1.4125, "dur": 90.0},
@@ -118,14 +105,13 @@ const TABLE := {
 		"namp": 0.6,
 		"pa": [0, 0, 0.4467, 0.1413, 0.1778, 0.1778, 0], "ab": 0, "dur": 80.0},
 	# affricates are expanded at parse time: CH -> T SH, JH -> D ZH
-	# /h/ is glottal: its noise DOES belong in the cascade (the whole tract is
-	# the filter), which is why it has no `par` and no posture of its own.
+	# /h/ is glottal: its noise belongs in the cascade (the whole tract is the filter), so it has no
+	# `par` and no posture of its own.
 	"HH": {"type": "asp", "dur": 65.0},
 	"SIL": {"type": "sil", "dur": 1.0},
 }
 
-# Greedy longest-match spelling rules, tried before single letters. Order within
-# a length class does not matter; longer keys always win.
+# Greedy longest-match spelling rules, tried before single letters; longer keys always win.
 const DIGRAPHS := {
 	"tch": ["T", "SH"], "igh": ["AY"], "eigh": ["EY"], "ough": ["OW"],
 	"ch": ["T", "SH"], "sh": ["SH"], "th": ["TH"], "ph": ["F"], "wh": ["W"],
@@ -151,20 +137,16 @@ const LONG := {"a": "EY", "e": "IY", "i": "AY", "o": "OW", "u": "UW"}
 
 const VOWEL_LETTERS := "aeiouy"
 
-# `th` is VOICED (DH) in three environments and voiceless everywhere else.
-# It was unconditionally voiceless, which is wrong on some of the highest
-# frequency words in English - `father` and `mother` came out with the `th` of
-# `thin`. These are the function words that carry a voiced initial `th`; the
-# intervocalic and `-the$` cases are handled by rule in word_to_phones.
+# `th` is voiced (DH) in three environments and voiceless elsewhere. These are the function words that
+# carry a voiced initial `th`; the intervocalic and `-the$` cases are handled by rule in word_to_phones.
 const TH_VOICED := ["the", "this", "that", "these", "those", "them", "then",
 	"than", "there", "their", "they", "though", "thus", "thence", "thee",
 	"thy", "thine", "themselves", "therefore"]
 
-# `g` before e/i/y is SOFT (as in `age`, `magic`) often enough to be the
-# default, but hard in a set of very common Germanic words. Listing the hard
-# ones is the smaller and safer change: flipping the default would break the
-# Latinate majority (`large`, `change`, `region`, `energy`, `message`).
-# Suffixed forms reduce to these stems through the morphology pass below.
+# `g` before e/i/y is soft (`age`, `magic`) often enough to be the default, but hard in a set of very
+# common Germanic words. Listing the hard ones is the safer change (flipping the default would break
+# `large`, `change`, `region`, `energy`, `message`). Suffixed forms reduce to these stems through the
+# morphology pass below.
 const HARD_G := ["get", "give", "given", "giving", "getting", "girl", "gift",
 	"begin", "began", "begun", "beginning", "forget", "forgive", "together",
 	"target", "tiger", "anger", "angry", "eager", "finger", "hunger", "gear",
@@ -175,8 +157,8 @@ const VOICELESS_PHONES := ["P", "T", "K", "F", "TH", "S", "SH", "HH"]
 # ... and after which it becomes a whole syllable (`buses`, `wishes`).
 const SIBILANT_PHONES := ["S", "Z", "SH", "ZH"]
 
-# Common irregular words the rules would butcher. Small on purpose - the author
-# writes `[.]` phonetics for anything else.
+# Common irregular words the rules would butcher. Small on purpose: the author writes `[.]` phonetics
+# for anything else.
 const EXCEPTIONS := {
 	"the": ["DH", "AH"], "of": ["AH", "V"], "to": ["T", "UW"], "you": ["Y", "UW"],
 	"was": ["W", "AH", "Z"], "is": ["IH", "Z"], "as": ["AE", "Z"], "his": ["HH", "IH", "Z"],
@@ -208,22 +190,17 @@ const FUNCTION_WORDS := [
 ]
 
 
-## Expand a paragraph into sentences of timed-ready words. Returns an Array of
-## sentences; each sentence is an Array of word Dictionaries:
+## Expand a paragraph into sentences of timed-ready words. Returns an Array of sentences; each sentence
+## is an Array of word Dictionaries:
 ## `{text, phones: [String], stressed: bool, pause_after: "none"|"comma"|"stop"}`.
-## `[K AE T]` bracket groups pass through as literal phonemes (shown as the
-## bracketed text in subtitles).
+## `[K AE T]` bracket groups pass through as literal phonemes (shown as the bracketed text in subtitles).
 static func parse(text: String) -> Array:
 	var sentences: Array = []
 	var words: Array = []
-	# Normalize FIRST: fold typographic punctuation to ASCII and turn numerals,
-	# ordinals, currency, times and dotted abbreviations into words. Before this
-	# stage existed, a numeral produced an empty phone array and vanished from
-	# the utterance without a trace, and a curly apostrophe defeated both the
-	# contraction split and the dictionary key. See TextNorm.
-	# ...and keep WHAT THE PAGE SAID alongside what the mouth will say. `2009` is
-	# spoken "two thousand nine" and must still be SHOWN as `2009`; see
-	# TextNorm.normalize_marked for why the two spellings have to travel together.
+	# Normalize first: fold typographic punctuation to ASCII and turn numerals, ordinals, currency,
+	# times and dotted abbreviations into words (see TextNorm), and keep what the page said alongside
+	# what the mouth will say: `2009` is spoken "two thousand nine" and shown as `2009` (see
+	# TextNorm.normalize_marked).
 	var marked := TextNorm.normalize_marked(text)
 	text = String(marked["text"])
 	var spans: Array = marked["spans"]
@@ -231,19 +208,17 @@ static func parse(text: String) -> Array:
 	var span_open := -1              # the span the previous word belonged to, if any
 	var tok_at := PackedInt32Array()
 	var toks := _tokenize(text, tok_at)
-	# The emphasis level currently in force. The sentinels TextNorm leaves behind are
-	# toggles welded to the word at each end of a run, so a run of any length needs only
-	# its two ends marked and this carries the level across everything between.
+	# The emphasis level in force. The sentinels TextNorm leaves are toggles welded to the word at each
+	# end of a run, so this carries the level across everything between.
 	var emph_state := 0
 	# Hesitation sentinels peeled off the current token, not yet given to a word.
 	var hold_acc := {"lead": 0, "tail": 0, "count": 0, "carry": 0}
 	for ti in toks.size():
 		var token: String = toks[ti]
-		# PEEL THE SENTINELS FIRST, before anything reads the token. They are typography:
-		# the dictionary must not see them, and `display` must not print them - what they
-		# leave behind is `emph`, which the subtitle draws as a slanted or bold face.
-		# Hesitations settle onto the word the PREVIOUS token produced, now that it is known
-		# whether it produced one - see [method _settle_holds].
+		# peel the sentinels first, before anything reads the token: the dictionary must not see them
+		# and `display` must not print them; what they leave is `emph`, which the subtitle draws as a
+		# slanted or bold face. Hesitations settle onto the word the previous token produced, once it
+		# is known whether it produced one - see [method _settle_holds].
 		_settle_holds(words, sentences, hold_acc)
 		var emph := emph_state
 		if token.contains(TextNorm.EMPH_ITALIC) or token.contains(TextNorm.EMPH_BOLD) \
@@ -267,12 +242,10 @@ static func parse(text: String) -> Array:
 					clean += ech
 			token = clean
 			emph = seen
-		# WHICH SOURCE RUN IS THIS TOKEN PART OF. A rewritten run covers one or
-		# more tokens ("two thousand nine"), and the reader is shown its source
-		# spelling ONCE, over the whole run - so the first token of a run carries
-		# the source and the rest carry nothing to draw. `src_span` groups them
-		# so a subtitle can span the run's whole duration rather than flashing
-		# the numeral over its first syllable.
+		# which source run this token is part of: a rewritten run covers one or more tokens ("two
+		# thousand nine") and the reader is shown its source spelling once, over the whole run, so the
+		# first token of a run carries the source and the rest nothing to draw. `src_span` groups them
+		# so a subtitle spans the run's whole duration.
 		var start: int = tok_at[ti] if ti < tok_at.size() else -1
 		var in_span := -1
 		var span_src := ""
@@ -293,21 +266,10 @@ static func parse(text: String) -> Array:
 		var pause := "none"
 		var punct := ""
 		var bare := token
-		# ORDER MATTERS (2026-08-09). The wrapper strip used to run AFTER this
-		# loop, so a token like `early,"` failed the loop's very first test on
-		# the closing quote and exited immediately: pause stayed "none", punct
-		# stayed empty, and every line of dialogue lost its terminal contour and
-		# its pause. Strip wrappers, then terminal punctuation, then any wrapper
-		# the punctuation was hiding.
-		# ... and it has to REPEAT, which the two-pass version above did not. A token can
-		# interleave wrappers and marks - `know."` followed by a line break arrives as
-		# `know."\n` - and one pass of each peels the newline, stops at the quote, then
-		# peels the quote and leaves the FULL STOP welded to the word. Measured on the
-		# manuscript: `you.`, `week.`, `dog.`, `free.`, `window.` and a dozen more reached
-		# the dictionary with a period attached, which means they missed it - and any such
-		# word would also have missed the homograph table, so `record."` at the end of a
-		# line of dialogue would have been read as the noun whatever the sentence said.
-		# Peel to a fixpoint instead.
+		# order matters: strip wrappers, then terminal punctuation, then any wrapper the punctuation
+		# was hiding, repeated to a fixpoint. A token can interleave wrappers and marks (`know."`
+		# followed by a line break arrives as `know."\n`), and a single pass of each leaves the full
+		# stop welded to the word, which then misses the dictionary and the homograph table.
 		while true:
 			var before := bare
 			bare = bare.lstrip("\"'(").rstrip("\"')")
@@ -320,12 +282,12 @@ static func parse(text: String) -> Array:
 			bare = bare.strip_edges()
 			if bare == before:
 				break
-		# the word as the page has it, its capitals kept: for the voice host's tagger, which reads a sentence's
-		# grammar off them ("i live in hell" came back an adjective and then a noun, `I` a pronoun - Homographs)
+		# the word as the page has it, its capitals kept: for the voice host's tagger, which reads a
+		# sentence's grammar off them (see Homographs)
 		var cased := bare
 		bare = bare.to_lower()
-		# %HESITATION (the ASR transcript token for a filled pause): an authored
-		# "um" - low, flat, reduced. Shows as an ellipsis in the karaoke.
+		# %HESITATION (the ASR transcript token for a filled pause): an authored "um" - low, flat,
+		# reduced. Shows as an ellipsis in the karaoke.
 		if bare.begins_with("%"):
 			words.append({"text": "…", "display": "…", "phones": ["AH", "M"],
 				"stressed": false, "pause_after": pause, "punct": punct, "hesit": true,
@@ -334,18 +296,14 @@ static func parse(text: String) -> Array:
 				sentences.append(words)
 				words = []
 			continue
-		# A DASH standing alone is a rest, not a word. ghost's own prose style writes an
-		# aside as " - " rather than with an em dash, so this is the common case in the
-		# book text this engine exists to read - and the mark has no phoneme of its own,
-		# so it is voiced as the rest a reader would take there.
+		# a dash standing alone is a rest, not a word (ghost's prose writes an aside as " - "): the mark
+		# has no phoneme of its own, so it is voiced as the rest a reader would take there
 		if bare.length() > 0 and _is_dash(bare):
 			pause = "comma"
 			punct = ","          # a hyphen means nothing to the model; a comma is the rest
 			bare = ""
-		# A MARK WITH NO WORD OF ITS OWN used to vanish outright: nothing was appended, so
-		# its pause and its mark went with it. A spaced dash produced no rest at all, and
-		# neither did a comma left adrift by a stray space ("one , two"). Hand it to the
-		# word BEFORE, which is where the reader actually breathes.
+		# a mark with no word of its own is handed to the word before, where the reader breathes (a
+		# spaced dash, or a comma left adrift by a stray space: "one , two")
 		if bare.is_empty() and pause != "none" and words.size() > 0:
 			var prev: Dictionary = words[words.size() - 1]
 			# Never downgrade: a stop already claimed is stronger than this comma.
@@ -353,10 +311,9 @@ static func parse(text: String) -> Array:
 				prev["pause_after"] = pause
 				if String(prev.get("punct", "")).is_empty():
 					prev["punct"] = punct
-			# AND KEEP IT VISIBLE. `display` is what the reader sees in the subtitles, and a
-			# mark that lost its own word would vanish from the page as well as the mouth -
-			# "a black breath - the glass going dark" was being SHOWN without its dash.
-			# Normalization is for the phoneme lookup, never for the reader's eyes.
+			# and kept visible: `display` is what the reader sees in the subtitles, so a mark that lost
+			# its own word must not vanish from the page. Normalization is for the phoneme lookup, never
+			# for the reader's eyes.
 			var mark := token.strip_edges()
 			if not mark.is_empty() and mark != "\n":
 				prev["display"] = String(prev.get("display", "")) + " " + mark
@@ -364,13 +321,9 @@ static func parse(text: String) -> Array:
 			var got := lookup(bare)
 			var phones: Array = got.phones
 			if phones.is_empty():
-				# NOTHING MAY LEAVE THE PIPELINE SILENTLY. This `if phones.size() > 0` was the
-				# second half of a reported loss: `2009` at the end of a paragraph escaped
-				# TextNorm's numeral pass (see TextNorm._expand_numbers, now fixed), reached here
-				# as digits, and word_to_phones - which walks letters - returned nothing, so the
-				# word was deleted from the utterance with no trace in the audio, the subtitles or
-				# the log. Two things now stand between a token and that fate: a rescue that reads
-				# any digits it contains, and a warning for whatever is left.
+				# nothing may leave the pipeline silently: a token that reaches here as digits (word_to_phones
+				# walks letters) would be deleted from the utterance. A rescue reads any digits it contains,
+				# and a warning covers whatever is left.
 				var saved := _rescue_phones(bare)
 				phones = saved["phones"] as Array
 				if phones.is_empty():
@@ -382,10 +335,8 @@ static func parse(text: String) -> Array:
 						% [token] + "read as '%s'" % [String(saved["said"])])
 					got = {"phones": phones, "stress": saved["stress"]}
 			if phones.size() > 0:
-				# THE SOURCE SPELLING, caps and punctuation intact - normalization
-				# is for the phoneme lookup, never for the reader's eyes. Inside a
-				# rewritten run that is what the page said (`2009`), shown once on
-				# the run's first word; elsewhere the token already IS the source.
+				# the source spelling, caps and punctuation intact. Inside a rewritten run that is what the
+				# page said (`2009`), shown once on the run's first word; elsewhere the token is the source.
 				var shown := token.trim_suffix("\n")
 				if in_span >= 0:
 					shown = span_src.trim_suffix("\n") if in_span != span_open else ""
@@ -402,11 +353,9 @@ static func parse(text: String) -> Array:
 					"punct": punct,
 					"emph": emph,
 				}
-				# A CAPITAL "A" INSIDE A SENTENCE IS THE LETTER. The article is only ever
-				# capitalized where a sentence starts, so "groups, A and B" can only mean the
-				# letter - and read as the article it came out as a clipped schwa, all but
-				# inaudible. Pinned as `literal` so eSpeak cannot reduce it again downstream.
-				# Only mid-sentence: a sentence-initial "A" is the article, and stays one.
+				# a capital "A" inside a sentence is the letter: the article is only capitalized where a
+				# sentence starts, and read as the article it comes out a clipped schwa. Pinned as `literal`
+				# so eSpeak cannot reduce it downstream. A sentence-initial "A" stays the article.
 				if bare == "a" and not words.is_empty() and _letter_a(token):
 					entry["phones"] = ["EY"]
 					entry["stress"] = [1]
@@ -423,13 +372,12 @@ static func parse(text: String) -> Array:
 	return sentences
 
 
-## Give the hesitations peeled off the last token to a word. A token appends at most one
-## word, so comparing the running word count says whether it did: if so the rests land on
-## THAT word (`hold_before` for a sentinel that led it, `hold` for one that trailed it);
-## if the token produced nothing - a stray mark, a dropped word - a trailing rest goes to
-## the word before, and a leading one waits for the next word. A rest is never dropped:
-## if no word follows at all it is kept on the last one, where the reading stops anyway.
-## `hold` / `hold_before` are COUNTS of sentinels; the caller owns the durations, in order.
+## Give the hesitations peeled off the last token to a word. A token appends at most one word, so
+## comparing the running word count says whether it did: if so the rests land on that word
+## (`hold_before` for a sentinel that led it, `hold` for one that trailed it); if the token produced
+## nothing, a trailing rest goes to the word before and a leading one waits for the next word. A rest is
+## never dropped: if no word follows it is kept on the last one. `hold` / `hold_before` are counts of
+## sentinels; the caller owns the durations, in order.
 static func _settle_holds(words: Array, sentences: Array, acc: Dictionary) -> void:
 	var total := words.size()
 	for s in sentences:
@@ -459,9 +407,8 @@ static func _settle_holds(words: Array, sentences: Array, acc: Dictionary) -> vo
 		acc["carry"] = lead + tail
 
 
-## `at` collects each token's start offset in `text`, for callers that have to
-## map a token back onto the source it was normalized from (see [method parse]).
-## Left empty by every other caller; the tokenization is unchanged.
+## `at` collects each token's start offset in `text`, for callers that map a token back onto the source
+## it was normalized from (see [method parse]). Left empty by every other caller.
 static func _tokenize(text: String, at: PackedInt32Array = PackedInt32Array()) -> PackedStringArray:
 	var out := PackedStringArray()
 	var i := 0
@@ -509,31 +456,20 @@ static func _literal_word(token: String) -> Dictionary:
 		elif key == "JH":
 			phones.append_array(["D", "ZH"])
 	var st := _with_default_stress(phones)
-	# `literal` is what makes ghost's own ARPAbet BEAT eSpeak downstream (see
-	# ReadingPlan.cut). Without it an inline [K AE T] was quietly
-	# re-phonemized by eSpeak like any other word - the documented escape hatch for a
-	# mispronounced name did nothing at all on the generative path.
+	# `literal` makes ghost's own ARPAbet beat eSpeak downstream (see ReadingPlan.cut): without it an
+	# inline [K AE T] would be re-phonemized by eSpeak like any other word.
 	return {"text": inner.to_lower(), "display": inner, "phones": phones,
 		"stress": st.stress, "stressed": true, "pause_after": "none", "literal": true}
 
 
 # ---- the external language data ---------------------------------------------
 #
-# `data/english.yml` holds the pronunciation LEXICON and the SUFFIX table. It is
-# data, not configuration: the language itself, external so it can be read and
-# corrected without touching the synthesizer, and so a wrong word is a one-line
-# diff instead of a code change. The built-in EXCEPTIONS above remain the
-# fallback, so a missing or malformed file degrades to the old behavior rather
-# than breaking speech.
+# `data/english.yml` holds the pronunciation lexicon and the suffix table: data, external so it can be
+# read and corrected without touching the synthesizer. The built-in EXCEPTIONS above remain the
+# fallback, so a missing or malformed file degrades rather than breaking speech.
 const DATA_PATH := "res://data/english.yml"
-# CMUdict: 126k words with LEXICAL STRESS, vendored (BSD-2-Clause, see
-# data/cmudict.LICENSE). Hand-building a lexicon was the wrong instinct - this
-# is a dictionary, not a model, exactly the kind of 1980s-technology data table
-# the phoneme inventory already is, and it carries the one thing a hand list
-# could never supply cheaply: which syllable of every word is stressed. That is
-# what drives vowel reduction and duration, so the dictionary is not a shortcut
-# past the interesting work, it is the input the interesting work needed.
-# Measured: 3.3 MB, 117 ms to read and index once, at first speech.
+# CMUdict: 126k words with lexical stress, vendored (BSD-2-Clause, see data/cmudict.LICENSE). Stress is
+# what drives vowel reduction and duration. 3.3 MB, 117 ms to read and index once, at first speech.
 const CMUDICT_PATH := "res://data/cmudict.dict"
 
 static var _lexicon := {}                 # our overrides (data/english.yml)
@@ -571,17 +507,15 @@ static func _load_data() -> void:
 		return
 	var data: Dictionary = res.data if res.data is Dictionary else {}
 	for w in (data.get("lexicon", {}) as Dictionary):
-		# stored RAW so stress digits survive: an override without them silently
-		# fell back to "primary stress on the first vowel", which mis-stressed 56
-		# high-frequency words (about, because, before, between, again ...) the
-		# moment CMUdict arrived. An override must be able to carry stress.
+		# stored raw so stress digits survive: an override without them falls back to "primary stress
+		# on the first vowel", which mis-stresses words like about, because, before. An override must be
+		# able to carry stress.
 		_lexicon[String(w)] = String(data.lexicon[w])
-	# NAMES - words no dictionary has, and the neural backend's own guess is wrong for.
-	# Kept apart from `lexicon` because they are resolved differently: a lexicon entry
-	# only reaches the PROCEDURAL voice, since the neural path sends text to eSpeak and
-	# uses ghost's own phones for a word only when it is marked `literal`. An invented
-	# proper noun has to beat eSpeak, so these are loaded into the same table the
-	# homograph resolver writes through, which sets that flag.
+	# names: words no dictionary has and the neural backend's own guess gets wrong. Kept apart from
+	# `lexicon` because a lexicon entry only reaches the procedural voice (the neural path sends text to
+	# eSpeak and uses ghost's phones only for a `literal` word). An invented proper noun has to beat
+	# eSpeak, so these are loaded into the table the homograph resolver writes through, which sets that
+	# flag.
 	for nm in (data.get("names", {}) as Dictionary):
 		_names[String(nm).to_lower()] = String(data.names[nm])
 	for fw in (data.get("function_words", []) as Array):
@@ -616,20 +550,14 @@ static func _phone_list(v: Variant) -> Array:
 	return _split_phones(String(v))
 
 
-## One lowercase word -> `{phones: [String], stress: [int]}`, the arrays
-## parallel. Stress is 0 (unstressed / consonant), 1 (primary) or 2 (secondary),
-## and is the signal the whole rhythm of the reading hangs off: which vowels
-## reduce to schwa, which get length, and which carries the pitch accent.
-## A LAST RESORT for a token the dictionary and the letter rules both have nothing for, so that
-## it is never simply deleted. Digits are the case that matters and the case that was reported:
-## anything numeric is normalized here and read as the words it stands for, with the phones of
-## those words concatenated into this one token (its DISPLAY stays the source spelling, so the
-## karaoke line still shows `2009`). A token with no digits and no letters is a symbol - there is
-## nothing to say for it, and the caller warns and drops it.
-##
-## This is deliberately defense in depth rather than the fix: numerals are expanded before the
-## tokenizer ever sees them (see TextNorm), and if one reaches here at all that is a bug in the
-## normalizer. It just must not be an INAUDIBLE bug.
+## One lowercase word -> `{phones: [String], stress: [int]}`, the arrays parallel. Stress is 0
+## (unstressed / consonant), 1 (primary) or 2 (secondary); it drives which vowels reduce to schwa, which
+## get length, and which carries the pitch accent.
+## A last resort for a token the dictionary and the letter rules have nothing for, so it is never
+## deleted: anything numeric is normalized here and read as the words it stands for (the phones of those
+## words concatenated into this one token; its display stays the source spelling). A token with no
+## digits and no letters is a symbol: the caller warns and drops it. Defense in depth: numerals are
+## expanded before the tokenizer sees them (see TextNorm).
 static func _rescue_phones(bare: String) -> Dictionary:
 	var digits := false
 	for i in bare.length():
@@ -655,8 +583,8 @@ static func _rescue_phones(bare: String) -> Dictionary:
 
 static func lookup(word: String) -> Dictionary:
 	_load_data()
-	# our overrides win: data/english.yml is where we disagree with the
-	# dictionary on purpose (reduced narrator forms, house pronunciations)
+	# our overrides win: data/english.yml is where we disagree with the dictionary on purpose
+	# (reduced narrator forms, house pronunciations)
 	var got: Dictionary
 	if _lexicon.has(word):
 		got = _parse_cmu(String(_lexicon[word]))
@@ -664,18 +592,11 @@ static func lookup(word: String) -> Dictionary:
 		got = _parse_cmu(String(_cmu[word]))
 	else:
 		got = _with_default_stress(word_to_phones(word))
-	# A FUNCTION WORD IS UNSTRESSED, whatever the dictionary says. CMUdict lists
-	# citation forms (`has` as HH AE1 Z), which is right for a word said alone
-	# and wrong for one said in a sentence - and a stress-1 mark stops the
-	# reduction stage from touching it, so every `has`, `for` and `your` came
-	# out at full length and full vowel quality. Stripping the stress here lets
-	# the existing machinery reduce them, at whatever depth the speaker and the
-	# tempo call for, instead of freezing one reduced spelling into the lexicon.
-	# ... but only a MONOSYLLABIC one. English reduces `the`, `of`, `at`, `for`;
-	# it does not flatten `about`, `between`, `under` or `after`, which keep
-	# their internal stress pattern even when the sentence gives them no accent.
-	# Flattening those made `about` come back with no stressed vowel at all.
-	# Not being accented is Phrasing's job, and it already handles both cases.
+	# a function word is unstressed whatever the dictionary says: CMUdict lists citation forms (`has` as
+	# HH AE1 Z), and a stress-1 mark stops the reduction stage from touching it. Stripping the stress
+	# lets the reduction machinery act at the depth the speaker and tempo call for. Only a monosyllabic
+	# one: English reduces `the`, `of`, `at`, `for` but not `about`, `between`, `under`, which keep their
+	# internal stress. Not being accented is Phrasing's job.
 	if is_function_word(word) and _syllables(got.phones as Array) <= 1:
 		var flat: Array = []
 		for _i in (got.stress as Array).size():
@@ -696,8 +617,8 @@ static func _syllables(phones: Array) -> int:
 static func _parse_cmu(spec: String) -> Dictionary:
 	var phones: Array = []
 	var stress: Array = []
-	# an entry with no digits at all gets the default marking instead, so a
-	# hand-written override may omit them for a monosyllable
+	# an entry with no digits at all gets the default marking, so a hand-written override may omit them
+	# for a monosyllable
 	var marked := false
 	for t in spec.split(" ", false):
 		var c := String(t)[String(t).length() - 1]
@@ -725,9 +646,8 @@ static func _parse_cmu(spec: String) -> Dictionary:
 	return {"phones": phones, "stress": stress}
 
 
-## Phones with no marks of their own: primary stress on the first vowel, which
-## is right for the short function words data/english.yml holds and a harmless
-## default elsewhere (the dictionary answers almost everything real).
+## Phones with no marks of their own: primary stress on the first vowel, right for the short function
+## words data/english.yml holds and a harmless default elsewhere.
 static func _with_default_stress(phones: Array) -> Dictionary:
 	var stress: Array = []
 	var seen := false
@@ -739,15 +659,13 @@ static func _with_default_stress(phones: Array) -> Dictionary:
 	return {"phones": phones.duplicate(), "stress": stress}
 
 
-## Is this word ANSWERED, or is the front end guessing at it?
+## Is this word answered, or is the front end guessing at it?
 ##
-## The distinction the audit tool turns on. Everything below is a real answer from a real
-## source; anything else falls through to the letter-to-sound rules, which are
-## deliberately 1980s technology and will mispronounce an invented word or an unusual
-## proper noun without any indication that they have. A hyphenated compound counts as
-## known when every part of it is, since the tokenizer splits it before it ever reaches
-## the rules, and a plural or possessive of a known stem is handled by the morphology
-## step rather than by guessing.
+## The audit tool turns on this. Anything below is a real answer from a real source; anything else falls
+## through to the letter-to-sound rules, which will mispronounce an invented word or an unusual proper
+## noun without indication. A hyphenated compound counts as known when every part is (the tokenizer
+## splits it before the rules), and a plural or possessive of a known stem is handled by the morphology
+## step.
 static func is_known(word: String) -> bool:
 	_load_data()
 	var w := word.to_lower().strip_edges()
@@ -760,12 +678,9 @@ static func is_known(word: String) -> bool:
 			if not is_known(String(part)):
 				return false
 		return true
-	# A PRODUCTIVE AFFIX IS NOT AN UNKNOWN WORD. `unmaking`, `watchmaker's` and
-	# `reproducible` are not gaps in the dictionary, they are regular English built out
-	# of parts the dictionary has - and both this front end and eSpeak's letter-to-sound
-	# rules handle them correctly. Reporting them as risks buries the two or three words
-	# that genuinely are risks under a hundred that are not, which is how an audit gets
-	# ignored. One level of stripping at each end is enough for ordinary prose.
+	# a productive affix is not an unknown word: `unmaking`, `watchmaker's` and `reproducible` are
+	# regular English built from parts the dictionary has, and reporting them buries the few real risks.
+	# One level of stripping at each end is enough for ordinary prose.
 	for suf in ["'s", "s'", "es", "ed", "ing", "er", "est", "ly", "ness", "ment", "ful",
 			"able", "ible", "ist", "ism", "s", "'"]:
 		if w.length() > suf.length() + 2 and w.ends_with(suf):
@@ -780,12 +695,11 @@ static func is_known(word: String) -> bool:
 	return false
 
 
-## Is the front end GUESSING at this word as the page wrote it? [param w] is a word of [method parse]:
-## one no dictionary holds ([method is_known]) that reaches the voice spelled as the page spells it,
-## its marks aside. A word normalization wrote (a numeral read out, a letter said by its name) is a
-## spelling already chosen for the voice, and is not one. THE MARKS ARE NOT THE WORD: `display` keeps
-## them, and "cosine," compared whole with "cosine" left every listed word unmarked - the three the
-## user heard slurred were the three with a comma or a stop after them (2026-10-17).
+## Is the front end guessing at this word as the page wrote it? [param w] is a word of [method parse]:
+## one no dictionary holds ([method is_known]) that reaches the voice spelled as the page spells it, its
+## marks aside. A word normalization wrote (a numeral read out, a letter said by its name) is a spelling
+## already chosen for the voice, and is not one. The marks are not the word: `display` keeps them, and
+## comparing "cosine," whole with "cosine" would leave it unmarked.
 static func guessed(w: Dictionary) -> bool:
 	var text := String(w.get("text", ""))
 	if _edges == null:
@@ -794,8 +708,8 @@ static func guessed(w: Dictionary) -> bool:
 	return not text.is_empty() and shown.to_lower() == text.to_lower() and not is_known(text)
 
 
-## A stem answered outright, without recursing back through the affix stripping (which
-## would let a word validate itself through an unbounded chain of prefixes).
+## A stem answered outright, without recursing back through the affix stripping (which would let a word
+## validate itself through an unbounded chain of prefixes).
 static func _known_stem(stem: String) -> bool:
 	return _cmu.has(stem) or _lexicon.has(stem) or _names.has(stem) or EXCEPTIONS.has(stem)
 
@@ -805,13 +719,10 @@ static func word_to_phones(word: String) -> Array:
 	_load_data()
 	if _lexicon.has(word):
 		return (_parse_cmu(String(_lexicon[word])).phones as Array)
-	# A HYPHENATED COMPOUND IS ITS PARTS. TextNorm used to split these before the
-	# tokenizer ever saw them, which pronounced them correctly but deleted the hyphen
-	# from the text - and the karaoke line shows the source spelling, so "twenty-five"
-	# was subtitled as "twenty five". The hyphen stays now, so the decomposition has to
-	# happen here instead: each part goes through this same pipeline and gets its own
-	# dictionary entry. Without it the letter rules read the whole thing as one run of
-	# characters and lose real sounds - "off-by-one" came out with no /w/ in "one".
+	# a hyphenated compound is its parts: the hyphen stays in the text (the karaoke line shows the
+	# source spelling), so each part goes through this same pipeline and gets its own dictionary entry.
+	# Otherwise the letter rules read the whole thing as one run and lose sounds ("off-by-one" loses the
+	# /w/ in "one").
 	if word.contains("-") and not _cmu.has(word):
 		var joined: Array = []
 		var any_part := false
@@ -833,13 +744,10 @@ static func word_to_phones(word: String) -> Array:
 	var suf := _try_suffix(word)
 	if not suf.is_empty():
 		return suf
-	# MORPHOLOGY, one level: strip a final plural / third-person `-s`, pronounce
-	# the STEM, then reattach the suffix with voicing assimilation. Letter rules
-	# alone cannot do this - they produced `comes` as K AA M EH S (a phantom
-	# syllable), `gives` as D ZH IH V EH S, and `yours` as Y AW R S instead of
-	# Y AO R Z. Going through the stem also lets the exceptions dictionary and
-	# the magic-e rule do their work, which is why this one pass fixes the
-	# vowel, the consonant and the spurious syllable at the same time.
+	# morphology, one level: strip a final plural / third-person `-s`, pronounce the stem, then reattach
+	# the suffix with voicing assimilation. Letter rules alone give `comes` as K aa m eh s (a phantom
+	# syllable) and `yours` as Y aw r s. Going through the stem also lets the exceptions dictionary and
+	# the magic-e rule act.
 	var stem := _s_stem(word)
 	if not stem.is_empty():
 		var sp := word_to_phones(stem)          # stem never ends in a strippable -s
@@ -854,11 +762,9 @@ static func word_to_phones(word: String) -> Array:
 		if LONG.has(vow) and not (cons in "aeiourw"):
 			long_vowel_at = w.length() - 3
 			w = w.substr(0, w.length() - 1)
-	# ... and the GENERAL silent final e, which magic-e cannot reach because it
-	# only inspects single letters: `bathe` and `breathe` have a digraph in the
-	# slot it checks, so they kept a whole spurious EH syllable. A final `e` is
-	# silent unless the word is tiny (`be`, `he`, `the`) or the `e` follows
-	# another vowel (`see`, `free`, `toe`), which is what those tests protect.
+	# and the general silent final e, which magic-e cannot reach because it only inspects single
+	# letters: `bathe` and `breathe` have a digraph in the slot it checks. A final `e` is silent unless
+	# the word is tiny (`be`, `he`, `the`) or follows another vowel (`see`, `free`, `toe`).
 	if w.length() >= 4 and w[w.length() - 1] == "e" \
 			and not VOWEL_LETTERS.contains(w[w.length() - 2]):
 		w = w.substr(0, w.length() - 1)
@@ -873,8 +779,7 @@ static func word_to_phones(word: String) -> Array:
 		for span in [4, 3, 2]:
 			if i + span <= w.length():
 				var chunk := w.substr(i, span)
-				# `th` is the one digraph whose value is contextual, so it is
-				# decided here rather than in the table
+				# `th` is the one digraph whose value is contextual, so it is decided here
 				if chunk == "th":
 					phones.append("DH" if _th_voiced(word, w, i) else "TH")
 					i += 2
@@ -893,17 +798,14 @@ static func word_to_phones(word: String) -> Array:
 			# word-initial y is the glide, not the vowel
 			if c == "y" and i == 0:
 				phones.append("Y")
-			# word-final y: AY in a monosyllable (`try`, `sky`, `fly`), IY
-			# otherwise (`every`, `really`, `happy`) - it was IH for all of them
+			# word-final y: AY in a monosyllable (`try`, `sky`, `fly`), IY otherwise (`every`, `happy`)
 			elif c == "y" and last:
 				phones.append("AY" if not _has_vowel_before(w, i) else "IY")
-			# word-final o is the long one: `go`, `no`, `so` (and `goes` reaches
-			# it through the -es stem)
+			# word-final o is the long one: `go`, `no`, `so` (and `goes` reaches it through the -es stem)
 			elif c == "o" and last and w.length() <= 3:
 				phones.append("OW")
-			# soft c / g before e, i, y - tested against the ORIGINAL spelling,
-			# because a dropped silent e is exactly the letter that softens them
-			# (`large`, `change`, `village` lose their trigger otherwise)
+			# soft c / g before e, i, y - tested against the original spelling, because a dropped silent e
+			# is the letter that softens them (`large`, `change`, `village`)
 			elif c == "c" and i + 1 < word.length() and word[i + 1] in "eiy":
 				phones.append("S")
 			elif c == "g" and i + 1 < word.length() and word[i + 1] in "eiy" \
@@ -922,26 +824,24 @@ static func _has_vowel_before(w: String, i: int) -> bool:
 	return false
 
 
-## Is this `th` voiced? Three environments, checked against the ORIGINAL word
-## (so a dropped magic-e still counts):
+## Is this `th` voiced? Three environments, checked against the original word (so a dropped magic-e
+## still counts):
 ##   a function word starting in th-  (the, this, them, those, then, than)
 ##   between two vowels              (father, mother, other, together, weather)
 ##   the `-the$` spelling            (bathe, breathe, clothe, soothe)
 static func _th_voiced(word: String, w: String, i: int) -> bool:
 	if i == 0 and TH_VOICED.has(word):
 		return true
-	# `aeiou`, NOT VOWEL_LETTERS: a preceding `y` is a word-joint far more often
-	# than a real vowel here, and it voiced the `th` in `everything`.
+	# `aeiou`, not VOWEL_LETTERS: a preceding `y` is usually a word joint (`everything`)
 	if i > 0 and i + 2 < w.length():
 		if "aeiou".contains(w[i - 1]) and "aeiou".contains(w[i + 2]):
 			return true
 	return word.ends_with("the") and i + 3 == word.length()
 
 
-## Split a contraction at its apostrophe and pronounce the head through this
-## same pipeline. `'s` reuses the plural's voicing rule, since it is the same
-## clitic. Contractions whose HEAD changes shape (don't, won't, can't) are
-## whole-word lexicon entries instead - `do` + `n't` would give D UW AH N T.
+## Split a contraction at its apostrophe and pronounce the head through this same pipeline. `'s` reuses
+## the plural's voicing rule (same clitic). Contractions whose head changes shape (don't, won't, can't)
+## are whole-word lexicon entries: `do` + `n't` would give D uw ah n t.
 static func _try_clitic(word: String) -> Array:
 	var at := word.rfind("'")
 	if at <= 0 or at >= word.length() - 1:
@@ -963,14 +863,12 @@ static func _try_clitic(word: String) -> Array:
 	return []
 
 
-## Try each suffix in `data/english.yml`: strip the spelling, rebuild a stem
-## (undoubling `stopped -> stop`, restoring a dropped `e` in `hoping -> hope`),
-## pronounce that stem through this same pipeline, then reattach.
+## Try each suffix in `data/english.yml`: strip the spelling, rebuild a stem (undoubling `stopped ->
+## stop`, restoring a dropped `e` in `hoping -> hope`), pronounce that stem through this same pipeline,
+## then reattach.
 ##
-## The stem has to be pronounced BEFORE the suffix can be chosen: whether the
-## `-ed` of `watched` is a syllable, a /t/ or a /d/ depends on the last PHONE of
-## the stem, which the letter rules cannot know from spelling. That dependency
-## is the whole reason a flat rule table produced `watched` as W AE T SH EH D.
+## The stem is pronounced before the suffix is chosen: whether the `-ed` of `watched` is a syllable, a
+## /t/ or a /d/ depends on the stem's last phone, which the letter rules cannot know from spelling.
 static func _try_suffix(word: String) -> Array:
 	for s in _suffixes:
 		var sp := String(s.spelling)
@@ -990,14 +888,12 @@ static func _stem_candidates(base: String, s: Dictionary) -> Array:
 	var out: Array = []
 	var n := base.length()
 	out.append(base)
-	# `hoping -> hope`: the stem's silent e was dropped before the suffix, and
-	# restoring it lets magic-e fire again. Tried SECOND, because trying it
-	# first turned `labeled` into `labele` -> L AE B IY L D; a stem that the
-	# lexicon or the plain rules already know is always the better answer.
+	# `hoping -> hope`: the stem's silent e was dropped before the suffix; restoring it lets magic-e
+	# fire again. Tried second, because trying it first turns `labeled` into `labele`; a stem the
+	# lexicon or the plain rules already know is the better answer.
 	if bool(s.get("restore_e", false)) and n >= 2 and not VOWEL_LETTERS.contains(base[n - 1]):
 		out.append(base + "e")
-	# `stopped -> stop`, `running -> run`: a final consonant was doubled to keep
-	# the preceding vowel short
+	# `stopped -> stop`, `running -> run`: a final consonant doubled to keep the preceding vowel short
 	if bool(s.get("undouble", false)) and n >= 3 and base[n - 1] == base[n - 2] \
 			and not VOWEL_LETTERS.contains(base[n - 1]):
 		out.append(base.substr(0, n - 1))
@@ -1102,70 +998,51 @@ static func _is_dash(t: String) -> bool:
 
 ## Is the terminal mark on token [param at] really the end of a sentence?
 ##
-## A DIALOGUE TAG IS NOT A NEW SENTENCE. Prose attributes speech by closing the quotation
-## and continuing the same sentence in lower case:
+## A dialogue tag is not a new sentence: prose closes the quotation and continues in lower case
+## (`"Do you think so?" you asked.`). The mark inside the quotation belongs to what was said, so a
+## genuine new sentence is told by a capital: a lower-case word after a full stop is a continuation,
+## whether it follows a dialogue tag or an abbreviation this front end failed to expand.
 ##
-##     "Do you think Jesus would do this?" you asked.
-##     "Hmm," you said, the remote still raised.
-##
-## The question mark is inside the quotation because it belongs to what was SAID, not to
-## the sentence containing it - so splitting there put "you asked." on a subtitle card of
-## its own, orphaned from the line it belongs to. Written English has a simple, reliable
-## signal for this and it is not the quotation: a genuine new sentence begins with a
-## CAPITAL. A lower-case word after a full stop is a continuation, whether it follows a
-## dialogue tag or an abbreviation this front end failed to expand.
-##
-## THE PAUSE IS UNAFFECTED, deliberately. A reader does rest at the close of a quotation
-## before the attribution, so `pause_after` and the terminal contour are left exactly as
-## they were - this changes only how the words are GROUPED, which is what the karaoke
-## draws. The voice is untouched.
+## The pause is unaffected: a reader rests at the close of a quotation, so `pause_after` and the
+## terminal contour are unchanged. This only changes how the words are grouped, which is what the
+## karaoke draws.
 static func _ends_sentence(toks: PackedStringArray, at: int) -> bool:
 	if at + 1 >= toks.size():
 		return true
 	var nxt := String(toks[at + 1])
-	# Skip anything that carries no case of its own, so an opening quote or bracket before
-	# the next word does not hide it.
+	# skip anything that carries no case of its own, so an opening quote or bracket does not hide the
+	# next word
 	var i := 0
 	while i < nxt.length() and nxt[i] in "\"\'([" :
 		i += 1
 	if i >= nxt.length():
 		return true
 	var c := nxt[i]
-	# Only a lower-case LETTER continues. A digit, a symbol or a capital all start
-	# something new - "He counted. 5 was missing." is two sentences.
+	# only a lower-case letter continues: a digit, a symbol or a capital starts something new ("He
+	# counted. 5 was missing." is two sentences)
 	return not (c >= "a" and c <= "z")
 
 
-## Words ghost pronounces ITSELF, because eSpeak reads them wrong in EVERY context.
+## Words ghost pronounces itself, because eSpeak reads them wrong in every context.
 ##
-## Each entry is one reading, always. The resolved word is marked `literal`, which makes ghost's
-## own ARPAbet win for that word only - the rest of the sentence still gets eSpeak's transcription,
-## so nothing else about the reading changes.
+## Each entry is one reading. The resolved word is marked `literal`, so ghost's own ARPAbet wins for
+## that word only; the rest of the sentence still gets eSpeak's transcription.
 ##
-## NO HOMOGRAPH IS PICKED HERE. Which of two readings a word takes is its part of speech, and the
-## voice host reads that from the whole sentence (hosts/voice/homographs.py: nltk's tagger, the
-## clause's tense, the reading asked of eSpeak in a frame that forces it). This table had held
-## `lives`, `record` and `records`, each a default flipped by lists of the words beside it - and a
-## pinned word never reaches the host's pass: "Earlier lives leave things lying around" had no
-## listed neighbor and was read as the verb (2026-10-27, north-star ch43). The host's pass reads
-## that one, and every sentence these entries were written for, right (hosts/voice/test_homographs.py).
+## No homograph is picked here: which of two readings a word takes is its part of speech, and the voice
+## host reads that from the whole sentence (hosts/voice/homographs.py; hosts/voice/test_homographs.py).
+## A word pinned here never reaches the host's pass.
 ##
 ## Add sparingly and only where eSpeak is measurably wrong whatever the sentence: a bad entry
-## mispronounces a word that was previously fine, which is worse than the occasional miss.
+## mispronounces a word that was fine.
 const SPEAK_AS := {
-	# HUMS. eSpeak spells these out instead of humming them - measured, it returns
-	#   "hmm" -> həm ("hem"),  "hm" -> ˌeɪtʃˈɛm ("aitch em"),  "mmm" -> ˌɛmˌɛmˈɛm ("em em em").
-	#
-	# A hum is NASAL MURMUR: nearly all of its energy sits below 500 Hz, with no vowel
-	# formants above it. Measured on this voice, share of spectral energy under 500 Hz -
-	#   "M M"    80.6%  (0.155 s)   <- a hum
+	# hums: eSpeak spells these out ("hmm" -> həm, "hm" -> ˌeɪtʃˈɛm, "mmm" -> ˌɛmˌɛmˈɛm). A hum is nasal
+	# murmur: nearly all its energy is below 500 Hz with no vowel formants above it. Share of spectral
+	# energy under 500 Hz on this voice:
+	#   "M M"    80.6%  (0.155 s)   a hum
 	#   "M"      90.7%  (0.064 s)   right shape, too short to register
 	#   "HH M"   41.5%              the HH puts 57% into 0.5-2 kHz: heard as "em"
-	#   "HH AH M" 32.2%             indistinguishable from the real word "hum" (28.0%)
-	# So no H and no vowel, and doubled because the voice has no syllabic m - a single
-	# one is over before it reads as anything. This is the second attempt: "HH M" was
-	# chosen for having no vowel, which was right in principle, but the H alone carries
-	# enough mid-band energy to be heard as one.
+	#   "hh ah m" 32.2%             indistinguishable from the word "hum" (28.0%)
+	# So no H and no vowel, and doubled because the voice has no syllabic m.
 	"hm": {"base": "M M"},
 	"hmm": {"base": "M M"},
 	"hmmm": {"base": "M M M"},
@@ -1174,9 +1051,9 @@ const SPEAK_AS := {
 }
 
 
-## The words ghost pronounces itself, pinned (`literal`) so the neural voice says them as written:
-## a name, then a word of [constant SPEAK_AS]. A homograph is left to the voice host, which reads its
-## part of speech from the sentence.
+## The words ghost pronounces itself, pinned (`literal`) so the neural voice says them as written: a
+## name, then a word of [constant SPEAK_AS]. A homograph is left to the voice host, which reads its part
+## of speech from the sentence.
 static func _pin_words(sentences: Array) -> void:
 	for s in sentences:
 		var sent: Array = s
@@ -1185,11 +1062,9 @@ static func _pin_words(sentences: Array) -> void:
 			var key := String(w.get("text", "")).to_lower()
 			if bool(w.get("literal", false)):
 				continue                      # an authored [L IH V Z] outranks every table
-			# A NAME beats everything else here. These are words no dictionary holds -
-			# invented ones, coined ones, proper nouns - so there is no reading to weigh
-			# them against; whatever the file says is simply what they are called.
-			# ITS POSSESSIVE TOO: "Libra's" is one token, so it missed the table and eSpeak read
-			# the name inside it its own way - the wrong one the entry exists for.
+			# a name beats everything else here: these are words no dictionary holds, so there is no
+			# reading to weigh them against. Its possessive too: "Libra's" is one token, which would miss
+			# the table.
 			var owner := key.trim_suffix("'s")
 			if _names.has(owner):
 				var nm := _parse_cmu(String(_names[owner]))

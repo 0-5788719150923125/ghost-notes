@@ -38,10 +38,10 @@
 # or for a SceneTree gate `timeout 600 godot --headless --path . --script res://tests/<folder>/<name>.gd`),
 # else 300 s; anything after it on a probe's line is handed to the probe as its args.
 #
-# THE LONGEST GATES START FIRST (--jobs above 1), by how long each took the last time it passed
+# The longest gates start first (--jobs above 1), by how long each took the last time it passed
 # (dist/check/.times, written by every run; CI carries it from run to run in a cache). Left in
 # the order they are found, the two longest gates started near the end and ran by themselves for
-# almost half the run, three of four cores idle - measured on a runner, 2026-10-13: 1040 s of
+# almost half the run, three of four cores idle - measured on a runner: 1040 s of
 # gates, 260 s at best four at a time, 372 s taken. A gate with no time yet starts before the
 # timed ones, the longest timeout first: a new gate is the one most worth an early answer. The
 # last lines of a run say what the gates added up to and what that is at best over the cores,
@@ -125,7 +125,7 @@ in_list() {  # in_list <word> <comma-or-space list>
 	[[ "$l" == *",$w,"* ]]
 }
 is_gpu() { in_list "$1" "${GPU[*]}"; }
-## WHERE EACH GATE IS: name -> tests/<folder>/<name>.gd (or tests/<name>.gd for a cross-cutting one).
+## Where each gate is: name -> tests/<folder>/<name>.gd (or tests/<name>.gd for a cross-cutting one).
 declare -A path_of=()
 for f in tests/*_check.gd tests/*/*_check.gd; do
 	[ -f "$f" ] || continue
@@ -238,7 +238,7 @@ how() {
 	esac
 }
 
-## HOW LONG EACH GATE TOOK the last time it passed: `<gate> <seconds>` a line in $OUT/.times.
+## How long each gate took the last time it passed: `<gate> <seconds>` a line in $OUT/.times.
 ## Read here, kept current as gates finish, written back when the run ends - a run cut short
 ## still keeps what it measured. Only a pass is a time worth keeping: a gate that failed fast,
 ## or ran into its timeout, says nothing about how long it takes.
@@ -249,8 +249,8 @@ if [ -f "$OUT/.times" ]; then
 	done <"$OUT/.times"
 fi
 
-## THE ORDER GATES START IN when several run at once: `parse` and `docs` first and alone, then
-## THE LONGEST FIRST, so none of them is left running alone at the end with the other cores idle -
+## The order gates start in when several run at once: `parse` and `docs` first and alone, then
+## The longest first, so none of them is left running alone at the end with the other cores idle -
 ## by the time each took when it last passed, and a gate with no time yet before all of those, the
 ## longest timeout first (see the header). Prints one gate a line.
 start_order() {
@@ -280,7 +280,7 @@ if [ "$list" -eq 1 ]; then
 fi
 
 mkdir -p "$OUT"
-# ONE RUN AT A TIME: two runs would write the same logs. Probes themselves may overlap with
+# One run at a time: two runs would write the same logs. Probes themselves may overlap with
 # anything (each boots its own scene), so this guards only this script's own output.
 exec 9>"$OUT/.lock"
 if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
@@ -372,7 +372,7 @@ settle() {
 	if [ "$rc" -eq 0 ] && grep -q 'SHADER ERROR' "$log"; then
 		rc=98
 	fi
-	# A RUNTIME ERROR BEHIND A PASS IS A FAILURE. A GDScript error prints and carries on, so the
+	# A runtime error behind a pass is a failure. A GDScript error prints and carries on, so the
 	# check that hit one ended early and the gate went on to print its verdict over everything it
 	# skipped - clown_face_check set two members that no longer existed and passed for a week with
 	# its Steadiness check never reached. A gate that makes runtime errors on purpose (a control)
@@ -466,7 +466,7 @@ fi
 
 echo
 t_total=$(( $(date +%s) - t_all ))
-## WHAT THE CORES WERE GIVEN, so a run that is not using them shows it: the gates added up, what
+## What the cores were given, so a run that is not using them shows it: the gates added up, what
 ## that is at best over this many at a time, and the one gate no number of cores makes shorter.
 clock() { printf '%dm%02ds' $(($1 / 60)) $(($1 % 60)); }
 if [ "$jobs" -gt 1 ] && [ "$work" -gt 0 ]; then

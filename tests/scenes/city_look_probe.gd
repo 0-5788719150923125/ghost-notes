@@ -1,21 +1,16 @@
 extends Node
 
-## NOT a gate - it asserts nothing. It renders the two CITY scenes and writes PNGs, because a
-## question like "are the buildings standing up straight" is answered by looking at a frame and
-## not by reading the code that placed them. (vapor_look_probe.gd and clown_look_probe.gd exist
-## for the same reason, and the same reason again: visual fixes argued from the source have been
-## wrong about things a rendered frame showed in a second.)
+## Not a gate (asserts nothing): renders the two city scenes and writes PNGs, since whether buildings
+## stand up straight is answered by looking at a frame. See also vapor_look_probe.gd and
+## clown_look_probe.gd.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/city_look_probe.gd 300 \
 ##       --out /tmp/city --scenes terrain_city,spires --seeds 3,11,404 --times 16
 ##
-## GHOST_PROBE_GPU is not optional: these scenes reach the Spectrum and Director autoloads (so
-## they need a real boot) and this reads pixels back (so it needs a real renderer, never
-## --headless, whose dummy driver returns nothing from a viewport readback).
-##
-## It also prints the LEAN ON OFFER: how far off vertical the terrain normal at each built plot
-## would tip a building, under the rule that used to place them. That is the size of the defect
-## the picture is being checked for - the picture itself is what says whether it is still there.
+## GHOST_PROBE_GPU is required: the scenes reach the Spectrum and Director autoloads (a real boot) and
+## this reads pixels back (a real renderer, never --headless, whose dummy driver reads back nothing).
+## It also prints the lean on offer: how far off vertical the terrain normal at each built plot would
+## tip a building, so the picture can be judged against it.
 
 const W := 1280
 const H := 720
@@ -77,12 +72,9 @@ func _shoot(name: String, sv: int) -> void:
 		while t < target:
 			sc.update(_features(t), DT)
 			t += DT
-		# THE SETTLE MUST KEEP TICKING THE SCENE, and this is the whole probe. [FrameForge] relaunches
-		# its worker from kick(), which is called by update() - so a probe that runs the sim in a
-		# tight loop and THEN waits for frames stops kicking, and the forge sits on whichever packet
-		# it happened to finish first. That is a photograph of the scene at t=0 with the caption t=16.
-		# It is not hypothetical: the same seed at the same moment came out as a dense city in one
-		# run and as bare terrain in the next, purely on worker timing.
+	# The settle must keep ticking the scene: [FrameForge] relaunches its worker from kick(), which
+	# update() calls, so running the sim in a tight loop and then waiting for frames leaves the
+	# forge on whichever packet it finished first (a photograph of t=0 captioned t=16).
 		for _i in 24:
 			sc.update(_features(t), DT)
 			t += DT
@@ -92,20 +84,14 @@ func _shoot(name: String, sv: int) -> void:
 		img.save_png(path)
 		_wrote += 1
 		print("    %s  (mean luma %.3f)" % [path, _luma(img)])
-		# AFTER the capture, and after the sim: the city grows in, so measured at t=0 no plot has
-		# built and it reported "0 built plots" for a full city.
+	# After the capture and the sim: the city grows in, so at t=0 no plot has built.
 		print("    lean on offer: %s" % _lean_available(sc, name))
 	vp.queue_free()
 	await get_tree().process_frame
 
 
-## What the LEAN would be if the terrain normal were followed - which is the rule that used to
-## place these buildings, sampled at the plots that actually built. This reports the terrain, not
-## the scene: whether the scene still follows it is what the PICTURE shows.
-##
-## It is written this way on purpose. The first cut printed "0.00 deg off vertical by
-## construction", which is not a measurement - it printed the same line for the control render
-## with the lean restored, and a check that cannot fail is worse than no check.
+## The lean if the terrain normal were followed, sampled at the plots that built. It reports the
+## terrain, not the scene; whether the scene follows it is what the picture shows.
 func _lean_available(sc, name: String) -> String:
 	var worst := 0.0
 	var acc := 0.0

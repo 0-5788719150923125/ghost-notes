@@ -1,15 +1,16 @@
-"""ONE LAYER'S STROKES, OPTIMIZED (the user, 2026-11-09: "I agree, this better, but needs optimization"; DiffVG, Li et al. 2020;
-Stylized Neural Painting, Zou et al. 2021): a layer is now a small, exact target - its region and its step's colors over the canvas as it
-stands - so its strokes are found by gradient descent through a soft model of the very strokes the lab lays (marks.brush_stroke: a path,
-a width at each point, how thick, how soft its belly), never by rules that fit one element and break the next.
+"""One layer's strokes, optimized (DiffVG, Li et al. 2020; Stylized Neural Painting, Zou et al. 2021): a layer is a small,
+exact target - its region and its step's colors over the canvas as it stands - so its strokes are found by gradient
+descent through a soft model of the very strokes the lab lays (marks.brush_stroke: a path, a width at each point, how
+thick, how soft its belly), never by rules that fit one element and break the next.
 
-1. START from the layer painted by numbers: its step's colors gathered into a few paints (layers_paint.paints_for), each part's contours
-   a stroke apiece, as wide as the brush that suits the part.
-2. OPTIMIZE paths, widths, thickness and softness together (Adam, on the GPU), every stroke laid in order over the canvas as the show lays
-   paint (pre-multiplied, decoded `pow 2.2`), against the step's picture in OKLab - fine and coarse - with paths kept smooth, widths
-   within their brush's, and a little cost on paint so a stroke that earns nothing fades out.
-3. KEEP what earns its place: a stroke gone thin is dropped; the rest are laid with the real renderer, a layer's parts together
-   (`optimize_layer`): the broadest brush first, through its paints lightest first, then the next brush - the hand's time counted.
+1. Start from the layer painted by numbers: its step's colors gathered into a few paints (layers_paint.paints_for),
+   each part's contours a stroke apiece, as wide as the brush that suits the part.
+2. Optimize paths, widths, thickness and softness together (Adam, on the GPU), every stroke laid in order over the canvas
+   as the show lays paint (pre-multiplied, decoded `pow 2.2`), against the step's picture in OKLab - fine and coarse -
+   with paths kept smooth, widths within their brush's, and a little cost on paint so a stroke that earns nothing fades out.
+3. Keep what earns its place: a stroke gone thin is dropped; the rest are laid with the real renderer, a layer's parts
+   together (`optimize_layer`): the broadest brush first, through its paints lightest first, then the next brush - the
+   hand's time counted.
 """
 import numpy as np
 import torch
@@ -26,27 +27,24 @@ OPT_SIDE = 240        # the optimized crop's longest side (pixels): finer than t
 POINTS = 6            # control points a stroke
 EDGE = 0.25           # mm, a stroke's outer edge (marks.brush_stroke's)
 TOOL_HALF = (("liner", 1.0), ("round", 3.0), ("flat", 5.0), ("blender", 8.0))
-# A LONG THIN PART'S BASE FIRST (the user, 2026-11-10: "An intelligent model should know: it can draw a single line, pull it all the way
-# through, as a base color. And then it can correct itself, painting other colors on top of that"): a part no wider than BASE_HALF_MOST
-# (mm, half) and BASE_LONG times longer than it is wide - a tear, a streak - is drawn along its middle in the paint most of it is, in pulls
-# up to BASE_PULL mm, and its other colors only correct it. Painted by numbers, 732687's three tears had been 17 runs of one brush in one
-# paint, five of them under 3.5 s each, every one a rinse, a blot and a dip.
+# A long thin part's base first: a part no wider than BASE_HALF_MOST (mm, half) and BASE_LONG times longer than it is wide - a
+# tear, a streak - is drawn along its middle in the paint most of it is, in pulls up to BASE_PULL mm, and its other colors
+# only correct it (painted by numbers it would be many short runs of one brush in one paint, each a rinse, a blot and a dip).
 BASE_HALF_MOST = 4.0
 BASE_LONG = 4.0
 BASE_PULL = 45.0
-# A BRUSH IN A PAINT IS TAKEN UP ONLY FOR WORK WORTH THE TRIP (the user: "the model will pick yellow, make two marks with yellow, then go
-# through the whole process of grabbing green ... half the video is just watching the brushes change their color"): a run of one brush
-# in one paint worth under GROUP_LEAST seconds of painting (each pull a second and its length at PULL_SPEED mm/s - a change of paint costs
-# the show about 14 s, rinsed, blotted and dipped) is laid by another run: its paint's run with the most work, in whichever brush, else a
-# run worth its trip in a shade no further than MERGE_COLOR_MOST (OKLab x100) - else it stays, a color of its own: merged as far as 25,
-# 732687's diamond had lost its olive to its plum and its socket its yellow ring. Then the layer's strokes found again.
+# A brush in a paint is taken up only for work worth the trip: a run of one brush in one paint worth under GROUP_LEAST seconds
+# of painting (each pull a second and its length at PULL_SPEED mm/s - a change of paint costs the show about 14 s, rinsed,
+# blotted and dipped) is laid by another run: its paint's run with the most work, in whichever brush, else a run worth its
+# trip in a shade no further than MERGE_COLOR_MOST (OKLab x100) - else it stays, a color of its own (merged as far as 25,
+# a part loses its minor colors). Then the layer's strokes found again.
 GROUP_LEAST = 12.0
 PULL_SPEED = 14.0
 MERGE_COLOR_MOST = 12.0
 # ...and a correction found where error remains is a pull along the place's own length, up to this long (mm).
 REFINE_PULL = 30.0
-# A MARK THAT SHOWS: a crisp part's stroke laid at least this strong (a soft part's glazes at 0.06) - the optimizer's faint dabs at a tenth
-# of a coat had been the brush touching the face and leaving nothing anyone could see (feedback 0013).
+# A mark that shows: a crisp part's stroke laid at least this strong (a soft part's glazes at 0.06) - fainter dabs are the
+# brush touching the face and leaving nothing anyone could see.
 TH_SHOWS = 0.25
 
 _M1 = torch.tensor([[0.4122214708, 0.5363325363, 0.0514459929], [0.2119034982, 0.6806995451, 0.1073969566],
@@ -102,8 +100,8 @@ class LayerOpt:
 
     def setup(self):
         p, sl = self.p, self.box
-        # (...A LAYER PAINTS ONLY ITS OWN REGION: outside it the target is the canvas as it stands, so a stroke that strays is a cost -
-        # judged against the step there, strokes had been laid round a closed eye to match the step's own redrawn shading)
+        # (...a layer paints only its own region: outside it the target is the canvas as it stands, so a stroke that strays is a
+        # cost - judged against the step there, strokes would be laid to match the step's own redrawn shading)
         inside = ndimage.gaussian_filter(ndimage.binary_dilation(self.region[sl], iterations=2).astype(np.float32), 1.0)[..., None]
         tgt = dec(self.target[sl]) * inside + p.cv.shown(sl) * (1 - inside)
         self.T = torch.tensor(self._down(tgt), device=DEV)
@@ -111,7 +109,7 @@ class LayerOpt:
         self.pre0 = torch.tensor(self._down(p.cv.pre[sl]), device=DEV)
         self.alp0 = torch.tensor(self._down(p.cv.alp[sl]), device=DEV)
         self.bare = torch.tensor(p.cv.bare_lin, dtype=torch.float32, device=DEV)
-        # (...never judged on the face's own rim: the picture's dark edge there is no paint, and strokes had been laid to match it)
+        # (...never judged on the face's own rim: the picture's dark edge there is no paint)
         inner = ndimage.binary_erosion(p.ref.face, iterations=int(2.5 * PX))
         face = self._down(inner[sl].astype(np.float32)) > 0.5
         near = ndimage.binary_dilation(self.region[sl], iterations=int(1.5 * PX))
@@ -136,7 +134,7 @@ class LayerOpt:
         near = _majority(np.where(reg, near, -1), 7, reg)
         strokes = []
         order = sorted(range(len(self.names)), key=lambda j: -oklab(dec(self.cols[j]))[0])
-        # ...A LONG THIN PART'S BASE FIRST ([BASE_LONG]): along its middle in the paint most of it is, as wide as it is
+        # ...a long thin part's base first ([BASE_LONG]): along its middle in the paint most of it is, as wide as it is
         base = []
         based = np.zeros(reg.shape, bool)
         long_parts = np.zeros(reg.shape, bool)
@@ -152,8 +150,8 @@ class LayerOpt:
                 continue
             votes = np.bincount(near[bx][part & (near[bx] >= 0)], minlength=len(self.names))
             j0 = int(np.argmax(votes))
-            # (...IN TWO PAINTS AT MOST, its base and the next most of it: every other color of it the nearer of those two's - a tear's dry
-            # streaks had cut its length into olive and plum pieces each too short to pull, and dabbed at between)
+            # (...in two paints at most, its base and the next most of it: every other color of it the nearer of those two's -
+            # a tear's dry streaks would cut its length into pieces each too short to pull, and dabbed at between)
             two = [j0] + [j for j in np.argsort(-votes) if j != j0 and votes[j] > 0][:1]
             if len(two) == 2:
                 sub = near[bx]
@@ -179,8 +177,7 @@ class LayerOpt:
                     dt = ndimage.distance_transform_edt(np.pad(part, 1))[1:-1, 1:-1]
                     thick = dt.max() / PX
                     tool, hw = tool_for(max(min(thick, 5.0), 0.6))
-                    # (...A LONG THIN PIECE OF ANY PAINT PULLED DOWN ITS MIDDLE, as its part's base is - a tear's olive edge one pull,
-                    # where its outline had been drawn round as a ring)
+                    # (...a long thin piece of any paint pulled down its middle, as its part's base is)
                     sk = lines_mod._thin(part)
                     if thick <= BASE_HALF_MOST and sk.sum() / PX >= BASE_LONG * 2.0 * thick:
                         strokes.extend(self._pulls(sk, dt, bx, thick, j, tool, hw, base=False))
@@ -234,10 +231,10 @@ class LayerOpt:
     # --- the order they are laid in, and judged in --------------------------------------------------------------------------------
 
     def key_of(self, s):
-        """WHERE STROKE `s` IS LAID IN ITS LAYER ([optimize_layer] lays every part's in this order, and each part is judged in it): THE
-        BROADEST BRUSH FIRST, then the next - as a painter works a layer broad to fine (a paint at a time with the brushes taken up in turn
-        had made a layer forty acts); in each brush the paint its layer's base is laid in first ([BASE_LONG]), then the rest lightest
-        first; a base before what corrects it. Its place in its run is its tour's ([_ordered])."""
+        """Where stroke `s` is laid in its layer ([optimize_layer] lays every part's in this order, and each part is judged in it): the
+        broadest brush first, then the next - as a painter works a layer broad to fine; in each brush the paint its layer's base is
+        laid in first ([BASE_LONG]), then the rest lightest first; a base before what corrects it. Its place in its run is its tour's
+        ([_ordered])."""
         nm = self.names[s["paint"]]
         return (-s["hw"], 0 if self.base_of_tool.get(s["tool"]) == nm else 1, -float(oklab(dec(self.cols[s["paint"]]))[0]),
                 0 if s.get("base") else 1)
@@ -352,7 +349,7 @@ class LayerOpt:
         return fine + 0.5 * coarse + 2.0 * smooth + 3.0 * paint, fine
 
     def refine(self, add=12, iters=160):
-        """WHERE ERROR REMAINS, MORE STROKES (e-David's loop, inside one layer): the places still furthest from the step's picture, each a
+        """Where error remains, more strokes (e-David's loop, inside one layer): the places still furthest from the step's picture, each a
         short stroke in the paint nearest the picture there, as wide as the place - then all of them optimized again."""
         with torch.no_grad():
             shown = self.render()
@@ -378,9 +375,8 @@ class LayerOpt:
             blob = e > e[k] * 0.5
             lbl, _ = ndimage.label(blob)
             part = lbl == lbl[k]
-            # (...ALONG THE PLACE'S OWN LENGTH, as wide as it is across (the user, 2026-11-10: "it doesn't need to approach every task one
-            # dot of paint at a time"): a long miss beside a tear one pull down it, where a dab across its middle had left the rest to the
-            # next round - 732687's tears had 46 such dabs in olive)
+            # (...along the place's own length, as wide as it is across: a long miss beside a tear is one pull down it, not a
+            # string of dabs)
             py, px_ = np.nonzero(part)
             c = (np.array([px_.mean(), py.mean()]) + 0.5) / self.opx + self.origin
             if len(py) >= 3:
@@ -457,7 +453,7 @@ class LayerOpt:
 
 
 def base_paints(parts):
-    """EACH BRUSH'S BASE PAINT over a layer's parts (`[(strokes, paint names)]`): the paint its long thin parts' bases are laid in most
+    """Each brush's base paint over a layer's parts (`[(strokes, paint names)]`): the paint its long thin parts' bases are laid in most
     with it ([BASE_LONG]), by their length - none for a brush that lays no base."""
     by = {}
     for strokes, names in parts:
@@ -477,7 +473,7 @@ def _pull_time(pts):
 
 
 def consolidate(p, los, iters):
-    """EVERY RUN OF ONE BRUSH IN ONE PAINT WORTH ITS TRIP ([GROUP_LEAST]) over a layer's parts `los`: a run worth less laid by a run already
+    """Every run of one brush in one paint worth its trip ([GROUP_LEAST]) over a layer's parts `los`: a run worth less laid by a run already
     taken up - the same paint in the brush nearest its width, else the nearest paint in the same brush (or in any, where the brush lays no
     other) within MERGE_COLOR_MOST - else left a color of its own; the parts changed found again. -> (strokes moved, strokes dropped: none)."""
     halves = dict(TOOL_HALF)
@@ -500,7 +496,7 @@ def consolidate(p, los, iters):
         big = {k: v for k, v in work.items() if k not in small}
         if not big:
             # (...a layer of small runs alone: the one its bases are most of kept - a base is what the part is - else its largest, the
-            # rest laid by it; a tear's olive corrections, outweighing its black base, had turned the base olive)
+            # rest laid by it)
             top = max(work, key=lambda k: (based.get(k, 0.0), work[k]))
             big = {top: work[top]}
             small.discard(top)
@@ -555,7 +551,7 @@ def consolidate(p, los, iters):
 
 
 def optimize_layer(p, specs, target_srgb, log=print, iters=260, rounds=1):
-    """A LAYER'S BROAD PARTS (`specs`: `[(region, paint names, soft)]`) painted toward `target_srgb`: each part's strokes optimized on
+    """A layer's broad parts (`specs`: `[(region, paint names, soft)]`) painted toward `target_srgb`: each part's strokes optimized on
     its own, against the canvas as the layer finds it, in the order the layer lays them ([LayerOpt.key_of]: broad to fine, each brush's
     base paint first, then lightest first, each run toured) - every run worth its trip ([consolidate]) - then all of them laid together in
     that order, and each soft part worked over wet after. Words."""

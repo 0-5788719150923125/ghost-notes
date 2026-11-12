@@ -1,11 +1,10 @@
 extends Window
 class_name PictureWindow
 
-## PictureWindow - ONE PICTURE AT FULL SIZE, in a window of its own: the picture, the words it was made from under it, and
-## a bar - its versions stepped through (‹ previous, "version 2 of 3", next ›), then whatever its owner adds (delete the
-## one shown, Regenerate, Import…). What a click on a picture opens on the Pictures card ([IllustrationPanel]) and on the
-## YouTube card's painted thumbnail ([YouTubeCard]): one window, where each had grown its own. Escape or the window's close
-## hides it.
+## PictureWindow - one picture at full size, in a window of its own: the picture, the words it was made
+## from under it, and a bar - its versions stepped through, then whatever its owner adds (delete the one
+## shown, Regenerate, Import...). A click on a picture opens it on the Pictures card ([IllustrationPanel])
+## and on the YouTube card's painted thumbnail ([YouTubeCard]). Escape or the window's close hides it.
 
 
 func _init() -> void:
@@ -16,10 +15,10 @@ func _init() -> void:
 			hide())
 
 
-## WHAT IT HOLDS: the picture at [param path], titled [param heading], [param words] under it; then the bar - "version
-## [param at] + 1 of [param count]" (or [param counted]'s word for what is stepped through) and [param note] after it, between a ‹
-## and a › that call [param step] with -1 or 1 (left out where [param step] is not valid) - and [param extras], buttons its owner
-## made, after them.
+## What it holds: the picture at [param path], titled [param heading], [param words] under it; then the bar -
+## "version [param at] + 1 of [param count]" (or [param counted]'s word for what is stepped through) and
+## [param note] after it, between a "‹" and a "›" that call [param step] with -1 or 1 (left out where
+## [param step] is not valid) - and [param extras], buttons its owner made, after them.
 func fill(heading: String, path: String, words: String, at: int, count: int, note := "", step := Callable(),
 		extras: Array = [], counted := "version") -> void:
 	clear()

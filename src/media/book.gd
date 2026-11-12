@@ -1,77 +1,60 @@
 extends Medium
 class_name BookMedium
 
-## BookMedium - the reading as a printed novel, open on a desk, with the words lit as they
-## are spoken.
+## BookMedium - the reading as a printed novel, open on a desk, with the words lit as they are spoken.
 ##
-## Where the comic draws SCENES onto pages, this draws the TEXT: the chapter is typeset once
-## into real pages ([BookLayout]) and the narration is followed across them by a soft swash
-## under the word being said - a finger moving along a line - so the picture draws the viewer
-## into the story rather than into the video. It replaces the karaoke line entirely
-## ([method bind_captions] answers true, and main hides the overlay), because a subtitle
-## floating over a page of the same words would be the same sentence printed twice.
+## Where the comic draws scenes onto pages, this draws the text: the chapter is typeset once into real
+## pages ([BookLayout]) and the narration is followed across them by a soft swash under the word being
+## said. It replaces the karaoke line ([method bind_captions] answers true and main hides the overlay).
 ##
-## NO SCENES. The Director still keeps its schedule, but a cut hands over to one hidden
-## placeholder this medium owns ([method take_over]), so nothing is built and nothing draws.
-## A book that later wants scenes in its plates would cast them the way the comic does.
+## No scenes: the Director still keeps its schedule, but a cut hands over to one hidden placeholder this
+## medium owns ([method take_over]), so nothing is built and nothing draws.
 ##
-## REAL 3D. The stage SubViewport has a world of its own, so the book is geometry in it: a
-## Camera3D, a lamp, a desk, a cloth cover, two page stacks and three leaves (the left page,
-## the right page, and the one being turned), each leaf a subdivided plane bent by
-## `LEAF_SHADER` into the gutter curve and, while turning, rolled over the spine with a curl.
-## Each visible page is a SubViewport drawn by [BookMedium.PageCanvas]; a page is redrawn
-## only when what is printed on it or lit on it changes, and otherwise its render target is
-## left alone. Four page targets cover the worst case, a turn, where the old left, the old
-## right (the leaf's front), the new left (its back) and the new right are all in shot.
+## Real 3D: the stage SubViewport has a world of its own, so the book is geometry in it: a Camera3D, a
+## lamp, a desk, a cloth cover, two page stacks and three leaves (the left page, the right page, and the
+## one being turned), each leaf a subdivided plane bent by `LEAF_SHADER` into the gutter curve and, while
+## turning, rolled over the spine with a curl. Each visible page is a SubViewport drawn by
+## [BookMedium.PageCanvas], redrawn only when what is printed or lit on it changes. Four page targets
+## cover the worst case, a turn (old left, old right, new left and new right all in shot).
 ##
-## A GENTLE CAMERA, deliberately unlike the comic's. It holds a wide view of the spread most
-## of the time, drifts toward the page and then the lines being read, and changes framing on
-## a slow schedule drawn from the session seed and the show clock, so an export frames the
-## same shots as the live reading. Every channel is a critically damped spring: nothing it
-## does can be a jump. `Director.camera` scales how far and how often it moves.
+## A gentle camera, unlike the comic's: a wide view of the spread most of the time, drifting toward the
+## page and then the lines being read, changing framing on a slow schedule drawn from the session seed and
+## the show clock (so an export frames the same shots). Every channel is a critically damped spring, so
+## nothing is a jump. `Director.camera` scales how far and how often it moves.
 
 ## World size of one page: 1 wide, 1.5 tall, spine along z at x = 0, the reader at +z.
 const PAGE_H := BookLayout.PAGE.y / BookLayout.PAGE.x
-## Seconds a leaf takes to turn, and how long before the new spread's first word it starts -
-## the eye is on the new page as the voice reaches it, not a beat behind.
+## Seconds a leaf takes to turn, and how long before the new spread's first word it starts.
 const TURN_TIME := 1.6
 const TURN_LEAD := 1.1
-## THE CAMERA'S ARC OVER ONE SPREAD. Every spread opens WIDE on both pages, closes in on the
-## text being read as the reading gets under way, and pulls back out to wide before the
-## leaf turns - so a page is introduced, read, and let go. It replaced a shot schedule that
-## cut between wide, page and close on a clock, which zoomed in and out several times on
-## one unchanging spread for no reason ("that zooming is a pointless action when the page
-## hasn't changed"). `ARC_IN` / `ARC_OUT` are the shares of the spread's words spent closing
-## in and pulling back; the spring does the easing.
+## The camera's arc over one spread: it opens wide on both pages, closes in on the text being read as the
+## reading gets under way, and pulls back to wide before the leaf turns. `ARC_IN` / `ARC_OUT` are the
+## shares of the spread's words spent closing in and pulling back; the spring does the easing.
 const WIDE := {"dist": 5.3, "pitch": 66.0}
 const LOCAL := {"dist": 3.3, "pitch": 71.0}
 const ARC_IN := 0.12
 const ARC_OUT := 0.12
 ## The camera springs' time constant at Camera 1. Slow, on purpose.
 const SPRING_TAU := 3.2
-## The slow angle: each spread's own yaw (+/- degrees), a wander over minutes on top, a
-## whisper of roll, and how many times slower than the framing the yaw settles.
+## The slow angle: each spread's own yaw (+/- degrees), a wander over minutes on top, a whisper of roll,
+## and how many times slower than the framing the yaw settles.
 const YAW_SPREAD := 9.0
 const YAW_WANDER := 3.0
-## Clockwise/counter-clockwise roll and forward/back tilt, the same way: an offset per spread
-## plus a slow wander. Degrees; all through the slow spring, so none of it reads as a move.
+## Roll and forward/back tilt, the same way: an offset per spread plus a slow wander. Degrees, through the
+## slow spring.
 const ROLL_SPREAD := 2.5
 const ROLL_WANDER := 1.5
 const TILT_SPREAD := 2.5
 const TILT_WANDER := 1.8
 const ANGLE_SLOW := 3.0
-## A LONG LENS. A wide one stood close makes every downstroke on the page converge on one
-## vanishing point, so a line of roman type leans like italics toward the edges of the frame -
-## the whole page reads as emphasis. Standing back with a narrow field keeps print upright.
+## A long lens: a wide one stood close makes every downstroke converge on one vanishing point, so roman
+## type leans like italics toward the frame's edges. A narrow field standing back keeps print upright.
 const VFOV := 20.0
-## THE HIGHLIGHT IS A TRAIL THAT DECAYS IN TIME. Each word lights in its own rainbow hue the
-## moment it is spoken and fades back to ink over [constant TRAIL_TAU] seconds, whatever the
-## sentence and paragraph boundaries - so the color follows the voice down the page and
-## cools behind it. The first cut colored the SENTENCE, with hues drifting over time: every
-## sentence reset the color, and a long one sat bright and shifting for as long as it was on
-## screen ("there is no continuity"). A word's hue is FIXED by its position, so a word never
-## changes color, it only fades. Words not yet spoken are plain ink. Darkened from the
-## overlay's values to read as ink on paper.
+## The highlight is a trail that decays in time: each word lights in its own rainbow hue the moment it is
+## spoken and fades back to ink over [constant TRAIL_TAU] seconds, whatever the sentence boundaries, so the
+## color follows the voice down the page and cools behind it. A word's hue is fixed by its position (it
+## only fades); words not yet spoken are plain ink. Darkened from the overlay's values to read as ink on
+## paper.
 const HUE_STEP := 0.011      # hue per LETTER along the text - the subtitles' HUE_SPAN
 const TRAIL_TAU := 2.6       # seconds for a spoken word's color to fall to about a third
 
@@ -262,7 +245,7 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = Color(0.55, 0.5, 0.45)
 	_env.ambient_light_energy = 0.32
-	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	# The tonemapper, as the Look has it ([Tonemaps]): Filmic unless a note picks another.
 	Tonemaps.dress(_env, 1.0)
 	_env.adjustment_enabled = true
 	_cam = Camera3D.new()
@@ -271,8 +254,7 @@ func _build_world() -> void:
 	_cam.far = 80.0
 	_cam.environment = _env
 	_root3.add_child(_cam)
-	# THE LAMP. One warm pool of light on the book, falling off across the desk into dark, is
-	# most of what makes this read as someone reading rather than as a document on a screen.
+	# The lamp: one warm pool of light on the book, falling off across the desk into dark.
 	_lamp = SpotLight3D.new()
 	_lamp.light_color = Color(1.0, 0.86, 0.68)
 	_lamp.light_energy = 5.2
@@ -295,9 +277,8 @@ func _build_world() -> void:
 	dm.size = Vector2(24.0, 24.0)
 	desk.mesh = dm
 	var dmat := StandardMaterial3D.new()
-	# DIRT, not wood grain: soft gaussian blotches over a finer mottle, low contrast, so the
-	# desk stops reading as a flat color without becoming a surface anyone looks at. The
-	# texture sits around mid-gray, which is why the albedo is set at twice the wanted brown.
+	# Dirt, not wood grain: soft gaussian blotches over a finer mottle, low contrast. The texture sits
+	# around mid-gray, so the albedo is set at twice the wanted brown.
 	dmat.albedo_color = Color(0.40, 0.24, 0.15)
 	dmat.albedo_texture = _grime(0x5EED, 0.02, 5, 0.16)
 	dmat.uv1_scale = Vector3(8.0, 8.0, 1.0)
@@ -309,15 +290,15 @@ func _build_world() -> void:
 	desk.position = Vector3(0.0, -0.075, 0.0)
 	_root3.add_child(desk)
 
-	# THE CASE IN TWO HALVES, because the book OPENS: the left half - front cover, left-hand
-	# stack and left leaf - hangs off one pivot at the spine, folded over the right half at the
-	# start of a session and swung open to the first spread (see [method _open_now]).
+	# The case in two halves, because the book opens: the left half (front cover, left-hand stack and left
+	# leaf) hangs off one pivot at the spine, folded over the right half at the start of a session and
+	# swung open to the first spread (see [method _open_now]).
 	var cm := BoxMesh.new()
 	cm.size = Vector3(1.06, 0.03, PAGE_H + 0.1)
 	var cmat := StandardMaterial3D.new()
 	cmat.albedo_color = Color(0.32, 0.07, 0.06)
-	# BOOK CLOTH: a fine, very faint mottle - the weave and handling of a used cover, barely
-	# there. Same mid-gray convention as the desk, so begin_session doubles the cloth color.
+	# Book cloth: a fine, very faint mottle. Mid-gray convention as the desk, so begin_session doubles the
+	# cloth color.
 	cmat.albedo_texture = _grime(0xC10F, 0.09, 3, 0.06)
 	cmat.uv1_scale = Vector3(2.0, 2.0, 1.0)
 	cmat.roughness = 0.85
@@ -333,9 +314,8 @@ func _build_world() -> void:
 	_cover_l.material_override = cmat          # one material: begin_session colors both
 	_cover_l.position = Vector3(-0.53, -0.058, 0.0)
 	_pivot.add_child(_cover_l)
-	# THE NAME ON THE COVER lies on the cover's UNDERSIDE, facing down, reading toward the far
-	# edge - so when the pivot folds the half over (a half turn about the spine) it faces up
-	# and reads the right way round. Open, it faces the desk and nothing sees it.
+	# The name on the cover lies on the cover's underside, facing down, reading toward the far edge, so
+	# when the pivot folds the half over (a half turn about the spine) it faces up and reads the right way.
 	_cover_label = Label3D.new()
 	var cf := _cover_font()
 	_cover_label.font = cf
@@ -348,8 +328,8 @@ func _build_world() -> void:
 	_cover_label.transform = Transform3D(Basis(Vector3(-1, 0, 0), Vector3(0, 0, -1),
 		Vector3(0, -1, 0)), Vector3(-0.53, -0.0745, -0.22))
 	_pivot.add_child(_cover_label)
-	# THE AUTHOR, set the way a cover sets a byline: centered near the foot, much smaller than
-	# the title and a shade quieter, in the same gilt. Same orientation trick as the title.
+	# The author, set as a cover sets a byline: centered near the foot, much smaller than the title, in
+	# the same gilt. Same orientation trick as the title.
 	_cover_author = Label3D.new()
 	_cover_author.font = cf
 	_cover_author.font_size = 40
@@ -373,10 +353,10 @@ func _build_world() -> void:
 	_leaf_t.visible = false
 
 
-## A seamless, low-contrast noise texture around mid-gray: [param freq] sets the blotch size
-## (per pixel of a 512 texture), [param octaves] how much finer detail rides on it, and
-## [param contrast] how far it strays from gray. Built SYNCHRONOUSLY - a NoiseTexture2D
-## generates on a thread, and an export's first frames would show the bare color.
+## A seamless, low-contrast noise texture around mid-gray: [param freq] sets the blotch size (per pixel of
+## a 512 texture), [param octaves] how much finer detail rides on it, [param contrast] how far it strays
+## from gray. Built synchronously (a NoiseTexture2D generates on a thread and an export's first frames
+## would show the bare color).
 static func _grime(seed: int, freq: float, octaves: int, contrast: float) -> Texture2D:
 	var n := FastNoiseLite.new()
 	n.seed = seed
@@ -392,8 +372,8 @@ static func _grime(seed: int, freq: float, octaves: int, contrast: float) -> Tex
 	return ImageTexture.create_from_image(img)
 
 
-## The page blocks as last placed: (left top, left thickness, right top, right thickness), for
-## anything that has to sit at a sheet's height inside one.
+## The page blocks as last placed: (left top, left thickness, right top, right thickness), for anything
+## that must sit at a sheet's height inside one.
 var _stack_depth := Vector4.ZERO
 
 ## How far the page blocks stop short of the spine: the gutter the leaves dip into.
@@ -440,8 +420,7 @@ func begin_session() -> void:
 	_seed_hue = float(hash([_seed, "hue"]) & 0xFFFF) / 65535.0
 	var r := RandomNumberGenerator.new()
 	r.seed = _seed ^ 0xB00C
-	# Paper is cream, never white; ink is a warm near-black; the cloth is one of the dark
-	# colors books are actually bound in.
+	# Paper is cream, never white; ink a warm near-black; the cloth one of the dark colors books are bound in.
 	_paper = Color.from_hsv(r.randf_range(0.09, 0.13), r.randf_range(0.07, 0.14),
 		r.randf_range(0.93, 0.97))
 	_ink = Color.from_hsv(r.randf_range(0.04, 0.10), r.randf_range(0.15, 0.35),
@@ -502,9 +481,8 @@ func bind_captions(subs) -> bool:
 
 
 func advance(_features, delta: float, bookend: float) -> void:
-	# THE BOOK FADES IN ON ITS OWN, quickly. The Director's fade-in lasts the whole intro hold,
-	# so the cover was still in the dark while the book opened: "I only see just the briefest
-	# flash of that cover". The Director's value still brings the ending down.
+	# The book fades in on its own, quickly: the Director's fade-in lasts the whole intro hold. The
+	# Director's value still brings the ending down.
 	var t := maxf(feed.show_time(), 0.0)
 	var slen := feed.show_length()
 	var b := bookend
@@ -532,9 +510,8 @@ func _ensure_layout() -> void:
 	if _subs != null and is_instance_valid(_subs):
 		var doc: Dictionary = _subs.document
 		src = String(doc.get("source", ""))
-		# The title and the book's name travel BESIDE the text: in sync mode the text arrives
-		# without its frontmatter, so reading them off the source gave a book with no chapter
-		# title in it.
+		# The title and the book's name travel beside the text: in sync mode the text arrives without its
+		# frontmatter.
 		title = String(doc.get("title", ""))
 		if title.is_empty():
 			title = FrontMatter.field_of(src, "title")
@@ -543,9 +520,9 @@ func _ensure_layout() -> void:
 		_set_cover(bk if not bk.is_empty() else FrontMatter.field_of(src, "book"),
 			au if not au.is_empty() else FrontMatter.field_of(src, "author"))
 	if src.is_empty() and not words.is_empty():
-		# NO MANUSCRIPT, ONLY WORDS: a take without a book block (an older sidecar, the
-		# fishing voice). Print what is spoken, a paragraph every few sentences, and reset
-		# as it grows - rarely, since a live take only ever appends.
+		# No manuscript, only words: a take without a book block (an older sidecar, the fishing voice).
+		# Print what is spoken, a paragraph every few sentences, and reset as it grows (a live take only
+		# appends).
 		if words.size() == _fallback_n and _layout != null:
 			src = _source
 		elif _layout == null or words.size() - _fallback_n >= 40 or _layout.words.size() < 40:
@@ -565,8 +542,8 @@ func _ensure_layout() -> void:
 	_title = title
 	lay.build(src, _image_size, title)
 	_layout = lay
-	# Every word's first character as an index into the running text, so each LETTER has a
-	# hue of its own that never depends on where a line or a sentence happens to break.
+	# Every word's first character as an index into the running text, so each letter has a hue of its own
+	# that never depends on where a line or sentence breaks.
 	_char0 = PackedInt32Array()
 	_voice_of = PackedInt32Array()
 	var c := 0
@@ -608,7 +585,7 @@ static func _words_to_source(words: Array) -> String:
 
 
 func _image_size(key: String) -> Vector2:
-	# a sketch is laid out at the size of its INK, which is what is drawn
+	# a sketch is laid out at the size of its ink, which is what is drawn
 	var t := _sketch_texture_for(key) if String(Illustrations.entry(key).get("placement", "")) == "sketch" \
 		else _texture_for(key)
 	return Vector2(t.get_size()) if t != null else Vector2.ZERO
@@ -632,12 +609,10 @@ func _texture_for(key: String) -> Texture2D:
 	return tex
 
 
-## [param key]'s picture as INK: white taken out, what is left drawn in [member _ink]. A sketch
-## is generated black on white because an image model reliably draws that and does not
-## reliably draw on transparency; the page then needs only the lines. Darkness becomes
-## coverage, so a hatched gray is a lighter stroke rather than a gray box. Cached per file and
-## ink; shrunk first, because it is a pass over every pixel in GDScript and the page never
-## shows it larger than half its own width.
+## [param key]'s picture as ink: white taken out, what is left drawn in [member _ink]. A sketch is
+## generated black on white (an image model draws that reliably, not transparency), so the page needs only
+## the lines. Darkness becomes coverage, so a hatched gray is a lighter stroke. Cached per file and ink;
+## shrunk first (a GDScript pass over every pixel; the page never shows it larger than half its width).
 var _sketches := {}
 
 func _sketch_texture_for(key: String) -> Texture2D:
@@ -676,9 +651,8 @@ static func ink_texture(img: Image, ink: Color) -> ImageTexture:
 		out[i * 4 + 3] = clampi((235 - int(lum[i])) * 255 / 175, 0, 255)
 	var ink_img := Image.create_from_data(img.get_width(), img.get_height(), false,
 		Image.FORMAT_RGBA8, out)
-	# CROPPED TO THE INK, with a hair of margin: the model surrounds a drawing with white it was
-	# asked for, and once the white is keyed out that border is empty room that makes every
-	# sketch look small in the space the page gave it.
+	# Cropped to the ink, with a hair of margin: the white border the model draws would otherwise make
+	# every sketch look small in its space.
 	var used := ink_img.get_used_rect()
 	if used.size.x > 8 and used.size.y > 8:
 		ink_img = ink_img.get_region(used.grow(6).intersection(Rect2i(Vector2i.ZERO, ink_img.get_size())))
@@ -686,13 +660,10 @@ static func ink_texture(img: Image, ink: Color) -> ImageTexture:
 	return ImageTexture.create_from_image(ink_img)
 
 
-## Map the spoken words onto the printed ones, as far as they have arrived.
-##
-## SEQUENTIAL WITH RESYNC. Both lists are the same text in the same order, so a match is
-## normally the next printed word; the window absorbs what the voice and the page spell
-## differently (a numeral read as three words shows ONE display word, a dash-joined word may
-## arrive in pieces). A spoken word matching nothing nearby is left unmapped rather than
-## dragging the pointer somewhere wrong.
+## Map the spoken words onto the printed ones, as far as they have arrived. Sequential with resync: both
+## lists are the same text in the same order, so a match is normally the next printed word, and the
+## window absorbs what voice and page spell differently (a numeral read as three words shows one display
+## word, a dash-joined word may arrive in pieces). A spoken word matching nothing nearby is left unmapped.
 func _extend_map() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return
@@ -706,8 +677,7 @@ func _extend_map() -> void:
 		_lay_t = {}
 		_lay_t0 = {}
 	var lw := _layout.words
-	# A READING STARTED MID-WAY (a scrub): match from where it starts, so the book opens at that
-	# spread rather than looking for those words on page one
+	# A reading started mid-way (a scrub): match from where it starts, so the book opens at that spread.
 	if _map.is_empty() and _map_j == 0:
 		var sw: Variant = (_subs.document as Dictionary).get("start_words", PackedStringArray())
 		if sw is PackedStringArray and not (sw as PackedStringArray).is_empty():
@@ -764,8 +734,8 @@ func _reading() -> Dictionary:
 	if li < 0:
 		return {}
 	var nxt := int(_map[i + 1]) if i + 1 < _map.size() else -1
-	# A SPOKEN WORD WITH NO PRINTED ONE leaves the last printed word fully lit. Handing its
-	# progress on to that word re-lit it from its first letter for every unmatched word said.
+	# A spoken word with no printed one leaves the last printed word fully lit (handing its progress on
+	# would re-light that word from its first letter).
 	var frac := clampf(c - float(i), 0.0, 1.0) if k == i else 1.0
 	return {"sub": i, "layout": li, "frac": frac, "next": nxt,
 		"sentence": int((_subs.words[i] as Dictionary).get("sentence", 0)),
@@ -780,9 +750,9 @@ func _spread_of_word(li: int) -> int:
 	return int((_layout.words[li] as Dictionary)["page"]) / 2
 
 
-## TURN WHEN THE VOICE IS ABOUT TO ARRIVE. The spread to show is decided from the NEXT word
-## and its start time, so the leaf is already over by the time it is spoken. A jump of more
-## than one spread (a restart, a reflow) is not a turn and simply lands.
+## Turn when the voice is about to arrive: the spread to show is decided from the next word and its start
+## time, so the leaf is over by the time it is spoken. A jump of more than one spread (a restart, a
+## reflow) is not a turn and simply lands.
 func _tick_turn(delta: float) -> void:
 	if _turn_t >= 0.0:
 		_turn_t += delta
@@ -811,10 +781,9 @@ func _tick_turn(delta: float) -> void:
 		_spread = clampi(want, 0, maxi(0, _layout.spreads() - 1))
 
 
-## THE BOOK STARTS CLOSED and opens to the first spread: 0 closed, 1 open. A pure function
-## of show time, so a render opens exactly as the live session did. It fades in over
-## [constant FADE_IN], sits closed until [constant OPEN_DELAY] so the cover is actually seen,
-## then opens over [constant OPEN_TIME] - slowly, the way a book is opened, not flipped.
+## The book starts closed and opens to the first spread: 0 closed, 1 open. A pure function of show time,
+## so a render opens as the live session did. It fades in over [constant FADE_IN], sits closed until
+## [constant OPEN_DELAY] so the cover is seen, then opens over [constant OPEN_TIME].
 const FADE_IN := 1.5
 const OPEN_DELAY := 3.5
 const OPEN_TIME := 5.0
@@ -846,17 +815,15 @@ func _place_leaves() -> void:
 	_stack_l.scale = Vector3(1.0, tl / 0.02, 1.0)
 	_stack_r.scale = Vector3(1.0, tr / 0.02, 1.0)
 	var floor_y := -0.043
-	# held back from the spine, where the leaves dip below the stacks' tops into the gutter
-	# (the block spans x = STACK_GAP + 0.0075 .. 0.9925 from the spine)
+	# held back from the spine, where the leaves dip below the stacks' tops into the gutter (the block
+	# spans x = STACK_GAP + 0.0075 .. 0.9925 from the spine)
 	_stack_l.position = Vector3(-(STACK_GAP + 1.0) * 0.5, floor_y + tl * 0.5, 0.0)
 	_stack_r.position = Vector3((STACK_GAP + 1.0) * 0.5, floor_y + tr * 0.5, 0.0)
 	var yl := floor_y + tl
 	var yr := floor_y + tr
 	_stack_depth = Vector4(yl, tl, yr, tr)
-	# THE GUTTER IS SHARED. Each leaf used to sit flat at its own stack's height right up to the
-	# spine, so early in a chapter (thin left stack, thick right) the right page met the spine
-	# 0.035 above the left and the ruled lines stepped across the binding. Both now meet at the
-	# thin-stack height and rise to their own across the gutter, as bound pages do.
+	# The gutter is shared: both leaves meet at the thin-stack height and rise to their own across the
+	# gutter, as bound pages do (else the ruled lines step across the binding).
 	var spine := floor_y + 0.012
 	for leaf in [_leaf_l, _leaf_r, _leaf_t]:
 		((leaf as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("spine_y", spine)
@@ -872,19 +839,15 @@ func _place_leaves() -> void:
 		var mat := _leaf_t.material_override as ShaderMaterial
 		mat.set_shader_parameter("angle", a)
 		mat.set_shader_parameter("curl", 1.1 * sin(a))
-		# The swell is along the leaf's OWN normal, which points DOWN once the leaf is past
-		# vertical - so an unsigned lift sank the landing leaf 0.05 under the page it was
-		# covering, and the old page (a full-page picture, most visibly) showed through for
-		# the last frames of every turn. Signed by side; it is 0 at vertical, so continuous.
+		# The swell is along the leaf's own normal, which points down once the leaf is past vertical, so
+		# the lift is signed by side (0 at vertical, so continuous); unsigned it sank the landing leaf under
+		# the page it covers.
 		mat.set_shader_parameter("lift", 0.05 * (1.0 - sin(a)) * (1.0 if a < PI * 0.5 else -1.0))
 		_bind(_leaf_t, _spread * 2 + 1, _turn_to * 2, lerpf(yr, yl, k) + 0.003)
-	# THE OPENING: fold the left half over the right about a hinge just above both blocks, so
-	# closed it rests on top of the right-hand pages, cover up; open it lies flat on the left.
-	# The hinge has to sit ABOVE both blocks while the book is closed, so the folded half rests
-	# on top of the right-hand pages - but a leaf turning about a point above its own spine
-	# edge swings that edge away from the spine, and the cloth showed through the gap between
-	# the pages as the book opened. So the hinge slides down to the left leaf's own surface by
-	# halfway: from there the page turns about its spine edge, and nothing opens up.
+	# The opening: fold the left half over the right about a hinge just above both blocks, so closed it
+	# rests on top of the right-hand pages, cover up; open it lies flat on the left. A leaf turning about
+	# a point above its spine edge swings that edge away from the spine, so the hinge slides down to the
+	# left leaf's own surface by halfway: from there the page turns about its spine edge.
 	var op := _open_now()
 	var hinge := lerpf((yl + yr) * 0.5 + 0.06, yl, smoothstep(0.0, 0.5, op))
 	var th := -PI * (1.0 - op)
@@ -902,9 +865,8 @@ func _bind(leaf: MeshInstance3D, page: int, back_page: int, y: float) -> void:
 		mat.set_shader_parameter("back", _page_tex(back_page))
 
 
-## The texture showing [param page], giving it a page target if it has none. The four slots
-## are enough by construction (see the class note); a slot is reused from a page no longer
-## asked for, oldest first.
+## The texture showing [param page], giving it a page target if it has none. The four slots are enough by
+## construction (see the class note); a slot is reused from a page no longer asked for, oldest first.
 func _page_tex(page: int) -> Texture2D:
 	var s := _slot_page.find(page)
 	if s < 0:
@@ -959,13 +921,12 @@ func _highlight_for(page: int, r: Dictionary) -> Dictionary:
 	var hi := int(ws[ws.size() - 1])
 	var li := int(r["layout"])
 	var now: float = _subs.now() if _subs != null and is_instance_valid(_subs) else 0.0
-	# Glowing here if the voice is on this page, or has just left it and the trail is still
-	# cooling; otherwise the page is settled and never redraws.
+	# Glowing here if the voice is on this page, or has just left it and the trail is still cooling;
+	# otherwise the page is settled and never redraws.
 	var cooling := li > hi and now - float(_lay_t.get(hi, -1e9)) < TRAIL_TAU * 4.0
 	if li < lo or (li > hi and not cooling):
 		return {"read": li} if li > hi else {}
-	# Quantized, so a page redraws some twenty times a second while its trail cools rather
-	# than on every float wobble.
+	# Quantized, so a page redraws some twenty times a second while its trail cools.
 	return {"word": li, "now": snappedf(now, 0.05), "read": li,
 		"frac": snappedf(float(r["frac"]), 0.02), "alpha": snappedf(float(r["alpha"]), 0.02)}
 
@@ -995,12 +956,10 @@ func draw_page(ci: CanvasItem, page: int, hl: Dictionary) -> void:
 		var lit := li >= 0 and alpha > 0.0 and i <= li
 		if lit and i < li and now - float(_lay_t.get(i, -1e9)) > TRAIL_TAU * 4.0:
 			lit = false                            # long cooled: all ink
-		# EVERY WORD IS DRAWN THE SAME WAY, lit or not: its own shaped glyphs, each at its own
-		# shaped position, each given a color. Switching from a whole-word draw to a letter-
-		# by-letter one when the highlight arrived moved letters by a pixel - two drawing
-		# paths snap glyphs to the pixel grid differently, and no offset arithmetic makes
-		# them agree ("the k shifts weirdly when the highlights touch it"). With one path the
-		# highlight can only ever change a color.
+		# Every word is drawn the same way, lit or not: its own shaped glyphs, each at its own shaped
+		# position, each given a color. Two drawing paths snap glyphs to the pixel grid differently, so
+		# switching when the highlight arrived would move letters by a pixel; with one path the highlight
+		# only changes a color.
 		var t0 := float(_lay_t0.get(i, now))
 		var t1 := float(_lay_t.get(i, now))
 		var n := text.length()
@@ -1019,8 +978,7 @@ func draw_page(ci: CanvasItem, page: int, hl: Dictionary) -> void:
 				if g > 0.01:
 					var ci_i := _char0[i] + k if i < _char0.size() else k
 					var hue := Scheme.voice_hue(_seed_hue + float(ci_i) * HUE_STEP, _voice_of[i] if i < _voice_of.size() else 0)
-					# the subtitles' saturation wave: two slow incommensurate ripples along
-					# the text, so the color breathes instead of sitting at one intensity
+					# the subtitles' saturation wave: two slow incommensurate ripples along the text
 					var sw := 0.5 + 0.35 * sin(float(ci_i) * 0.21 - now * 0.9) \
 						+ 0.15 * sin(float(ci_i) * 0.36 + now * 0.45)
 					var sat := lerpf(0.45, 0.9, clampf(sw, 0.0, 1.0))
@@ -1050,13 +1008,12 @@ func draw_page(ci: CanvasItem, page: int, hl: Dictionary) -> void:
 	for im in pg["images"]:
 		_draw_image(ci, im)
 	_draw_overlay(ci, pg)
-	# NO PAGE NUMBERS: this chapter does not start on page 2 of the real book, and a folio
-	# that is wrong is worse than none.
+	# No page numbers: this chapter does not start on page 2 of the real book, and a wrong folio is worse
+	# than none.
 
 
-## A word's shaped glyphs: `[{index, rid, pos, start}]`, positions relative to the baseline
-## origin, kerning and fallback faces included - exactly what a whole-word draw would place.
-## Cached per (font, size, text); a page draws the same few thousand words over and over.
+## A word's shaped glyphs: `[{index, rid, pos, start}]`, positions relative to the baseline origin,
+## kerning and fallback faces included - what a whole-word draw would place. Cached per (font, size, text).
 var _glyph_cache := {}
 var _ts: TextServer = TextServerManager.get_primary_interface()
 
@@ -1096,7 +1053,7 @@ func _box(col: Color, radius: float) -> StyleBoxFlat:
 	return b
 
 
-## One rectangle per LINE covering layout words [lo, hi] that sit on [param page].
+## One rectangle per line covering layout words [lo, hi] that sit on [param page].
 func _line_runs(lo: int, hi: int, page: int) -> Array:
 	var out: Array = []
 	var cur := Rect2()
@@ -1125,8 +1082,7 @@ func _draw_image(ci: CanvasItem, im: Dictionary) -> void:
 		return
 	var tex := _texture_for(String(im["key"]))
 	if tex == null:
-		# NOT YET PAINTED: a quiet frame holding the description, so the page shows where the
-		# picture goes and what it will be, and nothing reads as broken.
+		# Not yet painted: a quiet frame holding the description, so the page shows where the picture goes.
 		ci.draw_rect(rect, Color(_ink, 0.035))
 		ci.draw_rect(rect.grow(-10.0), Color(_ink, 0.22), false, 1.5)
 		var f := _layout.face(1)
@@ -1139,7 +1095,7 @@ func _draw_image(ci: CanvasItem, im: Dictionary) -> void:
 			String(im["prompt"]), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - pad * 2.0, 22,
 			lines, Color(_ink, 0.45))
 		return
-	# COVER, not contain: the picture fills its plate and the spare axis is cropped evenly.
+	# Cover, not contain: the picture fills its plate and the spare axis is cropped evenly.
 	var ts := Vector2(tex.get_size())
 	var want := rect.size.x / rect.size.y
 	var src := Rect2(Vector2.ZERO, ts)
@@ -1153,9 +1109,8 @@ func _draw_image(ci: CanvasItem, im: Dictionary) -> void:
 	ci.draw_rect(rect, Color(_ink, 0.25), false, 1.0)
 
 
-## A sketch: the drawing's ink laid on the page, CONTAINED in its rect (never cropped - a
-## drawing cut off at its edge reads as a mistake), and nothing at all until it exists, since
-## a frame around a drawing that is not there would itself be a drawing.
+## A sketch: the drawing's ink laid on the page, contained in its rect (never cropped) and nothing at all
+## until it exists.
 func _draw_sketch(ci: CanvasItem, im: Dictionary) -> void:
 	var tex := _sketch_texture_for(String(im["key"]))
 	if tex == null:
@@ -1169,14 +1124,14 @@ func _draw_sketch(ci: CanvasItem, im: Dictionary) -> void:
 
 # --- hooks for a medium in another hand ----------------------------------------------
 
-## Pixels of transparent margin around a page texture, past its outer and top/bottom edges -
-## room for something to hang off the page (a notebook's clips). A book needs none.
+## Pixels of transparent margin around a page texture, past its outer and top/bottom edges: room for
+## something to hang off the page (a notebook's clips). A book needs none.
 func _page_pad() -> float:
 	return 0.0
 
 
-## ...past its top edge, and its bottom one. Separate, because what hangs off a page need not
-## hang off every edge of it.
+## ...past its top edge, and its bottom one. Separate because what hangs off a page need not hang off
+## every edge.
 func _page_pad_top() -> float:
 	return _page_pad()
 
@@ -1197,8 +1152,8 @@ func _cover_font() -> Font:
 	return cf
 
 
-## The page under the words: here, a breath of shading toward the spine - the paper turns away
-## from the light as it goes into the gutter, and a flat page reads as a printout.
+## The page under the words: here, a breath of shading toward the spine (the paper turns away from the
+## light into the gutter).
 func _draw_paper(ci: CanvasItem, pg: Dictionary) -> void:
 	var size := BookLayout.PAGE
 	var spine_x := size.x if int(pg["side"]) == 0 else 0.0
@@ -1208,8 +1163,7 @@ func _draw_paper(ci: CanvasItem, pg: Dictionary) -> void:
 		ci.draw_rect(Rect2(x, 0.0, w, size.y), Color(0.25, 0.18, 0.1, 0.02))
 
 
-## Anything else a page's picture depends on, so the page redraws when it changes. Nothing, in
-## print: a printed page changes only with its highlight.
+## Anything else a page's picture depends on, so the page redraws when it changes. Nothing, in print.
 func _page_state(_page: int) -> String:
 	return ""
 
@@ -1219,14 +1173,14 @@ func _ink_for(_w: Dictionary) -> Color:
 	return _ink
 
 
-## May the leaf turn now? Always, in print. A medium with something lifted off the page - a
-## notebook's photo - holds the turn until it has settled back.
+## May the leaf turn now? Always, in print. A medium with something lifted off the page (a notebook's
+## photo) holds the turn until it has settled back.
 func _turn_ready() -> bool:
 	return true
 
 
 ## Where glyph [param _k] of word [param _i] is drawn, given its typeset origin [param _at]:
-## IDENTITY to set it exactly there, which is what type does.
+## Identity to set it exactly there, which is what type does.
 func _glyph_xform(_i: int, _k: int, _at: Vector2, _page: int) -> Transform2D:
 	return Transform2D.IDENTITY
 
@@ -1252,9 +1206,8 @@ func _sev() -> float:
 	return clampf(feed.camera, ShowFeed.CAMERA_MIN, ShowFeed.CAMERA_MAX)
 
 
-## How far into the arc of the open spread the reading is: 0 wide, 1 local. A pure function
-## of the reading position (which is itself a function of show time), so a render frames
-## exactly what the live reading framed.
+## How far into the arc of the open spread the reading is: 0 wide, 1 local. A pure function of the
+## reading position, so a render frames what the live reading framed.
 func _arc() -> float:
 	if _turn_t >= 0.0:
 		return 0.0                  # the leaf is turning: the whole spread is the subject
@@ -1282,13 +1235,11 @@ func _hash01(i: int, salt: int) -> float:
 	return float(hash([_seed, i, salt]) & 0xFFFFFF) / float(0xFFFFFF)
 
 
-## THE CAMERA READS AHEAD. It aims at the word the voice will reach [constant CAM_LEAD] seconds
-## from now, as a reader's eyes run ahead of the words they are saying - most visibly at the
-## foot of a left-hand page, where it used to follow the voice across to the right one and
-## arrive well after it: the springs that keep every move gentle also make it late, so the
-## lead is what pays for them. Kept on the open spread: the next spread is the page turn's.
-## Measured on a left-to-right crossing: with no lead the aim crossed the spine 3.8 s after the
-## voice, at 2.5 s 1.3 s after it, and at 5 s 1.3 s BEFORE it - arriving as the voice does.
+## The camera reads ahead: it aims at the word the voice will reach [constant CAM_LEAD] seconds from now,
+## as a reader's eyes run ahead of the words they say. The springs that keep every move gentle also make
+## it late, so the lead pays for them (measured on a left-to-right crossing: with no lead the aim crossed
+## the spine 3.8 s after the voice, at 5 s 1.3 s before it). Kept on the open spread: the next spread is
+## the page turn's.
 const CAM_LEAD := 5.0
 
 func _camera_word() -> int:
@@ -1343,11 +1294,9 @@ func _tick_camera(delta: float) -> void:
 	aim = aim.lerp(local, k)
 	# A closed book is half as wide and sits on the right: frame IT, then widen as it opens.
 	aim.x += 0.5 * (1.0 - opened)
-	# THE BOOK'S PLACE IS NEVER CONSTANT, and never noticeably moving either. Each spread
-	# sits at its own angle (hashed, so a render matches), reached through a spring several
-	# times slower than the framing so the change happens under the reading rather than as a
-	# move; on top of that a wander with a period of minutes. Asked for as "extremely gently
-	# and almost imperceptibly... mostly unnoticeable unless you skip through the video".
+	# The book's place is never constant and never noticeably moving: each spread sits at its own angle
+	# (hashed, so a render matches), reached through a spring several times slower than the framing, plus
+	# a wander with a period of minutes.
 	var yaw := (_hash01(_spread, 41) - 0.5) * 2.0 * YAW_SPREAD \
 		+ sin(t * 0.021 + float(_seed % 97)) * YAW_WANDER * sev
 	# How close "local" is scales with the Camera dial; wide is always the whole spread.

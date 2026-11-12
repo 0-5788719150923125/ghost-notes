@@ -4,27 +4,15 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/scene_kit/frame_cover_check.gd 90
 ##
-## THE FAILURE, reported over and over and about a different scene every time: "the shifting
-## camera reveals the fakery behind each scene... I can see the hard edges at the top and left
-## sides of the water... I can watch as birds bounce off of invisible boundaries. This happens
-## over and over, and the problem is clear: most scenes have no awareness of where the camera is."
+## Holds [method SceneView.visible_half]: scenes draw around the origin and a [SceneView] zooms, pans, rolls and skews
+## the canvas, so anything sized to the raw viewport has an edge just outside the frame, and a fixed margin (a
+## constant 1.15 overdraw, or the zoom divided out) is wrong for a camera that has pulled back, panned or rolled.
+## visible_half pulls the screen rectangle back through the very transform the renderer is handed. Over a sweep of
+## camera states - zoomed out, panned, rolled, skewed, mid-stinger, and all of those together - a quad of that
+## half-extent, pushed through that same matrix, must cover every pixel of the frame.
 ##
-## THE CAUSE WAS ONE CONSTANT. Scenes draw around the origin and a [SceneView] then zooms, pans,
-## rolls and skews the whole canvas, so anything sized to the raw viewport has an edge just
-## outside the frame. The convention for keeping it out there was a fixed 1.15 overdraw, written
-## into [method GhostScene.update_layers], [method GhostScene.paint_ground] and a scatter of
-## individual scenes. A CONSTANT CANNOT BE RIGHT: it has no idea whether the shot has pulled back
-## to 0.7 zoom, panned a third of a frame, or rolled - and every one of those makes 1.15 too
-## small. A slightly better version divided by the zoom, which covers a pull-back and nothing
-## else.
-##
-## [method SceneView.visible_half] answers it exactly instead, by pulling the screen rectangle
-## back through the very transform the renderer is handed. This gate holds that: over a sweep of
-## camera states - zoomed out, panned, rolled, skewed, mid-stinger, and all of those together - a
-## quad of that half-extent, pushed through that same matrix, must cover every pixel of the frame.
-##
-## THE TWO CONTROLS ARE THE RULES IT REPLACED, measured on the identical states. If the fixed
-## 1.15 ever passed this sweep, the sweep would not be reaching the cameras that broke it.
+## The two controls are the rules it replaced (the fixed 1.15 and the zoom-divided form), measured on the identical
+## states: if the fixed 1.15 ever passed this sweep, the sweep would not be reaching the cameras that broke it.
 
 const W := 1920.0
 const H := 1080.0
@@ -86,9 +74,8 @@ func _run() -> void:
 	get_tree().quit(1 if not _fails.is_empty() else 0)
 
 
-## The camera states to sweep. Deliberately includes the extremes the shot bag and the stinger
-## can actually reach together, because that combination is what the reports were of - a shot
-## already panned when a punch pulls the zoom back is well past anything either does alone.
+## The camera states to sweep, including the extremes the shot bag and the stinger can reach together (a shot already
+## panned when a punch pulls the zoom back is well past anything either does alone).
 func _states() -> Array:
 	var out: Array = []
 	out.append({"name": "neutral"})
@@ -107,8 +94,7 @@ func _states() -> Array:
 	return out
 
 
-## A SceneView settled on one state. `snap()` puts the eased actuals onto the targets, which is
-## what the pre-warm does and what a held shot converges to.
+## A SceneView settled on one state. `snap()` puts the eased actuals onto the targets, as the pre-warm does and a held shot converges to.
 func _view(st: Dictionary) -> SceneView:
 	var v := SceneView.new()
 	v.zoom = float(st.get("zoom", 1.0))

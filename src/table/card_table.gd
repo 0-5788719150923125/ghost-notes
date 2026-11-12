@@ -3,14 +3,12 @@ class_name CardTable
 
 ## CardTable - what an episode's look may name, and how a look is made safe to draw.
 ##
-## The producer invents a whole deck for every episode (see [TablePrompts.producer]), but some
-## of a look is drawn by ghost rather than painted: the card's frame and lettering, the booklet's
-## type, the things standing on the table. Those are REGISTRIES - the producer picks keys from
-## them, the table draws them - so a look can be anything an agent imagines and still always be
-## something the table knows how to draw. Adding one is an entry here and a branch where it is
-## drawn ([CardFaces] for faces and frames, [TableMedium] for props).
+## The producer invents a whole deck for every episode (see [TablePrompts.producer]), but some of a look is drawn by ghost rather than
+## painted: the card's frame and lettering, the booklet's type, the things standing on the table. Those are registries - the producer
+## picks keys from them, the table draws them - so a look can be anything an agent imagines and still be something the table knows how
+## to draw. Adding one is an entry here and a branch where it is drawn ([CardFaces] for faces and frames, [TableMedium] for props).
 
-## THE TYPE ON A CARD: the face its name and numeral are set in. One string literal per entry,
+## The type on a card: the face its name and numeral are set in. One string literal per entry,
 ## and the description is what the producer reads when it chooses (OFL fonts, `fonts/cards/`).
 const FACES := {
 	"roman": {"file": "res://fonts/cards/Cinzel-Variable.ttf", "weight": 600,
@@ -33,13 +31,9 @@ const FACES := {
 const BOOK_FACE := "res://fonts/cards/EBGaramond-Variable.ttf"
 const BOOK_ITALIC := "res://fonts/cards/EBGaramond-Italic-Variable.ttf"
 
-## THE FRAME around a card's picture - the border the deck prints on every face and back, its numeral
-## above the picture and its name below. Or none: a BORDERLESS card (2026-10-14, the user: "a lot of
-## instances in the real world where cards have no border at all, because the card artwork fills the
-## entire card") is its painting to the edge, cut to the card's corners, with no window and no ornament,
-## and its type set on the painting over a veil of the stock ([method veil_alpha], [method
-## CardFaces.type_boxes]). A `bleed` style before it (removed 2026-10-06, feedback 0010) set the name on
-## a plate narrower than the width it was fit to, and it ran off: "It looks nothing like other cards".
+## The frame around a card's picture - the border the deck prints on every face and back, its numeral above the picture and its name
+## below. Or none: a borderless card is its painting to the edge, cut to the card's corners, with no window and no ornament, and its
+## type set on the painting over a veil of the stock ([method veil_alpha], [method CardFaces.type_boxes]).
 const FRAMES := {
 	"line": "a plain border with one thin rule inside it",
 	"double": "a border with a double rule, thick and thin",
@@ -49,11 +43,8 @@ const FRAMES := {
 	"written": "a WRITTEN CARD - a recipe card, a note, a list, a letter: its writing is its face, the card's title and its lines written across it in a hand (`hand`) on its stock (`ruling`), and nothing else - no picture, no border round it and no ornament",
 }
 
-## A WRITTEN CARD ([constant FRAMES] `written`; the user, 2026-10-26: "we need to give the agents more control over
-## what they draw onto a card, because the current card design may not fit a box full of recipe cards"): the hand
-## its writing is in and its stock's ruling, each the producer's. NO PICTURE ON IT (2026-10-29, of a recipe card's
-## postage-stamp painting in its corner: "it begs the question: where would that picture have come from? It would
-## probably be best to just treat these like a baker's recipe card... just text"): nothing is painted for one.
+## A written card ([constant FRAMES] `written`): the hand its writing is in and its stock's ruling, each the producer's. No picture on
+## it: nothing is painted for one.
 const HANDS := {
 	"neat": {"file": "res://fonts/hands/Kalam-Regular.ttf", "scale": 1.0, "about": "a careful, rounded hand - a cook copying a recipe out for keeps"},
 	"quick": {"file": "res://fonts/hands/Caveat-Variable.ttf", "scale": 1.3, "about": "a quick, slanted, looping hand - a note dashed off, a recipe taken down over the phone"},
@@ -68,11 +59,8 @@ const RULINGS := {
 	"grid": "faint squares of graph paper, a darker line under the title",
 }
 
-## THE CARD ITSELF, beyond its frame's rules (2026-10-07, the user: "Every single card we generate right
-## now has a plain, rectangular border ... sometimes that border has rounded corners. Sometimes the cards
-## themselves have rounded borders ... the border around the image was... window-shaped"): the shape of
-## the picture's WINDOW, the card's CORNERS (the slab is cut to them - [method corner_radius]) and an
-## ORNAMENT printed round the card's edge. Each drawn by [CardFaces], chosen by the producer.
+## The card itself, beyond its frame's rules: the shape of the picture's window, the card's corners (the slab is cut to them -
+## [method corner_radius]) and an ornament printed round the card's edge. Each drawn by [CardFaces], chosen by the producer.
 const WINDOWS := {
 	"rect": "a plain rectangle",
 	"rounded": "a rectangle with softly rounded corners",
@@ -98,7 +86,7 @@ const ORNAMENTS := {
 	"stars": "small four-pointed stars set round the card's edge",
 	"scallops": "a scalloped lace edge, a dot in every scallop",
 }
-## THE BOOKLET'S PAGE, laid out as its printer set it: the same entry, set four ways.
+## The booklet's page, laid out as its printer set it: the same entry, set four ways.
 const PAGES := {
 	"classic": "centered: the numeral, the name, the keywords in one line, a small ornament, the text justified",
 	"drop": "a heading set to the left over a rule, the text opening on a large drop capital, the keywords listed at the foot",
@@ -106,30 +94,24 @@ const PAGES := {
 	"ledger": "the name and numeral on one line over a heavy rule, the keywords listed down the page, then the text, ragged",
 }
 
-## THE CANDLES: the most LIT THINGS on a table - a candle in its stick, a candelabra, a dish of tea
-## lights - each burning as ONE light however many flames it has (a light each is a shadow each, six
-## passes a frame), the brightest the key (see [method TableLight.light_the_table]); and the most
-## flames any one of them has.
+## The candles: the most lit things on a table - a candle in its stick, a candelabra, a dish of tea lights - each burning as one light
+## however many flames it has (a light each is a shadow each, six passes a frame), the brightest the key (see
+## [method TableLight.light_the_table]); and the most flames any one of them has.
 const MAX_CANDLES := 4
 const MAX_FLAMES := 12
 
-## THE THINGS ON THE TABLE are modeled, not painted (see [Props]): the set dresser describes each
-## in parts and materials and names where it stands; the table builds and places it. A painted
-## cut-out could neither take the candlelight nor cast a shadow. At most this many: a reader's table
-## runs from a few things to dozens (the user, 2026-10-18: "real tarot videos will often fill the
-## table with all manner of items").
+## The things on the table are modeled, not painted (see [Props]): the set dresser describes each in parts and materials and names where
+## it stands; the table builds and places it. A painted cut-out could neither take the candlelight nor cast a shadow. At most this many.
 const MAX_THINGS := 32
-## A THING WRITTEN WHERE IT STANDS ([method TableThings.stand_at]): its `at`, [x, z] centimeters from
-## the middle of the reading ([constant Tables.ORIGIN], as a layer's `at`), kept within AT_MOST; and
-## its `scale`, how much larger or smaller than built it stands.
+## A thing written where it stands ([method TableThings.stand_at]): its `at`, [x, z] centimeters from the middle of the reading
+## ([constant Tables.ORIGIN], as a layer's `at`), kept within AT_MOST; and its `scale`, how much larger or smaller than built it stands.
 const AT_MOST := 200.0
 const SCALE_RANGE := Vector2(0.25, 2.0)
 ## ...and how far from where it was written the table may move it, meters, when it may not stand there.
 const NUDGE_MOST := 0.15
 
-## WHERE A THING CAN STAND, as the set dresser names it: stretches of the cloth the cards leave
-## free. `aim` is a zone's middle on the table (x across, z toward the reader, meters); the table
-## finds the spot itself ([method TableThings.place]). "by the deck" is aimed per episode.
+## Where a thing can stand, as the set dresser names it: stretches of the cloth the cards leave free. `aim` is a zone's middle on the
+## table (x across, z toward the reader, meters); the table finds the spot itself ([method TableThings.place]). "by the deck" is aimed per episode.
 const ZONES := {
 	"back left": {"aim": Vector2(-0.3, -0.27), "about": "the far left of the cloth, behind where the cards are laid"},
 	"back": {"aim": Vector2(0.0, -0.3), "about": "the far middle of the cloth, behind where the cards are laid"},
@@ -139,13 +121,11 @@ const ZONES := {
 	"by the deck": {"aim": Vector2.ZERO, "about": "beside the deck, on the side the reader keeps it - never in front of it, where the reader works"},
 }
 
-## WHERE THE AIR IS: the stretches of the scene an effect ([Effects]) may fill - boxes in the table's
-## space (meters: x to the reader's right, y up from the cloth, z toward the reader) - each with the
-## height fog lies on (`floor`: the cloth's), how much of it a line of sight crosses (`sight`, meters:
-## what a fog's density is judged over), where motes there fly when that is not the whole box (`motes`:
-## a bank's front thins out over the middle of the cloth, but its lights stay at the back) and what it
-## is, as the set dresser reads it. The camera looks
-## down across the cloth, so past the table's far edge it sees only the floor and the room's lower part.
+## Where the air is: the stretches of the scene an effect ([Effects]) may fill - boxes in the table's space (meters: x to the reader's
+## right, y up from the cloth, z toward the reader) - each with the height fog lies on (`floor`: the cloth's), how much of it a line of
+## sight crosses (`sight`, meters: what a fog's density is judged over), where motes there fly when that is not the whole box (`motes`:
+## a bank's front thins out over the middle of the cloth, but its lights stay at the back) and what it is, as the set dresser reads it.
+## The camera looks down across the cloth, so past the table's far edge it sees only the floor and the room's lower part.
 const AIR := {
 	"beyond the table": {"box": AABB(Vector3(-1.7, -0.75, -2.8), Vector3(3.4, 1.25, 2.8)), "floor": 0.0, "sight": 0.9,
 		"motes": AABB(Vector3(-1.7, -0.75, -2.8), Vector3(3.4, 1.2, 2.5)),
@@ -157,7 +137,7 @@ const AIR := {
 	"the whole room": {"box": AABB(Vector3(-2.6, -0.8, -3.0), Vector3(5.2, 2.2, 4.0)), "floor": 0.0, "sight": 3.0,
 		"about": "everywhere, the air near the camera too - for a faint haze only, or the reading cannot be seen"},
 }
-## THE MOMENTS a burst can mark, each where it happens on the table.
+## The moments a burst can mark, each where it happens on the table.
 const MOMENTS := {
 	"shuffle": "as the shuffling begins, at the deck in the middle of the cloth",
 	"jumper": "a card leaping out of the deck on its own during a shuffle - thrown along its flight",
@@ -167,17 +147,13 @@ const MOMENTS := {
 	"close": "when the last card is down and the reading closes - from every card in the spread",
 }
 
-## THE STAGING: how an episode's cards come and are shown, the producer's choice ([method staging_of]).
+## The staging: how an episode's cards come and are shown, the producer's choice ([method staging_of]).
 ## `source` - where they come from ([constant TableActions.SOURCES]); `text` - where a card's text is
 ## printed ([constant TEXTS]); `reversals` - whether a card comes up upside down, and what then
 ## ([constant REVERSALS]); `jumpers` - whether the first card may fly out of the shuffle on its own.
 const STAGING := {"source": "deck", "text": "booklet", "reversals": "none", "jumpers": false}
-## WHICH WAY UP A CARD COMES (the user, 2026-10-25: reversals and jumpers "should be set by the agents
-## during preparation for an episode"; a tarot reading reads them, "elsewhere, we would almost never see
-## reversals used" - but a box of trading cards or "a pile of messy baseball cards" has a card come out
-## upside down and turned upright once it is pulled). `comes`: the seed turns some cards upside down
-## ([method CardDeck.shuffled]); `read`: such a card lies and is read upside down - otherwise the hand
-## rights it ([method TableCardPose.righting]) and it is read the right way up.
+## Which way up a card comes. `comes`: the seed turns some cards upside down ([method CardDeck.shuffled]); `read`: such a card lies and
+## is read upside down - otherwise the hand rights it ([method TableCardPose.righting]) and it is read the right way up.
 const REVERSALS := {
 	"none": {"comes": false, "read": false,
 		"about": "every card comes up the right way up - a deck or collection kept squared and sorted, as most are"},
@@ -190,8 +166,7 @@ const BOX_STYLES := ["open", "shoebox"]
 const BOX_CONTENTS := ["file", "piles", "loose"]
 const BOX_OBJECTS := ["coin", "button", "marble", "ticket"]
 const PACES := ["reflective", "mixed", "quick"]
-## THE CARD'S SIZE AND WHICH WAY IT IS HELD, across by tall as it is read (meters). A card wider than it is tall is
-## printed and held SIDEWAYS (the user, 2026-10-26: "many recipe cards would be held sideways, not vertical").
+## The card's size and which way it is held, across by tall as it is read (meters). A card wider than it is tall is printed and held sideways.
 const CARD_SIZES := {
 	"large": {"size": Vector2(0.07, 0.12), "about": "70 x 120 mm, tall: a large reading deck's card"},
 	"trading": {"size": Vector2(0.0635, 0.0889), "about": "63.5 x 88.9 mm, tall: a trading or game card"},
@@ -199,14 +174,14 @@ const CARD_SIZES := {
 	"index": {"size": Vector2(0.127, 0.0762), "about": "a 3 x 5 inch index card, read sideways: a recipe card, a note card, a library or flash card"},
 	"recipe": {"size": Vector2(0.1524, 0.1016), "about": "a 4 x 6 inch recipe card, read sideways: a recipe box's larger card, a postcard"},
 }
-## WHERE A CARD'S TEXT IS, and so how a drawn card is shown: in a booklet beside it,
+## Where a card's text is, and so how a drawn card is shown: in a booklet beside it,
 ## on its own back, or with its illustration on the front.
 const TEXTS := {
 	"booklet": "a page of the deck's little booklet, shown beside the card while it is held up (a reading deck's, an oracle's)",
 	"back": "printed on the card's own back - stats, a bio, rules or an answer - and the card is held up alone in the middle and turned over to show it",
 	"front": "printed with the picture on the card's front - stats, attacks, rules or flavor text below the art; the card is held up alone, with its printing's shared design on the back",
 }
-## THE BOX THE CARDS ARE KEPT IN, at its largest (x across, z front to back, meters) and tallest: a box
+## The box the cards are kept in, at its largest (x across, z front to back, meters) and tallest: a box
 ## the set dresser made bigger is stood smaller, so the spread is laid clear of where it can stand.
 const BOX_MAX := Vector3(0.15, 0.12, 0.22)
 const SHOEBOX_MAX := Vector3(0.34, 0.14, 0.23)
@@ -231,13 +206,10 @@ const TEXT_CONTRAST := 4.5
 ## though large - a card is small on screen, and the painting shows through the veil behind them.
 const PANEL_CONTRAST := 7.0
 
-## THE TITLE SCREEN: the show's name over the table thrown out of focus, which is also the video's
-## thumbnail (the user, 2026-10-06: "too small in some layouts on mobile"). The name is as large as
-## a line of it fits across TITLE_WIDTH of the frame, and no larger than TITLE_SIZE of its height;
-## a name that would come out under TITLE_TWO_LINES of that on one line is set on two. The byline
-## is TITLE_BYLINE of the name's size, and the whole block is centered TITLE_MIDDLE down the frame.
-## Then (2026-10-07) "a little too large. It basically touches the left and the right side of the screen":
-## the width it may fill came in from 0.86 to 0.74, a margin of an eighth of the frame each side.
+## The title screen: the show's name over the table thrown out of focus, which is also the video's thumbnail. The name is as large as a
+## line of it fits across TITLE_WIDTH of the frame (a margin of an eighth each side), and no larger than TITLE_SIZE of its height; a name
+## that would come out under TITLE_TWO_LINES of that on one line is set on two. The byline is TITLE_BYLINE of the name's size, and the
+## whole block is centered TITLE_MIDDLE down the frame.
 const TITLE_SIZE := 0.15
 const TITLE_WIDTH := 0.74
 const TITLE_TWO_LINES := 0.7
@@ -251,36 +223,29 @@ const TITLE_PITCH := 1.05
 ## set yet), and how far the shade round it goes toward black or white ([method title_shade]).
 const TITLE_INK := "#fff7e6"
 const TITLE_SHADE := 0.85
-## THE TABLE BEHIND THE NAME, THROWN FAR OUT OF FOCUS (the user, 2026-10-06: "an extremely strong
-## blur, such that nothing is really visible in the scene except for the colors"): a Gaussian whose
-## sigma is this share of the frame's height ([TableMedium], `shaders/table_intro.gdshader`). The
-## lens's softest bokeh (a sigma of 6.2 px, 0.0086 of a 720 frame, measured) showed "too much table
-## detail"; 0.11 came first and was "just a smidge too blurry" (the user: "reduce the blur by about
-## 25%"), and 0.0825 was cut "another 50%". tests/table/intro_blur_check.gd holds it between the verdicts.
+## The table behind the name, thrown far out of focus so nothing is visible but the colors: a Gaussian whose sigma is this share of the
+## frame's height ([TableMedium], `shaders/table_intro.gdshader`). The lens's softest bokeh (a sigma of 6.2 px, 0.0086 of a 720 frame)
+## shows too much table detail. tests/table/intro_blur_check.gd holds it.
 const TITLE_BLUR := 0.04125
 
 
-## THE LENS: the camera's vertical field of view, degrees, before an episode's own small turn of it.
+## The lens: the camera's vertical field of view, degrees, before an episode's own small turn of it.
 const VFOV := 42.0
 ## The stretch of the table the camera can see (x z, meters), and the grid it is sampled on: where the
 ## table's lightness is read ([constant TableMedium.LUM_RECT]) and its light is counted.
 const SEEN_RECT := Rect2(-0.7, -0.8, 1.4, 1.24)
 const SEEN_GRID := Vector2i(35, 31)
-## THE ROOM'S PICTURE is asked for as a LEVEL photograph from a seated reader's eye, its horizon
-## across its middle, through a lens this wide (millimeters, on a 36 x 24 frame) - the photograph an
-## image model makes most reliably - and projected from the camera's own eye, so the room past the
-## table is seen as the tilted camera would see it ([method TableMedium._place_backdrop]).
+## The room's picture is asked for as a level photograph from a seated reader's eye, its horizon across its middle, through a lens this
+## wide (millimeters, on a 36 x 24 frame) - the photograph an image model makes most reliably - and projected from the camera's own
+## eye, so the room past the table is seen as the tilted camera would see it ([method TableMedium._place_backdrop]).
 const BACKDROP_LENS := 20.0
-## THE CLOTH'S PICTURE is asked for as this much of the surface, centimeters - as wide as the
-## cloth and a little deeper, landscape as the painters make it - so its grain comes out at its
-## true size ([method cloth_crop]).
+## The cloth's picture is asked for as this much of the surface, centimeters - as wide as the cloth and a little deeper, landscape as the
+## painters make it - so its grain comes out at its true size ([method cloth_crop]).
 const CLOTH_PICTURE := Vector2(120.0, 80.0)
 
 
-## THE PART OF A CLOTH'S PICTURE THE CLOTH SHOWS, as a UV rectangle: as much of it as fits on a
-## cloth [param cloth] (meters) with its pixels square, cut evenly off the long side. Stretched to
-## the cloth, a square picture came out 1.67 times as wide as it was painted, every bead and weave
-## with it.
+## The part of a cloth's picture the cloth shows, as a UV rectangle: as much of it as fits on a cloth [param cloth] (meters) with its
+## pixels square, cut evenly off the long side (stretched to the cloth, a square picture would be distorted, every bead and weave with it).
 static func cloth_crop(picture: Vector2, cloth: Vector2) -> Rect2:
 	# the share of the picture's height the cloth takes when the picture spans its width
 	var k := (cloth.y / cloth.x) * (picture.x / maxf(picture.y, 1.0))
@@ -288,7 +253,7 @@ static func cloth_crop(picture: Vector2, cloth: Vector2) -> Rect2:
 	return Rect2((Vector2.ONE - size) * 0.5, size)
 
 
-## THE PLAN IS OF A GAME PLAYED AT THE TABLE (next/tabletop.md): its session is played live, its table is seen from higher up, and it has a board, figures and dice.
+## The plan is of a game played at the table (next/tabletop.md): its session is played live, its table is seen from higher up, and it has a board, figures and dice.
 static func game_of(plan: Dictionary) -> bool:
 	return plan.get("game") == true
 
@@ -297,12 +262,12 @@ static func game_of(plan: Dictionary) -> bool:
 const GAME_FOV := 29.0
 
 
-## THE CAMERA OVER A GAME (the user, 2026-11-04: "more top-down, so that we can't see that the person on the far side is invisible"): high over the near edge, looking well down, so that the whole board and what is round it are in the picture, a little different every episode.
+## The camera over a game: high over the near edge, looking well down, so that the whole board and what is round it are in the picture, a little different every episode.
 static func game_camera(seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "game-camera"])
 	var pitch := rng.randf_range(60.0, 66.0)
-	# ...A LONG LENS, FROM FAR OFF: at this angle a short one leans whatever stands at the table's edges out of the picture, and a mug looked as though it had fallen over (the first look)
+		# ...a long lens, from far off: at this angle a short one leans whatever stands at the table's edges out of the picture
 	var dist := rng.randf_range(1.22, 1.3)
 	var yaw := deg_to_rad(rng.randf_range(-2.5, 2.5))
 	var target := Vector3(rng.randf_range(-0.01, 0.01), 0.0, GameBoard.MIDDLE.y + 0.01)
@@ -311,9 +276,8 @@ static func game_camera(seed: int) -> Dictionary:
 	return {"pitch": pitch, "camera": Transform3D(Basis.looking_at(target - eye, Vector3.UP), eye), "fov": GAME_FOV + rng.randf_range(-0.8, 0.8)}
 
 
-## THE EPISODE'S LAYOUT, drawn from [param rng] in a fixed order: the camera (`camera`, `fov`,
-## `pitch`), the lamp (`lamp`, `lamp_energy`), where the deck is kept (`deck`) and shuffled
-## (`mid`). The table draws it as it is built; [method layout_of] lets a prompt know it first.
+## The episode's layout, drawn from [param rng] in a fixed order: the camera (`camera`, `fov`, `pitch`), the lamp (`lamp`, `lamp_energy`),
+## where the deck is kept (`deck`) and shuffled (`mid`). The table draws it as it is built; [method layout_of] lets a prompt know it first.
 static func sample_layout(rng: RandomNumberGenerator) -> Dictionary:
 	# shallow enough that the room always shows past the table's far edge (at 48 it was a sliver)
 	var pitch := rng.randf_range(34.0, 42.0)
@@ -324,8 +288,8 @@ static func sample_layout(rng: RandomNumberGenerator) -> Dictionary:
 	var eye := target + Vector3(sin(yaw) * cos(p), sin(p), cos(yaw) * cos(p)) * dist
 	var out := {"pitch": pitch, "camera": Transform3D(Basis.looking_at(target - eye, Vector3.UP), eye),
 		"fov": VFOV + rng.randf_range(-1.5, 1.5)}
-	# a draw kept where the far blur's distance was sampled, so every draw after it - the lamp,
-	# the deck, the spread - lands where it did for episodes already made
+		# a draw kept where the far blur's distance was sampled, so every draw after it (the lamp, the deck, the spread) lands where it
+		# does for episodes already made
 	rng.randf_range(0.45, 0.75)
 	var side := -1.0 if rng.randf() < 0.6 else 1.0
 	# low enough, and far enough to one side, that what stands on the table throws a shadow you see
@@ -336,7 +300,7 @@ static func sample_layout(rng: RandomNumberGenerator) -> Dictionary:
 	return out
 
 
-## THE TABLE THE CAMERA SEES, sampled: the middle of every cell of [constant SEEN_GRID] over [constant
+## The table the camera sees, sampled: the middle of every cell of [constant SEEN_GRID] over [constant
 ## SEEN_RECT] that lies on [param top] (a top made safe, [Tables]) and in the picture of a camera at
 ## [param cam] with [param fov] - where a light's report counts the sun ([Lights]), and the table's own
 ## light is fitted ([TableMedium]).
@@ -391,7 +355,7 @@ static func screen_rect(corners: PackedVector3Array, at: Vector3, cam_inv: Trans
 	return Rect2(lo, hi - lo)
 
 
-## WHERE [param at] LANDS IN THE PICTURE of a camera at [param cam] with [param fov] (16:9),
+## Where [param at] lands in the picture of a camera at [param cam] with [param fov] (16:9),
 ## 0..1 across and down; null behind the camera.
 static func project(cam: Transform3D, fov: float, at: Vector3) -> Variant:
 	var l: Vector3 = cam.affine_inverse() * at
@@ -411,7 +375,7 @@ static func in_shot(cam: Transform3D, fov: float, at: Vector3) -> bool:
 	return v.x > -0.1 and v.x < 1.1 and v.y > -0.1 and v.y < 1.1
 
 
-## HOW TALL A THING CAN STAND AND BE SEEN WHOLE, centimeters, in each of [constant ZONES] for
+## How tall a thing can stand and be seen whole, centimeters, in each of [constant ZONES] for
 ## episode [param seed]: the frame's top edge passes lower over the far cloth than the near, so
 ## the back holds only short things. For the set dresser's prompt.
 static func headroom(seed: int) -> Dictionary:
@@ -429,12 +393,11 @@ static func headroom(seed: int) -> Dictionary:
 	return out
 
 
-## HOW TALL A THING AT [param p] (on the table, x z, meters) CAN STAND AND BE SEEN WHOLE, meters, for a
-## camera at [param cam] with [param fov]: where the vertical through [param p] meets the plane every
-## point the frame's top shows lies on ([method headroom]'s line, 0.03 of the frame down, its foot 1 cm
-## lower). That plane passes through the lens, so the height is linear in x and z and every height's
-## line on the table is straight - the blueprint's ([TableBlueprint]). INF when the frame's top never
-## reaches over it; 0 when it cuts the cloth itself.
+## How tall a thing at [param p] (on the table, x z, meters) can stand and be seen whole, meters, for a camera at [param cam] with
+## [param fov]: where the vertical through [param p] meets the plane every point the frame's top shows lies on ([method headroom]'s line,
+## 0.03 of the frame down, its foot 1 cm lower). That plane passes through the lens, so the height is linear in x and z and every
+## height's line on the table is straight - the blueprint's ([TableBlueprint]). INF when the frame's top never reaches over it; 0 when it
+## cuts the cloth itself.
 static func headroom_at(cam: Transform3D, fov: float, p: Vector2) -> float:
 	var r := headroom_plane(cam, fov)
 	return INF if is_inf(r.z) else maxf(p.x * r.x + p.y * r.y + r.z, 0.0)
@@ -459,7 +422,7 @@ static func zone_aim(zone: String, deck: Vector3) -> Vector2:
 	return (ZONES.get(zone, ZONES["back"]) as Dictionary)["aim"]
 
 
-## THE LOOK MADE SAFE: every key the table reads present, every color a color, every registry
+## The look made safe: every key the table reads present, every color a color, every registry
 ## key one the table knows. Whatever an agent wrote, the table can draw what this returns.
 static func sanitize_look(look: Dictionary) -> Dictionary:
 	var out := look.duplicate(true)
@@ -520,7 +483,7 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	for k in ["deck_name", "deck_style", "card_back", "surface", "setting"]:
 		out[k] = String(look.get(k, ""))
 	out["foil"] = clampf(float(look.get("foil", 0.6)) if (look.get("foil") is float or look.get("foil") is int) else 0.6, 0.0, 1.0)
-	# THE PRINTINGS a deck mixes, each a name and what it prints otherwise ([method look_of])
+	# The printings a deck mixes, each a name and what it prints otherwise ([method look_of])
 	var series: Array = []
 	for sv in look.get("series", []) if look.get("series") is Array else []:
 		if sv is Dictionary and not str((sv as Dictionary).get("name", "")).strip_edges().is_empty() and series.size() < MAX_SERIES \
@@ -543,13 +506,13 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	return out
 
 
-## HOW ROUND [param look]'s CARDS ARE CUT at the corners, meters ([constant CORNERS]).
+## How round [param look]'s cards are cut at the corners, meters ([constant CORNERS]).
 static func corner_radius(look: Dictionary) -> float:
 	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
 	return float((CORNERS.get(String(f.get("corners", "rounded")), CORNERS["rounded"]) as Dictionary)["r"])
 
 
-## THE STAGING OF [param plan], made safe: [constant STAGING]'s keys, each one of its own registry's.
+## The staging of [param plan], made safe: [constant STAGING]'s keys, each one of its own registry's.
 static func staging_of(plan: Dictionary) -> Dictionary:
 	var st: Dictionary = plan.get("staging", {}) if plan.get("staging") is Dictionary else {}
 	var source := str(st.get("source", "")).strip_edges().to_lower()
@@ -566,7 +529,7 @@ static func staging_of(plan: Dictionary) -> Dictionary:
 	# A collection drawn from a box normally carries its own printing. A separate
 	# booklet remains available when the plan explicitly chooses one.
 	var default_text := "front" if safe_source == "box" else String(STAGING["text"])
-	# A WRITTEN CARD'S WRITING IS ITS FRONT: it is held up alone and read, never a booklet's page beside it
+	# A written card's writing is its front: it is held up alone and read, never a booklet's page beside it
 	if written(plan.get("look", {}) if plan.get("look") is Dictionary else {}):
 		text = "front"
 	var reversals := str(st.get("reversals", "")).strip_edges().to_lower()
@@ -581,13 +544,13 @@ static func staging_of(plan: Dictionary) -> Dictionary:
 		"jumpers": jumpers is bool and bool(jumpers) and bool((TableActions.SOURCES[safe_source] as Dictionary)["jumpers"])}
 
 
-## WHETHER [param plan] DRAWS NO CARDS ([constant TableActions.SOURCES] `none`): its episode is beats of words and
+## Whether [param plan] draws no cards ([constant TableActions.SOURCES] `none`): its episode is beats of words and
 ## work, with no deck, no box and no room kept for a spread.
 static func cardless(plan: Dictionary) -> bool:
 	return String(staging_of(plan)["source"]) == "none"
 
 
-## THE WORK [param plan] HAS PLANNED AT THE TABLE (next/table_work.md): beat ("intro", "close", or a beat's
+## The work [param plan] has planned at the table (next/table_work.md): beat ("intro", "close", or a beat's
 ## place) -> the work, in the producer's words - empty for a plan with none, as every plan before the work was.
 static func work_of(plan: Dictionary) -> Dictionary:
 	var out := {}
@@ -604,28 +567,26 @@ static func work_of(plan: Dictionary) -> Dictionary:
 	return out
 
 
-## HOW MANY BEATS [param plan]'s reading has between its intro and its close: a card's each - or, in a show
+## How many beats [param plan]'s reading has between its intro and its close: a card's each - or, in a show
 ## that draws none ([method cardless]), the beats the producer planned. Both are its spread's positions.
 static func beats(plan: Dictionary) -> int:
 	return ((plan.get("spread", {}) as Dictionary).get("positions", []) as Array).size() \
 		if plan.get("spread") is Dictionary and (plan["spread"] as Dictionary).get("positions") is Array else 0
 
 
-## WHETHER [param plan]'s cards may come up upside down at all ([constant REVERSALS] `comes`).
+## Whether [param plan]'s cards may come up upside down at all ([constant REVERSALS] `comes`).
 static func reverses(plan: Dictionary) -> bool:
 	return bool((REVERSALS[String(staging_of(plan)["reversals"])] as Dictionary)["comes"])
 
 
-## WHETHER A CARD UPSIDE DOWN IS READ THAT WAY in [param plan] ([constant REVERSALS] `read`): the booklet
+## Whether a card upside down is read that way in [param plan] ([constant REVERSALS] `read`): the booklet
 ## gives its reversed meaning, the back reads the same either way up, and the card lies upside down.
 static func reads_reversed(plan: Dictionary) -> bool:
 	return bool((REVERSALS[String(staging_of(plan)["reversals"])] as Dictionary)["read"])
 
 
-## THE ROOM A BOX OF [param look]'s CARDS TAKES at most ([constant BOX_MAX], or [constant SHOEBOX_MAX] for a
-## [param shoebox]): an open box files its cards on edge, face to the reader, so it is at least as wide as they
-## are and [constant BOX_ROOM] more - a reading deck's box held index cards 12.7 cm wide with nothing to spare
-## (the-quiet-crucible 181083).
+## The room a box of [param look]'s cards takes at most ([constant BOX_MAX], or [constant SHOEBOX_MAX] for a [param shoebox]): an open
+## box files its cards on edge, face to the reader, so it is at least as wide as they are and [constant BOX_ROOM] more.
 static func box_most(look: Dictionary, shoebox: bool) -> Vector3:
 	if shoebox:
 		return SHOEBOX_MAX
@@ -637,14 +598,14 @@ static func card_size(look: Dictionary) -> Vector2:
 	return (CARD_SIZES.get(key, CARD_SIZES["large"]) as Dictionary)["size"]
 
 
-## WHETHER [param look]'s cards are WRITTEN CARDS ([constant FRAMES] `written`): a recipe, a note, a list - their
+## Whether [param look]'s cards are written cards ([constant FRAMES] `written`): a recipe, a note, a list - their
 ## writing the face, in a hand, a small picture beside it.
 static func written(look: Dictionary) -> bool:
 	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
 	return String(f.get("style", "")).strip_edges().to_lower() == "written"
 
 
-## THE PRINTING [param card] belongs to, by name, in [param look]'s `series` - its own `series`, or its
+## The printing [param card] belongs to, by name, in [param look]'s `series` - its own `series`, or its
 ## group's name when a printing is called that - or "" for the deck's own.
 static func series_of(look: Dictionary, card: Dictionary) -> String:
 	var names: Array = []
@@ -663,7 +624,7 @@ static func series_key(name: String) -> String:
 	return Manuscript.slug(name)
 
 
-## THE LOOK [param card] IS PRINTED IN: [param look], with its printing's own written over it (its
+## The look [param card] is printed in: [param look], with its printing's own written over it (its
 ## style, its back, its palette, its frame - a frame's colors one by one - its title face, its foil), made
 ## safe. A deck of one printing is every card's look.
 static func look_of(look: Dictionary, card: Dictionary) -> Dictionary:
@@ -689,15 +650,12 @@ static func look_of(look: Dictionary, card: Dictionary) -> Dictionary:
 	return sanitize_look(out)
 
 
-## THE TABLE MADE SAFE: the set dresser's reply as [Props] can build it, its `top` and `layers` as
-## [Tables] can (the old table when it wrote neither), every thing standing in a
-## zone the table knows ("back" when it named none), things sharing a `group` kept together, no
-## more lit things than [constant MAX_CANDLES] and no more than [constant MAX_FLAMES] flames on one
-## - the first written keep their flames, the rest stand unlit - its `effects` as [Effects] can
-## build them, in the table's [constant AIR] and at its [constant MOMENTS], its `light` as [Lights]
-## can build it (`{}` when it wrote none: the lamp and the room's candles, as every table had), its `ride`
-## as [Rides] can plan it (`{}`: it stands still), and its `title` (the color the show's name is printed in
-## over it) when that is a color.
+## The table made safe: the set dresser's reply as [Props] can build it, its `top` and `layers` as [Tables] can (the old table when it
+## wrote neither), every thing standing in a zone the table knows ("back" when it named none), things sharing a `group` kept together, no
+## more lit things than [constant MAX_CANDLES] and no more than [constant MAX_FLAMES] flames on one (the first written keep their flames,
+## the rest stand unlit), its `effects` as [Effects] can build them, in the table's [constant AIR] and at its [constant MOMENTS], its
+## `light` as [Lights] can build it (`{}` when it wrote none: the lamp and the room's candles), its `ride` as [Rides] can plan it (`{}`:
+## it stands still), and its `title` (the color the show's name is printed in over it) when that is a color.
 static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 	var out := Props.sanitize(spec, look.get("palette", FALLBACK_PALETTE) if look.get("palette") is Array else FALLBACK_PALETTE)
 	var things: Array = []
@@ -709,14 +667,14 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 		var g: Variant = thing.get("group", "")
 		thing["group"] = str(int(g)) if (g is float or g is int) else String(g if g is String else "").strip_edges()
 		thing["turn"] = Props._num(thing.get("turn"), 0.0, -180.0, 180.0)
-		# WRITTEN WHERE IT STANDS, or not: a thing with no `at` is found a spot in its `place`
+		# Written where it stands, or not: a thing with no `at` is found a spot in its `place`
 		var at: Variant = thing.get("at")
 		if at is Array and (at as Array).size() == 2 and _is_num(at[0]) and _is_num(at[1]):
 			thing["at"] = [clampf(float(at[0]), -AT_MOST, AT_MOST), clampf(float(at[1]), -AT_MOST, AT_MOST)]
 		else:
 			thing.erase("at")
 		thing["scale"] = Props._num(thing.get("scale"), 1.0, SCALE_RANGE.x, SCALE_RANGE.y)
-		# THE BOX THE CARDS ARE KEPT IN: one thing at most, stood where the deck would be
+		# The box the cards are kept in: one thing at most, stood where the deck would be
 		var holds: bool = thing.get("holds_cards") == true and not things.any(func(o: Variant) -> bool: return bool((o as Dictionary).get("holds_cards", false)))
 		thing["holds_cards"] = holds
 		var flames := 0
@@ -732,24 +690,24 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 			lit += 1
 		things.append(thing)
 	out["things"] = things
-	# THE TABLE ITSELF - its top and the layers laid on it ([Tables]): the table every episode had
+	# The table itself - its top and the layers laid on it ([Tables]): the table every episode had
 	# before when the set dresser wrote neither
 	var furniture := Tables.sanitize(spec.get("top"), spec.get("layers"), out["materials"],
 		look.get("palette", FALLBACK_PALETTE) if look.get("palette") is Array else FALLBACK_PALETTE)
 	out["top"] = furniture["top"]
 	out["layers"] = furniture["layers"]
-	# THE AIR: fog, motes and bursts the set dresser wrote beside its things
+	# The air: fog, motes and bursts the set dresser wrote beside its things
 	out["effects"] = Effects.sanitize(spec.get("effects", []), look.get("palette", FALLBACK_PALETTE) if look.get("palette") is Array else FALLBACK_PALETTE,
 		AIR.keys(), MOMENTS.keys())
-	# THE LIGHT: the sky, the sun and what it falls through, the weather, lamps out of the shot
+	# The light: the sky, the sun and what it falls through, the weather, lamps out of the shot
 	out["light"] = Lights.sanitize(spec.get("light"))
-	# THE SOUND: what the place sounds like behind the reader ([Soundscape]) - heard, never seen
+	# The sound: what the place sounds like behind the reader ([Soundscape]) - heard, never seen
 	out["sound"] = Soundscape.sanitize(spec.get("sound"))
-	# THE RIDE: what the table is aboard, if it moves ([Rides]) - `{}` for a table standing still
+	# The ride: what the table is aboard, if it moves ([Rides]) - `{}` for a table standing still
 	out["ride"] = Rides.sanitize(spec.get("ride"))
-	# WHAT IS BUILT ON IT, from many small parts ([Assembly]) - `{}` for a table with none
+	# What is built on it, from many small parts ([Assembly]) - `{}` for a table with none
 	out["assembly"] = Assembly.sanitize(spec.get("assembly"))
-	# THE TITLE'S COLOR, chosen to stand out from this table: kept when it is a color at all
+	# The title's color, chosen to stand out from this table: kept when it is a color at all
 	var title: Dictionary = spec.get("title", {}) if spec.get("title") is Dictionary else {}
 	out["title"] = {}
 	if _is_color(String(title.get("color", "")) if title.get("color") is String else ""):
@@ -757,7 +715,7 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 	return out
 
 
-## THE TABLE BEFORE THE SET DRESSER HAS SET ONE: the look's candles alone, plain pillars of wax a
+## The table before the set dresser has set one: the look's candles alone, plain pillars of wax a
 ## shade of its palette each, flanking the cloth.
 static func default_table(look: Dictionary, seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
@@ -783,14 +741,14 @@ static func footprint(pos: Vector3, yaw: float, card: Vector2) -> Rect2:
 	return Rect2(pos.x - hx, pos.z - hz, hx * 2.0, hz * 2.0)
 
 
-## HOW FAR A SPREAD MUST MOVE to lie clear of [param keep_out] (a rectangle on the table, x by z -
+## How far a spread must move to lie clear of [param keep_out] (a rectangle on the table, x by z -
 ## the deck): the smaller of stepping back (-z, away from the reader) and stepping aside, away
 ## from it. An offset (x, z), zero when nothing touches. [param slots] are `{pos, yaw}`.
 static func clear_of(slots: Array, card: Vector2, keep_out: Rect2) -> Vector2:
 	var back := 0.0
 	var aside := 0.0
-	var right := keep_out.get_center().x > 0.0         # step aside AWAY from it
-	# a card that a step would carry THROUGH it rules that step out: one nearer the reader than it
+	var right := keep_out.get_center().x > 0.0         # step aside away from it
+	# a card that a step would carry through it rules that step out: one nearer the reader than it
 	# (stepping back), one past its far side (stepping aside)
 	var front := false
 	var beyond := false
@@ -833,7 +791,7 @@ static func color(s: String, fallback := Color(0.5, 0.5, 0.5)) -> Color:
 	return Color.html(s.strip_edges()) if _is_color(s) else fallback
 
 
-## WCAG's contrast ratio between two colors: 1 is the same, 21 is black on white.
+## Wcag's contrast ratio between two colors: 1 is the same, 21 is black on white.
 static func contrast(a: Color, b: Color) -> float:
 	var la := _luminance(a)
 	var lb := _luminance(b)
@@ -845,14 +803,14 @@ static func _luminance(c: Color) -> float:
 	return 0.2126 * l.r + 0.7152 * l.g + 0.0722 * l.b
 
 
-## THE TITLE'S INK: the color the set dresser chose for the show's name over its table ([param spec]
+## The title's ink: the color the set dresser chose for the show's name over its table ([param spec]
 ## made safe by [method sanitize_table]), else [constant TITLE_INK].
 static func title_ink(spec: Dictionary) -> Color:
 	var title: Dictionary = spec.get("title", {}) if spec.get("title") is Dictionary else {}
 	return color(String(title.get("color", "")) if title.get("color") is String else "", color(TITLE_INK))
 
 
-## THE SHADE ROUND THE TITLE: the ink's own hue taken nearly to black or white, whichever stands
+## The shade round the title: the ink's own hue taken nearly to black or white, whichever stands
 ## further from it - dark round a light name, light round a dark one - so the letters always have an
 ## edge to read against, whatever the table behind them is.
 static func title_shade(ink: Color) -> Color:
@@ -860,7 +818,7 @@ static func title_shade(ink: Color) -> Color:
 	return ink.lerp(to, TITLE_SHADE)
 
 
-## THE TITLE SCREEN'S TYPE for a [param frame] (pixels): the show's [param name] in [param face] -
+## The title screen's type for a [param frame] (pixels): the show's [param name] in [param face] -
 ## on one line as large as fits ([constant TITLE_SIZE], [constant TITLE_WIDTH]), or on two where one
 ## would set it under [constant TITLE_TWO_LINES] of that and two set it larger - and [param under]
 ## (the byline) beneath it in [param italic]. `{lines: [{text, italic, size, y}], box: Rect2}`: `y` is
@@ -936,15 +894,12 @@ static func legible_ink(ink: Color, stock: Color, least := INK_CONTRAST) -> Colo
 	return to
 
 
-## THE VEIL A BORDERLESS CARD'S TYPE IS SET ON, for type in [param ink] on a deck printed on [param stock],
-## to read at [param least]: `{ink, veil, alpha}`. The veil is the stock's color and the type the ink, both
-## TAKEN APART TOGETHER - the veil toward black or white, the ink the other way, an equal share of the way
-## each - only as far as they must for no more than [param heaviest] of the veil to be laid over the
-## painting ([method veil_alpha]). Planned on the stock and ink as they were, a mid-tone deck's veil came
-## out all but opaque (teal under cream, 0.93): a band of stock across the painting, a border again. Taken
-## apart one at a time, the veil went to black before the ink moved, and the deck's color was lost. A
-## light ink stays light and a dark one dark: made legible on the stock first, white on a mid green was
-## turned dark, on a pale veil - the deck's printing the other way round.
+## The veil a borderless card's type is set on, for type in [param ink] on a deck printed on [param stock], to read at [param least]:
+## `{ink, veil, alpha}`. The veil is the stock's color and the type the ink, both taken apart together - the veil toward black or white,
+## the ink the other way, an equal share of the way each - only as far as they must for no more than [param heaviest] of the veil to be
+## laid over the painting ([method veil_alpha]). Planned on the stock and ink as they were, a mid-tone deck's veil comes out all but
+## opaque (teal under cream, 0.93), a band of stock across the painting; taken apart one at a time, the veil goes to black before the ink
+## moves. A light ink stays light and a dark one dark: made legible on the stock first, white on a mid green turns dark, on a pale veil.
 static func veil_of(ink: Color, stock: Color, least: float, heaviest: float) -> Dictionary:
 	var lighter := _luminance(ink) > _luminance(stock)
 	var ends := [Color.WHITE if lighter else Color.BLACK, Color.BLACK if lighter else Color.WHITE]
@@ -982,11 +937,10 @@ const VEIL_HEAVIEST := 0.6
 const PANEL_HEAVIEST := 0.8
 
 
-## How much of [param stock] (0..1) is laid over the painting under [param ink] for the type to read at
-## [param least] - the least that does ([method veil_contrast]), or all of it. A PRINTER NEVER KNOWS WHICH
-## PAINTING GOES UNDER THE TYPE: every card of a deck is printed with one veil, planned against the worst
-## painting there could be, and a card's own colors, whatever they turn out to be, are never asked. The
-## canvas lays it as the face is drawn, in sRGB, and tests/table/card_veil_check.gd measures what it drew.
+## How much of [param stock] (0..1) is laid over the painting under [param ink] for the type to read at [param least] - the least that
+## does ([method veil_contrast]), or all of it. A printer never knows which painting goes under the type: every card of a deck is
+## printed with one veil, planned against the worst painting there could be, and a card's own colors are never asked. The canvas lays it
+## as the face is drawn, in sRGB, and tests/table/card_veil_check.gd measures what it drew.
 static func veil_alpha(ink: Color, stock: Color, least: float) -> float:
 	if veil_contrast(ink, stock, 1.0) < least:
 		return 1.0
@@ -1002,10 +956,9 @@ static func veil_alpha(ink: Color, stock: Color, least: float) -> float:
 	return hi
 
 
-## The least contrast [param ink] can have against [param stock] laid at [param alpha] over ANY painting.
-## The veil over black and over white bound every color it can come out as (the canvas mixes each channel
-## as `paint + (stock - paint) * alpha`, and lightness rises with every channel); an ink whose lightness
-## falls between them matches some painting, and reads not at all.
+## The least contrast [param ink] can have against [param stock] laid at [param alpha] over any painting. The veil over black and over
+## white bound every color it can come out as (the canvas mixes each channel as `paint + (stock - paint) * alpha`, and lightness rises
+## with every channel); an ink whose lightness falls between them matches some painting, and reads not at all.
 static func veil_contrast(ink: Color, stock: Color, alpha: float) -> float:
 	var dark := _luminance(Color.BLACK.lerp(stock, alpha))
 	var light := _luminance(Color.WHITE.lerp(stock, alpha))

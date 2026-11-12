@@ -1,28 +1,22 @@
 extends Control
 class_name TrackLane
 
-## TrackLane - one clip's block on the shared timeline: drag its LEFT/RIGHT edges
-## to trim (in/out points), drag its BODY to shift where it sits on the master
-## timeline. Used for both the primary clip's own trim block (offset fixed at 0 -
-## it IS master time, so `movable` is false there) and one lane per imported
-## track (offset draggable). Every lane shares the same TimelineView as the
-## marker strip below them (see mask_timeline.gd), so a second lines up
-## identically in every row - and, critically, dragging THIS lane's own edges
-## never touches that shared view's cached extent (see TimelineView.refresh):
-## the ruler a trim handle is measured against never moves under it mid-drag.
+## TrackLane - one clip's block on the shared timeline: drag its left/right edges to trim (in/out
+## points), drag its body to shift where it sits on the master timeline. Used for the primary clip's own
+## trim block (offset fixed at 0, so `movable` is false there) and one lane per imported track (offset
+## draggable). Every lane shares the same TimelineView as the marker strip below them (see
+## mask_timeline.gd), so a second lines up in every row; dragging this lane's edges never touches that
+## view's cached extent (see TimelineView.refresh), so the ruler a handle is measured against does not
+## move mid-drag.
 ##
-## Backed by Callables, not a fixed field name - a lane doesn't care whether
-## it's reading/writing session.clip_in/clip_out (the primary) or one
-## session.tracks[i] dict (a secondary track); the caller wires whichever.
+## Backed by Callables, not a fixed field name: the caller wires whether a lane reads and writes
+## session.clip_in/clip_out (the primary) or one session.tracks[i] dict (a secondary track).
 
 signal changed
-## Fired once per drag gesture, BEFORE the first mutation - the undo hook,
-## mirroring MaskTimeline.marker_drag_started.
+## Fired once per drag gesture, before the first mutation - the undo hook, mirroring MaskTimeline.marker_drag_started.
 signal drag_started
-## Fired once a drag gesture ENDS (mouse-up) - the ONLY safe point to refresh
-## the shared TimelineView's cached extent (see TimelineView.refresh): doing it
-## mid-drag would rescale the very ruler this lane's handle is being measured
-## against, while it's still being dragged.
+## Fired once a drag gesture ends (mouse-up): the only safe point to refresh the shared TimelineView's
+## cached extent (see TimelineView.refresh), as doing it mid-drag would rescale the ruler being dragged against.
 signal drag_ended
 
 var tview: TimelineView = null
@@ -30,11 +24,8 @@ var label := ""
 var color := Color(0.5, 0.7, 1.0)
 var movable := true         # false for the primary lane - its offset is always 0
 var full_duration := 0.0    # the SOURCE clip's own full length; trim can't exceed it
-## Px of the lane's left edge already occupied by another overlaid control (the
-## volume knob mask_editor.gd anchors top-left on every lane) - the label's start
-## x is pushed past this so it never draws underneath that knob, whatever the
-## block's own left edge happens to be (offset 0 puts them right on top of each
-## other - see feedback/0009).
+## Px of the lane's left edge already occupied by another overlaid control (the volume knob mask_editor.gd
+## anchors top-left on every lane): the label starts past this so it never draws under the knob.
 var reserved_left := 0.0
 
 var get_in: Callable
@@ -43,8 +34,8 @@ var get_out: Callable
 var set_out: Callable
 var get_offset: Callable = func(): return 0.0
 var set_offset: Callable = Callable()   # invalid = shift disabled (the primary lane)
-## Fade envelope (seconds in from each trimmed edge). The fade BOUNDARY is a second
-## handle at each edge - see the class doc / _hit. Invalid = fades disabled.
+## Fade envelope (seconds in from each trimmed edge). The fade boundary is a second handle at each edge
+## (see _hit). Invalid = fades disabled.
 var get_fade_in: Callable = Callable()
 var set_fade_in: Callable = Callable()
 var get_fade_out: Callable = Callable()
@@ -52,22 +43,15 @@ var set_fade_out: Callable = Callable()
 ## Master-timeline seconds to snap a dragged clip's start/end to (other clips' edges,
 ## the playhead, 0). Invalid = no snapping.
 var get_snap_targets: Callable = Callable()
-## Current master-timeline playhead position, in seconds. Invalid = no playhead drawn
-## (the primary lane skips this - its own timestamp already sits right below in the
-## marker strip; this is for secondary tracks, whose OWN source position at the shared
-## playhead isn't otherwise visible - see feedback/0007).
+## Current master-timeline playhead position, in seconds. Invalid = no playhead drawn (the primary lane
+## skips this: its own timestamp already sits in the marker strip; secondary tracks show their own
+## source position at the shared playhead).
 var get_playhead: Callable = Callable()
 
 const _EDGE_W := 8.0
 const _SNAP_PX := 8.0   # a dragged clip edge within this many px of a target snaps to it
-# A fade handle sitting exactly on top of its trim handle (fade == 0) used to be
-# separated by a vertical hit BAND - a sliver in the top ~22% of a 26px-tall lane.
-# That made the fade handle nearly unhittable (had to land inside a ~16x6px box) and
-# an ordinary click anywhere else on that edge silently grabbed the trim handle and
-# resized instead - see feedback/0011. Replaced with a horizontal nudge instead: a
-# coincident fade handle draws/hits _HANDLE_GAP px in from the trim edge, so the two
-# are always two adjacent, full-height, independently-grabbable targets (matching the
-# original two-markers-stacked spec) rather than one pixel gated behind a vertical band.
+# A fade handle coincident with its trim handle (fade == 0) draws and hits _HANDLE_GAP px in from the
+# trim edge, so the two are always adjacent, full-height, independently grabbable targets.
 const _HANDLE_GAP := 7.0
 var _drag_mode := ""   # "" | "in" | "out" | "fade_in" | "fade_out" | "body"
 var _drag_started_emitted := false
@@ -80,12 +64,8 @@ func _ready() -> void:
 
 
 func _process(_dt: float) -> void:
-	# Hide the whole row - not just skip drawing the clip block, which left an
-	# empty strip on screen - once its clip's span is entirely outside the
-	# current zoom/pan window: there's nothing left to look at or grab, and the
-	# VBoxContainer collapses the reclaimed space automatically. Same bounds
-	# check _draw already uses to skip the block itself, just promoted to gate
-	# the row's visibility too - see feedback/0023.
+	# Hide the whole row once its clip's span is entirely outside the zoom/pan window (the same bounds
+	# check _draw uses to skip the block): there is nothing to grab, and the VBoxContainer collapses the space.
 	if tview != null:
 		var b := _bounds()
 		visible = tview.x_of(b.y) >= 0.0 and tview.x_of(b.x) <= size.x
@@ -97,8 +77,7 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		# CTRL+WHEEL ZOOMS FROM ANY LANE, about the pointer, as on the strip (the user, 2026-11-11: "it only works when moused over the
-		# bottom lane ... A complex scene might have many lanes"); a plain wheel is left to the list of lanes, which scrolls them
+		# Ctrl+wheel zooms from any lane, about the pointer, as on the strip; a plain wheel is left to the list of lanes, which scrolls them
 		if mb.ctrl_pressed and tview.wheel(mb):
 			accept_event()
 			return
@@ -132,15 +111,10 @@ func _fade_out_s() -> float:
 	return maxf(0.0, float(get_fade_out.call())) if get_fade_out.is_valid() else 0.0
 
 
-## The clip's [left, right] edges in MASTER-timeline seconds. A movable (secondary)
-## lane sits at its own independently-placed `offset`, unaffected by where clip_in/
-## clip_out happen to fall in ITS OWN source's timeline. The fixed primary lane has
-## no such independent placement - clip_in/clip_out already ARE master time (offset
-## is always 0, non-negotiable) - so its bounds are the trim points directly. Every
-## hit-test/draw/drag below reads through this: using `offset` alone for the primary
-## pinned its left edge to time 0 regardless of clip_in, so trimming that edge never
-## visibly moved it - only the untouched right edge shifted in response, which read
-## as backwards - see feedback/0023.
+## The clip's [left, right] edges in master-timeline seconds. A movable (secondary) lane sits at its own
+## `offset`, independent of clip_in/clip_out in its own source. The fixed primary lane has no
+## independent placement - clip_in/clip_out already are master time (offset is always 0) - so its
+## bounds are the trim points directly. Every hit-test, draw and drag reads through this.
 func _bounds() -> Vector2:
 	var cin: float = get_in.call()
 	var cout: float = get_out.call()
@@ -150,12 +124,9 @@ func _bounds() -> Vector2:
 	return Vector2(cin, cout)
 
 
-## The x-position each fade boundary HANDLE draws/hits at. Equal to its real position
-## (b.x + fade_in_s / b.y - fade_out_s) once that's dragged out past _HANDLE_GAP, but
-## nudged in from a coincident trim edge below that - see the _HANDLE_GAP doc above.
-## The underlying fade seconds (and so where the envelope itself actually starts
-## fading, drawn separately in _draw) are never touched by this - only where the
-## little marker itself draws/hits.
+## The x-position each fade boundary handle draws/hits at: its real position (b.x + fade_in_s / b.y -
+## fade_out_s) once dragged out past _HANDLE_GAP, else nudged in from a coincident trim edge. The fade
+## seconds themselves (where the envelope starts, drawn in _draw) are never touched by this.
 func _fade_handle_xs(x0: float, x1: float, b: Vector2, span: float) -> Vector2:
 	var xfi := x0
 	var xfo := x1
@@ -172,10 +143,8 @@ func _hit(pos: Vector2) -> String:
 	var x0 := tview.x_of(b.x)
 	var x1 := tview.x_of(b.y)
 	var fx := _fade_handle_xs(x0, x1, b, span)
-	# Whichever handle CENTER is closest wins - full lane height counts now, not just
-	# a sliver top band, so a click dead-on the trim edge still grabs the trim edge
-	# even though the fade handle sits only _HANDLE_GAP px away from it - see
-	# feedback/0011.
+	# Whichever handle center is closest wins, over the full lane height, so a click on the trim edge
+	# grabs the trim edge even though the fade handle sits _HANDLE_GAP px away.
 	var best_mode := ""
 	var best_d := _EDGE_W
 	if set_fade_in.is_valid():
@@ -214,11 +183,9 @@ func _apply_drag(x: float) -> void:
 			var cur_in: float = get_in.call()
 			var delta := 0.0
 			if movable:
-				# A movable lane's right edge is offset + (clip_out - clip_in) - moving
-				# clip_in alone (leaving offset put) shrinks THAT, i.e. drags the RIGHT
-				# edge instead of the left one. Shift clip_in and offset by the same
-				# delta so the right edge stays put and the left edge tracks the cursor -
-				# see feedback/0026.
+				# A movable lane's right edge is offset + (clip_out - clip_in), so moving clip_in alone
+				# would drag the right edge: shift clip_in and offset by the same delta, so the right
+				# edge stays put and the left edge tracks the cursor.
 				delta = t - offset
 				var delta_min: float = -minf(cur_in, offset)
 				var delta_max: float = cur_out - 0.1 - cur_in
@@ -229,12 +196,9 @@ func _apply_drag(x: float) -> void:
 				var new_in := clampf(t - offset, 0.0, cur_out - 0.1)
 				delta = new_in - cur_in
 				set_in.call(new_in)
-			# Rescale the fade, don't just shift it: if a fade boundary is already set,
-			# keep ITS absolute position fixed as the trim edge slides past it, so the
-			# ramp stretches/shrinks to match instead of translating along with the edge
-			# and needing manual recorrection afterward - see feedback/0011. Only kicks
-			# in once a fade has actually been dragged out; a fresh (duration 0) edge
-			# stays at 0 rather than spontaneously growing a fade.
+			# Rescale the fade: a fade boundary already set keeps its absolute position as the trim edge
+			# slides past it, so the ramp stretches or shrinks. Only once a fade has been dragged out; a
+			# fresh (duration 0) edge stays at 0.
 			if set_fade_in.is_valid() and _fade_in_s() > 0.0:
 				set_fade_in.call(clampf(_fade_in_s() - delta, 0.0, maxf(0.0, cur_out - (cur_in + delta))))
 		"out":
@@ -247,7 +211,7 @@ func _apply_drag(x: float) -> void:
 			else:
 				new_out = clampf(t - offset, cur_in + 0.1, full_duration)
 			set_out.call(new_out)
-			# Same automatic rescale as the "in" edge, mirrored - see above.
+			# Same automatic rescale as the "in" edge, mirrored.
 			if set_fade_out.is_valid() and _fade_out_s() > 0.0:
 				var delta_out := new_out - cur_out
 				set_fade_out.call(clampf(_fade_out_s() + delta_out, 0.0, maxf(0.0, new_out - cur_in)))
@@ -264,8 +228,8 @@ func _apply_drag(x: float) -> void:
 	changed.emit()
 
 
-## Gentle snap: if the dragged clip's START or END lands within _SNAP_PX of any snap
-## target (other clip edges, the playhead, 0), align it exactly. Returns the offset.
+## Gentle snap: if the dragged clip's start or end lands within _SNAP_PX of any snap target (other clip
+## edges, the playhead, 0), align it exactly. Returns the offset.
 func _snap_offset(raw: float, span: float) -> float:
 	if not get_snap_targets.is_valid():
 		return raw
@@ -301,9 +265,8 @@ func _draw() -> void:
 	var xb := clampf(x1, -4.0, size.x + 4.0)
 	draw_rect(Rect2(xa, 2, maxf(1.0, xb - xa), size.y - 4), Color(color.r, color.g, color.b, 0.35))
 	draw_rect(Rect2(xa, 2, maxf(1.0, xb - xa), size.y - 4), Color(color.r, color.g, color.b, 0.9), false, 2.0)
-	# Fade envelope: a triangle darkening the clip from full at the fade boundary down
-	# to silence at the trimmed edge (the same envelope drives audio + video). Only the
-	# ramp is drawn; the flat middle is left alone.
+	# Fade envelope: a triangle darkening the clip from full at the fade boundary down to silence at the
+	# trimmed edge (the same envelope drives audio and video). Only the ramp is drawn.
 	var span := cout - cin
 	var top := 2.0
 	var bot := size.y - 2.0
@@ -315,16 +278,13 @@ func _draw() -> void:
 	if _fade_out_s() > 0.0 and xfo < x1:
 		draw_colored_polygon(PackedVector2Array([Vector2(xfo, top), Vector2(x1, bot), Vector2(xfo, bot)]),
 			Color(0.02, 0.02, 0.04, 0.62))
-	# Grip handles at each trimmable edge (drawn even for the immovable primary -
-	# in/out are always draggable, only BODY shift is what `movable` gates).
+	# Grip handles at each trimmable edge (drawn even for the immovable primary: only body shift is gated by `movable`).
 	if x0 >= -_EDGE_W and x0 <= size.x + _EDGE_W:
 		draw_rect(Rect2(x0 - 2.5, 2, 5, size.y - 4), color.lightened(0.35))
 	if x1 >= -_EDGE_W and x1 <= size.x + _EDGE_W:
 		draw_rect(Rect2(x1 - 2.5, 2, 5, size.y - 4), color.lightened(0.35))
-	# The SECOND handle at each edge - the fade boundary - as a full-height bright bar,
-	# nudged _HANDLE_GAP px in from a coincident trim edge (see _fade_handle_xs) so it
-	# always draws as its own distinct, easily-grabbed target instead of a sliver
-	# hiding on top of the trim handle - see feedback/0011.
+	# The second handle at each edge - the fade boundary - a full-height bright bar nudged _HANDLE_GAP px
+	# in from a coincident trim edge (see _fade_handle_xs).
 	var fade_col := Color(1.0, 0.95, 0.55, 0.95)
 	var fx := _fade_handle_xs(x0, x1, b, span)
 	if set_fade_in.is_valid() and fx.x >= -_EDGE_W and fx.x <= size.x + _EDGE_W:
@@ -332,17 +292,15 @@ func _draw() -> void:
 	if set_fade_out.is_valid() and fx.y >= -_EDGE_W and fx.y <= size.x + _EDGE_W:
 		draw_rect(Rect2(fx.y - 2.0, 2, 4, size.y - 4), fade_col)
 	if label != "":
-		# ...inside its block, cut at its end: a name past a short block ran over the next one's
+		# ...inside its block, cut at its end, so a name past a short block does not run over the next one's
 		var lx := clampf(maxf(xa + 6, reserved_left), 4, size.x - 60)
 		var room := minf(xb, size.x) - lx - 4.0
 		if room > 18.0:
 			draw_string(ThemeDB.fallback_font, Vector2(lx, size.y * 0.5 + 4),
 				label, HORIZONTAL_ALIGNMENT_LEFT, room, 12, Color(0.9, 0.92, 0.96, 0.9))
-	# Playhead, same style as MaskTimeline's - but tagged with THIS track's own local
-	# source position (cin + how far the master playhead sits into this clip's span),
-	# not the master time, since knowing where the alt track itself is tracking is the
-	# whole point (see feedback/0007). Only drawn while the master playhead is actually
-	# over this clip's span - outside it the track isn't playing (see MaskTracks.sync).
+	# Playhead, same style as MaskTimeline's, tagged with this track's own local source position (cin +
+	# how far the master playhead sits into the clip's span). Only drawn while the master playhead is over
+	# this clip's span (outside it the track isn't playing, see MaskTracks.sync).
 	if get_playhead.is_valid():
 		var master_t: float = get_playhead.call()
 		var local_t := master_t - offset + cin

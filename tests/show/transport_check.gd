@@ -1,26 +1,25 @@
 extends Node
 
-## transport_check - ONE transport for every mode (next/notes.md step 3), driven through the bar.
+## transport_check - one transport for every mode (next/notes.md), driven through the bar.
 ##
 ##   tests/run_boot_probe.sh tests/show/transport_check.gd 120
 ##
-## A SONG: play, pause, seek and stop through the bar's own buttons and rail - and THE CLOCK STANDS
-## STILL WHILE PAUSED, inside the held intro and inside the tail as well as in the music. The
-## bookend counters ran on through a pause before, so a pause inside a bookend still moved the
-## picture (the control: the same pause with the counters left running moves the clock).
+## A song: play, pause, seek and stop through the bar's own buttons and rail, and the clock stands still
+## while paused, inside the held intro and the tail as well as in the music (the control: the same pause
+## with the bookend counters left running moves the clock).
 ##
-## A READING: the Generative panel conducts (Spectrum.conduct), and the bar's play, pause, seek and
-## stop reach it; after Stop nothing is left on the rail, and once the panel is gone NO HOOK IS
-## LEFT - the three Callables this replaced were never cleared by anything.
+## A reading: the Generative panel conducts (Spectrum.conduct), and the bar's play, pause, seek and stop
+## reach it; after Stop nothing is left on the rail, and once the panel is gone no hook is left.
 ##
-## WAITING IS NOT A PAUSE ([method Spectrum.set_waiting]: a table's physics behind a live show): the clock stands still in the
-## intro and the music, the transport still plays and says it is catching up, and a pause taken while it waits outlasts the
-## wait (the control: the wait over, the clock runs).
+## Waiting is not a pause ([method Spectrum.set_waiting]: a table's physics behind a live show): the clock
+## stands still in the intro and the music, the transport still plays and says it is catching up, and a
+## pause taken while it waits outlasts the wait (the control: the wait over, the clock runs).
 ##
-## SPACE plays and pauses through the transport, even with a button focused.
+## Space plays and pauses through the transport, even with a button focused.
 ##
-## WHAT IS BUFFERED ([method Spectrum.ready_ahead]): the least of what the conductor has made ahead (a reading's voice) and what
-## every part that draws ahead has baked (a table's physics) - none said, none shown; a negative figure takes a part's off.
+## What is buffered ([method Spectrum.ready_ahead]): the least of what the conductor has made ahead (a
+## reading's voice) and what every part that draws ahead has baked (a table's physics); none said, none
+## shown; a negative figure takes a part's off.
 
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
 const LEAD := 3.0
@@ -56,7 +55,7 @@ func _run() -> void:
 	get_tree().quit(1)
 
 
-## WHAT IS BUFFERED: the least of the parts' and the conductor's, nothing when none says, a part's taken off by a negative figure.
+## What is buffered: the least of the parts' and the conductor's, nothing when none says, a part's taken off by a negative figure.
 func _buffered() -> void:
 	var owner := Node.new()
 	_ok(Spectrum.ready_ahead() < 0.0, "the control: nothing says it is ready ahead, and the transport is shown %.1f s buffered" % Spectrum.ready_ahead())
@@ -104,7 +103,7 @@ func _song() -> void:
 	_ok(_bar._root.visible, "a loaded song is timed: the transport shows (Auto and Manual have one now)")
 	_ok(Spectrum.transport_playing(), "and the song is playing")
 	_ok(Spectrum._held, "inside the held intro to begin with")
-	# PAUSE INSIDE THE INTRO, through the bar
+	# pause inside the intro, through the bar
 	_bar._play.pressed.emit()
 	await _frames(2)
 	_ok(Spectrum.paused and not Spectrum.transport_playing(), "the bar's ❚❚ pauses it")
@@ -116,21 +115,21 @@ func _song() -> void:
 	_ok(Spectrum.transport_playing(), "▶ plays it again")
 	var ran := await _moved(0.5)
 	_ok(ran > 0.3, "control: unpaused, the intro clock runs (%.2fs in 0.5s)" % ran)
-	# WAITING HOLDS THE INTRO TOO, unpaused
+	# waiting holds the intro too, unpaused
 	Spectrum.set_waiting("check", true)
 	await _frames(2)
 	still = await _moved(0.5)
 	_ok(absf(still) < 0.001 and not Spectrum.paused, "waiting, the intro clock stands still, unpaused (moved %.3fs)" % still)
 	Spectrum.set_waiting("check", false)
-	# SEEK through the rail: a click at three quarters
+	# seek through the rail: a click at three quarters
 	var r := _bar._rail()
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.pressed = true
 	click.position = Vector2(r.position.x + r.size.x * 0.75, r.position.y + r.size.y * 0.5)
 	click.global_position = click.position
-	# IN LOCAL COORDINATES: a pointer event pushed as window coordinates is moved through the
-	# window's stretch and lands elsewhere (measured: it never reached the rail)
+	# In local coordinates: a pointer event pushed as window coordinates is moved through the window's
+	# stretch and never reaches the rail.
 	get_viewport().push_input(click, true)
 	var up := click.duplicate() as InputEventMouseButton
 	up.pressed = false
@@ -139,14 +138,14 @@ func _song() -> void:
 	var want := 0.75 * Spectrum.scrub_length()
 	_ok(absf(Spectrum.scrub_position() - want) < 0.5,
 		"a click on the rail seeks there (%.2fs, want %.2fs)" % [Spectrum.scrub_position(), want])
-	# PAUSE IN THE MUSIC
+	# pause in the music
 	_bar._play.pressed.emit()
 	await _frames(2)
 	still = await _moved(0.5)
 	_ok(Spectrum.paused and absf(still) < 0.001, "paused in the music, the clock stands still (moved %.3fs)" % still)
 	_bar._play.pressed.emit()
-	# WAITING IS NOT A PAUSE (the table's physics behind a live show, [method Spectrum.set_waiting]): the clock stands still,
-	# the transport still plays and says it is catching up, and a pause taken meanwhile outlasts the wait
+	# Waiting is not a pause ([method Spectrum.set_waiting]): the clock stands still, the transport still
+	# plays and says it is catching up, and a pause taken meanwhile outlasts the wait
 	await _frames(2)
 	Spectrum.set_waiting("check", true)
 	await _frames(2)
@@ -163,7 +162,7 @@ func _song() -> void:
 	await _frames(2)
 	ran = await _moved(0.5)
 	_ok(ran > 0.3 and not _bar._label.text.contains("catching up"), "control: the wait over and played, the clock runs (%.2fs in 0.5s)" % ran)
-	# INTO THE TAIL, then pause there
+	# Into the tail, then pause there
 	Spectrum.seek(LEAD + LEN - 0.15)
 	var waited := 0.0
 	while not Spectrum._tailing and waited < 3.0:
@@ -176,12 +175,12 @@ func _song() -> void:
 		still = await _moved(0.5)
 		_ok(absf(still) < 0.001, "and the clock stands still in the tail while paused (moved %.3fs)" % still)
 		Spectrum.transport_play()
-	# STOP through the bar: back to the start, waiting there
+	# stop through the bar: back to the start, waiting there
 	_bar._stop.pressed.emit()
 	await _frames(3)
 	_ok(Spectrum.paused and Spectrum.scrub_position() < 0.05,
 		"■ goes back to the start and waits there (at %.2fs)" % Spectrum.scrub_position())
-	# SPACE plays it, with a button holding the focus
+	# Space plays it, with a button holding the focus
 	var b := Button.new()
 	add_child(b)
 	b.grab_focus()
@@ -238,7 +237,7 @@ func _reading() -> void:
 	_ok(not Spectrum.seekable() and Spectrum.scrub_length() == 0.0,
 		"after a stop nothing is left on the rail")
 	_ok(not Spectrum.conductor().is_empty(), "the panel still conducts: ▶ reads again from the top")
-	# LEAVING: the panel goes, and its hooks with it
+	# Leaving: the panel goes, and its hooks with it
 	ed._panel.free()
 	ed.free()
 	await _frames(2)

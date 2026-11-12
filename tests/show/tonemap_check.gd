@@ -4,21 +4,21 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/show/tonemap_check.gd 90
 ##
-## FILMIC IS THE PICTURE AS IT WAS: dressed at Filmic's preset with nothing adjusted, a set's environment is exactly
-## what every set wrote before (Filmic, its own exposure, white 1, contrast and saturation 1) - so the default changes
-## nothing on screen.
+## Filmic is the picture as it was: dressed at Filmic's preset with nothing adjusted, a set's environment
+## is what every set wrote before (Filmic, its own exposure, white 1, contrast and saturation 1), so the
+## default changes nothing on screen.
 ##
-## A CHOICE REACHES EVERY SET HANDED IN, AND THE SET'S OWN EXPOSURE HOLDS: chosen AgX with a stop up, an environment
-## dressed before is AgX at twice its own exposure, and chosen again it is still twice, never four times. The control:
-## the same arithmetic on what the environment held (the last dressing) compounds.
+## A choice reaches every set handed in, and the set's own exposure holds: chosen AgX with a stop up, an
+## environment dressed before is AgX at twice its own exposure, and chosen again it is still twice, never
+## four times. The control: the same arithmetic on what the environment held (the last dressing) compounds.
 ##
-## THE ADJUSTMENTS ARE KEPT FOR EACH TONEMAPPER: AgX moved, Filmic is neutral; back to AgX, its own are there. One put
-## back at its preset is forgotten. Out of range is held to the range. A NOTE STARTS FROM NOTHING: reset_show is
-## Filmic, nothing adjusted.
+## The adjustments are kept for each tonemapper: AgX moved, Filmic is neutral; back to AgX, its own are
+## there. One put back at its preset is forgotten. Out of range is held to the range. A note starts from
+## nothing: reset_show is Filmic, nothing adjusted.
 ##
-## THE CARD: its block names the tonemapper and only what was adjusted, round-trips through MiniYaml, and a block that
-## names none leaves Filmic; picking on the card sets the Director and shows that tonemapper's own dials. (A probe's
-## Settings never reach the disk; the Director's look is put back at the end.)
+## The card: its block names the tonemapper and only what was adjusted, round-trips through MiniYaml, and a
+## block that names none leaves Filmic; picking on the card sets the Director and shows that tonemapper's
+## own dials. (A probe's Settings never reach the disk; the Director's look is put back at the end.)
 
 var _fails: Array = []
 

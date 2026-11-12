@@ -2,16 +2,12 @@ extends GhostScene
 
 ## Fog lights - soft lights breathing under a drifting cloud cover.
 ##
-## A few glowing orbs sit in the dark, each tied to a slice of the spectrum so it
-## pulses with its own frequencies. Over them drift several big, low-alpha blobs -
-## fog - that diffuse and occlude the lights as they pass. The result is
-## atmospheric rather than graphic: light bleeding through cloud, the whole field
-## swelling on the louder passages.
+## A few glowing orbs sit in the dark, each tied to a slice of the spectrum so it pulses with its own
+## frequencies. Over them drift several big, low-alpha blobs (fog) that diffuse and occlude the lights as
+## they pass; the whole field swells on louder passages.
 
-## How the lamps are ARRANGED - the scene's silhouette, and the thing a viewer reads before
-## any color. Scattered is the original haze of orbs; a row is street lighting seen down a
-## street, a ring is something enclosing you, a pair is two sources facing off across the
-## frame. Same lights, same physics, four different pictures.
+## How the lamps are arranged, the scene's silhouette: scattered is a haze of orbs; a row is street
+## lighting seen down a street; a ring encloses you; a pair is two sources facing off.
 const LAYOUTS := ["scatter", "row", "ring", "pair"]
 
 var _f: AudioFeatures = AudioFeatures.new()
@@ -22,8 +18,8 @@ var _swirl_vel := 0.0    # angular velocity - kicked on beats, decays between th
 var _beat_prev := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"layout": {"label": "Layout", "type": "choice", "options": "LAYOUTS", "default": null,
 		"blurb": "How the lamps are arranged: scattered orbs in the haze, a row like street lighting, a ring around you, or a pair facing off across the frame."},
@@ -42,8 +38,7 @@ const FIELDS := {
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
-	# Lights in fog can be any color at all - a sodium street, a green exit sign, cold
-	# moonlight - so the mood is unrestricted and the lamps drift around it by its spread.
+	# Lights in fog can be any color (a sodium street, a green exit sign, cold moonlight), so the mood is unrestricted.
 	var sch := Scheme.pick(rng)
 	var layout := String(choice("layout", rng))
 	var light_count: int = number("lamps", rng)
@@ -51,8 +46,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		light_count = 2
 	elif layout == "row":
 		light_count = number("row_lamps", rng)
-	# An arranged layout wants lamps of a COMMON size (they read as the same fixture seen
-	# several times); a scatter wants them wildly unequal, which is what reads as depth.
+	# An arranged layout wants lamps of a common size (the same fixture seen several times); a scatter wants them unequal, which reads as depth.
 	var common: float = number("lamp_size", rng)
 	var row_y: float = number("row_height", rng)
 	var ring_r := Vector2(rng.randf_range(0.28, 0.48), rng.randf_range(0.16, 0.38))
@@ -90,10 +84,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"base_hue": sch.hue,
 		"mood": sch.name,
 		"layout": layout,
-		# The lamps keep the mood's saturation but stay bright - a light source that took a
-		# dim mood's value would stop reading as a source at all.
+		# The lamps keep the mood's saturation but stay bright, or they stop reading as sources.
 		"light_sat": clampf(sch.sat * rng.randf_range(0.7, 1.1), 0.08, 1.0),
-		# The cover sits on the scheme's own partner hue, so it veils rather than clashes.
+		# The cover sits on the scheme's partner hue, so it veils rather than clashes.
 		"fog_tint": sch.accent,
 		"fog_sat": clampf(sch.sat * rng.randf_range(0.15, 0.4), 0.03, 0.5),
 		"fog_alpha": number("fog", rng),
@@ -104,9 +97,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_f = f
 	tick(f, delta)
 	drift_view(f, 0.03, 0.04, 0.03, 0.08)
-	# Tempo-driven swirl: each beat kicks the angular velocity, which then decays back
-	# toward a slow baseline - so the field lurches with the music and coasts down,
-	# instead of rotating at one uniform rate.
+	# Tempo-driven swirl: each beat kicks the angular velocity, which decays toward a slow baseline.
 	var beat_edge: bool = f.beat > 0.55 and _beat_prev <= 0.55
 	_beat_prev = f.beat
 	if beat_edge:

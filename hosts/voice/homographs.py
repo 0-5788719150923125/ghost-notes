@@ -1,59 +1,41 @@
 #!/usr/bin/env python3
-"""Homograph readings chosen by part of speech - and elicited from eSpeak itself.
+"""Homograph readings chosen by part of speech, elicited from eSpeak itself.
 
-"He read the book" and "I will read the book" are not the same word.
-`PiperBackend._espeak` phonemizes WORD BY WORD, because ghost needs to know
-which phones belong to which word to place the karaoke line and the per-token
-timings, and a sentence-level transcription gives no word boundaries (eSpeak
-welds "of the" into one ʌvðə). A word alone on the line has no syntax, so
-eSpeak falls back to its default reading.
+`PiperBackend._espeak` phonemizes word by word (ghost needs to know which phones belong to which word), and
+a word alone on the line has no syntax, so eSpeak falls back to its default reading ("he read the book" and
+"I will read the book" are not the same word).
 
-NO PRONUNCIATION TABLE LIVES HERE. eSpeak already knows both readings, so it is
-asked the question in a form it can answer: the word is phonemized a second time
-inside a CARRIER PHRASE that forces the part of speech the tagger found.
+No pronunciation table lives here. The word is phonemized a second time inside a carrier phrase that forces
+the part of speech the tagger found:
 
     they will {} them     verb, base/present      (VB VBP VBZ VBG)
     they have {} them     verb, past/participle   (VBD VBN)
     the {} was            noun                    (NN NNS NNP NNPS)
     the {} thing          adjective               (JJ JJR JJS)
 
-Measured, that moves eSpeak off its default:
-
     read     alone ɹˈiːd      "they have read them"    ɹˈɛd
     record   alone ɹˈɛkɚd     "they will record them"  ɹᵻkˈɔːɹd
     live     alone lˈaɪv      "they will live them"    lˈɪv
-    wound    alone wˈuːnd     "they have wound them"   wˈaʊnd
     refuse   alone ɹᵻfjˈuːz   "the refuse was"         ɹˈɛfjuːs
-    tear     alone tˈɪɹ       "they will tear them"    tˈɛɹ
 
-The reading that comes back is eSpeak's own, in eSpeak's own symbols, for a
-model trained on eSpeak - so it cannot introduce the convention mismatch a
-CMUdict-based table would (223 of g2p_en's 371 entries transcribe differently
-from eSpeak, which is the class of difference that made "was" come out
-"wars").
+The reading is eSpeak's own, in eSpeak's symbols, for a model trained on eSpeak, so there is no convention
+mismatch (223 of g2p_en's 371 entries transcribe differently from eSpeak).
 
-THE CARRIERS END IN A CONSONANT ON PURPOSE. With "they will {} it" / "the {}
-is", a 3000-word sample reported 257 POS-conditioned readings, nearly all of
-them LINKING R - `miller` is mˈɪlɚ alone and mˈɪlɚɹ before a vowel, which is
-cross-word phonology, not part of speech. `them`/`was`/`thing` drops that to 24
-in 3000, and the residue is genuine.
+The carriers end in a consonant on purpose: with "they will {} it" / "the {} is" a 3000-word sample gave 257
+POS-conditioned readings, nearly all linking R (`miller` is mˈɪlɚ alone, mˈɪlɚɹ before a vowel);
+`them`/`was`/`thing` drops that to 24.
 
-WHAT CAN AND CANNOT CHANGE. Same safety property as `Phonemes.SPEAK_AS`: a word
-is rewritten only when the carrier reading DIFFERS from what the word-by-word
-path already produces, so a word eSpeak reads one way in every frame (`lead`,
-`minute`, `sow`, `row`) is untouched. An authored `[R EH1 D]` override arrives
-with `arpa` set and is skipped outright - the author outranks everything.
+A word is rewritten only when the carrier reading differs from what the word-by-word path already produces
+(as `Phonemes.SPEAK_AS`), so a word read one way in every frame is untouched. An authored `[R EH1 D]`
+override arrives with `arpa` set and is skipped.
 
-Tagging is nltk's averaged perceptron over the sentence ghost already split; the
-tag alone is not enough, hence the tense pass below. If nltk or its data is
-missing the whole pass turns itself off and the reading is unchanged.
+Tagging is nltk's averaged perceptron over the sentence ghost already split; the tag alone is not enough,
+hence the tense pass below. If nltk or its data is missing the whole pass turns itself off and the reading
+is unchanged.
 
-AND IT KEEPS NO WORD LISTS. Not the homographs (eSpeak knows them), not the
-function words (nltk's stopword corpus), not the modals, coordinators,
-determiners or adverbs (the Penn tags name them). One twelve-word constant
-survives, the inflection of BE and HAVE, closed by construction. Where a
-category cannot be sourced, the limitation is documented and left in place - see
-rule 8.
+No word lists: homographs come from eSpeak, function words from nltk's stopword corpus, modals,
+coordinators, determiners and adverbs from the Penn tags. The one constant is the inflection of BE and HAVE.
+Where a category cannot be sourced the limitation is documented and left in place (see rule 8).
 """
 
 from __future__ import annotations
@@ -61,10 +43,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Penn Treebank tag -> the frame that forces that reading, and which word of the
-# phonemized result is ours. Anything not listed (adverbs, determiners, numbers,
-# foreign words) is left alone: eSpeak has no reading keyed to those, so a probe
-# would cost a call and can only introduce noise.
+# Penn Treebank tag -> the frame that forces that reading, and which word of the phonemized result is ours.
+# Anything not listed (adverbs, determiners, numbers, foreign words) is left alone: eSpeak has no reading
+# keyed to those.
 CARRIERS: dict[str, tuple[str, int, int]] = {
     #        frame                    slot  expected words
     "VB": ("they will {} them", 2, 4),
@@ -89,151 +70,106 @@ FAMILY: dict[str, str] = {
     "JJS": "JJ",
 }
 
-# Everything below is the TENSE pass, and it exists because the tagger alone was
-# not enough. Reported after the first attempt shipped, from one chapter:
+# The tense pass. The tagger alone is not enough: `read` is spelled the same in every tense, so there is no
+# morphological evidence in the word and VB/VBP from this tagger mean "no evidence found", not "present
+# tense" ("I stood at the mailbox and read that seed catalog" tags VB, "I read your book in two nights" VBP;
+# both are past).
 #
-#   "I stood at the mailbox and read that seed catalog"    tagged VB
-#   "I read your book in two nights"                       tagged VBP
-#   "you told me I'd forgotten I read it"                  tagged VBP
+# The evidence is in the clause: conjuncts share a tense, a complement inherits its matrix clause's tense,
+# and a narrative holds one tense across sentences. So when the tag carries no evidence the tense is taken
+# from the nearest preceding finite verb, failing that from the tense the surrounding prose is written in.
 #
-# All three are past and all three came out present. This is not a bad tagger -
-# `read` is spelled the same in every tense, so there is NO morphological evidence
-# in the word itself, and a per-token classifier has nothing local to go on. VB and
-# VBP from this tagger therefore mean "no evidence found", not "present tense".
-#
-# The evidence is in the clause, and English puts it there by rule: conjuncts share
-# a tense ("I stood ... and read"), a complement inherits its matrix clause's tense
-# ("I'd forgotten I read it"), and a narrative holds one tense across sentences.
-# So when the tag carries no evidence, the tense is taken from the nearest preceding
-# FINITE verb, and failing that from the tense the surrounding prose has been
-# written in.
-#
-# NOTHING BELOW IS A LIST OF WORDS THAT WENT WRONG. That distinction is the whole
-# design of this section, and it was arrived at the hard way: the first attempt at
-# it grew a 150-word hand-typed table of "function words", which is a list with no
-# end - every chapter would have added to it. What replaced that table:
-#
-#   * the CLOSED CLASS comes from nltk's own stopword corpus, which is maintained
-#     by other people and already ships with the dependency the tagger needs;
-#   * MODALS, COORDINATORS, ADVERBS, DETERMINERS and every other category are
-#     PENN TREEBANK TAGS, an published inventory the tagger already assigns. That
-#     is what killed the modal list: `cannot`, `can't`, `won't` and `wouldn't` all
-#     come back VBZ rather than MD, so enumerating them was never going to finish;
-#   * the one category that is neither - a HABITUAL adverb, which would have let
-#     "sometimes I read the paper" escape a past-tense chapter - was DROPPED rather
-#     than guessed at, and is written up as a known limitation instead.
-#
-# What is left is one twelve-word constant, and it is closed by construction rather
-# than by hope: the complete inflection of BE and HAVE.
+# Nothing below is a list of words that went wrong:
+#   * the closed class comes from nltk's stopword corpus;
+#   * modals, coordinators, adverbs, determiners and every other category are Penn Treebank tags (`cannot`,
+# `can't`, `won't` and `wouldn't` all come back VBZ rather than MD, so enumerating modals never finishes);
+#   * a habitual adverb ("sometimes I read the paper" in a past-tense chapter) is not handled, and is a
+# known limitation.
+# What is left is one twelve-word constant, closed by construction: the complete inflection of BE and HAVE.
 
-# Every verb tag - "the tagger thinks this is a verb at all", which is a different
-# question from what tense it is, and the one that decides whether the noun/verb
-# fallback in `_reading` is allowed to run.
+# Every verb tag: "the tagger thinks this is a verb at all", which decides whether the noun/verb fallback in
+# `_reading` may run.
 VERB_TAGS = frozenset(("VB", "VBP", "VBZ", "VBG", "VBD", "VBN"))
 # Tags that ARE evidence of tense, and which way they point.
 PAST_TAGS = frozenset(("VBD", "VBN"))
 PRESENT_TAGS = frozenset(("VBZ",))
-# ...and the two that are not evidence of anything: the bare form and the
-# non-third-person present, which is spelled identically to the past for `read`,
-# `cut`, `set`, `put` and every other invariant verb.
+# ...and the two that are not evidence of anything: the bare form and the non-third-person present, spelled
+# identically to the past for `read`, `cut`, `set`, `put` and every other invariant verb.
 UNMARKED_TAGS = frozenset(("VB", "VBP"))
 
-# PRESENT EVIDENCE FROM AN AUXILIARY, which is the one place a VBP tag can be trusted.
-#
-# VBP is unmarked on the word being decided (`read` spells its present and its past alike, so a
-# VBP on it means the tagger found nothing), and it is not much better on an arbitrary other
-# word: measured, this tagger returns VBP for `forgotten`, which is morphologically a participle
-# and can only be VBN. Trusting VBP wholesale therefore traded one error for another - it fixed
-# "they are issued a face and they read everything through it" and broke "I'd forgotten I read
-# it", where the scan stopped at the mis-tagged participle instead of walking on to `told`.
-#
-# What IS reliable is an inflected form of BE or HAVE. `am`, `is`, `are`, `have`, `has` are the
-# commonest present cue in English prose, they are the words that carry the tense of every
-# periphrastic verb, and they are already enumerated here - closed by construction, not by hope.
-# So: VBZ anywhere, VBP only on those.
+# Present evidence from an auxiliary, the one place a VBP tag can be trusted. VBP is unmarked on the word
+# being decided, and not reliable on other words either (this tagger returns VBP for `forgotten`, which can
+# only be VBN). An inflected form of BE or HAVE is reliable: they carry the tense of every periphrastic
+# verb. So: VBZ anywhere, VBP only on those.
 
-# THE ONE WORD LIST IN THIS FILE, and the only one that can be complete: every
-# inflected form of BE and HAVE. English has three auxiliary verbs and these are
-# two of them - the two whose complement is a PARTICIPLE ("was read aloud", "had
-# wound the clock"). The third, DO, takes a bare infinitive instead ("did read"),
-# and it does not need naming here: it falls out as "a stopword tagged as a verb
-# that is not one of these", which is also how `cannot`, `won't` and `doesn't` are
-# caught without any of them being written down.
+# The one word list in this file, and a complete one: every inflected form of BE and HAVE, the two
+# auxiliaries whose complement is a participle ("was read aloud", "had wound the clock"). DO takes a bare
+# infinitive and falls out as "a stopword tagged as a verb that is not one of these", which also catches
+# `cannot`, `won't` and `doesn't`.
 BE_HAVE = frozenset("be been being am is are was were have has had having".split())
 
-# What can stand between the start of a sentence and an IMPERATIVE: adverbs, an
-# interjection, a leading conjunction. What cannot is a SUBJECT, and that is the
-# actual definition - an imperative has none.
+# What can stand between the start of a sentence and an imperative: adverbs, an interjection, a leading
+# conjunction. A subject cannot: an imperative has none.
 PRE_IMPERATIVE = frozenset(("RB", "RBR", "RBS", "UH", "CC"))
 
-# AN IMPERATIVE THE TAGGER MISSED (2026-10-27, north-star ch43, the user: "Live like a Spartan" used the wrong
-# pronunciation for "Live"). The perceptron has seen few imperatives: a sentence's first word comes back a proper
-# noun for its capital, and in lower case an adjective or a noun ("live simply" JJ, "record the year" NN) - so
-# `Live` fell to eSpeak's default, the adjective lˈaɪv. What a tag cannot say, the clause can (`_imperative`).
+# An imperative the tagger missed. The perceptron has seen few imperatives: a sentence's first word comes
+# back a proper noun for its capital, and in lower case an adjective or a noun ("live simply" JJ, "record
+# the year" NN), so "Live like a Spartan" fell to the adjective lˈaɪv. What a tag cannot say, the clause can
+# (`_imperative`).
 # The tags a bare verb is mistaken for; never a plural or a marked form, which no imperative is.
 BARE_GUESSES = frozenset(("NN", "NNP", "JJ", "RB", "VB", "VBP"))
 # ...and what may follow a first word that is a modifier rather than a verb: what it modifies ("Live music",
-# "Close friends", "Present company").
+# "Close friends").
 MODIFIED = frozenset(("NN", "NNS", "NNP", "NNPS", "JJ", "JJS", "CD", "POS", "VBG"))
 
-# A word directly after one of these is a NOUN or an adjective; nothing else can
-# follow "the most legible". The tagger called `object` a verb in "the most legible
-# object a person ever makes" and the sentence's `is` then made it a present-tense
-# one, so the noun came out ɑːbdʒˈɛkt. Position beats the tag here.
+# A word directly after one of these is a noun or an adjective; position beats the tag (the tagger called
+# `object` a verb in "the most legible object a person ever makes").
 NOUN_POSITION = frozenset(("DT", "JJ", "JJR", "JJS", "PRP$", "POS", "PDT"))
 
-# Where a leftward scan stops: a coordination or any punctuation. Past one of these
-# the words belong to another clause with its own licensers - "I will go and read"
-# must not find `will`, because the conjunct it governs is `go`. Penn tags its
-# punctuation as itself, so this needs no characters spelled out either.
+# Where a leftward scan stops: a coordination or any punctuation, past which the words belong to another
+# clause ("I will go and read" must not find `will`, because the conjunct it governs is `go`).
 CLAUSE_BREAK = frozenset(("CC", ",", ":", ".", "``", "''"))
 
-# How far back a licenser may sit. "Can you read this?" puts a subject between the
-# modal and the verb; three words covers that and "would he not read" without
+# How far back a licenser may sit: three words covers "Can you read this?" and "would he not read" without
 # reaching into an unrelated clause.
 LICENSER_REACH = 3
 
-# The narrative prior decays per sentence, so a chapter that changes tense (a
-# present-tense passage inside a past-tense book) follows within a few sentences
-# rather than being outvoted by everything before it. ~6 sentences of memory.
+# The narrative prior decays per sentence (about 6 sentences of memory), so a chapter that changes tense
+# follows within a few sentences.
 NARRATIVE_DECAY = 0.85
-# How lopsided the count has to be before the prior is allowed to decide. It is the
-# weakest evidence in the file and it only ever speaks when nothing else can.
+# How lopsided the count has to be before the prior may decide. It is the weakest evidence here and speaks
+# only when nothing else can.
 NARRATIVE_MARGIN = 1.5
 
-# Stress is not a reading, but where the stress SITS is.
+# Stress is not a reading, but where the stress sits is:
 #
 #   `above`  əbˈʌv alone, əbˌʌv in "the above thing"   - level, not a homograph
 #   `I`      ˈaɪ alone,   aɪ mid-frame                 - a mark appearing, not a reading
-#   `object` ˈɑːbdʒɛkt vs ɑːbdʒˈɛkt                    - THE noun/verb distinction
+#   `object` ˈɑːbdʒɛkt vs ɑːbdʒˈɛkt                    - the noun/verb distinction
 #
-# So: level the marks, compare the bare segments, and compare where the marks are -
-# but treat "no mark at all" as matching any position, because an unstressed
-# rendering of the same segments is the same word said in a sentence.
+# So level the marks, compare the bare segments and where the marks are, but treat "no mark at all" as
+# matching any position.
 _LEVEL = str.maketrans({"ˌ": "ˈ"})
 _MARK = "ˈ"
 
 
 def _enclitic_aux(word: str) -> bool:
-    """`I've`, `they'd`, `we're`, `I'm` - a subject with BE or HAVE fused onto it.
+    """`I've`, `they'd`, `we're`, `I'm`: a subject with BE or HAVE fused onto it.
 
-    ghost keeps the contraction as ONE token on purpose (the karaoke line shows the source
-    spelling), and this tagger reads `I've` as a proper noun - so nothing in the cascade saw the
-    auxiliary that is plainly there, and "I've read it more times than you would believe" had no
-    participle evidence at all. A suffix test rather than a list, because these four enclitics ARE
-    the contracted forms of be and have, and there are only four.
+    ghost keeps the contraction as one token (the karaoke line shows the source spelling) and this tagger
+    reads `I've` as a proper noun, so the auxiliary would go unseen. A suffix test, since these four
+    enclitics are the contracted forms of be and have.
 
-    `'s` is deliberately absent: it is also the possessive, and "the man's read on the situation"
-    is a noun. Treating it as an auxiliary would make that a participle.
+    `'s` is absent: it is also the possessive ("the man's read on the situation" is a noun).
     """
     return word.endswith(("'ve", "'d", "'re", "'m"))
 
 
 def _clitic(word: str) -> tuple:
-    """`word` split where the treebank splits it: (head, clitic) - "let's" ("let", "'s"), "don't" ("do", "n't"), "can't" ("ca",
-    "n't"), "I've" ("I", "'ve") - or (word, "") for none. English's clitics, by suffix, as `_enclitic_aux`'s are - but `'d`, which
-    is HAD or WOULD and which the tagger, split, calls a modal: "I'd forgotten I read it" then made `read` the bare form after it.
-    Whole, `_enclitic_aux` reads it as the auxiliary it most often is, as it did."""
+    """`word` split where the treebank splits it: (head, clitic) - "let's" ("let", "'s"), "don't" ("do",
+    "n't"), "can't" ("ca", "n't"), "I've" ("I", "'ve") - or (word, "") for none. English's clitics by
+    suffix, as `_enclitic_aux`'s are, but `'d` is HAD or WOULD and the tagger, split, calls it a modal.
+    Whole, `_enclitic_aux` reads it as the auxiliary it most often is."""
     w = word.replace("\u2019", "'")
     if len(w) > 3 and w.lower().endswith("n't"):
         return w[:-3], w[-3:]
@@ -244,15 +180,14 @@ def _clitic(word: str) -> tuple:
 
 
 def _tense_at(tags: list, lower: list, j: int) -> str:
-    """ "past", "present" or "" for the verb at `j` - a participle's tense read off its AUXILIARY.
+    """ "past", "present" or "" for the verb at `j`: a participle's tense read off its auxiliary.
 
-    "are issued" is present and "was issued" is past, and the participle is VBN in both, so a
-    scan that took VBN at face value read the passive of a present clause as evidence FOR the
-    past. The tense of a periphrastic verb sits on its auxiliary; this is the one place that is
-    written down, and rules 6 and 7 both consult it rather than reading tags directly.
+    "are issued" is present and "was issued" is past, and the participle is VBN in both, so VBN cannot be
+    taken at face value. The tense of a periphrastic verb sits on its auxiliary; rules 6 and 7 consult this
+    rather than reading tags directly.
 
-    A bare VBN with no auxiliary in front of it - "the letter read aloud in court" - is a reduced
-    relative, and past.
+    A bare VBN with no auxiliary in front of it ("the letter read aloud in court") is a reduced relative,
+    and past.
     """
     tag = tags[j]
     if tag in ("VBN", "VBG") and j and lower[j - 1] in BE_HAVE:
@@ -265,26 +200,23 @@ def _tense_at(tags: list, lower: list, j: int) -> str:
 
 
 def _imperative(tags: list, lower: list) -> bool:
-    """Is a sentence's FIRST WORD its clause's verb - an imperative - by the clause alone?
+    """Is a sentence's first word its clause's verb (an imperative), by the clause alone?
 
-    It must have something after it that is not what a modifier modifies (a preposition, a determiner,
-    an adverb: "Live like a Spartan", "Record the year", "Live simply" - never "Live music played"); its
-    clause, to the first break, must hold no other verb (that one would be the clause's); and the
-    clause must end the sentence or hand over to a coordinator or an adverb ("..., so there's enough")
-    rather than to a new subject - "Close to midnight, the bells rang" is a fronted phrase and its
-    clause's verb is `rang`. A word alone before a break ("Refuse, not cannot") is anyone's guess and
-    is left to the rules after this one, as before. And a noun the preposition after it repeats - "Project
-    after project", "day after day", "step by step" - is the English pattern for a noun again and again:
-    no verb takes itself for its object. An adverb right after the first word counts only where it ends the
-    clause.
+    It must have something after it that is not what a modifier modifies (a preposition, determiner or
+    adverb: "Live like a Spartan", "Record the year", "Live simply", never "Live music played"); its clause,
+    to the first break, must hold no other verb; and the clause must end the sentence or hand over to a
+    coordinator or adverb rather than a new subject ("Close to midnight, the bells rang" is a fronted
+    phrase). A word alone before a break ("Refuse, not cannot") is left to the later rules. A noun the
+    following preposition repeats ("Project after project", "day after day") is a noun again and again, not
+    a verb with itself as object. An adverb right after the first word counts only where it ends the clause.
     """
     n = len(tags)
     if n < 2 or tags[1] in CLAUSE_BREAK or tags[1] in MODIFIED:
         return False
     if tags[1] == "IN" and n > 2 and lower[2] == lower[0]:
         return False
-    # an adverb after it only where the adverb ends the clause ("Live simply."): before more, "Present only as
-    # an absence" (a fragment, the adjective) and "Live only for today" (the verb) are tagged alike
+    # an adverb after it only where the adverb ends the clause ("Live simply."): before more, "Present only
+    # as an absence" (a fragment) and "Live only for today" (a verb) are tagged alike
     if tags[1] in ("RB", "RBR", "RBS") and n > 2 and tags[2] not in CLAUSE_BREAK:
         return False
     b = 1
@@ -332,24 +264,20 @@ def _report(name: str, finished: bool = False) -> None:
 class _Corpus:
     """nltk's tagger and stopword list, loaded on demand and never twice.
 
-    Both are DATA, not code, and nltk does not ship either in the wheel - together
-    they are a ~6 MB download on first use. ghost already downloads voice models at
-    runtime, so that is a pattern it has rather than a new one; the difference is
-    that this one is allowed to fail. `tag` and `stop` end up filled in or the whole
-    pass is off, and off means the reading is exactly what it was before.
+    Both are data, not code, and nltk does not ship either in the wheel: about 6 MB downloaded on first use.
+    This download is allowed to fail: `tag` and `stop` end up filled in or the whole pass is off, and off
+    means the reading is unchanged.
 
-    They are fetched together and fail together on purpose. The stopword list is not
-    an optimization - without it the participle rule rewrites `a`, `to`, `in` and
-    `I` wherever one of them follows a `was` - so a half-loaded state would be worse
-    than none at all.
+    They are fetched together and fail together: without the stopword list the participle rule rewrites `a`,
+    `to`, `in` and `I` wherever one follows a `was`.
     """
 
     tag = None  # callable(list[str]) -> [(word, penn)]
     stop: frozenset = frozenset()
     _tried = False
 
-    # nltk renamed its English tagger between 3.8 and 3.9; ask for both and take
-    # whichever the installed version can find.
+    # nltk renamed its English tagger between 3.8 and 3.9; ask for both and take whichever the installed
+    # version can find.
     RESOURCES = (
         "averaged_perceptron_tagger_eng",
         "averaged_perceptron_tagger",
@@ -371,8 +299,7 @@ class _Corpus:
                 file=sys.stderr,
             )
             return False
-        # Keep the corpora inside the venv ghost owns rather than in the user's
-        # home, so removing user://voice_venv removes all of it.
+        # Keep the corpora inside the venv ghost owns, so removing user://voice_venv removes all of it.
         store = Path(sys.prefix) / "nltk_data"
         if str(store) not in nltk.data.path:
             nltk.data.path.insert(0, str(store))
@@ -414,10 +341,8 @@ class _Corpus:
     def closed_class(cls, word: str) -> bool:
         """Is this one of English's function words?
 
-        nltk's stopword corpus IS that list - determiners, pronouns, prepositions,
-        conjunctions, particles, the auxiliaries and their negated contractions -
-        maintained by other people and covering every word the hand-written table
-        this replaced had accumulated, with none of the homographs in it.
+        nltk's stopword corpus: determiners, pronouns, prepositions, conjunctions, particles, the
+        auxiliaries and their negated contractions, with none of the homographs in it.
         """
         return word in cls.stop
 
@@ -425,9 +350,8 @@ class _Corpus:
 class Homographs:
     """One per backend instance; the probe cache is what makes it worth keeping.
 
-    `speak(utterances, lang)` is the backend's own word-level phonemizer - the
-    SAME call the main path uses, so a carrier reading and a bare reading are
-    always comparable.
+    `speak(utterances, lang)` is the backend's own word-level phonemizer, the same call the main path uses,
+    so a carrier reading and a bare reading are comparable.
     """
 
     def __init__(self, speak) -> None:
@@ -435,10 +359,8 @@ class Homographs:
         # (lang, text) -> {family or "" : ipa}. A chapter re-uses its vocabulary
         # heavily, so this settles within the first few sentences.
         self._cache: dict[tuple[str, str], dict[str, str]] = {}
-        # Decayed counts of tensed verbs seen so far - the narrative prior. One
-        # instance lives for the whole session and sentences arrive in reading
-        # order, so by the second sentence of a past-tense chapter this is already
-        # saying "past" and it keeps saying it.
+        # Decayed counts of tensed verbs seen so far: the narrative prior. One instance lives for the whole
+        # session and sentences arrive in reading order.
         self._past = 0.0
         self._present = 0.0
         # Set by `_family` for the audit output; not used by the reading itself.
@@ -467,10 +389,9 @@ class Homographs:
 
         tags = [p for _w, p in tagged]
         lower = [w.lower() for w in words]
-        # BEFORE resolving anything: this sentence's own tensed verbs are part of
-        # the narrative the next sentence will be read against, and part of the one
-        # THIS sentence is read against too ("I stood ... and read" is settled by
-        # its own `stood`).
+        # Before resolving anything: this sentence's own tensed verbs are part of the narrative the next
+        # sentence is read against, and of the one this sentence is read against too ("I stood ... and read"
+        # is settled by its own `stood`).
         self._observe(tags)
 
         self.last_reasons = []
@@ -522,12 +443,10 @@ class Homographs:
     def _family(self, lower: list, tags: list, wi: int, word: str = "") -> tuple:
         """Which carrier this word wants, and the rule that decided it."""
         fam, why = self._decide(lower, tags, wi, word or lower[wi])
-        # A WORD ALREADY SPELLED IN THE PAST HAS NO USE FOR THE PAST FRAME, and
-        # asking anyway is not free: eSpeak reads "they have resented them" as
-        # ɹiːsˈɛntᵻd - re-sented, the perfume - where the word alone is correctly
-        # ɹᵻzˈɛntᵻd. The frame is there for verbs whose past is spelled like their
-        # present (`read`, `wound`, `cut`, `set`); a regular -ed form is already
-        # unambiguous, so it keeps the base frame and the artifact never arises.
+        # A word already spelled in the past has no use for the past frame: eSpeak reads "they have resented
+        # them" as ɹiːsˈɛntᵻd (re-sented) where the word alone is correctly ɹᵻzˈɛntᵻd. The frame is for
+        # verbs whose past is spelled like their present (`read`, `wound`, `cut`, `set`); a regular -ed form
+        # keeps the base frame.
         if fam == "VBD" and lower[wi].endswith("ed"):
             return "VB", why + ", already -ed"
         return fam, why
@@ -535,42 +454,29 @@ class Homographs:
     def _decide(self, lower: list, tags: list, wi: int, word: str) -> tuple:
         """The rule that picks a family, and its name.
 
-        Returns (family or None, reason). The order below IS the priority order,
-        strongest evidence first, and every rule is about grammar rather than about
-        any particular word.
+        Returns (family or None, reason). The order below is the priority order, strongest evidence first,
+        and every rule is about grammar rather than any particular word.
         """
         penn = tags[wi]
         fam = FAMILY.get(penn)
         if _Corpus.closed_class(lower[wi]):
             return None, "closed class"
 
-        # CAPITALS ARE NOT A PART OF SPEECH. The perceptron reads a capital as a
-        # proper noun, so the first word of any sentence and anything shouted in
-        # full caps comes back NNP - "Refuse not, cannot" and "FOR THE COURTS THAT
-        # DO NOT CONVENE" both did. Neither is a proper noun and neither wants a
-        # noun frame, and the capital carries no information here because the
-        # position or the shouting explains it. Left alone rather than guessed at - unless its clause says
-        # it is the verb (`_imperative`).
+        # Capitals are not a part of speech. The perceptron reads a capital as a proper noun, so the first
+        # word of any sentence and anything in full caps comes back NNP ("Refuse not, cannot"). Left alone,
+        # unless its clause says it is the verb (`_imperative`).
         if wi == 0 and penn in BARE_GUESSES and _imperative(tags, lower):
             return "VB", "the clause's verb: no subject, and nothing else in it a verb"
         if penn in ("NNP", "NNPS") and (wi == 0 or word.isupper()):
             return None, "capitalized by position, not a proper noun"
 
-        # 1. A PARTICIPLE THE TAGGER CALLED SOMETHING ELSE. "were read aloud" comes
-        #    back JJ and "was wound tight" comes back NN; the auxiliary in front says
-        #    outright that both are participles.
-        #
-        #    Deliberately NOT guarded by the tag. The tagger calls `wound` a
-        #    preposition in "he had wound the clock", so a guard that required a
-        #    verb-ish tag would drop the one case this rule exists for; what keeps
-        #    "it was a refund" and "I was in the room" out is the closed-class check
-        #    a few lines up, which is nltk's stopword corpus and not a guess.
-        #    ADVERBS DO NOT BREAK THE AUXILIARY'S GRIP, and the immediate-neighbor test used to
-        #    let them: "is not read", "have never read", "had already read" are all participles
-        #    and all three missed this rule, which is how a whole-book measurement caught them
-        #    (the veto in 3b then flipped them to the present reading, which is how they became
-        #    visible at all). Only adverbs and negation may be skipped - a subject or an object
-        #    in between means the auxiliary governs something else.
+        # 1. A participle the tagger called something else: "were read aloud" comes back JJ and "was wound
+        # tight" NN; the auxiliary in front says both are participles.
+        #    Not guarded by the tag: the tagger calls `wound` a preposition in "he had wound the clock".
+        # What keeps
+        #    "it was a refund" and "I was in the room" out is the closed-class check above (nltk's stopwords).
+        #    Adverbs and negation do not break the auxiliary's grip ("is not read", "have never read", "had
+        # already read"); a subject or an object in between means the auxiliary governs something else.
         for back in range(1, LICENSER_REACH + 1):
             j = wi - back
             if j < 0:
@@ -580,27 +486,22 @@ class Homographs:
             if tags[j] not in ("RB", "RBR", "RBS"):
                 break
 
-        # 2. POSITION BEATS A VERB TAG for a word sitting where no verb can sit.
-        #    Only a verb tag: a determiner after a determiner ("half a breath",
-        #    "all that winter") is still a determiner, and pulling `a` and `that`
-        #    into a noun frame is how this rule first went wrong.
+        # 2. Position beats a verb tag for a word sitting where no verb can sit. Only a verb tag: a
+        # determiner after a determiner ("half a breath", "all that winter") is still a determiner.
         if wi and tags[wi - 1] in NOUN_POSITION and penn in VERB_TAGS:
             return "NN", "after %s %r, a noun slot" % (tags[wi - 1], lower[wi - 1])
 
-        # 3. AN IMPERATIVE HAS NO SUBJECT, and that outranks the tag - the tagger
-        #    calls a sentence-opening "Read from the near face" a participle
-        #    because it has seen far more participles in that position. Verbs only,
-        #    for the same reason as above: a sentence-initial noun is just a noun.
+        # 3. An imperative has no subject, and that outranks the tag (the tagger calls a sentence-opening
+        # "Read from the near face" a participle). Verbs only: a sentence-initial noun is just a noun.
         if penn in VERB_TAGS and all(tags[j] in PRE_IMPERATIVE for j in range(wi)):
             return "VB", "no subject before it, imperative"
 
-        # 3a. A VERB JOINED ON WITH NO SUBJECT OF ITS OWN TAKES ITS FIRST CONJUNCT'S FORM. Right after a coordinator
-        #     (adverbs between), nothing but the verb before it shares that verb's subject and its form: "let's take their
-        #     words, and turn each one over, and read the side" is a run of commands, `read` as bare as `turn` - the
-        #     tagger had called it VBD and the reading said ɹˈɛd (732687, 2026-11-09: "It should have sounded like
-        #     'reed'"). The nearest verb before the coordinator is that conjunct's: bare is bare, a participle or a past
-        #     is past, a present is present. An unmarked VBP is no evidence, and leaves it to the rules after. Never an
-        #     -ed form, which its spelling marks.
+        # 3a. A verb joined on with no subject of its own takes its first conjunct's form. Right after a
+        # coordinator (adverbs between), nothing but the verb before it shares that verb's subject and form:
+        # "let's take their words, and turn each one over, and read the side" is a run of commands, `read`
+        # as bare as `turn`. The nearest verb before the coordinator is that conjunct's: bare is bare, a
+        # participle or a past is past, a present is present. An unmarked VBP is no evidence and leaves it
+        # to the later rules. Never an -ed form, which its spelling marks.
         if penn in VERB_TAGS and not lower[wi].endswith("ed"):
             j = wi - 1
             while j >= 0 and tags[j] in ("RB", "RBR", "RBS"):
@@ -621,24 +522,16 @@ class Homographs:
                         return FAMILY["VBP"], "joined to present %r" % lower[k]
                     break
 
-        # 3b. COORDINATION AGREES IN TENSE, and that outranks a past tag on a verb whose past is
-        #     spelled like its present. Rule 4 below believes a marked tag, which is right when
-        #     the SPELLING marks it - but `read`, `cut`, `set` and `wound` are spelled the same
-        #     either way, so VBD on one of them is the tagger guessing from context, and a
-        #     coordinated present clause is that same context saying otherwise.
-        #
-        #     Every clause of the guard is doing work. Across exactly ONE coordinator, which is
-        #     rule 7's own reach and the reason a complement clause cannot qualify - without it
-        #     "I know he read it" would flip, since `know` is present and the reading is past.
-        #     Nothing past in between, or "he stood up and read the letter" would flip too. And
-        #     never on an -ed form: that is marked by its spelling, so the tag is not a guess.
-        #     A FINITE CLAUSE HAS A SUBJECT, and requiring one immediately before the verb is
-        #     what keeps this off reduced passives - ", read out of him by the only unit" and
-        #     ", one woman, read from two sides," are participial phrases, not coordinated
-        #     clauses, and both were flipped to the present reading before this guard existed.
-        #     A comma is not a subject; a pronoun or a noun is. (VBN is excluded for the same
-        #     reason: a participle tag names a FORM, not a tense the tagger guessed at, and
-        #     `read` as a participle is ɹˈɛd whatever tense the clause around it carries.)
+        # 3b. Coordination agrees in tense, and that outranks a past tag on a verb whose past is spelled
+        # like its present: VBD on `read`, `cut`, `set` or `wound` is the tagger guessing from context, and
+        # a coordinated present clause is that same context saying otherwise (rule 4 believes a marked tag,
+        # right when the spelling marks it).
+        #     The guard: across exactly one coordinator (rule 7's reach), so a complement clause cannot
+        # qualify ("I know he read it"); nothing past in between ("he stood up and read the letter"); never
+        # an -ed form. A finite clause has a subject, and requiring one immediately before the verb keeps
+        # this off reduced passives (", read out of him by the only unit"): a comma is not a subject, a
+        # pronoun or a noun is. VBN is excluded because a participle tag names a form, not a tense the
+        # tagger guessed at.
         subject_before = wi > 0 and tags[wi - 1] in (
             "PRP",
             "NN",
@@ -667,13 +560,13 @@ class Homographs:
                 if t == "present":
                     return FAMILY["VBP"], "coordinated with present %r" % lower[j]
 
-        # 4. The tag is real evidence - a past form, a participle, a third-person
-        #    present, a noun, an adjective. Believe it.
+        # 4. The tag is real evidence (a past form, a participle, a third-person present, a noun, an
+        # adjective). Believe it.
         if penn not in UNMARKED_TAGS:
             return fam, "tagged %s" % penn
 
-        # From here the tag is VB or VBP, which for an invariant verb means the
-        # tagger found NOTHING, not that the word is present tense.
+        # From here the tag is VB or VBP, which for an invariant verb means the tagger found nothing, not
+        # that the word is present tense.
 
         # 5. A modal, `do` or infinitival `to` forces the bare form outright.
         for back in range(1, LICENSER_REACH + 1):
@@ -682,18 +575,15 @@ class Homographs:
                 break
             if tags[j] in ("MD", "TO"):
                 return "VB", "bare form after %s %r" % (tags[j], lower[j])
-            # ...and DO, plus every negated modal the tagger hands back as a plain
-            # verb rather than as MD - `cannot`, `can't`, `won't`, `doesn't` all
-            # come back VBZ. A closed-class word tagged as a verb is an auxiliary,
-            # and the two whose complement is a participle are named above; every
-            # other one of them takes the bare form. No modal is listed anywhere.
+            # ...and DO, plus every negated modal the tagger hands back as a plain verb rather than MD
+            # (`cannot`, `can't`, `won't`, `doesn't` come back VBZ). A closed-class word tagged as a verb is
+            # an auxiliary; the two whose complement is a participle are named above and every other one
+            # takes the bare form.
             if _Corpus.closed_class(lower[j]) and tags[j] in VERB_TAGS:
                 return "VB", "bare form after %s %r" % (tags[j], lower[j])
 
-        # 6. THE NEAREST PRECEDING FINITE VERB. Conjuncts share a tense ("I stood
-        #    ... and read"), and a complement clause inherits its matrix clause's
-        #    ("I'd forgotten I read it"). Both are the same scan, so both are one
-        #    rule rather than two special cases.
+        # 6. The nearest preceding finite verb. Conjuncts share a tense ("I stood ... and read") and a
+        # complement clause inherits its matrix clause's ("I'd forgotten I read it"): one scan.
         for j in range(wi - 1, -1, -1):
             t = _tense_at(tags, lower, j)
             if t == "past":
@@ -701,9 +591,8 @@ class Homographs:
             if t == "present":
                 return fam, "follows %s %r" % (tags[j], lower[j])
 
-        # 7. ...or the first conjunct's tense, taken from the second: "We read it
-        #    and left." Only across a coordinator, so an unrelated later clause
-        #    cannot reach back.
+        # 7. ...or the first conjunct's tense, taken from the second: "We read it and left." Only across a
+        # coordinator, so an unrelated later clause cannot reach back.
         crossed = False
         for j in range(wi + 1, len(tags)):
             if tags[j] in CLAUSE_BREAK:
@@ -717,15 +606,10 @@ class Homographs:
             if t == "present":
                 return fam, "conjoined with %s %r" % (tags[j], lower[j])
 
-        # 8. Nothing in the clause at all. Fall back to the tense the prose is
-        #    written in - much the weakest evidence here, and the only rule that can
-        #    be wrong in a way no amount of grammar fixes: a habitual present inside
-        #    a past-tense chapter ("sometimes I read the paper") comes out past. An
-        #    earlier draft vetoed that with a list of habitual adverbs, which is
-        #    exactly the kind of list this file does not keep; the audit below prints
-        #    every decision that rested on this rule instead, and over a whole book
-        #    there were six. A limitation someone can see beats a list nobody can
-        #    finish.
+        # 8. Nothing in the clause at all: fall back to the tense the prose is written in. The weakest
+        # evidence, and wrong where no grammar helps: a habitual present inside a past-tense chapter
+        # ("sometimes I read the paper") comes out past. The audit below prints every decision that rested
+        # on this rule.
         if self._narrative() == "past":
             return "VBD", "past-tense narrative (%.1f past / %.1f present)" % (
                 self._past,
@@ -738,34 +622,30 @@ class Homographs:
     def _tagger_input(self, tokens: list) -> tuple[list[str], list[int]]:
         """The sentence as the tagger wants it, and which token each word is.
 
-        Punctuation goes in as its own item (it is a strong feature - the tagger
-        reads "yesterday ." differently from "yesterday") and maps to token -1,
-        meaning "context only, never rewritten".
+        Punctuation goes in as its own item (a strong feature for the tagger) and maps to token -1: context
+        only, never rewritten.
         """
         words: list[str] = []
         owner: list[int] = []
         for ti, tok in enumerate(tokens):
-            # AS THE PAGE HAS IT: ghost sends each word lower-cased for the phoneme lookup, and its source
-            # spelling as `cased` - the tagger reads grammar off capitals. Lower-cased, "i live in hell" tagged
-            # `i` an adjective, rule 2 put `live` in a noun slot, and the reading said lˈaɪv (2026-10-27, the
-            # user: "The 'live' in 'I live in hell, Pen.' was also pronounced wrong") - where every test and the
-            # audit, reading the text as written, had it right.
+            # As the page has it: ghost sends each word lower-cased for the phoneme lookup and its source
+            # spelling as `cased`, and the tagger reads grammar off capitals (lower-cased, "i live in hell"
+            # tags `i` an adjective and `live` is read as the adjective).
             text = str(tok.get("cased") or tok.get("text", "")).strip()
             if text:
-                # AS THE TAGGER LEARNED IT: a contraction is two words in the treebank it was trained on ("Let 's", "do
-                # n't"), and whole it is a word it never saw - "Let's open that file, then, and read their words back to
-                # them" came back `Let's/NNP`, its verb a name, and nothing told `read` it was a command's (2026-11-09,
-                # the user: it "used the wrong tense of 'read'. It should have sounded like 'reed'"). Split for tagging
-                # only; a contraction is context either way (it is not all letters), so nothing it holds is rewritten.
+                # As the tagger learned it: a contraction is two words in the treebank ("Let 's", "do n't"),
+                # and whole it is a word the tagger never saw ("Let's" came back NNP, its verb a name).
+                # Split for tagging only; a contraction is context either way (it is not all letters), so
+                # nothing it holds is rewritten.
                 head, clitic = _clitic(text)
                 if clitic:
                     words.extend((head, clitic))
                     owner.extend((-1, -1))
                 else:
                     words.append(text)
-                    # An authored [R EH1 D] arrives with `arpa` and outranks this
-                    # whole file; a hyphenated token is two words to eSpeak and so
-                    # has no single slot in a carrier. Both stay as context.
+                    # An authored [R EH1 D] arrives with `arpa` and outranks this whole file; a hyphenated
+                    # token is two words to eSpeak and has no single slot in a carrier. Both stay as
+                    # context.
                     owner.append(ti if (not tok.get("arpa") and text.isalpha()) else -1)
             punct = str(tok.get("punct", "")).strip()
             if punct:
@@ -774,20 +654,15 @@ class Homographs:
         return words, owner
 
     def _fill(self, lang: str, wanted: list[tuple[str, str]]) -> None:
-        """Phonemize every probe not already cached, in ONE batch.
+        """Phonemize every probe not already cached, in one batch.
 
-        eSpeak is fast enough that this is not the reason for batching - 400
-        carrier utterances measured at 0.03 s. One call per sentence rather than
-        per word is simply less to go wrong in the alignment checks below.
+        One call per sentence rather than per word is less to go wrong in the alignment checks below (eSpeak
+        itself is fast: 400 carrier utterances take 0.03 s).
 
-        A CLAIM IS ONLY PERMANENT IF THE ANSWER ARRIVES. The cache entry is written
-        before the call so a word repeated inside one sentence is probed once, and
-        that claim used to survive a batch that never came back - so ONE failed call
-        turned the homograph pass off, silently, for every word in that sentence, for
-        the rest of the session. The reading falls back to eSpeak's default, which is
-        right about as often as a coin, and nothing anywhere says why. Both whole-batch
-        failures below release what this call claimed so the next sentence asks again;
-        a per-probe shape mismatch is deterministic and still sticks.
+        A claim is only permanent if the answer arrives. The cache entry is written before the call so a
+        word repeated inside one sentence is probed once, so both whole-batch failures below release what
+        this call claimed and the next sentence asks again; a per-probe shape mismatch is deterministic and
+        still sticks.
         """
         utts: list[str] = []
         slots: list[tuple[str, str, int, int]] = []  # text, family, slot, expected
@@ -805,9 +680,8 @@ class Homographs:
                 frame, at, count = CARRIERS[fam]
                 utts.append(frame.format(text))
                 slots.append((text, fam, at, count))
-            # A past-tagged NOUN/VERB pair still wants the verb reading:
-            # "the ledgers record no discrepancy" is ɹᵻkˈɔːɹd whether the tagger
-            # called it VBD or VBP. The base frame is fetched alongside so the
+            # A past-tagged noun/verb pair still wants the verb reading ("the ledgers record no discrepancy"
+            # is ɹᵻkˈɔːɹd whether the tagger said VBD or VBP). The base frame is fetched alongside so the
             # fallback in `_reading` costs no second round trip.
             if fam == "VBD" and "VB" not in entry:
                 entry["VB"] = ""
@@ -840,10 +714,9 @@ class Homographs:
             return
         for (text, fam, at, count), out in zip(slots, spoken):
             parts = str(out).strip().split()
-            # eSpeak welds function words together when it feels like it. If the
-            # frame did not come back with the shape we sent, the slot is not
-            # where we think it is, so nothing is recorded and the word keeps the
-            # reading it already had.
+            # eSpeak welds function words together at times. If the frame did not come back with the shape
+            # sent, the slot is not where we think it is: nothing is recorded and the word keeps its
+            # reading.
             if len(parts) == count:
                 self._cache[(lang, text)][fam] = parts[at]
 
@@ -851,17 +724,12 @@ class Homographs:
         entry = self._cache.get((lang, text), {})
         bare = entry.get("", "")
         got = entry.get(fam, "")
-        # A NOUN/VERB PAIR STILL WANTS THE VERB READING WHEN IT IS TAGGED PAST.
-        # "the ledgers record no discrepancy" is ɹᵻkˈɔːɹd whichever past-or-present
-        # tag it drew, and eSpeak's past frame answers with the noun for a word
-        # whose past tense is not its bare form. So a VBD that changes nothing
-        # falls through to the base verb frame.
-        #
-        # `verbal` gates it, and that gate is the difference between a fix and a
-        # regression: the auxiliary rule promotes NOUNS to VBD too ("was wound
-        # tight"), and without the gate "it was record heat" would fall through to
-        # the verb frame and be spoken ɹᵻkˈɔːɹd. A word the tagger never called a
-        # verb takes the past frame's answer or nothing.
+        # A noun/verb pair still wants the verb reading when it is tagged past ("the ledgers record no
+        # discrepancy" is ɹᵻkˈɔːɹd): eSpeak's past frame answers with the noun for a word whose past is not
+        # its bare form, so a VBD that changes nothing falls through to the base verb frame.
+        # `verbal` gates it: the auxiliary rule promotes nouns to VBD too ("was wound tight"), and without
+        # the gate "it was record heat" would take the verb frame. A word the tagger never called a verb
+        # takes the past frame's answer or nothing.
         if verbal and fam == "VBD" and (not got or _same_reading(got, bare)):
             got = entry.get("VB", "")
         if not got or not bare or _same_reading(got, bare):
@@ -875,12 +743,9 @@ class Homographs:
 def _audit(paths: list) -> int:
     """Print every reading this pass would change in a script, and why.
 
-    `tests/voice/pronounce_audit.gd` answers "which words in this chapter are uncertain";
-    this answers the follow-up, "and what did the machine actually decide about
-    them" - which is the question that comes up after a chapter has been heard.
-    Sentences are fed in reading order so the narrative prior builds exactly as it
-    does during a real reading; auditing one sentence out of context will not
-    reproduce what the chapter does, and that is the point rather than a flaw.
+    `tests/voice/pronounce_audit.gd` answers "which words in this chapter are uncertain"; this answers "what
+    did the machine decide about them". Sentences are fed in reading order so the narrative prior builds as
+    in a real reading; auditing one sentence out of context will not reproduce it.
 
         <venv>/bin/python hosts/voice/homographs.py chapters/12-*.md
     """

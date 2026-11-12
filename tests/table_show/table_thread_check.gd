@@ -1,29 +1,27 @@
 extends Node
 
-## THE SET DRESSER'S TABLE IS BUILT OFF THE MAIN THREAD ([method TablePreview._stand]). Reported
-## 2026-10-08: every picture the set dresser took froze the app for five or six seconds. On a fixture of
-## its own (an episode under its own root, a small table of two things):
+## The set dresser's table is built off the main thread ([method TablePreview._stand]). On a fixture of its own (an episode under
+## its own root, a small table of two things):
 ##
-##   - THE SAME TABLE: built on a worker, out of the tree, it stands every thing where a main-thread build
+##   - the same table: built on a worker, out of the tree, it stands every thing where a main-thread build
 ##     stands it, leaves off what that leaves off, names the same light, and photographs the same, pixel for
 ##     pixel - with the table's own light and without it (the lamp is aimed as look_at aims it).
-##   - THE APP KEEPS DRAWING while it is built: several frames, none as long as the build - the control,
+##   - the app keeps drawing while it is built: several frames, none as long as the build - the control,
 ##     the same table built on the main thread, is one frame at least as long as the whole build. (Not
 ##     tighter: on a table this small the fixed costs are most of the build, and a GPU busy elsewhere
 ##     stretches a frame.)
-##   - GIVEN BACK MID-BUILD, the stage being built is dropped, never swapped in; and the preview stands a
+##   - given back mid-build, the stage being built is dropped, never swapped in; and the preview stands a
 ##     table again afterward.
-##   - A TABLE PLAYED IS BUILT ON A WORKER TOO (2026-11-05, "We shouldn't be doing work in the main thread, as a rule"): on a stage
-##     in the tree it leaves the tree to be built and comes back to its stage, the app drawing all the while (several frames, none
-##     as long as the build), its table stood, its bake on a thread of its own, its camera filming the stage.
-##   - A HIDDEN WINDOW DRAWS NOTHING (reported 2026-10-19: the app minimized, a `put` waited 35 minutes for a
-##     picture and the set dresser gave up): with the render loop off, as a minimized window leaves it, a
-##     picture still comes, the same pixel for pixel as one taken while the app draws ([method
-##     TablePreview._render]) - the control, in that state not one frame is drawn of itself.
+##   - a table played is built on a worker too: on a stage in the tree it leaves the tree to be built and comes back to its stage, the
+##     app drawing all the while (several frames, none as long as the build), its table stood, its bake on a thread of its own, its
+##     camera filming the stage.
+##   - a hidden window draws nothing: with the render loop off, as a minimized window leaves it, a picture still comes, the same pixel
+##     for pixel as one taken while the app draws ([method TablePreview._render]) - the control, in that state not one frame is
+##     drawn of itself.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/table_thread_check.gd 300
 ##
-## A BOOT probe (the medium reaches the Director) on the GPU (a picture needs a real renderer).
+## A boot probe (the medium reaches the Director) on the GPU (a picture needs a real renderer).
 
 const ROOT := "user://table_thread_check"
 
@@ -90,7 +88,7 @@ func _run() -> void:
 	for pair in [["with no light of its own", TABLE], ["with its own light", lit]]:
 		var raw: Dictionary = pair[1]
 		var tag := String(pair[0])
-		# BUILT ON A WORKER: the main thread's longest frame while it is built
+		# Built on a worker: the main thread's longest frame while it is built
 		_time(true)
 		var t0 := Time.get_ticks_msec()
 		var err: String = await prev._stand(raw)
@@ -109,8 +107,7 @@ func _run() -> void:
 			_ok(((prev._medium._lamp as SpotLight3D).transform as Transform3D).is_equal_approx(ref.transform),
 				"the lamp is not aimed as look_at aims it: %s against %s" % [(prev._medium._lamp as SpotLight3D).transform, ref.transform])
 			ref.free()
-		# THE CONTROL: the same table built where the app draws, as the preview used to build it - the frame
-		# it is built in timed from the frame before to the frame after
+			# The control: the same table built where the app draws - the frame it is built in timed from the frame before to the frame after
 		var vp := SubViewport.new()
 		vp.own_world_3d = true
 		vp.size = TablePreview.SHEET
@@ -141,9 +138,8 @@ func _run() -> void:
 		_ok(not (a["stood"] as Array).is_empty(), "nothing stood on the table %s (the comparison proves nothing)" % tag)
 		var diff := _differ(a["image"], b["image"])
 		_ok(diff == 0, "the table %s built on a worker photographs differently: %d sampled pixels (-1: no picture)" % [tag, diff])
-	# A TABLE PLAYED IS BUILT ON A WORKER TOO (the user, 2026-11-05: "We shouldn't be doing work in the main thread, as a rule"): on a
-	# stage in the tree, as the show's is, it leaves the tree to be built and comes back - the app drawing all the while, its bake on a
-	# thread of its own, its camera the stage's
+		# A table played is built on a worker too: on a stage in the tree, as the show's is, it leaves the tree to be built and comes back
+		# - the app drawing all the while, its bake on a thread of its own, its camera the stage's
 	TableMedium.away_in_tests = true
 	TablePhysics.threaded = true
 	var stage := SubViewport.new()
@@ -177,7 +173,7 @@ func _run() -> void:
 	lm.release()
 	stage.queue_free()
 	await get_tree().process_frame
-	# A HIDDEN WINDOW: the render loop off, as a minimized window leaves it
+	# A hidden window: the render loop off, as a minimized window leaves it
 	var shown: Dictionary = await _picture(prev, lit)
 	RenderingServer.render_loop_enabled = false
 	var posts := [0]
@@ -198,7 +194,7 @@ func _run() -> void:
 	_ok(hidden.get("image") != null, "no picture came in 30 s while nothing was drawn")
 	var unseen := _differ(shown.get("image"), hidden.get("image"))
 	_ok(unseen == 0, "a picture taken while nothing is drawn differs from one taken while the app draws: %d sampled pixels (-1: no picture)" % unseen)
-	# GIVEN BACK MID-BUILD
+	# Given back mid-build
 	var gone := func() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame

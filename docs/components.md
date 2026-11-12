@@ -3,19 +3,17 @@
 
 What a note can carry. A note is a markdown file, and each block under `ghost:` in its frontmatter is a component attached to it. **New** in the notes list makes a note with nothing attached, **+** attaches a component and the × on its card takes it off again, and what a note does is read off what it has attached.
 
-Components - the parts a note is made of (next/notes.md, "A component"). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and what it gives, the components it brings with it, the room it takes in a note, what it asks of the platform (`Capabilities`), which groups of the script's marks it brings, the frontmatter block it keeps, and the card it is set on.
+Components - the parts a note is made of (next/notes.md, "A component"). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and gives, the components it brings with it, the room it takes in a A note is what its components make it: one kind of new note (its words only), and "+" attaches the rest (`attach_menu`). What a note can do, which panel runs it (`workspace_of`) and what it may take next are read off what is attached, never off a list of kinds of note.
 
-A NOTE IS WHAT ITS COMPONENTS MAKE IT. There is one kind of new note - its words and nothing else - and "+" attaches the rest (`attach_menu`); what a note can do, which panel runs it (`workspace_of`) and what it may take next are read off what is attached, never off a list of kinds of note. A song and a Medium is a seeded show; add a Storyboard and it is a show written by hand; a Voice reads the words, and Table has agents write them.
+Needs and provides are typed names ghost matches ("text", "audio", "reading", "picture", "moments"). A component never names another to work, only what it needs, so a need nobody provides is a sentence on a card.
 
-NEEDS AND PROVIDES ARE TYPED NAMES that ghost matches, the way a scene's `morph_out` and `morph_in` already are: "text", "audio", "reading", "picture", "moments". A component never names another to work - only what it needs - so a need nobody provides is a sentence on a card, never a branch somewhere else.
+Slots say how many (`SLOTS`): components naming the same slot are alternatives, and a note has one of them.
 
-SLOTS SAY HOW MANY (`SLOTS`): components that name the same slot are alternatives, and a note has one of them. A show has one clock and one presentation, so a song and a voice are not attached together - "+" grays the second, and says which to detach.
+The stage is a capability: anything shown on it asks for `forward_plus`, the desktop renderer, so on a phone every component but the text is impossible and "+" offers nothing.
 
-THE STAGE IS A CAPABILITY: anything shown on it asks for `forward_plus`, the desktop renderer, so on a phone - where a note is its text and nothing more - every component but the text is impossible and "+" offers nothing (`attach_menu`).
+A row's `comes_with` marks a part never attached by itself that brings nothing: its block is kept by whichever of those components the note has (`blocks_of`), and a note carrying its block with none has the first (`attached_of`).
 
-A PART THAT COMES WITH ANOTHER IS A ROW'S `comes_with` (optional): it is never attached by itself and brings nothing, its block is kept by whichever of those components the note has (`blocks_of`) - a novel's or a letter's pictures' look, with the Medium - and a note carrying its block with none of them has the first (`attached_of`). As `requires`, the Medium would come with it.
-
-A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that builds the component's card, loaded when a panel builds it (`NoteCards.make`). By path because this registry is under every card (docs/structure.md): a row is how it names one. The script answers `KEY` (its block), `for_note(ctx)`, `capture()` and `apply(block)`; `tests/notes/components_check.gd` loads each and holds it to that.
+A row's `script` is the path of the script that builds the component's card, loaded when a panel builds it (`NoteCards.make`); by path because this registry is under every card. The script answers `KEY` (its block), `for_note(ctx)`, `capture()` and `apply(block)`; `tests/notes/components_check.gd` holds each to that.
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 

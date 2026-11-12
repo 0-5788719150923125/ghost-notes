@@ -1,41 +1,34 @@
 extends SceneTree
 
-## coarticulation_check - the mouth a Likeness's voice wants ([Visemes]): every phone pulls toward its
-## class's shape with a dominance that falls off round its center (Cohen and Massaro, 1993), and the
-## mouth is the pulls' weighted mean.
+## coarticulation_check - the mouth a Likeness's voice wants ([Visemes]): every phone pulls toward its class's shape with a
+## dominance that falls off round its center (Cohen and Massaro, 1993), and the mouth is the pulls' weighted mean.
 ##
 ##   godot --headless --path . --script tests/likeness/coarticulation_check.gd
 ##
-## A FAST "AA M AA" CLOSES THE LIPS AT M'S CENTER: the lips' strong, quick hold wins its moment over the
-## open vowels round it, so the jaw there is near M's own and far from the vowels'. The control sets M's
-## dominance to nothing, and the jaw there must stay open.
+## A fast "aa m aa" closes the lips at M's center: the lips' strong, quick hold wins its moment over the open vowels round it,
+## so the jaw there is near M's own and far from the vowels'. Control: M's dominance set to nothing, and the jaw there stays open.
 ##
-## THE VOICE'S SYMBOLS FIND THEIR CLASSES: ghost's ARPAbet (stress digits and all) and Piper's IPA, and
-## a mark or a pause is no class. A silence between phones is a rest.
+## The voice's symbols find their classes: ghost's ARPAbet (stress digits and all) and Piper's IPA; a mark or a pause is no
+## class. A silence between phones is a rest.
 ##
-## THE TWO MOUTHS DRAWN ([Visemes.strongest]) - at M's center M's own, and in fast speech never a jump:
-## stepped a tenth of a millisecond at a time, each phone's share of the drawn mouth moves by little (in
-## fast speech one mouth gives way to the next in some 15 ms, so a millisecond's step is no test of a
-## jump), since the two strongest pulls are each less the third's. The control is the plain two
-## strongest, which must jump as a third overtakes one, however small the step.
+## The two mouths drawn ([Visemes.strongest]): at M's center M's own, and in fast speech never a jump - stepped a tenth of a
+## millisecond at a time, each phone's share of the drawn mouth moves by little, since the two strongest pulls are each less the
+## third's. Control: the plain two strongest, which must jump as a third overtakes one, however small the step.
 ##
-## THE SPLATS' MOUTH MOVES SMOOTHLY FRAME BY FRAME ([Visemes.mix], 2026-10-24: the two strongest, played on a
-## head of splats, morphed "at EXACTLY the same time every phoneme changes"): on the quick phrase at 30 frames a
-## second, from every phase, no sound's share moves more than 0.4 from one frame to the next, and at M's center
-## in the fast "AA M AA" the lips' share is still most of it. The control is the two strongest at the same
-## frames, which must move a share by more than 0.6 - the jump the check is for.
+## The splats' mouth moves smoothly frame by frame ([Visemes.mix]): on the quick phrase at 30 frames a second, from every phase,
+## no sound's share moves more than 0.4 from one frame to the next, and at M's center in the fast "aa m aa" the lips' share is
+## still most of it. Control: the two strongest at the same frames, which must move a share by more than 0.6.
 ##
-## THE LEARNED MOUTH IS READ AS IT WAS TRAINED ([LikenessPlan], actor.py's `contexts`): a made network of one
-## neuron that opens the jaw by tanh of how much of "open" fills the window - a window full of it gives
-## tanh(1), half of it tanh(0.5), silence nothing; and the inputs of a moment's every window sum to one.
+## The learned mouth is read as it was trained ([LikenessPlan], actor.py's `contexts`): a made network of one neuron that opens
+## the jaw by tanh of how much of "open" fills the window - a full window gives tanh(1), half of it tanh(0.5), silence nothing;
+## and the inputs of a moment's every window sum to one.
 ##
-## THEIR OWN MOUTH FOR EACH SOUND ([LikenessMedium.own_mouths], a head of splats): pushed by Articulation, never
-## past how far their own lips part, nor a score past their own top (see `_own_mouths`), nor folding the face's
-## triangles past FOLD_MOST (see `_unfolded`; its control, the turn unheld).
+## Their own mouth for each sound ([LikenessMedium.own_mouths], a head of splats): pushed by Articulation, never past how far
+## their own lips part, nor a score past their own top (see `_own_mouths`), nor folding the face's triangles past FOLD_MOST
+## (see `_unfolded`; its control, the turn unheld).
 ##
-## THE BREATH GOES ON FROM WHERE IT WAS ([LikenessPlan.breath]): over speech with pauses long and short, it
-## never moves more than a little in a millisecond - and it does move (its control: it spans most of its
-## range, so the check is no flat line's).
+## The breath goes on from where it was ([LikenessPlan.breath]): over speech with pauses long and short, it never moves more
+## than a little in a millisecond - and it does move (control: it spans most of its range, so the check is no flat line's).
 
 var _fails := 0
 var _checks := 0
@@ -68,7 +61,7 @@ func _run() -> void:
 	targets["open"] = PackedFloat32Array([0.8, 0.0, 0.0])
 	targets["pbm"] = PackedFloat32Array([0.02, 0.9, 0.0])
 	targets["rest"] = PackedFloat32Array([0.05, 0.5, 0.0])
-	# a fast "AA M AA": 90 ms a phone
+	# a fast "aa m aa": 90 ms a phone
 	var phones := [{"p": "AA", "t0": 0.0, "t1": 0.09}, {"p": "M", "t0": 0.09, "t1": 0.18}, {"p": "AA", "t0": 0.18, "t1": 0.27}]
 	var line := Visemes.timeline(phones)
 	var at_m := Visemes.blend_at(0.135, line, targets, n)
@@ -81,7 +74,7 @@ func _run() -> void:
 	(rows["pbm"] as Dictionary)["strength"] = 0.0
 	var weak := Visemes.blend_at(0.135, line, targets, n, 0, rows)
 	_ok(weak[0] > 0.5, "with M's dominance at nothing the jaw at its center still closed (%.3f): the check cannot fail" % weak[0])
-	# FAR FROM EVERY PHONE, THE REST
+	# Far from every phone, the rest
 	var far := Visemes.blend_at(5.0, line, targets, n)
 	_ok(absf(far[0] - 0.05) < 1e-3, "far from every phone the mouth is not at rest: %s" % str(far))
 	# A PURE FUNCTION: asked from anywhere in the line, the same mouth
@@ -114,7 +107,7 @@ func _run() -> void:
 		was_plain = now_plain
 	_ok(worst < 0.02, "a phone's share of the drawn mouth jumped %.3f in a tenth of a millisecond" % worst)
 	_ok(plain > 0.15, "the plain two strongest jumped only %.3f: the check cannot fail" % plain)
-	# THE SPLATS' MOUTH, FRAME BY FRAME
+	# The splats' mouth, frame by frame
 	var m_at := Visemes.mix(0.135, line)
 	_ok(float(m_at.get("pbm", 0.0)) > 0.7, "the lips' share at M's center in fast speech is only %.3f" % float(m_at.get("pbm", 0.0)))
 	var frame_mix := 0.0
@@ -136,7 +129,7 @@ func _run() -> void:
 			tf += 1.0 / 30.0
 	_ok(frame_mix < 0.4, "a sound's share of the splats' mouth moved %.3f from one frame to the next" % frame_mix)
 	_ok(frame_two > 0.6, "the two strongest moved a share only %.3f a frame: the check cannot fail" % frame_two)
-	# THE LEARNED MOUTH, as trained
+	# The learned mouth, as trained
 	var plan := LikenessPlan.new()
 	plan._classes = ["rest", "open"]
 	plan._offsets = PackedFloat32Array([0.0])
@@ -182,7 +175,7 @@ func _run() -> void:
 	quit(1 if _fails > 0 else 0)
 
 
-## THEIR OWN MOUTH FOR EACH SOUND ([method LikenessMedium.own_mouths]): on a made face (the forehead's top at 0, the
+## Their own mouth for each sound ([method LikenessMedium.own_mouths]): on a made face (the forehead's top at 0, the
 ## chin 100 below, the inner lips 2 apart - parted 0.02 of its height) whose expression is the jaw's score alone, a
 ## sound that parts the lips 3 more, pushed 3 times, stops where their own lips part most (0.08), and its jaw
 ## score is pushed as far; one that closes them stops at their least (0.004); pushed once, a sound is their own
@@ -237,7 +230,7 @@ func _own_mouths() -> void:
 	s.free()
 
 
-## A SOUND'S MOUTH NEVER FOLDS THE FACE ([method LikenessMedium.unfolded]): a triangle whose corner its move lifts 5 a
+## A sound's mouth never folds the face ([method LikenessMedium.unfolded]): a triangle whose corner its move lifts 5 a
 ## push, 10 from the others, turns atan(w / 2) - pushed 3 it would turn 56 degrees, so it stops where it turns
 ## FOLD_MOST (w = 2 tan 40 = 1.678); pushed once (27 degrees) it is as pushed; a triangle the move does not touch
 ## never stops it.

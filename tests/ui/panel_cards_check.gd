@@ -7,19 +7,17 @@ extends Node
 ## next/notes.md step 2: each mode's sections in colored cards. Checked on the Generative, Synthesis and Cards panels, on a
 ## note's own panel (a song played by hand) and on Masking's, before a clip is chosen:
 ##
-##   EVERY SECTION IS A CARD: a key of its panel's, a title, a family with a color, and a chip in the row.
-##   A CHIP BRINGS ITS CARD INTO VIEW (2026-11-09: a card no longer folds, so neither its bar nor its chip folds it): on a
-##   panel scrolled to its top, the last card's chip brings it out of the bottom pile, and its rows still show - on the
-##   Generative and Cards panels, which overflow the window (Synthesis' three cards fit it, and have no pile).
+## - Every section is a card: a key of its panel's, a title, a family with a color, and a chip in the row.
+## - A chip brings its card into view: on a panel scrolled to its top, the last card's chip brings it out of the bottom
+##   pile, and its rows still show - on the Generative and Cards panels, which overflow the window (Synthesis' three
+##   cards fit it, and have no pile).
+## - Every card says what it is for: its title bar's tooltip is its blurb, and its chip's says it before what a click
+##   does - a component's card the blurb of its row, the words "+" offered it with. "+"'s own tooltips are folded as the
+##   menu opens (Boot.wrap_items): no line wider than a tooltip is let be.
 ##
-##   EVERY CARD SAYS WHAT IT IS FOR (2026-11-11, the user: "after it's added, there is no longer a way to know what each
-##   component is for"): its title bar's tooltip is its blurb, and its chip's says it before what a click does - a
-##   component's card the blurb of its row, the words "+" offered it with. And "+"'s own tooltips are folded as the menu
-##   opens (Boot.wrap_items; "the description can be very wide"): no line wider than a tooltip is let be.
-##
-## THE CONTROL: before the press the last card lies in the bottom pile, or "brought" proves nothing. A card made with no
-## blurb must not pass as saying what it is for, and the menu's widest blurb must be wider than a tooltip unfolded. The deck's own
-## mechanics (where a press brings a card, the piles, the fan) are panel_deck_check's.
+## Controls: before the press the last card lies in the bottom pile, or "brought" proves nothing. A card made with no
+## blurb must not pass as saying what it is for, and the menu's widest blurb must be wider than a tooltip unfolded. The
+## deck's own mechanics (where a press brings a card, the piles, the fan) are panel_deck_check's.
 
 var _fails: Array = []
 
@@ -99,7 +97,7 @@ func _panel(name: String, make: Callable, overflows: bool) -> void:
 	await _settle(1)
 
 
-## A CHIP BRINGS ITS CARD: the last one, from the bottom pile of a panel at its top.
+## A chip brings its card: the last one, from the bottom pile of a panel at its top.
 func _brings(name: String, panel: SidePanel) -> void:
 	var cards: Array = panel.cards()
 	var last: Card = cards[cards.size() - 1]
@@ -115,9 +113,8 @@ func _brings(name: String, panel: SidePanel) -> void:
 	_ok(panel._deck.side_of(last) == 0 and last.body.is_visible_in_tree(), "%s: its chip brings '%s' into view, its rows showing" % [name, last.title])
 
 
-## A NOTE'S OWN PANEL: a note with a song, a medium and a storyboard, made in a folder of the gate's
-## own. Its components are cards - the Body, the Song, the Medium, the Storyboard - keyed by the
-## note's panel, a chip each.
+## A note's own panel: a note with a song, a medium and a storyboard, made in a folder of the gate's own. Its
+## components are cards - the Body, the Song, the Medium, the Storyboard - keyed by the note's panel, a chip each.
 func _note_panel() -> void:
 	var keep := NoteStore.root
 	NoteStore.root = "user://panel_cards_check"
@@ -147,7 +144,7 @@ func _note_panel() -> void:
 	DirAccess.remove_absolute(note.get_base_dir())
 
 
-## WHAT A CARD SAYS IT IS FOR: a blurb, its bar's tooltip, and its chip's tooltip leading with it (a chip in [param row];
+## What a card says it is for: a blurb, its bar's tooltip, and its chip's tooltip leading with it (a chip in [param row];
 ## null asks of the bar alone). Boot may have folded a tooltip already, so each is read unfolded.
 func _says(card: Card, row: CardRow) -> bool:
 	if card.blurb.strip_edges().is_empty() or _flat(card.head.tooltip_text) != _flat(card.blurb):
@@ -163,7 +160,7 @@ static func _flat(tip: String) -> String:
 	return tip.replace("\n\n", "\u0001").replace("\n", " ").replace("\u0001", "\n\n")
 
 
-## "+" OPENED AS A PRESS OPENS IT, its tooltips folded by then: no line of one is wider than a tooltip may be. The control:
+## "+" opened as a press opens it, its tooltips folded by then: no line of one is wider than a tooltip may be. The control:
 ## the widest item's tooltip, unfolded, is wider than that.
 func _menu_folds(panel: SidePanel) -> void:
 	var pop := panel.plus.get_popup()
@@ -188,7 +185,7 @@ func _menu_folds(panel: SidePanel) -> void:
 	_ok(tips > 0 and widest <= Boot.TIP_MAX_PX + 1.0, "'+' folds its tooltips as it opens: the widest line %d px of %d" % [int(widest), int(Boot.TIP_MAX_PX)])
 
 
-## MASKING, before a clip is chosen: the framework's panel with one card, the Clip.
+## Masking, before a clip is chosen: the framework's panel with one card, the Clip.
 func _masking() -> void:
 	var me := MaskEditor.new()
 	add_child(me)

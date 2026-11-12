@@ -1,22 +1,20 @@
 extends SceneTree
 
-## agent_effort_check - the REASONING EFFORT a card show sets for its writer and its painter
-## (2026-10-06, the user: "if they do - I think we should make that an option that we would be able
-## to set"), each CLI's own setting, with no agent run.
+## agent_effort_check - the reasoning effort a card show sets for its writer and painter, each CLI's own
+## setting, with no agent run.
 ##
 ##   godot --headless --path . --script res://tests/agents/agent_effort_check.gd
 ##
-## - CLAUDE: `--effort <level>` when one is chosen, nothing when not (the author's own Claude Code
-##   default for the model, read from `modelSettings` to label Default); the CLI's five levels.
-## - CODEX: `-c model_reasoning_effort=<level>`, the chosen one or ghost's own (the writer's tier:
-##   medium, low for designs; the painter: low); the levels each model's catalog entry offers.
-## - A WITHDRAWN MODEL IS NEVER ASKED FOR (2026-10-26: gpt-6.1-sol, gone from the account's Codex catalog, failed
-##   every painting): a model, or a config's default, the catalog does not hold runs as its first listed model by
-##   priority, and Default is labelled with it. The control: one the catalog holds - hidden too - is asked for as
-##   chosen, and with no catalog to ask, nothing is changed.
-## - AMAZON NOVA: Nova 2's `reasoningConfig` when a level is chosen, nothing otherwise and nothing
-##   for a model that does not think; at "high" no output cap, as Nova 2 requires.
-## - THE PANEL: an Effort picker beside each model picker, its choice in the show's knobs and the
+## - Claude: `--effort <level>` when chosen, nothing when not (the author's own default, read from
+##   `modelSettings` to label Default); the CLI's five levels.
+## - Codex: `-c model_reasoning_effort=<level>`, the chosen one or ghost's own (writer: medium, low for
+##   designs; painter: low); the levels each model's catalog entry offers.
+## - A withdrawn model is never asked for: a model, or a config's default, the catalog does not hold runs
+##   as its first listed model by priority, and Default is labelled with it. Control: one the catalog
+##   holds (hidden too) is asked for as chosen, and with no catalog nothing changes.
+## - Amazon Nova: Nova 2's `reasoningConfig` when a level is chosen, nothing otherwise or for a model that
+##   does not think; at "high" no output cap.
+## - The panel: an Effort picker beside each model picker, its choice in the show's knobs and the
 ##   producer's spec, reset when the agent changes, kept (marked) when a model does not offer it.
 
 const CODEX_FIXTURE := {"models": [
@@ -107,7 +105,7 @@ func _codex() -> bool:
 	_ok(_keys(TextGen.Codex.efforts("")) == ["", "low", "high", "max"], "Default model: the config's model's levels")
 	_ok(_keys(TextGen.Codex.efforts("not-listed")) == ["", "low", "medium", "high", "max"],
 		"a model the catalog does not list: every level any listed model takes")
-	# A WITHDRAWN MODEL IS NEVER ASKED FOR
+	#A withdrawn model is never asked for
 	var cat := ImageGen.Codex.catalog()
 	_ok(cat.size() == 2 and ImageGen.Codex.runnable("m-small", cat, "m-big") == "m-small" and ImageGen.Codex.runnable("", cat, "m-big") == "",
 		"the control: a model the catalog holds, and the config's own, are asked for as chosen")
@@ -160,9 +158,8 @@ func _panel() -> bool:
 	panel.workspace = "table"
 	panel._build_panel()
 	var ed = panel._block_cards["table"]      # the episode's card ([EpisodeCard])
-	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
-	# this has open, and DocSource.set_field writes a synced document at once - so this gate read
-	# the author's real show (and failed on its tags) and could have written into it.
+	#Not the author's show: a panel comes up synced to the document the person running this has open, and
+	#DocSource.set_field writes a synced document at once.
 	panel._doc._sync = false
 	panel._doc._fields = {}
 	ed._knobs["writer"] = "claude"

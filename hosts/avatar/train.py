@@ -9,7 +9,7 @@ frames), the rig rig.py wrote, what stands before them (whole frames; "" when no
 folder for pictures of it against held-out frames, and the stretch of the video [t0, t1] it learns from (one
 camera placement: a set's shots can stand a little apart).
 
-EVERY SPLAT IS BOUND TO A FRAME OF ITS OWN that they carry (GaussianAvatars' binding): a triangle of the face -
+Every splat is bound to a frame of its own that they carry (GaussianAvatars' binding): a triangle of the face -
 its centre, its edge and normal for axes, its mean edge for a unit; the head itself (hair, ears, the top of
 the head, which no triangle reaches without a lever that would swing it with the brows); or one of the body's
 bones (rig.py's `BODY`: the torso, the shoulders, each arm's upper arm, forearm and hand, from the pose). A
@@ -17,45 +17,37 @@ splat keeps its place, turn and size in its frame's terms, so whatever moves its
 below the mouth is bound to the lower face's edge, which the jaw carries. A bone not seen in a frame (a hand
 under the desk: MediaPipe guesses where) has its splats drawn clear there - learned only where they are seen.
 
-THE ROOM IS A PLATE, LEARNED: the camera never moves, so the room is one picture seen from one place, with a
+The room is a plate, learned: the camera never moves, so the room is one picture seen from one place, with a
 gain per frame for the day's light. With the room behind them learned, the splats at their edges are not asked
-to paint the difference between a guessed room and the true one (the head alone, over a fixed plate, grew a
-halo against the wall). IT IS THE ROOM AS THE FRAMES SHOW IT ([method room_of]), AND LEARNED ONLY THERE (the
-user, 2026-10-23: "the heavy blurring around the head ... so that the true wall might show through"): it had
-started as the set's room picture, which holds the still's own person where the room was never seen - right
-for the 2D renderer, which draws them over it where they stand - so the plate kept HIS FACE behind the head of
-splats (no frame shows the wall there to unlearn it, and it learned more of him through their soft edges), the
-splats leaned on it, and as the head turned a second face showed round it. Each pixel is the median of the
+to paint the difference between a guessed room and the true one. It is the room as the frames show it
+([method room_of]), and learned only there: the set's room picture holds the still's own person where the room
+was never seen, which would keep their face behind the head of splats. Each pixel is the median of the
 frames whose person leaves it; a pixel none shows is filled from round it ([method fill_round]) and never
 learned, so the splats must paint all of them, and what shows past their edges is wall.
 
-EACH STEP: one frame and a WINDOW of it (WINDOW square; half of them round the face, where the most is), the
+Each step: one frame and a window of it (WINDOW square; half of them round the face, where the most is), the
 face as it was tracked in it (MediaPipe's own points) and the body as its pose stands, every splat placed,
 rendered over the plate and compared with the frame: L1 and SSIM, and the drawn cover against the person
 MediaPipe sees there; what stands before them (the microphone) is no part of the loss. A small colour
 correction per frame takes the day's changing light out of them.
 
-A SPLAT CHANGES WITH THE FACE'S EXPRESSION (GaussianBlendshapes, SIGGRAPH 2024): beside its place and colour,
+A splat changes with the face's expression (GaussianBlendshapes, SIGGRAPH 2024): beside its place and colour,
 EXPRESSIONS shifts of each, mixed by the frame's expression - its 52 scores' principal components over the frames
-learned from, each scaled to its spread (`Frames.expr`) - pulled toward none (DELTA_PULL). ONLY ON THE FACE, AND
-FADING WITH DISTANCE from its triangle (SHIFT_NEAR to SHIFT_FAR units): a splat far from its triangle - the beard's
-tip, the hair's edge - swings on a lever with every shift, and they flickered (2026-10-23: "the tip of the beard,
-along the sweater, around the head against the wall"). AND EACH PART OF THE FACE ITS OWN (2026-10-25, the user: "The
-shape/color of the face and head can be stable for several seconds, but then it 'flickers' into something else"):
-the components of all 52 scores at once mixed the parts, and the shifts learned whatever went with a score in their
-footage - a glance aside came with the head turned to a lit screen, so a played glance, 3.4 of its component's
-spreads in 60 ms, widened the cheek and moved the face's light. So each part (parts.py: the eyes, the brows, the
+learned from, each scaled to its spread (`Frames.expr`) - pulled toward none (DELTA_PULL). Only on the face, and
+fading with distance from its triangle (SHIFT_NEAR to SHIFT_FAR units): a splat far from its triangle - the beard's
+tip, the hair's edge - swings on a lever with every shift and flickers. And each part of the face its own:
+components of all 52 scores at once mix the parts, and the shifts learn whatever went with a score in the
+footage (a glance aside with the head turned to a lit screen). So each part (parts.py: the eyes, the brows, the
 mouth) has components of its own scores alone (`components`), and a splat takes a part's shifts only as far as the
 part reaches its triangle (`reach_of`).
 
-THE SPLATS GROW WHERE THEY ARE WANTED (3DGS's densification): every DENSIFY_EVERY steps until DENSIFY_UNTIL (or
-DENSIFY_SHARE of a shorter run: one that ended within OPACITY_RESET of a reset kept them faint - 12,000 steps ended
-on one, and its held-out frames fell from 21.2 dB to 17.0),
+The splats grow where they are wanted (3DGS's densification): every DENSIFY_EVERY steps until DENSIFY_UNTIL (or
+DENSIFY_SHARE of a shorter run: one that ends within OPACITY_RESET of a reset keeps them faint),
 a splat whose place on the picture is pulled hard is copied when it is small and split when it is large; one
 nearly clear is dropped; every OPACITY_RESET steps all are made faint again; after, those nearly clear are
-dropped every PRUNE_EVERY steps. NO PUSH FOR A SPLAT TO BE THERE OR NOT (it cut the whole of him from 116k to
-18k, the torso to 1,030 splats of 20 px, and the sweater went to a blur - the head alone was no sharper for it).
-The pull's spread is said every 1000 steps (its median and 95th percentile), to set GRAD_PULL by.
+dropped every PRUNE_EVERY steps. Nothing pushes a splat to be there or not (that cut the torso to a few large
+splats and blurred the sweater). The pull's spread is said every 1000 steps (its median and 95th percentile),
+to set GRAD_PULL by.
 
 Writes <out> (avatar.npz), beside it what Godot reads (`export`: <out>.json, <out>.bin and <out>.plate.png)
 and, every so often, <preview>/<step>.jpg.
@@ -89,7 +81,7 @@ DENSIFY_FROM = 500
 DENSIFY_UNTIL = 20000
 DENSIFY_SHARE = 2.0 / 3.0
 DENSIFY_EVERY = 100
-# A quarter of 3DGS's: learned in windows, the whole of them grew only 77k to 116k at its 0.0002.
+# A quarter of 3DGS's: learned in windows, the whole of them grows little at its 0.0002.
 GRAD_PULL = 0.00005
 OPACITY_RESET = 3000
 PRUNE_BELOW = 0.005
@@ -102,12 +94,11 @@ DELTA_PULL = 1e-3
 SHIFT_NEAR = 1.0
 SHIFT_FAR = 2.0
 # A splat's size where it is copied rather than split, as a share of the window: 3DGS's 1% is of a whole
-# scene's extent, and a head that fills the square needs a finer cut (at 1% the median splat stood 4 px wide).
+# scene's extent, and a head that fills the square needs a finer cut.
 SPLIT_SHARE = 0.002
-# THE PLACES SETTLE (3DGS's own schedule, which these rates came from without it - 2026-10-24, the head's softness: no
-# rate fell in any loop, and every place went on wandering a step's worth to the end): the place, the expression's and
-# the look's shifts of place are learned at their rate times DECAY_TO ** (the share of the run done). On one video at
-# equal steps the eyes and nose came out 0.51 to 0.67 as sharp as the frame, the beard 0.31 to 0.55, the PSNR the same.
+# The places settle (3DGS's own schedule): the place, the expression's and the look's shifts of place are
+# learned at their rate times DECAY_TO ** (the share of the run done); a constant rate leaves every place
+# wandering a step's worth to the end, which softens the head.
 DECAYS = ("place", "place_d", "look_place")
 DECAY_TO = 0.01
 # Once the splats stop growing, those nearly clear are dropped this often.
@@ -129,7 +120,7 @@ MEASURED = 48
 # The head's own unit, in the neutral face's pixels: a splat bound to the head moves in steps of the same
 # size as one on a triangle (whose unit is its mean edge, about this).
 HEAD_UNIT = 16.0
-# THE ROOM AS THE FRAMES SHOW IT ([method room_of]): read from this many of the frames learned from; the person
+# The room as the frames show it ([method room_of]): read from this many of the frames learned from; the person
 # in each (MediaPipe's segmentation, past PLATE_PERSON) grown by PLATE_GROW pixels - their hair's loose edge -
 # and left out; a pixel fewer than PLATE_LEAST of them show is filled from round it, and one PLATE_SURE of them
 # show is learned in full (one fewer frames show is learned less: a rare glimpse past their shoulder).
@@ -148,7 +139,7 @@ TORSO = 1.35
 AHEAD = 16
 # How far past their head's region (`head_region`) a splat bound to the head or the face may stand, in pixels.
 HEAD_REACH = 16
-# THE BODY BENDS ([method second_of]): how much of the still the torso's lowest splats keep (the seat, which does not
+# The body bends ([method second_of]): how much of the still the torso's lowest splats keep (the seat, which does not
 # lean), from CHEST shoulder widths below the shoulders' line down to the hips (TORSO); and the most a splat at a
 # joint takes of the bone across it.
 HOLD_LOW = 0.9
@@ -271,7 +262,7 @@ class Frames:
         self.expr_mean, self.expr_basis, self.expr_scale, self.expr_part = components(b, self.train)
         self.expr_reach = None
         if spec.get("expr"):
-            # THE COMPONENTS ITS SPLATS WERE LEARNED WITH (an avatar's, or the actor's head's - learned from every
+            # The components its splats were learned with (an avatar's, or the actor's head's - learned from every
             # video): its shifts are mixed by those, never by these frames' own
             self.take_expr(np.load(spec["expr"]))
         self.expr = t((b - self.expr_mean) @ self.expr_basis / np.maximum(self.expr_scale, 1e-6))
@@ -383,8 +374,7 @@ def room_of(pictures, people, device):
         band = pics[:, y:y + PLATE_BAND].float() / 255.0
         band[covered[:, y:y + PLATE_BAND]] = float("nan")
         plate[y:y + PLATE_BAND] = torch.nanmedian(band, dim=0).values
-    # counted a frame at a time: summed whole, the frames' masks were made 64-bit integers first (2.3 GB for a set's
-    # 146 at 1080p - a bake died of it, 2026-10-24, on a card shared with another trainer)
+    # counted a frame at a time: summed whole, the frames' masks become 64-bit integers first (gigabytes for a set)
     count = torch.zeros((h, w), device=device)
     for c in covered:
         count += (~c).float()
@@ -707,7 +697,7 @@ def initial(rig: Rig, data: Frames, device, up_to_face=False):
         return img[px[:, 1], px[:, 0]].clamp(0.02, 0.98)
 
     binds, places, cols = [], [], []
-    # THE FACE, AND ROUND IT (in the frame the shoulders are seen best)
+    # The face, and round it (in the frame the shoulders are seen best)
     img, person = data.get(best, ahead=False)
     origin, axes, unit, verts = rig.frames(data, best)
     bary = torch.rand((T, PER_TRIANGLE, 3), generator=g).to(device)
@@ -758,8 +748,8 @@ def initial(rig: Rig, data: Frames, device, up_to_face=False):
         not_head = torch.ones_like(person_b, dtype=torch.bool)
         if up_to_face:
             # [param up_to_face]: below the chin, laid up to the face itself (its hull, as tracked there) - the neck
-            # and the collar under the beard are the body's (bake.py: a head learned from every video painted an
-            # average of every collar there); above it, the head's region is the head's (the hair, the ears)
+            # and the collar under the beard are the body's (bake.py); above it, the head's region is the head's
+            # (the hair, the ears)
             hull_b = Image.new("L", (data.W, data.H), 0)
             f2d = data.points[i][:468, :2]
             ImageDraw.Draw(hull_b).polygon([tuple(map(float, f2d[j])) for j in _convex(f2d)], fill=255)
@@ -1036,19 +1026,15 @@ def export(npz: str, order, extra=None) -> None:
 
 
 def second_of(splats, rig, data, i: int):
-    """THE BODY BENDS (the user, 2026-10-23: "the body DOES look rather strange, because it never moves at all. It
-    just floats around, weirdly, stiffly"): each splat on a bone had been carried by that bone alone, so the torso
-    moved as one card - the seat and the desk with the chest. So each body splat takes a SECOND INFLUENCE, by where
-    it rests in frame [param i] (the still): the torso's keep more and more of the still from CHEST down to the hips
-    (HOLD_LOW at the seat), so the chest and shoulders lean, settle and breathe over a seat that stays; a shoulder's
-    goes with the torso inward of its joint, and an arm's with the bone above it near its start - each at most
-    JOINT. A SPLAT OF THE HEAD TAKES NONE (2026-10-25 late, the user: "it's especially messy at the neck and around the
-    beard"): below the chin it had taken the torso's move, more and more down a quarter of the face's height, so the
-    neck's skin would stretch to the shirt - but every step that learned it (the head, the bake, Fit's moments) drew it
-    riding the head, and played, his long beard's lower half followed the torso (0.93 of its motion, none of the
-    head's), a translucent veil over the collar as the head moved; riding the head, it is whole. As the shader reads it
-    (the colour texel's fourth number): 0 for none, else (frame + 2) + 0.98 w - w the share of that frame's move the
-    splat takes, frame -1 the still itself. [N] float32."""
+    """The body bends: a splat on a bone carried by that bone alone would move the torso as one card - the seat
+    and the desk with the chest. So each body splat takes a second influence, by where it rests in frame
+    [param i] (the still): the torso's keep more and more of the still from CHEST down to the hips (HOLD_LOW at
+    the seat), so the chest and shoulders lean, settle and breathe over a seat that stays; a shoulder's goes
+    with the torso inward of its joint, and an arm's with the bone above it near its start - each at most JOINT.
+    A splat of the head takes none: every step that learned it drew it riding the head, so a beard's lower half
+    following the torso would show as a translucent veil over the collar. As the shader reads it (the colour
+    texel's fourth number): 0 for none, else (frame + 2) + 0.98 w - w the share of that frame's move the splat
+    takes, frame -1 the still itself. [N] float32."""
     import numpy as np
     import torch
     with torch.no_grad():

@@ -1,14 +1,17 @@
 extends SceneTree
 
-## assembly_model_check: WHAT IS BUILT IS DESIGNED, AND IT STANDS BY THE END ([AssemblyModel], next/assembly.md "The model"; the user, 2026-11-03: "we built absolutely nothing discernable ... I just want to have a proper
-## model built by the end of every video"). Pure: no table, no bodies.
+## assembly_model_check: what is built is designed, and it stands by the end ([AssemblyModel], next/assembly.md "The model").
+## Pure: no table, no bodies.
 ##
 ##   godot --headless --path . --script res://tests/table/assembly_model_check.gd
 ##
-## THE LAYING: every part is a real one, nothing lies in anything, and the cells written are what is covered - exactly, for what shows. It holds: an order exists in which every part goes on joined to what is there, and
-## one hung from what is over it is laid after that. It is hollow where nobody can see, and a wall's joints do not line up. Written twice, it comes out the same.
-## THE LANGUAGE: each shape fills what it says, carve cuts, paint colors and adds nothing, repeat and mirror make their copies, a formula it cannot read is said in words.
-## THE BUILD: `build` lays it in order; `wrong` puts on what is no part of it, and it is said; `undo` takes it off, and what came off is owed; `wreck` costs the same; `finish` stands the whole thing whatever came before.
+## The laying: every part is a real one, nothing lies in anything, and the cells written are what is covered, exactly for what
+## shows. An order exists in which every part goes on joined to what is there, and one hung from what is over it is laid after that.
+## It is hollow where nobody can see, a wall's joints do not line up, and written twice it comes out the same.
+## The language: each shape fills what it says, carve cuts, paint colors and adds nothing, repeat and mirror make their copies, a
+## formula it cannot read is said in words.
+## The build: `build` lays it in order; `wrong` puts on what is no part of it, and it is said; `undo` takes it off, and what came off
+## is owed; `wreck` costs the same; `finish` stands the whole thing whatever came before.
 ##
 ## Controls: a span with nothing across it floats, and is said to; a thing in the air over nothing floats, and is said to; a model with nothing written has no parts; a build that stops short leaves parts owed.
 
@@ -68,7 +71,7 @@ func _laying() -> void:
 		if int(cells[at]) > 1:
 			twice += 1
 	_ok(twice == 0, "nothing lies in anything: %d cells taken twice" % twice)
-	# WHAT SHOWS IS WHAT WAS WRITTEN: its outside, exactly
+	# what shows is what was written: its outside, exactly
 	var missing := 0
 	for z in 16:
 		for x in 16:
@@ -84,7 +87,7 @@ func _laying() -> void:
 		if not in_box and not in_round:
 			extra += 1
 	_ok(extra == 0, "and nothing was added: %d cells outside what was written" % extra)
-	# HOLLOW WHERE NOBODY SEES
+	# hollow where nobody sees
 	var solid := 16 * 16 * 6
 	var kept := 0
 	for at in cells:
@@ -96,7 +99,7 @@ func _laying() -> void:
 	_ok(not big_cells.has(Vector3i(15, 15, 15)), "control: nothing at its heart")
 	_ok(kept <= solid, "a floor is what it was written")
 	_ok((big["floating"] as Array).is_empty(), "and it still holds: what was hollowed out left nothing hanging")
-	# A FLOOR IS BIG PLATES, NOT CRUMBS
+	# a floor is big plates, not crumbs
 	var floor_m := _model([{"name": "f", "shapes": [{"shape": "box", "from": [0, 0, 0], "to": [31, 31, 0], "color": "tan"}]}], [32, 32])
 	_ok((floor_m["parts"] as Array).size() <= 20, "a floor of 1024 studs is a few big plates: %d" % (floor_m["parts"] as Array).size())
 	var ring_m := _model([{"name": "r", "shapes": [{"shape": "round", "at": [16, 16], "radius": 12, "y": [0, 2], "color": "tan"}, {"shape": "round", "at": [16, 16], "radius": 11, "y": [0, 2], "carve": true}]}], [32, 32])
@@ -105,7 +108,7 @@ func _laying() -> void:
 		if (at as Vector3i).z == 0:
 			round_studs += 1
 	_ok((ring_m["parts"] as Array).size() * 2 < round_studs, "a curved wall is not crumbs: %d parts for %d studs of it" % [(ring_m["parts"] as Array).size(), round_studs])
-	# A WALL'S JOINTS DO NOT RUN UP IT
+	# a wall's joints do not run up it
 	var wall := _model([{"name": "w", "shapes": [{"shape": "box", "from": [0, 4, 0], "to": [31, 4, 23], "color": "tan"}]}], [32, 32])
 	var joints := {}
 	for p in wall["parts"]:
@@ -129,7 +132,7 @@ func _laying() -> void:
 	_ok(str(again["parts"]) == str(parts), "written twice, it comes out the same")
 
 
-## AN ORDER THAT WORKS: walking them in it, each is on the plate or joined to what has gone before.
+## An order that works: walking them in it, each is on the plate or joined to what has gone before.
 static func _holds_in_order(parts: Array) -> int:
 	var at := {}
 	var bad := 0
@@ -169,13 +172,13 @@ func _holds() -> void:
 		if int((parts[i] as Dictionary)["section"]) == int((parts[i - 1] as Dictionary)["section"]) and int((parts[i] as Dictionary)["l"]) + 3 < int((parts[i - 1] as Dictionary)["l"]):
 			low_first = false
 	_ok(low_first, "from the bottom up within each")
-	# ...A SPAN, THICK ENOUGH TO LAY ACROSS: joined over its piers, hung from what is above where it must be
+	# ...a span, thick enough to lay across: joined over its piers, hung from what is above where it must be
 	var span := _model([{"name": "b", "shapes": [
 		{"shape": "box", "from": [0, 0, 0], "to": [3, 3, 8], "color": "gray"}, {"shape": "box", "from": [28, 0, 0], "to": [31, 3, 8], "color": "gray"},
 		{"shape": "box", "from": [0, 0, 9], "to": [31, 3, 14], "color": "tan"}]}], [32, 32])
 	_ok((span["floating"] as Array).is_empty(), "a span two courses thick holds between its piers: %d float" % (span["floating"] as Array).size())
 	_ok(_holds_in_order(span["parts"]) == 0, "and can be laid: what hangs goes on after what it hangs from")
-	# CONTROLS
+	# controls
 	var thin := _model([{"name": "b", "shapes": [
 		{"shape": "box", "from": [0, 0, 0], "to": [3, 3, 8], "color": "gray"}, {"shape": "box", "from": [28, 0, 0], "to": [31, 3, 8], "color": "gray"},
 		{"shape": "box", "from": [0, 0, 9], "to": [31, 0, 9], "color": "tan"}]}], [32, 32])
@@ -241,7 +244,7 @@ func _slopes_and_roof() -> void:
 		if String((p as Dictionary)["kind"]) == "slope":
 			ways[int((p as Dictionary)["turn"])] = true
 	_ok(ways.has(90) and ways.has(270), "and along its longer side, unless told")
-	# A SLOPE'S LOW SIDE FACES OUT, as its cells and its mesh have it
+	# a slope's low side faces out, as its cells and its mesh have it
 	var hill := _model([{"name": "h", "shapes": [{"shape": "box", "from": [0, 0, 0], "to": [15, 15, 2], "color": "tan", "slopes": true}]}])
 	var edge_right := false
 	for p in hill["parts"]:
@@ -284,7 +287,7 @@ func _build_steps() -> void:
 	a = _assembly(m)
 	a.perform([{"name": "n", "ops": [{"do": "build", "section": "the wall", "parts": "rest"}]}])
 	_ok(a._stand_of.is_empty() and not (a.problems["n"] as Array).is_empty(), "control: a section whose ground is not there cannot go on, and it says so: %s" % str(a.problems["n"]))
-	# WRONG, THEN NOTICED
+	# wrong, then noticed
 	a = _assembly(m)
 	a.perform([{"name": "n", "ops": [{"do": "build", "parts": 3}, {"do": "wrong", "parts": 2}]}])
 	_ok(a._off_model.size() == 2 and a._stand_of.size() == 3, "`wrong` puts on what is no part of it: %d, and %d that are" % [a._off_model.size(), a._stand_of.size()])
@@ -299,17 +302,17 @@ func _build_steps() -> void:
 	a = _assembly(m)
 	a.perform([{"name": "n", "ops": [{"do": "build", "parts": 6}, {"do": "undo", "parts": 2}, {"do": "build", "parts": 2}]}])
 	_ok(a._stand_of.size() == 6 and a._stand_of.has(owed), "and the next `build` lays what is owed first")
-	# WRONG, AND IN THE WAY
+	# wrong, and in the way
 	a = _assembly(m)
 	a.perform([{"name": "n", "ops": [{"do": "wrong", "parts": 1}, {"do": "build", "parts": "rest"}]}])
 	_ok(a._off_model.is_empty() and a._stand_of.size() == total, "what was wrong comes off when its place is wanted: %d of %d stand, %d wrong" % [a._stand_of.size(), total, a._off_model.size()])
-	# TRY AND LOOK KNOW WHAT IS NEXT
+	# try and look know what is next
 	a = _assembly(m)
 	a.perform([{"name": "n", "ops": [{"do": "try"}, {"do": "look"}, {"do": "build", "parts": 1}]}])
 	_ok((a.problems["n"] as Array).is_empty(), "`try` and `look` need nothing said: they are of what comes next: %s" % str(a.problems["n"]))
-	# A TOWER'S COST
+	# a tower's cost
 	_ok(absf(Assembly.timing([{"do": "build", "parts": 20}]).x - 20.0 * 5.0 * Assembly.BUILD_MORE) < 1e-3, "and how long it is known beforehand: 20 parts, %.0f s" % Assembly.timing([{"do": "build", "parts": 20}]).x)
-	# STOCK: IT IS HAD, AND IT TAKES THE PLACE OF WHAT WAS FILLER
+	# stock: it is had, and it takes the place of what was filler
 	a = _assembly(m)
 	a.perform([{"name": "n", "ops": [{"do": "finish"}]}])
 	var in_left := 0
@@ -337,7 +340,7 @@ func _finish_always() -> void:
 	a = _assembly(m)
 	a.perform([{"name": "n", "ops": [{"do": "build", "parts": "rest"}, {"do": "finish"}]}])
 	_ok(a.steps.size() == total and steps_with > total, "and it costs nothing where all of it stands: %d steps" % a.steps.size())
-	# WRITTEN INTO THE WORK, in the last act that builds, whatever order they were written in
+	# written into the work, in the last act that builds, whatever order they were written in
 	var d := {"acts": [
 		{"name": "last", "beat": "close", "tracks": [{"law": "assemble", "ops": [{"do": "pause"}]}]},
 		{"name": "first", "beat": "intro", "tracks": [{"law": "assemble", "ops": [{"do": "build", "parts": 3}]}]},
@@ -345,7 +348,7 @@ func _finish_always() -> void:
 		{"name": "no build", "beat": "close", "tracks": [{"law": "carry", "thing": "a mug"}]}]}
 	Assembly.with_finish(d, m)
 	var last_ops: Array = ((d["acts"][0] as Dictionary)["tracks"][0] as Dictionary)["ops"]
-	# ...WHAT IT COMES TO IS KNOWN, or the words end before it does and the video with them
+	# ...what it comes to is known, or the words end before it does and the video with them
 	_ok(int((last_ops[0] as Dictionary)["owed"]) == total - 3, "and it says how much that is, from what the acts before it really left: %d of %d" % [int((last_ops[0] as Dictionary).get("owed", -1)), total])
 	var said_long := Assembly.timing([last_ops[0]]).x
 	_ok(said_long >= float(total - 3) * 5.0, "so whoever times the words knows how long it takes: %.0f s" % said_long)
@@ -360,7 +363,7 @@ func _finish_always() -> void:
 	var none := {"acts": [{"name": "x", "beat": "close", "tracks": [{"law": "carry"}]}]}
 	Assembly.with_finish(none)
 	_ok(not str(none).contains("finish"), "control: nothing to finish in a show that does not build")
-	# A MODEL BRINGS ITS PLATE AND ITS COLORS
+	# a model brings its plate and its colors
 	var made := Assembly.sanitize({"colors": {"blue": "#1f4f9c"}, "stock": [{"name": "t", "at": [0, 0], "radius": 10}], "base": {"size": [16, 16], "color": "blue"}, "model": _model([{"name": "b", "shapes": [{"shape": "box", "from": [0, 0, 0], "to": [8, 8, 2], "color": "red"}]}], [40, 40])})
 	_ok((made["base"] as Dictionary)["size"] == [40, 40] and String((made["base"] as Dictionary)["color"]) == "gray", "the table takes its plate from the model: %s" % str(made["base"]))
 	_ok((made["colors"] as Dictionary).has("red") and (made["colors"] as Dictionary).has("blue"), "and its colors, with the table's own")

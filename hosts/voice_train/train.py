@@ -9,7 +9,7 @@ The spec: {"data": the utterances folder (metadata.csv, wav/, phonemes.json), "b
 "work": where training keeps its cache and checkpoint, "out": the voice (.onnx; its config beside it as
 .onnx.json), "name", "espeak", "steps", "batch"}.
 
-LESSONS, NOT EPOCHS (2026-10-24): the voice is taught for "steps" batches however many sentences it has - an epoch is
+LESSONS, NOT EPOCHS: the voice is taught for "steps" batches however many sentences it has - an epoch is
 as long as their speech, and the 150 epochs sized for 637 sentences were 65k batches on 6,909 - as many epochs as
 make them (the last one whole).
 
@@ -159,7 +159,7 @@ def main(argv=None) -> int:
     each = max(1, int(sentences * (1.0 - VALIDATION)) // batch)
     epochs = max(1, -(-int(spec.get("steps", 6000)) // each))
     last = work / "last.ckpt"
-    # A SAVED RUN GOES ON only while it is the same lesson: the same base and the same sentences (only the
+    # A saved run goes on only while it is the same lesson: the same base and the same sentences (only the
     # epochs asked for may change). Other sentences, or another base, start again from the base.
     import hashlib
     lesson = hashlib.sha256((str(spec["base"]) + "\n" + (data / "metadata.csv").read_text(encoding="utf-8"))

@@ -3,15 +3,14 @@ class_name NotebookMedium
 
 ## NotebookMedium - the reading as a research notebook, written by hand, open on a desk.
 ##
-## Everything that makes the book work is the book's - the 3D spread, the turning leaf, the
-## camera, the voice followed word by word - and only what a notebook does differently is here:
-## ruled paper with a red margin, the chapter in a handwriting face ([NotebookLayout]), a
-## marbled composition cover with a paper label, emphasis underlined, photos clipped on with a
-## paper clip at an angle, and sketches drawn onto the page in the same ink as the writing.
+## Everything that makes the book work is the book's (the 3D spread, the turning leaf, the camera, the
+## voice followed word by word); only what a notebook does differently is here: ruled paper with a red
+## margin, the chapter in a handwriting face ([NotebookLayout]), a marbled composition cover with a paper
+## label, emphasis underlined, photos clipped on at an angle, and sketches drawn onto the page in the same
+## ink as the writing.
 ##
-## THE TONE IS THE AUTHOR'S. A chapter drafted as a lab notebook or a field journal - dated
-## entries under headings, times in the margin, "<!-- sketch: ... -->" beside the note it goes
-## with - reads as one here; the same chapter in the Novel medium reads as a book.
+## A chapter drafted as a lab notebook or field journal (dated entries under headings, times in the
+## margin, `<!-- sketch: ... -->` beside its note) reads as one here.
 
 const RULE_COL := Color(0.50, 0.66, 0.86, 0.78)
 const MARGIN_COL := Color(0.86, 0.36, 0.40, 0.8)
@@ -20,33 +19,29 @@ const STEEL := Color(0.60, 0.62, 0.66)
 
 var _hand := "kalam"
 var _drawn_hand := ""       # this session's draw, used when the setting is "random"
-## THE PEEK: a clipped photo lifts off the page, curling back from its free edge toward the
-## clip, while the words it hides are being read, and settles again once they have been.
-## `_peel[stack]` runs 0..1 at a steady rate and is drawn through a smoothstep, so it eases in
-## and out; a stack lifts together.
+## The peek: a clipped photo lifts off the page, curling back from its free edge toward the clip, while
+## the words it hides are being read, and settles again after. `_peel[stack]` runs 0..1 at a steady rate
+## and is drawn through a smoothstep; a stack lifts together.
 ##
-## IT LIFTS WELL AHEAD OF THE VOICE, as a reader moves a photo aside while still a few lines
-## above what it hides - not as the voice arrives ("a real reader would turn the photo much
-## earlier, like 5 seconds or even 10"). It is fully up [constant PEEL_EARLY] seconds before the
-## first hidden word is spoken, timed off that word's own start where the take has reached it;
-## [constant PEEL_LEAD] words early (about the same, at speaking pace) where it has not yet.
+## It lifts well ahead of the voice, as a reader moves a photo aside while still a few lines above what it
+## hides: fully up [constant PEEL_EARLY] seconds before the first hidden word is spoken, timed off that
+## word's own start where the take has reached it, else [constant PEEL_LEAD] words early (about the same
+## at speaking pace).
 const PEEL_TIME := 0.9
 const PEEL_EARLY := 6.0
 const PEEL_LEAD := 20
-## ONCE UP, A PHOTO STAYS UP until the reading has passed the last word it hides, and never
-## comes down within this many seconds of lifting. The "early" test switches from a word count
-## to the take's own timings as they arrive, and the two can disagree for a moment: the photo
-## curled, dropped and curled again.
+## Once up, a photo stays up until the reading has passed the last word it hides, and never comes down
+## within this many seconds of lifting (the word-count and take-timing tests can disagree for a moment).
 const PEEL_HOLD := 4.0
 var _raised := {}                # stack -> when it was lifted (subtitle clock)
-## How much of a photo the clip PINS, from its clipped edge: that part stays flat under the clip
-## and the rest folds back over it. About where a clip's inner end reaches.
+## How much of a photo the clip pins, from its clipped edge: that part stays flat under the clip and the
+## rest folds back over it. About where a clip's inner end reaches.
 const PIN := 110.0
-## The roller a lifted print is turned over: wide enough to read as a curl rather than a crease,
-## small enough that the loop does not lie back over the writing beside the page edge.
+## The roller a lifted print is turned over: wide enough to read as a curl, small enough that the loop
+## does not lie back over the writing beside the page edge.
 const CURL_RADIUS := 50.0
-## The lamp, as the page sees it: which way a shadow is thrown (per px of height above the page)
-## and where a print lying flat throws it. The lamp is above and to the left, near the reader.
+## The lamp, as the page sees it: which way a shadow is thrown (per px of height above the page) and where
+## a print lying flat throws it. Above and to the left, near the reader.
 const LIGHT_DIR := Vector2(0.32, 0.42)
 const SHADOW_BASE := Vector2(5.0, 7.0)
 var _peel := {}
@@ -65,10 +60,9 @@ func _make_layout() -> BookLayout:
 	return l
 
 
-## Room past the page edge for what hangs off it: a clip's outer loop, and a photo folded back
-## over its clip while the words under it are read. The widest photo (0.56 of the page) folded
-## at its pin reaches ~430 px past a side edge; a landscape photo less than that past the top.
-## Nothing folds downward, so the bottom needs only the clips' room.
+## Room past the page edge for what hangs off it: a clip's outer loop, and a photo folded back over its
+## clip. The widest photo (0.56 of the page) folded at its pin reaches ~430 px past a side edge; a
+## landscape photo less past the top. Nothing folds downward, so the bottom needs only the clips' room.
 func _page_pad() -> float:
 	return 480.0
 
@@ -91,8 +85,8 @@ func advance(features, delta: float, bookend: float) -> void:
 	super.advance(features, delta, bookend)
 
 
-## The hand the author chose ([member Director.hand]), or this session's draw on "random".
-## Checked every frame so a change in the panel re-typesets the open chapter at once.
+## The hand the author chose ([member Director.hand]), or this session's draw on "random". Checked every
+## frame so a change in the panel re-typesets the open chapter at once.
 func _follow_hand() -> void:
 	var want := feed.hand if NotebookLayout.HANDS.has(feed.hand) else _drawn_hand
 	if want.is_empty() or want == _hand:
@@ -113,9 +107,9 @@ func _tick_peel() -> void:
 	var li := int(r["layout"]) if not r.is_empty() else -1
 	var now: float = _subs.now() if _subs != null and is_instance_valid(_subs) else 0.0
 	var step := _peel_dt / PEEL_TIME
-	# THE PHOTOS ARE PUT BACK BEFORE THE LEAF TURNS. A lifted photo on a turning leaf vanished
-	# with it; so as the voice nears the next spread every photo on this one is sent down,
-	# whatever its hold, and [method _turn_ready] keeps the leaf still until they are flat.
+	# The photos are put back before the leaf turns (a lifted photo on a turning leaf would vanish with
+	# it): as the voice nears the next spread every photo on this one is sent down, whatever its hold,
+	# and [method _turn_ready] keeps the leaf still until they are flat.
 	var turning_soon := r.is_empty() == false and _next_spread_in(r, now) < SETTLE_BEFORE_TURN
 	for page in _needed_pages():
 		if page < 0 or page >= _layout.pages.size():
@@ -140,11 +134,10 @@ func _tick_peel() -> void:
 			_peel[st] = move_toward(v, 0.0 if is_nan(at) else 1.0, step)
 
 
-## The lift decision for one stack: when it was lifted ([param at], NAN while it is down) after
-## this frame. It LIFTS when the reading is within its words or [param early] says it is time;
-## it DROPS only once the reading has left its words - past the last, or well back before the
-## first (a restart) - and at least [constant PEEL_HOLD] seconds after it lifted. Pure, so the
-## gate can drive it.
+## The lift decision for one stack: when it was lifted ([param at], NAN while down) after this frame. It
+## lifts when the reading is within its words or [param early] says it is time; it drops only once the
+## reading has left its words (past the last, or well back before the first, a restart) and at least
+## [constant PEEL_HOLD] seconds after it lifted. Pure, so the gate can drive it.
 static func peel_latch(at: float, now: float, li: int, lo: int, hi: int, early: bool) -> float:
 	if is_nan(at):
 		return now if li >= 0 and li <= hi and (li >= lo or early) else NAN
@@ -152,19 +145,19 @@ static func peel_latch(at: float, now: float, li: int, lo: int, hi: int, early: 
 	return NAN if gone and absf(now - at) >= PEEL_HOLD else at
 
 
-## CLOSER THAN THE BOOK'S. A hand is smaller on the page than type and was hard to read on a
-## phone at the book's framing; the arc closes in to here instead of BookMedium.LOCAL's 3.3.
+## Closer than the book's: a hand is smaller on the page than type, so the arc closes in to here instead
+## of BookMedium.LOCAL's 3.3.
 const LOCAL_DIST := 2.7
 
 func _local_dist() -> float:
 	return LOCAL_DIST
 
 
-## How long before a turn the open spread's photos start settling: the turn's own lead, the
-## time a photo takes to come down, and a breath.
+## How long before a turn the open spread's photos start settling: the turn's lead, the time a photo
+## takes to come down, and a breath.
 const SETTLE_BEFORE_TURN := BookMedium.TURN_LEAD + PEEL_TIME + 0.4
 
-## Seconds until the voice reaches the first word of the NEXT spread, or INF if it is not known.
+## Seconds until the voice reaches the first word of the next spread, or INF if it is not known.
 func _next_spread_in(r: Dictionary, now: float) -> float:
 	var words: Array = _subs.words
 	for i in range(int(r["sub"]) + 1, mini(_map.size(), words.size())):
@@ -215,7 +208,7 @@ func _page_state(page: int) -> String:
 
 func mount(st: SubViewport) -> void:
 	super.mount(st)
-	# THE SPINE TAPE: the black cloth strip a composition book is bound with, on both halves.
+	# The spine tape: the black cloth strip a composition book is bound with, on both halves.
 	var tm := BoxMesh.new()
 	tm.size = Vector3(0.16, 0.0316, PAGE_H + 0.102)
 	var tmat := StandardMaterial3D.new()
@@ -230,7 +223,7 @@ func mount(st: SubViewport) -> void:
 			_root3.add_child(tape)
 		else:
 			_pivot.add_child(tape)
-	# THE LABEL: a paper plate on the front cover's underside (which faces up once folded - see
+	# The label: a paper plate on the front cover's underside (which faces up once folded; see
 	# BookMedium's cover label), with the name and the author written on it.
 	_plate = MeshInstance3D.new()
 	var pm := PlaneMesh.new()
@@ -256,9 +249,8 @@ func begin_session() -> void:
 	keys.sort()
 	_drawn_hand = String(keys[r.randi() % keys.size()])
 	_follow_hand()
-	# Paper is white with the faintest warmth. The pen is BLACK unless a voice names its own
-	# ink (see [method _ink_for]) - a color per speaker is how a page tells voices apart
-	# without labels, so the default must be the one color no voice is likely to choose.
+	# Paper is white with the faintest warmth. The pen is black unless a voice names its own ink (see
+	# [method _ink_for]): a color per speaker tells voices apart without labels.
 	_paper = Color.from_hsv(r.randf_range(0.10, 0.14), r.randf_range(0.02, 0.06),
 		r.randf_range(0.955, 0.985))
 	_ink = NotebookLayout.INKS["black"]
@@ -276,8 +268,8 @@ func begin_session() -> void:
 	_cover_author.modulate = Color(_ink, 0.9)
 
 
-## The composition book's black-and-white marble: warped noise cut hard into black ground and
-## pale blotches. Built once, synchronously, for the reason [method BookMedium._grime] gives.
+## The composition book's black-and-white marble: warped noise cut hard into black ground and pale
+## blotches. Built once, synchronously, for the reason [method BookMedium._grime] gives.
 static func _marble_texture() -> Texture2D:
 	if _marble != null:
 		return _marble
@@ -341,8 +333,8 @@ func _draw_paper(ci: CanvasItem, pg: Dictionary) -> void:
 	super._draw_paper(ci, pg)
 
 
-## Each voice writes in its own ink, from `ink:` on the voice in the frontmatter, carried beside
-## the text as the document's `inks` ({speaker: ink}); a voice naming none writes in black.
+## Each voice writes in its own ink, from `ink:` on the voice in the frontmatter, carried beside the text
+## as the document's `inks` ({speaker: ink}); a voice naming none writes in black.
 func _ink_for(w: Dictionary) -> Color:
 	var who := String(w.get("speaker", ""))
 	if _subs == null or not is_instance_valid(_subs) or who.is_empty():
@@ -388,20 +380,17 @@ func _underline(ci: CanvasItem, at: Vector2, width: float, col: Color, salt: int
 
 # --- the hand ---------------------------------------------------------------------
 
-## HOW THE WRITING WANDERS OFF THE LINE, as a smooth field over the page rather than a jitter
-## per word: along a line the letters rise gradually toward its end (a hand drifts up as it goes
-## right), by a slope that changes only slowly from line to line, so neighboring lines lean
-## together in clusters; a very slow wave rides along each line; the slant wanders slowly down
-## the page; and each letter differs by a hair in size and slant and sits a fraction off, which
-## is the tremor of a pen. Every term is a function of place and the session seed, so a page
-## draws the same way every time and a render writes what the live reading wrote.
+## How the writing wanders off the line, as a smooth field over the page rather than a jitter per word:
+## letters rise gradually toward the end of a line (a hand drifts up going right) by a slope that changes
+## slowly from line to line; a very slow wave rides along each line; the slant wanders down the page; and
+## each letter differs by a hair in size and slant and sits a fraction off (the pen's tremor). Every term
+## is a function of place and the session seed, so a render writes what the live reading wrote.
 const DRIFT_SLOPE := -0.005        # mean rise per px along a line (negative is up)
 const DRIFT_SLOPE_VARY := 0.0045   # ...and how far a cluster of lines strays from it
 const DRIFT_CLUSTER := 5.0         # lines over which the slope changes
 const DRIFT_WAVE := 1.1            # px of the slow wave along a line
-## The slant, as skew in radians: POSITIVE leans the letters RIGHT, the way most hands lean.
-## Wanders from nearly upright to a clear right lean. It was centered on a small LEFT lean, so
-## it was never seen to lean right at all.
+## The slant, as skew in radians: positive leans the letters right, as most hands lean. Wanders from
+## nearly upright to a clear right lean.
 const SLANT := 0.08
 const SLANT_VARY := 0.06
 const LETTER_SCALE := 0.035        # a letter's size varies by this much either way
@@ -433,8 +422,8 @@ func _drift(page: int, x: float, y: float) -> float:
 	return slope * dx + DRIFT_WAVE * sin(x / 170.0 + phase)
 
 
-## Cached per letter: a letter's place is a function of the layout and the seed, and a page is
-## redrawn every frame its highlight moves - computing ~400 of these each time was 4.6 ms.
+## Cached per letter: a letter's place is a function of the layout and the seed, and a page is redrawn
+## every frame its highlight moves.
 var _xf_cache := {}
 var _xf_key := ""
 
@@ -485,7 +474,7 @@ func _draw_image(ci: CanvasItem, im: Dictionary) -> void:
 	var inner := Rect2(-hs + Vector2(b, b), rect.size - Vector2(b, b) * 2.0)
 	var tex := _texture_for(String(im["key"]))
 	if tex == null:
-		# NOT YET TAKEN: a blank print with what it will be written on it.
+		# Not yet taken: a blank print with what it will be written on it.
 		ci.draw_rect(inner, Color(0.80, 0.80, 0.79))
 		ci.draw_multiline_string(_layout.face(0), inner.position + Vector2(18.0, 40.0),
 			String(im["prompt"]), HORIZONTAL_ALIGNMENT_LEFT, inner.size.x - 36.0, 24,
@@ -503,18 +492,14 @@ func _draw_image(ci: CanvasItem, im: Dictionary) -> void:
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## THE CURL'S SHADOW OUTLINE, in the print's frame, grown by [param grow] px. Every point of the
-## print that faces the page throws its shadow along the lamp's direction, further the higher it
-## is, and the shadow is the outline of all of them - one shape, from the clipped edge up the
-## rising curl to where the print turns upright. (A flat rectangle under the whole footprint read
-## as "a strange shadow, which doesn't seem to align with what a true 3D page curl would look
-## like".)
+## The curl's shadow outline, in the print's frame, grown by [param grow] px. Every point of the print
+## that faces the page throws its shadow along the lamp's direction, further the higher it is, and the
+## shadow is the outline of all of them: one shape, from the clipped edge up the rising curl to where the
+## print turns upright.
 ##
-## ALWAYS A POLYGON THE ENGINE CAN FILL. When the lamp shines back along the curl - a print
-## clipped on the side the light comes from - pushing the rising edge along it folds that edge
-## back over itself, the outline crosses itself, and `draw_colored_polygon` refuses it ("Invalid
-## polygon data, triangulation failed"): the shadow blinked out for those frames of an export.
-## Such an outline is replaced by its convex hull, which is what that shadow covers anyway.
+## Always a polygon the engine can fill: when the lamp shines back along the curl (a print clipped on
+## the side the light comes from) the rising edge folds back over itself and `draw_colored_polygon`
+## refuses the self-crossing outline, so it is replaced by its convex hull, which that shadow covers anyway.
 static func curl_shadow(o: Vector2, fold: Vector2, side: Vector2, a: Vector2, us: PackedFloat32Array,
 		zs: PackedFloat32Array, ph: PackedFloat32Array, ang: float, grow: float) -> PackedVector2Array:
 	var light := LIGHT_DIR.rotated(-ang)              # page direction, in the print's frame
@@ -551,16 +536,12 @@ static func _fillable(poly: PackedVector2Array) -> PackedVector2Array:
 	return hull
 
 
-## A photo lifted by [param peel] (0..1), ROLLED BACK over a wide curve the way a person turns a
-## print they do not want to crease. The part the clip pins ([constant PIN]) stays flat; past it
-## the print wraps round a roller of radius [constant CURL_RADIUS] through an angle that grows to
-## a half turn, and runs on straight from where it leaves the roller - so its length is exactly
-## kept, and at full peel it lies back past the edge with a rounded loop over the clip. Drawn as
-## strips, each lit by how far it faces from the page and showing the back once past upright.
-## Three earlier cuts were each wrong in a way a still frame showed: a curl at the free end left
-## the clipped half on the text; a lean to 135 degrees looked foreshortened; and a hinge fold
-## "looks like a flat, linear fold - which is not what a real person would do". Past upright the
-## clip is under the print, so it is drawn first.
+## A photo lifted by [param peel] (0..1), rolled back over a wide curve the way a person turns a print
+## they do not want to crease. The part the clip pins ([constant PIN]) stays flat; past it the print wraps
+## round a roller of radius [constant CURL_RADIUS] through an angle that grows to a half turn, and runs on
+## straight from where it leaves the roller, so its length is kept and at full peel it lies back past the
+## edge with a rounded loop over the clip. Drawn as strips, each lit by how far it faces from the page and
+## showing the back once past upright. Past upright the clip is under the print, so it is drawn first.
 func _draw_curled(ci: CanvasItem, im: Dictionary, peel: float) -> void:
 	var rect: Rect2 = im["rect"]
 	var sz := rect.size
@@ -609,15 +590,14 @@ func _draw_curled(ci: CanvasItem, im: Dictionary, peel: float) -> void:
 		zs.append(z)
 		ph.append(bent)
 	ci.draw_set_transform(c, ang, Vector2.ONE)
-	# THE SHADOW IS CAST - see [method curl_shadow]
+	# The shadow is cast - see [method curl_shadow]
 	var fade := 1.0 - 0.45 * sin(theta * 0.5)
 	for g in [4.0, 0.0]:
 		ci.draw_colored_polygon(curl_shadow(o, fold, side, a, us, zs, ph, ang, g),
 			Color(0, 0, 0, 0.07 * fade))
 	# the pinned part, flat
 	_print_quad(ci, tex, o, fold, side, a, 0.0, t0, length, sz, 1.0)
-	# the rolled part, strip by strip in order along the print: what comes later lies over what
-	# came before, which is the right way round for a print rolled back on itself
+	# the rolled part, strip by strip in order along the print: what comes later lies over what came before
 	for i in N:
 		var p0 := fold + a * us[i]
 		var p1 := fold + a * us[i + 1]
@@ -643,9 +623,8 @@ func _draw_curled(ci: CanvasItem, im: Dictionary, peel: float) -> void:
 
 
 ## Where the curl starts, from the print's clipped edge: just past where its stack's clip reaches,
-## measured on THIS print, in its own frame. A fixed length was wrong for a print fanned under
-## another's clip or turned at an angle, and the fold landed well inside it - the curl "still
-## covers a lot of the text". [constant PIN] where there is no clip to measure.
+## measured on this print in its own frame (a print fanned under another's clip or turned at an angle
+## has a different pin). [constant PIN] where there is no clip to measure.
 func _pin_of(im: Dictionary, c: Vector2, ang: float, a: Vector2, o: Vector2, length: float) -> float:
 	var clip: Dictionary = im.get("clip", {})
 	if clip.is_empty() and _layout != null and _draw_page >= 0 and _draw_page < _layout.pages.size():
@@ -719,10 +698,10 @@ func _print_for(im: Dictionary) -> Texture2D:
 	return tex
 
 
-## The clips go on after every photo on the page, so a fanned stack sits under its clip. Then
-## the clips on the OTHER SIDE of this sheet: a clip grips the sheet's edge, so the page behind
-## a clipped photo shows it too - mirrored, and only what shows from behind (see [method
-## _clip_path]). That is how a right-hand page shows the clips of the pages still to come.
+## The clips go on after every photo on the page, so a fanned stack sits under its clip. Then the clips
+## on the other side of this sheet: a clip grips the sheet's edge, so the page behind a clipped photo
+## shows it too, mirrored and only what shows from behind (see [method _clip_path]); that is how a
+## right-hand page shows the clips of the pages still to come.
 func _draw_overlay(ci: CanvasItem, pg: Dictionary) -> void:
 	for im in pg["images"]:
 		var clip: Dictionary = (im as Dictionary).get("clip", {})
@@ -748,14 +727,11 @@ static func _sheet_partner(p: int) -> int:
 	return p + 1 if p % 2 == 1 else p - 1
 
 
-## A Gem clip, as its wire's path in its own frame: its length along +y from the origin, which is
-## the page edge. THE BEND AT THE EDGE is the one joining the clip's two layers - the paper is
-## slid in between them, so that bend is all that stands past the edge, a few px. The clip was
-## first drawn the other way round, its far outer loop at the edge and 40 px of wire standing
-## off the page, which "stick out too far, because they are turned the wrong way around".
-## ONE LOOP A SIDE: the FRONT - the side the photo is on - shows the small inner loop (the
-## tongue) and the bend; the BACK shows the big outer loop and the bend. Both loops were once
-## drawn on the front: "we shouldn't see two loops on the front of a photo".
+## A Gem clip, as its wire's path in its own frame: its length along +y from the origin, which is the
+## page edge. The bend at the edge joins the clip's two layers (the paper is slid in between them), so
+## that bend is all that stands past the edge, a few px. One loop a side: the front (the side the photo
+## is on) shows the small inner loop (the tongue) and the bend; the back shows the big outer loop and the
+## bend.
 static func _clip_path(back: bool) -> Array:
 	var out: Array = []
 	var l := NotebookLayout.CLIP_LEN
@@ -767,11 +743,10 @@ static func _clip_path(back: bool) -> Array:
 	return out
 
 
-## THE BEND WRAPS THE EDGE: past its apex (the point furthest off the page) the wire turns
-## round the edge and under the sheet, so on the page's face it must stop at the edge rather than
-## come back across it. The front runs up to the apex and on only while still off the page; the
-## back is the same wire seen from the other side, so it STARTS where the wire comes back round.
-## Drawn through the page, the loop "was clipping through the paper in an unnatural way".
+## The bend wraps the edge: past its apex (the point furthest off the page) the wire turns round the
+## edge and under the sheet, so on the page's face it must stop at the edge rather than come back across
+## it. The front runs up to the apex and on only while still off the page; the back is the same wire seen
+## from the other side, so it starts where the wire comes back round.
 static func _behind_the_edge(path: PackedVector2Array, back: bool) -> PackedVector2Array:
 	var edge := NotebookLayout.CLIP_OVERHANG
 	var apex := 0
@@ -841,11 +816,10 @@ func _draw_clip(ci: CanvasItem, at: Vector2, ang: float, back := false, mirror :
 
 # --- clips in the stacks ------------------------------------------------------------
 
-## THE CLIPS ON PAGES THAT ARE NOT OPEN. Every clip in the chapter is a flat piece of the stack
-## it is in, at its own sheet's height: under the stack's top, so the block hides all of it but
-## what stands past the edge - which is exactly what shows on a real notebook with photos
-## clipped through it. Read sheets are in the left stack and show the face that is up there
-## (the back of an odd page's clip); unread ones in the right. The open leaves draw their own.
+## The clips on pages that are not open: every clip in the chapter is a flat piece of the stack it is in,
+## at its own sheet's height, under the stack's top, so the block hides all of it but what stands past the
+## edge (as on a real notebook). Read sheets are in the left stack and show the face that is up there (the
+## back of an odd page's clip); unread ones in the right. The open leaves draw their own.
 var _stack_clips: Array = []      # [{node, page, clip}]
 var _stack_layout: BookLayout = null
 var _clip_tex := {}               # back (bool) -> ViewportTexture

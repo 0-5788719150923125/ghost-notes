@@ -1,56 +1,26 @@
 extends SceneTree
 
-## Does EVERY control on the clown actually do something?
+## Does every control on the clown actually do something?
 ##   godot --path . --position -5000,-5000 --script res://tests/masking/clown_controls_check.gd
 ## Needs a real renderer (the paint field is a ping-pong SubViewport pair).
 ##
-## Written because two controls were reported as inert - "what does Smear and
-## Evidence do? Neither seems to have any effect... fix them or remove them" - and
-## the honest answer needed a measurement rather than a reading of the code. It
-## turned out one was weak and one was genuinely dead:
+## Sweeps every control the clown exposes, renders the whole pipeline (stencil, paint sim and the
+## mask_split branch) at each control's extremes, and measures how much the picture changed. A control that
+## moves nothing is a dead control on the panel.
 ##
-##   Smear     0.010 - present, but far below its neighbors, so it read as inert
-##                     beside them. Its wobble range was widened.
-##   Evidence  0.0004 - nothing at all. It was a FLOOR under the evidence terms,
-##                     and the contour work had quietly made it redundant: a floor
-##                     only matters where the evidence is WEAK, and once the window
-##                     IS the feature the evidence is strong throughout it. Worse,
-##                     the evidence terms are each a dilated MAX over nine taps,
-##                     which saturates at 1.0 - so even reshaping them did nothing.
-##                     It now blends toward the CENTER tap, the one that still
-##                     varies pixel to pixel.
-##
-## So this sweeps every control the clown exposes, renders the whole pipeline -
-## stencil, paint sim, and the mask_split branch - at each control's extremes, and
-## measures how much the picture actually changed. A control that moves nothing is
-## a lie on the panel, whatever the code looks like.
-##
-## The face comes from a SYNTHETIC track written here, so this needs no mediapipe,
-## no venv and no clip - same trick face_track_check uses.
+## The face comes from a synthetic track written here, so no mediapipe, venv or clip is needed (same trick
+## as face_track_check).
 
 const W := 288
 const H := 512
 const T := 1.0
 const POINTS := 478
 
-## A control is judged on how many pixels it MOVES, not on the average movement
-## over the frame. Averaging punishes anything that acts on a thin region however
-## hard it acts there - Edge feather touches a band around the jaw and scores
-## 0.003 by mean while being plainly visible - and it flatters anything that
-## tints broadly and weakly. The fraction of pixels that changed by a visible
-## amount says the thing that was actually asked: does moving this slider change
-## what I see, anywhere.
-##
-## ...and that fraction is OF WHAT THE EFFECT DREW, not of the frame. Every control
-## here acts on the painted mask and nowhere else, so a fraction of the FRAME also
-## measures how much of the shot the face happens to fill - a property of the clip,
-## not of the code. It bit exactly once: the eye-drip was rebuilt as a tear of
-## liner, a streak about a fiftieth of the mask wide, and all three of its controls
-## scored 0.2% of the frame and read as dead while being, on the author's own
-## footage, a black line down a white cheek. The denominator is therefore the
-## pixels the clown CHANGED AT ALL relative to the untouched frame, which is
-## bounded by construction and says the thing meant: of what this effect draws, how
-## much did this slider move.
+## A control is judged on how many pixels it moves, not on the average movement over the frame: a mean
+## punishes anything acting on a thin region (Edge feather scores 0.003 by mean while plainly visible).
+## The fraction is of what the effect drew, not of the frame, which would also measure how much of the
+## shot the face fills: the denominator is the pixels the clown changed at all relative to the untouched
+## frame.
 const VISIBLE := 0.05     # a per-pixel change this size is one you can see
 const DEAD := 0.004       # ...on fewer than 0.4% of the drawn mask is a control doing nothing
 
@@ -147,18 +117,15 @@ func _expect(ok: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-## One render of the whole pipeline with `field` set to `v`, resolved through the
-## editor's own mappings so the panel-to-shader path is what is under test rather
-## than the shader alone.
+## One render of the whole pipeline with `field` set to `v`, resolved through the editor's own mappings, so
+## the panel-to-shader path is under test and not the shader alone.
 func _render(field: String, v: float) -> Image:
 	var l := {}
 	for k in MaskSession.VECTOR_FIELDS:
 		l[k] = MaskSession.DEFAULTS.get(k, 0.0)
 	l[field] = v
-	# Drip width and Drip curve shape a run that only exists once Drip is up, so
-	# with sat_floor at its stored default they would both measure zero and read as
-	# dead controls. They are swept ON a run, which is the only state in which the
-	# panel offers them anything to do.
+	# Drip width and Drip curve shape a run that only exists once Drip is up, so they are swept on a run
+	# (with sat_floor at its stored default they would measure zero).
 	if field == "fx_y" or field == "intensity_b":
 		l["sat_floor"] = 1.0
 	_ed._clown_fs = clampf(float(l["fx_scale"]), 0.3, 2.5)
@@ -315,9 +282,8 @@ func _composite(paint: Texture2D, l: Dictionary) -> Image:
 	return img
 
 
-## A face with real STRUCTURE in it - dark sockets, a red mouth, a lit nose ridge
-## and shading across the cheeks. The evidence terms read the picture, so a flat
-## fill would leave half these controls with nothing to act on.
+## A face with real structure in it (dark sockets, a red mouth, a lit nose ridge, cheek shading): the
+## evidence terms read the picture, so a flat fill leaves many controls nothing to act on.
 func _make_frame() -> Texture2D:
 	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
 	for y in H:
@@ -339,8 +305,8 @@ func _make_frame() -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
-## A one-sample track holding a plausible face, written in the same format
-## face_track.py produces (see face_track_check for the layout).
+## A one-sample track holding a plausible face, in the format face_track.py produces (see face_track_check
+## for the layout).
 func _write_track() -> String:
 	var dir := ProjectSettings.globalize_path("user://face_tracks")
 	DirAccess.make_dir_recursive_absolute(dir)

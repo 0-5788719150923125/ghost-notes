@@ -3,24 +3,20 @@ class_name TriBatch
 
 ## TriBatch - one canvas draw call for thousands of shapes.
 ##
-## The heavy scenes were issuing tens of thousands of `draw_colored_polygon` /
-## `draw_line` calls per frame - each a GDScript->server round trip with its
-## own array allocation - and THAT, not the geometry count, was the frame
-## cost (metropolis: 48x48 tiles x ~4-15 calls each = an unfinishable
-## render). The professional shape of the fix is batching: accumulate every
-## triangle into one vertex/color/index buffer and submit it with a single
-## [method RenderingServer.canvas_item_add_triangle_array] - the 2D twin of
-## a MultiMesh. Triangles render in append order, so the painter's
-## back-to-front discipline scenes already follow is preserved exactly.
+## Per-shape `draw_colored_polygon` / `draw_line` calls are each a GDScript->server round trip with their own array
+## allocation, and that, not the geometry count, is the frame cost. TriBatch accumulates every triangle into one
+## vertex/color/index buffer and submits it with a single [method RenderingServer.canvas_item_add_triangle_array] (the
+## 2D twin of a MultiMesh). Triangles render in append order, so the painter's back-to-front discipline scenes
+## already follow is preserved.
 ##
 ## Usage, inside _draw():
 ##   _tb.quad(a, b, c, d, col)     # convex quad, in paint order
 ##   _tb.tri(a, b, c, col)
 ##   _tb.line(a, b, col, width)    # a thin quad - batches with everything else
 ##   _tb.poly(points, col)         # convex fan
-##   _tb.flush(self)               # ONE draw call; the batch resets
+##   _tb.flush(self)               # one draw call; the batch resets
 ##
-## Anything that must draw OVER the batch (fog, glows) is drawn after flush().
+## Anything that must draw over the batch (fog, glows) is drawn after flush().
 
 var pts := PackedVector2Array()
 var cols := PackedColorArray()
@@ -29,11 +25,9 @@ var uvs := PackedVector2Array()      # non-empty only in a TEXTURED run
 var tex_rid := RID()                 # the textured run's texture
 
 
-## Depth-ordered lists that mix textured and untextured faces batch as RUNS:
-## call this before each append with the face's kind - when the kind (or
-## texture) changes, the current batch flushes first, so the painter's
-## interleave stays exact while same-kind stretches still collapse into
-## single draw calls.
+## Depth-ordered lists that mix textured and untextured faces batch as runs: call this before each append with the
+## face's kind; when the kind (or texture) changes the current batch flushes first, so the painter's interleave stays
+## exact while same-kind stretches still collapse into single draw calls.
 func set_run(ci: CanvasItem, textured: bool, rid: RID) -> void:
 	var is_textured := tex_rid.is_valid()
 	if textured == is_textured and (not textured or rid == tex_rid):
@@ -120,26 +114,18 @@ func quad_colored(p: PackedVector2Array, c: PackedColorArray) -> void:
 
 ## Width of the alpha falloff carried along each side of a line, in pixels.
 ##
-## This is ghost's antialiasing for edges, and it has to be, because nothing else is. Every line
-## here is geometry - a thin quad - not a line primitive, so `draw_line`'s own `antialiased` flag
-## never applies to it; and Godot's msaa_2d does almost nothing for this drawing path (measured:
-## the fraction of edge pixels with no partial coverage moves only 75.0% -> 73.8% going from MSAA
-## off to 8x, and in the export's "viewport" stretch mode MSAA is inert entirely - frames come out
-## byte-identical at 0, 4x and 8x). A hard-edged 1px quad of bright color on ghost's near-black
-## backgrounds is the worst case there is: it steps, and it crawls as the geometry turns.
-##
-## 0.8 px rather than a full pixel: wide enough to give the rasterizer a real gradient to
-## interpolate, narrow enough that a 1px line still reads as 1px rather than as a soft smear.
+## This is the antialiasing for edges: lines are geometry (a thin quad), so `draw_line`'s `antialiased` flag never
+## applies, and msaa_2d barely helps this drawing path (and is inert in the export's "viewport" stretch mode). 0.8 px
+## rather than a full pixel: wide enough to give the rasterizer a real gradient to interpolate, narrow enough that a
+## 1px line still reads as 1px.
 const FEATHER := 0.8
 
 
-## A line as a thin quad, so it batches (and layers!) with the fills around
-## it - a separate multiline call would break the painter's order.
+## A line as a thin quad, so it batches (and layers) with the fills around it; a separate multiline call would
+## break the painter's order.
 ##
-## Emitted as three quads: a solid core, and a fading skirt down each side (see [constant FEATHER]).
-## That is 6 triangles where this used to cost 2, which is the price of the only antialiasing this
-## renderer has. Pass `soft = false` for bulk hairline work that does not need it - the floor bands
-## behind a city's windows, say - to get the old single-quad form back.
+## Emitted as three quads: a solid core and a fading skirt down each side (see [constant FEATHER]), 6 triangles. Pass
+## `soft = false` for bulk hairline work that does not need it, to get the single-quad form.
 func line(a: Vector2, b: Vector2, col: Color, width := 1.0, soft := true) -> void:
 	var d := b - a
 	if d.length_squared() < 0.000001:
@@ -149,8 +135,7 @@ func line(a: Vector2, b: Vector2, col: Color, width := 1.0, soft := true) -> voi
 		var n := u * (width * 0.5)
 		quad(a - n, b - n, b + n, a + n, col)
 		return
-	# Keep a real core even for hairlines, so a thin line stays a line rather than becoming two
-	# feathers meeting in the middle (which reads as a dimmer, blurrier line, not a smoother one).
+	# Keep a real core even for hairlines, so a thin line stays a line rather than two feathers meeting in the middle.
 	var hw := maxf(width * 0.5, 0.4)
 	var i0 := a - u * hw
 	var i1 := b - u * hw
@@ -165,7 +150,7 @@ func line(a: Vector2, b: Vector2, col: Color, width := 1.0, soft := true) -> voi
 		PackedColorArray([col, col, fade, fade]))
 
 
-## A CONVEX polygon as a fan (matches draw_colored_polygon on convex input).
+## A convex polygon as a fan (matches draw_colored_polygon on convex input).
 func poly(p: PackedVector2Array, col: Color) -> void:
 	if p.size() < 3:
 		return
@@ -179,14 +164,10 @@ func poly(p: PackedVector2Array, col: Color) -> void:
 		idx.append(base + i + 1)
 
 
-## Native-key painter sort: order `items` (Array of Dictionary) far-to-near
-## by the float field `key`, WITHOUT sort_custom - whose per-comparison
-## GDScript lambda costs n·log n interpreter calls (a 20k-face list means
-## hundreds of thousands of lambda invocations per frame; measured as a
-## dominant scene cost). Quantized depth packs into the high bits of an
-## int64, the item index into the low 22, and the packed array sorts
-## natively. Stable (index tiebreak), ~1/128-unit depth resolution - more
-## than painter's needs.
+## Native-key painter sort: order `items` (Array of Dictionary) far-to-near by the float field `key` without
+## sort_custom (whose per-comparison lambda costs n·log n interpreter calls). Quantized depth packs into the high bits
+## of an int64, the item index into the low 22, and the packed array sorts natively. Stable (index tiebreak),
+## ~1/128-unit depth resolution.
 static func painter_sort(items: Array, key: String = "d") -> Array:
 	var n := items.size()
 	if n < 2:
@@ -207,10 +188,9 @@ static func painter_sort(items: Array, key: String = "d") -> Array:
 var _chunks: Array = []
 
 
-## WORKER-SIDE batching (the FrameForge contract): a builder thread cannot
-## touch a canvas, so instead of flushing, runs are CUT into chunk
-## dictionaries and returned as the packet. mark_run() is set_run() for
-## chunk mode - a kind (or texture) change cuts the current run.
+## Worker-side batching (the FrameForge contract): a builder thread cannot touch a canvas, so runs are cut into chunk
+## dictionaries and returned as the packet. mark_run() is set_run() for chunk mode: a kind (or texture) change cuts
+## the current run.
 func mark_run(textured: bool, rid: RID) -> void:
 	var is_textured := tex_rid.is_valid()
 	if textured == is_textured and (not textured or rid == tex_rid):

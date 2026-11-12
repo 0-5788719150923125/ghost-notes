@@ -1,12 +1,13 @@
 extends RefCounted
 class_name ReadingTimeline
 
-## ReadingTimeline - A NOTE'S WORDS AS A TIMELINE (next/editing.md step 12: "the Letter and the Dispatch desk hand a score from the
-## marks they have"): every mark in the words (`<!-- name: what -->`, the [ScriptMarks] a script may carry - a Letter's strike and
-## sketch, the Dispatch desk's `heard`, `redact`, `bell` and `lamp`, a reading's `pause`) a flag where it stands in them, on the
-## voice's clock - each word as long as the reader says one ([method ReadingCast.said_word]), a rest a mark asks for counted in -
-## and each heading of the words a group of its own. One reader for every show that is a reading, whatever presents it: what the
-## marks do is the medium's; where they fall is the words'. Read-only: a mark is moved in the words.
+## ReadingTimeline - a note's words as a timeline (next/editing.md step 12): every mark in the words
+## (`<!-- name: what -->`, the [ScriptMarks] a script may carry: a Letter's strike and sketch, the Dispatch desk's
+## `heard`, `redact`, `bell` and `lamp`, a reading's `pause`) is a flag where it stands in them, on the voice's
+## clock - each word as long as the reader says one ([method ReadingCast.said_word]), a rest a mark asks for
+## counted in - and each heading of the words is a group of its own. One reader for every show that is a
+## reading: what the marks do is the medium's; where they fall is the words'. Read-only: a mark is moved in the
+## words.
 
 const MARK := "<!--\\s*([A-Za-z][\\w-]*)\\s*(?::\\s*(.*?))?\\s*-->"
 ## A mark's rest, seconds, where it asks for one (`<!-- pause: 2 -->`).

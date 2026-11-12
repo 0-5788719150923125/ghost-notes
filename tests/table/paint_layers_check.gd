@@ -1,22 +1,20 @@
 extends SceneTree
 
-## The gate of THE PAINTING LAID IN LAYERS ([PaintLayers]; next/painted_surface.md, "The painting is the design"), on a picture made here:
-## a white oval with a purple disc, an orange streak across the disc, and a black line.
+## The gate of the painting laid in layers ([PaintLayers]; next/painted_surface.md, "The painting is the design"), on a picture made
+## here: a white oval with a purple disc, an orange streak across the disc, and a black line.
 ##
 ##   godot --headless --path . --script res://tests/table/paint_layers_check.gd
 ##
-## - A FOUNDATION FIRST: the first layer is the white, over the whole surface.
-## - WIDEST TOOL FIRST: each layer's tool no wider than the one before's (the foundation aside).
-## - ORANGE ON THE PURPLE: an orange layer comes after a purple one, and the streak is orange at the end.
-## - IT FINISHES: next to nothing of the surface is left off the picture. THE CONTROL: the sponge alone leaves the line and the streak.
-## - A TOOL GOES ONLY WHERE IT FITS: no point of the white is left darker than the picture's white by a spill. THE CONTROL: the picture
-##   has dark there to be spilt onto (the line runs beside the white).
-## - A COAT LAID AREA BY AREA (the user, 2026-11-08: "it moves from cheek to cheek, eye to eye, forehead to chin - it jumps everywhere,
-##   then returns"): on a broad plain surface, the hand comes back to a square it had left (after 30 dabs elsewhere) half as often as the
-##   same dabs taken round and round out from the middle, as they had been, at most (THE CONTROL: they come back, ring after ring).
-## - BUILT UP AS IT WAS LAID (the user, 2026-11-08: "There is not opacity at all"): what a point holds after the first mark that reaches it
-##   is a thin film, well short of what all its marks come to. THE CONTROL: shown from that first mark at what they all come to, as it had
-##   been, it holds nearly all of it at once.
+## - A foundation first: the first layer is the white, over the whole surface.
+## - Widest tool first: each layer's tool no wider than the one before's (the foundation aside).
+## - Orange on the purple: an orange layer comes after a purple one, and the streak is orange at the end.
+## - It finishes: next to nothing of the surface is left off the picture. Control: the sponge alone leaves the line and the streak.
+## - A tool goes only where it fits: no point of the white is left darker than the picture's white by a spill. Control: the picture has
+##   dark there to be spilt onto (the line runs beside the white).
+## - A coat laid area by area: on a broad plain surface, the hand comes back to a square it had left (after 30 dabs elsewhere) at most
+##   half as often as the same dabs taken round and round out from the middle. Control: those come back, ring after ring.
+## - Built up as it was laid: what a point holds after the first mark that reaches it is a thin film, well short of what all its marks
+##   come to. Control: shown from that first mark at what they all come to, it holds nearly all of it at once.
 
 const W := 60.0
 const H := 80.0
@@ -71,11 +69,11 @@ func _init() -> void:
 	_ok(float(res["left"]) < 0.04, "%.1f%% of the surface is left off the picture" % (float(res["left"]) * 100.0))
 	var alone := PaintLayers.plan(pic, Vector2(W, H), Color("#c89e80"), PAINTS, [TOOLS[0]])
 	_ok(float(alone["left"]) > float(res["left"]) * 2.0 + 0.02, "THE CONTROL: the sponge alone left only %.1f%%" % (float(alone["left"]) * 100.0))
-	# ...NO SPILL: the white beside the line is still white
+	# ...no spill: the white beside the line is still white
 	var beside := canvas.get_pixel(int(46.0 * PaintLayers.PX), int(60.0 * PaintLayers.PX))
 	_ok(_near(beside, WHITE), "the white beside the line is %s, spilt on" % beside.to_html(false))
 	_ok(_near(pic.get_pixel(int(48.0 * PX), int(60.0 * PX)), BLACK), "THE CONTROL: the picture has no line beside that white to spill")
-	# ...A COAT LAID AREA BY AREA, and BUILT UP AS IT WAS LAID
+	# ...a coat laid area by area, and built up as it was laid
 	var size := Vector2(100.0, 130.0)
 	var plain := Image.create(int(size.x * PX), int(size.y * PX), false, Image.FORMAT_RGBA8)
 	plain.fill(WHITE)

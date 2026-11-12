@@ -3,36 +3,23 @@ class_name ShadowFilter
 
 ## ShadowFilter - a positional light's shadow, softened by a filter of a set width and never by the
 ## light's size.
+## Given a `light_size`, Godot searches the map for what stands in front and blurs by how far off that is (PCSS),
+## which fails on a tabletop: the search takes no bias, so a surface the light grazes finds itself in front of the
+## light and shades half its own pool in rings, and where a caster stands close over what it shades the blur shrinks
+## to nothing and the map's texels show as stairs. Without a size the shadow is a filter of `shadow_blur` texels
+## (PCF): never narrower than that, and a normal bias as wide as the filter keeps a surface out of its own shadow.
+## A size also widens a light's highlights (its specular term takes the size), so a filter makes a candle's glint on
+## a glossy thing smaller. Godot gives the two only together; sized but unblurred is an unfiltered shadow.
 ##
-## Godot softens a light's shadow one of two ways. Given a `light_size` it searches the map for what
-## stands in front and blurs by how far off that is (PCSS) - which on a tabletop fails twice (feedback
-## 0007, a candlelit table). The search takes no bias at all, so a surface the light grazes finds
-## ITSELF in front of the light, blurs wide and shades half its own pool, in rings round the flame (the
-## cube map's texels, plainest on a card's dark back); and where a caster stands close over what it
-## shades (a clock's rim over its face) the blur shrinks to nothing and the map's texels show as
-## stairs, crawling as the flame flickers. Without a size it is a filter of `shadow_blur` texels (PCF):
-## never narrower than that, and a normal bias as wide as the filter keeps a surface out of its own
-## shadow. Measured on the episode of that report: the rings and the stairs gone, the cloth's open
-## pools 12-30% brighter (the search had shaded them), the shadows of things near a flame darker and
-## crisper (the old 3 cm search radius had washed them out). What a size also did and a filter cannot:
-## Godot widens a sized light's highlights as a lamp that big would (its specular term takes the size),
-## so a candle's glint on a glossy thing near it is smaller now - a headlamp's corner 13 cm off a flame
-## lost its spark. Godot gives the two only together; sized but unblurred is an unfiltered shadow, and
-## PCSS kept its stairs and rings on the bigger atlas and at a bigger normal bias too (measured).
+## [method filter] sets both from one number, the filter's radius in texels of the light's own map: the same width at
+## any quality ([method quality_radius]) and any map size (Godot's normal bias is counted in the map's texels too). A
+## shadow's softness is then its texels' angle seen from the light: a bigger shadow atlas makes a stage's shadows
+## finer, at the cost of a bigger normal bias, which wipes out the shadows of things thinner than it lifts.
 ##
-## [method filter] sets both from one number, the filter's radius in texels of the light's own map -
-## the same width at any quality ([method quality_radius]) and any map size (Godot's normal bias is
-## counted in the map's texels too). The softness of a shadow is then its texels' angle seen from the
-## light: what makes a stage's shadows finer is a bigger shadow atlas, and what it costs is a bigger
-## normal bias, which wipes out the shadows of things thinner than it lifts.
-##
-## AN OMNI LIGHT'S MAP IS ITS CUBE (feedback 0024: a candle behind a brush tray drew the brushes' shadows as
-## lumpy smears): Godot draws an omni light's six faces at HALF its atlas slot and copies them into the
-## slot's two paraboloids, where its `shadow_blur` is counted - so a filter counted in the slot's texels
-## spanned a texel and a half of the cube, and the cube's stairs showed through it, each stretched four
-## times along a surface a low flame grazes. Counted in the cube's own texels ([constant OMNI_MAP]), the
-## brushes' shadows came out smooth; turning the paraboloids' poles away from the table, so it lay where
-## the slot is finest, did next to nothing once the cube was what limited it (both measured on 520084).
+## An omni light's map is its cube: Godot draws its six faces at half its atlas slot and copies them into the slot's
+## two paraboloids, where its `shadow_blur` is counted, so a filter counted in the slot's texels spans a texel and a
+## half of the cube and the cube's stairs show through it. Counted in the cube's own texels ([constant OMNI_MAP]),
+## shadows come out smooth.
 
 ## The radius Godot multiplies a filter's `shadow_blur` by at each of the project's soft shadow
 ## qualities (RendererSceneRenderRD: hard, very low, low, medium, high, ultra).
@@ -70,7 +57,7 @@ static func blur(texels: float) -> float:
 	return texels / quality_radius()
 
 
-## THE NORMAL BIAS THAT KEEPS A SURFACE OUT OF ITS OWN SHADOW under a filter [param texels] wide.
+## The normal bias that keeps a surface out of its own shadow under a filter [param texels] wide.
 ## Godot reads a shadow off the surface, moved along its normal by `shadow_normal_bias` x 10 texels'
 ## angle as the light sees them (10 / N radians for a map N texels wide), times 1 - |N.L| - all of it
 ## at a graze, where the filter's lower half would read the surface itself. The move must clear the

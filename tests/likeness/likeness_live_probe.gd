@@ -1,29 +1,24 @@
 extends Node
 
-## NOT a gate. An actor played LIVE in a real boot: the real main scene opens a note carrying an
-## Actor, the real voice host reads it, and the stage is photographed as it plays -
-## the path the app's ▶ takes, which the look probe (a set handed to the medium by hand) never ran.
+## Not a gate. An actor played live in a real boot: the real main scene opens a note carrying an Actor, the real voice host
+## reads it, and the stage is photographed as it plays (the path the app's ▶ takes).
 ##
 ##   GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/likeness/likeness_live_probe.gd 300 \
 ##       --actors user://actors_live_probe --actor <id> --out <dir> --play 20 [--stamp 1] [--bake 1] [--voice <id>]
 ##
-## `--actors` is a library of the probe's own (a copy: opening an actor rescans its sources and saves
-## it); the notes are made in a folder of the probe's own (`NoteStore.root`). It first presses Play on
-## a note with no words (what the reading says then), then plays a note with words, printing each
-## second what the medium holds, photographing the frame at `--times`, and timing each part of a frame
-## (the machine's load is in those numbers: read the least).
+## `--actors` is a library of the probe's own (a copy: opening an actor rescans its sources and saves it); the notes are made in
+## a folder of the probe's own (`NoteStore.root`). It first presses Play on a note with no words, then plays a note with words,
+## printing each second what the medium holds, photographing the frame at `--times`, and timing each part of a frame (the
+## machine's load is in those numbers: read the least).
 ##
-## Run on the author's built set through a copy of symlinks (`cp -as`), so nothing of theirs is written:
-## the actor's small json files copied whole, `"set"` pointed at the built one. With `--stamp 1` the
-## copy's still, rig, library and motion (put there by hand, from actor.py run on their footage) are
-## stamped made, as Generate would have. With `--bake 1` the reading's own export take is made after
-## playing - its sound and its phones, `take.wav` and `take.json` in --out - for the look probe to draw
-## frame by frame (`--take`), and the take's own files are taken away again. `--voice` reads the note in that
-## voice (an actor's own: `actor-<id>`), the default one's otherwise; `--bookends <intro>,<outro>` gives the note
-## those holds (its `bookends:` block), `--words <file>` reads that note's body (its frontmatter left out) in
-## place of the probe's own sentences, and each second's line says how bright the actor is drawn and the last
-## of the text's words the voice's timings have reached. `--renderer gaussian` plays them as a head of splats (the
-## copy's `avatar/`, put there by hand, stamped made by `--stamp 1` with the set's other steps).
+## Run on an existing built set through a copy of symlinks (`cp -as`), so nothing of the original is written: the actor's small
+## json files copied whole, `"set"` pointed at the built one. `--stamp 1` stamps the copy's still, rig, library and motion made,
+## as Generate would. `--bake 1` makes the reading's own export take after playing (`take.wav` and `take.json` in --out) for the
+## look probe to draw frame by frame (`--take`), and removes the take's own files again. `--voice` reads the note in that voice
+## (an actor's own: `actor-<id>`), the default one's otherwise; `--bookends <intro>,<outro>` gives the note those holds (its
+## `bookends:` block); `--words <file>` reads that note's body (frontmatter left out) in place of the probe's own sentences,
+## and each second's line says how bright the actor is drawn and the last of the text's words the voice's timings have reached.
+## `--renderer gaussian` plays them as a head of splats (the copy's `avatar/`, stamped made by `--stamp 1`).
 
 const WORDS := "Hello there. This is a short test of the likeness, read in my own voice. " \
 	+ "The quick brown fox jumps over the lazy dog. Maybe we should move on, but please, bear with me."
@@ -85,7 +80,7 @@ func _run() -> void:
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
 	await _frames(30)
-	# ▶ WITH NO WORDS: what the author saw
+	# ▶ with no words
 	var panel := await _open(NoteStore.create("live likeness empty", "", {"actor": {"id": actor}}))
 	if panel == null:
 		return
@@ -184,7 +179,7 @@ func _open(note: String) -> ReadingPanel:
 	return panel
 
 
-## WHAT THE MEDIUM DRAWS WITH: its fade, its layer and where it stands, and the stage it is on.
+## What the medium draws with: its fade, its layer and where it stands, and the stage it is on.
 func _diag(lm: LikenessMedium) -> void:
 	if lm == null:
 		return
@@ -204,8 +199,8 @@ func _diag(lm: LikenessMedium) -> void:
 		print("diag: window %s" % win.get_size())
 
 
-## WHERE A FRAME'S TIME GOES: each part of [method LikenessMedium.draw_at], timed at the moments the show
-## plays next (in microseconds, the least and the median of 30).
+## Where a frame's time goes: each part of [method LikenessMedium.draw_at], timed at the moments the show plays next (in
+## microseconds, the least and the median of 30).
 func _costs(lm: LikenessMedium) -> void:
 	if lm == null or not lm._ready_set:
 		return
@@ -240,7 +235,7 @@ func _costs(lm: LikenessMedium) -> void:
 			v[v.size() / 2] if not v.is_empty() else -1, v.size()])
 
 
-## WHAT THE TWO CARDS COST THE MAIN THREAD, four times a second: each one's refresh, the least of 5.
+## What the two cards cost the main thread, four times a second: each one's refresh, the least of 5.
 func _card_costs() -> void:
 	var ac := _find(_main, ActorCard) as ActorCard
 	for pair in [["actor card refresh", func() -> void: ac._refresh()],

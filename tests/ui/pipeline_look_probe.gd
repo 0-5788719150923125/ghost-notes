@@ -1,9 +1,9 @@
 extends Node
 
-## pipeline_look_probe - the deck and the Pipeline card as the app shows them, as a picture: a note OPENED THE WAY A CLICK OPENS IT,
-## on main (a panel built by hand is out of the tree and has no ×, and looked right while the app's did not; next/panel_deck.md), a
-## table show's episode part made, with a card's painting running, a failed reading and the YouTube section under it
-## (next/pipeline.md). In roots of its own; the author's notes are only listed behind it. For looking; nothing is held.
+## pipeline_look_probe - the deck and the Pipeline card as the app shows them, as a picture: a note opened the way a click
+## opens it, on main (a panel built by hand is out of the tree and has no x; next/panel_deck.md), a table show's episode part
+## made, with a card's painting running, a failed reading and the YouTube section under it (next/pipeline.md). In roots of its
+## own; the author's notes are only listed behind it. For looking; nothing is held.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/ui/pipeline_look_probe.gd 60 [--out=<dir>]
 ##

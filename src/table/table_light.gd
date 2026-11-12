@@ -1,24 +1,20 @@
 extends RefCounted
 class_name TableLight
 
-## TableLight - the light on the card table: the flames and how each flickers, leans in a draft and
-## licks, the glow and the heat shimmer over them, the rig the episode's `light` builds ([Lights]:
-## the sun, its screens, the sky, lamps out of shot) and which of them is the key - and the contact
-## shadows under what stands on the cloth.
+## TableLight - the light on the card table: the flames and how each flickers, leans in a draft and licks, the glow and
+## the heat shimmer over them, the rig the episode's `light` builds ([Lights]: the sun, its screens, the sky, lamps
+## out of shot) and which of them is the key, and the contact shadows under what stands on the cloth.
 ##
-## A PART OF THE TABLE, cut along its banners (next/structure.md, step 14): it holds the light's own
-## state - the rig, the glows, the flames counted, the key - and reads the rest of the table through
-## `medium` (its plan, its props, its camera, the wind the light shares with the air). Like
-## everything on the table it is a function of show time: [method tick] and [method tick_props]
-## are asked for a moment, never stepped.
+## A part of the table, cut along its banners (next/structure.md): it holds the light's own state (the rig, the glows,
+## the flames counted, the key) and reads the rest of the table through `medium` (its plan, its props, its camera, the
+## wind the light shares with the air). A function of show time: [method tick] and [method tick_props] are asked for a
+## moment, never stepped.
 
-## The [TableMedium] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [TableMedium] this is a part of: everything read through it is what this part is handed.
 var medium: TableMedium
 
-## ...looked for this far round the candle, meters, on the table's lightness at this grid over the
-## stretch of table the camera can see (x z, meters; 4 cm cells); and the flame height a candle's
-## place is judged at.
+## ...looked for this far round the candle, meters, on the table's lightness at this grid over the stretch of table the
+## camera can see (x z, meters; 4 cm cells); and the flame height a candle's place is judged at.
 const HEAT_R := 0.25
 const HEAT_H := 0.13
 const KEY_MIN := 1.0
@@ -31,9 +27,8 @@ var _flame_n := 0                     # flames lit so far on this table, each wi
 ## the quad it is drawn on, standing on its wick.
 const FLAME_H := 0.03
 const FLAME_QUAD := 0.03
-## HOW A FLAME LEANS (the user, 2026-10-11: they "lean... which is not a thing that flames should do"):
-## the share of its lean that BENDS it - foot upright, tip leaned - the rest tipping the whole sprite;
-## and how far its tip licks from side to side, in flame heights, in still air and fanned to a full draft.
+## How a flame leans: the share of its lean that bends it (foot upright, tip leaned), the rest tipping the whole
+## sprite; and how far its tip licks from side to side, in flame heights, in still air and fanned to a full draft.
 const FLAME_BEND := 0.6
 const FLAME_LICK := Vector2(0.04, 0.16)
 var _glows: Array = []              # [{light, base, energy, flicker}] - candles in the room, out of shot
@@ -46,8 +41,8 @@ var _seen := PackedVector3Array()   # the table the camera sees, sampled (for th
 
 # --- the flames and the light they cast --------------------------------------------------------
 
-## A mesh close enough to a flame that its own shadow would be a false dark ring.
-## Props keeps each part in a separate mesh, while its shared parent holds the final scale.
+## A mesh close enough to a flame that its own shadow would be a false dark ring. Props keeps each part in a separate
+## mesh, while its shared parent holds the final scale.
 static func near_wick(mesh: MeshInstance3D, wicks: Array) -> bool:
 	var bounds := mesh.get_aabb()
 	var parent := mesh.get_parent() as Node3D
@@ -62,10 +57,9 @@ static func near_wick(mesh: MeshInstance3D, wicks: Array) -> bool:
 	return false
 
 
-## A FLAME at [param at], the top of a wick: a wick under it (on its candle's layer, [param own])
-## and the flame, flickering in its own time. Its light is its thing's ([method light_flames]); its
-## own wax glows with it, through [param glow] (its material's `flame`). The flame, as
-## `{mesh, base, flicker, glow}`.
+## A flame at [param at], the top of a wick: a wick under it (on its candle's layer, [param own]) and the flame,
+## flickering in its own time. Its light is its thing's ([method light_flames]); its own wax glows with it, through
+## [param glow] (its material's `flame`). The flame, as `{mesh, base, flicker, glow}`.
 func add_flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
 	var made := flame_nodes(at, own)
 	for n in made:
@@ -75,9 +69,9 @@ func add_flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
 	return {"mesh": flame, "base": flame.position, "flicker": _flicker_of(_flame_n - 1), "glow": glow, "open": 1.0}
 
 
-## A FLAME'S NODES at [param at], the top of a wick: `[wick, flame]`, the wick on its candle's layer
-## [param own], the flame a quad of [constant TableMedium.FLAME_SHADER] standing on it - for any host to add
-## where it keeps its things (the desk's candles too, [DeskLight]).
+## A flame's nodes at [param at], the top of a wick: `[wick, flame]`, the wick on its candle's layer [param own], the
+## flame a quad of [constant TableMedium.FLAME_SHADER] standing on it - for any host to add where it keeps its things
+## (the desk's candles too, [DeskLight]).
 static func flame_nodes(at: Vector3, own: int) -> Array:
 	var wick := MeshInstance3D.new()
 	var wm := CylinderMesh.new()
@@ -107,12 +101,10 @@ static func flame_nodes(at: Vector3, own: int) -> Array:
 	return [wick, flame]
 
 
-## A LIT THING'S ONE LIGHT, for every flame on it: a candelabra's tapers or a pillar's three wicks
-## light the room as one light from among them, as near together as they are - so a candle costs
-## one shadow however many flames it has. It lights everything but its own thing (render layer
-## [param own]) and throws shadows from all of it: a flame lighting its own holder blew it out (an
-## oil lamp's flame sits a few centimeters above its body). Its brightness follows its flames' -
-## each still flickers in its own time.
+## A lit thing's one light, for every flame on it: a candelabra's tapers or a pillar's three wicks light the room as
+## one light from among them, so a candle costs one shadow however many flames it has. It lights everything but its own
+## thing (render layer [param own]) and throws shadows from all of it (a flame lighting its own holder blows it out).
+## Its brightness follows its flames'; each still flickers in its own time.
 func light_flames(flames: Array, own: int) -> void:
 	var at := Vector3.ZERO
 	for f in flames:
@@ -130,14 +122,13 @@ func light_flames(flames: Array, own: int) -> void:
 	medium._lights.append({"light": light, "base": at, "light_base": light.position, "energy": 0.28, "flames": flames})
 
 
-## A CANDLE'S SHADOW, SOFT BY A FILTER AND NOT BY THE FLAME'S SIZE ([ShadowFilter]): a flame stands a few
-## centimeters over the cloth, so everything is lit at a graze, and sized (PCSS) it printed rings round
-## itself on a card's back and drew a clock's rim on its face in stairs (feedback 0007). The filter's
-## normal bias keeps the cloth out of its own shadow; the depth bias stays small (a tabletop's: at
-## Godot's own a deck's shadow began centimeters in front of it), which is what keeps a card's own
-## shadow. DRAWN STRAIGHT INTO TWO PARABOLOIDS, their poles up and down (feedback 0024: a brush in a tray drew a jagged smear - Godot
-## draws a cube and copies it into them through a linear sampler, averaging a thin thing's depth with what is behind it), the table about
-## the flame at their rims, where they are finest; what casts is cut fine enough for a paraboloid to draw it true ([ShadowCasters]).
+## A candle's shadow, soft by a filter and not by the flame's size ([ShadowFilter]): a flame stands a few centimeters
+## over the cloth, so everything is lit at a graze, and a sized (PCSS) shadow prints rings round itself on a card. The
+## filter's normal bias keeps the cloth out of its own shadow; the depth bias stays small (a tabletop's: at Godot's own
+## a deck's shadow begins centimeters in front of it), which keeps a card's own shadow. Drawn straight into two
+## paraboloids, their poles up and down, the table about the flame at their rims where they are finest: Godot's cube
+## copied into them through a linear sampler averages a thin thing's depth with what is behind it. What casts is cut
+## fine enough for a paraboloid to draw it true ([ShadowCasters]).
 static func candle_shadow(light: OmniLight3D) -> void:
 	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	light.basis = Basis(Vector3.RIGHT, PI / 2.0)
@@ -146,10 +137,9 @@ static func candle_shadow(light: OmniLight3D) -> void:
 	light.shadow_enabled = true
 
 
-## A SHADOW-ONLY SLAB under [param foot]: the tabletop's shadow biases are larger than the gap
-## under a bowl's sloping wall, so a ring of the lamp leaked in beside its base (feedback 0009). The
-## slab stands a few millimeters over the cloth, draws nothing and shades what the thing already
-## covers. It is on [param layer], so a candle's own flames still leave it out.
+## A shadow-only slab under [param foot]: the tabletop's shadow biases are larger than the gap under a bowl's sloping
+## wall, so a ring of the lamp leaks in beside its base. The slab stands a few millimeters over the cloth, draws nothing
+## and shades what the thing already covers. It is on [param layer], so a candle's own flames still leave it out.
 func foot_shadow(foot: PackedVector2Array, layer: int) -> MeshInstance3D:
 	var tris := Geometry2D.triangulate_polygon(foot)
 	if tris.is_empty():
@@ -193,11 +183,10 @@ func contact_shadow(foot: PackedVector2Array) -> Decal:
 	return contact
 
 
-## LIGHT FROM OUTSIDE THE SHOT: two or three more candles in the room - behind the camera and off
-## to the sides - never seen, only felt: a warm, shifting fill on the cloth, and on a card held up
-## to the lens. Without shadows - faint fills, whose shadows would be fainter still, at six shadow
-## passes each - each flickering in its own time.
-## Their own dice, so the rest of the table lands where it did.
+## Light from outside the shot: two or three more candles in the room, behind the camera and off to the sides, never
+## seen, only felt: a warm, shifting fill on the cloth and on a card held up to the lens. Without shadows (faint fills,
+## at six shadow passes each), each flickering in its own time. Their own dice, so the rest of the table lands where it
+## did.
 func _build_glows() -> void:
 	_glows = []
 	var r := RandomNumberGenerator.new()
@@ -228,15 +217,14 @@ func _in_shot(at: Vector3) -> bool:
 	return CardTable.in_shot(medium._plan.cam_base, medium._cam.fov, at)
 
 
-## THE LIGHT: the set dresser's (its table's `light`, [Lights]) - a sky, a sun and what it falls through,
-## clouds, birds, lamps out of the shot - in place of the lamp and the room's out-of-shot candles; or,
-## for a table that wrote none (every table set before 2026-10-07), those, as every table had them.
+## The light: the set dresser's (its table's `light`, [Lights]) - a sky, a sun and what it falls through, clouds, birds,
+## lamps out of the shot - in place of the lamp and the room's out-of-shot candles; a table that wrote none has those.
 func build(spec: Dictionary) -> void:
 	if _rig != null:
 		_rig.release()
 		_rig = null
 	var light: Dictionary = spec.get("light", {}) if spec.get("light") is Dictionary else {}
-	# ONE WIND for the light and the air: what stirs the leaves overhead blows the petals off the cloth
+	# One wind for the light and the air: what stirs the leaves overhead blows the petals off the cloth
 	medium._wind = Winds.plan(light.get("wind", {}) if light.get("wind") is Dictionary else {}, hash([medium._plan.seed_value, "wind"]))
 	medium._lamp.visible = light.is_empty()
 	medium._fill.visible = light.is_empty()
@@ -263,14 +251,14 @@ func _light_stage() -> Dictionary:
 		"bounds": bounds, "seen": _seen, "env": medium._env, "room": medium._backdrop_mat, "in_shot": _in_shot, "wind": medium._wind}
 
 
-## THE TABLE THE CAMERA SEES, sampled ([method CardTable.seen_points]).
+## The table the camera sees, sampled ([method CardTable.seen_points]).
 func _seen_points() -> PackedVector3Array:
 	return CardTable.seen_points(medium._plan.cam_base, medium._cam.fov, medium._top)
 
 
-## HOW PALE THE PALEST THING THE LIGHT FALLS ON IS (linear luminance): the cloth where it is lightest
-## that the camera sees (its 97th percentile - one pale thread is not the cloth) and the card stock, which
-## lies in the spread under the same light.
+## How pale the palest thing the light falls on is (linear luminance): the cloth where it is lightest that the camera
+## sees (its 97th percentile - one pale thread is not the cloth) and the card stock, which lies in the spread under the
+## same light.
 func _hot_lum() -> float:
 	var lums := PackedFloat32Array()
 	if not medium._lum.is_empty():
@@ -296,7 +284,7 @@ func tick(t: float) -> void:
 		_rig.tick(t)
 
 
-## WHAT LEADS THE LIGHT, in words: a candle (by its thing's name), the sun or a lamp of the table's own
+## What leads the light, in words: a candle (by its thing's name), the sun or a lamp of the table's own
 ## light, or the lamp.
 func lead_name(by_light: Dictionary = {}) -> String:
 	if _key_flame >= 0:
@@ -310,21 +298,17 @@ func lead_name(by_light: Dictionary = {}) -> String:
 	return "the lamp"
 
 
-## EVERY LIGHT THROWS ITS OWN SHADOW (the user, 2026-10-05: "most scenes have multiple light
-## sources, and thus should probably cast multiple shadows"): every candle and the lamp, so a thing
-## has a shadow for each light near it, each turned away from its own. One light had thrown them all
-## (every light casting its own then gave the deck no shadow worth the name and each half of a split
-## deck two - "it's all very strange"); now the KEY leads instead of casting alone: the candle
-## nearest the middle of the table, bright enough to reach the cards, so the deck's long shadow
-## toward the reader reads and the others are fainter. The other candles are fills, and the lamp is
-## dimmed to one; with no candle at all, the lamp is the key ([member _key_flame] -1). NO CLOTH IS LIT HOTTER THAN IT CAN TAKE ([constant HEAT]): a candle
-## by pale cloth is dimmer - and so are candles standing TOGETHER, whose pools add up on the cloth
-## between them (two tapers side by side, each at its own limit, burned a pale cloth white through
-## the bloom). A candle the cloth cannot let burn at [constant KEY_MIN] is never the key - with
-## none that can, the lamp is.
+## Every light throws its own shadow: every candle and the lamp, so a thing has a shadow for each light near it, each
+## turned away from its own. The key leads: the candle nearest the middle of the table, bright enough to reach the
+## cards, so the deck's long shadow toward the reader reads and the others are fainter. The other candles are fills and
+## the lamp is dimmed to one; with no candle at all, the lamp is the key ([member _key_flame] -1). No cloth is lit
+## hotter than it can take ([constant HEAT]): a candle by pale cloth is dimmer, and so are candles standing together,
+## whose pools add up on the cloth between them (two tapers side by side, each at its own limit, burn a pale cloth
+## white through the bloom). A candle the cloth cannot let burn at [constant KEY_MIN] is never the key - with none
+## that can, the lamp is.
 func light_the_table() -> void:
-	# A LIGHT OF THE TABLE'S OWN ([Lights]) is fitted to how pale the table is; where its sun or a lamp
-	# leads, every candle burns as a fill
+	# A light of the table's own ([Lights]) is fitted to how pale the table is; where its sun or a lamp leads, every
+	# candle burns as a fill
 	var leads := false
 	if _rig != null:
 		_rig.fit(_hot_lum())
@@ -341,8 +325,8 @@ func light_the_table() -> void:
 		if not leads and TableMedium.HEAT / maxf(_field_max(field), 0.05) >= KEY_MIN and d < best:
 			best = d
 			key = i
-	# A LIGHT IS AS BRIGHT AS ITS FLAMES: a pillar's three wicks give three flames' light, a
-	# candelabra's five tapers five - capped like any other by the cloth they light
+	# A light is as bright as its flames: a pillar's three wicks give three flames' light, a candelabra's five tapers
+	# five - capped like any other by the cloth they light
 	var flames := PackedFloat32Array()
 	for i in medium._lights.size():
 		flames.append(float(((medium._lights[i] as Dictionary)["flames"] as Array).size()))
@@ -377,14 +361,14 @@ func light_the_table() -> void:
 		# the candle has to carry much of the light at the cards, or its shadow is lost under the lamp's
 		medium._lamp.light_energy = medium._plan.lamp_base * (1.0 if key < 0 else 0.4)
 	else:
-		# A TABLE WITH A LIGHT OF ITS OWN has no lamp - unless nothing in that light reaches the cards and no
-		# candle can lead: then the lamp hangs over it, so a reading is never read in the dark
+		# A table with a light of its own has no lamp - unless nothing in that light reaches the cards and no candle
+		# can lead: then the lamp hangs over it, so a reading is never in the dark
 		medium._lamp.visible = not leads and key < 0 and _rig.lead_level() < LAMP_FALLBACK
 		medium._lamp.light_energy = medium._plan.lamp_base * 0.7
 	_lit_cloth = medium._painting_tex
 
 
-## The cloth's HOTTEST SPOT under a flame [param hf] above [param at] (see [method _heat_field]).
+## The cloth's hottest spot under a flame [param hf] above [param at] (see [method _heat_field]).
 func _heat(at: Vector3, hf: float) -> float:
 	return _field_max(_heat_field(at, hf))
 
@@ -396,10 +380,10 @@ static func _field_max(field: Dictionary) -> float:
 	return m
 
 
-## HOW HOT A FLAME [param hf] above [param at] LIGHTS THE TABLE, cell by cell within [constant
-## HEAT_R] ([constant LUM_GRID] over [constant LUM_RECT], keyed by cell): each cell's lightness over
-## the flame's falloff - height over distance squared, which is the slant of the light times an omni
-## light's 1/d at Godot's default attenuation. A table not yet built is its cloth's color.
+## How hot a flame [param hf] above [param at] lights the table, cell by cell within [constant HEAT_R] ([constant
+## LUM_GRID] over [constant LUM_RECT], keyed by cell): each cell's lightness over the flame's falloff - height over
+## distance squared, which is the slant of the light times an omni light's 1/d at Godot's default attenuation. A table
+## not yet built is its cloth's color.
 func _heat_field(at: Vector3, hf: float) -> Dictionary:
 	var out := {}
 	var cell := TableMedium.LUM_RECT.size / Vector2(TableMedium.LUM_GRID)
@@ -430,8 +414,8 @@ func heat_cell(at: Vector3) -> float:
 	return float(_heat_cells[k])
 
 
-## HOW A FLAME FLICKERS - its own way, so no two keep time: a tempo, how steadily it burns, and
-## how often a draft finds it. They all shared one tempo and one swing, and pulsed together.
+## How a flame flickers - its own way, so no two keep time: a tempo, how steadily it burns, and how often a draft finds
+## it.
 func _flicker_of(salt: Variant) -> Dictionary:
 	return flicker_seeded(medium._plan.seed_value, salt)
 
@@ -445,11 +429,10 @@ static func flicker_seeded(seed: int, salt: Variant) -> Dictionary:
 		"salt": hash([seed, "draft", salt])}
 
 
-## A flame at show time [param t]: (brightness about 1, height about 1, lean). Mostly a steady burn
-## - a slow sway and a fine shiver at the flame's own tempo - and now and then a DRAFT: for a second
-## or two it gutters, dims and leans. A draft is drawn per slot of the flame's own length from a
-## hash, so this is a pure function of time and a render and a scrub see the same flame. The room's
-## drafts are still air's ([param drafts]): in the light's wind the wind is the draft ([method tick_props]).
+## A flame at show time [param t]: (brightness about 1, height about 1, lean). Mostly a steady burn - a slow sway and a
+## fine shiver at the flame's own tempo - and now and then a draft: for a second or two it gutters, dims and leans. A
+## draft is drawn per slot of the flame's own length from a hash, so this is a pure function of time. The room's drafts
+## are still air's ([param drafts]): in the light's wind the wind is the draft ([method tick_props]).
 func _flame_at(fk: Dictionary, t: float, drafts := true) -> Vector3:
 	return flame_burn(medium._noise, fk, t, drafts)
 
@@ -496,19 +479,19 @@ func _contact_texture() -> Texture2D:
 	return _contact_tex
 
 
-## THE CANDLES AT SHOW TIME [param t]: each flame flickering in its own time, and IN THE LIGHT'S WIND
-## ([method Winds.flame], as much of it as reaches the flame - [method Props.open_to_air]) leaning downwind,
-## flickering in its eddies and guttering in a gust; its thing's light leans and dims with its flames,
-## so the shadows round it lean and dance with them.
+## The candles at show time [param t]: each flame flickering in its own time and, in the light's wind ([method
+## Winds.flame], as much of it as reaches the flame - [method Props.open_to_air]), leaning downwind, flickering in its
+## eddies and guttering in a gust; its thing's light leans and dims with its flames, so the shadows round it move with
+## them.
 func tick_props(t: float) -> void:
 	var blows := Winds.blows(medium._wind)
-	# ABOARD SOMETHING THAT MOVES ([Rides]): every flame leans toward the push and stays upright in the world as
-	# the deck rolls, and jumps at a jolt
+	# Aboard something that moves ([Rides]): every flame leans toward the push and stays upright in the world as the
+	# deck rolls, and jumps at a jolt
 	var riding := Rides.moves(medium._ride)
 	var rode := Rides.flame(medium._ride, t) if riding else Vector2.ZERO
 	var jolt := Rides.jolting(medium._ride, t) if riding else 0.0
 	for l in medium._lights:
-		# EACH FLAME IN ITS OWN TIME, and their light as bright as they are together
+		# Each flame in its own time, and their light as bright as they are together
 		var bright := 0.0
 		var leans := Vector3.ZERO
 		for f in (l as Dictionary)["flames"]:
@@ -531,12 +514,11 @@ func tick_props(t: float) -> void:
 				fl.x *= 1.0 - 0.25 * jolt * (0.6 + 0.4 * fast)
 				tall *= 1.0 + 0.3 * jolt * fast
 			var mesh: MeshInstance3D = f["mesh"]
-			# A SPRITE PARALLEL TO THE PICTURE, standing on its wick: its lean as it shows on the screen split
-			# into a BEND (the shader's: foot upright, tip leaned) and a tip of the whole sprite in its own
-			# plane, foreshortened by what of it leans toward or away from the lens. Every flame is read
-			# across the CAMERA's right, never across its own line of sight: the same draft then leans every
-			# flame the same way on the screen (the user, 2026-10-11: one flame looked straight up and two
-			# leaned right, in a draft that was one - the wide lens sees a flame at the edge end on)
+			# A sprite parallel to the picture, standing on its wick: its lean as it shows on the screen is split into a
+			# bend (the shader's: foot upright, tip leaned) and a tip of the whole sprite in its own plane, foreshortened
+			# by what of it leans toward or away from the lens. Every flame is read across the camera's right, never
+			# across its own line of sight, so one draft leans every flame the same way on the screen (a wide lens sees
+			# a flame at the edge end on)
 			var root := (f["base"] as Vector3) - Vector3(0.0, FLAME_QUAD * 0.5, 0.0)
 			var across := medium._cam.global_transform.basis.x * Vector3(1, 0, 1)
 			across = across.normalized() if across.length() > 1e-5 else Vector3.RIGHT
@@ -547,7 +529,7 @@ func tick_props(t: float) -> void:
 			var b := Basis(across, Vector3.UP, face) * Basis(Vector3.BACK, -atan(rest - bend)) \
 				* Basis.from_scale(Vector3(1.0 + 0.06 * fast, fl.y * tall * shown.length(), 1.0))
 			mesh.transform = Transform3D(b, root + b * Vector3(0.0, FLAME_QUAD * 0.5, 0.0) + Vector3(lean.x, 0.0, 0.0) * (0.0 if blows or riding else 1.0))
-			# ...AND LICKING: a ripple climbing it at the flame's own tempo, wider the harder it is fanned
+			# ...and licking: a ripple climbing it at the flame's own tempo, wider the harder it is fanned
 			var fk: Dictionary = f["flicker"]
 			var rate := float(fk["rate"])
 			var lick := lerpf(FLAME_LICK.x, FLAME_LICK.y, clampf(draft / sqrt(9.81 * FLAME_H), 0.0, 1.0))
@@ -563,10 +545,9 @@ func tick_props(t: float) -> void:
 		var n := maxf(float(((l as Dictionary)["flames"] as Array).size()), 1.0)
 		var light: OmniLight3D = (l as Dictionary)["light"]
 		light.light_energy = float((l as Dictionary)["energy"]) * bright / n
-		# the light leans with its flames, so the shadows breathe with them - IN A DRAFT, OR ABOARD SOMETHING THAT MOVES, never in still
-		# air (feedback 0024 again: "if you watch the topmost brush through sequential frames, you will see that it's flickering, even though
-		# no light source is apparently moving"): a still flame's own flicker leaned it 1.5 mm, and its shadow map's texels with it -
-		# 2.5 of them across a brush 30 cm off, the stairs of every thin thing's shadow crawling while nothing seen moved
+		# the light leans with its flames, so the shadows breathe with them - in a draft, or aboard something that moves,
+		# never in still air: a still flame's own flicker leans it 1.5 mm, and its shadow map's texels with it (2.5 of
+		# them across a brush 30 cm off), so the stairs of every thin thing's shadow would crawl while nothing seen moves
 		light.position = ((l as Dictionary)["light_base"] as Vector3) + (leans / n if blows or riding else Vector3.ZERO)
 	for g in _glows:
 		(g["light"] as OmniLight3D).light_energy = float(g["energy"]) * _flame_at(g["flicker"], t).x

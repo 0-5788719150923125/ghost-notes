@@ -1,28 +1,25 @@
 extends SceneTree
 
-## SOLID GLASS BENDS IN ONLY WHAT IS BEHIND IT (true-tarot 626717: every card held up before the lens prism
-## had a white strip hanging off its right edge, which flopped about as the card moved). Solid glass and
-## clear crystal ([code]shaders/prop_lens.gdshader[/code]) are seen through by reading the screen a little
-## off where they stand, and the screen holds what stands IN FRONT of the glass too - so the bend pulled the
-## held card's white face into the glass beside it. A crystal ball as the table makes it
-## ([method Props.material]: clear, solid, round), photographed straight on over a dark wall, a white card
-## standing before its left half:
+## Solid glass bends in only what is behind it, and a pane bends nothing. Solid glass and clear crystal
+## ([code]shaders/prop_lens.gdshader[/code]) are seen through by reading the screen a little off where they stand, and the screen
+## holds what stands in front of the glass too, so the bend must not pull a held card's white face into the glass beside it. A
+## crystal ball as the table makes it ([method Props.material]: clear, solid, round), photographed straight on over a dark wall, a
+## white card standing before its left half:
 ##
-##   - NOTHING IN FRONT IS BENT IN: the glass just right of the card's edge, where the bend reads leftward
-##     onto the card, stays as dark as the wall behind it (under [constant LEAK_MOST]).
-##   - WHAT IS BEHIND STILL IS: the same card stood behind the ball instead shows through that glass, bent
-##     (over [constant SEEN_LEAST]) - a test that only stopped bending would pass the first.
+##   - Nothing in front is bent in: the glass just right of the card's edge, where the bend reads leftward onto the card, stays as
+##     dark as the wall behind it (under [constant LEAK_MOST]).
+##   - What is behind still is: the same card stood behind the ball instead shows through that glass, bent (over
+##     [constant SEEN_LEAST]) - a test that only stopped bending would pass the first.
 ##
-## Two-sided: the shader without its depth test (the bend as it was) leaks the card into the glass.
+## Two-sided: the shader without its depth test leaks the card into the glass.
 ##
-## A PANE BENDS NOTHING (true-tarot 279427, feedback 0014: half-moons in the spectacles and every trial lens).
-## Parallel flat faces turn no line of sight, and a pane told to bend reads the screen off to one side by its tilt
-## - where the wire frame it sits in is. The spectacles' lens and frame as the set dresser wrote them, through
+## A pane bends nothing: parallel flat faces turn no line of sight, and a pane told to bend reads the screen off to one side by its
+## tilt, where the wire frame it sits in is. The spectacles' lens and frame as the set dresser writes them, through
 ## [method Props.build], turned to the camera over a bright wall:
 ##
-##   - ONLY FLAT FACES ARE PANES: the spectacle lens, a drink's skin and a magnifying glass with a faint cone
-##     read the screen straight; a ball, a domed reading glass and a thick prism still bend.
-##   - NOTHING OF THE FRAME IN THE GLASS: the lens's middle stays even, its darkest pixel near its median (over
+##   - Only flat faces are panes: the spectacle lens, a drink's skin and a magnifying glass with a faint cone read the screen
+##     straight; a ball, a domed reading glass and a thick prism still bend.
+##   - Nothing of the frame in the glass: the lens's middle stays even, its darkest pixel near its median (over
 ##     [constant EVEN_LEAST]).
 ##
 ## Two-sided: the same lens told to bend shows the frame in it.
@@ -47,9 +44,8 @@ const GAP := 4
 const BAND := 24
 const LEAK_MOST := 0.25
 const SEEN_LEAST := 0.5
-## The spectacles' own numbers (true-tarot 279427), and the camera near enough to read them. The lens's middle
-## ([constant MIDDLE] of its radius, clear of the frame's own edge) must have its darkest pixel at least
-## [constant EVEN_LEAST] of its median.
+## The spectacles' own numbers, and the camera near enough to read them. The lens's middle ([constant MIDDLE] of its radius, clear of the
+## frame's own edge) must have its darkest pixel at least [constant EVEN_LEAST] of its median.
 const PANE_MATERIALS := {"glass": {"kind": "glass", "clarity": 0.95, "color": "#e8f2f0"}, "wire": {"kind": "metal", "color": "#c8a24a"}}
 const PANE_THING := {"name": "the round spectacles", "parts": [
 	{"at": [0.0, 2.55, 0.0], "material": "wire", "radius": 2.4, "shape": "ring", "thickness": 0.26, "turn": [90.0, 0.0, 0.0]},
@@ -110,7 +106,7 @@ func _run() -> void:
 	quit(0 if _fails == 0 else 1)
 
 
-## The lens shader with its depth test cut out: what it was before.
+## The lens shader with its depth test cut out (the control).
 func _without_test(code: String) -> Shader:
 	var a := code.find(TEST_FROM)
 	var b := code.find(TEST_TO, a)

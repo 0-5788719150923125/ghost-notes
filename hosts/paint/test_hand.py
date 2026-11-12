@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Gate for the painter's hand (feedback 0020, 2026-11-09 - the user: "You would want a hand that generally tries to keep its whole brush
-inside of the edge; however hands can make mistakes, and spill over the edge, dragging/blending color with it. If it does, we could clean
-that up with more white (or other colors), or we might be able to wipe it away with a cotton swab (if the mistake was small, or the color
-was faint). So the point is: we want naturally-looking behaviors here.").
+"""Gate for the painter's hand.
 
 Run it directly with the paint venv's python - no pytest, no GPU (the optimizer is never imported):
 
@@ -19,29 +16,26 @@ On a made surface - a white ground, a plum disc on it - held to:
      half width and a few run on past their end, most stay within a steady hand's wander; the same seed draws the same path.
   5. A SPILL IS CLEANED (layers_paint.tidy): a small plum spill on the white is blotted with the cotton swab, a big one painted back over in
      white - both nearer the picture than they were. CONTROL: a spill that is the layer's own (inside where it changes things) is left.
-  7. A CLEANUP PAINTS BACK WHAT WAS THERE, AND STAYS OUT OF THE LAYER (feedback 0005: white patches on a cream face, the eye's makeup
+  7. A CLEANUP PAINTS BACK WHAT WAS THERE, AND STAYS OUT OF THE LAYER (: white patches on a cream face, the eye's makeup
      lightened at its edge): on a ground laid in a cream mix where the picture says white, a big spill against the disc's edge is painted
      back nearer the cream than the white, and a small one beside it blotted - the disc itself untouched. CONTROL: the paint nearest the
      picture there, which the cleanup had used, is the white.
-  9. A BASE IS EVEN BEFORE THE SPONGE IS PUT DOWN (2026-11-09: "the sponge was put down too early. There are still patchy areas"): next
+  9. A BASE IS EVEN BEFORE THE SPONGE IS PUT DOWN: next
      to nothing of the face under nine tenths covered. CONTROL: gone back over twice where under 0.8, as it was, more of it is.
-  10. A PART PAINTED BY NUMBERS HAS ITS OWN BORDERS WORKED WET, NEVER ITS EDGE (feedback 0011, 2026-11-10: "large white bands around the
-     outer part of the eye-diamond ... the outer white smearing into the inner part" - layers_paint `OWN_BORDERS`): a soft layer laid by
+  10. A PART PAINTED BY NUMBERS HAS ITS OWN BORDERS WORKED WET, NEVER ITS EDGE (layers_paint `OWN_BORDERS`): a soft layer laid by
      numbers over a plum disc's whole inside, a dark middle and plum round it, leaves the plum just inside the disc's edge plum. CONTROL:
      its edge against the white worked as a border too, as it was, the white is carried into it.
-  11. NO LAYER CHANGES THE FACE'S OWN EDGE (feedback 0012, 2026-11-10: "weird black smudges being painted along the chin" - layers_paint
+  11. NO LAYER CHANGES THE FACE'S OWN EDGE (layers_paint
      `RIM_OFF`): of two pictures of a face, the second's silhouette drawn two pixels aside into the black past it and a dark spot added,
      the step is the spot. CONTROL: the edge not kept, a ring round the whole face is the step's too.
-  12. A HAND KEEPING OUT OF A PLACE TAKES NOTHING UP FROM IT (feedback 0011 - plan.py `TAKE_INSIDE`): a fat brush's fade round a small core
+  12. A HAND KEEPING OUT OF A PLACE TAKES NOTHING UP FROM IT (plan.py `TAKE_INSIDE`): a fat brush's fade round a small core
      in a plum disc, its band crossing the disc's edge, the hand kept out past the disc and taking up only the disc, as a layer's fade
      does: the plum by the edge stays plum. CONTROL: its pulls taking up the white past the edge, the white is carried in.
   6. A SOFT LAYER IS NOT ITS PICTURE'S REDRAW (layers_paint.layer_alpha): a soft step whose picture is redrawn a shade lighter all over,
      with a real shading in one place, has the shading for its own and next to nothing of the rest. CONTROL: the floor it had, all of it.
-  7. A BASE IS ONE POT'S PAINT (feedback 0001, 2026-11-09: "The color we're painting doesn't seem to actually match the foundation it was
-     sourced from" - plan.py `_base`): over a picture a grey-green between white and olive, the base and its every press are in one of
+  7. A BASE IS ONE POT'S PAINT (plan.py `_base`): over a picture a grey-green between white and olive, the base and its every press are in one of
      the table's paints. CONTROL: of every paint and mix, the nearest is a mix.
-  8. A BASE'S PATS ARE A HAND'S, NEVER A LATTICE (feedback 0001: "the gaps are always in the exact same, uniform layout ... like a grid
-     of color, instead of organic" - plan.py `PAT_WANDER`): the thin places a white base leaves over a 150 mm face have no layout to
+  8. A BASE'S PATS ARE A HAND'S, NEVER A LATTICE (plan.py `PAT_WANDER`): the thin places a white base leaves over a 150 mm face have no layout to
      them (their autocorrelation's strongest peak off its middle under 0.3), in no more presses than the lattice took. CONTROL: pressed
      on the sweep's lattice, its holes repeat (over 0.45).
 """

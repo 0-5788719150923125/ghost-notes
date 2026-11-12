@@ -15,7 +15,7 @@ extends SceneTree
 ##              often than it is wrong; a rule that fires too eagerly breaks readings
 ##              that already worked.
 ##
-## A HOMOGRAPH IS THE VOICE HOST'S (2026-10-27): its part of speech is read from the
+## A homograph is the voice host's: its part of speech is read from the
 ## sentence there (hosts/voice/homographs.py, held by hosts/voice/test_homographs.py). This
 ## table had picked `lives` and `record` by lists of neighbors, and a word it pinned never
 ## reached the host - "Earlier lives leave things lying around" was read as the verb. So
@@ -51,7 +51,7 @@ const NAMES := [
 	["The Biouks are still singing.", "biouks", "B IY UW K S"],
 	["Njandejara, she calls him.", "njandejara", "N Y AA N D EH D ZH AA R AH"],
 	# Real words eSpeak reads wrong, pinned the same way: it says LIE-bruh, and the sign is
-	# LEE-bruh (the user, 2026-10-11: "the audio model keeps pronouncing 'Libra' wrong").
+	# LEE-bruh.
 	["The sun is in Libra this month.", "libra", "L IY B R AH"],
 	["Two Libras at one table.", "libras", "L IY B R AH Z"],
 	# ...and the possessive, one token, which missed the table and went to eSpeak as it was

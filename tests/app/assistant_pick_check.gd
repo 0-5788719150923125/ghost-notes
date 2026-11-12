@@ -1,28 +1,24 @@
 extends Node
 
-## assistant_pick_check - WHICH ASSISTANT RUNS, gated on what is installed ("If no AI is installed, we
-## cannot support that feature and should definitely gate on it"). The picker is in the 💬 Assistant's
-## own panel (step 4); its rules are [AssistantBackends]' (step 8 - they were the home screen's, and
-## splash_agents_check held them until the home screen was retired).
+## assistant_pick_check - which assistant runs, gated on what is installed. The picker is in the 💬
+## Assistant's own panel; its rules are [AssistantBackends]'.
 ##
 ##   tests/run_boot_probe.sh tests/app/assistant_pick_check.gd 90
 ##
-## Through the real main scene, in two states worked out here from the registry rather than from the
-## picker: this machine as it is, and no assistant CLI at all (every CLI's program hidden in
-## `Deps._resolved`, the cache a launch reads - never a seam - and the Environment panel's real
-## `probed` signal re-asked). In each: Off and every assistant listed, Off always choosable, a CLI
-## choosable exactly when installed and saying "(not installed)" when not, the whole picker grayed
-## with none, its tooltip paragraphs intact through Boot's re-flow; and for EVERY possible choice the
-## choice kept as chosen, the assistant that would actually run, and the reason it would not. With
-## none installed the tooltip says so, lists every supported assistant and suggests installing one,
-## shows on hover although the picker is grayed, and a click opens no list. The choice is set in
-## memory only: a probe's Settings never reach the disk.
+## Through the real main scene, in two states worked out from the registry: this machine as it is, and no
+## assistant CLI at all (every CLI's program hidden in `Deps._resolved`, the cache a launch reads, and the
+## Environment panel's `probed` signal re-asked). In each: Off and every assistant listed, Off always
+## choosable, a CLI choosable exactly when installed and "(not installed)" when not, the whole picker grayed
+## with none, its tooltip paragraphs intact through Boot's re-flow; and for every possible choice the choice
+## kept, the assistant that would actually run, and the reason it would not. With none installed the tooltip
+## lists every supported assistant and suggests installing one, shows on hover although grayed, and a click
+## opens no list. The choice is set in memory only.
 ##
-## THE WRITERS' OWN ROW (AgentPick.assistant, 2026-11-07: "I can pick an agent but I cannot specify the model or effort
-## level"): for each installed assistant the model and level pickers list exactly its writer's models and levels; a choice
-## is stored in `[assistant] backend`, `model` and `effort`; Off has neither list; a Claude chosen before there was a model
-## to choose still runs Sonnet, as it did; and a run takes what the row says - and a follow-up on a conversation pinned to
-## another CLI keeps what that one last ran on (the control: the same entry on the CLI the row names takes the row's).
+## The writers' own row (AgentPick.assistant): for each installed assistant the model and level pickers list
+## exactly its writer's models and levels; a choice is stored in `[assistant] backend`, `model` and `effort`;
+## Off has neither list; a Claude chosen before there was a model to choose still runs Sonnet; and a run takes
+## what the row says, while a follow-up on a conversation pinned to another CLI keeps what that one last ran
+## on (control: the same entry on the CLI the row names takes the row's).
 
 var _fails: Array = []
 var _pick: OptionButton
@@ -75,8 +71,8 @@ func _run() -> void:
 	_report()
 
 
-## The picker against the CLIs worked out here: each listed, choosable only when installed, the whole
-## picker grayed with none; and for every possible choice, the assistant that would actually run.
+## The picker against the CLIs worked out here: each listed, choosable only when installed, the whole picker
+## grayed with none; and for every possible choice, the assistant that would actually run.
 func _state(label: String) -> void:
 	var have := AssistantBackends.REGISTRY.keys().filter(func(k: String) -> bool: return Deps.has(AssistantBackends.dep(k)))
 	var keys: Array = AssistantBackends.picker_keys()
@@ -129,7 +125,7 @@ func _row(a: Assistant) -> void:
 			pick.models.item_selected.emit(1)
 			_ok(Settings.read("assistant", "model", "") == String(pick.models.get_item_metadata(1)),
 				"%s: a model chosen is stored (%s)" % [k, Settings.read("assistant", "model", "")])
-		# A RUN TAKES WHAT THE ROW SAYS - on the CLI it is pinned to
+		# A run takes what the row says - on the CLI it is pinned to
 		var entry := {"backend": k, "session_id": ""}
 		var run: Dictionary = a._run_for(entry, "/f/p.txt")
 		_ok(String(run["model"]) == pick.model and String(run["effort"]) == pick.effort,
@@ -148,7 +144,7 @@ func _row(a: Assistant) -> void:
 	pick.agents.item_selected.emit(0)
 	_ok(pick.models.item_count == 0 and pick.models.disabled and pick.efforts.disabled
 		and Settings.read("assistant", "backend", "x") == "", "Off has no model and no level, and is stored as Off")
-	# A CLAUDE CHOSEN BEFORE THERE WAS A MODEL TO CHOOSE: a fresh Assistant reads Sonnet
+	# A Claude chosen before there was a model to choose: a fresh Assistant reads Sonnet
 	Settings.write("assistant", "backend", "claude_cli")
 	for k in ["model", "effort"]:
 		if Settings._cfg.has_section_key("assistant", k):

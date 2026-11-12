@@ -1,33 +1,26 @@
 extends Node
 
-## showcase_check - THE README'S ANIMATION RECORDS ONLY WHEN IT WOULD CHANGE (src/app/showcase.gd).
+## showcase_check - the README's animation records only when it would change (src/app/showcase.gd).
 ##
 ##   tests/run_boot_probe.sh tests/app/showcase_check.gd 120
 ##
-## What it holds, on files of its own under user:// (never docs/showcase.*):
-##   - the stamp's digest is of the LISTED files: an edit to a file the recording never loaded leaves
-##     the animation current, an edit to one it did makes it stale, and so do a deleted file, a
-##     missing webp and an unreadable stamp. The edit to a listed file is the control: if it did not
-##     make the stamp stale, "current" would prove nothing.
-##   - the recording's list is the resource cache's: a script this process has loaded is on it, one it
-##     has not loaded is not (the control for the first).
-##   - the trigger never records from a test (read-only) process.
-##   - AT MOST ONCE A DAY: a recording begun ([method Showcase.mark_started]) holds the next back for
-##     [constant Showcase.DAY]; the control is one begun a day and a minute ago, which does not. None
-##     begun, or a file that cannot be read, holds nothing back.
-##   - the song is the storyboard's length, and made the same every time: the holds of
-##     storyboards/showcase.yaml add up to [constant Showcase.SONG] (the control: the default board's
-##     do not), and two songs written are byte-identical.
+## On files of its own under user:// (never docs/showcase.*):
+##   - The stamp's digest is of the listed files: an edit to a file the recording never loaded leaves the
+##     animation current; an edit to one it did, a deleted file, a missing webp and an unreadable stamp make it
+##     stale (the listed-file edit is the control).
+##   - The recording's list is the resource cache's: a script this process loaded is on it, one it has not is not.
+##   - The trigger never records from a test (read-only) process.
+##   - At most once a day: a recording begun ([method Showcase.mark_started]) holds the next back for [constant
+##     Showcase.DAY]; control: one begun a day and a minute ago does not. None begun, or an unreadable file,
+##     holds nothing back.
+##   - The song is the storyboard's length and the same every time: the holds of storyboards/showcase.yaml add
+##     up to [constant Showcase.SONG] (control: the default board's do not), and two songs are byte-identical.
+##   - A child ghost stopped has not failed: with [method Subprocess.closing] true, the recorder's watcher
+##     encodes nothing, says it was stopped and lets go of its claim, and the voice host reports no failure.
+##     Control: the same two watchers with nothing closing - a recorder gone without its capture file did not
+##     finish, and a voice host gone is a failure.
 ##
-##   - A CHILD GHOST STOPPED HAS NOT FAILED (2026-10-12, printed on every close with a recording
-##     under way: "ERROR: Parse JSON failed", "the recording ended without finishing", "the voice host
-##     exited unexpectedly"): with [method Subprocess.closing] true, the recorder's watcher encodes
-##     nothing, says it was stopped and lets go of its claim, and the voice host reports no failure.
-##     The control is the same two watchers with nothing closing: a recorder gone without its
-##     capture file IS a recording that did not finish, and a voice host gone IS a failure.
-##
-## It never records: a recording is two and a half minutes on the GPU, and `--showcase-now` is how
-## to ask for one.
+## It never records: a recording takes minutes on the GPU; `--showcase-now` asks for one.
 
 const DIR := "user://showcase_check"
 

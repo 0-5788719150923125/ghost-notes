@@ -1,20 +1,20 @@
 extends RefCounted
 class_name PuppeteerTools
 
-## PuppeteerTools - what the puppeteer can do while it blocks an episode's WORK AT THE TABLE
-## (next/table_work.md): read what on the set table can be worked, WRITE an act and be told in numbers what
-## it does, WATCH it from the camera, and hand the acts in. Served as tools ([AgentTools]), as the set
-## dresser's are ([SetDresserTools]); it keeps a DRAFT of acts here and works on it:
+## PuppeteerTools - what the puppeteer can do while it blocks an episode's work at the table
+## (next/table_work.md): read what on the set table can be worked, write an act and be told in numbers what
+## it does, watch it from the camera, and hand the acts in. Served as tools ([AgentTools]) like the set
+## dresser's ([SetDresserTools]); it keeps a draft of acts here and works on it:
 ##
 ##   parts    the table as it is set, and what on it can be worked: each thing, whether it may be moved
 ##            whole, its named parts - joints, points (where each is on the table now), states, what each
 ##            runs and emits ([method TableWork.parts_report])
 ##   act      acts put into the draft - one of the same name is replaced - each answered with what it does:
-##            how long, how far and how fast each moving thing goes, and ANYTHING PASSING THROUGH ANYTHING
-##            ([method TableWork.check]), and what of it could not be kept, and why - every act of a call on one
-##            table ([method TablePreview.work_checks]): THE TABLE STOOD FOR THE FIRST CALL, its acts bound again for
-##            each after ([method TableMedium.rework]), what is in things baked again only from where the draft
-##            changes ([method TablePhysics.replan]) - 841899's 29 first calls, replayed, 810 s to 348 s
+##            how long, how far and how fast each moving thing goes, anything passing through anything
+##            ([method TableWork.check]), and what of it could not be kept, and why. Every act of a call is
+##            checked on one table ([method TablePreview.work_checks]): the table stands for the first call,
+##            its acts are bound again for each after ([method TableMedium.rework]), and what is in things is
+##            baked again only from where the draft changes ([method TablePhysics.replan])
 ##            (tests/table/act_calls_probe.gd)
 ##   remove   acts taken out, by name
 ##   watch    one act photographed from the camera's place, six times start to end
@@ -25,9 +25,8 @@ class_name PuppeteerTools
 ##            answer in words would land ([method TableProducer._land_acts]) - refused while an act passes
 ##            through something, until it is fixed or handed in so twice
 ##
-## The user, 2026-10-25: "I want to build a system that is flexible enough to allow agents to do this for
-## themselves." What it writes is data - the laws are [Motions]'s, a formula is [Formula]'s - and nothing
-## it writes runs as code. EVERY PICTURE COUNTS against [constant LOOKS]; words cost nothing.
+## What it writes is data - the laws are [Motions]'s, a formula is [Formula]'s - and nothing it writes runs as code. Every
+## picture counts against [constant LOOKS]; words cost nothing.
 
 const SUBMITTED := "submitted.json"
 ## How many pictures one puppeteer may take.
@@ -48,7 +47,7 @@ var _released := false
 var _warned_unseen := false
 var _watched := {}              # act name -> true, once watched since it was last written
 var _preview: TablePreview
-## WHAT THE ACTS WRITE THAT TEX LAYS OUT, laid out as they are put ([method _lay_ink]): item id -> TeX's record, and the fonts.
+## What the acts write that TeX lays out, laid out as they are put ([method _lay_ink]): item id -> TeX's record, and the fonts.
 var _laid := {}
 var _fonts := {}
 
@@ -60,7 +59,7 @@ func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, table: D
 	dir = job_dir
 	_table = table
 	_preview = TablePreview.new(ep, plan, dir.path_join("preview"))
-	# A RUN STARTS CLEAN: a rerun works in the folder the last run left
+	# a run starts clean: a rerun works in the folder the last run left
 	DirAccess.make_dir_recursive_absolute(dir)
 	for f in DirAccess.get_files_at(dir):
 		var fs := String(f)
@@ -100,7 +99,7 @@ func list_tools() -> Array:
 	]
 
 
-## ONE CALL AT A TIME, and none once the tools are closed (as [method SetDresserTools.call_tool]).
+## One call at a time, and none once the tools are closed (as [method SetDresserTools.call_tool]).
 func call_tool(name: String, args: Dictionary) -> Dictionary:
 	while _busy and not _released:
 		await TablePreview._tree().process_frame
@@ -180,8 +179,7 @@ func _act(args: Dictionary) -> Dictionary:
 		for n in made["notes"]:
 			lines.append("- " + String(n))
 		return {"text": "\n".join(lines)}
-	# ONE TABLE FOR THE CALL: every act put checked on it, and what could not be kept read off it - a table stood for each
-	# act and once more for the notes had baked the work from its start every time (2026-10-28: 330 s for four acts)
+	# one table for the call: every act put is checked on it and what could not be kept read off it, never a table stood per act
 	var checking: Array = put.filter(func(nm: String) -> bool: return kept.has(nm))
 	var refused := await _lay_ink()
 	var got: Dictionary = await _preview.work_checks(_table, draft(), checking)
@@ -207,10 +205,9 @@ func _act(args: Dictionary) -> Dictionary:
 	return {"text": "\n".join(lines)}
 
 
-## WHAT THE ACTS WRITE THAT TEX LAYS OUT, LAID OUT NOW ([method TableInk.typeset]) - only what is new since the last call - and
+## What the acts write that TeX lays out, laid out now ([method TableInk.typeset]) - only what is new since the last call - and
 ## written beside the preview's acts, so the table tried shows the formulas and drawings as the episode will: each one TeX refuses
-## said in TeX's own words, while the puppeteer can still write it so it sets. Nothing where TeX is not installed yet (the ink step
-## lays it out later).
+## is said in TeX's own words. Nothing where TeX is not installed yet (the ink step lays it out later).
 func _lay_ink() -> Array:
 	var out: Array = []
 	var fresh: Array = TableInk.items_of(draft()).filter(func(it: Dictionary) -> bool: return not _laid.has(String(it["id"])))
@@ -264,8 +261,7 @@ func _watch(args: Dictionary) -> Dictionary:
 	var frames := PackedStringArray()
 	for f in got["frames"]:
 		frames.append("%.1f s" % float(f))
-	# ONE LOOK, SIX FRAMES: "six pictures ... Looks left: 29" was read as six spent a watch, and a puppeteer with 20 acts to watch gave
-	# up with 24 looks left, "only 4 more watches" (joker-motivation 856886)
+	# a watch is one look of six frames: it spends one of the looks, not six
 	return {"text": "\"%s\", one picture of six frames, left to right and down: %s into it.\n%s\nLooks left: %d (a watch is one)." % [nm, ", ".join(frames), JUDGE, LOOKS - _looks],
 		"images": [got["image"]]}
 

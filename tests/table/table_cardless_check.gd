@@ -1,21 +1,20 @@
 extends Node
 
-## A SHOW THAT DRAWS NO CARDS ON A MOUNTED TABLE (the user, 2026-10-26: "we should start with a mask every time
-## - and just paint it while talking"; [method CardTable.cardless]): an episode staged from nowhere, built and
-## played by the table as the show builds it - its things stood by [TableThings], its work scheduled from a
-## reading that begins and opens each beat with `work K`.
+## A show that draws no cards on a mounted table ([method CardTable.cardless]): an episode staged from nowhere, built and played by the
+## table as the show builds it - its things stood by [TableThings], its work scheduled from a reading that begins and opens each beat
+## with `work K`.
 ##
 ##   tests/run_boot_probe.sh tests/table/table_cardless_check.gd 300
 ##
-## - NOTHING OF A CARD'S STANDS: no deck, no card, no box, and no room kept clear for a spread - the middle of
-##   the table is the work's, so a thing written there stands there, unmoved.
-## - THE WORK RUNS IN ITS BEATS: every act kept (counted by beats, not cards), beat 1's after `work 1` begins,
-##   beat 2's cued act at its word, the close's after the spread.
-## - IT PLAYS THROUGH: posed from the first moment to past the last word, nothing of a card's is shown.
-## - THE CONTROL: the same table and words with two cards drawn from a deck stands a deck, keeps the cards'
-##   room clear and moves the thing written in the middle off it.
+## - Nothing of a card's stands: no deck, no card, no box, and no room kept clear for a spread - the middle of the table is the
+##   work's, so a thing written there stands there, unmoved.
+## - The work runs in its beats: every act kept (counted by beats, not cards), beat 1's after `work 1` begins, beat 2's cued act at
+##   its word, the close's after the spread.
+## - It plays through: posed from the first moment to past the last word, nothing of a card's is shown.
+## - The control: the same table and words with two cards drawn from a deck stands a deck, keeps the cards' room clear and moves the
+##   thing written in the middle off it.
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
+## A boot probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
 
 const DIR := "user://table_cardless_check"
 const LIVE := preload("res://tests/table/table_work_live_check.gd")
@@ -154,7 +153,7 @@ func _bare() -> void:
 			cue_si = int((c as Dictionary)["si"])
 	_ok(cue_si >= 0 and not grind.is_empty() and absf(float(grind["t0"]) - float((subs.words[cue_si] as Dictionary)["t0"])) < 0.05,
 		"beat 2's cued act starts at its word: %s" % grind.get("t0"))
-	# PLAYED THROUGH: from the first moment past the last word, nothing of a card's is ever shown
+	# Played through: from the first moment past the last word, nothing of a card's is ever shown
 	var end := float((subs.words[subs.words.size() - 1] as Dictionary)["t1"]) + 5.0
 	var shown := 0
 	var t := 0.0

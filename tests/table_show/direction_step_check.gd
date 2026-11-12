@@ -1,15 +1,15 @@
 extends SceneTree
 
-## The gate of AN EPISODE'S DIRECTION ([Direction] at the table: [method TableProducer._take_direction], [method
+## The gate of an episode's direction ([Direction] at the table: [method TableProducer._take_direction], [method
 ## TableProducer.with_direction]; next/direction.md). No writer runs: the producer's steps are called as Generate calls them.
 ##
 ##   godot --headless --path . --script res://tests/table_show/direction_step_check.gd
 ##
-## - A NEW EPISODE TAKES THE DIRECTION UP: Generate on an episode with no plan writes the card's words into it as its first step, the
+## - a new episode takes the direction up: Generate on an episode with no plan writes the card's words into it as its first step, the
 ##   author's, and the plan is made from it. The control: given none, an episode has no such step, and nothing waits on one.
-## - EVERY AGENT BEHIND IT IS TOLD IT, ABOVE THE BRIEF: the system prompt of every text job carries the episode's direction and the
+## - every agent behind it is told it, above the brief: the system prompt of every text job carries the episode's direction and the
 ##   words that put it first (the control: an episode with none is told nothing more).
-## - A MADE EPISODE KEEPS ITS OWN: the card changed for the next episode leaves a planned one's as it was. Taken up again (its row's
+## - a made episode keeps its own: the card changed for the next episode leaves a planned one's as it was. Taken up again (its row's
 ##   ⟳), the new words stand and the plan made from the old goes stale; an episode made before there were directions never does.
 
 var _fails := 0

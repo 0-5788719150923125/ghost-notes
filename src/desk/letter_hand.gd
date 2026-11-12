@@ -3,23 +3,21 @@ class_name LetterHand
 
 ## LetterHand - a letter's words in a hand, as the pen's strokes.
 ##
-## THE HAND WRITES ITS OWN LINES, NO TEX: a formula needs TeX to lay it out ([Ink]), a line of a letter
-## needs only its words' widths, so this sets each word itself and hands back strokes in the shape
-## [method Ink.strokes_of] does - points in TeX points, y down from the baseline, x from the line's start -
-## so [method Ink.schedule] and [method Ink.at] time and draw them as they do a formula's.
+## The hand writes its own lines, no TeX: a formula needs TeX to lay it out ([Ink]), a line of a letter needs only its
+## words' widths, so this sets each word itself and hands back strokes in the shape [method Ink.strokes_of] does - points in
+## TeX points, y down from the baseline, x from the line's start - so [method Ink.schedule] and [method Ink.at] time and draw
+## them as they do a formula's.
 ##
-## THE JOURNAL'S HANDS (2026-10-27, the user of the Hershey script it had been written in: "the font looks
-## awful ... the journal medium had nicer fonts"): Kalam, Caveat and Patrick Hand, the Notebook's
-## ([constant NotebookLayout.HANDS]) at the Notebook's sizes, each traced once into the lines a pen draws it
-## with (scripts/hand_strokes.py: its centerline cut where it branches and walked into strokes in a hand's
-## order, a dot filled as a small spiral; kept in Hershey's format under fonts/hands/strokes/, which [Ink]'s
-## reader takes) and written with a round nib as wide as the font's own stroke - so the page is the font,
-## written. A print hand: the pen lifts between letters, and a letter's strokes that meet are one.
+## The hands are the journal's: Kalam, Caveat and Patrick Hand, the Notebook's ([constant NotebookLayout.HANDS]) at the
+## Notebook's sizes, each traced once into the lines a pen draws it with (scripts/hand_strokes.py: its centerline cut where
+## it branches and walked into strokes in a hand's order, a dot filled as a small spiral; kept in Hershey's format under
+## fonts/hands/strokes/, which [Ink]'s reader takes) and written with a round nib as wide as the font's own stroke. A print
+## hand: the pen lifts between letters, and a letter's strokes that meet are one.
 ##
-## THE HAND IS SEEDED, never the layout: each word is a little bigger or smaller, set a little off its
-## line and turned a hair, and each line drifts - from the seed and the line's own salt - but a word's
-## WIDTH is the font's ([method advance]), so where the lines break is a function of the words alone and
-## the voice's rests and the desk's pages always agree ([LetterScript]).
+## The hand is seeded, never the layout: each word is a little bigger or smaller, set a little off its line and turned a
+## hair, and each line drifts - from the seed and the line's own salt - but a word's width is the font's ([method
+## advance]), so where the lines break is a function of the words alone and the voice's rests and the desk's pages always
+## agree ([LetterScript]).
 
 ## The hands, by the Notebook's names: the stroke font each is traced into, and what Hershey's format
 ## cannot hold, as the tracer prints it - a font unit's share of the em (`units`), the baseline (font
@@ -39,10 +37,8 @@ const SPACE := 1.0
 ## A letter's next stroke begun this close (em) to where its last ended is the same stroke: the pen
 ## did not lift.
 const JOIN := 0.02
-## HOW FAST THE HAND WRITES, against the desk's pen at its own pace ([method Ink.schedule]'s `pace`), and
-## steadily ([LetterScript]): about 48 words a minute in Kalam (at 1.5, 56: measured on the north-star
-## chapter's 3,467 words) - a brisk letter-writer's; the voice reads 120 to 140, and the pen kept with it
-## at that moved as no hand does.
+## How fast the hand writes, against the desk's pen at its own pace ([method Ink.schedule]'s `pace`), and steadily
+## ([LetterScript]): about 48 words a minute in Kalam, a brisk letter-writer's; a voice reads 120 to 140.
 const PACE := 2.3
 ## How unsteady the hand is (em of the hand): a word's size (share), its place off the line, its turn
 ## (radians); a line's drift (radians); a point's tremor.
@@ -109,11 +105,10 @@ static func nib(hand := DEFAULT) -> float:
 	return float(HANDS[of(hand)]["nib"]) * size_px(hand) / (DeskScript.PX_PER_PT * DRAWN)
 
 
-## A LINE OF THE LETTER, written: [param words] (as they are written - punctuation on them), the
-## [param emphasis] of each (underlined), the hand's [param seed], the line's [param salt] and the
-## [param hand] it is written in. Returns `{strokes, width}`: strokes as [method Ink.strokes_of] gives them
-## (`k` the word's place in the line, so the pen breathes between words and never inside one), width in
-## points. The same arguments are the same strokes, kept once made.
+## A line of the letter, written: [param words] (as they are written - punctuation on them), the [param emphasis] of each
+## (underlined), the hand's [param seed], the line's [param salt] and the [param hand] it is written in. Returns `{strokes,
+## width}`: strokes as [method Ink.strokes_of] gives them (`k` the word's place in the line, so the pen breathes between
+## words and never inside one), width in points. The same arguments are the same strokes, kept once made.
 static func line(words: PackedStringArray, emphasis: Array, seed: int, salt: String, hand := DEFAULT) -> Dictionary:
 	hand = of(hand)
 	var key := "%s|%d|%s|%s|%s" % [hand, seed, salt, " ".join(words), str(emphasis)]

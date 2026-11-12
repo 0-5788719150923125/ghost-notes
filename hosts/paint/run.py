@@ -93,7 +93,7 @@ def main():
         from export import export
         only = spec.get("only")
         if only is not None:
-            # ONE LAYER AGAIN (next/editing.md step 4): over the canvas the layers before it left (their maps, as kept), its elements
+            # One layer again (next/editing.md step 4): over the canvas the layers before it left (their maps, as kept), its elements
             # alone made and put among the rest - the others' as they were
             only = int(only)
             keep = Path(spec["keep"])

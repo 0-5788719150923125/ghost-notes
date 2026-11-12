@@ -134,18 +134,18 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
       Built 2026-10-13: `src/` is 22 folders, one level deep, stacked bottom to top, held by `python docs.py --check`; the 48 references that pointed up are turned; the tests mirror the folders and `scripts/check.sh --for` runs what a change can reach; a gate that passes over a runtime error fails; the scene roster is `scenes/roster.gd`; the table's shuffle and three of Masking's subsystems are scripts of their own. Built 2026-10-15 (the second round, for a live mode): the show's clock is handed to what it mounts (`ShowFeed.show_time()`...); nothing extends `ReadingPanel` - Cards is a card (`EpisodeCard`) that hands the reading its walk, its bed and its publish; the reading's pure rules are `Splice` and `Delivery`; `table.gd` has its plan, card poses, light and box as parts (2,841 lines, from 6,797); Masking's audio effect and undo are parts; every layer and force setting is a row in its class's `FIELDS`, held to the code both ways. Built 2026-10-19 (the third round): a reading's plan is a pure function (`ReadingPlan`; a piece of text that arrives later is planned as a continuation), and every take - live, exported, auditioned - is joined by one `ReadingJoin` (the three copies had parted); the cast, the sliding window and Test are parts of their own (`ReadingCast`, `ReadingStream`, `ReadingAudition`) and `reading_panel.gd` is 1,101 lines, from 3,765; Masking's banners are true (`scripts/sort_banners.py`) and its prep, waveform, region box and export are parts (5,631 lines). Built 2026-10-20 (the fourth round): the card table's plan is a function of the episode (`TablePlan.make`, checked to decide what the medium decided over 84 episodes) and what stands on it is a part (`TableThings`); Masking's tracks are a part (`MaskTracks`), the shared transport conducts its clip, and one timeline kit and one clock serve every timeline; the Voice is a card `NoteCards` makes; every scene's named choices are rows an entry's `set` can tell (59 settings in 48 scenes, a told setting moving nothing else the seed draws). Built 2026-10-22 (the fifth round): a scene's rolled numbers are rows too (170 in 48 scenes, `GhostScene.number` - told a number or a narrower `[lo, hi]`); the shuffle owns its chain of moves; the comic's camera is a part (`ComicCamera`, `comic.gd` 1,349 lines from 2,849) and Synthesis' party math a library (`VoiceParty`), each cut finding bugs it fixed; `props.gd`, `layer.gd` and `lights.gd` were read and are libraries already. Open: a reading that stays open while text arrives; the findings round five left for the user to decide. See [structure.md](structure.md).
 
 - [x] **YouTube uploads from every template**
-      A YouTube component (2026-10-07): "+" on every note's panel attaches it, and its card holds the upload - after export or not, a title template, the visibility, a playlist - with the Google client and the sign-in. Masking's own export does not upload. MANY CHANNELS (2026-10-17): a sign-in per channel, named by its handle, each keeping the client it signed in with; the card picks the note's channel with a toggle per channel, and "+" signs in to another. EACH EPISODE'S OWN TAGS (2026-10-18): "Write each episode's tags" on the card adds a Tags step to the card that makes the episodes (Cards, Proof) - an `EpisodeStep` the panel hands over, so neither card names the other - written by the show's writer from the episode's words, with ✓ and ⟳ on its row; ONE LIST (2026-10-19): what it writes replaces the note's `tags:` line, the only list the card shows and every upload takes. Next steps another card could add the same way: a thumbnail painted for the episode, a description, a short cut.
+      A YouTube component: "+" on every note's panel attaches it, and its card holds the upload - after export or not, a title template, the visibility, a playlist - with the Google client and the sign-in. Masking's own export does not upload. MANY CHANNELS: a sign-in per channel, named by its handle, each keeping the client it signed in with; the card picks the note's channel with a toggle per channel, and "+" signs in to another. EACH EPISODE'S OWN TAGS: "Write each episode's tags" on the card adds a Tags step to the card that makes the episodes (Cards, Proof) - an `EpisodeStep` the panel hands over, so neither card names the other - written by the show's writer from the episode's words, with ✓ and ⟳ on its row; ONE LIST: what it writes replaces the note's `tags:` line, the only list the card shows and every upload takes. Next steps another card could add the same way: a thumbnail painted for the episode, a description, a short cut.
 
-- [x] **One transport for Masking too (2026-10-20)**
+- [x] **One transport for Masking too**
       The shared transport conducts Masking's clip (the editor hands its shell its play, pause, stop, position and seek, `Shell.conduct_transport`): ▶ ■, the rail, Space, the arrows and Home are every mode's, its own Space key is gone, and its marker strip, lanes and video stand above the rail. The marker timeline stays the editor it is, on the one timeline kit (`TimelineView`) the storyboard's strip and lanes use too. Gate: mask_tracks_check.
 
-- [x] **Notes, not modes (2026-10-06)**
+- [x] **Notes, not modes**
       Ghost Notes opens on a notes list. A note is a markdown file with components attached; the six modes are templates over one registry; every panel section is a colored card; one transport plays every timed show; one bottom-right row; one frontmatter block per component; every mode is left and entered again through one teardown; and every component declares what it asks of the platform. Steps 0-8 of [notes.md](notes.md).
 
-- [x] **One kind of note (2026-10-12)**
+- [x] **One kind of note**
       New has no options: it makes a note with nothing attached, and "+" makes it what it becomes. The template table is gone; a component declares the room it takes and the workspace it needs, and the rest is derived. Every component detaches. A note keeps its own storyboard and edits it in the app. See [storyboard.md](storyboard.md).
 
-- [x] **After the first review (2026-10-06)**
+- [x] **After the first review**
       A clean notes list (New only; delete with ×, or a note's "⋯"), every note starting from nothing, a song as a note's component with Auto as a medium, Manual's storyboards as a card, Tarot renamed Cards, Masking's panel in the framework, and "Edit". See [notes.md](notes.md), "After the first review".
 
 - [x] **Tarot, now Cards (2026-10-04 to 10-06)**
@@ -154,13 +154,13 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [x] **Pronunciation as data**
       A `names:` block, homographs decided by part of speech and clause tense (eSpeak asked again, no word lists), `pronounce_audit.gd` before a render, and a probe that asks each voice checkpoint whether it says `read` right.
 
-- [x] **Two frames (2026-10-06)**
+- [x] **Two frames**
       Landscape and portrait: the preview is the frame, subtitles keep the platforms' safe area, portrait presets and a frame-shaped thumbnail, and Movie Maker's crop in a mis-shaped window measured and avoided.
 
-- [x] **The phone shell, on the desktop (2026-10-06)**
+- [x] **The phone shell, on the desktop**
       On a phone (or under `--handheld`), a notes app: the list, a full-screen editor written as you type, Import and Export through the system picker, portrait, nothing downloaded.
 
-- [x] **Ghost Notes installs its own dependencies (2026-10-05)**
+- [x] **Ghost Notes installs its own dependencies**
       FFmpeg, uv, Python and one environment per feature, fetched, checked and kept current by the Provisioner, with progress on screen; Godot is the only install.
 
 - [x] **The framework**
@@ -178,9 +178,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [x] **Staying interactive**
       `TriBatch` batched drawing, `FrameForge` geometry built off the main thread, and `SimClock`, the fixed-rate tick every running system advances on.
 
-- [x] **A repository of its own (2026-10-06)**
-      Moved out of Praxis (`axis/ghost`): the GDScript in `src/`, build and check scripts in `scripts/`, the Python hosts in `hosts/`.
-
 - [x] **Real 3D**
       `Mesh3D` bodies, `Geo` fracture and the `Lens3D` / `Scene3D` / `Plane3D` path; `Field`, `Palette` and `Terrain`, and a city that grows across real terrain.
 
@@ -189,6 +186,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [x] **Video export**
       An offline spectrum bake and a Movie Maker render on a virtual display, encoded while it renders, and the shared furniture every mode inherits.
+
+- [x] **A repository of its own**
+      Moved out of Praxis (`axis/ghost`): the GDScript in `src/`, build and check scripts in `scripts/`, the Python hosts in `hosts/`.
 
 - [x] **The media**
       A comic book, a novel, a notebook and a tablet beside full frame: the same Director cutting the same scenes, carried on something else.

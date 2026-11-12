@@ -1,44 +1,34 @@
 extends SceneTree
 
-## stage_filter_check - that the LOOK filters actually do what their names claim, in pixels.
+## stage_filter_check - that the Look filters do what their names claim, in pixels.
 ##
 ##   tests/run_quiet.sh stage_filter_check
 ##
-## NOT `--headless`: every claim here is a measurement of a rendered frame, and the dummy
-## renderer returns nothing from a viewport readback. The wrapper gives it a real GPU on a
-## virtual display, so no window appears.
+## Not `--headless`: every claim measures a rendered frame, and the dummy renderer reads back nothing. The
+## wrapper gives it a real GPU on a virtual display, so no window appears.
 ##
-## WHY EACH CLAIM IS WORTH ASSERTING - every one of these fails in a way that looks like a
-## design decision rather than a bug:
+## Each claim fails in a way that looks like a design decision rather than a bug:
 ##
-##   THE UNIFORM CONTRACT. `set_shader_parameter` on a name the shader does not declare is a
-##   SILENT no-op. A filter whose registry entry and uniform disagree therefore ships as a
-##   checkbox that moves, saves, reloads and does nothing - the exact failure mode ghost's
-##   own dependency table exists to prevent, one level down. This gate reads the shader
-##   SOURCE and holds the registry to it.
+##   The uniform contract: `set_shader_parameter` on a name the shader does not declare is a silent no-op,
+##   so a registry entry and uniform that disagree ship as a checkbox that moves, saves and does nothing.
+##   The gate reads the shader source and holds the registry to it.
 ##
-##   OFF IS OFF. The claim is not "looks the same" but that the default show runs the code it
-##   has always run: no material on the stage view at all, and a readback BIT-IDENTICAL to
-##   the unfiltered picture. A shader that multiplies everything by zero would pass a
-##   tolerance test and fail this.
+##   Off is off: the default show runs the code it always ran, with no material on the stage view and a
+##   readback bit-identical to the unfiltered picture (a shader that multiplies by zero would pass a
+##   tolerance test and fail this).
 ##
-##   EACH FILTER'S OWN CLAIM, not merely "the picture changed". "The picture changed" passes
-##   on a filter wired to the wrong uniform, on a monochrome that only darkens, on a vignette
-##   that darkens the sides instead of the corners, and on grain that fogs the blacks. So each
-##   is measured against the property that names it, and the two with a specific WRONG
-##   implementation are measured against THAT: a vignette that is circular in the image plane
-##   (so on a 16:9 frame the sides fall off far harder than the top) rather than the
-##   `length(uv - 0.5)` ellipse everyone writes first, which falls off equally; and grain
-##   weighted to the midtones rather than flat, which puts noise in a black that exposed
-##   nothing.
+##   Each filter's own claim, not "the picture changed" (which passes on a filter wired to the wrong
+##   uniform, a monochrome that only darkens, a vignette that darkens the sides instead of the corners, or
+##   grain that fogs the blacks). Each is measured against the property that names it, and the two with a
+##   specific wrong implementation against that: a vignette circular in the image plane (the sides fall
+##   off far harder than the top on 16:9) rather than the ellipse that falls off equally; grain weighted
+##   to the midtones rather than flat (flat noise lands in a black that exposed nothing).
 ##
-##   THEY COMBINE, which is the whole point of a set of dials rather than a picker: two
-##   filters on together must differ from either one alone AND keep each other's property.
+##   They combine: two filters on together differ from either alone and keep each other's property.
 ##
-## THE TEST IMAGE is built here rather than rendered from a scene, because a measurement needs
-## a picture whose answer is known before it is taken: a color ramp to desaturate, a black, a
-## mid-gray and a white patch for the grain weighting, and one small very bright spot on a dark
-## field for the bloom threshold.
+## The test image is built here, since a measurement needs a picture whose answer is known: a color ramp
+## to desaturate, a black, a mid-gray and a white patch for the grain weighting, and one small very bright
+## spot on a dark field for the bloom threshold.
 
 const Filters_ := preload("res://src/show/filters.gd")
 
@@ -53,9 +43,8 @@ const SPOT := Rect2i(232, 128, 8, 8)      # the bright spot bloom must spread
 const NEAR_SPOT := Rect2i(218, 114, 36, 36)   # ...and the dark ring around it
 const FAR := Rect2i(170, 20, 24, 24)      # dark field a long way from the spot
 
-## THE FILM FRAMES a filter that changes with time is judged on: pinned (`u_frame`), never the
-## shader's clock. On the clock a check is of whichever frame the moment happens to be, so it
-## passes or fails by how long the checks before it took and what else the machine is doing.
+## The film frames a filter that changes with time is judged on: pinned (`u_frame`), never the shader's
+## clock, on which a check is of whichever frame the moment happens to be.
 const FRAMES := [0, 7, 14, 21]
 
 var fails := 0
@@ -101,10 +90,8 @@ func _ok(cond: bool, msg: String) -> void:
 # --- the contract between the registry and the shader -------------------------
 
 
-## EVERY REGISTRY KEY HAS A UNIFORM, read off the shader's own source.
-##
-## The control is deliberately included: a search that cannot fail to find something proves
-## nothing about the searches that did find something.
+## Every registry key has a uniform, read off the shader's own source. The control is included: a search
+## that cannot fail to find something proves nothing about the searches that did.
 func _check_uniform_contract() -> void:
 	var src := FileAccess.get_file_as_string(Filters_.SHADER)
 	_ok(not src.is_empty(), "the stage filter shader could not be read at all")
@@ -121,8 +108,7 @@ func _check_uniform_contract() -> void:
 			"filter '%s' has a default of %f - switching it on would do nothing" % [key, d])
 	_ok(not src.contains("uniform float u_not_a_filter"),
 		"the control is wrong - the shader must not declare a filter nobody registered")
-	# The size uniform is not a filter and so is not in the registry, but everything that is
-	# sized in pixels depends on it arriving.
+	# The size uniform is not a filter and so not in the registry, but everything sized in pixels depends on it.
 	_ok(src.contains("uniform vec2 u_size"),
 		"the shader has no u_size - the dots and the grain cannot be sized in pixels")
 
@@ -140,8 +126,8 @@ func _check_off_is_off() -> void:
 	_ok(rect.material == null, "a filter dialed to zero still hung a material on the view")
 	Filters_.apply(rect, {"monochrome": 1.0}, Vector2(W, H))
 	_ok(rect.material != null, "the control is wrong - a live filter hung no material")
-	# AND IT COMES BACK OFF. Writing only the live uniforms would leave the last value of a
-	# filter that has just been switched off still burning.
+	# And it comes back off: writing only the live uniforms would leave a switched-off filter burning at
+	# its last value.
 	Filters_.apply(rect, {}, Vector2(W, H))
 	_ok(rect.material == null, "switching the last filter off did not remove the material")
 	rect.free()
@@ -157,21 +143,16 @@ func _check_off_is_off() -> void:
 # --- every filter acts, and acts alone ----------------------------------------
 
 
-## HOW MANY PIXELS MOVED, not by how much on average.
-##
-## The mean absolute difference was the first metric here and it is the wrong instrument for
-## half this registry. A MEAN cannot see a sparse effect: grain is deliberately heavy-tailed -
-## most of the frame carries nearly nothing so that the grains which do land read as grains -
-## and rebuilding it that way took the mean from 0.03 to 0.005 while the picture visibly
-## gained grain. A mean also flatters the opposite mistake, a filter that tints everything
-## faintly and does nothing worth seeing. The share of pixels actually moved answers "is this
-## doing something" for both shapes.
+## How many pixels moved, not by how much on average. A mean cannot see a sparse effect (grain is
+## deliberately heavy-tailed, and rebuilding it that way took the mean from 0.03 to 0.005 while the picture
+## visibly gained grain), and it flatters a filter that tints everything faintly and does nothing worth
+## seeing. The share of pixels actually moved answers "is this doing something" for both shapes.
 func _check_each_filter_acts() -> void:
 	for key in Filters_.REGISTRY:
 		if key == "slip" or key == "dust":
 			continue          # sparse and per-frame - see _check_slip / _check_dust
-		# ON PINNED FILM FRAMES (see FRAMES): a filter that changes from frame to frame is judged on
-		# the one where it does the most, and one that does not is the same picture four times
+	# On pinned film frames (see FRAMES): a filter that changes frame to frame is judged on the one
+	# where it does the most, and one that does not is the same picture four times
 		var f := 0.0
 		var soft_f := 0.0
 		for frame in FRAMES:
@@ -190,7 +171,7 @@ func _check_each_filter_acts() -> void:
 # --- each filter's own claim --------------------------------------------------
 
 
-## COLOR IS GONE, measured as chroma (max channel minus min), not as "the picture changed".
+## Color is gone, measured as chroma (max channel minus min), not as "the picture changed".
 func _check_monochrome() -> void:
 	var got := await _render({"monochrome": 1.0})
 	var before := _mean_chroma(_plain)
@@ -203,13 +184,9 @@ func _check_monochrome() -> void:
 		% absf(_mean_luma(got) - _mean_luma(_plain)))
 
 
-## THE VIGNETTE COMES IN FROM EVERY EDGE. It was a circular lens, which on this 16:9 frame put
-## the mid-left 0.87 of the way to a corner and the mid-top 0.49, so below about 0.6 the sides
-## were black and the top and bottom untouched ("you expect it to start creeping in from ALL
-## sides"). Now an oval fitted to the frame: the top and the side move alike at a low setting,
-## the corners most, the center not at all; and it is DARK - its depth was once the dial
-## itself, a gray veil at 0.5. (The shape between, an inset rounded rectangle, passed all of
-## this and was rejected by eye as "very square"; roundness is not gated.)
+## The vignette comes in from every edge: an oval fitted to the frame, so the top and the side move alike
+## at a low setting, the corners most, the center not at all (a circular lens on 16:9 puts the mid-left
+## 0.87 of the way to a corner and the mid-top 0.49). It is dark, not a gray veil. Roundness is not gated.
 func _check_vignette() -> void:
 	var low := await _render({"vignette": 0.3})
 	var left := _fall(low, Rect2i(0, H / 2 - 12, 12, 24))
@@ -246,10 +223,9 @@ func _check_vignette() -> void:
 			% [name, f] + "covering the corners")
 
 
-## THE GATE SLIP IS ITS OWN FILTER. It was the top of the Grain dial, so grain past 0.55 tore
-## the picture whether that was wanted or not. Held: the slip fires on some film frames at full
-## strength and at its default, and on a frame where it fires, grain alone leaves that band where
-## it was. Frames are asked for by number (`u_frame`), so this is the same answer every run.
+## The gate slip is its own filter (not the top of the Grain dial). Held: the slip fires on some film
+## frames at full strength and at its default, and on a frame where it fires, grain alone leaves that band
+## where it was. Frames are asked for by number (`u_frame`), so the answer is the same every run.
 func _check_slip() -> void:
 	var fired := -1
 	for f in 60:
@@ -270,9 +246,9 @@ func _check_slip() -> void:
 		if _changed_fraction(await _render({"slip": 1.0}, f), _plain) <= 0.02:
 			quiet += 1
 	_ok(quiet > 30, "gate slip at 1.0 fired on %d of 60 frames - it is a tear, not a wobble" % (60 - quiet))
-	# THE BAND: rows of the hue ramp (the top half) the slip moved - a slip shifts nearly every
-	# pixel of the ramp in its band, where grain changes luminance and leaves hue alone. The
-	# first frame to fire may have slipped the bottom half, so find one that crossed the ramp.
+	# The band: rows of the hue ramp (the top half) the slip moved. A slip shifts nearly every pixel of the
+	# ramp in its band, where grain changes luminance and leaves hue alone. The first frame to fire may
+	# have slipped the bottom half, so find one that crossed the ramp.
 	var rows: Array = []
 	for f in range(fired, fired + 120):
 		var slipped := await _render({"slip": 1.0}, f)
@@ -305,8 +281,7 @@ func _check_slip() -> void:
 		% (100.0 * float(in_band) / maxf(float(n), 1.0)))
 
 
-## GRAIN LIVES IN THE MIDTONES. Flat noise fogs a black that exposed nothing, which is the one
-## place it must not, and it is exactly what an unweighted version does.
+## Grain lives in the midtones: flat noise fogs a black that exposed nothing.
 func _check_grain() -> void:
 	# the pinned frame with the most grain in the mid patch (mottle leaves it nearly clean on some)
 	var got: Image = null
@@ -327,8 +302,8 @@ func _check_grain() -> void:
 		% [white, mid])
 
 
-## BLOOM SPREADS FROM THE BRIGHT PART AND LEAVES THE DARK ALONE. A bloom with no threshold is
-## a fogged lens and lifts the far field just as much.
+## Bloom spreads from the bright part and leaves the dark alone: a bloom with no threshold is a fogged
+## lens and lifts the far field just as much.
 func _check_bloom() -> void:
 	var got := await _render({"bloom": 1.0})
 	var near := _mean_luma_of(got, NEAR_SPOT) - _mean_luma_of(_plain, NEAR_SPOT)
@@ -339,9 +314,8 @@ func _check_bloom() -> void:
 		% [far, near] + "it is fogging the frame rather than blooming the highlights")
 
 
-## DOTS HAVE EDGES, and re-laying a picture as dots is not the same as washing it out. Two
-## claims together: local contrast goes UP (the rim of every dab), and the picture's overall
-## color stays where it was (a dab takes its color from where it sits).
+## Dots have edges, and re-laying a picture as dots is not washing it out: local contrast goes up (the rim
+## of every dab) and the overall color stays where it was (a dab takes its color from where it sits).
 func _check_pointillism() -> void:
 	var got := await _render({"pointillism": 0.6})
 	var steps_before := _step_fraction(_plain)
@@ -354,13 +328,12 @@ func _check_pointillism() -> void:
 		% absf(_mean_luma(got) - _mean_luma(_plain)))
 
 
-## CONTRAST UP, AND STILL IN COLOR. Noir grades whatever it is handed; a version that
-## desaturated on its own would make Monochrome redundant and Technicolor impossible.
+## Contrast up, and still in color. Noir grades whatever it is handed; a version that desaturated on its
+## own would make Monochrome redundant and Technicolor impossible.
 func _check_noir() -> void:
 	var got := await _render({"noir": 1.0})
-	# Measured on the RAMP, which is where the tones are. Over the whole frame the dark field
-	# and the black/white patches are already at the ends of the scale and cannot be expanded,
-	# so they dilute exactly the thing under test.
+	# Measured on the ramp, where the tones are: over the whole frame the dark field and the patches are
+	# already at the ends of the scale and dilute what is under test.
 	var ramp := Rect2i(0, 0, W, H / 2)
 	_ok(_luma_spread_of(got, ramp) > _luma_spread_of(_plain, ramp) * 1.25,
 		"noir raised the tonal spread from %.4f to only %.4f"
@@ -370,13 +343,11 @@ func _check_noir() -> void:
 		% _mean_chroma(got))
 
 
-## TWO AT ONCE, which is the reason these are dials and not a picker.
+## Two at once, which is why these are dials and not a picker.
 func _check_combining() -> void:
 	var mono := await _render({"monochrome": 1.0})
-	# THE GRAIN'S FILM FRAME IS PINNED here too. Left to the shader's clock, which frame these two
-	# pictures were of was a matter of how long everything before them took, and some frames are
-	# quiet: measured, 43 of the first 1500 film frames put the pair under this line, and so did 6
-	# of 300 pictures taken on the clock. It failed that way, with nothing changed, on 2026-10-12.
+	# The grain's film frame is pinned here too: left to the shader's clock, some frames are quiet (43 of
+	# the first 1500 film frames put the pair under this line, and 6 of 300 pictures taken on the clock).
 	var grain := await _render({"static": 1.0}, FRAMES[0])
 	var both := await _render({"monochrome": 1.0, "static": 1.0}, FRAMES[0])
 	var apart := _mean_diff(both, mono)
@@ -389,15 +360,14 @@ func _check_combining() -> void:
 	# ...and each keeps its own property in the pair.
 	_ok(_mean_chroma(both) < 0.02,
 		"grain put the color back into a monochrome picture (%.3f)" % _mean_chroma(both))
-	# MOTTLE leaves whole regions nearly clean for a while, so one frame can catch the mid patch
-	# in a quiet spell: the best of a few pinned frames, never the clock (which made this pass
-	# or fail on how long the checks before it took).
+	# Mottle leaves whole regions nearly clean for a while, so one frame can catch the mid patch in a quiet
+	# spell: the best of a few pinned frames, never the clock.
 	var mid_var := 0.0
 	for frame in FRAMES:
 		mid_var = maxf(mid_var, _added_variance(await _render({"monochrome": 1.0, "static": 1.0}, frame), MID))
 	_ok(mid_var > 0.0005, "monochrome flattened the grain out of the midtones")
-	# THE WHOLE STACK, which is the setting most likely to be used and the one most likely to
-	# hit a clamp: it must still be a picture rather than black or white.
+	# The whole stack, the setting most likely to be used and to hit a clamp: it must still be a picture
+	# rather than black or white.
 	var all := {}
 	for k in Filters_.REGISTRY:
 		all[String(k)] = float(Filters_.REGISTRY[k]["default"])
@@ -410,8 +380,8 @@ func _check_combining() -> void:
 # --- rendering and measuring --------------------------------------------------
 
 
-## The stage view's arrangement in miniature: the picture in a TextureRect, the filter material
-## on the rect, read back out of a SubViewport.
+## The stage view's arrangement in miniature: the picture in a TextureRect, the filter material on the
+## rect, read back out of a SubViewport.
 func _render(amounts: Dictionary, frame := -1) -> Image:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(W, H)
@@ -435,9 +405,9 @@ func _render(amounts: Dictionary, frame := -1) -> Image:
 	return got
 
 
-## A picture whose answer is known before it is measured: a saturated hue ramp over the top
-## half, three exposure patches along the bottom, and one small very bright spot on a dark
-## field for the bloom threshold to find.
+## A picture whose answer is known before it is measured: a saturated hue ramp over the top half, three
+## exposure patches along the bottom, and one small very bright spot on a dark field for the bloom
+## threshold to find.
 func _make_test_image() -> ImageTexture:
 	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
 	for y in H:
@@ -473,8 +443,8 @@ func _mean_diff(a: Image, b: Image) -> float:
 	return sum / (float(W * H) / 4.0 * 3.0)
 
 
-## The share of sampled pixels whose color moved at all - a channel step of more than 1/255
-## twice over, so filtering noise and dithering do not count as an effect.
+## The share of sampled pixels whose color moved at all: a channel step of more than 1/255 twice over, so
+## filtering noise and dithering do not count as an effect.
 func _changed_fraction(a: Image, b: Image, eps := 0.008) -> float:
 	var hits := 0
 	var n := 0
@@ -538,8 +508,7 @@ func _fall(img: Image, r: Rect2i) -> float:
 	return clampf(1.0 - _mean_luma_of(img, r) / was, 0.0, 1.0)
 
 
-## The variance a filter ADDED to a flat patch. The patch is flat in the source, so anything
-## here is the filter's own.
+## The variance a filter added to a flat patch (flat in the source, so anything there is the filter's).
 func _added_variance(img: Image, r: Rect2i) -> float:
 	return maxf(_variance(img, r) - _variance(_plain, r), 0.0)
 
@@ -559,8 +528,8 @@ func _variance(img: Image, r: Rect2i) -> float:
 	return acc / maxf(float(vals.size()), 1.0)
 
 
-## The share of horizontally adjacent pixel pairs that differ by more than a tenth - a dot's
-## rim is such a pair and a smooth gradient has none.
+## The share of horizontally adjacent pixel pairs that differ by more than a tenth: a dot's rim is such a
+## pair and a smooth gradient has none.
 func _step_fraction(img: Image) -> float:
 	var hits := 0
 	var n := 0
@@ -592,9 +561,9 @@ func _luma(c: Color) -> float:
 	return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 
 
-## DUST IS DIRT ON THE PRINT: sparse marks that change every film frame - some of the picture
-## moved on every frame, never most of it, a different place each frame, and none at all on a
-## frame when the dial is off. Frames are asked for by number (`u_frame`).
+## Dust is dirt on the print: sparse marks that change every film frame. Some of the picture moves on
+## every frame, never most of it, a different place each frame, and none at all when the dial is off.
+## Frames are asked for by number (`u_frame`).
 func _check_dust() -> void:
 	var moved: Array = []
 	var images: Array = []
@@ -617,8 +586,7 @@ func _check_dust() -> void:
 		if _changed_fraction(soft, _plain) > 0.0:
 			soft_hit += 1
 	_ok(soft_hit >= 6, "dust at its default touched only %d of 12 frames" % soft_hit)
-	# A LOW DIAL IS RARE, not a constant trickle: a fixed per-frame count made 0.05 a speck on
-	# every single frame, 24 a second.
+	# A low dial is rare, not a constant trickle (a fixed per-frame count made 0.05 a speck on every frame).
 	var rare_hit := 0
 	for f in 48:
 		var faint := await _render({"dust": 0.05}, f)

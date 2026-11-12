@@ -1,20 +1,17 @@
 """Offline face-landmark track for the Masking editor's clown effect.
 
-Reads a video once, runs MediaPipe's face landmarker over it at a fixed sample
-rate, and writes a compact binary track the editor reads back BY TIME. Same
-shape as the umbra effect's look-ahead track (see MaskEditor._umb_ensure_track):
-decode once, fit every sampled frame up front, cache, then playback is one array
-lookup. Three things follow that a per-frame detector cannot give:
+Reads a video once, runs MediaPipe's face landmarker over it at a fixed sample rate, and writes a compact
+binary track the editor reads back by time. Same shape as the umbra effect's look-ahead track (see
+MaskEditor._umb_ensure_track): decode once, fit every sampled frame up front, cache, then playback is one array
+lookup. That gives what a per-frame detector cannot:
 
-  DETERMINISM  the live preview and the export relaunch are separate processes
-               that must agree frame-for-frame. They read the same cached file.
-  NO STALL     detection never runs inside the render loop, so it cannot cost
-               frames or fight the audio clock.
-  LOOK-AHEAD   the whole track exists before playback, so smoothing can use
-               frames on BOTH sides of the current one. A live tracker has only
-               the past and must choose between lag and jitter.
+  Determinism  the live preview and the export relaunch are separate processes that must agree
+               frame-for-frame; they read the same cached file.
+  No stall     detection never runs inside the render loop, so it cannot cost frames or fight the audio clock.
+  Look-ahead   the whole track exists before playback, so smoothing can use frames on both sides of the
+               current one.
 
-THE FORMAT (little-endian, matches GDScript's FileAccess defaults)
+The format (little-endian, matches GDScript's FileAccess defaults)
 
     magic     4s    b"GFT1"
     version   u32   1
@@ -25,11 +22,10 @@ THE FORMAT (little-endian, matches GDScript's FileAccess defaults)
         found u8    1 = a face was detected in this sample, 0 = none
         xy    f32 * points * 2   normalized to the frame (0..1), origin top-left
 
-Samples with found = 0 still carry their stale coordinates so a reader can
-choose between holding the last good fit and skipping - the flag is the truth,
-the numbers are a convenience. Coordinates are normalized because the editor
-works in frame UV throughout and a track must not care what resolution the clip
-was decoded at.
+Samples with found = 0 still carry their stale coordinates so a reader can choose between holding the last
+good fit and skipping - the flag is the truth, the numbers are a convenience. Coordinates are normalized
+because the editor works in frame UV throughout and a track must not care what resolution the clip was
+decoded at.
 
 Usage:
     python face_track.py --video <path> --out <track.bin> --model <model.task>
@@ -51,9 +47,8 @@ def main() -> int:
     ap.add_argument("--video", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", required=True)
-    # 15 Hz: fast enough that a talking head moves only a little between samples
-    # (so reading between them is a short interpolation, not a guess) and slow
-    # enough that a long clip stays a few minutes of work, not an hour.
+    # 15 Hz: a talking head moves only a little between samples (reading between them is a short
+    # interpolation), and a long clip stays a few minutes of work.
     ap.add_argument("--rate", type=float, default=15.0)
     ap.add_argument("--progress", default="")
     args = ap.parse_args()
@@ -83,11 +78,9 @@ def main() -> int:
         )
     )
 
-    # DECODE SEQUENTIALLY, SAMPLE BY TIME. Seeking per sample (CAP_PROP_POS_MSEC)
-    # is accurate on some containers and wildly not on others, and a track whose
-    # samples are at the wrong times is worse than no track. Walking the file
-    # once and taking the frames whose timestamp has crossed the next sample
-    # boundary is exact for every container and no slower.
+    # Decode sequentially, sample by time: seeking per sample (CAP_PROP_POS_MSEC) is wildly inaccurate on some
+    # containers. Walking the file once and taking the frames whose timestamp has crossed the next sample
+    # boundary is exact for every container.
     step = 1.0 / max(args.rate, 1.0)
     samples = []
     next_t = 0.0
@@ -108,8 +101,8 @@ def main() -> int:
         if res.face_landmarks:
             pts = res.face_landmarks[0]
             row = [1] + [c for p in pts[:POINTS] for c in (p.x, p.y)]
-            # A model revision with fewer points would silently write short rows
-            # and desynchronize every sample after it - refuse instead.
+            # A model revision with fewer points would silently write short rows and desynchronize every
+            # sample after it - refuse instead.
             if len(row) != 1 + POINTS * 2:
                 print(
                     "face_track: model returned %d points, expected %d"
@@ -130,8 +123,7 @@ def main() -> int:
         print("face_track: no frames decoded from %s" % args.video, file=sys.stderr)
         return 2
 
-    # Write to a .part and rename, so a reader can never open a half-written
-    # track (the same discipline the clip transcode uses for video.ogv).
+    # Write to a .part and rename, so a reader can never open a half-written track.
     tmp = args.out + ".part"
     with open(tmp, "wb") as f:
         f.write(MAGIC)

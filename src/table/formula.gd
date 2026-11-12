@@ -1,26 +1,24 @@
 extends RefCounted
 class_name Formula
 
-## Formula - a number an agent writes as arithmetic: anywhere a motion law takes a number ([Motions]),
-## it may take a formula of the act's time instead - `"90 + 30 * sin(tau * t / 1.5)"` - read here.
+## Formula - a number an agent writes as arithmetic: anywhere a motion law takes a number ([Motions]), it may take a formula of the act's
+## time instead - `"90 + 30 * sin(tau * t / 1.5)"` - read here.
 ##
-## NOTHING AN AGENT WRITES IS RUN AS CODE (next/table_work.md, "Why not code"): this is a small language of
-## its own, the GDScript twin of hosts/math/figure.py's - numbers, the names it is handed, + - * / % and ^
-## (or **), parentheses, and calls of the functions in [constant FUNCS] by name, and NOTHING ELSE. Godot's
-## own `Expression` is not used: with no object behind it, it still reaches any live object through
-## `instance_from_id(...)` and runs its methods (measured 2026-10-25, a `--script` probe: the root's id gave
-## back a `Window`).
+## Nothing an agent writes is run as code (next/table_work.md, "Why not code"): this is a small language of its own, the GDScript twin of
+## hosts/math/figure.py's - numbers, the names it is handed, + - * / % and ^ (or **), parentheses, and calls of the functions in
+## [constant FUNCS] by name, and nothing else. Godot's own `Expression` is not used: with no object behind it, it still reaches any live
+## object through `instance_from_id(...)` and runs its methods.
 ##
-## COMPILED ONCE, RUN EVERY FRAME: [method compile] turns the text into a list of steps (postfix: a number,
-## a name, an operator, a call), refusing anything it does not know with why; [method run] works the list
-## on a stack. A result that is not a finite number - a division by zero, the root of a negative - is 0.
+## Compiled once, run every frame: [method compile] turns the text into a list of steps (postfix: a number, a name, an operator, a call),
+## refusing anything it does not know with why; [method run] works the list on a stack. A result that is not a finite number (a division
+## by zero, the root of a negative) is 0.
 
 ## The most tokens a formula may have, and the most values deep its stack may go.
 const MAX_TOKENS := 160
 const MAX_STACK := 48
 ## The constants every formula knows.
 const CONSTANTS := {"pi": PI, "tau": TAU, "e": 2.718281828459045}
-## THE FUNCTIONS a formula may call, each with how many arguments it takes.
+## The functions a formula may call, each with how many arguments it takes.
 const FUNCS := {"sin": 1, "cos": 1, "tan": 1, "asin": 1, "acos": 1, "atan": 1, "atan2": 2, "abs": 1,
 	"min": 2, "max": 2, "clamp": 3, "lerp": 3, "smoothstep": 3, "ease": 1, "pingpong": 2, "fract": 1,
 	"floor": 1, "ceil": 1, "round": 1, "sqrt": 1, "pow": 2, "exp": 1, "log": 1, "sign": 1, "step": 2,
@@ -123,7 +121,7 @@ static func compile(text: String, names: PackedStringArray) -> Dictionary:
 		if String(o[0]) != "op":
 			return {"ok": false, "code": [], "error": "a \"(\" with no \")\""}
 		out.append(o)
-	# HOW DEEP ITS STACK GOES, worked out now: a formula past the most is refused, not run
+	# How deep its stack goes, worked out now: a formula past the most is refused, not run
 	var depth := 0
 	var most := 0
 	for s in out:
@@ -218,7 +216,7 @@ static func _call(f: String, a: PackedFloat64Array) -> float:
 	return 0.0
 
 
-## A SMOOTH NOISE of two numbers, -1..1, as [method noise1] is of one: ground, rock, a shoreline ([AssemblyModel]).
+## A smooth noise of two numbers, -1..1, as [method noise1] is of one: ground, rock, a shoreline ([AssemblyModel]).
 static func noise2(x: float, y: float) -> float:
 	var ix := floorf(x)
 	var iy := floorf(y)
@@ -233,7 +231,7 @@ static func noise2(x: float, y: float) -> float:
 	return lerpf(lerpf(a, b, ux), lerpf(c, d, ux), uy) * 2.0 - 1.0
 
 
-## A SMOOTH NOISE of one number, -1..1: the same everywhere it is asked (no state, no seed beyond the
+## A smooth noise of one number, -1..1: the same everywhere it is asked (no state, no seed beyond the
 ## number), so a formula that wanders wanders the same in a render and a scrub.
 static func noise1(x: float) -> float:
 	var i := floorf(x)
@@ -248,7 +246,7 @@ static func _hash1(i: float) -> float:
 	return (h - floorf(h)) * 2.0 - 1.0
 
 
-## THE PIECES of [param text]: `[kind, value]` - "num", "name", "call" (a name right before "("), "op",
+## The pieces of [param text]: `[kind, value]` - "num", "name", "call" (a name right before "("), "op",
 ## "(", ")", ",", or "bad" for anything else, which [method compile] refuses.
 static func _tokens(text: String) -> Array:
 	var out: Array = []

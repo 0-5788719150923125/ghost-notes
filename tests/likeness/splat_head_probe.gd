@@ -6,11 +6,10 @@ extends SceneTree
 ##   xvfb-run -a godot --path . --script tests/likeness/splat_head_probe.gd -- \
 ##       --avatar <dist/.../avatar> --look <look.py's folder> --out <folder>
 ##
-## For each `<k>_pose.json` in the look folder it draws `<k>_room.png` and over it the face and body posed so,
-## at the crop's own size, writes `<k>_godot.png`, and
-## prints how far it is from `<k>_played.png` - over the whole square and where the head is (where the
-## trainer's picture is not its room). They differ by more than rounding: Godot draws the splats in one
-## order (back to front as the neutral face stands), the trainer sorts them per pixel as each pose stands.
+## For each `<k>_pose.json` in the look folder it draws `<k>_room.png` and over it the face and body posed so, at the crop's
+## own size, writes `<k>_godot.png`, and prints how far it is from `<k>_played.png` - over the whole square and where the head
+## is (where the trainer's picture is not its room). They differ by more than rounding: Godot draws the splats in one order (back
+## to front as the neutral face stands), the trainer sorts them per pixel as each pose stands.
 ##
 ## NOT `--headless`: the frames are rendered and read back.
 

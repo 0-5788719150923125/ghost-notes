@@ -1,6 +1,6 @@
 extends Node
 
-## NOT a gate. What the set dresser SEES through its tools ([SetDresserTools]) - with no agent: a
+## Not a gate. What the set dresser SEES through its tools ([SetDresserTools]) - with no agent: a
 ## table description is put on an episode's table a few things at a time, one thing is looked at
 ## from four sides, and the table is set; every picture is written out, beside the words each tool
 ## answered with.
@@ -15,7 +15,7 @@ extends Node
 ## and every part of it that moves is watched (`--watch 0`: none). Things written into zones (a table set
 ## before the blueprint) are placed on it where the table's own hunt stands them; the blueprint is drawn and
 ## the table set, with its things numbered and without. Last, the name's color is chosen
-## (`--ink`, else the description's own `title`, else cream) and the OPENING is shown under
+## (`--ink`, else the description's own `title`, else cream) and the opening is shown under
 ## `--name`/`--byline`; `--quick 1` skips the close look at a thing and the opening. The episode is only
 ## read: the tools work in a folder of their own (`user://set_dresser_look/<show>_<seed>`), never its jobs.
 
@@ -61,7 +61,7 @@ func _run() -> void:
 		print("set_dresser_look_probe: no table at %s, or no plan for %s #%d" % [spec_path, show, seed])
 		get_tree().quit(2)
 		return
-	# A FOLDER PER EPISODE: the preview copies an episode's pictures only when they are newer than the
+	# A folder per episode: the preview copies an episode's pictures only when they are newer than the
 	# copies it has, so two episodes sharing one would show the first one's cloth and room
 	var dir := ProjectSettings.globalize_path("user://set_dresser_look/%s_%d" % [show, seed])
 	DirAccess.make_dir_recursive_absolute(_out.get_base_dir() if _out.is_absolute_path() else ProjectSettings.globalize_path(_out).get_base_dir())
@@ -72,7 +72,7 @@ func _run() -> void:
 	var t0 := Time.get_ticks_msec()
 	# a few at a time, as the set dresser is told to put them
 	var half := ceili(things.size() / 2.0)
-	# THE TABLE ITSELF first, as the set dresser is told to build it, and seen from above
+	# The table itself first, as the set dresser is told to build it, and seen from above
 	var td: Dictionary = table
 	if td.has("top") or td.has("layers"):
 		var built := {"materials": td.get("materials", {})}
@@ -98,7 +98,7 @@ func _run() -> void:
 		await _call(tools, "put", {"light": light}, "light")
 	if not things.is_empty() and not quick:
 		await _call(tools, "look", {"name": String((things[0] as Dictionary).get("name", ""))}, "look")
-	# AN OLD TABLE, its things named into zones: written onto the blueprint where the table's own hunt
+	# An old table, its things named into zones: written onto the blueprint where the table's own hunt
 	# stands them, so it looks as it always did - then drawn
 	var spots: Array = []
 	if not tools._unplaced().is_empty() and TablePreview.can_set():

@@ -2,16 +2,12 @@ extends GhostScene
 
 ## Motes - dust adrift in a shaft of light.
 ##
-## The quietest scene: light cuts the frame and countless fine motes hang and turn in
-## it on a slow curl-noise current, brightening as they cross the beam. The color of
-## the light is a [Scheme] - late sun, a cold north window, green light under leaves -
-## and the room's shadow is that scheme's accent, so the two agree. `bed` + `fog` +
-## a `dust` layer.
+## The quietest scene: light cuts the frame and countless fine motes hang and turn in it on a slow
+## curl-noise current, brightening as they cross the beam. The light's color is a [Scheme] and the room's
+## shadow is that scheme's accent. `bed` + `fog` + a `dust` layer.
 
-# THE AIR IN THE ROOM. One shaft, 120-200 motes, always: the same still afternoon
-# every time. An air is how much matter hangs in it and whether there is a beam at
-# all - a thick haze with no visible shaft is a different room from a near-empty one
-# with a hard column of light through it.
+# The air in the room: how much matter hangs in it and whether there is a beam at all (a thick haze with no
+# visible shaft is a different room from a near-empty one with a hard column of light).
 const AIRS := [
 	{"name": "shaft", "count": [120, 200], "beam": true, "speed": [0.015, 0.030], "drift": [0.004, 0.010]},
 	{"name": "haze", "count": [220, 340], "beam": false, "speed": [0.010, 0.022], "drift": [0.002, 0.006]},
@@ -20,8 +16,8 @@ const AIRS := [
 ]
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed.
 const FIELDS := {
 	"haze": {"label": "Haze", "type": "num", "range": [0.02, 0.055], "default": null,
 		"blurb": "How thick the soft haze in the room is."},
@@ -35,13 +31,11 @@ const FIELDS := {
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	# Whatever light gets in: late sun, sodium street-glare, a cold north window,
-	# green light under leaves, or the colorless gray of an overcast one.
+	# Whatever light gets in: late sun, sodium street-glare, a cold north window, green light under leaves, or overcast gray.
 	var sch := Scheme.among(["sodium", "dawn", "brass", "bone", "glacier", "ash", "verdant",
 		"teal", "rose"], rng)
 	var air: Dictionary = AIRS[rng.randi() % AIRS.size()]
-	# The room behind the beam sits in the scheme's accent, kept dark - shadow that
-	# belongs to this light rather than an unrelated second color.
+	# The room behind the beam sits in the scheme's accent, kept dark: shadow that belongs to this light.
 	add_layer("bed", rng, {"hue": sch.accent, "sat": sch.sat * 0.5,
 		"val": sch.val * rng.randf_range(0.12, 0.22), "pools": rng.randi_range(2, 4)})
 	add_layer("fog", rng, {"hue": sch.hue, "sat": sch.sat * 0.3,

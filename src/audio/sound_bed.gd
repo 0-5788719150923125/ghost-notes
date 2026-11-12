@@ -1,13 +1,10 @@
 extends RefCounted
 class_name SoundBed
 
-## SoundBed - a sound laid under a voice: what a reading asks of whatever makes one.
-##
-## A reading mixes the place it is in under the voice - live, a buffer at a time, and into the
-## take an export renders. It does not know what a place is: it is handed something that answers
-## these five questions ([method ReadingPanel._environment] hands it the maker), and the card
-## table's [Soundscape] is the one thing that does today. The questions are here, under both, so
-## the reading names no table.
+## SoundBed - a sound laid under a voice: what a reading asks of whatever makes one. A reading mixes the
+## place it is in under the voice, live a buffer at a time and into the take an export renders. It is handed
+## something that answers these questions ([method ReadingPanel._environment] hands it the maker; the table's
+## [Soundscape] is the one that does today), so the reading names no table.
 
 ## Whether there is anything to hear.
 func active() -> bool:

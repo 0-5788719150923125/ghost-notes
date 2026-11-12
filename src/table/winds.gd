@@ -1,34 +1,28 @@
 extends RefCounted
 class_name Winds
 
-## Winds - the air moving over a scene: a breeze from one side that rises and falls a little, and GUSTS
+## Winds - the air moving over a scene: a breeze from one side that rises and falls a little, and gusts
 ## now and then, each a swell that rises in a second or so and dies away over a few. One wind for the
 ## whole table: it stirs what the sun falls through, swings what hangs and ripples what flutters
 ## ([Lights]), and carries what drifts in the air - petals, leaves, seeds ([Effects], `drift`). The set
-## dresser writes it as the light's `wind` (the user, 2026-10-08: "a table under a tree, where the
-## shadows cast upon the table would look like those cast through foliage, gently moving in the wind
-## ... petals ... settling on the table, or getting carried-off from the table again after another
-## gust").
+## dresser writes it as the light's `wind`.
 ##
-## EVERYTHING IS A FUNCTION OF SHOW TIME: the gusts are planned once over [constant Lights.HORIZON] from
-## the seed ([method plan]), and the breeze is a few slow sines - so how far the air has carried a thing
+## Everything is a function of show time: the gusts are planned once over [constant Lights.HORIZON] from
+## the seed ([method plan]), and the breeze is a few slow sines, so how far the air has carried a thing
 ## between two times ([method carried]) is a sum in closed form, never stepped, and a render, a scrub and
 ## a picture see the same petal in the same place.
 ##
-## IT REACHES EVERYTHING IN THE AIR (the user, 2026-10-08: "you might expect wind to effect the flame from
-## candles, causing flickering (which would also chain into shadows moving) ... when there are little
-## flying pixies/particles, you would expect wind to make those move"): a FLAME leans downwind and
-## flickers in the eddies, guttering in a strong gust, and its light leans with it, so the shadows move
-## ([method flame]: the candles on the table, the torches and fires round it); DUST, SNOW AND EMBERS are
-## carried through; what FLIES - pixies, fireflies, wisps, flies - holds its place against the wind as
-## hard as it can fly and gives way only to what is more, flying back once the gust has passed
-## ([method pushed]); a burst's smoke and sparks drift off downwind, and fog rolls with it ([Effects]).
-## The air is not smooth: near the ground it churns about its mean in EDDIES carried past on it
-## ([method air_at]), so a flame flickers faster the harder it blows.
+## It reaches everything in the air: a flame leans downwind and flickers in the eddies, guttering in a
+## strong gust, and its light leans with it so the shadows move ([method flame]: the candles on the
+## table, the torches and fires round it); dust, snow and embers are carried through; what flies -
+## pixies, fireflies, wisps, flies - holds its place against the wind as hard as it can fly and gives
+## way only to what is more, flying back once the gust has passed ([method pushed]); a burst's smoke and
+## sparks drift off downwind, and fog rolls with it ([Effects]). Near the ground the air churns about its
+## mean in eddies carried past on it ([method air_at]), so a flame flickers faster the harder it blows.
 ##
-## ONLY A WIND THE LIGHT WROTE moves them ([method blows]): a room with its windows shut has still air, and
-## its candles burn in the room's own faint drafts. Still air planned for what drifts ([constant STILL]:
-## a petal must fall through something) moves no flame and no mote.
+## Only a wind the light wrote moves them ([method blows]): a room with its windows shut has still air,
+## and its candles burn in the room's own faint drafts. Still air planned for what drifts ([constant
+## STILL]: a petal must fall through something) moves no flame and no mote.
 
 ## The breeze at strength 1 (m/s, at the table: a sheltered table's air is slower than the open wind's).
 const BREEZE := 0.6
@@ -47,39 +41,38 @@ const VEER := 0.35
 const FULL := 1.5
 ## A wind no one wrote: a light breath, gusting now and then.
 const STILL := {"from": 270.0, "strength": 0.15, "gusts": 0.35, "every": 40.0}
-## THE EDDIES: how much the air near the ground churns about its mean (the share of its speed - 0.2 to 0.4
-## over open ground and among things), and their sizes (meters: the big swirls a mote is tossed in, the
-## small ones a flame flickers in). The noise they are drawn from spreads by [constant EDDY_SD] (measured),
-## brought to one here.
+## The eddies: how much the air near the ground churns about its mean (the share of its speed - 0.2 to
+## 0.4 over open ground and among things), and their sizes (meters: the big swirls a mote is tossed in,
+## the small ones a flame flickers in). The noise they are drawn from spreads by [constant EDDY_SD]
+## (measured), brought to one here.
 const TURBULENCE := 0.3
 const EDDIES := [0.5, 0.08]
 const EDDY_SD := 0.231
-## A FLAME IN A DRAFT ([method flame]): its hot gas rises at about the square root of g times its height
+## A flame in a draft ([method flame]): its hot gas rises at about the square root of g times its height
 ## (a candle's 3 cm flame draws at half a meter a second), and a draft as fast as that leans it 45
 ## degrees - tan(tilt) is the draft over the draw - never past [constant FLAME_TILT]. Between
 ## [constant GUTTER]'s two multiples of its draw it gutters: shorter, dimmer, as a candle does in a gust.
 const FLAME_TILT := 1.2
-## HOW MUCH OF THE EDDIES A FLAME FEELS ACROSS THE WIND (the user, 2026-10-11: the candles "don't seem to sync
-## with the wind correctly: you would expect candle flames to lean in the same direction in MOST instances").
-## A flame's eddies are a few centimeters wide, so two candles never share one; left whole, their sideways
-## halves lean neighboring flames opposite ways whenever the draft is along the view. Along the wind they
-## stretch and slacken the draft as it is; across it they shiver the flame ([constant FLAME_CROSS] of their
-## size) and leave its lean the wind's.
+## How much of the eddies a flame feels across the wind. A flame's eddies are a few centimeters wide, so
+## two candles never share one; left whole, their sideways halves would lean neighboring flames opposite
+## ways whenever the draft is along the view. Along the wind they stretch and slacken the draft as it
+## is; across it they shiver the flame ([constant FLAME_CROSS] of their size) and leave its lean the
+## wind's.
 const FLAME_CROSS := 0.3
 const GUTTER := Vector2(1.8, 5.0)
-## A FLIER PUSHED ([method pushed]): the wind it remembers - this many of its own returns back - and the
+## A flier pushed ([method pushed]): the wind it remembers - this many of its own returns back - and the
 ## steps that span is summed in.
 const MEMORY := 4.0
 const MEMORY_STEPS := 16
 
 
-## THE VOCABULARY, as an agent reads it: one line of [method Lights.describe].
+## The vocabulary, as an agent reads it: one line of [method Lights.describe].
 static func describe() -> String:
 	return "- wind: {\"from\" (where it blows from, as a sun's `from`), \"strength\" 0-1 (0 still air, 0.2 a breath, 0.5 a breeze, 1 a strong wind), \"gusts\" 0-1 (steady to gusty: how hard a gust blows over the breeze), \"every\" (seconds between gusts, about)} - the air moving over the table. It stirs the leaves, fronds and branches the sun falls through and ripples an awning's edge, harder in a gust; swings what hangs and ripples what flutters among the shadows; carries whatever drifts in the air (the air's `drift`: petals, leaves, seeds) - a gust lifts what lies on the cloth and carries it off; leans and flickers every open flame - the candles on the table, torches and fires round it - so their light and shadows dance (a flame under glass hardly feels it); carries dust, snow and embers through the shot, while pixies, fireflies, wisps and flies hold their place against it and a strong gust pushes them off for a moment; and blows a burst's smoke and sparks downwind and fog along with it. Leave it out for still air - a room with its windows and doors shut has none, and a draft through an open window or door is a breath (0.1 to 0.25); anything drifting then falls through a faint breath that moves nothing else."
 
 
-## WHATEVER AN AGENT WROTE as `wind`, made safe: `{}` when nothing was written. What had to change is said
-## in [param notes].
+## Whatever an agent wrote as `wind`, made safe: `{}` when nothing was written. What had to change is
+## said in [param notes].
 static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray()) -> Dictionary:
 	if raw == null:
 		return {}
@@ -94,7 +87,7 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 		"every": Props._num(d.get("every"), 30.0, 4.0, 600.0)}
 
 
-## THE WIND PLANNED for [param wind] (made safe; `{}` is [constant STILL]) on [param seed]: the way it
+## The wind planned for [param wind] (made safe; `{}` is [constant STILL]) on [param seed]: the way it
 ## blows (`dir`, a unit vector in the table's xz, where the air goes), the breeze, and every gust over the
 ## [constant Lights.HORIZON] - starts, peaks, rises, falls, how hard (m/s) and which way - with the air
 ## each carried, summed (and how far, `runs`), so [method carried] and [method gust_run] are lookups.
@@ -140,13 +133,13 @@ static func plan(wind: Dictionary, seed: int) -> Dictionary:
 		"peaks": peaks, "dirs": dirs, "sums": sums, "runs": runs, "written": not wind.is_empty(), "eddies": eddies}
 
 
-## WHETHER [param p] MOVES WHAT IS IN THE AIR - flames, motes, smoke, fog: a wind the light wrote. Still
+## Whether [param p] moves what is in the air - flames, motes, smoke, fog: a wind the light wrote. Still
 ## air ([constant STILL], planned for what drifts) and `{}` move nothing.
 static func blows(p: Dictionary) -> bool:
 	return not p.is_empty() and bool(p.get("written", false))
 
 
-## THE BREEZE'S SPEED at [param t] (m/s), gusts aside.
+## The breeze's speed at [param t] (m/s), gusts aside.
 static func breeze_at(p: Dictionary, t: float) -> float:
 	var ph: PackedFloat32Array = p["phases"]
 	var s := 1.0
@@ -191,7 +184,7 @@ static func _blowing(p: Dictionary, t: float) -> Vector2i:
 	return Vector2i(starts.bsearch(t - LONGEST), starts.bsearch(t))
 
 
-## THE WIND'S SPEED at [param t] (m/s), breeze and gusts.
+## The wind's speed at [param t] (m/s), breeze and gusts.
 static func speed_at(p: Dictionary, t: float) -> float:
 	var v := breeze_at(p, t)
 	var span := _blowing(p, t)
@@ -201,7 +194,7 @@ static func speed_at(p: Dictionary, t: float) -> float:
 	return v
 
 
-## THE WIND'S VELOCITY at [param t] (m/s in the table's xz): the breeze along its way, each gust along its
+## The wind's velocity at [param t] (m/s in the table's xz): the breeze along its way, each gust along its
 ## own - what [method carried] sums.
 static func velocity_at(p: Dictionary, t: float) -> Vector2:
 	var v: Vector2 = (p["dir"] as Vector2) * breeze_at(p, t)
@@ -213,13 +206,12 @@ static func velocity_at(p: Dictionary, t: float) -> Vector2:
 	return v
 
 
-## THE EDDIES at [param at] (the table's space, meters) at [param t], spread to one: swirls of
+## The eddies at [param at] (the table's space, meters) at [param t], spread to one: swirls of
 ## [constant EDDIES]' sizes, carried past on the wind (frozen in it as it goes, each turning over in the
 ## time its churn takes to cross it - [constant TURBULENCE] of the breeze, or of a breath at least), so
 ## what stands still sees them pass faster the harder it blows, and what rides the air keeps the swirl
 ## it is in. Up and down half as much as across: the ground flattens them. [param fine] false leaves the
-## small ones out: what rides the air is tossed by the big swirls, and an eddy carries nothing much
-## further than it is wide.
+## small ones out: what rides the air is tossed by the big swirls.
 static func eddy(p: Dictionary, t: float, at: Vector3, fine := true) -> Vector3:
 	var n: FastNoiseLite = p["eddies"]
 	var c := carried(p, t)
@@ -238,20 +230,20 @@ static func eddy(p: Dictionary, t: float, at: Vector3, fine := true) -> Vector3:
 	return e / (EDDY_SD * sqrt(ws))
 
 
-## THE AIR AT A PLACE: the wind's velocity at [param t] and its eddies at [param at], churning about it by
+## The air at a place: the wind's velocity at [param t] and its eddies at [param at], churning about it by
 ## [constant TURBULENCE] of its speed (m/s; y up).
 static func air_at(p: Dictionary, t: float, at: Vector3) -> Vector3:
 	var v := velocity_at(p, t)
 	return Vector3(v.x, 0.0, v.y) + eddy(p, t, at) * TURBULENCE * v.length()
 
 
-## A FLAME [param size] meters tall at [param at] in the air at [param t], [param open] the share of a draft
-## that reaches it (a chimney, a lantern's glass or a hurricane glass keeps most of it off). `axis`: which
-## way it points, a unit vector - straight up in still air, leaning downwind as tan(tilt) = the draft over
-## its draw ([constant FLAME_TILT]); `mid`: how far its middle has moved from where it burns upright
+## A flame [param size] meters tall at [param at] in the air at [param t], [param open] the share of a
+## draft that reaches it (a chimney or a lantern's glass keeps most of it off). `axis`: which way it
+## points, a unit vector - straight up in still air, leaning downwind as tan(tilt) = the draft over its
+## draw ([constant FLAME_TILT]); `mid`: how far its middle has moved from where it burns upright
 ## (meters, for its light: the shadows lean with it); `tall`: its length against its still length - a
-## little longer in a draft that stretches it, longer in an eddy rising through it, shorter as it gutters;
-## `bright`: dimmer as it gutters ([constant GUTTER]); `draft`: m/s.
+## little longer in a draft that stretches it, longer in an eddy rising through it, shorter as it
+## gutters; `bright`: dimmer as it gutters ([constant GUTTER]); `draft`: m/s.
 static func flame(p: Dictionary, t: float, at: Vector3, size: float, open := 1.0) -> Dictionary:
 	var v := velocity_at(p, t)
 	var e := eddy(p, t, at) * TURBULENCE * v.length()
@@ -274,7 +266,7 @@ static func flame(p: Dictionary, t: float, at: Vector3, size: float, open := 1.0
 		"draft": u}
 
 
-## THE WIND A FLIER FEELS, sampled for [method pushed]: its velocity over the last [constant MEMORY] of the
+## The wind a flier feels, sampled for [method pushed]: its velocity over the last [constant MEMORY] of the
 ## flier's returns ([param back], a second) before [param t], newest first.
 static func memory(p: Dictionary, t: float, back: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
@@ -284,13 +276,13 @@ static func memory(p: Dictionary, t: float, back: float) -> PackedVector2Array:
 	return out
 
 
-## HOW FAR A FLIER IS PUSHED from where it holds itself (meters, xz), from the wind it felt ([method
+## How far a flier is pushed from where it holds itself (meters, xz), from the wind it felt ([method
 ## memory], with the same [param back]): it flies against the wind as hard as it can - [param airspeed]
-## m/s - and gives way only to what is more, and to a little of what it beats, up to [param give] of it as
-## it nears its limit (none holds perfectly still against a wind it can barely beat); once a gust has
-## passed it flies back, [param back] of the way a second. The wind
-## beyond it, summed with each moment's weight fading as it recedes - so a breeze it can beat moves it
-## barely, a gust past its strength carries it off, and it comes home after. Pure: the wind is planned.
+## m/s - and gives way only to what is more, and to a little of what it beats, up to [param give] of it
+## as it nears its limit (none holds perfectly still against a wind it can barely beat); once a gust has
+## passed it flies back, [param back] of the way a second. The wind beyond it is summed with each
+## moment's weight fading as it recedes, so a breeze it can beat moves it barely and a gust past its
+## strength carries it off. Pure: the wind is planned.
 static func pushed(felt: PackedVector2Array, back: float, airspeed: float, give: float) -> Vector2:
 	var step := MEMORY / maxf(back, 0.05) / float(felt.size())
 	var out := Vector2.ZERO
@@ -303,7 +295,7 @@ static func pushed(felt: PackedVector2Array, back: float, airspeed: float, give:
 	return out
 
 
-## HOW HARD IT BLOWS at [param t], 0 still to 1 the strongest ([constant FULL]).
+## How hard it blows at [param t], 0 still to 1 the strongest ([constant FULL]).
 static func strength_at(p: Dictionary, t: float) -> float:
 	return clampf(speed_at(p, t) / FULL, 0.0, 1.0)
 
@@ -313,7 +305,7 @@ static func gust_at(p: Dictionary, t: float) -> float:
 	return clampf((speed_at(p, t) - breeze_at(p, t)) / FULL, 0.0, 1.0)
 
 
-## HOW FAR THE AIR HAS CARRIED A THING from show time 0 to [param t] (meters in the table's xz): the
+## How far the air has carried a thing from show time 0 to [param t] (meters in the table's xz): the
 ## breeze's run, every gust over, and the parts of those blowing. [method carried_between] is the
 ## difference of two.
 static func carried(p: Dictionary, t: float) -> Vector2:
@@ -336,7 +328,7 @@ static func carried_between(p: Dictionary, t0: float, t1: float) -> Vector2:
 	return carried(p, t1) - carried(p, t0)
 
 
-## HOW MUCH GUST HAS BLOWN between [param t0] and [param t1]: the air every gust carried, as a length
+## How much gust has blown between [param t0] and [param t1]: the air every gust carried, as a length
 ## (meters, whichever way each went) - what sets a piece in the air turning, harder the harder it blows.
 static func gust_run(p: Dictionary, t0: float, t1: float) -> float:
 	return _run(p, t1) - _run(p, t0)
@@ -357,7 +349,7 @@ static func gust_carried(p: Dictionary, i: int, t0: float, t1: float) -> Vector2
 	return (p["dirs"] as PackedVector2Array)[i] * k * (swell_carry(p, i, t1) - swell_carry(p, i, t0))
 
 
-## THE FIRST GUST at or after [param t] that blows at least [param least] m/s: its index, or -1.
+## The first gust at or after [param t] that blows at least [param least] m/s: its index, or -1.
 static func next_gust(p: Dictionary, t: float, least: float) -> int:
 	var starts: PackedFloat32Array = p["starts"]
 	var peaks: PackedFloat32Array = p["peaks"]

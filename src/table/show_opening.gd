@@ -1,25 +1,19 @@
 extends RefCounted
 class_name ShowOpening
 
-## ShowOpening - how a show at a table or a desk OPENS AND CLOSES, one way for both: the card table's
-## ([TableMedium]), lifted out of it for the desk ([DeskMedium]) - the user, 2026-10-16: "the
-## intro/outro doesn't inherit the behavior from cards mode. We need the blurring effect and fade and
-## such." A medium hands it its own moment of opening and its voice; this says what the frame does.
+## ShowOpening: how a show at a table or a desk opens and closes, one way for both - the card table's ([TableMedium]), lifted out of it
+## for the desk ([DeskMedium]). A medium hands it its own moment of opening and its voice; this says what the frame does.
 ##
-##   THE INTRO: the channel's name ([TitleCard]) over the whole frame thrown far out of focus - a
-##   Gaussian [constant CardTable.TITLE_BLUR] of the frame's height wide ([IntroBlur],
-##   [constant INTRO_SHADER]) - up by 1.4 s, with nothing to be made out under it but colors.
-##   THE FOCUS PULL as the show opens (the deck's shuffle, the box's opening, the pen's first word):
-##   the wide blur lifts over the first [constant INTRO_LIFT] of the pull, eased through its log down to
-##   [constant INTRO_SHARP] (half a pixel at 1080), and is taken off; the lens's own near-to-far pull
-##   carries on from there; the name goes as the pull starts.
-##   THE OUTRO: black a beat after the voice's last word, exactly as the outro's silence runs out.
+##   The intro: the channel's name ([TitleCard]) over the whole frame thrown far out of focus - a Gaussian [constant CardTable.TITLE_BLUR]
+##   of the frame's height wide ([IntroBlur], [constant INTRO_SHADER]) - up by 1.4 s, with nothing to be made out under it but colors.
+##   The focus pull as the show opens (the deck's shuffle, the box's opening, the pen's first word): the wide blur lifts over the first
+##   [constant INTRO_LIFT] of the pull, eased through its log down to [constant INTRO_SHARP] (half a pixel at 1080), and is taken off; the
+##   lens's own near-to-far pull carries on from there; the name goes as the pull starts.
+##   The outro: black a beat after the voice's last word, exactly as the outro's silence runs out.
 ##
-## WHETHER IT OPENS SO IS THE NOTE'S (2026-10-28, the user: "these should be optional, but not a
-## requirement"): the medium hands each function its feed's [member ShowFeed.opening] - the name and the
-## blur ([Openings] "title"), the blur alone ("blur"), or neither, the picture up sharp from black ("none",
-## a note's default). A thumbnail of the title screen is the YouTube card's to take ([method
-## Openings.title_moment]), never this one's.
+## Whether it opens so is the note's: the medium hands each function its feed's [member ShowFeed.opening] - the name and the blur
+## ([Openings] "title"), the blur alone ("blur"), or neither, the picture up sharp from black ("none", a note's default). A thumbnail of
+## the title screen is the YouTube card's to take ([method Openings.title_moment]), never this one's.
 ##
 ## Pure functions of show time, so a live reading, a scrub and an export open and close alike.
 
@@ -33,10 +27,9 @@ const INTRO_LIFT := 0.5
 const INTRO_SHARP := 0.0005
 
 
-## THE NAME'S ALPHA at [param t]: up by 1.4 s, gone as the show opens at [param opening] (INF while it
-## is not known) - and only then: with the show's actions [param placed] and still no opening, it is
-## down (the show ends on the picture fading to black, not on the name again). Never up where
-## [param style] ([constant Openings.ROWS]) shows no title.
+## The name's alpha at [param t]: up by 1.4 s, gone as the show opens at [param opening] (INF while it is not known) - and only then:
+## with the show's actions [param placed] and still no opening, it is down (the show ends on the picture fading to black, not on the name
+## again). Never up where [param style] ([constant Openings.ROWS]) shows no title.
 static func title_alpha(style: String, t: float, opening: float, placed: bool) -> float:
 	if not Openings.titled(style):
 		return 0.0
@@ -48,10 +41,9 @@ static func title_alpha(style: String, t: float, opening: float, placed: bool) -
 	return a
 
 
-## HOW FAR THE FOCUS PULL IS at [param t], 0 (the intro, all out of focus) to 1 (sharp): it runs from
-## [constant FOCUS_PULL]`.x` before [param opening] to `.y` after. A show with nothing placed yet is
-## still in its intro; one placed with no opening has nothing to wait for. Sharp throughout where
-## [param style] ([constant Openings.ROWS]) is never out of focus.
+## How far the focus pull is at [param t], 0 (the intro, all out of focus) to 1 (sharp): it runs from [constant FOCUS_PULL]`.x` before
+## [param opening] to `.y` after. A show with nothing placed yet is still in its intro; one placed with no opening has nothing to wait
+## for. Sharp throughout where [param style] ([constant Openings.ROWS]) is never out of focus.
 static func pull(style: String, t: float, opening: float, placed: bool) -> float:
 	if not Openings.blurred(style):
 		return 1.0
@@ -78,9 +70,8 @@ static func lens(p: float, blur: IntroBlur, attrs: CameraAttributesPractical) ->
 	attrs.dof_blur_amount = lerpf(FOCUS_BLUR, FOCUS_BLUR * 0.4, e)
 
 
-## THE OUTRO: 1 until the voice has said the last of [param total] words ([param follower] knows when),
-## then down to black - a beat after it, and black exactly as [param outro] (the take's tail in a
-## render, the Director's outro live) runs out.
+## The outro: 1 until the voice has said the last of [param total] words ([param follower] knows when), then down to black - a beat after
+## it, and black exactly as [param outro] (the take's tail in a render, the Director's outro live) runs out.
 static func end_fade(t: float, follower: ReadingFollower, total: int, outro: float) -> float:
 	var last := follower.known_last()
 	if total == 0 or last < total - 1:

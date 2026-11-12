@@ -1,22 +1,18 @@
 extends RefCounted
 class_name DealerTools
 
-## DealerTools - what a dealer can do while it lays an episode's cards out (next/notes.md step 9,
-## "Agents choose"): PLACE a card where it should lie, FLIP it face up or down, LOOK at the whole
-## layout as the table will check it, and SUBMIT it. Served as tools ([AgentTools]), as the set
-## dresser's are ([SetDresserTools]): the dealer keeps a draft here and works on it, and every answer
-## says what the table would say - a card off the cloth, partly out of the camera's frame, over the
-## deck ([method TablePositions.troubles]) - so the layout is right before it is handed in.
+## DealerTools - what a dealer can do while it lays an episode's cards out (next/notes.md step 9):
+## place a card, flip it, look at the whole layout as the table will check it, and submit it. Served
+## as tools ([AgentTools]) like [SetDresserTools]; every answer says what the table would object to
+## (a card off the cloth, partly out of frame, over the deck - [method TablePositions.troubles]).
 ##
-## IT CHOOSES WHERE, NEVER WHAT. Which card is which is the shuffle's, from the seed (NO CHEATING): the
-## dealer places "card 1", "card 2" in drawing order and is told no names - a dealer that could see
-## the draw could deal for it. The plan's spread names each position (its name and its question);
-## the dealer gives it a place on the cloth.
+## It chooses where, never what: which card is which is the shuffle's. The dealer places "card 1",
+## "card 2" in drawing order and is told no names. The plan's spread names each position.
 ##
 ## A handed-in layout is `layout.json` in the episode's folder (`{positions: [{card, x, z, yaw,
 ## face}]}`); the episode lays its coordinates over the plan's positions ([method TableEpisode.document])
 ## and the table lies its cards there ([method TablePositions.given]). A layout with any trouble is
-## not accepted, so the table never has to fall back from a submitted one.
+## not accepted.
 
 ## The file a handed-in layout is written to, in the episode's folder.
 const LAYOUT := "layout.json"
@@ -126,7 +122,7 @@ func _look() -> String:
 	return "\n".join(lines)
 
 
-## THE TABLE'S TOP, once the set dresser has set it ([Tables], made safe), or {} before: a round or an
+## The table's top once the set dresser has set it ([Tables], made safe), or {} before: a round or
 ## oval top may not reach every corner of the cloth, and a card off it is refused as the table builds.
 func _top() -> Dictionary:
 	var t: Variant = episode.read_json("table")

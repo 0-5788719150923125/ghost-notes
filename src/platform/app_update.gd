@@ -5,7 +5,7 @@ class_name AppUpdate
 ## can still be written, then that same downloaded executable starts headlessly on exit to swap
 ## the files after the old process closes. No installer or system Python is needed.
 ##
-## NOT ON macOS: the program there is sealed inside a signed .app bundle, and a copy downloaded
+## Not on macOS: the program there is sealed inside a signed .app bundle, and a copy downloaded
 ## by a browser runs from a read-only translocated folder, so swapping the executable would break
 ## the signature or fail outright. A Mac gets new builds from the Releases page.
 signal changed

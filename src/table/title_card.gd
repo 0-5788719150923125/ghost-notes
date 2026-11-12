@@ -1,14 +1,14 @@
 extends Node2D
 class_name TitleCard
 
-## TitleCard - THE CHANNEL'S NAME over the picture while the intro holds, and its byline under it
+## TitleCard - the channel's name over the picture while the intro holds, and its byline under it
 ## ("with Pen & Ink"), on a soft shade with a halo round every letter, so it reads over whatever is
-## behind it. The card table's ([TableMedium]) and the desk's ([DeskMedium]) - one title screen for
-## every show a note puts up; the medium says when it shows (`alpha`) and in what faces.
+## behind it. Used by the card table ([TableMedium]) and the desk ([DeskMedium]); the medium says when
+## it shows (`alpha`) and in what faces.
 
-## A shade behind the type, at its middle (it fades to nothing above and below), and THE HALO
-## round every letter: rings of the shade, each `x` of the type's size wide at `y` alpha, soft
-## from the outside in.
+## A shade behind the type, at its middle (it fades to nothing above and below), and the halo round
+## every letter: rings of the shade, each `x` of the type's size wide at `y` alpha, soft from the
+## outside in.
 const BAND := 0.32
 const HALO := [Vector2(0.24, 0.06), Vector2(0.16, 0.08), Vector2(0.1, 0.12), Vector2(0.06, 0.18), Vector2(0.03, 0.3)]
 
@@ -32,7 +32,7 @@ func _draw() -> void:
 		_lay_key = key
 		_lay = CardTable.title_layout(face, italic, channel, byline, vp)
 	var shade := CardTable.title_shade(ink)
-	# A SHADE BEHIND THE TYPE, soft above and below: the cloth is whatever the episode painted
+	# A shade behind the type, soft above and below: the cloth is whatever the episode painted
 	var box: Rect2 = _lay["box"]
 	var reach := box.size.y * 0.5 + vp.y * 0.12
 	_band(Rect2(0.0, box.get_center().y - reach, vp.x, reach * 2.0), shade)

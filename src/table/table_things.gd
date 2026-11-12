@@ -1,18 +1,18 @@
 extends RefCounted
 class_name TableThings
 
-## TableThings - THE THINGS ON THE TABLE: where each one stands, and what stands where. A part of
+## TableThings - the things on the table: where each one stands, and what stands where. A part of
 ## [TableMedium] (next/structure.md, step 24).
 ##
-## What the set dresser described for the episode (`table.json` in its folder, made safe by
-## [method CardTable.sanitize_table]), or the look's candles alone until it has - each built
-## ([Props]) by the medium, then stood here: the draped laid where they were written, the written
-## where the set dresser put them on the blueprint ([method stand_at]), and the rest found room in the
-## zone they name ([method stand]), a group together. Where nothing may stand is a function of the
-## plan and the box ([method off_limits]); what stood is kept ([member on_table], [member standing]) for
-## the light, the wash and the blueprint to read.
+## It takes what the set dresser described for the episode (`table.json`, made safe by
+## [method CardTable.sanitize_table]), or the look's candles alone until it has, each built ([Props]) by
+## the medium, then stood here: the draped laid where they were written, the written where the set
+## dresser put them on the blueprint ([method stand_at]), and the rest found room in the zone they name
+## ([method stand]), a group together. Where nothing may stand is a function of the plan and the box
+## ([method off_limits]); what stood is kept ([member on_table], [member standing]) for the light, the
+## wash and the blueprint to read.
 ##
-## IT HOLDS ITS OWN STATE (what stood, the episode's habit, the layers' outlines) and reads the rest
+## It holds its own state (what stood, the episode's habit, the layers' outlines) and reads the rest
 ## through [member medium]: the plan, the camera, the table's top, the box, the light it lights its
 ## wicks with, and what moves with the ride ([method TableMedium._take_movers]).
 
@@ -23,40 +23,37 @@ var medium: TableMedium
 ## How far apart things stand on the table (meters): any two, and two of one group.
 const THING_GAP := 0.014
 const GROUP_GAP := 0.004
-## HOW A READER SETS OUT THEIR THINGS, a habit drawn per episode (the user, 2026-10-08: "props are
-## most often placed in a kind of arc along the top, with more or less equal spacing"; a real reader
-## "will often have an entire table of stuff", much of it cut by the frame's edge, and "push the props
-## to the left and right edges, such that the middle of the table remains more free"). Patterns
-## guided toward, never enforced ([method _habit_of]): how far each group's spot wanders off its
-## zone's middle (meters, x and z), how far the things are pushed out to the sides at the most, and
-## the least share of a thing's picture the frame may keep when it cuts it. Lit things first seek a
-## whole view; when that fails, their body may cross a side edge while every flame stays visible.
+## How a reader sets out their things, a habit drawn per episode: props are often placed in a kind of arc
+## along the top, with more or less equal spacing, much of it cut by the frame's edge, and pushed to the
+## left and right so the middle of the table stays freer. Patterns guided toward, never enforced
+## ([method _habit_of]): how far each group's spot wanders off its zone's middle (meters, x and z), how
+## far the things are pushed out to the sides at the most, and the least share of a thing's picture the
+## frame may keep when it cuts it. Lit things first seek a whole view; when that fails, their body may
+## cross a side edge while every flame stays visible.
 const AIM_WANDER := Vector2(0.08, 0.05)
 const EDGE_PUSH := 0.2
 const SEEN_LEAST := 0.55
-## A THING ACROSS A CLOTH'S EDGE - half on the cloth, half on the bare top - reads as set down
-## carelessly (the user, 2026-10-08), unless it is large: a book, a tray may lie across a hem. So a
-## spot whose foot crosses a layer's edge scores this much worse (as many meters from its aim, over 4),
-## and a thing wider than STRADDLE_BIG only a third of it.
+## A thing across a cloth's edge - half on the cloth, half on the bare top - reads as set down
+## carelessly, unless it is large: a book or a tray may lie across a hem. So a spot whose foot crosses a
+## layer's edge scores this much worse (as many meters from its aim, over 4), and a thing wider than
+## STRADDLE_BIG only a third of it.
 const STRADDLE := 0.5
 const STRADDLE_BIG := 0.18
-## THE READER'S WORKSPACE (the user, 2026-10-10: a low thing stood "at the bottom and in the middle -
-## just in front of the speaker ... when there are open areas elsewhere"): the strip of the cloth
-## nearest the reader, in front of where the cards are shuffled and laid, is where their hands work.
-## A spot there scores this much worse (as many meters from its aim, over 4), a low thing's too - the
-## near ground a low thing may lie on ([method stand]) is for a crowded table, not the first choice.
-## Soft: a table with no other room still stands its thing there. WORKSPACE_HALF is the strip's
-## half-width from the middle of the reading; it begins where [method off_limits]'s middle ends.
+## The reader's workspace: the strip of the cloth nearest the reader, in front of where the cards are
+## shuffled and laid, is where their hands work. A spot there scores this much worse (as many meters
+## from its aim, over 4), a low thing's too - the near ground a low thing may lie on ([method stand]) is
+## for a crowded table, not the first choice. Soft: a table with no other room still stands its thing
+## there. WORKSPACE_HALF is the strip's half-width from the middle of the reading; it begins where
+## [method off_limits]'s middle ends.
 const WORKSPACE := 2.0
 const WORKSPACE_HALF := 0.25
 const WORKSPACE_FROM := 0.14
-## A THING WRITTEN WHERE IT STANDS (the user, 2026-10-18: "do the planning and desired placements
-## up-front, then verify with screenshots at the end"): the set dresser lays its things out on a
-## blueprint and writes each one's `at`, `turn` and `scale` ([method stand_at]). It stands exactly
-## there unless that spot is one where nothing may stand - off the top, where the cards go, in another
-## thing, or a flame in front of the middle - and then at the nearest spot that is not, NUDGE_STEP by
-## NUDGE_STEP out to NUDGE_MOST (meters); with none so near, it is left off. Things written where they
-## stand keep WRITTEN_GAP apart: the set dresser spaces them itself.
+## A thing written where it stands: the set dresser lays its things out on a blueprint and writes each
+## one's `at`, `turn` and `scale` ([method stand_at]). It stands exactly there unless that spot is one
+## where nothing may stand - off the top, where the cards go, in another thing, or a flame in front of
+## the middle - and then at the nearest spot that is not, NUDGE_STEP by NUDGE_STEP out to NUDGE_MOST
+## (meters); with none so near, it is left off. Things written where they stand keep WRITTEN_GAP apart:
+## the set dresser spaces them itself.
 const NUDGE_MOST := CardTable.NUDGE_MOST
 const NUDGE_STEP := 0.005
 const WRITTEN_GAP := 0.003
@@ -75,7 +72,7 @@ var unstood: Array = []              # things written where they stand that foun
 # --- the things on the table ------------------------------------------------------------------
 
 
-## A NEW TABLE, nothing on it yet: what stood is forgotten, and the outlines of [param layers] (the
+## A new table, nothing on it yet: what stood is forgotten, and the outlines of [param layers] (the
 ## cloths laid on the medium's top, [method Tables.layer_outline]) kept for a foot across a hem.
 func clear(layers: Variant) -> void:
 	_layer_os = []
@@ -89,20 +86,19 @@ func clear(layers: Variant) -> void:
 	unstood = []
 
 
-## WHERE EACH THING STANDS. A thing written where it stands (`at`) stands there ([method stand_at]),
-## in the order written. Any other goes in the zone the set dresser named, and things that share
-## a group stand together: the group's tallest first, as near its zone's middle as there is room,
-## the rest round it - the shorter ones toward the reader - so a group reads as arranged, not
-## lined up. The biggest groups choose first. A thing with no room is tried smaller, then left
-## off the table.
+## Where each thing stands. A thing written where it stands (`at`) stands there ([method stand_at]), in
+## the order written. Any other goes in the zone the set dresser named, and things that share a group
+## stand together: the group's tallest first, as near its zone's middle as there is room, the rest round
+## it - the shorter ones toward the reader. The biggest groups choose first. A thing with no room is
+## tried smaller, then left off the table.
 func place(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
 	var keep_out := off_limits()
 	_habit = _habit_of(medium._plan.seed_value)
-	# THE DRAPED FIRST: where they lie is written, and the rest stand clear of them
+	# The draped first: where they lie is written, and the rest stand clear of them
 	for i in things.size():
 		if Props.draped(things[i]):
 			_drape(things[i], built[i], keep_out)
-	# ...THEN THE WRITTEN, each where the set dresser put it on the blueprint
+	# ...then the written, each where the set dresser put it on the blueprint
 	for i in things.size():
 		if Props.draped(things[i]) or not (things[i] as Dictionary).has("at"):
 			continue
@@ -141,10 +137,9 @@ func place(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
 				anchor = stood
 
 
-## THIS EPISODE'S HABIT ([constant AIM_WANDER]), from its own die so no other draw moves: `push` - how
-## far out to the sides its things lean (0 keeps the zones' own middles, as before; often well out, so
-## the middle stays free), and `wander`, `side` - each group's own step off its zone's middle and the side
-## a "back" group leans to, by the group's name.
+## This episode's habit ([constant AIM_WANDER]), from its own die so no other draw moves: `push` - how
+## far out to the sides its things lean (0 keeps the zones' own middles), and `wander`, `side` - each
+## group's own step off its zone's middle and the side a "back" group leans to, by the group's name.
 static func _habit_of(seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "tarot-things-habit"])
@@ -191,9 +186,9 @@ func grounded(t: Dictionary) -> Dictionary:
 	return out
 
 
-## A STRAND DRAPED ACROSS THE TABLE ([param t], built as [param b] in the table's own space): laid where it was
-## written - unless it runs where the cards go ([param keep_out]), when it is left off - and the stretches of
-## the table it covers kept out for the things that stand after it.
+## A strand draped across the table ([param t], built as [param b] in the table's own space): laid where
+## it was written - unless it runs where the cards go ([param keep_out]), when it is left off - and the
+## stretches of the table it covers kept out for the things that stand after it.
 func _drape(t: Dictionary, b: Dictionary, keep_out: Array) -> void:
 	var node: Node3D = b["node"]
 	var line := PackedVector2Array()
@@ -232,14 +227,14 @@ func _drape(t: Dictionary, b: Dictionary, keep_out: Array) -> void:
 ## deck is shuffled, where a jumper lands - as rectangles on the table (x by z).
 func off_limits() -> Array:
 	var out: Array = []
-	# WHAT IS BUILT HERE ([TableAssembly]): its plate, and each pile on the table - nothing else stands there
+	# What is built here ([TableAssembly]): its plate, and each pile on the table - nothing else stands there
 	var built_here: Dictionary = medium._work.assembly_spec if medium._work != null else {}
 	if not built_here.is_empty():
 		out.append_array(TableAssembly.keep_out(built_here, TableAssembly.base_center(built_here, medium._plan)))
-	# A GAME'S BOARD ([GameBoard]): nothing stands where a map goes down
+	# A game's board ([GameBoard]): nothing stands where a map goes down
 	if CardTable.game_of(medium._plan.pay.get("plan", {}) if medium._plan.pay.get("plan") is Dictionary else {}):
 		out.append_array(GameBoard.keep_out())
-	# A SHOW WITH NO CARDS keeps no room for them: no spread, no deck, no jumper's landing - the middle is the work's
+	# A show with no cards keeps no room for them: no spread, no deck, no jumper's landing - the middle is the work's
 	if medium._plan.cards_from == "none":
 		return out
 	for sl in medium._plan.slots:
@@ -263,11 +258,9 @@ func off_limits() -> Array:
 	return out
 
 
-## The middle of the table, where the deck is shuffled (x by z) - none for a show that draws no cards, and for one that
-## draws them from a box, where nothing is shuffled, only where its spread lies: its cards and between them. (The-quiet-
-## crucible 119515 draws one recipe card from a box: the 44 cm of a shuffle kept bare round it left its cauldron, written
-## beside the work's spot, nowhere to stand but the back corner - the user: "The cauldron is one of the core components
-## of this entire animation: you would expect it to be more prominent in the camera view".)
+## The middle of the table, where the deck is shuffled (x by z) - none for a show that draws no cards,
+## and for one that draws them from a box, where nothing is shuffled, only where its spread lies: its
+## cards and between them.
 func shuffle_rect() -> Rect2:
 	if medium._plan.cards_from == "none":
 		return Rect2()
@@ -280,12 +273,13 @@ func shuffle_rect() -> Rect2:
 	return Rect2(medium._plan.mid.x - 0.22, medium._plan.mid.z - 0.14, 0.44, 0.28)
 
 
-## THE TABLE'S BLUEPRINT, as [TableBlueprint] draws it for the set dresser: everything that decides where
+## The table's blueprint, as [TableBlueprint] draws it for the set dresser: everything that decides where
 ## a thing may stand, in the table's own space (meters; x to the reader's right, z toward the reader) -
 ## the top's outline and its layers' ([method Tables.top_outline]), the spread's cards (`{pos, yaw}`), the
-## deck (none in a show that draws no cards), where nothing may stand ([method off_limits]), the shuffle, the reader's workspace, the line flames
-## stand behind, the camera - and each thing as it stood: its foot, which way its front faces, its height,
-## where it was written and how far it was moved, and why; and each written thing that found no room.
+## deck (none in a show that draws no cards), where nothing may stand ([method off_limits]), the shuffle,
+## the reader's workspace, the line flames stand behind, the camera - and each thing as it stood: its
+## foot, which way its front faces, its height, where it was written and how far it was moved, and why;
+## and each written thing that found no room.
 func blueprint() -> Dictionary:
 	var cards: Array = []
 	for sl in medium._plan.slots:
@@ -315,16 +309,16 @@ func blueprint() -> Dictionary:
 	return out
 
 
-## ONE THING STOOD: the best free spot for [param t] (built as [param b]) on a grid over the table,
-## at full size or, failing that, a little smaller. Every spot is ON THE TABLE, off everywhere the
-## cards go, clear of what already stands (by [constant THING_GAP], or [constant GROUP_GAP] within
-## its own group), IN THE SHOT (its projected box never cut by the frame's top, with at least
-## [constant SEEN_LEAST] visible). A lit thing first seeks a whole view; if none fits, its sides
-## may be cut while every flame stays in view. Between groups, things do not overlap in the picture.
-## Aimed where the episode's habit puts its zone ([method _habit_aim]),
-## and kept off a cloth's edge where it can be ([method _straddle]). A lit thing stands only behind the middle (in front of the
-## cards its flame blew out the card held up to the lens) and looks for dark cloth. The spot
-## chosen ({at, k, group, height}), or empty when there is none.
+## One thing stood: the best free spot for [param t] (built as [param b]) on a grid over the table, at
+## full size or, failing that, a little smaller. Every spot is on the table, off everywhere the cards go,
+## clear of what already stands (by [constant THING_GAP], or [constant GROUP_GAP] within its own group),
+## in the shot (its projected box never cut by the frame's top, with at least [constant SEEN_LEAST]
+## visible). A lit thing first seeks a whole view; if none fits, its sides may be cut while every flame
+## stays in view. Between groups, things do not overlap in the picture. Aimed where the episode's habit
+## puts its zone ([method _habit_aim]), and kept off a cloth's edge where it can be ([method _straddle]).
+## A lit thing stands only behind the middle (its flame in front of the cards would blow out a card held
+## up to the lens) and looks for dark cloth. The spot chosen ({at, k, group, height}), or empty when
+## there is none.
 func stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, keep_out: Array,
 		rng: RandomNumberGenerator, edge_light := false) -> Dictionary:
 	var box: AABB = b["size"]
@@ -423,7 +417,7 @@ func stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, keep
 						if not wick_seen:
 							continue
 				# not in front of another in the picture: apart between groups, and within one only a
-				# little in front - a group seen one thing through another read as a stack
+				# little in front - a group seen one thing through another reads as a stack
 				var hidden := 0.0
 				for th in on_table:
 					var other: Rect2 = ((th as Dictionary)["rect"] as Rect2).intersection(shot)
@@ -463,7 +457,7 @@ func stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, keep
 	return {}
 
 
-## ONE THING STOOD WHERE IT WAS WRITTEN ([constant NUDGE_MOST]): [param t]'s `at`, turned by its `turn`
+## One thing stood where it was written ([constant NUDGE_MOST]): [param t]'s `at`, turned by its `turn`
 ## and sized by its `scale` - exactly, with no hand's jitter: the spot is the set dresser's. A spot where
 ## it may not stand ([method _spot_trouble]) moves it to the nearest where it may, the move and its
 ## reason kept for the blueprint; false, and kept in [member unstood], when none is within reach. Whether
@@ -536,9 +530,9 @@ func put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: St
 	node.transform = Transform3D(basis, Vector3(at.x, 0.0, at.y))
 	medium._props.add_child(node)
 	var wicks: Array = b["wicks"]
-	# The wax and holder immediately under a flame cannot shadow themselves: they printed a
-	# hard disc at the base. Separate accessories several centimeters away (a dish of dye beside
-	# the candle, for example) must still catch and cast that candle's light.
+	# The wax and holder immediately under a flame cannot shadow themselves (they print a hard disc at
+	# the base). Separate accessories several centimeters away (a dish of dye beside the candle, for
+	# example) must still catch and cast that candle's light.
 	var own := (TableMedium.CANDLE_LAYER << medium._lights.size()) if not wicks.is_empty() else TableMedium.THING_LAYER
 	for m in b["meshes"]:
 		var mesh := m as MeshInstance3D

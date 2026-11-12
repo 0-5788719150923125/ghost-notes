@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode cull_disabled;
 
-// A MAP ON A GAME'S TABLE (TableGame, next/tabletop.md): a painting, or plain paper until it is painted, under a grid the code draws so a square is exact. No grid for a game measured with a tape.
+// A map on a game's table (TableGame, next/tabletop.md): a painting, or plain paper until it is painted, under a grid the code draws so a square is exact. No grid for a game measured with a tape.
 
 uniform sampler2D painting : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform bool painted = false;

@@ -3,9 +3,7 @@ class_name GhostScene
 
 ## GhostScene - one visualizer.
 ##
-## The base of every scene, and the heart of the pipeline. A scene is a seeded
-## *definition* plus *transforms modulated by audio* - exactly the Arena /
-## business-card move, pushed at sound. Two things come for free here:
+## The base of every scene: a seeded definition plus transforms modulated by audio. Two things come for free here:
 ##
 ##   mod  : a [ModBank] of organic oscillator channels (mod.value("sway")...)
 ##   view : a [SceneView] - zoom / tilt / rotate / off-center, drawn through
@@ -19,10 +17,8 @@ class_name GhostScene
 ## [method begin_draw] first and the view's zoom/tilt/pan/roll apply to
 ## everything you draw.
 
-## Motion behaviors - the typed "how does this scene move" axis, separate from
-## *what* it draws. The same geometry can be shown frozen (pure audio reaction,
-## the original look), gently drifting as a whole, or with each element moving on
-## its own. The Director pairs a scene with one of these.
+## Motion behaviors - how a scene moves, separate from what it draws: frozen (pure audio reaction), gently drifting
+## as a whole, or with each element moving on its own. The Director pairs a scene with one of these.
 ##   view    - how much whole-scene camera drift to apply (0 = frozen camera)
 ##   element - how much independent per-element motion (0 = rigid)
 ##   speed   - time scale for all organic motion (0 = modulators frozen)
@@ -32,10 +28,7 @@ const BEHAVIORS := {
 	"fluid": {"view": 0.3, "element": 1.0, "speed": 1.0},
 }
 
-## Render kind - the typed "how is this scene drawn" axis, separate from *what* it
-## draws and *how it moves*. The project carries several rendering mechanisms
-## forward (the "split"); naming each one makes the divergence explicit so we can
-## converge on the unified 3D path. A scene declares this in build_params. One of:
+## Render kind - how a scene is drawn, separate from what it draws and how it moves. A scene declares one in build_params:
 ##   "canvas"    - flat 2D canvas drawing (draw_* in centered screen space). Legacy.
 ##   "mesh3d"    - software 3D bodies ([Mesh3D]) projected onto the 2D canvas.
 ##   "particles" - a [ParticleSystem] substrate, drawn on the canvas.
@@ -45,18 +38,16 @@ const BEHAVIORS := {
 ##                 everything else migrates toward.
 var render_kind := "canvas"
 
-## WHAT THIS SCENE READS OF THE SHOW ([ShowFeed]) - handed by whoever mounts it (the [Director],
-## as it makes the scene); the show that is up, for a scene nobody handed one (a gate, a medium's
-## placeholder). A scene reads the show here and never by the Director's name.
+## What this scene reads of the show ([ShowFeed]): handed by whoever mounts it (the [Director]); the show that is up
+## for a scene nobody handed one (a gate, a medium's placeholder). A scene reads the show here, never by the Director's name.
 var feed: ShowFeed = ShowFeed.playing()
 
 ## The typed definition for this instance.
 var params: Dictionary = {}
 
-## The raw storyboard entry that created this scene (empty in auto mode), set by the
-## [Director] before [method init_with_seed]. A data-driven scene (see scenes/stage.gd)
-## builds its entire content - cast, track, camera - from this in build_params; an ordinary
-## scene reads only its `set` - the settings an entry tells it ([method choice]).
+## The raw storyboard entry that created this scene (empty in auto mode), set by the [Director] before
+## [method init_with_seed]. A data-driven scene (see scenes/stage.gd) builds its content from this in build_params;
+## an ordinary scene reads only its `set`, the settings an entry tells it ([method choice]).
 var spec: Dictionary = {}
 ## What each setting an entry may tell came out as, told or drawn ([method choice]): the scene's own
 ## account of its choices, for the feedback console and a gate.
@@ -75,29 +66,23 @@ var seed_value := 0
 ## lifecycle + randomly-armed trigger (auto mode).
 var exit_spec: Dictionary = {}
 
-## Narrative-tempo scalar from the storyboard's `sensitivity` (see the Director), 1.0 = nominal.
-## Higher = faster: the Director shrinks this scene's hold by it, and a scene that has no fixed hold
-## (auto mode) divides its nominal keyframe span by it. It ONLY compresses the keyframe/phase clock -
-## the ambient life of the bodies (a prism's spin, an eye's saccades) always runs on the raw delta,
-## so turning sensitivity up makes events arrive sooner WITHOUT making the animation itself look fast.
+## Narrative-tempo scalar from the storyboard's `sensitivity` (see the Director), 1.0 = nominal. Higher = faster: the
+## Director shrinks this scene's hold by it, and a scene with no fixed hold divides its nominal keyframe span by it.
+## It only compresses the keyframe/phase clock: the ambient life of the bodies always runs on the raw delta.
 var event_scale: float = 1.0
 
-## The window (seconds) a keyframe-driven scene should pace its phases over: its fixed hold if it has
-## one (already sensitivity-scaled by the Director), else its own [param nominal] design length divided
-## by [member event_scale]. Scenes express keyframes as FRACTIONS of this (e.g. `_t / phase_span(8.0)`),
-## so every event still lands whatever the hold - shorter holds just compress them.
+## The window (seconds) a keyframe-driven scene paces its phases over: its fixed hold if it has one (already
+## sensitivity-scaled by the Director), else its own [param nominal] design length divided by [member event_scale].
+## Scenes express keyframes as fractions of this (e.g. `_t / phase_span(8.0)`), so every event lands whatever the hold.
 func phase_span(nominal: float) -> float:
 	if exit_spec.has("hold"):
 		return maxf(0.05, float(exit_spec["hold"]))
 	return maxf(0.05, nominal / maxf(0.05, event_scale))
 
-## Content-aware transition typing. A scene declares the geometry it LEAVES on screen
-## (`morph_out`) and the geometry it can grow IN from (`morph_in`). When the Director
-## changes from A to B and `B.morph_in == A.morph_out` (and both non-empty), it plays
-## a *morph* - an instant swap where B animates itself out of A's shape (e.g. one eye
-## splitting into two) - instead of a cut or dip. Mismatched or empty = a normal cut.
-## This is how fancy transitions are added safely: only between compatible geometries,
-## so we never try to morph two things that don't line up.
+## Content-aware transition typing. A scene declares the geometry it leaves on screen (`morph_out`) and the geometry
+## it can grow in from (`morph_in`). When the Director changes from A to B and `B.morph_in == A.morph_out` (both
+## non-empty) it plays a morph: an instant swap where B animates itself out of A's shape (e.g. one eye splitting into
+## two), instead of a cut or dip. Only compatible geometries morph.
 var morph_out := ""
 var morph_in := ""
 
@@ -132,11 +117,8 @@ var shot = null
 ## Seconds this scene has been alive - drives slow shot moves (push-in, pan).
 var _life := 0.0
 
-## Composed visual components (see [Layer]) - the appearance sibling of the physics
-## [Primitives] force list. A scene adds layers in build_params (snow, fog, fireflies,
-## stars, …); update_layers advances them and draw_layers paints them, in order. This
-## is how weather is *integrated*: the same component is a scene on its own and an
-## overlay on a city or a hillside.
+## Composed visual components (see [Layer]), the appearance sibling of the physics [Primitives] force list. A scene
+## adds layers in build_params; update_layers advances them and draw_layers paints them, in order.
 var layers: Array = []
 ## The most recent audio frame, kept so draw-time code (and layers) can read it.
 var last_f: AudioFeatures = AudioFeatures.new()
@@ -164,12 +146,10 @@ func build_params(_rng: RandomNumberGenerator) -> Dictionary:
 
 # --- what a scene can be told ---------------------------------------------------------------------
 
-## A SETTING A STORYBOARD ENTRY MAY TELL THIS SCENE (next/structure.md, step 27): one of the options its
-## row in the scene's own `FIELDS` names ([method fields_of]) - the one the entry's `set` gives, when it
-## gives one of them; else the seed's pick. The die is thrown either way, so telling one setting moves
-## no draw made before or beside it, and a scene told nothing is the scene it always was - only a told
-## setting that changes how much is drawn after it (a kind with rolls of its own, a count that sizes a
-## loop) moves what follows, as the seed's own pick of it would.
+## A setting a storyboard entry may tell this scene: one of the options its row in the scene's own `FIELDS` names
+## ([method fields_of]), the one the entry's `set` gives, else the seed's pick. The die is thrown either way, so
+## telling one setting moves no draw made before or beside it; only a told setting that changes how much is drawn
+## after it (a kind with rolls of its own, a count that sizes a loop) moves what follows.
 func choice(key: String, rng: RandomNumberGenerator) -> Variant:
 	var options := options_of(get_script(), key)
 	assert(not options.is_empty(), "%s: no options for the setting '%s'" % [get_script().resource_path, key])
@@ -188,12 +168,10 @@ func choice(key: String, rng: RandomNumberGenerator) -> Variant:
 	return drawn
 
 
-## A NUMBER A STORYBOARD ENTRY MAY TELL THIS SCENE (step 28): drawn from the `range` its `FIELDS` row gives
-## ([method fields_of]) - `rng.randi_range` when both ends are whole numbers, `randf_range` otherwise -
-## and, when the entry's `set` gives a number or a narrower `[lo, hi]`, that number, or the same draw
-## carried into that range (the seed's place in the scene's range, kept in the told one). What is told is
-## held to the scene's own range: a scene is made for its range. The die is thrown either way, as in
-## [method choice], and the same draw comes back when the whole range is told.
+## A number a storyboard entry may tell this scene: drawn from the `range` its `FIELDS` row gives ([method fields_of]),
+## `rng.randi_range` when both ends are whole numbers, `randf_range` otherwise; when the entry's `set` gives a number
+## or a narrower `[lo, hi]`, that number, or the same draw carried into that range. What is told is held to the
+## scene's own range. The die is thrown either way, as in [method choice].
 func number(key: String, rng: RandomNumberGenerator) -> Variant:
 	var r: Array = (fields_of(get_script()).get(key, {}) as Dictionary).get("range", [])
 	assert(r.size() == 2, "%s: no range for the setting '%s'" % [get_script().resource_path, key])
@@ -238,12 +216,11 @@ func told(key: String) -> Variant:
 	return null if v == null or str(v).is_empty() else v
 
 
-## WHAT A SCENE CAN BE TOLD: the rows of its own `FIELDS` (and an ancestor's), one per setting - `label`,
-## `type` ("choice", or "num" for a rolled number), `options` (a choice's: the NAME of the scene's own
-## table its choices are - a Dictionary's keys, an Array's elements, repeats weighting the seed's pick),
-## `names` (for options that are indices, the table of their names, which is what an entry may tell
-## instead), `range` (a number's: `[lo, hi]`, what the seed draws from - [method number]), `default`
-## (null: drawn from the seed), `blurb`. What the storyboard's inspector builds its rows from ([method SceneRoster.fields_of]) and
+## What a scene can be told: the rows of its own `FIELDS` (and an ancestor's), one per setting - `label`, `type`
+## ("choice", or "num" for a rolled number), `options` (a choice's: the name of the scene's own table its choices are;
+## repeats weight the seed's pick), `names` (for options that are indices, the table of their names, which an entry may
+## tell instead), `range` (a number's `[lo, hi]`, what the seed draws from - [method number]), `default` (null: drawn
+## from the seed), `blurb`. What the storyboard's inspector builds its rows from ([method SceneRoster.fields_of]) and
 ## docs/scenes.md shows; docs.py holds each row to the code that reads it.
 static func fields_of(script: Script) -> Dictionary:
 	var chain: Array = []
@@ -294,10 +271,9 @@ func finished() -> bool:
 	return false
 
 
-## Override (morph sources): a small typed bag of state the outgoing scene hands to
-## the incoming one during a morph, so the transition is *continuous* - e.g. the eye
-## passes its color / gaze / size so the two it splits into are the SAME eye, not
-## new ones. Keys are by convention; the receiver reads what it understands.
+## Override (morph sources): a small typed bag of state the outgoing scene hands to the incoming one during a morph,
+## so the transition is continuous (e.g. the eye passes its color / gaze / size). Keys are by convention; the
+## receiver reads what it understands.
 func morph_payload() -> Dictionary:
 	return {}
 
@@ -313,11 +289,9 @@ func begin_morph(_from: GhostScene) -> void:
 func _ready() -> void:
 	size = get_viewport_rect().size
 	get_viewport().size_changed.connect(_on_resize)
-	# Disable premature canvas-item culling. Scenes draw through a view transform (pan /
-	# zoom), so content near the frame edge - especially big soft glows / lighting whose
-	# center drifts off-screen while their halo still bleeds in - would pop out abruptly
-	# when the item's auto-computed bounds crossed the viewport. A large custom rect keeps
-	# the item always considered visible, so things ease off the edge instead of clipping.
+	# Disable canvas-item culling: scenes draw through a view transform (pan / zoom), so content near the frame edge (big
+	# soft glows whose halo still bleeds in) would pop out when the item's auto-computed bounds crossed the viewport. A
+	# large custom rect keeps the item always visible.
 	RenderingServer.canvas_item_set_custom_rect(
 		get_canvas_item(), true, Rect2(-100000, -100000, 200000, 200000))
 
@@ -332,22 +306,17 @@ func begin_draw() -> void:
 	draw_set_transform_matrix(view.matrix(size))
 
 
-## A filled polygon with an ANTIALIASED silhouette - use this instead of draw_colored_polygon
-## wherever the shape's outline is part of the picture.
+## A filled polygon with an antialiased silhouette: use this instead of draw_colored_polygon wherever the shape's
+## outline is part of the picture.
 ##
-## Godot offers no antialiasing for draw_colored_polygon at all, and that is the single biggest
-## source of jagged edges here: measured on the harmonic lattice, 97.7% of its edge pixels had no
-## partial coverage whatsoever. Stroking the same outline with an antialiased polyline lays a
-## smoothed fringe over the hard silhouette and takes that to 40.8%, for one extra draw call per
-## shape. Lines already had an answer (`antialiased: true`, or TriBatch's feather); fills did not.
+## Godot offers no antialiasing for draw_colored_polygon. Stroking the same outline with an antialiased polyline lays a
+## smoothed fringe over the hard silhouette (edge pixels with no partial coverage drop from 97.7% to 40.8% on the
+## harmonic lattice) for one extra draw call per shape.
 ##
-## ALPHA: the stroke composites ON TOP of the fill it traces, so a translucent shape gets a rim of
-## roughly 2a - a² instead of a. That is invisible near a = 1 and a bright hairline down near
-## a = 0.1, so full-frame washes, fog banks and beds should keep plain draw_colored_polygon - they
-## have no silhouette worth smoothing anyway. This is for shapes you actually see the edge of.
-## COST: one extra draw call per shape, so this is for scenes that draw tens to a few hundred
-## shapes - which is most of them. Anything drawing thousands should be going through [TriBatch]
-## instead, and pay for its antialiasing by supersampling rather than per shape.
+## Alpha: the stroke composites on top of the fill it traces, so a translucent shape gets a rim of roughly 2a - a²
+## instead of a: invisible near a = 1, a bright hairline near a = 0.1. Full-frame washes, fog banks and beds keep plain
+## draw_colored_polygon. Cost: one extra draw call per shape, for scenes that draw tens to a few hundred shapes;
+## anything drawing thousands should go through [TriBatch] and get its antialiasing from supersampling.
 func fill_aa(pts: PackedVector2Array, col: Color, width := 1.0) -> void:
 	fill_aa_on(self, pts, col, width)
 
@@ -363,36 +332,27 @@ static func fill_aa_on(ci: CanvasItem, pts: PackedVector2Array, col: Color, widt
 	ci.draw_polyline(ring, col, width, true)
 
 
-## Flood the whole frame with one bright, flat ground - the HIGH-KEY counterpart to
-## [Layer]'s `bed`, and the thing that makes a light scene possible at all.
+## Flood the whole frame with one bright, flat ground: the high-key counterpart to [Layer]'s `bed`.
 ##
-## `bed` cannot do this, and not by accident: it paints top / middle / bottom at
-## val*0.5, val*1.0 and val*0.35 around a default val of 0.32, so its brightest
-## possible pixel is a mid tone and its edges are always darker than its center. That
-## is exactly right for a luminous subject floating in a dark frame, which is what 29
-## of the catalog's scenes are. It is exactly wrong for paper, daylight, or water
-## seen from above, where the ground IS the subject and must read as flat and bright.
+## `bed` paints top / middle / bottom at val*0.5, val*1.0 and val*0.35 around a default val of 0.32, so its brightest
+## pixel is a mid tone and its edges are darker than its center. That suits a luminous subject in a dark frame, not
+## paper, daylight, or water seen from above, where the ground is the subject and must read flat and bright.
 ##
-## Three deliberate differences from `bed`:
-##   FLAT, not vignetted. A survey sheet has no gradient toward its corners; the
-##   moment it does, it reads as a spotlight on paper rather than as paper.
-##   PLAIN FILL, never fill_aa. The antialiased variant strokes the outline on top of
-##   the fill, and on a full-frame quad that rim lands exactly on the frame edge - a
-##   bright hairline all the way round. There is no silhouette here worth smoothing.
-##   OVERSIZED. Same 1.15 overdraw the layers get, so camera drift never exposes a
-##   corner. Call it FIRST in _draw, right after begin_draw.
+## Three differences from `bed`:
+##   Flat, not vignetted: a gradient toward the corners reads as a spotlight on paper.
+##   Plain fill, never fill_aa: the antialiased variant strokes the outline on top of the fill, and on a full-frame
+##   quad that rim lands on the frame edge as a bright hairline.
+##   Oversized: the same 1.15 overdraw the layers get, so camera drift never exposes a corner. Call it first in
+##   _draw, right after begin_draw.
 ##
-## [param tint] is a gentle audio-driven wash toward the accent, applied at low
-## strength - a bright scene reacts by shifting temperature, not by dimming, because
-## dimming a high-key frame just makes it look broken.
+## [param tint] is a gentle audio-driven wash toward the accent at low strength: a bright scene reacts by shifting
+## temperature, not by dimming.
 func paint_ground(hue: float, sat := 0.06, val := 0.94, tint := 0.0, tint_hue := 0.0) -> void:
-	# Blended on the wheel, not along the shortest arc - see blend_hue. This quad is FULL BLEED,
-	# so it was the largest surface in the frame flipping across the antipodal boundary.
+	# Blended on the wheel, not along the shortest arc (see blend_hue): this full-bleed quad is the largest surface in the frame.
 	var h := blend_hue(hue, tint_hue, clampf(tint, 0.0, 1.0) * 0.5)
 	var col := Color.from_hsv(fposmod(h, 1.0), clampf(sat, 0.0, 1.0), clampf(val, 0.0, 1.0))
-	# Sized to what the camera can SEE (see [method SceneView.visible_half]) rather than to the
-	# viewport scaled by a constant: dividing by the zoom covered a pull-back and nothing else, so
-	# a panned or rolled camera still walked this quad's corner into frame.
+	# Sized to what the camera can see (see [method SceneView.visible_half]) rather than to the viewport scaled by a
+	# constant, so a panned or rolled camera cannot walk this quad's corner into frame.
 	var hv := view_half_px()
 	draw_colored_polygon(PackedVector2Array([
 		Vector2(-hv.x, -hv.y), Vector2(hv.x, -hv.y),
@@ -404,10 +364,9 @@ func unit() -> float:
 	return minf(size.x, size.y)
 
 
-## The half-extent this scene must fill to cover the frame, IN UNIT FRACTIONS - the space layers,
-## spawn bounds and flock walls are expressed in. Ask this instead of assuming the viewport: it
-## follows the camera exactly, so nothing sized from it can have an edge the camera can reach.
-## See [method SceneView.visible_half] for why a fixed margin cannot work.
+## The half-extent this scene must fill to cover the frame, in unit fractions (the space layers, spawn bounds and
+## flock walls are expressed in). Ask this instead of assuming the viewport: it follows the camera exactly. See
+## [method SceneView.visible_half].
 func view_half() -> Vector2:
 	return view.visible_half(size) / maxf(1.0, unit())
 
@@ -419,20 +378,13 @@ func view_half_px() -> Vector2:
 
 ## Pull [param base] a fraction [param k] of the way toward [param toward], both hues in turns.
 ##
-## USE THIS INSTEAD OF THE SHORTEST-ARC FORM. Every audio-driven tint in this project was written
-## as `base + (fposmod(toward - base + 0.5, 1.0) - 0.5) * k`, which takes the short way round the
-## wheel - and that expression is DISCONTINUOUS at the antipode, where it flips between +0.5 and
-## -0.5. A tonal center drifting onto the point opposite a scene's own hue therefore made the
-## color jump by `k` of a whole turn from one frame to the next, and a tonal center parked ON
-## that point dithered between the two: "the color is unstable, and will often flicker between
-## two colors at random, then stabilize upon ONE of those colors". It is not a rate problem, so
-## slowing the drive does not fix it - the jump is the same size however slowly the input moves.
+## Use this instead of the shortest-arc form `base + (fposmod(toward - base + 0.5, 1.0) - 0.5) * k`, which is
+## discontinuous at the antipode (it flips between +0.5 and -0.5): a tonal center near the point opposite a scene's
+## hue makes the color jump or dither between two colors, however slowly the input moves.
 ##
-## Blending the two hues as VECTORS on the color wheel has no such boundary. As `toward` sweeps
-## through the antipode the resultant swings smoothly through `base` instead of leaping across
-## it, and its length shrinks - which is the honest reading anyway, since a hue exactly opposite
-## the base is not evidence for either direction. For k < 0.5 the resultant can never be
-## degenerate (its length is at least 1 - 2k), so the angle is always well defined.
+## Blending the two hues as vectors on the color wheel has no such boundary: as `toward` sweeps through the antipode
+## the resultant swings smoothly through `base` and its length shrinks. For k < 0.5 its length is at least 1 - 2k, so
+## the angle is always well defined.
 static func blend_hue(base: float, toward: float, k: float) -> float:
 	var w := clampf(k, 0.0, 0.49)
 	if w <= 0.0005:
@@ -453,11 +405,9 @@ func set_shot(s) -> void:
 ## and apply the assigned shot's base framing. Call this at the top of update().
 func tick(f: AudioFeatures, delta: float) -> void:
 	_life += delta
-	# The METAMORPHOSIS: while a catch is being reeled in (synthesis mode),
-	# the show's aura ([member ShowFeed.aura]) contorts the running scene - motion tempo stretches, the
-	# frame zoom-breathes and pan-sweeps, growing with the pull. Discipline-
-	# safe (zoom + pan only, never roll/shear) and base-level, so it reaches
-	# every scene, static behaviors included. Zero-cost when aura is 0.
+	# The metamorphosis: while a catch is being reeled in (synthesis mode), the show's aura ([member ShowFeed.aura])
+	# contorts the running scene: motion tempo stretches, the frame zoom-breathes and pan-sweeps, growing with the pull.
+	# Zoom and pan only (never roll/shear), at base level so it reaches every scene; zero-cost when aura is 0.
 	var aura: float = feed.aura if feed != null else 0.0
 	mod.advance(delta * float(behavior.speed) * (1.0 + aura * 0.8), f.energy)
 	if shot != null:
@@ -470,13 +420,10 @@ func tick(f: AudioFeatures, delta: float) -> void:
 			aura * 0.11 * sin(_life * 0.29))
 
 
-## Organic camera drift, added *on top* of the shot's base framing (set in tick),
-## scaled by the behavior's view gain. A "static" scene (view = 0) adds nothing
-## and rides the shot alone. Deliberately only zoom + pan: rolling or shearing flat
-## 2D content reads as fake 3D / spinning, so the camera never does it here -
-## rotation comes only from shots, and real depth only from Mesh3D. (The `roll` and
-## `tilt` parameters are kept for call-site compatibility but intentionally unused;
-## a scene that genuinely wants skew sets view.skew itself, e.g. strata.)
+## Organic camera drift, added on top of the shot's base framing, scaled by the behavior's view gain. A "static"
+## scene (view = 0) adds nothing. Only zoom + pan: rolling or shearing flat 2D content reads as fake 3D, so rotation
+## comes only from shots and real depth only from Mesh3D. (`roll` and `tilt` are unused, kept for call-site
+## compatibility; a scene that wants skew sets view.skew itself, e.g. strata.)
 func drift_view(f: AudioFeatures, move := 0.05, zoom := 0.08, _roll := 0.0, _tilt := 0.0) -> void:
 	var g: float = behavior.view
 	if g <= 0.0:
@@ -500,11 +447,8 @@ func update_layers(f: AudioFeatures, delta: float) -> void:
 	last_f = f
 	if layers.is_empty():
 		return
-	# WHAT THE CAMERA CAN ACTUALLY SEE, not a fixed guess. This was `size / (2u) * 1.15` for a
-	# long time and the constant IS the bug: 1.15 has no idea whether the shot has pulled back to
-	# 0.7 zoom or panned a third of a frame sideways, and at either of those the layer's drawn
-	# region ends inside the frame. Reported as edges walking into shot over and over - the hard
-	# border of a water plane, a light shaft beginning in mid air. See [method SceneView.visible_half].
+	# What the camera can actually see, not a fixed guess: a constant margin cannot know whether the shot has pulled back
+	# or panned sideways, and the layer's drawn region would end inside the frame. See [method SceneView.visible_half].
 	for l in layers:
 		l.update(f, delta, view_half())
 
@@ -540,8 +484,8 @@ func signature() -> PackedFloat32Array:
 	return feed.signature() if feed != null else PackedFloat32Array()
 
 
-## Tonal color from the live harmonic signature - the CONTINUOUS, expressive half of harmonic
-## seeding (the discrete half is the seed_bias mixed into seeds; see next/harmonic_seeding.md).
+## Tonal color from the live harmonic signature: the continuous, expressive half of harmonic seeding (the discrete
+## half is the seed_bias mixed into seeds; see next/harmonic_seeding.md).
 ## The 12 chroma bins are placed on the color wheel and summed: the result's angle is the
 ## music's tonality (its "key" as a hue) and its length is how tonal the moment is. Returns
 ## Vector2(hue 0..1, strength 0..1); a scene can pull its palette toward the hue by the strength.

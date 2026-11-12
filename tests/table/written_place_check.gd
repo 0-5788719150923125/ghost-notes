@@ -1,28 +1,25 @@
 extends Node
 
-## THINGS STAND WHERE THE SET DRESSER WROTE THEM (the user, 2026-10-18: "do the planning and desired
-## placements up-front, then verify with screenshots at the end"). A thing with an `at` is stood by
-## [method TableThings.stand_at], not hunted for in a zone; over several seeds, on a fixture of its own:
+## Things stand where the set dresser wrote them. A thing with an `at` is stood by [method TableThings.stand_at], not hunted for
+## in a zone; over several seeds, on a fixture of its own:
 ##
-##   - a thing whose written spot is clear stands EXACTLY there, turned and sized as written - no hand's
-##     jitter; one moved was moved for a reason that is real: its written foot runs off the top, into
-##     where the cards go, into another thing, or is a flame in front of the middle (the control: each
-##     move's written foot is tested by the gate's own geometry, and must hit one of those);
-##   - a thing written across the edge of the cards' room is moved out of it, no further than it must
-##     go (control: its written foot overlaps the room), and its reason names the cards;
+##   - a thing whose written spot is clear stands exactly there, turned and sized as written - no hand's jitter; one moved was moved
+##     for a real reason: its written foot runs off the top, into where the cards go, into another thing, or is a flame in front of
+##     the middle (the control: each move's written foot is tested by the gate's own geometry, and must hit one of those);
+##   - a thing written across the edge of the cards' room is moved out of it, no further than it must go (control: its written foot
+##     overlaps the room), and its reason names the cards;
 ##   - a thing written on top of another stands beside it, never in it (control: the written feet overlap);
 ##   - a flame written in front of the middle is moved behind it (control: it was written in front);
-##   - a thing written deep in the cards' room finds no spot within [constant CardTable.NUDGE_MOST] and is
-##     left off, kept in the blueprint's `unstood` with where it was written and why;
+##   - a thing written deep in the cards' room finds no spot within [constant CardTable.NUDGE_MOST] and is left off, kept in the
+##     blueprint's `unstood` with where it was written and why;
 ##   - a thing with no `at` still finds a spot in its zone, clear of every written thing;
 ##   - a crowded table - 28 small things written in rows round the back and sides - stands nearly whole;
-##   - the blueprint ([method TableThings.blueprint]) holds every stood thing, its written spot and move,
-##     the spread's cards, where nothing may stand, the camera; and the drawing ([method TableBlueprint.view])
-##     fits every thing.
+##   - the blueprint ([method TableThings.blueprint]) holds every stood thing, its written spot and move, the spread's cards, where
+##     nothing may stand, the camera; and the drawing ([method TableBlueprint.view]) fits every thing.
 ##
 ##   tests/run_boot_probe.sh tests/table/written_place_check.gd 300
 ##
-## A BOOT probe (the medium reaches the Director); no GPU needed - placement is geometry.
+## A boot probe (the medium reaches the Director); no GPU needed - placement is geometry.
 
 const DIR := "user://written_place_check"
 const SEEDS := 6
@@ -128,7 +125,7 @@ func _run() -> void:
 				var foot: PackedVector2Array = Geo.moved(th["outline"], want - at)
 				if _hits(foot, keep, th, int(th["lit"]) > 0 and want.y > mid.z):
 					n["moved_real"] += 1
-		# ACROSS THE CARDS' ROOM: out of it, no further than it must go
+		# Across the cards' room: out of it, no further than it must go
 		var dish: Dictionary = stood.get("a dish", {})
 		if not dish.is_empty():
 			var at := Vector2((dish["node"] as Node3D).position.x, (dish["node"] as Node3D).position.z)
@@ -138,7 +135,7 @@ func _run() -> void:
 			n["edge_cards"] += 1 if String(dish["why"]).contains("cards") else 0
 		else:
 			n["edge_out"] += 1
-		# ON ANOTHER: beside it, never in it
+		# On another: beside it, never in it
 		var stone: Dictionary = stood.get("a stone", {})
 		var ledger: Dictionary = stood.get("a ledger", {})
 		if not stone.is_empty() and not ledger.is_empty():
@@ -146,19 +143,19 @@ func _run() -> void:
 			var was := Geo.moved(stone["outline"], Tables.ORIGIN + Vector2(-0.42, -0.26) - Vector2((stone["node"] as Node3D).position.x, (stone["node"] as Node3D).position.z))
 			n["on_hit"] += 1 if Geo.within(was, ledger["outline"], 0.0) else 0
 			n["on_named"] += 1 if String(stone["why"]).contains("a ledger") else 0
-		# A FLAME IN FRONT OF THE MIDDLE goes behind it
+		# A flame in front of the middle goes behind it
 		var pillar: Dictionary = stood.get("a pillar", {})
 		if not pillar.is_empty():
 			n["flame_ok"] += 1 if (pillar["node"] as Node3D).position.z <= mid.z + 1e-4 else 0
 			n["flame_front"] += 1 if flame_at.y > mid.z else 0
-		# DEEP IN THE CARDS' ROOM: left off, and the blueprint says where it was written and why
+		# Deep in the cards' room: left off, and the blueprint says where it was written and why
 		var bp: Dictionary = medium._things_part.blueprint()
 		for u in bp["unstood"]:
 			if String((u as Dictionary)["name"]) == "a crate" and ((u as Dictionary)["written"] as Vector2).distance_to(room.get_center()) < 0.001 \
 					and String((u as Dictionary)["why"]).contains("cards"):
 				n["deep_off"] += 1
 		n["deep_hit"] += 1 if room.has_point(room.get_center()) and not stood.has("a crate") else 0
-		# A ZONE'S THING among written ones
+		# A zone's thing among written ones
 		var bottle: Dictionary = stood.get("a bottle", {})
 		if not bottle.is_empty() and bottle.get("written") == null:
 			var clear := true
@@ -166,7 +163,7 @@ func _run() -> void:
 				if other != bottle and Geo.within(bottle["outline"], (other as Dictionary)["outline"], 0.0):
 					clear = false
 			n["zone_ok"] += 1 if clear else 0
-		# THE BLUEPRINT holds what stood, and the drawing fits it
+		# The blueprint holds what stood, and the drawing fits it
 		var fits := (bp["things"] as Array).size() == medium._things_part.on_table.size() and (bp["cards"] as Array).size() == (medium._plan.slots as Array).size() \
 			and not (bp["keep_out"] as Array).is_empty() and bp["camera"] is Transform3D
 		for t in bp["things"]:
@@ -178,7 +175,7 @@ func _run() -> void:
 			var bb: Rect2 = (t as Dictionary)["bb"]
 			fits = fits and room_px.grow(1.0).has_point(TableBlueprint._to_px(v, bb.position)) and room_px.grow(1.0).has_point(TableBlueprint._to_px(v, bb.end))
 		n["print_ok"] += 1 if fits else 0
-		# A CROWDED TABLE: rows of small things round the back and the sides
+		# A crowded table: rows of small things round the back and the sides
 		var crowd: Array = []
 		for i in 14:
 			crowd.append(_box("back %d" % i, [4, 3, 4], [-52.0 + i * 8.0, -30.0], i * 13.0))

@@ -1,26 +1,21 @@
 extends SceneTree
 
-## A CANDLE THAT GRAZES THE TABLE DRAWS ITS LIGHT AND SHADOWS CLEAN (feedback 0007: a candle printed rings
-## round itself on a card's dark back, and a clock's rim drew its shadow across the face in stairs that
-## crawled as the flame flickered). On the stage as the table sets it ([constant TableMedium.STAGE]), lit by
-## a candle's light as [method TableLight.candle_shadow] makes it, photographed from straight above - each
-## picture read against the same one with the light casting nothing, so what is left is the shadow's own:
+## A candle that grazes the table draws its light and shadows clean. On the stage as the table sets it ([constant TableMedium.STAGE]),
+## lit by a candle's light as [method TableLight.candle_shadow] makes it, photographed from straight above - each picture read
+## against the same one with the light casting nothing, so what is left is the shadow's own:
 ##
-##   - WHAT NOTHING STANDS IN FRONT OF KEEPS ITS LIGHT: a dark plane under a flame 7 cm up, and the top of a
-##     deck 2 cm tall 35 cm off, are as bright as with no shadow at all (within [constant OPEN_LEAST]).
-##   - NO RINGS: the plane's light, binned by its distance from under the flame, keeps to a running mean of
-##     it within [constant RINGS_MOST] - concentric rings are what bins by distance gather.
-##   - NO STAIRS: a plate [constant PLATE_H] over the plane, its edge aslant, cast from a lamp about 86 cm
-##     off - a caster close over what it shades, as the clock's rim is over its face. The shadow's edge,
-##     found to a fraction of a pixel in every few rows, keeps to a line within [constant STAIRS_MOST] pixels
-##     (what is left is the stairs' own period, smoothed to a quarter of a millimeter's wave).
-##   - THE SHADOW IS THERE: the plate's shadow is darker than half the plane lit beside it - a normal bias
-##     big enough to lift every shadow off the plane would pass all of the above.
+##   - What nothing stands in front of keeps its light: a dark plane under a flame 7 cm up, and the top of a deck 2 cm tall 35 cm
+##     off, are as bright as with no shadow at all (within [constant OPEN_LEAST]).
+##   - No rings: the plane's light, binned by its distance from under the flame, keeps to a running mean of it within
+##     [constant RINGS_MOST].
+##   - No stairs: a plate [constant PLATE_H] over the plane, its edge aslant, cast from a lamp about 86 cm off - a caster close
+##     over what it shades. The shadow's edge, found to a fraction of a pixel in every few rows, keeps to a line within
+##     [constant STAIRS_MOST] pixels.
+##   - The shadow is there: the plate's shadow is darker than half the plane lit beside it (a normal bias big enough to lift every
+##     shadow off the plane would pass all of the above).
 ##
-## Two-sided: the same scenes lit as the candles were before (a 1.5 cm light, PCSS, on a 4096 atlas without
-## debanding) shade the deck's open top, ring and stair past the bounds; and a thin thing at a graze, its shadow
-## drawn as a cube copied into the paraboloids, strays from its line (feedback 0024). (Drawn straight into its
-## paraboloids, a candle's cloth keeps its light without the normal bias too: that control is gone.)
+## Two-sided: the same scenes lit with a 1.5 cm light, PCSS, on a 4096 atlas without debanding shade the deck's open top, ring and
+## stair past the bounds; and a thin thing at a graze, its shadow drawn as a cube copied into the paraboloids, strays from its line.
 ##
 ##   tests/run_quiet.sh table_shadow_check
 ##
@@ -70,9 +65,9 @@ func _run() -> void:
 	_ok(float(edge["stairs"]) < STAIRS_MOST, "a close caster's shadow keeps to a smooth edge: %.2f px off it" % float(edge["stairs"]))
 	_ok(float(edge["dark"]) < 0.5, "the plate's shadow is there: %.2f of the lit plane" % float(edge["dark"]))
 	_ok(float(edge_was["stairs"]) > STAIRS_MOST * 3.0, "the control stairs: %.2f px off a smooth edge" % float(edge_was["stairs"]))
-	# A THIN THING LYING AT A GRAZE (feedback 0024: a brush in a tray, a candle 30 cm behind it): its shadow's far edge a straight line - drawn
-	# straight into the candle's paraboloids, its casters cut fine ([ShadowCasters]); the control, the candle's shadow drawn as a cube and
-	# copied into them, which Godot reads through a linear sampler and smears into lumps
+	# A thin thing lying at a graze (a brush in a tray, a candle 30 cm behind it): its shadow's far edge a straight line - drawn straight into
+	# the candle's paraboloids, its casters cut fine ([ShadowCasters]); the control, the candle's shadow drawn as a cube and copied into them,
+	# which Godot reads through a linear sampler and smears into lumps
 	var rod := await _rod("candle")
 	var rod_cube := await _rod("cube")
 	_ok(float(rod["stairs"]) < ROD_STAIRS_MOST and float(rod["dark"]) < 0.6,
@@ -82,9 +77,8 @@ func _run() -> void:
 	quit(0 if _fails == 0 else 1)
 
 
-## A candle's light at [constant FLAME]: as the table makes it (`candle`), casting nothing (`off`), its
-## filter with no normal bias (`bare`), as the candles were before (`before`: a cube, sized), or as the table made it before its shadow was
-## drawn straight into its paraboloids (`cube`).
+## A candle's light at [constant FLAME]: as the table makes it (`candle`), casting nothing (`off`), its filter with no normal bias (`bare`),
+## with a cube shadow, sized (`before`), or with its shadow drawn as a cube (`cube`).
 func _flame(kind: String) -> OmniLight3D:
 	var light := OmniLight3D.new()
 	light.omni_range = 1.4
@@ -157,7 +151,7 @@ func _shoot(rect: Rect2, light: OmniLight3D, table: bool, also: Array = []) -> I
 	for n in also:
 		world.add_child(n)
 	world.add_child(light)
-	# ...WHAT CASTS CUT AS THE TABLE CUTS IT ([ShadowCasters]): a paraboloid draws a big triangle's depth wrong
+	# ...what casts is cut as the table cuts it ([ShadowCasters]): a paraboloid draws a big triangle's depth wrong
 	if table:
 		ShadowCasters.cut_under(world)
 	for i in 8:
@@ -216,7 +210,7 @@ func _pool(lit: Image, off: Image) -> Dictionary:
 		"rings": sqrt(sq / float(n)) if n > 400 else INF, "bins": n}
 
 
-## A THIN THING LYING ON THE PLANE, a rod 6 mm thick 30 cm from a flame [constant FLAME] up, across the way the light comes: how far its
+## A thin thing lying on the plane, a rod 6 mm thick 30 cm from a flame [constant FLAME] up, across the way the light comes: how far its
 ## shadow's far edge strays from a line (`stairs`, pixels of 0.08 mm) and how dark the shadow is (`dark`, of the lit plane beyond it).
 func _rod(kind: String) -> Dictionary:
 	var rect := Rect2(-0.04, 0.29, 0.08, 0.04)

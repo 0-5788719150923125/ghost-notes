@@ -1,6 +1,6 @@
 extends SceneTree
 
-## NOT a gate. Builds every thing in a table description (see [Props]) side by side on a dark
+## Not a gate. Builds every thing in a table description (see [Props]) side by side on a dark
 ## cloth under candlelight and writes a PNG to look at - for judging shapes and materials without
 ## the tarot table around them.
 ##

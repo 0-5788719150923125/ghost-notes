@@ -1,16 +1,17 @@
 extends SceneTree
 
-## stage_keys_check - A STAGE'S FLAGS: a value that changes at a moment, eased before or after it, and holds ([StageKeys];
-## next/editing.md step 10).
+## stage_keys_check - a stage's flags: a value that changes at a moment, eased before or after it, and holds
+## ([StageKeys]; next/editing.md).
 ##
 ##   godot --headless --path . --script res://tests/stage/stage_keys_check.gd
 ##
 ## What it holds:
-##   - before any key a field is what the entry set; a RAMP arrives at its moment (its seconds before it the eased way there),
-##     a DAMP begins at it; each holds after; a second key moves on from where the first left it; a place eases as one;
-##   - keys are a stage entry's flags on its Timeline: lane "camera", seekable (the `time` engine) where its verbs are not,
-##     each its key's place in the storyboard;
-##   - THE CONTROL: a key naming no field, and one whose value is not its field's kind, are said and left out.
+##   - before any key a field is what the entry set; a ramp arrives at its moment (its seconds before it the
+##     eased way there), a damp begins at it; each holds after; a second key moves on from where the first
+##     left it; a place eases as one;
+##   - keys are a stage entry's flags on its Timeline: lane "camera", seekable (the `time` engine) where its
+##     verbs are not, each its key's place in the storyboard;
+##   - the control: a key naming no field, and one whose value is not its field's kind, are said and left out.
 
 var _fails := 0
 
@@ -49,8 +50,8 @@ func _initialize() -> void:
 		and String(cam.get("ease", "")) == "ramp" and DataPath.same(cam["source"], ["sequence", 0, "track", "keys", 0]),
 		"a key is a flag in lane \"camera\", seekable where a verb is not, its source its place in the storyboard: %s" % str(cam))
 	_ok(Timeline.check(tl).is_empty(), "the timeline has no problems")
-	# AN ACTOR'S OWN VALUES: a key names its actor, is shown in that actor's lane, and moves only that actor's - THE CONTROL a key with
-	# no actor, said and left out
+	# An actor's own values: a key names its actor, is shown in that actor's lane and moves only that
+	# actor's. Control: a key with no actor, said and left out.
 	var ak := StageKeys.sanitize([{"field": "actor.scale", "actor": "blue", "at": 2.0, "to": 0.6, "over": 1.0, "ease": "ramp"},
 		{"field": "actor.hue", "at": 1.0, "to": 0.1}])
 	_ok((ak["keys"] as Array).size() == 1 and " ".join(ak["notes"]).contains("names no `actor`"), "an actor's key names its actor; one that does not is said and left out")
@@ -58,8 +59,8 @@ func _initialize() -> void:
 	_ok(is_equal_approx(float(StageKeys.value_at(0.3, aks, "actor.scale", 2.0, "blue")), 0.6) and float(StageKeys.value_at(0.3, aks, "actor.scale", 2.0, "red")) == 0.3
 		and StageKeys.first_start(aks, "actor.scale", "blue") == 1.0 and StageKeys.first_start(aks, "actor.scale", "red") == INF,
 		"it moves its own actor's value alone, from its first key on")
-	# THE LOOK'S DIALS: a key names its filter, moves only that filter's, is named and laned as the Look's - THE CONTROL a look key
-	# naming no filter, said and left out
+	# The look's dials: a key names its filter, moves only that filter's, is named and laned as the Look's.
+	# Control: a look key naming no filter, said and left out.
 	var lk := StageKeys.sanitize([{"field": "look", "filter": "slip", "at": 1.0, "to": 0.9, "over": 1.0, "ease": "ramp"},
 		{"field": "look", "at": 1.0, "to": 0.5}])
 	var lks: Array = lk["keys"]

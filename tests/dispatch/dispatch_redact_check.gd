@@ -1,19 +1,17 @@
 extends SceneTree
 
-## dispatch_redact_check - that REDACTED WORDS ON THE DISPATCH DESK ([constant DispatchScript.REDACT]) are hidden OVER THE
-## FRAME, as an editor hides a name after the shoot ([DispatchCensor], `shaders/dispatch_redact.gdshader`): the terminal
-## drawn as the desk draws it, on a quad bulged as the desk's glass is, seen by a camera off to one side, and the censor
-## drawn over that picture:
+## dispatch_redact_check - that redacted words on the dispatch desk ([constant DispatchScript.REDACT]) are hidden over the
+## frame ([DispatchCensor], `shaders/dispatch_redact.gdshader`): the terminal is drawn as the desk draws it, on a bulged quad,
+## seen by a camera off to one side, with the censor drawn over that picture. It holds:
 ##
-## - NO LETTER OF THE REDACTED WORDS REACHES THE FRAME: every pixel they light (the frame with them against the frame with
-##   them blanked - THE CONTROL: there are such pixels) lies inside a box;
-## - EVERY SHARD IS ONE COLOR, THE AVERAGE OF THE FRAME UNDER IT (THE CONTROL: in the frame without the censor the same
-##   shards are not one color), its shape the cracks' ([method DispatchCensor.shard], line for line with the shader); the
-##   shards are not all one color; nothing outside the boxes changes;
-## - THE BOXES ARE THE FRAME'S: runs on lines next to each other are one box, runs a line apart two (THE CONTROL: plain
-##   lines, none); a box is upright round the words as the camera sees them and larger than them, and never short of
-##   them while the camera moves - it trails a beat behind a sudden move (wider than at rest just after, back within its
-##   waver half a second later) and wavers at rest, a function of show time alone (the same moment, the same box).
+## - no letter of the redacted words reaches the frame: every pixel they light (frame with them against frame with them
+##   blanked; control: there are such pixels) lies inside a box;
+## - every shard is one color, the average of the frame under it (control: without the censor the same shards are not one
+##   color), its shape the cracks' ([method DispatchCensor.shard], line for line with the shader); shards differ from each
+##   other; nothing outside the boxes changes;
+## - the boxes are the frame's: runs on adjacent lines are one box, runs a line apart two (control: plain lines, none); a box is
+##   upright, larger than the words and never short of them while the camera moves; it trails a beat behind a sudden move and
+##   wavers at rest, a function of show time alone.
 ##
 ##   tests/run_quiet.sh dispatch_redact_check
 ##   tests/run_quiet.sh -- tests/dispatch/dispatch_redact_check.gd --png <path>   (the frame, and <path>_bare.png without)
@@ -81,7 +79,7 @@ func _run() -> void:
 	_censor = DispatchCensor.new()
 	_vp.add_child(_censor)
 	_ok(is_equal_approx(float(DispatchMedium.TERMINAL_GLASS["curve"]), CURVE), "the gate's bulge is the desk's")
-	# each run last on its line: blanking one with spaces would move what follows it (the terminal's face kerns)
+	# each run is last on its line: blanking one with spaces would move what follows it (the terminal's face kerns)
 	var lines := PackedStringArray(["> open 1", "NAME ........ " + _r("DOE, JANE QUINCY"), "BIRTH ....... 01/02/1970",
 		"PLATE ....... " + _r("XKC 4417"), "STATUS ...... CONTAINED", "",
 		"  1  38   AKRON, OH   " + _r("DOE, JANE Q"), "  2  54   TULSA, OK   " + _r("DOE, JANE M"),
@@ -97,7 +95,7 @@ func _run() -> void:
 			text = text.substr(0, run.x) + " ".repeat(run.y - run.x) + text.substr(run.y)
 		blank.append(text)
 	var runs := _screens.redactions(lines)
-	# THE BOXES ARE THE FRAME'S
+	# the boxes are the frame's
 	var groups := DispatchCensor.groups(runs)
 	_ok(runs.size() == 5 and groups.size() == 3, "runs on lines next to each other are one box, a line apart two (%d runs, %d boxes)" % [runs.size(), groups.size()])
 	_ok(_screens.redactions(plain).is_empty(), "the control: plain lines have no runs")
@@ -119,7 +117,7 @@ func _run() -> void:
 			held = held or (b["rect"] as Rect2).grow(-3.0).encloses(words)
 		larger = larger and held
 	_ok(larger, "a box holds the words as the camera sees them, with room round them")
-	# NO LETTER OF THE REDACTED WORDS REACHES THE FRAME
+	# no letter of the redacted words reaches the frame
 	var ink := 0
 	var loose := 0
 	for y in SIZE.y:
@@ -132,7 +130,7 @@ func _run() -> void:
 					loose += 1
 	_ok(ink >= 300, "the control: the redacted words light the frame (%d px) - the instrument sees them" % ink)
 	_ok(loose == 0, "no letter of the redacted words reaches the frame: %d of their %d px outside the boxes" % [loose, ink])
-	# EVERY SHARD ONE COLOR, THE AVERAGE OF THE FRAME UNDER IT
+	# every shard is one color, the average of the frame under it
 	var colors := {}
 	var whole := 0
 	var worst_spread := 0.0
@@ -178,7 +176,7 @@ func _run() -> void:
 			if not _inside(boxes, Vector2(x, y) + Vector2(0.5, 0.5), 1.5) and not censored.get_pixel(x, y).is_equal_approx(bare.get_pixel(x, y)):
 				same = false
 	_ok(same, "a pixel outside the boxes changed")
-	# THE TRACKER: never short of the words, a beat behind a sudden move, wavering at rest, a function of show time
+	# the tracker: never short of the words, a beat behind a sudden move, wavering at rest, a function of show time
 	var tr := DispatchCensor.new()
 	var rest_x := PackedFloat32Array()
 	var held_all := true
@@ -247,8 +245,8 @@ func _frame(lines: PackedStringArray, censored: bool, now: float) -> Image:
 	return _vp.get_texture().get_image()
 
 
-## THE SHARDS OF BOX [param b] as the shader cuts them: per shard, `all` (every pixel whose center is in it - what it
-## averages) and `inner` (those 1.5 px from any crack or edge - what must be one color).
+## The shards of box [param b] as the shader cuts them: per shard, `all` (every pixel whose center is in it, what it
+## averages) and `inner` (those 1.5 px from any crack or edge, what must be one color).
 func _shards(b: Dictionary) -> Dictionary:
 	var q: Rect2 = b["rect"]
 	var lines: PackedVector3Array = _censor._cracks[int(b["key"])]["lines"]

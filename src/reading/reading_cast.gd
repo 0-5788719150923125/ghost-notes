@@ -1,49 +1,40 @@
 extends RefCounted
 class_name ReadingCast
 
-## ReadingCast - the voices a reading is read in, a part of [ReadingPanel]: one per speaker the
-## script cues ([method refresh]), each a whole settings page - the voice, the reader within it, the
-## tone, the pace and pauses, the delivery dials, the room, the ink - and the rows that edit the one
-## on screen, with the Turn and Hesitate rows that belong to no one voice. Its block is the
-## document's `voice:` ([method capture], [method apply]): THE VOICE CARD's, which is what this part
-## becomes when the voice is a card of its own (next/notes.md).
+## ReadingCast - the voices a reading is read in, a part of [ReadingPanel]: one per speaker the script cues
+## ([method refresh]), each a whole settings page (the voice, the reader within it, the tone, the pace and
+## pauses, the delivery dials, the room, the ink) - and the rows that edit the one on screen, with the Turn and
+## Hesitate rows that belong to no one voice. Its block is the document's `voice:` ([method capture],
+## [method apply]): the Voice card's (next/notes.md).
 ##
-## A PART OF ITS PANEL (next/structure.md, step 23): it asks the panel for the text the cast is read
-## from, the reading on the stream (a voice changed, a pace changed, a dial moved) and the status
-## line, and is asked a voice's settings by name ([method cfg_of]) by everything that reads one -
-## the stream, the audition and the export.
+## A part of its panel (next/structure.md, step 23): it asks the panel for the text the cast is read from, the
+## reading on the stream (a voice changed, a pace changed, a dial moved) and the status line, and is asked a
+## voice's settings by name ([method cfg_of]) by everything that reads one - the stream, the audition and the
+## export.
 
-## The [ReadingPanel] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [ReadingPanel] this is a part of: everything read through it is something this part is handed.
 var panel: ReadingPanel
 
-# VOICES, plural, and NAMED. One tab per reader, and the tabs are whoever the script says
-# is speaking - a line of its own hands the text after it to that name:
+# Voices, plural and named. One tab per reader, and the tabs are whoever the script says is speaking - a line of
+# its own hands the text after it to that name:
 #
 #     <!-- speaker: Emily White -->     (what a chapter file carries)
 #     [speaker: Emily White]            (the same thing, typeable)
 #
-# THE SCRIPT IS THE CAST LIST. There is no + and no ×: the tabs are derived from the cues
-# ([method refresh]) every time the text changes or a document is read, so a name
-# written into the prose is a tab the moment it exists. A name was chosen over a number
-# because the author reads the prose, and "speaker 2" says nothing to a reader of it. Text
-# before the first cue is [constant Manuscript.NARRATOR]'s.
+# The script is the cast list. There is no + and no x: the tabs are derived from the cues ([method refresh]) every
+# time the text changes or a document is read. Text before the first cue is [constant Manuscript.NARRATOR]'s.
+# A tab is a whole settings page: the voice, the reader, the tone, the pace, the pauses, the delivery dials and the
+# room are all per-tab.
 #
-# A tab is a WHOLE settings page, not just a checkpoint id: the voice, the reader within
-# it, the tone, the pace, the pauses, the delivery dials and the room are all per-tab. Two
-# speakers in one reading are rarely the same person recorded twice.
+# A name that leaves the script keeps its voice ([member _stash]): it is hidden, not forgotten, and comes back
+# exactly as it was.
 #
-# A NAME THAT LEAVES THE SCRIPT KEEPS ITS VOICE ([member _stash]). Deleting a scene to
-# rewrite it must not cost the character their settings, so a name no longer cued is
-# hidden, not forgotten, and comes back exactly as it was.
+# The cue must own its line (see [constant Manuscript.SPEAKER]): a mis-parsed cue silently reads the rest of the
+# chapter in the wrong voice.
 #
-# The cue must own its line (see [constant Manuscript.SPEAKER]): a mis-parsed cue does not
-# error, it just reads the rest of the chapter in the wrong voice.
-#
-# HESITATIONS. `<!-- hesitation -->` anywhere in the text - mid-sentence included - is a
-# longer rest at exactly that point, for effect; `<!-- hesitation: 2.5 -->` names its own
-# length in seconds. The Hesitate row sets the length of a bare one and switches them all.
-# The rest is spliced into the take where the host reports the gap after a word, so it lands
+# Hesitations. `<!-- hesitation -->` anywhere in the text, mid-sentence included, is a longer rest at that point;
+# `<!-- hesitation: 2.5 -->` names its own length in seconds. The Hesitate row sets the length of a bare one and
+# switches them all. The rest is spliced into the take where the host reports the gap after a word, so it lands
 # between two words and never inside one (see [method Splice.chunk]).
 const HESITATE_DEFAULT := 1.5
 const HESITATE_MAX := 6.0
@@ -70,7 +61,7 @@ var _tone: OptionButton
 var _speaker: SpinBox
 var _speaker_about: Label        # who that speaker number is (VoiceReaders)
 var _browser: ReaderBrowser      # the Speaker row's Browse… (ReaderBrowser)
-## A BLEND OF READERS ([VoiceBlend]): the tab on screen's, "" for its Speaker number alone. Ticked in the reader
+## A blend of readers ([VoiceBlend]): the tab on screen's, "" for its Speaker number alone. Ticked in the reader
 ## browser on a voice whose readers blend; stepping the Speaker number by hand, or another voice, ends it.
 var _blend := ""
 var _blending := {}              # the backends whose readers blend, as the host said ([method offer_blends])
@@ -90,7 +81,7 @@ var _cast_timer: Timer         # re-derives the tabs once typing pauses
 var _syncing := false          # writing controls from a slot must not re-plan
 var _repace_timer: Timer       # one re-plan per slider gesture, not one per pixel
 
-## THE INK: which pen this voice writes in, where the medium writes by hand (the Notebook).
+## The ink: which pen this voice writes in, where the medium writes by hand (the Notebook).
 ## Not a sound, so changing it restarts nothing; it reaches the page at the next Play.
 var _ink_pick: OptionButton
 var _ink_raw := ""               # the slot's ink as stored, kept when it is a hex the list lacks
@@ -104,10 +95,8 @@ func _init(owner: ReadingPanel) -> void:
 
 
 func build_cast(box: VBoxContainer) -> void:
-	# THE HANDOVER REST, above the tabs because it belongs to no tab: it is the
-	# silence BETWEEN two of them. Unlike Pause it needs no re-synthesis - the
-	# gap is spliced in as the chunks are joined, not asked of the model - so it
-	# takes effect at the next handover rather than at the next chunk.
+		# The handover rest, above the tabs because it belongs to no tab: it is the silence between two of them. It
+		# needs no re-synthesis (the gap is spliced in as the chunks are joined), so it takes effect at the next handover.
 	var turow := HBoxContainer.new()
 	turow.add_theme_constant_override("separation", 8)
 	box.add_child(turow)
@@ -134,9 +123,7 @@ func build_cast(box: VBoxContainer) -> void:
 			return
 		panel.touch())
 	turow.add_child(_turn)
-	# THE READOUT IS IN SECONDS, not the dial's multiplier: what matters is how long the gap
-	# is. There was no readout at all, and a stored 5.1 was a hidden 2.8 s at every handover -
-	# "an invisible, forced pause between speakers... killing the pacing".
+		# The readout is in seconds, not the dial's multiplier: what matters is how long the gap is.
 	var tur := Label.new()
 	tur.custom_minimum_size = Vector2(42, 0)
 	tur.add_theme_font_size_override("font_size", 12)
@@ -148,10 +135,9 @@ func build_cast(box: VBoxContainer) -> void:
 	_turn.value_changed.connect(show_turn)
 	turow.add_child(tur)
 
-	# HESITATIONS, global for the same reason Turn is: a `<!-- hesitation -->` belongs to a
-	# moment in the text, not to whichever voice happens to be reading it. The checkbox
-	# switches every marker off at once (an author auditioning the plain reading); the dial
-	# is the length of a bare marker, and a marker that names its own length keeps it.
+		# Hesitations are global, like Turn: a `<!-- hesitation -->` belongs to a moment in the text, not to a voice. The
+		# checkbox switches every marker off at once; the dial is the length of a bare marker, and a marker that names
+		# its own length keeps it.
 	var hrow := HBoxContainer.new()
 	hrow.add_theme_constant_override("separation", 8)
 	box.add_child(hrow)
@@ -184,20 +170,14 @@ func build_cast(box: VBoxContainer) -> void:
 		panel.touch()
 	_hesitate.value_changed.connect(on_hesitate)
 	_hesitate_on.toggled.connect(on_hesitate)
-	# SHOWN WHERE THE SCRIPT CAN CARRY THE MARK, by its Script card's mode (never its settings section:
-	# a table's is "cards", which offers nothing): a panel whose palette has no hesitation mark (a Proof
-	# note's - its words are the problem, never read) keeps the values in the voice block and shows no row.
+		# Shown where the script can carry the mark, by its Script card's mode (never its settings section: a table's is
+		# "cards", which offers nothing): a panel whose palette has no hesitation mark keeps the values in the voice
+		# block and shows no row.
 	hrow.visible = ScriptMarks.for_mode(panel.script_mode()).has("hesitation")
 
-	# THE TABS - one per name the script cues, derived rather than managed (see the note on
-	# the speaker cues above). Everything below this row belongs to the selected tab; the
-	# Play button beside the voice picker does not - it reads the whole script, in every
-	# voice it asks for. A FLOW, not a TabBar, so a chapter with eight speakers shows all
-	# eight names at once instead of hiding half of them behind scroll arrows.
-	# A LIST WITH A HEADING, one row per person, each saying what voice they have now - a
-	# first cut drew the names as a flow of flat buttons and it read as a line of text: no
-	# heading, no visible selection, nothing saying these were the speakers or what they
-	# sounded like.
+		# The tabs: one per name the script cues, derived rather than managed (see the note on the speaker cues above).
+		# Everything below this row belongs to the selected tab; the Play button beside the voice picker does not, it
+		# reads the whole script. A list with a heading, one row per person, each saying what voice they have now.
 	_cast_head = Label.new()
 	_cast_head.add_theme_font_size_override("font_size", 12)
 	_cast_head.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -219,15 +199,13 @@ func build_cast(box: VBoxContainer) -> void:
 	panel.add_child(_cast_timer)
 
 
-## THE VOICE: the model, Play / Stop / Test, the reader, the tone, the pace and pauses, the
+## The voice: the model, Play / Stop / Test, the reader, the tone, the pace and pauses, the
 ## delivery dials and the room - every control below belongs to the tab that is showing.
 func build_voice(box: VBoxContainer) -> void:
 	var vrow := HBoxContainer.new()
 	vrow.add_theme_constant_override("separation", 8)
 	box.add_child(vrow)
-	# NAMED AS THE ROWS UNDER IT ARE (2026-10-22, the user, looking for an actor's own voice: "when I
-	# click on 'Browse' to see the list of Piper voices, none are clearly labeled") - Browse is one
-	# voice's readers; the voices are this list.
+		# Named as the rows under it are: Browse is one voice's readers; the voices are this list.
 	var vl := Label.new()
 	vl.text = "Voice"
 	vl.custom_minimum_size = Vector2(72, 0)
@@ -235,8 +213,8 @@ func build_voice(box: VBoxContainer) -> void:
 	vrow.add_child(vl)
 	voice_pick = OptionButton.new()
 	voice_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# SIZED BY THE ROW, NOT BY ITS LONGEST VOICE: Play becomes "Resume ●" beside it, and a picker
-	# as wide as "libritts high (downloads)" pushed the whole panel out (see SidePanel._check_width)
+		# Sized by the row, not by its longest voice: Play becomes "Resume" beside it, and a picker as wide as "libritts
+		# high (downloads)" pushed the whole panel out (see SidePanel._check_width)
 	voice_pick.fit_to_longest_item = false
 	voice_pick.clip_text = true
 	voice_pick.tooltip_text = "Which voice model reads: a Piper model, or kokoro. A model that holds more than one reader (libritts, kokoro) picks who reads on the Speaker row below. Each model has its own license - it appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
@@ -244,13 +222,10 @@ func build_voice(box: VBoxContainer) -> void:
 		if not _syncing:
 			_voice_picked())
 	vrow.add_child(voice_pick)
-	# PLAY AND STOP ARE THE TRANSPORT'S, along the bottom of the stage (Space plays and pauses).
+	# Play and stop are the transport's, along the bottom of the stage (Space plays and pauses).
 
-	# AUDITION ONE VOICE, without the chapter. In a script with seven speakers the last one
-	# first speaks forty minutes in, so tuning that voice by reading the whole script is not
-	# a loop anyone can iterate in. This reads a fixed passage (ReadingAudition.PASSAGE) in the voice on
-	# the selected tab - its tone, pace, pauses, delivery and room - and plays it straight
-	# out: no stage, no subtitles, no Director.
+		# Audition one voice, without the chapter: reads a fixed passage (ReadingAudition.PASSAGE) in the voice on the
+		# selected tab, with no stage, subtitles or Director.
 	_test = Button.new()
 	_test.text = "Test"
 	_test.tooltip_text = ("Hear the selected tab's voice on its own: a short fixed passage, "
@@ -261,10 +236,9 @@ func build_voice(box: VBoxContainer) -> void:
 	_test.pressed.connect(press_test)
 	vrow.add_child(_test)
 
-	# Multi-speaker checkpoints carry many readers under one model - libritts-high
-	# has 904, kokoro 28 voicepacks - and they are the only way to change WHO is
-	# reading without changing the model. Hidden entirely for single-speaker
-	# voices, like every other capability-driven control here.
+		# Multi-speaker checkpoints carry many readers under one model (libritts-high has 904, kokoro 28 voicepacks) and
+		# are the only way to change who is reading without changing the model. Hidden for single-speaker voices, like
+		# every capability-driven control here.
 	_speaker_row = HBoxContainer.new()
 	_speaker_row.add_theme_constant_override("separation", 8)
 	_speaker_row.visible = false
@@ -276,10 +250,9 @@ func build_voice(box: VBoxContainer) -> void:
 	_speaker_row.add_child(sl2)
 	_speaker = SpinBox.new()
 	_speaker.min_value = 0
-	# NO CEILING UNTIL THE MODEL IS KNOWN. A Range's default max is 100, and a document or a stored
-	# cast is applied at boot, before the host has listed its voices - so reader 692 of
-	# libritts-high (904 readers) was clamped to 100 and then saved that way. The real ceiling is
-	# set by _show_voice_license once the voice's reader count is known.
+		# No ceiling until the model is known. A Range's default max is 100, and a document or stored cast is applied at
+		# boot, before the host has listed its voices, so a high reader would be clamped. The real ceiling is set by
+		# _show_voice_license once the voice's reader count is known.
 	_speaker.max_value = 100000
 	_speaker.step = 1
 	_speaker.tooltip_text = "Which reader, on a model that holds more than one (libritts carries 904 readers, kokoro 28 voices). Same model, a different person - so it changes WHO is reading, not how. Hidden on single-speaker voices. Regenerates the un-played chunks."
@@ -295,8 +268,7 @@ func build_voice(box: VBoxContainer) -> void:
 		panel.touch())
 	_speaker_row.add_child(_speaker)
 	_speaker.value_changed.connect(func(_v: float) -> void: _describe_speaker())
-	# BROWSE: every reader of the voice, with who they are - so a voice is chosen by
-	# description rather than by stepping through numbers and listening to each
+		# Browse: every reader of the voice, with who they are, so a voice is chosen by description
 	var browse := Button.new()
 	browse.text = "Browse…"
 	browse.focus_mode = Control.FOCUS_NONE
@@ -328,15 +300,13 @@ func build_voice(box: VBoxContainer) -> void:
 		if _syncing:
 			return
 		capture_slot()
-		# a tone changes the model's own parameters, so un-played chunks have
-		# to be regenerated - the same path a pace change takes
+				# a tone changes the model's own parameters, so un-played chunks are regenerated, as a pace change does
 		if panel._stream.has_reading():
 			panel._stream.repace()
 		panel.touch())
 	trow.add_child(_tone)
 
-	# Shown only if the backend reports duration_control - the surface is built
-	# from capabilities(), never from assumptions about what a model can do.
+		# Shown only if the backend reports duration_control: the surface is built from capabilities().
 	_rate_row = HBoxContainer.new()
 	_rate_row.add_theme_constant_override("separation", 8)
 	_rate_row.visible = false
@@ -346,8 +316,7 @@ func build_voice(box: VBoxContainer) -> void:
 	rl.add_theme_font_size_override("font_size", 12)
 	_rate_row.add_child(rl)
 	_rate = HSlider.new()
-	# 0.7 was arbitrary. VITS length_scale is stable well past it, and an
-	# audiobook read often wants slower than "slightly slow".
+		# VITS length_scale is stable well past 0.7, and an audiobook read often wants slower than "slightly slow".
 	_rate.min_value = 0.4
 	_rate.max_value = 1.6
 	_rate.step = 0.05
@@ -361,17 +330,12 @@ func build_voice(box: VBoxContainer) -> void:
 	_rate_row.add_child(_rate)
 	Card.readout(_rate_row, _rate, "x")
 
-	# PAUSE. How long the reading rests on punctuation, as a multiple of the
-	# host's default rests (roughly: a tenth of a second on a comma, a quarter on
-	# a colon, a third at a sentence end). VITS runs straight through a comma and
-	# especially through a colon, so the silence is spliced in around the mark by
-	# the host rather than asked of the model.
-	#
-	# Always visible, unlike Pace: this needs no duration_control, because the
-	# host is inserting silence rather than asking the model for a different
-	# length. And it is NOT a live buffer effect like Echo/Ambience - it changes
-	# what gets synthesized, so it takes the debounced re-plan path below, the
-	# same one a pace change takes.
+		# Pause: how long the reading rests on punctuation, as a multiple of the host's default rests (roughly a tenth
+		# of a second on a comma, a quarter on a colon, a third at a sentence end). VITS runs straight through a comma
+		# and a colon, so the host splices the silence in around the mark.
+		#
+		# Always visible, unlike Pace (no duration_control needed). Not a live buffer effect like Echo/Ambience: it
+		# changes what gets synthesized, so it takes the debounced re-plan path below, as a pace change does.
 	var prow := HBoxContainer.new()
 	prow.add_theme_constant_override("separation", 8)
 	box.add_child(prow)
@@ -394,25 +358,20 @@ func build_voice(box: VBoxContainer) -> void:
 	prow.add_child(_pause)
 	Card.readout(prow, _pause, "x")
 
-	# Debounced rather than immediate: a slider drag emits a value per pixel,
-	# and each change throws away work in flight. One re-plan per gesture.
+		# Debounced: a slider drag emits a value per pixel, and each change throws away work in flight.
 	_repace_timer = Timer.new()
 	_repace_timer.wait_time = 0.3
 	_repace_timer.one_shot = true
 	_repace_timer.timeout.connect(func() -> void:
-		# CAPTURE FIRST. _repace re-requests from the slot store, not from the
-		# controls, so a pace the slider knows about and the slot does not is a
-		# pace the regenerated chunks are read at the OLD value.
+				# Capture first: _repace re-requests from the slot store, not from the controls.
 		capture_slot()
 		panel._stream.repace()
 		panel._persist())
 	panel.add_child(_repace_timer)
 
-	# Ambience: the same effects Synthesis has, over any PCM. Off by default -
-	# a narration take should sound like a reading unless asked otherwise.
-	# DELIVERY, not effect. These two are the discourse layer Piper structurally
-	# cannot supply: it never sees the paragraph, so every sentence starts from the
-	# same register at the same rate. See piper._discourse_plan for the rules.
+		# Ambience: the same effects Synthesis has, over any PCM. Off by default.
+		# Delivery, not effect: the discourse layer Piper cannot supply (it never sees the paragraph, so every sentence
+		# starts from the same register at the same rate). See piper._discourse_plan for the rules.
 	_dynamics = _fx_slider(box, "Dynamics", 0.5,
 		"How much the READING's timing follows its own structure: a sentence at the end of a "
 		+ "paragraph is drawn out, a short one after a long one lands harder, a question runs a "
@@ -438,12 +397,8 @@ func build_voice(box: VBoxContainer) -> void:
 		+ "to fuse with the voice rather than be heard as a separate sound. It opens out into a "
 		+ "distinct slapback with a long tail as you raise it, so this changes the SIZE of the "
 		+ "space, not just how loud it is.")
-	# THE ROOM, the same one Masking has - see [RoomFX], which owns the dial and
-	# leaves each mode only its engine. It is a separate control from Echo above
-	# and has to be: Echo is discrete repeats, which the ear counts, and this is
-	# the diffuse tail behind them, which it cannot. A voice with only the first
-	# sounds like a voice in a corridor; with only the second, like a voice in a
-	# hall. Most rooms are both.
+		# The room, the same one Masking has (see [RoomFX], which owns the dial and leaves each mode only its engine).
+		# Separate from Echo above: Echo is discrete repeats, this is the diffuse tail behind them; most rooms are both.
 	_fx_room = _fx_slider(box, "Room", 0.0,
 		"The size of the space around the reader. Where Echo is a repeat you can hear arrive, "
 		+ "this is the diffuse tail behind it - no countable events, just the room answering. "
@@ -513,13 +468,11 @@ func _build_ink_row(box: VBoxContainer) -> void:
 		_ink_raw = "" if i == 0 else String(NotebookLayout.INKS.keys()[i])
 		capture_slot())
 	row.add_child(_ink_pick)
-	# ONLY WHERE THE MEDIUM INKS A VOICE'S WORDS (the Notebook's `ink`): it showed on the card table, which writes
-	# nothing - and a Letter, written by hand, is written in its pens' inks, never a voice's
+		# Only where the medium inks a voice's words (the Notebook's `ink`); a Letter is written in its pens' inks.
 	(panel._medium_rows.get_or_add("ink", []) as Array).append(row)
 
 
-## A voice/delivery slider. `tip` is not optional in practice: an unlabeled dial
-## is a dial nobody touches, and every other slider in this panel carries one.
+## A voice/delivery slider. Every slider in this panel carries a `tip`.
 func _fx_slider(box: VBoxContainer, name: String, initial: float, tip := "") -> HSlider:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -529,8 +482,7 @@ func _fx_slider(box: VBoxContainer, name: String, initial: float, tip := "") -> 
 	l.text = name
 	l.custom_minimum_size = Vector2(72, 0)
 	l.add_theme_font_size_override("font_size", 12)
-	# A Label ignores the mouse by default, so pointing at the NAME - which is
-	# what anyone actually does - would otherwise show nothing.
+		# A Label ignores the mouse by default, so pointing at the name would otherwise show nothing.
 	l.mouse_filter = Control.MOUSE_FILTER_STOP
 	l.tooltip_text = tip
 	row.add_child(l)
@@ -566,10 +518,8 @@ func show_testing(on: bool) -> void:
 		_browser.show_testing(on)
 
 
-## TEST, the Voice card's and the reader browser's: a press while a test plays ALWAYS stops it, whatever was changed
-## meanwhile, and only the next press starts one, in what is picked then (2026-11-11, the user, of a press that started
-## the test over in a blend changed during it: "Please ensure that we always stop before we allow the Test button to
-## be started for playback again").
+## Test, the Voice card's and the reader browser's: a press while a test plays always stops it, whatever was
+## changed meanwhile, and only the next press starts one, in what is picked then.
 func press_test() -> void:
 	panel._on_test()
 
@@ -583,33 +533,28 @@ func show_pace() -> void:
 # --- the voice block, and what is kept between sessions -------------------------------------------
 
 
-## THE WHOLE CAST: every voice, keyed by the name the script cues it with - including names the
-## text no longer uses, so rewriting a scene and restoring it does not lose a character's voice
-## from the document either - the reader's first ([method reader]). The controls are captured
-## first, because they - not [member _slots] - are the truth for the tab on screen. WHICH VOICE
-## IS ON SCREEN IS NOT THE DOCUMENT'S: it had been kept as `tab`, and every change wrote it back.
+## The whole cast: every voice, keyed by the name the script cues it with, including names the text no longer
+## uses (so rewriting a scene does not lose a character's voice), the reader's first ([method reader]). The
+## controls are captured first, since they, not [member _slots], are the truth for the tab on screen. Which voice
+## is on screen is not the document's.
 func capture() -> Dictionary:
 	capture_slot()
 	return {"turn": _turn.value, "voices": cast_dict(),
 		"hesitate": _hesitate.value, "hesitate_on": _hesitate_on.button_pressed}
 
 
-## THE VOICE BLOCK, to the cast.
-##
-## A BLOCK WITH NO CAST CHANGES NOTHING. `_merge` gives every row every key, so a voice
-## written by an older build arrives with sane defaults rather than half-applied - but a
-## block with no `voices` at all is a document that has never been given a voice, and
-## silently blanking the panel's cast for it would be the opposite of the feature. A LIST
-## of voices is the numbered tabs this replaced, and is read the way the settings are.
+## The voice block, to the cast. A block with no cast changes nothing: `_merge` gives every row every key, so a
+## voice written by an older build arrives with defaults, but a block with no `voices` is a document never given
+## a voice, and blanking the panel's cast for it would be wrong. A list of voices is the numbered tabs this
+## replaced, read the way the settings are.
 func apply(cfg: Dictionary) -> void:
 	var rows: Variant = cfg.get("voices", {})
 	var cast: Dictionary = _merge_cast(rows as Dictionary) if rows is Dictionary \
 		else _cast_from_rows(rows if rows is Array else [], panel._cast_text())
 	if cast.is_empty():
 		return
-	# THE READER IS THE FIRST VOICE LISTED, whatever its name. A voice named for the reader's cue
-	# ([constant Manuscript.NARRATOR]) listed after it can never be spoken - that name is the
-	# reader's - and is what the panel had written in as a copy of the reader: it goes.
+		# The reader is the first voice listed, whatever its name. A voice named for the reader's cue
+		# ([constant Manuscript.NARRATOR]) listed after it can never be spoken, so it goes.
 	var first := String(cast.keys()[0])
 	if first != Manuscript.NARRATOR:
 		cast.erase(Manuscript.NARRATOR)
@@ -625,10 +570,10 @@ func apply(cfg: Dictionary) -> void:
 	_hesitate.editable = _hesitate_on.button_pressed
 	_syncing = false
 	refresh(panel._cast_text())
-	# The room, once, exactly as [method _load_persisted] does it: the chain is stateful
-	# and a tab switch alone does not re-dial it.
+		# The room, once, exactly as [method _load_persisted] does it: the chain is stateful and a tab switch alone does
+		# not re-dial it.
 	Delivery.apply_fx(panel._stream.fx, slot_cfg(slot))
-	# Whatever is on the stream was cut against the PREVIOUS cast.
+		# Whatever is on the stream was cut against the previous cast.
 	panel._stream.mark_stale()
 	panel.touch()
 
@@ -636,14 +581,13 @@ func apply(cfg: Dictionary) -> void:
 ## The cast's own state, written to [Settings] beside the draft: every voice, the Turn and Hesitate
 ## rows, and which voice is on screen.
 func persist() -> void:
-	# The controls are the truth for the tab on screen; every other tab's truth
-	# is already in _slots. Capture before writing or the tab being edited saves
-	# whatever it held when it was last switched away from.
+		# The controls are the truth for the tab on screen; capture before writing, or the tab being edited saves
+		# what it held when last switched away from.
 	capture_slot()
 	Settings.write(panel.section(), "cast", cast_dict())
 	Settings.write(panel.section(), "turn", _turn.value)
-	# A NEW KEY, not "tab": that one held an int index, and Settings' no-op guard compares
-	# the stored value with the new one - an int against a String is a script error.
+		# A new key, not "tab" (an int index): Settings' no-op guard compares the stored value with the new one, and
+		# an int against a String is a script error.
 	Settings.write(panel.section(), "tab_name", tab_name())
 	Settings.write(panel.section(), "hesitate", _hesitate.value)
 	Settings.write(panel.section(), "hesitate_on", _hesitate_on.button_pressed)
@@ -663,8 +607,8 @@ func load_stored() -> void:
 	if cast is Dictionary and not (cast as Dictionary).is_empty():
 		_stash = _merge_cast(cast as Dictionary)
 	else:
-		# MIGRATION, from the numbered tabs. Tab N was cued `<!-- speaker: N -->`, and tab 1
-		# also read everything before the first cue - so it becomes both "1" and the narrator.
+				# Migration from the numbered tabs: tab N was cued `<!-- speaker: N -->`, and tab 1 also read everything
+				# before the first cue, so it becomes both "1" and the narrator.
 		var rows: Variant = Settings.read(panel.section(), "slots", [])
 		_stash = _cast_from_rows(rows if rows is Array else [],
 			str(Settings.read(panel.section(), "text", "")))
@@ -707,11 +651,9 @@ func cast_dict() -> Dictionary:
 	return out
 
 
-## THE READER'S VOICE: the first one the document lists, whatever it is called (the user,
-## 2026-10-15: a show whose one voice was "Ryan" had a copy of it written in as "Narrator" at any
-## change, because only a voice of that name could read the words before the first cue). Those
-## words, and a cue naming [constant Manuscript.NARRATOR] - as a Cards reading hands a line back to
-## its reader - are the reader's; a cast with no voice yet starts with one of that name.
+## The reader's voice: the first one the document lists, whatever it is called. Those words, and a cue naming
+## [constant Manuscript.NARRATOR] (as a table show hands a line back to its reader), are the reader's; a cast with
+## no voice yet starts with one of that name.
 func reader() -> String:
 	return _order[0] if not _order.is_empty() else Manuscript.NARRATOR
 
@@ -729,10 +671,8 @@ func _merge_cast(d: Dictionary) -> Dictionary:
 	return out
 
 
-## The numbered tabs this replaced, as names: row i was cued `<!-- speaker: i+1 -->`, and
-## the first row read everything before the first cue - so it becomes the NARRATOR, and also
-## "1" only when the script actually cues `1` (otherwise every migrated document would carry
-## a phantom voice named "1" from then on).
+## The numbered tabs this replaced, as names: row i was cued `<!-- speaker: i+1 -->`, and the first row read
+## everything before the first cue, so it becomes the NARRATOR, and also "1" only when the script cues `1`.
 func _cast_from_rows(rows: Array, body := "") -> Dictionary:
 	var cued := Manuscript.speakers(body)
 	var out := {}
@@ -748,15 +688,13 @@ func _cast_from_rows(rows: Array, body := "") -> Dictionary:
 	return out
 
 
-## THE TABS FOLLOW THE SCRIPT. Re-derive them from [param body]: every name it cues, in order
-## of first appearance, each with its own settings - kept if it had a tab, restored if it was
-## stashed, and otherwise a COPY of the first voice (a new character is reached by changing
-## one thing about the reader you already have, not by re-dialing a room from nothing).
-## Names that left the script go to [member _stash]. The tab on screen stays on the same
-## NAME when it survives, since its index means nothing once names come and go.
+## The tabs follow the script. Re-derive them from [param body]: every name it cues, in order of first
+## appearance, each with its own settings (kept if it had a tab, restored if stashed, otherwise a copy of the
+## first voice). Names that left the script go to [member _stash]. The tab on screen stays on the same name when
+## it survives, since its index means nothing once names come and go.
 ##
-## Cheap and idempotent - it runs on every pause in typing - and it touches nothing when the
-## cast is unchanged, so a reading in progress is only marked stale by a real change.
+## Cheap and idempotent (it runs on every pause in typing) and it touches nothing when the cast is unchanged, so a
+## reading in progress is only marked stale by a real change.
 func refresh(body: String, want := "") -> void:
 	# The cards that follow the text (the book's pictures) follow it on the same beat.
 	panel._script_text_changed(body)
@@ -766,10 +704,8 @@ func refresh(body: String, want := "") -> void:
 	for n in Manuscript.speakers(body):
 		if not names.has(_who(n)):
 			names.append(_who(n))
-	# NOTHING WRITTEN YET IS NOT A CAST OF ONE (2026-10-25, the user: "Why is the True Tarot note only
-	# reading one available speaker now? What happened to the 'Familiar' voice?"). A show's new episode,
-	# not yet made, hands an empty script, and every voice but the reader went out of reach until it was.
-	# Until there are words, the tabs are every voice the note keeps; words with no cue are the reader's.
+		# Nothing written yet is not a cast of one: a show's new episode, not yet made, hands an empty script. Until
+		# there are words, the tabs are every voice the note keeps; words with no cue are the reader's.
 	if body.strip_edges().is_empty() and not _order.is_empty():
 		names = _order.duplicate()
 	if names.is_empty():
@@ -814,19 +750,17 @@ func tab_name() -> String:
 	return _names[slot] if slot >= 0 and slot < _names.size() else ""
 
 
-## A stored slot merged onto [constant SLOT_DEFAULTS]: every key present, every
-## value the right type, and an index that cannot be out of range. Everything
-## downstream reads settings through here, so a tab that vanished while its passages
-## are still queued degrades to the first voice rather than to a null.
+## A stored slot merged onto [constant SLOT_DEFAULTS]: every key present, every value the right type, and an
+## index that cannot be out of range. Everything downstream reads settings through here, so a tab that vanished
+## while its passages are queued degrades to the first voice rather than to a null.
 func slot_cfg(i: int) -> Dictionary:
 	if _slots.is_empty():
 		return ReadingPanel.SLOT_DEFAULTS.duplicate()
 	return _merge(_slots[clampi(i, 0, _slots.size() - 1)] as Dictionary)
 
 
-## The settings of the voice NAMED [param who] - which is how a chunk asks, because a tab's
-## index moves whenever the script gains or loses a speaker, and a reading in flight must
-## not change voice because someone typed a new name further down.
+## The settings of the voice named [param who] - how a chunk asks, since a tab's index moves whenever the script
+## gains or loses a speaker, and a reading in flight must not change voice when a name is typed further down.
 ## Which ear [param who] is heard in ([method Delivery.pan_of_seat]): what a voice over the line is placed by ([method ReadingJoin.side_between]).
 func pan_of(who: String) -> float:
 	return Delivery.pan_of_seat(float(cfg_of(who).get("seat", 0.0)))
@@ -836,10 +770,9 @@ func pan_of(who: String) -> float:
 const SAID_AT_PACE_ONE := {"piper": 0.52, "kokoro": 0.463}
 
 
-## HOW LONG A WORD TAKES voice [param cfg] (a cast entry: its `voice`, the engine, and its `pace`) to say, seconds - its sentences' rests
-## counted in - the pace each engine was measured at, quickened by its own: what a show's passages are written to cover (Proof's Piper
-## voices, 0.52; Joker Motivation's Kokoro at pace 1.2, 0.39 - 257002's 3,779 words and 463 s of silence read in 1,920 s, where the
-## producer had counted 0.52 for every voice, and every passage came out a quarter short of its work).
+## How long a word takes voice [param cfg] (a cast entry: its `voice`, the engine, and its `pace`) to say, in
+## seconds, its sentences' rests counted in: the pace each engine was measured at, quickened by its own. What a
+## show's passages are written to cover.
 static func said_word(cfg: Dictionary) -> float:
 	var engine := String(cfg.get("voice", ""))
 	var base := float(SAID_AT_PACE_ONE.get(engine, SAID_AT_PACE_ONE["piper"]))
@@ -861,8 +794,7 @@ func _merge(row: Dictionary) -> Dictionary:
 	for k in out:
 		if not row.has(k):
 			continue
-		# The defaults double as the schema: an int key stays an int through a
-		# ConfigFile round trip, which stores every number as a float.
+				# The defaults double as the schema: an int key stays an int through a ConfigFile round trip.
 		match typeof(out[k]):
 			TYPE_INT: out[k] = int(row[k])
 			TYPE_FLOAT: out[k] = float(row[k])
@@ -886,10 +818,8 @@ func capture_slot() -> void:
 	_refresh_tab_labels()
 
 
-## A slot -> the controls. Every write is inside `_syncing`, because each of
-## these controls answers a change by throwing away work in flight: without the
-## guard, showing a tab would restart the reading and re-request every chunk at
-## the settings of the tab that was just left.
+## A slot -> the controls. Every write is inside `_syncing`, because each of these controls answers a change by
+## throwing away work in flight; unguarded, showing a tab would restart the reading at the previous tab's settings.
 func _apply_slot(i: int) -> void:
 	var s := slot_cfg(i)
 	_syncing = true
@@ -914,8 +844,7 @@ func _apply_slot(i: int) -> void:
 	_fx_near.value = float(s["near"])
 	_fx_seat.value = float(s.get("seat", 0.0))
 	_show_ink(String(s["ink"]))
-	# After the voice, because it is what sets the Speaker row's range - and a
-	# speaker id is only meaningful against the model that holds it.
+		# After the voice, because it sets the Speaker row's range (a speaker id only means something against its model).
 	_show_voice_license()
 	_speaker.value = clampf(float(int(s["speaker"])), _speaker.min_value, _speaker.max_value)
 	_syncing = false
@@ -958,8 +887,8 @@ func _rebuild_tabs() -> void:
 	_refresh_tab_labels()
 
 
-## Each row: the name, then the voice it has NOW - model, reader, tone - so the whole cast can
-## be read at a glance, and two people accidentally left on the same voice are obvious.
+## Each row: the name, then the voice it has now (model, reader, tone), so the whole cast reads at a glance and two
+## people left on the same voice are obvious.
 func _refresh_tab_labels() -> void:
 	if _tabs == null:
 		return
@@ -1053,8 +982,8 @@ func fill_voices(voices: Array) -> void:
 		_read_in(_made_voice)
 
 
-## A VOICE MADE WHILE THE NOTE IS OPEN (an actor's own, trained on the Actor card): the reader's from
-## the moment the list asked again holds it ([method ReadingPanel.voice_made]) - it was made to read this.
+## A voice made while the note is open (an actor's own, trained on the Actor card): the reader's from the moment
+## the list asked again holds it ([method ReadingPanel.voice_made]).
 func voice_made(id: String) -> void:
 	_made_voice = id
 
@@ -1078,11 +1007,9 @@ func _voice_picked() -> void:
 	_show_voice_license()
 	panel.warm_voice(_selected_voice_id())
 	capture_slot()
-	# A voice change is not a re-pace. _repace keeps the stream and appends
-	# at the new setting, which for a VOICE would splice a second speaker
-	# mid-narration; and leaving the old requests in flight keeps both
-	# models loaded and chunking, halving the throughput of each. So: kill
-	# the session and read again in the new voice.
+		# A voice change is not a re-pace: _repace keeps the stream and appends at the new setting, which for a voice
+		# would splice a second speaker mid-narration, and old requests left in flight would keep both models loaded.
+		# So: kill the session and read again in the new voice.
 	if panel._stream.has_reading():
 		panel._stream.restart()
 	panel.touch()
@@ -1116,8 +1043,8 @@ func blend_now() -> String:
 	return _blend
 
 
-## The host says backend [param backend]'s readers blend (its `describe`): never a voice's row, whose every field keys
-## the takes kept in it ([TakeCache]).
+## The host says backend [param backend]'s readers blend (its `describe`): never a voice's row, whose every field
+## keys the takes kept in it ([TakeCache]).
 func offer_blends(backend: String) -> void:
 	_blending[backend] = true
 
@@ -1131,9 +1058,8 @@ func blends(id: String) -> bool:
 	return false
 
 
-## THE READER BROWSER'S PICK, to the tab on screen: reader [param speaker] and [param blend] ("" for that
-## reader alone) - regenerating what has not played, as a step of the Speaker number does. The same pick
-## again changes nothing.
+## The reader browser's pick, to the tab on screen: reader [param speaker] and [param blend] ("" for that reader
+## alone), regenerating what has not played, as a step of the Speaker number does. The same pick again changes nothing.
 func pick(speaker: int, blend: String) -> void:
 	if speaker == int(_speaker.value) and blend == _blend:
 		return
@@ -1148,8 +1074,7 @@ func pick(speaker: int, blend: String) -> void:
 	panel.touch()
 
 
-## Always shown: these checkpoints are licensed individually and the terms are
-## inherited through fine-tuning in a way nothing machine-readable records.
+## Always shown: these checkpoints are licensed individually and the terms are inherited through fine-tuning.
 func _show_voice_license() -> void:
 	var i := voice_pick.selected
 	if i < 0 or i >= voice_meta.size():
@@ -1168,10 +1093,8 @@ func _show_voice_license() -> void:
 # --- what a request reads of a voice --------------------------------------------------------------
 
 
-## Which checkpoint a slot reads with. A tab may name a voice this install does
-## not have - a config copied between machines, a model deleted - and the answer
-## to that is to read in whatever IS selected, not to fall silent halfway
-## through a chapter.
+## Which checkpoint a slot reads with. A tab may name a voice this install does not have (a config copied between
+## machines, a model deleted): it reads in whatever is selected rather than falling silent.
 func voice_id_of(s: Dictionary) -> String:
 	var want := String(s["voice"])
 	for v in voice_meta:
@@ -1183,9 +1106,8 @@ func voice_id_of(s: Dictionary) -> String:
 	return ""
 
 
-## A slot's reader id, clamped to what its own model actually holds. Slots are
-## copied when a tab is added, so a speaker id chosen on libritts (904 readers)
-## can easily outlive the switch to a single-speaker voice.
+## A slot's reader id, clamped to what its own model holds (slots are copied when a tab is added, so a speaker
+## id chosen on libritts can outlive a switch to a single-speaker voice).
 func speaker_of(s: Dictionary) -> int:
 	var vid := voice_id_of(s)
 	for v in voice_meta:

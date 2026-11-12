@@ -1,7 +1,7 @@
 extends RefCounted
 class_name GamePrepTools
 
-## GamePrepTools - WHAT THE GAME MASTER HAS, ALONE, before anyone sits down (next/tabletop.md): real dice, for what the game's rules roll when a character is made, and handing the preparation in. Nothing thrown here is on any table.
+## GamePrepTools - what the game master has alone, before anyone sits down (next/tabletop.md): real dice for what the game's rules roll when a character is made, and handing the preparation in. Nothing thrown here is on any table.
 
 const SUBMITTED := "submitted.json"
 
@@ -68,7 +68,7 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 	return {"text": "No tool called %s." % name, "error": true}
 
 
-## WHAT A PREPARATION LACKS, each said in words: nothing has to be anything in particular but what the table reads - every player a sheet and a want.
+## What a preparation lacks, each said in words: only what the table reads is required - every player a sheet and a want.
 static func problems(prep: Variant, the_players: PackedStringArray) -> PackedStringArray:
 	var out := PackedStringArray()
 	if not (prep is Dictionary):

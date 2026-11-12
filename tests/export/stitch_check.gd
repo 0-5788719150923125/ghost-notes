@@ -1,16 +1,16 @@
 extends SceneTree
 
-## stitch_check - A STRETCH OF AN EXPORT RENDERED AGAIN, PUT BACK IN ITS PLACE ([Stitch]; next/editing.md step 13).
+## stitch_check - a stretch of an export rendered again and put back in its place ([Stitch]; next/editing.md step 13).
 ##
 ##   godot --headless --path . --script res://tests/export/stitch_check.gd
 ##
-## On videos of its own made by ffmpeg with the export's keyframe settings (a 12 s "old" export with its sound, and a "new"
-## 4 s stretch of another picture), the stitch's own argv run for real:
+## On videos made by ffmpeg with the export's keyframe settings (a 12 s "old" export with sound, and a "new" 4 s stretch of
+## another picture), the stitch's own argv run for real:
 ##   - the stretch asked for, 5.3-7.1 s, is widened to the keyframes about it, 4-8 s;
-##   - the stitched video is as long as the old, every picture before the stretch and after it BIT FOR BIT the old one's
-##     (copied, never encoded again), the stretch's the new one's, and the sound the old one's whole track;
-##   - THE CONTROLS: the old video's own pictures in the stretch differ from what was stitched there; and the old video
-##     stitched with its own middle, nothing changes.
+##   - the stitched video is as long as the old, every picture before and after the stretch bit for bit the old one's (copied,
+##     never encoded again), the stretch's the new one's, and the sound the old one's whole track;
+##   - controls: the old video's own pictures in the stretch differ from what was stitched there; the old video stitched with
+##     its own middle changes nothing.
 
 const DIR := "user://stitch_check"
 const FPS := 10
@@ -40,7 +40,7 @@ func _initialize() -> void:
 	_ok(n.slice(a0, a1) == s.slice(0, a1 - a0), "the stretch's pictures are the new ones")
 	_ok(n.slice(a0, a1) != o.slice(a0, a1), "the control: the old video's own pictures there differ")
 	_ok(_audio_seconds(out) > 11.5 and absf(_audio_seconds(out) - _audio_seconds(old)) < 0.1, "the sound is the old one's whole track (%.2f s)" % _audio_seconds(out))
-	# THE CONTROL: the old video's own middle stitched back changes nothing
+	# control: the old video's own middle stitched back changes nothing
 	var middle := _dir.path_join("middle.mp4")
 	OS.execute("ffmpeg", ["-y", "-loglevel", "error", "-ss", "%.3f" % sp.x, "-i", old, "-frames:v", str(int((sp.y - sp.x) * FPS)), "-map", "0:v", "-c", "copy", middle])
 	var same := _stitch(old, middle, sp, "same.mp4")

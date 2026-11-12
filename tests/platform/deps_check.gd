@@ -2,34 +2,18 @@ extends SceneTree
 
 ## Is the dependency table still true, and does resolution still behave?
 ##
-## The panel this backs exists to make a new machine's first run explainable, and
-## it can fail in two ways that are invisible on the author's own machine - which
-## has everything installed and runs Linux only.
-##
-##   THE TABLE GOES STALE. Someone adds a call site that shells out to a new
-##   program and does not add a row for it, so the Environment panel reports "all
-##   present" on a machine that is missing the thing that just broke. So this gate
-##   READS THE SOURCE: every bare program name handed to [Subprocess] or
-##   [method Deps.execute] anywhere in `src/` must be a [constant Deps.TOOLS]
-##   row's or provided by a [constant Deps.FETCHED] one. That is the same drift
-##   discipline `docs.py` applies to scenes and CLI flags, for the same reason - a
-##   map nobody can forget to update.
-##
-##   THE HINTS GO WRONG. What stays the machine's own is installed by the user, with
-##   the command `install` names per platform, and the author cannot run Windows or
-##   macOS - so a row that ships with only a Linux hint tells a Mac user nothing at
-##   the exact moment they need telling. Every such row must carry a hint for every
-##   platform it claims to apply to. (What ghost fetches is tests/platform/provision_check.gd's.)
-##
-## Plus the resolver's own invariants, which are cheap and which nothing else
-## covers: a miss stays a miss, an absolute path passes through, and `venv_bin`
-## puts things where this platform actually puts them.
+## - The table must not go stale: the gate reads the source, and every bare program name handed to [Subprocess]
+##   or [method Deps.execute] anywhere in `src/` must be a [constant Deps.TOOLS] row's or provided by a
+##   [constant Deps.FETCHED] one.
+## - The hints must cover every platform: what stays the machine's own is installed by the user with the
+##   command `install` names per platform, so every such row carries a hint for every platform it applies to.
+##   (What ghost fetches is tests/platform/provision_check.gd's.)
+## - The resolver's invariants: a miss stays a miss, an absolute path passes through, and `venv_bin` puts things
+##   where this platform puts them.
 ##
 ##   godot --headless --path . --script tests/platform/deps_check.gd
 
-## Programs every platform provides as part of itself. They are excluded from the
-## drift scan because a row telling someone to install `sleep` would be absurd -
-## and because a machine without them has bigger problems than ghost.
+## Programs every platform provides as part of itself, excluded from the drift scan.
 const ASSUMED := ["sleep", "true", "false", "sh", "bash", "cmd", "env", "powershell"]
 
 var _fails: Array = []
@@ -69,8 +53,7 @@ func _table_shape() -> void:
 			_check(not keys.has(key), "key '%s' is unique across the tables" % key)
 			keys[key] = true
 			_check(not String(t.get("name", "")).is_empty(), "%s has a display name" % key)
-			# The description IS the panel's tooltip and the report's explanation. A row
-			# without one is a row that tells the reader a name and nothing else.
+			# The description is the panel's tooltip and the report's explanation.
 			_check(String(t.get("used_for", "")).length() > 30,
 				"%s says what it is used for" % key)
 			_check(Deps.entry(key) == t, "Deps.entry finds %s" % key)
@@ -91,9 +74,8 @@ func _table_shape() -> void:
 			"%s knows where it lives" % key)
 
 
-## THE ONE THE AUTHOR CANNOT CATCH BY RUNNING IT. ghost is developed on Linux; a
-## row whose `install` map only has a "linux" key is silently useless to everyone
-## else, and there is no way to notice that from here except by asserting it.
+## A row whose `install` map only has a "linux" key is useless to everyone else; ghost is developed on Linux, so
+## only an assertion catches it.
 func _platform_hints() -> void:
 	print("-- install hints cover every platform a row applies to")
 	for t in Deps.TOOLS:
@@ -111,11 +93,9 @@ func _platform_hints() -> void:
 			"%s links somewhere to download it" % key)
 
 
-## Read every script and collect the bare program names actually spawned. A name
-## with a slash in it is a path (a venv binary, `OS.get_executable_path()`) and is
-## nobody's dependency to declare; a name behind a variable cannot be seen from
-## here and is out of scope by construction - which is fine, because the point is
-## to catch the LITERAL that someone added without a table row.
+## Read every script and collect the bare program names actually spawned. A name with a slash is a path (a venv
+## binary, `OS.get_executable_path()`) and nobody's dependency to declare; a name behind a variable cannot be seen
+## from here and is out of scope.
 func _source_drift() -> void:
 	print("-- every spawned program name has a table row")
 	var declared := {}
@@ -148,9 +128,8 @@ func _source_drift() -> void:
 		_check(declared.has(prog), "'%s' (spawned in %s) has a Deps row"
 			% [prog, ", ".join(PackedStringArray(seen[prog]))])
 
-	# NO POSIX-ONLY PROGRAM PATHS. `/bin/bash` was spawned from seven places, none of which
-	# could start on Windows; the redirects they existed for are Subprocess.start_logged /
-	# start_redirected now. Subprocess itself owns the one `/bin/sh`, on the Unix branch.
+	# No POSIX-only program paths: the redirects `/bin/bash` was used for are Subprocess.start_logged /
+	# start_redirected; Subprocess itself owns the one `/bin/sh`, on the Unix branch.
 	var abs_re := RegEx.new()
 	abs_re.compile("(?:Subprocess\\.start\\w*|Deps\\.execute|OS\\.execute|OS\\.create_process"
 		+ "|OS\\.execute_with_pipe)\\(\\s*\"(/[^\"]*)\"")
@@ -162,8 +141,7 @@ func _source_drift() -> void:
 		% ", ".join(posix))
 
 
-## Every script under src/, every folder of the stack (it listed three folders by hand, and after
-## src/ became 22 folders on 2026-10-13 it was scanning two of them).
+## Every script under src/, in every folder of the stack.
 func _scripts() -> PackedStringArray:
 	var out := PackedStringArray()
 	var queue := PackedStringArray(["res://src"])
@@ -189,9 +167,7 @@ func _resolver() -> void:
 	var nope := "ghost-no-such-program-xyzzy"
 	_check(Deps.resolve(nope).is_empty(), "a program that does not exist resolves to \"\"")
 	_check(not Deps.has(nope), "and has() agrees")
-	# Cached, so the second ask does not re-walk the whole search path. Same answer
-	# is all that can be asserted from here, but a regression that broke the cache
-	# key would change it.
+	# Cached, so the second ask does not re-walk the search path; a regression in the cache key would change it.
 	_check(Deps.resolve(nope).is_empty(), "and stays \"\" from the cache")
 	_check(Deps.resolve("").is_empty(), "an empty name resolves to \"\"")
 
@@ -201,8 +177,7 @@ func _resolver() -> void:
 
 	var dirs := Deps.search_dirs()
 	_check(dirs.size() > 0, "there are directories to search")
-	# PATH first: the user's own statement of intent must outrank our guesses, or a
-	# deliberately-chosen ffmpeg loses to whatever is in /usr/bin.
+	# PATH first: the user's own statement of intent must outrank our guesses.
 	var path_env := OS.get_environment("PATH")
 	if not path_env.is_empty():
 		var first := String(path_env.split(":" if OS.get_name() != "Windows" else ";", false)[0])
@@ -227,8 +202,7 @@ func _reporting() -> void:
 	_check(rows.size() >= Deps.MANAGED.size() + Deps.FETCHED.size(), "the report has rows")
 	for r in rows:
 		_check(r.has("found") and r.has("name"), "%s row is shaped" % String(r.get("key", "?")))
-		# Nothing on a platform's exclusion list should be reported there at all -
-		# a red `setpriv` on a Mac is a bug report waiting to happen.
+		# Nothing on a platform's exclusion list should be reported there at all.
 		var only: Array = r.get("platforms", [])
 		_check(only.is_empty() or only.has(Deps.platform()),
 			"%s applies here" % String(r.get("key", "?")))
@@ -238,9 +212,8 @@ func _reporting() -> void:
 		_check(text.contains(String(r.get("name", "?"))),
 			"the text report mentions %s" % String(r.get("name", "?")))
 
-	# verdict() is what `--deps`'s exit code reads, so it has to agree with the rows
-	# rather than be computed twice. An environment is not "missing" - it is built
-	# when its feature asks - but anything else a feature needs is.
+	# verdict() is what `--deps`'s exit code reads, so it must agree with the rows. An environment is not
+	# "missing" (it is built when its feature asks), but anything else a feature needs is.
 	var missing_feature := false
 	for r in rows:
 		var env := int(r.get("kind", Deps.KIND_TOOL)) == Deps.KIND_MANAGED \

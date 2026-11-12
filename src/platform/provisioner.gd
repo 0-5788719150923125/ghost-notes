@@ -2,23 +2,19 @@ extends Node
 
 ## Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
 ##
-## One job per dependency. FFmpeg and uv are downloaded from their upstream releases, checked
-## against the published SHA-256 and unpacked into a versioned directory (see [Provision]). Python
-## is installed by uv. Each feature's environment is a uv virtualenv built from its requirements,
-## then checked by importing what it promises. Jobs are coroutines on the main thread, because every
-## child process has to start there (see subprocess.gd); checksums and unpacking run on worker
-## threads so no frame waits on a disk.
+## One job per dependency. FFmpeg and uv are downloaded from their upstream releases, checked against the
+## published SHA-256 and unpacked into a versioned directory (see [Provision]); Python is installed by uv; each
+## feature's environment is a uv virtualenv built from its requirements, then checked by importing what it
+## promises. Jobs are coroutines on the main thread, since every child process must start there (see
+## subprocess.gd); checksums and unpacking run on worker threads.
 ##
-## WHEN THINGS HAPPEN. An interactive launch installs the core (uv, FFmpeg, Python) in the
-## background and, at most once a day and only when the home screen's "keep up to date" box is
-## ticked, updates everything already installed. A feature's environment is built the first time
-## [method Provision.ensure] asks for it. A render, the offline analyzer, a test probe and every
-## headless tool never start a job; they read what is on disk. `--provision` is the exception, a
-## headless run that installs on purpose.
+## When: an interactive launch installs the core (uv, FFmpeg, Python) in the background and, at most once a day
+## and only when "keep up to date" is ticked, updates everything installed. A feature's environment is built the
+## first time [method Provision.ensure] asks. A render, the offline analyzer, a test probe and every headless
+## tool never start a job; they read what is on disk. `--provision` is a headless run that installs on purpose.
 ##
-## Progress is the point of the shape: [signal changed] fires as a job moves, and [method state]
-## says what it is doing in words, with a fraction whenever one is known. The Environment panel on
-## the home screen and the badge at the top of every mode are both drawn from it.
+## [signal changed] fires as a job moves and [method state] says what it is doing in words, with a fraction when
+## known; the Environment panel and every mode's badge are drawn from it.
 
 signal changed(key: String)
 signal finished(key: String, ok: bool, message: String)
@@ -67,12 +63,11 @@ func _may_run(args: PackedStringArray) -> bool:
 	var st := get_node_or_null("/root/Settings")
 	if st != null and bool(st.is_read_only()):
 		return false
-	# THE PHONE SHELL downloads nothing (next/notes.md step 11), on a phone or under --handheld
+	# The phone shell downloads nothing (next/notes.md step 11), on a phone or under --handheld
 	var boot := get_node_or_null("/root/Boot")
 	if boot != null and bool(boot.handheld()):
 		return false
-	# A phone (or the web) has no builds of anything ghost installs - see Deps.platform - so
-	# there is nothing to start, not a row of jobs to fail one by one.
+	# A phone (or the web) has no builds of anything ghost installs (see Deps.platform): nothing to start.
 	if not Provision.PLATFORMS.has(Provision.platform_key()):
 		return false
 	return DisplayServer.get_name() != "headless"
@@ -527,9 +522,8 @@ func _release(row: Dictionary, src: Dictionary) -> Dictionary:
 	return {"error": "there is no build for %s" % Provision.platform_key()}
 
 
-## The Lean toolchain to fetch is not Lean's newest: it is the one the newest Mathlib release (that
-## the REPL also has) was built with, read from that release's `lean-toolchain` file. The pick rides
-## along as `extra.mathlib`, for the workbench.
+## The Lean toolchain to fetch is the one the newest Mathlib release (that the REPL also has) was built with,
+## read from that release's `lean-toolchain` file, not Lean's newest. The pick rides along as `extra.mathlib`.
 func _lean_release(src: Dictionary) -> Dictionary:
 	var gh := ["Accept: application/vnd.github+json"]
 	var rels: Dictionary = await _ask(
@@ -663,10 +657,9 @@ func _env_job(key: String, action: String) -> void:
 
 # --- a Lean workbench -----------------------------------------------------------
 #
-# Measured by hand first (2026-10-15, Mathlib v4.35.0): `lake update` 145 s, and Mathlib's own
-# post-update hook downloads and unpacks its compiled library while it runs (9,031 files); the
-# workbench is 7.3 GB, its download cache 0.45 GB more until it is removed. Lake runs git; the cache
-# tool runs curl and honors MATHLIB_CACHE_DIR, so nothing lands in the user's own caches.
+# Measured on Mathlib v4.35.0: `lake update` takes 145 s, and Mathlib's post-update hook downloads and unpacks
+# its compiled library (9,031 files); the workbench is 7.3 GB, its download cache 0.45 GB more until removed.
+# Lake runs git; the cache tool runs curl and honors MATHLIB_CACHE_DIR, so nothing lands in the user's caches.
 
 ## Build the workbench `key` names for the Mathlib release ghost's Lean was picked for: write the
 ## template into its own folder (one per release), let Lake fetch Mathlib and the REPL, download

@@ -1,15 +1,15 @@
 extends SceneTree
 
-## model_step_check: AN EPISODE THAT BUILDS DESIGNS WHAT IT BUILDS FIRST ([AssemblyModel], [ModelTools], next/assembly.md "The model"; the user, 2026-11-03: "We probably need a proper modeling step ... I just want to have a proper model built by the end of every video"). No renderer, no writer.
+## model_step_check: an episode that builds designs what it builds first ([AssemblyModel], [ModelTools], next/assembly.md "The model"). No renderer, no writer.
 ##
 ##   godot --headless --path . --script res://tests/table_show/model_step_check.gd
 ##
-## - THE STEP: a plan that builds has `model` before its table and its acts, which are made from it. Control: a plan that builds nothing has none.
-## - AN EPISODE ALREADY MADE GOES ON AS IT WAS: its work was blocked with no model, and it wants none, until its work is blocked again.
-## - THE TOOLS: `shape` says what parts it comes to and what floats; a section written again replaces it; `submit` refuses what floats until told twice, too many parts always, and no name; what it hands in lands as `model.json`.
-## - WHAT IS HANDED IN STANDS: the table takes the model into itself; the acts begin their last act by finishing it, whatever was written. Control: an episode with no model has neither.
-## - ALL OF IT IS IN THE PICTURE: how far a model's top is cut off by the frame is known where its plate stands, part by part, the modeler is told what the lens sees, and the set dresser is asked to move a plate that cuts it. Control: a low one is not cut.
-## - WORDS: whoever comes after is told what it is.
+## - the step: a plan that builds has `model` before its table and its acts, which are made from it. Control: a plan that builds nothing has none.
+## - an episode already made goes on as it was: its work was blocked with no model, and it wants none, until its work is blocked again.
+## - the tools: `shape` says what parts it comes to and what floats; a section written again replaces it; `submit` refuses what floats until told twice, too many parts always, and no name; what it hands in lands as `model.json`.
+## - what is handed in stands: the table takes the model into itself; the acts begin their last act by finishing it, whatever was written. Control: an episode with no model has neither.
+## - all of it is in the picture: how far a model's top is cut off by the frame is known where its plate stands, part by part, the modeler is told what the lens sees, and the set dresser is asked to move a plate that cuts it. Control: a low one is not cut.
+## - words: whoever comes after is told what it is.
 
 const ROOT := "user://model_step_check"
 const COLORS := {"red": "#b3261e", "tan": "#c9b185"}
@@ -73,7 +73,7 @@ func _steps() -> void:
 	_ok(ep.dependents("model").has("table") and ep.dependents("model").has("acts"), "and go with it, when it is designed again")
 	var none := _episode(2, false)
 	_ok(not none.steps().has("model") and not none.needs("table").has("model"), "control: one that builds nothing has none")
-	# ...ALREADY MADE
+	# ...already made
 	var old := _episode(3, true)
 	old.write_json("acts", {"acts": [{"name": "a", "beat": "intro", "tracks": [{"law": "assemble", "ops": [{"do": "put", "part": "brick 2x4 red", "at": [0, 0]}]}]}]})
 	_ok(not old.steps().has("model") and old.model_words().is_empty(), "an episode whose work was blocked with no model goes on as it was made")
@@ -91,14 +91,14 @@ func _tools() -> void:
 	got = await t.call_tool("submit", {})
 	_ok(got.has("error") and String(got["text"]).contains("`name`"), "it needs a name")
 	await t.call_tool("shape", {"name": "a block"})
-	# ...FLOATS
+	# ...floats
 	got = await t.call_tool("shape", {"sections": [{"name": "a cloud", "shapes": [{"shape": "box", "from": [10, 10, 30], "to": [13, 13, 35], "color": "red"}]}]})
 	_ok(String(got["text"]).contains("HOLD ON TO NOTHING"), "what floats is said")
 	got = await t.call_tool("submit", {})
 	_ok(got.has("error") and not t.submitted, "and it is not handed in")
 	got = await t.call_tool("shape", {"sections": [{"name": "a cloud", "shapes": [{"shape": "box", "from": [4, 4, 9], "to": [7, 7, 14], "color": "red"}]}]})
 	_ok(not String(got["text"]).contains("HOLD ON TO NOTHING") and (t.draft()["sections"] as Array).size() == 2, "a section written again replaces it, where it stands")
-	# ...TOO MANY
+	# ...too many
 	var many := ModelTools.new(ProjectSettings.globalize_path(ROOT).path_join("many"))
 	await many.call_tool("shape", {"name": "a lot", "size": [48, 48], "colors": COLORS, "base_color": "tan", "sections": [{"name": "dots", "shapes": [{"shape": "where", "if": "mod(x+z, 2) - 0.5", "from": [0, 0, 0], "to": [47, 47, 0], "color": "red", "step": 1}]}]})
 	got = await many.call_tool("submit", {})
@@ -107,7 +107,7 @@ func _tools() -> void:
 	_ok((t.draft()["sections"] as Array).size() == 1, "`remove` takes a section out")
 	got = await t.call_tool("submit", {})
 	_ok(not got.has("error") and t.submitted, "and what holds is handed in: %s" % String(got["text"]).left(70))
-	# ...AS THE PRODUCER LANDS IT
+	# ...as the producer lands it
 	var ep := _episode(4, true)
 	var prod := TableProducer.new(ep, {"title": "Show", "brief": "A brief."})
 	var err := prod._land_model(FileAccess.get_file_as_string(dir.path_join(ModelTools.SUBMITTED)))
@@ -140,7 +140,7 @@ func _lands() -> void:
 	var acts: Array = (ep.read_json("acts") as Dictionary)["acts"]
 	var last_ops: Array = ((acts[1] as Dictionary)["tracks"][0] as Dictionary)["ops"]
 	_ok(String((last_ops[0] as Dictionary)["do"]) == "finish", "its last act begins by finishing the model, whatever was written")
-	# ...AND ALL OF IT IS IN THE PICTURE
+	# ...and all of it is in the picture
 	var lay := CardTable.layout_of(ep.seed)
 	var tower := AssemblyModel.make({"name": "a tower", "size": [16, 16], "colors": COLORS, "base_color": "tan", "sections": [{"name": "t", "shapes": [{"shape": "box", "from": [6, 6, 0], "to": [9, 9, 140], "color": "red"}]}]})
 	var far := Assembly.sanitize({"model": tower, "base": {"at": [0, -40]}, "stock": []})
@@ -158,7 +158,7 @@ func _lands() -> void:
 	set_tools._assembly = {"base": {"at": [0, -40]}, "stock": []}
 	_ok(set_tools._model_cut() == TableAssembly.model_cut_by(Assembly.sanitize({"base": {"at": [0, -40]}, "stock": [], "model": ep.model()}), lay["camera"], float(lay["fov"])), "and the set dresser's tools ask the same")
 	set_tools.release()
-	# CONTROL
+	# Control
 	var other := _episode(2, false)
 	var p3 := TableProducer.new(other, {"title": "Show", "brief": "A brief."})
 	p3._land_table(JSON.stringify(table))

@@ -2,15 +2,13 @@ extends Node
 
 ## Spectrum - the audio front end (autoload).
 ##
-## Owns the [AudioStreamPlayer] and the [AudioEffectSpectrumAnalyzer] sitting on
-## the Master bus. Every frame it samples the analyzer across a log-spaced set
-## of frequency bands, packs the result into a typed [AudioFeatures], and stores
-## it on [member current]. Scenes read [member current]; they never see the
-## analyzer. This is the one place that knows audio exists.
+## Owns the [AudioStreamPlayer] and the [AudioEffectSpectrumAnalyzer] on the Master bus. Every frame it
+## samples the analyzer across log-spaced bands, packs the result into a typed [AudioFeatures] on
+## [member current], and owns the session clock. Scenes read [member current]; they never see the
+## analyzer.
 ##
-## Two backends: the live analyzer (default, real-time, what you author in) and a
-## baked timeline ([SpectrumBake], enabled with --use-bake) read from pre-computed
-## frames for deterministic, analyzer-independent Movie Maker exports.
+## Two backends: the live analyzer (default) and a baked timeline ([SpectrumBake], `--use-bake`) read
+## from pre-computed frames for deterministic Movie Maker exports.
 
 ## Number of log-spaced bands in [member AudioFeatures.bands].
 const BAND_COUNT := AudioFeatures.BAND_COUNT
@@ -39,45 +37,19 @@ var current: AudioFeatures = AudioFeatures.new()
 ## A stable hash of the loaded audio's path - scenes seed from this so the same
 ## song always renders the same video. 0 when nothing is loaded.
 var song_hash: int = 0
-## A CLOCK SUPPLIED FROM OUTSIDE, in seconds; negative means "use the audio player", which is
-## every normal session and every render.
-##
-## It exists because a six-hour export cannot be re-run to find out what it did. The show is a
-## pure function of the seed and the baked spectrum, so the whole schedule can be replayed with
-## no audio device and no encoder - but only if something can stand in for the playback
-## position. This is that, and it is deliberately ONE branch in `_process` rather than a second
-## code path: the energy, the beat, the tempo, the flux and the movement are all derived below
-## it, and a replay that computed those itself would be measuring a copy of this file rather
-## than this file. See tests/show/show_timeline_probe.gd.
+## A clock supplied from outside, in seconds; negative means "use the audio player" (every normal
+## session and every render). It lets the whole schedule be replayed with no audio device and no
+## encoder. It is one branch in `_process`, so everything derived below it (energy, beat, tempo, flux,
+## movement) runs unchanged. See tests/show/show_timeline_probe.gd.
 var virtual_clock: float = -1.0
-## THE RENDER CLOCK: in an export, the show's time is COUNTED FROM FRAMES rather than asked of
-## the audio player. True only in a render.
+## The render clock: in an export, show time is counted from frames rather than asked of the audio
+## player. True only in a render.
 ##
-## Reported as a finished video freezing for up to twenty seconds at a time while the audio
-## played on. The picture - every scene and the karaoke line - is driven by `current.time`, and
-## Movie Maker writes exactly one video frame per engine iteration; so if that clock stops
-## while iterations continue, the OUTPUT holds a still. Measured on the artifact: a subtitle
-## card sitting nineteen seconds past the end of its own sentence with the karaoke fill frozen
-## mid-word, then snapping back into sync - a clock that STOPPED and RESUMED, not one that
-## lagged. The same session played back live, with the clock watched, never stalls; only the
-## render does.
-##
-## `get_playback_position()` answers for a device that is mixing in blocks, and under Movie
-## Maker there is no device pacing anything - the engine is running as fast as it can and the
-## audio is written per frame. Under `--fixed-fps` a frame IS 1/fps of show time, exactly, so
-## counting frames is not an approximation of the truth here, it is the definition of it: the
-## output has exactly that many frames per second whatever any device says.
-##
-## THE MASKING RENDER ALREADY DID THIS, and its comment says why in almost these words - "in
-## render mode the movie is driven by accumulated fixed-fps time (_render_t), NOT the
-## video/audio stream positions - those can drift a little, stall". That lesson never reached
-## this file, which is the whole of the defect.
-##
-## A/V CANNOT DRIFT UNDER IT, which is the property that makes it safe rather than merely
-## different: Movie Maker writes the audio at the same fixed rate it writes the frames, so the
-## counted clock and the written audio advance by the same amount every iteration by
-## construction. Live playback keeps asking the player, where a real device really is the
-## authority on where the sound is.
+## Movie Maker writes one video frame per engine iteration with no device pacing anything, and
+## `get_playback_position()` can stall and resume, which would freeze the output picture while the
+## audio plays on. Under `--fixed-fps` a frame is exactly 1/fps of show time, so counting frames is
+## the definition of the clock. A/V cannot drift under it: Movie Maker writes audio at the same fixed
+## rate as frames. Live playback keeps asking the player, which is the authority on where the sound is.
 var render_clock := false
 var _render_t := 0.0
 var _sig: HarmonicSignature = null       # rolling perceptual harmonic descriptor + content seed
@@ -85,9 +57,8 @@ var _sig_fast: HarmonicSignature = null  # short-memory twin for the Echo re-loc
                                          # that the audio moved (a loop seam) must not wait out the
                                          # seconds of context the seeding descriptor integrates
 
-## Emitted when a loaded song reaches its end (not in idle mode). main listens: Manual and
-## Synthesis loop, Auto stops at its start and stays in its note. Looping streams never end,
-## so this never fires for them.
+## Emitted when a loaded song reaches its end (not in idle mode). Manual and Synthesis loop, Auto stops
+## at its start and stays in its note. Looping streams never end, so this never fires for them.
 signal song_finished
 
 var _player: AudioStreamPlayer
@@ -96,87 +67,52 @@ var _tap: AudioEffectCapture          # the LIVE_TAP recorder (see the const)
 var _tap_ring := PackedFloat32Array()
 var _tap_pos := 0
 var _tap_filled := 0
-## THE BOOKEND - held silence before the content and after it.
+## The bookend: held silence before the content and after it, so the opening words are not spoken
+## behind a dark screen. [member lead_in] holds playback for that many seconds while the session clock
+## runs; [member tail] keeps the session alive that long after the audio ends, before
+## [signal song_finished] is emitted.
 ##
-## A show used to begin on its first sample and end on its last, which reads as abrupt
-## however gracefully the picture fades: [method Director._bookend_fade] eases the
-## image up from black over the opening seconds, but those are the opening seconds OF
-## THE NARRATION, so the first words are spoken behind a dark screen and the last are
-## still landing as it goes out. Nothing was ever added to the timeline.
-##
-## These two add it. [member lead_in] holds playback for that many seconds while the
-## session clock runs anyway; [member tail] keeps the session alive that long after the
-## audio ends, before [signal song_finished] is emitted.
-##
-## THE CLOCK IS THE WHOLE DESIGN. [member current].time reads `_hold` during the hold,
-## `lead_in + playback_position` while playing, and `lead_in + length + _tail_t` during
-## the tail - ONE continuous timeline across all three. That is not a convenience; it is
-## what makes everything downstream correct for free. The bookend fade, Echo's cursor,
-## the subtitle time base and the exporter's progress all read this clock, and the
-## obvious alternative - simply delaying `play()` - DOUBLE-FADES, because during the
-## hold `time` would be the idle clock ramping the fade up, and then `play()` snaps it
-## back to zero and it fades from black a second time.
-##
-## Why not simply write silence into the audio file, which sounds simpler: the session
-## seed is derived from the audio's own fingerprint, so padding the file makes the same
-## script render a DIFFERENT show, and it invalidates the spectrum bake cache. It also
-## could not work for auto mode, where the song belongs to the user.
+## [member current].time is one continuous timeline across the hold, playback and tail: `_hold` during
+## the hold, `lead_in + playback_position` while playing, `lead_in + length + _tail_t` during the tail.
+## The bookend fade, Echo's cursor, the subtitle time base and the exporter's progress all read it.
+## Delaying `play()` instead would fade in twice. Silence is not written into the file because the
+## session seed comes from the audio's fingerprint (padding would change the show and invalidate the
+## bake cache), and auto mode's song belongs to the user.
 var lead_in := 0.0
 var tail := 0.0
 
-## Whether the loaded audio ALREADY CONTAINS the bookend silence.
-##
-## Two mechanisms are needed, because the two modes own their audio differently:
-##
-##   AUTO / MANUAL play a song that belongs to the user and must not be rewritten, so
-##   the hold is performed here at playback time and the intro is genuinely silent.
-##
-##   SYNTHESIS renders its own take, so the silence is written INTO the PCM - and that
-##   is strictly better there, because the ambience pad is a filter over the buffer:
-##   given real samples to write into, it swells during the intro and the analyzer
-##   HEARS it, so the scenes have something to move to instead of idling through a
-##   dead five seconds. A held player cannot produce that; there is nothing to filter.
-##
-## When this is true the clock needs no offset (the file's own position already spans
-## the bookend) and playback must not be held or deferred - but [member lead_in] and
-## [member tail] are still set, because the fade windows are read from them.
+## Whether the loaded audio already contains the bookend silence. Auto and manual play a song that
+## must not be rewritten, so the hold is performed here at playback time. Synthesis renders its own
+## take and writes the silence into the PCM, so the ambience pad swells during the intro and the
+## analyzer hears it. When true the clock needs no offset and playback is not held, but [member
+## lead_in] and [member tail] are still set because the fade windows read them.
 var bookend_baked := false
 
-## Seconds over which the AUDIO is ramped in and out, alongside the picture. Applied to
-## the MASTER BUS rather than the player, deliberately: the analyzer is a bus EFFECT and
-## runs BEFORE the bus's output volume, so a master ramp is heard and recorded without
-## dimming what the scenes see. Fading the player instead would dim the visuals a second
-## time on top of the bookend's own fade, and the picture would sink twice as fast as
-## the sound.
+## Seconds over which the audio is ramped in and out alongside the picture. Applied to the Master bus,
+## not the player: the analyzer runs before the bus volume, so the ramp is heard and recorded without
+## dimming what the scenes see.
 var fade_audio := true
 
-## THE CONDUCTOR (next/notes.md, "The transport"): whatever plays the show's audio when it is not
-## a plain file - a live reading, a synthesis take - and so whatever the transport's play, pause,
-## stop and rail drive. A generator has no file to seek and its player's position means nothing
-## across a restart, but the editor driving it holds the take and can push it again from any
-## sentence, which is a perfectly good seek; it just cannot be expressed through the player.
+## The conductor (next/notes.md, "The transport"): whatever plays the show's audio when it is not a
+## plain file (a live reading, a synthesis take), and so whatever the transport's play, pause, stop and
+## rail drive. One at a time, registered by its owner ([method conduct]), released by it ([method
+## release_conductor]), and forgotten once the owner is freed.
 ##
-## ONE at a time, REGISTERED by its owner ([method conduct]) and RELEASED by it
-## ([method release_conductor]) - and forgotten by itself once the owner is freed. It replaced
-## three bare Callables (`scrub_pos`, `scrub_len`, `scrub_seek`) that the Generative panel set and
-## nothing cleared: not [method stop], not the panel leaving.
-##
-## The hooks, each optional: `play`, `pause`, `stop` () -> void; `playing`, `can_play`,
-## `can_stop` () -> bool; `position`, `length` () -> float, seconds of content (a length of 0 is nothing to
-## scrub yet); `seek` (float) -> void. With none registered, a loaded file is its own conductor.
+## The hooks, each optional: `play`, `pause`, `stop` () -> void; `playing`, `can_play`, `can_stop` ()
+## -> bool; `position`, `length` () -> float, seconds of content (a length of 0 is nothing to scrub
+## yet); `seek` (float) -> void. With none registered, a loaded file is its own conductor.
 var _conductor := {}
 var _conductor_owner: WeakRef = null
 
-## PAUSE STOPS ALL OF SHOW TIME: the player, AND the held lead-in and the tail, whose counters ran
-## on through a pause - so a pause inside a bookend still moved the picture. The Director, the
-## scenes, the media and the karaoke all advance by this clock, so they stop with it.
+## Pause stops all of show time: the player, the held lead-in and the tail. The Director, scenes,
+## media and karaoke advance by this clock, so they stop with it.
 var paused := false
-## WAITING, NOT PAUSED ([method set_waiting]): show time held where it is while something the picture draws catches up - a table's
-## physics, baked on a thread of its own, behind a live reading (2026-10-30, the user: "Go ahead and do #1"; 841899 had drawn what
-## an export never would while its bake was behind). The player and the bookends stop as for a pause; the transport still says
-## playing, and a pause and a wait are each let go on their own. who -> true.
+## Waiting, not paused ([method set_waiting]): show time held where it is while something the picture
+## draws catches up (a table's physics baked on a thread of its own, behind a live reading). The player
+## and the bookends stop as for a pause; the transport still says playing; a pause and a wait are each
+## let go on their own. who -> true.
 var _waits := {}
-## HOW FAR AHEAD EACH PART THAT MAKES ITS PICTURE AHEAD IS READY ([method set_ready]): who -> seconds past now.
+## How far ahead each part that makes its picture ahead is ready ([method set_ready]): who -> seconds past now.
 var _ready_of := {}
 
 var _hold := 0.0                # counts up through the lead-in
@@ -191,9 +127,8 @@ var _idle_time := 0.0
 var _override_path := ""        # the note's song (main._begin_song); wins over CLI/default
 var _loaded_path := ""          # the resolved path actually loaded (for re-launch/export)
 
-# Baked backend: a pre-computed per-frame spectrum timeline (one PackedFloat32Array
-# of BAND_COUNT per frame). Used by the export render (--use-bake) so a recorded
-# video's reactivity is correct and analyzer-independent. Live sessions leave it off.
+# Baked backend: a pre-computed per-frame spectrum timeline (one PackedFloat32Array of BAND_COUNT per
+# frame), used by the export render (--use-bake). Live sessions leave it off.
 var _baked := false
 var _baked_frames: Array = []
 
@@ -224,29 +159,24 @@ func _ready() -> void:
 	_player.bus = "Master"
 	_player.finished.connect(_on_player_finished)
 	add_child(_player)
-	# Audio is no longer loaded here - main decides when (immediately on a direct
-	# boot, or when a note with a song opens). See begin().
+	#Audio is loaded in begin(), when main decides (a direct boot, or a note with a song opens).
 
 
-## Load the chosen audio and start playback. Called once the session begins: with
-## the note's song, or with "" on a direct boot (which falls back to the
-## --audio flag, then res://audio/song.wav). Idempotent enough to re-point the song.
+## Load the chosen audio and start playback. Called once the session begins: with the note's song, or
+## with "" on a direct boot (falls back to --audio, then res://audio/song.wav). Safe to re-point.
 func begin(path := "") -> void:
 	paused = false
 	if not path.is_empty():
 		_override_path = path
 	_load_audio()
 	if _has_audio:
-		# A render counts its own time (see `render_clock`). Same flag the rest of the app
-		# uses to know it is a render, read here rather than pushed in from main so nothing
-		# has to remember to set it.
+		#A render counts its own time (see `render_clock`); read here from the same flag the app uses.
 		render_clock = OS.get_cmdline_user_args().has("--export")
 		if render_clock:
 			print("ghost: render clock - show time counted from frames, not the audio player")
 		var bake_file := _arg_value("--bake-file")
 		if not bake_file.is_empty():
-			# Pre-built cache (the export render's normal path): load it and start -
-			# NO in-process baking, so the render never blocks on a gray frame.
+			#Pre-built cache (the export render's normal path): load and start, no in-process baking.
 			_baked_frames = Bake.load_cache(bake_file, BAND_COUNT)
 			_baked = not _baked_frames.is_empty()
 			if _baked:
@@ -255,14 +185,11 @@ func begin(path := "") -> void:
 				push_warning("ghost: bake file missing/empty: %s" % bake_file)
 		elif OS.get_cmdline_user_args().has("--use-bake"):
 			_bake()                              # direct-CLI fallback (bakes in-process)
-		# A synthesis take writes its own bookend into its PCM (so the ambience pad has
-		# real samples to swell into) and records the fact in its sidecar. Believe the
-		# file over the request: holding playback for a file that already opens with
-		# five seconds of silence would give ten.
+		#A synthesis take writes its own bookend into its PCM and records it in its sidecar. Believe the
+		#file over the request, or a file that already opens with silence would be held twice.
 		_adopt_baked_bookend()
-		# The lead-in holds the FIRST SAMPLE, not the session: the clock below starts
-		# running immediately, so scenes animate and the picture fades up through the
-		# hold. _process starts playback when the hold is spent.
+		#The lead-in holds the first sample, not the session: the clock runs at once so scenes animate and
+		#the picture fades up through the hold. _process starts playback when the hold is spent.
 		_hold = 0.0
 		_tail_t = 0.0
 		_tailing = false
@@ -271,9 +198,8 @@ func begin(path := "") -> void:
 			_player.play()
 
 
-# Pre-analyze the loaded song into a spectrum timeline (export render only). Blocks
-# until done - fine for a non-interactive render, and Movie Maker only starts
-# recording once it is ready. Cached per song, so a re-export skips the analysis.
+# Pre-analyze the loaded song into a spectrum timeline (export render only). Blocks until done; Movie
+# Maker only starts recording once it is ready. Cached per song.
 func _bake() -> void:
 	var cache := _bake_cache_path()
 	_baked_frames = Bake.load_cache(cache, BAND_COUNT)
@@ -306,22 +232,9 @@ func _bake_cache_path() -> String:
 ## Generator ring size (seconds) for streamed sessions - see begin_stream().
 const STREAM_BUFFER := 4.0
 
-## LIVE TAP (diagnostic, 2026-07-26): record the MASTER BUS - everything the
-## mixer actually hears (takes, loop seams, restarts, generator gaps) - into
-## a rolling ring, written to user://synth/live_tap.wav on quit. Context:
-## offline takes measure clean (silence floors below -70 dBFS, zero
-## saturation) while the ear still hears noise bursts live, so the open
-## question is WHERE between the synthesized block and the speaker the
-## artifact enters. If this capture CONTAINS the bursts, they are inside the
-## mix and analyzable; if it is clean while the ear hears them, the artifact
-## is post-mix (audio driver / OS - e.g. PipeWire xruns under scene load).
-## Flip off when the hunt is over. (Off since 2026-07-26 - the hunt ended:
-## the noise was frication routing, voice_rca.md sections 11-16. Re-arm any
-## time an ear/meter mismatch needs the actual mixer output on disk.)
-##
-## `--live-tap` arms it for one run without touching this constant (2026-10-03, for "I hear two
-## voices" against a probe that recorded one: the probe had no picture attached, so it could not
-## see what the live app's frame lag does to the stream).
+## Diagnostic: record the Master bus (everything the mixer hears) into a rolling ring, written to
+## user://synth/live_tap.wav on quit, to tell whether an artifact is inside the mix or after it (audio
+## driver / OS). Off by default; `--live-tap` arms it for one run without touching this constant.
 const LIVE_TAP := false
 const TAP_SECONDS := 120.0            # rolling window: the LAST two minutes
 
@@ -329,13 +242,11 @@ var _streaming := false
 var _stream_length := 0.0
 
 
-## Begin a STREAMED session: no file - the caller pushes PCM into the returned
-## generator playback as it produces it ([VoiceStream]), and the analyzer bus
-## hears it exactly like a song, so features/signature/scenes all just work.
-## `fp` stands in for the file fingerprint as the session seed source (the
-## caller derives it from its own content - e.g. text + voice traits - so the
-## same input replays the same show). The audio path / length are unknown at
-## start; the caller reports them via set_stream_info() once the take is done.
+## Begin a streamed session: no file - the caller pushes PCM into the returned generator playback as it
+## produces it ([VoiceStream]), and the analyzer bus hears it like a song. `fp` stands in for the file
+## fingerprint as the session seed source (derived from the caller's own content, so the same input
+## replays the same show). The audio path and length are unknown at start; the caller reports them via
+## set_stream_info() once the take is done.
 func begin_stream(fp: int, sr: int) -> AudioStreamGeneratorPlayback:
 	var held := paused
 	stop()
@@ -348,16 +259,16 @@ func begin_stream(fp: int, sr: int) -> AudioStreamGeneratorPlayback:
 	_loaded_path = ""
 	_streaming = true
 	_has_audio = true
-	# play() first, then the caller pushes its prebuffer in this same frame -
-	# so pushed sample N plays at N / sr and timing maps cannot drift.
+	#play() first, then the caller pushes its prebuffer in the same frame, so pushed sample N plays at
+	#N / sr and timing maps cannot drift.
 	_player.play()
-	# ...HELD WHERE THE SESSION IS PAUSED: a reading sought to while paused begins its new stream paused (ReadingStream.seek_now)
+	#...held where the session is paused: a reading sought to while paused begins its new stream paused (ReadingStream.seek_now)
 	_player.stream_paused = paused
 	return _player.get_stream_playback()
 
 
-## The streamed take is fully synthesized: it now has a real file (for the
-## exporter's relaunch) and a known length (for the exporter's progress math).
+## The streamed take is fully synthesized: it now has a real file (for the exporter's relaunch) and a
+## known length (for the exporter's progress).
 func set_stream_info(path: String, length: float) -> void:
 	_loaded_path = path
 	_stream_length = length
@@ -368,16 +279,14 @@ func is_streaming() -> bool:
 	return _streaming
 
 
-## Did audio actually load for this session? An export render checks this: a
-## render with no audio never ends (song_finished cannot fire) and would
-## record silence indefinitely.
+## Did audio actually load for this session? An export render checks this: with no audio, song_finished
+## cannot fire.
 func has_audio() -> bool:
 	return _has_audio
 
 
-## Fade the streaming player out over a breath (~two frames) so a restart's
-## stop/play cycle never truncates the waveform mid-cycle - the raw cut WAS an
-## audible pop on every throw and edit. restart_stream() restores the volume.
+## Fade the streaming player out over a breath (~two frames) so a restart's stop/play cycle does not
+## truncate the waveform mid-cycle (an audible pop). restart_stream() restores the volume.
 func fade_stream(dur := 0.04) -> void:
 	if _player == null or not _streaming:
 		return
@@ -386,10 +295,9 @@ func fade_stream(dur := 0.04) -> void:
 	await tw.finished
 
 
-## Cycle the streaming generator for an in-place content restart. A generator's
-## ring buffer cannot be cleared while playback is active (clear_buffer errors),
-## so the restart is a stop/play cycle: playback position rebases to 0 and a
-## FRESH playback object comes back - the old one is dead, push to this one.
+## Cycle the streaming generator for an in-place content restart. A generator's ring buffer cannot be
+## cleared while playing, so this is a stop/play cycle: position rebases to 0 and a fresh playback
+## object comes back - push to that one.
 func restart_stream() -> AudioStreamGeneratorPlayback:
 	_stream_length = 0.0
 	_loaded_path = ""    # the old take's file no longer matches what is playing
@@ -399,22 +307,17 @@ func restart_stream() -> AudioStreamGeneratorPlayback:
 	return _player.get_stream_playback()
 
 
-## Can this session be scrubbed at all?
-##
-## A file can be seeked; a GENERATOR cannot. In synthesis the audio is being pushed into a
-## ring buffer a chunk at a time and nothing behind the playhead still exists, so there is
-## no position to seek to - which is also why the scrubber hides itself rather than
-## offering a control that would silently do nothing.
+## Can this session be scrubbed at all? A file can be seeked; a generator cannot (nothing behind the
+## playhead still exists), so the scrubber hides itself.
 func seekable() -> bool:
 	if not conductor().is_empty():
 		return _hook("seek").is_valid() and scrub_length() > 0.0
 	return _has_audio and not _streaming and _content_length() > 0.0
 
 
-## Where the scrub bar should sit, and how long the thing is. A STREAM cannot answer
-## either from the player: restarting a generator resets its playback position to zero, so
-## after one seek the player's own clock says nothing about where the content is. The
-## session that owns the audio answers instead when it can (the conductor's `position` and `length`).
+## Where the scrub bar should sit, and how long the thing is. A stream's player position resets on
+## restart, so the session that owns the audio answers instead when it can (the conductor's `position`
+## and `length`).
 func scrub_position() -> float:
 	var h := _hook("position")
 	return float(h.call()) if h.is_valid() else current.time
@@ -425,23 +328,14 @@ func scrub_length() -> float:
 	return float(h.call()) if h.is_valid() else song_length()
 
 
-## Move the playhead to [param t] on the SESSION clock - the same clock
-## [member current].time runs on, bookend included, so a caller can hand back a position
-## it read from there without knowing whether the silence is held or baked.
+## Move the playhead to [param t] on the session clock - the clock [member current].time runs on,
+## bookend included, so a caller can hand back a position it read from there.
 ##
-## WHAT THIS DOES NOT DO is re-derive the visuals. Everything that READS the clock follows
-## correctly and immediately: the baked spectrum is a timeline lookup, the karaoke reads
-## `current.time - time_base`, the bookend fade is a function of position. But the
-## [Director] is a SIMULATION, not a function of t - its scene choice, its hold schedule
-## and its RNG stream evolve from the sequence of events it has actually seen. So after a
-## seek the show carries on from the scene that is up, rather than jumping to the scene a
-## from-the-start playthrough would have been showing. ([Echo] then pulls it back toward
-## the content on its own, since it re-localizes against the harmonic signature rather
-## than against elapsed time - but that is a drift back into alignment, not a guarantee.)
-##
-## Reproducing the exact visual state of an arbitrary t would mean replaying the Director
-## from zero with drawing off. That is a real thing this architecture could do, and it is
-## not what a scrub bar is for.
+## This does not re-derive the visuals. Everything that reads the clock follows at once (the baked
+## spectrum lookup, the karaoke, the bookend fade), but the [Director] is a simulation whose scene
+## choice, hold schedule and RNG evolve from the events it has seen: after a seek the show carries on
+## from the scene that is up. ([Echo] pulls it back toward the content by re-localizing against the
+## harmonic signature, as a drift rather than a guarantee.)
 func seek(t: float) -> void:
 	var h := _hook("seek")
 	if h.is_valid():
@@ -452,8 +346,8 @@ func seek(t: float) -> void:
 	seek_file(t)
 
 
-## THE FILE'S OWN SEEK, [param t] on the session clock: what [method seek] does where nothing conducts - and what a conductor
-## playing a file of its own asks for (a reading's take kept, [method ReadingStream.seek]). Nothing for a stream.
+## The file's own seek, [param t] on the session clock: what [method seek] does where nothing conducts,
+## and what a conductor playing a file of its own asks for ([method ReadingStream.seek]). Nothing for a stream.
 func seek_file(t: float) -> void:
 	if not _has_audio or _streaming or _content_length() <= 0.0:
 		return
@@ -462,7 +356,7 @@ func seek_file(t: float) -> void:
 	_tailing = false
 	_tail_t = 0.0
 	if not bookend_baked and want < lead_in:
-		# Landed inside the held silence: hold there rather than starting the audio early.
+		#Landed inside the held silence: hold there rather than starting the audio early.
 		_held = true
 		_hold = want
 		_player.stop()
@@ -471,8 +365,8 @@ func seek_file(t: float) -> void:
 	var pos := clampf(want - _clock_offset(), 0.0, maxf(0.0, content - 0.05))
 	if not _player.playing:
 		_player.play(pos)
-		# ...A FRESH PLAYBACK, which the player does not hold where the session is paused (measured: a take sought while paused
-		# played on, take_play_check) - held again, set both ways since the player skips a value it already has
+		#...a fresh playback, which the player does not hold where the session is paused - held again, set
+		#both ways since the player skips a value it already has
 		var hold := paused or not _waits.is_empty()
 		_player.stream_paused = not hold
 		_player.stream_paused = hold
@@ -480,8 +374,8 @@ func seek_file(t: float) -> void:
 		_player.seek(pos)
 
 
-## A RENDER BEGUN [param t] SECONDS IN (`--from`; [Stitch]): its frame-counted clock starts there and the take plays from
-## there, so Movie Maker records the stretch from [param t] - its pictures and its sound - and nothing before it.
+## A render begun [param t] seconds in (`--from`; [Stitch]): its frame-counted clock starts there and
+## the take plays from there, so Movie Maker records only the stretch from [param t].
 func render_from(t: float) -> void:
 	_held = false
 	_render_t = maxf(0.0, t - _clock_offset())
@@ -491,25 +385,24 @@ func render_from(t: float) -> void:
 		_player.play(_render_t)
 
 
-## Restart the loaded song from the top WITHOUT touching any session state - no
-## reseed, no reload, the fingerprint and analyzers carry straight on. Manual mode
-## loops the audio endlessly with this; whether the VISUALS restart is the
-## storyboard's own business (its `loop` / `tail` fields), not the session's.
+## Restart the loaded song from the top without touching session state (no reseed, no reload; the
+## fingerprint and analyzers carry on). Manual mode loops with this; whether the visuals restart is the
+## storyboard's own business (its `loop` / `tail` fields).
 func replay() -> void:
 	if _has_audio and _player != null and _player.stream != null:
 		_player.play()
 
 
-## PAUSE THE SHOW where it is - the player and the bookend clock together (see `paused`). A
-## streaming caller simply finds no room to push more audio until it resumes.
+## Pause the show where it is - the player and the bookend clock together (see `paused`). A streaming
+## caller finds no room to push more audio until it resumes.
 func set_paused(on: bool) -> void:
 	paused = on
 	if _player != null:
 		_player.stream_paused = on or not _waits.is_empty()
 
 
-## SHOW TIME HELD FOR [param who] while [param on] - what the picture needs and has not got yet ([member _waits]). Never in a
-## render, whose clock is its own and whose parts wait on the caller's thread.
+## Show time held for [param who] while [param on]: what the picture needs and has not got yet ([member
+## _waits]). Never in a render, whose clock is its own.
 func set_waiting(who: String, on: bool) -> void:
 	if on == _waits.has(who) or (on and render_clock):
 		return
@@ -526,7 +419,7 @@ func waiting() -> bool:
 	return not _waits.is_empty()
 
 
-## HOW FAR AHEAD [param who] IS READY to draw (seconds past now - [method ShowFeed.ready_ahead]): a table's physics baked on. Said
+## How far ahead [param who] is ready to draw (seconds past now - [method ShowFeed.ready_ahead]), said
 ## every frame by what makes its picture ahead; a negative figure takes it off.
 func set_ready(who: String, seconds: float) -> void:
 	if seconds < 0.0:
@@ -535,9 +428,9 @@ func set_ready(who: String, seconds: float) -> void:
 		_ready_of[who] = seconds
 
 
-## HOW FAR AHEAD THE SHOW IS READY TO PLAY (seconds past the playhead): the least of what the conductor has made (a reading's voice,
-## its `ahead` hook) and what every part that draws ahead has ([method set_ready]) - -1 when nothing says. What the transport
-## shows as buffered, as a video player shows it.
+## How far ahead the show is ready to play (seconds past the playhead): the least of what the conductor
+## has made (its `ahead` hook) and what every part that draws ahead has ([method set_ready]); -1 when
+## nothing says. The transport shows it as buffered.
 func ready_ahead() -> float:
 	var h := _hook("ahead")
 	var said := false
@@ -553,7 +446,7 @@ func ready_ahead() -> float:
 	return least if said else -1.0
 
 
-## The panels' name for the same pause, from before it held the bookends too.
+## The panels' name for [method set_paused].
 func set_stream_paused(on: bool) -> void:
 	set_paused(on)
 
@@ -564,8 +457,8 @@ func stream_paused() -> bool:
 
 # --- the conductor and the transport (next/notes.md, "The transport") ---------------------
 
-## Register [param owner] as what the transport drives, with [param hooks] (see `_conductor`).
-## Replaces any other: there is one clock.
+## Register [param owner] as what the transport drives, with [param hooks] (see `_conductor`). Replaces
+## any other: there is one clock.
 func conduct(owner: Object, hooks: Dictionary) -> void:
 	_conductor_owner = weakref(owner)
 	_conductor = hooks.duplicate()
@@ -578,8 +471,7 @@ func release_conductor(owner: Object) -> void:
 		_conductor = {}
 
 
-## The conductor's hooks, {} when none is registered - or when its owner has been freed, which
-## releases it here rather than leaving a hook into nothing.
+## The conductor's hooks, {} when none is registered or its owner has been freed (which releases it).
 func conductor() -> Dictionary:
 	if _conductor_owner != null and _conductor_owner.get_ref() == null:
 		_conductor_owner = null
@@ -592,8 +484,8 @@ func _hook(name: String) -> Callable:
 	return c if c is Callable and (c as Callable).is_valid() else Callable()
 
 
-## Is the show TIMED - is there anything for the transport to play? A conductor, or a loaded
-## file or stream. An untimed note shows no transport at all.
+## Is the show timed - is there anything for the transport to play? A conductor, or a loaded file or
+## stream. An untimed note shows no transport.
 func timed() -> bool:
 	return not conductor().is_empty() or _has_audio
 
@@ -605,8 +497,8 @@ func transport_playing() -> bool:
 		return bool(h.call())
 	if not conductor().is_empty():
 		return false
-	# NOT `_player.playing` alone: setting stream_paused turns that false at once (4.7), and the
-	# held bookends play with the player stopped - and a wait is playing, held ([method set_waiting])
+	#Not `_player.playing` alone: setting stream_paused turns that false at once, the held bookends play
+	#with the player stopped, and a wait is playing, held ([method set_waiting])
 	return _has_audio and not paused and (_player.playing or _held or _tailing or not _waits.is_empty())
 
 
@@ -666,8 +558,7 @@ func transport_toggle() -> void:
 		transport_play()
 
 
-## Stop playback and reset to a clean, songless state, so the next begin() starts
-## fresh. Called when a session ends (the song finished, or we returned home).
+## Stop playback and reset to a clean, songless state, so the next begin() starts fresh.
 func stop() -> void:
 	paused = false
 	_waits = {}
@@ -683,10 +574,8 @@ func stop() -> void:
 	_stream_length = 0.0
 	song_hash = 0
 	current = AudioFeatures.new()
-	# Put the master back where we found it. The bookend trims a GLOBAL bus, so a
-	# session that ended mid-fade would otherwise hand the next one a quiet mixer -
-	# and on the home screen there is nothing playing to make that audible until it
-	# is far too late to work out why.
+	#Put the master back where it was: the bookend trims a global bus, so a session that ended mid-fade
+	#would hand the next one a quiet mixer.
 	_held = false
 	_tailing = false
 	_hold = 0.0
@@ -699,10 +588,9 @@ func stop() -> void:
 func _on_player_finished() -> void:
 	if not _has_audio:
 		return
-	# Run the tail out before telling anyone the song ended - the export quits on this
-	# signal (main.gd), so the deferral IS the outro. Godot's movie writer records the
-	# audio bus, so the held silence is captured with the picture and the two stay
-	# locked without any container-level padding.
+	#Run the tail out before telling anyone the song ended: the export quits on this signal (main.gd), so
+	#the deferral is the outro. Movie Maker records the audio bus, so the held silence stays locked to
+	#the picture.
 	if tail > 0.001 and not bookend_baked and not _tailing:
 		_tailing = true
 		_tail_t = 0.0
@@ -710,12 +598,9 @@ func _on_player_finished() -> void:
 	song_finished.emit()
 
 
-## Read the loaded take's sidecar and adopt the bookend it was rendered with, if any.
-##
-## The sidecar is the same JSON the karaoke subtitles come from, so this costs one small
-## file read on a path that already existed. A take that carries `bookend` was padded at
-## render time and its word timings are ALREADY shifted to match, which is why this sets
-## `bookend_baked` rather than trying to reconcile two offsets.
+## Read the loaded take's sidecar and adopt the bookend it was rendered with, if any. A take that
+## carries `bookend` was padded at render time and its word timings are already shifted, so this sets
+## `bookend_baked` rather than reconciling two offsets.
 func _adopt_baked_bookend() -> void:
 	bookend_baked = false
 	if _loaded_path.is_empty():
@@ -734,14 +619,14 @@ func _adopt_baked_bookend() -> void:
 	bookend_baked = lead_in > 0.001 or tail > 0.001
 
 
-## How far the session clock runs AHEAD of the player's own position. Zero when the
-## bookend is baked into the file, because then the file's position already spans it.
+## How far the session clock runs ahead of the player's own position. Zero when the bookend is baked
+## into the file.
 func _clock_offset() -> float:
 	return 0.0 if bookend_baked else lead_in
 
 
-## THE SHOW TIME OF A STREAM'S FIRST SAMPLE: pushed frame N is heard at this plus N / rate - what a
-## sound made to go with the picture ([Soundscape]) starts its clock at.
+## The show time of a stream's first sample: pushed frame N is heard at this plus N / rate - where a
+## sound made to go with the picture ([Soundscape]) starts its clock.
 func stream_origin() -> float:
 	return _clock_offset()
 
@@ -755,10 +640,8 @@ func _content_length() -> float:
 	return 0.0
 
 
-## Ramp the master bus in over the lead-in and out over the tail, so the sound arrives
-## and leaves with the picture. Equal-power rather than linear: a linear ramp on a
-## sustained bed audibly dips through its middle, because perceived loudness follows
-## roughly the square root of power.
+## Ramp the master bus in over the lead-in and out over the tail, so the sound arrives and leaves with
+## the picture. Equal-power rather than linear: a linear ramp on a sustained bed dips audibly mid-way.
 func _apply_bookend_gain(t: float) -> void:
 	if not _has_audio:
 		return
@@ -776,19 +659,17 @@ func _apply_bookend_gain(t: float) -> void:
 	AudioServer.set_bus_volume_db(0, want)
 
 
-## The filesystem path of the song actually loaded (or "" if idle). The exporter
-## re-passes it to the Movie Maker render so it renders the same track.
+## The filesystem path of the song actually loaded (or "" if idle); the exporter re-passes it to the
+## Movie Maker render.
 func audio_path() -> String:
 	return _loaded_path
 
 
-## Length of the loaded song in seconds (0 when idle / unknown). The exporter uses
-## it with the playback position ([member current].time) to know it is near the end.
+## Length of the loaded song in seconds (0 when idle / unknown); the exporter compares it with the
+## playback position ([member current].time) to know it is near the end.
 func song_length() -> float:
-	# The WHOLE timeline, bookend included, because that is the clock `current.time`
-	# runs on. Everything that compares a position against this - the bookend fade,
-	# Echo's arc roll, the exporter's percentage - would be wrong by the bookend
-	# otherwise, and the fade in particular would go to black before the tail.
+	#The whole timeline, bookend included, because that is the clock `current.time` runs on: the fade,
+	#Echo's arc roll and the exporter's percentage compare against it.
 	var content := _content_length()
 	if content <= 0.0:
 		return 0.0                       # streaming and not yet measured: unknown
@@ -797,19 +678,19 @@ func song_length() -> float:
 	return lead_in + content + tail
 
 
-## The current perceptual harmonic descriptor (12 chroma + coarse shape, normalized). For
-## SMOOTH content-driven modulation of a scene's dynamics. Empty until the analyzer is up.
+## The current perceptual harmonic descriptor (12 chroma + coarse shape, normalized), for smooth
+## content-driven modulation of a scene's dynamics. Empty until the analyzer is up.
 func harmonic_signature() -> PackedFloat32Array:
 	return _sig.vector() if _sig != null else PackedFloat32Array()
 
-## The FAST descriptor (same shape, ~0.7s of context instead of 2.5s): for listeners that
-## must notice a content change quickly - the [Echo] re-localizer - at the cost of jitter.
+## The fast descriptor (same shape, ~0.7 s of context instead of 2.5 s) for listeners that must notice
+## a content change quickly, like the [Echo] re-localizer, at the cost of jitter.
 func harmonic_signature_fast() -> PackedFloat32Array:
 	return _sig_fast.vector() if _sig_fast != null else PackedFloat32Array()
 
-## A coarse content seed (SimHash bucket) from the harmonics RIGHT NOW - the same for the same
-## music even re-encoded / cut up, drifting only as the content does. `bits` sets bucket width
-## (fewer = wider/more robust). For DISCRETE choices (which scene / behavior).
+## A coarse content seed (SimHash bucket) from the harmonics right now: the same for the same music
+## even re-encoded or cut up. `bits` sets bucket width (fewer = wider, more robust). For discrete
+## choices (which scene / behavior).
 func harmonic_bucket(bits := 10) -> int:
 	return _sig.bucket(bits) if _sig != null else 0
 
@@ -818,11 +699,9 @@ func harmonic_seed() -> int:
 	return _sig.seed() if _sig != null else 0
 
 
-## A live, harmonic-derived SEED BIAS, meant to be XOR-mixed into any seed expression - it does
-## not REPLACE the existing seed (session identity, scene index, history all stay); it BIASES it,
-## so the harmonic channels themselves continuously steer the sampled randomness everywhere this
-## is threaded. Read it AT THE MOMENT a thing is instanced (it samples the current spectrum).
-## Same music -> same bias trajectory -> same show; the bias is coarse + smoothed, so it survives
+## A live harmonic-derived seed bias, meant to be XOR-mixed into any seed expression: it biases the
+## existing seed (session identity, scene index, history stay) so the harmonics steer the sampled
+## randomness. Read it at the moment a thing is instanced. Coarse and smoothed, so it survives
 ## re-encoding and a cut-out segment carries its own.
 func seed_bias() -> int:
 	if _sig == null:
@@ -834,8 +713,7 @@ func _exit_tree() -> void:
 	_write_tap()
 
 
-## Dump the LIVE_TAP ring (oldest -> newest) as a WAV at the BUS mix rate -
-## this is the actual mixer output, not the synthesized take.
+## Dump the LIVE_TAP ring (oldest -> newest) as a WAV at the bus mix rate: the actual mixer output.
 func _write_tap() -> void:
 	if _tap == null or _tap_filled == 0:
 		return
@@ -916,11 +794,9 @@ func _process(delta: float) -> void:
 
 	var f := AudioFeatures.new()
 
-	# --- the bookend clock (see lead_in / tail) ---
-	# Held silence counts as session time so the picture can fade up through it, but the
-	# bands stay zero, which is what the intro is FOR: the scenes idle, the Director's
-	# cut trigger sits under its silence floor and holds one shot, and nothing lurches.
-	# A pause holds it where it is, like the player (see `paused`).
+	#--- the bookend clock (see lead_in / tail) ---
+	#Held silence counts as session time so the picture can fade up through it, but the bands stay zero
+	#(scenes idle and the Director holds one shot). A pause holds it where it is (see `paused`).
 	if _held:
 		if not paused and _waits.is_empty():
 			_hold += delta
@@ -935,10 +811,8 @@ func _process(delta: float) -> void:
 			song_finished.emit()
 
 	if virtual_clock >= 0.0:
-		# A CLOCK FROM OUTSIDE - see `virtual_clock`. Everything below this branch runs
-		# exactly as it does in a render; only where the time came from is different.
-		# The held lead-in and the tail are silence here too, as they are in a render: the
-		# bands fill only where the player would be playing.
+		#A clock from outside (see `virtual_clock`). Everything below runs as in a render. The held lead-in
+		#and the tail are silence here too: bands fill only where the player would be playing.
 		f.time = virtual_clock
 		var pos := virtual_clock - _clock_offset()
 		if pos >= 0.0 and pos < _content_length():
@@ -947,8 +821,7 @@ func _process(delta: float) -> void:
 			else:
 				_fill_bands(f)
 	elif _has_audio and _player.playing:
-		# THE RENDER CLOCK. A render is driven by ACCUMULATED FIXED-FPS TIME, never by the
-		# audio player's reported position - see `render_clock`.
+		#The render clock: accumulated fixed-fps time, not the player's position (see `render_clock`).
 		if render_clock:
 			_render_t += delta
 			f.time = _clock_offset() + _render_t
@@ -959,17 +832,12 @@ func _process(delta: float) -> void:
 		else:
 			_fill_bands(f)
 	elif _held or _tailing:
-		# Bookend silence: the clock is continuous with the playing branch above, so
-		# nothing downstream can tell the difference except that it is quiet.
+		#Bookend silence: continuous with the playing branch above, only quiet.
 		f.time = _hold if _held else lead_in + _content_length() + _tail_t
 	elif _has_audio:
-		# A LOADED SESSION NEVER FALLS BACK TO THE IDLE CLOCK. The player can be stopped
-		# while audio is still loaded - it has run past the end, or a seek landed on the
-		# last fraction of a second - and reverting to `_idle_time` there restarts the
-		# session clock from zero, which reads downstream as the whole show jumping back
-		# to its first frame. Caught by seek_check: a seek past the end reported 0.01 s.
-		# Hold the last position instead; the tail and the finish signal own what happens
-		# next, and neither of them wants the clock moving backwards first.
+		#A loaded session never falls back to the idle clock: the player can stop while audio is loaded (past
+		#the end, or a seek onto the last fraction of a second), and reverting to `_idle_time` would restart
+		#the clock from zero. Hold the last position; the tail and the finish signal own what happens next.
 		f.time = _last_time
 	else:
 		_idle_time += delta
@@ -989,9 +857,8 @@ func _process(delta: float) -> void:
 	# Beat: pulse when energy jumps above its slow average.
 	_energy_avg = lerpf(_energy_avg, raw_energy, 0.08)
 	var onset := raw_energy > _energy_avg * 1.4 + 0.02
-	# Tempo: on the RISING edge of an onset, measure the interval since the last one and fold it
-	# into a smoothed beat period. Reject implausible gaps (~30..270 BPM) so double-triggers and
-	# missed beats don't corrupt the estimate. This is the "how fast is the music" signal.
+	#Tempo: on the rising edge of an onset, measure the interval since the last one and fold it into a
+	#smoothed beat period. Implausible gaps (~30..270 BPM) are rejected.
 	if onset and not _onset_high:
 		if _last_beat_t >= 0.0:
 			var ibi := f.time - _last_beat_t
@@ -1009,19 +876,17 @@ func _process(delta: float) -> void:
 	_compute_movement(f)
 	current = f
 
-	# Roll the perceptual harmonic descriptor (chroma + coarse shape) and its content seed. This
-	# tracks WHAT the music is, robustly, so scenes can be seeded from the harmonics themselves
-	# rather than the file - see HarmonicSignature / next/harmonic_seeding.md.
+	#Roll the perceptual harmonic descriptor and its content seed, so scenes can be seeded from the
+	#harmonics rather than the file (HarmonicSignature, next/harmonic_seeding.md).
 	if _sig != null:
 		_sig.update(f.bands, f.bass + f.low_mid, f.mid, f.high + f.treble, f.flux, delta)
 	if _sig_fast != null:
 		_sig_fast.update(f.bands, f.bass + f.low_mid, f.mid, f.high + f.treble, f.flux, delta)
 
 
-# Spectral flux + a sliding-window "movement" score. Flux is how much new
-# frequency content arrived this frame; movement is the short-term flux measured
-# against the passage's own baseline, so it spikes at section changes (a drop, a
-# build, a new instrument) and stays low through a steady groove.
+# Spectral flux plus a sliding-window movement score: flux is how much new frequency content arrived
+# this frame; movement is the short-term flux against the passage's own baseline, so it spikes at
+# section changes and stays low through a steady groove.
 func _compute_movement(f: AudioFeatures) -> void:
 	var flux := 0.0
 	if _prev_bands.size() == f.bands.size() and f.bands.size() > 0:
@@ -1038,9 +903,7 @@ func _compute_movement(f: AudioFeatures) -> void:
 	f.movement = clampf((ratio - 1.3) * 0.7, 0.0, 1.0)
 
 
-# Sample the analyzer into f.bands and the named convenience fields. The raw
-# analyzer magnitudes jitter frame to frame, so each value is EMA-smoothed
-# against the previous frame - this calms every scene at the source.
+# Sample the analyzer into f.bands and the named fields, EMA-smoothed against the previous frame.
 func _fill_bands(f: AudioFeatures) -> void:
 	if _sm_bands.size() != BAND_COUNT:
 		_sm_bands.resize(BAND_COUNT)
@@ -1056,16 +919,14 @@ func _fill_bands(f: AudioFeatures) -> void:
 	f.treble = _smooth_named("treble", NAMED.treble)
 
 
-# Baked counterpart of _fill_bands: read the band frame at the current playback
-# time from the timeline and apply the same EMA smoothing, so the baked replay
-# tracks the live look. Named bands are aggregated from the 64 baked bands.
+# Baked counterpart of _fill_bands: read the band frame at the current playback time and apply the
+# same EMA smoothing. Named bands are aggregated from the 64 baked bands.
 func _fill_bands_baked(f: AudioFeatures) -> void:
 	if _sm_bands.size() != BAND_COUNT:
 		_sm_bands.resize(BAND_COUNT)
 	f.bands.resize(BAND_COUNT)
-	# The bake is of the FILE, so it is indexed by the file's position - the session clock
-	# less the held lead-in. Indexing by the session clock ran the picture a whole lead-in
-	# (5 s by default) ahead of the sound in every export.
+	#The bake is of the file, so it is indexed by the file's position: the session clock less the held
+	#lead-in.
 	var idx := clampi(int((f.time - _clock_offset()) * BAKE_FPS), 0, _baked_frames.size() - 1)
 	var raw: PackedFloat32Array = _baked_frames[idx]
 	for i in BAND_COUNT:
@@ -1132,13 +993,10 @@ func _load_audio() -> void:
 		print("ghost: no audio loaded - scenes will idle-animate.")
 
 
-# A content fingerprint of the audio file, so the seed is a true *file* match - the same
-# sound yields the same show regardless of the file's name or location (rename-proof),
-# which a path hash is not. Samples up to ~768 KB from the start / middle / end plus the
-# byte length, rather than hashing a whole multi-MB file, which is plenty to distinguish
-# tracks. Falls back to the path hash if the bytes can't be read. (Phase 1 of spectral
-# determinism - exact file. A perceptual signature that also matches re-encodes / lossy
-# copies is the planned phase 2; see next/roadmap.md.)
+# A content fingerprint of the audio file, so the seed matches the same sound whatever the file's name
+# or location. Samples up to ~768 KB from the start, middle and end plus the byte length. Falls back to
+# the path hash if the bytes can't be read. (A perceptual signature that also matches re-encodes is
+# planned; see next/roadmap.md.)
 func _fingerprint(path: String) -> int:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -1192,8 +1050,8 @@ func _load_external(path: String) -> AudioStream:
 	return null
 
 
-# Godot has no runtime FLAC loader (FLAC is editor-import only), so transcode to a
-# temp WAV with ffmpeg. Degrades gracefully while FFmpeg is not there yet.
+# Godot has no runtime FLAC loader, so transcode to a temp WAV with ffmpeg. Degrades gracefully while
+# FFmpeg is not there yet.
 func _load_flac(path: String) -> AudioStream:
 	var tmp := ProjectSettings.globalize_path("user://ghost_flac.wav")
 	var code := Deps.execute("ffmpeg", ["-y", "-loglevel", "error", "-i", path, tmp])

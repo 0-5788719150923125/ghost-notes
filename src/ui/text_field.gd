@@ -1,18 +1,17 @@
 extends VBoxContainer
 class_name TextField
 
-## TextField - words too long for a line on a card: a heading, their first lines, and a click from a window to
-## write them in, the way the Body card shows a note's words ([ScriptWriter] draws its preview with this one's).
+## TextField - words too long for a line on a card: a heading, their first lines, and a click from a
+## window to write them in, the way the Body card shows a note's words ([ScriptWriter] draws its preview
+## with this one's).
 ##
-## NOTHING ON A CARD SCROLLS OF ITS OWN (2026-11-03, the user, of the YouTube card's Description: "the inner
-## scrolling ... can be pretty annoying and unexpected. At the same time, that text is hard to read, and it's annoying
-## that I even have to scroll it, to read it"): a box with a scroll of its own under a panel that scrolls takes the
-## wheel from the panel the moment the pointer crosses it, and shows a few small lines of what wants reading. The
-## preview hands the wheel on, and the words are read and written in the window, at a size meant for reading.
-## docs.py's rule "one scroll" holds it.
+## Nothing on a card scrolls of its own: a box with a scroll of its own under a panel that scrolls takes
+## the wheel from the panel the moment the pointer crosses it, and shows a few small lines of what wants
+## reading. The preview hands the wheel on, and the words are read and written in the window, at a size
+## meant for reading. docs.py's rule "one scroll" holds it.
 ##
-## IT ANSWERS AS THE BOX IT TOOK THE PLACE OF: [member text], and [signal text_changed] for a hand's edit, as it is
-## typed, never for a value arriving. A card asks [method editing] where it asked `has_focus()`.
+## It answers as the box it took the place of: [member text], and [signal text_changed] for a hand's
+## edit, as it is typed, never for a value arriving. A card asks [method editing] where it asked `has_focus()`.
 
 ## The hand changed the words. Assigning [member text] does not say so.
 signal text_changed
@@ -36,9 +35,8 @@ var _tip := ""
 var _preview: Label
 var _window: Window      # made when first opened: most never are
 var _edit: TextEdit
-## WHAT A CARD DOES WITH THE WORDS, IN THE WINDOW BESIDE THEM ([method add_action], [method add_line]; the user, 2026-11-11, of the
-## Direction's Refine on its card: "It's pointless to force the user to back-out of the Direction text, just to push the button and
-## then re-enter it, to check results"): its own controls at the window's foot before Done, and lines above the foot.
+## What a card does with the words, in the window beside them ([method add_action], [method add_line]): its
+## own controls at the window's foot before Done, and lines above the foot.
 var _actions: Array = []
 var _lines: Array = []
 var _foot: HBoxContainer
@@ -96,8 +94,8 @@ func add_line(c: Control) -> void:
 		_col.move_child(c, _col.get_child_count() - 2)
 
 
-## THE WORDS REPLACED AS ONE EDIT where the window has them, so its own undo (Ctrl+Z) takes the replacement back - what a card's
-## action writes over them. [signal text_changed] is not emitted: it says a hand changed them.
+## The words replaced as one edit where the window has them, so its own undo (Ctrl+Z) takes the replacement
+## back - what a card's action writes over them. [signal text_changed] is not emitted: it says a hand changed them.
 func replace(v: String) -> void:
 	if _edit == null:
 		text = v
@@ -201,9 +199,9 @@ static func show_words(l: Label, words: String, placeholder: String) -> void:
 	l.modulate = Color(1, 1, 1, 1.0 if not shown.is_empty() else 0.5)
 
 
-## [param w] up, centered, sized as [param share] of the window it opens over. THE SIZE IS SET AGAIN AFTER THE POPUP:
-## measured, popup() and popup_centered() both came back 1280 wide whatever was asked for (1574 on a 1080p window),
-## which also left popup_centered's window left of center.
+## [param w] up, centered, sized as [param share] of the window it opens over. The size is set again after
+## the popup: popup() and popup_centered() both came back 1280 wide whatever was asked for, which also left
+## popup_centered's window left of center.
 static func pop_up(w: Window, over: Node, share: Vector2) -> void:
 	var host := over.get_tree().root.get_visible_rect().size if over.is_inside_tree() \
 		else Vector2(1600, 900)

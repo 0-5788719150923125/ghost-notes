@@ -43,7 +43,7 @@ def main(argv=None) -> int:
     spec = json.loads(Path(a.spec).read_text(encoding="utf-8"))
     utt, work = Path(spec["utterances"]), Path(spec["work"])
     work.mkdir(parents=True, exist_ok=True)
-    # THE SENTENCES, PREPARED ONCE for what Utterances made (its index and its rows) and the pack it starts from
+    # The sentences, prepared once for what Utterances made (its index and its rows) and the pack it starts from
     stamp = hashlib.sha256(b"".join((utt / f).read_bytes() for f in ("metadata.csv", "test.csv") if (utt / f).exists())
                            + str(spec["base"]).encode()).hexdigest()[:16]
     prepared = work / "prepared"

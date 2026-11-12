@@ -1,15 +1,14 @@
 extends RefCounted
 class_name Registry
 
-## Registry - reading any of ghost's registries, which are one shape: a Dictionary of ROWS, one per
-## key, in the order they are offered, each row a Dictionary of fields. Every row has a `label` (what
-## a person reads) and a `blurb` (a sentence or two: a tooltip, a line of the docs); the rest of a
-## row is its own kind's (a filter's `uniform`, a medium's `frames`, a component's `needs`).
+## Registry - reading any of ghost's registries, which are one shape: a Dictionary of rows, one per key, in
+## the order they are offered, each row a Dictionary of fields. Every row has a `label` (what a person reads)
+## and a `blurb` (a sentence or two: a tooltip, a line of the docs); the rest is its own kind's (a filter's
+## `uniform`, a medium's `frames`, a component's `needs`).
 ##
-## ONE ROW A THING, never parallel tables keyed alike (`LABELS`, `BLURBS`, `DEFAULTS`...): adding a
-## thing is one row, and a key cannot be in one table and missing from the next. docs.py reads the
-## same rows (`const`), so a field added to a row is in the docs without a regex of its own
-## (next/structure.md, step 6).
+## One row a thing, never parallel tables keyed alike: adding a thing is one row, and a key cannot be in one
+## table and missing from the next. docs.py reads the same rows (`const`), so a field added to a row is in the
+## docs without a regex of its own (next/structure.md).
 
 ## The label of [param key] in [param registry] - the key itself when there is none.
 static func label(registry: Dictionary, key: String) -> String:

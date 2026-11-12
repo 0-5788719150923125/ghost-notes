@@ -4,30 +4,18 @@ extends SceneTree
 ##   godot --path . --position -5000,-5000 --script res://tests/scene_kit/rain_check.gd
 ## Needs a real renderer (it reads pixels back).
 ##
-## Three claims, each from something the first cuts got wrong:
+## Three claims:
 ##
-##   INDEPENDENCE  Every drop must go its own way. Column-based shader rain hashes
-##                 each LANE once, so every drop down a lane repeats the identical
-##                 position, caliber and angle forever - reported, exactly, as
-##                 "painting thirty train-track paths across the screen, then
-##                 sending trains down the exact same track every single time".
-##                 Hashing on the cell index as well as the lane gives each PASS
-##                 its own everything. Measured as the overlap between the set of
-##                 x positions carrying rain at one moment and at another: shared
-##                 tracks means near-total overlap, independent drops means little.
-##
-##   AMOUNT        Turning it down must EMPTY the sky, not merely thin each drop.
-##                 Coverage used to move the lane count, so the sky stayed full and
-##                 a drizzle was just a finer downpour.
-##
-##   DEPTH         At Depth 0 nothing falls in front of the subject. The far sheet
-##                 is confined to background, which is the only depth cue available
-##                 without a depth buffer.
+##   Independence  Every drop goes its own way. Hashing each lane once makes every drop down a lane repeat one
+##                 position, caliber and angle; hashing on the cell index as well gives each pass its own. Measured
+##                 as the overlap between the x positions carrying rain at one moment and at another: shared tracks
+##                 mean near-total overlap, independent drops little.
+##   Amount        Turning it down empties the sky, not merely thins each drop (coverage moves the lane count).
+##   Depth         At Depth 0 nothing falls in front of the subject: the far sheet is confined to background, the
+##                 only depth cue available without a depth buffer.
 
-## Wide on purpose. A near lane is a 26th of the frame and a drop is a pixel or
-## two across, so at 400px a lane offers only about six distinguishable positions
-## and the independence measure hits that ceiling rather than the rain's. At 1200
-## a lane is ~46px and the question can actually be asked.
+## Wide on purpose: a near lane is a 26th of the frame and a drop a pixel or two across, so at 400px a lane offers
+## only about six distinguishable positions and the independence measure hits that ceiling; at 1200 a lane is ~46px.
 const W := 1200
 const H := 600
 
@@ -46,36 +34,10 @@ func _initialize() -> void:
 				else Color(0.62 + n, 0.48 + n, 0.42 + n))
 	var tex := ImageTexture.create_from_image(src)
 
-	# INDEPENDENCE. Three earlier measures failed here and each failure says
-	# something, so all three are recorded rather than replaced quietly:
-	#
-	#   "does this column ever have a drop", over a whole column - SATURATES.
-	#   Nearly every lane holds a drop somewhere down the frame however independent
-	#   they are; it reported 88% overlap for rain that was in fact scattered.
-	#
-	#   "do the same crossings recur at two moments" - whether a drop crosses a
-	#   given row depends on its PHASE, so crossings differ between moments even
-	#   when every drop reuses one fixed path. It passed the bug it was written for.
-	#
-	#   "are positions quantized to lanes", from one instant - there are ~200 lanes
-	#   across the frame, so a snapshot of fixed offsets and a snapshot of random
-	#   ones look alike: 0.70 against 0.76, no separation.
-	#
-	# What actually distinguishes them is TEMPORAL, which is also how it was
-	# reported - "sending trains down the exact same track every single time". Watch
-	# ONE row over many moments. A lane hashed once puts every one of its drops
-	# across that row at the SAME x, so however long you watch, the crossings pile
-	# onto as many positions as there are lanes. Hashed per drop, each crossing
-	# brings its own x and the count keeps growing. So: distinct positions divided
-	# by total crossings, accumulated over time.
-	# ...and the fourth attempt, which does discriminate: ISOLATE ONE LANE and
-	# watch it. Accumulating over the whole frame saturates on the pixel grid (at a
-	# 1.5px merge there are only ~130 distinguishable positions across 400px, and
-	# 300 crossings fill nearly all of them whatever the drops are doing). Inside a
-	# single lane's width the question is clean and unsaturated: a lane hashed once
-	# puts every drop it ever produces at ONE x, so a window that wide collects
-	# crossings at a single position however long you watch. Hashed per drop, the
-	# crossings scatter across the window.
+	# Independence: watch one lane over many moments. A lane hashed once puts every drop it produces at one x, so a window
+	# one lane wide collects crossings at a single position however long you watch; hashed per drop, the crossings scatter
+	# across the window. (Whole-column and whole-frame measures saturate: nearly every lane holds a drop somewhere, and
+	# across ~200 lanes snapshots of fixed and random offsets look alike.)
 	var win_lo := int(W * 0.30)
 	var win_hi := win_lo + int(float(W) / 26.0)   # exactly one near lane
 	var lane_x := []
@@ -97,8 +59,7 @@ func _initialize() -> void:
 	print("independence: within ONE lane, %d crossings over 30 moments landed on %d "
 		% [lane_n, lane_x.size()] + "distinct x -> %.2f" % ratio)
 	_expect(lane_n > 20, "too few crossings in the sampled lane (%d)" % lane_n)
-	# Measured: 0.13 with the shipped per-lane hash (every drop on one track),
-	# 0.60+ with the per-drop hash. 0.35 sits between with room on both sides.
+	# Measured: 0.13 with a per-lane hash (every drop on one track), 0.60+ with a per-drop hash; 0.35 sits between with room on both sides.
 	_expect(ratio > 0.35,
 		"within one lane, %d crossings landed on only %d distinct positions (%.2f) - "
 		% [lane_n, lane_x.size(), ratio]
@@ -141,17 +102,11 @@ func _expect(ok: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-## Which x positions carry rain ON ONE ROW, over the background half.
-##
-## One row, not the whole column. Scanning a column's full height asks "does this
-## lane ever have a drop in it", and the answer is yes for nearly every lane at
-## nearly every moment however independent the drops are - the measurement
-## saturates and reports 88% overlap for rain that is in fact scattered. A single
-## row asks the question that was actually reported: is a drop crossing HERE, now,
-## and is it crossing the same HERE a moment later.
-## The CENTER x of every streak crossing a set of rows, over the background half.
-## Centers rather than wet pixels: a streak is several pixels wide, and counting
-## each of them would report a wide drop as several distinct positions.
+## Which x positions carry rain on one row, over the background half. One row, not the whole column: a column's full
+## height asks whether the lane ever has a drop, which saturates (88% overlap for scattered rain); a single row asks
+## whether a drop crosses here now and crosses the same here a moment later.
+## The center x of every streak crossing a set of rows, over the background half. Centers rather than wet pixels: a
+## streak is several pixels wide, and counting each would report a wide drop as several distinct positions.
 func _centers(got: Image, src: Image) -> Array:
 	var out := []
 	for row in [int(H * 0.30), int(H * 0.50), int(H * 0.70)]:

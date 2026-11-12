@@ -1,23 +1,17 @@
 extends SceneTree
 
-## Isolated probe for shaders/umbra_field.gdshader - runs the ping-pong field
-## by hand against a SYNTHETIC silhouette (a head on a pair of shoulders) thrown
-## by a real cast transform, and dumps what each channel actually holds.
+## Isolated probe for shaders/umbra_field.gdshader: runs the ping-pong field by hand against a synthetic
+## silhouette (a head on a pair of shoulders) thrown by a real cast transform, and dumps what each channel
+## holds. Look here before debugging the visual.
 ##   godot --path . --headless --script res://tests/masking/umbra_sim_check.gd
-##
-## This exists because the clown's equivalent probe (tests/masking/paint_sim_check.gd)
-## found two bugs that were completely invisible from the rendered picture:
-## a SubViewport forcing alpha to 1 (so the guard permitted everything) and a
-## missing blend_disabled. Look here BEFORE trying to debug the visual.
-## Writes /tmp/ghost_scratch/umbra_field.png - the field itself, as a picture.
+## Writes /tmp/ghost_scratch/umbra_field.png, the field itself as a picture.
 
 const W := 384
 const H := 216
 
 func _initialize() -> void:
-	# HER silhouette, at the grid the pose track writes: a head on a pair of
-	# shoulders, left of center. R is the body the throw magnifies, B is the same
-	# mask dilated - the guard, read at plain screen uv (see _pt_upload_mask).
+	# Her silhouette, at the grid the pose track writes: a head on shoulders, left of center. R is the body
+	# the throw magnifies, B the same mask dilated (the guard, read at plain screen uv; see _pt_upload_mask).
 	var region := Image.create_empty(96, 54, false, Image.FORMAT_RGBA8)
 	for y in 54:
 		for x in 96:
@@ -29,12 +23,10 @@ func _initialize() -> void:
 			region.set_pixel(x, y, Color(m, 0.0, m, 1.0))
 	var rtex := ImageTexture.create_from_image(region)
 
-	# THE CAST TRANSFORM, at a real magnification and pointed back TOWARD her -
-	# the guard has to hold with the ghost scaled up and shoved onto the subject,
-	# which is exactly when a stencil-shaped bug would show. Built the same way
-	# MaskEditor._umb_solve_cast builds it: her shoulder line (0.40, 0.50) and eye
-	# line (0.40, 0.24) in aspect-corrected space, thrown to a head at (1.10, 0.16)
-	# with scale 2.0 and no rotation, so the inverse is a plain 1/2.
+	# The cast transform, at a real magnification and pointed back toward her: the guard must hold with the
+	# ghost scaled up and shoved onto the subject. Built as MaskEditor._umb_solve_cast builds it: her
+	# shoulder line (0.40, 0.50) and eye line (0.40, 0.24) in aspect-corrected space, thrown to a head at
+	# (1.10, 0.16) with scale 2.0 and no rotation, so the inverse is a plain 1/2.
 	var asp := 1.7778
 	var her_sh := Vector2(0.40 * asp, 0.50)
 	var her_eye := Vector2(0.40 * asp, 0.24)
@@ -88,8 +80,7 @@ func _initialize() -> void:
 		mat.set_shader_parameter("u_unit", unit)
 		mat.set_shader_parameter("u_bust0", 1.6)
 		mat.set_shader_parameter("u_bust1", 3.2)
-		# Eyes ON, and the LEFT one deliberately planted right on the subject:
-		# the sockets must never become a way for the effect to reach her.
+		# Eyes on, and the left one planted on the subject: the sockets must never reach her.
 		mat.set_shader_parameter("u_eye_l", Vector2(0.40, 0.26))
 		mat.set_shader_parameter("u_eye_r", Vector2(0.66, 0.16))
 		mat.set_shader_parameter("u_eye_rad", 0.06)
@@ -119,9 +110,8 @@ func _initialize() -> void:
 		if k.begins_with("ON SUBJECT"):
 			worst = maxf(c.r * c.a, c.g * c.a)
 			under = c.r
-	# Peak, so "is there any mass at all" is answerable without hunting probes.
-	# Scanned on a downsampled COPY - 83k get_pixel calls in GDScript is slower
-	# than the entire simulation it is measuring.
+	# Peak, so "is there any mass at all" is answerable without hunting probes. Scanned on a downsampled
+	# copy (83k get_pixel calls in GDScript is slower than the simulation).
 	var small: Image = img.duplicate()
 	small.resize(96, 54, Image.INTERPOLATE_BILINEAR)
 	var pk := 0.0
@@ -133,12 +123,9 @@ func _initialize() -> void:
 			pkw = maxf(pkw, c2.g)
 	print("  peak mass=%.3f peak essence=%.3f" % [pk, pkw])
 	print("  SUBJECT LEAK (must be ~0): %.4f" % worst)
-	# ...AND THE MASS IS STILL THERE UNDERNEATH HER, which is the other half of
-	# the same change and cannot be inferred from the leak being zero - a field
-	# that deposited nothing at all would also read 0.0000. The mass grows under
-	# her so that the instant she moves off a pixel it is already full, instead of
-	# refilling at Cling's rise time and dragging a hole behind every gesture; the
-	# guard is what stops it being DRAWN, and that is what the leak measures.
+	# ...and the mass is still there underneath her: a field that deposited nothing would also read 0.0000
+	# leak. The mass grows under her so the instant she moves off a pixel it is already full (no hole
+	# dragged behind a gesture); the guard stops it being drawn, which is what the leak measures.
 	print("  MASS UNDER HER (must be > 0, gated only at render): %.4f" % under)
 	if under <= 0.05:
 		print("  WARNING: nothing is growing under the subject - a gesture will "

@@ -1,35 +1,29 @@
 extends RefCounted
 class_name LikenessFace
 
-## LikenessFace - a set's rig and library, and the still a Likeness is drawn on (next/likeness.md, "The
-## second build"). Read from `rig.json`, `library.json` and one of `stills.json`'s stills, which `actor.py
-## rig`, `library` and `stills` make.
+## LikenessFace - a set's rig and library, and the still a Likeness is drawn on (next/likeness.md, "The second build").
+## Read from `rig.json`, `library.json` and one of `stills.json`'s stills, which `actor.py rig`, `library` and `stills` make.
 ##
-## THE MESH: the face's 468 points, two rings round the face oval (1.35 and 2 times as far from its middle
-## - over the hair and beard, and out where any change has faded to nothing) and anchors on the frame's
-## edge, joined by one triangulation made once on the set's first still. Drawn over the whole frame, it
-## covers every pixel.
+## The mesh: the face's 468 points, two rings round the face oval (1.35 and 2 times as far from its middle - over the hair
+## and beard, and out where any change has faded to nothing) and anchors on the frame's edge, joined by one triangulation
+## made once on the set's first still. Drawn over the whole frame, it covers every pixel.
 ##
-## THE HEAD TURNS ON THE NECK, THE BODY CARRIES IT (the third pass, 2026-10-22: "the body doesn't shift
-## at all, the head doesn't really pivot at all (it just sort of floats around)"): the still's face turned
-## through its own 3D points about the neck - a pivot below and behind its middle - by the motion's yaw,
-## pitch and roll ([method pose]).
+## The head turns on the neck, the body carries it: the still's face is turned through its own 3D points about the neck
+## (a pivot below and behind its middle) by the motion's yaw, pitch and roll ([method pose]).
 ##
-## THE BODY IS A SKELETON (the fourth pass, 2026-10-22, the user: "the actor's body is completely rigid
-## ... we're not modeling the body - we're just shifting it around a bunch"): each still's own, from its
-## pose (`rig.json`'s `stills`: the hips, the neck, each shoulder, elbow, wrist and the hand's end), and
-## every vertex of its mesh weighed to its [constant BONES] - the room's what the weights leave. THE TORSO
-## leans, settles and breathes about the hips ([method torso_xf]); each SHOULDER lifts on it; a HAND THAT
-## RESTS in the picture stays where it rests, but for its own small drift, and its ARM BENDS between it
-## and the moved shoulder - the elbow found as an arm's would be (two bones of their lengths, bending the
-## way it bent) - a hand not in the picture goes with its shoulder ([method bones]). The frame's edge stays;
-## the room is drawn under them, apart ([LikenessMedium]), so it never moves.
+## The body is a skeleton: each still's own, from its pose (`rig.json`'s `stills`: hips, neck, each shoulder, elbow, wrist
+## and the hand's end), every vertex of its mesh weighed to its [constant BONES] - the room's is what the weights leave.
+## The torso leans, settles and breathes about the hips ([method torso_xf]); each shoulder lifts on it; a hand that rests
+## in the picture stays where it rests but for its own small drift, and its arm bends between it and the moved shoulder
+## (the elbow found as an arm's would be: two bones of their lengths, bending the way it bent); a hand not in the
+## picture goes with its shoulder ([method bones]). The frame's edge stays; the room is drawn under them, apart
+## ([LikenessMedium]), so it never moves.
 ##
-## THE LAYOUT: the set's first still's face. Every library mouth and eye is kept unwrapped into it (the
-## box, [member box]), so a vertex's place in the layout is where it reads the library. A mouth or eye
-## drawn is its own shape - the frame it came from, aligned onto the layout by the points that move with
-## neither ([member steady]) - and the face moved toward it by each point's weight ([member weights] for
-## the mouth, [member eye_weights] for the lids): mixed, both are morphs, never two images over each other.
+## The layout is the set's first still's face. Every library mouth and eye is kept unwrapped into it (the box, [member
+## box]), so a vertex's place in the layout is where it reads the library. A mouth or eye drawn is its own shape - the frame
+## it came from, aligned onto the layout by the points that move with neither ([member steady]) - and the face moved
+## toward it by each point's weight ([member weights] for the mouth, [member eye_weights] for the lids): both are morphs,
+## never two images over each other.
 
 const FACE := 468
 ## How far the chest's breath stretches the torso upward from the hips, from empty to full.
@@ -53,12 +47,11 @@ var image := Vector2i(512, 512)
 var lay_uv := PackedVector2Array()       # every mesh vertex's place in the box's image, 0..1
 var mask_mouth := ""
 var mask_eyes := ""
-## EACH STILL'S BODY, as the rig made it: `[{body, skin, skeleton, triangles}]`.
+## Each still's body, as the rig made it: `[{body, skin, skeleton, triangles}]`.
 var _bodies: Array = []
 
-## THE LIBRARY: every image's file (the mouths, then the eyes - one texture array), its shape in the
-## layout, its cheeks' light when it was filmed (mean and spread); and which images each sound class and
-## each eye state has.
+## The library: every image's file (the mouths, then the eyes - one texture array), its shape in the layout, its cheeks'
+## light when it was filmed (mean and spread); and which images each sound class and each eye state has.
 var files: Array = []
 var shapes: Array = []                   # PackedVector2Array per image
 var lights: Array = []                   # PackedFloat32Array(6) per image
@@ -69,7 +62,7 @@ var eyes_of := {}                        # state -> [image index]
 var mouth_blends := {}
 var articulation := 1.0
 
-## THE STILL: its face in its frame, in 3D (pixels, the depth on the width's scale), and its cheeks' light.
+## The still: its face in its frame, in 3D (pixels, the depth on the width's scale), and its cheeks' light.
 var still_face := PackedVector2Array()
 var still_3d := PackedVector3Array()
 var still_light := PackedFloat32Array()
@@ -82,8 +75,8 @@ var _mesh := PackedVector2Array()
 var _skin_at := PackedInt32Array()
 var _skin_bone := PackedInt32Array()
 var _skin_w := PackedFloat32Array()
-## THE SKELETON: the hips (what the torso leans and breathes about), the shoulders' width, and each arm
-## (`l` theirs, on the picture's right; then `r`) as `{shoulder, elbow, wrist, rests}`.
+## The skeleton: the hips (what the torso leans and breathes about), the shoulders' width, and each arm (`l` theirs, on
+## the picture's right; then `r`) as `{shoulder, elbow, wrist, rests}`.
 var _hip := Vector2.ZERO
 var _width := 1.0
 var _arms: Array = []
@@ -125,7 +118,7 @@ func load_set(rig_path: String, library_path: String, need_library := true) -> S
 	var l: Variant = ActorFolder.read_json(library_path)
 	if not (l is Dictionary):
 		if not need_library:
-			# A HEAD OF SPLATS draws the mouth and eyes itself: the rig and the body are all it reads
+			# a head of splats draws the mouth and eyes itself: the rig and the body are all it reads
 			files = []
 			shapes = []
 			lights = []
@@ -164,8 +157,8 @@ static func _flat(tris: Array) -> PackedInt32Array:
 	return out
 
 
-## DRAW ON [param still], the set's still [param k] (one of `stills.json`'s): its face, in 2D and 3D, the
-## pivot it turns about, and its body's mesh.
+## Draw on [param still], the set's still [param k] (one of `stills.json`'s): its face, in 2D and 3D, the pivot it turns
+## about, and its body's mesh.
 func set_still(still: Dictionary, k := 0) -> void:
 	var pts: Array = still.get("points", [])
 	still_face = PackedVector2Array()
@@ -175,7 +168,7 @@ func set_still(still: Dictionary, k := 0) -> void:
 		still_face.append(Vector2(float(p[0]) * size.x, float(p[1]) * size.y))
 		still_3d.append(Vector3(float(p[0]) * size.x, float(p[1]) * size.y, float(p[2]) * size.x))
 	still_light = PackedFloat32Array(still.get("light", []))
-	# THE NECK: below the face's middle by most of its half height, and behind it
+	# the neck: below the face's middle by most of its half height, and behind it
 	var c := Vector3.ZERO
 	var lo := INF
 	var hi := -INF
@@ -191,7 +184,7 @@ func set_still(still: Dictionary, k := 0) -> void:
 	var half := (hi - lo) * 0.5
 	_pivot = c + Vector3(0.0, half * 0.9, half * 0.6)
 	_face_w = maxf(1.0, right - left)
-	# ITS BODY, as the rig made it for this still: its mesh, its skin and its skeleton
+	# its body, as the rig made it for this still: its mesh, its skin and its skeleton
 	var b: Dictionary = _bodies[k] if k < _bodies.size() and _bodies[k] is Dictionary else {}
 	var body := _vecs(b.get("body", []))
 	_mesh = still_face.duplicate()
@@ -213,8 +206,8 @@ func set_still(still: Dictionary, k := 0) -> void:
 	_uvs = PackedVector2Array()
 	for p in _mesh:
 		_uvs.append(p / size)
-	# EVERY VERTEX'S PLACE IN THE LIBRARY'S BOX: the face and its rings where the layout has them, the
-	# rest as the still's face sits on the layout (outside the box, read by no mask)
+	# every vertex's place in the library's box: the face and its rings where the layout has them, the rest as the still's
+	# face sits on the layout (outside the box, read by no mask)
 	var to_lay := similarity(still_face, layout, steady)
 	var lay := layout.duplicate()
 	lay.append_array(ring(layout, ring1))
@@ -226,8 +219,8 @@ func set_still(still: Dictionary, k := 0) -> void:
 		lay_uv.append((p - box.position) / box.size)
 
 
-## THE SKIN [param skin] (`{bone: [weight per vertex]}`) over the [param rest] vertices past the near
-## ring, kept sparse; none (or not as many) leaves every one of them where it is.
+## The skin [param skin] (`{bone: [weight per vertex]}`) over the [param rest] vertices past the near ring, kept sparse; none
+## (or not as many) leaves every one of them where it is.
 func _skin(skin: Dictionary, rest: int) -> void:
 	_skin_at = PackedInt32Array()
 	_skin_bone = PackedInt32Array()
@@ -261,7 +254,7 @@ static func _vecs(a: Array) -> PackedVector2Array:
 	return out
 
 
-## THE RING round [param face]'s oval at [param s] times its distance from the oval's middle.
+## The ring round [param face]'s oval at [param s] times its distance from the oval's middle.
 func ring(face: PackedVector2Array, s: float) -> PackedVector2Array:
 	var c := Vector2.ZERO
 	for i in oval:
@@ -273,8 +266,8 @@ func ring(face: PackedVector2Array, s: float) -> PackedVector2Array:
 	return out
 
 
-## THE STILL'S FACE TURNED BY [param m] - the motion's yaw, pitch and roll against the shoulders (degrees):
-## its 3D points turned about the neck and seen straight on. Where the head goes besides is the body's.
+## The still's face turned by [param m] - the motion's yaw, pitch and roll against the shoulders (degrees): its 3D points
+## turned about the neck and seen straight on. Where the head goes besides is the body's.
 func pose(m: PackedFloat32Array) -> PackedVector2Array:
 	if m.size() < 3 or still_3d.is_empty():
 		return still_face
@@ -292,9 +285,9 @@ func pivot() -> Vector3:
 	return _pivot
 
 
-## THE TORSO'S POSTURE [param m] (the motion's across, down - face widths - nearer, and tilt) with the
-## chest [param breath] full (0..1), as one transform of the picture: about the hips, turned by the tilt,
-## scaled by the nearness (and upward by the breath), moved.
+## The torso's posture [param m] (the motion's across, down - face widths - nearer, and tilt) with the chest [param breath]
+## full (0..1), as one transform of the picture: about the hips, turned by the tilt, scaled by the nearness (and upward by
+## the breath), moved.
 func torso_xf(m: PackedFloat32Array, breath := 0.5) -> Transform2D:
 	if m.size() < 7:
 		return Transform2D.IDENTITY
@@ -305,11 +298,10 @@ func torso_xf(m: PackedFloat32Array, breath := 0.5) -> Transform2D:
 	return Transform2D(0.0, _hip + shift) * t * Transform2D(0.0, -_hip)
 
 
-## EVERY BONE'S TRANSFORM ([constant BONES]' order) for the face turned to [param posed] on a torso at
-## [param m] ([method torso_xf]) breathing [param breath], the shoulders lifted by [param lifts] (x theirs
-## left, y right; shares of the shoulders' width, up is more) and the resting hands moved by [param hands]
-## (each a share of the shoulders' width): the head turned on the torso; each arm's elbow found between its
-## lifted shoulder and its hand, so the hand stays where it rests.
+## Every bone's transform ([constant BONES]' order) for the face turned to [param posed] on a torso at [param m]
+## ([method torso_xf]) breathing [param breath], the shoulders lifted by [param lifts] (x theirs left, y right; shares of
+## the shoulders' width, up is more) and the resting hands moved by [param hands] (each a share of the shoulders' width):
+## the head turned on the torso; each arm's elbow found between its lifted shoulder and its hand.
 func bones(posed: PackedVector2Array, m: PackedFloat32Array, breath := 0.5, lifts := Vector2.ZERO,
 		hands := PackedVector2Array()) -> Array:
 	var torso := torso_xf(m, breath)
@@ -337,9 +329,8 @@ func bones(posed: PackedVector2Array, m: PackedFloat32Array, breath := 0.5, lift
 	return out
 
 
-## WHERE AN ELBOW GOES when its shoulder [param s] goes to [param s2] and its wrist [param w] to [param
-## w2]: the arm's two bones keep their lengths (as far as they can reach) and bend the way they bent at
-## [param e].
+## Where an elbow goes when its shoulder [param s] goes to [param s2] and its wrist [param w] to [param w2]: the arm's two
+## bones keep their lengths (as far as they can reach) and bend the way they bent at [param e].
 static func elbow(s: Vector2, e: Vector2, w: Vector2, s2: Vector2, w2: Vector2) -> Vector2:
 	var l1 := s.distance_to(e)
 	var l2 := e.distance_to(w)
@@ -351,8 +342,7 @@ static func elbow(s: Vector2, e: Vector2, w: Vector2, s2: Vector2, w2: Vector2) 
 	return s2 + (w2 - s2).normalized().rotated(a * bend) * l1
 
 
-## THE BONE from [param a] to [param b] moved to lie from [param a2] to [param b2]: turned and scaled about
-## its start, and moved.
+## The bone from [param a] to [param b] moved to lie from [param a2] to [param b2]: turned and scaled about its start, and moved.
 static func bone(a: Vector2, b: Vector2, a2: Vector2, b2: Vector2) -> Transform2D:
 	var v := b - a
 	var v2 := b2 - a2
@@ -371,8 +361,7 @@ func align(src: PackedVector2Array, dst: PackedVector2Array) -> Transform2D:
 	return similarity(src, dst, steady)
 
 
-## THE SIMILARITY (scale, turn, shift) that best takes [param src]'s points [param idx] onto [param
-## dst]'s, least squares.
+## The similarity (scale, turn, shift) that best takes [param src]'s points [param idx] onto [param dst]'s, least squares.
 static func similarity(src: PackedVector2Array, dst: PackedVector2Array, idx: PackedInt32Array) -> Transform2D:
 	var ms := Vector2.ZERO
 	var md := Vector2.ZERO
@@ -401,9 +390,8 @@ static func similarity(src: PackedVector2Array, dst: PackedVector2Array, idx: Pa
 	return t
 
 
-## THE FACE [param posed] BENT TO ITS MOUTH AND EYES: [param mouth] and [param eyes] (`[[image, weight]]`,
-## image -1 for the still's own) - aligned to the layout, each point moved toward the images' own shapes
-## by its weight, and set back.
+## The face [param posed] bent to its mouth and eyes: [param mouth] and [param eyes] (`[[image, weight]]`, image -1 for the
+## still's own) - aligned to the layout, each point moved toward the images' own shapes by its weight, and set back.
 func target(posed: PackedVector2Array, mouth: Array, eyes: Array) -> PackedVector2Array:
 	var t := align(posed, layout)
 	var back := t.affine_inverse()
@@ -435,10 +423,9 @@ func _want(i: int, here: Vector2, mix: Array) -> Vector2:
 	return want / total if total > 0.0 else here
 
 
-## THE MESH'S VERTICES for the still turned to [param posed], bent to [param bent], its bones at [param
-## at] ([method bones]; none, the still's own pose): the face where it is bent to and the near ring with the
-## head (part of the way with the jaw), both on the torso; every other vertex by its weights on the bones,
-## the room's share staying where it is.
+## The mesh's vertices for the still turned to [param posed], bent to [param bent], its bones at [param at] ([method bones];
+## none, the still's own pose): the face where it is bent to and the near ring with the head (part of the way with the
+## jaw), both on the torso; every other vertex by its weights on the bones, the room's share staying where it is.
 func vertices(posed: PackedVector2Array, bent: PackedVector2Array, at: Array = []) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(_mesh.size())
@@ -474,10 +461,9 @@ func base_uvs() -> PackedVector2Array:
 	return _uvs
 
 
-## AN IMAGE MATCHED TO THE STILL'S LIGHT: `[gain, offset]` (each a Vector3, r g b) taking image [param m]'s
-## cheeks - their mean and spread when it was filmed - to the still's. ONE GAIN FOR ALL THREE CHANNELS, so
-## the lips keep their hue: a gain per channel turned a red lip teal (2026-10-21, the first look) - the
-## mean is matched per channel, the spread only as a whole, and only so far.
+## An image matched to the still's light: `[gain, offset]` (each a Vector3, r g b) taking image [param m]'s cheeks - their
+## mean and spread when it was filmed - to the still's. One gain for all three channels, so the lips keep their hue (a gain
+## per channel turns a red lip teal): the mean is matched per channel, the spread only as a whole, and only so far.
 func match_light(m: int) -> Array:
 	var ml: PackedFloat32Array = lights[m] if m >= 0 and m < lights.size() else PackedFloat32Array()
 	var light := still_light

@@ -1,42 +1,30 @@
 extends SceneTree
 
-## Gate for THE DISPATCH DESK ([DispatchMedium], next/dispatch.md), mounted headless and played through on a steady voice
-## over tests/fixtures/dispatch_note.md ([method DispatchScript.rehearsal]):
+## Gate for the dispatch desk ([DispatchMedium], next/dispatch.md), mounted headless and played on a steady voice over
+## tests/fixtures/dispatch_note.md ([method DispatchScript.rehearsal]). It holds:
 ##
-## - THE ACTIONS FIT THE VOICE'S RESTS: every action placed, each done before the word after it, two pings a hesitation
-##   apart kept a hesitation apart;
-## - THE PHONES: the one called at the ear while its voice speaks, the one before it laid open on the desk, picked back up,
-##   and every one back in its row at the end;
-## - THE DESK IS SEEN FIRST: nothing happens and the camera stays home through the opening rest;
-## - THE TERMINAL: asleep (dark) until a block wakes it; A SESSION wakes it to a bare prompt, each command typed a key at a
-##   time and its answer printed after it, the prompt back at the end; a shown block drawn down a line at a time (the
-##   control: just begun, its last line is not there yet); its REDACTED WORDS a run on their own line and nowhere as
-##   written (the control: plain lines have none), HIDDEN OVER THE FRAME - the camera on the terminal, one box round them
-##   as it sees them, a small part of the glass (the control: asleep, no box) - and a redacted run being typed covered
-##   whole from its first key (the control: the key before, as typed); a typed block SAID BEHIND ITS KEYS - its first words typed before
-##   the voice begins (the control: the rest not yet), every word's keys done before the voice says it; struck, it is gone;
-## - THE CAMERA turns to what is active (the terminal while it types, the receiver in a storm, a ringing phone) and a look
-##   holds it while nothing else is; THE RADAR: the target sets off at a moving mark and arrives at a ping, under the voice,
-##   the sweep painting him a small step on each round - never a jump (THE CONTROL: the two places are well apart) - the
-##   place he left written beside him until he arrives; the radar's alarm as he sets off turns the camera to it, and the
-##   camera goes to the radar only at its sounds, never to watch it do nothing; THE RECEIVER is open only in its storm;
-## - A TEXT IS READ ON ITS PHONE: a chime, the phone up before the eye, the message on its screen and never captioned; the
-##   answer typed under it as it is said, and sent; the phone home after. A CALL IS SPEED-DIALED: 1 held, Send, the ear;
-## - THE CAPTIONS: a typed word is read on the terminal, not captioned; a spoken line is;
-## - A LIVE READING: words arriving a sentence at a time, an action begun keeps its start when the plan is made again;
-## - THE ROOTS: some on the desk, and grown further at the end of the night than at its start; none where a phone is laid
-##   open, its lid with it (the control: the strip round the bases it had been leaves the lid out);
-## - THE DESK IS ITS NUMBER'S: the same number is the same desk (THE CONTROL), and across numbers it is mirrored both ways and
-##   its small things packed elsewhere - never onto anything standing, the mug at arm's reach (25-40 cm in from the edge,
-##   beside the keyboard), the camera turning to where each thing is; the old coffee ring a thin opaque rim, never a clear disc;
-##   THE KEYBOARD a standard layout (every row fifteen units), every key on its case (THE CONTROL: the old ones stood off it);
-## - THE MUG IS DRUNK FROM: upright all the way, brought to the mouth and out of the picture for the sip, in its ring before;
-## - THE GAIN: the knob turned from three to nine a click a step, the camera on the radar; at three nothing on the scope but
-##   him (THE CONTROL), at nine the clutter round him, unnamed, each blip painted only once the sweep has passed it since the
-##   knob reached it (the control: just turned, not yet all); turned back to three they fade, and are gone in a sweep or two;
-## - THE BELL rings as the block after it goes up; THE LAMP goes out at its click, dark in a moment (the control: lit before),
-##   the camera on the whole desk;
-## - BUILT ON A WORKER, as the app builds it (half a second, on the main thread a hitch): the show held until it lands.
+## - actions fit the voice's rests: each placed and done before the next word; two pings a hesitation apart stay apart;
+## - phones: the one called is at the ear while its voice speaks, the previous one laid open, picked back up, all back at the end;
+## - the desk is seen first: nothing happens and the camera stays home through the opening rest;
+## - the terminal: dark until a block wakes it; a session types each command a key at a time and prints its answer; a shown
+##   block draws a line at a time; redacted words are one run on their own line, hidden over the frame by one box round
+##   them as the camera sees them, and covered whole from their first key; a typed block is said behind its keys; a strike removes it;
+## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
+##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
+##   old place written beside it until it arrives; the receiver is open only in its storm;
+## - a text is read on its phone (chime, phone up, message on screen, never captioned, reply typed as said and sent); a call
+##   is speed-dialed (1 held, Send, ear);
+## - captions: a typed word is read on the terminal, a spoken line is captioned;
+## - a live reading, words arriving a sentence at a time: an action begun keeps its start when the plan is made again;
+## - the roots: some on the desk, grown further at the end than at the start, none under an open phone or its lid;
+## - the desk is its number's: the same number is the same desk, across numbers it is mirrored and packed differently, nothing
+##   on anything standing, the mug 25-40 cm in from the edge beside the keyboard; the keyboard is a standard layout (every
+##   row fifteen units) with every key on its case;
+## - the mug is drunk from: upright, brought to the mouth and out of the picture for the sip, back in its ring;
+## - the gain knob turns from three to nine a click a step with the camera on the radar: at three only the target is on the
+##   scope, at nine the clutter round it, each blip painted once the sweep has passed it; turned back, they fade;
+## - the bell rings as the block after it goes up; the lamp goes out at its click, the camera on the whole desk;
+## - built on a worker, as the app builds it: the show is held until it lands.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_check.gd
 
@@ -69,7 +57,7 @@ func _run() -> void:
 	var actions: Array = md._actions
 	var t0 := md.starts()
 	var at := func(si: int) -> float: return float((words[si] as Dictionary)["t0"])
-	# THE ACTIONS FIT THE VOICE'S RESTS
+	# actions fit the voice's rests
 	var placed := true
 	var before := true
 	for i in actions.size():
@@ -84,7 +72,7 @@ func _run() -> void:
 	_ok(before, "every action is done before the word after it")
 	_ok(absf((t0[1] - t0[0]) - (float(actions[0]["rest"]) + DispatchScript.REST_PAD + 1.5)) < 0.05,
 		"two pings a hesitation apart stay a hesitation apart (%.2f s)" % (t0[1] - t0[0]))
-	# THE PHONES, at the words their voices say
+	# phones, at the words their voices say
 	var si_of := func(word: String, from: int) -> int:
 		var sp: PackedStringArray = parsed["spoken"]
 		for k in range(from, sp.size()):
@@ -103,7 +91,7 @@ func _run() -> void:
 	var end_t := float((words.back() as Dictionary)["t1"]) + 5.0
 	_ok(md.phone_at("AISLE", end_t) == "row" and md.phone_at("VAN", end_t) == "row" and md.phone_at("COUGH", end_t) == "row",
 		"every phone is back in its row at the end")
-	# THE TERMINAL
+	# terminal
 	_ok(bool(md.terminal_at(0.5)["asleep"]), "the terminal opens asleep, dark")
 	_ok(t0[0] >= DispatchScript.OPENING and md.looking_at(t0[0] - 1.0) == "home",
 		"THE DESK IS SEEN FIRST: nothing before the opening rest is over, the camera home (%.1f s)" % t0[0])
@@ -134,7 +122,7 @@ func _run() -> void:
 		"a shown block's redacted words are a run on their own line, and nowhere as written (%d runs)" % covers.size())
 	_ok(md._screens.redactions(PackedStringArray(["NAME ........ SUBJECT", "STATUS ...... CONTAINED"])).is_empty(),
 		"the control: plain lines have no runs")
-	# HIDDEN OVER THE FRAME: the camera on the terminal, one box round the plate as it sees it, a small part of the glass
+	# hidden over the frame: the camera on the terminal, one box round the plate as it sees it, a small part of the glass
 	var shown_t := t0[screen_i] + 1.0
 	md._now = shown_t
 	md._snap = true
@@ -150,7 +138,7 @@ func _run() -> void:
 		"the plate is hidden over the frame: one box round it as the camera sees it, a small part of the glass (%s round %s, glass %s)" % [box, plate_seen, glass_seen])
 	md._censor_at(0.5)
 	_ok(md._censor.boxes.is_empty() and not md._censor.visible, "the control: the terminal asleep, no box")
-	# A REDACTED RUN BEING TYPED IS COVERED WHOLE FROM ITS FIRST KEY (the control: the key before it, as typed)
+	# a redacted run being typed is covered whole from its first key (control: the key before it, as typed)
 	var hid := DispatchScript.parse("```terminal\n> search <!-- redact: jane doe -->\n```\n\nThere.\n")
 	var ha: Dictionary = hid["actions"][0]
 	var hkeys: PackedFloat32Array = ha["plan"]["steps"][0]["keys"]
@@ -178,7 +166,7 @@ func _run() -> void:
 	var gone := "\n".join(md.terminal_at(md._end_of(strike_i) + 0.2)["lines"])
 	var before_strike := "\n".join(md.terminal_at(t0[strike_i] + 0.5)["lines"])
 	_ok(before_strike.contains("WHAT DO WE DO") and not gone.contains("WHAT DO WE DO"), "a strike backspaces the block off the screen")
-	# THE CAMERA, THE RADAR, THE RECEIVER
+	# camera, radar, receiver
 	var static_i := _first(actions, "static")
 	var ring_i := _first(actions, "ring")
 	var look_i := _first(actions, "look")
@@ -209,9 +197,9 @@ func _run() -> void:
 	_ok(String(arrived["blip"]["label"]) == "THE STAIRWELL" and (arrived["blip"]["at"] as Vector2).distance_to(stair) < 0.03,
 		"arrived, the stairwell is written beside him (%s)" % arrived["blip"]["label"])
 	_ok(md.looking_at(t0[moving_i] + 1.0) == "radar", "the radar's alarm as he sets off turns the camera to it (%s)" % md.looking_at(t0[moving_i] + 1.0))
-	# THE CAMERA GOES TO THE RADAR ONLY AT ITS SOUNDS: every look at it begins as it pings or sounds its alarm (or a look
-	# mark asks), and none stays to watch it do nothing - a ping held to its sentence's end at most, a walk to the ping where
-	# he arrives; either runs on only into the next look (the camera stays rather than easing home to turn straight back)
+	# the camera goes to the radar only at its sounds: every look at it begins as it pings or sounds its alarm (or a look mark
+	# asks) and none stays to watch it do nothing - a ping is held to its sentence's end at most, a walk to the ping where he
+	# arrives; either runs on only into the next look
 	var radar_spot: Dictionary = md._spot("radar")
 	var at_sounds := true
 	for w in md._attn:
@@ -238,7 +226,7 @@ func _run() -> void:
 			if not ends_at_ping:
 				at_sounds = false
 	_ok(at_sounds, "the camera goes to the radar only at its sounds - a ping held to its sentence's end, its alarm and the walk after it - and never stays to watch it do nothing")
-	# A PING IS HELD: from its ring PING_HOLD at least, to a sentence's end within PING_HOLD_MOST
+	# a ping is held from its ring PING_HOLD at least, to a sentence's end within PING_HOLD_MOST
 	var pings_held := true
 	for i in actions.size():
 		if String(actions[i]["kind"]) == "ping" and t0[i] < INF:
@@ -247,7 +235,7 @@ func _run() -> void:
 				pings_held = false
 	_ok(pings_held, "every ping holds the radar at least %.0f s, to the end of a sentence within %.0f s" % [DispatchMedium.PING_HOLD, DispatchMedium.PING_HOLD_MOST])
 	_settling(md, radar_spot)
-	# THE MUG IS DRUNK FROM: upright all the way, brought to the mouth and out of the picture, then home in its ring
+	# the mug is drunk from: upright all the way, brought to the mouth and out of the picture, then home in its ring
 	var lift_i := _first(actions, "lift")
 	var hold_t := t0[lift_i] + (DispatchScript.LIFT_UP + DispatchScript.LIFT_HOLD * 0.5) / md._sp[lift_i]
 	var up_t := t0[lift_i] + DispatchScript.LIFT_UP * 0.5 / md._sp[lift_i]
@@ -269,8 +257,8 @@ func _run() -> void:
 	md._pose_mug(t0[lift_i] - 0.5)
 	_ok(upright_on_way and at_mouth and unseen and md._set.mug.global_transform.origin.distance_to(md._set.mug_home.origin) < 0.001,
 		"the mug is drunk from: upright all the way, at the mouth and out of the picture for the sip, in its ring before (%s %s %s)" % [upright_on_way, at_mouth, unseen])
-	# A REAL SIP, UNHURRIED: at the mouth from the end of its rise to the end of its hold - at least 2.5 s - after a rise of
-	# 1.5 s at least, and the voice silent until the sip is done (THE CONTROL: before its rise is over it is not there yet)
+	# a real sip: at the mouth from the end of its rise to the end of its hold (at least 2.5 s), after a rise of at least 1.5 s,
+	# the voice silent until the sip is done (control: before its rise is over it is not there yet)
 	var sip0 := t0[lift_i] + DispatchScript.LIFT_UP / md._sp[lift_i]
 	var sip1 := t0[lift_i] + (DispatchScript.LIFT_UP + DispatchScript.LIFT_HOLD) / md._sp[lift_i]
 	var mouth_at := func(t: float) -> bool:
@@ -286,7 +274,7 @@ func _run() -> void:
 	var alarm := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "alarm" and absf(float(x["t"]) - t0[moving_i]) < 0.01).size()
 	var ticks := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "tick" and float(x["t"]) > t0[moving_i] and float(x["t"]) < t0[stair_i]).size()
 	_ok(alarm == 1 and ticks >= 1, "the radar sounds its alarm as he sets off, and ticks as the sweep passes him on his way (%d, %d)" % [alarm, ticks])
-	# PASSING THROUGH: a moving straight after a ping sounds no alarm and turns no camera
+	# passing through: a moving straight after a ping sounds no alarm and turns no camera
 	var pass_i := -1
 	for i in actions.size():
 		if String(actions[i]["kind"]) == "moving" and bool(actions[i].get("passing", false)):
@@ -296,7 +284,7 @@ func _run() -> void:
 	_ok(pass_i >= 0 and pass_alarm == 0 and pass_look == 0, "passing through a place on the way, the radar sounds no alarm and the camera stays (%d, %d)" % [pass_alarm, pass_look])
 	_ok(float(md.storm_at(t0[static_i] + 1.0).get("level", 0.0)) > 0.0 and md.storm_at(md._end_of(static_i) + 0.5).is_empty(),
 		"the receiver is open only in its storm")
-	# A TEXT IS READ ON ITS PHONE: a chime, the phone up before the eye and open, the message on its screen - and no caption
+	# a text is read on its phone: a chime, the phone up before the eye and open, the message on its screen, no caption
 	var text_i := _first(actions, "text")
 	var reply_i := _first(actions, "reply")
 	var read_t := t0[text_i] + (DispatchScript.TEXT_CHIME + DispatchScript.READ_LIFT) / md._sp[text_i] + 0.2
@@ -317,7 +305,7 @@ func _run() -> void:
 	var pads := plan_r.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "pad" and float(x["t"]) > t0[reply_i] and float(x["t"]) < sent_t).size()
 	var sends := plan_r.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "sent").size()
 	_ok(chimed == 1 and pads >= 10 and sends == 1, "it chimes as it comes, its keys tap as the answer is typed, and it is sent (%d, %d, %d)" % [chimed, pads, sends])
-	# SPEED DIAL: up before the eye, 1 held, Send, then to the ear
+	# speed dial: up before the eye, 1 held, Send, then to the ear
 	var dial_mv: Dictionary = {}
 	for m in md._phone_moves:
 		if String((m as Dictionary).get("how", "")) == "dial" and String(m["to"]) == "read":
@@ -334,10 +322,10 @@ func _run() -> void:
 		and md.phone_at(String(dial_mv["label"]), float(dial_mv["dialed"]) + DispatchScript.DIAL + 0.2) == "ear",
 		"a call is speed-dialed: up before the eye, 1 held, then to the ear for the rings (%s)" % str(dial_mv.get("label")))
 	_gain_bell_lamp(md, actions, t0, plan_r, screen_i)
-	# THE CAPTIONS
+	# captions
 	md._follower.extend(words)
 	_ok(not md._captioned(mid, mid, 0.0) and md._captioned(hello, hello, 0.0), "a typed word is captioned, or a spoken one is not")
-	# A LIVE READING
+	# live reading
 	var live := DispatchMedium.new()
 	live.feed = md.feed
 	live.mount(st)
@@ -362,10 +350,10 @@ func _run() -> void:
 		elif absf(live.starts()[kept] - was) > 0.001:
 			moved = true
 	_ok(kept >= 0 and not moved, "a live reading's begun action keeps its start as the plan is made again")
-	# THE ROOTS
+	# roots
 	_ok(md._roots.on_desk.size() >= 2 and DispatchRoots.grown(end_t + 2000.0) > DispatchRoots.grown(0.0),
 		"roots reach onto the desk, and grow through the night (%d on the desk)" % md._roots.on_desk.size())
-	# BUILT ON A WORKER, as the app builds it: the show held, the desk put in as it lands
+	# built on a worker, as the app builds it: the show held, the desk put in as it lands
 	DispatchMedium.away_in_tests = true
 	var away := DispatchMedium.new()
 	away.feed = md.feed
@@ -392,7 +380,7 @@ func _run() -> void:
 		quit(1)
 
 
-## THE GAIN, THE BELL AND THE LAMP, on the fixture's night.
+## The gain, the bell and the lamp, on the fixture's night.
 func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array, heard: Array, screen_i: int) -> void:
 	var up := _first(actions, "gain")
 	var down := -1
@@ -431,11 +419,11 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 			faded = false
 	_ok(not fading.is_empty() and faded and md.clutter_at(lowered + DispatchMedium.CLUTTER_FADE + 0.1).is_empty(),
 		"turned back to three, the clutter fades, and is gone in a sweep or two (%d fading)" % fading.size())
-	# THE BELL, as the block after it goes up
+	# the bell, as the block after it goes up
 	var rung := heard.filter(func(x: Dictionary) -> bool: return String(x.get("kind", "")) == "bell")
 	_ok(rung.size() == 1 and absf(float(rung[0]["t"]) - t0[screen_i]) < 0.01 and float(rung[0]["t1"]) > float(rung[0]["t"]),
 		"the bell rings as the block after it goes up (%s)" % str(rung))
-	# THE LAMP
+	# the lamp
 	var lamp_i := _first(actions, "lamp")
 	var click := t0[lamp_i] + DispatchScript.LAMP_AT / md._sp[lamp_i]
 	md._pose(click - 0.05)
@@ -446,8 +434,8 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 	_ok(is_equal_approx(lit_before, DispatchSet.LAMP_ENERGY) and md.lamp_at(click + DispatchMedium.LAMP_FADE * 0.3) < 1.0 and dark and clicked == 1
 		and md.looking_at(click + 0.5) == "home",
 		"the lamp goes out at its click, dark in a moment, the camera on the whole desk (the control: lit before - %.2f, %s, %d, %s)" % [lit_before, dark, clicked, md.looking_at(click + 0.5)])
-	# THE OUTRO WAITS FOR THE DESK: what it does after the last word (the lamp, a hesitation, the sleep) is seen before the
-	# fade - black as the outro runs out after its rests (THE CONTROL: timed from the last word alone, already fading)
+	# the outro waits for the desk: what it does after the last word (lamp, hesitation, sleep) is seen before the fade
+	# (control: timed from the last word alone, already fading)
 	var last := md._word_t1(md._spoken_n - 1)
 	var after := md._after_last()
 	var outro := md.feed.tail()
@@ -467,7 +455,7 @@ static func _first(actions: Array, kind: String) -> int:
 	return -1
 
 
-## THE DESK IS ITS NUMBER'S.
+## The desk is its number's.
 func _layout() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)
@@ -504,8 +492,7 @@ func _layout() -> void:
 		if mat == null or mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or ring.mesh == null or ring.mesh.get_aabb().size.x > 0.11:
 			ring_ok = false
 		node.free()
-	# THE KEYBOARD: a standard layout - every row fifteen units - and every key on its case, none off its edge (THE
-	# CONTROL: the old four keys stood past the case's back)
+	# the keyboard: a standard layout (every row fifteen units) with every key on its case, none past its edge
 	var rows_ok := true
 	for row in DispatchSet.KEY_ROWS:
 		var units := 0.0
@@ -537,9 +524,9 @@ func _layout() -> void:
 	_ok(ring_ok, "the old coffee ring is a thin opaque rim, never a clear disc")
 
 
-## WHAT THE CAMERA TURNS TO IS SEEN ([method DispatchMedium._settled]), on looks made by hand - each against its control, the
-## same looks as they were before (a glance let go of at once, a ping gone in a second, the camera eased home between two
-## looks at the radar, a swerve toward a phone being hung up, a turn away to the receiver and straight back).
+## What the camera turns to ([method DispatchMedium._settled]), on looks made by hand, each against its control: a glance is
+## let go of at once, a ping is gone in a second, the camera eases home between two looks at the radar, a swerve toward a
+## phone being hung up, a turn away to the receiver and straight back.
 func _settling(md: DispatchMedium, radar: Dictionary) -> void:
 	var home: Dictionary = md._spot("home")
 	var phones: Dictionary = md._spot("phones")
@@ -575,7 +562,7 @@ func _settling(md: DispatchMedium, radar: Dictionary) -> void:
 	_ok(on.call(md._settled([ping.duplicate()]), 7.5) == radar and on.call([ping.duplicate()], 7.5) == home and never_back
 		and on.call(unyielding, 6.5) == radar,
 		"a ping holds the radar to its hold, and gives way to what begins next for good (the controls: gone at 7.5 s as it was; a hold that will not give way is gone back to)")
-	# 0040: the camera stays on the radar from a ping to the walk that follows it, never easing home between
+	# the camera stays on the radar from a ping to the walk that follows it, never easing home between
 	var walk := [ping.duplicate(), {"t0": 9.0, "t1": 21.0, "spot": radar}]
 	walk[0]["hold"] = 0.0
 	_ok(always.call(md._settled(walk.duplicate(true)), radar, 0.0, 21.0) and not always.call(walk.duplicate(true), radar, 0.0, 21.0),
@@ -603,8 +590,8 @@ func _ok(cond: bool, what: String) -> void:
 	if not cond:
 		_fails.append(what)
 
-## NO ROOT LIES WHERE A PHONE IS LAID OPEN (feedback 0038: "This phone is clipping through the root here"), on eight desks:
-## the held phones' whole footprint, lids and all - the control, the strip round the bases it had been, leaves the lids out.
+## No root lies where a phone is laid open, on eight desks: the held phones' whole footprint, lids included (control: the strip
+## round the bases leaves the lids out).
 func _roots_clear() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)

@@ -1,31 +1,19 @@
 extends SceneTree
 
-## Does mask mode handle a clip that ISN'T 16:9 - a phone video shot in portrait,
-## 1080x1920 - end to end?
+## Does mask mode handle a clip that is not 16:9 (a phone video shot in portrait, 1080x1920) end to end?
 ##   godot --headless --path . --script res://tests/masking/mask_portrait_check.gd
 ##
-## Everything downstream of the picture is shaped by ONE pair of numbers,
-## MaskPrep.src_size (probed from the clip, confirmed from the decoded texture).
-## This probe boots a real MaskEditor on a synthetic portrait session and checks the
-## three places that pair has to reach, because each of them used to be a hardcoded
-## 16:9 constant and each failed differently:
+## Everything downstream of the picture is shaped by one pair of numbers, MaskPrep.src_size (probed from
+## the clip, confirmed from the decoded texture). This boots a real MaskEditor on a synthetic portrait
+## session and checks the places that pair must reach:
 ##
-##   1. the editor's video slot   - _video_area.ratio. Was 16.0/9.0, so a portrait
-##      clip was stretched sideways to fill a wide box instead of being pillarboxed
-##      (black bars left and right) inside it.
-##   2. the exported resolution   - _render_size() / the override.cfg it writes.
-##      Movie Maker locks its size at engine startup, so the EDITOR has to name the
-##      size before the render process launches. Was never named at all, so every
-##      export came out 1920x1080 whatever went in.
-##   3. the meta mirror's pane    - _shrink_into_video_pane, which rebuilds the live
-##      editor's pane geometry by hand for the export.
+## 1. the editor's video slot (_video_area.ratio): pillarboxed, not stretched.
+## 2. the exported resolution (_render_size() and the override.cfg it writes): Movie Maker locks its size
+##    at engine startup, so the editor names the size before the render process launches.
+## 3. the meta mirror's pane (_shrink_into_video_pane), which rebuilds the pane geometry by hand.
 ##
-## SWITCHES (the portrait clip, what the fix is for) and HOLDS (a 16:9 clip, which
-## must come out exactly as it always did) - the second half is the safety net, same
-## discipline as the pronunciation gates.
-##
-## Fixtures are two tiny ffmpeg-generated clips under user://; regenerated only when
-## missing. Nothing is written into the project tree.
+## Switches (the portrait clip) and holds (a 16:9 clip, which must come out unchanged).
+## Fixtures are two tiny ffmpeg-generated clips under user://, regenerated only when missing.
 
 const DIR := "user://mask_shape_check"
 const PORTRAIT := Vector2i(360, 640)     # 9:16, the same shape as a 1080x1920 phone clip
@@ -36,8 +24,8 @@ var _fails: PackedStringArray = []
 
 
 func _initialize() -> void:
-	# _write_render_override targets res://override.cfg, the same file
-	# tests/run_boot_probe.sh uses to hijack the main scene. Never clobber one.
+	# _write_render_override targets res://override.cfg, the file tests/run_boot_probe.sh uses to hijack
+	# the main scene. Never clobber one.
 	if FileAccess.file_exists(ProjectSettings.globalize_path("res://override.cfg")):
 		print("mask_portrait_check: override.cfg already exists in the project root - ",
 			"inspect and remove it first. Refusing to run.")
@@ -65,15 +53,13 @@ func _initialize() -> void:
 		quit(1)
 
 
-## Boot a real MaskEditor on `size`'s session and check everything the picture's
-## shape has to reach.
+## Boot a real MaskEditor on `size`'s session and check everything the picture's shape has to reach.
 func _check(size: Vector2i, label: String) -> void:
 	var aspect := float(size.x) / float(size.y)
 	var editor: Node = load("res://src/masking/mask_editor.gd").new()
 	root.add_child(editor)
 	editor.open_source(_session_path(size))
-	# A few frames: the session opens synchronously, but _sync_source_size only
-	# adopts the decoder's own size once the first frame has actually decoded, and
+	# A few frames: _sync_source_size adopts the decoder's own size once the first frame has decoded, and
 	# the container needs a layout pass before its rect means anything.
 	for i in 30:
 		await process_frame
@@ -81,16 +67,15 @@ func _check(size: Vector2i, label: String) -> void:
 	print("")
 	print("--- %s (%dx%d, aspect %.4f) ---" % [label, size.x, size.y, aspect])
 
-	# 1. THE SOURCE SIZE ITSELF.
+	# 1. The source size itself.
 	var src: Vector2i = editor._source_prep.src_size
 	print("  _src_size            %dx%d  (confirmed by the decoder: %s)"
 		% [src.x, src.y, editor._source_prep.size_confirmed])
 	_expect(src == size, "%s: _src_size is %dx%d, expected %dx%d"
 		% [label, src.x, src.y, size.x, size.y])
 
-	# 2. THE EDITOR'S VIDEO SLOT. The container's ratio is the clip's, and the slot
-	# it hands its child is genuinely narrower than the space available - which IS
-	# the black bars either side, measured rather than assumed.
+	# 2. The editor's video slot: the container's ratio is the clip's, and the slot it hands its child is
+	# narrower than the space available, which is the black bars measured.
 	var area: AspectRatioContainer = editor._video_area
 	if area == null:
 		_expect(false, "%s: no _video_area was built" % label)
@@ -117,14 +102,10 @@ func _check(size: Vector2i, label: String) -> void:
 				"%s: a portrait clip should be PILLARBOXED - bars left and right - but the pane fills the width"
 				% label)
 
-	# 2b. THE PANEL IS WHOLE. Every row in the control list is a (label, control)
-	# pair built by _build_panel and re-read by _refresh_panel; a control that is
-	# declared and SYNCED but never built is null, and the sync line then throws on
-	# every panel refresh - at open, on every selection, and once per frame from
-	# _process. That shipped: a slider was cut along with the block around it while
-	# its declaration and its sync line stayed, and nothing here noticed, because
-	# a GDScript runtime error prints and carries on rather than failing a check.
-	# This is the cheap structural assertion that catches the whole class.
+	# 2b. The panel is whole. Every row in the control list is a (label, control) pair built by _build_panel
+	# and re-read by _refresh_panel; a control declared and synced but never built is null, and the sync
+	# line then throws on every refresh. A runtime error prints and carries on rather than failing a check,
+	# so this structural assertion catches the class.
 	var opts: Array = editor._options
 	print("  panel rows          %d" % opts.size())
 	_expect(opts.size() > 20, "%s: only %d panel rows were registered" % [label, opts.size()])
@@ -136,15 +117,10 @@ func _check(size: Vector2i, label: String) -> void:
 			"%s: a registered panel row has no label - _apply_sort moves the two "
 			% label + "together and will desynchronize the whole list")
 
-	# 2c. NO LABEL HAS BEEN SQUEEZED INTO A COLUMN OF LETTERS. Every label in this
-	# panel word-wraps - deliberately, because an unwrapped one's natural width
-	# becomes the whole column's minimum and pushes the panel over the timeline -
-	# and the price is that a wrapping label's MINIMUM width is about one
-	# character. Put it in an HBox beside anything that expands and the container
-	# hands the slack to the other child and squeezes the label to that minimum:
-	# "In order" rendered 1px wide and 157px tall, eight lines of one letter, and
-	# took the whole row with it. Nothing about that is visible from the code.
-	# A short label wrapping to more than two lines is the signature.
+	# 2c. No label is squeezed into a column of letters. Every label in this panel word-wraps (an unwrapped
+	# one's natural width would become the column's minimum), and a wrapping label's minimum width is about
+	# one character: beside an expanding sibling in an HBox it is squeezed to that. A short label wrapping
+	# to more than two lines is the signature.
 	for node in _walk(editor):
 		if not (node is Label):
 			continue
@@ -156,8 +132,8 @@ func _check(size: Vector2i, label: String) -> void:
 			% [label, lbl.text, lbl.get_line_count(), lbl.size.x, lbl.size.y]
 			+ "squeezed to its minimum width by something expanding beside it")
 
-	# 3. THE EXPORT RESOLUTION. Both the number the editor computes and what it
-	# actually writes into override.cfg for the render process to boot with.
+	# 3. The export resolution: the number the editor computes and what it writes into override.cfg for the
+	# render process to boot with.
 	var rsz: Vector2i = editor._export.render_size()
 	print("  _render_size()       %dx%d" % [rsz.x, rsz.y])
 	_expect(rsz == size, "%s: the export would record %dx%d, expected the source's %dx%d"
@@ -179,9 +155,8 @@ func _check(size: Vector2i, label: String) -> void:
 	_expect(not FileAccess.file_exists(ProjectSettings.globalize_path("res://override.cfg")),
 		"%s: override.cfg was left behind" % label)
 
-	# 4. THE META MIRROR'S PANE, which rebuilds the live editor's geometry by hand
-	# for the export. Same shape as the real pane, or the mirror shows a squashed
-	# copy of the workspace.
+	# 4. The meta mirror's pane, which rebuilds the live editor's geometry by hand for the export; it must
+	# keep the real pane's shape.
 	var img := Image.create_empty(240, 240, false, Image.FORMAT_RGBA8)
 	var pane_img: Image = editor._shrink_into_video_pane(img)
 	print("  meta mirror canvas   %dx%d" % [pane_img.get_width(), pane_img.get_height()])
@@ -204,9 +179,8 @@ func _session_path(size: Vector2i) -> String:
 	return "%s/%dx%d.json" % [DIR, size.x, size.y]
 
 
-## A clip of `size`, its audio, and the session that pairs them - built once and
-## cached. testsrc is deliberately a picture with structure in it, so a stretched
-## frame would be visible if anyone ever looks at one of these by hand.
+## A clip of `size`, its audio, and the session that pairs them, built once and cached. testsrc has
+## structure in it, so a stretched frame would be visible.
 func _ensure_fixture(size: Vector2i) -> bool:
 	var base := "%s/%dx%d" % [DIR, size.x, size.y]
 	var video := base + ".ogv"
@@ -225,8 +199,8 @@ func _ensure_fixture(size: Vector2i) -> bool:
 		OS.execute("ffmpeg", ["-y", "-loglevel", "error",
 			"-f", "lavfi", "-i", "sine=frequency=220:duration=%d" % CLIP_SECONDS,
 			"-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2", "-f", "wav", abs_audio], out2)
-		# The .ogg sidecar is the path _ready_with_session prefers; without it the
-		# editor loads the raw WAV on a worker thread and holds playback for it.
+		# The .ogg sidecar is the path _ready_with_session prefers; without it the editor loads the raw WAV
+		# on a worker thread and holds playback for it.
 		var out3 := []
 		OS.execute("ffmpeg", ["-y", "-loglevel", "error", "-i", abs_audio,
 			"-c:a", "libvorbis", "-q:a", "5", "-f", "ogg",
@@ -238,8 +212,8 @@ func _ensure_fixture(size: Vector2i) -> bool:
 	return session.save(ProjectSettings.globalize_path(_session_path(size)))
 
 
-## override.cfg is a plain ini; read it back as key -> raw value so the check reads
-## the file the render process would actually boot from, not our own arguments.
+## override.cfg is a plain ini; read back as key -> raw value so the check reads the file the render
+## process would boot from, not our own arguments.
 func _read_override() -> Dictionary:
 	var out := {}
 	var f := FileAccess.open(ProjectSettings.globalize_path("res://override.cfg"), FileAccess.READ)
@@ -254,8 +228,7 @@ func _read_override() -> Dictionary:
 	return out
 
 
-## Every node under the editor, so the label sweep can reach the ones nested in
-## rows and scroll containers rather than only the panel's direct children.
+## Every node under the editor, so the label sweep reaches nested ones.
 func _walk(n: Node) -> Array:
 	var out := [n]
 	for c in n.get_children():

@@ -3,41 +3,29 @@ extends GhostScene
 ## Vapors - colored ink-in-water: heavy masses twisting through the frame with fibrous
 ## strands drawn out of them, lit from inside.
 ##
-## The gap this fills. ghost already had soft weather - `clouds`, `fog_bank`, `fog_volume`,
-## `aurora` - and every one of them is built from stacked gaussian puffs, which can only
-## ever be SOFT. The look asked for here is the opposite: diffuse but HARD, a mass with a
-## visible front, bright threads streaming inside it, and its color changing across the
-## frame - ink in water, or heavy vapor turning over, or the stretched-cotton cobweb
-## people hang at Halloween. None of that is a blob's to draw, so this scene is a FIELD:
-## one quad, one density evaluated per pixel, and the structure is in the arithmetic. Read
-## shaders/vapor_field.gdshader's header for how (a ridged multifractal for the filaments, a
-## double domain warp for the twist, the plume envelope re-tapped toward the lamp for the
-## volume) and [Layer.Vapor] for the plumes that place, color and drive it.
+## Unlike `clouds`, `fog_bank`, `fog_volume` and `aurora` (stacked gaussian puffs, which can only
+## be soft), this is diffuse but hard: a mass with a visible front, bright threads streaming
+## inside it, color changing across the frame. So the scene is a field: one quad, one density
+## evaluated per pixel. Read shaders/vapor_field.gdshader's header for how (a ridged multifractal
+## for the filaments, a double domain warp for the twist, the plume envelope re-tapped toward
+## the lamp for the volume) and [Layer.Vapor] for the plumes that place, color and drive it.
 ##
-## Its gate is tests/scenes/vapor_check.gd, and it is a gate about a LOOK: presence, a front, drawn-out
-## filaments, more than one hue, and motion, each against a control that breaks that one
-## property. Three earlier cuts of the field compiled, ran, reported plausible coverage and drew
-## engraved satin; that is why the gate measures the properties rather than the plumbing.
+## Its gate is tests/scenes/vapor_check.gd: presence, a front, drawn-out filaments, more than
+## one hue, and motion, each against a control that breaks that one property.
 ##
-## WHAT THE MUSIC IS ALLOWED TO TOUCH, and this is the scene's hardest-won rule: light and
-## SPEED, never shape. The vapor travels steadily forward and turns over on its own clock; a
-## swell brightens it, moves its rate of flow a little, and thickens each mass slightly over a
-## second or two; a beat lights the plume it landed on. What it may NOT do is resize anything -
-## the first version drove the plume amplitudes hard and fast and re-warped space with the
-## loudness, and since amplitude IS the size of a mass, the whole frame inflated and collapsed
-## with the harmonics ("EXTREMELY unstable... it should be continuous movement forward, not an
-## expand and contract"). Every audio path here now ends in a brightness or a rate, and
-## tests/scenes/vapor_check.gd holds it to that. The tonal center pulls every hue toward the music's
-## key, eased as a vector so a key change sweeps instead of jumping.
+## The music touches light and speed, never shape. The vapor travels steadily forward and turns
+## over on its own clock; a swell brightens it, nudges its rate of flow and thickens each mass
+## slightly over a second or two; a beat lights the plume it landed on. Nothing is resized
+## (amplitude is a mass's size, so driving it makes the frame inflate and collapse); every audio
+## path ends in a brightness or a rate, and the gate holds it to that. The tonal center pulls
+## every hue toward the music's key, eased as a vector so a key change sweeps instead of jumping.
 ##
-## What kind of vapor it is comes from one roll, because these are not independent
-## choices: ink is dense and wet and dark, a nebula is wide and diffuse and starlit, and
-## gossamer is pale and almost all fiber. Sampling them separately would mostly produce
-## neither.
+## The kind of vapor comes from one roll, since the choices are not independent: ink is dense,
+## wet and dark, a nebula wide, diffuse and starlit, gossamer pale and almost all fiber.
 
-# The vapor's character. Each decides the moods it may be colored from, the field's shape
-# (how hard the front, how fibrous, how big the features, how violently it turns), where the
-# masses sit, and what else is in the frame.
+# The vapor's character. Each decides the moods it may be colored from, the field's shape (how
+# hard the front, how fibrous, how big the features, how violently it turns), where the masses
+# sit, and what else is in the frame.
 const CHARACTERS := {
 	# INK - a drop of ink in still water: dense, wet, sharp-fronted, dark around it.
 	"ink": {
@@ -49,8 +37,7 @@ const CHARACTERS := {
 		"shadow": [1.9, 2.8], "sat": [0.80, 0.95], "size": [0.9, 1.15],
 		"counter": 0.3, "bed": [0.008, 0.022], "stars": 0.15, "dust": 0.25,
 	},
-	# NEBULA - the same field seen across light years: broad, diffuse, colors far apart,
-	# starlight behind it.
+	# NEBULA - broad, diffuse, colors far apart, starlight behind it.
 	"nebula": {
 		"moods": ["violet", "magenta", "abyss", "glacier", "rose", "teal"],
 		"layouts": ["edges", "scatter"],
@@ -60,8 +47,7 @@ const CHARACTERS := {
 		"shadow": [1.2, 1.9], "sat": [0.70, 0.90], "size": [1.05, 1.35],
 		"counter": 0.5, "bed": [0.008, 0.022], "stars": 0.90, "dust": 0.20,
 	},
-	# GOSSAMER - the fake cobweb: pale, low mass, almost entirely strand, stretched between
-	# whatever it is caught on.
+	# GOSSAMER - pale, low mass, almost entirely strand, stretched between whatever it is caught on.
 	"gossamer": {
 		"moods": ["glacier", "bone", "teal", "violet", "ash"],
 		"layouts": ["sweep", "edges"],
@@ -84,12 +70,12 @@ const CHARACTERS := {
 }
 
 var _vapor: Layer.Vapor = null
-# The tonal center, held as a VECTOR and eased there - see the note in update().
+# The tonal center, held as a vector and eased there (see the note in update()).
 var _ch_vec := Vector2.ZERO
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"character": {"label": "Character", "type": "choice", "options": "CHARACTERS", "default": null,
 		"blurb": "What the vapor is like: a drop of ink in still water, a nebula seen across light years, a pale gossamer cobweb, or hot plasma turning over fast."},
@@ -110,9 +96,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var sch := Scheme.among(ch["moods"], rng)
 	var layouts: Array = ch["layouts"]
 	var layout := String(layouts[rng.randi() % layouts.size()])
-	# The ground is nearly black on purpose: the field is ADDITIVE light, so every bit of
-	# brightness under it is brightness the vapor cannot be darker than, and this look
-	# lives or dies on having true dark between the masses.
+	# The ground is nearly black on purpose: the field is additive light, so any brightness under
+	# it is brightness the vapor cannot be darker than, and the look needs true dark between masses.
 	add_layer("bed", rng, {
 		"hue": sch.hue,
 		"sat": clampf(sch.sat * rng.randf_range(0.5, 0.9), 0.05, 1.0),
@@ -144,14 +129,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"shadow": _pick(rng, ch["shadow"]),
 		"gain": number("glow", rng),
 	}) as Layer.Vapor
-	# Motes draw onto the scene's own canvas, so the field (a child quad - see
-	# [Layer.FieldQuad]) composites OVER them whatever order they are added in. That is fine
-	# and is why they are here at all: additive light does not occlude, so the motes read
-	# THROUGH the vapor, brightened where it is thick.
-	#
-	# `flare` was here and is deliberately gone: a literal lens flare - rings, starburst,
-	# anamorphic streak - drew hardware in front of the frame and read as a stock overlay
-	# over a scene whose whole subject is light IN a medium. Rendered, looked at, removed.
+	# Motes draw onto the scene's own canvas, so the field (a child quad, see [Layer.FieldQuad])
+	# composites over them whatever order they are added in. Additive light does not occlude, so
+	# the motes read through the vapor, brightened where it is thick.
 	if rng.randf() < float(ch["dust"]):
 		add_layer("dust", rng, {
 			"hue": sch.accent, "count": number("motes", rng),
@@ -165,15 +145,14 @@ static func _pick(rng: RandomNumberGenerator, r: Array) -> float:
 
 func update(f: AudioFeatures, delta: float) -> void:
 	tick(f, delta)
-	# A whisper of camera: the field's own motion is the show, and panning a full-frame
-	# field on top of it only ever reads as the camera slipping.
+	# A whisper of camera: the field's own motion is the show, and a pan on top reads as the
+	# camera slipping.
 	drift_view(f, 0.010, 0.018)
-	# THE TONAL CENTER, EASED AS A VECTOR - tidepool's discipline, for its reason. An angle
-	# is the wrong quantity to ease: when two tonal centers a tritone apart trade dominance
-	# the resultant passes near the origin and its angle flips half a turn between frames,
-	# which the vapor would show as every mass changing color at once. Easing the vector
-	# routes that through the middle: an ambiguous tonality reads as low STRENGTH and the
-	# pull simply fades out instead of picking a side.
+	# The tonal center, eased as a vector (as tidepool does). An angle is the wrong quantity to
+	# ease: when two tonal centers a tritone apart trade dominance the resultant passes near the
+	# origin and its angle flips half a turn, which would change every mass's color at once. Easing
+	# the vector routes that through the middle: an ambiguous tonality reads as low strength and
+	# the pull fades out instead of picking a side.
 	var raw := chroma_hue()
 	var want := Vector2(cos(raw.x * TAU), sin(raw.x * TAU)) * raw.y
 	_ch_vec = _ch_vec.lerp(want, 1.0 - exp(-0.85 * delta))

@@ -1,16 +1,16 @@
 extends Node
 
-## NOT a gate. THE PAINTED SURFACE AS THE SHOW DRAWS IT, AT ANY MOMENT, WITHOUT PLAYING UP TO IT (next/painted_surface.md, "The audit"): an
-## episode's table stood from a COPY of its folder (a take's sidecar names it), its acts scheduled on the take's word times, and then for
-## each moment asked for, the paint alone set to it ([method TablePaint.tick] - no bake, no physics: what is laid is a pure function of
-## show time) and the skin's own canvas drawn by the GPU and read back, laid over the bare surface as prop.gdshader lays it. Side by side
-## with the painted picture it was copied from, and how far each stands from it (OKLab x 100, on average over the surface, and the share
-## of it more than 10 off). A frame at 37:00 had taken half an hour of playing up to it.
+## NOT a gate. The painted surface as the show draws it, at any moment, without playing up to it (next/painted_surface.md): an episode's
+## table stood from a copy of its folder (a take's sidecar names it), its acts scheduled on the take's word times, and then for each
+## moment asked for, the paint alone set to it ([method TablePaint.tick] - no bake, no physics: what is laid is a pure function of show
+## time) and the skin's own canvas drawn by the GPU and read back, laid over the bare surface as prop.gdshader lays it. Side by side with
+## the painted picture it was copied from, and how far each stands from it (OKLab x 100, on average over the surface, and the share of
+## it more than 10 off).
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/paint_preview_probe.gd 1500 --take=<user://generative/take_N.json> \
 ##       --at=600,1800,2640 --out=<dir>
 ##
-## READ-ONLY: the episode is copied, never written; the pictures go to `--out` (`paint_<t>.png` each, and `paint_strip.png`: the picture,
+## Read-only: the episode is copied, never written; the pictures go to `--out` (`paint_<t>.png` each, and `paint_strip.png`: the picture,
 ## then each moment).
 
 const EBP := preload("res://tests/table/episode_bake_probe.gd")

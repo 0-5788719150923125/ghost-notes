@@ -1,17 +1,19 @@
 extends RefCounted
 class_name Dice
 
-## Dice - A DIE AS A SOLID (next/tabletop.md "Dice"): each shape's faces from its vertices, the numbers printed on them as real dice print them, how to read one at rest, and the one trick that makes a die
-## thrown by real physics come up as the seed says.
+## Dice - a die as a solid (next/tabletop.md "Dice"): each shape's faces from its vertices, the numbers printed on them as real dice print
+## them, how to read one at rest, and the one trick that makes a die thrown by real physics come up as the seed says.
 ##
-## THE TRICK IS HONEST: a body is thrown ([DiceBake]) and lands on whatever face it lands on, and the die's PRINTING is then turned by one of the solid's own rotations ([method rotation_between]) so the number
-## rolled is printed on that face. The solid does not change, so every bounce and every rest is what physics did, and the printing it comes to rest in is a real die's, opposite faces summing as they do. Which number
-## came up was decided by [DiceNotation], and this is how it is shown. Every shape here is face-transitive, so for any two faces the rotation exists, which tests/table/dice_check.gd holds by the vertices.
+## The trick: a body is thrown ([DiceBake]) and lands on whatever face it lands on, and the die's printing is then turned by one of the
+## solid's own rotations ([method rotation_between]) so the number rolled is printed on that face. The solid does not change, so every
+## bounce and every rest is what physics did, and the printing it comes to rest in is a real die's, opposite faces summing as they do.
+## Which number came up was decided by [DiceNotation]. Every shape here is face-transitive, so for any two faces the rotation exists,
+## which tests/table/dice_check.gd holds by the vertices.
 ##
-## A D4 IS READ AT ITS TOP POINT: it rests on a face, and the number is the one printed at the point that face is opposite. So its face counts as the one it lies on ([method landed]), and each of its faces shows the three
-## numbers of the three points it has.
+## A D4 is read at its top point: it rests on a face, and the number is the one printed at the point that face is opposite. So its face
+## counts as the one it lies on ([method landed]), and each of its faces shows the three numbers of the three points it has.
 ##
-## NOTHING HERE NEEDS A SERVER OR A SCENE, but [method mesh_of]: the bake and a gate ask for the shapes alone.
+## Nothing here needs a server or a scene, but [method mesh_of]: the bake and a gate ask for the shapes alone.
 
 ## The solids, by how many faces. `flat`: how far from the solid's middle its face is, as a share of its size, so a table can stand it at rest; `size` a real die's across, in meters, flats or points as a player would measure it; `read` how big its print is on a face, as a share of the face's own radius.
 const SHAPES := {
@@ -22,7 +24,7 @@ const SHAPES := {
 	12: {"label": "Twelve", "blurb": "a dodecahedron", "size": 0.025, "read": 0.72},
 	20: {"label": "Twenty", "blurb": "an icosahedron", "size": 0.026, "read": 0.56},
 }
-## WHAT A SET OF DICE IS MADE OF: how it looks, how it bounces (real dice are near enough one mass; a metal die is what you hear coming), and what [WorkSounds] rings as.
+## What a set of dice is made of: how it looks, how it bounces (real dice are near enough one mass; a metal die is what you hear coming), and what [WorkSounds] rings as.
 const MATERIALS := {
 	"plastic": {"label": "Plastic", "blurb": "the usual kind: light, bright and rattling", "friction": 0.42, "bounce": 0.42, "mass": 1.0, "sound": "plastic", "metal": 0.0, "rough": 0.28},
 	"metal": {"label": "Metal", "blurb": "heavy, bites the table, and is heard across the room", "friction": 0.32, "bounce": 0.28, "mass": 3.2, "sound": "metal", "metal": 0.9, "rough": 0.34},
@@ -40,7 +42,7 @@ static var _meshes := {}          # a shape + print -> ArrayMesh
 static var _lock := Mutex.new()
 
 
-## THE SOLID: `{verts, faces}` at a radius of 1 from its middle, a face `{normal, center, ring}`, `ring` its corners in order, counterclockwise from outside; `printed`, a printed face's index -> the solid's face that has it.
+## The solid: `{verts, faces}` at a radius of 1 from its middle, a face `{normal, center, ring}`, `ring` its corners in order, counterclockwise from outside; `printed`, a printed face's index -> the solid's face that has it.
 static func solid(shape: int) -> Dictionary:
 	_lock.lock()
 	if not _solids.has(shape):
@@ -67,8 +69,8 @@ static func _vertices(shape: int) -> PackedVector3Array:
 		8:
 			v = PackedVector3Array([Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, -1, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)])
 		10:
-			# A PENTAGONAL TRAPEZOHEDRON: two points and a zigzag ring, as high as lays each kite flat. In the kite's plane the point, the ring's near corner and its far corner must lie on one line,
-			# so point / ring = (1 + cos 36) / (1 - cos 36) (9.47)
+						# a pentagonal trapezohedron: two points and a zigzag ring, as high as lays each kite flat. In the kite's plane the point, the ring's near corner and its far corner must lie on one line,
+						# so point / ring = (1 + cos 36) / (1 - cos 36) (9.47)
 			var c := cos(deg_to_rad(36.0))
 			var ring := (1.0 - c) / (1.0 + c)
 			v.append(Vector3(0, 1, 0))
@@ -100,7 +102,7 @@ static func _vertices(shape: int) -> PackedVector3Array:
 	return v
 
 
-## ITS FACES, from its vertices: every plane through three of them with all the rest on one side, the corners of each found once, in order round its middle.
+## Its faces, from its vertices: every plane through three of them with all the rest on one side, the corners of each found once, in order round its middle.
 static func _faces_of(v: PackedVector3Array) -> Array:
 	var seen := {}
 	var faces: Array = []
@@ -150,7 +152,7 @@ static func _face(v: PackedVector3Array, on: Array, n: Vector3) -> Dictionary:
 	return {"normal": n, "center": center, "ring": ring}
 
 
-## WHERE EACH NUMBER IS PRINTED, as real dice have them: a number and its opposite add up alike, taken up the die in turn. (Which face a real maker gives which pair varies from maker to maker.) A four has no opposites.
+## Where each number is printed, as real dice have them: a number and its opposite add up alike, taken up the die in turn. (Which face a real maker gives which pair varies from maker to maker.) A four has no opposites.
 static func _printing(faces: Array, shape: int) -> Array:
 	var n := faces.size()
 	var printed: Array = []
@@ -184,7 +186,7 @@ static func _printing(faces: Array, shape: int) -> Array:
 	return printed
 
 
-## WHAT LANDED: the solid's face showing, for a body turned by [param basis]: the one looking up (`dot` how squarely, 1 flat), or, on a four, the one it lies on.
+## What landed: the solid's face showing, for a body turned by [param basis]: the one looking up (`dot` how squarely, 1 flat), or, on a four, the one it lies on.
 static func landed(shape: int, basis: Basis) -> Dictionary:
 	var sd := solid(shape)
 	var up := Vector3.UP
@@ -206,13 +208,13 @@ static func flat_enough(shape: int) -> float:
 	return 0.997 if shape == 20 or shape == 12 else 0.995
 
 
-## THE TURN THAT PRINTS FACE [param printed_face] ON SOLID FACE [param solid_face]: a rotation of the solid onto itself, in the body's own coordinates. The body is drawn as `body_transform * turn`.
+## The turn that prints face [param printed_face] on solid face [param solid_face]: a rotation of the solid onto itself, in the body's own coordinates. The body is drawn as `body_transform * turn`.
 static func turn_for(shape: int, printed_face: int, solid_face: int) -> Basis:
 	var printed: Array = solid(shape)["printed"]
 	return rotation_between(shape, int(printed[clampi(printed_face, 0, printed.size() - 1)]), solid_face)
 
 
-## A ROTATION OF THE SOLID taking its face [param from] onto its face [param to]: found by trying each corner of the far face for one near corner, and kept when every vertex lands on a vertex.
+## A rotation of the solid taking its face [param from] onto its face [param to]: found by trying each corner of the far face for one near corner, and kept when every vertex lands on a vertex.
 static func rotation_between(shape: int, from: int, to: int) -> Basis:
 	if from == to:
 		return Basis.IDENTITY
@@ -251,7 +253,7 @@ static func _is_symmetry(verts: PackedVector3Array, r: Basis) -> bool:
 	return true
 
 
-## WHAT IS PRINTED ON EACH FACE: a thrown die's `sides` and any names of its own ([DiceNotation] `labels`), one text per printed face: 00 to 90 on a percentile's tens, 0 to 9 on a ten, a two and a three on a six numbered over.
+## What is printed on each face: a thrown die's `sides` and any names of its own ([DiceNotation] `labels`), one text per printed face: 00 to 90 on a percentile's tens, 0 to 9 on a ten, a two and a three on a six numbered over.
 static func labels_of(shape: int, sides: int, names: PackedStringArray = PackedStringArray()) -> PackedStringArray:
 	var out := PackedStringArray()
 	if not names.is_empty():
@@ -276,7 +278,7 @@ static func labels_of(shape: int, sides: int, names: PackedStringArray = PackedS
 	return out
 
 
-## ITS CONVEX SHAPE'S CORNERS, at [param scale] across: what [DiceBake] gives the physics.
+## Its convex shape's corners, at [param scale] across: what [DiceBake] gives the physics.
 static func hull(shape: int, scale: float) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	for p in solid(shape)["verts"]:
@@ -293,7 +295,7 @@ static func radius_of(shape: int) -> float:
 
 # --- drawn --------------------------------------------------------------------------------------------------------------------------------------------
 
-## THE DIE'S MESH: two surfaces, its body (edges rounded back: each face drawn in from its corners, a strip across each edge and a little fan over each corner, normals running between) and its print. One per shape and printing, kept.
+## The die's mesh: two surfaces, its body (edges rounded back: each face drawn in from its corners, a strip across each edge and a little fan over each corner, normals running between) and its print. One per shape and printing, kept.
 static func mesh_of(shape: int, labels: PackedStringArray) -> ArrayMesh:
 	var key := "%d:%s" % [shape, ",".join(labels)]
 	_lock.lock()
@@ -389,7 +391,7 @@ static func _tri(pos: PackedVector3Array, nor: PackedVector3Array, a: Vector3, b
 		nor.append_array([na, nb, nc])
 
 
-## ITS PRINT: each number laid on its face, from [TextMesh], as a surface of its own (a face has its number in its middle; a four's has three, one at each corner, for the point it stands by).
+## Its print: each number laid on its face, from [TextMesh], as a surface of its own (a face has its number in its middle; a four's has three, one at each corner, for the point it stands by).
 static func _print_arrays(sd: Dictionary, shape: int, labels: PackedStringArray, r: float) -> Array:
 	var pos := PackedVector3Array()
 	var nor := PackedVector3Array()
@@ -429,7 +431,7 @@ static func _print_arrays(sd: Dictionary, shape: int, labels: PackedStringArray,
 	return _as_arrays(pos, nor, idx)
 
 
-## A SIX AND A NINE ARE TOLD APART, as dice do.
+## A six and a nine are told apart, as dice do.
 static func _marked(text: String) -> String:
 	return text + "." if text == "6" or text == "9" else text
 

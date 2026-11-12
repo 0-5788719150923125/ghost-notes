@@ -3,7 +3,7 @@
 
 A word CMUdict does not have (ghost's `Phonemes.is_known` - the audit's UNKNOWN) reaches
 eSpeak with no dictionary behind it, and eSpeak answers from its letter rules. The reported
-case (2026-10-16, a lesson on the six trig functions): cosine said "co-seen", cotangent
+case: cosine said "co-seen", cotangent
 "co-angent", cosecant "co-seh-cant". eSpeak gives
 
     cosine     kˈoʊsaɪn        cotangent  kˈoʊtændʒənt        cosecant  kˈoʊsɛkənt
@@ -134,7 +134,7 @@ def to_espeak(ipa: str) -> str:
         else:
             out.append(ch)
     s = "".join(out)
-    # THE STRESS MARK MOVES TO ITS VOWEL: Wiktionary writes it at the syllable's start
+    # The stress mark moves to its vowel: Wiktionary writes it at the syllable's start
     # (ˈkoʊˌsiːkənt), eSpeak right before the nucleus (kˈoʊsˌiːkənt)
     moved, pending = [], ""
     spans = {a: b for a, b in nuclei(s)}

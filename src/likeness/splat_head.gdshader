@@ -9,11 +9,10 @@
 // its covariance plus `low_pass`, and it is drawn as hosts/avatar/raster.py composites it: cover times the
 // Gaussian's falloff, at most 0.99, nothing under 1/255 - the instances drawn back to front, blended over.
 //
-// THE BODY BENDS (hosts/avatar/train.py's `second_of`): a splat on a bone may take a SECOND INFLUENCE (the colour
-// texel's fourth number: 0 for none, else (frame + 2) + 0.98 w) - a share w of another bone's move, or of none (frame
-// -1: the still itself) - so the seat stays while the chest leans, and a joint bends rather than tears. Each bone's
-// move (`moves`: six numbers a bone, a 2D transform's x, y and origin columns) is what took it from the still.
-// A splat of the head takes none: it rides the head as every step that learned it did (train.py's `second_of`).
+// The body bends (hosts/avatar/train.py's `second_of`): a splat on a bone may take a second influence (the colour texel's
+// fourth number: 0 for none, else (frame + 2) + 0.98 w) - a share w of another bone's move, or of none (frame -1: the still
+// itself) - so the seat stays while the chest leans, and a joint bends rather than tears. Each bone's move (`moves`: six
+// numbers a bone, a 2D transform's x, y and origin columns) is what took it from the still. A splat of the head takes none.
 shader_type canvas_item;
 render_mode blend_mix, unshaded;
 

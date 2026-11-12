@@ -1,26 +1,20 @@
 extends RefCounted
 class_name HarmonicSignature
 
-## HarmonicSignature - a perceptual, loudness-invariant descriptor of the RECENT audio, plus a
-## cosine-LSH (SimHash) seed derived from it. The point: seed the show from the *harmonic
-## content present right now*, not from the file - so the same music reconstructs the same
-## visuals even when the audio is re-encoded (lossy), cut apart, or has other sound laid over
-## it. Similar harmonics -> similar descriptor -> same hash bucket -> same seed, with graceful
-## drift as the content diverges. Full design in next/harmonic_seeding.md.
+## HarmonicSignature - a perceptual, loudness-invariant descriptor of the recent audio, plus a cosine-LSH
+## (SimHash) seed derived from it, so the same music reconstructs the same visuals even when re-encoded, cut
+## apart or mixed with other sound. Similar harmonics -> similar descriptor -> same bucket -> same seed, with
+## graceful drift as the content diverges. Design in next/harmonic_seeding.md.
 ##
-## Descriptor (DIM floats) = a 12-bin CHROMA (the 64 log-bands folded onto octave-wrapped pitch
-## classes, so it is timbre- and octave-robust and survives re-encoding) + a few coarse shape
-## scalars (low / mid / high tilt, onset flux) for discrimination. It is L2-NORMALIZED (gain
-## and compression don't matter) and EMA-SMOOTHED over a few seconds (stable, not jittery) and
-## LOCAL (depends only on a recent window, so a cut-out segment carries its own signature).
+## The descriptor (DIM floats) is a 12-bin chroma (the 64 log-bands folded onto octave-wrapped pitch classes)
+## plus a few coarse shape scalars (low / mid / high tilt, onset flux). It is L2-normalized, EMA-smoothed over
+## a few seconds, and local (a recent window only, so a cut-out segment carries its own signature).
 ##
-## Two ways to consume it, and the distinction is the whole point:
-##   vector()      - the continuous descriptor, for SMOOTH modulation of a scene's dynamics
-##                   (a perturbed signature -> a slightly perturbed look). Graceful similarity.
-##   bucket(bits)  - a SimHash: the descriptor's sign against a FIXED bank of random hyperplanes
-##                   (baked seed, so the hash is identical on every machine). For DISCRETE
-##                   choices (which scene / behavior). Snaps: same bucket = identical, a crossed
-##                   boundary = unrelated - so keep `bits` small to make the buckets wide.
+## Two ways to consume it:
+##   vector()      - the continuous descriptor, for smooth modulation of a scene's dynamics.
+##   bucket(bits)  - a SimHash: the descriptor's sign against a fixed bank of random hyperplanes (baked seed,
+##                   identical on every machine), for discrete choices (which scene / behavior). Same bucket =
+##                   identical, a crossed boundary = unrelated, so keep `bits` small to make buckets wide.
 
 const DIM := 16
 const BITS := 32
@@ -34,9 +28,8 @@ var _pc := PackedInt32Array()        # band index -> pitch class (0..11), precom
 var _planes: Array = []              # BITS hyperplanes of DIM floats (fixed)
 
 
-## [param smooth_tau] trades stability for reaction time: the default suits seeding
-## and slow modulation; a listener that must NOTICE a change quickly (the [Echo]
-## re-localizer) runs a second, faster instance.
+## [param smooth_tau] trades stability for reaction time: the default suits seeding and slow modulation; a
+## listener that must notice a change quickly (the [Echo] re-localizer) runs a second, faster instance.
 func _init(band_centers: PackedFloat32Array, smooth_tau := TAU_SMOOTH) -> void:
 	tau = maxf(0.05, smooth_tau)
 	_vec.resize(DIM)
@@ -80,8 +73,8 @@ func vector() -> PackedFloat32Array:
 	return _vec
 
 
-## SimHash bucket from the first `bits` hyperplanes (wider buckets = more robust). Identical
-## descriptors give identical buckets; perceptually close ones usually share a bucket.
+## SimHash bucket from the first `bits` hyperplanes (wider buckets = more robust). Identical descriptors give
+## identical buckets; perceptually close ones usually share one.
 func bucket(bits: int) -> int:
 	var s := 0
 	for k in mini(bits, BITS):

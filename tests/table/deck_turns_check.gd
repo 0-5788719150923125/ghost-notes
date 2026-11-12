@@ -1,33 +1,24 @@
 extends Node
 
-## THE DECK'S CARDS LIE THE WAY THEY LIE (2026-10-10, the user, of the shuffle: "the orientation of
-## the very top card never changes. That is unexpected. For example, if the deck is cut - you would
-## expect that top card's orientation to change, at least some of the time. But worse: there are
-## instances where the orientation DOES change after shuffling, but then it 'reverts' wrongly, back
-## to the original orientation"). The top slot was turned for the next card drawn, always, whichever
-## mesh a move brought up; and a wash squared every card back upright the short way round. Posed
-## from show time, the deck's meshes:
+## The deck's cards lie the way they lie. Posed from show time, the deck's meshes:
 ##
-##   - CARRY THEIR WAY THROUGH A MOVE: for every move (riffle, overhand, cut, a wash that turned
-##     cards half way round) each slot's card, just before the move ends, faces the way the slot it
-##     goes to faces just after - nothing reverts at the hand-over. Two-sided: asked of the slot
-##     itself, not where the card went, the cards disagree (the measure can tell);
-##   - SHUFFLES CHANGE THE TOP CARD'S WAY: over many shuffles, the card on top between moves faces
-##     both ways, and a cut now and then brings up a card that faces the other way;
-##   - A WASH TURNS CARDS: planned washes have cards that lie half a turn round when gathered, and
-##     the pile is squared to that, a quarter turn at most;
-##   - THE SHUFFLE ENDS ON THE WAY THE NEXT CARD IS DRAWN: the top, as the deck settles before the first
-##     card, faces as that card does - reversed or upright - whatever the shuffle did;
-##   - A MOVE THE FIRST CARD CUTS OFF IS FINISHED, NOT UNDONE (2026-10-18, true-tarot 288024: "a card
-##     'pops' to the top, clipping through the other cards from below"): the deck settles along the rest
-##     of the move's own path, and no more cards pass each other than the move itself makes them -
-##     two-sided: eased back to where each began, they pass by the thousand;
-##   - THE FIRST CARD IS THE DECK'S OWN TOP CARD until the hand takes it ("or appearing out of
-##     nowhere"): unseen before, then itself where the top card lay, the deck a card shorter.
+##   - Carry their way through a move: for every move (riffle, overhand, cut, a wash that turned cards half way round) each slot's
+##     card, just before the move ends, faces the way the slot it goes to faces just after - nothing reverts at the hand-over.
+##     Two-sided: asked of the slot itself, not where the card went, the cards disagree (the measure can tell);
+##   - Shuffles change the top card's way: over many shuffles, the card on top between moves faces both ways, and a cut now and then
+##     brings up a card that faces the other way;
+##   - A wash turns cards: planned washes have cards that lie half a turn round when gathered, and the pile is squared to that, a
+##     quarter turn at most;
+##   - The shuffle ends on the way the next card is drawn: the top, as the deck settles before the first card, faces as that card
+##     does - reversed or upright - whatever the shuffle did;
+##   - A move the first card cuts off is finished, not undone: the deck settles along the rest of the move's own path, and no more
+##     cards pass each other than the move itself makes them - two-sided: eased back to where each began, they pass by the thousand;
+##   - The first card is the deck's own top card until the hand takes it: unseen before, then itself where the top card lay, the
+##     deck a card shorter.
 ##
 ##   tests/run_boot_probe.sh tests/table/deck_turns_check.gd 420
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - poses are transforms.
+## A boot probe (the medium reaches the Director); no GPU - poses are transforms.
 
 const SEEDS := 8
 
@@ -244,14 +235,11 @@ func _deck_now() -> Array:
 	return out
 
 
-## A MOVE THE FIRST CARD CUTS OFF IS FINISHED, NOT UNDONE (true-tarot 288024, the user, 2026-10-18: "At
-## the end of the shuffle, a card 'pops' to the top, clipping through the other cards from below"): with a
-## riffle, an overhand pass or a cut under way as the first card comes, the deck settles along the rest of
-## the move's own path - no card passes another that the move itself, played on at its own pace, would
-## not. Two-sided: each card eased straight back to the slot it began the move in - the old squaring -
-## carries cards up past the cards over them by the thousand. (The moves' own paths are not clean: an
-## overhand's packets drop through the edges of the cards still held, and a riffle's halves lift through
-## each other - measured here, and not this check's to hold.)
+## A move the first card cuts off is finished, not undone: with a riffle, an overhand pass or a cut under way as the first card
+## comes, the deck settles along the rest of the move's own path - no card passes another that the move itself, played on at its own
+## pace, would not. Two-sided: each card eased straight back to the slot it began the move in carries cards up past the cards over
+## them by the thousand. (The moves' own paths are not clean: an overhand's packets drop through the edges of the cards still held,
+## and a riffle's halves lift through each other - measured here, and not this check's to hold.)
 func _finished() -> void:
 	var dt := 1.0 / 60.0
 	var passes := {}
@@ -327,10 +315,8 @@ func _finished() -> void:
 	_ok(tops_ok == n, "and the card it leaves on top faces as the first card comes up, before it settles and after (%d of %d)" % [tops_ok, n])
 
 
-## THE FIRST CARD IS THE DECK'S OWN TOP CARD until the hand takes it: not to be seen before, the deck's
-## top card in its place; then the card itself, where that card lay and turned as it was, and the deck a
-## card shorter. It used to be a card of its own laid over the whole deck from the moment the shuffle
-## ended - seen to appear on the top as the shuffle's last cards came down (2026-10-18).
+## The first card is the deck's own top card until the hand takes it: not to be seen before, the deck's top card in its place; then
+## the card itself, where that card lay and turned as it was, and the deck a card shorter.
 func _handed_off() -> void:
 	var good := 0
 	var n := 0

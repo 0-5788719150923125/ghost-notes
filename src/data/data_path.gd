@@ -1,22 +1,17 @@
 extends RefCounted
 class_name DataPath
 
-## DataPath - edits of nested data (Dictionaries and Arrays) as PURE FUNCTIONS, addressed by a
-## path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
+## DataPath - edits of nested data (Dictionaries and Arrays) as pure functions, addressed by a path: the keys
+## and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
 ##
-## EVERY EDIT RETURNS A NEW ROOT AND LEAVES ITS ARGUMENT AS IT WAS. Godot's containers are
-## references, so an edit made in place reaches everything that holds the same Dictionary - a card,
-## the Director, the document's last snapshot - and "what changed" can no longer be asked ([Settings]
-## learned it from ConfigFile, which keeps the reference it is handed). With a new root per edit an
-## editor's history is a list of roots, an undo is taking the one before, and whoever was handed
-## the old one still has exactly what they were given.
+## Every edit returns a new root and leaves its argument as it was. Godot's containers are references, so an
+## in-place edit reaches everything that holds the same Dictionary (a card, the Director, the document's last
+## snapshot) and "what changed" can no longer be asked. With a new root per edit an editor's history is a list
+## of roots and an undo is taking the one before. The whole root is copied per edit, not only the path walked:
+## sharing the untouched branches would bring the aliasing back.
 ##
-## The whole root is copied per edit, not only the path walked. A storyboard is a few thousand
-## values and an edit is a person's click; sharing the untouched branches would save nothing a
-## person could feel, and would bring the aliasing back.
-##
-## A path that leads nowhere is a no-op, never an error and never a repair: [method put] makes the
-## maps a path names on its way down, and nothing else invents structure.
+## A path that leads nowhere is a no-op, never an error and never a repair: [method put] makes the maps a path
+## names on its way down, and nothing else invents structure.
 
 
 ## The value at [param path], or [param fallback] where the path leads nowhere.

@@ -1,14 +1,10 @@
 extends Node
 
-## Smoke test for the PICTURE SETTINGS in the Generative panel - the Medium card's Format picker, the film
-## controls and the Look filters: build the whole panel and read the controls back. A parse
-## check cannot see a wrong registry key or a Callable that captured the wrong thing, and
-## these controls are the only way most people will ever reach the settings.
+## Smoke test for the picture settings in the Generative panel - the Medium card's Format picker, the film controls
+## and the Look filters: builds the whole panel and reads the controls back. Restores the setting it found and
+## flushes that restore to disk (the debounce would not land before the check quits).
 ##
 ## Run: tests/run_boot_probe.sh tests/media/medium_pick_check.gd 90
-##
-## It restores the setting it found, and FLUSHES that restore to disk rather than trusting
-## the debounce - see the note at the restore itself.
 
 func _ready() -> void:
 	_run.call_deferred()
@@ -16,13 +12,9 @@ func _ready() -> void:
 
 func _run() -> void:
 	var fails := 0
-	# THE DIRECTOR MUST HOLD WHAT THE FILE SAYS, not merely whatever it happens to hold. Those
-	# came apart the moment Settings was added as an autoload listed AFTER Director: Director
-	# read its remembered values before the file had been loaded, got defaults, and the picker
-	# faithfully showed them. Nothing errored - a default is a valid value - and the only visible
-	# symptom was a setting quietly reverting. Asked BEFORE the panel is built: the panel syncs
-	# to the chapter it last had open and applies that chapter's medium block, and since every
-	# note resets the show (2026-10-06) the file holds the LAST note's medium, not that chapter's.
+	# The Director must hold what the file says, not whatever it happens to hold. Asked before the panel is built:
+	# the panel applies the last chapter's medium block, and every note resets the show, so the file holds the last
+	# note's medium.
 	var on_disk := ConfigFile.new()
 	if on_disk.load(Settings.PATH) == OK:
 		var want := String(on_disk.get_value("director", "medium", on_disk.get_value("director", "vehicle", "full")))
@@ -33,8 +25,8 @@ func _run() -> void:
 	var ed := ReadingPanel.new()
 	add_child(ed)
 	await get_tree().process_frame
-	# THE MEDIUM IS A CARD (next/notes.md step 5; the Picture card until 2026-11-09): its controls, and the rows that
-	# follow the format - the card's and the panel's own (the Ink) - asked of both
+	# The medium is a card (next/notes.md step 5): its controls, and the rows that follow the format - the card's
+	# and the panel's own (the Ink) - asked of both
 	var pic: MediumCard = ed._block_cards.get("medium")
 	var rows := {}
 	for owner_rows in [ed._medium_rows, pic._medium_rows]:
@@ -45,8 +37,8 @@ func _run() -> void:
 		print("vpick: FAILED - the picker was never built")
 		fails += 1
 	else:
-		# what a picker offers: every medium no component owns (a row's `mode` - the card table is the
-		# Table's, pinned for its sessions, and never a choice here) - the Letter and the Dispatch desk among them
+		# what a picker offers: every medium no component owns (a row's `mode`; the table is the Table's, pinned for
+		# its sessions) - the Letter and the Dispatch desk among them
 		var keys: Array = Medium.pickable()
 		print("vpick: %d items, selected %d (%s)" % [
 			opt.item_count, opt.selected, opt.get_item_text(maxi(0, opt.selected))])
@@ -70,18 +62,11 @@ func _run() -> void:
 			fails += 1
 		else:
 			print("vpick: selecting '%s' set Director.medium" % other)
-		# LEAVE THE USER'S SETTING ALONE, and flush it rather than trusting the debounce.
-		# set_medium only marks the config dirty; the write lands 400 ms later, and this
-		# check quits well inside that - so the SELECTION above was what reached the disk
-		# and the restore was not. It left `medium="comic"` in a config the user never
-		# chose it in.
+		# Leave the author's setting alone, and flush it: set_medium only marks the config dirty and the write lands
+		# 400 ms later, after this check has quit.
 		Director.set_medium(was)
 		Director._save_pacing()
-	# THE FILM CONTROLS ARE BUILT AND SHOW THE STORED VALUE. They live in the same section
-	# and are reached the same way, so they fail the same way: a control that never got
-	# built is invisible rather than broken, and one whose initial value came from a
-	# default instead of the file looks exactly like a setting that reverted. Only reads
-	# here - the frequency dial is the user's, and a gate may not spend it.
+	# The film controls are built and show the stored value. Only reads here: the frequency dial is the author's.
 	if pic._film_freq == null:
 		print("vpick: FAILED - the film frequency slider was never built")
 		fails += 1
@@ -95,10 +80,7 @@ func _run() -> void:
 	if pic._film_list == null or pic._film_list.get_child_count() == 0:
 		print("vpick: FAILED - the film list was never built (it shows a row either way)")
 		fails += 1
-	# ONLY THE SETTINGS THIS MEDIUM CAN USE ARE SHOWN. Reported as "there are a number of
-	# settings currently being displayed that ONLY work with the comic book medium". The
-	# failure is not an error - a control that does nothing looks exactly like one that does -
-	# so it is asserted as a property of the registry rather than of a hand-written list.
+	# Only the settings this medium can use are shown, asserted as a property of the registry rather than of a list.
 	if rows.is_empty():
 		print("vpick: FAILED - no rows are tagged with a medium feature at all")
 		fails += 1
@@ -106,8 +88,7 @@ func _run() -> void:
 		var cam := Director.medium
 		for key in Medium.pickable():
 			var vk := String(key)
-			# select() AND the signal: a real click does both, and the two are separate in
-			# Godot - emitting alone leaves `selected` on the previous item.
+			# select() and the signal: a real click does both, and emitting alone leaves `selected` on the previous item.
 			pic._format_pick.select(Medium.pickable().find(vk))
 			pic._format_pick.item_selected.emit(Medium.pickable().find(vk))
 			for tag in rows:
@@ -120,8 +101,8 @@ func _run() -> void:
 						fails += 1
 						break
 			print("vpick: '%s' shows %s" % [vk, str(Registry.field(Medium.REGISTRY, vk, "uses", []))])
-		# THE CONTROL: at least one tag must actually differ between two media, or the
-		# sweep above is satisfied by every row being visible everywhere.
+		# The control: at least one tag must differ between two media, or the sweep is satisfied by every row being
+		# visible everywhere.
 		var differs := false
 		for tag in rows:
 			var seen := {}
@@ -138,10 +119,8 @@ func _run() -> void:
 		pic._format_pick.select(maxi(0, Medium.pickable().find(cam)))
 		ed._sync_medium_rows()
 		pic.sync_medium()
-	# THE LOOK FILTERS, and the same three questions: a row per registry entry, each showing
-	# the live setting, and a tick that actually reaches the Director. The failure mode here is
-	# the one filters.gd is written around - a checkbox that moves, saves, reloads and changes
-	# no pixel - and it is invisible from inside a parse check or a shader compile.
+	# The look filters, and the same three questions: a row per registry entry, each showing the live setting, and a
+	# tick that actually reaches the Director.
 	if (ed._block_cards["look"] as LookCard)._filter_rows.size() != Filters.REGISTRY.size():
 		print("vpick: FAILED - %d filter rows for %d registered filters"
 			% [(ed._block_cards["look"] as LookCard)._filter_rows.size(), Filters.REGISTRY.size()])
@@ -157,21 +136,19 @@ func _run() -> void:
 				print("vpick: FAILED - '%s' shows %s, the Director holds %.2f"
 					% [k, "on" if cb.button_pressed else "off", live])
 				fails += 1
-			# A GRAYED DIAL MUST BE GRAYED, or an inert control looks live.
+			# A grayed dial must be grayed, or an inert control looks live.
 			if sl.editable != (live > 0.0):
 				print("vpick: FAILED - '%s' dial is %s while the filter is %s"
 					% [k, "live" if sl.editable else "grayed", "on" if live > 0.0 else "off"])
 				fails += 1
-		# One round trip through the FIRST filter, then put it back. Ticking it on with the
-		# dial at zero must land on the registry's default rather than on silence - a box that
-		# does nothing when ticked is the report this whole block exists for.
+		# One round trip through the first filter, then put it back. Ticking it on with the dial at zero must land on
+		# the registry's default rather than on silence.
 		var first := String(Filters.REGISTRY.keys()[0])
 		var frow: Dictionary = (ed._block_cards["look"] as LookCard)._filter_rows[first]
 		var fcb: CheckBox = frow["box"]
 		var fsl: HSlider = frow["slider"]
 		var was_amount := Director.filter_amount(first)
-		# OFF FIRST: the settings are the author's own, and a filter they already have on would
-		# make ticking the box a no-op - the check read their amount back as a failure.
+		# Off first: a filter the author already has on would make ticking the box a no-op.
 		fcb.button_pressed = false
 		fsl.set_value_no_signal(0.0)
 		fcb.button_pressed = true
@@ -190,8 +167,7 @@ func _run() -> void:
 			print("vpick: FAILED - unticking '%s' left it at %.2f"
 				% [first, Director.filter_amount(first)])
 			fails += 1
-		# LEAVE THE USER'S LOOK ALONE, flushed rather than left to the debounce - same reason
-		# the medium restore above is flushed.
+		# Leave the author's look alone, flushed as above.
 		Director.set_filter(first, was_amount)
 		Director._save_pacing()
 		Settings.flush()

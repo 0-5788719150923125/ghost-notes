@@ -21,7 +21,7 @@ minutes}, voiced, register, recording}.
 THE IDS ARE THE VOICE HOST'S OWN (backends/piper.py): its homographs, its eSpeak reading of the sentence, its
 lead-in spaces and its layout of the ids - so the voice is taught exactly what it will be sent.
 
-WHAT IS KEPT, measured on Ephemeral Rift's videos (2026-10-22):
+WHAT IS KEPT, measured on Ephemeral Rift's videos:
 - a run of their words between pauses (BREAK; SENTENCE_BREAK after a sentence's end), SHORTEST to LONGEST
   seconds of at least two words, every word heard surely enough (WORD_SURE, RUN_SURE: Whisper's own
   probabilities; its median word is 0.91, a fifth of runs hold one under 0.34);
@@ -34,8 +34,7 @@ WHAT IS KEPT, measured on Ephemeral Rift's videos (2026-10-22):
   VOICED of its loud frames pitched is left out;
 - each brought to one level (LEVEL, its peaks under PEAK): their videos sit 13 dB apart.
 
-ONE VOICE, NOT EVERY WAY THEY SOUND (2026-10-24, the user on the voice taught on all 65 of his videos: "really
-muddy and hard to understand ... quite inconsistent"; Whisper misheard 33.6% of its words, against 14-17% for the
+ONE VOICE, NOT EVERY WAY THEY SOUND (Whisper misheard 33.6% of its words, against 14-17% for the
 voices taught on two to seven): of the 480 minutes those videos gave, 220 were noisy - outdoors, wind, water, over a
 music bed - 32 soft and low (85 Hz, close to the microphone), 38 pitched high, 44 breathy, and 146 his ordinary
 voice; a voice of one speaker averages them all and draws among them sentence by sentence. Taught on the ordinary
@@ -166,7 +165,7 @@ def signature(y, text: str) -> dict:
     of loud sound, f0 - its pitched frames' median pitch (Hz; 0 for none), hnr - their median harmonics-to-noise
     ratio (dB), spectrum - its loud frames' mean over BANDS mel bands (dB), its level taken out}.
 
-    A PITCH IS THE CORRELATION COMING BACK (2026-10-27, an ASMR channel heard whole): a frame is pitched where its
+    A PITCH IS THE CORRELATION COMING BACK: a frame is pitched where its
     correlation, having fallen under half its peak, rises to that peak inside the 70-300 Hz searched - never at its
     edge. A breath or a rumble's correlation only falls, and read as the search's edge, 109 runs said exactly 300 Hz
     and "their usual pitch" became 300 against her voice's 205-235."""
@@ -428,7 +427,7 @@ def main(argv=None) -> int:
     espeak = str(spec.get("espeak", "en-us"))
     kokoro = str(spec.get("engine", "piper")) == "kokoro"
     if kokoro:
-        # KOKORO'S RATE AND ITS OWN IDS: every measure below reads SR, so the cut and the choice are the same
+        # Kokoro's rate and its own ids: every measure below reads SR, so the cut and the choice are the same
         global SR
         from backends.kokoro import SR as KOKORO_SR, KokoroBackend
         SR = KOKORO_SR

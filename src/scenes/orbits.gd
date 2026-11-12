@@ -2,45 +2,38 @@ extends GhostScene
 
 ## Orbits - harmonograph curves that morph with the music.
 ##
-## Each curve is a damped sum of sines in x and y - the figure a harmonograph pen traces.
-## A slow global phase advances every frame, so the figure breathes and folds through
-## itself continuously, and the per-axis amplitudes are driven by the spectrum, so loud
-## passages swell the curve outward.
+## Each curve is a damped sum of sines in x and y, the figure a harmonograph pen traces. A slow
+## global phase makes it breathe and fold through itself; per-axis amplitudes follow the
+## spectrum, so loud passages swell the curve.
 ##
-## The seed picks a FIGURE first, and the four figures are different curves, not different
-## tunings of one: incommensurate frequencies fold a rosette that never repeats, small
-## integer ratios close into a braid, a carrier plus a fast epicycle loops petals around
-## an open ring, and a heavily damped pair spirals inward to a point. Color comes from a
-## shared [Scheme] mood, so a session is not one hue every time.
+## The seed picks one of four figures, which are different curves, not tunings of one:
+## incommensurate frequencies fold a rosette that never repeats, small integer ratios close into
+## a braid, a carrier plus a fast epicycle loops petals around an open ring, and a heavily
+## damped pair spirals in to a point. Color comes from a shared [Scheme] mood.
 
 const SAMPLES := 480
 
-# The four ways a pen on two pendulums can move. `ratio` names how the frequencies relate
-# (that is what decides whether the trace ever closes), `w2` how much of the second term
-# each axis carries (small = a ripple on a ring, large = a fold), and `damp`/`span` how far
-# the trace runs before it dies. Change one of these and the SILHOUETTE changes, not the tint.
+# The four ways a pen on two pendulums can move. `ratio` names how the frequencies relate (what
+# decides whether the trace closes), `w2` how much of the second term each axis carries (small =
+# a ripple on a ring, large = a fold), `damp`/`span` how far the trace runs before it dies.
 const FIGURES := {
 	"harmonograph": {
-		# Incommensurate frequencies, lightly damped: the classic folding rosette that
-		# never quite returns to where it started.
+		# Incommensurate frequencies, lightly damped: a folding rosette that never returns.
 		"curves": [2, 3], "ratio": "free", "w2": [0.6, 1.0], "damp": [0.02, 0.06],
 		"span": [20.0, 26.0], "amp": [0.20, 0.34], "width": [1.5, 3.0], "bed": 0.5,
 	},
 	"lissajous": {
-		# Small integer ratios and no damping at all: a closed braid that holds its shape
-		# and only shears as the phase advances.
+		# Small integer ratios, no damping: a closed braid that only shears as the phase advances.
 		"curves": [1, 3], "ratio": "integer", "w2": [0.0, 0.18], "damp": [0.0, 0.004],
 		"span": [1.0, 1.0], "amp": [0.26, 0.40], "width": [2.0, 4.0], "bed": 0.6,
 	},
 	"spirograph": {
-		# A dominant carrier plus a fast epicycle: petal loops marching around an open
-		# ring, so this figure has a HOLE in the middle the others do not.
+		# A dominant carrier plus a fast epicycle: petal loops around an open ring (a hole in the middle).
 		"curves": [1, 2], "ratio": "epicycle", "w2": [0.18, 0.42], "damp": [0.0, 0.003],
 		"span": [1.0, 1.0], "amp": [0.28, 0.42], "width": [1.2, 2.4], "bed": 0.65,
 	},
 	"pendulum": {
-		# Heavily damped and nearly in tune with itself: an ellipse that spirals in and
-		# dies at the center, the way a real harmonograph ends its run.
+		# Heavily damped, nearly in tune: an ellipse that spirals in and dies at the center.
 		"curves": [2, 4], "ratio": "detune", "w2": [0.08, 0.22], "damp": [0.14, 0.26],
 		"span": [26.0, 34.0], "amp": [0.30, 0.44], "width": [1.2, 2.2], "bed": 0.45,
 	},
@@ -53,8 +46,8 @@ var _ch := Vector2.ZERO       # live tonal color (hue, strength) from the harmon
 var _sch: Scheme = null
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"figure": {"label": "Figure", "type": "choice", "options": "FIGURES", "default": null,
 		"blurb": "The figure the pen traces: a folding harmonograph rosette, a closed Lissajous braid, spirograph petal loops around an open ring, or a damped pendulum that spirals in."},
@@ -80,7 +73,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		cv["hue"] = fposmod(_sch.hue_at(c, maxi(n, 2)) + rng.randf_range(-0.02, 0.02), 1.0)
 		cv["alpha"] = alpha
 		_curves.append(cv)
-	# A faint wash behind the line work, on the mood - the void was black every session.
+	# A faint wash behind the line work, on the mood.
 	if rng.randf() < float(fig["bed"]):
 		add_layer("bed", rng, {
 			"hue": _sch.accent,
@@ -91,9 +84,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	return {"hue": _sch.hue, "mood": _sch.name, "figure": figure, "curves": n}
 
 
-# Frequencies, phases and per-term weights for one curve. The RELATION between the four
-# frequencies is the whole difference between the figures: free ratios never close, integer
-# ratios close, a 1:k pair with quarter-phase offsets is a carrier and its epicycle.
+# Frequencies, phases and per-term weights for one curve. The relation between the four
+# frequencies is the difference between the figures: free ratios never close, integer ratios
+# close, a 1:k pair with quarter-phase offsets is a carrier and its epicycle.
 func _shape(figure: String, fig: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var f := PackedFloat32Array([1.0, 1.0, 1.0, 1.0])
 	var ph := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
@@ -102,8 +95,8 @@ func _shape(figure: String, fig: Dictionary, rng: RandomNumberGenerator) -> Dict
 	var span := rng.randf_range(float(fig["span"][0]), float(fig["span"][1]))
 	match String(fig["ratio"]):
 		"integer":
-			# x and y on different small whole multiples of one fundamental, with the
-			# quarter-turn offset that opens the braid out instead of collapsing it to a line.
+			# x and y on different small whole multiples of one fundamental, with a quarter-turn offset
+			# that opens the braid instead of collapsing it to a line.
 			var p := rng.randi_range(2, 5)
 			var q := p + rng.randi_range(1, 4)
 			f = PackedFloat32Array([float(p), float(p * 2), float(q), float(q * 2)])
@@ -112,8 +105,7 @@ func _shape(figure: String, fig: Dictionary, rng: RandomNumberGenerator) -> Dict
 			ph[2] = ph[0] + PI * 0.5
 			span *= TAU                       # exactly one closed pass
 		"epicycle":
-			# Carrier at 1, epicycle at k, y a quarter turn behind x on BOTH terms - the
-			# parametric form of an epitrochoid.
+			# Carrier at 1, epicycle at k, y a quarter turn behind x on both terms (an epitrochoid).
 			var k := float(rng.randi_range(3, 9))
 			var p0 := rng.randf() * TAU
 			var p1 := rng.randf() * TAU
@@ -170,12 +162,10 @@ func _draw_curve(cv: Dictionary, u: float) -> void:
 		var x := (w[0] * sin(f[0] * s + ph[0] + _gphase) + w[1] * sin(f[1] * s + ph[1])) * d
 		var y := (w[2] * sin(f[2] * s + ph[2] + _gphase) + w[3] * sin(f[3] * s + ph[3])) * d
 		pts[k] = Vector2(x * ax, y * ay)
-	# Pull the curve's hue toward the live tonal hue (circular nudge, scaled by how tonal it is),
-	# so the palette tracks the music's key - the continuous half of harmonic seeding.
+	# Pull the curve's hue toward the live tonal hue (circular, scaled by how tonal it is).
 	var dh: float = _ch.x - float(cv.hue)
 	dh = dh - round(dh)                              # shortest way around the wheel
 	var hue := fposmod(float(cv.hue) + dh * 0.5 * _ch.y, 1.0)
-	# Value still rides the energy, but through the mood's own character rather than a
-	# hardcoded 0.7/0.6 - an ash figure stays wan where a toxic one burns.
+	# Value rides the energy through the mood's own character: an ash figure stays wan.
 	var col := _sch.color(hue, 1.0, 0.75 + 0.5 * _f.energy, float(cv.alpha))
 	draw_polyline(pts, col, float(cv.width), true)

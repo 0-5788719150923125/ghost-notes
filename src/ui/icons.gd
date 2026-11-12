@@ -1,16 +1,11 @@
 extends RefCounted
 class_name Icons
 
-## Icons - the few pictures a button wears in place of words (2026-10-31, the user, of the notes list:
-## "remove the 'New' and 'Existing note...' buttons and just replace them plain icons, no text").
-##
-## DRAWN, NEVER IMPORTED: each is a stroke path on a 24-unit square, made into a texture at the size it
-## is asked for ([method texture]), so a phone's 43-pixel button is as sharp as a desktop's 24 - and a
-## new icon is a row, with no file for the editor's import step to miss (a `--path .` run never imports).
-## Drawn white: a [Button] tints its icon by its own state colors. A button that wears one says what it
-## does in its tooltip, since nothing else on it does.
-##
-## The paths are our own: plain geometry, nothing traced from an icon set.
+## Icons - the few pictures a button wears in place of words. Drawn, never imported: each is a stroke
+## path on a 24-unit square, made into a texture at the size it is asked for ([method texture]), so a
+## phone's button is as sharp as a desktop's and a new icon is a row, with no file for the import step to
+## miss (a `--path .` run never imports). Drawn white: a [Button] tints its icon by its own state colors.
+## A button that wears one says what it does in its tooltip. The paths are our own plain geometry.
 
 ## One row an icon: `label` (what the button does), `blurb`, and `svg`, the shapes inside a 24x24 view.
 const ROWS := {
@@ -62,7 +57,7 @@ static func texture(key: String, px: int) -> Texture2D:
 	return tex
 
 
-## A BUTTON THAT WEARS ICON [param key] and no words, [param px] pixels square inside its padding: its
+## A button that wears icon [param key] and no words, [param px] pixels square inside its padding: its
 ## tooltip says what it does ([param tip], else the row's label).
 static func button(key: String, px: int, tip := "") -> Button:
 	var b := Button.new()

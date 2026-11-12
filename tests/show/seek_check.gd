@@ -1,13 +1,11 @@
 extends Node
 
-## Gate for SEEKING - the scrub bar's one load-bearing operation.
+## Gate for seeking, the scrub bar's one operation.
 ##
-## The clock a caller hands to [method Spectrum.seek] is the SESSION clock, bookend and
-## all, because that is the only clock anything outside Spectrum ever sees. Inside, that
-## position has to be resolved against three different regimes - held silence, playing
-## file, run-out tail - and against the two ways a bookend can exist (held here, or baked
-## into the audio). Getting the offset wrong in either direction is invisible until a seek
-## lands a few seconds off, which on a ten minute narration is very hard to attribute.
+## The clock handed to [method Spectrum.seek] is the session clock, bookend and all. Inside, that position
+## is resolved against three regimes (held silence, playing file, run-out tail) and two ways a bookend can
+## exist (held here, or baked into the audio); a wrong offset is invisible until a seek lands a few
+## seconds off.
 ##
 ## Run: tests/run_boot_probe.sh tests/show/seek_check.gd 120
 
@@ -46,7 +44,7 @@ func _ok(cond: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-## The clock must READ BACK what was asked for, across all three regimes.
+## The clock must read back what was asked for, across all three regimes.
 func _held_bookend(wav: String) -> void:
 	Spectrum.stop()
 	Spectrum.lead_in = LEAD
@@ -62,7 +60,7 @@ func _held_bookend(wav: String) -> void:
 	_ok(absf(Spectrum.current.time - 2.0) < 0.35,
 		"seek into the intro should read 2.0s, got %.2f" % Spectrum.current.time)
 
-	# into the content - the offset is where this goes wrong if it goes wrong
+	# into the content: the offset is where this goes wrong
 	Spectrum.seek(LEAD + 4.0)
 	await _settle()
 	_ok(absf(Spectrum.current.time - (LEAD + 4.0)) < 0.35,
@@ -84,8 +82,8 @@ func _held_bookend(wav: String) -> void:
 		"seek home should read ~0, got %.2f" % Spectrum.current.time)
 
 
-## Without a bookend the session clock and the player position are the same thing, so a
-## seek that quietly applied the offset anyway would land LEAD seconds early.
+## Without a bookend the session clock and the player position are the same, so a seek that applied the
+## offset anyway would land LEAD seconds early.
 func _no_bookend(wav: String) -> void:
 	Spectrum.stop()
 	Spectrum.lead_in = 0.0
@@ -97,8 +95,7 @@ func _no_bookend(wav: String) -> void:
 		"unbookended seek should read 6.0s, got %.2f" % Spectrum.current.time)
 
 
-## A generator has nothing behind the playhead, so the control must refuse rather than
-## appear to work - the scrub bar keys off exactly this.
+## A generator has nothing behind the playhead, so the control must refuse (the scrub bar keys off this).
 func _unseekable() -> void:
 	Spectrum.stop()
 	_ok(not Spectrum.seekable(), "a stopped session must not report itself seekable")

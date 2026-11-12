@@ -15,8 +15,8 @@ extends SceneTree
 ##             function word.
 ##   GUESSED - which words of a parsed sentence the voice host is told eSpeak would
 ##             be guessing at (`Phonemes.guessed` -> `rare`, hosts/voice/lexicon.py):
-##             the trig list the user heard slurred, every word with its comma or
-##             stop after it (2026-10-17: the marks hid all three); the controls, a
+##             the trig list that came out slurred, every word with its comma or
+##             stop after it (the marks hid all three); the controls, a
 ##             word normalization wrote and a word the dictionary has, are not.
 ##
 ## Run: godot --headless --path . --script tests/voice/g2p_check.gd

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Every voice at one level.
 
-THE USER (2026-10-28): "Especially if we're going to continue adding voice model support, we're
-going to want a sane way to keep the volume even across them all." Nothing levelled them: Piper
+Nothing levelled the voices: Piper
 puts a take's level back after its effort filter and that is all, so each model's own level went
 straight on into the reading. Measured on four paragraphs of one chapter, speaking RMS:
 libritts-high 0.065, Kokoro's Heart 0.086 and Puck 0.141 - Puck's takes at full scale, clipped in

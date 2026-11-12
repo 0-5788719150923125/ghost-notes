@@ -1,89 +1,62 @@
 extends Node2D
 class_name Medium
 
-## Medium - what the show is carried ON. The presentation axis.
+## Medium - what the show is carried on: the presentation axis.
 ##
-## ghost has always had exactly one presentation and never had to name it: the
-## [Director] paints ONE scene, full-bleed, edge to edge, and cuts to the next. A
-## medium is that choice made addressable. [FullMedium] is that behavior,
-## unchanged and default; [ComicMedium] renders the same scenes into the panels of
-## an open comic book - two facing pages across a spine - and flies a real perspective
-## camera over it.
+## The [Director] paints one scene full-bleed and cuts to the next; a medium makes that choice
+## addressable. [FullMedium] is that behavior and the default; [ComicMedium] renders the same scenes
+## into the panels of an open comic book and flies a real perspective camera over it.
 ##
-## NOT A MODE, and the distinction is the whole point. A mode decides what DRIVES the
-## show - a song (Auto), a storyboard (Manual), a written script (Synthesis /
-## Generative). A medium decides what the show is PRESENTED AS. They are independent
-## axes, so every mode gets every medium for free, exactly as every scene gets every
-## behavior and every render kind. Putting the comic in as a fifth mode would have
-## meant a comic that only works over a song, and a second copy of the Director's
-## scheduling to drive it.
+## A medium is not a mode: a mode decides what drives the show (a song, a storyboard, a written
+## script), a medium decides what it is presented as. They are independent axes, so every mode gets
+## every medium.
 ##
-## THE CONTRACT is deliberately four small vetoes rather than a rendering interface,
-## because the Director must not learn what a comic is:
+## The contract is four small vetoes rather than a rendering interface, so the Director never learns
+## what a comic is:
 ##
-##   host_for(incoming)   - the node an arriving scene is added to. `full` returns the
-##                          stage; `comic` returns the next panel's SubViewport, having
-##                          first FROZEN the one behind it.
+##   host_for(incoming)   - the node an arriving scene is added to. `full` returns the stage;
+##                          `comic` returns the next panel's SubViewport, having frozen the one behind.
 ##   style_for(style)     - veto on the transition style the Director chose.
-##   hold_outgoing()      - true when the leaving scene must NOT fade out (its panel is
-##                          already drawn and must stay drawn).
-##   owns_bookend()       - true when the medium applies the whole-show fade itself,
-##                          so the Director stops applying it to the scene.
+##   hold_outgoing()      - true when the leaving scene must not fade out (its panel stays drawn).
+##   owns_bookend()       - true when the medium applies the whole-show fade itself.
 ##
-## A medium is a Node2D mounted INSIDE the stage SubViewport, so the stage governor
-## still owns it: when the governor stops the stage, it stops the medium and every
-## panel viewport nested under it, together.
+## A medium is a Node2D mounted inside the stage SubViewport, so the stage governor stops the medium
+## and every panel viewport under it together.
 
-## THE REGISTRY: one row a medium, the one shape every registry here has (a `label` a person reads, a
-## `blurb`, and the fields of its own kind - next/structure.md, step 6). Adding a presentation is a
-## row here, never new control flow in the Director (see the four vetoes above) - the same rule
-## [Layer] and [Primitives] follow. Keys are what `--medium NAME`, `[director] medium` in
-## `user://ghost.cfg` and a note's `medium: format:` take; the order is the Format picker's.
+## The registry: one row a medium (a `label`, a `blurb`, and the fields of its own kind -
+## next/structure.md). Adding a presentation is a row here, never new control flow in the Director.
+## Keys are what `--medium NAME`, `[director] medium` in `user://ghost.cfg` and a note's
+## `medium: format:` take; the order is the Format picker's.
 ##
-## A NOTE'S MEDIUM IS ONE CARD (2026-11-09, the user: "the 'Picture' card becomes 'Medium', and we would move Dispatch
-## Desk and [Letter] modes into that card ... for the extra options we need for each of those mediums... we could just
-## dynamically render them into the Medium card"): every row without a `mode` is a FORMAT of the Medium card
-## ([MediumCard]), its shared rows shown by `uses` and its own by `card`. The Letter and the Dispatch desk were
-## components of their own until then, each a thin card that pinned its medium.
+## Every row without a `mode` is a format of the Medium card ([MediumCard]): its shared rows are
+## shown by `uses` and its own by `card`.
 ##
-##   label   its name in the Medium card's Format picker
-##   script  the medium's script, by path - a medium a feature brings lives with that feature (the
-##           card table, in `table/`)
-##   uses    WHICH OPTIONAL SETTINGS IT USES, as the Medium card's own group names. A medium decides what
-##           the show is presented AS, so some of the Director's picture settings mean nothing to
-##           some of them - the full-frame show has no camera to be severe with and no panels to
-##           cut footage into. Reported as "there are a number of settings currently being
-##           displayed that ONLY work with the comic book medium". Declared here rather than
-##           branched on in the panel: a medium added later says what it uses and the panel
-##           follows. `scenes`: it cuts the Director's scenes, so Scene hold and Flourishes mean something (the
-##           Novel, the Notebook and the Tablet "have no scenes to change to", and showed both until 2026-11-09).
-##           `camera`, `films`, `illustrations` (the note's Pictures card stands), `handwriting` (the shared hand
-##           row: the Notebook's hands, the Letter's too), `ink` (a voice's pen color, on the Voice card). `opening`:
-##           it draws an opening of its own through the intro hold - out of focus, the show's name over it
-##           ([Openings], [ShowOpening]) - and the Intro & outro card offers the choice of one.
-##   frames  THE FRAMES IT CAN BE SHOWN IN (next/notes.md, "Two frames"): landscape 16:9 for every
-##           one, portrait 9:16 only where it was measured to work. The full-frame show does -
-##           scenes size everything off the frame's short side. The tablet needs its camera
-##           distances fitted on both axes first; the comic, the book, the notebook and the card
-##           table frame a spread or a table a 9:16 view cannot hold: design work of their own.
-##   needs   optional: WHAT IT NEEDS FROM THE NOTE beyond a sound to cut on. The novel, the
-##           notebook, the tablet, the letter and the dispatch desk show a READING - its words, timed by the voice -
-##           so a note with only a song has nothing to put on them, and its Medium card does not offer them.
-##   card    optional: THE FORMAT'S OWN ROWS, by path - a script answering `for_note(ctx)`, `capture()` and
-##           `apply(block)`, built into the Medium card under the shared rows while the format is picked. What it
-##           keeps is part of the Medium's one block; what it hands the reading (its `walk`, its `publish`) is why
-##           a change to or from such a format opens the note again.
-##   capabilities  optional: what the format asks of the platform beyond the stage ([Capabilities]): a format
+##   label   its name in the Format picker
+##   script  the medium's script, by path (a medium a feature brings lives with that feature)
+##   uses    which optional settings it uses, as the Medium card's group names; a setting a medium
+##           has no use for is hidden (declared here, not branched on in the panel). `scenes`: it cuts
+##           the Director's scenes, so Scene hold and Flourishes mean something. `camera`, `films`,
+##           `illustrations` (the note's Pictures card stands), `handwriting` (the shared hand row),
+##           `ink` (a voice's pen color, on the Voice card). `opening`: it draws an opening of its own
+##           through the intro hold ([Openings], [ShowOpening]) and the Intro & outro card offers one.
+##   frames  the frames it can be shown in (next/notes.md, "Two frames"): landscape 16:9 for every
+##           one, portrait 9:16 only where it was measured to work.
+##   needs   optional: what it needs from the note beyond a sound to cut on. Formats that show a
+##           reading (its words, timed by the voice) are not offered for a note with only a song.
+##   card    optional: the format's own rows, by path - a script answering `for_note(ctx)`,
+##           `capture()` and `apply(block)`, built into the Medium card under the shared rows. What it
+##           keeps is part of the Medium's one block; what it hands the reading (its `walk`,
+##           `publish`) is why a change to or from such a format opens the note again.
+##   capabilities  optional: what the format asks of the platform ([Capabilities]); a format
 ##           impossible here is grayed in the picker, saying why.
 ##   intro_tip, outro_tip  optional: what the Intro & outro card's holds say under this format.
-##   mode    optional: THE COMPONENT IT BELONGS TO, which shows its readings in it (the card table is Table's). The card
-##           table is drawn from an episode Table produced - its deck, its pictures, its spread - so a
-##           chapter read anywhere else has nothing to put on it. Such a medium is never offered
-##           by a picker ([method pickable]) and never becomes the remembered setting; its component
-##           pins it for the session instead (see [member Director.medium_override]).
-##   bare    optional: it TAKES NO SETTINGS - the Medium card shows nothing under the picker,
-##           and picking it puts the Director's dials back to their defaults (see [AutoMedium]).
-##   blurb   one line, for the picker's tooltip and docs/media.md - ONE string literal, not a `+`
+##   mode    optional: the component it belongs to, which shows its readings in it (the card table is
+##           Table's, drawn from an episode Table produced). Never offered by a picker
+##           ([method pickable]) nor remembered as the setting; its component pins it for the session
+##           (see [member Director.medium_override]).
+##   bare    optional: it takes no settings - the Medium card shows nothing under the picker and picking
+##           it resets the Director's dials to their defaults (see [AutoMedium]).
+##   blurb   one line, for the picker's tooltip and docs/media.md - one string literal, not a `+`
 ##           continuation, so docs.py reads it whole
 const REGISTRY := {
 	"auto": {"label": "Auto", "script": "res://src/media/auto.gd",
@@ -158,21 +131,19 @@ static func pickable() -> Array:
 			out.append(k)
 	return out
 
-## Does [param key]'s medium use the [param feature] group? Unknown media and unknown
-## features answer TRUE, deliberately: the failure of a wrong answer here is a control the
-## author cannot find, and showing a setting that does nothing is the lesser of the two.
+## Does [param key]'s medium use the [param feature] group? Unknown media and features answer true:
+## a setting that does nothing is the lesser failure than a control the author cannot find.
 static func uses(key: String, feature: String) -> bool:
 	if not REGISTRY.has(key):
 		return true
 	return feature in (Registry.field(REGISTRY, key, "uses", []) as Array)
 
 
-## WHAT A MEDIUM SHOWS AS PICTURES, for the one Pictures card every presentation shares (2026-11-06, the user: "if we are
-## generating images, we are doing it from a unified place: not from a bunch of disparate cards"): [param body]'s
-## pictures as [param key]'s medium shows them - [Manuscript.images] rows, a captured page's with its `url` - asked of
-## its script's own static `pictures_in(body)` where it has one (a letter's sketches are drawn by its pen, never painted;
-## a tablet's pages are captured; a dispatch desk shows each on a screen), else every image mark in it. [] for a medium
-## that shows none (a row whose `uses` has no "illustrations").
+## What a medium shows as pictures, for the one Pictures card every presentation shares: [param body]'s
+## pictures as [param key]'s medium shows them ([Manuscript.images] rows, a captured page's with its
+## `url`) - asked of its script's static `pictures_in(body)` where it has one (a letter's sketches are
+## drawn by its pen, a tablet's pages are captured, a dispatch desk shows each on a screen), else every
+## image mark. [] for a medium that shows none (no "illustrations" in its `uses`).
 static func pictures_of(key: String, body: String) -> Array:
 	if not uses(key, "illustrations"):
 		return []
@@ -213,9 +184,9 @@ static func supports(key: String, frame: String) -> bool:
 	return frames(key).has(frame)
 
 
-## SHOW EACH ROW ONLY WHERE [param key]'s medium has its feature: [param rows] maps a `uses`
-## tag to the controls that answer to it. Every card with such rows shows them by this one rule;
-## the key is the caller's (`Director.resolved_medium()`), so this file names no autoload.
+## Show each row only where [param key]'s medium has its feature: [param rows] maps a `uses` tag to
+## the controls that answer to it. The key is the caller's (`Director.resolved_medium()`), so this
+## file names no autoload.
 static func show_rows(rows: Dictionary, key: String) -> void:
 	for tag in rows:
 		var on := uses(key, String(tag))
@@ -226,8 +197,7 @@ static func show_rows(rows: Dictionary, key: String) -> void:
 
 
 
-## Build the medium for [param key], falling back to `full` for an unknown one (a
-## stale config or a typo must never be able to stop a session starting).
+## Build the medium for [param key], falling back to `full` for an unknown one.
 static func make(key: String) -> Medium:
 	var path := String(Registry.field(REGISTRY, key, "script", REGISTRY["full"]["script"]))
 	if not REGISTRY.has(key):
@@ -240,11 +210,10 @@ static func make(key: String) -> Medium:
 ## The registry key this instance was built from.
 var key := "full"
 
-## WHAT THIS MEDIUM READS OF THE SHOW ([ShowFeed]): the session's seed, the camera and the
-## handwriting a person chose, the holds at each end, the fade, the hold left on the scene that is
-## up, and one more scene when it asks. Handed by [method Director.attach]; the show that is up,
-## for a medium nobody handed one (a gate that builds it by hand). A medium reads the show here
-## and never by the Director's name - it is below the player (docs/structure.md).
+## What this medium reads of the show ([ShowFeed]): the session's seed, the camera and handwriting a
+## person chose, the holds at each end, the fade, and the hold left on the scene that is up. Handed by
+## [method Director.attach]; the live show for a medium nobody handed one (a gate). A medium reads the
+## show here, never by the Director's name (it is below the player: docs/structure.md).
 var feed: ShowFeed = ShowFeed.playing()
 
 ## The stage this medium is mounted in - the SubViewport [main] composites. Set by
@@ -252,81 +221,64 @@ var feed: ShowFeed = ShowFeed.playing()
 var stage: SubViewport = null
 
 
-## Mount on the stage. The base parents itself; a medium with its own furniture
-## (panel viewports, a page) builds it here.
+## Mount on the stage. The base parents itself; a medium with its own furniture (panel viewports, a
+## page) builds it here.
 ##
-## SEED-INDEPENDENT WORK ONLY. Mounting happens while the stage is being created, which
-## is BEFORE the Director has resolved the session seed - so anything sampled belongs in
-## [method begin_session], not here. (It is the same ordering trap as reading the song
-## fingerprint before the audio is loaded, and it fails silently: every session would
-## roll the identical "random" page.)
+## Seed-independent work only: mounting happens before the Director has resolved the session seed, so
+## anything sampled belongs in [method begin_session].
 func mount(st: SubViewport) -> void:
 	stage = st
 	st.add_child(self)
 
 
-## A session is starting and [method Director.session_seed] is now valid. Roll everything
-## sampled here. Called by [method Director.attach], and again for every take in the
-## synthesis modes, which re-attach per take.
+## A session is starting and [method Director.session_seed] is valid: roll everything sampled here.
+## Called by [method Director.attach], and again for every take in the synthesis modes.
 func begin_session() -> void:
 	pass
 
 
-## The node an ARRIVING scene should be added to. Called by the [Director] at every
-## point it would have written `_host.add_child(...)`, and it is the hook a medium
-## with more than one surface hangs everything off: `comic` uses the call itself as
-## the signal to freeze the panel behind and open the next one.
+## The node an arriving scene should be added to. Called by the [Director] wherever it would add a
+## scene to the host; `comic` uses the call itself as the signal to freeze the panel behind and open
+## the next one.
 func host_for(_incoming: GhostScene) -> Node:
 	return stage
 
 
-## Veto on the transition style (a [enum Director.Style] value). Return it unchanged
-## to accept the Director's choice.
+## Veto on the transition style (a [enum Director.Style] value). Return it unchanged to accept.
 func style_for(style: int) -> int:
 	return style
 
 
-## True when the OUTGOING scene must be held at full opacity through a transition
-## instead of fading out. A comic panel that is already on the paper cannot un-draw
-## itself; the full frame has no such constraint.
+## True when the outgoing scene must be held at full opacity through a transition instead of fading
+## out (a comic panel already on the paper cannot un-draw itself).
 func hold_outgoing() -> bool:
 	return false
 
 
-## True when this medium applies the whole-show bookend fade itself. The [Director]
-## then stops folding it into the scene's alpha, because on a comic page that would
-## fade one panel and leave the paper lit.
+## True when this medium applies the whole-show bookend fade itself, so the [Director] stops folding
+## it into the scene's alpha (on a comic page that would fade one panel and leave the paper lit).
 func owns_bookend() -> bool:
 	return false
 
 
-## True when this medium makes and owns the scenes itself, rather than showing the one
-## the [Director] makes per cut.
-##
-## The full frame shows ONE scene, so "the scene" and "the show" are the same object and
-## the Director can own it. A comic page has several on it AT ONCE - that is what makes it
-## a page rather than a slideshow - so the page owns its cast and the Director's cut means
-## "move the reading to the next panel" instead of "build a new scene". A medium that
-## says true here must answer [method take_over], and the Director then never creates,
-## parents or frees a scene on its own.
+## True when this medium makes and owns the scenes itself rather than showing the one the [Director]
+## makes per cut: a comic page has several scenes on it at once, so a cut means "move the reading to
+## the next panel". A medium that says true must answer [method take_over]; the Director then never
+## creates, parents or frees a scene on its own.
 func owns_cast() -> bool:
 	return false
 
 
-## The scene the show is now ON, for a medium that owns its cast. Returning non-null
-## means: this scene is ALREADY BUILT AND PARENTED, adopt it as current, and leave
-## [param outgoing] alone - it is still on the page and must not be freed. [param outgoing]
-## is null on the first call of a session.
-##
-## Returning null keeps the Director's own behavior, so a medium can decline a
-## particular change without giving up ownership.
+## The scene the show is now on, for a medium that owns its cast. Non-null means the scene is already
+## built and parented: adopt it as current and leave [param outgoing] alone (it is still on the page
+## and must not be freed; null on the first call of a session). Null keeps the Director's own
+## behavior, so a medium can decline a particular change.
 func take_over(_outgoing: GhostScene) -> GhostScene:
 	return null
 
 
-## The session's words and their clock, handed over when the karaoke overlay is made.
-## Return TRUE when this medium shows the words itself, and main hides the overlay - a page
-## that prints the text under a subtitle of the same text would say every sentence twice.
+## The session's words and their clock, handed over when the karaoke overlay is made. Return true when
+## this medium shows the words itself, and main hides the overlay.
 func bind_captions(_subs) -> bool:
 	return false
 

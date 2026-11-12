@@ -1,53 +1,39 @@
 extends RefCounted
 class_name DeskLook
 
-## DeskLook - what an episode's desk is made of and how it is lit, drawn from its seed ([DeskMedium]):
-## the pad's paper, rules and binding, the ink, the pen, the desk's top and a mat on it, the lamp, and a
-## few things lying about.
+## DeskLook - what an episode's desk is made of and how it is lit, drawn from its seed ([DeskMedium]): the pad's paper,
+## rules and binding, the ink, the pen, the desk's top and a mat on it, the lamp, and a few things lying about.
 ##
-## EVERY DESK HAS A LOOK OF ITS OWN (the user, 2026-10-19: "this mode would benefit a lot from a little
-## bit of variety, of color, of the table, of objects on the table, etc. We could definitely borrow from
-## the cards mechanisms ... It would be very nice if the table could have a proper texture"). Every
-## episode was the same brown noise under the same pad. Now the top is built as the card table's is
-## ([Tables]: boards with their grain and seams, stone, lacquer, leather or baize, the relief raked by
-## the lamp), a mat may lie under the pad ([constant Tables.FABRICS]), and the things on the desk are
-## made as the card table's are ([Props]), each [constant THINGS] row a desk thing's shape, its sizes
-## and colors drawn here. Every value is drawn from a range, each kind of choice from its own hash of
-## the seed ([method _rng]), so adding a choice never moves the others.
+## The top is built as the card table's is ([Tables]: boards with their grain and seams, stone, lacquer, leather or baize,
+## the relief raked by the lamp), a mat may lie under the pad ([constant Tables.FABRICS]), and the things on the desk are
+## made as the card table's are ([Props]), each [constant THINGS] row a desk thing's shape, its sizes and colors drawn
+## here. Every value is drawn from a range, each kind of choice from its own hash of the seed ([method _rng]), so adding a
+## choice never moves the others.
 ##
-## WHAT IS ON IT AND ITS LIGHT MAY BE CHOSEN (2026-10-29, the user of the Letter's desk: "It's really hard to find a
-## good seed, because generating the scenes is kind of slow ... provide a multi-select bank of the standard objects
-## ... Then, when we change the seed - the only thing being changed would be the placement of objects, and
-## textures"): handed `picks` ([method of]: the things, the mat among them, and the mood), the seed only places them
-## and draws how each looks - each from a generator of its own kind, so ticking another moves nothing about how the
-## rest look. A desk handed none (a Proof's) draws them all, as before.
+## What is on the desk and its light may be chosen: handed `picks` ([method of]: the things, the mat among them, and the
+## mood), the seed only places them and draws how each looks, each from a generator of its own kind, so ticking another
+## moves nothing about how the rest look. A desk handed none draws them all.
 ##
-## NOTHING HERE IS PAINTED (the user, 2026-10-19: "There is nowhere to set the 'Painter' on the Proof
-## card; so how would the generative table and props even work there?"): a top's grain, a stone's
-## veins, a mat's weave and every thing are shapes and shader patterns from the numbers drawn here. The
-## card table's one surface an agent paints - a top or a layer that IS the episode's painting, and the
-## reading cloth [method Tables.sanitize] lays when it is handed no layers - is never chosen, so a desk
+## Nothing here is painted: a top's grain, a stone's veins, a mat's weave and every thing are shapes and shader patterns
+## from the numbers drawn here. The card table's one surface an agent paints (a top or a layer that is the episode's
+## painting, and the reading cloth [method Tables.sanitize] lays when it is handed no layers) is never chosen, so a desk
 ## needs no painter and no agent (proof_check holds it).
 ##
-## THE DESK IS LIT AS A TABLE IS (2026-10-27, the user: "some nice ambient lighting, maybe some open-flame light
-## sources, which cast nice shadows ... akin to what the agents produce in True Tarot episodes ... leverage the
-## Table primitives"): each desk has a MOOD ([constant MOODS]) - the lamp at night, candles, a window's daylight,
-## a low sun at dusk - and the light it writes is the card table's ([Lights]: the sky's fill, the sun or the moon
-## through a window, lamps out of the shot), drawn here as the set dresser would write it and built by
-## [DeskLight]; the candles it puts on the desk are things like any other ([Props], a wick on the wax), their flames
-## the table's. Before, every desk had one spot lamp over the same flat warm fill.
+## The desk is lit as a table is: each desk has a mood ([constant MOODS]) - the lamp at night, candles, a window's
+## daylight, a low sun at dusk - and the light it writes is the card table's ([Lights]: the sky's fill, the sun or the moon
+## through a window, lamps out of the shot), drawn here as the set dresser would write it and built by [DeskLight]; the
+## candles it puts on the desk are things like any other ([Props], a wick on the wax), their flames the table's.
 ##
-## WHAT IS ON THE DESK STAYS OUT OF THE PEN'S WAY AND THE PAGES': nothing on the pad or behind it (the
-## turned pages lie there, [LegalPad]), nothing tall beside the pad's right edge, where the pen leans
-## out as it writes and waits ([constant DeskMedium.PARK]), nothing tall in front of it, where the
-## camera looks over it ([method _placed]), and nothing where the pen lies before a letter's writer picks it up
-## ([method pen_rest]).
+## What is on the desk stays out of the pen's way and the pages': nothing on the pad or behind it (the turned pages lie
+## there, [LegalPad]), nothing tall beside the pad's right edge, where the pen leans out as it writes and waits ([constant
+## DeskMedium.PARK]), nothing tall in front of it, where the camera looks over it ([method _placed]), and nothing where
+## the pen lies before a letter's writer picks it up ([method pen_rest]).
 
-## THE THINGS a desk may have. `tall`: kept back from the pad (it would stand in the pen's or the
-## camera's way); `weight`: how often it is chosen among the things lying about - none for a candle, which
-## its desk's mood sets down ([constant MOODS]), and none for what is only ever chosen ([method of]'s `picks`);
-## `lit`: it burns; `layer`: it lies under the pad, not on the desk ([method _desk]); `face`: the material of what must be
-## seen of it, kept in the frame before the rest ([method _pack]; a dog tag's bone, its chain may hang past the edge).
+## The things a desk may have. `tall`: kept back from the pad (it would stand in the pen's or the camera's way); `weight`:
+## how often it is chosen among the things lying about - none for a candle, which its desk's mood sets down ([constant
+## MOODS]), and none for what is only ever chosen ([method of]'s `picks`); `lit`: it burns; `layer`: it lies under the
+## pad, not on the desk ([method _desk]); `face`: the material of what must be seen of it, kept in the frame before the
+## rest ([method _pack]; a dog tag's bone, its chain may hang past the edge).
 const THINGS := {
 	"mug": {"label": "a mug", "blurb": "A glazed mug, often with coffee or tea in it, its handle any way round.", "tall": true, "weight": 3.0},
 	"pencil": {"label": "a pencil", "blurb": "A hexagonal pencil lying down, sharpened, an eraser in a metal band at its end.", "tall": false, "weight": 3.0},
@@ -64,9 +50,9 @@ const THINGS := {
 	"dog_tag": {"label": "a dog tag", "blurb": "A flat, polished steel tag cut in the shape of a dog's bone, a V of two straight struts at the middle of its edge cast with it and a long fine chain through it - dropped beside it in a heap, its clasp along it.", "tall": false, "weight": 0.0, "face": "tag"},
 	"mat": {"label": "a desk mat", "blurb": "A mat of felt, wool, linen or cotton under the pad, now and then with a border.", "tall": false, "weight": 0.0, "layer": true},
 }
-## THE DESK'S MOOD: how it is lit, each a row - `weight` how often, `lamp` the share of the desk lamp's light
-## that is on (0 off), `candles` how many burn on the desk ([least, most]) and whether one of them is the KEY,
-## lighting the page as the lamp would (`leads`). The rest of the light is the room's ([method _light]).
+## The desk's mood: how it is lit, each a row - `weight` how often, `lamp` the share of the desk lamp's light that is on
+## (0 off), `candles` how many burn on the desk ([least, most]) and whether one of them is the key, lighting the page as
+## the lamp would (`leads`). The rest of the light is the room's ([method _light]).
 const MOODS := {
 	"lamplight": {"label": "Lamplight", "blurb": "Night: the desk lamp lights the page, the room dark round it - a screen's glow, a street lamp, a fire, the moon in a window.",
 		"weight": 4.0, "lamp": 1.0, "candles": [0, 1], "leads": false},
@@ -77,54 +63,51 @@ const MOODS := {
 	"dusk": {"label": "Dusk", "blurb": "Evening: a low gold sun through the window, long shadows, and the lamp on.",
 		"weight": 1.5, "lamp": 0.6, "candles": [0, 1], "leads": false},
 }
-## Where the desk's light comes from ([constant Lights.FROM]'s degrees: 270 the writer's left): the left, as for
-## a right hand, whose shadow then falls away from the line.
+## Where the desk's light comes from ([constant Lights.FROM]'s degrees: 270 the writer's left): the left, as for a right
+## hand, whose shadow then falls away from the line.
 const FROM_LEFT := Vector2(215.0, 305.0)
-## WHERE A CANDLE STANDS: just beside the pad's left (meters from its middle), where the wide framing sees its
-## flame and its light falls across the page from the writer's left - not back in the dark past the frame. Nearer
-## than a tall thing may stand ([constant TALL_LEFT]): the camera stands over the pad, so a candle there leans out
-## of the picture, away from the page, and covers none of it. A flame stands at most about 20 cm up (a taper's
-## holder and wax, [method _thing]): the higher it burns the nearer the lens, and the further out of the frame.
+## Where a candle stands: just beside the pad's left (meters from its middle), where the wide framing sees its flame and
+## its light falls across the page from the writer's left. Nearer than a tall thing may stand ([constant TALL_LEFT]): the
+## camera stands over the pad, so a candle there leans out of the picture, away from the page, and covers none of it. A
+## flame stands at most about 20 cm up (a taper's holder and wax, [method _thing]): the higher it burns the nearer the
+## lens, and the further out of the frame.
 const CANDLE_BAND := Rect2(-0.24, -0.16, 0.08, 0.24)
 const CANDLE_WIDER := Rect2(-0.38, -0.3, 0.22, 0.48)
-## ...OR BESIDE ITS RIGHT (2026-10-29, the user: "I don't think I've seen a candle placed on the right side even one
-## time ... The scenes look best when lighting comes from both directions"): past the stretch beside the pad's right
-## edge that the pen keeps for itself as it leans out, rests, taps the desk and waits ([constant TALL_RIGHT]), at the
-## frame's edge or just past it - its light across the page from the right. A desk's candles take their sides by turns
-## from a seeded first ([method _candle_right]), so two light it from both.
+## ...or beside its right: past the stretch beside the pad's right edge that the pen keeps for itself as it leans out,
+## rests, taps the desk and waits ([constant TALL_RIGHT]), at the frame's edge or just past it - its light across the page
+## from the right. A desk's candles take their sides by turns from a seeded first ([method _candle_right]), so two light
+## it from both.
 const CANDLE_RIGHT := Rect2(0.27, -0.12, 0.08, 0.24)
 const CANDLE_RIGHT_WIDER := Rect2(0.25, -0.3, 0.18, 0.48)
 ## How many things a desk has, by weight: none to five.
 const FILLS := [[0, 0.5], [1, 1.0], [2, 2.0], [3, 2.0], [4, 1.2], [5, 0.5]]
 ## A tea light's tin, round (centimeters).
 const TEA_TIN := 1.9
-## Where things may stand, meters from the pad's middle (x right, z toward the reader): the stretch
-## the wide camera sees, the pad's footprint with room round it, and how far from the pad's edges a
-## tall thing keeps on its left and its right (where the pen leans out).
+## Where things may stand, meters from the pad's middle (x right, z toward the reader): the stretch the wide camera sees,
+## the pad's footprint with room round it, and how far from the pad's edges a tall thing keeps on its left and its right
+## (where the pen leans out).
 const REACH := Rect2(-0.45, -0.34, 0.9, 0.62)
 ## What the Letter's widest framing sees of the desk ([constant LetterMedium.LETTER_WIDE] through [constant
-## DeskMedium.VFOV]'s narrow lens at 16:9, its corners cast onto the desk: 56 cm across at the binding, 52 at the
-## frame's foot, 31 cm deep), where a thing CHOSEN for the desk lies when it can ([method _pack]) - the whole [constant
-## REACH] is mostly past the frame. Close, as the pen writes, it sees about 4 cm past the pad's sides.
+## DeskMedium.VFOV]'s narrow lens at 16:9, its corners cast onto the desk: 56 cm across at the binding, 52 at the frame's
+## foot, 31 cm deep): where a thing chosen for the desk lies when it can ([method _pack]); the whole [constant REACH] is
+## mostly past the frame. Close, as the pen writes, it sees about 4 cm past the pad's sides.
 const SEEN := [Vector2(-0.27, -0.175), Vector2(0.27, -0.175), Vector2(0.25, 0.13), Vector2(-0.25, 0.13)]
-## PACKING A CHOSEN DESK ([method _pack]): places tried for each thing, the gap kept between two things (meters), how
-## far a long thing lying along the pad turns off it (radians, either way), how much a place's share out of [constant
-## SEEN] weighs against its distance from the paper (meters for all of it out), and the seeded spread among the best.
+## Packing a chosen desk ([method _pack]): places tried for each thing, the gap kept between two things (meters), how far a
+## long thing lying along the pad turns off it (radians, either way), how much a place's share out of [constant SEEN]
+## weighs against its distance from the paper (meters for all of it out), and the seeded spread among the best.
 const PACK_TRIES := 160
 const PACK_GAP := 0.01
 const PACK_SWAY := 0.2
 const PACK_SEEN := 0.8
 const PACK_JITTER := 0.045
-## What any of a thing out of [constant SEEN] costs it beside its share (meters): the more random the choice, the more a
-## little overhang had won - a dog tag's bone 7 mm past the frame's edge.
+## What any of a thing out of [constant SEEN] costs it beside its share (meters): a little overhang is penalized so a thing
+## is not left a few millimeters past the frame's edge.
 const PACK_EDGE := 0.05
-## ...and BOTH SIDES OF THE PAD (2026-10-29, the user: "the pencil and dog tags and probably other objects as well are
-## NEVER placed on the right ... the pencil could obviously be set alongside the pens on the right. Also on the right,
-## at the bottom corner, there is NEVER anything placed there, even though there is space for it"): how often a thing
-## leans to the right, what lying on its other side costs it (meters), how often a long thing lies at any angle
-## rather than along the pad, and the lane kept clear beside the pad's right edge, where the pen taps the desk
-## ([constant LetterMedium.TAP_SPOTS] `desk`, 2 cm out) - past it the pen's rest is kept clear as a thing is, and
-## what stands keeps back to [constant TALL_RIGHT] as always (the pen leans out over it as it writes, and parks there).
+## Both sides of the pad: how often a thing leans to the right, what lying on its other side costs it (meters), how often
+## a long thing lies at any angle rather than along the pad, and the lane kept clear beside the pad's right edge, where
+## the pen taps the desk ([constant LetterMedium.TAP_SPOTS] `desk`, 2 cm out). Past the lane the pen's rest is kept clear
+## as a thing is, and what stands keeps back to [constant TALL_RIGHT] as always (the pen leans out over it as it writes,
+## and parks there).
 const PACK_RIGHT := 0.45
 const PACK_SIDE := 0.03
 const PACK_ASKEW := 0.3
@@ -134,25 +117,25 @@ const TALL_LEFT := 0.19
 const TALL_RIGHT := 0.23
 ## A thing this high or higher is tall, whatever its row says (meters).
 const TALL_H := 0.04
-## WHERE THE PEN LIES ([method pen_rest]): its nib this far right of the pad's right edge and this far from the pad's
-## middle toward the reader - up the pad, so less than none (meters, [least, most]), its body turned out from the pad
-## by this much (degrees from straight toward the writer), and as long as [DeskMedium] builds it, nib to top. Where
-## the wide framing sees it, beside the page's upper half.
+## Where the pen lies ([method pen_rest]): its nib this far right of the pad's right edge and this far from the pad's
+## middle toward the reader - up the pad, so less than none (meters, [least, most]), its body turned out from the pad by
+## this much (degrees from straight toward the writer), and as long as [DeskMedium] builds it, nib to top. The wide
+## framing sees it beside the page's upper half.
 const PEN_OFF := Vector2(0.024, 0.04)
 const PEN_AT := Vector2(-0.125, -0.095)
 const PEN_TURN := Vector2(4.0, 16.0)
 const PEN_LONG := 0.155
-## A PEN EACH INK (a letter's, [constant LetterScript.SWAP]): the others lie beside the first, each this much further out
-## from the pad (meters), set down a little differently - this much along it and turned this much (at most, either way).
+## A pen for each ink (a letter's, [constant LetterScript.SWAP]): the others lie beside the first, each this much further
+## out from the pad (meters), set down a little differently - this much along it and turned this much (at most, either way).
 const PEN_APART := 0.026
 const PEN_SHIFT := 0.012
 const PEN_SWAY := 4.0
-## A DOG TAG ([method _dog_tag], centimeters): the plate's thickness, the steps round each lobe of its outline, the radius
+## A dog tag ([method _dog_tag], centimeters): the plate's thickness, the steps round each lobe of its outline, the radius
 ## round its V's point, how wide each of the V's two straight struts is, how wide the V's foot is against how far out it
 ## stands (a share), how far round where the chain goes through the V it may lie on the plate, its chain's links (a fine
-## cable chain's 1.5 mm), the chain's length (a necklace's, 30 to 35 inches: the bone hangs to the middle of the chest), the places along it as it
-## is dropped (all a strand's path may have, less its two ends: [constant Props.MAX_POINTS]) and how many times it may be
-## dropped again to keep off the bone, and its clasp's radius and length.
+## cable chain's 1.5 mm), the chain's length (a necklace's, 30 to 35 inches), the places along it as it is dropped (all a
+## strand's path may have, less its two ends: [constant Props.MAX_POINTS]) and how many times it may be dropped again to
+## keep off the bone, and its clasp's radius and length.
 const TAG_THICK := 0.1
 const TAG_ARC := 9
 const TAG_TIP := 0.08
@@ -163,15 +146,11 @@ const TAG_LINK := 0.15
 const TAG_LONG := Vector2(76.0, 89.0)
 const TAG_DROP := 37
 const TAG_DROPS := 6
-## A DOG TAG'S NAME ([method tag_name]; 2026-10-29, the user: "generate random words to use as names, engraved into the
-## dog tag ... must be a name that is generated by the hash function: not something we just naively hack into the code
-## ... ~75% of the time - there should be no name on tags at all"): the share of tags engraved; the salt of the generator
-## that names them - SEARCHED FOR, the first from 0 under which the desk the user chose for their first video, 4230,
-## draws a name and draws the one they chose (tests/desk/letter_check.gd holds it by its digest - the name is never
-## written in the code), the rule the same for every desk; and the
-## engraving's letters - their size in the label's own pixels, their cap height and how much of the bone's length they
-## may take (centimeters, a share), their color, dark as a cut in polished steel, and how far off the face they lie
-## (meters).
+## A dog tag's name ([method tag_name]): the share of tags engraved; the salt of the generator that names them (a fixed
+## number: tests/desk/letter_check.gd holds the resulting name by its digest, so the name is never written in the code),
+## the rule the same for every desk; and the engraving's letters - their size in the label's own pixels, their cap height
+## and how much of the bone's length they may take (centimeters, a share), their color, dark as a cut in polished steel,
+## and how far off the face they lie (meters).
 const TAG_NAMED := 0.25
 const TAG_NAME_SALT := 88283
 const ENGRAVE_PX := 64
@@ -180,12 +159,9 @@ const ENGRAVE_WIDE := 0.72
 const ENGRAVE_COLOR := Color(0.2, 0.21, 0.23)
 const ENGRAVE_LIFT := 0.0006
 const TAG_CLASP := Vector2(0.09, 0.5)
-## WHAT IS WRITTEN ON THE INDEX CARDS ([method picks_of]'s `card_text`; 2026-10-29, the user: "a property to the frontmatter
-## that would allow us to write something on the index cards ... We'd have to handle orientation there: we would not want
-## to write it upside-down"): on the top card of the stack, in the letter's hand and the desk's ink, AS ON THE PAD - the hand's
-## size on a pixel of the pad's page, its lines a rule apart, smaller only as the words need ([method _write]) - and NOTHING
-## ON THE DESK MOVES FOR IT (the user, of a first pass that laid a written card across the view and never a sticky note:
-## "you broke the layout of my scene ... The original layout was best"): the stack is the one the number drew, where it
+## What is written on the index cards ([method picks_of]'s `card_text`): on the top card of the stack, in the letter's hand
+## and the desk's ink, as on the pad - the hand's size on a pixel of the pad's page, its lines a rule apart, smaller only
+## as the words need ([method _write]). Nothing on the desk moves for it: the stack is the one the number drew, where it
 ## drew it, and the writing turns to it. Its margin (centimeters), how small it may come before a line too long for the
 ## card is wrapped (a share of the pad's size), the hair it is turned off square (radians, either way) and how far off the
 ## card it lies (meters, as an engraving does).
@@ -197,15 +173,15 @@ const CARD_LIFT := 0.0006
 static var _card_fonts := {}     # a hand -> its font for a card ([method _card_font])
 
 
-## THE LOOK of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board`
-## (colors); `pen` ({body, trim, rest - its nib and turn, [method pen_rest]}); `lamp` ({color, energy, at, share - of it on}); `fill` (a color);
-## `mood` ([constant MOODS]) and `light` (the room's, [method Lights.sanitize]d); `top` and `layers`
-## ([Tables]' spec, `materials` its materials) and `things` ([{kind, thing, materials}], not yet placed -
-## [method dress] places them; the candles first).
+## The look of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board` (colors); `pen`
+## ({body, trim, rest - its nib and turn, [method pen_rest]}); `lamp` ({color, energy, at, share - of it on}); `fill` (a
+## color); `mood` ([constant MOODS]) and `light` (the room's, [method Lights.sanitize]d); `top` and `layers` ([Tables]'
+## spec, `materials` its materials) and `things` ([{kind, thing, materials}], not yet placed - [method dress] places them;
+## the candles first).
 ##
-## [param picks] is what was chosen for it ([method picks_of]): `things` (the [constant THINGS] keys on it, the mat
-## among them - each once, any order), `mood`, and what is written on its index cards (`card_text`, in `hand`). What
-## it leaves out is drawn from the seed; given `things`, the look is `picked` ([method _chosen]).
+## [param picks] is what was chosen for it ([method picks_of]): `things` (the [constant THINGS] keys on it, the mat among
+## them - each once, any order), `mood`, and what is written on its index cards (`card_text`, in `hand`). What it leaves
+## out is drawn from the seed; given `things`, the look is `picked` ([method _chosen]).
 static func of(seed: int, picks := {}) -> Dictionary:
 	var out := {}
 	var r := _rng(seed, "paper")
@@ -282,7 +258,7 @@ static func of(seed: int, picks := {}) -> Dictionary:
 	return out
 
 
-## WHAT A DOCUMENT'S `letter` CHOSE for its desk ([LetterFormat]): `things` and `mood` where it carries them, and what is
+## What a document's `letter` chose for its desk ([LetterFormat]): `things` and `mood` where it carries them, and what is
 ## written on its index cards (`card_text`) with the hand it is written in - [method of]'s `picks`.
 static func picks_of(letter: Dictionary) -> Dictionary:
 	var out := {}
@@ -297,7 +273,7 @@ static func picks_of(letter: Dictionary) -> Dictionary:
 	return out
 
 
-## WHAT [param look] HAS ON IT, by [constant THINGS] key in its order - the mat among them when one lies under the pad:
+## What [param look] has on it, by [constant THINGS] key in its order - the mat among them when one lies under the pad:
 ## what the Letter's rows show ticked for a desk it has chosen nothing for.
 static func kinds(look: Dictionary) -> Array:
 	var have := {}
@@ -312,10 +288,10 @@ static func kinds(look: Dictionary) -> Array:
 	return out
 
 
-## THE ROOM'S LIGHT for a desk of [param mood], as the set dresser writes a table's ([Lights]): the sky's fill
-## and what else lights the room. Night is a dim blue sky and perhaps a lamp out of the shot or the moon in a
-## window; day the sun through a window aimed across the pad, clouds passing now and then; dusk a low gold sun
-## through it. Every sun and moon comes from the writer's left ([constant FROM_LEFT]).
+## The room's light for a desk of [param mood], as the set dresser writes a table's ([Lights]): the sky's fill and what
+## else lights the room. Night is a dim blue sky and perhaps a lamp out of the shot or the moon in a window; day the sun
+## through a window aimed across the pad, clouds passing now and then; dusk a low gold sun through it. Every sun and moon
+## comes from the writer's left ([constant FROM_LEFT]).
 static func _light(seed: int, mood: String) -> Dictionary:
 	var r := _rng(seed, "light")
 	var from := r.randf_range(FROM_LEFT.x, FROM_LEFT.y)
@@ -361,7 +337,7 @@ static func _light(seed: int, mood: String) -> Dictionary:
 	return out
 
 
-## THE CANDLES a desk of [param mood] burns ([constant MOODS]): as many as it says, each a [constant THINGS]
+## The candles a desk of [param mood] burns ([constant MOODS]): as many as it says, each a [constant THINGS]
 ## candle ([method _thing]) - `{kind, thing, materials}`, made safe, as [method _things] gives.
 static func _candles(seed: int, mood: String) -> Array:
 	var r := _rng(seed, "candles")
@@ -375,8 +351,8 @@ static func _candles(seed: int, mood: String) -> Array:
 	return out
 
 
-## THE DESK'S TOP and what lies on it, as the set dresser would write them ([Tables]): a mat under the pad when
-## [param mat_chosen] says so, or now and then when it is null (nothing chosen) - its look drawn the same either way.
+## The desk's top and what lies on it, as the set dresser would write them ([Tables]): a mat under the pad when [param
+## mat_chosen] says so, or now and then when it is null (nothing chosen) - its look drawn the same either way.
 static func _desk(seed: int, mat_chosen: Variant = null) -> Dictionary:
 	var r := _rng(seed, "top")
 	var kind := String(_pick(r, [["wood", 6.5], ["painted", 1.2], ["stone", 1.2], ["leather", 0.6], ["fabric", 0.5]]))
@@ -427,7 +403,7 @@ static func _desk(seed: int, mat_chosen: Variant = null) -> Dictionary:
 	return {"top": top, "layers": layers, "materials": mats}
 
 
-## THE THINGS on the desk with seed [param seed], as the set dresser would write them ([Props]): each
+## The things on the desk with seed [param seed], as the set dresser would write them ([Props]): each
 ## `{kind, thing, materials}`, made safe.
 static func _things(seed: int) -> Array:
 	var r := _rng(seed, "things")
@@ -452,10 +428,10 @@ static func _things(seed: int) -> Array:
 	return out
 
 
-## THE THINGS CHOSEN for the desk of [param seed] ([param kinds], [constant THINGS] keys; the mat is the top's, [method
+## The things chosen for the desk of [param seed] ([param kinds], [constant THINGS] keys; the mat is the top's, [method
 ## _desk]): each once, in [constant THINGS]' order, the candles first as [method dress] places them, each drawn from a
-## generator of its own kind. A desk lit by candles ([constant MOODS] `leads`) and given none has a taper set down: its
-## page would have no light of its own. The index cards carry [param card] written on them in [param hand] (`writing`,
+## generator of its own kind. A desk lit by candles ([constant MOODS] `leads`) and given none has a taper set down, since
+## its page would have no light of its own. The index cards carry [param card] written on them in [param hand] (`writing`,
 ## [method _write]).
 static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "") -> Array:
 	var want := {}
@@ -483,9 +459,9 @@ static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "
 	return out
 
 
-## ONE OF THE DESK'S THINGS, BUILT: a [constant THINGS] row of [param kind], drawn from [param seed] and made by [method
-## Props.build] (`{node, size, ...}`, meters, its base on y = 0, its front toward +z) - for another desk that sets the same
-## things out (the dispatch desk's mug and pencil cup: one way of making a mug, where two had grown).
+## One of the desk's things, built: a [constant THINGS] row of [param kind], drawn from [param seed] and made by [method
+## Props.build] (`{node, size, ...}`, meters, its base on y = 0, its front toward +z); another desk that sets out the same
+## things (the dispatch desk's mug and pencil cup) uses it too.
 static func made(kind: String, seed: int) -> Dictionary:
 	var safe := Props.sanitize(_thing(kind, _rng(seed, "made " + kind), seed), ["#888888"])
 	if (safe["things"] as Array).is_empty():
@@ -598,7 +574,6 @@ static func _thing(kind: String, r: RandomNumberGenerator, seed := -1, written :
 			parts.append({"shape": "lathe", "material": "holder", "smooth": true, "profile": [[0, 0], [foot, 0, 0], [foot, 0.6, 0.3],
 				[foot * 0.45, 1.6], [0.8, 2.6], [0.75, h - 2.4], [1.9, h - 1.3], [2.1, h, 0], [1.25, h, 0], [1.25, h - 1.1, 0], [0, h - 1.1]]})
 			mats["wax"] = _wax(r)
-			# burned down some way, or new
 			var wax_h := r.randf_range(10.0, 15.0) * r.randf_range(0.45, 1.0)
 			parts.append({"shape": "lathe", "material": "wax", "at": [0, h - 1.1, 0], "profile": [[0, 0], [1.1, 0], [1.05, wax_h], [0, wax_h]],
 				"wick": true, "drips": r.randf_range(0.0, 0.6)})
@@ -627,8 +602,7 @@ static func _thing(kind: String, r: RandomNumberGenerator, seed := -1, written :
 			parts.append({"shape": "lathe", "material": "saucer", "smooth": true, "profile": [[0, 0], [sr + 0.6, 0, 0], [sr + 1.6, 0.9],
 				[sr + 1.4, 1.0], [sr + 0.4, 0.4], [0, 0.4]]})
 			var a0 := r.randf_range(0.0, TAU)
-			# THE TINS APART (2026-10-29, the user: "the tea lights are clipping through each other"): two had stood 1.6 cm
-			# either side of the middle, 3.2 apart, each 1.9 round - far enough out that no two of them meet
+			# the tins apart: far enough out that no two of them meet
 			var out := maxf(sr - 2.0, (TEA_TIN + 0.12) / sin(PI / float(n)))
 			for k in n:
 				var a := a0 + TAU * float(k) / float(n)
@@ -653,27 +627,20 @@ static func _wax(r: RandomNumberGenerator) -> Dictionary:
 	return {"kind": "wax", "color": _hex(c), "clarity": r.randf_range(0.4, 0.7)}
 
 
-## A DOG TAG CUT AS A DOG'S BONE (2026-10-29, the user: "Exactly like a military-issued tag might be, except that the
-## tag needs to be literally dog-bone shaped"; then, of the first, a stamped steel tag with a rolled rim on a ball
-## chain through a hole at its end, by their picture: "The chain is connected to the center of the bone, not to the
-## side. It has sort of a V-shaped thing attached to the middle of the bone, where the chain connects. The chain itself
-## is true chain: like the necklace a girl would wear ... the bone is just simple and flat ... more shiny/polished ...
-## the chain needs to be much longer ... the bone hangs to roughly the middle of her chest"): a flat plate of polished
-## steel ([method _bone]) with a V cast in it at the middle of its long edge - an upside-down V as the tag hangs, two
-## straight struts open between them - and a fine link chain through it, a necklace long
-## enough to hang to the middle of the chest, dropped beside the bone ([method _dropped]), its clasp somewhere along it.
-## One tag in four has a name engraved on it ([method tag_name], handed back in [param engraving]). The parts are laid
-## about their middle, so the thing stands where it is placed ([method _pack] keeps its rectangle). Its materials go
-## into [param mats].
+## A dog tag cut as a dog's bone: a flat plate of polished steel ([method _bone]) with a V cast in it at the middle of its
+## long edge (an upside-down V as the tag hangs, two straight struts open between them) and a fine link chain through it,
+## a necklace long enough to hang to the middle of the chest, dropped beside the bone ([method _dropped]), its clasp
+## somewhere along it. One tag in four has a name engraved on it ([method tag_name], handed back in [param engraving]). The
+## parts are laid about their middle, so the thing stands where it is placed ([method _pack] keeps its rectangle). Its
+## materials go into [param mats].
 static func _dog_tag(r: RandomNumberGenerator, mats: Dictionary, seed := -1, engraving := {}) -> Array:
-	# POLISHED: a near mirror, the metal's grain gone from it (prop.gdshader) - less polished, a nearby flame's light
-	# spread across its whole face and bloomed it white
+	# polished: a near mirror, the metal's grain gone from it (prop.gdshader); less polished, a nearby flame's light
+	# spreads across its whole face and blooms it white
 	mats["tag"] = {"kind": "metal", "color": "#d2d4d7", "polish": r.randf_range(0.9, 0.97), "wear": 0.0}
 	mats["chain"] = {"kind": "metal", "color": "#cdcfd2", "polish": 0.85}
 	var bone := _bone(r)
-	# THE CHAIN through the V, by its point
 	var tip: Vector2 = bone["hole"]
-	# THE CHAIN, dropped ([method _dropped]): out of the V and back to it, a necklace long - and dropped again while the
+	# the chain, dropped ([method _dropped]): out of the V and back to it, a necklace long - and dropped again while the
 	# curve it lies along (smoothed between its places) crosses the bone, which it would cut through
 	var outline := PackedVector2Array()
 	for q in bone["outline"]:
@@ -690,7 +657,6 @@ static func _dog_tag(r: RandomNumberGenerator, mats: Dictionary, seed := -1, eng
 		if over == 0.0:
 			break
 	var chain := {"shape": "strand", "material": "chain", "kind": "chain", "thickness": TAG_LINK, "lay": "path", "path": path, "loose": 0.0}
-	# EVERYTHING ABOUT ITS MIDDLE: the bone and the loops' reach
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
 	for q in (bone["outline"] as Array) + path:
@@ -704,12 +670,11 @@ static func _dog_tag(r: RandomNumberGenerator, mats: Dictionary, seed := -1, eng
 		{"shape": "extrude", "material": "tag", "points": bone["left"], "height": TAG_THICK, "at": at},
 		chain.merged({"at": at}),
 	]
-	# A NAME, now and then ([method tag_name]): in the bone's middle, as long as its middle allows
 	var name := tag_name(seed) if seed >= 0 else ""
 	if not name.is_empty():
 		engraving.merge({"text": name.to_upper(), "at": Vector3(-c.x, TAG_THICK, -c.y), "cap": ENGRAVE_CAP,
 			"wide": float(bone["length"]) * ENGRAVE_WIDE})
-	# THE CLASP, where the chain lies on the desk nearest a seeded place along it, as the chain lies ([method
+	# The clasp, where the chain lies on the desk nearest a seeded place along it, as the chain lies ([method
 	# Props.strand_line])
 	var laid := Props.sanitize({"things": [{"name": "chain", "parts": [chain]}], "materials": {"chain": mats["chain"]}}, ["#888888"])
 	if not (laid["things"] as Array).is_empty():
@@ -728,7 +693,7 @@ static func _dog_tag(r: RandomNumberGenerator, mats: Dictionary, seed := -1, eng
 	return parts
 
 
-## THE NAME ON THE DOG TAG of the desk of [param seed], or "" for none (three tags in four): a made-up name of two or three
+## The name on the dog tag of the desk of [param seed], or "" for none (three tags in four): a made-up name of two or three
 ## syllables, as the tablet names its apps ([method TabletMedium.made_up]), from a generator of its own salted with
 ## [constant TAG_NAME_SALT].
 static func tag_name(seed: int) -> String:
@@ -738,9 +703,9 @@ static func tag_name(seed: int) -> String:
 	return TabletMedium.made_up(r)
 
 
-## A NAME ENGRAVED on a thing's face ([param e], `{text, at, cap, wide}` - centimeters in the thing's own space): plain
-## capitals lying flat on it, as on a collar's tag or an army's (the user: "just simple lettering"), dark as a cut in
-## polished steel, their tops toward the V so they read as the tag hangs. Godot's own [Label3D] in its fallback face.
+## A name engraved on a thing's face ([param e], `{text, at, cap, wide}` - centimeters in the thing's own space): plain
+## capitals lying flat on it, dark as a cut in polished steel, their tops toward the V so they read as the tag hangs.
+## Godot's own [Label3D] in its fallback face.
 static func _engrave(node: Node3D, e: Dictionary) -> void:
 	var label := Label3D.new()
 	label.name = "engraving"
@@ -758,24 +723,23 @@ static func _engrave(node: Node3D, e: Dictionary) -> void:
 	var wide := label.font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, ENGRAVE_PX).x
 	var cap := label.font.get_ascent(ENGRAVE_PX) * 0.72
 	label.pixel_size = minf(float(e["cap"]) * 0.01 / maxf(cap, 1.0), float(e["wide"]) * 0.01 / maxf(wide, 1.0))
-	# a hair off the face, casting nothing: at a fifth of a millimeter the plate drew over it (measured: 0.2 mm hid, 0.5
-	# showed - far under a pixel from any camera)
+	# a hair off the face, casting nothing: a fifth of a millimeter is hidden by the plate, half a millimeter shows (far
+	# under a pixel from any camera)
 	label.position = (e["at"] as Vector3) * 0.01 + Vector3(0.0, ENGRAVE_LIFT, 0.0)
 	label.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
 	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.add_child(label)
 
 
-## WORDS WRITTEN ON THE TOP INDEX CARD ([param w], `{text, card, hand}` - the card's size in centimeters, as [method _thing]
-## builds it about its middle): in the letter's hand ([constant NotebookLayout.HANDS]' font) and [param ink], from the card's
-## top left inside [constant CARD_MARGIN], turned a hair off square ([constant CARD_TILT], from [param r]). AS THE PAD IS
-## WRITTEN: the hand's size ([method LetterHand.size_px]) on a pixel of the pad's page ([constant DeskScript.PH] to [constant
-## LegalPad.H]), its lines a rule apart ([constant DeskScript.RULE]) - smaller where a line is too long for the card, to
-## [constant CARD_LEAST] of it, then wrapped, and smaller again only where the lines overrun it. Rastered finer than that, a
-## glyph's thin strokes were averaged away by its mipmaps from across the desk, the dark ink a pale tint. THE RIGHT WAY UP
-## FROM THE WRITER'S SEAT: the card lies however the number turned it ([param turn], its node's `rotation.y`), and the
-## writing is turned on it by the quarter turn that leaves it nearest upright - across a card lying across the view, down
-## one lying along the pad (portrait). Godot's own [Label3D], as the dog tag's name is.
+## Words written on the top index card ([param w], `{text, card, hand}` - the card's size in centimeters, as [method _thing]
+## builds it about its middle): in the letter's hand ([constant NotebookLayout.HANDS]' font) and [param ink], from the
+## card's top left inside [constant CARD_MARGIN], turned a hair off square ([constant CARD_TILT], from [param r]). As the
+## pad is written: the hand's size ([method LetterHand.size_px]) on a pixel of the pad's page ([constant DeskScript.PH] to
+## [constant LegalPad.H]), its lines a rule apart ([constant DeskScript.RULE]), smaller where a line is too long for the
+## card (to [constant CARD_LEAST] of it), then wrapped, and smaller again only where the lines overrun it; rastered finer, a
+## glyph's thin strokes are averaged away by its mipmaps from across the desk. The writing is turned on the card by the
+## quarter turn that leaves it nearest upright from the writer's seat, however the number turned the card ([param turn],
+## its node's `rotation.y`). Godot's own [Label3D], as the dog tag's name is.
 static func _write(node: Node3D, w: Dictionary, turn: float, ink: Color, r: RandomNumberGenerator) -> void:
 	var card: Vector3 = w["card"]
 	var font := _card_font(String(w["hand"]))
@@ -844,14 +808,12 @@ static func _card_font(hand: String) -> Font:
 	return _card_fonts[key]
 
 
-## A CHAIN AS IT WAS DROPPED (2026-10-29, the user: "a normal person doesn't loop their chain into neat little circles,
-## before putting on the table. They just drop it there, chaotically. ... typically it wouldn't be a giant circle of
-## chain, but more of a dense pile, or whatever"): a path [[x, z], ...] (centimeters) out of the ring at [param tip] and
-## back to it, [param long] along. A walk: its heading turns as it goes, smoothly or in kinks, by drawn amounts the seed
-## makes gentle or wild, and is drawn toward a heap's middle the further it strays (the heap drawn dense to loose); now
-## and then a run of it is pulled out nearly straight first, and its last stretch heads back to the ring. It turns away
-## from the bone ([param bone], grown) rather than cross it - the curve between two places too - what gap is left to the
-## ring is spread back along it, and it is drawn again until it is as long as it should be ([constant TAG_DROP] places).
+## A chain as it was dropped: a path [[x, z], ...] (centimeters) out of the ring at [param tip] and back to it, [param
+## long] along. A walk: its heading turns as it goes, smoothly or in kinks, by drawn amounts the seed makes gentle or wild,
+## and is drawn toward a heap's middle the further it strays (the heap drawn dense to loose); now and then a run of it is
+## pulled out nearly straight first, and its last stretch heads back to the ring. It turns away from the bone ([param
+## bone], grown) rather than cross it (the curve between two places too); what gap is left to the ring is spread back
+## along it, and it is drawn again until it is as long as it should be ([constant TAG_DROP] places).
 static func _dropped(r: RandomNumberGenerator, tip: Vector2, long: float, bone: PackedVector2Array) -> Array:
 	var steps := TAG_DROP
 	var heap := r.randf_range(0.9, 2.2)
@@ -883,12 +845,11 @@ static func _dropped(r: RandomNumberGenerator, tip: Vector2, long: float, bone: 
 			curl = lerpf(curl, turns[k], 0.6)
 			a += curl * (0.12 if k < run else 1.0)
 			if k >= steps - home:
-				# the last stretch, back to the ring
 				a = lerp_angle(a, (tip - p).angle(), 0.6)
 			elif k >= run:
 				var to := mid - p
 				a = lerp_angle(a, to.angle(), clampf(to.length() / heap, 0.0, 1.5) * pull * 0.5)
-			# AWAY FROM THE BONE: turned off it, toward the side it came from, until the step and the curve to it are clear
+			# Away from the bone: turned off it, toward the side it came from, until the step and the curve to it are clear
 			var next := p + Vector2(cos(a), sin(a)) * step
 			var side := 1.0 if (p - middle).cross(next - p) > 0.0 else -1.0
 			for _turn in 10:
@@ -898,7 +859,6 @@ static func _dropped(r: RandomNumberGenerator, tip: Vector2, long: float, bone: 
 				next = p + Vector2(cos(a), sin(a)) * step
 			p = next
 			pts.append(p)
-		# HOME: the gap to the ring spread back along it, then anything left on the bone pushed off it
 		var gap: Vector2 = (pts[pts.size() - 1] as Vector2) - tip
 		for k in pts.size():
 			pts[k] = (pts[k] as Vector2) - gap * float(k) / float(pts.size() - 1)
@@ -913,7 +873,6 @@ static func _dropped(r: RandomNumberGenerator, tip: Vector2, long: float, bone: 
 		for k in pts.size() - 1:
 			got += (pts[k] as Vector2).distance_to(pts[k + 1])
 		step *= long / maxf(got, 1.0)
-		# its two runs side by side where they leave the ring
 		out = []
 		for k in pts.size():
 			var q: Vector2 = pts[k]
@@ -931,20 +890,15 @@ static func _over(path: Array, outline: PackedVector2Array, hole := Vector2.INF)
 	var n := 0
 	for q in Props.strand_line((laid["things"][0]["parts"] as Array)[0], RandomNumberGenerator.new()):
 		var at := Vector2(q.x, q.z) * 100.0
-		# where it goes through the V and over its point it lies on the plate, as it should
 		n += int(Geometry2D.is_point_in_polygon(at, outline) and at.distance_to(hole) > TAG_THROUGH)
 	return n
 
 
-## A BONE'S OUTLINE (centimeters, its long way along x, its middle at the origin): two round lobes at each end, the bar
-## between them, and out of the middle of one long edge (z < 0) a V CAST WITH IT, its point no further out than the
-## knobs - as the user's picture has it (2026-10-29: "the inner part of the bone is not quite so narrow, and the V-shape
-## is not a separate thing: it is a part of the bone itself, as if the entire bone and V were cut from the same cast.
-## The point of the V protrudes roughly as far outward as the curve of the bone-knobs do") - and A V, NOT A HOLE: two
-## straight struts, the triangle between them and the bar open through the plate, its foot on the bar's edge, and the
-## chain through it ("2 straight pieces of metal, which make a V ... The bottom of the triangle should be level with the
-## center of the bone's inner side"). `outline` [[x, z], ...] round it all; `right` and `left` the plate cut in two
-## along its axis, each half of the opening a notch in it - an extrude has no holes ([method Props._extrude_face]);
+## A bone's outline (centimeters, its long way along x, its middle at the origin): two round lobes at each end, the bar
+## between them, and out of the middle of one long edge (z < 0) a V cast with it, its point no further out than the knobs.
+## The V is open, not a hole: two straight struts, the triangle between them and the bar open through the plate, its foot
+## on the bar's edge, and the chain through it. `outline` [[x, z], ...] round it all; `right` and `left` the plate cut in
+## two along its axis, each half of the opening a notch in it (an extrude has no holes, [method Props._extrude_face]);
 ## `hole` where the chain goes through, in the opening by its point; `bar` half the bar's width, `length`.
 static func _bone(r: RandomNumberGenerator) -> Dictionary:
 	var length := r.randf_range(3.6, 4.4)
@@ -960,7 +914,6 @@ static func _bone(r: RandomNumberGenerator) -> Dictionary:
 	for i in TAG_ARC + 1:
 		var a := lerpf(a0, a1, float(i) / float(TAG_ARC))
 		arc.append(Vector2(cx, off) + Vector2(cos(a), sin(a)) * lobe)
-	# the other three by mirroring it, each the way round the outline goes
 	var ul: Array = []
 	var ll: Array = []
 	var lr: Array = []
@@ -968,7 +921,7 @@ static func _bone(r: RandomNumberGenerator) -> Dictionary:
 		ul.push_front(Vector2(-(q as Vector2).x, (q as Vector2).y))
 		ll.append(-(q as Vector2))
 		lr.push_front(Vector2((q as Vector2).x, -(q as Vector2).y))
-	# THE V: from the bar's edge out to the knobs' reach, its sides straight to its point, a little round
+	# The V: from the bar's edge out to the knobs' reach, its sides straight to its point, a little round
 	var reach := wide * 0.5
 	var mid := Vector2(0.0, -reach + TAG_TIP)
 	var foot := Vector2(maxf((reach - bar) * TAG_V, TAG_TIP * 1.6), -bar)
@@ -979,12 +932,12 @@ static func _bone(r: RandomNumberGenerator) -> Dictionary:
 	for k in steps + 1:
 		var a := lerpf(side, -PI * 0.5, float(k) / float(steps))
 		point.append(mid + Vector2(cos(a), sin(a)) * TAG_TIP)
-	# ITS OPENING: each strut's inner edge its outer one moved in a strut's width, down to the bar's edge
+	# Its opening: each strut's inner edge its outer one moved in a strut's width, down to the bar's edge
 	var out := Vector2(cos(side), sin(side))             # the way the right strut's outer edge faces
 	var inner := foot.dot(out) - TAG_STRUT
 	var apex := Vector2(0.0, inner / out.y)
 	var base := Vector2((inner + bar * out.y) / out.x, -bar)
-	# THE RIGHT HALF: down the axis from the bar's top edge... round the right lobes, along the bar's lower edge to the V,
+	# The right half: down the axis from the bar's top edge... round the right lobes, along the bar's lower edge to the V,
 	# out to its point, back along the axis to the opening's apex, down its right side to the bar and along it home
 	var right: Array = [Vector2(0.0, bar)]
 	for k in range(arc.size() - 1, -1, -1):
@@ -997,7 +950,6 @@ static func _bone(r: RandomNumberGenerator) -> Dictionary:
 	var left: Array = []
 	for q in right:
 		left.push_front(Vector2(-(q as Vector2).x, (q as Vector2).y))
-	# THE WHOLE OUTLINE, the opening left out: round the lobes and the V
 	var whole: Array = arc + ul + ll.slice(1) + [Vector2(-foot.x, foot.y)]
 	for k in point.size():
 		whole.append(Vector2(-(point[k] as Vector2).x, (point[k] as Vector2).y))
@@ -1038,17 +990,16 @@ static func _pencil(r: RandomNumberGenerator, mats: Dictionary, length: float, n
 	]
 
 
-## THE DESK, DRESSED: the top and what lies on it ([method Tables.build]) and every thing standing where
-## [method _placed] puts it, under one node, the top's face at [param face] (the pad's frame, the pad's
-## middle at x = z = 0). Built off the tree; the caller adds it. `{node, lit}`: `lit` the things that burn,
-## each `{node, wicks, glows, meshes}` as [method Props.build] gives them (`wicks` in the thing's own space).
+## The desk, dressed: the top and what lies on it ([method Tables.build]) and every thing standing where [method _placed]
+## puts it, under one node, the top's face at [param face] (the pad's frame, the pad's middle at x = z = 0). Built off the
+## tree; the caller adds it. `{node, lit}`: `lit` the things that burn, each `{node, wicks, glows, meshes}` as [method
+## Props.build] gives them (`wicks` in the thing's own space).
 static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "Desk"
 	var spec := Tables.sanitize(look["top"], look["layers"], look["materials"], [])
 	var built := Tables.build(spec, seed)
 	var furniture: Node3D = built["node"]
-	# the reading's middle ([constant Tables.ORIGIN]) under the pad's
 	furniture.position = Vector3(-Tables.ORIGIN.x, face, -Tables.ORIGIN.y)
 	root.add_child(furniture)
 	var taken := _pen_taken(look, face)
@@ -1065,7 +1016,6 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 		var tall := bool((THINGS[String(t["kind"])] as Dictionary)["tall"]) or size.size.y >= TALL_H
 		var near := bool((THINGS[String(t["kind"])] as Dictionary).get("lit", false))
 		var r := _rng(seed, "place %d" % i)
-		# a candle on the right keeps out of the pen's stretch as a tall thing does
 		var right := near and _candle_right(seed, lit.size())
 		var at := _placed(r, rad, (tall and not near) or right, taken, (CANDLE_RIGHT if right else CANDLE_BAND) if near else REACH)
 		if near and at.x == INF:
@@ -1083,7 +1033,6 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 		node.position = Vector3(at.x, face + (Tables.LAYER_FLOOR + 0.0001 if on_mat else 0.0), at.y)
 		node.rotation.y = _rng(seed, "turn %d" % i).randf_range(0.0, TAU)
 		if String(t["kind"]) in ["pencil", "ruler"] and absf(at.x) < 0.2:
-			# lying beside the pad, along it
 			node.rotation.y = PI * 0.5 + _rng(seed, "turn %d" % i).randf_range(-0.35, 0.35)
 		root.add_child(node)
 		if not (made["wicks"] as Array).is_empty():
@@ -1091,21 +1040,16 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 	return {"node": root, "lit": lit}
 
 
-## A CHOSEN DESK'S THINGS PACKED IN TO THE PAPER ([method _chosen]; 2026-10-29, the user: "almost all of the objects
-## placed on the table are outside of the camera's view. Could we add some pressure that would push items inward,
-## closer to the paper, in a more dense fashion? ... certain items are better candidates to push outside (like
-## candles, which cast light regardless of where they exist)"). The lens is narrow: the widest framing sees the stretch
-## [constant SEEN], and while the pen writes the camera sees about four centimeters past the pad's sides. So each thing
-## is tried at many places ([constant PACK_TRIES]), most snug against the pad, and set where it is CLOSEST TO THE PAPER
-## and most IN THE WIDE FRAME - its footprint its own turned rectangle, a long thing lying along the pad, never the
-## circle round it (a dog tag 5 by 8 cm had kept a disc 9.4 cm wide). Flat things first, smallest first: a small thing
-## is seen only in the frame, a big one half out of it; then what stands, kept back from the pad as always
-## ([constant TALL_LEFT], [constant TALL_RIGHT]); and the candles last, wherever is left nearest their bands - their light
-## falls on the page from anywhere. On either side of the pad, each thing leaning to one by the seed ([constant
-## PACK_RIGHT]); nothing lies on the pad or behind it, nor in the lane beside its right edge where the pen taps the desk
-## ([constant TAP_LANE]), nor on the pens ([method pen_rest]), and nothing tall where the pen leans out and waits
-## ([constant DeskMedium.PARK]). Each thing's tries are its own kind's ([method _rng]), so a seed moves them all. Each is added under [param root], what
-## burns to [param lit] as [method dress] gives it.
+## A chosen desk's things packed in to the paper ([method _chosen]). The widest framing sees the stretch [constant SEEN],
+## and while the pen writes the camera sees about four centimeters past the pad's sides. Each thing is tried at many places
+## ([constant PACK_TRIES]), most snug against the pad, and set where it is closest to the paper and most in the wide frame,
+## its footprint its own turned rectangle (a long thing lying along the pad), never the circle round it. Flat things first,
+## smallest first; then what stands, kept back from the pad ([constant TALL_LEFT], [constant TALL_RIGHT]); and the candles
+## last, wherever is left nearest their bands, since their light falls on the page from anywhere. Each thing leans to a side
+## of the pad by the seed ([constant PACK_RIGHT]); nothing lies on the pad or behind it, in the lane beside its right edge
+## where the pen taps the desk ([constant TAP_LANE]), or on the pens ([method pen_rest]), and nothing tall where the pen
+## leans out and waits ([constant DeskMedium.PARK]). Each thing's tries are its own kind's ([method _rng]). Each is added
+## under [param root], what burns to [param lit] as [method dress] gives it.
 static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken: Array, mat: Rect2, lit: Array) -> void:
 	var things: Array = look["things"]
 	var made_all: Array = []
@@ -1152,10 +1096,9 @@ static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken:
 		var half := Vector2(size.size.x, size.size.z) * 0.5
 		var mid := Vector2(size.position.x, size.position.z) + half
 		var long := maxf(half.x, half.y) > 1.6 * maxf(minf(half.x, half.y), 1e-4)
-		# ITS FACE, what must be seen of it ([constant THINGS] `face`; none: all of it): its rectangle in the thing's own space
+		# Its face, what must be seen of it ([constant THINGS] `face`; none: all of it): its rectangle in the thing's own space
 		var shown := _face(t, row)
 		var r := _rng(seed, "pack " + kind)
-		# A CANDLE'S SIDE, by turns: on the right it keeps out of the pen's stretch as a tall thing does
 		var right := burns and _candle_right(seed, candle_k)
 		candle_k += int(burns)
 		# the side this thing leans to: it lies on the other only when its own has no better place
@@ -1175,7 +1118,7 @@ static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken:
 			for c in [Vector2(half.x, half.y), Vector2(half.x, -half.y)]:
 				var w := _turned(c, th)
 				reach = reach.max(Vector2(absf(w.x), absf(w.y)))
-			# MOSTLY SNUG beside the pad, on the side it leans to more often than not (or, for what stands, as near as it may
+			# Mostly snug beside the pad, on the side it leans to more often than not (or, for what stands, as near as it may
 			# come; a candle, round its band), the rest anywhere it reaches
 			var at := Vector2(r.randf_range(REACH.position.x, REACH.end.x), r.randf_range(REACH.position.y, REACH.end.y))
 			var on_right := r.randf() < (0.7 if leans_right else 0.3)
@@ -1208,7 +1151,6 @@ static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken:
 				continue
 			var score := r.randf() * PACK_JITTER
 			if burns:
-				# a candle: as near its band as is left
 				score += at.distance_to(band.get_center())
 			else:
 				# out of the frame at all costs a step, and then by how much: wholly in it wherever there is room
@@ -1246,7 +1188,7 @@ static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken:
 			lit.append({"node": node, "wicks": made["wicks"], "glows": made["glows"], "meshes": made["meshes"]})
 
 
-## WHETHER CANDLE [param k] of the desk of [param seed] stands beside the pad's right ([constant CANDLE_RIGHT]) or its left
+## Whether candle [param k] of the desk of [param seed] stands beside the pad's right ([constant CANDLE_RIGHT]) or its left
 ## ([constant CANDLE_BAND]): the first's side drawn even, each after it on the other side from the last.
 static func _candle_right(seed: int, k: int) -> bool:
 	return (_rng(seed, "candle side").randf() < 0.5) != (k % 2 == 1)
@@ -1263,7 +1205,7 @@ static func _box(lo: Vector2, hi: Vector2) -> PackedVector2Array:
 	return PackedVector2Array([lo, Vector2(hi.x, lo.y), hi, Vector2(lo.x, hi.y)])
 
 
-## WHAT MUST BE SEEN OF [param t] (a [constant THINGS] row [param row] with a `face`: the material of its parts that must be
+## What must be seen of [param t] (a [constant THINGS] row [param row] with a `face`: the material of its parts that must be
 ## in the frame): their rectangle in the thing's own space (meters, x z) - or an empty one, all of it.
 static func _face(t: Dictionary, row: Dictionary) -> Rect2:
 	var material := String(row.get("face", ""))
@@ -1327,12 +1269,10 @@ static func _area(polys: Array) -> float:
 	return out
 
 
-## WHERE THE PEN LIES when nobody holds it (a letter's, before its writer picks it up - [LetterMedium]; 2026-10-28,
-## the user: "it would be better if the pen started from a resting place upon the table, to the right of the
-## paper"): beside the pad's right edge, its top toward the writer and turned a little out from the pad - as a right
-## hand set it down, and as it picks it up again ([constant LetterMedium.LEAN]) - on the desk or on the mat there -
-## `{nib, top}`, the ends of its axis on the surface under it (meters, the pad's frame, [param face] the desk's face;
-## the pen's own radius is the medium's).
+## Where the pen lies when nobody holds it (a letter's, before its writer picks it up, [LetterMedium]): beside the pad's
+## right edge, its top toward the writer and turned a little out from the pad - as a right hand sets it down and picks it
+## up again ([constant LetterMedium.LEAN]) - on the desk or on the mat there. `{nib, top}`, the ends of its axis on the
+## surface under it (meters, the pad's frame, [param face] the desk's face; the pen's own radius is the medium's).
 ##
 ## Pen [param k] of a letter's (`look["pens"]` of them, [constant PEN_APART]): beside the first, further out.
 static func pen_rest(look: Dictionary, face: float, k := 0) -> Dictionary:
@@ -1373,7 +1313,7 @@ static func _mat_rect(spec: Dictionary) -> Rect2:
 	return Rect2()
 
 
-## WHERE A THING STANDS (x, z meters from the pad's middle), [param rad] its reach, [param tall] whether it
+## Where a thing stands (x, z meters from the pad's middle), [param rad] its reach, [param tall] whether it
 ## stands up, clear of the things [param taken] ([x, z, reach]), somewhere in [param within] (its middle; the
 ## desk's whole [constant REACH] by default, a candle's [constant CANDLE_BAND]); (INF, INF) when no place is found.
 ## Never on the pad nor behind it (where turned pages lie), a tall one never close beside it nor in front.

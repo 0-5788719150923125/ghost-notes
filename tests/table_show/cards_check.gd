@@ -1,68 +1,52 @@
 extends SceneTree
 
-## The Cards mode's gate: everything that can be held to a rule without a writer, a painter or a
-## renderer.
+## The table show's gate: everything that can be held to a rule without a writer, a painter or a renderer.
 ##
 ##   godot --headless --path . --script res://tests/table_show/cards_check.gd
 ##
-## - THE DECK is the brief's: a Cards section of 78 (tests/fixture_deck.gd) reads back in order, with its
-##   numerals, groups and meanings; NO DECK IS BUILT IN - a brief that lists none leaves it to the
-##   producer, against a listed one, which does not.
-## - THE SHUFFLE is a pure function of the seed; HOW MANY CARDS come up is the producer's - its spread's
-##   positions, cut to [constant TableProducer.SPREAD_MOST] and to a listed deck (the control: no spread lands none).
-## - ONE WALK, TWO READERS: the voice's text and the table's actions come from the same parse, and
-##   the rest the voice takes for each action is the one the table performs it in.
-## - THE SCHEDULE puts every action in the rest the voice left for it.
-## - NO CHEATING: the reader's prompt for card K names cards 1..K and NO card after it, on an
-##   episode written to disk the way the producer writes one. Two-sided: the same check run on a
-##   prompt handed every card fails.
-## - A REDO deletes the step and exactly what was made from it.
+## - The deck is the brief's: a Cards section of 78 (tests/fixture_deck.gd) reads back in order, with numerals, groups and
+##   meanings; none is built in (a brief that lists none leaves it to the producer).
+## - The shuffle is a pure function of the seed; how many cards come up is the producer's - its spread's positions, cut to
+##   [constant TableProducer.SPREAD_MOST] and to a listed deck (the control: no spread lands none).
+## - One walk, two readers: the voice's text and the table's actions come from the same parse, and the rest the voice takes for each
+##   action is the one the table performs it in. The schedule puts every action in the rest the voice left for it.
+## - No cheating: the reader's prompt for card K names cards 1..K and no card after it, on an episode written to disk the way the
+##   producer writes one. Two-sided: the same check run on a prompt handed every card fails.
+## - A redo deletes the step and exactly what was made from it; a part asked for is the part made, never the whole episode.
 ## - The helpers agents' replies go through: lenient JSON, spoken-text cleanup, look sanitizing.
-## - THE QUEUE'S LANES run one job at a time, in order, and a rerun starts from a cleared folder.
-## - THE ART DIRECTOR looks at every painting before it is read: kept, or sent back and painted again
-##   with its faults told to the painter, up to TableProducer.REPAINTS times - then the reader is told
-##   what the painting gets wrong. A card read before checks were made needs none. And each designer is
-##   shown the cards designed before it in the draw.
-## - REPLIES OF THE WRONG SHAPE are reshaped as they land; a step that writes nothing fails.
-## - A SCRUB into a reading that repeats itself finds the repeat nearest where it was asked for.
-## - THE SPREAD lies clear of the deck.
-## - DELETING AN EPISODE takes its whole folder and nothing else.
-## - A PART ASKED FOR IS THE PART MADE: a redo makes that step (and the free steps that follow it),
-##   never the whole episode - that is Generate's.
-## - THE READER SEES THE PAINTING: a card's passage waits for its picture and is sent it (upside
-##   down when reversed) when it is one of the few the reader may stop on, the close is sent them all,
-##   and nothing is sent a picture not yet drawn. No passage is asked to announce a move.
-## - THE TABLE is its own step, set from the plan while looking at the cloth: a new cloth keeps it,
-##   a new plan takes it, no card reaches the set dresser, and its prompt names every shape,
-##   material, ornament and zone the builder knows, with the headroom of each zone.
-## - WHAT IS BUILT is safe whatever was written: junk is dropped or clamped, flames are capped, a
-##   thing stands on y = 0 with a foot to go round (every shape, lofts, coils and warps among them),
-##   and a candle's flame is lit at its wax's top.
-## - CANDLES of every form: wicks set round a top or placed by hand, a candelabra written once as a
-##   GROUP copied round, groups nested only so deep, extruded outlines standing sound - and a table
-##   lights no more things, and no thing more flames, than it may.
-## - STONES: scattered copies never touch, heaped ones pile up without passing through each other
-##   or the floor, and stay in the dish they lie in - a smooth lathe's sloped one too (the control: heaped
-##   blind, some coals lie in its iron), a list of materials goes to the copies in turn, a geode keeps its crystals
-##   inside it, and a play of light is kept only when the shader knows it.
-## - THE CARD STOCK is the producer's choice, shown earlier decks' stocks; the card's name reads on
-##   any stock, and the booklet is printed in the card's colors.
-## - WHAT THE SHOW HAS ALREADY MADE reaches each agent in the part it decides (the producer names the
-##   show's habits), never the episode being made, and never a card name through a reader's record.
-## - THE CARD'S FRAME keeps a border in every bordered style: an old look naming `bleed` drawn as `line`,
-##   and every card's name fits the stock below its picture, in every face. A picture still to come is
-##   drawn in every window shape with nothing the renderer cannot triangulate - against the sliver an
-##   oval window once left, which is refused.
-## - A BORDERLESS CARD is its painting, its type fit to its bands and set on a veil that reads over any
-##   painting, every deck's planned to the least, no heavier than allowed, light ink kept light; the foil
-##   keys none of its type. Controls: the stock and ink as they were need a veil all but opaque.
-## - THE EPISODE'S TITLE is written for the line it goes up in: the producer is shown that line with
-##   its own part marked, asked for title case, and its reply is no longer called the video's whole; one written in capitals
-##   alone lands in sentence case (the control: one with small letters of its own lands as written)
-##   title. Two-sided: with no line, none is spoken of. A title lands as it was written.
-## - THE TITLE SCREEN: the name as large as the frame's width allows (two lines for a long one), in
-##   proportion at any frame size; the set dresser's color kept and junk dropped for the default; a
-##   shade round the name that its color always reads against.
+## - The queue's lanes run one job at a time, in order, and a rerun starts from a cleared folder.
+## - The art director looks at every painting before it is read: kept, or sent back and painted again with its faults told to the
+##   painter, up to TableProducer.REPAINTS times - then the reader is told what the painting gets wrong. A card read before checks
+##   were made needs none. Each designer is shown the cards designed before it in the draw.
+## - Replies of the wrong shape are reshaped as they land; a step that writes nothing fails.
+## - A scrub into a reading that repeats itself finds the repeat nearest where it was asked for.
+## - The spread lies clear of the deck. Deleting an episode takes its whole folder and nothing else.
+## - The reader sees the painting: a card's passage waits for its picture and is sent it (upside down when reversed) when it is one
+##   of the few the reader may stop on, the close is sent them all, and nothing is sent a picture not yet drawn. No passage is asked
+##   to announce a move.
+## - The table is its own step, set from the plan while looking at the cloth: a new cloth keeps it, a new plan takes it, no card
+##   reaches the set dresser, and its prompt names every shape, material, ornament and zone the builder knows, with the headroom of
+##   each zone.
+## - What is built is safe whatever was written: junk is dropped or clamped, flames are capped, a thing stands on y = 0 with a foot
+##   to go round (every shape, lofts, coils and warps among them), and a candle's flame is lit at its wax's top.
+## - Candles of every form: wicks set round a top or placed by hand, a candelabra written once as a group copied round, groups
+##   nested only so deep, extruded outlines standing sound - and a table lights no more things, and no thing more flames, than it may.
+## - Stones: scattered copies never touch, heaped ones pile up without passing through each other or the floor, and stay in the dish
+##   they lie in - a smooth lathe's sloped one too (the control: heaped blind, some coals lie in its iron), a list of materials goes
+##   to the copies in turn, a geode keeps its crystals inside it, and a play of light is kept only when the shader knows it.
+## - The card stock is the producer's choice, shown earlier decks' stocks; the card's name reads on any stock, and the booklet is
+##   printed in the card's colors.
+## - What the show has already made reaches each agent in the part it decides (the producer names the show's habits), never the
+##   episode being made, and never a card name through a reader's record.
+## - The card's frame keeps a border in every bordered style, and every card's name fits the stock below its picture, in every face.
+##   A picture still to come is drawn in every window shape with nothing the renderer cannot triangulate.
+## - A borderless card is its painting, its type fit to its bands and set on a veil that reads over any painting, every deck's
+##   planned to the least, no heavier than allowed, light ink kept light; the foil keys none of its type.
+## - The episode's title is written for the line it goes up in: the producer is shown that line with its own part marked and asked
+##   for title case; one written in capitals alone lands in sentence case (the control: one with small letters of its own lands as
+##   written). With no line, none is spoken of.
+## - The title screen: the name as large as the frame's width allows (two lines for a long one), in proportion at any frame size; the
+##   set dresser's color kept and junk dropped for the default; a shade round the name that its color always reads against.
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
 
@@ -70,8 +54,7 @@ var _fails := 0
 
 
 func _init() -> void:
-	# EVERY CHECK MUST REACH ITS END: a script error inside one stops it part way and returns
-	# nothing, and it used to leave a gate that had checked half of something reading ALL OK
+		# every check must reach its end: a script error inside one stops it part way and returns nothing, so the gate would read all OK
 	for check in [_deck, _shuffle, _script, _schedule, _no_cheating, _redo, _helpers, _landing, _printing_inventory,
 			_lanes, _rerun_clears, _scrub_near, _clear_of_deck, _trash_episode, _pictures, _only_what_was_asked, _no_objects, _moves_after_words,
 			_few_remarks, _cards_meet, _art_director, _designed_in_order, _burst_moments, _ways_up,
@@ -112,11 +95,11 @@ func _deck() -> bool:
 		if String((c as Dictionary)["meaning"]).strip_edges().is_empty():
 			missing += 1
 	_ok(missing == 0, "%d listed cards lost their meaning" % missing)
-	# NO DECK IS BUILT IN: a brief that lists none leaves the deck to the producer
+	# No deck is built in: a brief that lists none leaves the deck to the producer
 	_ok(CardDeck.of("No cards here.").is_empty() and CardDeck.chooses("No cards here."),
 		"a brief that lists no card was given a deck the app keeps")
 	_ok(not CardDeck.chooses(FixtureDeck.section()), "control: a listed deck was left to the producer")
-	# AN ALTERNATIVE DECK, defined in a show's brief
+	# An alternative deck, defined in a show's brief
 	var body := "# A show\n\nSome brief.\n\n## The Cards\n\nRead these upside down too.\n\n### The Feed\n" \
 		+ "- 1. The Algorithm: what you were shown, and why it was you\n" \
 		+ "- **The Ex** - still there, still not texting\n" \
@@ -136,14 +119,14 @@ func _deck() -> bool:
 		_ok(own[3]["numeral"] == "12" and own[3]["group"] == "The Bed", "a `12)` numeral or a second group was lost")
 		_ok(own[4]["key"] != own[1]["key"], "two cards with one name share a key")
 		_ok(own[5]["name"] == "Untitled" and String(own[5]["meaning"]).is_empty(), "a card with no meaning was lost")
-	# A NESTED BULLET SAYS MORE ABOUT ITS CARD; it is not a card
+	# A nested bullet says more about its card; it is not a card
 	var nested := "## Cards\n\n- The Moon: dreams\n  - Reversed: clarity at last\n- The Sun: plain day\n"
 	var nd := CardDeck.parse(nested)
 	_ok(nd.size() == 2 and String(nd[0]["meaning"]).contains("Reversed: clarity at last"),
 		"a nested bullet became a card: %s" % str(nd))
 	_ok(CardDeck.strip(nested).contains("This deck has 2 cards") and not CardDeck.strip(nested).contains("clarity"),
 		"stripping a deck with nested bullets miscounted it or left them in")
-	# A SECTION ABOUT THE DECK'S LOOK is not a deck
+	# A section about the deck's look is not a deck
 	var looks := "## The Deck\n\n- Style: woodcut\n- Colors: ink and rust\n"
 	_ok(CardDeck.parse(looks).is_empty() and CardDeck.strip(looks) == looks,
 		"a '## The Deck' section of bullets was read as a deck of its bullets")
@@ -190,8 +173,7 @@ func _shuffle() -> bool:
 		_ok(t >= 1 and t <= 999999, "a true seed out of range: %d" % t)
 		seeds[t] = true
 	_ok(seeds.size() >= 18, "twenty true seeds were %d distinct" % seeds.size())
-	# HOW MANY CARDS IS THE PRODUCER'S (the user, 2026-10-26: no Draw knob): as many as its spread has
-	# positions, cut to the most an episode draws and to what the show's own deck holds
+		# how many cards is the producer's: as many as its spread has positions, cut to the most an episode draws and to what the show's own deck holds
 	TableEpisode.root = "user://cards_check"
 	var counted := TableEpisode.open("check-count", 31)
 	var spread_of := func(prod: TableProducer, n: int) -> int:
@@ -231,7 +213,7 @@ func _script() -> bool:
 	for a in actions:
 		kinds.append(String((a as Dictionary)["kind"]))
 	_ok(kinds == ["shuffle", "jumper", "draw", "spread"], "actions out of order: %s" % str(kinds))
-	# THE RESTS AGREE: what the voice is told to wait, and what the table performs in
+	# The rests agree: what the voice is told to wait, and what the table performs in
 	var speak := String(p["speakable"])
 	var holds := []
 	for m in Manuscript._rx(TabletScript.HOLD).search_all(speak):
@@ -242,7 +224,7 @@ func _script() -> bool:
 		CardReading.LAY + CardReading.SETTLE]
 	for i in mini(holds.size(), want.size()):
 		_ok(absf(float(holds[i]) - float(want[i])) < 0.011, "rest %d is %.2fs, the table takes %.2fs" % [i, holds[i], want[i]])
-	# EVERY WORD SPOKEN IS A WORD THE TABLE FOLLOWS, in order
+	# Every word spoken is a word the table follows, in order
 	var words := PackedStringArray()
 	for q in passages:
 		for w in String((q as Dictionary)["text"]).split(" ", false):
@@ -254,7 +236,7 @@ func _script() -> bool:
 	# seven words of intro, five of the jumper's passage
 	_ok(int((actions[2] as Dictionary)["after"]) == 12, "the draw is anchored after word %d, not 12" % int((actions[2] as Dictionary)["after"]))
 	_ok(not speak.contains("table:"), "a table mark survives into what the voice reads")
-	# THE READER'S DELIVERY MARKS reach the voice, and no comment is ever a word the table follows
+	# The reader's delivery marks reach the voice, and no comment is ever a word the table follows
 	var marked := CardReading.parse(CardReading.compose([{"kind": "shuffle",
 		"text": "Hello.\n\n<!-- delivery: excited -->\nOh wow. <!-- hesitation: 1.5 --> Look. <!-- a note --> Done."}]))
 	var said := String(marked["speakable"])
@@ -262,7 +244,7 @@ func _script() -> bool:
 		"the voice is not handed the reader's delivery and hesitation, or is handed a note: %s" % said)
 	_ok(not (marked["spoken"] as PackedStringArray).has("delivery") and not (marked["spoken"] as PackedStringArray).has("excited")
 		and not (marked["spoken"] as PackedStringArray).has("hesitation"), "a mark is counted as a word the table follows")
-	# THE FIRST CARD WAITS FOR THE DECK: shuffled in the middle, it is pushed to its side first
+	# The first card waits for the deck: shuffled in the middle, it is pushed to its side first
 	var plain := CardReading.parse(CardReading.compose([{"kind": "shuffle", "text": "one two"},
 		{"kind": "draw", "card": 1, "text": "three four"}, {"kind": "draw", "card": 2, "text": "five six"}]))
 	var dur: Array = []
@@ -305,7 +287,7 @@ func _schedule() -> bool:
 			_ok(end <= float((words[n] as Dictionary)["t0"]) - 0.19, "%s ends %.2fs, after its next word at %.2fs" % [a["kind"], end, (words[n] as Dictionary)["t0"]])
 		if n > 0:
 			_ok(float(e["t0"]) >= float((words[n - 1] as Dictionary)["t1"]), "%s starts before the word ahead of it ends" % a["kind"])
-	# A VOICE THAT SPELLS A WORD ITS OWN WAY costs that word, never the pointer
+	# A voice that spells a word its own way costs that word, never the pointer
 	var g := ReadingFollower.new()
 	g.reset(PackedStringArray(["the", "7", "cards", "fell"]))
 	g.extend([{"text": "the", "t0": 0.0, "t1": 0.2}, {"text": "seven", "t0": 0.3, "t1": 0.5},
@@ -375,13 +357,13 @@ func _no_cheating() -> bool:
 			for j in range(1, n + 1):
 				_ok(text.contains(String(names[j - 1])), "the close does not know card %d" % j)
 	_ok(leaks == 0, "%d later card(s) reached a reader prompt" % leaks)
-	# TWO-SIDED: the same check, run on a prompt handed every card, must see them
+	# Two-sided: the same check, run on a prompt handed every card, must see them
 	var cheat := TablePrompts.reader("Test Tarot", "A brief.", plan, "1", prod._said(0), prod._drawn(n), n)
 	var seen := 0
 	for j in range(2, n + 1):
 		seen += 1 if String(cheat["prompt"]).contains(String(names[j - 1])) else 0
 	_ok(seen == n - 1, "the leak check is blind: a prompt given every card shows only %d of %d later ones" % [seen, n - 1])
-	# AND THROUGH THE PRODUCER ITSELF: the prompt it would actually send, for every passage
+	# And through the producer itself: the prompt it would actually send, for every passage
 	var prod_leaks := 0
 	for k in range(0, n + 2):
 		var step := "intro" if k == 0 else ("close" if k == n + 1 else str(k))
@@ -396,7 +378,7 @@ func _no_cheating() -> bool:
 				print("  card %d (%s) is in the producer's prompt for %s" % [j, names[j - 1], step])
 		if step.is_valid_int():
 			_ok(text.contains(String(names[upto - 1])), "the producer's prompt for card %d does not name it" % upto)
-		# THE PAINTINGS SENT: card K's own for card K when it is one the reader may stop on, all of them for
+		# The paintings sent: card K's own for card K when it is one the reader may stop on, all of them for
 		# the close, none before
 		var sent: Array = []
 		for im in p.get("images", []):
@@ -410,7 +392,7 @@ func _no_cheating() -> bool:
 		_ok(sent == want, "the reader's prompt for %s is sent the paintings %s, not %s" % [step, str(sent), str(want)])
 		_ok(want.is_empty() == not (text.contains("painting above") or text.contains("paintings above")),
 			"the reader's prompt for %s %s the paintings it is sent" % [step, "is not told about" if not want.is_empty() else "speaks of"])
-		# A CARD READ WITH THE CARDS ALREADY DOWN: exactly the ones the seed picks ([method TablePrompts.links])
+		# A card read with the cards already down: exactly the ones the seed picks ([method TablePrompts.links])
 		var linked := step.is_valid_int() and bool(TablePrompts.links(ep.seed, n)[upto - 1])
 		_ok(linked == text.contains("READ WITH THE CARDS ALREADY ON THE TABLE"),
 			"the reader's prompt for %s is%s told to read it with the cards already down" % [step, " not" if linked else ""])
@@ -437,7 +419,7 @@ func _redo() -> bool:
 		_ok(ep.has(s), "redoing design 2 took %s with it" % s)
 	ep.invalidate("image:back")
 	_ok(not ep.has("image:back") and ep.has("image:card:3"), "redoing the back took a card's picture with it")
-	# A STEP IS KEPT, NEVER DELETED (next/editing.md step 1): made, it is recorded from what it was made from; that changed, it is STALE
+	# A step is kept, never deleted (next/editing.md step 1): made, it is recorded from what it was made from; that changed, it is stale
 	# and still there; kept, Generate passes it by; what is written over or thrown away is a version back, and comes back, kept
 	ep.write_text("say:2", "Two.")
 	ep.write_text("say:intro", "Hello.")
@@ -518,7 +500,7 @@ func _lanes() -> bool:
 	return true
 
 
-## REPLIES OF THE WRONG SHAPE are reshaped as they land, and still build a reader's prompt; a
+## Replies of the wrong shape are reshaped as they land, and still build a reader's prompt; a
 ## local step that writes nothing is a failure on screen.
 func _landing() -> bool:
 	TableEpisode.root = "user://cards_check"
@@ -540,19 +522,19 @@ func _landing() -> bool:
 	_ok(d_err.is_empty() and design is Dictionary
 		and ((design as Dictionary)["booklet"] as Dictionary)["keywords"] == ["love", "union"],
 		"keywords as one string were not split: %s" % str(design))
-	# the draw, then a reader's prompt from what landed - it used to fail inside the builder
+	# the draw, then a reader's prompt from what landed
 	prod.spec["deck"] = FixtureDeck.cards()
 	prod._finish("draw", prod._make_draw())
 	var p := prod.say_prompt("1")
 	_ok(String(p.get("prompt", "")).contains("Past") and String(p.get("prompt", "")).contains("love, union"),
 		"a reader's prompt could not be built from reshaped replies")
-	# A STEP THAT WRITES NOTHING says so - two-sided: one that wrote its file does not
+	# A step that writes nothing says so - two-sided: one that wrote its file does not
 	var quiet := TableProducer.new(ep, {})
 	quiet._finish("script", "")
 	_ok(not quiet.error_of("script").is_empty(), "a local step that wrote nothing was taken as done")
 	quiet._finish("draw", "")
 	_ok(quiet.error_of("draw").is_empty(), "a local step that wrote its file was taken as failed")
-	# A DECK CUT BELOW THE SPREAD the plan was made for is an error, not an index past the end
+	# A deck cut below the spread the plan was made for is an error, not an index past the end
 	ep.invalidate("draw")
 	var short := TableProducer.new(ep, {"deck": [{"key": "a", "name": "A"}]})
 	_ok(not short._make_draw().is_empty() and not ep.has("draw"), "a draw ran past the end of a small deck")
@@ -586,7 +568,7 @@ func _printing_inventory() -> bool:
 	return true
 
 
-## A RERUN STARTS FROM A CLEARED FOLDER: the last run's picture or reply would otherwise be taken
+## A rerun starts from a cleared folder: the last run's picture or reply would otherwise be taken
 ## for this run's when it ends without writing one.
 func _rerun_clears() -> bool:
 	var dir := ProjectSettings.globalize_path("user://cards_check/jobs_rerun")
@@ -603,7 +585,7 @@ func _rerun_clears() -> bool:
 	return true
 
 
-## A SCRUB INTO A READING THAT REPEATS ITSELF: the same start words at two places, and the one
+## A scrub into a reading that repeats itself: the same start words at two places, and the one
 ## nearest where the scrub landed wins - two-sided: with no hint, the first.
 func _scrub_near() -> bool:
 	var norms := PackedStringArray(["oh", "wow", "okay", "so", "the", "tower", "oh", "wow", "okay", "so", "the", "star"])
@@ -617,7 +599,7 @@ func _scrub_near() -> bool:
 	return true
 
 
-## THE SPREAD LIES CLEAR OF THE DECK: two rows reaching into its corner step back, or aside, by
+## The spread lies clear of the deck: two rows reaching into its corner step back, or aside, by
 ## the least that clears it; a spread nowhere near it is not moved.
 func _clear_of_deck() -> bool:
 	var card := Vector2(0.07, 0.12)
@@ -647,7 +629,7 @@ func _clear_of_deck() -> bool:
 	return true
 
 
-## DELETING AN EPISODE takes its whole folder - jobs and all - out of the show's history, and
+## Deleting an episode takes its whole folder - jobs and all - out of the show's history, and
 ## leaves the show's other episodes as they were. The trash is swapped for a plain delete here,
 ## so the check never fills the author's trash.
 func _trash_episode() -> bool:
@@ -685,7 +667,7 @@ func _remove_tree(path: String) -> int:
 	return DirAccess.remove_absolute(path)
 
 
-## THE READER SEES THE PAINTING. The order: a card's passage waits for its picture, and painting a
+## The reader sees the painting. The order: a card's passage waits for its picture, and painting a
 ## card again rewrites its passage and every one after it (they were written looking at it), but
 ## not the next card's picture. The prompt: told to talk about the painting, and given no
 ## designer's plan for it. The picture: no larger than the edge it is sent at, upside down for a
@@ -735,7 +717,7 @@ func _pictures() -> bool:
 		"the prompt record does not list the picture sent: %s" % String(m["shown"]).substr(0, 80))
 	var gone := TextGen.Claude.compose({"prompt": "x", "images": [{"path": path + ".missing"}]})
 	_ok(not String(gone["error"]).is_empty(), "a picture that cannot be read did not stop the run")
-	# CODEX, the other writer: told to work from the message alone, the pictures attached as files
+	# Codex, the other writer: told to work from the message alone, the pictures attached as files
 	# in order and named in the message, read-only
 	var job := {"dir": "/tmp/job", "system": "The system.", "prompt": "Read it.", "tier": "fast",
 		"images": [{"path": path, "label": "Card 1:", "flip": true}, {"path": path, "label": "Card 2:"}]}
@@ -751,7 +733,7 @@ func _pictures() -> bool:
 	_ok(bool((cm["pictures"][0] as Dictionary)["flip"]) and not bool((cm["pictures"][1] as Dictionary)["flip"]),
 		"a reversed card's picture is not turned over for Codex")
 	_ok(TextGen.has("codex") and TextGen.has("claude"), "the writers on offer are not Claude and Codex")
-	# THE MODEL: the one chosen for a job wins over its tier's; none chosen is the CLI's own
+	# The model: the one chosen for a job wins over its tier's; none chosen is the CLI's own
 	_ok(TextGen.Claude.model_of({"tier": "fast"}) == "sonnet" and TextGen.Claude.model_of({"tier": "best"}) == "opus"
 		and TextGen.Claude.model_of({"tier": "fast", "model": "fable"}) == "fable",
 		"a chosen model does not win over the tier's, or the tiers lost their defaults")
@@ -765,7 +747,7 @@ func _pictures() -> bool:
 	return true
 
 
-## NO PAINTED OBJECTS: an older plan that names some makes no step for them, and the planner is not
+## No painted objects: an older plan that names some makes no step for them, and the planner is not
 ## asked for any - the things on the table are the set dresser's, modeled (see _table_step).
 func _no_objects() -> bool:
 	var ep := _episode(3)
@@ -780,9 +762,7 @@ func _no_objects() -> bool:
 	return true
 
 
-## THE CARDS MOVE AFTER THE WORDS: every reader prompt says the table acts only between passages,
-## and none is told to end ON a move - "End on the moment you stop shuffling to pull the first
-## card" got "And there. That's the first one." spoken before the card was out (2026-10-05).
+## The cards move after the words: every reader prompt says the table acts only between passages, and none is told to end on a move.
 func _moves_after_words() -> bool:
 	var n := 3
 	var ep := _episode(n)
@@ -797,11 +777,9 @@ func _moves_after_words() -> bool:
 	return true
 
 
-## A READER STOPS ON A FEW PAINTINGS, AND ANNOUNCES NO MOVE: the share of cards whose painting may be
-## remarked on is seeded and never most of them; a card outside it is sent no painting and no
-## description of one, and is told not to describe it. No prompt asks the reader to lead into a move.
-## Two-sided: a card inside the share is sent its painting and told it may stop on it.
-## (2026-10-07: 834225 described four paintings of five and closed every card on "let me set this one down".)
+## A reader stops on a few paintings, and announces no move: the share of cards whose painting may be remarked on is seeded and
+## never most of them; a card outside it is sent no painting and no description of one, and is told not to describe it. No prompt
+## asks the reader to lead into a move. Two-sided: a card inside the share is sent its painting and told it may stop on it.
 func _few_remarks() -> bool:
 	var total := 0
 	var most := 0
@@ -832,11 +810,9 @@ func _few_remarks() -> bool:
 	return true
 
 
-## A READING BUILDS (the user, 2026-10-17: "the 2nd or 3rd or 4th draw often builds upon the earlier
-## draws"; no passage after the first of fourteen tarot episodes named an earlier card): a seeded share of
-## the cards after the first is told to read the card with the ones already down - at least one, never the
-## first, never every card of a long reading - and the cards down reach it with their keywords. Two-sided:
-## a card outside the share is not told to, and keywords are only ever of cards already drawn.
+## A reading builds: a seeded share of the cards after the first is told to read the card with the ones already down - at least
+## one, never the first, never every card of a long reading - and the cards down reach it with their keywords. Two-sided: a card
+## outside the share is not told to, and keywords are only ever of cards already drawn.
 func _cards_meet() -> bool:
 	var total := 0
 	var all := 0
@@ -875,15 +851,13 @@ func _cards_meet() -> bool:
 	return true
 
 
-## THE ART DIRECTOR (the user, 2026-10-17: a reading told a left-handed handshake while the painting showed
-## a right-handed one; rinks bent so a crowd would fit; a draw's cards near-copies of one another). On an
-## episode mid-way, driven through the producer's own landing with the verdicts an agent would give:
-## - a card not read yet waits for its check, and one already read (an episode made before checks) has
-##   none - the control: the same card unread asks for one again;
-## - "keep" writes the check and leaves the painting; "repaint" deletes the painting and what was made from
-##   it, keeps its faults, and the painter of the next is told them - and after REPAINTS sends back, the
-##   last painting stands and the reader is told what it gets wrong (the control: a kept card's reader is
-##   told nothing of the kind); a reply that is no verdict is a failure, not a pass;
+## The art director. On an episode mid-way, driven through the producer's own landing with the verdicts an agent would give:
+## - a card not read yet waits for its check, and one already read (an episode made before checks) has none - the control: the
+##   same card unread asks for one again;
+## - "keep" writes the check and leaves the painting; "repaint" deletes the painting and what was made from it, keeps its faults,
+##   and the painter of the next is told them - and after repaints sends back, the last painting stands and the reader is told
+##   what it gets wrong (the control: a kept card's reader is told nothing of the kind); a reply that is no verdict is a failure,
+##   not a pass;
 ## - a person painting a card again by hand starts it with nothing sent back.
 func _art_director() -> bool:
 	var n := 3
@@ -907,7 +881,7 @@ func _art_director() -> bool:
 	_ok(prod._land_check("check:2", '{"verdict": "keep", "faults": []}').is_empty() and ep.has("check:2")
 		and bool((ep.read_json("check:2") as Dictionary).get("kept", false)) and ep.has("image:card:2"),
 		"a kept painting was not kept")
-	# SENT BACK, and painted again with its faults told
+	# Sent back, and painted again with its faults told
 	var fault := "the clasp reads as two right hands; he offers his LEFT hand, his right hangs taped"
 	_ok(prod._land_check("check:3", '{"verdict": "repaint", "faults": ["%s"]}' % fault).is_empty(), "a send-back failed")
 	_ok(not ep.has("check:3") and not ep.has("image:card:3") and ep.has("design:3") and ep.has("image:card:2"),
@@ -918,7 +892,7 @@ func _art_director() -> bool:
 	_ok(told.contains("sent it back for") and told.contains(fault), "the painter of the next painting is not told its faults")
 	_ok(not TablePrompts.card_image(look, prod._card(3), "art", "/x.png", true, 1).contains("sent it back"),
 		"control: a first painting is told of faults")
-	# ...up to REPAINTS times: then the painting stands, and the reader is told what it gets wrong
+	# ...up to repaints times: then the painting stands, and the reader is told what it gets wrong
 	for r in range(1, TableProducer.REPAINTS):
 		ep.write_text("image:card:3", "png")
 		prod._land_check("check:3", '{"verdict": "repaint", "faults": ["round %d"]}' % r)
@@ -935,10 +909,10 @@ func _art_director() -> bool:
 		"the reader of a painting that stands with faults is not told them")
 	_ok(not String(prod.say_prompt("2").get("prompt", "")).contains("DOES NOT QUITE SHOW"),
 		"control: the reader of a kept painting is told it falls short")
-	# A PERSON PAINTING IT AGAIN starts it afresh
+	# A person painting it again starts it afresh
 	ep.invalidate("image:card:3")
 	_ok(ep.sent_back(3).is_empty(), "a card painted again by hand starts with what was sent back of the last one")
-	# THE PROMPT: the painting, what it was painted from, what is printed with it, and the cards before it
+	# The prompt: the painting, what it was painted from, what is printed with it, and the cards before it
 	var card := prod._card(3)
 	var p := TablePrompts.art_director("Test Tarot", "A brief.", look, card, 2, "booklet")
 	var text := String(p["prompt"])
@@ -953,10 +927,8 @@ func _art_director() -> bool:
 	return true
 
 
-## EACH DESIGNER IS SHOWN THE CARDS DESIGNED BEFORE IT (the user, 2026-10-17: "players will be in very
-## similar poses/positions" - seven of ten designs of penalty-box 901482 alike, each designer blind to the
-## others): designs are made in drawing order, each shown the earlier ones' pictures - never their
-## entries - and a redesign keeps the cards after it. Two-sided: the first card's designer is shown none.
+## Each designer is shown the cards designed before it: designs are made in drawing order, each shown the earlier ones' pictures -
+## never their entries - and a redesign keeps the cards after it. Two-sided: the first card's designer is shown none.
 func _designed_in_order() -> bool:
 	var ep := _episode(3)
 	_ok(ep.needs("design:2").has("design:1") and not ep.needs("design:1").has("design:0"), "designs are not made in drawing order")
@@ -974,7 +946,7 @@ func _designed_in_order() -> bool:
 	return true
 
 
-## A BURST'S MOMENTS ARE ONES THAT HAPPEN: the set dresser of a reading with no jumper is not offered the
+## A burst's moments are ones that happen: the set dresser of a reading with no jumper is not offered the
 ## jumper's moment, and is told so; one with a jumper is (the control). Whether a card jumps comes from the
 ## seed alone, as the draw has it.
 func _burst_moments() -> bool:
@@ -987,7 +959,7 @@ func _burst_moments() -> bool:
 		"a reading with no jumper is offered a burst on one")
 	_ok(with.contains("- \"jumper\":") and with.contains("the first card leaps out"), "control: a reading with a jumper is not offered its moment")
 	_ok(with.contains("\"which\""), "the set dresser is not told a burst can pick which time it marks")
-	# A CARD JUMPS ONLY WHERE THE PLAN LETS ONE (`staging.jumpers`, the producer's), and out of no box
+	# A card jumps only where the plan lets one (`staging.jumpers`, the producer's), and out of no box
 	var lets := plan.duplicate(true)
 	lets["staging"] = {"source": "deck", "jumpers": true}
 	var boxed := plan.duplicate(true)
@@ -1002,13 +974,10 @@ func _burst_moments() -> bool:
 	return true
 
 
-## WHICH WAY UP A CARD COMES, AND WHETHER ONE JUMPS, ARE THE PLAN'S (the user, 2026-10-25: reversals and
-## jumpers "should be set by the agents during preparation for an episode"): the staging keeps the
-## producer's choice - by default no reversals and no jumper, and never a jumper out of a box - and the
-## draw turns the seed's cards upside down only when the plan lets them come so: read reversed, or
-## righted (`righted`, read the right way up). The same seed turns the same cards either way, and a plan
-## of none turns none. The producer is told every choice; a reader is told its card was righted, and
-## only that reader.
+## Which way up a card comes, and whether one jumps, are the plan's: the staging keeps the producer's choice - by default no
+## reversals and no jumper, and never a jumper out of a box - and the draw turns the seed's cards upside down only when the plan
+## lets them come so: read reversed, or righted (`righted`, read the right way up). The same seed turns the same cards either way,
+## and a plan of none turns none. The producer is told every choice; a reader is told its card was righted, and only that reader.
 func _ways_up() -> bool:
 	var bare := CardTable.staging_of({})
 	_ok(String(bare["reversals"]) == "none" and not bool(bare["jumpers"]), "a plan that says nothing reads reversals or lets a card jump")
@@ -1065,8 +1034,8 @@ func _ways_up() -> bool:
 	return true
 
 
-## A PART ASKED FOR IS THE PART MADE. Run against a queue that refuses every job (no Settings
-## here), so what the producer TRIED is the record: one step asked for is one step tried - with
+## A part asked for is the part made. Run against a queue that refuses every job (no Settings
+## here), so what the producer tried is the record: one step asked for is one step tried - with
 ## the shuffle, which costs nothing, made on the way - where Generate tries everything ready.
 func _only_what_was_asked() -> bool:
 	var ep := _episode(3)
@@ -1095,7 +1064,7 @@ func dict_with(d: Dictionary, k: String, v: Variant) -> Dictionary:
 	return o
 
 
-## THE TABLE STEP: where it sits in the episode, what it is made from and what it takes with it,
+## The table step: where it sits in the episode, what it is made from and what it takes with it,
 ## what the set dresser is told - and that it is told no card, two-sided like the reader's.
 func _table_step() -> bool:
 	var n := 3
@@ -1118,7 +1087,7 @@ func _table_step() -> bool:
 	ep.write_json("table", {"things": []})
 	ep.invalidate("plan")
 	_ok(not ep.has("table"), "a new plan kept the old plan's table")
-	# NO CARD REACHES THE SET DRESSER, through the producer itself
+	# No card reaches the set dresser, through the producer itself
 	ep = _episode(n)
 	ep.write_text("image:surface", "png")
 	var prod := TableProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
@@ -1137,7 +1106,7 @@ func _table_step() -> bool:
 	for nm in names:
 		seen += 1 if (String(cheat["system"]) + String(cheat["prompt"])).contains(String(nm)) else 0
 	_ok(seen == names.size(), "the set dresser's leak check is blind (%d of %d seen in a prompt that holds them)" % [seen, names.size()])
-	# ...and what it IS told: every word the builder knows, the zones with their headroom, the
+	# ...and what it is told: every word the builder knows, the zones with their headroom, the
 	# candles, what earlier tables held
 	for k in Props.SHAPES:
 		_ok(text.contains("- %s:" % k), "the set dresser is not told the shape %s" % k)
@@ -1152,15 +1121,15 @@ func _table_step() -> bool:
 			"the set dresser is not told the zone %s and its headroom" % z)
 	_ok(text.contains("Exactly 1 lit thing -"), "the set dresser is not told how many lit things the look has")
 	_ok(text.contains("a brass bell"), "the set dresser is not told what earlier tables held")
-	# NO BODIES: balls and rods made a squid on ice a bug in a box (feedback 0006)
+		# no bodies: balls and rods may not be written as a creature's body
 	_ok(text.contains("cannot make a BODY") and text.contains("it has no body"),
 		"the set dresser is not told that the parts cannot make a body")
 	_ok(int(head["back"]) < int(head["left"]) and int(head["back"]) > 3, "the back holds less height than the sides: %s" % str(head))
-	# THE EXAMPLE IS BUILDABLE, and the format it shows is the format read
+	# The example is buildable, and the format it shows is the format read
 	var ex: Variant = TextGen.extract_json(TablePrompts.set_example())
 	_ok(ex is Dictionary and (CardTable.sanitize_table(ex as Dictionary, {})["things"] as Array).size() == 1,
 		"the format the set dresser is shown does not read back as one thing")
-	# LANDING: junk is refused; a buildable reply is kept as it was written
+	# Landing: junk is refused; a buildable reply is kept as it was written
 	_ok(prod._land_table("no table here") != "", "a reply with no JSON landed as a table")
 	_ok(prod._land_table("{\"things\": [{\"name\": \"a hat\", \"parts\": [{\"shape\": \"hat\"}]}]}") != "",
 		"a table with nothing buildable on it landed")
@@ -1170,7 +1139,7 @@ func _table_step() -> bool:
 	return true
 
 
-## WHAT IS BUILT IS SAFE, whatever was written: shapes the builder does not know and junk numbers
+## What is built is safe, whatever was written: shapes the builder does not know and junk numbers
 ## are dropped or clamped, no more flames than the table allows, every thing on y = 0 with a foot,
 ## a candle's flame at the top of its wax, an oversize thing scaled down whole. Built headless (no
 ## renderer: meshes and materials only).
@@ -1244,7 +1213,7 @@ func _things_built() -> bool:
 					bad += 1
 			_ok(bad == 0 and v.size() % 3 == 0, "%s has %d bad vertices or normals" % [(things[i] as Dictionary)["name"], bad])
 		(b["node"] as Node).free()
-	# A CANDLE'S FLAME at the top of its wax: a 9 cm candle on a 2 cm holder is lit at 11 cm, less its pool
+	# A candle's flame at the top of its wax: a 9 cm candle on a 2 cm holder is lit at 11 cm, less its pool
 	var cand := CardTable.sanitize_table({"things": [{"name": "a candle", "parts": [
 		{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 2], [0, 2]]},
 		{"shape": "lathe", "profile": [[0, 0], [1.2, 0], [1.2, 9], [0, 9]], "at": [0, 2, 0], "wick": true}]}]}, {})
@@ -1254,7 +1223,7 @@ func _things_built() -> bool:
 		and Vector2((w[0] as Vector3).x, (w[0] as Vector3).z).length() < 0.001,
 		"the flame is not lit at the top of the wax: %s" % str(w))
 	(cb["node"] as Node).free()
-	# THE TABLE BEFORE THE SET DRESSER: the look's candles, lit
+	# The table before the set dresser: the look's candles, lit
 	var dt := CardTable.default_table({"candles": 3, "palette": ["#112233", "#445566", "#778899"]}, 5)
 	var lit := 0
 	for t in dt["things"]:
@@ -1265,7 +1234,7 @@ func _things_built() -> bool:
 	return true
 
 
-## STONES, as a handful is set out. Scattered copies never touch, however crowded the handful;
+## Stones, as a handful is set out. Scattered copies never touch, however crowded the handful;
 ## heaped ones pile up - some resting on others, none through another or the floor; a part's list
 ## of materials goes to its copies in turn, a mesh for each; every vertex knows its copy's middle,
 ## for a pattern to center on; a geode keeps its crystals inside it; a play of light is kept only
@@ -1281,8 +1250,7 @@ func _stones() -> bool:
 				"material": ["agate", "glass", "crystal"], "copies": {"heap": {"count": 18, "radius": 1.5}, "jitter": 0.6}}]},
 			{"name": "a geode", "parts": [{"shape": "geode", "radius": 7, "rind": 1.2, "length": 2.5, "material": "agate"}]}]},
 		["#112233"])
-	# A REPEAT WRITTEN BESIDE THE PART is read as its copies (a skein's turns were built one of each,
-	# the top one floating) - and one under `copies` still wins
+		# a repeat written beside the part is read as its copies - and one under `copies` still wins
 	var beside := Props.sanitize({"things": [{"name": "a skein", "parts": [
 		{"shape": "ring", "radius": 3.5, "thickness": 0.8, "line": {"count": 4, "step": [0, 0.7, 0]}, "jitter": 0.3},
 		{"shape": "ring", "radius": 3.5, "thickness": 0.8, "line": {"count": 4, "step": [0, 0.7, 0]},
@@ -1301,7 +1269,7 @@ func _stones() -> bool:
 	_ok(things.size() == 3, "%d of 3 stone things survived sanitizing" % things.size())
 	if things.size() != 3:
 		return true
-	# SCATTERED, never touching; HEAPED, piled without passing through
+	# Scattered, never touching; heaped, piled without passing through
 	for t in [things[0], things[1]]:
 		var part: Dictionary = (t as Dictionary)["parts"][0]
 		var rng := RandomNumberGenerator.new()
@@ -1329,7 +1297,7 @@ func _stones() -> bool:
 				var d := Vector2(a.origin.x - b.origin.x, a.origin.z - b.origin.z).length()
 				if d < (sa + sb) * reach - 0.0002:
 					touching += 1
-				# two in the same place: near in plan AND at the same height
+				# two in the same place: near in plan and at the same height
 				if d < (sa + sb) * reach * 0.4 and absf(a.origin.y - b.origin.y) < tall * 0.4:
 					through += 1
 		if String((part["copies"] as Dictionary)["kind"]) == "scatter":
@@ -1338,11 +1306,9 @@ func _stones() -> bool:
 			_ok(stacked > 0, "a heap of %d in a 1.5 cm circle did not pile up (none above the floor)" % xforms.size())
 			_ok(through == 0, "%d pairs of heaped copies pass through each other" % through)
 		_ok(below == 0, "%d copies of %s sink below the floor" % [below, t["name"]])
-	# NO LUMP BALANCED ON ANOTHER (feedback 0005, 0006: "one pebble is balanced precariously upon
-	# another pebble"): every heaped lump off the floor lies in a POCKET - three or more lumps
-	# touching it from below, its middle inside them - unless it is flat. Over handfuls of every
-	# crowding; two-sided against the rule it replaced (a lump may rest over ONE lump's middle),
-	# which stacks columns on the same handfuls.
+		# no lump balanced on another: every heaped lump off the floor lies in a pocket - three or more lumps touching it from below, its
+		# middle inside them - unless it is flat. Over handfuls of every crowding; two-sided against the earlier rule (a lump may rest
+		# over one lump's middle), which stacks columns on the same handfuls.
 	var perched := 0
 	var piled := 0
 	var crossed := 0
@@ -1374,7 +1340,7 @@ func _stones() -> bool:
 	_ok(old_perched > 0, "control: the retired rule balanced no lump on another")
 	print("  heaps: %d lumps off the floor, every one in a pocket (the retired rule balanced %d); slowest heap %d ms"
 		% [piled, old_perched, slowest])
-	# A HEAP IN A DISH STAYS IN IT: a handful too big for the dish's floor piles against its wall -
+	# A heap in a dish stays in it: a handful too big for the dish's floor piles against its wall -
 	# never through it - and what has no room is left out. Two-sided: the same heap laid with no
 	# wall to know of spills through the dish.
 	var dish := Props.sanitize({"things": [{"name": "a crowded dish", "parts": [
@@ -1402,9 +1368,8 @@ func _stones() -> bool:
 	_ok(blind_through > 0, "control: a heap laid with no wall to know of stayed inside the dish anyway")
 	var open := Props._walls(Props._assemble([dparts[1]], 1, []), 0, Vector3(0.0, 0.0035, 0.0))
 	_ok(open.is_empty(), "a heap on the open cloth found a wall: %s" % str(open))
-	# A HEAP IN A SMOOTH DISH STAYS IN IT (the-quiet-crucible 181083's brazier: a lathe's sloped wall is many short
-	# faces, none reaching from the floor past the cut, so it had no wall and its coals were heaped through it): no
-	# coal's side or foot lies in the dish's iron. Two-sided: heaped with no wall to know of, some do.
+		# a heap in a smooth dish stays in it (a lathe's sloped wall is many short faces, none reaching from the floor past the cut): no
+		# coal's side or foot lies in the dish's iron. Two-sided: heaped with no wall to know of, some do.
 	var brazier := Props.sanitize({"things": [{"name": "a brazier", "parts": [
 		{"shape": "lathe", "smooth": true, "profile": [[0.0, 0.0], [8.0, 0.0], [8.3, 0.5, 0.2], [10.8, 2.6], [11.2, 3.0, 0.0],
 			[10.6, 3.0, 0.0], [10.2, 2.5], [7.8, 0.8], [0.0, 0.7]]},
@@ -1432,7 +1397,7 @@ func _stones() -> bool:
 	_ok(blind_iron > 0, "control: coals heaped with no wall to know of stayed out of the dish's iron anyway")
 	print("  a smooth dish: its wall %.1f cm out, %.1f cm high; %d coals in its iron when heaped blind" % [
 		float(bwalls.get("radius", 0.0)) * 100.0, float(bwalls.get("top", 0.0)) * 100.0, blind_iron])
-	# A LIST OF MATERIALS: its copies take them in turn; every vertex knows its copy. A HEAP'S COPIES ARE LOOSE (each its own
+	# A list of materials: its copies take them in turn; every vertex knows its copy. A heap's copies are loose (each its own
 	# body, next/table_physics.md), so each is a mesh of its own; written not loose, one mesh a material holds them all
 	var heap := Props.build(things[1], mats, 3)
 	var colors := {}
@@ -1463,7 +1428,7 @@ func _stones() -> bool:
 	var fixed := Props.build(fixed_thing, mats, 3)
 	_ok((fixed["meshes"] as Array).size() == 3, "the control: a heap of 18 in 3 materials, not loose, built %d meshes, not one a material" % (fixed["meshes"] as Array).size())
 	(fixed["node"] as Node).free()
-	# THE GEODE: its lining in the part's material, its rock in plain stone, the crystals inside
+	# The geode: its lining in the part's material, its rock in plain stone, the crystals inside
 	var geo := Props.build(things[2], mats, 5)
 	var meshes: Array = geo["meshes"]
 	_ok(meshes.size() == 2, "a geode built %d meshes, not its lining and its rock" % meshes.size())
@@ -1566,8 +1531,7 @@ func _crossed(lumps: Array) -> int:
 	return n
 
 
-## THE HEAP RULE IT REPLACED (feedback 0005's), kept as the control: the lowest of a few drops,
-## resting over the middle of whichever lump holds it up.
+## The earlier heap rule, kept as the control: the lowest of a few drops, resting over the middle of whichever lump holds it up.
 func _retired_heap(n: int, jit: float, radius: float, bounds: Dictionary, rng: RandomNumberGenerator) -> Array:
 	var girth := float(bounds["girth"])
 	var tall := float(bounds["high"]) - float(bounds["low"])
@@ -1603,10 +1567,8 @@ func _retired_heap(n: int, jit: float, radius: float, bounds: Dictionary, rng: R
 	return laid.map(func(e: Array) -> Array: return [e[0], e[2], e[3]])
 
 
-## THE EPISODE'S TITLE (the user, 2026-10-11: "Yes Or No Tarot: Ask As Many Times As It Takes" went up
-## after "True Tarot: " - two colons, "Tarot" twice, a capital on every word): the producer is shown
-## the line its title goes up in and asked for title case, and no code recases what it writes - but a title in capitals alone
-## (2026-11-09), set in sentence case.
+## The episode's title: the producer is shown the line its title goes up in and asked for title case, and no code recases what it
+## writes - but a title in capitals alone is set in sentence case.
 func _episode_title() -> bool:
 	var line := "Test Tarot: " + TablePrompts.TITLE_MARK
 	var told := String(TablePrompts.producer("Test Tarot", "B", 7, CardTable.FACES, CardTable.FRAMES, [],
@@ -1620,7 +1582,7 @@ func _episode_title() -> bool:
 	_ok(not bare.contains("goes up as") and bare.contains("is set in title case"),
 		"control: with no line to show, the producer is still told of one (or not of title case)")
 	_ok(not told.contains("{{") and not bare.contains("{{"), "a name in the title's rule was left unfilled")
-	# AS WRITTEN: the plan keeps the title's own capitals
+	# As written: the plan keeps the title's own capitals
 	TableEpisode.root = "user://cards_check"
 	var ep := TableEpisode.open("title-check", 5)
 	ep.invalidate("plan")
@@ -1630,7 +1592,7 @@ func _episode_title() -> bool:
 	var plan: Variant = ep.read_json("plan")
 	_ok(err.is_empty() and plan is Dictionary and String((plan as Dictionary).get("episode_title", "")) == "ask as Many times as it takes",
 		"a title did not land as written: %s %s" % [err, str((plan as Dictionary).get("episode_title", "") if plan is Dictionary else plan)])
-	# ...BUT NEVER SHOUTED (2026-11-09: "the title of this episode is in ALL CAPS"): one with no small letter lands in sentence case
+		# ...but never shouted: one with no small letter lands in sentence case
 	ep.invalidate("plan")
 	err = prod._land_plan(JSON.stringify({"episode_title": "THEY SAID I'D DRIFT, AND I DID",
 		"spread": {"name": "S", "positions": ["a", "b", "c"]}, "look": {"deck_name": "D"}}))
@@ -1642,8 +1604,7 @@ func _episode_title() -> bool:
 	return true
 
 
-## THE CARD STOCK is the producer's choice (asked only for "card stock", it printed every deck on
-## cream): it is told what the stock is and shown the stocks earlier decks used; the name reads on
+## The card stock is the producer's choice: it is told what the stock is and shown the stocks earlier decks used; the name reads on
 ## any stock; and the booklet is printed in the card's colors.
 func _card_stock() -> bool:
 	# shown an earlier deck's stock - two-sided: with no history that color is nowhere in the prompt
@@ -1654,7 +1615,7 @@ func _card_stock() -> bool:
 	var fresh := String(TablePrompts.producer("T", "B", 1, CardTable.FACES, CardTable.FRAMES, [])["prompt"])
 	_ok(not fresh.contains("#2b1d3c"), "control: a stock no earlier episode used is in the prompt")
 	_ok(not TablePrompts.dice(1).has("stock"), "a die still decides the card stock")
-	# THE NAME READS ON ANY STOCK: an ink that does not is moved until it does, either way round...
+	# The name reads on any stock: an ink that does not is moved until it does, either way round...
 	for pair in [["#14121a", "#1d1a2b"], ["#efe6d2", "#f2e4c4"], ["#7a7a7a", "#808080"]]:
 		_ok(CardTable.contrast(Color.html(pair[1]), Color.html(pair[0])) < CardTable.INK_CONTRAST,
 			"control: %s on %s already reads" % [pair[1], pair[0]])
@@ -1664,7 +1625,7 @@ func _card_stock() -> bool:
 	# ...and one that already reads is the producer's own, untouched
 	var kept: Dictionary = CardTable.sanitize_look({"frame": {"stock": "#e6d8bb", "ink": "#3A2A20"}})["frame"]
 	_ok(String(kept["ink"]) == "#3A2A20", "a readable ink was changed: %s" % kept["ink"])
-	# THE BOOKLET IS PRINTED IN THE CARD'S COLORS: its page is the stock, a dark one included, and its
+	# The booklet is printed in the card's colors: its page is the stock, a dark one included, and its
 	# type reads on it (the last look's ink and accent do not, as written)
 	for look in [{"frame": {"stock": "#1b2a3f", "ink": "#e9dcc0", "accent": "#c9a227"}},
 			{"frame": {"stock": "#efe6d2", "ink": "#3a2a20", "accent": "#7a2e3a"}},
@@ -1686,11 +1647,9 @@ func _card_stock() -> bool:
 	return true
 
 
-## THE CARD'S FRAME (feedback 0010, 2026-10-06: a deck printed `bleed` - the painting to the card's
-## edge, cropped to the card's shape, the name and numeral on plates over it, the name running off its
-## plate - "It looks nothing like other cards, from other episodes"): every style keeps a border of
-## stock, a look naming the old style is drawn as `line`, the picture's window leaves a band above it
-## and below it, and every name of the fixture deck's 78 fits the band below at a readable size in every face.
+## The card's frame: every style keeps a border of stock, a look naming the old style (`bleed`) is drawn as `line`, the picture's
+## window leaves a band above it and below it, and every name of the fixture deck's 78 fits the band below at a readable size in
+## every face.
 func _card_frame() -> bool:
 	_ok(not CardTable.FRAMES.has("bleed"), "the old `bleed` style, which set the name on a plate too narrow for it, is offered again")
 	_ok(String((CardTable.sanitize_look({"frame": {"style": "bleed"}})["frame"] as Dictionary)["style"]) == "line",
@@ -1699,9 +1658,8 @@ func _card_frame() -> bool:
 	var win := CardFaces.window()
 	_ok(win.position.x > 0.0 and win.end.x < sz.x and win.position.y >= sz.y * 0.075 and sz.y - win.end.y >= sz.y * 0.105,
 		"the picture's window leaves no border or no band for the numeral and the name: %s" % str(win))
-	# THE ORNAMENT'S ROOM (feedback 0009, 2026-10-09: "the image border is a bit too close to the outer
-	# border around the card"): with every frame style, the window leaves the ornament's line, its own
-	# band and the frame's outermost rule - the picture's rules never touch the ornament
+		# the ornament's room: with every frame style, the window leaves the ornament's line, its own band and the frame's outermost rule -
+		# the picture's rules never touch the ornament
 	for style in CardTable.FRAMES:
 		if style in ["borderless", "written"]:
 			continue  # no border to keep: _borderless, and written_card_check
@@ -1728,9 +1686,8 @@ func _card_frame() -> bool:
 				worst = {"size": size, "name": name, "face": f}
 			_ok(face.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= room, "%s in %s runs past the band" % [name, f])
 	_ok(int(worst["size"]) >= int(sz.y * 0.035), "%s in %s is set at %d px on a %d px card - too small to read" % [worst["name"], worst["face"], worst["size"], int(sz.y)])
-	# A PICTURE STILL TO COME, in every window: nothing the renderer cannot triangulate
-	# the control: the disc that grazed an oval window (episode true-tarot 336151's, seed 253) leaves a
-	# sliver no renderer can fill, and it is refused
+		# a picture still to come, in every window: nothing the renderer cannot triangulate
+		# the control: a disc that grazes an oval window leaves a sliver no renderer can fill, and it is refused
 	var oval_r := Rect2(56, 128, 448, 675.2)
 	var oval := CardFaces.outline("oval", oval_r)
 	var disc := PackedVector2Array()
@@ -1757,16 +1714,13 @@ func _card_frame() -> bool:
 	return true
 
 
-## A BORDERLESS CARD (2026-10-14, the user: "cards have no border at all, because the card artwork fills
-## the entire card ... Be careful with how text is written onto such a card, since color will matter quite
-## a lot there, for visibility"): offered to the producer; its painting the whole card, face and back,
-## with no window shape or ornament left on it; its name and numeral fit the bands they are set in, in
-## every face, at a size that reads; its type reads over ANY painting - the veil's bound holds against
-## paintings of every color, and every deck's veil, planned on its own stock and ink, reaches the contrast
-## at no more than the veil allowed, a light ink kept light and a dark one dark; and the foil keys none of
-## its type. Two-sided: a veil a little lighter than planned fails the bound, the stock and ink as they
-## were need a band all but opaque (a border again), and the bound is broken by a painting of the ink's own
-## color under no veil at all. The pixels are tests/table/card_veil_check.gd's.
+## A borderless card: offered to the producer; its painting the whole card, face and back, with no window shape or ornament left on
+## it; its name and numeral fit the bands they are set in, in every face, at a size that reads; its type reads over any painting -
+## the veil's bound holds against paintings of every color, and every deck's veil, planned on its own stock and ink, reaches the
+## contrast at no more than the veil allowed, a light ink kept light and a dark one dark; and the foil keys none of its type.
+## Two-sided: a veil a little lighter than planned fails the bound, the stock and ink as they were need a band all but opaque (a
+## border again), and the bound is broken by a painting of the ink's own color under no veil at all. The pixels are
+## tests/table/card_veil_check.gd's.
 func _borderless() -> bool:
 	_ok(CardTable.FRAMES.has("borderless"), "the producer is not offered a borderless card")
 	var look := CardTable.sanitize_look({"frame": {"style": "borderless", "window": "gothic", "ornament": "serpent", "corners": "round"}})
@@ -1778,7 +1732,7 @@ func _borderless() -> bool:
 		_ok(CardFaces.window(back, look) == Rect2(Vector2.ZERO, sz), "a borderless %s's painting is not the whole card" % ("back" if back else "face"))
 	_ok(CardFaces.front_window(look, true) == Rect2(Vector2.ZERO, sz), "a borderless card with details cuts its painting short")
 	_ok(CardFaces.front_window({}, true).size.y < CardFaces.window().size.y, "control: a bordered card with details keeps its painting whole")
-	# THE TYPE FITS ITS BANDS, every name in every face: set as the card sets it, keyline and all
+	# The type fits its bands, every name in every face: set as the card sets it, keyline and all
 	var boxes := CardFaces.type_boxes(look)
 	var band: Rect2 = boxes["name"]
 	var worst := {"size": 999, "name": "", "face": ""}
@@ -1797,7 +1751,7 @@ func _borderless() -> bool:
 	_ok(int(worst["size"]) >= int(sz.y * 0.035), "%s in %s is set at %d px on a %d px card - too small to read" % [worst["name"], worst["face"], worst["size"], int(sz.y)])
 	_ok(band.position.x > 0.0 and band.end.x < sz.x and band.end.y < sz.y and (boxes["numeral"] as Rect2).position.y > 0.0,
 		"a band of type runs to the card's edge: %s" % str(boxes))
-	# THE VEIL'S BOUND: over paintings of every color the type stands at least as far from its ground as
+	# The veil's bound: over paintings of every color the type stands at least as far from its ground as
 	# veil_contrast says - and a painting of the ink's own color under no veil hides it
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1014
@@ -1814,7 +1768,7 @@ func _borderless() -> bool:
 	_ok(under == 0, "%d paintings left the type less contrast than the veil's bound" % under)
 	_ok(CardTable.veil_contrast(Color("#e8dcc0"), Color("#2f5d62"), 0.0) == 1.0 and CardTable.contrast(Color("#e8dcc0"), Color("#e8dcc0").lerp(Color("#2f5d62"), 0.0)) < 1.01,
 		"control: with no veil, a painting the ink's own color does not hide the type")
-	# EVERY DECK'S VEIL: random decks, printed as sanitize_look leaves them (the ink readable on the stock)
+	# Every deck's veil: random decks, printed as sanitize_look leaves them (the ink readable on the stock)
 	var heavy := 0
 	var weak := 0
 	var turned := 0
@@ -1840,7 +1794,7 @@ func _borderless() -> bool:
 	_ok(stock_only > 100, "control: planned on the stock and ink as they were, only %d of 600 veils needed more than allowed" % stock_only)
 	var teal := CardTable.veil_alpha(Color("#e8dcc0"), Color("#2f5d62"), CardTable.TEXT_CONTRAST)
 	_ok(teal > 0.9, "control: cream on teal, planned on its stock alone, no longer needs a band all but opaque (%.2f)" % teal)
-	# THE FOIL keys none of the type: the painting clear of the veils' full strength
+	# The foil keys none of the type: the painting clear of the veils' full strength
 	var named := CardFaces.bare(look, false, true, true)
 	_ok(named.position.y >= (boxes["numeral"] as Rect2).end.y and named.end.y <= band.position.y,
 		"the foil may key a borderless card's name or numeral: %s" % str(named))
@@ -1851,12 +1805,10 @@ func _borderless() -> bool:
 	return true
 
 
-## THE TITLE SCREEN (the user, 2026-10-06: the name "too small in some layouts on mobile" - this frame
-## is the thumbnail - and "always the same color", camouflaged on a table of the same): the name as
-## large as fits the frame's width, up to its cap, on two lines where one would set it small, and the
-## byline under it, smaller; the same layout at any frame size, in proportion; the set dresser's color
-## kept as written and anything else read as the default; and a shade round the name - dark round a
-## light one, light round a dark one - that every color reads against.
+## The title screen: the name as large as fits the frame's width, up to its cap, on two lines where one would set it small, and the
+## byline under it, smaller; the same layout at any frame size, in proportion; the set dresser's color kept as written and anything
+## else read as the default; and a shade round the name - dark round a light one, light round a dark one - that every color reads
+## against.
 func _title_screen() -> bool:
 	var face := CardTable.font("roman")
 	var italic := CardTable.font(CardTable.BOOK_ITALIC)
@@ -1868,8 +1820,7 @@ func _title_screen() -> bool:
 	_ok(lines.size() == 2 and not bool(lines[0]["italic"]) and bool(lines[1]["italic"]),
 		"the name and its byline are not set as two lines, the name first: %s" % str(lines))
 	var size := int(lines[0]["size"])
-	# large enough to read on a phone (it was 84 px: "too small"), short of the frame's sides (it was 162:
-	# "basically touches the left and the right side of the screen", 2026-10-07)
+		# large enough to read on a phone, short of the frame's sides
 	_ok(size >= int(84 * 1.5), "the name is set at %d px on a 1080 frame - hardly over the old 84" % size)
 	_ok(face.get_string_size(String(lines[0]["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= hd.x * 0.8,
 		"the name runs within a tenth of the frame's sides")
@@ -1883,7 +1834,7 @@ func _title_screen() -> bool:
 	_ok(absf(float(small[0]["size"]) - size * 720.0 / 1080.0) <= 2.0, "the name is not set in proportion on a 720 frame: %d against %d" % [int(small[0]["size"]), size])
 	var short: Array = CardTable.title_layout(face, italic, "Tarot", "", hd)["lines"]
 	_ok(short.size() == 1 and int(short[0]["size"]) == cap, "a short name is not set at the cap: %s" % str(short))
-	# A LONG NAME GOES ON TWO LINES, larger than one line would set it - two-sided: on one, it is small
+	# A long name goes on two lines, larger than one line would set it - two-sided: on one, it is small
 	var long_name := "The Extremely Honest Tarot Hour With Friends"
 	var one := CardTable.fit_rows(face, PackedStringArray([long_name]), cap, room)
 	_ok(one < cap * CardTable.TITLE_TWO_LINES, "control: the long name sets large enough on one line (%d px)" % one)
@@ -1893,7 +1844,7 @@ func _title_screen() -> bool:
 		_ok(String(two[0]["text"]) + " " + String(two[1]["text"]) == long_name, "the two lines are not the name")
 		for l in two:
 			_ok(face.get_string_size(String(l["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, int(l["size"])).x <= room, "a line of the long name runs wider than the frame allows")
-	# THE COLOR is the set dresser's, kept as written; anything else reads as the default
+	# The color is the set dresser's, kept as written; anything else reads as the default
 	var spec := CardTable.sanitize_table({"things": [], "title": {"color": "#1d2f5c", "why": "deep ink on pale straw"}}, {})
 	_ok(CardTable.title_ink(spec).to_html(false) == "1d2f5c" and String((spec["title"] as Dictionary)["why"]) == "deep ink on pale straw",
 		"the set dresser's color was not kept: %s" % str(spec["title"]))
@@ -1902,7 +1853,7 @@ func _title_screen() -> bool:
 		var j := CardTable.sanitize_table({"title": junk}, {})
 		_ok((j["title"] as Dictionary).is_empty() and CardTable.title_ink(j) == cream, "a title of %s was kept" % str(junk))
 	_ok(CardTable.title_ink(CardTable.default_table({"candles": 1}, 3)) == cream, "a table with no title is not printed in the default")
-	# THE SHADE: every color reads against its own - two-sided, the ink itself as its shade reads against nothing
+	# The shade: every color reads against its own - two-sided, the ink itself as its shade reads against nothing
 	var worst := INF
 	for h in 12:
 		for v in [0.05, 0.3, 0.45, 0.5, 0.55, 0.7, 0.95]:
@@ -1917,9 +1868,9 @@ func _title_screen() -> bool:
 	return true
 
 
-## CANDLES OF EVERY FORM, and what a table allows. A pillar's three wicks stand on its pool, apart and
+## Candles of every form, and what a table allows. A pillar's three wicks stand on its pool, apart and
 ## inside its top; wicks placed by hand stand where they were put; a tea light in its tin lights one
-## flame; a candelabra written once as a GROUP - arm, cup and taper, copied round a ring - holds a
+## flame; a candelabra written once as a group - arm, cup and taper, copied round a ring - holds a
 ## flame in every cup; groups nest only so deep and their parts count toward a thing's; a thing makes
 ## no more parts in all than it may; an extruded outline (a star tray, a heart, a hexagonal candle,
 ## an outline of its own going in and out) stands on the cloth, sound; and a table lights no more
@@ -1966,7 +1917,7 @@ func _candles() -> bool:
 					bad += 1
 			bad += 0 if v.size() % 3 == 0 else 1
 		_ok(bad == 0 and not (b["meshes"] as Array).is_empty(), "%s has %d bad vertices or no mesh" % [things[i]["name"], bad])
-	# THREE WICKS on the pillar's pool: apart, inside its 5 cm top, a hair under its 6 cm
+	# Three wicks on the pillar's pool: apart, inside its 5 cm top, a hair under its 6 cm
 	var w3: Array = (built[0] as Dictionary)["wicks"]
 	var apart := INF
 	var out := 0.0
@@ -1985,7 +1936,7 @@ func _candles() -> bool:
 	_ok(w2.size() == 2 and absf(absf((w2[0] as Vector3).x) - 0.02) < 0.001 and absf((w2[0] as Vector3).z) < 0.001
 		and (w2[0] as Vector3).x * (w2[1] as Vector3).x < 0.0, "wicks placed by hand are not where they were put: %s" % str(w2))
 	_ok(((built[2] as Dictionary)["wicks"] as Array).size() == 1, "a tea light does not light one flame")
-	# THE CANDELABRA: a flame in every cup, round the stem, as high as its tapers
+	# The candelabra: a flame in every cup, round the stem, as high as its tapers
 	var w5: Array = (built[3] as Dictionary)["wicks"]
 	var axis := Vector2.ZERO           # the stem: the flames' middle (a five-armed thing's box is not)
 	for w in w5:
@@ -1995,7 +1946,7 @@ func _candles() -> bool:
 		var q: Vector3 = w
 		placed += 1 if absf(Vector2(q.x, q.z).distance_to(axis) - 0.08) < 0.006 and absf(q.y - 0.244) < 0.006 else 0
 	_ok(w5.size() == 5 and placed == 5, "a candelabra written once does not hold a flame in each of its 5 cups (%d flames, %d in place)" % [w5.size(), placed])
-	# THE TABLE'S CAPS: four lit things at most - the hexagonal candle, the fifth, stands unlit - and
+	# The table's caps: four lit things at most - the hexagonal candle, the fifth, stands unlit - and
 	# a part past the flames one thing may have is put out, alone
 	_ok(Props.flames_of((things[4] as Dictionary)["parts"][0]) == 0, "a fifth lit thing was left burning (the table allows %d)" % CardTable.MAX_CANDLES)
 	var crowd := CardTable.sanitize_table({"materials": mats, "things": [{"name": "a wall of candles", "parts": [
@@ -2004,7 +1955,7 @@ func _candles() -> bool:
 	var wall_parts: Array = (crowd["things"][0] as Dictionary)["parts"]
 	_ok(Props.flames_of(wall_parts[0]) == 0 and Props.flames_of(wall_parts[1]) == 1,
 		"a part past the flames one thing may have (%d) was not put out alone" % CardTable.MAX_FLAMES)
-	# GROUPS nest three deep, their parts count toward a thing's, and a thing makes no more parts in
+	# Groups nest three deep, their parts count toward a thing's, and a thing makes no more parts in
 	# all than it may
 	var nest := {"shape": "ball", "radius": 1}
 	for k in 5:
@@ -2040,7 +1991,7 @@ func _candles() -> bool:
 	return true
 
 
-## THE ROOM'S PICTURE IS ASKED FOR AS THE TABLE PROJECTS IT: a level camera at a seated eye, its
+## The room's picture is asked for as the table projects it: a level camera at a seated eye, its
 ## horizon across the middle, through the lens the table assumes ([constant CardTable.BACKDROP_LENS]),
 ## with the lower third - all the tilted camera sees past the table - carrying the place.
 func _room_prompt() -> bool:
@@ -2051,9 +2002,7 @@ func _room_prompt() -> bool:
 	return true
 
 
-## THE CLOTH IS A TEXTURE (feedback 0006: painted seawater beads "have no depth"): asked for dry,
-## bare and flat-lit at its true scale, landscape - and laid on the cloth with its pixels square,
-## two-sided against the old stretch.
+## The cloth is a texture: asked for dry, bare and flat-lit at its true scale, landscape - and laid on the cloth with its pixels square.
 func _cloth_prompt() -> bool:
 	var p := TablePrompts.surface_image({"surface": "a wet steel table beaded with seawater", "palette": ["#112233"]}, "/tmp/x.png")
 	_ok(p.contains("DRY AND BARE, whatever the description says") and p.contains("IT IS A TEXTURE")
@@ -2077,13 +2026,10 @@ func _cloth_prompt() -> bool:
 	return true
 
 
-## MORE THAN ONE VOICE (2026-10-05: a familiar on the reader's shoulder, "mostly silent, but
-## sometimes they'll make a quip"): the reader is told the show's other voices and how to hand one
-## a line - and a show with one voice is told nothing of it (two-sided); the cues a writer sends
-## are held to the show's own names (any spelling of one; anyone else's cue taken out, its words
-## kept); and the script keeps them for the voice, on lines of their own, never as words the table
-## follows, every passage opening in the reader's voice - two-sided against the passages simply
-## joined, which gave the next card's reading to the familiar.
+## More than one voice: the reader is told the show's other voices and how to hand one a line - and a show with one voice is told
+## nothing of it (two-sided); the cues a writer sends are held to the show's own names (any spelling of one; anyone else's cue taken
+## out, its words kept); and the script keeps them for the voice, on lines of their own, never as words the table follows, every
+## passage opening in the reader's voice - two-sided against the passages simply joined.
 func _familiar() -> bool:
 	var ep := _episode(2)
 	var prod := TableProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards(), "voices": ["Narrator", "Familiar"]})
@@ -2093,13 +2039,12 @@ func _familiar() -> bool:
 		"the reader is not told the show's other voice and how to hand it a line")
 	var alone := TableProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards(), "voices": ["Narrator"]})
 	_ok(not String(alone.say_prompt("1")["prompt"]).contains("speaker:"), "control: a show with one voice is told about speaker cues")
-	# LANDING: the show's own spelling, and no voice the show does not have
+	# Landing: the show's own spelling, and no voice the show does not have
 	var landed := TableProducer.own_voices("Hello.\n<!-- speaker: familiar -->\nOh no.\n<!-- speaker: Spirit -->\nBoo. <!-- speaker: NARRATOR --> Hush.", ["Familiar"])
 	_ok(landed.contains("<!-- speaker: Familiar -->") and landed.contains("<!-- speaker: %s -->" % Manuscript.NARRATOR)
 		and not landed.contains("Spirit") and landed.contains("Boo.") and landed.contains("Oh no."),
 		"a writer's cues are not held to the show's voices: %s" % landed.c_escape())
-	# THE READER IS THE SHOW'S FIRST VOICE, WHATEVER ITS NAME (2026-10-15): a show reading as "Ryan" is told
-	# of its familiar alone, and a cue naming Ryan hands the line back to the reader
+		# the reader is the show's first voice, whatever its name: a show reading as "Ryan" is told of its familiar alone, and a cue naming Ryan hands the line back to the reader
 	var ryan := TableProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards(), "voices": ["Ryan", "Familiar"]})
 	var told_ryan := String(ryan.say_prompt("1")["prompt"])
 	_ok(told_ryan.contains("OTHER VOICES: Familiar.") and not told_ryan.contains("<!-- speaker: Ryan -->"),
@@ -2107,7 +2052,7 @@ func _familiar() -> bool:
 	var back := TableProducer.own_voices("Hi.\n<!-- speaker: Familiar -->\nBoo.\n<!-- speaker: ryan -->\nBack.", ["Familiar"], "Ryan")
 	_ok(back.contains("<!-- speaker: %s -->" % Manuscript.NARRATOR) and not back.contains("ryan") and back.contains("Back."),
 		"a cue naming the reader by its own name did not hand the line back to the reader: %s" % back.c_escape())
-	# THE SCRIPT: a card ends on the familiar's quip (written inline, as a writer may); the next opens in the reader's
+	# The script: a card ends on the familiar's quip (written inline, as a writer may); the next opens in the reader's
 	var texts := ["Hello, my loves. Welcome back.\n<!-- speaker: Familiar -->\nHere we go again.\n<!-- speaker: Narrator -->\nShush. Let's shuffle.",
 		"The Tower. Big changes for you. <!-- speaker: Familiar --> There is always a tower.",
 		"The Star. Hope, my loves, hope.", "That is the reading. Go and do the thing."]
@@ -2132,12 +2077,12 @@ func _familiar() -> bool:
 		if String((q as Dictionary)["text"]).contains("The Star"):
 			naive = String((q as Dictionary)["speaker"])
 	_ok(naive == "Familiar", "control: passages simply joined still gave the next card to the reader (%s)" % naive)
-	# WHAT EARLIER EPISODES SAID keeps who said it
+	# What earlier episodes said keeps who said it
 	_ok(TablePrompts.heard("Hi.\n<!-- speaker: Familiar -->\nNo.").contains("(Familiar:) No."), "an earlier episode's quip is not marked as the familiar's")
 	return true
 
 
-## WHAT THE SHOW HAS ALREADY MADE reaches each agent in the part it decides: the producer sees an
+## What the show has already made reaches each agent in the part it decides: the producer sees an
 ## earlier episode's angle, running bit, what its cards pictured, its stock, cloth and room, and is
 ## asked to name the show's habits; the designer, how an earlier deck pictured the same card; a
 ## reader passage, how earlier episodes opened, met a card (a jumper apart) and closed - without
@@ -2179,7 +2124,7 @@ func _archive() -> bool:
 	var designer := func(k: int) -> String:
 		return String(TablePrompts.designer("Test Tarot", brief, prod._look(), prod._card(k), true,
 			TableEpisode.archive(show, 4242))["prompt"])
-	# ALONE IN ITS SHOW: told nothing of other episodes
+	# Alone in its show: told nothing of other episodes
 	_ok(TableEpisode.archive(show, 4242).is_empty(), "an episode alone in its show has a history")
 	var alone := producer.call() as String
 	_ok(not alone.contains("EARLIER EPISODES") and not alone.contains("\"habits\""),
@@ -2187,7 +2132,7 @@ func _archive() -> bool:
 	_ok(not (designer.call(1) as String).contains("EARLIER DECKS"), "a designer with no earlier decks is shown one")
 	for who in ["intro", "1", "close"]:
 		_ok(not String(prod.say_prompt(who)["prompt"]).contains("HOW EARLIER"), "a reader alone in its show is told what earlier ones said (%s)" % who)
-	# AN EARLIER EPISODE beside it
+	# An earlier episode beside it
 	var old := TableEpisode.open(show, 1111)
 	old.write_json("plan", {"episode_title": "OLD-TITLE", "audience": "OLD-AUDIENCE", "topic": "OLD-TOPIC",
 		"premise": "OLD-PREMISE", "reader_mood": "OLD-MOOD", "running_bit": "OLD-BIT",
@@ -2213,19 +2158,19 @@ func _archive() -> bool:
 	_ok(String((TableEpisode.archive(show, 1111)[0] as Dictionary)["light"]).is_empty(), "a table with no light of its own is archived with one")
 	_ok(TableEpisode.archive(show, 1111).size() == 1 and int((TableEpisode.archive(show, 1111)[0] as Dictionary)["seed"]) == 4242,
 		"an episode is its own history")
-	# THE PRODUCER: every choice the earlier one made, and the habits asked for
+	# The producer: every choice the earlier one made, and the habits asked for
 	var pp := producer.call() as String
 	for mark in ["OLD-TITLE", "OLD-PREMISE", "OLD-MOOD", "OLD-BIT", "OLD-STYLE", "OLD-ART-1", "OLD-ART-3", "#123456", "OLD-CLOTH", "OLD-ROOM", "OLD-LIGHT", "OLD-SPREAD"]:
 		_ok(pp.contains(mark), "the producer is not shown the earlier episode's %s" % mark)
 	_ok(pp.contains("\"habits\"") and pp.contains("THE SHOW'S HABITS"), "the producer is not asked to name the show's habits")
 	_ok(not pp.contains("THIS-TITLE") and not pp.contains("THIS-PREMISE"), "the producer is shown the episode it is planning")
-	# THE DESIGNER: the same card as an earlier deck pictured it, and only that card
+	# The designer: the same card as an earlier deck pictured it, and only that card
 	var d1 := designer.call(1) as String
 	_ok(d1.contains("EARLIER DECKS") and d1.contains("OLD-ART-1") and d1.contains("Old Deck"),
 		"the designer of the Tower is not shown how an earlier deck pictured it")
 	_ok(not d1.contains("OLD-ART-2") and not d1.contains("OLD-ART-3"), "the designer is shown earlier decks' other cards")
 	_ok(not (designer.call(2) as String).contains("EARLIER DECKS"), "the designer of a card no earlier deck drew is shown one")
-	# THE READER, through the producer itself: what was heard at the same point, the brief's own words
+	# The reader, through the producer itself: what was heard at the same point, the brief's own words
 	# left out, card names masked
 	var intro := String(prod.say_prompt("intro")["prompt"])
 	_ok(intro.contains("HOW EARLIER EPISODES OPENED") and intro.contains("OLD-OPENING"), "the intro is not shown how earlier episodes opened")
@@ -2245,14 +2190,14 @@ func _archive() -> bool:
 	var jp := String(TablePrompts.reader("Test Tarot", brief, plan, "1", prod._said(0), [jumper], 3, false, past, names)["prompt"])
 	_ok(jp.contains("HOW EARLIER EPISODES MET A JUMPER") and jp.contains("OLD-JUMPER") and not jp.contains("OLD-REACTION"),
 		"a jumper's passage is not shown how earlier jumpers were met, and only that")
-	# CONTROLS: unmasked, the later card is there; with no brief, the greeting stays
+	# Controls: unmasked, the later card is there; with no brief, the greeting stays
 	var bare := String(TablePrompts.reader("Test Tarot", brief, plan, "1", prod._said(0), prod._drawn(1), 3, false, past, [])["prompt"])
 	_ok(bare.contains("the Moon"), "control: the mask check is blind - unmasked, the earlier reader's Moon is not there")
 	_ok(TablePrompts.unfixed("Hello, my loves. Okay.", "").contains("Hello, my loves"),
 		"control: a greeting the brief does not give is dropped")
 	_ok(TablePrompts.mask_cards("Oh. The Tower, and the Ace of Cups.", ["The Tower", "Ace of Cups", "Ace"]) == "Oh. [card], and [card].",
 		"card names are not masked whole: %s" % TablePrompts.mask_cards("Oh. The Tower, and the Ace of Cups.", ["The Tower", "Ace of Cups", "Ace"]))
-	# A PLAN LANDS WITH ITS HABITS AND ITS RUNNING BIT in the shape their readers expect
+	# A plan lands with its habits and its running bit in the shape their readers expect
 	var fresh := TableEpisode.open(show, 2222)
 	var lp := TableProducer.new(fresh, {"title": "T", "brief": brief, "deck": FixtureDeck.cards()})
 	_ok(lp._land_plan(JSON.stringify({"episode_title": "T", "habits": "titles end in brackets, decks show people",

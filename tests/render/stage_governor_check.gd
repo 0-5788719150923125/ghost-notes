@@ -6,16 +6,15 @@ extends SceneTree
 ## Frames are played to it as `main._process` plays them - what the frame before cost the app's thread, and how long it
 ## took in all - at a 160 Hz display's pace: a frame the stage ran in takes the scene's time, the others a refresh.
 ##
-## A HEAVY SCRIPT IS SPACED OUT, AND STAYS SO: a scene costing the thread 111 ms a frame (a terrain) climbs to one frame
-## in six and is held there, since its own frames read heavy at every level; a light scene is never touched; one long
-## frame (a scene's build) costs one level for a couple of seconds, no more. It lets go a level at a time once the scene
-## is light, and at once on a scene cut.
+## A heavy script is spaced out and stays so: a scene costing the thread 111 ms a frame climbs to one frame in six
+## and is held there (its own frames read heavy at every level); a light scene is never touched; one long frame (a
+## scene's build) costs one level for a couple of seconds. It lets go a level at a time once the scene is light, and
+## at once on a scene cut.
 ##
-## A STAGE THE GRAPHICS CARD IS SLOW WITH IS LEFT ALONE, AND SAID (2026-11-11): frames 25 ms apart of which the thread
-## spends 4 never change the level, and [member StageGovernor.slow_elsewhere] says so. THE CONTROL is the governor as it
-## was, handed the whole frame's time: on the trace the app's log of 2026-11-10 holds (25 ms a frame drawn every frame;
-## 9 ms once it is drawn every other, the card's work waited for in the frames between) it changes level again and
-## again - the hunting that was seen as constant hitching. And a frame slow on the thread itself is not "elsewhere".
+## A stage the graphics card is slow with is left alone, and said: frames 25 ms apart of which the thread spends 4
+## never change the level, and [member StageGovernor.slow_elsewhere] says so. Control: the governor handed the whole
+## frame's time instead changes level again and again on that trace (25 ms a frame drawn every frame; 9 ms once drawn
+## every other). And a frame slow on the thread itself is not "elsewhere".
 
 const REFRESH := 1.0 / 160.0
 
@@ -122,8 +121,7 @@ func _card_bound() -> void:
 	_ok(r["changes"] == 0 and r["most"] == 0, "frames 25 ms apart, 4 of them the thread's: the level never changes (%d changes in a minute)" % r["changes"])
 	_ok(g.slow_elsewhere and g.whole > StageGovernor.HEAVY_MS and g.cost < StageGovernor.GOOD_MS,
 		"and it is said: slow, and not for the thread's sake (%.0f ms a frame, %.0f of them its own)" % [g.whole, g.cost])
-	# THE CONTROL: the same governor handed the whole frame, as it was - on the trace the log holds, where the card's work is
-	# waited for in the frames between once the stage is drawn every other one, so the stage's own frames read 9 ms
+	# the control: the same governor handed the whole frame, where the card's work is waited for in the frames between once the stage is drawn every other one
 	var was := StageGovernor.new()
 	var hunted := _play(was, 60.0, _flat(4.0), func(level: int) -> float: return 21.0 if level == 0 else 5.0, true)
 	_ok(hunted["changes"] >= 20 and hunted["most"] >= 1, "CONTROL: handed the whole frame's time it hunts (%d changes in a minute, to level %d)"

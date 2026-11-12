@@ -27,7 +27,7 @@ shader_type canvas_item;
 // drawn in the masking color, never the target hue - a tinted rim just paints
 // the removed color back); everywhere the field is absent, the footage stays
 // intact. (The sparse regions
-// of the pattern DRAW THE VOID - tendrils devouring the subject - they don't
+// of the pattern draw the void - tendrils devouring the subject - they don't
 // open windows onto it.)
 //
 // Time comes in as a uniform (the clip's own playback position), never TIME -
@@ -424,7 +424,7 @@ float snow_layer(vec2 p, float thr) {
 // threshold edge, 0 regardless for pixels with no real color.
 //
 // The gate is COLORFULNESS (saturation x brightness), not HSV saturation alone.
-// HSV saturation is chroma NORMALIZED BY BRIGHTNESS, so a near-black compressed
+// HSV saturation is chroma normalized by brightness, so a near-black compressed
 // pixel - RGB(10,25,20), say - scores "saturation 0.6" while carrying almost no
 // actual color, and its quantized hue is junk that lands anywhere on the wheel
 // (in red-lit footage, disproportionately on red's complement, teal). Gating on
@@ -453,7 +453,7 @@ float tap_mask(float target_hue, vec3 hsv) {
 // fragment: [0..8] = center + fine ring, [9..16] = mid ring, [17..24] = wide
 // ring). Averaging the MASK across the neighborhood - never the color (averaging
 // RGB across a red/blue seam invents purple) - turns the blocky steps of
-// compressed chroma into coverage gradients. The mask is GRAY AND CONTINUOUS end
+// compressed chroma into coverage gradients. The mask is gray and continuous end
 // to end; nothing downstream may treat it as on/off.
 float mask_over(float target_hue, vec3 taps[25], int start, int count) {
 	float acc = 0.0;
@@ -511,7 +511,7 @@ float wave_wash(vec2 uv, vec2 flow) {
 	return clamp(acc, 0.0, 1.0);
 }
 
-// THE REMNANT RULE. Suppressing a keyed pixel by scaling its RGB keeps its HUE -
+// The remnant rule. Suppressing a keyed pixel by scaling its RGB keeps its HUE -
 // a half-erased blue pixel is still blue, just dimmer, and against fully-dark
 // neighbors every partial-confidence zone (mask edges, the colorfulness gate's
 // ramp) renders as a halo of the exact color being removed. Removing a color
@@ -552,7 +552,7 @@ float shade_amount(float x, vec2 uv) {
 // color, 0..1. Split out of the effect branch because the branch evaluates it
 // over a disc rather than at one pixel (see there for why).
 //
-// SELECTION IS AN ANGLE WITH A FLAT TOP, not the raw alignment and not a power
+// Selection is an angle with a flat top, not the raw alignment and not a power
 // of it. Erase and crystal use the cosine of the angle directly, which is fine
 // when the result is proportional (subtracting a bit of chroma, mixing a bit of
 // glass) but wrong for a REPLACEMENT, because the cosine is flat near zero and
@@ -627,7 +627,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 	}
 	int effect = u_l_effect[i];
 	if (effect == 0) {
-		// ERASE IS SUBTRACTION, NOT CLASSIFICATION. Every gate-based key -
+		// Erase is subtraction, not classification. Every gate-based key -
 		// hue-distance x colorfulness membership - leaks at its own boundaries:
 		// wherever the gate product dips (shadow edges where red drifts magenta,
 		// dim reds near the colorfulness floor), pixels survive at partial
@@ -652,21 +652,21 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// RAIN. Rewritten from a first cut that was wrong in five separate ways,
 		// each recorded here so none of them comes back.
 		//
-		//  1 THE TAIL POINTED THE WRONG WAY. A falling drop is brightest at its
+		//  1 the tail pointed the wrong way. A falling drop is brightest at its
 		//    LEADING edge, with the tail trailing behind it - i.e. above it. The
 		//    first profile peaked at the top of each cell and faded downward, so
 		//    every drop appeared to be flying upward. The phase runs so that
 		//    yy -> 1 is the bottom of a cell, hence the head, and the tail ramps
 		//    away above it.
-		//  2 IT HAD A TAIL SHAPE AT ALL. Rain is a fast straight line that simply
+		//  2 it had a tail shape at all. Rain is a fast straight line that simply
 		//    fades out behind the head - not a lozenge with a soft nose. A linear
 		//    ramp to a hard leading edge is the whole of it.
-		//  3 THERE WAS NO AMOUNT CONTROL. Coverage moved the COLUMN COUNT, so
+		//  3 there was no amount control. Coverage moved the COLUMN COUNT, so
 		//    every column always held a drop and the sheet went from downpour to
 		//    slightly-finer downpour. Drizzle needs most columns EMPTY, which is a
 		//    per-column existence gate, not a spacing.
-		//  4 IT FELL FAR TOO SLOWLY, and
-		//  5 IT FELL AS ONE RIGID SHEET - every drop the same angle, the same
+		//  4 it fell far too slowly, and
+		//  5 it fell as one rigid sheet - every drop the same angle, the same
 		//    speed, the same length. Real rain is chaotic with a TREND: a wind
 		//    direction that drifts, and drops that scatter around it.
 		float k19 = shade_amount(w, uv);
@@ -676,12 +676,12 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		float len19 = 0.10 * clamp(u_l_scale[i], 0.1, 8.0);
 		float depth19 = clamp(u_l_con[i], 0.0, 1.0);
 		float squall19 = clamp(u_l_smooth[i], 0.0, 1.0);
-		// THE WIND IS A TREND, NOT A SETTING. Pan is the direction it blows on
+		// The wind is a trend, not a setting. Pan is the direction it blows on
 		// average; the gust is a slow smooth wander around that, so the sheet
 		// leans and recovers instead of holding one rigid angle forever.
 		float gust19 = (fbm(vec2(u_time * 0.13, 4.7)) - 0.5) * 1.6;
 		float slant19 = u_l_off[i].x * 0.9 + gust19 * 0.45 * squall19;
-		// HOW MUCH OF THIS PIXEL IS THE SUBJECT. Same idea as crystal's aligned
+		// How much of this pixel is the subject. Same idea as crystal's aligned
 		// fraction - ask the picture per pixel rather than guessing globally.
 		// Dark AND flat reads as background (a wall, or one this session has
 		// already repainted); lit or structured reads as the person in front of
@@ -726,7 +726,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 			float slen19 = max(len19 * blen19 * (0.55 + 0.95 * hl19.x), 1e-3);
 			float rate19 = (1.6 + 6.0 * clamp(u_l_speed[i], 0.0, 4.0))
 				* bspeed19 * (0.7 + 0.6 * hl19.y);
-			// EVERY DROP IS ITS OWN DROP. This is the correction that matters. A
+			// Every drop is its own drop. This is the correction that matters. A
 			// lane hashed once gives each lane a fixed offset, a fixed caliber and
 			// a fixed angle FOREVER, so drop after drop runs down the identical
 			// path - thirty tracks with trains on them, which is exactly what it
@@ -810,7 +810,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// the crystal branch for why a replacement mixed by the raw projection
 		// barely registers on dim footage.
 		float reach18 = clamp(u_l_con[i], 0.0, 1.0);
-		// THE EDGE IS SUPERSAMPLED, and it has to be. Erase and crystal read the
+		// The edge is supersampled, and it has to be. Erase and crystal read the
 		// single pixel under them, which is fine for a proportional effect, but a
 		// REPLACEMENT makes every artifact in the selection visible at full
 		// contrast, and the source is compressed video: theora stores chroma at
@@ -851,7 +851,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 			wsum18 += 0.85;
 		}
 		sel18 /= wsum18;
-		// STRENGTH WITHOUT THE GRAIN. Every other suppression here runs through
+		// Strength without the grain. Every other suppression here runs through
 		// shade_amount, whose per-pixel grain is clocked off the clip's time and
 		// exists to dissolve block boundaries in a DARKENING - where it reads as
 		// film grain. Multiplying a flat replacement by it instead makes the
@@ -886,7 +886,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		float lum6 = dot(col.rgb, vec3(0.299, 0.587, 0.114));
 		vec3 ch6 = col.rgb - vec3(lum6);
 		float p6 = max(0.0, dot(ch6, u_l_tdir[i]));
-		// REPLACEMENT AMOUNT IS THE ALIGNED FRACTION, not the raw projection.
+		// Replacement amount is the aligned fraction, not the raw projection.
 		// The projection measures ABSOLUTE target chroma - tiny on dim footage
 		// even when the pixel is purely the target color, so a replacement
 		// mixed by it barely registers (erase gets away with raw p because
@@ -960,7 +960,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		vec2 h1 = hash22(vec2(salt16, 3.7));
 		vec2 h2 = hash22(vec2(salt16, 9.1));
 		vec2 h3 = hash22(vec2(salt16, 15.3));
-		// NO PAN. The clown mask TRACKS A DETECTED FACE - every feature below is
+		// NO PAN. The clown mask tracks a detected face - every feature below is
 		// placed from the model, every frame - so a fixed screen-space offset on
 		// top of that can only slide the mask off the face it is following. It used
 		// to shift the eye anchors and the whole liquid-sampling frame together,
@@ -980,7 +980,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// COAT window: the face channel of the liquid - advected and decaying
 		// in screen space, with no oval geometry left to rotate.
 		float win16 = smoothstep(0.12, 0.5, paint16.a);
-		// HOW DEEP INSIDE THE MEASURED FACE THIS PIXEL IS - and therefore the
+		// How deep inside the measured face this pixel is - and therefore the
 		// answer to "is this surrounded by coat", which is what the in-fill below
 		// needs. The coat's silhouette is a rasterized landmark polygon carried in
 		// the liquid's alpha: 1 across the whole interior, ramping to 0 over the
@@ -1022,7 +1022,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// through the SAME field (see there), so both deform with the face.
 		vec2 struct16 = vec2(-grad16.y, grad16.x) * smoothstep(0.06, 0.30, length(grad16));
 		vec2 conform16 = struct16 * 0.12;
-		// THE CRACKS LIVE IN THE FACE'S OWN FRAME, not the screen's. They used to
+		// The cracks live in the face's own frame, not the screen's. They used to
 		// be evaluated in screen space with only a soft pull toward the face
 		// center, so as the head moved and turned the lattice slid across the
 		// skin underneath it - which is exactly the "squiggly smears" reading:
@@ -1066,7 +1066,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// socket, so they started in clean white with a gap above them), they
 		// tilted symmetrically (so half of them ran inward, straight down
 		// over the nose and mouth), and they were sized in absolute screen
-		// units (thick bars). Now each one is GATED ON THE PAINT ITSELF at
+		// units (thick bars). Now each one is gated on the paint itself at
 		// its root - no black there, no streak, so they are always attached -
 		// tilts strictly OUTWARD from the face's center line, and is sized
 		// from its own eye's radius so it stays a run of makeup rather than
@@ -1132,7 +1132,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// a FEATURE lands (they paint at full strength on the dark anatomy
 		// they were detected on).
 		float feat16 = max(max(eyeM16, streakM16), max(lipM16, noseM16));
-		// THE COLOR AND DARKNESS GUARDS ONLY APPLY AT THE RIM. Both exist for one
+		// The color and darkness guards only apply at the rim. Both exist for one
 		// job - stopping paint that the liquid has carried past the jawline from
 		// finding anything to draw on - and back when the coat was a screen-space
 		// blob with no fitted geometry they were the ONLY thing doing it. The coat
@@ -1162,7 +1162,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// COMPOSE back to front. Black and red keep a breath of the footage's
 		// light so the paint sits IN the scene's lighting; Morph rotates the
 		// whole palette at the end.
-		// WEAR MARKS THE COAT, IT DOES NOT PERFORATE IT. Chips and erosion used to
+		// Wear marks the coat, it does not perforate it. Chips and erosion used to
 		// SUBTRACT coverage, so the default Wear of 0.45 punched roughly a fifth of
 		// the craquelure's cells clean through to the skin. That was tolerable while
 		// the lattice sat in screen space and a face held about nine cells; moving
@@ -1227,7 +1227,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// The silhouette itself breathes - the edge threshold wanders, so the
 		// outline is never die-cut and never the same twice.
 		float edge17 = fbm(uv * asp17 * 7.0 + vec2(t17 * 0.25, -t17 * 0.55)) - 0.5;
-		// ONE BODY, NOT A FIELD OF CLOUDS. The mass's EXISTENCE comes from the
+		// One body, not a field of clouds. The mass's EXISTENCE comes from the
 		// density alone; Roil only shades the inside of it and wobbles its rim.
 		// Multiplying the density by the noise before thresholding (the first
 		// cut) let the noise punch holes clean through the middle, which is
@@ -1260,7 +1260,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		if (amt17 <= 0.003) {
 			return col;
 		}
-		// LIGHT LOST, NOT BLACK PAINT. A shadow is the same surface under less
+		// Light lost, not black paint. A shadow is the same surface under less
 		// illumination, so a plain multiply is the physically right operation:
 		// it keeps the wall's hue and its texture, and shade_amount's ceiling
 		// guarantees some of the footage always survives inside the mass. A
@@ -1271,7 +1271,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 		// red for something angrier.
 		vec3 cool17 = hue_shift(vec3(0.44, 0.50, 0.64), u_l_tint[i]);
 		dark17 = mix(dark17, dark17 * cool17, 0.38 * body17);
-		// THE EYES BURN. Hollowing alone only reveals whatever wall lies behind
+		// The eyes burn. Hollowing alone only reveals whatever wall lies behind
 		// the socket, and where the ghost's head sits that wall is already
 		// near-black - measured, the sockets came back at luminance 33 against
 		// a body at 31, real structure that was simply invisible. So the
@@ -1992,7 +1992,7 @@ vec4 apply_layer(vec4 col, int i, vec3 taps[25], vec2 uv, sampler2D tex) {
 	// "nothing consumed" must mean untouched footage.
 	float rim = smoothstep(thr - sharp * 3.0, thr, field) * (1.0 - consume);
 	rim *= smoothstep(0.0, 0.08, dens);
-	// THE KEY DOES NOT CLIP THE PATTERN. The old model multiplied the wisp by
+	// The key does not clip the pattern. The old model multiplied the wisp by
 	// local keying confidence, so the pattern's edge WAS the key's edge - and on
 	// compressed footage that edge is ragged, blocky, and temporally unstable:
 	// tendrils were amputated mid-lick along compression noise, constantly.

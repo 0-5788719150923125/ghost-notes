@@ -1,23 +1,19 @@
 extends RefCounted
 class_name ActorFolder
 
-## Actor - one actor of the [Actors] library, as it lies on disk (next/likeness.md, "The actor's
-## folder"): `actor.json` (their name, their sources and their videos, which are ticked, the chosen set
-## and each set's still) and a folder per thing a step covers - each video's (`videos/<vid>/`), the actor's own
-## (the folder itself) and each set's (`sets/<set>/`). EVERY STEP IS FILES ([constant
-## ActorSteps.REGISTRY]'s `outputs`), and beside them, in the same folder's `steps.json`, what each
-## was made from.
+## Actor - one actor of the [Actors] library, as it lies on disk (next/likeness.md, "The actor's folder"): `actor.json`
+## (name, sources, videos, which are ticked, the chosen set and each set's still) and a folder per thing a step covers -
+## each video's (`videos/<vid>/`), the actor's own (the folder itself) and each set's (`sets/<set>/`). Every step is files
+## ([constant ActorSteps.REGISTRY]'s `outputs`); beside them, `steps.json` records what each was made from.
 ##
-## WHAT A STEP WAS MADE FROM is a fingerprint ([method inputs_of]): the step, its version, the
-## settings it reads, and the TOKEN of every output it read - a token being new each time a step is
-## made. So a step made again makes everything made from it stale, a changed setting makes the steps
-## that read it stale, and a video ticked or unticked makes the sets stale. A stale output is still
-## used ([method state_of] says "stale", never "missing") until it is made again.
+## What a step was made from is a fingerprint ([method inputs_of]): the step, its version, the settings it reads, and the
+## token of every output it read (a token is new each time a step is made). So a step made again makes everything made
+## from it stale, a changed setting makes the steps that read it stale, and a video ticked or unticked makes the sets
+## stale. A stale output is still used ([method state_of] says "stale", never "missing") until it is made again.
 ##
-## A VOICE ALONE (`kind` "voice", the Voice training card; next/likeness.md, "A voice alone"): a person whose
-## voice is all that is learned of them - its steps the voice's alone ([method ActorSteps.voice_chain]), a link
-## fetched as its sound ([method sound_only]), and a folder's sound files listed beside its videos. An actor is
-## the rest (no `kind`).
+## A voice alone (`kind` "voice", the Voice training card; next/likeness.md, "A voice alone"): a person whose voice is all
+## that is learned of them - its steps the voice's alone ([method ActorSteps.voice_chain]), a link fetched as its sound
+## ([method sound_only]), and a folder's sound files listed beside its videos. An actor is the rest (no `kind`).
 
 const FILE := "actor.json"
 const STAMPS := "steps.json"
@@ -34,12 +30,9 @@ var data := {}
 ## What was read of the folders since the last [method forget]: a card asks for every step's state
 ## a few times a second, and each reads the stamps of what it is made from.
 var _cache := {}
-## FILES PARSED, kept while they stand unchanged on disk (their time and size): the audit, the stamps,
-## the stills, the motion - asked for many times a refresh, four refreshes a second, at a millisecond or more a
-## read (2026-10-21: the two cards held the main thread 57 ms every quarter second). A write through
-## [method write_file] drops its own. Shared by every [ActorFolder] - and A WORKER READS IT TOO (the Actor card
-## works its rows out off the main thread, on a folder of its own: 2026-10-23, "We shouldn't be blocking the main
-## thread for ANY operation"), so it is touched under [member _kept_lock] alone, never while a file is read.
+## Files parsed, kept while they stand unchanged on disk (their time and size): the audit, stamps, stills and motion,
+## asked for many times a refresh. A write through [method write_file] drops its own. Shared by every [ActorFolder]
+## and read from a worker too, so it is touched under [member _kept_lock] alone, never while a file is read.
 static var _kept := {}
 static var _kept_lock := Mutex.new()
 
@@ -74,8 +67,8 @@ func reload() -> void:
 			data[k] = {}
 
 
-## Write `actor.json`, whole, through a temporary name. "" once written, else why not. Its videos stay
-## in the order they were added: written sorted, they came back in another order after a restart.
+## Write `actor.json`, whole, through a temporary name. "" once written, else why not. Its videos stay in the order they
+## were added.
 func save() -> String:
 	return write_file(dir.path_join(FILE), JSON.stringify(data, "\t", false))
 
@@ -137,8 +130,8 @@ func kind() -> String:
 	return String(data.get("kind", "actor"))
 
 
-## IS ALL THAT IS LEARNED OF THEM THEIR VOICE? Then a link is fetched as its sound alone - a playlist of hours is
-## megabytes, where its pictures would be gigabytes nothing reads.
+## Is all that is learned of them their voice? Then a link is fetched as its sound alone (a playlist's pictures would be
+## gigabytes nothing reads).
 func sound_only() -> bool:
 	return kind() == "voice"
 
@@ -183,7 +176,7 @@ func ticked() -> Array:
 	return out
 
 
-## THE VIDEOS PINNED FOR THE HEAD (a video's `head`): the ticked ones their head of splats learns from alone, when any
+## The videos pinned for the head (a video's `head`): the ticked ones their head of splats learns from alone, when any
 ## is ([method head_videos]) - its ids, by id.
 func pinned() -> Array:
 	var out := ticked().filter(func(v: String) -> bool: return bool(video(v).get("head", false)))
@@ -191,10 +184,9 @@ func pinned() -> Array:
 	return out
 
 
-## A COPY IS NOT ANOTHER VIDEO (2026-10-24: their merged download folders held four videos twice, "(1080p)" and
-## "(1080p, h264)" - the voice was taught the same sentences twice and measured on some it had been taught): a video
-## whose title ([method ActorSources.comparable]) and length, to a tenth of a second, are an earlier one's is a copy
-## of it, left out of every step as if unticked - the earlier one's id, "" for none. Its length is known once probed.
+## A copy is not another video: one whose title ([method ActorSources.comparable]) and length, to a tenth of a second,
+## are an earlier one's is a copy of it, left out of every step as if unticked - the earlier one's id, "" for none.
+## Its length is known once probed.
 func copy_of(vid: String) -> String:
 	return String(_copies().get(vid, ""))
 
@@ -245,8 +237,8 @@ func sheets_dir() -> String:
 
 # --- the sets ------------------------------------------------------------------------------------
 
-## THE SETS AS THEY STAND: the audit's, once it has looked (it may split a set, and says each one's
-## look), else the clustering's. Shared ([method read_kept]): never change them.
+## The sets as they stand: the audit's, once it has looked (it may split a set, and says each one's look), else the
+## clustering's. Shared ([method read_kept]): never change them.
 func sets() -> Array:
 	var au: Variant = read_kept(dir.path_join("audit.json"))
 	if au is Dictionary and (au as Dictionary).get("sets") is Array:
@@ -264,8 +256,8 @@ func set_of(sid: String) -> Dictionary:
 	return {}
 
 
-## THE CHOSEN SET: the one picked on the card while it is still a set, else the steady one with the
-## most usable minutes (a handheld one only where there is no other). "" before there are sets.
+## The chosen set: the one picked on the card while it is still a set, else the steady one with the most usable
+## minutes (a handheld one only where there is no other). "" before there are sets.
 func chosen_set() -> String:
 	var all := sets()
 	var picked := String(data.get("set", ""))
@@ -341,8 +333,8 @@ func put_stamp(step: String, scope: String, summary := "") -> String:
 ## [param step]'s outputs for [param scope] thrown away, and its stamp: ⟳ makes it again, and
 ## what was made from it is stale once it is.
 func drop(step: String, scope: String) -> void:
-	# KEPT ONE BACK, NEVER DELETED (next/editing.md step 12, "the Actor takes step 1"): what the step made moved - never copied, a
-	# model or a video's frames are large - into `versions/<step>/`, its stamp beside it, over the one kept before ([method put_back])
+	# kept one back, never deleted (next/editing.md step 12): what the step made is moved - never copied, a model or
+	# a video's frames are large - into `versions/<step>/`, its stamp beside it, over the one kept before ([method put_back])
 	var back := scope_dir(scope).path_join(VERSIONS).path_join(step)
 	var all := _stamps(scope)
 	var moved := false
@@ -372,8 +364,8 @@ func kept_back(step: String, scope: String) -> bool:
 	return FileAccess.file_exists(scope_dir(scope).path_join(VERSIONS).path_join(step).path_join(STAMPS))
 
 
-## WHAT [param step] MADE BEFORE ITS LAST ⟳ PUT BACK for [param scope]: what stands now goes one back in its place (a swap), the
-## stamp with it. "" done, else why not.
+## Puts back what [param step] made before its last ⟳ for [param scope]: what stands now goes one back in its place (a
+## swap), the stamp with it. "" done, else why not.
 func put_back(step: String, scope: String) -> String:
 	if not kept_back(step, scope):
 		return "nothing %s made before is kept" % step
@@ -418,17 +410,14 @@ func moot(step: String, scope: String) -> bool:
 		"transcribe":
 			return FileAccess.file_exists(String(video(scope.substr(2)).get("captions", "")))
 		"head_frames":
-			# a video with no usable shot of theirs in any set has no moments for their head - known once the
-			# sets are audited (before, every video would be, and their head made of none)
+			# a video with no usable shot of theirs in any set has no moments for their head - known once the sets are audited
 			return not stamp_of("audit", "").is_empty() and head_shots(scope.substr(2)).is_empty()
 	return false
 
 
-## THE HEAD VIDEOS (hosts/avatar/head.py, "ENOUGH OF EACH VIDEO"): the ticked videos with the most usable minutes of
-## them facing the camera in the sets, at most [param most] of them, most first - their ids; none before the audit.
-## THE PINNED ALONE when any is ([method pinned]: 2026-10-25, "reducing the number of videos to 3 very similar ones" -
-## a head of 3 alike videos drew a set's mouth with twice the detail of one of 10 in every light; unticking them would
-## have made the voice and every other step of the actor's again).
+## The head videos (hosts/avatar/head.py, "enough of each video"): the ticked videos with the most usable minutes of them
+## facing the camera in the sets, at most [param most], most first - their ids; none before the audit. The pinned alone
+## when any is ([method pinned]), so pinning narrows the head without unticking videos the voice and other steps use.
 func head_videos(most: int) -> Array:
 	var usable := {}
 	for s in sets():
@@ -445,9 +434,9 @@ func head_videos(most: int) -> Array:
 	return vids.slice(0, most)
 
 
-## THE SHOTS OF VIDEO [param vid] ITS MOMENTS ARE READ FROM, for their head ([ActorBuilder], head_frames): the
-## usable ones of the set it fills most - one camera placement, its room learned whole - `[[start, end], ...]`;
-## none when no set holds a usable shot of it (the audit not made yet, or nothing of theirs in it).
+## The shots of video [param vid] its moments are read from, for their head ([ActorBuilder], head_frames): the usable
+## ones of the set it fills most (one camera placement, its room learned whole) - `[[start, end], ...]`; none when no
+## set holds a usable shot of it (the audit not made yet, or nothing of theirs in it).
 func head_shots(vid: String) -> Array:
 	var best: Array = []
 	var most := 0.0
@@ -498,11 +487,9 @@ func outputs_made(step: String, scope: String) -> bool:
 	return true
 
 
-## WHAT [param step] OVER [param scope] WOULD BE MADE FROM NOW, as a fingerprint: the step, its
-## version, its settings, and the tokens of what it reads. A captions file found later is a new
-## input to a video's words. WHAT IS READ, NEVER IN WHAT ORDER: the videos a step reads go in by id
-## (2026-10-21: listed in the order they were held, a restart that held them in another made the
-## user's built set stale - the sets, the audit and every step of the set, its track too).
+## What [param step] over [param scope] would be made from now, as a fingerprint: the step, its version, its settings,
+## and the tokens of what it reads. A captions file found later is a new input to a video's words. What is read, never
+## in what order: the videos a step reads go in by id.
 func inputs_of(step: String, scope: String) -> String:
 	var row: Dictionary = ActorSteps.REGISTRY.get(step, {})
 	var parts: Array = [step, int(row.get("version", 1))]
@@ -519,7 +506,7 @@ func inputs_of(step: String, scope: String) -> String:
 		parts.append("captions=%s|%d" % [cap, FileAccess.get_modified_time(cap) if FileAccess.file_exists(cap) else 0])
 	if step == "audit" or ActorSteps.per(step) == "set":
 		parts.append("set=" + scope)
-	# a head learned from the videos pinned is stale once others are (none pinned: as it always was)
+	# a head learned from the videos pinned is stale once others are (none pinned: every video)
 	if step == "head" and not pinned().is_empty():
 		parts.append("pinned=" + ",".join(PackedStringArray(pinned())))
 	# a body fitted to one still is stale once another is picked
@@ -574,8 +561,8 @@ func stills_of(sid: String) -> Array:
 	return (d as Dictionary).get("stills", []) if d is Dictionary else []
 
 
-## WHICH OF SET [param sid]'S STILLS A LIKENESS IS DRAWN ON: the one picked on the card while there is
-## one, else the one most at rest ([method rest_of]), else the best.
+## Which of set [param sid]'s stills a likeness is drawn on: the one picked on the card while there is one, else the
+## one most at rest ([method rest_of]), else the best.
 func still_of(sid: String) -> int:
 	var n := stills_of(sid).size()
 	var picked: Variant = (data.get("stills", {}) as Dictionary).get(sid, null) if data.get("stills") is Dictionary else null
@@ -585,8 +572,8 @@ func still_of(sid: String) -> int:
 	return int(rest[0]) if not rest.is_empty() else 0
 
 
-## THE STILLS OF SET [param sid] THAT SHOW THEM AT REST, most at ease first (`rest.json`, the writer's
-## answer: the fourth pass) - every one a still the set has.
+## The stills of set [param sid] that show them at rest, most at ease first (`rest.json`, the writer's answer) - every
+## one a still the set has.
 func rest_of(sid: String) -> Array:
 	var d: Variant = read_kept(set_dir(sid).path_join("rest.json"))
 	var n := stills_of(sid).size()

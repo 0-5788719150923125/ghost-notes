@@ -110,7 +110,7 @@ class Hand:
 
     def top_up(self, enough):
         """BACK TO THE POT BEFORE A MARK THE LOAD WILL NOT LAST (`enough`, the share of a load it takes): 732687's right brow, 53 mm,
-        begun on three tenths of a liner's load, ran dry after 33 and was laid as scraps (feedback 0013, 2026-11-10)."""
+        begun on three tenths of a liner's load, ran dry after 33 and was laid as scraps ."""
         if self.paint and self.tool not in CLEAN_TOOLS and self.load < min(enough, 1.0):
             self._spend("loading", RELOAD)
             self.reloads += 1

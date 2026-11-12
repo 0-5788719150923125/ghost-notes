@@ -1,16 +1,17 @@
 extends Node
 
-## WHAT IS BUILT, ON A MOUNTED TABLE ([TableAssembly], next/assembly.md): a stock finds its inside on a real thing by rays, its pieces
+## What is built, on a mounted table ([TableAssembly], next/assembly.md): a stock finds its inside on a real thing by rays, its pieces
 ## lie inside the walls, a thing with no hollow holds none and says so, nothing else stands on the plate, the acts are scheduled under
-## the words and through their silences, and what `act` tells a puppeteer is true. A table on the stage begins a real record of it, which the show waits for, plays from, and
-## hears: what bodies do is assembly_bake_check's. A hour of it costs what is in things next to nothing, for nothing in it is theirs.
+## the words and through their silences, and what `act` tells a puppeteer is true. A table on the stage begins a real record of it,
+## which the show waits for, plays from and hears (what bodies do is assembly_bake_check's). An hour of it costs next to nothing,
+## since what is in things is the bake's.
 ##
 ##   tests/run_boot_probe.sh tests/table/assembly_table_check.gd 500
 ##
 ## Controls: a solid thing named as a stock's container holds nothing; a tub moved whole is refused; a passage far too short for what
 ## it stands over gets a silence; a table with no `assembly` has none and an `assemble` track on it is refused.
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
+## A boot probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
 
 const DIR := "user://assembly_table_check"
 const Look := preload("res://tests/table/assembly_look_probe.gd")
@@ -103,14 +104,14 @@ func _stands() -> void:
 	_ok(heaps.has("the tub") and heaps.has("the pile") and heaps.has("aside"), "its stocks stood, and an aside: %s" % str(heaps.keys()))
 	var tub: AssemblyHeap = heaps["the tub"]
 	_ok(tub.thing == "toy tub", "the tub's stock knows its thing")
-	# THE TUB'S INSIDE IS ITS INSIDE: the walls left out
+	# the tub's inside is its inside: the walls left out
 	var ti := w._thing_named("toy tub")
 	var box: AABB = w._world_rest_thing(ti) * ((w.things[ti] as Dictionary)["box"] as AABB)
 	var inner_x := box.size.x - 0.024
 	var cells := float(tub.area_cells()) * AssemblyHeap.CELL * AssemblyHeap.CELL
 	_ok(cells > 0.7 * inner_x * (box.size.z - 0.024) and cells < 1.05 * box.size.x * box.size.z, "the rays found the tub's inside: %.3f m2 of %.3f" % [cells, box.size.x * box.size.z])
 	_ok(not is_nan(tub.bed), "a deep tub is filled over a false floor: %.3f, its rim %.3f" % [tub.bed, tub.rim])
-	# EVERY PIECE IN IT LIES INSIDE ITS WALLS, none over the rim by much
+	# every piece in it lies inside its walls, none over the rim by much
 	var out := 0
 	var over := 0
 	var in_tub := 0
@@ -127,7 +128,7 @@ func _stands() -> void:
 	_ok(in_tub > 100, "the tub holds what fills it: %d" % in_tub)
 	_ok(out == 0, "nothing in the tub lies through its walls: %d of %d" % [out, in_tub])
 	_ok(over == 0, "nothing stands far over its rim: %d" % over)
-	# NOTHING ELSE MAY STAND ON THE PLATE OR A PILE
+	# nothing else may stand on the plate or a pile
 	var keep: Array = medium._things_part.off_limits()
 	var at := TableAssembly.base_center(w.assembly_spec, medium._plan)
 	_ok(keep.any(func(r: Rect2) -> bool: return r.has_point(at)), "the plate keeps its room on the table")
@@ -145,33 +146,33 @@ func _scheduled() -> void:
 		times[String((w.acts[int((r as Dictionary)["i"])] as Dictionary)["name"])] = [float(r["t0"]), float(r["t1"])]
 	_ok(times.size() == 4, "every act placed: %s" % str(times.keys()))
 	var words: Array = subs.words
-	# THE VIDEO OPENS TALKING, whatever the reader wrote, and the hands are at work under it - once the table has been seen a settle
+	# the video opens talking, whatever the reader wrote, and the hands are at work under it - once the table has been seen a settle
 	# after the intro ([constant Openings.SETTLE])
 	var first_word := float((words[0] as Dictionary)["t0"])
 	_ok(absf(first_word - Director.intro_hold - Openings.SETTLE) < 1.0, "the first word is said as the video opens, its opening silence moved on: %.1f, the opening %.1f and its settle" % [first_word, Director.intro_hold])
 	_ok(float((times["first-look"] as Array)[0]) <= first_word + 0.5, "and the first act has begun by then: %.1f" % float((times["first-look"] as Array)[0]))
-	# ...AND WHAT WAS CUED AT A WORD WAITS FOR ITS WORD, in a silence or not
+	# ...and what was cued at a word waits for its word, in a silence or not
 	var si: int = (medium._plan.parse["cues"] as Array).filter(func(c: Dictionary) -> bool: return String(c["name"]) == "start-wall")[0]["si"]
 	_ok(absf(float((times["start-wall"] as Array)[0]) - float((words[si] as Dictionary)["t0"])) < 0.6 or float((times["start-wall"] as Array)[0]) >= float((words[si] as Dictionary)["t0"]) - 0.1, "an act cued at a word begins at it")
-	# A BEAT'S LAST SILENCE IS ITS OWN
+	# a beat's last silence is its own
 	var more_end := float((times["more"] as Array)[1])
 	# ...`more` is beat 2's, and beat 3's mark comes after the last word of beat 2's passage
 	var next_mark: int = int((medium._plan.parse["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "work" and int(a["card"]) == 3)[0]["after"])
 	var ended_at := float((words[next_mark - 1] as Dictionary)["t1"])
 	_ok(more_end > ended_at + 4.0, "the work goes on through a silence its words end on: to %.1f, the last word %.1f" % [more_end, ended_at])
-	# THE STEPS ARE IN ORDER, AND EACH OF AN ACT WITHIN ITS TIME
+	# the steps are in order, and each of an act within its time
 	var ordered := true
 	for k in range(1, lg.steps.size()):
 		if lg._t0[k] < lg._t1[k - 1] - 1e-3:
 			ordered = false
 	_ok(ordered, "one hand: no step begins before the last has ended")
-	# A MOVE IS NEVER SLOWER THAN ITS PACE, however much time it has: what is spare goes into stops
+	# a move is never slower than its pace, however much time it has: what is spare goes into stops
 	var slow := 0
 	for k in lg.steps.size():
 		if lg._len[k] > float((lg.steps[k] as Dictionary)["floor"]) + 1e-3:
 			slow += 1
 	_ok(slow == 0, "time left over falls between moves: %d moves stretched" % slow)
-	# A TUB MOVED WHOLE IS REFUSED: what is in it would be left in the air
+	# a tub moved whole is refused: what is in it would be left in the air
 	var raw := Look._acts().duplicate(true)
 	(raw["acts"] as Array).append({"name": "shift-tub", "beat": 1, "about": "x", "length": 3, "tracks": [{"thing": "toy tub", "law": "carry", "to": [10, 0, 10]}]})
 	medium.rework(raw)
@@ -201,8 +202,9 @@ func _said() -> void:
 	_build(Look._table(), Look._acts(), SAID)
 
 
-## THE BUILD, RECORDED AND HEARD: a table on the stage asks, the record is made in a process of its own, the pieces then stand where it has them, and what is heard is what it holds: a dig
-## and a press are heard, a stop is not, and nothing is louder than the rest of the work is allowed to be.
+## The build, recorded and heard: a table on the stage asks, the record is made in a process of its own, the pieces then stand where it
+## has them, and what is heard is what it holds: a dig and a press are heard, a stop is not, and nothing is louder than the rest of
+## the work is allowed to be.
 func _heard() -> void:
 	var small := {"acts": [{"name": "a-dig", "beat": "intro", "about": "digging", "length": "under", "tracks": [{"law": "assemble", "ops": [
 		{"do": "dig", "in": "the pile", "seconds": 6.0}, {"do": "pause", "seconds": 4.0}, {"do": "put", "part": "brick 2x4 red", "at": [2, 2], "from": "the pile"}]}]}]}
@@ -223,7 +225,7 @@ func _heard() -> void:
 	var dig := 0
 	var put := 2
 	_ok(String((lg.steps[put] as Dictionary)["do"]) == "put", "its steps: %s" % str(lg.steps.map(func(q: Dictionary) -> String: return String(q["do"]))))
-	# ...A MOMENT OF THE RECORD, AT THE SHOW'S TIME: a piece is where it says, and a stop stands still
+	# ...a moment of the record, at the show's time: a piece is where it says, and a stop stands still
 	var tau_a := lg.tau_at(lg._t0[1] + 0.5)
 	var tau_b := lg.tau_at(lg._t1[1] - 0.5)
 	_ok(tau_a == tau_b, "through a pause the record stands: %.3f, %.3f" % [tau_a, tau_b])
@@ -239,8 +241,9 @@ func _heard() -> void:
 	_build(Look._table(), Look._acts(), SAID)
 
 
-## A SHOW PLAYING WHILE ITS RECORD IS MADE, as the app's does: it waits at first, what is written lands bit by bit with no frame waiting on a disk, and it goes on. A gate takes the path a
-## render takes everywhere else, so this is the only one that walks it. Its control: told to go on past what has landed, it would be behind.
+## A show playing while its record is made, as the app's does: it waits at first, what is written lands bit by bit with no frame
+## waiting on a disk, and it goes on. A gate takes the path a render takes everywhere else, so this is the only one that walks it.
+## Its control: told to go on past what has landed, it would be behind.
 func _live() -> void:
 	var own := ProjectSettings.globalize_path("res://dist/assembly_bakes/live_check")
 	if DirAccess.dir_exists_absolute(own):
@@ -297,8 +300,8 @@ func _rendered_peak(sounds: WorkSounds, t0: float, t1: float) -> float:
 	return peak
 
 
-## AN HOUR OF IT (the user: "The video might be long"): nothing here is the bake's, so its frames come to nothing, and a frame of
-## the assembly costs what moves. Measured by the frames a bake keeps, never by a clock.
+## An hour of it: nothing here is the bake's, so its frames come to nothing, and a frame of the assembly costs what moves. Measured by
+## the frames a bake keeps, never by a clock.
 func _long_show() -> void:
 	var w: TableWork = medium._work
 	if w.assembly == null or w.physics == null:
@@ -311,7 +314,7 @@ func _long_show() -> void:
 	_ok(f0 != null and f0 == f1, "and leaves the bake with nothing to change, all %d pieces of it outside it" % lg.pieces.size())
 
 
-## THE PROMPTS, WHOLE, with a show that builds and goes quiet: every name filled in.
+## The prompts, whole, with a show that builds and goes quiet: every name filled in.
 func _prompts() -> void:
 	var w: TableWork = medium._work
 	Rules.clear()
@@ -324,7 +327,7 @@ func _prompts() -> void:
 	var plain := plan.duplicate(true)
 	plain["assembly"] = false
 	_ok(not String(TablePrompts.puppeteer("Show", "a brief", plain, 3, [], "", 12)["prompt"]).contains("brick"), "control: a show that builds nothing never hears of bricks")
-	# AN EPISODE OPENS TALKING: its reader is told, and given the words to do it with, however quiet the show and however little work is under it
+	# an episode opens talking: its reader is told, and given the words to do it with, however quiet the show and however little work is under it
 	var opening := TablePrompts.reader("Show", "a brief", plan, "intro", [], [], 1, false, [], [], [], true, false, [], Motions.of_beat(acts, "intro"))
 	_ok(String(opening["prompt"]).contains("OPENS THE VIDEO"), "the opening passage's reader is told it opens talking")
 	var minute := "%d to %d" % [roundi(TablePrompts.QUIET_OPENING_WORDS * 0.8), roundi(TablePrompts.QUIET_OPENING_WORDS * 1.2)]

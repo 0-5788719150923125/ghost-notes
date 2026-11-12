@@ -1,14 +1,13 @@
 extends RefCounted
 class_name AssemblyMeshes
 
-## AssemblyMeshes - WHAT AN ASSEMBLY'S PARTS LOOK LIKE ([Assembly]'s kinds), as meshes: one for each kind and size, its origin the
-## middle of its underside, across along x, deep along z. Studs carry no maker's mark. Built by hand, as [Props] builds a thing, so
-## each costs what is seen: a heap of a thousand of them is drawn at every shadow it casts, and a tub's pieces lie studs up, studs
-## down and on their sides, so the underside is real too - the walls, and the tubes the studs grip.
+## AssemblyMeshes - what an assembly's parts look like ([Assembly]'s kinds), as meshes: one for each kind and size, its origin the middle of
+## its underside, across along x, deep along z. Studs carry no maker's mark. Built by hand, as [Props] builds a thing, so each costs what is
+## seen: a heap of a thousand of them is drawn at every shadow it casts, and a tub's pieces lie studs up, studs down and on their sides, so
+## the underside is real too - the walls and the tubes the studs grip.
 ##
-## SMALL EDGES THAT CATCH THE LIGHT: a molded brick's edges are broken a fraction of a millimeter, and its studs' tops are too, and
-## that thin line of highlight is most of what makes one read as a brick and not a box. Each part stands a hair inside its cell, as
-## a real one does, so a wall's joints are seen.
+## Small edges catch the light: a molded brick's edges and its studs' tops are broken a fraction of a millimeter, and that thin highlight
+## is most of what makes one read as a brick and not a box. Each part stands a hair inside its cell, so a wall's joints are seen.
 
 const STUD := Assembly.STUD
 const PLATE := Assembly.PLATE
@@ -32,7 +31,7 @@ static var _kept := {}
 static var _lock := Mutex.new()
 
 
-## THE MESH OF A PART: made once, under a lock, for a table is built on a worker ([TablePreview]).
+## The mesh of a part: made once, under a lock, for a table is built on a worker ([TablePreview]).
 static func mesh_of(kind: String, w: int, d: int) -> ArrayMesh:
 	var key := "%s %dx%d" % [kind, w, d]
 	_lock.lock()
@@ -63,7 +62,7 @@ static func mesh_of(kind: String, w: int, d: int) -> ArrayMesh:
 	return made
 
 
-## THE PLATE a build stands on: thin, studded all over.
+## The plate a build stands on: thin, studded all over.
 static func base_of(w: int, d: int) -> ArrayMesh:
 	var key := "base %dx%d" % [w, d]
 	_lock.lock()
@@ -120,7 +119,7 @@ static func _under(b: Build, w: int, d: int, tall: float) -> void:
 			b.tube(Vector3((float(i) + 1.0 - float(w) * 0.5) * STUD, 0.0, 0.0), BAR_R, top)
 
 
-## A SLOPE, its back along far z at full height, its top flat for the back row, falling 45 degrees to its low front edge.
+## A slope, its back along far z at full height, its top flat for the back row, falling 45 degrees to its low front edge.
 static func _slope(b: Build, w: int, d: int) -> void:
 	var hw := float(w) * STUD * 0.5 - INSET
 	var hd := float(d) * STUD * 0.5 - INSET
@@ -132,7 +131,7 @@ static func _slope(b: Build, w: int, d: int) -> void:
 	_studs(b, w, d, tall, func(j: int) -> bool: return j == 0)
 
 
-## A ROUND PART: its body turned, broken at its top edge, a stud on each of its studs.
+## A round part: its body turned, broken at its top edge, a stud on each of its studs.
 static func _round(b: Build, w: int) -> void:
 	var r := float(w) * STUD * 0.5 - INSET
 	var tall := PLATE * 3.0
@@ -140,7 +139,7 @@ static func _round(b: Build, w: int) -> void:
 	_studs(b, w, w, tall, func(_j: int) -> bool: return true)
 
 
-## AN ARCH: standing on its two end studs, its opening a curve under its top, studs along all of its top.
+## An arch: standing on its two end studs, its opening a curve under its top, studs along all of its top.
 static func _arch(b: Build, w: int, d: int) -> void:
 	var hw := float(w) * STUD * 0.5 - INSET
 	var hd := float(d) * STUD * 0.5 - INSET
@@ -195,7 +194,7 @@ class Build:
 		var b3 := Vector3(b.x, t, b.z) - normal * e - along * e
 		quad(a2, b2, b3, a3, (normal + Vector3.UP).normalized())
 
-	## A PART'S SHELL: top and four sides with its edges broken, hollow below - a rim round its underside and a ceiling above it.
+	## A part's shell: top and four sides with its edges broken, hollow below - a rim round its underside and a ceiling above it.
 	func shell(hw: float, hd: float, tall: float) -> void:
 		box_open(hw, hd, tall)
 
@@ -220,7 +219,7 @@ class Build:
 		quad(Vector3(iw, 0.0, id), Vector3(-iw, 0.0, id), Vector3(-iw, top, id), Vector3(iw, top, id), Vector3.FORWARD)
 		quad(Vector3(-iw, top, id), Vector3(-iw, top, -id), Vector3(iw, top, -id), Vector3(iw, top, id), Vector3.DOWN)
 
-	## A STUD standing on [param at]: its side round and smooth, its top broken, its cap flat.
+	## A stud standing on [param at]: its side round and smooth, its top broken, its cap flat.
 	func stud(at: Vector3) -> void:
 		var r := STUD_R
 		var h := STUD_H
@@ -273,7 +272,7 @@ class Build:
 		for k in range(1, sides - 1):
 			i.append_array(PackedInt32Array([cap, cap + k + 1, cap + k]))
 
-	## A SOLID OF THIS OUTLINE (z, y points, counterclockwise from outside at +x) across x from [param x0] to [param x1].
+	## A solid of this outline (z, y points, counterclockwise from outside at +x) across x from [param x0] to [param x1].
 	func extrude_x(outline: PackedVector2Array, x0: float, x1: float) -> void:
 		var tris := Geometry2D.triangulate_polygon(outline)
 		for side in 2:
@@ -301,7 +300,7 @@ class Build:
 			var out := Vector3(0.0, -along.x, along.y)
 			quad(Vector3(x1, a.y, a.x), Vector3(x1, b.y, b.x), Vector3(x0, b.y, b.x), Vector3(x0, a.y, a.x), out)
 
-	## A TURNED BODY round the vertical, [param tall] high: its side smooth, its top edge broken, its top and underside flat.
+	## A turned body round the vertical, [param tall] high: its side smooth, its top edge broken, its top and underside flat.
 	func turned(r: float, tall: float, sides: int) -> void:
 		var e := EDGE
 		var base := v.size()

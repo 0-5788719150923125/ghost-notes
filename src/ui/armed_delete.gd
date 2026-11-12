@@ -1,10 +1,10 @@
 extends RefCounted
 class_name ArmedDelete
 
-## ArmedDelete - A DELETE PRESSED TWICE, because it cannot be undone: the first press arms it for [constant ARMED] seconds
-## ("Delete?", in red), the second calls what it deletes. A dialog for every bad picture would make clearing a run of them
-## a chore, which is exactly when it is used. One button for whatever a card deletes of what was made - a picture's
-## version ([IllustrationPanel]), a painted thumbnail, a kept client ([YouTubeCard]) - where two alike had grown.
+## ArmedDelete - a delete pressed twice, because it cannot be undone: the first press arms it for
+## [constant ARMED] seconds ("Delete?", in red), the second calls what it deletes. One button for
+## whatever a card deletes of what was made - a picture's version ([IllustrationPanel]), a painted
+## thumbnail, a kept client ([YouTubeCard]).
 
 ## How long a first press stays armed, in seconds.
 const ARMED := 3.0
@@ -16,8 +16,7 @@ static func button(label: String, act: Callable, tip: String) -> Button:
 	b.text = label
 	b.tooltip_text = tip
 	b.focus_mode = Control.FOCUS_NONE
-	# THE DISARM TIMER IS THE BUTTON'S CHILD, not a SceneTree timer: a delete rebuilds a list and frees the button, and a
-	# tree timer still holding it fired into a freed capture.
+	# The disarm timer is the button's child, not a SceneTree timer: a delete rebuilds a list and frees the button.
 	var disarm := Timer.new()
 	disarm.one_shot = true
 	disarm.wait_time = ARMED

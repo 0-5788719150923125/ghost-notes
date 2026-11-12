@@ -3,65 +3,35 @@ class_name GlyphSet
 
 ## GlyphSet - a seeded alphabet of invented characters, baked as pen-ready ink.
 ##
-## An alphabet is cattle, not pets. A pet alphabet is a font: someone drew every
-## letter by hand and froze it. This one is a GRAMMAR - a small lattice of nodes, a
-## seeded subset of the connections a pen is allowed to make between them, and a
-## per-glyph walk over that subset - so a seed produces a whole writing system with
-## one consistent hand: its own slant, weight, terminal style, nib angle and taste
-## in curves. Two seeds give two scripts that are each internally coherent and
-## obviously not the same language.
+## The alphabet is a grammar rather than a font: a small lattice of nodes, a seeded subset of the connections a pen may make
+## between them, and a per-glyph walk over that subset. A seed produces a whole writing system with one consistent hand (slant,
+## weight, terminal style, nib angle, curves). It lives outside any one scene because writing is also annotation: the `glyphs`
+## scene writes a page of it, and a map or cross-section uses the same script for labels. A caller needing a smaller hand passes
+## `advance` in `cfg`.
 ##
-## It lives outside any one scene because writing is annotation as much as it is
-## subject: the `glyphs` scene writes a page of it, and a map or a cross-section
-## wants the same invented script for its labels and callouts. A caller that needs
-## a smaller hand passes `advance` in `cfg`; everything else follows from it.
-##
-## WHAT A SEED DECIDES. The lattice (3x5 / 4x5 / a 7-node hex), which connections
-## are legal at all (the grammar: a script of verticals and shallow diagonals is a
-## different script from a boxy one), how many strokes a character takes, how much
-## the pen curves, whether terminals are blunt, serifed or hooked, the slant, the
-## broad-nib angle and contrast, the diacritic rate, and whether the hand joins its
+## A seed decides: the lattice (3x5 / 4x5 / a 7-node hex), which connections are legal, strokes per character, pen curvature,
+## terminals (blunt, serifed or hooked), slant, broad-nib angle and contrast, the diacritic rate, and whether the hand joins its
 ## characters with a trailing hairline.
 ##
-## WHAT COMES OUT. Per glyph, quad geometry already expanded to stroke width, in EM
-## SPACE - x to the right, y from -1 at the cap line to 0 at the baseline, with the
-## slant already sheared in. Em space matters: it makes the per-frame transform a
-## uniform scale plus a rotation and a translation, which is one native
-## `Transform2D * PackedVector2Array` per glyph instead of a GDScript loop over
-## every vertex. A page of 220 characters is then a few hundred native calls, and
-## that is the difference between this scene existing and not.
+## Output per glyph: quad geometry already expanded to stroke width, in em space (x to the right, y from -1 at the cap line to 0
+## at the baseline, slant already sheared in), so the per-frame transform is one native `Transform2D * PackedVector2Array` per glyph.
 ##
-## STROKE WIDTH IS BAKED, and it can be because it is resolution independent:
-## `weight` is quoted in pixels at [constant REF_UNIT], the drawn size is
-## `em * unit()` pixels, and `weight * unit() / REF_UNIT / (em * unit())` cancels
-## `unit()` out entirely. So the same baked geometry is correct at 720p and at 4K.
+## Stroke width is baked and resolution independent: `weight` is in pixels at [constant REF_UNIT], the drawn size is `em * unit()`
+## pixels, and `unit()` cancels, so the same geometry is correct at 720p and 4K.
 ##
-## THE NIB. Width per segment is not constant: a broad nib held at a fixed angle
-## writes thick across its edge and thin along it, which is where the whole look of
-## a written hand comes from. Each segment's width is multiplied by
-## `|sin(direction - nib_angle)|` eased toward 1 by the sampled contrast, so a
-## contrast of 0 is a monoline felt-tip and 0.85 is a chisel.
+## The nib: each segment's width is multiplied by `|sin(direction - nib_angle)|` eased toward 1 by the sampled contrast (0 is a
+## monoline felt-tip, 0.85 a chisel).
 ##
-## ANTIALIASING BY TEXTURE. Every stroke quad is drawn wider than its core and
-## carries a 1-D alpha ramp across its width (see [method ramp_texture]), so the
-## edge is a gradient the rasterizer can interpolate rather than a hard step. This
-## replaces [TriBatch]'s three-quads-per-line feather with ONE quad per segment,
-## which matters at four thousand quads a frame, and it lets the whole page share a
-## single color per glyph - a plain `fill()` on a packed array rather than a
-## per-vertex loop.
+## Antialiasing by texture: every stroke quad is drawn wider than its core and carries a 1-D alpha ramp across its width (see
+## [method ramp_texture]), replacing [TriBatch]'s three quads per line with one per segment and letting a glyph share a single color.
 
-## Pixels of screen height the sampled [member weight] is quoted at, matching the
-## rest of the project's convention (the 1080-tall reference frame).
+## Pixels of screen height the sampled [member weight] is quoted at (the 1080-tall reference frame).
 const REF_UNIT := 1080.0
 
-## Fraction of a stroke quad's width that is fully opaque; the rest is the feather.
-## 0.5 puts a quarter of the quad on each side into the ramp, so a 2 px core carries
-## a 1 px gradient either side - enough for the rasterizer to work with, not so much
-## that a heavy stroke turns to smoke.
+## Fraction of a stroke quad's width that is fully opaque; the rest is the feather. 0.5 puts a 1 px gradient either side of a 2 px core.
 const CORE := 0.5
 
-## Texels across the alpha ramp. 16 is plenty: the profile is a trapezoid and the
-## sampler interpolates it.
+## Texels across the alpha ramp (the profile is a trapezoid and the sampler interpolates it).
 const RAMP := 16
 
 const LATTICES := {
@@ -70,16 +40,13 @@ const LATTICES := {
 	"hex7": {"cols": 0, "rows": 0},
 }
 
-## Blunt is a cut reed, serif adds a written cross-tick at free ends, hook curls the
-## exit of a stroke the way a hand does when it lifts. "Round" in the sense of a
-## rounded terminal: the curl is what rounds it off, since a canvas quad has no cap.
+## Blunt is a cut reed, serif adds a written cross-tick at free ends, hook curls the exit of a stroke (a canvas quad has no cap).
 const TERMINALS := ["blunt", "serif", "hook"]
 
 
-## One character: quad geometry, plus the cumulative ink length that lets a pen
-## reveal it stroke by stroke.
+## One character: quad geometry, plus the cumulative ink length that lets a pen reveal it stroke by stroke.
 class Glyph:
-	## 4 vertices per quad, one quad per stroke segment, in em space, in WRITING ORDER.
+	## 4 vertices per quad, one quad per stroke segment, in em space, in writing order.
 	var verts := PackedVector2Array()
 	## Parallel to [member verts]: the cross-width ramp coordinate for each vertex.
 	var uvs := PackedVector2Array()
@@ -119,9 +86,8 @@ var _perm := PackedInt32Array()     # 36 harmonic keys -> character index
 var _marks := PackedInt32Array()    # the reserved characters, in order
 
 
-## Roll a whole writing system. [param cfg] overrides individual decisions -
-## `advance`, `aspect`, `weight`, `count`, `lattice` - for a caller that needs the
-## hand to match something else (map labels sized to their contour).
+## Roll a whole writing system. [param cfg] overrides individual decisions (`advance`, `aspect`, `weight`, `count`, `lattice`)
+## for a caller that needs the hand to match something else.
 func _init(rng: RandomNumberGenerator, cfg: Dictionary = {}) -> void:
 	var lat_keys := LATTICES.keys()
 	lattice = String(cfg.get("lattice", lat_keys[rng.randi() % lat_keys.size()]))
@@ -160,9 +126,7 @@ func _init(rng: RandomNumberGenerator, cfg: Dictionary = {}) -> void:
 		seen[sig] = true
 		glyphs.append(_forge(nodes, strokes, rng))
 
-	# A few characters held back from the sound mapping become the hand's PUNCTUATION -
-	# marks that only ever appear at a word boundary. Not decoration: it is what makes a
-	# page read as language rather than as an undifferentiated stream of shapes.
+	# A few characters held back from the sound mapping become the hand's punctuation: marks that only appear at a word boundary.
 	reserve = 0
 	if glyphs.is_empty():
 		return
@@ -192,22 +156,13 @@ func count() -> int:
 
 ## The character this moment of music writes.
 ##
-## The 12 chroma channels of [method Spectrum.harmonic_signature] pick a pitch class
-## by argmax, and the coarse low/mid/high tilt that follows them picks one of three
-## registers, so the key is 36 wide: the same chord in the same register writes the
-## same character every time it comes round, and the page becomes a transcription of
-## the progression rather than a random walk. A seeded permutation stands between
-## the key and the alphabet, so which shape a chord means is per-session.
+## The 12 chroma channels of [method Spectrum.harmonic_signature] pick a pitch class by argmax, and the coarse low/mid/high tilt
+## picks one of three registers, so the key is 36 wide: the same chord in the same register writes the same character each time.
+## A seeded permutation stands between the key and the alphabet, so which shape a chord means is per-session.
 ##
-## [param step] is how many characters have already been written under THIS key; it walks the
-## permutation on by a stride coprime with its 36 entries, so a run of tens of characters goes
-## by before any shape comes round again. Without it the hand wrote ONE character over and
-## over: [HarmonicSignature] is an EMA over 2.5 s of context and this pen writes up to twelve
-## characters a second, so its argmax holds still for tens of characters at a stretch - which
-## is exactly "hundreds of the exact same glyph in a row, then a hundred of the next one". A
-## chord now names a WORD rather than a letter, and because the key still fixes where that
-## word STARTS, the same chord in the same register still writes the same thing every time it
-## comes round - the transcription this mapping exists for survives intact.
+## [param step] is how many characters have already been written under this key; it walks the permutation on by a stride coprime
+## with its 36 entries, so a chord names a word rather than a letter (the signature is an EMA over 2.5 s while the pen writes up
+## to twelve characters a second, so its argmax holds still for tens of characters). The key still fixes where that word starts.
 func pick(sig: PackedFloat32Array, step := 0) -> int:
 	if glyphs.is_empty():
 		return 0
@@ -217,10 +172,8 @@ func pick(sig: PackedFloat32Array, step := 0) -> int:
 	return _perm[posmod(k + step * 7, _perm.size())]
 
 
-## The 36-wide harmonic key this moment of music lands on, or -1 if there is no signature yet.
-## Exposed separately from [method pick] so a caller can notice the key CHANGING - which is
-## where one word ends and the next begins - without comparing characters, since a short
-## alphabet maps several keys onto the same shape.
+## The 36-wide harmonic key this moment of music lands on, or -1 if there is no signature yet. Separate from [method pick] so a
+## caller can notice the key changing (where one word ends and the next begins) without comparing characters.
 func key(sig: PackedFloat32Array) -> int:
 	if sig.size() < 16:
 		return -1
@@ -243,13 +196,9 @@ func mark(i: int) -> int:
 	return _marks[posmod(i, _marks.size())]
 
 
-## The visible prefix of character [param gi] after [param p] of its ink has been
-## laid down (0 = pen down, 1 = finished), plus where the nib currently sits.
-##
-## The completed segments come out as a native slice of the baked array - no
-## per-vertex work - and only the segment under the nib is rebuilt, by walking its
-## far corners back toward its near ones. Returns
-## `{verts, uvs, tip, dir, done}`.
+## The visible prefix of character [param gi] after [param p] of its ink has been laid down (0 = pen down, 1 = finished), plus
+## where the nib currently sits. The completed segments come out as a native slice of the baked array and only the segment under
+## the nib is rebuilt. Returns `{verts, uvs, tip, dir, done}`.
 func trace(gi: int, p: float) -> Dictionary:
 	var out := {"verts": PackedVector2Array(), "uvs": PackedVector2Array(),
 		"tip": Vector2.ZERO, "dir": Vector2.RIGHT, "done": false}
@@ -283,8 +232,7 @@ func trace(gi: int, p: float) -> Dictionary:
 	var e2 := q3.lerp(q2, t)
 	var v := g.verts.slice(0, base)
 	var uv := g.uvs.slice(0, base)
-	# Below a sliver the partial quad is degenerate and would just flicker; the nib is
-	# still reported at the stroke's start, so the pen rests there rather than jumping.
+	# Below a sliver the partial quad is degenerate and would flicker; the nib is still reported at the stroke's start.
 	if t > 0.02:
 		v.append(q0)
 		v.append(e1)
@@ -348,19 +296,10 @@ static func uv_hi() -> float:
 	return (float(RAMP) - 0.5) / float(RAMP)
 
 
-## PEN PRESSURE WITHOUT REBUILDING ANY GEOMETRY.
-##
-## Stroke width is baked, so a live "press harder" would normally mean rebuilding every
-## vertex every frame. It does not, because the width the eye reads is not the quad's
-## width - it is the width of the ramp's opaque plateau inside that quad. Squeezing the
-## ramp COORDINATE toward the middle of the quad reaches the plateau sooner and thins
-## the stroke; letting it out again thickens it, up to the baked maximum.
-##
-## The squeeze is `u' = 0.5 + (u - 0.5) * k`, which is a [Transform2D] - so a whole
-## character's uv array is remapped by one native multiply, exactly like its vertices.
-## The opaque core comes out at `baked / k` (the ramp's plateau covers half its width,
-## and the quad is twice the core wide, so the two halves cancel to that), which is why
-## the geometry is baked at full pressure and `k` only ever thins it.
+## Pen pressure without rebuilding geometry. The width the eye reads is the ramp's opaque plateau inside the quad, so squeezing
+## the ramp coordinate toward the middle (`u' = 0.5 + (u - 0.5) * k`, a [Transform2D], so a whole character's uv array is remapped
+## by one native multiply) thins the stroke; the opaque core comes out at `baked / k`. The geometry is baked at full pressure and
+## `k` only ever thins it.
 ##
 ## [param amount] is 0 (the hand's nominal weight) to 1 (leaning on it).
 func uv_pressure(amount: float) -> Transform2D:
@@ -372,8 +311,7 @@ func uv_pressure(amount: float) -> Transform2D:
 # Construction
 # ---------------------------------------------------------------------------------
 
-# Lattice nodes in LOCAL coordinates: x in 0..1 across the character, y in -1..0 from
-# the cap line down to the baseline.
+# Lattice nodes in local coordinates: x in 0..1 across the character, y in -1..0 from the cap line down to the baseline.
 func _nodes() -> PackedVector2Array:
 	var out := PackedVector2Array()
 	if lattice == "hex7":
@@ -391,10 +329,8 @@ func _nodes() -> PackedVector2Array:
 	return out
 
 
-# The GRAMMAR: which node pairs this hand may join. Full-height verticals and
-# full-width horizontals are always candidates (a bar is the most basic mark there
-# is), plus short hops and clean diagonals; then a seeded subset of THAT is kept, so
-# one script is all uprights and hooks while another is a mesh of diagonals.
+# The grammar: which node pairs this hand may join. Full-height verticals and full-width horizontals are always candidates, plus
+# short hops and clean diagonals; then a seeded subset of that is kept.
 func _edges(nodes: PackedVector2Array, rng: RandomNumberGenerator) -> Array:
 	var legal: Array = []
 	var n := nodes.size()
@@ -437,10 +373,8 @@ func _adjacency(n: int, edges: Array) -> Array:
 	return adj
 
 
-# One character as a walk over the grammar: the pen lands, runs a few legal
-# connections without retracing itself, and occasionally lifts and lands elsewhere.
-# Pure topology - an Array of Vector2i(node, node). Curvature is drawn later, when the
-# stroke is given a shape, so two characters over the same nodes still differ.
+# One character as a walk over the grammar: the pen lands, runs a few legal connections without retracing itself, and occasionally
+# lifts and lands elsewhere. Pure topology (an Array of Vector2i(node, node)); curvature is drawn later.
 func _walk(n: int, adj: Array, rng: RandomNumberGenerator) -> Array:
 	var want := rng.randi_range(strokes_lo, strokes_hi)
 	var lift_p := rng.randf_range(0.12, 0.40)
@@ -484,8 +418,7 @@ func _signature(strokes: Array) -> String:
 	return out
 
 
-# Local (0..1, -1..0) to em space: scale x by the character's width in ems and shear
-# by the hand's slant. Everything downstream is em space.
+# Local (0..1, -1..0) to em space: scale x by the character's width in ems and shear by the hand's slant.
 func _em(p: Vector2) -> Vector2:
 	var wr := fill / maxf(0.2, aspect)
 	return Vector2(p.x * wr - p.y * lean, p.y)
@@ -507,9 +440,8 @@ func _forge(nodes: PackedVector2Array, strokes: Array, rng: RandomNumberGenerato
 		var a := _em(nodes[v.x])
 		var b := _em(nodes[v.y])
 		var pl := _polyline(a, b, rng.randf_range(-curve_max, curve_max))
-		# Terminals live at ends the rest of the character does not reach. A hook is
-		# part of the stroke (the hand curls as it lifts); a serif is its own tick,
-		# written AFTER the stroke it finishes, which is how a hand actually does it.
+		# Terminals live at ends the rest of the character does not reach. A hook is part of the stroke; a serif is its own tick,
+		# written after the stroke it finishes.
 		var ticks: Array = []
 		if terminal == "hook" and int(deg.get(v.y, 0)) == 1 and pl.size() >= 2:
 			var d := _edge_dir(pl[pl.size() - 2], pl[pl.size() - 1])
@@ -542,9 +474,7 @@ func _serif(p: Vector2, d: Vector2) -> PackedVector2Array:
 	return out
 
 
-# A tick above the cap line or below the baseline - the cheapest way to double an
-# alphabet's apparent size, and the thing that makes an invented script read as
-# written language rather than as ornament.
+# A tick above the cap line or below the baseline: doubles an alphabet's apparent size.
 func _diacritic(wr: float, rng: RandomNumberGenerator) -> PackedVector2Array:
 	var x := wr * rng.randf_range(0.2, 0.8)
 	var y := -1.16 if rng.randf() < 0.65 else 0.16
@@ -562,8 +492,7 @@ func _diacritic(wr: float, rng: RandomNumberGenerator) -> PackedVector2Array:
 	return out
 
 
-# A stroke as a quadratic bow. Segment count follows the curvature: a straight bar is
-# one segment and costs one quad, which is what keeps a page of a runic hand cheap.
+# A stroke as a quadratic bow. Segment count follows the curvature: a straight bar is one segment and one quad.
 func _polyline(a: Vector2, b: Vector2, curve: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	var d := b - a
@@ -596,9 +525,8 @@ func _nib(dir: Vector2) -> float:
 
 
 func _bake(g: Glyph, lines: Array) -> void:
-	# Core width in em units. `weight` is px at REF_UNIT and the character is drawn
-	# `em * unit()` px tall, so unit() cancels and this number is resolution-free.
-	# Baked at FULL pressure, because [method uv_pressure] can only thin a stroke.
+	# Core width in em units (resolution-free: `weight` is px at REF_UNIT and unit() cancels). Baked at full pressure, because
+	# [method uv_pressure] can only thin a stroke.
 	var base_w := weight * (1.0 + pressure) / (REF_UNIT * em)
 	var u0 := uv_lo()
 	var u1 := uv_hi()

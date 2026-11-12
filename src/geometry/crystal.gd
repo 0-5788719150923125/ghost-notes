@@ -1,65 +1,37 @@
 extends RefCounted
 class_name Crystal
 
-## Crystal - a BANK of snow crystals, generated once from sampled morphology.
+## Crystal - a bank of snow crystals, generated once from sampled morphology.
 ##
-## What was wrong with what came before. A flake was drawn by a helper taking a single
-## `shape` scalar in [0,1], which fed three derived values - where the side branches sat,
-## how long they were, and the size of the terminal fork. Those three are affine
-## functions of the same number, and the third is anti-correlated with the other two, so
-## the whole morphology space was a ONE-DIMENSIONAL CURVE: there is no flake with
-## branches near the center and also long, and none with long branches and a large tip.
-## All six arms were bitwise identical by construction, the fold count was a parameter
-## that every call site in the project passed the literal 6, and there was no plate, no
-## column, no needle, no riming and no per-arm variation of any kind. One number.
+## The model: real snow crystal morphology is two-dimensional (Nakaya). Temperature selects the habit (plate near freezing,
+## needle and column through the middle, plate then column when colder) and supersaturation selects the complexity (a bare prism
+## at low humidity, a fernlike dendrite at high). Riming (supercooled droplets freezing onto the arms) is a third independent
+## axis. The sampled space is `habit` x `branch_gens` x `rime`, and a weather can weight the habits it produces.
 ##
-## And it barely mattered, because the crystal path was almost never reached: selection
-## required a probability roll AND depth > 0.8 AND a squared size roll > 0.6, which
-## multiplies out to `crystal_frac * 0.064`. A preset asking for a 10-20% crystal flurry
-## delivered 0.6-1.3%, or about one crystal on screen. The other 94-99% of flakes were
-## two concentric circles - rotationally symmetric, so their per-flake spin and phase
-## were invisible. That is the literal reason every snowflake looked the same.
-##
-## THE MODEL. Real snow crystal morphology is two-dimensional, and has been since Nakaya
-## plotted it: TEMPERATURE selects the habit (plate near freezing, needle and column
-## through the middle, plate again and then column when it gets cold enough), and
-## SUPERSATURATION selects the complexity (a bare prism at low humidity, a full fernlike
-## dendrite at high). Riming - supercooled droplets freezing onto the arms - is a third,
-## independent axis that only needs liquid water present. So the sampled space here is
-## `habit` x `branch_gens` x `rime`, which is a box rather than a line, and a weather can
-## weight the habits it actually produces.
-##
-## THE BANK. Crystals are generated ONCE at build, as flat line lists in local unit space
-## (radius 1, centered on the origin), and every falling flake references one by index.
-## That is the cheap way to get variety: a few dozen genuinely different crystals shared
-## across hundreds of flakes reads as "no two alike" at any density a viewer can audit,
-## while costing one array lookup and a transform per flake instead of a generator. It
-## also means the geometry can be pushed straight through [TriBatch] as segments, which
-## is what makes drawn crystals affordable as the NORM rather than as a rare accent.
+## The bank: crystals are generated once at build, as flat line lists in local unit space (radius 1, centered on the origin), and
+## every falling flake references one by index. A few dozen different crystals shared across hundreds of flakes cost one array
+## lookup and a transform per flake, and the geometry goes straight through [TriBatch] as segments.
 
-## The habits, and what each one is. Weights are supplied per weather by the caller.
-##   plate     - a bare hexagonal plate, no arms. Cold and dry.
+## The habits. Weights are supplied per weather by the caller.
+##   plate     - a bare hexagonal plate, no arms.
 ##   sectored  - a plate with ridges dividing it into six sectors.
 ##   stellar   - the classic six-armed star: arms with a couple of branch generations.
 ##   fern      - a stellar dendrite pushed to its limit; branches carry sub-branches.
-##   needle    - a long thin spike. Drawn with TWO folds, which is what the fold
-##               parameter was always for and never used on.
+##   needle    - a long thin spike, drawn with two folds.
 ##   column    - a stubby hexagonal prism seen with its axis across the frame.
-##   capped    - a column that drifted into plate conditions: a plate at each end.
+##   capped    - a column with a plate at each end.
 ##   bullet    - a rosette of a few short columns sharing an origin at odd angles.
 const HABITS := ["plate", "sectored", "stellar", "fern", "needle", "column", "capped", "bullet"]
 
-## How many arms each habit is built on. This is the knob that was inert before.
+## How many arms each habit is built on.
 const FOLDS := {
 	"plate": 6, "sectored": 6, "stellar": 6, "fern": 6,
 	"needle": 2, "column": 2, "capped": 2, "bullet": 4,
 }
 
 
-## One crystal, ready to draw: `a`/`b` are matched endpoint arrays in LOCAL UNIT SPACE
-## (the crystal spans roughly radius 1), `w` is a per-segment width multiplier, and
-## `fill` is an optional convex polygon for the solid-bodied habits (a plate is a filled
-## hexagon, not an outline).
+## One crystal, ready to draw: `a`/`b` are matched endpoint arrays in local unit space (the crystal spans roughly radius 1), `w`
+## is a per-segment width multiplier, and `fill` is an optional convex polygon for the solid-bodied habits.
 class Shape:
 	extends RefCounted
 	var a := PackedVector2Array()
@@ -78,9 +50,8 @@ class Shape:
 		return a.size()
 
 
-## Build [param count] crystals. [param weights] maps a habit name to a relative weight;
-## anything absent is never generated. [param complexity] biases how many branch
-## generations the branching habits get, and [param rime_max] how heavily they can be
+## Build [param count] crystals. [param weights] maps a habit name to a relative weight; anything absent is never generated.
+## [param complexity] biases how many branch generations the branching habits get, and [param rime_max] how heavily they can be
 ## rimed - both are the weather's business, not the individual crystal's.
 static func bank(rng: RandomNumberGenerator, count: int, weights: Dictionary,
 		complexity := 0.5, rime_max := 0.0) -> Array:
@@ -137,13 +108,10 @@ static func make(rng: RandomNumberGenerator, habit: String, complexity := 0.5,
 
 # --- habits ------------------------------------------------------------------------
 
-## A regular hexagon. `solid` fills it; otherwise it is an outline. The plate is the
-## habit the old drawing code could not express at all - it has no arms, and a flake
-## with no arms was simply not in the vocabulary.
+## A regular hexagon. `solid` fills it; otherwise it is an outline.
 static func _plate(s: Shape, rng: RandomNumberGenerator, r: float, solid: bool) -> void:
 	var turn := rng.randf() * TAU
-	# Real plates are not perfectly regular; a few percent of radius variation per corner
-	# is the difference between a drawn hexagon and a grown one.
+	# a few percent of radius variation per corner, so it reads as grown rather than drawn
 	var pts := PackedVector2Array()
 	for i in 6:
 		var ang := turn + TAU * float(i) / 6.0
@@ -155,8 +123,7 @@ static func _plate(s: Shape, rng: RandomNumberGenerator, r: float, solid: bool) 
 		s.fill = pts
 
 
-## The ridges that divide a sectored plate: a spoke to each corner, sometimes stopping
-## short of it, which is what makes the sectors read as facets rather than as a wheel.
+## The ridges that divide a sectored plate: a spoke to each corner, sometimes stopping short of it, so the sectors read as facets.
 static func _sector_ridges(s: Shape, rng: RandomNumberGenerator) -> void:
 	var reach := rng.randf_range(0.55, 0.95)
 	var n := s.fill.size()
@@ -164,7 +131,7 @@ static func _sector_ridges(s: Shape, rng: RandomNumberGenerator) -> void:
 		s.seg(Vector2.ZERO, s.fill[i] * reach, 0.7)
 
 
-## A long thin spike, drawn on TWO folds so it is a bar rather than a star.
+## A long thin spike, drawn on two folds so it is a bar rather than a star.
 static func _needle(s: Shape, rng: RandomNumberGenerator) -> void:
 	var half_w := rng.randf_range(0.03, 0.10)
 	var taper := rng.randf_range(0.2, 0.7)
@@ -176,16 +143,14 @@ static func _needle(s: Shape, rng: RandomNumberGenerator) -> void:
 	s.seg(-d - p * taper, d - p * taper, 1.0)
 	s.seg(-d + p * taper, -d - p * taper, 0.8)
 	s.seg(d + p * taper, d - p * taper, 0.8)
-	# a few internal striations, which is what makes a needle read as ice
+	# a few internal striations
 	var lines := rng.randi_range(1, 3)
 	for i in lines:
 		var f := float(i + 1) / float(lines + 1) * 2.0 - 1.0
 		s.seg(d * f + p, d * f - p, 0.5)
 
 
-## A hexagonal prism seen from the side: two end caps joined by its long faces. `capped`
-## puts a full plate on each end - the capped column, which is one of the most
-## recognizable real habits and was completely absent.
+## A hexagonal prism seen from the side: two end caps joined by its long faces. `capped` puts a full plate on each end.
 static func _column(s: Shape, rng: RandomNumberGenerator, capped: bool) -> void:
 	var ang := rng.randf() * TAU
 	var d := Vector2(cos(ang), sin(ang))
@@ -198,7 +163,7 @@ static func _column(s: Shape, rng: RandomNumberGenerator, capped: bool) -> void:
 		s.seg(c0 + n * rad * k, c1 + n * rad * k, 1.0)
 	s.seg(c0 - n * rad, c0 + n * rad, 0.9)
 	s.seg(c1 - n * rad, c1 + n * rad, 0.9)
-	# the visible far edge of the prism, which gives it a little solidity
+	# the visible far edge of the prism
 	s.seg(c0 + n * rad * 0.35, c1 + n * rad * 0.35, 0.45)
 	if capped:
 		var cap := rng.randf_range(0.5, 0.85)
@@ -211,9 +176,7 @@ static func _column(s: Shape, rng: RandomNumberGenerator, capped: bool) -> void:
 				s.seg(pts[i], pts[(i + 1) % 6], 0.8)
 
 
-## A bullet rosette: a few short columns sharing an origin at independent angles. This
-## is the habit that the old single-basis drawing could not express even in principle,
-## because every arm had to share one orientation.
+## A bullet rosette: a few short columns sharing an origin at independent angles.
 static func _bullet(s: Shape, rng: RandomNumberGenerator) -> void:
 	var arms := rng.randi_range(3, 6)
 	for i in arms:
@@ -227,11 +190,8 @@ static func _bullet(s: Shape, rng: RandomNumberGenerator) -> void:
 		s.seg(d * ln - n * rad * 0.4, d * ln + n * rad * 0.4, 0.7)
 
 
-## The branching habits. `gens` generations of side branches on each arm, at sampled
-## positions and lengths, with SIBLING JITTER: the branch schedule is drawn once for the
-## crystal and then each arm perturbs it slightly, because real arms grew in the same
-## conditions but are not stamped copies. That single detail does more for the read than
-## any amount of extra branching.
+## The branching habits: `gens` generations of side branches on each arm, at sampled positions and lengths, with sibling
+## jitter: the schedule is drawn once for the crystal and each arm perturbs it slightly.
 static func _dendrite(s: Shape, rng: RandomNumberGenerator, folds: int, complexity: float,
 		fern: bool) -> void:
 	var gens := 1
@@ -252,7 +212,7 @@ static func _dendrite(s: Shape, rng: RandomNumberGenerator, folds: int, complexi
 		_plate_at(s, rng, core, folds)
 	for arm in folds:
 		var base := TAU * float(arm) / float(folds)
-		# per-arm jitter - a few percent, deliberately small
+		# per-arm jitter, a few percent
 		var ang := base + deg_to_rad(rng.randf_range(-2.5, 2.5))
 		var reach := rng.randf_range(0.95, 1.0)
 		var d := Vector2(cos(ang), sin(ang))
@@ -267,8 +227,7 @@ static func _dendrite(s: Shape, rng: RandomNumberGenerator, folds: int, complexi
 				var tip := root + bd * ln
 				s.seg(root, tip, 0.75)
 				if gens >= 2:
-					# sub-branches, which is the whole difference between a stellar
-					# dendrite and a fernlike one
+					# sub-branches: the difference between a stellar dendrite and a fernlike one
 					var subs := 2 if fern else 1
 					for j in subs:
 						var sf := float(j + 1) / float(subs + 1)
@@ -290,10 +249,8 @@ static func _plate_at(s: Shape, rng: RandomNumberGenerator, r: float, folds: int
 		s.seg(pts[i], pts[(i + 1) % n], 0.8)
 
 
-## Riming: frozen droplets stuck to the structure. Modeled as short stubs normal to
-## existing segments, so a heavily rimed crystal reads as lumpy and blurred at its
-## edges - which is exactly what riming does to a real one, and what a blizzard's
-## crystals should look like.
+## Riming: frozen droplets stuck to the structure, modeled as short stubs normal to existing segments, so a rimed crystal reads
+## as lumpy and blurred at its edges.
 static func _rime(s: Shape, rng: RandomNumberGenerator) -> void:
 	var n := s.size()
 	if n == 0:

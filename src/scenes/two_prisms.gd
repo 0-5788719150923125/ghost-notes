@@ -2,31 +2,27 @@ extends GhostScene
 
 ## Two prisms - the pair, from the drop through specialization (the-point, scenes 6-11).
 ##
-## The trembling eye BURSTS into the glowing RED [PrismBody] on the beat drop; now two prisms
-## face forward, the BLUE (continued from `eye_prism`) and the RED. They run a timeline:
+## The trembling eye bursts into the glowing red [PrismBody] on the beat drop; two prisms then
+## face forward, the blue (continued from `eye_prism`) and the red, on a timeline:
 ##   6  burst      - the red forms in a flash where the eye was; blue keeps living.
-##   7  phase-lock - the two SNAP into sync, red locked to blue's pose, rotating as one.
+##   7  phase-lock - the two snap into sync, red locked to blue's pose, rotating as one.
 ##   8  scan       - locked, they scan the void in unison.
 ##   9  desync     - the blue breaks sync and looks around on its own; the red holds steady.
-##   10 unlock     - both slip their anchors and SWAY, weightless, straining and drifting.
-##   11 specialize - the blue SWELLS and pulses slowly; the red SHRINKS and quickens. They
-##                   grow visibly distinct (bias vs. variance made physical).
+##   10 unlock     - both slip their anchors and sway, weightless, straining and drifting.
+##   11 specialize - the blue swells and pulses slowly; the red shrinks and quickens (bias vs.
+##                   variance made physical).
 ##
 ## Arrives by morph from `eye_prism` (`morph_in = "eye2prism"`): reuses the live blue prism and
 ## bursts the red at the eye's slot. Hands off to `prism_swarm` (`morph_out = "prisms"`).
 ##
-## The pair takes a [Scheme] mood: the lead on its base hue, the counter on the mood's opposed
-## hue. Both ride on the BODIES as offsets from [constant HUE_BLUE] / [constant HUE_RED] (the
-## convention `eye_prism` established), so a body handed across a morph keeps its color and this
-## scene inherits whatever the eye crystallized into instead of snapping back to blue. When that
-## happens the red is re-derived from the arriving hue, so the pair is always ONE mood's
-## opposition rather than two unrelated ones.
+## The pair takes a [Scheme] mood: the lead on its base hue, the counter on the opposed hue. Both
+## ride on the bodies as offsets from [constant HUE_BLUE] / [constant HUE_RED] (the convention
+## `eye_prism` established), so a body handed across a morph keeps its color. When one arrives,
+## the red is re-derived from the arriving hue, so the pair is one mood's opposition.
 
-## The pair's staging - separation and size together, since the two only read well in
-## combination: two big prisms crowded together overlap, two small ones far apart lose the
-## relationship. The old build rolled a 0.03-wide band of each and could only ever be "paired".
-## Each entry leaves room for the SPECIALIZE phase, where the lead swells by half again -
-## a measured clearance, since "close" originally crossed into overlap once it did.
+## The pair's staging: separation and size together (two big prisms crowded together overlap,
+## two small ones far apart lose the relationship). Each entry leaves room for the specialize
+## phase, where the lead swells by half again.
 const STAGING := {
 	"close":  {"off": [0.10, 0.13], "size": [0.10, 0.13]},
 	"paired": {"off": [0.14, 0.17], "size": [0.16, 0.20]},
@@ -54,8 +50,8 @@ var _red_cast := 0.0                # the red body's own small per-instance hue 
 const HUE_BLUE := 0.6
 const HUE_RED := 0.0
 
-# Phase thresholds as FRACTIONS of the scene's hold (beats 6-11 spread across it), so every event
-# lands whatever the hold length - a shorter scene just marches through them sooner.
+# Phase thresholds as fractions of the scene's hold (beats 6-11 spread across it), so every event
+# lands whatever the hold length.
 const FL_LOCK := 0.19      # snap into phase-lock
 const FL_DESYNC := 0.50    # blue breaks sync
 const FL_UNLOCK := 0.62    # slip anchors and sway
@@ -63,8 +59,8 @@ const FL_SPECIAL := 0.80   # specialize
 const NOMINAL := 16.0      # design length (used to pace in auto mode, where there is no fixed hold)
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"staging": {"label": "Staging", "type": "choice", "options": "STAGING", "default": null,
 		"blurb": "How the pair is staged: small prisms close together, a matched pair, or larger ones set apart."},
@@ -80,8 +76,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	morph_out = "prisms"
 	_blue = PrismBody.new(rng.randi())
 	_red = PrismBody.new(rng.randi())
-	# One mood, two roles. `+=` rather than `=` so each body keeps the small cast it rolled for
-	# itself - the pair are two prisms of one color family, not two copies of one hue.
+	# One mood, two roles. `+=` keeps each body's own small cast, so the pair is one color family,
+	# not two copies of one hue.
 	var sch := Scheme.pick(rng)
 	var lead := sch.vary(rng)
 	var counter := sch.opposed(lead)
@@ -98,8 +94,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_bscale = _base
 	_rscale = _base
 	var off := rng.randf_range(float(off_band[0]), float(off_band[1]))
-	# The pair's AXIS, not just its gap: level is only one of the ways two things can face
-	# each other, and a leaning pair re-composes the whole frame.
+	# The pair's axis, not just its gap: a leaning pair re-composes the whole frame.
 	var tilt: float = number("tilt", rng)
 	var axis := Vector2(cos(tilt), sin(tilt))
 	_banch = axis * off
@@ -111,12 +106,11 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"tilt": tilt, "offset": off, "size": _base, "forms": [_blue.form, _red.form]}
 
 
-# The prism family's second hue: the mood's own accent, never closer to the lead than Scheme.opposed allows.
-# Several moods keep their accent within a few hundredths of the base, and two prisms that close
-# together stop reading as an opposition - which is the whole point of this scene. Those are
-# pushed out along the DIRECTION the mood already chose rather than replaced by a generic
-# complement, so verdant still turns amber and glacier still turns violet. Measured against the
-# drifted lead, not the mood's nominal hue, since `vary` moves it.
+# The prism family's second hue: the mood's own accent, never closer to the lead than
+# Scheme.opposed allows. Moods whose accent sits within a few hundredths of the base are pushed
+# out along the direction the mood chose (verdant still turns amber, glacier violet), or the two
+# prisms would stop reading as an opposition. Measured against the drifted lead, since `vary`
+# moves it.
 
 
 # Arrived from eye_prism: keep the live blue prism, and burst the red in at the eye's slot.
@@ -126,9 +120,8 @@ func begin_morph(from: GhostScene) -> void:
 		return
 	if p.has("blue"):
 		_blue = p["blue"]
-		# The arriving body carries the mood the eye crystallized into. Re-derive the red from
-		# THAT hue at the separation this build rolled, so the morph lands one mood's opposition
-		# instead of the eye's color beside an unrelated red.
+		# The arriving body carries the mood the eye crystallized into: re-derive the red from that
+		# hue at the separation this build rolled, so the morph lands one mood's opposition.
 		_lead_off = _blue.hue_shift
 		var lead := fposmod(HUE_BLUE + _lead_off, 1.0)
 		_red.hue_shift = _red_cast + wrapf(fposmod(lead + _sep, 1.0) - HUE_RED, -0.5, 0.5)
@@ -156,12 +149,12 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_t += delta
 	var drive := clampf(f.energy * 0.85 + f.beat * 0.6, 0.0, 1.0)
 	_burst = maxf(0.0, _burst - delta * 2.2)
-	# Keyframe phases run on the fraction of the hold elapsed (so they always land); the bodies' spin
-	# and pulse below run on the raw delta and never speed up with the tempo.
+	# Keyframe phases run on the fraction of the hold elapsed; the bodies' spin and pulse run on
+	# the raw delta and never speed up with the tempo.
 	var f2 := clampf(_t / phase_span(NOMINAL), 0.0, 1.0)
 
-	# Phase-lock: ease _lock up around FL_LOCK; a snap-flash on the crossover. While locked, the red
-	# mirrors the blue's pose exactly (they turn as one).
+	# Phase-lock: ease _lock up around FL_LOCK, with a snap-flash on the crossover. While locked,
+	# the red mirrors the blue's pose exactly.
 	var lock_t := smoothstep(FL_LOCK - 0.04, FL_LOCK + 0.03, f2)
 	if f2 < FL_DESYNC:
 		if _lock < 0.5 and lock_t >= 0.5:
@@ -171,13 +164,13 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_lock = maxf(0.0, _lock - delta * 3.0)     # blue breaks sync at FL_DESYNC
 	_lockflash = maxf(0.0, _lockflash - delta * 2.6)
 
-	# When the blue desyncs, the red HOLDS STEADY: damp its own spin to zero (blue keeps looking).
+	# When the blue desyncs, the red holds steady: its own spin damps to zero.
 	var want_rspin := 1.0 if f2 < FL_DESYNC else 0.0
 	_rspin = lerpf(_rspin, want_rspin, 1.0 - exp(-4.0 * delta))
 	_red._vel *= (0.02 + 0.98 * _rspin) if f2 >= FL_DESYNC else 1.0
 
-	# Specialize: blue swells + slows, red shrinks + quickens. Time-scales change each body's whole
-	# tempo (its core pulse and its looking-around), so they diverge in character, not just size.
+	# Specialize: blue swells and slows, red shrinks and quickens. Time-scales change each body's
+	# whole tempo, so they diverge in character, not just size.
 	var sp := smoothstep(FL_SPECIAL, FL_SPECIAL + 0.15, f2)
 	var b_speed := lerpf(1.0, 0.55, sp)
 	var r_speed := lerpf(1.0, 1.8, sp)
@@ -186,8 +179,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_bscale = lerpf(_bscale, b_size, 1.0 - exp(-5.0 * delta))
 	_rscale = lerpf(_rscale, r_size, 1.0 - exp(-5.0 * delta))
 
-	# Unlock + sway: past FL_UNLOCK the pair slips its anchors and drifts weightlessly, pushing and
-	# pulling against them (a gentle spring back, with an audio-driven wander on top).
+	# Unlock + sway: past FL_UNLOCK the pair slips its anchors and drifts weightlessly against
+	# them (a gentle spring back, with an audio-driven wander on top).
 	var sway := smoothstep(FL_UNLOCK, FL_UNLOCK + 0.09, f2)
 	var bw := Vector2(sin(_t * 0.7 + 0.0), cos(_t * 0.9 + 1.0)) * (0.05 * sway * (0.5 + drive))
 	var rw := Vector2(sin(_t * 0.8 + 2.1), cos(_t * 0.6 + 3.0)) * (0.05 * sway * (0.5 + drive))
@@ -208,8 +201,7 @@ func _draw() -> void:
 	var u := unit()
 	var bc := _bpos * u
 	var rc := _rpos * u
-	# The red bursts into being where the eye was: a bright flash that fades as it forms. The
-	# flash is the counter's own color, so it is not a red bloom on a green prism.
+	# The red bursts into being where the eye was: a bright flash in the counter's own color.
 	if _burst > 0.001:
 		var fc := Color.from_hsv(fposmod(HUE_RED + _red.hue_shift, 1.0), 0.5, 1.0)
 		draw_circle(rc, _rscale * u * (0.6 + 1.6 * _burst), Color(fc.r, fc.g, fc.b, 0.5 * _burst))

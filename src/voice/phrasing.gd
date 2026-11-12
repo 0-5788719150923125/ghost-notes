@@ -1,36 +1,20 @@
 extends RefCounted
 class_name Phrasing
 
-## Phrasing - sentence-level prominence, derived from the TEXT.
+## Phrasing - sentence-level prominence, derived from the text.
 ##
-## [Phonemes] gives every word its LEXICAL stress: which syllable of `cushion`
-## is strong. That is a property of the word, identical every time it is said.
-## What a reading also needs is SENTENCE stress: which words in this clause get
-## leaned on at all, and which are thrown away. That is a property of the
-## position, and it is the difference between a machine reciting a word list and
-## a person saying a sentence.
+## [Phonemes] gives each word its lexical stress; this stage adds sentence stress: which words in a
+## clause get leaned on and which are thrown away. Nothing here is seeded - the same text always gets
+## the same phrasing - and [Voice.ProsodyWalk] only modulates around the baseline set here.
 ##
-## The accent must not come from the walk's coin flip: a `randf() < 0.22 * appetite`
-## decision stresses different words on different seeds and no seed stresses them where
-## English does, which is the walk GENERATING prosody it should only be COLORING.
+## Four parser-free rules:
+##   1. Content vs function: function words carry no accent.
+##   2. Nuclear accent: the last content word before a boundary carries its phrase's main accent.
+##   3. De-accent given information: a content word said in the last few words is demoted
+##      ("I bought a CAR. The car was RED" does not stress `car` twice).
+##   4. Stress clash: of two full accents in adjacent syllables, the earlier steps back.
 ##
-## So this stage sets the baseline from four well-established, parser-free rules, and
-## [Voice.ProsodyWalk] modulates around it. Nothing here is seeded - the same text always
-## gets the same phrasing, and the voice's temperament decides how hard it leans, not where.
-##
-##   1. CONTENT vs FUNCTION - function words carry no accent in English. This
-##      is the oldest and strongest of the rules.
-##   2. THE NUCLEAR ACCENT - the last content word before a boundary carries the
-##      main accent of its phrase (the nuclear stress rule). It is the single
-##      most audible prosodic event in a clause, and it was entirely absent.
-##   3. DE-ACCENTING GIVEN INFORMATION - a content word already said in the last
-##      few seconds is old news and gets demoted. This is why "I bought a CAR.
-##      The car was RED" does not stress `car` twice.
-##   4. STRESS CLASH - two full accents in adjacent syllables is not English
-##      rhythm; the earlier of the pair steps back.
-##
-## Sentence-level FOCUS (contrastive stress: "I said the RED one") genuinely
-## needs syntax or an author's mark and is not attempted here.
+## Contrastive focus ("I said the RED one") needs syntax or an author's mark and is not attempted.
 
 ## How far back a repeated content word still counts as "given", in words.
 const GIVEN_WINDOW := 14
@@ -100,8 +84,7 @@ static func _mark_phrase(words: Array, from_i: int, to_i: int) -> void:
 	var w: Dictionary = words[pick]
 	w["prominence"] = P_NUCLEAR
 	w["nuclear"] = true
-	# the first content word of the phrase gets an onset accent too, unless it
-	# IS the nucleus - English phrases tend to be prominent at both ends
+	# the first content word of the phrase gets an onset accent too, unless it is the nucleus
 	for i in range(from_i, to_i + 1):
 		var f: Dictionary = words[i]
 		if float(f.get("prominence", 0.0)) > P_FUNCTION:

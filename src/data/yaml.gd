@@ -1,34 +1,29 @@
 extends RefCounted
 class_name MiniYaml
 
-## MiniYaml - an in-house parser for the YAML *subset* storyboards are written in.
-##
-## Godot has no built-in YAML, and an external addon is a heavy dependency for what a
-## storyboard needs - so this is a small, strict parser for a documented subset. The
-## rule it lives by: anything outside the subset is REJECTED loudly with a line number,
-## never silently misparsed (a wrong parse is worse than no parse).
+## MiniYaml - an in-house parser for the YAML subset storyboards are written in. Godot has no built-in YAML and
+## an addon is a heavy dependency, so this is a small, strict parser for a documented subset: anything outside
+## it is rejected loudly with a line number, never silently misparsed.
 ##
 ## Supported:
 ##   - `#` comments (full-line and trailing, outside quotes)
-##   - block maps (`key: value`) and block lists (`- item`), nested by indentation
-##     (spaces only - a tab in the indent is an error)
+##   - block maps (`key: value`) and block lists (`- item`), nested by indentation (spaces only; a tab in the
+##     indent is an error)
 ##   - single-line flow collections `[a, b, [c]]` and `{k: v, k2: v2}`, nestable
-##   - scalars: int, float, `true`/`false`, `null`/`~`, bare strings, `'single'` and
-##     `"double"` quoted strings (`\\`, `\"`, `\n`, `\r`, `\t` escapes in double quotes)
-##   - a list item may open an inline map (`- {id: x}`) or a block map (`- id: x`
-##     with further keys aligned beneath)
-##   - block scalars, for prose (the agents' rules, rules/): `|` keeps its lines, `>` folds
-##     them - joined by spaces, a blank line a line break - and `-` after either drops the
-##     final line break. Lines inside one are text: a `#` there is not a comment.
+##   - scalars: int, float, `true`/`false`, `null`/`~`, bare strings, `'single'` and `"double"` quoted strings
+##     (`\\`, `\"`, `\n`, `\r`, `\t` escapes in double quotes)
+##   - a list item may open an inline map (`- {id: x}`) or a block map (`- id: x` with further keys aligned
+##     beneath)
+##   - block scalars, for prose (the agents' rules, rules/): `|` keeps its lines, `>` folds them (joined by
+##     spaces, a blank line a line break) and `-` after either drops the final line break. Lines inside one are
+##     text: a `#` there is not a comment.
 ##
-## Rejected (with a line-numbered error): anchors/aliases (`&`, `*`), tags (`!`),
-## multi-document (`---`), directives (`%`), keep-chomping block scalars (`|+`, `>+`) and
-## indentation indicators (`|2`), merge keys (`<<`), flow collections spanning lines,
-## duplicate keys, tabs in indentation.
+## Rejected (with a line-numbered error): anchors/aliases (`&`, `*`), tags (`!`), multi-document (`---`),
+## directives (`%`), keep-chomping block scalars (`|+`, `>+`), indentation indicators (`|2`), merge keys (`<<`),
+## flow collections spanning lines, duplicate keys, tabs in indentation.
 ##
-## `parse(text)` returns `{ok: bool, data: Variant, error: String}`. Numbers parse as
-## int when integral, float otherwise (JSON parses everything as float; every consumer
-## casts its numeric fields, so the two formats behave identically downstream).
+## `parse(text)` returns `{ok: bool, data: Variant, error: String}`. Numbers parse as int when integral, float
+## otherwise (JSON parses everything as float; every consumer casts its numeric fields).
 
 static func parse(text: String) -> Dictionary:
 	var p := _Parser.new()
@@ -189,7 +184,7 @@ class _Parser:
 	func _block_head(s: String) -> bool:
 		return s in ["|", ">", "|-", ">-"]
 
-	# A BLOCK SCALAR whose header [param head] ends line [param n] (1-based) of an entry at
+	# A block scalar whose header [param head] ends line [param n] (1-based) of an entry at
 	# [param parent]'s indentation: the raw lines after it that are blank or indented further,
 	# their common indentation cut, kept (`|`) or folded (`>`), with one final line break
 	# unless `-`. The lines it took are skipped.
@@ -440,11 +435,11 @@ class _Parser:
 		return t
 
 
-## THE OTHER DIRECTION: a Variant back out as the same subset [method parse] reads.
+## The other direction: a Variant back out as the same subset [method parse] reads.
 ##
 ## Added for the frontmatter block a document carries its voice in (see [FrontMatter]),
 ## which is written by ghost and read by a human, so neither JSON-on-one-line nor a
-## dependency would do. The contract is a ROUND TRIP: everything this emits, `parse`
+## dependency would do. The contract is a round trip: everything this emits, `parse`
 ## reads back equal - the gate holds both halves to it - which is what makes it safe to
 ## write into someone's file.
 ##
@@ -487,7 +482,7 @@ static func emit(value: Variant, indent := 0) -> String:
 	return pad + _scalar(value) + "\n"
 
 
-## A short list of NUMBERS on one line, or "" when the value is not one.
+## A short list of numbers on one line, or "" when the value is not one.
 ##
 ## Readability, and only that: a seed lineage as a block list is five lines that say
 ## `[1, 9]`, in a file a human opens to edit the prose around it. Restricted to numbers,
@@ -526,7 +521,7 @@ static func _scalar(v: Variant) -> String:
 		TYPE_INT:
 			return str(v)
 		TYPE_FLOAT:
-			# A DECIMAL POINT, ALWAYS. `parse` returns an int for an integral literal, so
+			# A decimal point, always. `parse` returns an int for an integral literal, so
 			# a float that happens to sit on a whole number would come back a different
 			# type than it went in - which is a round trip this file promises not to break.
 			var f := float(v)
@@ -573,9 +568,8 @@ static func _needs_quote(s: String) -> bool:
 		return true
 	if s in ["true", "True", "false", "False", "null", "Null", "~"]:
 		return true
-	# A LINE BREAK ANYWHERE, not only at the start: bare, the rest of the string lands on lines of
-	# its own and reads as keys (a YouTube description's paragraphs did, 2026-10-06). Quoted, `\n`
-	# is escaped and the value round-trips.
+	# A line break anywhere, not only at the start: bare, the rest of the string lands on lines of its own and
+	# reads as keys. Quoted, `\n` is escaped and the value round-trips.
 	if s.contains("\n") or s.contains("\r") or s.contains("\t"):
 		return true
 	for c in ["#", ":", "-", "[", "]", "{", "}", ",", "&", "*", "!", "|", ">", "%",

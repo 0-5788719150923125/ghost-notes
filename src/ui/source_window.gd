@@ -1,24 +1,24 @@
 extends Window
 class_name SourceWindow
 
-## SourceWindow - ✎ ON A ROW: one thing an agent made, as text, in a window of its own (next/editing.md step 4; the user,
-## 2026-11-10: "humans or agents in the loop could just edit details directly"). Its words, or its data as JSON; Apply hands
-## the text to whoever opened it ([member take]), who writes it where it lives - as a hand's version, kept - or says why
-## not, and then the window stays open on what was typed with the reason above it, so nothing typed is lost to a refusal.
-## Every note a taker's checks find ([member notes]) is shown, none thrown away.
+## SourceWindow - the edit button on a row: one thing an agent made, as text, in a window of its own
+## (next/editing.md step 4). Its words, or its data as JSON; Apply hands the text to whoever opened it
+## ([member take]), who writes it where it lives - as a hand's version, kept - or says why not, and then
+## the window stays open on what was typed with the reason above it. Every note a taker's checks find
+## ([member notes]) is shown.
 
 ## (text: String) -> String: the text taken, "" when it was written, else why not.
 var take: Callable = Callable()
 ## () -> PackedStringArray: what the taker's checks say of what stands now (shown under the text; empty for nothing).
 var notes: Callable = Callable()
-## () -> PackedStringArray: THE VERSIONS KEPT of it, oldest first, each in a few words ("made by the reader, 11-10 04:15");
-## invalid or empty, none is offered. What a ⟳ or an edit replaced is one of them (TableEpisode.versions).
+## () -> PackedStringArray: the versions kept of it, oldest first, each in a few words ("made by the reader, 11-10 04:15");
+## invalid or empty, none is offered. What a refresh or an edit replaced is one of them (TableEpisode.versions).
 var versions: Callable = Callable()
 ## (i: int) -> String: version [param i] put back, what stands a version back - "" done; then [method reread] shows it.
 var restore: Callable = Callable()
 ## () -> String: the text as it stands now, read again after a version is put back.
 var reread: Callable = Callable()
-## (note: String) -> String: ASK ITS MAKER FOR IT AGAIN WITH A NOTE (next/editing.md step 9) - "" asked; invalid, not offered.
+## (note: String) -> String: ask its maker for it again with a note (next/editing.md step 9) - "" asked; invalid, not offered.
 var ask: Callable = Callable()
 ## Who is asked ("the reader"), for the button's words.
 var ask_who := ""
@@ -126,7 +126,7 @@ func open_on(heading: String, text: String, over: Node, highlighter: SyntaxHighl
 	text_edit.grab_focus()
 
 
-## THE FIRST [param needle] IN THE TEXT, picked and brought into view - what a click on the stage named, found in its data. False
+## The first [param needle] in the text, picked and brought into view - what a click on the stage named, found in its data. False
 ## when it is not there.
 func find_text(needle: String) -> bool:
 	var all := text_edit.text
@@ -142,7 +142,7 @@ func find_text(needle: String) -> bool:
 	return true
 
 
-## APPLY: the text handed over; written, the window closes - refused, it stays, saying why. Returns what the taker said.
+## Apply: the text handed over; written, the window closes - refused, it stays, saying why. Returns what the taker said.
 func apply() -> String:
 	var err: String = take.call(text_edit.text) if take.is_valid() else "nothing here can take it"
 	if err.is_empty():
@@ -156,7 +156,7 @@ func apply() -> String:
 	return err
 
 
-## ASKED AGAIN WITH [param note]: handed to whoever made it; asked, the window closes. Returns what the asker said.
+## Asked again with [param note]: handed to whoever made it; asked, the window closes. Returns what the asker said.
 func ask_again(note: String) -> String:
 	if note.strip_edges().is_empty():
 		_said.text = "Say what to change first."
@@ -171,7 +171,7 @@ func ask_again(note: String) -> String:
 	return err
 
 
-## VERSION [param i] PUT BACK, and shown: what stands goes a version back first. Returns what the restorer said.
+## Version [param i] put back, and shown: what stands goes a version back first. Returns what the restorer said.
 func put_back(i: int) -> String:
 	var err: String = restore.call(i) if restore.is_valid() else "there is nothing to put back"
 	if err.is_empty():

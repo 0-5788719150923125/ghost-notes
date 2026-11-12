@@ -1,40 +1,31 @@
 extends RefCounted
 class_name AudioFeatures
 
-## One frame of audio, typed.
-##
-## This is the only thing a [GhostScene] reads from the audio engine - scenes
-## never touch [AudioServer] or the analyzer directly. [Spectrum] fills one of
-## these every frame and hands it to the active scene.
+## One frame of audio, typed: the only thing a [GhostScene] reads from the audio engine. [Spectrum] fills one
+## every frame and hands it to the active scene.
 
 ## Overall loudness this frame, roughly 0..1 (smoothed, soft-clipped).
 var energy: float = 0.0
 
-## Named band energies, each roughly 0..1. These are convenience views into
-## [member bands] at musically useful split points.
+## Named band energies, each roughly 0..1: views into [member bands] at musically useful split points.
 var bass: float = 0.0
 var low_mid: float = 0.0
 var mid: float = 0.0
 var high: float = 0.0
 var treble: float = 0.0
 
-## A short pulse near 1.0 right after an energy onset, decaying toward 0.
-## Cheap stand-in for real beat detection (see README roadmap).
+## A short pulse near 1.0 right after an energy onset, decaying toward 0. A cheap stand-in for beat detection.
 var beat: float = 0.0
 
-## Smoothed seconds between beat onsets - the track's PULSE PERIOD (small = fast music, large =
-## slow). ~0.5 (120 BPM) until enough onsets are seen. The Director paces scene changes off this,
-## so faster music transitions scenes more often.
+## Smoothed seconds between beat onsets (small = fast music). ~0.5 (120 BPM) until enough onsets are seen.
+## The Director paces scene changes off this.
 var beat_period: float = 0.5
 
-## Spectral flux this frame: how much the spectrum *changed* (sum of positive
-## per-band deltas). High when new frequency content arrives - the raw material
-## for detecting a change of section.
+## Spectral flux this frame: the sum of positive per-band deltas. High when new frequency content arrives.
 var flux: float = 0.0
 
-## 0..1 "we just moved into a new part of the song" score, from a sliding window
-## over [member flux]. The [Director] cuts scenes on this rather than a timer, so
-## changes land with the music. Stays low through a steady passage.
+## 0..1 "we just moved into a new part of the song" score, from a sliding window over [member flux]. The
+## [Director] cuts scenes on this rather than a timer. Stays low through a steady passage.
 var movement: float = 0.0
 
 ## How many bands [member bands] holds, as [Spectrum] analyzes them.
@@ -43,13 +34,11 @@ const BAND_COUNT := 64
 ## The full spectrum this frame: N band magnitudes, low to high, each ~0..1.
 var bands: PackedFloat32Array = PackedFloat32Array()
 
-## Seconds of audio elapsed (playback position), or an idle clock when no
-## audio is loaded - so scenes still animate with nothing playing.
+## Seconds of audio elapsed (playback position), or an idle clock when no audio is loaded.
 var time: float = 0.0
 
 
 ## Linear sample of the band spectrum at [param t] in 0..1, interpolated.
-## Handy for spreading a scene's geometry across the whole spectrum.
 func sample(t: float) -> float:
 	var n := bands.size()
 	if n == 0:

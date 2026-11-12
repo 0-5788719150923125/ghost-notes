@@ -1,14 +1,14 @@
 extends RefCounted
 class_name TableRows
 
-## TableRows - WHAT A PERSON MAY SET OF A TABLE SHOW'S DATA, AS ROWS (next/editing.md step 5: "rows for the table ... a thing and
-## its parts, ... acts"): each field's type, label, sentence, default and bounds, in the shape [SchemaForm] draws - so the
-## inspector a picked act or thing opens in ([TimelineDock]) is these tables, and a field added here is a control that exists.
-## What a row does not name is still shown, as what its value is ([method SchemaForm.infer]); the agents' own words for the same
-## fields stay theirs ([constant Props.SHAPES], the set dresser's and the puppeteer's rules).
+## TableRows - what a person may set of a table show's data, as rows (next/editing.md step 5): each
+## field's type, label, sentence, default and bounds, in the shape [SchemaForm] draws, so the inspector
+## a picked act or thing opens in ([TimelineDock]) is these tables. What a row does not name is still
+## shown, as what its value is ([method SchemaForm.infer]); the agents' own words for the same fields
+## stay theirs ([constant Props.SHAPES], the set dresser's and the puppeteer's rules).
 ##
-## The bounds are what the table itself takes: an act's length as [method Motions.sanitize_acts] keeps it, a thing's place in
-## centimeters from the middle of the reading ([method TableThings.stand_at]).
+## The bounds are what the table itself takes: an act's length as [method Motions.sanitize_acts] keeps
+## it, a thing's place in centimeters from the middle of the reading ([method TableThings.stand_at]).
 
 ## An act (`acts.json`), as its sanitizer keeps it.
 const ACT := {
@@ -45,10 +45,10 @@ const PART := {
 }
 
 
-## A LAW'S FIELDS AS ROWS (next/editing.md step 5: "laws and acts first"): what every track names - its law, its thing, its part -
-## then each of the law's own `fields` in [constant Motions.LAWS], its name and the sentence the puppeteer reads, typed and
-## defaulted by what the law's sanitizer makes of a track that tells it nothing ([method Motions.sanitize_law]): the rows and the
-## agents' words are one list, written once.
+## A law's fields as rows (next/editing.md step 5): what every track names - its law, its thing, its
+## part - then each of the law's own `fields` in [constant Motions.LAWS], its name and the sentence the
+## puppeteer reads, typed and defaulted by what the law's sanitizer makes of a track that tells it
+## nothing ([method Motions.sanitize_law]): the rows and the agents' words are one list.
 static func law_fields(law: String) -> Dictionary:
 	var out := {
 		"law": {"type": "enum", "label": "Law", "blurb": "What the track does to its thing.", "options": Motions.LAWS.keys()},
@@ -92,7 +92,7 @@ static func thing_index(table: Dictionary, name: String) -> int:
 	return -1
 
 
-## THE PATH TO PART [param name] inside [param thing] (`["parts", i, "parts", j, ...]`, as [DataPath] reads one), the first found
+## The path to part [param name] inside [param thing] (`["parts", i, "parts", j, ...]`, as [DataPath] reads one), the first found
 ## depth first; [] for none.
 static func part_path(thing: Dictionary, name: String) -> Array:
 	if name.is_empty():

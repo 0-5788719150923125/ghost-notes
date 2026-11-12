@@ -1,21 +1,20 @@
 extends SceneTree
 
-## episode_rows_check - an episode of a table show, as rows of the note's Pipeline card ([EpisodeCard.Section];
-## next/pipeline.md; the user, 2026-11-02: "every distinct regeneration action should just be a part of the pipeline list").
+## episode_rows_check - an episode of a table show, as rows of the note's Pipeline card ([EpisodeCard.Section]; next/pipeline.md).
 ##
 ##   godot --headless --path . --script tests/table_show/episode_rows_check.gd
 ##
-## EVERY STEP THE EPISODE HAS IS A ROW (THE CONTROL: the fixture has steps) and no menu stands anywhere on the card or the list; a
-## card's rows stand under its name. EVERY ⟳ SAYS ONE THING, each its own.
-## WHAT THROWS OTHER FINISHED WORK AWAY SAYS SO: Plan asks first, naming what goes - the stray click the menu had guarded -
-## and a new Cloth does not (THE CONTROL), for its depth is remade with it, nor the Close, for the script is only the readings put
-## together. And only when that work exists (THE CONTROL: the same row, on an episode with nothing made after it, asks nothing).
-## A ⟳ ONLY WHAT CAN START: one whose inputs are not made is not offered, saying so (it had been passed by without a word).
-## While the episode is being made every ⟳ waits. PRESSED AND ANSWERED, NO FILE GOES (next/editing.md step 1): the step is made again
-## over what stands, and what was made from it goes stale (THE CONTROL: invalidate, which moves them a version back, out of place).
-## A MADE ROW CARRIES A LOCK, and locked it is kept.
-## WHAT IT TAKES WITH IT IS WORKED OUT ONCE, the same as [method TableEpisode.dependents] says for every step (THE CONTROL: a
-## card's painting takes its reading), and read again only when the episode's files change (THE CONTROL: a new file).
+## Every step the episode has is a row (the control: the fixture has steps) and no menu stands anywhere on the card or the list; a
+## card's rows stand under its name. Every ⟳ says one thing, each its own.
+## What throws other finished work away says so: Plan asks first, naming what goes -
+## and a new Cloth does not (the control), for its depth is remade with it, nor the Close, for the script is only the readings put
+## together. And only when that work exists (the control: the same row, on an episode with nothing made after it, asks nothing).
+## A ⟳ only what can start: one whose inputs are not made is not offered, saying so.
+## While the episode is being made every ⟳ waits. Pressed and answered, no file goes (next/editing.md step 1): the step is made again
+## over what stands, and what was made from it goes stale (the control: invalidate, which moves them a version back, out of place).
+## A made row carries a lock, and locked it is kept.
+## What it takes with it is worked out once, the same as [method TableEpisode.dependents] says for every step (the control: a
+## card's painting takes its reading), and read again only when the episode's files change (the control: a new file).
 
 const ROOT := "user://episode_rows_check"
 
@@ -80,7 +79,7 @@ func _check() -> void:
 	_ep.write_json("plan", {"episode_title": "Rows", "spread": {"positions": [{"name": "Past"}, {"name": "Future"}]}})
 	_write(["image:surface", "image:backdrop"])
 	_pipe.refresh()
-	# EVERY STEP IS A ROW
+	# Every step is a row
 	var missing := []
 	var all: Array = _ep.steps()
 	for s in all:
@@ -96,7 +95,7 @@ func _check() -> void:
 	_ok(_redo("draw").modulate.a == 0.0 and _redo("script").modulate.a == 0.0,
 		"a step that cannot be made again by itself has none: the draw is the seed's, the script its readings'")
 
-	# WHAT IT THROWS AWAY
+	# What it throws away
 	_ok(not _pipe.asks_first("say:intro") and not _redo("say:intro").tooltip_text.contains("goes stale"),
 		"control: with nothing made from it yet, its ⟳ asks nothing - the same row asks once there is")
 	_ep.write_json("draw", {"cards": [{"name": "The Tower", "key": "tower"}, {"name": "The Moon", "key": "moon"}], "deck_n": 78})
@@ -113,7 +112,7 @@ func _check() -> void:
 		"control: a new cloth or room keeps the table, and its depth is remade with it: it does not ask")
 	_ok(not _pipe.asks_first("say:close"), "control: the close takes only the script, which is the readings put together: it does not ask")
 
-	# A ⟳ ONLY WHAT CAN START
+	# A ⟳ only what can start
 	DirAccess.remove_absolute(_ep.file_of("say:1"))
 	_pipe.refresh()
 	_ok(_redo("say:2").disabled and _redo("say:2").tooltip_text.contains("once what it is made from is made") and not _redo("say:intro").disabled,
@@ -121,7 +120,7 @@ func _check() -> void:
 	_write(["say:1"])
 	_pipe.refresh()
 
-	# WHILE IT IS MADE (the list built again since: a row made carries a lock)
+	# While it is made (the list built again since: a row made carries a lock)
 	plan = _redo("plan")
 	_ok(not plan.disabled, "made and idle, its ⟳ is offered")
 	_show._producer.running = true
@@ -129,7 +128,7 @@ func _check() -> void:
 	_ok(plan.disabled and _redo("say:close").disabled, "while the episode is being made, every ⟳ waits")
 	_show._producer.running = false
 
-	# ONCE, AND THE SAME
+	# Once, and the same
 	var map: Dictionary = _ep.all_dependents()
 	var differs := []
 	for s in map:
@@ -148,7 +147,7 @@ func _check() -> void:
 	_ok(not is_same(_show._facts(), kept), "the control: a new file, and they are")
 	DirAccess.remove_absolute(_ep.file_of("acts"))
 
-	# PRESSED AND ANSWERED
+	# Pressed and answered
 	_pipe.refresh()
 	_redo("image:card:1").pressed.emit()
 	_ok(_ep.has("image:card:1") and _pipe.asking != null, "pressed: it asks, nothing thrown away yet")
@@ -164,14 +163,14 @@ func _check() -> void:
 		and not _ep.versions("image:card:1").is_empty(), "the control: invalidate takes them out of place, each a version back")
 	_write(["image:card:1", "check:1", "say:1", "say:2", "say:close", "script"])
 
-	# A MADE ROW CARRIES A LOCK, AND LOCKED IT IS KEPT
+	# A made row carries a lock, and locked it is kept
 	_pipe.refresh()
 	var lock_b: Variant = _pipe.row("say:1").get("lock")
 	_ok(lock_b is Button and not _ep.kept("say:1"), "a made row carries a lock, open")
 	(lock_b as Button).pressed.emit()
 	_ok(_ep.kept("say:1"), "pressed, the step is kept")
 
-	# ✎ ON A ROW (next/editing.md step 4): what it made, changed by hand, kept as a hand's version
+	# ✎ on a row (next/editing.md step 4): what it made, changed by hand, kept as a hand's version
 	_pipe.refresh()
 	_ok(_pipe.row("script").get("edit") is Button and _pipe.row("say:intro").get("edit") is Button
 		and _pipe.row("plan").get("edit") is Button and _pipe.row("image:surface").get("edit") is Button,
@@ -189,7 +188,7 @@ func _check() -> void:
 	w.text_edit.text = "Hello, by hand."
 	_ok(w.apply().is_empty() and _ep.read_text("say:intro") == "Hello, by hand." and _ep.kept("say:intro") and _ep.versions("say:intro").size() == back + 1,
 		"a passage's ✎: its words, written as a hand's version, kept, what stood a version back")
-	# ...AND ITS VERSIONS: the words before the hand's put back from the same window, the hand's a version back
+	# ...and its versions: the words before the hand's put back from the same window, the hand's a version back
 	_ok(w._versions.visible and w._versions.item_count >= 1, "the window offers the versions kept (%d)" % w._versions.item_count)
 	w.open_on("Intro", _ep.read_text("say:intro"), _show)
 	var vcount: int = _ep.versions("say:intro").size()
@@ -202,7 +201,7 @@ func _check() -> void:
 	w.text_edit.text = JSON.stringify({"episode_title": "Retitled by hand", "spread": {"name": "", "positions": []}})
 	_ok(w.apply().is_empty() and String((_ep.read_json("plan") as Dictionary)["episode_title"]) == "Retitled by hand" and _ep.kept("plan"),
 		"the plan's ✎: its JSON taken back, kept")
-	# A PART BY HAND, NOT MADE YET (next/editing.md step 8): its row waits for you, with its ✎
+	# A part by hand, not made yet (next/editing.md step 8): its row waits for you, with its ✎
 	DirAccess.remove_absolute(_ep.file_of("image:backdrop"))
 	_ep.set_by_hand("image:backdrop", true)
 	_pipe.refresh()

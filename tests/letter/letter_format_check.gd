@@ -1,46 +1,29 @@
 extends SceneTree
 
-## Does the Letter format hold together without an agent or TeX: its row, what the drawer is told,
-## what is kept, and what its rows hand the reading ([LetterFormat], [LetterSketches], [LetterWalk];
-## next/letter.md)?
+## Does the Letter format hold together without an agent or TeX: its row, what the drawer is told, what is kept, and what its rows
+## hand the reading ([LetterFormat], [LetterSketches], [LetterWalk]; next/letter.md)?
 ##
-## - THE ROW: a Letter is one of the Medium card's formats (2026-11-09), no component of its own: offered on a
-##   reading and not to a song alone (the control), its own rows named by path; its pictures' look is a block of
-##   the note's (`illustrations:`) that comes with the Medium.
-## - WHAT THE DRAWER IS TOLD ([constant LetterSketches.RULES]): the prompt renders whole, names each id a
-##   point needs and what is said while it is drawn - and on a second try what the last drawing lacked or
-##   why it could not be read (the control: a first try says neither).
-## - WHAT LANDS: the SVG is taken out of an answer however it is wrapped (none from an answer with none, the
-##   control), and the ids a drawing lacks are found and the ones it has are not.
-## - WHAT IS KEPT (under a scratch root): a sketch not drawn is missing, one drawn from its words is ready,
-##   and the same sketch pointed at a new part is stale; the ink is ready with nothing to lay out, missing
-##   before it is laid out, ready for the drawings it was made from and stale for others.
-## - WHAT THE ROWS HAND THE READING (on the first frame: they name the Director): the Medium card builds them for a
-##   note shown as a letter (none for a tablet, nor for a letter on a song alone, whose block is kept as it was - the
-##   controls); their block round trips without a hand - the hand is the Medium card's Handwriting, the document
-##   carries it, Random is drawn from the note's own number the same each time, and one the Director does not know
-##   is Kalam (the control) - and the Medium's one block holds the format, the hand and the rows' keys; without a note
-##   its desk is the first; the walk reads the letter as [method LetterScript.speakable] does, with no title announced.
-## - WHAT IS ON THE DESK AND ITS LIGHT ARE CHOSEN ON THE CARD (2026-10-29, the user: "provide a multi-select bank of
-##   the standard objects ... Then, when we change the seed - the only thing being changed would be the placement of
-##   objects, and textures"): with nothing chosen the desk is what its number drew, ticked so on a bank of every thing;
-##   another number keeps them and the light - the control, that number's own desk, is another - and is the desk's
-##   alone, the letter said the same at either (the control, the hand seeded by the number, otherwise); a tick and a light are
-##   kept in the block and carried by the document; the block round trips through the frontmatter, an empty desk too,
-##   and a thing or a light it does not know is dropped. WHAT IS WRITTEN ON THE INDEX CARDS (the user: "an input box -
-##   which only appears if we've selected the index cards"): the box shown with the cards ticked and hidden without
-##   them (the control); typed into, kept in the block, carried by the document to the desk with the letter's hand, and
-##   round trips through the frontmatter, its lines and all.
-## - THE STEPS THE NOTE'S OTHER CARDS ADD (the YouTube card's tags; 2026-10-28, they had waited at the bottom
-##   of the YouTube card): the rows hand the reading how it goes out, so the Pipeline card lists them - with the box
-##   ticked the row is the YouTube section's, under the Ink (THE CONTROL: the box clear, no row anywhere); the
-##   YouTube card's line says where it is. Generate makes it
-##   once the sketches are drawn - not while one is (held by hand) - here refused, read-only, and said on its
-##   row; a job landed gives its ✓ and replaces the note's tags; Stop stops one.
-## - A NOTE OPENED AGAIN KEEPS ITS MEDIUM (2026-10-28, the user: attaching a Look to a letter being watched "suddenly
-##   add[ed] the underwater scene to my video"): the format is the Director's medium, set from the block, and nothing
-##   lets it go - the old Medium card leaving after the new one has applied the note leaves it a letter, and the
-##   rows pin nothing (the control: a reset without the block is full frame).
+## - the row: a Letter is one of the Medium card's formats: offered on a reading and not to a song alone (control), its own rows
+##   named by path; its pictures' look is a block of the note's (`illustrations:`) that comes with the Medium.
+## - what the drawer is told ([constant LetterSketches.RULES]): the prompt renders whole, names each id a point needs, and on a
+##   second try says what the last drawing lacked or why it could not be read (control: a first try says neither).
+## - what lands: the SVG is taken out of an answer however wrapped (none from an answer with none, control); missing ids are found.
+## - what is kept (under a scratch root): a sketch not drawn is missing, one drawn from its words ready, the same sketch pointed at
+##   a new part stale; the ink is ready with nothing to lay out, missing before it is laid out, ready for its drawings, stale for others.
+## - what the rows hand the reading (on the first frame: they name the Director): built for a note shown as a letter (none for a
+##   tablet or a letter on a song alone: controls); their block round trips without a hand (the hand is the Medium card's
+##   Handwriting; Random is drawn from the note's number; an unknown one is Kalam: control); the Medium's one block holds the format,
+##   the hand and the rows' keys; the walk reads the letter as [method LetterScript.speakable] does, with no title announced.
+## - the desk and its light are chosen on the card: with nothing chosen the desk is what its number drew, ticked on a bank of every
+##   thing; another number keeps them and the light (control: that number's own desk is another) and is the desk's alone, the letter
+##   said the same at either (control: the hand seeded by the number otherwise); ticks and light are kept in the block, carried by
+##   the document and round trip through the frontmatter (an empty desk too; unknown things or lights are dropped). The index cards'
+##   text box shows with the cards ticked and hides without them (control), is kept in the block and carried to the desk.
+## - the steps the note's other cards add (the YouTube card's tags): the rows hand the reading how it goes out, so the Pipeline card
+##   lists them under the Ink in the YouTube section only while the box is ticked (control: clear, no row). Generate makes it once
+##   the sketches are drawn, here refused read-only and said on its row; a job landed gives ✓ and replaces the note's tags; Stop stops one.
+## - a note opened again keeps its medium: the format is the Director's medium, set from the block, and the old Medium card leaving
+##   after the new one applied the note leaves it a letter (control: a reset without the block is full frame).
 ##
 ##   godot --headless --path . --script tests/letter/letter_format_check.gd
 
@@ -197,8 +180,7 @@ func _card() -> void:
 	_finish()
 
 
-## WHAT IS ON THE DESK AND ITS LIGHT, CHOSEN ON THE ROWS: what the number drew until anything on the desk changes, then
-## kept - the number moving them, never choosing them.
+## What is on the desk and its light, chosen on the rows: what the number drew until anything on the desk changes, then kept.
 func _desk() -> void:
 	print("-- what is on the desk, chosen")
 	var script: GDScript = load("res://src/letter/letter_format.gd")
@@ -225,7 +207,7 @@ func _desk() -> void:
 	_check(int(block["seed"]) == other and block.get("things") == drawn and String(block["mood"]) == mood and its_own,
 		"another number keeps what was on the desk and its light - the control, that number's own desk, is another (%s, %s)"
 		% [", ".join(DeskLook.kinds(DeskLook.of(other))), String(DeskLook.of(other)["mood"])])
-	# THE NUMBER IS THE DESK'S ALONE: the words written and said as they were
+	# the number is the desk's alone: the words written and said as they were
 	var long := LETTER + "\n" + "I keep the tag by the lamp, where I can see it while I write to you about the days we had. ".repeat(6) + "\n"
 	var walk: TextWalk = load("res://src/letter/letter_walk.gd").new(card)
 	var at_other: String = walk.spoken(long, "")["body"]
@@ -244,7 +226,7 @@ func _desk() -> void:
 	_check((block["things"] as Array).has("dog_tag") and String(block["mood"]) == "dusk"
 		and doc["things"] == block["things"] and String(doc["mood"]) == "dusk",
 		"a thing ticked and a light picked are kept in the block, and the document a render reads carries them")
-	# THE BLOCK AS THE NOTE KEEPS IT: written and read back
+	# the block as the note keeps it: written and read back
 	var again: Control = script.call("for_note", {})
 	again.apply(MiniYaml.parse(MiniYaml.emit({"letter": block}))["data"]["letter"])
 	var none: Control = script.call("for_note", {})
@@ -255,7 +237,7 @@ func _desk() -> void:
 		and (none.call("desk_things") as Array).is_empty() and odd.call("desk_things") == ["mug"]
 		and odd.call("desk_mood") == String(DeskLook.of(other)["mood"]),
 		"the block round trips through the note's frontmatter, an empty desk too; a thing or a light it does not know is dropped")
-	# WHAT IS WRITTEN ON THE INDEX CARDS
+	# what is written on the index cards
 	var cards_box: TextField = card.get("_card_box")
 	(bank["cards"] as CheckBox).button_pressed = false
 	var hidden := not cards_box.visible
@@ -283,7 +265,7 @@ func _steps() -> void:
 	var note_upload = load("res://src/reading/note_upload.gd")
 	var keep: String = note_upload.root
 	note_upload.root = _scratch.path_join("readings")
-	# THE NOTE, read by a panel built by hand (its _ready would start the voice host)
+	# the note, read by a panel built by hand (its _ready would start the voice host)
 	var ed = load("res://src/reading/reading_panel.gd").new()
 	ed.workspace = "reading"
 	ed._build_panel()
@@ -312,7 +294,7 @@ func _steps() -> void:
 	var line: String = ed._youtube._tags_note.text
 	_check(line.contains("Tags row in the Pipeline") and line.ends_with("and so does Generate, or an export that goes up."),
 		"the YouTube card says where the row is and what makes it (%s)" % line)
-	# GENERATE: the sketches first, then the note's tags
+	# Generate: the sketches first, then the note's tags
 	card._sketches._jobs["held"] = {"id": "text-letter-format-check-sketch", "sketch": {}, "tries": 1}
 	pipe.generate()
 	_tick_steps(card, up, pipe)
@@ -323,7 +305,7 @@ func _steps() -> void:
 	var r: Dictionary = pipe.row(step.key)
 	_check(step.state(feed) == "failed" and (r["text"] as Label).text.contains("read-only"),
 		"then Generate starts the tags - here refused, read-only, and said on its row (%s)" % (r["text"] as Label).text)
-	# A JOB LANDED: its ✓, and the note's tags replaced
+	# a job landed: its ✓, and the note's tags replaced
 	step._errors.clear()
 	AgentJobs._ended["text-letter-card-check"] = {"ok": true, "text": "{\"tags\": [\"handwriting\", \"a cross\", \"a dot\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-letter-card-check", "feed": feed, "stamp": feed.stamp()}
@@ -332,7 +314,7 @@ func _steps() -> void:
 	r = pipe.row(step.key)
 	_check((r["glyph"] as Label).text == "✓" and (r["text"] as Label).text == "3 tags: handwriting, a cross, a dot" and ed._doc.field("tags") == "handwriting, a cross, a dot",
 		"landed: its ✓, and the note's tags replaced (%s)" % (r["text"] as Label).text)
-	# STOP stops a job writing them
+	# Stop stops a job writing them
 	step._jobs[feed.folder()] = {"id": "text-letter-card-check-2", "feed": feed, "stamp": feed.stamp()}
 	pipe._stop.pressed.emit()
 	_check(not step.busy(feed) and not pipe.busy(), "Stop stops the tags being written")
@@ -341,7 +323,7 @@ func _steps() -> void:
 	note_upload.root = keep
 
 
-## A NOTE OPENED AGAIN KEEPS ITS MEDIUM: the old panel's Medium card leaves the tree after the new one has applied the note.
+## A note opened again keeps its medium: the old panel's Medium card leaves the tree after the new one has applied the note.
 func _reopened() -> void:
 	print("-- a note opened again keeps its medium")
 	var director: Node = root.get_node("Director")

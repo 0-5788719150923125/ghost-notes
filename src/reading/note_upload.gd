@@ -1,30 +1,26 @@
 extends VBoxContainer
 class_name NoteUpload
 
-## NoteUpload - A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, the user, of an actor's
-## note: "I don't see anywhere it would be possible to write a description for videos uploaded in this
-## way ... be sure that the auto-tagging mechanism should work as well"). Nothing on such a note makes
-## episodes - its words are the author's, read by a Voice or an Actor - so its YouTube card holds what a
-## show's card holds for its episodes: the description its uploads take (the card's own box, [method
-## YouTubeCard.describe]), the note's tags as one list (its `tags:` line, as a show's), and THE NOTE AS THE EPISODE ITS
-## STEPS READ ([Feed], [EpisodeStep] - the YouTube card's tags and painted thumbnail), whose rows are the note's Pipeline
-## card's like any other ([method ReadingPanel.episode_feed]).
+## NoteUpload - a note read as it is written is its own episode. Nothing on such a note makes episodes (its words
+## are the author's, read by a Voice or an Actor), so its YouTube card holds what a show's card holds for its
+## episodes: the description its uploads take (the card's own box, [method YouTubeCard.describe]), the note's tags
+## as one list (its `tags:` line), and the note as the episode its steps read ([Feed], [EpisodeStep]: the YouTube
+## card's tags and painted thumbnail), whose rows are the note's Pipeline card's like any other
+## ([method ReadingPanel.episode_feed]).
 ##
-## AN EXPORT THAT GOES UP MAKES THEM, when they are not made from the words as they are (a painted thumbnail only
-## while none is - [method YouTubeThumbnail.owed]): started as the
-## take starts rendering ([method start]) and waited for once it is rendered ([method settled], at most
-## [constant SETTLE_MOST]), so the upload takes the tags and the thumbnail they made. What a step makes is kept in the note's
-## own folder ([method folder_of]).
+## An export that goes up makes them when they are not made from the words as they are (a painted thumbnail only
+## while none is - [method YouTubeThumbnail.owed]): started as the take starts rendering ([method start]) and
+## waited for once it is rendered ([method settled], at most [constant SETTLE_MOST]), so the upload takes the tags
+## and thumbnail they made. What a step makes is kept in the note's own folder ([method folder_of]).
 ##
 ## Built by the [ReadingPanel] on its YouTube card when its publish says the note is its own episode
-## ([method ReadingPublish.note_is_episode]); a show's card (Cards', Proof's) does all of this for its
-## episodes itself.
+## ([method ReadingPublish.note_is_episode]); a show's card does all of this for its episodes itself.
 
 const YouTube := preload("res://src/export/youtube.gd")
 const TagField := preload("res://src/ui/tag_field.gd")
 
-## How long an export waits for the steps an upload takes, in seconds: a painted thumbnail is a writer's
-## brief and then a painting, minutes of both.
+## How long an export waits for the steps an upload takes, in seconds (a painted thumbnail is a brief, then a
+## painting).
 const SETTLE_MOST := 360.0
 ## Where each note's folder is: what the steps made from its words. A gate points it at its own.
 const ROOT := "user://readings"
@@ -41,9 +37,9 @@ var _pictures_of := []            # what they were found for: the words' hash, t
 var _t := 0.0
 
 
-## THE NOTE AS THE STEPS READ IT: its folder, the video's title as it goes up, the description written on
-## the YouTube card, the note's tags (and a step's to write over them), its words with the marks taken out,
-## and who writes for its uploads.
+## The note as the steps read it: its folder, the video's title as it goes up, the description on the YouTube
+## card, the note's tags (and a step's to write over them), its words with the marks taken out, and who writes
+## for its uploads.
 class Feed extends EpisodeFeed:
 	var upload: NoteUpload
 
@@ -112,8 +108,8 @@ func _process(dt: float) -> void:
 	refresh()
 
 
-## THE NOTE'S FOLDER, absolute, for the note at [param note]: named after its file, and told apart from
-## another of that name by its path. "" for a note with no file.
+## The note's folder, absolute, for the note at [param note]: named after its file, told apart from another of
+## that name by its path. "" for a note with no file.
 static func folder_of(note: String) -> String:
 	if note.is_empty():
 		return ""
@@ -122,9 +118,10 @@ static func folder_of(note: String) -> String:
 	return ProjectSettings.globalize_path(root.path_join("%s-%s" % [base, abs.md5_text().substr(0, 8)]))
 
 
-## A NOTE MOVED TAKES WHAT ITS STEPS MADE WITH IT, as [method LetterSketches.carry] its sketches: the folder of the note
-## at [param from] renamed to the one at [param to]'s, never over one already there, and the author's only where the
-## caller [param may] write them (a gate's own root always). "" once moved or with nothing to move, else why not.
+## A moved note takes what its steps made with it, as [method LetterSketches.carry] does its sketches: the
+## folder of the note at [param from] renamed to the one at [param to]'s, never over one already there, and the
+## author's only where the caller [param may] write them (a gate's own root always). "" once moved or with
+## nothing to move, else why not.
 static func carry(from: String, to: String, may: bool) -> String:
 	var was := folder_of(from)
 	var now := folder_of(to)
@@ -141,8 +138,7 @@ func note_tags() -> PackedStringArray:
 	return YouTube.split_tags(doc.field("tags")) if doc != null else PackedStringArray()
 
 
-## THE NOTE'S TAGS ARE [param tags] from now on: its `tags:` line, and the chips. "" once written, else why
-## not.
+## Sets the note's tags to [param tags]: its `tags:` line, and the chips. "" once written, else why not.
 func write_tags(tags: PackedStringArray) -> String:
 	var doc := reading.doc_source()
 	if doc == null or not doc.set_field("tags", ", ".join(tags)):
@@ -164,11 +160,10 @@ func upload_of(base: Dictionary) -> Dictionary:
 	return out
 
 
-## THE NOTE'S OWN PICTURES, absolute, in the order it shows them: each its words call for that is painted
-## ([Illustrations]) - a letter's pictures over the screen, a book's, a dispatch desk's on its screens - as its
-## presentation shows them, the Pictures card's list ([method Medium.pictures_of]). A note read as it is written had
-## handed its steps none, and its thumbnail was painted blind to them (2026-10-30, the user: "just random weird
-## pictures, completely different from the video"). Found again only when the words, the medium or the library change.
+## The note's own pictures, absolute, in the order it shows them: each its words call for that is painted
+## ([Illustrations]) as its presentation shows them, the Pictures card's list ([method Medium.pictures_of]), so
+## the steps (the thumbnail) see what the video shows. Found again only when the words, the medium or the
+## library change.
 func pictures() -> PackedStringArray:
 	var box := reading.source_box()
 	var body := box.text if box != null else ""
@@ -185,7 +180,7 @@ func pictures() -> PackedStringArray:
 	return _pictures
 
 
-## EACH REFRESH: the note's words as the steps read them, and the chips.
+## Each refresh: the note's words as the steps read them, and the chips.
 func refresh() -> void:
 	var box := reading.source_box()
 	_words = Manuscript.unspoken(reading.walk.body(box.text if box != null else "")).strip_edges()
@@ -201,8 +196,8 @@ func start() -> void:
 	_steps.generate(_feed)
 
 
-## A COROUTINE: the take is rendered, and the upload waits for the steps making what it takes (its tags,
-## its painted thumbnail) - at most [constant SETTLE_MOST] - saying so on the panel's line.
+## A coroutine: the take is rendered, and the upload waits for the steps making what it takes (tags, painted
+## thumbnail), at most [constant SETTLE_MOST], saying so on the panel's line.
 func settled() -> void:
 	if not youtube.ticked() or not _steps.busy_on(_feed):
 		return

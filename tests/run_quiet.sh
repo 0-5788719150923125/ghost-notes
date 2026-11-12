@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the gates that NEED A REAL RENDERER, with no window on screen.
+# Run the gates that need a real renderer, with no window on screen.
 #
 #   tests/run_quiet.sh clown_drip_check clown_controls_check ...
 #   tests/run_quiet.sh --all
@@ -39,9 +39,9 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 if command -v xvfb-run >/dev/null 2>&1; then
 	# -s sets a screen big enough that a gate requesting a window never has it clamped.
-	# A DISPLAY OF ITS OWN. `xvfb-run -a` looks for a free display number and starts its server a
+	# A display of its own. `xvfb-run -a` looks for a free display number and starts its server a
 	# moment LATER, so two started in the same instant both take :99: they share one server, and the
-	# first to finish kills it under the other ("X connection to :99 broken" - seen 2026-10-12, two
+	# first to finish kills it under the other ("X connection to :99 broken" - seen with two
 	# GPU gates started together by `check.sh --gpu --jobs`). `-d` has the server choose its own
 	# number, which cannot collide; an xvfb-run too old to have it starts looking from a number of
 	# this process's own.

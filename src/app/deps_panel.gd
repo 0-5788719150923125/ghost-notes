@@ -3,22 +3,19 @@ class_name DepsPanel
 
 ## DepsPanel - the environment readout above the bottom-right row, behind its ⚙ (Chrome).
 ##
-## ghost runs on a handful of things it does not draw itself: FFmpeg for video, a Python and its
-## per-feature environments for the voice, the trackers, URL import and page capture. ghost
-## installs and updates all of those on its own; this panel is where that is visible - what is
-## there, what version, what is downloading right now and how far along, and why something
-## failed. The few things that stay the machine's own (Linux utilities, the AI CLIs) are listed
+## ghost runs on things it does not draw itself: FFmpeg for video, a Python and its per-feature
+## environments for the voice, the trackers, URL import and page capture. ghost installs and updates them
+## itself; this panel shows what is there, what version, what is downloading and how far along, and why
+## something failed. The few things that stay the machine's own (Linux utilities, the AI CLIs) are listed
 ## with the command that installs them.
 ##
-## It renders [Deps] and [Provision] and adds nothing of its own. That matters: a status panel with
-## private detection logic drifts from the code that actually launches things and then reports
-## green while the launch fails. Every row here comes from the same resolver [Subprocess] uses, and
-## every progress bar from the job that is actually running.
+## It renders [Deps] and [Provision] and adds nothing of its own, so it cannot drift from the code that
+## launches things: every row comes from the resolver [Subprocess] uses, every progress bar from the
+## running job.
 ##
-## WHAT IT COSTS. A full [method Deps.report] runs one `--version` per installed program - a few
-## hundred milliseconds, cold - so it runs on a [Thread] and the panel says "checking…" until the
-## results land; it runs again when a job finishes, to pick up the new version. Progress between
-## those comes from the Provisioner's signals and costs nothing.
+## A full [method Deps.report] runs one `--version` per installed program (a few hundred milliseconds, cold),
+## so it runs on a [Thread] and the panel says "checking…" until the results land; it runs again when a job
+## finishes. Progress between those comes from the Provisioner's signals.
 
 const COL_OK := Color(0.44, 0.84, 0.56)
 const COL_BAD := Color(1.0, 0.50, 0.42)
@@ -30,13 +27,13 @@ const COL_DIM := Color(0.50, 0.57, 0.68)
 const GROUPS := ["kept current by Ghost Notes", "built the first time a feature needs it",
 	"from this machine"]
 
-## A probe has landed: [Deps]' answers are fresh. A note's "+" grays what needs an agent off
-## them, as its menu opens, so a rescan after installing an agent CLI lights that component up.
+## A probe has landed: [Deps]' answers are fresh. A note's "+" grays what needs an agent off them as its
+## menu opens, so a rescan after installing an agent CLI lights that component up.
 signal probed
 ## The one-line state changed ([method state_line], [method state_color]) - the row's ⚙ shows it.
 signal state_changed
-## A probe found something a feature needs missing or failed: Chrome opens the panel, without
-## remembering that as the user's choice - a missing dependency must be seen.
+## A probe found something a feature needs missing or failed: Chrome opens the panel without remembering
+## that as the user's choice.
 signal problem_found
 
 var _rows: Array = []
@@ -72,9 +69,8 @@ func _ready() -> void:
 	_start_probe()
 
 
-## A probe in flight owns a thread, and Godot is loud about one that is still joinable at free
-## time. A probe built without a Chrome (a gate) can be freed the moment it is done with, which is
-## exactly when a cold probe is likely to still be running.
+## A probe in flight owns a thread, and Godot is loud about one still joinable at free time; a probe built
+## without a Chrome (a gate) can be freed while a cold probe is still running.
 func _exit_tree() -> void:
 	_join()
 
@@ -88,14 +84,11 @@ func _join() -> void:
 # --- layout ------------------------------------------------------------------
 
 func _build_ui() -> void:
-	# Pinned to the bottom-right corner and grown UP-LEFT from it, so the panel's height is free to
-	# change - a row's detail pane opening, a rescan finding more - without ever moving the corner
-	# it is anchored to. The grow directions are set explicitly because the preset leaves them at
-	# GROW_DIRECTION_END, which sends a minimum-size-driven panel off the bottom-right of the screen.
-	#
-	# THE CORNER ITSELF BELONGS TO THE SHARED TOGGLE ROW (💬 assistant, >_ console), which sits
-	# there in every mode: the panel stands on top of it, right edges aligned, rather than pushing
-	# it up. A row that moved on this one screen read as wrong, and it is the screen people start on.
+	#Pinned to the bottom-right corner and grown up-left, so the panel's height can change without moving
+	#its corner. The grow directions are set explicitly because the preset leaves GROW_DIRECTION_END, which
+	#sends a minimum-size-driven panel off-screen.
+	#The corner belongs to the shared toggle row (assistant, console): the panel stands on top of it, right
+	#edges aligned, rather than pushing it up.
 	anchor_left = 1.0
 	anchor_top = 1.0
 	anchor_right = 1.0
@@ -107,8 +100,7 @@ func _build_ui() -> void:
 	grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	grow_vertical = Control.GROW_DIRECTION_BEGIN
 	custom_minimum_size = Vector2(360, 0)
-	# Own panel style rather than the theme's: the notes list is nearly black and the default
-	# StyleBoxFlat is a mid gray slab that reads as a modal dialog.
+	#Own panel style: the notes list is nearly black and the default StyleBoxFlat reads as a modal dialog.
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.07, 0.08, 0.11, 0.92)
 	sb.border_color = Color(0.18, 0.21, 0.27)
@@ -124,8 +116,7 @@ func _build_ui() -> void:
 	col.add_theme_constant_override("separation", 4)
 	add_child(col)
 
-	# --- header: the state, and the two actions on the right. It was also the collapse toggle; the
-	# row's ⚙ opens and closes the whole panel now (Chrome, `[deps] open`).
+	#--- header: the state, and the two actions on the right (the row's ⚙ opens and closes the whole panel).
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
 	col.add_child(head)
@@ -140,16 +131,14 @@ func _build_ui() -> void:
 	_title.add_theme_font_size_override("font_size", 13)
 	_title.add_theme_color_override("font_color", COL_TEXT)
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Clipped, because the summary is a list of names and a long one would otherwise draw straight
-	# over the two buttons beside it.
+	#Clipped: the summary is a list of names and a long one would draw over the buttons beside it.
 	_title.clip_text = true
 	_title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	toggle.add_child(_title)
-	# The button still has to be tall enough for a label it does not measure.
+	#The button must be tall enough for a label it does not measure.
 	toggle.custom_minimum_size = Vector2(0, 20)
 
-	# Words, not glyphs. This panel is the one part of ghost most likely to be read on a machine
-	# nobody here has tried, and a six-letter word reads everywhere.
+	#Words, not glyphs: a six-letter word reads everywhere.
 	head.add_child(_action_button("rescan", "Look again - for after installing something", _rescan))
 	head.add_child(_action_button("copy", "Copy the whole report as text, for a bug report",
 		_copy_report))
@@ -160,8 +149,7 @@ func _build_ui() -> void:
 
 	_body.add_child(HSeparator.new())
 
-	# SAY THE ROWS CAN BE CLICKED. The detail pane is where a failure's reason and an install
-	# command live, and nothing about a flat row says it opens one.
+	#Say the rows can be clicked: the detail pane holds a failure's reason and an install command.
 	var hint := Label.new()
 	hint.text = "Ghost Notes installs and updates these itself. Click one for what it does."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -281,8 +269,8 @@ func _start_probe() -> void:
 	if _rows.is_empty():
 		_placeholder("checking…")
 	_thread = Thread.new()
-	# `Deps.report` only reads the filesystem and spawns short-lived `--version` processes; nothing
-	# it touches is a Godot resource, so no main-thread hop is needed until the results come back.
+	#`Deps.report` only reads the filesystem and spawns short-lived `--version` processes; nothing it
+	#touches is a Godot resource, so no main-thread hop is needed until the results come back.
 	_thread.start(_probe_worker)
 
 
@@ -296,8 +284,7 @@ func _apply(rows: Array) -> void:
 	_rows = rows
 	_render()
 	probed.emit()
-	# Something a feature needs that is missing or failed overrides a remembered close: the one
-	# moment this panel exists to serve is the one where the user does not yet know to look.
+	#Something a feature needs that is missing or failed overrides a remembered close.
 	if not _problem().is_empty():
 		problem_found.emit()
 	if _reprobe:
@@ -337,7 +324,7 @@ func _on_finished(_key: String, _ok: bool, _message: String) -> void:
 
 
 func _process(dt: float) -> void:
-	# A running job's line carries its elapsed time, which moves even when the job says nothing.
+	#A running job's line carries its elapsed time, which moves even when the job says nothing.
 	_tick += dt
 	if _tick < 0.5:
 		return
@@ -358,8 +345,8 @@ func _live(key: String) -> void:
 	var r := _row(key)
 	var s := Provision.state(key)
 	var found := bool(r.get("found", false))
-	# Only what the user has to install is a problem while it is absent. What ghost installs
-	# is simply not there YET - it is gray until it is downloading (blue) or has failed (red).
+	#Only what the user has to install is a problem while absent. What ghost installs is not there yet: gray
+	#until downloading (blue) or failed (red).
 	var yours := Deps.group_of(r) == 2 and int(r.get("tier", Deps.TIER_EXTRA)) == Deps.TIER_FEATURE
 	var glyph := "●" if found else ("▲" if yours else "○")
 	var tint := COL_OK if found else (COL_BAD if yours else COL_IDLE)
@@ -373,8 +360,7 @@ func _live(key: String) -> void:
 		var f := float(s.get("fraction", -1.0))
 		value = String(s.get("phase", "working"))
 		if f >= 0.0:
-			# The number first: the column clips from the right, and the percent is the part
-			# that moves.
+		#The number first: the column clips from the right, and the percent is the part that moves.
 			value = "%d%% · %s" % [int(f * 100.0), value]
 		bar.visible = true
 		bar.indeterminate = f < 0.0
@@ -434,8 +420,8 @@ func _group_label(text: String) -> Control:
 	return box
 
 
-## The one-line state for the header. In order of what the reader most needs to know: a failure,
-## something a feature needs that is missing, an install in progress, all well.
+## The one-line state for the header, in order of what the reader most needs: a failure, something a
+## feature needs that is missing, an install in progress, all well.
 func _problem() -> String:
 	for r in _rows:
 		var key := String(r.get("key", ""))
@@ -554,10 +540,8 @@ func _on_retry() -> void:
 		_fill_detail(_open_key)
 
 
-## One row: the button the whole strip is, and a thin progress bar under it while a job runs. A
-## flat [Button] rather than an [HBoxContainer] with a `gui_input` handler, so hover highlighting
-## and keyboard focus come from the theme; the labels inside ignore the mouse so the whole strip
-## stays one click target.
+## One row: a flat [Button] (so hover and keyboard focus come from the theme) and a thin progress bar
+## under it while a job runs. The labels inside ignore the mouse so the strip is one click target.
 func _row_widget(r: Dictionary) -> Control:
 	var key := String(r.get("key", ""))
 	var box := VBoxContainer.new()
@@ -603,8 +587,8 @@ func _row_widget(r: Dictionary) -> Control:
 	return box
 
 
-## A row's look: nothing at rest, a faint band under the pointer - so a row reads as something to
-## click - and a stronger band for the row whose detail pane is OPEN, which stays until it is closed.
+## A row's look: nothing at rest, a faint band under the pointer, a stronger band for the row whose detail
+## pane is open.
 const ROW_HOVER := Color(0.16, 0.19, 0.25, 0.9)
 const ROW_OPEN := Color(0.19, 0.26, 0.38, 0.95)
 
@@ -637,9 +621,9 @@ func _cell(text: String, tint: Color, size: int, min_w: int, align: int) -> Labe
 	return l
 
 
-## Clicking a row opens what it is for, where it lives, and what is happening to it: a job's
-## progress, a failure's reason and a retry, or - for the machine's own programs - the install
-## command for THIS platform. Clicking the same row again closes it.
+## Clicking a row opens what it is for, where it lives, and what is happening to it: a job's progress, a
+## failure's reason and a retry, or for the machine's own programs the install command for this platform.
+## Clicking the same row again closes it.
 func _toggle_detail(key: String) -> void:
 	var was := _open_key
 	if key == _open_key:

@@ -78,11 +78,10 @@ func _layout(with_images: bool) -> NotebookLayout:
 	return l
 
 
-## A CURLED PHOTO'S SHADOW IS ALWAYS FILLABLE. An overnight export logged "Invalid polygon data,
-## triangulation failed" from the curl: with the lamp shining back along the curl, the shadow's
-## rising edge folds over itself and the engine drops the whole shadow for that frame. Swept over
-## every hinge, the angles a print is turned to, and the whole peel - and the RAW outline is
-## counted too, because a sweep that never produces the fault proves nothing.
+## A curled photo's shadow is always fillable: with the lamp shining back along the curl, the shadow's rising edge can
+## fold over itself and the engine drops the whole shadow ("Invalid polygon data"). Swept over every hinge, the
+## angles a print is turned to, and the whole peel; the raw outline is counted too, since a sweep that never
+## produces the fault proves nothing.
 func _check_curl_shadow_fills() -> void:
 	var raw_bad := 0
 	var bad := 0
@@ -152,9 +151,7 @@ func _check_curl_shadow_fills() -> void:
 	_ok(bad == 0, "%d curl shadows the engine cannot fill" % bad)
 
 
-## ONE CAMERA, ONE PRINT: every inline photo is the same size, and a portrait picture is that
-## print turned on its side. Sizes used to be drawn per photo (44-56% of the page, a fanned one
-## 90-105% of the one on top), and a portrait was set to a landscape's WIDTH - 2.25x the area.
+## One camera, one print: every inline photo is the same size, and a portrait is that print turned on its side.
 func _check_one_print_size() -> void:
 	var longs: Array = []
 	for portrait in [false, true]:
@@ -181,7 +178,7 @@ func _check_one_print_size() -> void:
 func _check_layout() -> void:
 	var l := _layout(true)
 	_ok(l.words.size() > 60, "the chapter typeset to only %d words" % l.words.size())
-	# ON THE RULES: the baseline sits a fixed step above a rule, give or take the hand's wobble.
+	# On the rules: the baseline sits a fixed step above a rule, give or take the hand's wobble.
 	var off := 0
 	for w in l.words:
 		var y: float = (w["base"] as Vector2).y
@@ -207,7 +204,7 @@ func _check_layout() -> void:
 		if (w["rect"] as Rect2).end.x < NotebookLayout.MARGIN_X:
 			margin.append(String(w["text"]))
 	_ok(margin == ["09:40", "10:15", "am"], "the margin holds %s, wanted 09:40, 10:15 am" % [margin])
-	# PHOTOS LIE OVER THE WRITING: the same words on the same lines with and without them.
+	# Photos lie over the writing: the same words on the same lines with and without them.
 	var bare := _layout(false)
 	var moved := 0
 	var n := mini(bare.words.size(), l.words.size())
@@ -231,7 +228,7 @@ func _check_layout() -> void:
 		if not (ph["clip"] as Dictionary).is_empty():
 			clips += 1
 	_ok(clips == 2, "%d clips for 3 photos - two in a row should share one" % clips)
-	# A SKETCH TAKES ROWS: no word's box crosses it.
+	# A sketch takes rows: no word's box crosses it.
 	_ok(sketches.size() == 1, "%d sketches, wanted 1" % sketches.size())
 	if sketches.size() == 1:
 		var sr: Rect2 = sketches[0]["rect"]
@@ -270,10 +267,8 @@ func _check_keying() -> void:
 	_ok(out.get_pixel(14, 14).b > 0.4, "the stroke is not in the pen's ink")
 
 
-## A HEADING IS SPOKEN, so it must be WORDS the reading can follow. Set as a label, a dated
-## entry ("## September 19, 2026") had nothing on the page to match: the highlight fell back to
-## the previous paragraph and re-lit its last word for every word of the date, and the camera
-## sat on it. Held for both layouts, on the chapter the report came from when it is present.
+## A heading is spoken, so it must be words the reading can follow: set as a label, a dated entry has nothing on the
+## page to match and the highlight re-lights the previous paragraph's last word. Held for both layouts.
 func _check_headings_are_read() -> void:
 	var path := "/home/crow/repos/rift/books/north-star/chapters/41-the-gift-of-guilt.md"
 	var doc := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else DOC
@@ -306,7 +301,7 @@ func _check_headings_are_read() -> void:
 			% [lay.get_script().get_global_name(), missing, heads.size()])
 
 
-## EACH VOICE WRITES IN ITS OWN INK, black by default: words carry their speaker (headings and
+## Each voice writes in its own ink, black by default: words carry their speaker (headings and
 ## margin times included), a named ink is an ink color, and the medium resolves a speaker to
 ## the ink the document names for it.
 func _check_inks() -> void:
@@ -336,8 +331,7 @@ func _check_inks() -> void:
 	m.free()
 
 
-## EVERY HAND WRITES ON EVERY RULE: consecutive lines of one paragraph are one rule apart, in
-## each hand. Caveat's body size once double-spaced every line.
+## Every hand writes on every rule: consecutive lines of one paragraph are one rule apart, in each hand.
 func _check_single_spaced() -> void:
 	var para := "word ".repeat(120)
 	for h in NotebookLayout.HANDS:
@@ -354,9 +348,8 @@ func _check_single_spaced() -> void:
 			"%s is not written on consecutive rules: %s" % [h, ys.slice(0, 4)])
 
 
-## A PAGE NEVER ENDS ON A HEADING: every heading has two lines of its own text under it on the
-## same page (unless the chapter ends there). Reported as a dated entry at the foot of a page
-## with its whole text over the leaf. Held on chapter 41 in both layouts.
+## A page never ends on a heading: every heading has two lines of its own text under it on the same page (unless
+## the chapter ends there). Held on chapter 41 in both layouts.
 func _check_heading_kept_with_text() -> void:
 	var path := "/home/crow/repos/rift/books/north-star/chapters/41-the-gift-of-guilt.md"
 	var doc := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else DOC
@@ -381,7 +374,7 @@ func _check_heading_kept_with_text() -> void:
 			% [lay.get_script().get_global_name(), stranded])
 
 
-## EVERY CLIPPED PHOTO KNOWS WHICH WORDS IT HIDES, so it can lift while they are read: a photo
+## Every clipped photo knows which words it hides, so it can lift while they are read: a photo
 ## over writing names a real range of words on its own page, and a stack shares one.
 func _check_photo_covers() -> void:
 	var l := _layout(true)
@@ -400,10 +393,8 @@ func _check_photo_covers() -> void:
 	_ok(n == 3, "the control is wrong - %d photos" % n)
 
 
-## A LIFTED PHOTO DOES NOT FLICKER. Reported: curled, dropped, curled again - the early test
-## flipped as the take's timings arrived. Held: once up it stays up while "early" goes false,
-## it drops only after the reading passes its last word, never within PEEL_HOLD of lifting, and
-## it does not lift for a reading that is nowhere near it.
+## A lifted photo does not flicker. Held: once up it stays up while "early" goes false, it drops only after the
+## reading passes its last word, never within PEEL_HOLD of lifting, and it does not lift for a reading nowhere near it.
 func _check_peel_holds() -> void:
 	var L := NotebookMedium.peel_latch
 	var at: float = L.call(NAN, 10.0, 50, 60, 90, true)
@@ -417,9 +408,9 @@ func _check_peel_holds() -> void:
 	_ok(is_nan(L.call(NAN, 1.0, 5, 60, 90, false)), "a photo lifted for a reading far above it")
 
 
-## A CLIP GRIPS A SHEET, so both its pages show it: a right-hand page is backed by the next
-## left-hand one (page 0 is the cover's inside, with no sheet), and the back is a different
-## drawing from the front - the inner tongue and the end past the edge, not the whole clip.
+## A clip grips a sheet, so both its pages show it: a right-hand page is backed by the next left-hand one (page 0 is
+## the cover's inside, with no sheet), and the back is a different drawing from the front - the inner tongue and the
+## end past the edge, not the whole clip.
 func _check_clip_sides() -> void:
 	_ok(NotebookMedium._sheet_partner(1) == 2 and NotebookMedium._sheet_partner(2) == 1
 		and NotebookMedium._sheet_partner(5) == 6 and NotebookMedium._sheet_partner(0) == -1,
@@ -439,9 +430,8 @@ func _check_clip_sides() -> void:
 	_ok(front.size() == 1 and back.size() == 1, "a side of the clip is drawn as more than one wire")
 
 
-## THE HAND DRIFTS, IT DOES NOT JITTER: words sit exactly on the line (no per-word offset), and
-## the drift is SMOOTH - a letter a little further along sits almost where its neighbor does,
-## and lines next to each other lean alike. A per-word random offset was reported as unnatural.
+## The hand drifts, it does not jitter: words sit exactly on the line (no per-word offset) and the drift is smooth -
+## a letter a little further along sits almost where its neighbor does, and neighboring lines lean alike.
 func _check_hand_drift() -> void:
 	var l := NotebookLayout.new()
 	l.hand = "kalam"
@@ -463,8 +453,8 @@ func _check_hand_drift() -> void:
 	var a := m._drift(3, 900.0, y) - m._drift(3, 250.0, y)
 	var b := m._drift(3, 900.0, y + NotebookLayout.RULE) - m._drift(3, 250.0, y + NotebookLayout.RULE)
 	_ok(absf(a - b) < 2.0, "neighboring lines do not lean alike (%.1f vs %.1f px)" % [a, b])
-	# THE HAND LEANS RIGHT (positive skew in Godot leans a glyph's top right - measured): every
-	# line's slant, per-letter wobble included, stays right of upright or at it, never left.
+	# The hand leans right (positive skew in Godot leans a glyph's top right): every line's slant, per-letter wobble
+	# included, stays right of upright or at it.
 	var lefts := 0
 	for li in 60:
 		for k in 5:

@@ -1,20 +1,25 @@
 extends RefCounted
 class_name TableGame
 
-## TableGame - A GAME, ON THE TABLE (next/tabletop.md): the map, the paper figures, the dice and the pictures held up, drawn from a session's events: a part of [TableWork], as [TableAssembly] is. A pure function of show time and when each event was
-## reached (`game.json`, [method schedule]): a render, a scrub and a live reading all see the same table.
+## TableGame - a game on the table (next/tabletop.md): the map, the paper figures, the dice and the pictures held up,
+## drawn from a session's events; a part of [TableWork], as [TableAssembly] is. A pure function of show time and when
+## each event was reached (`game.json`, [method schedule]): a render, a scrub and a live reading all see the same table.
 ##
-## A DIE'S STORY: it rises from where its person keeps their dice, is shaken in the hand, and then goes where the record has it ([DiceBake]: real bodies, thrown from where they sit, as the same record for live and render); it lies until the next throw or a while passes, and goes home. Its
-## printing is turned, once, so the number rolled is on the face it lands on ([method Dice.turn_for]), and what shows on a die is what was rolled.
+## A die rises from where its person keeps their dice, is shaken in the hand, then goes where the record has it
+## ([DiceBake]: real bodies thrown from where they sit, the same record for live and render); it lies until the next
+## throw or a while passes, and goes home. Its printing is turned once so the number rolled is on the face it lands on
+## ([method Dice.turn_for]).
 ##
-## THE SHOT GOES TO THE DICE ([method shot_at]): a die is too small to read from across a table, and a viewer who reads it first laughs first. As they land the camera eases in to look, and eases back after the words go on. Never fast: the user of a camera that moved for every
-## line, 2026-10-27: "the forward and backward zooming of the camera is nauseating".
+## The shot goes to the dice ([method shot_at]): a die is too small to read from across a table, so as they land the
+## camera eases in, and eases back after the words go on. Never fast.
 ##
-## A FIGURE IS A PAINTED CARD IN A BASE, a little leaned back so it reads from above, and when it falls it lies flat on its back: its painting up, which a fallen miniature never shows. A move is a hop, by [Hands].
+## A figure is a painted card in a base, leaned back a little so it reads from above; when it falls it lies flat on its
+## back, painting up. A move is a hop, by [Hands].
 ##
-## WHAT IS IN THE RECORD IS MADE WHEN THE TABLE FIRST STANDS on the stage: named by everything it depends on, and kept, so a note opened again costs nothing. A preview draws dice nowhere.
+## The record is made when the table first stands on the stage: named by everything it depends on and kept, so a note
+## opened again costs nothing. A preview draws no dice.
 
-## A roll's own moments (seconds): rising from where they are kept, shaken in the air; how long it lies before it goes home if nothing else has been thrown, and how long going home takes.
+## A roll's moments (seconds): rising from where dice are kept, shaken in the air; how long it lies before going home if nothing else is thrown, and how long going home takes.
 const RISE := 0.28
 const SHAKE := 0.42
 const LIES := 9.0
@@ -25,7 +30,7 @@ const SHAKE_RATE := 6.5
 ## How much rattling is heard in a shake.
 const RATTLE_RATE := 11.0
 const RATTLE_HARD := 0.28
-## THE SHOT: how many dice it goes to at most, how far from them it stands (meters), how long before they stop it begins (from their rest), how long it eases in, holds on after, and eases out; and how far from the camera's own place it comes (a share).
+## The shot: the most dice it goes to, how far from them it stands (meters), how long before they stop it begins (from their rest), how long it eases in, holds on after, and eases out; and how far from the camera's own place it comes (a share).
 const SHOT_DICE := 4
 const SHOT_FAR := 0.56
 const SHOT_LEADS := 0.55
@@ -53,11 +58,11 @@ const MAP_FROM := 0.7
 const MAP_Y := 0.0012
 const BASE_R := 0.46
 const BASE_H := 0.0035
-## A record's name changes when this does: what the world does is the same given the same of everything else.
+## A record's name changes when this does.
 const BAKE_VERSION := 1
 const BAKES_KEPT := 24
 const PROBE_BAKES := "res://dist/game_bakes"
-## Where records are kept, where a gate wants them; a gate's way to a show that plays while its record is made, for everything else run from tests/ waits for it.
+## Where records are kept; a gate sets it, and a show that plays while its record is made waits for it.
 static var bake_root := ""
 static var live_in_tests := false
 ## What each person keeps at their place: one of each, as a set is.
@@ -144,7 +149,7 @@ func _map_material(m: Dictionary, pic: int) -> ShaderMaterial:
 	return mat
 
 
-## EVERY LIFE OF A FIGURE: placed on a map, moved, fallen, stood up, taken off, or swept off as its map goes. One node each, whatever else happens on the table.
+## Every life of a figure: placed on a map, moved, fallen, stood up, taken off, or swept off as its map goes. One node each, whatever else happens on the table.
 func _stand_figures() -> void:
 	var maps: Array = game.get("maps", [])
 	var map := {}
@@ -181,7 +186,7 @@ func _stand_figures() -> void:
 					alive.erase(name)
 
 
-## A FIGURE'S NODES: a low base, and the painted card held in it, its pivot where it stands in its base.
+## A figure's nodes: a low base, and the painted card held in it, its pivot where it stands in its base.
 func _figure_node(life: Dictionary) -> Node3D:
 	var w := GameBoard.figure_width(life["map"])
 	var tall := w * GameBoard.FIGURE_TALL
@@ -247,7 +252,7 @@ func _stand_reveals() -> void:
 		var tex := _picture("reveal_%d.png" % pic)
 		if tex != null:
 			face.albedo_texture = tex
-			# ...A PICTURE IN THE HAND STANDS OUT OF THE TABLE'S DIM LIGHT: it faces the lens, its light is from over the table, and it is what a viewer is being shown
+			# A picture in the hand stands out of the table's dim light: it faces the lens, lit from over the table
 			face.emission_enabled = true
 			face.emission_texture = tex
 			face.emission_energy_multiplier = 0.55
@@ -259,7 +264,7 @@ func _stand_reveals() -> void:
 		_reveals.append({"node": node, "event": int(d["id"])})
 
 
-## EVERY THROW'S DICE, made once, its nodes hidden until wanted: its printing and its body's own material from whose they are.
+## Every throw's dice, made once, its nodes hidden until wanted: its printing and its body's own material from whose they are.
 func _stand_rolls() -> void:
 	var sets: Dictionary = game.get("dice", {})
 	var seats: Dictionary = game.get("seats", {})
@@ -286,7 +291,7 @@ func _stand_rolls() -> void:
 		_rolls.append({"event": d, "id": int(d["id"]), "nodes": nodes, "home": Vector3(home.x, 0.03, home.y), "hidden": bool(d.get("hidden", false)), "scale": float(set.get("size", 1.0))})
 
 
-## WHERE EACH PERSON KEEPS THEIR DICE: a set lying at their place, which is where a throw is seen to begin. A die in the air is not lying there too ([method _tick_homes]).
+## Where each person keeps their dice: a set lying at their place, which is where a throw is seen to begin. A die in the air is not lying there too ([method _tick_homes]).
 func _stand_homes() -> void:
 	var sets: Dictionary = game.get("dice", {})
 	var seats: Dictionary = game.get("seats", {})
@@ -309,7 +314,7 @@ func _stand_homes() -> void:
 			_homes.append({"node": n, "who": String(who), "shape": shape})
 
 
-## A BODY'S TURN FOR LYING ON ITS FACE [param face]: that face down.
+## A body's turn for lying on its face [param face]: that face down.
 static func _lying_on(shape: int, face: int) -> Basis:
 	var n: Vector3 = ((Dice.solid(shape)["faces"] as Array)[face] as Dictionary)["normal"]
 	return Basis(Quaternion(n, Vector3.DOWN))
@@ -380,7 +385,7 @@ func clear() -> void:
 
 # --- when ---------------------------------------------------------------------------------------------------------------------------------------------
 
-## WHEN EACH EVENT WAS REACHED: the placed marks of the reading ([method ReadingFollower.place]), whose `card` is the event's id. Asked again every sentence of a live reading: nothing here is decided by when it asks.
+## When each event was reached: the placed marks of the reading ([method ReadingFollower.place]), whose `card` is the event's id. Asked again every sentence of a live reading: nothing here is decided by when it asks.
 func schedule(sched: Array) -> void:
 	_times = {}
 	for e in sched:
@@ -414,7 +419,7 @@ func _when(id: int) -> float:
 
 # --- the record ---------------------------------------------------------------------------------------------------------------------------------------
 
-## WHETHER A SHOW HAS TO WAIT: the first time a table stands with a session on it, the record is made ([DiceBake]); a show waits, as for the bricks, only until it lands, and it is seconds, not minutes.
+## Whether a show has to wait: the first time a table stands with a session on it the record is made ([DiceBake]); a show waits, as for the bricks, only until it lands (seconds).
 func behind(_t: float) -> bool:
 	if _rolls.is_empty() or not _record.is_empty():
 		return false
@@ -437,7 +442,7 @@ func ready_to(t: float) -> float:
 	return INF if not _record.is_empty() or _rolls.is_empty() else t
 
 
-## A RENDER WAITS WHOLE: it never plays what has not landed.
+## A render waits whole: it never plays what has not landed.
 func wait_whole() -> void:
 	_begin_record()
 	while _record.is_empty() and not _failed:
@@ -553,7 +558,7 @@ func tick(t: float) -> void:
 	_tick_homes(t)
 
 
-## THE MAP DOWN NOW: each its own span, sliding in over the last, which slides out.
+## The map down now: each its own span, sliding in over the last, which slides out.
 func _tick_maps(t: float) -> void:
 	var seen := -1
 	for i in _maps.size():
@@ -620,7 +625,7 @@ func _tick_figures(t: float) -> void:
 		var taken := clampf((t - ended) / PLACE_TAKES, 0.0, 1.0) if ended < INF else 0.0
 		up += Hands.smooth(taken) * 0.3
 		node.position = from + Vector3(0.0, up + MAP_Y * 1.5, 0.0)
-		# ...A FALL: backward onto its back, painting up, with one small bounce
+		# ...A fall: backward onto its back, painting up, with one small bounce
 		var drop := fall * fall
 		var lean := lerpf(deg_to_rad(LEAN_BACK), deg_to_rad(89.0), drop)
 		if fall >= 1.0:
@@ -658,7 +663,7 @@ func _tick_rolls(t: float) -> void:
 		var thrown := at + RISE + SHAKE
 		var rec: Dictionary = _record.get(int(r["id"]), {})
 		var dur := float(rec.get("dur", 2.0))
-		# ...IT GOES HOME as the next throw begins, or once it has lain a while
+		# ...It goes home as the next throw begins, or once it has lain a while
 		var gone := thrown + dur + LIES
 		if i + 1 < _rolls.size():
 			gone = minf(gone, _when(int((_rolls[i + 1] as Dictionary)["id"])))
@@ -694,7 +699,7 @@ func _home_of(r: Dictionary, k: int) -> Transform3D:
 	return Transform3D(Basis(Vector3(0.3, 1.0, 0.1).normalized(), float(k) * 1.7), home + along)
 
 
-## UP OUT OF WHERE IT LAY AND SHAKEN: to where the record's first key begins, closed form.
+## Up out of where it lay and shaken: to where the record's first key begins, closed form.
 func _in_hand(t: float, at: float, home: Transform3D, rec: Dictionary, k: int) -> Transform3D:
 	var dice: Array = rec.get("dice", [])
 	var keys: PackedFloat32Array = (dice[k] as Dictionary)["keys"] if k < dice.size() else PackedFloat32Array()
@@ -737,7 +742,7 @@ static func _key_at(keys: PackedFloat32Array, i: int) -> Transform3D:
 
 # --- the shot ---------------------------------------------------------------------------------------------------------------------------------------
 
-## WHERE THE CAMERA IS AT [param t]: [param base], or on the way to the dice ([constant SHOT_FAR] from them, looking down at them from over their shoulder of the table), at most as far as [constant SHOT_WEIGHT] takes it.
+## Where the camera is at [param t]: [param base], or on the way to the dice ([constant SHOT_FAR] from them, looking down at them from over their shoulder of the table), at most as far as [constant SHOT_WEIGHT] takes it.
 func shot_at(t: float, base: Transform3D) -> Transform3D:
 	var out := base
 	for s in _shots:
@@ -757,7 +762,7 @@ func shot_at(t: float, base: Transform3D) -> Transform3D:
 
 # --- heard ------------------------------------------------------------------------------------------------------------------------------------------
 
-## EVERY HIT BETWEEN TWO MOMENTS OF THE SHOW, as [WorkSounds] rings them: real ones where the record has them, and a few quick soft knocks of dice shaken in a hand.
+## Every hit between two moments of the show, as [WorkSounds] rings them: real ones where the record has them, and a few quick soft knocks of dice shaken in a hand.
 func sounds_in(t0: float, t1: float) -> Array:
 	var out: Array = []
 	for r in _rolls:
@@ -771,7 +776,7 @@ func sounds_in(t0: float, t1: float) -> Array:
 		var rings := String(material["sound"])
 		var weight := float(material["mass"])
 		var rec: Dictionary = _record.get(int(rd["id"]), {})
-		# ...THE SHAKE, while it is in hand
+		# ...The shake, while it is in hand
 		if at + RISE < t1 and thrown > t0 and (rd["nodes"] as Array).size() > 0:
 			var k0 := ceili(maxf(t0 - at - RISE, 0.0) * RATTLE_RATE)
 			var k1 := floori(minf(t1 - at - RISE, SHAKE) * RATTLE_RATE)

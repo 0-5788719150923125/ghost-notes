@@ -12,18 +12,13 @@ class_name Mesh3D
 const LIGHT := Vector3(0.35, -0.55, 0.75)   # upper-front key light (normalized below)
 const VIEW := Vector3(0.0, 0.0, 1.0)        # viewer direction, for specular highlights
 
-# The shared face batch (see TriBatch): every draw_through/draw_shaded call
-# appends its faces (and edge lines) in painter order and flushes ONCE at the
-# end - one canvas draw call per BODY instead of one per FACE. This is the
-# single highest-leverage batch in the codebase: every Scene3D (eyes, spires,
-# prisms, rocks) funnels through here, and the per-face draw_colored_polygon
-# calls were the reason those scenes ran at ~1 fps.
+# The shared face batch (see TriBatch): every draw_through/draw_shaded call appends its faces (and edge lines) in
+# painter order and flushes once at the end, one canvas draw call per body instead of one per face. Every Scene3D funnels through here.
 static var _tb := TriBatch.new()
 
 
-# A projected triangle whose 2D area is sub-pixel (an edge-on or collapsed face)
-# can't be triangulated by the canvas - draw_colored_polygon rejects it. Skip those
-# faces; edge-on, they contribute nothing visible anyway.
+# A projected triangle whose 2D area is sub-pixel (edge-on or collapsed) cannot be triangulated by the canvas
+# (draw_colored_polygon rejects it); it contributes nothing visible, so it is skipped.
 static func _degenerate(poly: PackedVector2Array) -> bool:
 	if poly.size() < 3:
 		return true
@@ -69,9 +64,8 @@ static func icosphere(subdiv := 1) -> Mesh3D:
 	return m
 
 
-# Split every triangle into four. With `project` (the icosphere case) new midpoints
-# are pushed back onto the sphere; without it (flat bases like a cube) they stay put,
-# so subdivision just adds vertices to deform while keeping the geometric form.
+# Split every triangle into four. With `project` (the icosphere case) new midpoints are pushed back onto the
+# sphere; without it (flat bases like a cube) they stay put.
 func _subdivide(project := true) -> void:
 	var cache := {}
 	var new_faces: Array = []
@@ -168,21 +162,17 @@ static func dome(rings: int, segments: int, height: float) -> Mesh3D:
 	return m
 
 
-## Push each vertex out/in along its direction by seeded *uncorrelated* noise - a
-## quick fuzzy lump. Neighbors are independent, so the surface reads as a noisy
-## ball; for a believable solid prefer [method warp] (coherent), which is what the
-## rock factory uses. Kept as a cheap primitive. Shared vertices stay watertight.
+## Push each vertex out/in along its direction by seeded uncorrelated noise: a cheap fuzzy lump whose neighbors
+## are independent. For a believable solid prefer [method warp]. Shared vertices stay watertight.
 func displace(amp: float, rng: RandomNumberGenerator) -> void:
 	for i in verts.size():
 		verts[i] = verts[i] * (1.0 + rng.randf_range(-amp, amp))
 
 
-## Coherent fractal displacement: move each vertex along its own direction by a
-## sum of noise octaves sampled in 3D over the *position*, so neighboring vertices
-## move together. The surface deforms in smooth correlated lumps - a real mass with
-## bulges and hollows - instead of the per-vertex fuzz [method displace] gives.
-## `amp` is the peak fraction of radius, `detail` the octave count (finer crag),
-## `gain` how much each finer octave contributes, `freq` the base lump scale.
+## Coherent fractal displacement: move each vertex along its own direction by a sum of 3D noise octaves sampled
+## over the position, so neighbors move together (smooth lumps, bulges and hollows, unlike [method displace]'s
+## per-vertex fuzz). `amp` is the peak fraction of radius, `detail` the octave count, `gain` how much each finer
+## octave contributes, `freq` the base lump scale.
 func warp(amp: float, detail: int, gain: float, freq: float, rng: RandomNumberGenerator) -> void:
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -236,10 +226,8 @@ func compute_normals() -> void:
 		vertex_normals[i] = n.normalized() if n.length() > 1e-6 else Vector3.UP
 
 
-## Bake a coherent surface texture: a value-noise mottle sampled at each face
-## centroid, stored in [member face_tint] and applied as a per-face brightness /
-## saturation variation when drawn - patches of light and dark across the surface,
-## the way real stone is never one flat color. `amount` is the depth of the mottle.
+## Bake a coherent surface texture: a value-noise mottle sampled at each face centroid, stored in
+## [member face_tint] and applied as a per-face brightness/saturation variation when drawn. `amount` is the depth of the mottle.
 func texturize(amount: float, freq: float, rng: RandomNumberGenerator) -> void:
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -254,10 +242,9 @@ func texturize(amount: float, freq: float, rng: RandomNumberGenerator) -> void:
 		face_tint[fi] = noise.get_noise_3dv(c) * amount
 
 
-## Coherent fractal displacement *masked by a second noise field*, so the growth is
-## patchy: where the mask is high the surface erupts into rock, where it is low it
-## stays the underlying (geometric) form. The basis for "rock growing on a structure"
-## - run it on a subdivided cube/octahedron and only parts crust over.
+## Coherent fractal displacement masked by a second noise field, so the growth is patchy: where the mask is
+## high the surface erupts into rock, where it is low it stays the underlying form. Run it on a subdivided
+## cube/octahedron and only parts crust over.
 func warp_masked(amp: float, detail: int, gain: float, freq: float, mask_freq: float,
 		rng: RandomNumberGenerator) -> void:
 	var noise := FastNoiseLite.new()
@@ -279,9 +266,8 @@ func warp_masked(amp: float, detail: int, gain: float, freq: float, mask_freq: f
 		verts[i] = v + dir * (v.length() * amp * n * m)
 
 
-## A hybrid body: a crisp geometric base (cube / octahedron / tetrahedron) with rock
-## crusting over part of it, where a noise mask says so ([method warp_masked]). Part
-## machined, part grown - "rock growing upon the geometric structure."
+## A hybrid body: a crisp geometric base (cube / octahedron / tetrahedron) with rock crusting over part of it
+## where a noise mask says so ([method warp_masked]).
 static func hybrid(rng: RandomNumberGenerator) -> Mesh3D:
 	var m: Mesh3D
 	match rng.randi_range(0, 2):
@@ -326,11 +312,9 @@ static func rock(style: String, rng: RandomNumberGenerator) -> Mesh3D:
 	return m
 
 
-## Draw the mesh, flat-shaded and depth sorted. `explode` pushes each face out
-## along its normal; `edge` 0 none / 1 dark / 2 bright outlines; `face_alpha` < 1
-## makes the faces translucent. `gloss` adds a specular highlight (a wet/polished
-## look) whose tightness is set by `rough` (low rough = a sharp glossy glint, high
-## rough = matte); per-face [member face_tint] mottles the surface like real texture.
+## Draw the mesh, flat-shaded and depth sorted. `explode` pushes each face out along its normal; `edge` 0 none /
+## 1 dark / 2 bright outlines; `face_alpha` < 1 makes the faces translucent. `gloss` adds a specular highlight
+## whose tightness is set by `rough` (low = a sharp glint, high = matte); per-face [member face_tint] mottles the surface.
 func draw_shaded(ci: CanvasItem, basis: Basis, center: Vector2, scale: float,
 		hue: float, sat: float, explode: float, edge: int, face_alpha := 1.0,
 		glow := 0.0, gloss := 0.0, rough := 0.6) -> void:
@@ -395,13 +379,11 @@ func draw_shaded(ci: CanvasItem, basis: Basis, center: Vector2, scale: float,
 	_tb.flush(ci)
 
 
-## Build a gaussian alpha mask for the partial-reveal look: a coherent noise field
-## thresholded into a sparse pattern of solid coat (alpha 1) and holes (alpha 0), with
-## a soft edge. RGB stays white so the face color shows through where the coat is
-## present. `threshold` is the sampleable masking knob - low leaves mostly coat with a
-## few bare patches, near 0 makes it roughly half coat / half holes. `soft` sets how
-## feathered the hole edges are; `freq` the patch scale. One texture per rock, built
-## once; the holes reveal the wireframe drawn beneath (see [method draw_revealed]).
+## Build a gaussian alpha mask for the partial-reveal look: a coherent noise field thresholded into a sparse
+## pattern of solid coat (alpha 1) and holes (alpha 0), with a soft edge. RGB stays white so the face color shows
+## through where the coat is present. `threshold`: low leaves mostly coat with a few bare patches, near 0 makes it
+## roughly half coat / half holes. `soft` sets how feathered the hole edges are; `freq` the patch scale. One
+## texture per rock, built once; the holes reveal the wireframe drawn beneath (see [method draw_revealed]).
 static func reveal_texture(rng: RandomNumberGenerator, threshold := -0.15, soft := 0.16,
 		freq := 0.05, size := 128) -> ImageTexture:
 	var noise := FastNoiseLite.new()
@@ -410,10 +392,8 @@ static func reveal_texture(rng: RandomNumberGenerator, threshold := -0.15, soft 
 	noise.frequency = freq
 	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	noise.fractal_octaves = 4
-	# Seamless along X: the x axis is wrapped around a circle (3D noise on a cylinder), so the
-	# left and right edges meet exactly. That lets the mask be PANNED horizontally over time
-	# (see draw_revealed) and wrap with no seam - a continuously drifting crust instead of a
-	# static pattern that appears to reset. The radius keeps the feature scale matching freq.
+	# Seamless along X (3D noise on a cylinder), so the mask can be panned horizontally with no seam (see
+	# draw_revealed). The radius keeps the feature scale matching freq.
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var radius := float(size) / TAU
 	for y in size:
@@ -425,13 +405,10 @@ static func reveal_texture(rng: RandomNumberGenerator, threshold := -0.15, soft 
 	return ImageTexture.create_from_image(img)
 
 
-## Draw the mesh as a *partially revealed* body: the solid shaded coat is punched
-## through by a gaussian alpha mask ([param reveal_tex]) to expose the wireframe lattice
-## beneath - patches of bare geometry, patches of crusted surface, uneven even across a
-## single face (the mask is sampled per-pixel via the texture, not per-face). Back faces
-## are culled, so the holes reveal only the near shell's wireframe, never the interior.
-## The mask UVs come from each face's dominant object-space axis, so the pattern sticks
-## to the rock as it tumbles instead of swimming in screen space.
+## Draw the mesh as a partially revealed body: the solid shaded coat is punched through by a gaussian alpha mask
+## ([param reveal_tex]) to expose the wireframe lattice beneath (the mask is sampled per pixel via the texture, not
+## per face). Back faces are culled, so the holes reveal only the near shell's wireframe. The mask UVs come from
+## each face's dominant object-space axis, so the pattern sticks to the rock as it tumbles.
 func draw_revealed(ci: CanvasItem, basis: Basis, center: Vector2, scale: float,
 		hue: float, sat: float, glow: float, wire_col: Color, reveal_tex: Texture2D,
 		pan := 0.0, pan_seed := 0.0) -> void:
@@ -492,10 +469,8 @@ func draw_revealed(ci: CanvasItem, basis: Basis, center: Vector2, scale: float,
 				uv = Vector2((vo.x - bbmin.x) / ext.x, (vo.z - bbmin.z) / ext.z)
 			else:
 				uv = Vector2((vo.x - bbmin.x) / ext.x, (vo.y - bbmin.y) / ext.y)
-			# Spatially-varying drift instead of one uniform scroll: a smooth field decides how
-			# much THIS patch moves (0 = a stable, anchored patch; 1 = full drift) and which way,
-			# and a second field gently varies the local scale - so the coat creeps unevenly, some
-			# patches holding still while others crawl, with blended scales across the geometry.
+			# Spatially varying drift: a smooth field decides how much this patch moves (0 = anchored, 1 = full drift) and
+			# which way, and a second field varies the local scale, so the coat creeps unevenly.
 			var motion := 0.5 + 0.5 * sin(uv.x * 4.7 + uv.y * 6.1 + pan_seed)
 			var ddir := sin(uv.y * 3.3 - uv.x * 2.7 + pan_seed * 1.7)
 			var scl := 1.0 + 0.12 * sin(uv.x * 5.5 - uv.y * 4.3 + pan_seed)
@@ -521,13 +496,10 @@ func draw_revealed(ci: CanvasItem, basis: Basis, center: Vector2, scale: float,
 		ci.draw_colored_polygon(fr.poly, fr.col, fr.uvs, reveal_tex)
 
 
-## Draw the mesh as a body in a [Lens3D] world: rotate by `basis`, scale, place at
-## `pos` (world units), then project every vertex through the camera - true forced
-## perspective, not the fixed centered projector of [method draw_shaded]. Faces are
-## depth-sorted against the camera and flat-shaded; normals face the eye. `u_px` is
-## the pixel unit (projection returns centered unit-fractions). This is the [Scene3D]
-## counterpart used by the unified path; draw_shaded stays for the legacy centered
-## look. A face is skipped if any of its vertices fall behind the camera.
+## Draw the mesh as a body in a [Lens3D] world: rotate by `basis`, scale, place at `pos` (world units), then
+## project every vertex through the camera. Faces are depth-sorted against the camera and flat-shaded; normals
+## face the eye. `u_px` is the pixel unit (projection returns centered unit-fractions). The [Scene3D] counterpart
+## to draw_shaded's fixed centered projector. A face is skipped if any vertex falls behind the camera.
 func draw_through(ci: CanvasItem, lens: Lens3D, u_px: float, basis: Basis, pos: Vector3,
 		scale: float, hue: float, sat: float, edge: int, face_alpha := 1.0,
 		glow := 0.0, explode := 0.0, gloss := 0.0, rough := 0.6,

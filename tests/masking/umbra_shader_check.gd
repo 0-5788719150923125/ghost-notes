@@ -1,16 +1,14 @@
 extends SceneTree
 
-## One-shot GPU compile check for the umbra effect - mask_split.gdshader's
-## effect-17 branch and shaders/umbra_field.gdshader:
+## One-shot GPU compile check for the umbra effect: mask_split.gdshader's effect-17 branch and
+## shaders/umbra_field.gdshader:
 ##   godot --path . --headless --script res://tests/masking/umbra_shader_check.gd
-## `--editor --quit` only validates GDScript; a .gdshader edit needs a real
-## compile with realistic values on every uniform the branch reads (CLAUDE.md's
-## validation discipline). The caller judges by grepping for SHADER ERROR /
-## Invalid; the one known-harmless line is crystal's custom_samplers complaint.
+## `--editor --quit` only validates GDScript; a .gdshader edit needs a real compile with realistic values
+## on every uniform the branch reads. The caller judges by grepping for SHADER ERROR / Invalid; the one
+## known-harmless line is crystal's custom_samplers complaint.
 ##
-## Layer 1 is deliberately the CLOWN branch: both effects sample their own
-## field texture, and this is the check that would catch the mask shader
-## running past a per-GPU sampler limit once a second field was added.
+## Layer 1 is deliberately the clown branch: both effects sample their own field texture, so this catches
+## the mask shader running past a per-GPU sampler limit.
 
 func _initialize() -> void:
 	var shader: Shader = load("res://shaders/mask_split.gdshader")

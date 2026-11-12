@@ -1,23 +1,21 @@
 extends RefCounted
 class_name TableInk
 
-## TableInk - WHAT A PEN WRITES THAT TEX LAYS OUT, at the table: a formula, a drawing, a line of words with math in it, each a
-## `write` of the work ([constant Motions.LAWS]) - laid out once by ghost's own TeX (`hosts/math/typeset.py`, the episode's
-## `ink` step) and drawn here as the hand writes it ([Ink]), into the picture a sheet's writing shows ([SheetWriting]).
+## TableInk - what a pen writes that TeX lays out, at the table: a formula, a drawing, a line of words with math in it,
+## each a `write` of the work ([constant Motions.LAWS]). ghost's own TeX (`hosts/math/typeset.py`, the episode's `ink`
+## step) lays each out once; it is drawn here as the hand writes it ([Ink]), into the picture a sheet's writing shows
+## ([SheetWriting]). Any show's page can carry a formula or a graph (next/proof.md).
+## TeX lays out and a hand writes: the structure is TeX's (a fraction's bar between numerator and denominator where
+## TeX set it) and the strokes are the Hershey hand's, in the order a hand writes them.
 ##
-## Proof's pad, at the table since 2026-11-11 (next/proof.md, "Proof became a table show"): any show's page can carry a
-## formula or a graph, and a lesson is a brief that asks for them. TEX LAYS OUT, A HAND WRITES: the structure is TeX's - a
-## fraction's bar between its numerator and denominator because that is where TeX set it - and the strokes are the Hershey
-## hand's, in the order a hand writes them.
-##
-## WHICH WRITES ([method items_of]): a `tex` (TeX math, written on its own line: an `align*` or `gather*` set as the display it
-## is), a `draw` (an SVG in figure.py's words: lines, curves, arrows, labels, axes with curves COMPUTED from their expressions or
-## plotted from the series the solve kept - never an agent's guess) and a `text` with `$...$` in it (words and math, wrapped at
+## Which writes ([method items_of]): a `tex` (TeX math on its own line; an `align*` or `gather*` is set as the display it
+## is), a `draw` (an SVG in figure.py's words: lines, curves, arrows, labels, axes with curves computed from their
+## expressions or plotted from the series the solve kept) and a `text` with `$...$` in it (words and math, wrapped at
 ## the page's width). Words with no math are the sheet's own hand ([SheetWriting.picture]) and never go through TeX.
 ##
-## AN ITEM'S PICTURE ([method picture_of]): R the ink's coverage, G when each point is put down - the hand's own schedule
-## ([method Ink.schedule]: the pen's speed, its lifts, a breath between glyphs, a longer one before a relation), so a formula is
-## written stroke by stroke as the act's `written` goes from 0 to 1, never wiped on.
+## An item's picture ([method picture_of]): R the ink's coverage, G when each point is put down, on the hand's own
+## schedule ([method Ink.schedule]: the pen's speed, its lifts, a breath between glyphs, a longer one before a
+## relation), so a formula is written stroke by stroke as the act's `written` goes from 0 to 1.
 
 ## The episode's file of TeX's layout: typeset.py's answer, `{items: [records], fonts}`.
 const FILE := "ink.json"
@@ -35,21 +33,19 @@ const PAD_PX := 3
 static var DISPLAY := RegEx.create_from_string("^\\s*\\\\begin\\{(align|gather|multline|flalign|alignat)\\*?\\}")
 
 
-## THE ITEM a write lays out by TeX ([param kind] "tex", "draw" or "text"), as typeset.py takes it: `{id, tex, mode}`. Its id is
+## The item a write lays out by TeX ([param kind] "tex", "draw" or "text"), as typeset.py takes it: `{id, tex, mode}`. Its id is
 ## a digest of what it is, so the bake finds TeX's record of it from the write alone.
 static func item(kind: String, tex: String) -> Dictionary:
 	var mode := "text"
 	if kind == "draw":
 		mode = "figure"
 	elif kind == "tex":
-		# MATH, unless it is a display environment of its own (align*, gather*), which TeX sets only outside math: `aligned`
-		# lives inside math, and set as a display it was refused ("\\begin{aligned} allowed only in math mode", Proof's first
-		# real episode)
+		# Math, unless it is a display environment of its own (align*, gather*), which TeX sets only outside math.
 		mode = "display" if DISPLAY.search(tex) != null else "math"
 	return {"id": "i" + (kind + "|" + tex).sha256_text().substr(0, 12), "tex": tex, "mode": mode}
 
 
-## THE ITEM [param track] (a `write`, as [method Motions.law] made it) lays out by TeX, or `{}` for words in the sheet's own hand.
+## The item [param track] (a `write`, as [method Motions.law] made it) lays out by TeX, or `{}` for words in the sheet's own hand.
 static func item_of_track(track: Dictionary) -> Dictionary:
 	if not String(track.get("draw", "")).is_empty():
 		return item("draw", String(track["draw"]))
@@ -61,7 +57,7 @@ static func item_of_track(track: Dictionary) -> Dictionary:
 	return {}
 
 
-## EVERY ITEM the acts [param raw] (`acts.json` as parsed) write by TeX, once each, in order: what the ink step typesets.
+## Every item the acts [param raw] (`acts.json` as parsed) write by TeX, once each, in order: what the ink step typesets.
 static func items_of(raw: Variant) -> Array:
 	var acts: Array = (raw as Dictionary).get("acts", []) if raw is Dictionary and (raw as Dictionary).get("acts") is Array \
 		else (raw if raw is Array else [])
@@ -96,10 +92,11 @@ static func raw_write(t: Dictionary) -> Dictionary:
 	return out
 
 
-## TEX'S LAYOUT OF [param items], NOW (typeset.py, ghost's own TeX), for an agent waiting on it - the puppeteer's `act`, so it sees its
-## formulas as they will be written and hears what TeX refuses while it can still write them so they set ([PuppeteerTools]) - never in
-## a build. [param data] the series a drawing plots by name, [param work] a folder of its own. Awaits the host: the answer `{items,
-## fonts}`, or `{error}` - "" an error for TeX not installed yet, when the ink step will lay it out later all the same.
+## TeX's layout of [param items] now (typeset.py), for an agent waiting on it - the puppeteer's `act`, so it sees its
+## formulas as they will be written and hears what TeX refuses while it can still fix them ([PuppeteerTools]); never
+## called in a build. [param data] names the series a drawing plots, [param work] is a folder of its own. Awaits the
+## host: the answer `{items, fonts}`, or `{error}` ("" when TeX is not installed yet and the ink step will lay it out
+## later).
 static func typeset(items: Array, data: Dictionary, work: String) -> Dictionary:
 	var py := Deps.venv_bin("user://math_venv", "python")
 	var host := BundledHosts.path("res://hosts/math/typeset.py")
@@ -145,11 +142,11 @@ static func size_of(rec: Dictionary) -> Vector2:
 	return Vector2(maxf(float(rec.get("w", 0.0)), 1.0), maxf(float(rec.get("h", 0.0)) + float(rec.get("d", 0.0)), 1.0))
 
 
-## RECORD [param rec] WRITTEN BY THE HAND seeded [param seed], at [param px] pixels a TeX point: an image whose R is the ink's
-## coverage and G when each point of it is put down, 0 to 0.98 along the hand's own schedule - and the strokes it found none
-## for in `missing`. [param outlines] is the answer's `fonts`, for a glyph no stroke font has. `{image, missing, seconds, strokes}`:
-## `strokes` the hand's schedule ([method Ink.schedule]: each stroke's points in the record's TeX points and when it is drawn), which
-## a pen seen follows ([method TableWork._pen_nib]), each point of the ink put down as far along its stroke as its time says.
+## Record [param rec] written by the hand seeded [param seed], at [param px] pixels a TeX point: an image whose R is the
+## ink's coverage and G when each point is put down, 0 to 0.98 along the hand's schedule. [param outlines] is the
+## answer's `fonts`, for a glyph no stroke font has. `{image, missing, seconds, strokes}`: `missing` the glyphs it found
+## no stroke for; `strokes` the hand's schedule ([method Ink.schedule]: each stroke's points in the record's TeX points
+## and when it is drawn), which a pen seen follows ([method TableWork._pen_nib]).
 static func picture_of(rec: Dictionary, seed: int, px: float, outlines: Dictionary = {}) -> Dictionary:
 	var made := Ink.strokes_of(rec, seed, outlines)
 	var sched := Ink.schedule(made["strokes"], seed)

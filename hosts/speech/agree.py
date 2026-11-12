@@ -6,7 +6,7 @@
 The spec: {"utterances": Utterances' folder (wav/, metadata.csv, test.csv), "model": a faster-whisper model folder
 (medium.en: the smaller ones hear soft speech too poorly), "out": the cuts (JSON), "passes"}.
 
-WHY (2026-10-26, an ASMR channel): a sentence's words came from hearing the whole video at once, and its cut was laid by
+WHY: a sentence's words came from hearing the whole video at once, and its cut was laid by
 those words' times - and only 83 of 192 cut sentences said exactly their text, heard again alone: a word at an edge
 counted on the wrong side of a cut ("I've" in one sentence's text, its sound in the next), a word the long hearing
 left out. Taught on them, Kokoro learned to say what no text asked for and mumbled; on clean speech, alignments a
@@ -123,8 +123,8 @@ def load(path: str):
         m = WhisperModel(path, device="cuda", compute_type="float16")
         import numpy as np
 
-        # HEARD ONCE, WHOLE: a transcription is lazy, and CUDA's libraries are only reached when it runs - unrun, a
-        # card with no CUDA 12 cuBLAS beside CTranslate2 passed here and failed on the first sentence (2026-10-27)
+        # Heard once, whole: a transcription is lazy, and CUDA's libraries are only reached when it runs - unrun, a
+        # card with no CUDA 12 cuBLAS beside CTranslate2 passed here and failed on the first sentence
         segs, _info = m.transcribe(np.zeros(SR16, np.float32), language="en", vad_filter=False)
         list(segs)
         return m, "the graphics card"

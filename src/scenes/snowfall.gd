@@ -2,35 +2,26 @@ extends GhostScene
 
 ## Snowfall - a quiet field of falling snow over a soft color bed.
 ##
-## The atmospheric weather scene (distinct from `snowflakes`, the hero crystal field):
-## flakes drift down and gust sideways with the treble over a gradient that breathes with
-## the music. The seed picks the KIND of snow first - fine powder, fat lazy flurry, a
-## driven blizzard, a still hard frost - and that decides how many flakes there are, how
-## big, how fast they fall and how many of them crisp into six-fold dendrites, so the
-## silhouette changes with the weather and not just the tint. Pure component composition -
-## `bed` + `snow` (+ `volumetric` fog, + `veil`) from the [Layer] registry.
+## The atmospheric weather scene (distinct from `snowflakes`, the hero crystal field): flakes
+## drift down and gust sideways with the treble over a gradient that breathes with the music.
+## The seed picks the kind of snow first - fine powder, fat lazy flurry, driven blizzard, still
+## hard frost - which decides flake count, size, fall speed and how many crisp into six-fold
+## dendrites. Layers: `bed` + `snow` (+ `volumetric` fog, + `veil`) from the [Layer] registry.
 
-# Snow is a WEATHER before it is a color. Flake size, count and fall speed are one choice,
-# not three: powder is many tiny fast-settling specks, a flurry is a handful of fat slow
-# ones, a blizzard is a wall, and a hoar frost is sparse but genuinely crystalline.
+# Snow is a weather before it is a color: flake size, count and fall speed are one choice.
 #   count/size/fall/crystal go straight to the snow layer; fog/veil are chances; val is the bed
 #
 # `habits` is the crystal morphology this weather produces, as relative weights over
-# [constant Crystal.HABITS], and it is not decoration: habit is set by TEMPERATURE and
-# complexity by SUPERSATURATION (the Nakaya diagram), so the conditions that decide
-# whether snow is powder or a flurry are the same ones that decide whether its crystals
-# are columns or ferns. Tying them together is what makes the four weathers read as four
-# different substances rather than four densities of the same one.
+# [constant Crystal.HABITS]. Habit follows temperature and complexity follows supersaturation
+# (the Nakaya diagram), so the conditions that make powder or a flurry also decide whether
+# its crystals are columns or ferns.
 #
-# `density` is the floor and gain of the audio-driven flake count - the drizzle-to-
-# downpour axis. A blizzard is loud at its quietest, so its floor is high and its gain
-# small; a hoar frost barely moves at all, which is the point of a still frost.
+# `density` is the floor and gain of the audio-driven flake count (the drizzle-to-downpour
+# axis): a blizzard is loud at its quietest (high floor, small gain), a hoar frost barely moves.
 const SNOWS := {
 	"powder": {
-		# Dry fine snow. Cool by default, but snow takes the color of whatever lights it -
-		# dawn on a field, or a lamp - so the warm moods are in here too.
-		# Cold and dry: columns and needles, almost no branching. The old table gave
-		# powder full dendrites, which is meteorologically backwards.
+		# Dry fine snow. Snow takes the color of whatever lights it, so the warm moods are in too.
+		# Cold and dry: columns and needles, almost no branching.
 		"moods": ["glacier", "bone", "ash", "abyss", "teal", "violet", "dawn", "rose"],
 		"count": [260, 380], "size": [0.0035, 0.005], "fall": [0.06, 0.10],
 		"crystal": [0.10, 0.25], "fog": 0.70, "veil": 0.0, "val": [0.20, 0.30],
@@ -38,7 +29,7 @@ const SNOWS := {
 		"complexity": [0.0, 0.2], "rime": [0.0, 0.1], "density": [0.30, 0.75],
 	},
 	"flurry": {
-		# Fat wet flakes, few and slow - the ones you can follow with your eye down.
+		# Fat wet flakes, few and slow.
 		# Warm and wet, near freezing: big stellar dendrites and sectored plates.
 		"moods": ["glacier", "sodium", "dawn", "rose", "violet", "bone", "teal", "abyss"],
 		"count": [55, 110], "size": [0.012, 0.020], "fall": [0.045, 0.08],
@@ -48,7 +39,7 @@ const SNOWS := {
 	},
 	"blizzard": {
 		# Driven and dense enough to hide the ground; brass/sodium are headlights in it.
-		# Driven snow is battered snow: heavily rimed, broken, barely branched.
+		# Battered snow: heavily rimed, broken, barely branched.
 		"moods": ["ash", "glacier", "abyss", "bone", "teal", "violet", "sodium", "brass"],
 		"count": [340, 480], "size": [0.005, 0.008], "fall": [0.20, 0.34],
 		"crystal": [0.15, 0.35], "fog": 0.90, "veil": 0.95, "val": [0.12, 0.22],
@@ -56,9 +47,9 @@ const SNOWS := {
 		"complexity": [0.0, 0.25], "rime": [0.5, 1.0], "density": [0.62, 0.95],
 	},
 	"hoar": {
-		# A still, hard frost: fewer flakes but most of the near ones are drawn dendrites,
-		# so this is the variant whose SHAPES read differently, not just its density.
-		# Still air and high supersaturation - the showcase, and the only unrimed one.
+		# A still, hard frost: fewer flakes, most near ones drawn as dendrites, so its shapes
+		# differ, not just its density.
+		# Still air and high supersaturation: the showcase, and the only unrimed one.
 		"moods": ["glacier", "teal", "bone", "violet", "abyss", "magenta", "ash", "dawn"],
 		"count": [150, 240], "size": [0.009, 0.014], "fall": [0.03, 0.06],
 		"crystal": [0.80, 1.0], "fog": 0.35, "veil": 0.0, "val": [0.24, 0.36],
@@ -68,8 +59,8 @@ const SNOWS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"snow": {"label": "Snow", "type": "choice", "options": "SNOWS", "default": null,
 		"blurb": "What kind of snow falls: fine powder, a flurry of fat slow flakes, a blizzard, or a sparse hoar frost of real crystals."},
@@ -91,8 +82,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"val": rng.randf_range(float(val[0]), float(val[1])),
 		"pools": rng.randi_range(2, 4),
 	})
-	# Real volumetric fog rolling low under the snow - a lit, drifting bank with harmonic motion,
-	# behind the falling flakes (added before the snow layer).
+	# Volumetric fog rolling low under the snow, behind the flakes (added before the snow layer).
 	if rng.randf() < float(s["fog"]):
 		add_layer("volumetric", rng, {"mode": "fog", "hue": sch.vary(rng)})
 	var count := rng.randi_range(int(s["count"][0]), int(s["count"][1]))
@@ -106,9 +96,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"size": rng.randf_range(float(s["size"][0]), float(s["size"][1])),
 		"fall": rng.randf_range(float(s["fall"][0]), float(s["fall"][1])),
 		"crystal_frac": crystal,
-		# The crystal bank: enough distinct geometries that a viewer counting flakes runs
-		# out of patience before they run out of shapes, without paying to generate one
-		# per flake. Scaled to the field, since a blizzard shows far more at once.
+		# The crystal bank: enough distinct geometries that counting flakes runs out of patience
+		# before shapes, without generating one per flake. Scaled to the field.
 		"bank": clampi(int(count / 12) + 8, 10, 32),
 		"habits": s["habits"],
 		"complexity": rng.randf_range(float(s["complexity"][0]), float(s["complexity"][1])),
@@ -116,8 +105,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"density_floor": float(dens[0]),
 		"density_gain": float(dens[1]),
 	})
-	# A blizzard needs more obscuring than the snow layer's own squalls give: a second veil in
-	# front, swelling on loud passages, is what closes the view down to a whiteout.
+	# A blizzard needs more obscuring than the snow layer's own squalls: a second veil in front,
+	# swelling on loud passages, closes the view to a whiteout.
 	if rng.randf() < float(s["veil"]):
 		add_layer("veil", rng, {
 			"hue": sch.hue, "sat": clampf(sch.sat * 0.12, 0.01, 0.2), "val": 1.0,

@@ -1,6 +1,6 @@
 extends Node
 
-## NOT a gate. WORK AT THE TABLE photographed ([TableWork], next/table_work.md): table_work_live_check's bench
+## Not a gate. Work at the table photographed ([TableWork], next/table_work.md): table_work_live_check's bench
 ## - a cauldron steaming, a mortar and pestle, a jar of ink poured into the brew, a clock that runs, hatchlings
 ## heard by the hearth - read with a synthetic voice (table_look_probe's), and a frame written at the middle
 ## of every act, or at the times asked for. Real advances, so the work is scheduled as a reading schedules it.

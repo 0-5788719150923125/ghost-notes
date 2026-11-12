@@ -4,10 +4,10 @@ class_name VoiceCard
 ## VoiceCard - the Voice: the note's cast and the speaker picked in it, a card [NoteCards] builds from
 ## the `voice` row like every other component's (next/notes.md, "the Voice as a card").
 ##
-## ITS INSIDES ARE THE READING'S ([ReadingCast]): the cast rows (Turn, Hesitate, the list of speakers)
-## are global, and every row below the list belongs to the speaker selected in it. The reading plays
-## what the cast holds, so the cast stays the panel's and the card is where it is shown and kept - the
-## panel hands it over in `ctx` (`cast`), as a producer is handed the panel itself.
+## Its insides are the reading's ([ReadingCast]): the cast rows (Turn, Hesitate, the list of speakers) are global,
+## and every row below the list belongs to the speaker selected in it. The reading plays what the cast holds, so
+## the cast stays the panel's and the card is where it is shown and kept - the panel hands it over in `ctx`
+## (`cast`), as a producer is handed the panel itself.
 ##
 ## Its block is `voice:` ([method ReadingCast.capture], [method ReadingCast.apply]): every voice by the
 ## name the script cues it with, the reader's first.

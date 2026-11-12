@@ -3,17 +3,15 @@
 
 A post-process applied to the finished frame, after every scene has drawn and under everything on a CanvasLayer - so the show is filtered and the subtitles and panels are not. Filters COMBINE: each has its own 0..1 dial and they are all applied, in one pass, in the order below.
 
-Filters - the LOOK the whole picture is put through, after the scenes have drawn.
+Filters - the look the whole picture is put through, after the scenes have drawn.
 
-THE SEAM WAS ALREADY THERE. Since the stage governor landed, scenes do not draw into the root viewport: they draw into ONE `SubViewport` that main presents through a single `TextureRect` at child index 0, with every panel and the karaoke overlay stacked above it on their own CanvasLayers. So a material on that one rect is a post-process over the entire show and over nothing else - it costs no render target, no second pass and no change to a single scene, and the UI stays legible because it is not underneath it.
+Scenes draw into one `SubViewport` that main presents through a single `TextureRect` at child index 0, with every panel and the karaoke overlay above it on their own CanvasLayers. A material on that rect is a post-process over the whole show and nothing else: no extra render target or pass, no change to a scene, and the UI stays legible. Subtitles are not filtered (grain over a karaoke line is hard to read, and a caption is not part of the photograph).
 
-THAT IS ALSO THE LIMIT, and it is a deliberate one: subtitles are NOT filtered. Grain and halftone dots over a karaoke line make it hard to read, and the line is not part of the photograph - it is a caption on top of one.
+Filters combine, so this is a registry of amounts, not a picker: every entry has its own 0..1 dial and all are applied in one fragment shader in one pass. A filter at 0 is arithmetically a no-op, and when every filter is at 0 the material is removed from the rect, so the default show runs the code it always ran.
 
-FILTERS COMBINE, which is the reason this is a registry of amounts and not a picker. Being asked to choose between monochrome and grain is the wrong question - black and white film HAS grain - so every entry has its own 0..1 dial and they are all applied, in one fragment shader, in one pass. A filter at 0 is arithmetically a no-op, and when every filter is at 0 the material is removed from the rect entirely, so the default show is not merely unchanged but is running the code it always ran.
+The registry order is the pipeline order, top to bottom, and cannot be read off the shader: dots first (they re-sample the picture, so anything after grades the dots), then the optics a lens adds, the grade, the emulsion, the frame. Monochrome before Noir makes the pair read as black-and-white noir, since Noir's split-tone is applied to whatever it is handed.
 
-THE REGISTRY ORDER IS THE PIPELINE ORDER, top to bottom, and it is the one thing here that cannot be read off the shader: dots are laid first (they RE-SAMPLE the picture, so anything after them grades the dots rather than the photograph), then the optics that a lens would add, then the grade, then the emulsion, then the frame. Monochrome before Noir is what makes the pair read as black-and-white noir rather than as a tinted color picture - Noir's split-tone is applied to whatever it is handed.
-
-ADDING A FILTER is a row of `REGISTRY` below plus a `u_<key>` uniform and a block in `shaders/stage_filter.gdshader`. Nothing in main, the Director or the panel changes - the controls are built off `Filters.REGISTRY`. A key with no matching uniform is the failure this arrangement is exposed to, because `set_shader_parameter` on a name the shader does not declare is a SILENT no-op; the gate reads the shader source and fails on it.
+Adding a filter is a row of `REGISTRY`, a `u_<key>` uniform and a block in `shaders/stage_filter.gdshader`; the controls are built off the registry. A key with no matching uniform is a silent no-op in `set_shader_parameter`; the gate reads the shader source and fails on it.
 
 Registry: `Filters.REGISTRY` in [src/show/filters.gd](../src/show/filters.gd) (8 entries), rendered by [shaders/stage_filter.gdshader](../shaders/stage_filter.gdshader). Select with `--filter key=amount,...` (or `--filter none`), or the Look rows in the Generative panel (persisted to `user://ghost.cfg`, `[director] filters`).
 

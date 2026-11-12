@@ -1,17 +1,21 @@
 extends SceneTree
 class_name DiceBake
 
-## DiceBake - EVERY THROW OF A SESSION, AS REAL BODIES (next/tabletop.md "Dice"): a second Godot, no window, stepping Jolt as fast as the machine goes, as [AssemblyBake] does the bricks. Handed where everything stands at each throw
-## ([method GameBoard.bake_request]), it throws, watches each die come to rest, and writes down what each body did and every time it hit something. [TableGame] plays it back by lookup.
+## DiceBake - every throw of a session, as real bodies (next/tabletop.md "Dice"): a second Godot, no window, stepping Jolt as fast as the
+## machine goes, as [AssemblyBake] does the bricks. Handed where everything stands at each throw ([method GameBoard.bake_request]), it
+## throws, watches each die come to rest, and writes down what each body did and every time it hit something. [TableGame] plays it back by lookup.
 ##
 ##     godot --headless --fixed-fps 240 --script res://src/table/dice_bake.gd -- <request file>
 ##
-## A THROW NEVER DEPENDS ON THE LAST: the last roll's dice have gone home before the next is thrown, so each throw stands alone, in a world holding only what stands on the table and on the map then.
+## A throw never depends on the last: the last roll's dice have gone home before the next is thrown, so each throw stands alone, in a world
+## holding only what stands on the table and on the map then.
 ##
-## WHAT DOES NOT COUNT IS THROWN AGAIN: a die that leans on something, leaves the table, leaves the picture, or takes too long to stop. Which number it shows is not this file's: it comes to rest on a face, and the die's printing is
-## turned onto that face ([method Dice.turn_for]), so whatever a throw lands on, it reads what was rolled. A real table's cocked die is rolled again too.
+## What does not count is thrown again: a die that leans on something, leaves the table, leaves the picture, or takes too long to stop.
+## Which number it shows is not this file's: it comes to rest on a face, and the die's printing is turned onto that face
+## ([method Dice.turn_for]), so whatever a throw lands on, it reads what was rolled.
 ##
-## AT TEN TIMES ITS SIZE, as [AssemblyWorld] and for its reason: Jolt's margins are made for things a meter across, so everything is scaled going in and coming out, gravity with it.
+## At ten times its size, as [AssemblyWorld] and for its reason: Jolt's margins are made for things a meter across, so everything is
+## scaled going in and coming out, gravity with it.
 
 const SIM := 10.0
 const TICKS := 240
@@ -26,7 +30,7 @@ const SPIN := Vector2(14.0, 26.0)
 const REST_SPEED := 0.012
 const REST_SPIN := 0.25
 const REST_HOLD := 0.18
-## HEARD: the least sudden change in a die's speed that is a hit at all (m/s), and how soon the same die can be heard again (ticks).
+## Heard: the least sudden change in a die's speed that is a hit at all (m/s), and how soon the same die can be heard again (ticks).
 const HIT_LEAST := 0.09
 const HIT_AGAIN := 5
 ## Keys are looked at this many ticks apart (60 a second), and what lies still after is its last.
@@ -105,7 +109,7 @@ func _free_world() -> void:
 	PhysicsServer3D.free_rid(_space)
 
 
-## THE TABLE ITSELF: flat to a good way past anything thrown at it, which is what leaving the table means here: a body that gets past it is off it, and not looked at again.
+## The table itself: flat to a good way past anything thrown at it, which is what leaving the table means here: a body that gets past it is off it, and not looked at again.
 func _slab() -> void:
 	var s := PhysicsServer3D.box_shape_create()
 	PhysicsServer3D.shape_set_data(s, Vector3(1.0, 0.2, 0.7) * SIM)
@@ -137,7 +141,7 @@ func _surface(faces: PackedVector3Array) -> void:
 	_static_shapes.append(s)
 
 
-## WHERE SOMEONE KEEPS THEIR DICE: a low heap of them on the table, as a throw meets it.
+## Where someone keeps their dice: a low heap of them on the table, as a throw meets it.
 func _home_pile(at: Vector2) -> void:
 	var s := PhysicsServer3D.box_shape_create()
 	PhysicsServer3D.shape_set_data(s, Vector3(0.05, 0.012, 0.03) * SIM)
@@ -152,7 +156,7 @@ func _home_pile(at: Vector2) -> void:
 	_static_shapes.append(s)
 
 
-## WHAT STANDS ON THE MAP FOR THIS THROW: a figure's base, a little taller than a coin, and the card it holds; a fallen one, only flat card. Nothing here is knocked over: it is a post in the way.
+## What stands on the map for this throw: a figure's base, a little taller than a coin, and the card it holds; a fallen one, only flat card. Nothing here is knocked over: it is a post in the way.
 func _figures(list: Array) -> void:
 	for f in list:
 		var d: Dictionary = f
@@ -191,7 +195,7 @@ func _shape_of(shape: int, scale: float) -> RID:
 	return _shapes[key]
 
 
-## ONE THROW, as many times as it takes to come out readable: `{dur, dice: [{keys, face, rest}], hits: PackedFloat32Array + kinds}`.
+## One throw, as many times as it takes to come out readable: `{dur, dice: [{keys, face, rest}], hits: PackedFloat32Array + kinds}`.
 func _throw(r: Dictionary) -> Dictionary:
 	_figures(r.get("figures", []))
 	var best := {}
@@ -212,7 +216,7 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 	var seat := float(r.get("seat", 0.0))
 	var hand2 := GameBoard.at_seat(seat, GameBoard.HAND)
 	var hand := Vector3(hand2.x, rng.randf_range(GameBoard.THROW_UP.x, GameBoard.THROW_UP.y), hand2.y)
-	# ...AIMED AT OPEN TABLE, nearer the middle as a throw goes on being unreadable, and only ever across from where they sit
+	# ...aimed at open table, nearer the middle as a throw goes on being unreadable, and only ever across from where they sit
 	var aim := Vector2(rng.randf_range(GameBoard.AIM.position.x, GameBoard.AIM.end.x), rng.randf_range(GameBoard.AIM.position.y, GameBoard.AIM.end.y))
 	aim = aim.lerp(GameBoard.MIDDLE, clampf(float(attempt) * 0.08, 0.0, 0.7))
 	var toward := Vector3(aim.x, 0.02, aim.y)
@@ -242,7 +246,7 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 		var start := hand + side * (float(col) - float(cols - 1) * 0.5) * gap - ahead * float(row) * gap + Vector3.UP * float(row % 2) * gap * 0.5
 		var turn := Basis(Vector3(rng.randf(), rng.randf(), rng.randf()).normalized(), rng.randf() * TAU)
 		PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, Transform3D(turn, start * SIM))
-		# ...IN THE WORLD, THEN GOING: a velocity set on a body not yet in a space is lost, and it lay where it was put
+		# ...in the world, then going: a velocity set on a body not yet in a space is lost, and it lay where it was put
 		PhysicsServer3D.body_set_space(b, _space)
 		PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_SLEEPING, false)
 		var v := (toward - start) / flight + Vector3.UP * G * flight * 0.5
@@ -253,7 +257,7 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 	var hits := PackedFloat32Array()
 	var against := PackedStringArray()
 	var tick := 0
-	# ...ITS FIRST KEY, where it leaves the hand: a hand's move ends exactly there ([method TableGame._in_hand])
+	# ...its first key, where it leaves the hand: a hand's move ends exactly there ([method TableGame._in_hand])
 	for bd: Dictionary in bodies:
 		var at: Transform3D = PhysicsServer3D.body_get_state(bd["rid"], PhysicsServer3D.BODY_STATE_TRANSFORM)
 		_keep(bd, 0.0, at.origin / SIM, at.basis)
@@ -272,7 +276,7 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 			var v: Vector3 = PhysicsServer3D.body_get_state(rid, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 			var w: Vector3 = PhysicsServer3D.body_get_state(rid, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
 			v /= SIM
-			# ...HEARD: a sudden change past what gravity takes in a tick, and the hit is what it was thrown against
+			# ...heard: a sudden change past what gravity takes in a tick, and the hit is what it was thrown against
 			var change := (v - (bd["last_v"] as Vector3) + Vector3.UP * G / float(TICKS)).length()
 			bd["last_v"] = v
 			bd["again"] = int(bd["again"]) - 1
@@ -292,7 +296,7 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 				_keep(bd, t, p, xf.basis)
 				continue
 			settled = false
-	# WHAT IT CAME TO
+	# What it came to
 	var good := settled
 	var out_dice: Array = []
 	var dur := 0.0
@@ -310,7 +314,7 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 	return {"good": good, "dur": dur, "dice": out_dice, "hits": hits, "against": against, "hand": hand}
 
 
-## A KEY OF THIS DIE. Taken out and put back: appending through a cast appends to a copy of a packed array, and every key was lost.
+## A key of this die. Taken out and put back: appending through a cast appends to a copy of a packed array.
 static func _keep(bd: Dictionary, t: float, p: Vector3, b: Basis) -> void:
 	var q := b.get_rotation_quaternion()
 	var keys: PackedFloat32Array = bd["keys"]

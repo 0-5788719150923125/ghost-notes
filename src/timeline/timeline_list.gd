@@ -1,12 +1,11 @@
 extends VBoxContainer
 class_name TimelineList
 
-## TimelineList - THE TIMELINE OPEN, AS A LIST on the panel's Timeline card (the user, 2026-11-11: "The original timeline had those
-## flags in a list, along the left-hand UI panel. That was very useful ... instead of forcing users to click them on the timeline
-## (which isn't always possible ... when the flags are stacked)"): every group and every item of the timeline editor open now
-## ([constant TimelineDock.GROUP]: an episode's beats, acts and cues; a storyboard's entries, verbs and flags), in the order they
-## come, each its time and its name; a row pressed picks it in the editor's inspector and moves the show there. The card it is on
-## is shown while an editor is open and hidden otherwise - the list follows the editor, never the other way.
+## TimelineList - the timeline open, as a list on the panel's Timeline card: every group and every item
+## of the timeline editor open now ([constant TimelineDock.GROUP]: an episode's beats, acts and cues; a
+## storyboard's entries, verbs and flags), in the order they come, each its time and its name; a row
+## pressed picks it in the editor's inspector and moves the show there. The card is shown while an
+## editor is open and hidden otherwise - the list follows the editor, never the other way.
 
 ## What its card is for, on the card's title bar and its chip ([member Card.blurb]).
 const BLURB := "The open timeline as a list: every beat, cue or entry at its time. Press one to pick it and move the show there. Shown while a timeline is open."
@@ -30,7 +29,7 @@ func _process(_delta: float) -> void:
 		refresh()
 
 
-## WHAT IS OPEN, LOOKED AT AGAIN: the card shown or hidden with it, the rows built again where its items changed.
+## What is open, looked at again: the card shown or hidden with it, the rows built again where its items changed.
 func refresh() -> void:
 	var ed := get_tree().get_first_node_in_group(TimelineDock.GROUP) if is_inside_tree() else null
 	var items: Array = ed.call("timeline_items") if ed != null and ed.has_method("timeline_items") else []
@@ -69,7 +68,7 @@ func show_items(items: Array) -> void:
 		_rows.append(b)
 
 
-## ROW [param i] PRESSED: the editor picks it and the show goes there.
+## Row [param i] pressed: the editor picks it and the show goes there.
 func press(i: int) -> void:
 	if _editor != null and is_instance_valid(_editor) and _editor.has_method("pick_item"):
 		_editor.call("pick_item", i)

@@ -2,29 +2,22 @@ extends SceneTree
 
 ## script_marks_check - that every mark the script editor offers DOES what it says.
 ##
-## [ScriptMarks] is a list of promises: "click this and the reading will rest here", "this
-## hands the text to Emily". It implements none of them - [Manuscript], [TextNorm] and
-## [Phonemes] do - so the failure this exists for is DRIFT: a registry entry whose example no
-## longer means anything to the parser that is supposed to read it, which looks exactly like
-## a working palette button. So every entry's example is inserted and the REAL parser is asked
-## what it makes of it, and an entry with no check here fails too - a new mark has to come
-## with its proof.
+## [ScriptMarks] is a list of promises that implements none of them ([Manuscript], [TextNorm] and [Phonemes] do), so
+## the failure this guards is drift: an entry whose example no longer means anything to its parser looks like a
+## working palette button. Every entry's example is inserted and the real parser is asked what it makes of it; an
+## entry with no check here fails too.
 ##
-## Also held: each entry's highlight pattern recognizes its own example (the color on screen
-## is the same claim), the insertion rules (a selection becomes the fill, the fill is left
-## selected, an own-line mark gets its own line, one undo step), and the highlighter coloring
-## a multi-line picture description and leaving prose plain.
+## Also held: each entry's highlight pattern recognizes its own example, the insertion rules (a selection becomes the
+## fill, the fill is left selected, an own-line mark gets its own line, one undo step), and the highlighter coloring a
+## multi-line picture description and leaving prose plain.
 ##
-## A CARDS BRIEF HAS A PALETTE TOO (2026-10-12, the user: "why are all of the supported macros and
-## features missing from 'cards' editor mode?"), and each mark offered there is held to what it
-## says of a BRIEF, which is not what it says of a script: a speaker cue is a voice of the show, a
-## note to self never reaches an agent and a macro reaches them as its default ([method
-## TablePrompts.brief] - the control is the brief before it, which still carries both), a
-## hesitation, a delivery and a stressed word survive from a line the brief dictates into the
-## reader's passage and the reader is told to keep them (italic and bold as two levels of stress,
-## never flattened into one), such a line is still known as the brief's own, and a card is colored
-## as one only inside the deck. What is NOT offered is held too: a
-## passage keeps no bracket, which is why the inline pronunciation is left out.
+## A table brief has a palette too, and each mark offered there is held to what it says of a brief: a speaker cue is a
+## voice of the show, a note to self never reaches an agent and a macro reaches them as its default ([method
+## TablePrompts.brief]; the control is the brief before it, which carries both), a hesitation, a delivery and a
+## stressed word survive from a line the brief dictates into the reader's passage and the reader is told to keep them
+## (italic and bold as two levels of stress), such a line is still known as the brief's own, and a card is colored as
+## one only inside the deck. What is not offered is held too: a passage keeps no bracket, so the inline pronunciation
+## is left out.
 ##
 ## Run: godot --headless --path . --script tests/notes/script_marks_check.gd
 
@@ -84,8 +77,7 @@ func _registry_shape() -> void:
 		"a mark does not say what it does in a brief")
 
 
-## THE COLOR IS A CLAIM TOO: the highlight pattern must find the whole example, on a line
-## of its own inside prose (the own-line marks are anchored to a line).
+## The color is a claim too: the highlight pattern must find the whole example, on a line of its own inside prose.
 func _patterns_match_examples() -> void:
 	for k in ScriptMarks.REGISTRY:
 		var e: Dictionary = ScriptMarks.REGISTRY[k]
@@ -110,8 +102,8 @@ func _kinds(d: Dictionary) -> Array:
 	return out
 
 
-## THE PROOF: each example, read by the parser of record. A key missing from this match is a
-## failure, so a new entry cannot ship unverified.
+## The proof: each example, read by the parser of record. A key missing from this match fails, so a new entry cannot
+## ship unverified.
 func _parsers_agree() -> void:
 	for k in ScriptMarks.REGISTRY:
 		var e: Dictionary = ScriptMarks.REGISTRY[k]
@@ -290,14 +282,14 @@ func _parsers_agree() -> void:
 				_dispatch_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
-	# THE SYNTHESIS FIX, two-sided: the raw text DOES read a cue aloud, the stripped text not.
+	# The synthesis fix, two-sided: the raw text DOES read a cue aloud, the stripped text not.
 	var raw := "Hello. <!-- speaker: Emily --> Then. <!-- hesitation --> End."
 	_ok(_words(raw).has("emily") and not _words(Manuscript.unspoken(raw)).has("emily")
 			and not _words(Manuscript.unspoken(raw)).has("hesitation"),
 		"Manuscript.unspoken does not keep comments out of a synthesis reading")
 
 
-## WHAT A BRIEF'S MARKS DO, each as its Cards blurb says it.
+## What a brief's marks do, each as its table blurb says it.
 func _cards_brief() -> void:
 	var body := "\n".join(PackedStringArray([
 		"# The Penalty Box", "",
@@ -326,8 +318,8 @@ func _cards_brief() -> void:
 		"a reader's passage does not keep the voice's marks (and only those): %s" % said)
 	_ok(_stressed(said, "stick") and not _stressed(said, "ice"),
 		"a stressed word of a dictated line is not stressed in the reading")
-	# ITALIC HITS, BOLD HITS HARDER (2026-10-12): a reader's passage keeps the two apart, each leaves it
-	# as its own level (1, 2) - the level the voice leans by and the subtitle picks its face from
+	# Italic hits, bold hits harder: a reader's passage keeps the two apart, each leaving it as its own level (1, 2) -
+	# the level the voice leans by and the subtitle picks its face from
 	var two := TableProducer.clean_spoken("It was *never* about the card. You **must** rest.")
 	_ok(two.contains("*never*") and two.contains("**must**"), "a passage does not keep italic and bold apart: %s" % two)
 	# (what the voice makes of a level is the reading panel's and the host's: multi_voice_check's
@@ -342,10 +334,10 @@ func _cards_brief() -> void:
 	# a dictated line is still known as the brief's own with a mark in it; a line of the reader's is not
 	var left := TablePrompts.unfixed("Keep your stick on the ice. Something new happened today.", brief)
 	_ok(left == "Something new happened today.", "a dictated line with a mark in it is not known as the brief's: '%s'" % left)
-	# WHAT IS NOT OFFERED: a passage keeps no bracket, so an inline pronunciation would be lost
+	# What is not offered: a passage keeps no bracket, so an inline pronunciation would be lost
 	_ok(not TableProducer.clean_spoken("The [K AE T] sat down on the ice.").contains("["),
 		"a reader's passage keeps brackets now - offer the pronunciation mark in a brief")
-	# THE DECK IS COLORED AS ONE, and a list anywhere else is not
+	# The deck is colored as one, and a list anywhere else is not
 	var te := TextEdit.new()
 	var hl := ScriptHighlighter.new("table")
 	te.syntax_highlighter = hl
@@ -382,14 +374,14 @@ func _words(text: String) -> PackedStringArray:
 
 func _insertion() -> void:
 	var te := TextEdit.new()
-	# A SELECTION BECOMES THE FILL, and an own-line mark in mid-line gets its own line.
+	# A selection becomes the fill, and an own-line mark in mid-line gets its own line.
 	te.text = "Then Emily said hello."
 	te.select(0, 5, 0, 10)
 	ScriptMarks.insert(te, "speaker")
 	_ok(te.text == "Then \n<!-- speaker: Emily -->\n said hello.",
 		"a selected name did not become its own-line cue: %s" % te.text.c_escape())
 	_ok(Manuscript.speakers(te.text).has("Emily"), "the inserted cue is not read as a cue")
-	# THE FILL IS SELECTED so typing replaces the example.
+	# The fill is selected so typing replaces the example.
 	te.text = "Prose."
 	te.deselect()
 	te.set_caret_line(0)
@@ -399,10 +391,10 @@ func _insertion() -> void:
 		"the example was not left selected: '%s'" % te.get_selected_text())
 	_ok(te.text == "Prose.\n<!-- image: what the picture shows -->",
 		"a picture after prose did not get its own line: %s" % te.text.c_escape())
-	# ONE UNDO STEP takes the whole insertion back.
+	# One undo step takes the whole insertion back.
 	te.undo()
 	_ok(te.text == "Prose.", "one undo did not remove the whole mark: %s" % te.text.c_escape())
-	# A MARK WITH NO FILL goes AFTER a selection, never over it.
+	# A mark with no fill goes AFTER a selection, never over it.
 	te.text = "Wait for it."
 	te.select(0, 0, 0, 4)
 	ScriptMarks.insert(te, "hesitation")
@@ -445,7 +437,7 @@ func _highlighter() -> void:
 	var at := te.text.find("<!--")
 	_ok(l.has(at) and (l[at]["color"] as Color).is_equal_approx(note),
 		"an inline speaker cue is colored as a working cue: %s" % l)
-	# THE SYNTHESIS PANEL honors no cues: the same line there is a note.
+	# The synthesis panel honors no cues: the same line there is a note.
 	var te2 := TextEdit.new()
 	var hl2 := ScriptHighlighter.new("synthesis")
 	te2.syntax_highlighter = hl2
@@ -457,7 +449,7 @@ func _highlighter() -> void:
 	te2.free()
 
 
-## A DISPATCH DESK'S MARK ([DispatchScript]), read by the desk's own parser: what each makes the desk do, what the voice
+## A dispatch desk's mark ([DispatchScript]), read by the desk's own parser: what each makes the desk do, what the voice
 ## says and what it is heard through.
 func _dispatch_mark(k: String, ex: String) -> void:
 	var head := "<!-- speaker: Control -->\n\nThe night begins.\n\n"

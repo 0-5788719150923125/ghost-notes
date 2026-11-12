@@ -1,26 +1,24 @@
 extends SceneTree
 
-## card_veil_check - that a BORDERLESS card's type reads over whatever painting lies under it, measured in
-## the pixels its face draws ([CardFaces.Face], [method CardTable.veil_of]; the user, 2026-10-14: "Be
-## careful with how text is written onto such a card, since color will matter quite a lot there, for
-## visibility"). cards_check holds the plan; this holds the plan to what the canvas draws.
+## card_veil_check - that a borderless card's type reads over whatever painting lies under it, measured in the pixels its face draws
+## ([CardFaces.Face], [method CardTable.veil_of]). cards_check holds the plan; this holds the plan to what the canvas draws.
 ##
 ##   tests/run_quiet.sh card_veil_check
 ##
-## NOT `--headless`: every claim is a measurement of a drawn face.
+## Not `--headless`: every claim is a measurement of a drawn face.
 ##
-## Decks' colors - five real episodes', the default, a mid gray under black, white on a mid green - each
-## printed borderless and drawn over three paintings: black and white, the two every veil is planned
-## against, and a field of the type's own ink, which hides type laid on it bare. Held:
+## Decks' colors (five real episodes', the default, a mid gray under black, white on a mid green), each printed borderless and drawn
+## over three paintings: black and white, the two every veil is planned against, and a field of the type's own ink, which hides
+## type laid on it bare. Held:
 ##
-##   - THE GROUND IS THE PLANNED ONE: beside the name and the numeral, from the top of each band to its
-##     foot, the face shows the painting under the veil as [method CardTable.veil_of] planned it, mixed in
-##     sRGB as [method CardTable.veil_contrast] assumes - so the bound cards_check holds every deck to is
-##     the bound the pixels keep. Two-sided: the same veil mixed in linear light misses those pixels.
-##   - THE TYPE READS: the name's and the numeral's letters against that ground at TEXT_CONTRAST at least,
-##     in the ink planned; a front's details against theirs at PANEL_CONTRAST.
-##   - THE VEIL IS WHY: past its fade the painting is bare, and there the type's ink against a painting of
-##     its own color reads not at all.
+##   - The ground is the planned one: beside the name and the numeral, from the top of each band to its foot, the face shows the
+##     painting under the veil as [method CardTable.veil_of] planned it, mixed in sRGB as [method CardTable.veil_contrast] assumes,
+##     so the bound cards_check holds every deck to is the bound the pixels keep. Two-sided: the same veil mixed in linear light
+##     misses those pixels.
+##   - The type reads: the name's and the numeral's letters against that ground at TEXT_CONTRAST at least, in the ink planned; a
+##     front's details against theirs at PANEL_CONTRAST.
+##   - The veil is why: past its fade the painting is bare, and there the type's ink against a painting of its own color reads not
+##     at all.
 
 ## [stock, ink] as the producer wrote them (sanitize_look makes the ink readable on the stock).
 const DECKS := [["#14213a", "#efe4c8"], ["#2b0f2e", "#e3c77a"], ["#eab4a5", "#253637"], ["#35461c", "#f2ead2"],
@@ -105,8 +103,8 @@ func _judge(f: Dictionary, img: Image) -> int:
 		var v: Dictionary = line[1]
 		var want := paint.lerp(v["veil"], float(v["alpha"]))
 		var linear := paint.srgb_to_linear().lerp((v["veil"] as Color).srgb_to_linear(), float(v["alpha"])).linear_to_srgb()
-		# THE GROUND: down the band's left end, clear of the type (which starts 12 px in on a panel, and a
-		# short name is centered far from it), from its top to its foot
+		# the ground: down the band's left end, clear of the type (which starts 12 px in on a panel, and a short name is centered far
+		# from it), from its top to its foot
 		var ground := Color()
 		for y in [band.position.y + 2.0, band.get_center().y, band.end.y - 2.0]:
 			var got := img.get_pixelv(Vector2i(int(band.position.x + 3.0), int(y)))
@@ -115,8 +113,8 @@ func _judge(f: Dictionary, img: Image) -> int:
 			if _dist(want, linear) > SPLIT:
 				split += 1
 				_ok(_dist(got, linear) > SPLIT * 0.5, "%s, %s: the ground matches a LINEAR mix too - the instrument cannot tell" % [what, line[0]])
-		# THE TYPE: the letters' cores, found by the ink planned for them (the keyline round them is the
-		# veil's color at full strength, and may stand further from the ground than the ink does)
+		# the type: the letters' cores, found by the ink planned for them (the keyline round them is the veil's color at full strength,
+		# and may stand further from the ground than the ink does)
 		var area := Rect2i(int(band.position.x + 8.0), int(band.position.y), int(band.size.x - 16.0), int(band.size.y))
 		if line[0] == "panel":
 			area.size.y = int(sz.y * 0.05)  # the name, at the panel's head - above the rule under it
@@ -132,7 +130,7 @@ func _judge(f: Dictionary, img: Image) -> int:
 			(v["ink"] as Color).to_html(false), at.to_html(false)])
 		var stands := CardTable.contrast(at, ground)
 		_ok(stands >= float(line[2]) - 0.05, "%s, %s: its letters stand %.2f from their ground, under %.1f" % [what, line[0], stands, line[2]])
-	# THE VEIL IS WHY: the painting bare, past the name's veil and its fade - and type of its color on it
+	# the veil is why: the painting bare, past the name's veil and its fade - and type of its color on it
 	var name_band: Rect2 = boxes["panel" if f["details"] else "name"]
 	var clear := int(name_band.position.y - sz.y * (CardFaces.VEIL_PAD + CardFaces.VEIL_FADE) - 6.0)
 	var bare := img.get_pixel(int(sz.x * 0.5), clear)

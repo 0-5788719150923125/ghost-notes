@@ -1,53 +1,41 @@
 extends Node
 
-## teardown_check - EVERY NOTE CAN BE LEFT AND ENTERED AGAIN (next/notes.md step 6), through the real
-## main scene: a note of each make-up - its words alone, a song and its show, a show written by hand
-## with the storyboard's editor open, each workspace - opened the way the notes list opens a note,
-## left by Chrome's ⌂, several times over, and the app measured after every return home.
+## teardown_check - every note can be left and entered again (next/notes.md), through the real main scene: a
+## note of each make-up (words alone, a song and its show, a show written by hand with the storyboard's editor
+## open, each workspace) opened the way the notes list opens a note, left by Chrome's ⌂ several times, and the
+## app measured after every return home.
 ##
 ##   tests/run_boot_probe.sh tests/app/teardown_check.gd 420
 ##
-## WHAT IS MEASURED after each return: nodes in the tree and orphan nodes (Godot's own monitors);
-## the stage (wiped - no medium mounted, nothing shown: a tablet chapter's desk used to stay under the
-## next note, 2026-10-06);
-## Chrome's claims on the bottom of the frame, on the show's room and on the export button (the notes
-## list's own only - the storyboard's editor, docked under the show, gives back what it took);
-## the row (Masking's ⤓ gone, the ⌂ hidden); the transport (no conductor, nothing timed); the
-## Director (no storyboard, no game pacing, no medium pinned by a mode); the audio buses and their
-## effects; the background programs [Subprocess] tracks (the voice host stops with its panel). A
-## number that grows with every cycle is a leak. The FIRST cycle of a mode may build what every later
-## one reuses (the stage, a bus), so it is cycles 2..N that must agree with each other.
+## Measured after each return: nodes in the tree and orphan nodes (Godot's monitors); the stage (wiped: no
+## medium mounted); Chrome's claims on the bottom of the frame, the show's room and the export button (the
+## notes list's own only); the row (Masking's ⤓ gone, the ⌂ hidden); the transport (no conductor, nothing
+## timed); the Director (no storyboard, no game pacing, no pinned medium); the audio buses and effects; the
+## background programs [Subprocess] tracks. A number that grows with every cycle is a leak. The first cycle of
+## a mode may build what later ones reuse, so cycles 2..N must agree with each other.
 ##
-## NOTHING IS MEASURED UNTIL THE ENVIRONMENT PANEL'S PROBE HAS LANDED. Its rows (162 nodes for 22
-## programs) are built when a thread comes back, and rows that land in the middle of the cycles read as
-## a leak (CI, 2026-10-19: manual's nodes [478, 478, 640] - the wait was 600 frames, and a cold probe
-## beside three other gates outlasted them). It is waited on by the clock, and a probe that never lands
+## Nothing is measured until the Environment panel's probe has landed: its rows are built when a thread comes
+## back, and rows landing mid-cycle read as a leak. It is waited on by the clock, and a probe that never lands
 ## fails here rather than as a count that grew.
 ##
-## LEAVING IS REFUSED, AND SAYS WHY, while an export is making the mode's take: the take is a
-## coroutine on the mode's panel and the export would wait on a freed panel forever. Two-sided: the
-## ⌂ grays and the mode stays, then the hold lifts and it leaves.
+## Leaving is refused, and says why, while an export is making the mode's take (the take is a coroutine on the
+## mode's panel). Two-sided: the ⌂ grays and the mode stays, then the hold lifts and it leaves.
 ##
-## THE CONTROL: a node a mode "forgets" to free is seen by the same measure, or the comparisons above
-## prove nothing.
+## Control: a node a mode "forgets" to free is seen by the same measure.
 ##
-## A NOTE STARTS FROM NOTHING (2026-10-06, the user: "every time we enter a note, we should wipe the
-## scene and start fresh"): a chapter that sets its medium and look hands neither to the note opened
-## after it, and a song note opens stopped at its start. Two-sided: the chapter does set them.
+## A note starts from nothing: a chapter that sets its medium and look hands neither to the note opened after
+## it, and a song note opens stopped at its start. Two-sided: the chapter does set them.
 ##
-## A NOTE'S MAKE-UP IS ITS BLOCKS: there is one kind of new note, so each is made with the blocks "+"
-## would have written ([constant BLOCKS]) - a voice with a Medium and a storyboard among them, which
-## no template ever was. An Actor's note carries its own block alone, as "+" writes it, and must show its
-## card and the Voice it brings, and play them (2026-10-21: the reading built only what was written).
+## A note's make-up is its blocks: each is made with the blocks "+" would have written ([constant BLOCKS]). An
+## Actor's note carries its own block alone, as "+" writes it, and must show its card and the Voice it brings,
+## and play them.
 ##
-## MASKING OPENS ON NO CLIP (its panel asks for one): the author's sessions hold hand-placed markers that
-## cannot be remade, and no gate opens one. A song for Auto and Manual is a fixture of silence. Every
-## note lives in a folder of the gate's own (`NoteStore.root`), so the author's notes are never made,
-## listed or opened - and a reading's panel is pointed at a note of the gate's, never their chapter.
+## Masking opens on no clip (its panel asks for one): no gate opens the author's sessions. A song for Auto and
+## Manual is a fixture of silence. Every note lives in a folder of the gate's own (`NoteStore.root`), and a
+## reading's panel is pointed at a note of the gate's.
 
 const CYCLES := 3
-## WHAT EACH NOTE IS MADE OF: the blocks a note of that make-up carries (`SONG` stands for the
-## fixture's path). There is one kind of new note; these are what "+" would have made of it.
+## What each note is made of: the blocks a note of that make-up carries (`SONG` stands for the fixture's path).
 const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "narrated", "table",
 	"likeness", "masking"]
 const BLOCKS := {
@@ -101,7 +89,7 @@ func _run() -> void:
 				"%s #%d: the ⌂ shows while the mode is up" % [mode, cycle + 1])
 			if mode == "generative" and cycle == 0:
 				await _check_refused_while_preparing()
-			# "+" ACTOR WRITES ITS OWN BLOCK ALONE, and the Voice it brings has its card all the same
+			# "+" actor writes its own block alone, and the Voice it brings has its card all the same
 			if mode == "likeness" and cycle == 0:
 				_ok(_has_node_of(_main, ActorCard) and _has_node_of(_main, VoiceCard),
 					"likeness: the note shows its Actor card and the Voice card it brings")
@@ -115,7 +103,7 @@ func _run() -> void:
 			var m := _measure()
 			seen.append(m)
 			_check_home(mode, cycle, m, home)
-		# CYCLES 2..N AGREE: nothing grows with each visit
+		# Cycles 2..N agree: nothing grows with each visit
 		for k in ["nodes", "orphans", "buses", "procs", "row"]:
 			var vals := seen.slice(1).map(func(x: Dictionary) -> Variant: return x[k])
 			var same := vals.all(func(v: Variant) -> bool: return str(v) == str(vals[0]))
@@ -136,8 +124,8 @@ func _has_node_of(n: Node, script: Script) -> bool:
 	return false
 
 
-## Enter [param mode] the way the notes list does: a note made from the template (once), opened by the
-## list's own handler, which calls main and then frees the list.
+## Enter [param mode] the way the notes list does: a note made from the template (once), opened by the list's
+## own handler, which calls main and then frees the list.
 func _enter(mode: String, song: String) -> void:
 	var list: Node = _main._list
 	if list == null or not is_instance_valid(list):
@@ -157,8 +145,8 @@ func _blocks(mode: String, song: String) -> Dictionary:
 	return blocks
 
 
-## The storyboard's editor, opened over the note's show: it claims room at the bottom of the frame
-## and from the stage, and the leaving that follows must give both back.
+## The storyboard's editor, opened over the note's show: it claims room at the bottom of the frame and from the
+## stage, and the leaving that follows must give both back.
 func _open_timeline(cycle: int) -> void:
 	var panel: NotePanel = _main._note_panel
 	var card: StoryboardCard = panel._story if panel != null else null
@@ -190,7 +178,7 @@ func _check_home(mode: String, cycle: int, m: Dictionary, home: Dictionary) -> v
 	_ok(not m["stage"] and not m["medium"], "%s: the stage is wiped (shown %s, a medium mounted %s)" % [tag, m["stage"], m["medium"]])
 
 
-## TWO-SIDED: while an export makes the take, the ⌂ grays with the reason and leaving is refused -
+## Two-sided: while an export makes the take, the ⌂ grays with the reason and leaving is refused -
 ## then the hold lifts and the same press leaves.
 func _check_refused_while_preparing() -> void:
 	var ch: Chrome = _main._chrome
@@ -206,7 +194,7 @@ func _check_refused_while_preparing() -> void:
 	_ok(not ch._home_button.disabled, "the ⌂ comes back once the take is made")
 
 
-## A NOTE STARTS FROM NOTHING: what a chapter set is not the next note's, and a song opens stopped.
+## A note starts from nothing: what a chapter set is not the next note's, and a song opens stopped.
 func _check_fresh(song: String) -> void:
 	var ch: Chrome = _main._chrome
 	var chapter := NoteStore.create("teardown fresh", "Words.\n",
@@ -234,7 +222,7 @@ func _check_fresh(song: String) -> void:
 	await _frames(12)
 
 
-## THE CONTROL: a node left behind by a "mode" shows up in the same count.
+## The control: a node left behind by a "mode" shows up in the same count.
 func _control(song: String) -> void:
 	await _enter("auto", song)
 	var stray := Node.new()
@@ -288,8 +276,8 @@ func _quiet(home_procs: int) -> void:
 		await _frames(5)
 
 
-## The Environment panel's first probe runs on a thread and builds its rows when it returns: waited
-## on by the clock, since how many frames a cold probe takes is the machine's.
+## The Environment panel's first probe runs on a thread and builds its rows when it returns: waited on by the
+## clock, since how many frames a cold probe takes is the machine's.
 func _settle_probe() -> void:
 	var env: DepsPanel = _main._chrome.environment
 	var t0 := Time.get_ticks_msec()

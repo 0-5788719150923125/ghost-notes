@@ -1,68 +1,45 @@
 extends RefCounted
 class_name RoomFX
 
-## RoomFX - THE ROOM, decided once and rendered twice.
+## RoomFX - the room, decided once and rendered by two engines.
 ##
-## Masking got a room first, as the last stage of its audio effect's bus chain,
-## and it is the knob in that panel people reach for most. Generative had none at
-## all. Writing a second one from scratch would have shipped two dials that say
-## Room and do not mean the same thing - the same failure as two sliders called
-## "pace" doing unrelated jobs, which this project has already talked itself out
-## of once.
+## Everything above the engine lives here: the dial's range and taper, what Resonance does to the tail's
+## color, what "no room" means, and how one dial collapses into size-plus-wet when a panel has room for
+## only one. Masking and the reading both ask this class and get the same answer.
 ##
-## So everything ABOVE the engine lives here: the dial's range, its taper, what
-## Resonance does to the tail's color, what "no room" means, and how a single
-## dial collapses into size-plus-wet when a panel only has room for one. Both
-## modes ask this class and get the same answer.
+## The engines differ because each mode's audio does:
+##   [method to_reverb]  Masking plays its clip through an [AudioStreamPlayer], so its room is Godot's
+##                       [AudioEffectReverb] on a bus (rebuilt identically by the export relaunch).
+##   [method tick]       The reading pushes samples into a generator and bakes its effects into the take
+##                       WAV, because the render process boots with only that file; a bus effect cannot
+##                       run offline over a buffer, so this half is the reverb, in GDScript.
 ##
-## THE ENGINE IS THE ONE THING THEY CANNOT SHARE, and the reason is what each
-## mode's audio actually is:
-##
-##   [method to_reverb]  Masking plays its clip through a real [AudioStreamPlayer],
-##                       so its room is Godot's own [AudioEffectReverb] on a bus -
-##                       sample-exact, free on the main thread, and rebuilt
-##                       identically by the export relaunch (see MASK_BUS).
-##   [method tick]       Generative pushes samples into a generator and BAKES its
-##                       effects into the take WAV, because the render process
-##                       boots with nothing but that file. A bus effect cannot be
-##                       run offline over a buffer, so this half IS the reverb,
-##                       in GDScript.
-##
-## They are not sample-identical and are not trying to be. They are close because
-## they are the same algorithm: Godot's reverb is derived from Jezar at
-## Dreampoint's Freeverb (public domain) - eight damped comb filters in parallel
-## into four allpasses in series - and so is the network below, from the same
-## published tunings. That is what lets one set of numbers drive both.
+## Both derive from Jezar at Dreampoint's Freeverb (public domain): eight damped comb filters in
+## parallel into four allpasses in series, from the same published tunings, so one set of numbers drives
+## both. They are close, not sample-identical.
 
 # --- the dial ------------------------------------------------------------------
 
-## The top of the Room dial. 2 rather than 1 because Masking's neutral sits at
-## 1.0: a dial whose rest position is the middle can be opened as well as closed,
-## and a session with no audio marker has to keep sounding exactly as it did.
+## The top of the Room dial. 2 because Masking's neutral sits at 1.0: a dial resting in the middle can be
+## opened as well as closed.
 const SIZE_MAX := 2.0
-## A single-dial panel's taper, for [method from_dial]. Above 1 so the bottom of
-## the travel is genuinely a small close room rather than a quiet big one - the
-## same reasoning as [constant VoiceFX.ECHO_TAPER], and for the same material.
+## A single-dial panel's taper, for [method from_dial]. Above 1 so the bottom of the travel is a small
+## close room rather than a quiet big one (as [constant VoiceFX.ECHO_TAPER]).
 const WET_TAPER := 1.5
 
 # --- what the numbers mean -----------------------------------------------------
 
-## Feedback across the dial: a small room's tail dies in a breath, a big one rings
-## for seconds. Freeverb's roomsize1 = size * 0.28 + 0.7, which is also how Godot
-## maps its own `room_size`, so one number really does drive both engines.
+## Feedback across the dial: a small room's tail dies in a breath, a big one rings for seconds.
+## Freeverb's roomsize1 = size * 0.28 + 0.7, which is also how Godot maps its `room_size`.
 const FB_MIN := 0.7
 const FB_SPAN := 0.28
-## Damping is what makes a tail sound like a room instead of a metal box, and it
-## is RESONANCE that moves it: a resonant space is bright and rings on, a dead one
-## swallows the top of every repeat immediately. Same mapping both sides, so the
-## Resonance slider colors the room the same way in either mode.
+## Damping, moved by Resonance: a resonant space is bright and rings on, a dead one swallows the top of
+## every repeat. Same mapping in both engines.
 const DAMP_DEAD := 0.9
 const DAMP_RING := 0.2
 const DAMP_SCALE := 0.4          # Freeverb's scaledamp
-## Wet and dry are taken from ONE "how much of the room reaches you" number, but
-## they are not each other's complement: a room is added to the sound rather than
-## swapped for it, so the dry only steps back part of the way. Full wet against
-## fully removed dry is the preset sound this avoids.
+## Wet and dry come from one "how much of the room reaches you" number but are not complements: the
+## room is added to the sound, so the dry only steps back part of the way.
 const WET_GAIN := 0.8
 const DRY_DUCK := 0.35
 
@@ -70,46 +47,35 @@ const DRY_DUCK := 0.35
 const COMB := [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617]
 const ALLPASS := [556, 441, 341, 225]
 const REF_RATE := 44100.0
-## The comb bank sums eight lines each with a DC gain of 1/(1 - feedback), so at
-## the top of the dial the network multiplies by ~50 before anything else happens.
-## Freeverb's own input trim, chosen against the feedback range above rather than
-## independently of it.
+## The comb bank sums eight lines each with a DC gain of 1/(1 - feedback), so at the top of the dial the
+## network multiplies by ~50. Freeverb's input trim, chosen against the feedback range above.
 const FIXED_GAIN := 0.015
 const ALLPASS_FB := 0.5
 
 # --- the settings --------------------------------------------------------------
 
-## How big the space is, on the same 0..[constant SIZE_MAX] dial Masking's slider
-## uses. 1.0 is neutral.
+## How big the space is, on the 0..[constant SIZE_MAX] dial Masking's slider uses. 1.0 is neutral.
 var size := 1.0
-## How much of that space reaches the listener, 0..1. Masking drives this from its
-## own Ambience slider; a panel with one dial gets it from [method from_dial].
+## How much of that space reaches the listener, 0..1. Masking drives it from its Ambience slider; a
+## one-dial panel gets it from [method from_dial].
 var wet := 0.0
-## The tail's color, 0..1, from whatever the mode calls Resonance. 0 is a dead
-## room, 1 a ringing one.
+## The tail's color, 0..1, from the mode's Resonance: 0 a dead room, 1 a ringing one.
 var resonance := 0.5
 
 var sample_rate := 22050
 
-# --- the DSP half's state ------------------------------------------------------
+# One flat buffer with per-line offsets rather than twelve arrays: nested indexing on packed arrays
+# goes through set_indexed and is slow per sample, and this runs in VoiceFX's per-sample loop.
 #
-# ONE flat buffer with per-line offsets rather than twelve arrays in an Array.
-# Nested indexing (`_lines[k][i] = v`) on packed arrays goes through set_indexed
-# and is markedly slower per sample, and this runs inside VoiceFX's per-sample
-# loop over every sample of a whole chapter.
-#
-# The positions are ABSOLUTE indices into that buffer rather than per-line offsets,
-# and the bound each wraps at is stored beside them, so the innermost loop reads two
-# packed values per line instead of four. The start is only needed on the wrap, which
-# happens once per line per delay.
+# Positions are absolute indices into that buffer and the wrap bound is stored beside them, so the
+# innermost loop reads two packed values per line instead of four.
 var _buf := PackedFloat32Array()
 var _off := PackedInt32Array()
 var _end := PackedInt32Array()
 var _len := PackedInt32Array()
 var _pos := PackedInt32Array()
 var _store := PackedFloat32Array()   # each comb's damping lowpass state
-# Resolved from the settings whenever they move (the sliders are live), never per
-# sample.
+# Resolved from the settings whenever they move, never per sample.
 var _k_size := -1.0
 var _k_wet := -1.0
 var _k_res := -1.0
@@ -140,30 +106,19 @@ func damping() -> float:
 	return lerpf(DAMP_DEAD, DAMP_RING, clampf(resonance, 0.0, 1.0))
 
 
-## Nothing of the room reaches the listener, so a caller may skip it entirely.
-## Note this asks about WET and not about size: a big room nobody is standing in
-## is silence, and evaluating a twelve-line network to hear silence is the cost
-## this saves on every take that leaves the dial at zero.
-##
-## That cost is worth knowing, because the DSP half is GDScript in a per-sample
-## loop: measured at 22050 Hz, the room adds about 6% of realtime on top of
-## VoiceFX's own 2.5% - roughly a millisecond per frame while a reading plays, and
-## about a minute of extra baking on a twenty-minute chapter. Only paid when the
-## dial is up, which is why this gate exists rather than a room that always runs
-## at whatever level.
+## Nothing of the room reaches the listener, so a caller may skip it entirely. Asks about wet, not size:
+## a big room nobody is standing in is silence. The DSP half is GDScript in a per-sample loop (about 6%
+## of realtime at 22050 Hz), so it is paid only when the dial is up.
 func is_active() -> bool:
 	return wet_gain() > 0.0005
 
 
-## Collapse one 0..1 dial into a room. Used where a panel has a single Room
-## slider (Generative), rather than Masking's separate size and Ambience.
+## Collapse one 0..1 dial into a room, for a panel with a single Room slider (the reading), rather than
+## Masking's separate size and Ambience.
 ##
-## Size and wet move TOGETHER here, which Masking deliberately does not do - a big
-## dry room and a small wet one are different sounds and one slider cannot say
-## both. It is the right trade only because the mode that does this already has
-## the other axis under a different name: Presence is distance from the source,
-## which is exactly the question a separate wet control answers. So the two dials
-## between them still span the same space, they just cut it differently.
+## Size and wet move together here, which Masking does not do (a big dry room and a small wet one are
+## different sounds). The reading has the other axis under another name: Presence is distance from the
+## source, which is what a separate wet control answers.
 func from_dial(k: float, res: float) -> void:
 	var t := clampf(k, 0.0, 1.0)
 	size = t * SIZE_MAX
@@ -174,9 +129,8 @@ func from_dial(k: float, res: float) -> void:
 # --- renderer 1: Godot's own reverb, on a bus ----------------------------------
 
 
-## Push the settings onto a live [AudioEffectReverb]. Every property is assigned,
-## including the ones that do not move, so a bus rebuilt from stale state cannot
-## keep a value nobody chose.
+## Push the settings onto a live [AudioEffectReverb]. Every property is assigned, including the ones
+## that do not move, so a bus rebuilt from stale state keeps no value nobody chose.
 func to_reverb(fx: AudioEffectReverb) -> void:
 	if fx == null:
 		return
@@ -214,8 +168,8 @@ func setup(sr: int) -> void:
 	_k_size = -1.0                 # force a resolve on the next sample
 
 
-## Cheap and idempotent, like VoiceFX's echo resolve: the sliders are live, so
-## this runs once per buffer and returns immediately unless something moved.
+## Cheap and idempotent: the sliders are live, so this runs once per buffer and returns at once unless
+## something moved.
 func _resolve() -> void:
 	if is_equal_approx(size, _k_size) and is_equal_approx(wet, _k_wet) \
 			and is_equal_approx(resonance, _k_res):
@@ -230,15 +184,11 @@ func _resolve() -> void:
 	_dry_g = dry_gain()
 
 
-## One sample through the room. Inlined by the caller's loop rather than exposed
-## as a buffer pass, because Generative's chain puts the room BETWEEN the echo and
-## the presence filter - the same place the bus chain puts it - and a whole-buffer
-## pass could not sit there without splitting that loop in three.
+## One sample through the room. Inlined by the caller's loop because the reading's chain puts the room
+## between the echo and the presence filter, as the bus chain does.
 ##
-## Call [method prepare] once per buffer first: re-resolving the settings per
-## sample would cost more than the network does, and they cannot move mid-buffer.
-## The 8 and the 12 are the tuning tables' own sizes, read as literals rather than
-## as COMB.size() because this is the innermost loop in the audio path.
+## Call [method prepare] once per buffer first (the settings cannot move mid-buffer). The 8 and the 12
+## are the tuning tables' sizes, literals because this is the innermost loop in the audio path.
 func tick(x: float) -> float:
 	if _buf.is_empty():
 		setup(sample_rate)
@@ -264,9 +214,8 @@ func tick(x: float) -> float:
 	return x * _dry_g + acc * _wet_g
 
 
-## A whole buffer through the room, in place. For callers that want nothing but
-## the room over some audio; VoiceFX uses [method tick] directly so the room keeps
-## its place in the chain.
+## A whole buffer through the room, in place. VoiceFX uses [method tick] directly so the room keeps its
+## place in the chain.
 func process(buf: PackedFloat32Array) -> PackedFloat32Array:
 	if _buf.is_empty():
 		setup(sample_rate)

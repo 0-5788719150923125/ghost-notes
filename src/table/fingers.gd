@@ -1,23 +1,22 @@
 extends RefCounted
 class_name Fingers
 
-## Fingers - WHAT A HAND DOES WITH WHAT IT HOLDS, for as long as it holds it (the user, 2026-11-03, of a brick pulled from the tub and held up: "A real
-## hand is not perfectly still: the brick would maybe float a little, the rotation would change, maybe the person would flip the brick in their
-## fingers, fidgeting with it. But to have the brick just sit there, center-screen, at an angle, unmoving - it looks very strange").
+## Fingers - what a hand does with what it holds, for as long as it holds it: a held thing is never perfectly still.
 ##
-## LAID OVER THE RECORD, NOT IN IT: a stop lasts as long as the reading wants ([method Assembly.lay]), so the record ([AssemblyTrack]) cannot hold
-## motion for a time it does not know the length of, and whatever it held would run out into a brick standing still. So this is a pure function of how
-## long the piece has been in hand: a scrub lands on the same pose, an export draws what the show drew, and it touches nothing in the world - it is
-## given only as much ROOM as the hand has there ([method AssemblyBake._room]), so it never comes to touch anything either, and it has no sound.
+## Laid over the record, not in it: a stop lasts as long as the reading wants ([method Assembly.lay]), so the record ([AssemblyTrack])
+## cannot hold motion for a time it does not know the length of. So this is a pure function of how long the piece has been in hand: a
+## scrub lands on the same pose, an export draws what the show drew, and it touches nothing in the world - it is given only as much room
+## as the hand has there ([method AssemblyBake._room]), so it never comes to touch anything either, and it has no sound.
 ##
-## THREE THINGS, one over another, each as much as the room allows:
-##   - THE ARM SWAYS ([method Hands.drift]), never stopping;
-##   - THE HAND SHIFTS ([method _shift]) in short moves with rests between them, each to somewhere of its own: a hand corrects itself in submovements
-##     (Milner, 1992), and the same amount of motion as smooth waves reads as something floating under water;
-##   - THE FINGERS TURN IT OVER ([method turned]) in beats ([constant BEATS]), each from where the last left it, with no room to do so unless it is
-##     clear of everything: their clock runs only then ([param free]), so a turned brick is righted, as room runs out, along one path and with no jump.
+## Three things, one over another, each as much as the room allows:
+##   - the arm sways ([method Hands.drift]), never stopping;
+##   - the hand shifts ([method _shift]) in short moves with rests between them, each to somewhere of its own: a hand corrects itself in
+##     submovements (Milner, 1992), and the same amount of motion as smooth waves reads as something floating under water;
+##   - the fingers turn it over ([method turned]) in beats ([constant BEATS]), each from where the last left it, with no room to do so
+##     unless it is clear of everything: their clock runs only then ([param free]), so a turned brick is righted, as room runs out, along
+##     one path and with no jump.
 
-## WHAT FINGERS DO TO A THING THEY HOLD, how often (`share`), about which of its axes, how far either way and how long it takes: each from where the last left it.
+## What fingers do to a thing they hold, how often (`share`), about which of its axes, how far either way and how long it takes: each from where the last left it.
 const BEATS := {
 	"tilt": {"label": "Tilt", "blurb": "tipped a little, to see it from another side", "share": 0.34, "about": "any", "degrees": Vector2(18.0, 42.0), "takes": Vector2(0.4, 0.8)},
 	"roll": {"label": "Roll", "blurb": "rolled along its length between a thumb and a finger", "share": 0.26, "about": "long", "degrees": Vector2(70.0, 125.0), "takes": Vector2(0.38, 0.75)},
@@ -35,7 +34,7 @@ const REGRIP := Vector2(0.42, 0.58)
 ## The most beats a look at a hold walks through: over ten minutes of fidgeting, and it costs a frame nothing to get there.
 const BEATS_MOST := 240
 
-## ROOM: how far from anything it could touch a thing in hand is, as a share of all it does: free in the air (1), carried over things, waiting a little over where it
+## Room: how far from anything it could touch a thing in hand is, as a share of all it does: free in the air (1), carried over things, waiting a little over where it
 ## goes, sitting on the studs being tried. Pressed home (0) it does not move.
 const ROOM_FREE := 1.0
 const ROOM_CARRY := 0.35
@@ -47,7 +46,7 @@ const TURN_FROM := 0.2
 ## Under this much room what shifts goes up and never down, and what tilts is lifted by as much as its low end would dip: it has something under it.
 const OVER_THINGS := Vector2(0.35, 0.9)
 
-## A SHIFT at full room: how far it may go each way (meters), and how far it may turn (radians).
+## A shift at full room: how far it may go each way (meters), and how far it may turn (radians).
 const SHIFT_MOVE := Vector3(0.024, 0.016, 0.024)
 const SHIFT_TURN := 0.3
 ## How often one begins (seconds, a hold's own), how long it may wait into that time as a share of it, and how long it takes.
@@ -60,7 +59,7 @@ const SHIFT_SIZE := Vector2(0.25, 1.0)
 const GRIP_IN := 0.3
 const GRIP_OUT := 0.22
 
-## A HAND KEPT WAITING OVER THINGS DRAWS BACK: a stop over a place this long (seconds) and it rises by as much as this (meters), takes a look and comes down again. It is
+## A hand kept waiting over things draws back: a stop over a place this long (seconds) and it rises by as much as this (meters), takes a look and comes down again. It is
 ## all the way back, with room for fingers, from [constant BACK_WHOLE]. What is on the studs, or under [constant BACK_FROM] of room, never does it.
 const BACK_AFTER := 2.2
 const BACK_WHOLE := 3.24
@@ -73,7 +72,7 @@ const BACK_EARLY := 0.15
 const BACK_FROM := 0.1
 
 
-## PIECE [param piece], whose record has it at [param x], as the hand has it: [param held] is what [method Assembly.held_at] says of this moment. It turns about its own
+## Piece [param piece], whose record has it at [param x], as the hand has it: [param held] is what [method Assembly.held_at] says of this moment. It turns about its own
 ## middle, for a hand holds a thing by the sides and not by what it stands on.
 static func on(x: Transform3D, held: Dictionary, piece: Dictionary) -> Transform3D:
 	var w := int(piece["w"])
@@ -85,7 +84,7 @@ static func on(x: Transform3D, held: Dictionary, piece: Dictionary) -> Transform
 	return Transform3D(b, x * up + (off[0] as Vector3) - b * up)
 
 
-## WHAT THE HAND HAS DONE TO IT: `[move (meters, the world's), turn (of its own axes)]`, [param h] seconds after the grip with [param left] to go, with [param room] now, the fingers
+## What the hand has done to it: `[move (meters, the world's), turn (of its own axes)]`, [param h] seconds after the grip with [param left] to go, with [param room] now, the fingers
 ## having had [param free] seconds of room in all, drawn back by [param back] of [constant BACK_RISE], [param seed] the hold's. [param long] its long axis and [param half]
 ## how far it reaches along that, for how far a tilt dips.
 static func at(h: float, left: float, room: float, free: float, back: float, seed: int, long: Vector3, half: float) -> Array:
@@ -105,7 +104,7 @@ static func at(h: float, left: float, room: float, free: float, back: float, see
 	return [mv + (sway[0] as Vector3) + Vector3.UP * BACK_RISE * back, (q * fingers).normalized()]
 
 
-## THE SHIFT AT [param h]: where the hand has gone from its way, `[move, turn]` each -1..1 of the most. Goes straight to the moment asked, whatever the hold's length.
+## The shift at [param h]: where the hand has gone from its way, `[move, turn]` each -1..1 of the most. Goes straight to the moment asked, whatever the hold's length.
 static func _shift(h: float, seed: int) -> Array:
 	var every := lerpf(SHIFT_EVERY.x, SHIFT_EVERY.y, Hands.share(seed, 300))
 	var n := floori(h / every)
@@ -128,7 +127,7 @@ static func _shift_to(seed: int, n: int) -> Array:
 		Vector3(Hands.share(s, 7) - 0.5, Hands.share(s, 8) - 0.5, Hands.share(s, 9) - 0.5) * 2.0 * size]
 
 
-## HOW THE FINGERS HAVE TURNED IT after [param free] seconds of room: each beat from where the last left it, of its own axes.
+## How the fingers have turned it after [param free] seconds of room: each beat from where the last left it, of its own axes.
 static func turned(free: float, seed: int, long: Vector3) -> Quaternion:
 	var q := Quaternion.IDENTITY
 	var clock := 0.0
@@ -184,7 +183,7 @@ static func _beat(seed: int, n: int, long: Vector3) -> Dictionary:
 		"takes": lerpf(takes.x, takes.y, Hands.share(s, 9)), "gap": gap, "regrip": bool(row.get("regrip", false))}
 
 
-## HOW FAR A HAND KEPT WAITING HAS DRAWN BACK, [param s] seconds into a stop of [param d].
+## How far a hand kept waiting has drawn back, [param s] seconds into a stop of [param d].
 static func drawn_back(s: float, d: float) -> float:
 	if d < BACK_AFTER:
 		return 0.0
@@ -192,7 +191,7 @@ static func drawn_back(s: float, d: float) -> float:
 	return most * Hands.smooth((s - BACK_DELAY) / BACK_UP) * Hands.smooth((d - s - BACK_EARLY) / BACK_DOWN)
 
 
-## HOW LONG OF THE FIRST [param s] SECONDS of a stop of [param d] a hand drawn back has been all the way back, with room for its fingers.
+## How long of the first [param s] seconds of a stop of [param d] a hand drawn back has been all the way back, with room for its fingers.
 static func free_in(s: float, d: float) -> float:
 	if d < BACK_WHOLE:
 		return 0.0

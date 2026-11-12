@@ -1,34 +1,24 @@
 extends CanvasLayer
 class_name FeedbackConsole
 
-## FeedbackConsole - the authoring feedback channel.
+## FeedbackConsole - the authoring feedback channel. Press the toggle key, type what feels off about the
+## scene on screen, hit Enter, and it writes a self-contained record to `res://feedback/` in the editor or
+## `user://feedback/` in an exported app:
 ##
-## The visualizer is built by eye, but "this shape feels wrong" is hard to act on
-## from a written note alone. This console closes that loop: press the toggle key,
-## type what feels off about the scene on screen, hit Enter, and it writes a
-## self-contained record to `res://feedback/` in the editor or `user://feedback/`
-## in an exported app:
+##   feedback/NNNN.json  - the typed scene descriptor (name / behavior / shot / seed / params / the audio
+##                         frame) plus the query.
+##   feedback/NNNN.png   - a screenshot of exactly that frame (the console hides itself first).
 ##
-##   feedback/NNNN.json  - the typed scene descriptor (name / behavior / shot / seed
-##                         / params / the audio frame) plus your query.
-##   feedback/NNNN.png   - a screenshot of exactly that frame (the console hides
-##                         itself first), so the critique carries the picture too.
-##
-## That pair is everything needed to understand and reproduce a complaint - the
-## seed makes the scene deterministic, and the image shows what "wrong" looked like.
-## The editor directory is git-ignored; records in an export live in app data.
+## The pair is enough to reproduce a complaint: the seed makes the scene deterministic and the image shows
+## what "wrong" looked like. The editor directory is git-ignored; records in an export live in app data.
 
-## Emitted whenever the console closes (submit or cancel). The session lifecycle
-## listens for this so it can wait, rather than tearing the console out from under a
-## user who is mid-feedback when the song happens to end.
+## Emitted whenever the console closes (submit or cancel). The session lifecycle waits on it rather than
+## tearing the console out from under a user who is mid-feedback.
 signal closed
 
-## Emitted right after a submission is written to disk (see _write) - the hook
-## point for the Assistant (see assistant.gd): index/query/
-## stem are everything Assistant.enqueue needs to dispatch a fresh claude
-## session at this exact feedback record. [param ask] is the console's "Ask the
-## assistant" box: off, the note is only LOGGED - written and listed in the
-## browser, where its Send button can still dispatch it later.
+## Emitted right after a submission is written to disk (see _write): index, query and stem are everything
+## Assistant.enqueue needs. [param ask] is the console's "Ask the assistant" box: off, the note is only
+## logged (written and listed in the browser, where its Send button can still dispatch it later).
 signal submitted(index: int, query: String, stem: String, ask: bool)
 
 const DIR := "res://feedback"
@@ -37,10 +27,9 @@ const TOGGLE_KEY := KEY_QUOTELEFT   # the backtick / tilde key
 const ASK_SECTION := "feedback"
 const ASK_KEY := "ask_assistant"
 
-## Injection points for modes that don't run through the Director (the mask
-## editor): what to snapshot, how to freeze the scene while typing, and what to
-## do after a submission. Invalid (unset) Callables fall back to the Director -
-## the auto/manual show's behavior is unchanged.
+## Injection points for modes that don't run through the Director (the mask editor): what to snapshot, how
+## to freeze the scene while typing, and what to do after a submission. Unset Callables fall back to the
+## Director.
 var describe: Callable = Callable()   # -> Dictionary: the state descriptor
 ## Where records are written. A gate points it at a scratch folder, so it never writes into the
 ## author's feedback.
@@ -119,8 +108,8 @@ func _build_ui() -> void:
 	_edit.text_submitted.connect(_on_submit)
 	row.add_child(_edit)
 
-	# Off: the screenshot and the note are written and listed, and nothing is sent. Never takes
-	# focus, so ticking it mid-sentence leaves the cursor in the note.
+	#Off: the note is written and listed, nothing is sent. Never takes focus, so ticking it mid-sentence
+	#leaves the cursor in the note.
 	_ask = CheckBox.new()
 	_ask.text = "Ask the assistant"
 	_ask.focus_mode = Control.FOCUS_NONE
@@ -152,14 +141,11 @@ func _toggle() -> void:
 
 
 func _open_console() -> void:
-	# Snapshot the exact frame and scene the user is reacting to, RIGHT NOW - before
-	# the overlay is shown and before anything can cut. The feedback must record what
-	# was on screen at the keypress, not whatever is current after typing and closing
-	# (un-holding the Director on close can immediately cut a new scene in, which is
-	# the scene that wrongly ended up in early screenshots).
+	#Snapshot the exact frame and scene the user is reacting to now, before the overlay is shown and before
+	#anything can cut (un-holding the Director on close can cut a new scene in).
 	_shot_img = get_viewport().get_texture().get_image()
 	_shot_desc = describe.call() if describe.is_valid() else Director.current_descriptor()
-	# ...and what a table draws off where it stood, and why ([method TableWork.drawn_report]): a live-only report names its part
+	#...and what a table draws off where it stood, and why ([method TableWork.drawn_report])
 	if Director._medium != null and Director._medium.has_method("work_report"):
 		_shot_desc["table"] = Director._medium.call("work_report")
 	# ...and which episode, at what moment of it: a report may be of its data, not the code (TableMedium.episode_report)
@@ -169,8 +155,8 @@ func _open_console() -> void:
 			_shot_desc["episode"] = ep
 	_open = true
 	_ui.visible = true
-	# The panels above the bottom-right row draw over every scene, this console included: opening
-	# it closes them, as opening any of them closes the others (Chrome.panel_opened).
+	#The panels above the bottom-right row draw over every scene, this console included: opening it closes
+	#them (Chrome.panel_opened).
 	var ch := Chrome.of(self)
 	if ch != null:
 		ch.panel_opened(&"feedback")
@@ -201,10 +187,9 @@ func _close() -> void:
 	closed.emit()
 
 
-## The Ask box as it stands right now: with no assistant to send to - none chosen in the 💬
-## panel, the chosen one's CLI not installed, or no AI installed at all ([method
-## AssistantBackends.gap]) - there is nothing to ask, so it is shown off and unclickable. The
-## remembered choice is untouched and comes back once there is one.
+## The Ask box as it stands now: with no assistant to send to (none chosen in the 💬 panel, the chosen one's
+## CLI not installed, or no AI installed - [method AssistantBackends.gap]) it is shown off and unclickable.
+## The remembered choice is untouched.
 func _show_ask() -> void:
 	var gap := AssistantBackends.gap()
 	var none := not gap.is_empty()
@@ -243,10 +228,8 @@ func _on_submit(text: String) -> void:
 	if query.is_empty() or img == null:
 		return
 	_write(query, img, desc, ask)
-	# We have been staring at this exact scene for the minutes it took to write the
-	# critique, so don't wait out the next harmonic cue - cut to the next scene the
-	# moment the feedback lands. (Director.next() no-ops if the session is ending;
-	# the mask editor injects a no-op - its playhead is the user's business.)
+	#Cut to the next scene the moment the feedback lands rather than waiting out the next harmonic cue.
+	#(Director.next() no-ops if the session is ending; the mask editor injects a no-op.)
 	if advance.is_valid():
 		advance.call()
 	else:
@@ -260,10 +243,8 @@ func _write(query: String, img: Image, desc: Dictionary, ask: bool) -> void:
 	var png_ok := img.save_png(stem + ".png")
 	desc["query"] = query
 	desc["index"] = n
-	# THE MACHINE, in the record. A dispatched fix that can see "this user has no
-	# ffmpeg" does not spend a session chasing a Masking bug that is really a
-	# missing-dependency report. Cheap enough here: a report is only built when a
-	# note is actually submitted, never per frame.
+	#The machine, in the record: a dispatched fix that sees "no ffmpeg" does not chase a Masking bug that is
+	#a missing dependency. Built only when a note is submitted, never per frame.
 	desc["environment"] = Deps.snapshot()
 	if png_ok == OK:
 		desc["screenshot"] = "%04d.png" % n
@@ -297,9 +278,8 @@ func _next_index() -> int:
 	return best + 1
 
 
-## Flatten a descriptor into JSON-native types - the scene params carry Godot
-## values (Vector2 / Vector3 / Color / packed arrays) that JSON.stringify can't
-## encode directly. Recurses through dictionaries and arrays.
+## Flatten a descriptor into JSON-native types: scene params carry Godot values (Vector2 / Vector3 / Color
+## / packed arrays) that JSON.stringify can't encode. Recurses through dictionaries and arrays.
 static func to_jsonable(v: Variant) -> Variant:
 	match typeof(v):
 		TYPE_DICTIONARY:

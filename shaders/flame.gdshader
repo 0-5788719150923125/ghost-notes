@@ -3,15 +3,13 @@ render_mode blend_add;
 
 // Flame field - the volumetric body of Layer.Fire.
 //
-// The quad covers the frame; every pixel evaluates one shared TEMPERATURE FIELD:
-// a row of heat SOURCES along the fire bed (each one driven by a harmonic band on
-// the CPU side) raises a column of heat, and rising domain-warped fbm noise CARVES
-// that column - the subtraction cuts tongues into the upper edge and pinches some
-// free entirely, so licks form, detach, climb and dissolve on their own. That is
-// where the life comes from: the flame is one field, not a crowd of particles.
+// Every pixel of the quad evaluates one shared temperature field: a row of heat sources along the fire bed (each driven
+// by a harmonic band on the CPU side) raises a column of heat, and rising domain-warped fbm noise carves it - the
+// subtraction cuts tongues into the upper edge and pinches some free, so licks form, detach, climb and dissolve. The
+// flame is one field, not a crowd of particles.
 //
-// Time comes in as a uniform (the layer's own clock), never TIME - live and the
-// offline Movie Maker bake step the same clock, so a seed reproduces its fire.
+// Time comes in as a uniform (the layer's own clock), never TIME: live and the offline Movie Maker bake step the same
+// clock, so a seed reproduces its fire.
 
 // The fire bed sources (unit-fraction x, heat 0..~1.2, gaussian width).
 uniform int u_n = 6;
@@ -30,12 +28,9 @@ uniform float u_lift = 1.0;            // column height gain (sampled per instan
 uniform float u_gain = 1.0;            // brightness gain    (sampled per instance)
 uniform vec2 u_seed = vec2(0.0);       // noise offset       (sampled per instance)
 
-// Lattice hash on a mod-289 permutation polynomial: inputs are bounded BEFORE any
-// multiply, so precision holds no matter how far the time scroll pushes the
-// coordinates. (A fract-of-big-product hash quantizes within seconds of scrolling -
-// the upper fbm octaves blow coordinates past float precision and the flame
-// interior tiles into blocks.) The noise repeats every 289 lattice units: at these
-// scales that is minutes of scroll, invisible.
+// Lattice hash on a mod-289 permutation polynomial: inputs are bounded before any multiply, so precision holds however
+// far the time scroll pushes the coordinates (a fract-of-big-product hash quantizes within seconds of scrolling and the
+// interior tiles into blocks). The noise repeats every 289 lattice units, minutes of scroll at these scales.
 float permf(float x) {
 	return mod(((x * 34.0) + 1.0) * x, 289.0);
 }

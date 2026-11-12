@@ -1,31 +1,25 @@
 extends SceneTree
 
-## intro_blur_check - that the card table's intro blur (`shaders/table_intro.gdshader`) is the blur it is
-## asked for, in pixels: as wide as asked at any frame size, round, smooth and in place - and at the
-## title screen's width ([constant CardTable.TITLE_BLUR]) between the user's verdicts (2026-10-06):
-## stronger than the lens's softest bokeh, which showed "too much table detail" ("an extremely strong
-## blur, such that nothing is really visible in the scene except for the colors"), and softer than
-## 0.0825 - itself 0.11, "just a smidge too blurry", less 25% - which was cut "another 50%".
+## intro_blur_check - that the card table's intro blur (`shaders/table_intro.gdshader`) is the blur it is asked for, in pixels: as
+## wide as asked at any frame size, round, smooth and in place - and at the title screen's width ([constant CardTable.TITLE_BLUR])
+## stronger than the lens's softest bokeh (which shows too much table detail) and softer than 0.0825.
 ##
 ##   tests/run_quiet.sh intro_blur_check
 ##
-## NOT `--headless`: every claim is a measurement of a rendered frame.
+## Not `--headless`: every claim is a measurement of a rendered frame.
 ##
-## THE MEASURE IS AN EDGE. A black half beside a white half, blurred, rises as the Gaussian's own
-## integral, so half the distance from its 16% to its 84% is the sigma drawn, and its 10% to 90% is
-## how far an outline is spread. The shader reads the screen's mips - Godot builds each level with a
-## Gaussian - and how much blur one level carries was MEASURED here (`level_sigma`): left at the
-## first guess, 1.1, every blur came out 1.9 times as wide as asked.
+## The measure is an edge. A black half beside a white half, blurred, rises as the Gaussian's own integral, so half the distance from
+## its 16% to its 84% is the sigma drawn, and its 10% to 90% is how far an outline is spread. The shader reads the screen's mips
+## (Godot builds each level with a Gaussian); how much blur one level carries is measured here (`level_sigma`): a guess of 1.1
+## makes every blur 1.9 times as wide as asked.
 ##
-## TWO-SIDED: the instrument reads the unblurred edge as sharp and the first guess's blur as too
-## wide, and the title screen's band rejects both widths judged against it.
+## Two-sided: the instrument reads the unblurred edge as sharp and the guessed blur as too wide, and the title screen's band rejects
+## both widths judged against it.
 
 const SHADER := preload("res://shaders/table_intro.gdshader")
-## A 10 cm thing on the table stands about this share of the frame's height (the set dresser is told
-## so), and the title screen spreads an outline over between SPREAD.x and SPREAD.y times that. The
-## widths judged against it: the lens's softest bokeh as a Gaussian (a sigma of 6.2 px whatever the
-## frame, measured off an edge half a meter out at dof_blur_amount 0.16 - 0.0086 of a 720 frame), too
-## sharp; 0.0825, too soft.
+## A 10 cm thing on the table stands about this share of the frame's height (the set dresser is told so), and the title screen spreads
+## an outline over between SPREAD.x and SPREAD.y times that. The widths judged against it: the lens's softest bokeh as a Gaussian (a
+## sigma of 6.2 px whatever the frame, measured off an edge half a meter out at dof_blur_amount 0.16), too sharp; 0.0825, too soft.
 const THING := 1.0 / 6.0
 const SPREAD := Vector2(0.3, 1.0)
 const TOO_SHARP := 0.0086
@@ -50,7 +44,7 @@ func _run() -> void:
 	for frame in [Vector2i(1280, 720), Vector2i(1920, 1080)]:
 		var size: Vector2i = frame
 		var edge := _edge(size, false)
-		# THE INSTRUMENT: an unblurred edge reads as sharp
+		# the instrument: an unblurred edge reads as sharp
 		var bare := await _render(edge, size, -1.0)
 		_ok(_sigma(bare, size, false) < 1.0, "%s: the unblurred edge reads %.1f px wide - the instrument cannot see a sharp edge" % [size, _sigma(bare, size, false)])
 		for w in [0.02, 0.05, CardTable.TITLE_BLUR]:
@@ -62,17 +56,17 @@ func _run() -> void:
 			_ok(absf(mid - size.x * 0.5) < 1.5, "%s at %.3f: the edge moved, to %.1f from %d" % [size, want, mid, size.x / 2])
 			var rough := _roughness(_row(img, size.y / 2))
 			_ok(rough <= 3.0 / 255.0, "%s at %.3f: steps in the blur (a second difference of %.4f) - the mips' texels show" % [size, want, rough])
-		# ROUND: across the frame as along it
+		# round: across the frame as along it
 		var across := await _render(_edge(size, true), size, 0.05)
 		var along := await _render(edge, size, 0.05)
 		var a := _sigma(across, size, true)
 		var b := _sigma(along, size, false)
 		_ok(absf(a / b - 1.0) < 0.05, "%s: %.1f px wide down the frame, %.1f across it" % [size, a, b])
-		# THE CALIBRATION is what makes it right: the first guess draws far too wide
+		# the calibration is what makes it right: the guess draws far too wide
 		var guess := await _render(edge, size, 0.05, 1.1)
 		_ok(_sigma(guess, size, false) / size.y > 0.05 * 1.5, "%s: the uncalibrated level drew %.4f for 0.05 - the instrument cannot tell" % [size, _sigma(guess, size, false) / size.y])
-	# THE TITLE SCREEN leaves only colors, and no more blur than that: an outline spread over between
-	# SPREAD.x and SPREAD.y things' heights - and both widths judged against it fall outside
+	# the title screen leaves only colors, and no more blur than that: an outline spread over between SPREAD.x and SPREAD.y things'
+	# heights - and both widths judged against it fall outside
 	var size := Vector2i(1280, 720)
 	var edge := _edge(size, false)
 	var things := _rise(await _render(edge, size, CardTable.TITLE_BLUR), size) / size.y / THING

@@ -1,28 +1,24 @@
 extends VBoxContainer
 class_name LookCard
 
-## LookCard - the Look: a post-process over the whole picture, one row per filter in
-## [constant Filters.REGISTRY] (next/notes.md step 5: one card per section, in every panel that has
-## it - the Generative panel built it and the Cards panel borrowed it by inheriting the whole panel).
+## LookCard - the Look: a post-process over the whole picture, one row per filter in [constant
+## Filters.REGISTRY] (next/notes.md; one card per section, in every panel that has it).
 ##
-## IT IS THE DIRECTOR'S, like the medium, so a look set here is the look of every session: a
-## reading, a synthesis take, a song in Auto mode, and an export render, which boots a second
-## process against the same settings file and inherits it with no flag to pass.
+## It is the Director's, like the medium, so a look set here is the look of every session: a reading, a
+## synthesis take, a song in Auto mode and an export render (a second process against the same settings
+## file).
 ##
-## A CHECKBOX AND A DIAL, NOT A PICKER, and that is the design rather than the layout. Being asked
-## to choose between monochrome and grain is the wrong question - black and white film HAS grain -
-## so every filter is independently switchable and they are all applied in one pass, in the
-## registry's order. The dial is grayed rather than hidden while its filter is off: a control that
-## vanishes takes its value with it as far as anyone looking can tell, and the value is kept.
+## A checkbox and a dial, not a picker: every filter is independently switchable and all are applied in
+## one pass in the registry's order. The dial is grayed rather than hidden while its filter is off, so
+## the kept value stays in view.
 ##
-## Its block in a document is `look:` - every filter named, off ones at 0, so the block says
-## exactly which look the chapter is shown in - `subtitles:`, how the line reveals its words
-## ([constant Subtitles.REVEALS]), and `tonemap:` with `tonemap_adjust:`, the TONEMAPPER a 3D set is
-## shown through and the adjustments made to each ([Tonemaps]; a block that names none is Filmic).
+## Its block in a document is `look:` (every filter named, off ones at 0), `subtitles:` (how the line
+## reveals its words, [constant Subtitles.REVEALS]) and `tonemap:` with `tonemap_adjust:` (the tonemapper
+## a 3D set is shown through and the adjustments made to each, [Tonemaps]; a block naming none is Filmic).
 ##
-## THE TONEMAPPER, A PICKER AND THREE DIALS: one tonemapper at a time is the right question here (a curve
-## is a curve), each with its own preset; the dials are that tonemapper's own adjustments, so switching
-## shows where it was left, and "reset" puts the one shown back to its preset.
+## The tonemapper is a picker and three dials: one at a time, each with its own preset; the dials are
+## that tonemapper's own adjustments, so switching shows where it was left, and "reset" puts the one
+## shown back to its preset.
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "look"
@@ -82,9 +78,8 @@ func _init() -> void:
 		cb.set_pressed_no_signal(live > 0.0)
 		Card.put_slider(sl, readout, live if live > 0.0 else float(Registry.field(Filters.REGISTRY, k, "default", 0.5)))
 		sl.editable = live > 0.0
-		# TICKING A FILTER ON MUST DO SOMETHING VISIBLE. A box whose dial happens to be at 0
-		# reads as a broken checkbox, so switching on with nothing dialed in lands on the
-		# registry's own starting point rather than on silence.
+	# Ticking a filter on must do something visible: with the dial at 0 it lands on the registry's own
+	# starting point rather than on silence.
 		cb.toggled.connect(func(on: bool) -> void:
 			if on and sl.value <= 0.0:
 				Card.put_slider(sl, readout, float(Registry.field(Filters.REGISTRY, k, "default", 0.5)))
@@ -98,7 +93,7 @@ func _init() -> void:
 			refresh())
 		_filter_rows[k] = {"box": cb, "slider": sl, "readout": readout}
 	_build_tonemap()
-	# THE SUBTITLES: how a line's words appear - over the look, never under it
+	# the subtitles: how a line's words appear, over the look and never under it
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 8)
 	add_child(srow)
@@ -122,7 +117,7 @@ func _init() -> void:
 	refresh()
 
 
-## THE TONEMAPPER'S ROWS: the picker with its reset, then a dial per adjustment.
+## The tonemapper's rows: the picker with its reset, then a dial per adjustment.
 func _build_tonemap() -> void:
 	var trow := HBoxContainer.new()
 	trow.add_theme_constant_override("separation", 8)
@@ -213,9 +208,9 @@ func refresh() -> void:
 		+ "mode and of an export render.\n\nOn now: " + text)
 
 
-## The rows, back from the Director - after a document set the filters. The number beside a dial comes
-## back with it: a note opened from nothing builds this card at the registry's defaults, and the block
-## that arrives next moved the dial alone (2026-11-03).
+## The rows, back from the Director after a document set the filters, including the number beside each
+## dial (a note opened from nothing builds this card at the registry's defaults, and the block that
+## arrives next moves the dial alone).
 func sync_rows() -> void:
 	for k in _filter_rows:
 		var row: Dictionary = _filter_rows[k]

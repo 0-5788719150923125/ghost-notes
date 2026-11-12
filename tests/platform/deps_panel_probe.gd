@@ -1,23 +1,15 @@
 extends Node
 
-## LOOK AT THE PANEL, in the state you have and in the states you don't.
-##
-## A probe, not a gate: it writes PNGs and asserts nothing. The home screen's Environment panel is
-## most interesting on a machine where ghost is still installing things, or where an install
-## failed - and the author's machine has everything. So after the first shot it fakes them: FFmpeg
-## mid-download, the voice environment mid-install with no fraction to show, the download
-## environment failed with its detail pane open, and the badge every mode shows at the top of the
-## frame while anything installs. Layout bugs live in those states (a long phase line drawn over
-## its neighbor, a column too narrow for a percentage) and are invisible in the settled one.
+## A probe, not a gate: it writes PNGs of the home screen's Environment panel and asserts nothing. After the
+## first shot it fakes the states a settled machine never shows: FFmpeg mid-download, the voice environment
+## mid-install with no fraction, the download environment failed with its detail pane open, and the badge every
+## mode shows at the top of the frame while anything installs.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/platform/deps_panel_probe.gd 60 found.png busy.png
 ##
-## A BOOT probe: the panel reads its collapsed state through the [Settings] autoload and its live
-## state from the Provisioner, and a bare `--script` run has neither. The probe is read-only, so
-## the Provisioner never starts a real job here; the jobs drawn are written into it by hand.
-##
-## With GHOST_PROBE_GPU=1, because it renders: `--headless` is the dummy driver and a viewport
-## readback there returns nothing at all.
+## A boot probe: the panel reads its collapsed state through the [Settings] autoload and its live state from the
+## Provisioner. The probe is read-only, so the Provisioner never starts a real job; the jobs drawn are written
+## into it by hand. GHOST_PROBE_GPU=1 because it renders (`--headless` readbacks return nothing).
 
 
 func _ready() -> void:
@@ -30,7 +22,7 @@ func _run() -> void:
 		print("usage: ... deps_panel_probe.gd <found.png> <busy.png>")
 		get_tree().quit(2)
 		return
-	# THE PANEL IS CHROME'S (next/notes.md step 4), behind the row's ⚙: a Chrome, with it open.
+	# The panel is Chrome's (next/notes.md step 4), behind the row's ⚙: a Chrome, with it open.
 	var chrome: Chrome = preload("res://src/app/chrome.gd").new()
 	get_tree().root.add_child(chrome)
 	var panel: DepsPanel = chrome.environment

@@ -1,6 +1,8 @@
 extends Node
 
-## NOT a gate. A GAME ON THE TABLE, photographed ([TableGame], next/tabletop.md): a small session made through the same ledger the tools use, played with a synthetic voice, a frame at each moment asked or one on every event. Unpainted: a map is plain paper under its grid and a figure its owner's color, for judging where things are, how they read and how the dice go.
+## NOT a gate. A game on the table, photographed ([TableGame], next/tabletop.md): a small session made through the same ledger the tools
+## use, played with a synthetic voice, a frame at each moment asked or one on every event. Unpainted: a map is plain paper under its grid
+## and a figure its owner's color, for judging where things are, how they read and how the dice go.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/game_look_probe.gd 400 [--times 12,30] [--out <dir>/game] [--size 1280x720]
 ##
@@ -81,7 +83,7 @@ static func _session() -> Dictionary:
 	return {"script": script, "game": game}
 
 
-## A SESSION REALLY PLAYED: as the producer gathers it, from what is there.
+## A session really played: as the producer gathers it, from what is there.
 static func _played(dir: String, people: PackedStringArray) -> Dictionary:
 	var names := DirAccess.get_files_at(dir)
 	var order: Array = ["intro"]
@@ -201,7 +203,7 @@ func _run() -> void:
 	print(w.game.report())
 	for n in w.notes:
 		print("game_look_probe: note - %s" % n)
-	# THE RECORD, first: a render waits for it whole
+	# the record, first: a render waits for it whole
 	var t0 := Time.get_ticks_msec()
 	w.game.wait_whole()
 	print("game_look_probe: dice thrown in %d ms: %s" % [Time.get_ticks_msec() - t0, w.game.report()])

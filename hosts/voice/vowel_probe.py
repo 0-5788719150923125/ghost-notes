@@ -1,51 +1,32 @@
 #!/usr/bin/env python3
 """Whether a checkpoint actually says the vowel its phoneme string names.
 
-Some Piper checkpoints read a word-initial `ɹˈiːd` with the vowel of `rid`, even
-though every upstream stage is correct and eSpeak hands the model `ɹˈiːd`. The
-defect is in the acoustic model.
-
-Measured on en_US-libritts-high, speaker 32, one frame, one word swapped, five
-renders each. F1 is the discriminator: this reader's /iː/ sits at F1 343 and its
-/ɪ/ at F1 444.
+Some Piper checkpoints (en_US-libritts-high) read a word-initial `ɹˈiːd` with the vowel of `rid` although
+eSpeak hands the model `ɹˈiːd`. Measured at speaker 32, one frame, one word swapped, five renders each (F1
+discriminates: this reader's /iː/ is at F1 343, its /ɪ/ at 444):
 
     that can feed them    fˈiːd     F1 283      that can read them   ɹˈiːd  F1 463
     that can seed them    sˈiːd     F1 298      that can reed them   ɹˈiːd  F1 447
-    that can beat them    bˈiːt     F1 284      that can breed them  bɹˈiːd F1 333
-    that can reach them   ɹˈiːtʃ    F1 322      that can freed them  fɹˈiːd F1 330
+    that can breed them   bɹˈiːd    F1 333      that can freed them  fɹˈiːd F1 330
 
-`reed` fails exactly as `read` does and the model never sees spelling, so this
-is the SYMBOL STRING, not the word. Any consonant in front of the ɹ recovers it;
-so does changing the coda. That is the signature of a contaminated training set:
-eSpeak phonemized the LibriTTS transcripts the same way, so every past-tense
-"read" was labeled `ɹˈiːd` over audio of a reader saying `ɹˈɛd`, and the
-checkpoint hedges to a mid vowel.
+`reed` fails as `read` does and the model never sees spelling, so it is the symbol string, not the word: any
+consonant in front of the ɹ, or a changed coda, recovers it. That signals a contaminated training set (every
+past-tense "read" labeled `ɹˈiːd` over audio of `ɹˈɛd`), and the checkpoint hedges to a mid vowel.
 
-THE REPAIR IS PHONETICALLY NULL. English /iː/ in a stressed syllable before a
-consonant already has an offglide; writing it is a spelling choice, not a
-different vowel, and it leaves the poisoned region:
+The repair is phonetically null: English /iː/ in a stressed syllable before a consonant already has an
+offglide, so writing it (ɹˈiːd -> ɹˈiːjd: speaker 32 F1 478 -> 298) is a spelling choice that leaves the
+poisoned region. On words never broken it is a no-op within measurement noise.
 
-    ɹˈiːd -> ɹˈiːjd    speaker 32  F1 478 -> 298      speaker 29  F1 511 -> 377
+It is asked, not listed, because it is not true of every checkpoint (on the other installed voices `read` is
+already right; on en_US-kristin-medium the offglide hurts). As in homographs.py the question goes to the
+model and the answer is cached. Three probe words in one frame: an /iː/ the model gets right, an /ɪ/ for the
+other end of the scale, and the string under suspicion. If the suspect lands nearer the /ɪ/ the checkpoint
+needs the repair; if writing the offglide does not move it back, the repair is declined. Nothing is keyed to
+a word: the repair applies to every stressed /iː/ before a consonant.
 
-On words that were never broken it is a no-op within measurement noise.
-
-IT IS ASKED, NOT LISTED, because it is not true of every checkpoint. On the
-other four installed voices `read` is already correct, and on
-en_US-kristin-medium the offglide actively HURTS (F2 2730 -> 2070). Same policy
-as homographs.py: put the question to the model that has to answer it and cache
-the answer. Three probe words in one frame - an /iː/ the model gets right, an
-/ɪ/ for the other end of the scale, and the string under suspicion between them.
-If the suspect lands nearer the /ɪ/, the checkpoint needs the repair; if writing
-the offglide does not move it back, the repair is declined.
-
-The probe words are a PROBE, not a lexicon. Nothing is keyed to a word: the
-repair applies to every stressed /iː/ before a consonant, which is why it must
-be shown harmless on unbroken words before it runs at all.
-
-Costs three short inferences for a healthy voice and four for one that needs the
-repair, once per voice per install, cached beside the weights and taken on the
-cold path of `_load`. If numpy is missing, the ONNX has no duration output, or
-anything else goes wrong, the answer is "no repair".
+Costs three short inferences for a healthy voice and four for one that needs the repair, once per voice per
+install, cached beside the weights, on the cold path of `_load`. If numpy is missing, the ONNX has no
+duration output, or anything else goes wrong, the answer is "no repair".
 """
 
 from __future__ import annotations
@@ -55,79 +36,45 @@ import re
 import sys
 from pathlib import Path
 
-# A stressed /iː/ with an OBSTRUENT after it. The stress mark has to be in the SAME
-# word (no space and no second mark between), the lookahead has to find something
-# that is not a vowel, not a length mark and not the offglide already - and being a
-# lookahead, it also fails at the end of a word, which is what keeps `fɹˈiː` alone.
-#
-# NASALS ARE EXCLUDED, and that is a correction rather than an original nicety. Every
-# word this repair was measured on ends in an obstruent - the suspect is "reed", and
-# the onset-matched set that established the defect is feed / seed / beat / reach /
-# breed / freed. Before a nasal it was never measured at all, and firing there takes in
-# the entire -ine / -een / -eam family: machine, seen, mean, dream, scheme. Reported
-# from an export on the one voice this repair is active for, about the one word in that
-# family the reader used most: "machines was pronounced weirdly every single time... it
-# was like the speaker was taking a huge breath in the MIDDLE of that word".
-#
-# HONESTLY: that report is not reproduced here. Rendered on the same voice, in and out
-# of connected speech, the repaired string measures no internal gap the plain one does
-# not also have (21-37 ms either way on "machines", and the medians in a sentence are
-# if anything shorter WITH the repair). So this is not "the fix for that bug" - it is
-# the repair being pulled back inside the evidence that justified it, which happens to
-# be exactly the family the report came from. The A/B is in feedback/machines_*.wav.
+# A stressed /iː/ with an obstruent after it. The stress mark must be in the same word (no space and no
+# second mark between), and the lookahead must find something that is not a vowel, a length mark or the
+# offglide already; being a lookahead it also fails at the end of a word, which keeps `fɹˈiː` alone.
+# Nasals are excluded: the repair was measured only on words ending in an obstruent (feed, seed, beat,
+# reach, breed, freed). Firing before a nasal takes in the -ine / -een / -eam family (machine, seen, mean,
+# dream), outside the evidence that justified it.
 OFFGLIDE = re.compile(r"(ˈ[^ˈˌ ]*?iː)(?=[^aeiouɐəɚɛɪʊʌɔɑːjnmŋˈˌ ])")
 
-# ONE FRAME AND THREE WORDS.
-#
-# THE FRAME IS LONG ON PURPOSE, and a short one is why this file took three passes to
-# settle. The defect only appears in CONNECTED SPEECH - a word said alone comes out
-# right on every voice measured - so a two-word carrier is a weak instrument for it.
-# Measured at speaker 0 of the broken checkpoint, 24 renders per cell, F1 medians:
+# One frame and three words.
+# The frame is long because the defect only appears in connected speech (a word said alone is right on every
+# voice), so a two-word carrier is a weak instrument. Speaker 0 of the broken checkpoint, 24 renders per
+# cell, F1 medians:
 #
 #     "that can {} them"                     tense 409  lax 523  suspect 609  fixed 522
 #     "the house of healing that can {} them" tense 397  lax 535  suspect 625  fixed 432
 #
-# In the short frame the repaired string lands ON the lax reference and the second gate
-# below is deciding a 87 Hz difference between two measurements that scatter by 40 - a
-# coin toss about one cold start in ten, which is exactly what it did. In the long one
-# the repair carries the vowel back to the tense reference and the same gate is reading
-# 193 Hz. Same code, same weights; the frame was the whole difference. It is the shape
-# the defect was reported in, which is not a coincidence: a probe should ask the question
-# in the position the answer matters.
-#
-# The words are onset-matched: all three are ɹ + vowel + stop, so the span the formants
-# are taken from lines up across the renders without any alignment work. `reap` is an
-# /iː/ every checkpoint measured gets right, `rip` is the other end of the scale, and
-# `reed` is the string under suspicion - which is `read`'s string, in a spelling that
-# cannot be confused for a homograph question.
+# In the short frame the repaired string lands on the lax reference and the second gate decides an 87 Hz
+# difference between measurements that scatter by 40; in the long one the repair carries the vowel back to
+# the tense reference (193 Hz).
+# The words are onset-matched (ɹ + vowel + stop), so the span the formants are taken from lines up without
+# alignment. `reap` is an /iː/ every checkpoint gets right, `rip` the other end of the scale, `reed` the
+# string under suspicion (`read`'s string, in a spelling that is no homograph question).
 FRAME = "the house of healing that can {} them"
 SUSPECT = "reed"
 TENSE_REF = "reap"
 LAX_REF = "rip"
 
-# HOW THE PROBE RENDERS, and this is the part that took three passes to get right.
-#
-# A VITS voice is stochastic by design: the duration predictor draws from noise and so
-# does the flow. That is what keeps a reading from sounding mechanical, and it is
-# exactly wrong for a measurement. Probing at speaking settings, the F1 of a 50 ms vowel
-# scattered by 40-50 Hz per render with a heavy tail - LPC occasionally picks the wrong
-# pole - against margins of the same order, so the verdict flipped about one cold start
-# in ten. Averaging did not fix it, a median of three did not fix it, and neither would
-# have: the instrument was noisy, and the answer to a noisy instrument is to turn the
-# noise off rather than to sample it harder.
-#
-# So the probe renders with both noise terms at zero and the clock slowed down. The
-# vowel gets three times as long for LPC to fit, and the whole measurement becomes
-# EXACTLY repeatable - five consecutive probes of five voices returned identical ratios
-# to four decimal places. One render per word is then not a sample, it is the answer,
-# which is also why this costs less than the version that could not make up its mind.
-#
-# Nothing here reaches a reading. These settings exist inside the probe and nowhere else.
+# How the probe renders. A VITS voice is stochastic (the duration predictor and the flow draw from noise),
+# which is wrong for a measurement: at speaking settings the F1 of a 50 ms vowel scattered by 40-50 Hz per
+# render with a heavy tail (LPC occasionally picks the wrong pole), and the verdict flipped about one cold
+# start in ten; averaging did not fix it.
+# So the probe renders with both noise terms at zero and the clock slowed: the vowel gets three times as
+# long for LPC to fit and the measurement is exactly repeatable (identical ratios to four decimals), so one
+# render per word is the answer. These settings exist inside the probe only.
 PROBE_PARAMS = {"noise_scale": 0.0, "noise_w": 0.0, "length_scale": 3.0}
 
-# How far from the /iː/ reference the suspect has to land before the checkpoint is
-# called broken, as a multiple of that reader's OWN /iː/-to-/ɪ/ distance. Measured on
-# the five installed voices, deterministically:
+# How far from the /iː/ reference the suspect has to land before the checkpoint is called broken, as a
+# multiple of that reader's own /iː/-to-/ɪ/ distance. Measured deterministically on the five installed
+# voices:
 #
 #     en_US-libritts-high   1.46      <- past its own /ɪ/, and the only one that is broken
 #     en_US-john-medium     0.51
@@ -135,25 +82,17 @@ PROBE_PARAMS = {"noise_scale": 0.0, "noise_w": 0.0, "length_scale": 3.0}
 #     en_US-kristin-medium  0.10
 #     en_US-norman-medium   0.02
 #
-# 1.0 sits between the two nearest neighbors with about a threefold margin on each
-# side, and it is a meaningful place to put a line rather than a gap in the data: at 1.0
-# the model is rendering the string further from the vowel it names than its own lax
-# vowel is. Below that is a reader with an unremarkable spread; john is the one to watch
-# if this ever needs revisiting, and it is not close.
+# 1.0 sits between the two nearest neighbors with about a threefold margin each side: the model renders the
+# string further from the vowel it names than its own lax vowel is.
 BROKEN_AT = 1.0
 
-# How much WORSE the repair may make the vowel before it is refused, on the same scale.
-#
-# THE TEST IS NON-REGRESSION AND NOT IMPROVEMENT, and the asymmetry is deliberate: a
-# repair that does nothing IS nothing, so the only outcome worth refusing is one that
-# drags the vowel further from where it belongs. Whether the rewrite helps is already
-# settled above. This gate exists for a checkpoint that does not yet exist - one broken
-# in a way the offglide reaches the wrong way - and it should not be doing any other job.
+# How much worse the repair may make the vowel before it is refused, on the same scale. The test is
+# non-regression, not improvement: a repair that does nothing is nothing, so the only outcome worth refusing
+# is one that drags the vowel further from where it belongs.
 MAX_LOSS = 0.10
 
-# Where in the vowel's own span to measure. Skipping the first third steps past the
-# transition out of the ɹ, which is formant-heavy and would drag F1 in the same
-# direction for every word.
+# Where in the vowel's own span to measure. Skipping the first third steps past the transition out of the ɹ,
+# which would drag F1 the same way for every word.
 NUCLEUS = (0.30, 0.90)
 
 
@@ -269,9 +208,9 @@ class VowelProbe:
             raise RuntimeError("frame phonemization came back the wrong length")
         words = spoken[: len(heads)] + [word_ipa] + spoken[len(heads) :]
 
-        # EVERY CHARACTER ITS OWN SOURCE INDEX. The render step keys its spans by
-        # whatever it is handed, so numbering the characters is what turns a per-token
-        # span into a per-symbol one - and a vowel is a symbol, not a word.
+        # Every character its own source index: the render step keys its spans by whatever it is handed, so
+        # numbering the characters turns a per-token span into a per-symbol one (a vowel is a symbol, not a
+        # word).
         symbols: list = []
         for wi, w in enumerate(words):
             if wi:
@@ -316,9 +255,8 @@ class VowelProbe:
         f_tense = self._f1(voice, cfg, sess, lang, tense)
         f_lax = self._f1(voice, cfg, sess, lang, lax)
         f_suspect = self._f1(voice, cfg, sess, lang, suspect)
-        # A reader whose two reference vowels come back on top of each other has told us
-        # the measurement is not working on this voice, not that it is healthy. It is
-        # also the denominator of everything below.
+        # A reader whose two reference vowels come back on top of each other tells us the measurement is not
+        # working on this voice, not that it is healthy. It is also the denominator of everything below.
         scale = abs(f_lax - f_tense)
         if scale < 60.0:
             print(

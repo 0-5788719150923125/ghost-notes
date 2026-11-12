@@ -1,21 +1,16 @@
 extends Node2D
 class_name DispatchCensor
 
-## DispatchCensor - REDACTED WORDS HIDDEN OVER THE PICTURE, as an editor hides a name in a video after it was shot
+## DispatchCensor - redacted words hidden over the picture, as an editor hides a name in a video after it was shot
 ## (next/dispatch.md; [constant DispatchScript.REDACT]). The terminal draws every word as written; this is drawn over the
 ## desk's finished frame, after the 3D, and covers each redacted run with a box cracked along a few long straight lines
-## into large shards, each one flat, the average color of the frame under it (`shaders/dispatch_redact.gdshader`).
-## (2026-11-10, the user, of hexagons that had been drawn into the terminal's own lines: "This is a post-processing
-## effect, applied to the raw video AFTER: like when police blur faces in a video. You would not expect it to be bound
-## exactly to the terminal screen: it would be sort of unstable, detached, blocking the text region from the camera's
-## view ... it's usually a big rectangle region with large straight cracks in it.")
+## into large flat shards, each the average color of the frame under it (`shaders/dispatch_redact.gdshader`).
 ##
-## THE BOX IS THE FRAME'S, NEVER THE GLASS'S: each run's rect on the terminal (padded, and runs that then touch made one,
+## The box belongs to the frame, not the glass: each run's rect on the terminal (padded; runs that then touch become one,
 ## [method groups]) is carried through the glass's bulge and the camera ([method on_glass], [method seen]), and the box is
-## the upright rect round it, as a tracker draws one. It follows a beat behind ([constant LAG]) and wavers outward a
-## little ([constant WAVER]), and whatever it does it holds the words' own rect ([method cover]). Its cracks are laid once
-## per run, seeded by its words ([method cracks]), and stretch with the box: the shards keep their shapes, and only their
-## colors change with what lies under them.
+## the upright rect round it, as a tracker draws one. It follows a beat behind ([constant LAG]), wavers outward a little
+## ([constant WAVER]) and always holds the words' own rect ([method cover]). Its cracks are laid once per run, seeded by
+## its words ([method cracks]), and stretch with the box: the shards keep their shapes, only their colors change.
 
 ## How many boxes the shader holds at once, and how deep each box's cracks go (LEAVES = 2^DEPTH shards at most; NODES
 ## lines) - the shader's arrays, about 12 KB, under the 16 KB a uniform block is sure of.
@@ -24,17 +19,17 @@ const DEPTH := 6
 const NODES := 63
 const LEAVES := 64
 const SHADER := "res://shaders/dispatch_redact.gdshader"
-## HOW FAR PAST THE WORDS A BOX REACHES on the terminal, in its lines: sideways (into the space before and after them, not
-## the letter past it: "search" lost its "h" at 0.6), and up and down from the letters' middle - short of the next line's
-## letters, so a word left showing beside, above or below is still read.
+## How far past the words a box reaches on the terminal, in its lines: sideways (into the space before and after them, not
+## the next letter: at 0.6 "search" loses its "h"), and up and down from the letters' middle (short of the next line's
+## letters, so a word left showing beside, above or below is still read).
 const PAD_X := 0.3
 const HALF_H := 0.62
-## THE TRACKER: the time it takes to close most of the way to where the words went (s, an exponential's), how far an edge
+## The tracker: the time it takes to close most of the way to where the words went (s, an exponential's), how far an edge
 ## wavers out past them (a share of the box's height), and how often its jitter steps (per second).
 const LAG := 0.09
 const WAVER := 0.08
 const STEP_RATE := 11.0
-## A SHARD's length at the most, in the terminal's px: about three letters, a little more than a line's box is high.
+## A shard's longest length, in the terminal's px: about three letters.
 const SHARD := 56.0
 
 ## This frame's boxes: `{rect: Rect2 (px), key: int, aspect: float}`.
@@ -52,9 +47,9 @@ func _init() -> void:
 	visible = false
 
 
-## HIDE [param runs] ({rect, key} on the terminal, [method DispatchScreens.redactions]) where [param cam] sees them on
+## Hide [param runs] ({rect, key} on the terminal, [method DispatchScreens.redactions]) where [param cam] sees them on
 ## [param glass] (its face bulged by [param curve]) at show time [param now]: each group's box eased from where it was,
-## wavered, and never short of the words' own rect; the shader's arrays pushed whole.
+## wavered, never short of the words' own rect; the shader's arrays pushed whole.
 func cover(runs: Array, glass: MeshInstance3D, curve: float, cam: Camera3D, now: float) -> void:
 	var dt := now - _last
 	_last = now
@@ -125,7 +120,7 @@ func _draw() -> void:
 
 # --- where the boxes go -----------------------------------------------------------------------------------------------
 
-## THE RUNS AS BOXES ON THE TERMINAL (px): each of [param runs] ({rect, key}) padded ([constant PAD_X], [constant HALF_H]),
+## The runs as boxes on the terminal (px): each of [param runs] ({rect, key}) padded ([constant PAD_X], [constant HALF_H]),
 ## and those that then overlap made one (the names down a column of matches are one box): `{rect, key}`.
 static func groups(runs: Array) -> Array:
 	var line := DispatchScreens.TERM_LINE
@@ -152,7 +147,7 @@ static func groups(runs: Array) -> Array:
 	return out
 
 
-## WHERE TERMINAL PIXEL [param px] IS SHOWN on [param glass], in the world: a quad whose face `shaders/dispatch_screen.gdshader`
+## Where terminal pixel [param px] is shown on [param glass], in the world: a quad whose face `shaders/dispatch_screen.gdshader`
 ## bulges by [param curve], showing the face's point b at the quad's c where c (1 + curve |c|^2 / 2) = b.
 static func on_glass(px: Vector2, glass: MeshInstance3D, curve: float) -> Vector3:
 	var b := px / Vector2(DispatchScreens.TERM_SIZE) * 2.0 - Vector2.ONE
@@ -163,7 +158,7 @@ static func on_glass(px: Vector2, glass: MeshInstance3D, curve: float) -> Vector
 	return glass.global_transform * Vector3(c.x * 0.5 * size.x, -c.y * 0.5 * size.y, 0.0)
 
 
-## THE UPRIGHT RECT ROUND [param r] (terminal px) in [param cam]'s frame, its edges followed through the bulge; empty when
+## The upright rect round [param r] (terminal px) in [param cam]'s frame, its edges followed through the bulge; empty when
 ## any of it is behind the camera.
 static func seen(r: Rect2, glass: MeshInstance3D, curve: float, cam: Camera3D) -> Rect2:
 	var out := Rect2()
@@ -182,7 +177,7 @@ static func seen(r: Rect2, glass: MeshInstance3D, curve: float, cam: Camera3D) -
 	return out
 
 
-## HOW FAR EDGE [param edge] OF RUN [param key]'s BOX IS OUT at [param now], 0 to 1: a slow drift and a tracker's small
+## How far edge [param edge] of run [param key]'s box is out at [param now], 0 to 1: a slow drift and a tracker's small
 ## steps, a function of show time alone.
 static func waver(key: int, edge: int, now: float) -> float:
 	var h := hash([key, edge])
@@ -192,12 +187,12 @@ static func waver(key: int, edge: int, now: float) -> float:
 	return clampf(0.7 * slow + 0.3 * DispatchSounds.hash01(h, floori(now * STEP_RATE)), 0.0, 1.0)
 
 
-## A BOX'S CRACKS for [param key], on a box [param aspect] wide to its one high: a tree of straight lines, each right across
-## the shard it splits - steep across a wide one, shallow along a tall one - until no shard is longer than [param most]
-## (in box heights); a long box is often first cracked along its length, slanting across most of its height, so the
-## cracks across it stagger as glass's do (steep cracks alone read as a row of V's). `{lines, leaves}`: [constant NODES] lines, `(n.x, n.y, d)`, a point p's side the sign of `n . p + d`,
-## p in box heights from the top left, a node that does not split `(0, 0, 1)`; and each shard's bounds by the leaf
-## [method shard] names (`x0, y0, x1, y1`), what the shader reads its color off.
+## A box's cracks for [param key], on a box [param aspect] wide to its one high: a tree of straight lines, each right
+## across the shard it splits (steep across a wide one, shallow along a tall one) until no shard is longer than
+## [param most] (in box heights). A long box is often first cracked along its length, slanting across most of its height,
+## so the cracks across it stagger as glass's do. `{lines, leaves}`: [constant NODES] lines `(n.x, n.y, d)`, a point p's
+## side the sign of `n . p + d`, p in box heights from the top left, a node that does not split `(0, 0, 1)`; and each
+## shard's bounds by the leaf [method shard] names (`x0, y0, x1, y1`), what the shader reads its color off.
 static func cracks(key: int, aspect: float, most: float) -> Dictionary:
 	var out := PackedVector3Array()
 	out.resize(NODES)
@@ -252,8 +247,8 @@ static func _split(poly: PackedVector2Array, node: int, depth: int, most: float,
 	_leaf(node, depth, lo, hi, leaves)
 
 
-## A shard left whole at [param node], [param depth] down: its bounds put where [method shard] ends for it - a node that
-## does not split sends every point to its second child, down to the leaves.
+## A shard left whole at [param node], [param depth] down: its bounds put where [method shard] ends for it (a node that
+## does not split sends every point to its second child, down to the leaves).
 static func _leaf(node: int, depth: int, lo: Vector2, hi: Vector2, leaves: PackedVector4Array) -> void:
 	var n := node
 	for _d in DEPTH - depth:
@@ -283,7 +278,7 @@ static func _area(poly: PackedVector2Array) -> float:
 	return s * 0.5
 
 
-## WHICH SHARD OF A BOX point [param p] (box heights from its top left) is in, by [param lines] ([method cracks]) - the
+## Which shard of a box point [param p] (box heights from its top left) is in, by [param lines] ([method cracks]); the
 ## shader's `shard`, line for line.
 static func shard(lines: PackedVector3Array, p: Vector2) -> int:
 	var n := 0

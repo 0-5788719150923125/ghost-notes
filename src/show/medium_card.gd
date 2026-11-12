@@ -1,37 +1,30 @@
 extends VBoxContainer
 class_name MediumCard
 
-## MediumCard - WHAT THE NOTE IS SHOWN IN, ONE CARD (2026-11-09, the user: "the 'Picture' card becomes 'Medium', and we
-## would move Dispatch Desk and [Letter] modes into that card. For the picker already called Medium, we would rename it
-## ... for the extra options we need for each of those mediums... we could just dynamically render them into the Medium
-## card, depending upon which mode we're using, and probably with at least some of the options shared"). Its block in a
-## document is `medium:`. It was the Picture card, beside the note's Pictures card ("That is confusing"), and the Letter
-## and the Dispatch desk were components of their own, each a card that pinned its medium.
+## MediumCard - what the note is shown in, one card. Its block in a document is `medium:`.
 ##
-## THE FORMAT is what the show is carried on: a row of [constant Medium.REGISTRY] that no component owns - the seeded
-## show, full frame, a comic, a novel, a notebook, a tablet, a letter, a dispatch desk. Under it stand THE SHARED ROWS -
-## the frame, scene hold and flourishes, the camera, the handwriting, the films - each shown only where the format
-## `uses` it, and under those THE FORMAT'S OWN ROWS (a row's `card`: the Letter's desk and sketch writer, the Dispatch
-## desk's number), built from the script the row names. One block holds them all, and only what the format uses:
-## switching a Letter to a Tablet drops the desk. The note's pictures stay the Pictures card's ([PicturesCard]).
+## The format is what the show is carried on: a row of [constant Medium.REGISTRY] that no component
+## owns (the seeded show, full frame, a comic, a novel, a notebook, a tablet, a letter, a dispatch desk).
+## Under it stand the shared rows (the frame, scene hold and flourishes, the camera, the handwriting, the
+## films), each shown only where the format `uses` it, and under those the format's own rows (a row's
+## `card`: the Letter's desk and sketch writer, the Dispatch desk's number), built from the script the
+## row names. One block holds them all, only what the format uses: switching a Letter to a Tablet drops
+## the desk. The note's pictures stay the Pictures card's ([PicturesCard]).
 ##
-## A FORMAT WITH ROWS OF ITS OWN HANDS THE READING what it reads (its `walk`, its `publish`), so the panel is built
-## around it: picking one, or leaving one, writes the block and opens the note again ([member _reshape]), the path a
-## component attached or detached takes. Every other pick is live - a song's show restaged at once, a reading's on its
-## next Play.
+## A format with rows of its own hands the reading what it reads (its `walk`, its `publish`), so the
+## panel is built around it: picking or leaving one writes the block and opens the note again ([member
+## _reshape]), the path a component attached or detached takes. Every other pick is live (a song's show
+## restaged at once, a reading's on its next Play).
 ##
-## WHAT IT OFFERS FOLLOWS THE NOTE: a note with only a song gets the formats that need nothing but a sound to cut on
-## ([method Medium.offered] - not those that show a reading), and AUTO - the original show with nothing to set
-## ([AutoMedium]) - is first, and shows nothing under the picker at all. A note whose block names a format it cannot
-## have (a Letter whose Voice was detached) keeps it as it was, and says what it is waiting for ([member _held]).
+## What it offers follows the note: a note with only a song gets the formats that need nothing but a
+## sound to cut on ([method Medium.offered]), and Auto (the original show with nothing to set,
+## [AutoMedium]) is first and shows nothing under the picker. A note whose block names a format it
+## cannot have (a Letter whose Voice was detached) keeps it and says what it waits for ([member _held]).
 ##
-## A ROW A FORMAT CANNOT USE IS HIDDEN, by each format's `uses` rather than by branching here: "there are a number of
-## settings currently being displayed that ONLY work with the comic book medium" - a control that does nothing teaches
-## nothing. The rows move the moment the format does ([signal Director.medium_changed]).
-##
-## They lived only in this machine's ghost.cfg once, so a chapter opened on another machine - Windows, first - came up
-## in whatever medium and look THAT machine last had: "the medium didn't transfer, the filters didn't transfer". The
-## film LIBRARY stays behind: it is this machine's file paths.
+## A row a format cannot use is hidden, by each format's `uses` rather than by branching here; the rows
+## move the moment the format does ([signal Director.medium_changed]). The block is kept in the note so
+## a chapter opened on another machine comes up in the same medium and look. The film library stays
+## behind: it is this machine's file paths.
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "medium"
@@ -59,20 +52,20 @@ var _setting_rows: Array = []
 var _keys: Array = []
 ## Whether the note is a reading: a format picked then lands on the next one (a song's is shown at once).
 var _reading := true
-## THE FORMAT'S OWN ROWS ([constant Medium.REGISTRY] `card`), and the script they were built from ("" for none).
+## The format's own rows ([constant Medium.REGISTRY] `card`), and the script they were built from ("" for none).
 var _own: Control = null
 var _own_card := ""
-## Write the note as the cards hold it and open it again (the panel's, handed in `ctx`): a pick to or from a format
-## with rows of its own.
+## Write the note as the cards hold it and open it again (the panel's, handed in `ctx`): a pick to or
+## from a format with rows of its own.
 var _reshape: Callable
-## THE BLOCK OF A FORMAT THE NOTE CANNOT HAVE, kept as it was until another is picked ({} for none).
+## The block of a format the note cannot have, kept as it was until another is picked ({} for none).
 var _held := {}
 
 
-## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]): `reading` (the note has
-## a voice, so every format is offered), `blocks` (the note's, so the format's own rows stand from the first frame),
-## `reshape` (write the note and open it again) - and the whole of it handed on to the format's own rows (a reading's
-## `workspace`).
+## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]): `reading`
+## (the note has a voice, so every format is offered), `blocks` (the note's, so the format's own rows
+## stand from the first frame), `reshape` (write the note and open it again), and the whole of it handed
+## on to the format's own rows (a reading's `workspace`).
 static func for_note(ctx: Dictionary) -> MediumCard:
 	return MediumCard.new(ctx)
 
@@ -122,8 +115,8 @@ func _init(ctx := {"reading": true}) -> void:
 	Director.medium_changed.connect(sync_medium)
 
 
-## THE FORMAT'S OWN ROWS, for the format the note's block names (else the one this run shows): built from its row's
-## `card` and handed [param ctx]. None for a format the note cannot have - it is waiting, not shown.
+## The format's own rows, for the format the note's block names (else the one this run shows): built from
+## its row's `card` and handed [param ctx]. None for a format the note cannot have, which is waiting.
 func _build_own(ctx: Dictionary) -> void:
 	var blocks: Dictionary = ctx.get("blocks", {})
 	var block: Variant = blocks.get(KEY)
@@ -153,10 +146,9 @@ static func _card_of(key: String) -> String:
 	return String(Registry.field(Medium.REGISTRY, key, "card", ""))
 
 
-## Show only what the format can use. ASKED OF THE DIRECTOR, NOT OF THE PICKER: selecting an
-## item and the `item_selected` signal are separate things in Godot, so a picker driven from code
-## has the signal without the index - and `resolved_medium` also knows a run launched with
-## `--medium comic`, which the picker cannot.
+## Show only what the format can use. Asked of the Director, not the picker: a picker driven from code
+## has the `item_selected` signal without the index, and `resolved_medium` also knows a run launched
+## with `--medium comic`.
 func sync_medium() -> void:
 	var key := Director.resolved_medium()
 	var bare := not Medium.takes_settings(key) or not _held.is_empty()
@@ -183,8 +175,8 @@ func sync_medium() -> void:
 	_sync_frames()
 
 
-## A FORMAT THAT TAKES NO SETTINGS WAS PICKED: the dials go back to their defaults, so what it shows
-## is the same for every note (see [AutoMedium]).
+## A format that takes no settings was picked: the dials go back to their defaults, so what it shows is
+## the same for every note (see [AutoMedium]).
 func _to_defaults() -> void:
 	_scene_hold.value = 1.0
 	_flourish.value = 1.0
@@ -216,8 +208,8 @@ func capture() -> Dictionary:
 	return out
 
 
-## ...and back. Each key the block names is set through the same control a hand would use, so the
-## card shows it and the Director saves it; a key it does not name is left alone. A block whose format has other own
+## ...and back. Each key the block names is set through the control a hand would use, so the card shows
+## it and the Director saves it; a key it does not name is left alone. A block whose format has other own
 ## rows than the ones built (an edit made outside Ghost Notes) opens the note again around them.
 func apply(block: Dictionary) -> void:
 	var fmt := String(block.get("format", ""))
@@ -270,10 +262,10 @@ func _tag(feature: String, row: Control) -> void:
 	(_medium_rows.get_or_add(feature, []) as Array).append(row)
 
 
-## THE FORMAT PICKER - what the show is carried on (see [Medium]). Built off the registry rather
-## than a written-out list, so a new presentation appears here by being registered. It sits at the
-## TOP of the card, because it is the setting the ones below are qualified by. A format impossible on this
-## machine ([constant Medium.REGISTRY] `capabilities`) is grayed, saying why.
+## The format picker: what the show is carried on (see [Medium]). Built off the registry, so a new
+## presentation appears by being registered. It sits at the top of the card, as the settings below are
+## qualified by it. A format impossible on this machine ([constant Medium.REGISTRY] `capabilities`) is
+## grayed, saying why.
 func _format_option() -> OptionButton:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -296,16 +288,15 @@ func _format_option() -> OptionButton:
 		opt.set_item_tooltip(opt.item_count - 1, Registry.blurb(Medium.REGISTRY, k) + ("" if why.is_empty() else "\n\n" + why))
 		tip += "\n%s - %s" % [Registry.label(Medium.REGISTRY, k), Registry.blurb(Medium.REGISTRY, k)]
 	opt.tooltip_text = tip
-	# The DIRECTOR is the truth for this one (it is a whole-app setting and the export
-	# render reads it), so the picker drives the setter rather than being bound directly -
-	# and the setter is what persists it, through Settings like every other one.
+	# The Director is the truth for this one (a whole-app setting the export render reads), so the
+	# picker drives the setter, which persists it through Settings.
 	opt.select(maxi(0, keys.find(Director.medium)))
 	opt.item_selected.connect(_pick)
 	row.add_child(opt)
 	return opt
 
 
-## THE FORMAT PICKED: set, and - where its own rows are not the ones standing - the note opened again around them.
+## The format picked: set, and where its own rows are not the ones standing, the note opened again around them.
 func _pick(i: int) -> void:
 	if i < 0 or i >= _keys.size():
 		return
@@ -323,9 +314,9 @@ func _pick(i: int) -> void:
 	noted.emit("Format: %s%s" % [label, " - takes effect on the next reading." if _reading else "."])
 
 
-## THE FRAME: landscape 16:9 or portrait 9:16 (next/notes.md step 10) - a property of the show, kept
-## beside the format. Only what the format can be shown in is offered (its row's `frames`, [method Medium.frames]); a
-## frame it cannot is grayed, saying so, and the show plays in landscape.
+## The frame: landscape 16:9 or portrait 9:16 (next/notes.md), a property of the show kept beside the
+## format. Only what the format can be shown in is offered (its row's `frames`, [method Medium.frames]);
+## a frame it cannot is grayed, saying so, and the show plays in landscape.
 func _frame_option() -> OptionButton:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -359,8 +350,8 @@ func _sync_frames() -> void:
 			% Registry.label(Medium.REGISTRY, Director.resolved_medium()))
 
 
-## THE HANDWRITING, the Notebook's and the Letter's (the Letter is written in the Notebook's hands, [LetterHand]): a
-## named hand, or Random.
+## The handwriting, the Notebook's and the Letter's (the Letter is written in the Notebook's hands,
+## [LetterHand]): a named hand, or Random.
 func _hand_option() -> OptionButton:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -394,21 +385,12 @@ func _hand_keys() -> Array:
 
 
 # --- films: real footage in a comic panel -------------------------------------
-#
-# THIS SITS UNDER THE FORMAT PICKER because it only means anything to the comic, and a
-# setting is easiest to understand next to the thing it qualifies.
-#
-# IT IS ALSO HIDDEN WHEN THE MEDIUM CANNOT USE IT, which reverses an earlier decision worth
-# recording rather than quietly overwriting. The argument for always showing it was that
-# someone building a library before switching over should not have to discover that the
-# controls exist somewhere else first. That is answered by WHERE it sits: the picker is the
-# row directly above, so the controls appear the moment the comic is chosen, in the place the
-# eye is already looking. The argument against it was the stronger one - "there are a number
-# of settings currently being displayed that ONLY work with the comic book medium" - because
-# a control that does nothing teaches nothing, and there were two of them.
+# The film library sits under the format picker because it only means anything to the comic, and it is
+# hidden when the medium cannot use it: a control that does nothing teaches nothing, and the picker is
+# the row directly above, so the controls appear where the eye already is.
 
-## The film library block: the list, an import button, and the frequency dial. Built into a
-## group of its own so the whole block can be shown or hidden as one (see a format's `uses`).
+## The film library block: the list, an import button and the frequency dial, in a group of its own so
+## the block is shown or hidden as one (see a format's `uses`).
 func _build_films() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
@@ -467,8 +449,7 @@ func _build_films() -> void:
 	_refresh_films()
 
 
-## Rebuild the list of imported clips. Cheap and total - the library is a handful of rows,
-## and a diff would be more code than the thing it saves.
+## Rebuild the list of imported clips (a handful of rows, so no diff).
 func _refresh_films() -> void:
 	if _film_list == null or not is_instance_valid(_film_list):
 		return
@@ -513,9 +494,8 @@ func _open_film_dialog() -> void:
 	_film_dialog = FileDialog.new()
 	_film_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_film_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	# In-window, never native: the portal dialog shows nothing at all on a Linux box
-	# without xdg-desktop-portal, which is the "I pressed it and nothing happened" report
-	# Masking's own importer already carries this note for.
+	# In-window, never native: the portal dialog shows nothing on a Linux box without
+	# xdg-desktop-portal (Masking's own importer carries the same note).
 	_film_dialog.use_native_dialog = false
 	_film_dialog.title = "Import a clip for the comic"
 	_film_dialog.filters = PackedStringArray(["*.mp4, *.mov, *.mkv, *.webm, *.avi, *.ogv ; Video"])
@@ -536,9 +516,8 @@ func _close_film_dialog() -> void:
 	_film_dialog = null
 
 
-## ADDING A CLIP IS INSTANT. There is no transcode to wait for - a clip is prepared a
-## window at a time, when something wants to play it (see Films.WINDOW), so this reads a
-## duration and writes a row.
+## Adding a clip is instant: there is no transcode, a clip is prepared a window at a time when something
+## wants to play it (see Films.WINDOW), so this reads a duration and writes a row.
 func _start_film_import(source: String) -> void:
 	var err := Films.add(source)
 	if not err.is_empty():
@@ -548,13 +527,11 @@ func _start_film_import(source: String) -> void:
 	_refresh_films()
 
 
-## Polled from _process. A window cut is a subprocess, so something with a frame has to
-## notice it finished; this is that, for as long as the card is up. [FilmScene] does
-## the same while a panel is live, which between them covers every moment one is awaited.
+## Polled from _process: a window cut is a subprocess, so something with a frame must notice it finished.
+## [FilmScene] does the same while a panel is live, which between them covers every moment one is awaited.
 func _pump_films() -> void:
 	Films.pump()
-	# The status line follows the cutting rather than a one-shot import, because "is it
-	# ready" is now a question with a running answer.
+	# The status line follows the cutting rather than a one-shot import.
 	if _film_status == null or not is_instance_valid(_film_status):
 		return
 	var cutting := 0

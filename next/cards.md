@@ -2,9 +2,7 @@
 
 A card reading nobody writes. A SHOW is a document; each seed of it is an EPISODE that agents plan,
 deal, paint and write one card at a time, and ghost reads it aloud in the Generative voice at a
-table. Built 2026-10-04 as the tarot mode; renamed Cards on 2026-10-06 (the user: "the intent is to
-later support any kind of card: tarot, baseball cards, MTG, Pokemon, flashcards... I want to use
-'Card' as the name"). Its first deck, and so far its only recipe, is the tarot: the prompts, the 78
+table. Built 2026-10-04 as the tarot mode; renamed Cards on 2026-10-06. Its first deck, and so far its only recipe, is the tarot: the prompts, the 78
 and their elements were the tarot's, and moving them into a show's guide was next/notes.md step 9 -
 reversals and jumpers, the last of them, are each episode's producer's since 2026-10-25 ("The
 staging", below). First show: `rift/tarot/truthful-tarot.md` ("Truthful Tarot" -
@@ -32,7 +30,7 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
    designs), Codex's from the catalog the CLI keeps (`~/.codex/models_cache.json`, listed entries
    only; Default is the author's config). Saved as `writer_model` / `painter_model`. The painter's
    model is the agent that asks for a picture; the picture is Codex's image tool's either way.
-   Beside each model, the REASONING EFFORT (2026-10-06), saved as `writer_effort` /
+   Beside each model, the REASONING EFFORT, saved as `writer_effort` /
    `painter_effort`: each CLI's own levels - Claude's `--effort` (low..max; Default = the author's
    Claude Code setting for the model), Codex's `model_reasoning_effort` (the model's catalog levels;
    Default = medium, low for designs; the painter low), Nova 2 Lite's extended thinking (low..high,
@@ -87,9 +85,7 @@ during its minutes of synthesis. The BODY is the BRIEF: what the show is, its re
 it verbatim. The framework (the prompts in code) knows what a tarot video is; the brief knows
 what THIS show is. One show document makes many episodes.
 
-**The deck is the show's**, and it is data (the user, 2026-10-04: "the 78 cards are constant... we
-should define the deck itself, then use true RNG"; and alternative decks with their own cards must
-work too). A `## Cards` section of the brief lists it, one card per list item - an optional
+**The deck is the show's**, and it is data. A `## Cards` section of the brief lists it, one card per list item - an optional
 numeral, the name, a colon, what it means (`- XVI. The Tower: ...`) - with `###` headings for
 suits or groups; an indented line or nested bullet says more about the card above it. The heading
 is `Cards` (or `The Cards`), never `Deck`: a section describing the deck's look in bullets would
@@ -101,8 +97,7 @@ seed, and a new episode's seed comes from the OS's cryptographic randomness
 (`CardDeck.true_seed`) and is kept, so the episode can be made again exactly. The draw writes the
 cards themselves into `draw.json`, so an episode keeps what it drew whatever the deck becomes.
 
-**A show that is not a tarot reading** (2026-10-07; the user: "somebody has a box of baseball
-cards, or Pokemon cards, and they just want to show them to people"). Two parts of the guide:
+**A show that is not a tarot reading**. Two parts of the guide:
 
 - A `## Format` (or `## The format`) section says what the show is. With one, no agent is told
   "tarot": the shared context says only that it is a show of cards at a table, and maps the
@@ -117,9 +112,7 @@ cards, or Pokemon cards, and they just want to show them to people"). Two parts 
   listed deck. The producer picks what is in the box, never what comes out; a box the size of the
   spread is refused. NO CHEATING holds: a reader is handed cards 1..K, never the rest of the box.
 
-**One set of rules for every show** (2026-10-08; the user: "there shouldn't be ANY tarot-gated rules
-or logic in the 'rules/' files ... for anything else that tarot might need - declare it in the markdown
-files"). The Format switch above is gone: every show gets the same shared context
+**One set of rules for every show**. The Format switch above is gone: every show gets the same shared context
 (`rules/table/show.yaml`, `context`), every producer names the deck's `kind` from the brief, and a look
 with no `kind` is a plain "deck". What was the tarot's moved into `rift/cards/true-tarot.md`: its 78
 (it always listed them; `CardDeck.standard` and its generated deck are gone, and
@@ -136,11 +129,7 @@ First such show: `rift/tarot/the-shoebox.md` (a collector opening a different bo
 every card invented). Gate: `cards_choose_check`. The producer now selects a physical card size;
 the face still uses the same shared frame system, with a text panel when it is printed on a card.
 
-**The staging** (2026-10-07; the user: a collector "might have a box... and just draw cards at
-random from it", cards in a box "stand vertical... like files in a filing cabinet", a card "tapped...
-turned sideways", "a waterfall... presenting several at once", cards "stacked vertically, like land in
-MTG", a baseball card "held in the center of the screen, alone", a box mixing printings whose "front
-and backs would be different"). Every choice is the producer's, in the plan, steered by the brief, and
+**The staging**. Every choice is the producer's, in the plan, steered by the brief, and
 every one is data the table reads:
 
 - `plan.staging.source` (`TableActions.SOURCES`): `deck` - shuffled in the middle, pushed aside, a
@@ -152,11 +141,7 @@ every one is data the table reads:
   (`TableMedium._build_file`, a MultiMesh per printing). A drawn card
   waits standing in the file and is pulled straight up past the rim. The reading opens with `open`
   instead of `shuffle`, and no first card waits for a push.
-- `plan.staging.reversals` (`CardTable.REVERSALS`) and `plan.staging.jumpers` (2026-10-25; the user:
-  the Episode card's Reversals and Jumpers switches "should be set by the agents during preparation for
-  an episode" - a tarot reading reads both, "elsewhere, we would almost never see reversals used", but "a
-  box full of Pokemon cards, or a pile of messy baseball cards" has a card come out upside down and turned
-  upright after it is pulled). `none` is the default; `read` - a card upside down lies and is read so (its
+- `plan.staging.reversals` (`CardTable.REVERSALS`) and `plan.staging.jumpers`. `none` is the default; `read` - a card upside down lies and is read so (its
   booklet's reversed meaning, the back symmetric under a half turn); `righted` - the seed's same cards
   come out upside down (waiting so on the deck, riding a riffle, standing in the box's file or on its
   piles: `TableBox._waits`) and are turned the right way up in the hand a beat after they are up
@@ -196,7 +181,7 @@ marks, the layouts over 40 seeds, the choreography, a deck show and a box show p
 backs), `table_actions_check` (the rests). `flip` has no producer field yet (a face-down card's reveal
 needs its own rule for the reader), and the dealer's tools do not take the new fields.
 
-**Shoebox branch** (2026-10-09): The show guide describes the desired presentation in ordinary
+**Shoebox branch**: The show guide describes the desired presentation in ordinary
 prose; the shared agent context directs each role to translate that prose using its own production
 rules and available choices. `staging.box_style: shoebox` builds a larger cardboard box with a lid;
 the box slides to the center, turns its long side across the table, and stays there while the lid
@@ -228,8 +213,7 @@ scrubbing or exporting. The shoebox, small cards, destinations and drift are exe
 | `say:close` | reader | everything, and every card's painting; how earlier episodes closed |
 | `script` | ghost | the passages and the marks between them |
 
-**The reader looks at the cards** (the user, 2026-10-04: "otherwise, the text and the images are
-sort of just disconnected"). A card's passage waits for that card's picture and is sent it -
+**The reader looks at the cards**. A card's passage waits for that card's picture and is sent it -
 upside down when the card came up reversed, as the viewer sees it - and is told to talk about
 what is actually painted; the designer's plan for the painting is left out, since the painter
 may have gone its own way. The close is sent the whole spread. Painting a card again therefore
@@ -237,8 +221,7 @@ rewrites its passage and every one after it. The writer takes pictures as stream
 blocks (`TextGen.Claude.compose`, at most 768 px on the long edge), and `prompt.txt` lists which
 pictures went with the words.
 
-**The cards move between passages, never inside one** (the user, 2026-10-05: "she's signaling the
-draw before it even happened"). A passage is spoken whole and the table acts in the silence after
+**The cards move between passages, never inside one**. A passage is spoken whole and the table acts in the silence after
 it, so the intro had been told to "end on the moment you stop shuffling to pull the first card" and
 wrote "And there. That's the first one." - with a hesitation, trying to time the draw itself - a
 beat before the card came out; a last card's "There. Beside the other two." came before it went
@@ -266,9 +249,7 @@ it - and choosing the agent matters more than sealing it.
 brainstorm pick) - no word lists - and the table samples its own layout from the seed (camera,
 deck position, spread layout, shuffle moves, props, light).
 
-**What the show has already made** (2026-10-05; the user: "without any context about what we
-have already made, the models don't know what they should avoid, or what new things they should
-try"). Told only to vary, the agents varied the SUBJECT and converged on the FORM. Eight episodes
+**What the show has already made**. Told only to vary, the agents varied the SUBJECT and converged on the FORM. Eight episodes
 in: seven decks were "painted as if it were [a craft object] from [a century]" with a human figure
 centered on nearly every card, seven of seven running bits were a status revised at each card
 with the third revision the punchline, every title ended on a bracketed twist, three readers said
@@ -306,11 +287,8 @@ is "a count that moves, a story told in installments, a claim that keeps being r
 year and hour dice, which producers have read literally (a period piece of that year; the reader
 stating that hour).
 
-**The card stock** (2026-10-05, the user: "most if not all generated tarot cards have a light tan
-color"): asked only for "card stock", the producer printed all four decks on cream. It stays the
-PRODUCER'S CHOICE (the user: "the AI will pick more complementary colors, rather than just a random
-roll" - a lightness die was tried and dropped the same day; its one episode got a muddy mauve-gray
-from outside its own palette): the prompt says what the stock is (the card's own color, round the
+**The card stock**: asked only for "card stock", the producer printed all four decks on cream. It stays the
+PRODUCER'S CHOICE: the prompt says what the stock is (the card's own color, round the
 picture and behind the name, and the booklet's), that decks are printed on every color, and to
 choose the one that sets off the paintings; each earlier episode in its history shows its stock,
 and "do not repeat" covers card stocks. `CardTable.sanitize_look` keeps the ink readable on
@@ -321,9 +299,7 @@ nothing like other cards, from other episodes"). It was removed, and a plan that
 `line`; the picture's window is one function (`CardFaces.window`). Gate: cards_check `_card_frame`
 (every standard name fits the band below the picture in every face).
 
-BORDERLESS (2026-10-14, the user: "a lot of instances in the real world where cards have no border at
-all, because the card artwork fills the entire card ... Be careful with how text is written onto such a
-card, since color will matter quite a lot there, for visibility"): `frame.style` `borderless`, the
+BORDERLESS: `frame.style` `borderless`, the
 producer's choice like any frame. The painting is the whole card, face and back, cut to its corners (no
 window shape, no ornament - `sanitize_look` drops them). The type is set on the painting
 (`CardFaces.type_boxes`): the numeral in a band at the top, the name at the foot, a front's details in a
@@ -356,9 +332,7 @@ Static camera from the reader's chair (locked; the Tarot panel has no Camera dia
 the episode's `surface`, its `backdrop` out of focus beyond the far edge. The lamp is low and to
 one side, so things throw shadows you can see.
 
-THE SET TABLE (2026-10-05; the user: "the lack of objects upon the table makes the whole scene
-rather boring... most tarot readers are very intentional about how they setup their
-workspaces"). A step of its own, `table` (`table.json`): the SET DRESSER (`TablePrompts.set_dresser`,
+THE SET TABLE. A step of its own, `table` (`table.json`): the SET DRESSER (`TablePrompts.set_dresser`,
 best tier) sets the reader's table from the plan, LOOKING AT the cloth (it waits for it; a new
 cloth keeps the table), knowing no card. It invents the things of the episode's world - a
 field station's hurricane candle, rain gauge and calabash of rainwater; a harbor's votive stone
@@ -376,13 +350,9 @@ holds only short things). The reply is kept as written and made safe at every bu
 flames capped at `MAX_CANDLES`). Exactly the look's candle count is asked for; before a table is
 set (or for an older episode) the look's candles stand alone (`CardTable.default_table`). The
 reader is told only that the reader's own things stand there - no passage depends on them, so
-setting the table again keeps the reading. NO IMAGE-TO-3D: the user ruled it out on 2026-10-05
-("way too slow, and my GPU is in constant use... I'm not going to expect users to load giant
-models") - no Piper-sized model exists (TripoSR and SF3D are 1.6+ GB and want a GPU). Claude
-writing the geometry was the user's idea.
+setting the table again keeps the reading. NO IMAGE-TO-3D: too slow, GPU-bound and too large to ship (TripoSR and SF3D are 1.6+ GB and want a GPU); Claude writes the geometry instead.
 
-THE SET DRESSER SEES WHAT IT BUILDS (2026-10-05; the user, on giving the agents a loop: "offer
-the agents the ability to make something, then view the model, then make revisions"). Every agent
+THE SET DRESSER SEES WHAT IT BUILDS. Every agent
 had been one prompt in and one reply out - `num_turns: 1` on every job of the last episode - so the
 table was ~5,000 tokens of geometry its author never saw, and a "CHECK each thing before you
 answer" list it had nothing to check against: the squid of balls and rods, stones perched on
@@ -411,9 +381,7 @@ bare rod it had named a dried grass bundle, "perfect". The pictures showed both 
 a tool job loads no settings instead (`--setting-sources ""`), and was measured to see no
 CLAUDE.md, memory or skills. Gates `tests/agents/agent_tools_check.gd`, `tests/table_show/set_dresser_tools_check.gd`.
 
-THE BLUEPRINT (2026-10-18; the user: "placement still feels awfully strange ... a blueprint-based system
-might work better ... do the planning and desired placements up-front, then verify with screenshots at
-the end"). A thing used to name one of six zones (`CardTable.ZONES`), and `TableThings.stand` hunted that
+THE BLUEPRINT. A thing used to name one of six zones (`CardTable.ZONES`), and `TableThings.stand` hunted that
 zone for room - scored toward the zone's middle and refusing any spot in front of another group IN THE
 PICTURE. The set dresser could only rename zones and look where the hunt put things: on True Tarot #15853
 it moved a felt pad to lie under wherever the hunt had dropped its journal, and a glass of grass was LEFT
@@ -450,11 +418,7 @@ Gates `tests/table/written_place_check.gd` (boot probe), `tests/table_show/set_d
 `set_dresser_look_probe` (an old table is written where its hunt stood it, then drawn and set, numbered).
 OPEN: things stacked on things (a candle on a book) are still one thing's parts; a real run with an agent.
 
-THE AIR (2026-10-05; the user: "some particle and/or volumetric effects could go a long way... gentle
-fog/smoke rolling in the background region (with less-severe fog in the foreground, perhaps even upon
-the table)... when a card is ejected from the deck - a burst of colorful sparks... when a card twirls...
-fireflies or pixies (just simple spots of color) that fly around, leaving the scene, coming back...
-generic primitives... pixies flying around behind the fog, with the color effects bleeding-through").
+THE AIR.
 The set dresser writes `effects` beside its things; `Effects` builds them:
 - FOG is Godot's own volumetric fog, a FogVolume per fog in one of `CardTable.AIR`'s regions ("beyond
   the table" - a bank from mid-table back, thickening to the far edge; "over the cloth"; "low on the
@@ -473,16 +437,12 @@ The set dresser writes `effects` beside its things; `Effects` builds them:
   falling away round it as a gentle dome - so a mote is lifted over what stands, never through it. Lit
   motes carry a tiny OmniLight, so the fog glows in their color round them; the light is nearly all the
   fog's (a surface sees 1/15), and a lit mote keeps 4 cm off what it flies over - at full strength a
-  pixie skimming the cloth bloomed into a red blot. FLIES (2026-10-06) are dark specks on a planned
+  pixie skimming the cloth bloomed into a red blot. FLIES are dark specks on a planned
   flight: zips with sharp turns, hovers of a fraction of a second, now and then a short drift, out of
-  the picture and back in elsewhere (the user: "flies are almost never still... a fly zips into a
-  scene, hovers for a fraction of a second, then zips somewhere else"); a zip smears as a bright
-  day's fast shutter would, a short dark dash. EVERY MOTE CAN FLY AWAY FROM THE CAMERA (the user:
-  "a fly COULD fade, if it moved away from the camera and flew far enough away"; "a pixie could fly
-  away from the camera too"): two in five leavings are off into the room past the table - with the
+  the picture and back in elsewhere; a zip smears as a bright
+  day's fast shutter would, a short dark dash. EVERY MOTE CAN FLY AWAY FROM THE CAMERA: two in five leavings are off into the room past the table - with the
   camera looking down at the cloth, up the picture and shrinking - and a fly, a dark speck, also
-  blurs as the room is blurred, so it fades out of sight; glows shrink to a point and the fog takes them. Each look's size and brightness stay in its own range (the user: pixies
-  "quite small generally", adjustable "within constraints"): a pixie 3 mm, 1.5-8.
+  blurs as the room is blurred, so it fades out of sight; glows shrink to a point and the fog takes them. Each look's size and brightness stay in its own range: a pixie 3 mm, 1.5-8.
 - BURSTS - sparks, glitter, embers, flames, smoke, stars - mark a MOMENT (`CardTable.MOMENTS`:
   shuffle, jumper, reveal, pirouette, lay, close), read off the schedule by `TableMedium._air_moments`
   with the emitter's path from the table's own poses (the jumper's flight, the held card twirling -
@@ -494,12 +454,7 @@ four times (a burst just after its staged moment, fog and motes 3 s apart). The 
 brief's "The table and its air". Gates `tests/table/effects_check.gd`, `tests/table_show/set_dresser_tools_check.gd`;
 look with `tests/table/air_look_probe.gd` on a COPY of an episode.
 
-THE TABLE ITSELF (2026-10-06; the user: "right now, the table is just a flat rectangular surface, with
-a texture crudely drawn onto it... give the agents the proper tools and instructions to construct their
-own table, with optional tapestries, tablecloths, runners, etc. And of course, item placement changes a
-bit as well, depending upon the geometry of the table"; then "the table would really benefit from some
-depth mapping... normal mapping, tesselation, whatever - make such things available to the agents'
-tooling"). The set dresser now writes `top` and `layers` beside its things (`Tables`, `src/table/tables.gd`):
+THE TABLE ITSELF. The set dresser now writes `top` and `layers` beside its things (`Tables`, `src/table/tables.gd`):
 - THE TOP: rect (with rounded corners), round, oval or a regular polygon, a scalloped rim if it likes;
   1.5-9 cm thick; its edge cut to a profile (square, eased, bevel, bullnose, ogee, bead) as real
   geometry - the far edge is all of the table's side the camera sees; made of one of the table's
@@ -553,8 +508,7 @@ tooling"). The set dresser now writes `top` and `layers` beside its things (`Tab
 Gate `tests/table/tables_check.gd`; look with `set_dresser_look_probe --spec` (a spec with `top`/`layers` is
 put first and seen from above).
 
-THE PAINTING'S DEPTH, PAINTED (2026-10-07; the user: "the painter-made height map, especially, sounds
-like a novel idea - if you think it can truly work"). A step of its own, `image:height` (`height.png`),
+THE PAINTING'S DEPTH, PAINTED. A step of its own, `image:height` (`height.png`),
 listed only once the table lays the painting where its depth is read - as a layer or as the top, its
 relief `painting` or its own (`TableEpisode.wants_height`, `Tables.wants_height`); it waits for the
 table and is made FROM the painting (a new cloth clears it, a new table does not). The painter is
@@ -576,12 +530,7 @@ line might), and other painters (Bedrock's take a reference as a style, and will
 Probes take `--root <dir>` now (`episode_probe`, `set_dresser_look_probe`) to work on a COPY of an
 episode.
 
-THE LIGHT (2026-10-07; the user: "we sometimes have indoor scenes, and we sometimes have outdoor
-scenes... it would be nice to bring the agents into this loop, giving them a way to control both
-lighting and shadow"; a bright day's strong light, dusk with torches round the perimeter out of the
-camera's view, a window hidden to one side, clouds - sparse and moving, or heavy with breaks the light
-peeks through - and "shadows from birds... a simple, fast shadow that crosses the scene"; "I would want
-to give the agents proper tooling, to create these vibes on its own"). The plans had described it all
+THE LIGHT. The plans had described it all
 along - "bright overhead noon sun diffused through a white canvas awning", "warm afternoon sunlight
 slanting low through tall windows from one side", "cool early-morning daylight from the open sky, with
 no flame on the table" - and every table was drawn alike: a dark room, a spot lamp, candles out of shot.
@@ -622,10 +571,7 @@ The set dresser now writes `light` beside its things (`Lights`, `src/table/light
   it (`Lights.lamp_place`, `CardTable.in_shot`), flickering its own way as a pure function of show time
   (a torch's dancing light and shadows, a sign's stutters, a screen's cuts, a strike's two to four
   flickers lighting the room).
-- SHADOWS OUT OF THE SHOT (`shadows`, at most 4; the user, the same night: "a beam or a pillar might cast
-  a permanent shadow over the table... a hanging rope might be gently swaying in the wind - casting a
-  shadow that truly would be in constant motion (or better yet, nonlinear periodic motion)... a
-  chandelier might cast shadows"): things the camera never sees, built of SILHOUETTES in centimeters up
+- SHADOWS OUT OF THE SHOT (`shadows`, at most 4): things the camera never sees, built of SILHOUETTES in centimeters up
   to six meters (`Lights.CASTER_SHAPES`: box, cylinder, ball, ring, tube along a path, sheet, grille;
   grouped two deep and copied round the upright or along a step - a chandelier's six arms, a row of roof
   beams), shadow-only on `Lights.CASTER_LAYER`, which every light that casts casts with. NOT [Props]:
@@ -676,11 +622,7 @@ cloth, a bell rope swinging, a chandelier's spokes, laundry rippling and a fan t
 `tests/table/lights_check.gd`, `tests/table/table_light_check.gd` (boot),
 `tests/table/light_screen_check.gd` (GPU), set_dresser_tools_check `_light`, cards_check (archive, the table step).
 
-SHADE, WIND AND WHAT IT CARRIES (2026-10-08; the user: "a diffuse shadow, which is softer and blurrier.
-Today, it sort of feels like most shadows more or less are of the same 'quality'"; "a table under a tree,
-where the shadows cast upon the table would look like those cast through foliage, gently moving in the
-wind"; "petals could fall from that tree ... either blowing through the scene, or settling on the table,
-or getting carried-off from the table again after another gust"):
+SHADE, WIND AND WHAT IT CARRIES:
 - A SOFT SCREEN (`soft` 0-1 on anything the sun falls through; leaves 0.5, fronds 0.4, branches 0.35 when
   not said, the rest crisp): the sun is cast `Lights.SOFT_SUNS` (3) times from the one place, each a third
   of its light, each with a screen layer of its own (`SCREEN_LAYERS`, `SCREEN_MASK`); a soft screen is
@@ -705,9 +647,7 @@ or getting carried-off from the table again after another gust"):
   the shader and `Lights._pattern`), swings what hangs (the swing's push is the table's wind when it has
   one), snaps what flutters, and carries what drifts. A table that wrote no wind keeps its old light;
   what drifts there falls through a faint breath (`Winds.STILL`).
-- THE WIND REACHES EVERYTHING IN THE AIR (2026-10-08; the user: "you might expect wind to effect the
-  flame from candles, causing flickering (which would also chain into shadows moving) ... when there are
-  little flying pixies/particles, you would expect wind to make those move"). ONLY A WRITTEN WIND moves
+- THE WIND REACHES EVERYTHING IN THE AIR. ONLY A WRITTEN WIND moves
   them (`Winds.blows`): a room with its windows shut has still air, and STILL moves no flame or mote. The
   air is turbulent - EDDIES of 50 and 8 cm carried past on it, churning by 0.3 of its speed
   (`Winds.eddy`, `air_at`). A FLAME leans as tan(tilt) = draft / draw, its draw sqrt(g x its height) (a
@@ -728,16 +668,14 @@ or getting carried-off from the table again after another gust"):
   gust; the cards themselves stay put (a 2 g card lifts at about 2 m/s - the reading must stay readable).
 - WHAT DRIFTS (`effects` kind `drift`; `src/table/drifts.gd`, `Drifts`, `shaders/air_drift.gdshader`): petals,
   rose petals, leaves, green leaves, seeds, spinners, feathers - falling from above or blown in from the
-  wind's side. RARE (2026-10-08, the user: a tree "coming down all at once"; "it takes days or even weeks
-  for all of the foliage to fall"): `every` seconds between one coming loose in the breeze and the next
+  wind's side. RARE: `every` seconds between one coming loose in the breeze and the next
   (60 when left out, 6-600), `shake` how many a gust at its strongest shakes loose (1, 0-6); `settle`,
   `grip` (the gust that lifts one lying), `lying` at the start. No whole flowers ("blossoms" is gone:
   "whole flowers rarely, if ever, fall"). Real geometry - a cupped quad cut to its outline, lit, glowing
   through (`BACKLIGHT`), casting, blurred by the lens. Each piece lives a planned life on dice of its
   own: falls with the air in one of its look's WAYS (`ways`: flat, fluttering as a falling leaf does,
   tumbling over and over with a glide, twirling round a small circle tipped in to it), and a gust turns
-  any of them over, harder the harder it blows (`Winds.gust_run`; the user saw them "fly like
-  frisbies"); turns flat as it lands, lies trembling in the breeze, and each gust past its grip skids it
+  any of them over, harder the harder it blows (`Winds.gust_run`); turns flat as it lands, lies trembling in the breeze, and each gust past its grip skids it
   across the cloth (short of what stands there) or, past the edge, carries it off - lifted, turning
   over, then sinking once clear of the table (and of a cloth hanging over it). A fall that would pass
   through a thing or the table's side is thrown again from elsewhere. Lives are filed in ten-second bins
@@ -762,9 +700,7 @@ wax glows with the flicker instead (`flame` uniform). A reflection probe catches
 it is set, and only the things reflect it (`reflection_mask`): metal with nothing to reflect
 read as paint. Look at a description alone with `tests/table/props_look_probe.gd`.
 
-STONES (2026-10-05; the user: "a lot of tarot readers often have stones of all sizes: sometimes
-large ones, though often a handful of small ones of various colors and properties", and "stones do
-not always need to be in a dish. A lot of people would just arrange them on a table"). A `geode`
+STONES. A `geode`
 shape: a rough half rock, its hollow lined with points growing in (its rock plain stone unless
 `base`). STREWN COPIES: `scatter`ed ones never touch (a crowded handful spreads wider rather than
 pass through itself - three beach stones in a shell had crossed 94% of the time) and a `heap`
@@ -786,9 +722,7 @@ it is guarded now and called on every pixel - a derivative in a branch some pixe
 undefined. A flag written "yes" crashed the sanitizer (`Props._flag`). The set dresser is told
 that many readers keep stones, set on the cloth or heaped in a dish. Gate: cards_check `_stones`.
 
-CANDLES OF EVERY FORM, AND GROUPS (2026-10-05; the user: "I would prefer if the model had a lot of
-control, so that it could explore novel objects from our well-defined interfaces... short, fat ones
-with 3 wicks in a triangle. Or a candelabra. Or even just tiny tea light candles"). The model still
+CANDLES OF EVERY FORM, AND GROUPS. The model still
 writes DATA, never code - its expression is in how it uses the spec. WICKS as data: `wicks` 2-6 set
 round a candle's top (three make a triangle) or `wicks` [[x, z], ...] placed, each standing on the
 melted pool as deep as the pool is there (a single wick sits where it always did). ONE LIGHT A LIT
@@ -807,10 +741,7 @@ up with `taper`, `bevel` and a `wall` that makes it a tray. Gate: cards_check `_
 table_place_check counts lights and flames apart (the pair of pillars is one light, two flames). A
 tall candelabra fits only where the frame has headroom - the set dresser is told each zone's.
 
-FREE FORM: LOFTS, COILS, CORNERS AND WARPS (2026-10-07; the user: "do we literally allow them to
-draw abstract geometry, in order to produce truly novel things?", "if we have a pipe shape - do agents
-have the ability to create bends/kinks in that pipe?", and "I've seen a teapot that looked a bit
-bulbous and strange"). The agents already drew their own curves - a lathe's profile, a tube's path, an
+FREE FORM: LOFTS, COILS, CORNERS AND WARPS. The agents already drew their own curves - a lathe's profile, a tube's path, an
 extrude's and a sheet's outline - so the answer is more of that, never raw vertices (typed by hand
 they come back inside out and holed, and skip the foot and the heaps every built shape feeds).
 THE TEAPOT (episode 882) was a `smooth` lathe: a uniform Catmull-Rom through every point sagged its
@@ -843,8 +774,7 @@ read as a stack). A lit thing stands only behind the middle (a candle in front o
 became the key and blew out the held card) and by dark cloth. A low thing may lie nearer the
 reader. A thing with no room is tried smaller, then left off (logged).
 
-NOTHING PASSES THROUGH WHAT STANDS (the user: "objects should probably have collision, and so
-should the cards"): each thing's FOOT - its outline up to `Props.FOOT_H` - is an obstacle in the
+NOTHING PASSES THROUGH WHAT STANDS: each thing's FOOT - its outline up to `Props.FOOT_H` - is an obstacle in the
 planned wash. Every card moves from where it was to where the step puts it a few millimeters at a
 time and is pushed back out of any foot it runs into, away from its middle (`_card_clear`,
 `_push_out` by separating axes along that direction), so it slides along it and never jumps
@@ -856,27 +786,22 @@ CANDLES TOGETHER LIGHT THE CLOTH TOGETHER: the HEAT cap is on the cloth's hottes
 the flames at once (`_heat_field` per flame, summed; every flame reaching the hottest cell dimmed).
 Two tapers side by side, each at its own limit, burned a pale linen white through the bloom.
 
-PAINTED OBJECTS WERE TRIED AND TAKEN OFF (2026-10-04): a photograph of one thing cut out of its
+PAINTED OBJECTS WERE TRIED AND TAKEN OFF: a photograph of one thing cut out of its
 background brings its own camera, light and grade, and a flat card can neither take the
 candlelight nor cast a shadow ("these 2D objects look awful").
 
-FLAMES FLICKER APART (the user: "the candles flicker at exactly the same rate, which is wrong").
+FLAMES FLICKER APART.
 Every flame had one tempo and one swing, so they pulsed together. Each now has its own tempo,
 steadiness and drafts: mostly a steady burn, and now and then a draft gutters it for a second or
 two - a pure function of show time, so a render and a scrub see the same flame. The light leans
-with its flame, so the shadows breathe. ROOM CANDLES OUT OF SHOT (the user's idea, "backlighting
-behind the camera, which also flickers"): two or three shadowless, flickering lights behind the
+with its flame, so the shadows breathe. ROOM CANDLES OUT OF SHOT: two or three shadowless, flickering lights behind the
 camera and off to the sides - a warm fill on the cloth and on the card held up to the lens.
 Gate: `tests/table/table_place_check.gd`.
 
-EVERY LIGHT THROWS ITS OWN SHADOW (2026-10-05; the user, on a frame where "the rock casts a
-shadow that is crescent-moon shaped": "most scenes have multiple light sources, and thus should
-probably cast multiple shadows"). Every candle and the lamp cast, so a thing has a shadow for each
+EVERY LIGHT THROWS ITS OWN SHADOW. Every candle and the lamp cast, so a thing has a shadow for each
 light near it, each turned from its own; where two fall together the shadow is darker. The KEY -
 the candle nearest the middle that its cloth can take, else the lamp - is still the brightest, so
-the deck's long shadow toward the reader leads. (Before, one key light cast alone - the user had
-found every light casting strange: "the stack of cards casts no shadow... two independent shadows
-for each side".) THE CRESCENTS WERE THE LAMP'S BIASES: Godot's defaults are made for rooms, and at
+the deck's long shadow toward the reader leads. (Before, one key light cast alone.) THE CRESCENTS WERE THE LAMP'S BIASES: Godot's defaults are made for rooms, and at
 the lamp's distance they came to millimeters - more than a bowl's floor stands off the cloth - so
 a bowl cast only its rim's ring, stones nothing, a geode a shadow standing off its foot; now
 `shadow_bias` 0.005 / `shadow_normal_bias` 0.15 (the candles' were already 0.02 / 0.4). A
@@ -893,8 +818,7 @@ on an all-pale cloth the lamp is. THE CLOTH HAS RELIEF:
 its picture's luminance is its height, turned into a normal map natively
 (`Image.bump_map_to_normal_map`, `RELIEF`), so the low light rakes the weave; the table wood too.
 
-THE READER MARKS ITS DELIVERY (the user: "a real tarot reader will often speed up, or slow
-down... get excited, or become serious"): `<!-- delivery: quicker, brighter -->` on its own line,
+THE READER MARKS ITS DELIVERY: `<!-- delivery: quicker, brighter -->` on its own line,
 for the rest of that paragraph, and `<!-- hesitation -->` for a real stop. NOT THE TONE PRESETS -
 the first cut leaned toward the panel's Tone presets and was rejected before it was heard: "they
 all sound wildly different... like a totally different speaker... we need subtle inflection
@@ -906,9 +830,7 @@ sentence goes half way from the last one's delivery (`_ease_leans`), in and back
 takes `lean_semis` / `lean_effort` in `_discourse_plan` (`hosts/voice/test_lean.py`). A script mark
 like any other (`ScriptMarks` "delivery"), so a Generative chapter can carry it too.
 
-MORE THAN ONE VOICE (2026-10-05; the user added a Familiar to Truthful Tarot's voices: "like that
-devil or angel on your shoulder: mostly silent, but sometimes they'll make a quip about something,
-which the narrator could respond to"). Who a show's other voices are and when they speak is the
+MORE THAN ONE VOICE. Who a show's other voices are and when they speak is the
 BRIEF's (Truthful Tarot's "## The familiar"; its old name for the reader's sincere mode, "the
 familiar", became "the spell"). The framework only hands lines over: the show's voices are its
 document's `voices:` (`CardsEditor._spec` -> `voices`), the reader prompt names the others and
@@ -926,9 +848,7 @@ through purple to blue, the third could be green to yellow"): subtitle words car
 `Subtitles.voice_hue` gives the first voice to speak the whole rainbow and each after it a band of its
 own (`VOICE_BANDS`), swept there and back by the same flowing phase - the book's highlight too.
 
-THE ROOM IS SEEN FROM THE READER'S EYE (2026-10-05; the user: "the backgrounds are 2D, so when
-the background is just a wall or a window, it's very close to the table and the angles feel
-wrong... if it's a distant landscape, the backgrounds look better"). The camera looks down 34-42
+THE ROOM IS SEEN FROM THE READER'S EYE. The camera looks down 34-42
 degrees through a 42-degree lens, so the frame's top is already 13-21 degrees below eye level: all it
 sees past the table is a thin band BELOW the horizon - in a real room, the floor and the feet of
 things. The picture had been a level photograph laid square to the tilted camera with its horizon on
@@ -955,17 +875,14 @@ to an eighth and back, the strip the camera sees past the table was blocks). The
 light's quadrant whole, given back when the table leaves it. The camera is locked off; its dial is
 gone from the panel.
 
-THE SHUFFLE IS RUNS WITH SPARSE ACTIVITY (the user: "nonlinear behaviors with sparse
-activations"): several riffles, a string of cuts, a few overhand passes - one kind at one tempo -
+THE SHUFFLE IS RUNS WITH SPARSE ACTIVITY: several riffles, a string of cuts, a few overhand passes - one kind at one tempo -
 then nothing for a while (median ~3 s, now and then a long linger), in the MIDDLE of the table;
 before the first card the deck is squared and pushed to its side (`CardReading.PUSH`, which the
 first draw's rest includes). A wash is rare, once at most, and a planned simulation: the deck
 flattened under the palm and spread WIDE (some cards flung well out), two flat palms working it for
 most of half a minute, then six to eight sweeps round the pile over ~7 s, each taking a few cards -
 a few missed and fetched by a later sweep - landing squared on the pile, so the end is a light tidy,
-never the whole spread arriving at once. THE MIXING IS MOST OF IT (the user, 2026-10-05: "BARELY
-shuffled at all. 3 or 4 cards might shift slightly... no changing of z-order... maybe 5 or 10
-seconds long"): it had been 5 s of two hands drifting through less than one slow loop. The
+never the whole spread arriving at once. THE MIXING IS MOST OF IT: it had been 5 s of two hands drifting through less than one slow loop. The
 ORDER is decided when two cards meet - the one sliding in on top - and held while they touch, so
 it changes all through the wash and never through a card. CARDS REST ON ONE ANOTHER (feedback
 0007: "many of these cards are lifted off of the table itself... they cannot rest upon each other
@@ -982,9 +899,7 @@ in. Exact against a brute-force hull on every card the gate judges; the plan's f
 on two cards in three. A wash the first card would cut short is replanned to fit, the same wash up
 to its own gather.
 
-CALM, AND NEVER THROUGH A CARD (2026-10-06, the user: the cards "'repel' each other in a way that
-makes them almost bouncy - they are very unstable and they tilt far too much... the cards often
-clip through each other... cards moving THROUGH each other, which should be impossible"). Measured
+CALM, AND NEVER THROUGH A CARD. Measured
 first, posed frame by frame: tilts to 24 degrees on heaps 27 mm tall, and some 1700 card-through-card
 frames a wash - most of them as the deck spread and as the pile gathered, where only fully spread
 cards were rested and the rest (the deck, the pile) were no support at all, so a card slid off the
@@ -1003,9 +918,7 @@ leans); and a meeting is a NUDGE (`WASH_KNOCK` 0.16, at the point where they tou
 crossing, no card dipping into another or the cloth, no swap, over every frame; mixing cards tip
 under 2 degrees 99% of the time, 6 at most.
 
-THROWN OUT OF THE SPREAD (the user, the same day: "when a lot of repulsion is applied, a card can get
-ejected, it can land face-up, and the reader can choose to draw that card... I would expect some
-ejections to land face-down, and thus NOT be drawn"): a meeting faster than `EJECT_SPEED` may throw
+THROWN OUT OF THE SPREAD: a meeting faster than `EJECT_SPEED` may throw
 the card run into - surer the harder - a hop along the blow onto the cloth and wholly in the picture,
 its way clear of what stands (`_eject`, `_flight_xf`; in the air it rides up over anything its edge
 would dip into, `_flight_clear`). About one a wash, two at most, none late in the mixing, and FACE
@@ -1018,11 +931,7 @@ over it, and it lies there until it is picked up and shown as from a riffle; the
 the rest, one card short (`_wash_jump`, `_wash_jump_xf`). Half the episodes whose first card is a
 jumper hold their wash back for it (`_jumper_wash`: it begins `JUMPER_WASH_LEAD` before the jumper is
 reckoned to come, the script's words at a steady pace, and runs `JUMPER_WASH_SLACK` past it); the rest
-riffle as before - and either way, a wash under way when the jumper comes throws it. THE HANDS SWEEP (the user, 2026-10-05:
-"cards barely move... the movements are very small, very localized... It would be much more common
-for cards to sweep back, and forth, back, and forth in various directions, crossing large regions of
-the table, creating chaos along their path. Today, these sort of just shift in tiny little
-circles"): each palm had worked a 6 cm circle and the cards under it went round it and back - 4 cm
+riffle as before - and either way, a wash under way when the jumper comes throws it. THE HANDS SWEEP: each palm had worked a 6 cm circle and the cards under it went round it and back - 4 cm
 the longest straight run, 11 cm the farthest a card got - and the gate, which measured PATH length,
 passed it. Now a palm comes down where the cards are and mostly SCRUBS: passes of 20-40 cm back and
 forth across the spread, its line turning and drifting between them; or it swirls wide, or fetches
@@ -1040,24 +949,20 @@ circles made up inside the gate fail them too). A draw: square, slide, flip, up 
 RIGHT (shown, never read); both turn a little on their axes, and the card is now and then turned
 to look at its back - either way round, its back held anywhere from half a second to five (most
 looks short; a fixed-feeling 1.1-1.8 s was "the exact same length, always"), and about one look in
-three a PIROUETTE (the user's, 2026-10-05: "the kind of trick a person might do in their own hands
-to show off"): over to the back, held a few seconds, then on round the same way, five half turns
+three a PIROUETTE: over to the back, held a few seconds, then on round the same way, five half turns
 more, to face on again three whole turns from where it began (`TableMedium._look_of`,
 `_look_angle`; gate: table_wash_check, two-sided on the holds; `table_look_probe --looks 1` says
 when they happen). A lay: page out, card down into the spread. A JUMPER FLIES OUT OF A SHUFFLE
-(the user, 2026-10-05: "that jump should probably happen during a shuffle - not when the cards are
-just sitting there on the table, doing nothing"): it had left the deck the moment the shuffle
+: it had left the deck the moment the shuffle
 stopped, often after seconds of the deck lying still. Its action now opens with one more riffle,
 and the card rides the top of a half and springs off it while the halves fall (`JUMP_RIFFLE`,
 `_jump_ride`); the deck goes aside once that riffle is done. The voice's rest for it grew to 5.0 s.
 Out of a wash under way, a blow throws it instead (THROWN OUT OF THE SPREAD, above).
-The channel's name opens it, and nothing closes it but the light: THE OUTRO (the user,
-2026-10-05: "a simple fade to black, after the voice is done speaking... not display the title
-again at the end") - a beat after the last word the table fades to black, reaching it exactly as
+The channel's name opens it, and nothing closes it but the light: THE OUTRO - a beat after the last word the table fades to black, reaching it exactly as
 the outro's silence runs out (`_end_fade`: the take's own tail in a render, the Director's outro
 live), a function of show time like the rest.
 
-**Foil** (the user's idea, 2026-10-04): each painting's brightest, most colorful pixels - keyed
+**Foil**: each painting's brightest, most colorful pixels - keyed
 per picture from its own luminance percentiles, plus anything near the frame's accent color -
 print as foil: metallic, a slow breath, a glint sweeping across now and then; the scene's bloom
 lets it bleed. The look's `foil` (0-1) says how much.
@@ -1069,8 +974,7 @@ draw the same frames.
 
 Built 2026-10-06 (user: "upload them unlisted... an optional flag, selected when we press the
 export button"; "have Ghost Notes prompt for a credentials file... and cache those credentials for
-every future login"). `src/export/youtube.gd` is generic. MOVED TO A COMPONENT 2026-10-07 (the user: "The
-placement of the YouTube upload button is not in a good spot"): "+" on any note's panel attaches
+every future login"). `src/export/youtube.gd` is generic. MOVED TO A COMPONENT 2026-10-07: "+" on any note's panel attaches
 YouTube, and `YouTubeCard` (block `youtube:`) holds the choice; every panel's `upload_meta` is the
 card's title, visibility and playlist over the mode's own part (`_upload_base`: here the episode's
 description, chapters, tags, thumbnail moment and record). The export menu has no YouTube items.
@@ -1095,7 +999,7 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   of the channel's, loaded with ↻ - listing them and adding a video take the `youtube` scope, so
   the first ↻ signs in again for it (`YouTube.granted` reads the scopes kept with the token). A
   playlist YouTube refuses leaves the video up, and the status line says why.
-- **The producer writes for that line** (2026-10-11): asked for "the video's title, as it appears on
+- **The producer writes for that line**: asked for "the video's title, as it appears on
   YouTube", it wrote a whole one ("Yes Or No Tarot: Ask As Many Times As It Takes", which went up
   after "True Tarot: " - two colons, "Tarot" twice). It is now shown the template with the show's
   name in it and its own part marked (`YouTube.title_shape`, `CardsEditor._uploads_as`, the
@@ -1106,20 +1010,18 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   project's test users gets a dead-end page that never comes back to Ghost Notes, so the dialog
   names it; add the account under Google Auth Platform > Audience > Test users, then "Open the page
   again" finishes the same sign-in. A newer sign-in replaces one still waiting.
-- **The panel's fields** (2026-10-06) show the SHOW'S GLOBAL VALUES at once, New episode included:
+- **The panel's fields** show the SHOW'S GLOBAL VALUES at once, New episode included:
   the description and tags are the show's; the title is one value the picked episode overwrites
   when it has a plan (as the seed is) - an edit goes into its plan too. A show with no description
   or tags yet takes the picked episode's once (the producer writes both with every plan). THE TAGS
-  ARE THE SHOW'S (the user: "I want global tags, not per-episode ones"):
+  ARE THE SHOW'S:
   the document's own top-level `tags:` line, the North Star chapters' format, edited as CHIPS like
   YouTube Studio's - × removes one, a comma (or Enter, or a pasted "a, b, c") in the box at the end
   makes chips, Backspace in the empty box removes the last, a chip past 500 characters is dimmed.
   The block keeps `episode_title` and `description` - one of each, NOTHING per episode ("I just
   don't want to store a bunch of episode-specific logic in the frontmatter"); a per-seed record map
   was tried the same day and removed.
-- **The table seen first** (2026-11-07, the user: "The speaking starts IMMEDIATELY after the title screen disappears. That doesn't
-  give the viewer enough time to orient themselves ... That should probably be a general principle across most modes, after the
-  title/intro sequence"): the voice rests a settle (`Openings.SETTLE`, 3 s) after the intro before anything is said or done
+- **The table seen first**: the voice rests a settle (`Openings.SETTLE`, 3 s) after the intro before anything is said or done
   (`CardReading.parse` opens its speakable on it), and the name goes and the focus pulls that long before the opening verb
   (`TableMedium._intro_end`) - the table sharp and at rest, then the shuffle a beat before the first word. A cardless show's `begin`
   had held the voice 0.4 s, so it spoke as the name went. The same settle at the desk (`DeskScript.parse`, `DeskMedium._blank`) and the
@@ -1127,9 +1029,7 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   no opening has its picture up that long before the first sound (`Director._bookend_fade`).
 - **The title screen**: the show's name, and under it the BYLINE - the document's `byline:` ("with
   Pen & Ink"), a field on the document card right under Title. REBUILT 2026-10-06 for the thumbnail
-  (the user: the text "too small in some layouts on mobile", "always the same color... camouflaged",
-  and the table showing "too much detail" - "an extremely strong blur, such that nothing is really
-  visible in the scene except for the colors"):
+ :
   - THE TYPE (`CardTable.title_layout`): the name as large as a line of it fits across 86% of the
     frame, at most 15% of its height (Cinzel; "Trustworthy Tarot" went from 84 to 156 px at 1080, its
     byline from 40 to 62), on two lines when one would set it under 70% of that; the byline 0.4 of its size; the block centered
@@ -1224,7 +1124,7 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   `frame.ornament` round the card's edge (vine, serpent, laurel, beads, rope, stars, scallops) and the
   booklet's `page` (classic, drop, banner, ledger). The producer chooses; the archive shows each episode's
   choice so habits are named. Foil skips the stock showing in a shaped window's corners. A `borderless`
-  frame (2026-10-14) has no window or ornament: the painting fills the card, its type on a veil (above).
+  frame has no window or ornament: the painting fills the card, its type on a veil (above).
 - STRANDS (`Props` shape `strand`): rope (three-strand lay), cord, wire, vine (leaves), beads, chain;
   laid as a coil, a flemish spiral, a heap, a path, or DRAPED across the table in its own coordinates
   and over the top's edge - hanging as far as the path runs past it, to the floor. A strand rests on
@@ -1301,7 +1201,7 @@ enforced:
   on smooth vinyl is drawn flat, and faint scratches correlate with nothing. A map spanning under
   `Tables.FLAT_SPAN` of gray is now kept as flat (`height.json` `flat: true`) - the print lies smooth
   rather than raised by the painting's-own-detail fallback, and no image job is spent asking again.
-- The same refusal, for maps with relief (2026-10-11): an oilcloth's printed check, a blanket's dyed
+- The same refusal, for maps with relief: an oilcloth's printed check, a blanket's dyed
   stripe and a pebbled steel top were each drawn right - the print left out, a nap or a grain alike
   everywhere - and refused at 0.03, 0.24 and 0.09. A map that fits nothing is now kept, unmoved, when
   its relief has no place of its own (`Tables.relief_spread` under `EVEN_SPREAD`: the gradient's size
@@ -1374,8 +1274,7 @@ the agents, then simply draw their attention to it".
   line - 2.5 dB a step), how hard gusts and crashes strike, and brightness (distance). It ducks up to
   4.7 dB under speech and a slow limiter holds a place alone under -5 dBFS. At 0.5 every part sits near
   -54 dBFS RMS, some 30 dB under the voice.
-- The level was retuned on 2026-10-11 (the user: "even at a value of 0.05 (the lowest), the
-  'Environment' audio is really quite loud"): it was -30 to -2 dB on a curve steep at the bottom, so
+- The level was retuned on 2026-10-11: it was -30 to -2 dB on a curve steep at the bottom, so
   the first step was already at -27 and the top half was as loud as the reader. What 0.05 was is now
   near 0.65. Stored dials were not moved: one left at 0.05 is close to silent until it is turned up.
   Not yet judged by ear.
@@ -1438,8 +1337,7 @@ Read off the video's own frames (`~/Downloads/<title>.mp4`, ffmpeg), not a re-re
 
 Gate: `table_staging_check` (`_file_search`, the box show's facing, the cards left in).
 
-Then, the same day (the user: "address the open items as well... some ability for random
-placement might be good"):
+Then, the same day:
 
 - THE CARD A SEARCH LOOKS AT IS THE BOX'S OWN, kept in its place (`_keep_searched`, `_searched`):
   standing in the file, or lying on top of a pile nothing is drawn from or put back on
@@ -1481,10 +1379,7 @@ generative mode should also work here."
 - **Still open.** Whether a writer really keeps a dictated line's marks is the writer's doing: the
   rule is there and the pipeline keeps them, and no episode has been made with one yet. A way to give a name's
   pronunciation in a brief.
-- **Italic hits, bold hits harder** (the user, the same day, on the two having disagreed -
-  `clean_spoken` turned `**word**` into `*word*` while the reader's rule promised that double
-  asterisks "hit harder still": "*italics* should be rendered as italics, and hit hard, while
-  **bold** should be rendered in bold, and hit even harder than that"). A passage keeps `**` now,
+- **Italic hits, bold hits harder**. A passage keeps `**` now,
   so a bold word is shown in bold and sent at the stronger level, and both levels were raised in
   the voice host for every reading, not only a show's (`EMPHASIS` in hosts/voice/backends/piper.py,
   with what was measured and the ceiling that keeps a lifted word from clipping). Measured on the
@@ -1678,9 +1573,7 @@ table - the set dresser asked for it on 136562); the shadows' casters swinging w
 its chain in a rolling cabin); a liquid's ripples (the surface tips whole); cards on the cloth shifting at a
 hard jolt; the reader's held card jiggling in their hand.
 
-**An electric light holds steady** (the user, the same day: "the agents are doing the "flickering lights"
-effect very often, in nearly every episode ... it flickers "all the way" on and off (when typically
-flickering would be more like a brown-out, with partial failure, not complete loss of light)"). Measured
+**An electric light holds steady**. Measured
 over 31 tables: six stuttered, and one plan had asked for it - `fluorescent` and `neon` stuttered by their
 look alone, an 18 Hz square wave down to 8% every half minute or so. Now they are steady, and an electric
 light (a lamp, a hanging lamp, a street lamp, tubes, a sign) fails only when written `failing`: a bad spell
@@ -1691,7 +1584,7 @@ sign loses one tube or one stroke, shutter-averaged; once in ten spells a moment
 
 ## Not built yet
 
-- The light, next (2026-10-07): no real set dresser has lit a table yet. A cloud's edge ACROSS the table
+- The light, next: no real set dresser has lit a table yet. A cloud's edge ACROSS the table
   (it dims everything at once - right at a table's scale for a real cloud, but a slow low cloud's gradient
   would need the sun's light shaped in every table shader's own `light()`). A screen for a LAMP (a street
   lamp through a window's bars at night: screens are the sun's alone). Rain running down a window, and
@@ -1703,13 +1596,13 @@ sign loses one tube or one stroke, shutter-averaged; once in ten spells a moment
   more than one layer, and each set dresser sees the tables before it. Legs, an apron or a pedestal
   (the camera sees none from the reader's chair, but a lower camera would). A dark velvet or a bare
   dark top lets a candle burn as the key beside pale cards, which bloom (the HEAT cap reads the
-  cloth, not the cards) - counting the cards would take most candles off the key: the user's call.
+  cloth, not the cards) - counting the cards would take most candles off the key.
   The dealer is told a round or oval top and its layout is checked against it once the table is set.
 
-- Free form, next (2026-10-07): no real set dresser has used lofts, coils, corners or warps yet. A
+- Free form, next: no real set dresser has used lofts, coils, corners or warps yet. A
   rounding on an extrude's or a sheet's own outline (a rounded tray); a loft whose path is a coil (a
   conch's whorl); a warp on a crystal bends its flat faces like any other.
-- The sound, next (2026-10-08): no real set dresser has written a `sound` yet, and nobody has listened
+- The sound, next: no real set dresser has written a `sound` yet, and nobody has listened
   to one under a real reading. A boat's timbers creaking with the swell; birdsong (the light's birds
   are silent); a crowd or a market's murmur; thunder with the light's lightning; the sea's size
   following the wind's strength more than a little. A dial change is heard after the few seconds the

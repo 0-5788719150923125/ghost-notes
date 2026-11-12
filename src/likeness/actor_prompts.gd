@@ -8,9 +8,6 @@ class_name ActorPrompts
 ##
 ##   audit     a set's contact sheets -> their look, shots of another look, unusable shots
 ##   rest      a set's stills on one sheet -> the ones that show them at ease, most at ease first
-##
-## The gestures, their habits and the director went with the first build's footage (2026-10-21, night):
-## a still plays no hand. They may come back as the head's own gestures.
 
 
 # --- the audit -------------------------------------------------------------------------------------
@@ -44,9 +41,8 @@ static func land_audit(d: Dictionary, shots: int) -> Dictionary:
 		"unusable": unusable}
 
 
-## SET [param set_d] AS THE AUDIT [param part] SAW IT: its look, its unusable shots marked and out of
-## its usable minutes - and, where some shots are of another look, those shots as a set of their own.
-## The sets it is, in order.
+## Set [param set_d] as the audit [param part] saw it: its look, its unusable shots marked and out of its usable minutes -
+## and, where some shots are of another look, those shots as a set of their own. The sets it is, in order.
 static func apply_audit(set_d: Dictionary, part: Dictionary) -> Array:
 	var shots: Array = set_d.get("shots", [])
 	var other: Array = (part.get("other", {}) as Dictionary).get("shots", [])

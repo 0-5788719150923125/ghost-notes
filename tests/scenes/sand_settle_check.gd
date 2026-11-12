@@ -1,45 +1,33 @@
 extends SceneTree
 
-## sand_settle_check - that a SETTLED [Grains] chamber actually stops.
+## sand_settle_check - that a settled [Grains] chamber actually stops.
 ##
-## The bug this gates: the fluid sideways search tried its two directions in the order
-## `rb, -rb`, and `rb` flips with the generation - so a fluid cell with passable space on
-## both sides took the first option every single tick and walked right, left, right, left
-## for ever. Each of those swaps empties the cell it leaves, so a settled pool read as
-## grains blinking between their color and the background: "almost every single grain is
-## flickering between black and color, as if the pixels were vibrating".
+## The fluid sideways search must not alternate directions every tick: `rb` flips with the generation,
+## so trying `rb, -rb` in that order walks a fluid cell with passable space on both sides right, left,
+## right, left for ever, and a settled pool reads as grains blinking between color and background.
 ##
-## MEASURED, not eyeballed. Before the fix, with nothing pouring in: a water-only pool had
-## 40 cells changing occupancy 40 times over 40 ticks, every one a clean two-tick
-## oscillation; salt+water 25 such cells, sand+water 20, sand+oil 30. Powder-only chambers
-## had exactly zero, which is what named the branch - powders have no `spread` and never
-## enter it. After: 0, 0, 0 and 1 respectively.
-##
-## The test therefore asserts the ping-pong count, NOT the total change count. A powder
-## pile keeps creeping slowly for a long time (about 140 cells still moving in the same
-## window, before and after), and that is settling, not flicker - the thing that has to be
-## zero is the population of cells that reverse themselves every tick.
+## The test asserts the ping-pong count (cells that reverse themselves every tick), not the total change
+## count: a powder pile keeps creeping slowly for a long time, which is settling, not flicker. Powder-only
+## chambers have none, since powders have no `spread` and never enter that branch.
 ##
 ## Run: godot --headless --path . --script tests/scenes/sand_settle_check.gd
 
-## A cell that reverses this many times inside [constant WINDOW] ticks is oscillating, not
-## settling: the window is 60 ticks, so 20 is a reversal every third tick at worst.
+## A cell that reverses this many times inside [constant WINDOW] ticks is oscillating, not settling
+## (the window is 60 ticks, so 20 is a reversal every third tick at worst).
 const PINGPONG := 20
 const WINDOW := 60
 
-## What a chamber may have. Two is the honest ceiling: one lone cell in an awkward pocket is
-## not what the report was about, and holding the number at zero would gate on noise.
+## What a chamber may have: one lone cell in an awkward pocket is noise, so the ceiling is two.
 const ALLOWED := 2
 
-## The matter subsets to try. Every one of these is reachable from falling_sand's own
-## POURABLE bag, and the liquid ones are the whole point - they are what oscillated.
+## The matter subsets to try, each reachable from falling_sand's own POURABLE bag; the liquid ones are
+## what oscillated.
 const SETS := [["sand"], ["sand", "water"], ["sand", "dust"], ["water"], ["sand", "oil"],
 	["salt", "water"], ["water", "oil"], ["dust", "water"]]
 
-## The chamber's weather, run over every subset. Both are live in falling_sand - a draft in 65%
-## of sessions (falling_sand.gd's `_wind`) and a gravity shear on every section change - and both
-## keep powder moving after it would otherwise have stopped, so a settle test that leaves them at
-## zero is not testing the world the scene actually runs.
+## The chamber's weather, run over every subset. Both are live in falling_sand (a draft in 65% of
+## sessions, `_wind`, and a gravity shear on every section change) and keep powder moving after it would
+## otherwise stop.
 const WEATHER := [{"wind": 0.0, "tilt": 0.0}, {"wind": 0.30, "tilt": 0.0},
 	{"wind": 0.0, "tilt": 0.36}]
 
@@ -84,8 +72,8 @@ func _run(trial: int, weather: Dictionary) -> void:
 	g.tilt = float(weather["tilt"])
 	g.ignite = 0.0
 
-	# Fill the chamber, then STOP pouring and let it settle. The measurement window has to be
-	# a world nothing is being added to, or the pour's own churn hides what is being measured.
+	# Fill the chamber, then stop pouring and let it settle: the measurement window must be a world
+	# nothing is added to.
 	for _t in 1200:
 		for k in ids.size():
 			g.emit(56, 62, 0, int(ids[k]), 5, k)

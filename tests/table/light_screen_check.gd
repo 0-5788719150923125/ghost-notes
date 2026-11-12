@@ -1,15 +1,13 @@
 extends SceneTree
 
-## WHAT THE SUN'S SCREENS DRAW IS WHAT [Lights] RECKONS: the set dresser is told how much of the table
-## the sun reaches through a window, leaves, a lattice, an awning or a parasol from the CPU's own
-## reckoning ([method Lights.sunlit]), and the shader (shaders/light_screen.gdshader, on the GPU's noise
-## in shaders/light_noise.gdshaderinc) is what the viewer sees. Each screen is built by [method
-## Lights.build] over a white ground lit by its sun alone, photographed from straight above, and read
-## at a grid of points away from the pattern's edges (where the shadow filter blurs it): lit where the CPU
-## says lit, dark where it says shaded. Two-sided: the same pictures read against the pattern on another
-## salt - another noise - disagree; and a screen moving in time is read at a time that is not 0. A soft
-## screen's copy (its shade grown or shrunk) in a gust is read too, both forced on the shader and the
-## reckoning alike.
+## What the sun's screens draw is what [Lights] reckons: the set dresser is told how much of the table the sun reaches through a
+## window, leaves, a lattice, an awning or a parasol from the CPU's own reckoning ([method Lights.sunlit]), and the shader
+## (shaders/light_screen.gdshader, on the GPU's noise in shaders/light_noise.gdshaderinc) is what the viewer sees. Each screen is
+## built by [method Lights.build] over a white ground lit by its sun alone, photographed from straight above, and read at a grid of
+## points away from the pattern's edges (where the shadow filter blurs it): lit where the CPU says lit, dark where it says shaded.
+## Two-sided: the same pictures read against the pattern on another salt (another noise) disagree; and a screen moving in time is
+## read at a time that is not 0. A soft screen's copy (its shade grown or shrunk) in a gust is read too, both forced on the shader
+## and the reckoning alike.
 ##
 ##   tests/run_quiet.sh light_screen_check
 ##
@@ -96,7 +94,7 @@ func _case(what: String, sun: Dictionary, screen: Dictionary, t: float, force: D
 	world.add_child(rig.root)
 	rig.fit(0.3)
 	rig.tick(t)
-	# FORCED on the shader and on the reckoning alike
+	# forced on the shader and on the reckoning alike
 	for sc in rig.screens:
 		for k in force:
 			((sc as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter(String(k), force[k])

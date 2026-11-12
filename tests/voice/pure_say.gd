@@ -4,7 +4,7 @@ extends SceneTree
 ## autoloads, no scenes, no stream, no push path - just [Voice.render] and
 ## [Voice.write_wav].
 ##
-## LADDER v4 (2026-08-04) - the parallel branch, and a calibrator that can
+## LADDER v4 - the parallel branch, and a calibrator that can
 ## actually see the defect it exists to catch.
 ##
 ## v3's metric was BROADBAND fricative/vowel RMS against a target ratio. That

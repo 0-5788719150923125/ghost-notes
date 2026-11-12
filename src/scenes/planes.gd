@@ -2,32 +2,25 @@ extends Scene3D
 
 ## Planes - the spectrum as a ring of real planes under a forced-perspective camera.
 ##
-## A deliberate echo of `spectrum_ring`: the bars are genuine [Plane3D] quads standing
-## on a ground plane in a circle, with an optional [Mesh3D] body tumbling at the center,
-## projected and depth-sorted through one [Lens3D]. Nearly everything is sampled per
-## scene so it is never the same shot twice: the lens / orbit (distance, pitch, yaw
-## direction and speed), the ring radius and bar geometry, and the central body - which
-## may be a rock, a hybrid, a platonic solid, or nothing at all, and is kept small so it
-## no longer dominates the frame. It can also bleed a faint sky (stars / fog) behind the
-## ring, composed from the shared [Layer] registry.
+## A deliberate echo of `spectrum_ring`: the bars are [Plane3D] quads standing on a ground plane
+## in a circle, with an optional [Mesh3D] body tumbling at the center, projected and depth-sorted
+## through one [Lens3D]. Sampled per scene: the lens and orbit (distance, pitch, yaw direction
+## and speed), the ring radius and bar geometry, and the central body (a rock, a hybrid, a
+## platonic solid, or nothing), kept small. It can bleed a faint sky (stars / fog) behind the
+## ring from the shared [Layer] registry.
 ##
-## The ring's LAYOUT is sampled too ([constant RINGS]): even, woven, stepped or
-## scalloped, so alternate panels can step in and out of the circle or stand at
-## different heights instead of the one flat band of identical panels it always was,
-## and the panels themselves run from tall blades to stubby tiles. Color comes from
-## one [Scheme] - the band grades from its base hue to its accent round the ring, the
-## core body wears the accent, and the sky behind agrees instead of being fixed blue.
+## The ring's layout is sampled too ([constant RINGS]): even, woven, stepped or scalloped, and
+## panels run from tall blades to stubby tiles. Color comes from one [Scheme]: the band grades
+## from its base hue to its accent round the ring, the core wears the accent, and the sky agrees.
 
 const BASE_H := 0.16          # bar half-height at rest
 const SLIDE_MID := 0.5        # band level that sits a panel at the ring's resting height
-# The mood brightness the panel lighting was tuned against; exposure is expressed
-# relative to it, so a dim mood really is a dimmer ring and a bright one glares.
+# The mood brightness the panel lighting was tuned against; exposure is relative to it, so a dim
+# mood is a dimmer ring and a bright one glares.
 const NOMINAL_VAL := 0.85
 
-## Ring layouts. The panels used to be one evenly spaced circle at a single radius
-## with a single resting height, every time; this is the choice that decides the
-## ring's silhouette before anything moves. `stagger` steps alternate panels in and
-## out of the circle, `lift` stands them at alternating heights.
+## Ring layouts, the choice that decides the ring's silhouette. `stagger` steps alternate panels
+## in and out of the circle, `lift` stands them at alternating heights.
 const RINGS := {
 	"even": {"stagger": 0.0, "lift": 0.0},
 	"woven": {"stagger": 0.10, "lift": 0.0},
@@ -56,25 +49,25 @@ var _pitch_base := 0.30
 var _pitch_amp := 0.08
 var _yaw_dir := 1.0
 var _yaw_base := 0.16
-# The whole ring tumbles on a sampled axis (not just the camera's yaw) with a wind-up /
-# wind-down angular speed, so the circle tilts and spins on other axes over time.
+# The whole ring tumbles on a sampled axis with a wind-up / wind-down angular speed, so the
+# circle tilts and spins on other axes over time.
 var _ring_basis := Basis.IDENTITY
 var _ring_angle := 0.0
 var _tumble_axis := Vector3.UP
 var _tumble_base := 0.05
 var _tumble_amp := 0.25
 var _tumble_rate := 0.3
-# A traveling TWIST in the band: around one point on the ring the panels rotate their slide axis
-# from UP toward OUTWARD (and a little past it - an inversion), so the band's animation is
-# redirected radially over a phase of the circle. The twist point drifts slowly around the ring.
+# A traveling twist in the band: around one point on the ring the panels rotate their slide axis
+# from up toward outward (a little past it - an inversion), redirecting the band's animation
+# radially. The twist point drifts slowly around the ring.
 var _twist_a := 0.0
 var _twist_max := PI * 0.6
 var _twist_w := PI * 0.45
 var _twist_speed := 0.2
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"ring": {"label": "Ring", "type": "choice", "options": "RINGS", "default": null,
 		"blurb": "How the panels stand in their ring: evenly spaced, woven in and out of the circle, stepped at alternating heights, or scalloped with a little of both."},
@@ -96,7 +89,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# A ring of lit panels is abstract - every mood suits it, so take the whole set.
 	_sch = Scheme.pick(rng)
 	_hue = _sch.hue
-	# Sample the whole shot: lens, orbit, ring - so the angle and framing vary every time.
+	# Sample the whole shot: lens, orbit, ring.
 	lens.fov = rng.randf_range(54.0, 78.0)  # wide lens => forced perspective
 	_R = number("ring_size", rng)
 	_bar_w = number("panel_width", rng)
@@ -108,16 +101,16 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_pitch_amp = rng.randf_range(0.03, 0.12)
 	_yaw_dir = 1.0 if rng.randf() < 0.5 else -1.0
 	_yaw_base = rng.randf_range(0.06, 0.16)             # gentler camera spin; the ring tumbles too
-	# Ring tumble: an axis biased strongly HORIZONTAL (so the circle visibly TILTS / rolls, not
-	# just spins like the camera). The orientation is a slow net spin (_tumble_base) plus a big
-	# wind-up / wind-down TILT that swings the ring back and forth (_tumble_amp radians).
+	# Ring tumble: an axis biased strongly horizontal (so the circle tilts and rolls, not just
+	# spins). The orientation is a slow net spin (_tumble_base) plus a wind-up / wind-down tilt
+	# swinging the ring back and forth (_tumble_amp radians).
 	_tumble_axis = Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.15, 0.15),
 		rng.randf_range(-1, 1)).normalized()
 	_tumble_base = rng.randf_range(-0.08, 0.08)        # net spin rate (rad/s)
 	_tumble_amp = rng.randf_range(0.45, 1.15)          # tilt amplitude (rad) of the wind-up/down
 	_tumble_rate = rng.randf_range(0.15, 0.4)          # how fast it winds up and back
-	# The band twist: how far the panels rotate at the point (a bit past 90 deg = a flip), the
-	# phase-width it eases over, and how fast the twist point travels round the ring.
+	# The band twist: how far panels rotate at the point (a bit past 90 deg = a flip), the phase
+	# width it eases over, and how fast the point travels round the ring.
 	_twist_max = rng.randf_range(PI * 0.5, PI * 0.78)
 	_twist_w = rng.randf_range(PI * 0.28, PI * 0.55)
 	_twist_speed = rng.randf_range(0.08, 0.28) * (1.0 if rng.randf() < 0.5 else -1.0)
@@ -132,13 +125,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	for i in count:
 		var a := float(i) / float(count) * TAU
 		# Palindrome spectrum mapping: t runs 0 -> 1 -> 0 around the ring, so the value at the
-		# wrap matches itself and the circle closes seamlessly. (It used to run 0 -> 1 once and
-		# jump from treble straight back to bass between the last panel and the first - the hard
-		# loop-edge.) Every panel is one continuous circle; each just slides on its own Y axis.
+		# wrap matches itself and the circle closes seamlessly.
 		var u := float(i) / float(count)
 		var t := 1.0 - absf(2.0 * u - 1.0)
-		# Alternating panels step out of the circle and stand higher, by layout - the
-		# ring is no longer obliged to be a single flat band of identical panels.
+		# Alternating panels step out of the circle and stand higher, by layout.
 		var alt := 1.0 if i % 2 == 0 else -1.0
 		var r := _R * (1.0 + stagger * alt)
 		var y := lift * alt * _panel_h
@@ -148,13 +138,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		var pl := Plane3D.new(c, uax, vax, _sch.base(1.0, 0.95, 0.9))
 		pl.edge = Color(1, 1, 1, 0.22)
 		add_plane(pl)
-		# Store each panel's LOCAL ring position + tangent so the whole ring can be re-oriented
-		# by _ring_basis each frame (the panel slides along the ring's local up).
+		# Store each panel's local ring position and tangent so _ring_basis can re-orient the ring
+		# each frame (a panel slides along the ring's local up).
 		_bars.append({"t": t, "a": a, "bx": cos(a) * r, "bz": sin(a) * r, "y": y, "ul": uax})
 
 	_make_core(rng)
-	# Cross-scene bleed: a faint sky behind the ring, sometimes. The sky belongs to the
-	# same scheme as the ring - a hardcoded blue star field fought half the moods.
+	# A faint sky behind the ring, sometimes, from the same scheme as the ring.
 	var bg := rng.randf()
 	if bg < 0.40:
 		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(70, 130), "hue": _sch.accent})
@@ -165,8 +154,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"panel_h": _panel_h, "slide": _slide}
 
 
-# The central body: by seed a rock, a hybrid, a platonic solid, or nothing - and small,
-# so it is an accent in the ring, not the whole screen.
+# The central body: by seed a rock, a hybrid, a platonic solid, or nothing; small, an accent.
 func _make_core(rng: RandomNumberGenerator) -> void:
 	_has_core = rng.randf() >= 0.22                       # ~1 in 5 has no center at all
 	if not _has_core:
@@ -184,7 +172,7 @@ func _make_core(rng: RandomNumberGenerator) -> void:
 			2: _core = Mesh3D.tetrahedron()
 			_: _core = Mesh3D.icosphere(1)
 	_core_basis = Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, 0.0))
-	_core_scale = rng.randf_range(0.28, 0.55)            # small - no longer dominates
+	_core_scale = rng.randf_range(0.28, 0.55)            # small
 	_core_spin = Vector3(rng.randf_range(-0.20, 0.20),
 		rng.randf_range(0.10, 0.30) * (1.0 if rng.randf() < 0.5 else -1.0),
 		rng.randf_range(-0.15, 0.15))
@@ -201,8 +189,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	lens.orbit(Vector3(0.0, BASE_H * 1.5, 0.0), _orbit_dist, _yaw, pitch)
 
 	# Tumble the whole ring: a slow net spin that accumulates (energy nudges it faster) plus a
-	# big wind-up / wind-down TILT swinging it back and forth, so the circle visibly tilts and
-	# rolls on axes the camera alone can't.
+	# wind-up / wind-down tilt.
 	_ring_angle += delta * (_tumble_base + 0.12 * f.energy)
 	var angle := _ring_angle + _tumble_amp * sin(_life * _tumble_rate)
 	_ring_basis = Basis(_tumble_axis, angle)
@@ -213,34 +200,31 @@ func update(f: AudioFeatures, delta: float) -> void:
 		var band := f.sample(float(bar.t))
 		var amp: float = band * 1.5 + f.beat * 0.12
 		var pl: Plane3D = planes[i]
-		# Twist: how much THIS panel is rotated, peaking at the traveling twist point and easing to
-		# nothing a phase-window away. Its slide axis rotates from UP toward the OUTWARD radial (a
-		# bit past, an inversion), so near the twist the panel stands out radially and its animation
-		# is redirected outward instead of up.
+		# Twist: how much this panel is rotated, peaking at the traveling twist point and easing
+		# to nothing a phase-window away; its slide axis rotates from up toward outward (a bit
+		# past, an inversion).
 		var d := absf(wrapf(float(bar.a) - _twist_a, -PI, PI))
 		var w := 1.0 - smoothstep(0.0, _twist_w, d)
 		var ang := w * _twist_max
 		# Normalized, not divided by _R: staggered layouts sit panels off the nominal radius.
 		var radial := Vector3(float(bar.bx), 0.0, float(bar.bz)).normalized()
 		var axis := Vector3.UP * cos(ang) + radial * sin(ang)              # up -> outward (-> inverted)
-		# Each panel SLIDES along its (possibly twisted) axis by its band, then the whole ring is
-		# re-oriented by the tumble basis - so the undulating circle also rolls and tilts as a body.
+		# Each panel slides along its (possibly twisted) axis by its band, then the whole ring is
+		# re-oriented by the tumble basis.
 		var local := Vector3(float(bar.bx), float(bar.y), float(bar.bz)) \
 			+ axis * (_slide * (amp - SLIDE_MID))
 		pl.center = _ring_basis * local
 		pl.u_axis = _ring_basis * (bar.ul as Vector3)
 		pl.v_axis = _ring_basis * (axis * _panel_h)
 		var lit := clampf(0.30 + 0.70 * band + 0.45 * _glow, 0.0, 1.0)
-		# Round the ring the panels travel from the scheme's base hue to its accent, so
-		# the band is graded within one mood instead of an arbitrary quarter-turn away.
+		# Around the ring the panels travel from the scheme's base hue to its accent.
 		pl.color = _sch.color(_toward_accent(0.85 * float(bar.t) + 0.15 * _glow),
 			1.0, lit / NOMINAL_VAL, 0.9)
 
 	bodies.clear()
 	if _has_core and _core != null:
 		_core_basis = _core_basis * Basis.from_euler(_core_spin * delta)
-		# The core reads AGAINST the ring: the scheme's own accent, which is a chosen
-		# partner for the base rather than a blind half-turn away from it.
+		# The core reads against the ring: the scheme's accent, a chosen partner for the base.
 		add_body(_core, _core_basis, Vector3.ZERO, _core_scale,
 			_sch.accent, _sch.sat * 0.8, 2, 0.9, 0.3 + 0.5 * _glow)
 	queue_redraw()

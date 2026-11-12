@@ -2,22 +2,18 @@ extends GhostScene
 
 ## Spectrum ring - the spectrum bent into a circle.
 ##
-## The whole band array is laid around a ring; each band pushes a bar outward by
-## its energy. The ring breathes with energy, spins at a seeded rate, flashes on
-## the beat, and the whole frame drifts/tilts on its own through the view.
-##
-## The hue used to be a bare `randf()` - varied, but unrelated to anything, so the
-## bars swept an arbitrary span from it. It now runs base -> accent along a [Scheme]
-## mood, which also sets the ring's saturation and how bright it sits. Two other
-## rolls decide what the ring IS: how a bar is drawn, and which way it grows off the
-## rim - the same audio mapping, three silhouettes.
+## The whole band array is laid around a ring; each band pushes a bar outward by its energy. The
+## ring breathes with energy, spins at a seeded rate, flashes on the beat, and the frame
+## drifts/tilts through the view. The hue runs base -> accent along a [Scheme] mood, which also
+## sets saturation and brightness. Two rolls decide what the ring is: how a bar is drawn and
+## which way it grows off the rim - the same audio mapping, several silhouettes.
 
-## How each band's bar is drawn. Energy -> length is identical in all three; only the
-## shape differs, so the ring reads as a spoke wheel, a sunburst, or a dashed dial.
+## How each band's bar is drawn. Energy -> length is identical; only the shape differs: spoke
+## wheel, sunburst or dashed dial.
 const FORMS := ["spoke", "spoke", "wedge", "tick"]      # the spoke is the familiar read
 
-## Which way bars grow off the rim. Inward turns the ring inside out - a closing iris
-## rather than a fringed rim - and "both" makes each band a two-ended spike.
+## Which way bars grow off the rim. Inward turns the ring inside out (a closing iris), and
+## "both" makes each band a two-ended spike.
 const GROWTH := ["out", "out", "out", "in", "both"]
 
 var _spin := 0.0
@@ -32,8 +28,8 @@ var _eye: EyeBody
 var _lens: Lens3D
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"form": {"label": "Bar shape", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "How each band's bar is drawn: a spoke, a wedge or a tick, so the ring reads as a spoke wheel, a sunburst or a dashed dial."},
@@ -65,8 +61,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_lens.look = Vector3.ZERO
 		_lens.fov = 48.0
 	var sch := Scheme.pick(rng)                  # a ring of pure spectrum: any mood fits
-	# The band sweep runs base -> accent the SHORT way round, so low and high bands are
-	# two ends of one relationship rather than an arbitrary arc of the color wheel.
+	# The band sweep runs base -> accent the short way round, so low and high bands are two ends
+	# of one relationship.
 	var span := wrapf(sch.accent - sch.hue, -0.5, 0.5) * rng.randf_range(0.35, 1.0)
 	return {
 		"hue": sch.hue,
@@ -74,9 +70,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"sat": sch.sat,
 		"val": sch.val,
 		"mood": sch.name,
-		# Radius and reach were 0.16-0.26 and 0.12-0.30 - always a mid-size ring with a
-		# modest fringe. Widened, the seed can build a tight hub with long spikes or a
-		# broad rim that barely bristles.
+		# Wide ranges: the seed can build a tight hub with long spikes or a broad rim that barely
+		# bristles.
 		"radius": number("size", rng),
 		"bar_len": number("bar_length", rng),
 		"spin_rate": number("spin", rng),
@@ -120,23 +115,23 @@ func _draw() -> void:
 	var vmax: float = params.val
 	var form: String = params.form
 	var growth: String = params.growth
-	# Inward bars must stop short of the core (eye or sphere - both land near 0.65 of
-	# the ring radius on screen), or they swallow it.
+	# Inward bars must stop short of the core (eye or sphere, both near 0.65 of the ring radius
+	# on screen), or they swallow it.
 	var in_room: float = maxf(0.0, base_r * 0.28)
 	var count := n * mirror
 	for i in count:
 		var band_i := i % n if mirror == 1 else (i if i < n else count - 1 - i)
 		band_i = clampi(band_i, 0, n - 1)
 		var e := _f.bands[band_i] if _f.bands.size() > 0 else 0.0
-		# Activation gates how far each bar reaches: rooted bands stay short, active
-		# ones swell and decay. Each bar also drifts on its own radius/angle (fluid
-		# behavior only); rigid behaviors leave wobble() at 0.
+		# Activation gates how far each bar reaches: rooted bands stay short, active ones swell
+		# and decay. Each bar also drifts on its own radius/angle (fluid behavior only); rigid
+		# behaviors leave wobble() at 0.
 		e *= 0.25 + 0.75 * _act.level(band_i)
 		var r_i := base_r * (1.0 + 0.10 * wobble("bar", i))
 		var ang := _spin + TAU * float(i) / float(count) + 0.05 * wobble("ang", i)
 		var dir := Vector2(cos(ang), sin(ang))
-		# Color, not size, carries the audio: a moving hotspot lights the bars it
-		# sweeps over, and the global glow lifts everything on a beat.
+		# Color, not size, carries the audio: a moving hotspot lights the bars it sweeps over, and
+		# the global glow lifts everything on a beat.
 		var lit := _light.at(dir * radius_frac)
 		var h := fposmod(hue + hue_spread * float(band_i) / float(n) + 0.10 * lit + _light.hue_shift(), 1.0)
 		var val := clampf(0.35 + 0.4 * e + 0.5 * lit + 0.4 * glow, 0.0, 1.0) * (0.55 + 0.45 * vmax)
@@ -154,13 +149,13 @@ func _draw() -> void:
 		_lens.prepare()
 		_eye.draw(self, _lens, u, Vector3.ZERO, float(params.radius) * 1.15)
 	else:
-		# A shaded sphere at the core: real curvature (dark rim -> bright, light-offset
-		# highlight) and a soft halo, brightening on the beat. Not a flat disc.
+		# A shaded sphere at the core: real curvature (dark rim to bright, light-offset highlight)
+		# and a soft halo, brightening on the beat.
 		_draw_sphere(Vector2.ZERO, base_r * 0.62, hue, glow, sat / 0.7)
 
 
-# One band's bar, in this ring's FORM. `a` sits on the rim and `b` is the tip; the
-# audio still only decides how far apart they are - the shape between them is seeded.
+# One band's bar, in this ring's form. `a` sits on the rim and `b` is the tip; the audio only
+# decides how far apart they are.
 func _bar(a: Vector2, b: Vector2, dir: Vector2, col: Color, form: String, thickness: float) -> void:
 	var d := b - a
 	var ln := d.length()
@@ -172,8 +167,8 @@ func _bar(a: Vector2, b: Vector2, dir: Vector2, col: Color, form: String, thickn
 		fill_aa(PackedVector2Array([a - perp * w, a + perp * w,
 			b + perp * w * 0.18, b - perp * w * 0.18]), col)
 	elif form == "tick":
-		# Dash count is capped rather than derived from the bar length alone: a long
-		# bar gets longer dashes, not hundreds of them.
+		# Dash count is capped, not derived from the bar length alone: a long bar gets longer
+		# dashes, not hundreds.
 		var want := clampi(int(ln / maxf(6.0, thickness * 2.6)), 1, 18)
 		var step := ln / float(want)
 		var dn := d / ln
@@ -184,9 +179,9 @@ func _bar(a: Vector2, b: Vector2, dir: Vector2, col: Color, form: String, thickn
 		draw_line(a, b, col, thickness, true)
 
 
-# A pseudo-3D sphere: opaque circles stacked large-dark to small-bright, each nudged
-# toward the light, so a highlight sits up-left and the lower-right falls into shadow.
-# `s_mul` scales the saturation to the ring's mood - an ash ring gets a gray ball.
+# A pseudo-3D sphere: opaque circles stacked large-dark to small-bright, each nudged toward the
+# light, so a highlight sits up-left and the lower-right falls into shadow. `s_mul` scales the
+# saturation to the ring's mood.
 func _draw_sphere(c: Vector2, radius: float, hue: float, glow: float, s_mul := 1.0) -> void:
 	# Soft outer halo (a couple of faint wide discs).
 	for h in 3:

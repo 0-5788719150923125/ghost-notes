@@ -1,12 +1,12 @@
 extends SceneTree
 
-## note_history_check - A NOTE'S EVERY SAVED STATE, TO GO BACK TO ([NoteHistory]; the Body card's Restore).
+## note_history_check - A note's every saved state, to go back to ([NoteHistory]; the Body card's Restore).
 ##
 ##   godot --headless --path . --script res://tests/notes/note_history_check.gd
 ##
-## In a folder of its own: a note's text kept with its moment; a setting changed said by its place and its two values, the words by
-## how many more; newest first, each read back as it was; the newest kept, the oldest gone past the bound. THE CONTROL: the same
-## text written again is kept once.
+## In a folder of its own: a note's text kept with its moment; a setting changed said by its place and its two values,
+## the words by how many more; newest first, each read back as it was; the newest kept, the oldest gone past the
+## bound. Control: the same text written again is kept once.
 
 const ROOT := "user://note_history_check"
 

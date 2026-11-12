@@ -1,19 +1,21 @@
 extends RefCounted
 class_name GameLedger
 
-## GameLedger - WHAT IS SO AT A GAME'S TABLE, kept by no one who could fudge it (next/tabletop.md): every sheet, where each figure stands, which map
-## lies on the table, every die rolled. An agent forgets it took seven damage, and a viewer does not.
+## GameLedger - what is so at a game's table, kept by no one who could fudge it (next/tabletop.md): every sheet, where each figure
+## stands, which map lies on the table, every die rolled. An agent forgets it took seven damage, and a viewer does not.
 ##
-## NO GAME IS NAMED HERE: a sheet's fields are whatever the agents call them, numbers or lists, and what any of them means is the brief's. The board
-## is squares or a free measure in any unit, and a move says how far it went and leaves whether that was allowed to the one running the game.
+## No game is named here: a sheet's fields are whatever the agents call them, numbers or lists, and what any of them means is the brief's.
+## The board is squares or a free measure in any unit, and a move says how far it went and leaves whether that was allowed to the one
+## running the game.
 ##
-## IT IS ITS EVENTS: the state at any moment is the sheets it began with and [method apply] over what happened, one by one, so a scene made again
-## drops its own events and whatever came after it stands from what came before it. An event is plain data (`{id, kind, ...}`), written into the
-## episode ([TableEpisode] `say`), and the table reads the same list ([TableGame]) to stand each figure where it is when.
+## It is its events: the state at any moment is the sheets it began with and [method apply] over what happened, one by one, so a scene
+## made again drops its own events and whatever came after it stands from what came before it. An event is plain data (`{id, kind, ...}`),
+## written into the episode ([TableEpisode] `say`), and the table reads the same list ([TableGame]) to stand each figure where it is when.
 ##
-## A REFUSAL IS WORDS ([method move] on a square off the map): the agent is told what is so, in the call that got it wrong. Gate: tests/table/game_ledger_check.gd.
+## A refusal is words ([method move] on a square off the map): the agent is told what is so, in the call that got it wrong.
+## Gate: tests/table/game_ledger_check.gd.
 
-## WHAT CAN HAPPEN AT THE TABLE, as rows: `table` says a viewer sees it happen, so it has a mark in the script ([constant TableActions.REGISTRY], the same verb), and
+## What can happen at the table, as rows: `table` says a viewer sees it happen, so it has a mark in the script ([constant TableActions.REGISTRY], the same verb), and
 ## `about` is what the agent is told. `change` and `note` are only so.
 const KINDS := {
 	"roll": {"table": true, "label": "Roll", "blurb": "dice thrown from where a person sits, and what came up"},
@@ -62,7 +64,7 @@ func next_id() -> int:
 	return (int((events.back() as Dictionary).get("id", 0)) + 1) if not events.is_empty() else 1
 
 
-## WHAT THE EVENT MAKES SO. Never fails: an event only reaches here having passed what made it, and an old one read again must not change what follows.
+## What the event makes so. Never fails: an event only reaches here having passed what made it, and an old one read again must not change what follows.
 func apply(e: Dictionary) -> void:
 	var what := String(e.get("kind", ""))
 	match what:
@@ -101,7 +103,7 @@ func _set_field(who: String, field: String, to: Variant) -> void:
 
 # --- what an agent asks for: each answers `{ok, event, words}`, and only an answer that is `ok` has happened -----------------------------------------------
 
-## ROLL [param notation] for [param who], the [param n]th thing to happen in an episode of [param seed]. `hidden`: thrown behind a screen, so no number reaches anyone at the table but the one who threw it.
+## Roll [param notation] for [param who], the [param n]th thing to happen in an episode of [param seed]. `hidden`: thrown behind a screen, so no number reaches anyone at the table but the one who threw it.
 func roll(who: String, notation: String, why: String, seed: int, hidden := false) -> Dictionary:
 	var id := next_id()
 	var got := DiceNotation.roll(notation, hash([seed, "game", id]))
@@ -113,7 +115,7 @@ func roll(who: String, notation: String, why: String, seed: int, hidden := false
 	return {"ok": true, "event": e, "words": String(got["words"])}
 
 
-## A FIELD OF A SHEET, by a number (`by`, added), to a value (`to`), or a list's `add` or `remove`. Nothing about a field is checked but that the change makes sense for what is there.
+## A field of a sheet, by a number (`by`, added), to a value (`to`), or a list's `add` or `remove`. Nothing about a field is checked but that the change makes sense for what is there.
 func change(who: String, field: String, ask: Dictionary, why := "") -> Dictionary:
 	if who.is_empty() or field.is_empty():
 		return {"ok": false, "words": "a change names who and which field"}
@@ -141,7 +143,7 @@ func change(who: String, field: String, ask: Dictionary, why := "") -> Dictionar
 	return {"ok": true, "event": e, "words": "%s's %s: %s -> %s" % [who, field, _plain(have), _plain(to)]}
 
 
-## A NEW MAP goes down. `size` in squares (or the free measure's units), `grid` false for a table measured with a tape.
+## A new map goes down. `size` in squares (or the free measure's units), `grid` false for a table measured with a tape.
 func map_down(name: String, looks: String, size: Array, grid := true, unit := UNIT) -> Dictionary:
 	if name.is_empty():
 		return {"ok": false, "words": "a map needs a name"}
@@ -156,7 +158,7 @@ func map_down(name: String, looks: String, size: Array, grid := true, unit := UN
 	return {"ok": true, "event": e, "words": said}
 
 
-## A NEW FIGURE on the map. `owner`: the person who plays it, if anyone does.
+## A new figure on the map. `owner`: the person who plays it, if anyone does.
 func place(figure: String, at: Array, looks: String, owner := "") -> Dictionary:
 	if figure.is_empty():
 		return {"ok": false, "words": "a figure needs a name"}
@@ -176,7 +178,7 @@ func place(figure: String, at: Array, looks: String, owner := "") -> Dictionary:
 	return {"ok": true, "event": e, "words": said}
 
 
-## A FIGURE TAKEN SOMEWHERE ELSE: answered with how far, which is the one running the game's to judge.
+## A figure taken somewhere else: answered with how far, which is the one running the game's to judge.
 func move(figure: String, to: Array) -> Dictionary:
 	if not figures.has(figure):
 		return {"ok": false, "words": "no figure called \"%s\" is on the map: %s" % [figure, ", ".join(PackedStringArray(figures.keys()))]}
@@ -209,7 +211,7 @@ func figure_state(kind: String, figure: String) -> Dictionary:
 	return {"ok": true, "event": e, "words": "%s: %s" % [figure, String((KINDS[kind] as Dictionary)["label"]).to_lower()]}
 
 
-## A PICTURE HELD UP.
+## A picture held up.
 func reveal(name: String, looks: String) -> Dictionary:
 	if name.is_empty() or looks.is_empty():
 		return {"ok": false, "words": "a picture needs a name and what it shows"}
@@ -218,7 +220,7 @@ func reveal(name: String, looks: String) -> Dictionary:
 	return {"ok": true, "event": e, "words": "%s is held up" % name}
 
 
-## THE GAME IS OVER: however it came to that.
+## The game is over: however it came to that.
 func end_game(how: String) -> Dictionary:
 	var e := {"id": next_id(), "kind": "over", "how": how}
 	apply(e)
@@ -227,7 +229,7 @@ func end_game(how: String) -> Dictionary:
 
 # --- reading it -------------------------------------------------------------------------------------------------------------------------------------
 
-## HOW FAR from [param a] to [param b]: on squares, as most games count them, a diagonal one square; with a free measure, a straight line.
+## How far from [param a] to [param b]: on squares, as most games count them, a diagonal one square; with a free measure, a straight line.
 func distance(a: Array, b: Array) -> float:
 	var grid := maps.is_empty() or bool((maps.back() as Dictionary).get("grid", true))
 	var dx := absf(float(a[0]) - float(b[0]))

@@ -1,32 +1,30 @@
 extends Control
 class_name FlagStrip
 
-## FlagStrip - THE TIMELINE'S FLAGS: a scrub strip with markers on it, Masking's and the editor's alike (next/editing.md, "The
-## Timeline"; the user, 2026-11-11: "I like the little flag markers and stuff that it uses, it's a really pleasant editing
-## experience"). Masking's [MaskTimeline] is this with its clip's waveform under it; any timeline hands it its flags through
-## Callables, as [TrackLane] is handed its block.
+## FlagStrip - the timeline's flags: a scrub strip with markers on it, Masking's and the editor's alike
+## (next/editing.md, "The Timeline"). Masking's [MaskTimeline] is this with its clip's waveform under
+## it; any timeline hands it its flags through Callables, as [TrackLane] is handed its block.
 ##
-## Click-drag on the body to scrub (emits `scrubbed`). Marker moves are TWO-STEP, to stop the misclick where aiming to select
-## a marker dragged it off its time in the same gesture: a marker's triangle HANDLE (the top band only - grabbing anywhere on
-## the full tick made it far too easy to snag a marker while aiming for the playhead) is grabbable ONLY once it is the
-## selected marker. The first press on a handle just SELECTS it (emits `marker_picked`); a second press-drag on the
-## now-selected marker picks it up and moves it (emits `marker_moved` while held).
+## Click-drag on the body to scrub (emits `scrubbed`). Marker moves are two-step: a marker's triangle
+## handle (the top band only) is grabbable only once it is the selected marker. The first press on a
+## handle selects it (emits `marker_picked`); a second press-drag on the selected marker moves it
+## (emits `marker_moved` while held).
 ##
-## Ctrl+scroll ZOOMS around the cursor (plain scroll pans when zoomed); all drawing and hit-testing goes through the shared
-## [TimelineView], so this strip and any lane above it agree on where a second sits on screen.
+## Ctrl+scroll zooms around the cursor (plain scroll pans when zoomed); all drawing and hit-testing go
+## through the shared [TimelineView], so this strip and any lane above it agree on where a second sits.
 ##
-## A marker is a Dictionary with a `time`, and a RAMP or a DAMP (`kind` 0 or 1; see MaskSession.MARKER_KINDS): it draws as
-## its anchor line, a triangle handle pointing the way its span runs (back into the past for a ramp, forward for a damp) and
-## a translucent tint across exactly its span ([member get_span]). A flag with no span is a moment, its tint a hairline.
+## A marker is a Dictionary with a `time`, and a ramp or a damp (`kind` 0 or 1; see MaskSession.MARKER_KINDS):
+## it draws as its anchor line, a triangle handle pointing the way its span runs (back for a ramp, forward
+## for a damp) and a translucent tint across exactly its span ([member get_span]). A flag with no span is
+## a moment, its tint a hairline.
 
 signal scrubbed(t: float)
 signal marker_picked(m: Dictionary)
-## Fired once per drag gesture, BEFORE the first time-mutation - the hook point for undo. A plain click-to-select never
-## fires it (no motion, no mutation, nothing to undo).
+## Fired once per drag gesture, before the first time-mutation - the undo hook. A plain click-to-select never fires it.
 signal marker_drag_started(m: Dictionary)
 signal marker_moved(m: Dictionary)
 
-## The shared pixel<->time mapping (one instance shared with every lane, so they all agree on where a second sits).
+## The shared pixel<->time mapping (one instance shared with every lane).
 var tview: TimelineView = null
 ## The currently-selected marker Dictionary, or null.
 var selected: Variant = null
@@ -113,9 +111,8 @@ func _gui_input(event: InputEvent) -> void:
 			if mb.pressed:
 				var m: Variant = _marker_near(mb.position)
 				if m != null:
-					# Two-step (see the class doc): the FIRST press on a marker only SELECTS it - it is not grabbable until it
-					# is the selected one. The owner keeps `selected` in sync from marker_picked synchronously, so the next
-					# press already sees this marker selected. Matches _draw's own `selected == m` identity test.
+					# Two-step (see the class doc): the first press on a marker only selects it. The owner keeps
+					# `selected` in sync from marker_picked synchronously, so the next press sees it selected.
 					if selected != null and selected == m:
 						_dragging_marker = m
 						_drag_started_emitted = false
@@ -146,10 +143,9 @@ func _drag_marker_to_x(x: float) -> void:
 	marker_moved.emit(_dragging_marker)
 
 
-## Markers are grabbable ONLY by their triangle handle in the top band - clicking the strip's body always scrubs, however
-## close to a marker's anchor line it lands.
+## Markers are grabbable only by their triangle handle in the top band - clicking the strip's body always scrubs.
 func _get_tooltip(at: Vector2) -> String:
-	# A FLAG'S NAME UNDER THE POINTER (drawn nowhere): every flag within a few pixels of it, one a line - stacked flags each said
+	# A flag's name under the pointer: every flag within a few pixels of it, one a line.
 	var said := PackedStringArray()
 	for m in _markers():
 		if (m as Dictionary).has("label") and absf(tview.x_of(float(m.time)) - at.x) <= 6.0:
@@ -179,8 +175,7 @@ func _draw() -> void:
 	var span := tview.visible_span()
 	var end := _extent()
 	_draw_under()
-	# Marker spans - a translucent tint across exactly the time range each marker's own ramp/damp occupies. Ramp =
-	# cool/green, damp = warm/orange; overlapping spans layer visibly.
+	# Marker spans: a translucent tint across the time range of each marker's ramp/damp. Ramp = cool/green, damp = warm/orange.
 	var markers := _markers()
 	for m in markers:
 		var mspan := _span_of(m)
@@ -191,17 +186,15 @@ func _draw() -> void:
 		var is_ramp: bool = int(m.get("kind", 0.0)) == 0
 		var tint := Color(0.45, 0.85, 0.55, 0.16) if is_ramp else Color(0.95, 0.55, 0.3, 0.16)
 		draw_rect(Rect2(x0, 0, maxf(1.0, x1 - x0), size.y), tint)
-	# The ruler adapts its tick step to the visible window, so zooming in brings finer gradations instead of one lonely
-	# label ([method TimelineView.step_for]).
+	# The ruler adapts its tick step to the visible window ([method TimelineView.step_for]).
 	var step := TimelineView.step_for(span, 14.0)
 	for tt in tview.ticks(step):
 		var x := tview.x_of(tt)
 		draw_line(Vector2(x, size.y - 14), Vector2(x, size.y), Color(0.3, 0.34, 0.4, 0.6), 1.0)
 		draw_string(ThemeDB.fallback_font, Vector2(x + 3, size.y - 4),
 			TimelineView.tick_label(tt, step), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.45, 0.5, 0.58))
-	# Markers: an anchor line (taller/brighter when selected) plus a triangle handle pointing back (ramp - it's pulling the
-	# timeline in from the past) or forward (damp - pushing away into the future), colored to match its span tint. The
-	# handle is also the ONLY grab region (see _marker_near).
+	# Markers: an anchor line (taller/brighter when selected) plus a triangle handle pointing back (ramp)
+	# or forward (damp), colored to match its span tint. The handle is also the only grab region (see _marker_near).
 	for m in markers:
 		var x := tview.x_of(float(m.time))
 		if x < -20.0 or x > size.x + 20.0:
@@ -217,10 +210,8 @@ func _draw() -> void:
 		var tip_x := x - h * 0.7 if is_ramp else x + h * 0.7
 		var pts := PackedVector2Array([Vector2(x, 1), Vector2(x, h), Vector2(tip_x, h * 0.5)])
 		draw_colored_polygon(pts, col)
-		# (NO WORDS BESIDE A FLAG, as Masking's markers have none - flags at one moment stacked their labels into a blur (the user,
-		# 2026-11-11, on 732687's Timeline); a flag's name is its tooltip, and every flag is listed on the panel's Timeline card)
-	# Playhead, with its own time tag riding right above it - the point being you never have to look away from "where the
-	# line is" to read "what time that is".
+		# No words beside a flag: a flag's name is its tooltip, and every flag is listed on the panel's Timeline card.
+	# Playhead, with its own time tag riding right above it.
 	var t := _playhead()
 	var px := tview.x_of(t)
 	if px >= -2.0 and px <= size.x + 2.0:

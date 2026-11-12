@@ -1,64 +1,35 @@
 extends RefCounted
 class_name Subprocess
 
-## Subprocess - every external program ghost starts, in one place, with one promise:
-## A CHILD NEVER OUTLIVES THE APP THAT STARTED IT.
+## Subprocess - every external program ghost starts, in one place, with one promise: a child never outlives
+## the app that started it. `OS.create_process` on Unix is fully detached, so closing or killing ghost would
+## leave an `ffmpeg` transcoding to disk. Going through [method start] covers every call site by default.
 ##
-## WHY THIS EXISTS. `OS.create_process` on Unix is fully detached: the child gets no
-## link back to its parent, so closing (or killing) ghost leaves it running. That is not
-## hypothetical - it was reported from the export path, where the render window and the
-## app window were both shut and `ffmpeg` carried on transcoding to disk with nothing on
-## screen to show it, no way to stop it, and no "godot" in `ps` to explain it. The same
-## hole exists for every other program the app starts: the bake process, the Movie Maker
-## render itself, the mask editor's prep/waveform/import passes, the voice host.
+## Two independent mechanisms:
 ##
-## `mask_editor` already killed its OWN pids from `_exit_tree`, and that pattern is the
-## reason this file exists rather than another copy of it: a per-owner list is a list
-## somebody must remember to extend, and the exporter - the one that got reported - never
-## had one at all. Going through `start()` is what makes a new call site covered by
-## default instead of covered if remembered.
+## 1. The registry (everywhere). Every pid started here is remembered until it exits or is stopped, and
+##    [method reap_all] kills whatever is left. `Boot` calls it when the app closes. Portable.
+## 2. The death pact (Linux, when available). A registry cannot help if the app is SIGKILLed, and ghost's own
+##    quit ends in `OS.kill(OS.get_process_id())` (see main._shutdown, a workaround for an audio-driver
+##    teardown crash), so no `_exit_tree` runs. `setpriv --pdeathsig KILL` sets the child's PR_SET_PDEATHSIG
+##    before exec'ing the real program, so the kernel kills it when the parent dies; the pid returned is the
+##    real program's.
 ##
-## TWO INDEPENDENT MECHANISMS, because they fail in different ways:
+## The pact is per-thread: PR_SET_PDEATHSIG fires when the parent thread exits, so a child must be started from
+## a thread that lives as long as the app (the main thread). Do not call `start()` from a WorkerThreadPool task;
+## use [method start_detached] there.
 ##
-##   1. THE REGISTRY (everywhere). Every pid started here is remembered until it exits or
-##      is stopped, and [method reap_all] kills whatever is left. `Boot` calls it when the
-##      app closes, so a graceful quit takes every child with it even if the owning mode
-##      forgot to clean up. This covers the ordinary case and it is portable.
+## The one deliberate exception uses [method start_detached] and says why at the call site: `assistant.gd`
+## dispatches `claude -p` runs that write to the working tree and are meant to finish after the editor closes.
 ##
-##   2. THE DEATH PACT (Linux, when available). A registry cannot help if the app is
-##      SIGKILLed - no shutdown code runs at all. That is not an exotic case here: ghost's
-##      OWN quit ends in `OS.kill(OS.get_process_id())` (see main._shutdown, a workaround
-##      for an audio-driver teardown crash), so every ordinary close is a SIGKILL and no
-##      autoload `_exit_tree` and no engine child-reaping ever runs. `setpriv --pdeathsig KILL` sets the
-##      child's PR_SET_PDEATHSIG before exec'ing the real program, so the KERNEL kills it
-##      the moment the parent dies, however the parent died. Verified both ways: with the
-##      pact the child is gone within a second of `kill -9` on the Godot process; without
-##      it the same child is still running. `setpriv` execs, so the pid we get back IS the
-##      real program's - callers keep polling it and reading its progress file exactly as
-##      before.
-##
-## THE PACT IS PER-THREAD, which is the one caveat worth knowing: PR_SET_PDEATHSIG fires
-## when the parent THREAD exits, not the parent process, so a child must be started from a
-## thread that lives as long as the app. Every caller here starts from the main thread (UI
-## callbacks and `_process`), which is exactly that thread. Do not call `start()` from a
-## WorkerThreadPool task without thinking about this; use [method start_detached] there.
-##
-## DELIBERATE EXCEPTIONS use [method start_detached] and say why at the call site. There is
-## one: `assistant.gd` dispatches `claude -p` runs that write straight to the working tree
-## and are MEANT to finish after the editor closes.
-##
-## NO SHELL IS ASSUMED. `/bin/bash` does not exist on Windows, and seven call sites used to
-## reach for it just to redirect output. Two portable forms replace it:
-##   [method start_logged] - stdout+stderr into one log file, pumped by this process. Pure
-##     Godot, so it behaves identically on every platform and Linux exercises the same path
-##     Windows runs.
-##   [method start_redirected] - a working directory, stdin from a file, stdout and stderr to
-##     separate files, for runs that must not hold a pipe to this process (the assistant's
-##     detached runs) or must see stdin closed (`codex exec` waits on an open one). `/bin/sh`
-##     on Linux and macOS, PowerShell on Windows.
-## FREE TEXT NEVER GOES IN ARGV. Godot's Windows command-line quoting wraps an argument in
-## quotes without escaping the quotes inside it, so a prompt containing `"` arrives split.
-## Prompts travel through [method start_redirected]'s stdin file instead.
+## No shell is assumed (`/bin/bash` does not exist on Windows). Two portable forms:
+##   [method start_logged] - stdout+stderr into one log file, pumped by this process. Pure Godot.
+##   [method start_redirected] - a working directory, stdin from a file, stdout and stderr to separate files,
+##     for runs that must not hold a pipe to this process or must see stdin closed (`codex exec` waits on an
+##     open one). `/bin/sh` on Linux and macOS, PowerShell on Windows.
+## Free text never goes in argv: Godot's Windows command-line quoting does not escape quotes inside an
+## argument, so a prompt containing `"` arrives split. Prompts travel through [method start_redirected]'s
+## stdin file.
 
 ## pid -> a short label, kept only so the shutdown reap can say what it killed.
 static var _tracked := {}
@@ -68,24 +39,21 @@ static var _closing := false
 static var _pact := ""
 ## Programs already reported missing, so a per-frame caller complains once, not 60x/s.
 static var _warned := {}
-## pid -> {threads, exited_ms}: the reader threads behind a [method start_logged] child.
-## [method alive] keeps answering true until they have drained the pipes, so a caller that
-## reads the log the moment the child is gone reads all of it.
+## pid -> {threads, exited_ms}: the reader threads behind a [method start_logged] child. [method alive] stays
+## true until they have drained the pipes, so a caller reading the log once the child is gone reads all of it.
 static var _pumps := {}
 ## Reader threads no longer tied to a live pid, joined once they finish.
 static var _stray: Array[Thread] = []
-## How long a finished child's readers may keep draining before [method alive] stops
-## waiting for them - a grandchild that inherited the pipe can hold it open indefinitely.
+## How long a finished child's readers may keep draining before [method alive] stops waiting (a grandchild
+## that inherited the pipe can hold it open indefinitely).
 const _DRAIN_MS := 2000
 ## The longest run without a line end a log pump holds back (see [method _pump]).
 const _LINE_MAX := 65536
 
-## The Windows half of [method start_redirected]. Fixed text, written once per run into
-## user://; everything variable arrives in a JSON spec file, so nothing the caller passes is
-## ever parsed as PowerShell. Arguments are re-quoted with the CommandLineToArgvW rules
-## (backslashes before a quote doubled, the quote escaped), which Godot's own quoting skips.
-## Output files are opened unbuffered and share-readable, so a caller tailing them sees
-## each event as it is written.
+## The Windows half of [method start_redirected]. Fixed text written once per run into user://; everything
+## variable arrives in a JSON spec file, so nothing the caller passes is parsed as PowerShell. Arguments are
+## re-quoted with the CommandLineToArgvW rules, which Godot's own quoting skips. Output files are opened
+## unbuffered and share-readable, so a caller tailing them sees each event as written.
 const _PS_LAUNCHER := """param([string]$SpecPath)
 $ErrorActionPreference = 'Stop'
 $s = [IO.File]::ReadAllText($SpecPath, [Text.Encoding]::UTF8) | ConvertFrom-Json
@@ -139,10 +107,9 @@ $out.Close(); $err.Close()
 exit $p.ExitCode
 """
 
-## The Unix half: `cd`, export the `env` entries (their count, then each `NAME=value`), then
-## exec with the redirects, so the pid the caller holds IS the program's (and a `setpriv` pact on
-## the shell carries over the exec). Every value is a positional parameter; nothing is
-## interpolated into the script.
+## The Unix half: `cd`, export the `env` entries (their count, then each `NAME=value`), then exec with the
+## redirects, so the pid the caller holds is the program's (and a `setpriv` pact on the shell carries over).
+## Every value is a positional parameter; nothing is interpolated into the script.
 const _SH_LAUNCHER := "cd \"$1\" || exit 1; in=\"$2\"; out=\"$3\"; err=\"$4\"; n=\"$5\"; shift 5; " \
 	+ "while [ \"$n\" -gt 0 ]; do export \"$1\"; shift; n=$((n - 1)); done; " \
 	+ "exec \"$@\" < \"$in\" > \"$out\" 2> \"$err\""
@@ -151,11 +118,8 @@ const _SH_LAUNCHER := "cd \"$1\" || exit 1; in=\"$2\"; out=\"$3\"; err=\"$4\"; n
 ## Start `path` with `args`, bound to this process, and return its pid (<= 0 on failure).
 ## `tag` is a human label for the shutdown log and the echo; it defaults to the program's name.
 ##
-## WHAT THE CHILD SAYS LANDS IN THE APP'S LOG, line by line, as `[tag] line` (stderr through
-## printerr). It used to inherit the terminal, so a child's output reached whoever had one open
-## and nobody else: the README recording's "Done recording movie ... 257 frames" summary was in
-## the terminal and never in the console (`>_`), and an end user running the app from a launcher
-## has no terminal at all - a child failing there left nothing to send. The child's stdin is a
+## What the child says lands in the app's log, line by line, as `[tag] line` (stderr through printerr), so it
+## reaches the console (`>_`) and the feedback record even where no terminal exists. The child's stdin is a
 ## pipe nobody writes, as in [method start_logged].
 static func start(path: String, args: PackedStringArray, tag := "") -> int:
 	_sweep_pumps()
@@ -165,20 +129,17 @@ static func start(path: String, args: PackedStringArray, tag := "") -> int:
 	return _attach_pumps(info, null, "[%s] " % (tag if tag != "" else path.get_file()))
 
 
-## The words that give a Godot child of THIS project a log file of its own -
-## `--log-file user://logs/<name>.log` - to go before its `--`. Without them it opens
-## user://logs/godot.log, and Godot opens its log TRUNCATED: under a session that is running, the
-## app's lines up to then survive only in the rotated copy, and the rest land in the child's file
-## after a run of NUL bytes (measured) - while the console tails that file. What the child prints
-## still reaches the app's log through [method start].
+## The words that give a Godot child of this project a log file of its own - `--log-file user://logs/<name>.log`
+## - to go before its `--`. Without them it opens user://logs/godot.log, and Godot opens its log truncated, so a
+## running session's lines survive only in the rotated copy. What the child prints still reaches the app's log
+## through [method start].
 static func own_log(name: String) -> PackedStringArray:
 	return PackedStringArray(["--log-file", ProjectSettings.globalize_path("user://logs/%s.log" % name)])
 
 
-## Start `path` with `args` and keep a pipe to its stdio - the `OS.execute_with_pipe` form,
-## bound and registered exactly like [method start]. Returns that call's Dictionary, empty on
-## failure. `setpriv` execs the real program, so the returned pid and the pipe are the real
-## program's; nothing about the caller's protocol changes.
+## Start `path` with `args` and keep a pipe to its stdio - the `OS.execute_with_pipe` form, bound and registered
+## like [method start]. Returns that call's Dictionary, empty on failure. The returned pid and pipe are the real
+## program's (`setpriv` execs).
 static func start_with_pipe(path: String, args: PackedStringArray, tag := "") -> Dictionary:
 	var prog := _program(path)
 	if prog.is_empty():
@@ -197,18 +158,16 @@ static func start_with_pipe(path: String, args: PackedStringArray, tag := "") ->
 	return info
 
 
-## The words that bind a program a WRAPPER starts (xvfb-run, say) to that wrapper: run
-## `pact_prefix() + [program, args...]` where the wrapper would run `[program, args...]`. A pact
-## does not pass to a child's own children, so without this, stopping the wrapper leaves what it
-## started running. Empty where no pact is available.
+## The words that bind a program a wrapper starts (xvfb-run, say) to that wrapper: run `pact_prefix() +
+## [program, args...]` where the wrapper would run `[program, args...]`. A pact does not pass to a child's own
+## children, so stopping the wrapper would otherwise leave what it started running. Empty where no pact exists.
 static func pact_prefix() -> PackedStringArray:
 	var bin := _pact_bin()
 	return PackedStringArray() if bin == "-" else PackedStringArray([bin, "--pdeathsig", "KILL", "--"])
 
 
-## Start a program that is SUPPOSED to outlive the app. Not tracked, not bound; the call
-## site must justify itself in a comment, because this is the behavior every reported
-## orphan came from.
+## Start a program that is supposed to outlive the app. Not tracked, not bound; the call site must say why in a
+## comment.
 static func start_detached(path: String, args: PackedStringArray) -> int:
 	var prog := _program(path)
 	return OS.create_process(prog, args) if not prog.is_empty() else -1
@@ -217,17 +176,16 @@ static func start_detached(path: String, args: PackedStringArray) -> int:
 ## Start `path` with `args`, stdout and stderr both written to `log_path` (truncated first),
 ## bound and registered like [method start]. Returns the pid, <= 0 on failure.
 ##
-## One reader thread per stream, because a single blocking reader deadlocks the moment the
-## child fills the pipe it is not reading. Both append to the log under one lock and flush
-## per chunk, so a caller tailing the file each frame (yt-dlp's progress line) sees it live.
-## The child's stdin is a pipe this process never writes: fine for uv, yt-dlp, python and a
+## One reader thread per stream, since a single blocking reader deadlocks when the child fills the pipe it is
+## not reading. Both append to the log under one lock and flush per chunk, so a caller tailing the file each
+## frame sees it live. The child's stdin is a pipe this process never writes: fine for uv, yt-dlp, python and a
 ## headless Godot, wrong for anything that reads stdin (use [method start_redirected]).
 static func start_logged(path: String, args: PackedStringArray, log_path: String, tag := "") -> int:
 	_sweep_pumps()
 	var info := start_with_pipe(path, args, tag)
 	if info.is_empty():
 		return -1
-	# A log that cannot be opened still gets drained - an unread pipe stalls the child.
+	# A log that cannot be opened is still drained: an unread pipe stalls the child.
 	return _attach_pumps(info, FileAccess.open(log_path, FileAccess.WRITE), "")
 
 
@@ -297,10 +255,9 @@ static func start_redirected(path: String, args: PackedStringArray, io: Dictiona
 	return start(shell, full, tag if tag != "" else path.get_file())
 
 
-## Kill `pid` - and on Windows its whole process tree, since a [method start_redirected]
-## child there sits under a PowerShell launcher and killing the launcher alone would orphan
-## it. Not registry-checked: [method stop] is the guarded form, this is for pids the caller
-## owns outright (a detached assistant run).
+## Kill `pid`, and on Windows its whole process tree (a [method start_redirected] child sits under a PowerShell
+## launcher). Not registry-checked: [method stop] is the guarded form, this is for pids the caller owns outright
+## (a detached assistant run).
 static func terminate(pid: int) -> void:
 	if pid <= 0:
 		return
@@ -311,16 +268,12 @@ static func terminate(pid: int) -> void:
 	OS.kill(pid)
 
 
-## EVERY child goes through [Deps] first, so a bare "ffmpeg" becomes an absolute path
-## before the kernel sees it. That is not a convenience: a GUI-launched app does not
-## inherit a shell's PATH, so on macOS a Homebrew ffmpeg is invisible to a bare name
-## and the child simply never starts. Returns "" - and says why, once - when the
-## program is not there at all, which would otherwise present as an unexplained pid of
-## -1 somewhere far from the cause. A program ghost downloads itself is asked for on the
-## way out, so the next attempt finds it.
+## Every child goes through [Deps] first, so a bare "ffmpeg" becomes an absolute path (a GUI-launched app does
+## not inherit a shell's PATH). Returns "" and says why, once, when the program is not there at all. A program
+## ghost downloads itself is asked for on the way out, so the next attempt finds it.
 static func _program(path: String) -> String:
-	# NOTHING STARTS WHERE NOTHING CAN (next/notes.md, "Platforms"): a phone executes no program
-	# ghost could fetch, so a component that forgot to declare `subprocess` still launches nothing.
+	# Nothing starts where nothing can (next/notes.md, "Platforms"): a phone executes no program ghost could fetch,
+	# so a component that forgot to declare `subprocess` still launches nothing.
 	var impossible := Capabilities.impossible("subprocess")
 	if not impossible.is_empty():
 		if not _warned.has(path):
@@ -342,33 +295,16 @@ static func _program(path: String) -> String:
 	return bin
 
 
-## THE REGISTRY IS THE AUTHORITY ON WHETHER A PID IS OURS TO ASK ABOUT, and both calls below
-## check it BEFORE they touch the OS. That is not tidiness, it is the fix for an error printed
-## on every single close:
-##
-##     ghost: stopped 1 background process(es) on exit: voice host
-##     ERROR: The process 1199699 does not exist or is not a child of the calling process.
-##        at: _check_pid_is_running (drivers/unix/os_unix.cpp:863)
-##        [0] stop (res://src/platform/subprocess.gd) [1] stop (voice_host.gd) [2] _exit_tree
-##
-## Read the order: `Boot` reaps the registry, and THEN the tree tears down and the owning
-## autoload's `_exit_tree` stops its own pid a second time. `stop()` asked
-## `OS.is_process_running` first, and that call `waitpid()`s a child Godot has already
-## reaped - ECHILD, which the Unix driver reports as an error. It is exactly the race
-## [method reap_all] documents refusing to run into, and it was still in these two.
-##
-## So: a pid in `_tracked` is one we started and have not stopped, reaped or seen exit, and it
-## is the only kind either call will hand to the kernel. Anything else - never ours, already
-## reaped, already exited, a stale variable a mode's shutdown list still holds - answers from
-## the registry alone and costs nothing. `kill()` on a tracked child that has since exited on
-## its own stays harmless (it is a signal, not a wait), which is why `stop` needs no liveness
-## question at all.
+## The registry is the authority on whether a pid is ours to ask about: [method alive] and [method stop] check
+## it before they touch the OS. `Boot` reaps the registry, then the tree tears down and an owning autoload's
+## `_exit_tree` stops its pid a second time, and `OS.is_process_running` on a child Godot already reaped
+## is a `waitpid` that fails with ECHILD, reported as an engine error. A pid in `_tracked` is one we started and
+## have not stopped, reaped or seen exit; anything else answers from the registry alone. `kill()` on a tracked
+## child that has exited is harmless (a signal, not a wait), so `stop` needs no liveness question.
 
-## Is this child of ours still running? Forgets it once it is not, so the registry stays tight
-## and a shutdown reap can never signal a pid that has been recycled since. Use this in the
-## polling loops that used to call `OS.is_process_running` directly. A pid we did not start (or
-## have already forgotten) is not "alive" as far as this registry is concerned - including a
-## `start_detached` child, which is deliberately nobody's to track.
+## Is this child of ours still running? Forgets it once it is not, so the registry stays tight and a shutdown
+## reap never signals a recycled pid. A pid we did not start or already forgot, including a `start_detached`
+## child, is not alive as far as this registry is concerned.
 static func alive(pid: int) -> bool:
 	if pid <= 0 or not _tracked.has(pid):
 		return false
@@ -378,20 +314,15 @@ static func alive(pid: int) -> bool:
 	return false
 
 
-## GHOST IS CLOSING, AND ITS CHILDREN WERE KILLED BY IT ([method reap_all] has run). Whoever watches
-## a child asks this before concluding anything from the child being gone: the tree lives one more
-## frame after the reap (main._shutdown waits for it, so the `_exit_tree` saves run), and in that
-## frame every watcher saw its child dead and said so (2026-10-12, on every close with the README's
-## recording under way: "ERROR: Parse JSON failed" out of the recorder's unwritten capture file,
-## "the recording ended without finishing", "the voice host exited unexpectedly"). A child ghost
-## stopped has not failed.
+## True once ghost is closing and [method reap_all] has killed its children. Whoever watches a child asks this
+## before concluding anything from the child being gone: the tree lives one more frame after the reap
+## (main._shutdown waits for it so the `_exit_tree` saves run), and a child ghost stopped has not failed.
 static func closing() -> bool:
 	return _closing
 
 
-## Kill one child now and forget it. Returns whether it actually signaled anything, so a
-## second stop - after a reap, or on a pid a mode's shutdown list still holds from last time -
-## is visibly a no-op rather than an error in the log.
+## Kill one child now and forget it. Returns whether it signaled anything, so a second stop is a visible
+## no-op rather than an error in the log.
 static func stop(pid: int) -> bool:
 	if pid <= 0 or not _tracked.has(pid):
 		return false
@@ -401,17 +332,16 @@ static func stop(pid: int) -> bool:
 	return true
 
 
-## Forget a pid WITHOUT killing it - for a child deliberately handed off. Rare.
+## Forget a pid without killing it, for a child deliberately handed off. Rare.
 static func forget(pid: int) -> void:
 	_tracked.erase(pid)
 
 
-## Kill every child still registered. Called from `Boot` when the app closes; safe to call
-## more than once. Deliberately does NOT call `OS.is_process_running` first: at shutdown
-## Godot is reaping its own children on another path, and a same-frame
-## `is_process_running` on the same pid races that reap into ECHILD - the crash-on-close
-## `assistant.gd` documents. `kill()` on an already-dead child is harmless. It returns once the
-## killed children's log readers have finished ([method _await_pumps]).
+## Kill every child still registered. Called from `Boot` when the app closes; safe to call more than once.
+## It does not call `OS.is_process_running` first: at shutdown Godot reaps its own children on another path, and
+## a same-frame call races that reap into ECHILD (the crash-on-close `assistant.gd` documents). `kill()` on an
+## already-dead child is harmless. It returns once the killed children's log readers have finished
+## ([method _await_pumps]).
 static func reap_all() -> int:
 	_closing = true
 	var n := 0
@@ -434,17 +364,14 @@ static func tracked() -> int:
 	return _tracked.size()
 
 
-# One stream of a child, copied into its log (or echoed into the app's) until EOF. A
-# blocking read returns whatever is available, and nothing only at EOF - or, rarely, when
-# a signal interrupts it, which is why one empty read is not believed until it repeats.
+# One stream of a child, copied into its log (or echoed into the app's) until EOF. A blocking read returns
+# whatever is available, and nothing only at EOF or when a signal interrupts it, so one empty read is not
+# believed until it repeats.
 ##
-## WHOLE LINES ONLY. Both streams share one log, and a read takes whatever is in the pipe - so a chunk
-## could end mid-line and the other stream's chunk land inside that line, splicing an `err` line into
-## an `out` one (subprocess_pact_check lost exactly one line in a few thousand that way). A shell's
-## `2>&1` keeps lines whole because programs write whole lines; this keeps the part after the last
-## line end back until the line is finished. A carriage return ends a line too, or yt-dlp's progress
-## line - rewritten in place with `\r` - would not reach a caller tailing the log until the download
-## finished; and a "line" grown past [constant _LINE_MAX] goes out as it is.
+## Whole lines only. Both streams share one log and a read takes whatever is in the pipe, so a chunk ending
+## mid-line could be spliced with the other stream's chunk. The part after the last line end is held back until
+## the line is finished. A carriage return ends a line too (yt-dlp rewrites its progress line with `\r`), and a
+## "line" grown past [constant _LINE_MAX] goes out as it is.
 static func _pump(pipe: FileAccess, sink: FileAccess, lock: Mutex, echo: String, err: bool) -> void:
 	var empty := 0
 	var held := PackedByteArray()          # the unfinished line, waiting for its end
@@ -478,8 +405,8 @@ static func _store(sink: FileAccess, lock: Mutex, bytes: PackedByteArray, echo: 
 	lock.unlock()
 
 
-# Whole lines into the app's log, one print each (one write each, so the two streams cannot
-# splice). A line rewritten in place with `\r` is a line of its own here.
+# Whole lines into the app's log, one print each (one write each, so the two streams cannot splice). A line
+# rewritten in place with `\r` is a line of its own here.
 static func _echo(bytes: PackedByteArray, echo: String, err: bool) -> void:
 	var lines := bytes.get_string_from_utf8().replace("\r\n", "\n").replace("\r", "\n").split("\n")
 	if lines.size() > 1 and lines[-1].is_empty():
@@ -535,11 +462,10 @@ static func _join_finished_pumps() -> void:
 			_stray.erase(t)
 
 
-# THE READERS FINISH BEFORE THE SCRIPT DOES. A killed child's pipe ends at once, but its reader sees
-# that only after a few empty reads (about 60 ms) and then calls back into this script - and a closing
-# engine clears every script's functions under a thread still running: "Nonexistent function '_store'
-# in base 'GDScript'", after mask_tracks_check had passed (CI, 2026-10-23). So the close waits for
-# them, up to [constant _DRAIN_MS]; a grandchild holding a pipe open is left reading.
+# The readers finish before the script does. A killed child's pipe ends at once, but its reader notices only
+# after a few empty reads (about 60 ms) and then calls back into this script; a closing engine clears every
+# script's functions under a thread still running. So the close waits for them, up to [constant _DRAIN_MS]; a
+# grandchild holding a pipe open is left reading.
 static func _await_pumps() -> void:
 	var until := Time.get_ticks_msec() + _DRAIN_MS
 	while Time.get_ticks_msec() < until and _stray.any(func(t: Thread) -> bool: return t.is_alive()):
@@ -551,8 +477,8 @@ static func _is_windows() -> bool:
 	return OS.get_name() == "Windows"
 
 
-# By absolute path under SystemRoot first: it ships with every Windows since 7, and a
-# stripped PATH should not be what decides whether the assistant can start.
+# By absolute path under SystemRoot first: it ships with every Windows since 7, and a stripped PATH should not
+# decide whether the assistant can start.
 static func _powershell() -> String:
 	var p := OS.get_environment("SystemRoot").path_join(
 		"System32/WindowsPowerShell/v1.0/powershell.exe")
@@ -589,11 +515,9 @@ static func _write_ps_spec(spec: Dictionary) -> String:
 	return path
 
 
-# The `setpriv` binary if it can bind a child to us, "-" if it cannot. Resolved once per
-# run. PROVEN, not assumed: `--pdeathsig` arrived in util-linux 2.33, and an older setpriv
-# rejects the flag - which would mean every child failing to start at all rather than
-# merely failing to be bound. So the flag is exercised on `true` before anything real
-# rides on it.
+# The `setpriv` binary if it can bind a child to us, "-" if it cannot; resolved once per run. `--pdeathsig` needs
+# util-linux 2.33 and an older setpriv rejects it, which would stop every child starting, so the flag is
+# exercised on `true` first.
 static func _pact_bin() -> String:
 	if _pact != "":
 		return _pact

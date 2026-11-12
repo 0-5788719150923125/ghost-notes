@@ -1,47 +1,32 @@
 extends RefCounted
 class_name Deps
 
-## Deps - every external program and environment ghost uses, in one place, with one promise:
-## RESOLUTION AND REPORTING ARE THE SAME CODE.
+## Deps - every external program and environment ghost uses, in one place. Resolution and reporting are the
+## same code: [method resolve] is what launches things ([Subprocess] runs every child through it, so a bare
+## "ffmpeg" becomes an absolute path), and [method report] is what the Environment panel lists, asking the same
+## resolver so the panel cannot claim a dependency is present while the launch path fails to find it.
 ##
-## ghost shells out constantly - ffmpeg for every Masking clip, ffprobe for its frame counts, a
-## Python environment for the voice host, the clown's face tracker, the URL import and the tablet's
-## page capture. There are two halves and they must not drift apart:
+## Three kinds of row. [constant FETCHED] are programs ghost downloads and keeps current (FFmpeg, uv);
+## [constant MANAGED] is what ghost builds with them: its own Python and one environment per feature. Both are
+## installed by the `Provisioner` autoload (see [Provision]). [constant TOOLS] are the programs that stay the
+## machine's own: Linux system utilities and the AI CLIs, which keep their own logins.
 ##
-##   [method resolve] is what actually launches things. [Subprocess] runs every child through it,
-##   so a bare "ffmpeg" handed to `Subprocess.start` becomes an absolute path before the kernel
-##   ever sees it.
+## The path problem, for programs found on the machine: a GUI-launched app does not inherit a shell's PATH (on
+## macOS a double-clicked app gets `/usr/bin:/bin:/usr/sbin:/sbin`; on Linux `~/.local/bin` and Flatpak/snap
+## exports are missing). [method search_dirs] scans PATH plus each platform's usual install places as a
+## filesystem lookup, not a `which` subprocess: microseconds, identical on all platforms.
 ##
-##   [method report] is what the Environment panel lists. It asks the SAME resolver, so the panel cannot
-##   claim a dependency is present while the launch path fails to find it - a status panel with its
-##   own detection logic is a panel that lies eventually.
+## Windows: every candidate is tried against `PATHEXT` (a `.cmd` shim is how npm tools appear), and a virtualenv
+## keeps its programs in `Scripts\`, not `bin/` ([method venv_bin]).
 ##
-## THREE KINDS OF ROW. [constant FETCHED] are programs ghost downloads and keeps current itself
-## (FFmpeg, uv), and [constant MANAGED] is what ghost builds with them: its own Python and one
-## environment per feature. Both are installed by the `Provisioner` autoload - see [Provision] -
-## so nothing in them is the user's to install. [constant TOOLS] are the few programs that stay the
-## machine's own: Linux system utilities, and the AI CLIs, which keep their own logins.
-##
-## THE PATH PROBLEM, for the programs found on the machine. A GUI-launched app does not inherit an
-## interactive shell's PATH. On macOS a double-clicked app gets `/usr/bin:/bin:/usr/sbin:/sbin` and
-## nothing else, so a Homebrew program in `/opt/homebrew/bin` is invisible; on Linux the same
-## happens to `~/.local/bin` and Flatpak/snap exports. [method search_dirs] therefore scans PATH
-## *plus* the places each platform actually installs things, as a filesystem lookup rather than a
-## `which` subprocess: it costs microseconds, works identically on all three platforms, and needs no
-## external program to find external programs.
-##
-## WINDOWS gets two extra rules. Executables need an extension, so every candidate is tried against
-## `PATHEXT` (`.exe`, `.cmd`, `.bat`, ...) - a `.cmd` shim is how npm-installed tools appear. And a
-## virtualenv puts its programs in `Scripts\`, not `bin/`, which is what [method venv_bin] is for.
-##
-## ADDING A DEPENDENCY is one row in one of the three tables. The home-screen panel, the `--deps`
-## report, the feedback record's environment block and the hints are all rendered off them.
+## Adding a dependency is one row in one of the three tables; the Environment panel, the `--deps` report, the
+## feedback record's environment block and the hints are all rendered off them.
 
-## Severity, and it is about CONSEQUENCE, not about how much we like the program.
+## Severity: the consequence of the program being absent.
 enum { TIER_FEATURE, TIER_EXTRA }
 
-## Where a row's state comes from: the machine, a program ghost builds from what it fetched, or a
-## program ghost downloads itself.
+## Where a row's state comes from: the machine, a program ghost builds from what it fetched, or a program ghost
+## downloads itself.
 enum { KIND_TOOL, KIND_MANAGED, KIND_FETCHED }
 
 ## Programs ghost downloads from their upstream releases, checks against the published SHA-256 and
@@ -271,7 +256,7 @@ const MANAGED := [
 				"url": "https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/37d1bea250e21ca0d617818d2bef1db724edb80c/en/en_US/john/medium/config.json",
 				"sha256": "af60f177b6b550f3d7a302720c0fb89e7f94a82b5dca464775ef63b1c69ba09a",
 				"size": 4965},
-			# KOKORO, TAUGHT HERE (hosts/voice_train/kokoro_voice.py): hexgrad's PyTorch checkpoint (Apache-2.0), its
+			# Kokoro, taught here (hosts/voice_train/kokoro_voice.py): hexgrad's PyTorch checkpoint (Apache-2.0), its
 			# config, and the pack a voice starts from (onnx-community's af_heart, the voice host's own)
 			{"key": "kokoro_model", "name": "Kokoro's weights", "file": "kokoro-82m/kokoro-v1_0.pth",
 				"url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/f3ff3571791e39611d31c381e3a41a3af07b4987/kokoro-v1_0.pth",
@@ -285,8 +270,8 @@ const MANAGED := [
 				"url": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/dd4401a9add81ac692d20e240d22ec9dda82cc29/voices/af_heart.bin",
 				"sha256": "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b",
 				"size": 522240},
-			# THE EAR THAT CHECKS EACH SENTENCE (hosts/speech/agree.py, read by the speech environment): Whisper medium.en -
-			# base.en and small.en heard 32 and 50 of 79 clean clips of soft speech as written, medium.en all of them
+			# The speech check (hosts/speech/agree.py, read by the speech environment): Whisper medium.en, which heard all
+			# 79 clean clips of soft speech as written where base.en and small.en heard 32 and 50
 			{"key": "whisper_medium", "name": "the careful speech model", "file": "whisper-medium.en/model.bin",
 				"url": "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/a29b04bd15381511a9af671baec01072039215e3/model.bin",
 				"sha256": "11b220779aea4c6f3ce9d2549c8a95ea869ed84066864b999531ef53e594fe5b",
@@ -569,8 +554,8 @@ const TOOLS := [
 
 # --- resolution --------------------------------------------------------------
 #
-# THE HOT PATH. `Subprocess` calls this for every child it starts, so it has to be cheap and it has
-# to be thread-safe: mask_editor and voice_stream both start work off the main thread.
+# The hot path: `Subprocess` calls this for every child it starts, so it must be cheap and thread-safe
+# (mask_editor and voice_stream start work off the main thread).
 
 static var _resolved := {}          # program name -> absolute path, "" for a known miss
 static var _dirs := PackedStringArray()
@@ -758,7 +743,7 @@ static func entry(key: String) -> Dictionary:
 ## `found`, `path`, `version`, `note`, plus the table's own fields. What a job is doing right now is
 ## [method Provision.state]'s to say; this is what is installed.
 ##
-## This SPAWNS PROCESSES (one `--version` per installed program), so it is slow enough to notice on
+## This spawns processes (one `--version` per installed program), so it is slow enough to notice on
 ## a frame - a few hundred milliseconds cold. The panel runs it on a thread; `--deps` runs it inline
 ## because there is no frame to protect.
 static func report(include_dev := true) -> Array:
@@ -1074,17 +1059,14 @@ static func _ask_the_shell(prog: String) -> String:
 	return p if FileAccess.file_exists(p) else ""
 
 
-## "linux", "macos" or "windows" - or "android", "ios" or "web", where ghost has no builds of
-## anything: a program it downloads cannot run there (Android 10 and later refuse to execute a
-## file from an app's own writable storage), so [method Provision.unsupported] answers no for
-## all of them. It used to call everything that was not Windows or macOS "linux", so a phone
-## reported `linux-arm64` - a platform ghost HAS downloads for - and started fetching FFmpeg.
+## "linux", "macos" or "windows" - or "android", "ios" or "web", where ghost has no builds: a program it
+## downloads cannot run there (Android 10 and later refuse to execute a file from an app's own writable
+## storage), so [method Provision.unsupported] answers no for all of them.
 static func platform() -> String:
 	return _platform()
 
 
-## A gate's way to ask the questions above as another platform would ("android"). Never set in
-## the app.
+## A gate's way to ask the questions above as another platform would ("android"). Never set in the app.
 static var platform_override := ""
 
 

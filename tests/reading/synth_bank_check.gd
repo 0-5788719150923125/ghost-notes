@@ -5,24 +5,16 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/reading/synth_bank_check.gd 120
 ##
-## A throw from a seed COMPOSES: its traits are the parent's plus a few members' pulls, and the
-## sustain bank - where in a reading the voice holds its notes - carries one cycle per member that
-## pulled ([method VoiceParty.sustain_bank]). The editor kept those contributors for the bank and
-## nothing cleared them, so a voice no throw composed sang with the last throw's: a wild draw; a
-## catch landed (its belt entry and the note keep no contributors, so it sang one way as it was
-## caught and another when it came back); the still water after a release; a voice a document
-## applies. The stream and an export plan from `_current_spec()` - the plan is made at setup and
-## restart, a retune swaps timbre only - so that is what is read here:
+## A throw from a seed composes: its traits are the parent's plus a few members' pulls, and the sustain bank
+## carries one cycle per member that pulled ([method VoiceParty.sustain_bank]). The stream and an export plan
+## from `_current_spec()` (made at setup and restart; a retune swaps timbre only), so that is what is read here:
+## a wild throw, a landed catch, a release and an applied document each sing their own cycle alone.
 ##
-##   A WILD THROW, A LANDED CATCH, A RELEASE AND AN APPLIED DOCUMENT each sing their own cycle alone.
+## Controls: before each, a throw from a seed is made to compose (its bank carries more than its own cycle), or a
+## cleared bank proves nothing; and a document block with no lineage leaves the water as it was - its bank stays.
 ##
-## THE CONTROLS: before each, a throw from a seed is made to compose (its bank carries more than
-## its own cycle), or a bank found cleared proves nothing; and a document block with NO lineage
-## leaves the water as it was - the bank it had stays.
-##
-## The editor is built by hand and never added to the tree (its `_ready` reads the author's save),
-## with `_autopilot` set: `_apply` and `_persist` return at once, so no voice is synthesized and
-## nothing is written.
+## The editor is built by hand and never added to the tree (its `_ready` reads the author's save), with
+## `_autopilot` set: `_apply` and `_persist` return at once, so no voice is synthesized and nothing is written.
 
 var _fails: Array = []
 var _ed: SynthEditor
@@ -69,7 +61,7 @@ func _bank() -> int:
 	return (_ed._current_spec().sustain_bank as Array).size()
 
 
-## THE CONTROL before each check: throw from the Collection's seeds until one composes.
+## The control before each check: throw from the Collection's seeds until one composes.
 func _compose(before: String) -> bool:
 	for k in 60:
 		_ed._throw_from(k % _ed._belt.size())

@@ -1,30 +1,27 @@
 extends SceneTree
 
 ## bedrock_check - Amazon Bedrock as a writer and a painter ([BedrockCatalog], [TextGen]'s and
-## [ImageGen]'s `bedrock`): everything that can be held to a rule WITHOUT calling a model, which
-## bills per token or per picture, and the queue's STEPS the backends run on.
+## [ImageGen]'s `bedrock`): everything that can be held to a rule without calling a model (which bills),
+## and the queue's steps the backends run on.
 ##
 ##   godot --headless --path . --script res://tests/agents/bedrock_check.gd
 ##
-## - THE CATALOG, from canned answers shaped like a real account's (us-east-2, 2026-10-05): chat
-##   models and text-to-image models only - not embeddings, the reranker, speech, an upscaler that
-##   takes no prompt, provisioned-only variants, a legacy model or a retired one whose profile
-##   lingers. The route to each: the geographic profile over the global one, the base id where the
-##   home region serves it on demand, else ANOTHER REGION that does (Stability's painters live in
-##   us-west-2). No account number kept; a week per region asked.
-## - THE REGION as the CLI reads it.
-## - THE WRITER: pictures as base64 JPEG (turned over when reversed), the request in a file and
-##   nothing authored in argv, the region named; a model that takes no system prompt is sent it in
-##   the message and one with a lower output limit is asked inside it - each once; the reply's text
-##   blocks, a cut-off reply a failure, the CLI's complaint reported; a text-only model refuses
-##   pictures before anything starts.
-## - THE PAINTER: the director is shown each reference by the name the request gives it, and its
-##   reply is reshaped (clipped, the ratio checked against what the image model takes, else read
-##   off the request); the body per model family - a style model is handed the first reference,
-##   and with none the default paints; the picture decoded from the response into the target; a
-##   declined picture says why; a family it cannot ask is refused.
-## - THE QUEUE'S STEPS: `advance` keeps a job running on a new pid until it returns 0 - in
-##   [AgentJobs] and in [Illustrations]' own pump.
+## - The catalog, from canned answers shaped like a real account's: chat models and text-to-image models
+##   only (not embeddings, the reranker, speech, an upscaler that takes no prompt, provisioned-only
+##   variants, a legacy or retired model). The route to each: the geographic profile over the global one,
+##   the base id where the home region serves it on demand, else another region that does. A week per
+##   region asked; no account number kept.
+## - The region as the CLI reads it.
+## - The writer: pictures as base64 JPEG (turned over when reversed), the request in a file and nothing
+##   authored in argv, the region named; a model that takes no system prompt is sent it in the message and
+##   one with a lower output limit is asked inside it, each once; the reply's text blocks, a cut-off reply
+##   a failure, the CLI's complaint reported; a text-only model refuses pictures before anything starts.
+## - The painter: the director is shown each reference by the name the request gives it and its reply is
+##   reshaped (clipped, the ratio checked against what the image model takes, else read off the request);
+##   the body per model family (a style model is handed the first reference, and with none the default
+##   paints); the picture decoded into the target; a declined picture says why; an unknown family is refused.
+## - The queue's steps: `advance` keeps a job running on a new pid until it returns 0, in [AgentJobs] and
+##   in [Illustrations]' own pump.
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
 const Catalog := preload("res://src/agents/bedrock_catalog.gd")

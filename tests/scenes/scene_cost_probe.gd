@@ -1,14 +1,15 @@
 extends Node
 
-## WHAT ONE FRAME OF EACH CATALOG SCENE COSTS IN SCRIPT (next/csharp.md, next/compute.md step 1): every scene of the roster once, at
-## 1920x1080, on the dummy renderer - so the GPU is not in it, only GDScript and the canvas taking its arrays. A probe, for looking.
+## What one frame of each catalog scene costs in script (next/csharp.md, next/compute.md step 1): every
+## roster scene once at 1920x1080 on the dummy renderer, so only GDScript and the canvas taking its
+## arrays are in it. A probe, for looking.
 ##
 ##   tests/run_boot_probe.sh tests/scenes/scene_cost_probe.gd 600 [how many scenes]
 ##
-## PROCESSOR TIME, never the wall's (a busy machine times itself): `main`, this thread's a frame, split into `update` and the
-## rest (`_draw`); `all threads`, every thread's, for a scene that uses the worker pool itself. An empty frame is taken off.
-## THE FORGE BUILDS IN `_draw`, as an export does ([FrameForge]): live, a scene's build is on a worker and the picture only updates
-## as fast as it lands, so what is said here is the build's whole cost.
+## Processor time, never the wall's: `main` is this thread's cost per frame, split into `update` and the
+## rest (`_draw`); `all threads` is every thread's, for a scene that uses the worker pool itself. An
+## empty frame is taken off. The forge builds in `_draw`, as an export does ([FrameForge]), so the figure
+## is the build's whole cost (live, the build is on a worker).
 
 const WARM := 10
 const TIMED := 30

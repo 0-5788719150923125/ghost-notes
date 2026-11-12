@@ -1,55 +1,39 @@
 extends Node
 
-## Is it VAPOR? The gate for `vapors` and shaders/vapor_field.gdshader.
+## Is it vapor? The gate for `vapors` and shaders/vapor_field.gdshader.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/vapor_check.gd 480
 ##
-## Needs BOTH a real boot (the scene reaches Spectrum and Director) and a real renderer (every
-## claim below is measured off pixels), which is what GHOST_PROBE_GPU is for.
+## Needs a real boot (the scene reaches Spectrum and Director) and a real renderer (every claim is
+## measured off pixels). A look can compile, run and report plausible coverage and still draw engraved
+## satin (long parallel contour lines over the frame) or pulse like a bellows, so each claim is a
+## property that separates the look from the ways it has failed, measured against a control that breaks
+## that property:
 ##
-## This scene is a LOOK, and a look is exactly what gets shipped broken on a careful read: the
-## first three cuts of the field all compiled, all ran, all reported plausible coverage, and all
-## three drew engraved satin - long parallel contour lines over the whole frame - instead of
-## vapor. Then the fourth moved beautifully and pulsed like a bellows. So each claim here is one
-## of the properties that separates the look from the ways it has ACTUALLY failed, and each is
-## measured against a control that breaks that property, because a threshold nothing can fail is
-## not a gate.
+##   PRESENCE   Masses and darkness: a field filling the frame is a wash, one filling none is a bug.
+##   FRONT      A visible boundary: the share of lit edges that jump more than STEEP in one pixel,
+##              against the same field with `hard` at 0 (soft-edged haze).
+##   FILAMENT   Elongated structure: structure-tensor coherence per block, against the same field
+##              sampled isotropically (`stretch` 1). Cloud is incoherent; drawn-out vapor is not.
+##   STEADINESS The masses do not inflate: a plume's amplitude is the size of its mass, so anything
+##              fast reaching it pulses the frame. The largest change in lit area over a quarter
+##              second across a passage with beats, against a control that drives the amplitudes as
+##              the retired beat kick did.
+##   COLOR      More than one hue in the frame, area-weighted, against a control with every plume on
+##              the same color.
+##   MOTION     The field moves on its own under the static behavior (no camera drift), against the
+##              same frames with the phase rolled back, so the vapor flowing is what is measured.
 ##
-##   PRESENCE   Masses AND darkness. A field that fills the frame is a color wash and one that
-##              fills none of it is a bug; the negative space is half of what makes masses read.
-##   FRONT      A visible boundary. The SHARE of lit edges that jump more than STEEP in one
-##              pixel, against the same field with `hard` at 0 - the soft-edged haze this look
-##              must not be, and which every existing fog/cloud layer here already is.
-##   FILAMENT   Elongated structure. Structure-tensor COHERENCE per block (how aligned the
-##              gradients inside it are), against the same field sampled isotropically
-##              (`stretch` 1). Cloud is incoherent; drawn-out vapor is not.
-##   STEADINESS The masses do not INFLATE. Reported from the field and the worst thing this
-##              scene did: "it expands and contracts rapidly with the harmonics... it should be
-##              continuous movement forward, not an expand and contract". A plume's amplitude IS
-##              the size of its mass, so anything fast reaching it pulses the whole frame.
-##              Measured as the largest change in lit AREA over a quarter second across a
-##              passage with beats, against a control that drives the amplitudes the way the
-##              first version's beat kick did.
-##   COLOR     More than one hue in the frame, area-weighted, against a control with every
-##              plume on the SAME color. Two masses of different colors blending where they
-##              meet is the reference image's whole subject.
-##   MOTION     The field moves on its own, under the STATIC behavior (no camera drift at all),
-##              against the same frames with the phase rolled back - so what is measured is the
-##              vapor flowing and not the camera.
-##
-## FRONT and FILAMENT are averaged over SEVERAL MOMENTS, each against its control at the same
-## instant. Single-moment readings of both swing by a third depending on what happens to be in
-## frame (front measured x2.01, x1.67 and x1.51 on three states of the same seed), which is wide
-## enough to put a fixed threshold on either side of the truth. The controls are paired inside
-## the moment, so only the state varies between samples and averaging removes it.
+## FRONT and FILAMENT are averaged over several moments, each against its control at the same instant:
+## single-moment readings swing by a third with what is in frame (front x2.01, x1.67, x1.51 on three
+## states of one seed). Controls are paired inside the moment, so averaging removes the state.
 
 const W := 640
 const H := 360
 const DT := 1.0 / 30.0
-## An edge is STEEP if adjacent pixels differ by more than this in luminance. A front is a TAIL
-## property of that distribution: the MEAN step was the first version of this measure and could
-## not see a front at all (x1.20 between a cut front and pure haze), because the mean is
-## dominated by the filament texture inside the mass, which is there either way.
+## An edge is steep if adjacent pixels differ by more than this in luminance. A front is a tail property
+## of that distribution: the mean step cannot see one (x1.20 between a cut front and pure haze), as the
+## filament texture inside the mass dominates it.
 const STEEP := 0.045
 const MOMENTS := 3
 
@@ -61,9 +45,8 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	# One instance, driven to a settled loud passage, then re-rendered under each control. The
-	# field is a pure function of its uniforms, so a control is one set_shader_parameter and
-	# needs no re-seeding - which is what keeps this gate to a single boot.
+	# One instance, driven to a settled loud passage, then re-rendered under each control. The field is a
+	# pure function of its uniforms, so a control is one set_shader_parameter with no re-seeding.
 	var sc = load("res://src/scenes/vapors.gd").new()
 	var vp := SubViewport.new()
 	vp.size = Vector2i(W, H)
@@ -82,14 +65,14 @@ func _run() -> void:
 	var base := await _grab(vp)
 	var base_l := _luma(base)
 
-	# --- PRESENCE ---
+	# --- presence ---
 	var lit := _fraction(base_l, 0.05, true)
 	var dark := _fraction(base_l, 0.02, false)
 	print("  presence: %.1f%% of the frame lit, %.1f%% near-black" % [100.0 * lit, 100.0 * dark])
 	_want(lit > 0.10 and lit < 0.92, "presence: %.2f lit is not a field with masses in it" % lit)
 	_want(dark > 0.04, "presence: only %.2f near-black - no negative space left" % dark)
 
-	# --- FRONT and FILAMENT, paired against their controls, over several moments ---
+	# --- front and filament, paired against their controls, over several moments ---
 	var f_hard := 0.0
 	var f_soft := 0.0
 	var c_str := 0.0
@@ -119,7 +102,7 @@ func _run() -> void:
 	_want(c_str > c_iso + 0.01,
 		"filament: %.4f stretched against %.4f isotropic - nothing is drawn out" % [c_str, c_iso])
 
-	# --- STEADINESS, against an inflating control ---
+	# --- steadiness, against an inflating control ---
 	var jump := 0.0
 	var prev := _lit_fast(await _grab(vp))
 	for _k in 16:                          # 16 samples x 0.25 s = four seconds of music
@@ -127,9 +110,8 @@ func _run() -> void:
 		var area := _lit_fast(await _grab(vp))
 		jump = maxf(jump, absf(area - prev) / maxf(prev, 0.02))
 		prev = area
-	# The control drives the amplitudes the way the beat kick used to (x1.7 on every plume, on
-	# and off), pushed straight into the uniform so it needs none of the old code back. A
-	# measure that could not see THAT would not have caught the bug it exists for.
+	# The control drives the amplitudes as the retired beat kick did (x1.7 on every plume, on and off),
+	# pushed into the uniform.
 	var amps: PackedFloat32Array = mat.get_shader_parameter("u_amp")
 	var jump_pulsed := 0.0
 	prev = _lit_fast(await _grab(vp))
@@ -150,7 +132,7 @@ func _run() -> void:
 		"steadiness: the control only moved %.1f%% - this measure cannot see an inflating mass"
 			% (100.0 * jump_pulsed))
 
-	# --- COLOR, against a one-color control ---
+	# --- color, against a one-color control ---
 	var here_img := await _grab(vp)
 	var spread_multi := _hue_spread(here_img)
 	var cols: PackedVector3Array = mat.get_shader_parameter("u_col")
@@ -167,13 +149,13 @@ func _run() -> void:
 		"color: %.3f multi against %.3f mono - the plume colors are not reaching the frame"
 			% [spread_multi, spread_mono])
 
-	# --- MOTION, against a rolled-back phase ---
+	# --- motion, against a rolled-back phase ---
 	var before := _luma(await _grab(vp))
 	t = await _advance(sc, t, t + 0.4)
 	var moved := _luma(await _grab(vp))
 	var d_live := _mean_abs_diff(before, moved)
-	# The control: put the PHASE back where it was 0.4 s ago and leave the plume positions and
-	# amplitudes where they are now. What is left is the field's own flow, alone.
+	# The control: put the phase back where it was 0.4 s ago and leave plume positions and amplitudes;
+	# what is left is the field's own flow.
 	var now: float = mat.get_shader_parameter("u_time")
 	mat.set_shader_parameter("u_time", now - 0.4)
 	var d_frozen := _mean_abs_diff(moved, _luma(await _grab(vp)))
@@ -201,7 +183,7 @@ func _want(ok: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-# Run the SIM (not the renderer) from `t` up to `until`, and hand back the new clock.
+# Run the sim (not the renderer) from `t` up to `until`, and hand back the new clock.
 func _advance(sc, t: float, until: float) -> float:
 	var now := t
 	while now < until:
@@ -216,8 +198,7 @@ func _grab(vp: SubViewport) -> Image:
 	return vp.get_texture().get_image()
 
 
-# Luminance, once per image, as a flat array - get_pixel is far too slow to call from every
-# measure that wants the same frame.
+# Luminance, once per image, as a flat array (get_pixel is too slow for every measure on one frame).
 func _luma(img: Image) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(W * H)
@@ -236,8 +217,8 @@ func _fraction(l: PackedFloat32Array, level: float, above: bool) -> float:
 	return float(hit) / float(l.size())
 
 
-# Lit area on a coarse grid: this one is called two dozen times in the steadiness loop, where a
-# full-resolution pass costs about a second each.
+# Lit area on a coarse grid: called two dozen times in the steadiness loop, where a full-resolution pass
+# costs about a second each.
 func _lit_fast(img: Image) -> float:
 	var hit := 0
 	var n := 0
@@ -250,8 +231,7 @@ func _lit_fast(img: Image) -> float:
 	return float(hit) / float(maxi(1, n))
 
 
-# The share of lit edges that are STEEP - see the STEEP constant for why it is a share and not
-# a mean.
+# The share of lit edges that are steep (see STEEP for why a share and not a mean).
 func _edge_step(l: PackedFloat32Array) -> float:
 	var steep := 0
 	var n := 0
@@ -267,15 +247,11 @@ func _edge_step(l: PackedFloat32Array) -> float:
 	return float(steep) / float(maxi(1, n))
 
 
-# Structure-tensor coherence per block: (l1 - l2) / (l1 + l2) of the local gradient tensor, which
-# is 1 where every gradient in the block points the same way (a drawn-out filament) and near 0
-# where they scatter (cloud). Averaged over blocks carrying enough gradient energy.
-#
-# HIGH-PASSED FIRST, and that is not optional. On raw luminance every block is dominated by the
-# mass's own broad ramp, which is coherent whatever the fine structure does: the measure read
-# 0.78 both stretched and isotropic - saturated, discriminating nothing. Removing the local mean
-# leaves the structure at filament scale, which is what the claim is about. Blocks are wide
-# enough to hold several filaments, or one filament fills the block and saturates it again.
+# Structure-tensor coherence per block: (l1 - l2) / (l1 + l2) of the local gradient tensor, 1 where every
+# gradient in the block points the same way (a filament) and near 0 where they scatter (cloud). Averaged
+# over blocks with enough gradient energy. High-passed first: on raw luminance each block is dominated
+# by the mass's broad ramp (0.78 both stretched and isotropic). Blocks are wide enough to hold several
+# filaments, or one filament fills the block and saturates it.
 func _coherence(l0: PackedFloat32Array) -> float:
 	var l := _highpass(l0, 5)
 	var block := 32
@@ -325,8 +301,8 @@ func _highpass(l: PackedFloat32Array, r: int) -> PackedFloat32Array:
 	return out
 
 
-# How far apart the frame's hues are, over the area that actually carries color: the widest
-# circular gap between hue bins holding at least 2% of the colored pixels.
+# How far apart the frame's hues are, over the area that carries color: the widest circular gap between
+# hue bins holding at least 2% of the colored pixels.
 func _hue_spread(img: Image) -> float:
 	var bins := PackedFloat32Array()
 	bins.resize(36)
@@ -359,8 +335,8 @@ func _mean_abs_diff(la: PackedFloat32Array, lb: PackedFloat32Array) -> float:
 	return acc / float(la.size())
 
 
-# Synthetic audio: a settled, moderately loud passage with a traveling spectral peak and beats
-# on a half-second grid - the state the look is judged in.
+# Synthetic audio: a settled, moderately loud passage with a traveling spectral peak and beats on a
+# half-second grid, the state the look is judged in.
 func _features(t: float) -> AudioFeatures:
 	var f := AudioFeatures.new()
 	f.time = t

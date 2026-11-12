@@ -1,33 +1,25 @@
 extends SceneTree
 
-## The gate of [AppIcon] - the ghost drawn for a machine's window and a build's package. No renderer:
-## ThorVG draws on the processor.
+## The gate of [AppIcon] - the ghost drawn for a machine's window and a build's package. No renderer: ThorVG
+## draws on the processor.
 ##
 ##   godot --headless --path . --script res://tests/platform/app_icon_check.gd
 ##
-## - THE SAME SEED DRAWS THE SAME GHOST, design, SVG and pixels - against another seed, whose pixels
-##   differ.
-## - EVERY ROW IS DRAWN by some seed of a fixed hundred (every body, pose, eyes, mouth, prop, style),
-##   and the hues fill every twelfth of the wheel - against the same hundred made of one seed, which
-##   leaves rows undrawn and eleven twelfths empty.
-## - EVERY GHOST DRAWS: none of the hundred comes out blank or failed. A row ThorVG cannot read may
-##   draw nothing - or crash the engine outright (a stray `<` in a row did), which fails this gate
-##   loudly where it would have crashed every launch whose seed picks the row.
-## - EACH PLATFORM'S LAYER IS WHAT IT SAYS: the backdrop and the square are opaque (iOS refuses an
-##   icon with alpha) and the backdrop holds no ghost (as dark as its gradient; against the square,
-##   whose ghost is light); the monochrome is white wherever it is drawn, as solid as the figure but
-##   for its face, and its face is cut out (against the figure measured against itself, which cuts
-##   nothing; gray content under the mask comes out a faint white, which the solidity catches); the figure and the
-##   monochrome lie inside Android's safe circle, 66 of the adaptive icon's 108 (against the whole
-##   icon, whose backdrop does not).
-## - EVERY GHOST STANDS IN THE MIDDLE (the user, 2026-10-31: "quite a few of the ghosts are
-##   off-center"): each body drawn alone, turned either way, has its box's middle on the frame's -
-##   against the drift body told its middle is (0, 0), which its tail pulls off.
-## - NO PROP COVERS A FACE: of the hundred, no prop's pixel falls in the box round the eyes, mouth
-##   and cheeks (the face the monochrome cuts, widened by the cheeks) - against a prop perched on the
-##   eyes. And each prop's `box` is what it draws - against another prop's box.
-## - THE PACKAGE has every icon at its size, each in a file of its own.
-## - THIS MACHINE'S SEED is its id salted (not the id's bare hash) and the same each time asked.
+## - The same seed draws the same ghost (design, SVG, pixels); another seed's pixels differ.
+## - Every row is drawn by some seed of a fixed hundred (body, pose, eyes, mouth, prop, style) and the hues fill
+##   every twelfth of the wheel; the control is the same hundred made of one seed.
+## - Every ghost draws: none comes out blank or failed. A row ThorVG cannot read may crash the engine, which
+##   fails this gate instead of every launch whose seed picks the row.
+## - Each platform's layer is what it says: the backdrop and the square are opaque (iOS refuses alpha) and the
+##   backdrop holds no ghost; the monochrome is white wherever drawn, as solid as the figure but for its face,
+##   which is cut out; the figure and the monochrome lie inside Android's safe circle (66 of the adaptive
+##   icon's 108). Controls: the figure measured against itself, the whole icon against the circle.
+## - Every ghost stands in the middle: each body drawn alone, turned either way, has its box's middle on the
+##   frame's. Control: the drift body told its middle is (0, 0).
+## - No prop covers a face: no prop pixel of the hundred falls in the box round the eyes, mouth and cheeks
+##   (control: a prop perched on the eyes), and each prop's `box` is what it draws (control: another prop's box).
+## - The package has every icon at its size, each in a file of its own.
+## - This machine's seed is its id salted (not the id's bare hash) and the same each time asked.
 
 const SEEDS := 100
 ## Android's safe zone: a circle 66 across in the adaptive icon's 108.

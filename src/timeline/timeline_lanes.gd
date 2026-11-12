@@ -1,20 +1,19 @@
 extends VBoxContainer
 class_name TimelineLanes
 
-## TimelineLanes - ONE STAGE ENTRY'S SPANS ON MASKING'S CONTROLS (next/editing.md, "The Timeline"; the user, 2026-11-11:
-## "pulling-in the timeline from the face-mask editor ... I would not want to build two different timelines"). A window
-## span (`from` to `to`) is a [TrackLane] - drag its edges to trim it, its body to move it - and every moment (`at`) a flag
-## on one [FlagStrip] beneath them, picked by its handle and then dragged; the strip scrubs, and shows the playhead. All read
-## ONE [TimelineView], so a second sits in the same place on every row. The lower rows of the [StoryboardEditor], shown
-## while a stage entry is picked.
+## TimelineLanes - one stage entry's spans on Masking's controls (next/editing.md, "The Timeline"). A
+## window span (`from` to `to`) is a [TrackLane] - drag its edges to trim it, its body to move it - and
+## every moment (`at`) a flag on one [FlagStrip] beneath them, picked by its handle and then dragged;
+## the strip scrubs, and shows the playhead. All read one [TimelineView], so a second sits in the same
+## place on every row. The lower rows of the [StoryboardEditor], shown while a stage entry is picked.
 ##
-## THE RULER IS THE ENTRY'S OWN: a track's times are written in seconds of its `nominal`, the length it was designed at, and
-## they scale as one piece with the entry's hold - so the rows are drawn in nominal seconds, and dragging changes the number
-## that is written, whatever speed the entry plays at.
+## The ruler is the entry's own: a track's times are written in seconds of its `nominal`, the length it
+## was designed at, and they scale as one piece with the entry's hold - so the rows are drawn in nominal
+## seconds, and dragging changes the number that is written, whatever speed the entry plays at.
 ##
-## IT ASKS, THE EDITOR DOES - one signal per gesture, raised when the button comes up: [signal picked], [signal retimed] (a
-## span moved or stretched), [signal wanted] (a double click on the strip's body: a new moment there, for everyone) and
-## [signal scrubbed] (the strip dragged: a moment of the entry to show).
+## It asks, the editor does: one signal per gesture, raised when the button comes up: [signal picked],
+## [signal retimed] (a span moved or stretched), [signal wanted] (a double click on the strip's body: a
+## new moment there, for everyone) and [signal scrubbed] (the strip dragged: a moment of the entry to show).
 
 ## A span was clicked: its index in the track's list.
 signal picked(span: int)
@@ -145,7 +144,7 @@ func _on_strip_input(e: InputEvent) -> void:
 			retimed.emit(int((m as Dictionary)["span"]), float((m as Dictionary)["time"]), float((m as Dictionary)["time"]))
 
 
-## THE TRACK'S KEYS ([StageKeys], as written): flags on the strip as Masking draws its markers - a ramp's handle pointing back,
+## The track's keys ([StageKeys], as written): flags on the strip as Masking draws its markers - a ramp's handle pointing back,
 ## a damp's forward, the seconds each eases over tinted - picked, then dragged to another moment.
 func set_keys(raw: Array) -> void:
 	_keys = []

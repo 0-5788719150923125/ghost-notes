@@ -1,16 +1,14 @@
 extends PipelineSection
 class_name ActorPipeline
 
-## ActorPipeline - a person's steps as a section of the note's Pipeline card ([PipelineCard]; every step of the Actor card, the
-## voice's alone of the Voice training card - [method ActorSteps.voice_chain]), a row each ([ActorSteps]): ✓ made, ⚠ stale,
+## ActorPipeline - a person's steps as a section of the note's Pipeline card ([PipelineCard]; every step of the Actor card,
+## the voice's alone of the Voice training card - [method ActorSteps.voice_chain]), a row each ([ActorSteps]): ✓ made, ⚠ stale,
 ## its share while it runs, ▶ to make it and what it needs, ⟳ to make it again, after asking. Handed the folder and its
 ## builder ([method show_actor]); what it has to say goes out as [signal said].
 ##
-## NOTHING HERE WAITS ON THE DISK (the user, 2026-10-23: "We shouldn't be blocking the main thread for ANY
-## operation"): the steps' states are worked out on a worker, on a folder of its own ([method
-## ActorBuilder.states_of]), and only when what they are made from changed ([method _rows_key]) - every scope's
-## state of every step took 10-20 ms four times a second under a playing show, and seconds once a video was
-## ticked; the runs are laid over them every refresh, which is cheap - so a running row moves every refresh.
+## Nothing here waits on the disk: the steps' states are worked out on a worker, on a folder of its own
+## ([method ActorBuilder.states_of]), and only when what they are made from changed ([method _rows_key]); the runs are
+## laid over them every refresh, which is cheap, so a running row moves every refresh.
 
 signal said(text: String)
 
@@ -60,7 +58,7 @@ func wait() -> void:
 	_rows_task = -1
 
 
-## THE PERSON SHOWN: [param a] and its builder ([param b]), or nulls for none.
+## The person shown: [param a] and its builder ([param b]), or nulls for none.
 func show_actor(a: ActorFolder, b: ActorBuilder) -> void:
 	_actor = a
 	_builder = b
@@ -108,7 +106,7 @@ func missing() -> bool:
 	return false
 
 
-## THE STEPS' ROWS: the states worked out again when what they are made from changed, and the runs laid over them.
+## The steps' rows: the states worked out again when what they are made from changed, and the runs laid over them.
 func rows() -> Array:
 	if _actor == null or _builder == null:
 		return []
@@ -158,8 +156,8 @@ func _rows_key() -> String:
 	return ",".join(parts)
 
 
-## THE STEPS' STATES WORKED OUT ON A WORKER, on a folder of its own ([method ActorBuilder.states_of]): one at a
-## time - asked again while it works, it goes again once done.
+## The steps' states worked out on a worker, on a folder of its own ([method ActorBuilder.states_of]): one at a time -
+## asked again while it works, it goes again once done.
 func _work_rows() -> void:
 	_kept = {}            # (what is kept one back is asked again with the states, never at every refresh)
 	if _rows_task >= 0:
@@ -236,7 +234,7 @@ func _fill_rows(now_busy: bool) -> Array:
 		r.asks = ("What %s made is kept one back (its ✎ puts it back). Everything made from it is marked stale (⚠): it is still "
 			+ "used until it is made again too - Generate does that.") % name
 		r.redo = _redo.bind(step)
-		# ✎ WHERE ONE IS KEPT BACK: what the step made before its last ⟳, put back (next/editing.md step 12)
+		# ✎ where one is kept back: what the step made before its last ⟳, put back (next/editing.md step 12)
 		if not _kept.has(step):
 			_kept[step] = _builder.kept_back(step)
 		if bool(_kept[step]):

@@ -55,7 +55,7 @@ applied, no room or presence):
 3. `3_first_word_model.wav` / `4_first_word_floored.wav` - 14 sentences, the model's first word
    against a 5-frame vowel floor on it.
 
-## Built (2026-10-07): the duration plan steered, and the resample fixed
+## Built: the duration plan steered, and the resample fixed
 
 Pitch has no input in a VITS graph, but DURATION does, per phoneme id, between the predictor and
 the decoder. Status: built, gated, waiting on the user's ear (`5_before.wav` against
@@ -90,7 +90,7 @@ the resampler against the linear control, an old patch upgraded), `test_pauses.p
 check and the patch check say what they hold now), `tests/reading/multi_voice_check.gd`
 (`_check_stress_reaches_the_voice`, and `play_ratio` in `_check_settings_reach_the_request`).
 
-## Built (2026-10-07): the word before a rest, and the next word's hiss
+## Built: the word before a rest, and the next word's hiss
 
 Reported: "the end of a statement (most commonly at a comma) can sound a bit strange, and truncated
 ... clipped", and then "Wait until the end, sweet souls" heard as "ends ... sweet". Status: built,
@@ -132,7 +132,7 @@ whole), and every clause's first word would be clipped the way a sentence's is (
 leak is local and the plan says exactly where it is, so it is fixed there. If the ear still hears the
 next word in a rest, splitting is the experiment to run next.
 
-## Built (2026-10-11): a word's own hiss, and the next word's early start
+## Built: a word's own hiss, and the next word's early start
 
 Reported: the trail "seems to truncate the 's' at the end of its final word too early, such that it
 turns plural words into singular words". Status: built, gated, waiting on the user's ear
@@ -203,7 +203,7 @@ comment and a blank line): `_resolve_marks` noted marks before the leading white
 - `_effort` and `_emphasize` end in a hard clip: none at the note's settings (0 samples at full
   scale in 23 takes), reachable at the top of the Effort dial.
 
-## Built (2026-10-16): a word eSpeak has to guess at
+## Built: a word eSpeak has to guess at
 
 The report, on a Proof lesson about the six trig functions: cosine said "co-seen", cotangent
 "co-angent", cosecant "co-seh-cant". eSpeak, which the neural voices are phonemized by, gave
@@ -226,7 +226,7 @@ Live, on a lesson's words: Pythagorean pˈaɪθɐɡˌɔːɹiən -> pɪθˌæɡə
 secant, tangent, trigonometry, radians and Euclid unchanged. A name Wiktionary lacks keeps eSpeak's
 guess (Gelfond dʒˈɛlfɑːnd, the stress rule only). About a second a new word, once.
 
-The first export after it "sounded exactly like the original" (2026-10-17): `rare` compared a
+The first export after it "sounded exactly like the original": `rare` compared a
 word's page spelling with its spoken one whole, and the page spelling keeps the word's marks, so
 "cosine," "cotangent," and "cosecant." were never marked. `Phonemes.guessed` compares them with the
 marks off (a word normalization wrote - a numeral, a letter's name - is still not one); g2p_check's
@@ -297,7 +297,7 @@ MaskGCT, OpenAudio S1. The worry that these are hard to steer is borne out.
 behind the backend registry (`hosts/voice/backends/`), whose explicit F0 input is the one thing
 Piper cannot have. The prototype is built: "Kokoro" below.
 
-## Kokoro (2026-10-25): an inference trial
+## Kokoro: an inference trial
 
 **The user:** "What would it take to wire up support for a more capable generative voice model, such
 as Kokoro? I'd want to make it available everywhere we currently use voice models ... and the
@@ -336,9 +336,7 @@ is 600 samples, 25 ms (Piper's is 256 at 22,050, 11.6 ms).
   its eSpeak fallback. ghost's reading carries no tie marks, so a pair is merged where it stands in
   one word. The phones go back in eSpeak's symbols (A's time shared by e and ɪ), so Visemes and the
   desk read them as they read Piper's.
-- **One voice, its packs the speakers** (2026-10-25, the user: "I really dislike how all of the voices
-  are pushed into the 'Voice' list ... voice should be used more like a family of voices, then a
-  secondary option should be for selecting the various checkpoints within"): the host lists one
+- **One voice, its packs the speakers**: the host lists one
   voice, `kokoro`, with 28 speakers - the English packs, a speaker number each in the fixed order of
   `PACKS` (a note keeps the number, so a pack is only ever added at the end) - and says who each is
   (`readers`: the pack, its accent, hexgrad's own grade; only af_heart A, af_bella A-, the men C+ at
@@ -512,8 +510,7 @@ A pad token after the comma rests there but the model fills round it ("Gently ai
 an ellipsis in its place barely rests. Listening: `dist/voice_ab/kokoro_gb/1_emma_v1.0.wav` (before)
 against `1_emma_v1.0_now.wav`, the chapter's opening at its own Pace and Pause.
 
-**Read through, or left unrested?** (the user: "Is Kokoro leaving commas unrested, or is it choosing to
-read through them quickly, as a natural speaker might do?") Each sentence rendered with the comma and
+**Read through, or left unrested?** Each sentence rendered with the comma and
 without it (`commas.py`; 28 commas, two voices): at the commas it RESTS, the comma lengthens the word
 before it by 150 to 200 ms, deepens the dip at the boundary by 12 dB and holds the pitch up (a
 continuation: Heart +3.0 semitones over the word's end where without the comma she falls 1.0; Emma -0.6
@@ -533,7 +530,7 @@ Gates: `hosts/voice/test_kokoro.py` (no rest floored; the window, with Piper's a
 not made on Kokoro, made on Piper; and, below, a stop's release kept before the cut, the trail run up to
 the next word without a step, the short last vowel held).
 
-### The plan runs late: corrected (2026-10-26)
+### The plan runs late: corrected
 
 **The user:** "the 'h' from 'happy' STARTS on the left side of the comma, then continues into the right
 ... ANY break is going to sound bad there. This is EXACTLY why we had the fade-out for Piper." And then:
@@ -579,15 +576,13 @@ was clearly cut in the wrong place." The export was rendered again by the host, 
   corrected) and fades the vowel right up to the next word.
 - **"it,":** the window reached GAP_REACH (50 ms) back into the word and found the silence of the t's
   closure, so the release went after the rest, a tick before "haven't". Now it reaches GAP_BACK (15 ms).
-- **The way back up is never a step** (the user: "the cut should probably be a logarithmic fade-out and
-  fade-in, not a linear one"). The splicer's own ramps were measured first: at every cut in the test
+- **The way back up is never a step**. The splicer's own ramps were measured first: at every cut in the test
   sentences they are 2 to 5 ms long at 32 to 98 dB under the peak, so their shape cannot be heard -
   reshaped to fall at a steady rate in dB, the take differed by 0 to 3 ms at each cut and nothing else.
   The abrupt edge was the trail's: where the voice runs right up to the next word, TRAIL_BACK had no room
   and came back in one sample, 16 dB on sounding voice (8 of 80 comma trails in two voices). Now it runs
   on into the next word (`_trail`'s `through`), a fade in dB as it always was; 0 of 80 step.
-- **The short vowel held, not every rime** (the user, after M: "I would want to hear MORE of the
-  'you'"). Piper's hold is a ratio (TRAIL_STRETCH, 1.25) and on 25 ms frames it is wrong both ways: the
+- **The short vowel held, not every rime**. Piper's hold is a ratio (TRAIL_STRETCH, 1.25) and on 25 ms frames it is wrong both ways: the
   "oo" of "you," (two frames) rounded back to two, and held 1.6 or 2.0 times "stays," and "flame," (five
   and six frames) were drawn out ("someone stayyys", "same flaaaame" - and Whisper began to hear commas
   as full stops). Now the last vowel of the word before a rest is floored at HOLD_LEAST (90 ms at length
@@ -604,7 +599,7 @@ Listening (`dist/voice_ab/kokoro_commas/`, Emma at the Narrator's settings, six 
 `listen_N2_hold_2.0.wav` (the ratio, rejected), `listen_O_short_vowel_held.wav` (as built: the code renders
 it sample for sample); `listen_L1_db_ramps.wav` (the splicer's ramps in dB: no difference).
 
-### Every sentence ends alike (2026-10-27): the model's, not ours
+### Every sentence ends alike: the model's, not ours
 
 **The user,** of north-star ch43 "Secular Haze" in Puck (speaker 13): "EVERY sentence ends with a downward
 inflection ... the very last word ALWAYS sounds the same, with a downward curve. Like a valley girl accent."
@@ -646,9 +641,7 @@ as Piper did. Not ours: LEAD_IN 0 falls the same (Puck -5.7), nothing after the 
 
 **The lever: F0 as an input** ("Not in the trial" below). The predictor's pitch curve is one tensor
 (`/encoder/Reshape_output_0`, from `F0_proj`, read by the decoder alone) and so is its energy
-(`/encoder/Reshape_1_output_0`, from `N_proj`). A listening prototype, NOT the product (the user, 2026-10-27,
-wary it "would end badly, and just make it sound like asking a question, or chipmunk voice"; a copy of the
-graph at `dist/voice_ab/kokoro_f0/model_f0.onnx` handing both out and taking replacements, run twice a sentence):
+(`/encoder/Reshape_1_output_0`, from `N_proj`). A listening prototype, NOT the product:
 
 - **The ending is planned unvoiced.** Puck's last vowel is predicted at 0 Hz ("left": 100 -> 69 Hz into the
   l, then the whole ɛ at 0; "down": the W and the n; "are": the ɑ and the ɹ) - the fry is the plan, not the
@@ -664,7 +657,7 @@ graph at `dist/voice_ab/kokoro_f0/model_f0.onnx` handing both out and taking rep
   letter from a stranger" +1.0 in level. Files `now.wav`, `gentle.wav`, `level.wav` there. Waiting on the
   user's ear.
 
-### It comes out hot (2026-10-28)
+### It comes out hot
 
 The user: "Even at max volume, the 'ambience' level is almost inaudible with the newly-implemented Kokoro
 models." Measured on four paragraphs of Secular Haze through the real host, speaking RMS: Puck (13) 0.141 with
@@ -677,8 +670,7 @@ and the bed, at a fixed level, sat 17.7 dB under Puck where it sits 9 under Pipe
   the voice's speaking level (the RMS of the windows the pitch tracker finds voiced, over 8 s of voice, primed
   with the key from the take's first 12 s), against libritts-high's (0.06), so Piper's bed is where it was and
   every voice's sits 8-10 dB under it. Gate: tests/voice/pad_level_check.gd.
-- **Built: every voice at one level** (the user: "Especially if we're going to continue adding voice model
-  support, we're going to want a sane way to keep the volume even across them all"; hosts/voice/level.py). Each
+- **Built: every voice at one level**. Each
   voice and speaker is measured once, as the vowel probe measures a checkpoint: two plain sentences through the
   backend's own `_run`, nothing delivered, the noise off (a VITS render moved 0.7 dB from one to the next) and
   what the noise adds back as the backend says (`level_noise`, measured: libritts-high 1.14 and 1.16 over twelve
@@ -690,8 +682,7 @@ and the bed, at a fixed level, sat 17.7 dB under Puck where it sits 9 under Pipe
   4 0.0333 (1.6). Read in the chapter after, the four voices' speech came within 1.2 dB of each other (they
   had been 7.7 dB apart) and none reached full scale (Puck had clipped 198 samples in 59 s). Gate:
   hosts/voice/test_level.py.
-- **And the bed's tones** (the user, after: "a very strange tone being 'plucked' a few times per minute ...
-  super distracting, dissonant ... always the same tone"): the bass swell, which at the bed's new level was
+- **And the bed's tones**: the bass swell, which at the bed's new level was
   heard at last. Its key had been the first voiced window's pitch, rounded to A440's grid - a reading opens
   high, and Puck's came out C where he speaks at A#, inside the key's hysteresis so it never moved - and its
   root sat in [41, 82) Hz whatever the voice, so on a low voice its partials were in his own register, the
@@ -701,9 +692,9 @@ and the bed, at a fixed level, sat 17.7 dB under Puck where it sits 9 under Pipe
   bass's second partial stays a fifth under the voice's middle (`BASS_UNDER`), none under A0
   (`BASS_FLOOR`); and it swells over 1.2 s, not 0.35. The scale was never the fault: the bed's minor
   pentatonic has no two notes a semitone apart. Gate: tests/voice/pad_key_check.gd.
-- **Then staged by the ear** (the user: "The ambience is far too quiet. I can barely hear it at all anymore"). In
+- **Then staged by the ear**. In
   Puck's own key, a fifth under him, every tone of the bed was under 80 Hz: at the same power against the voice as
-  libritts-high's bed (-6.7 dB), it was -30.4 dB A-weighted where the bed the user had liked on Piper is -22.1, and
+  libritts-high's bed (-6.7 dB), it was -30.4 dB A-weighted where the Piper bed is -22.1, and
   no small speaker plays it. Now a tone under 120 Hz takes octave partials (2x and 4x, 0.6 and 0.35 an octave
   under it; octaves only, so no note the scale did not choose) at its own power, and the tones are lifted by how
   much less audible their register is than the one the bed was staged in (`PAD_EAR_KEY`, `_audibility`: the
@@ -712,7 +703,7 @@ and the bed, at a fixed level, sat 17.7 dB under Puck where it sits 9 under Pipe
   -19.2, libritts-high -21.0, Heart -20.2. The swell is not lifted: it is felt more than heard. Gate:
   pad_key_check ("heard under a low voice as under a high one").
 
-### The happy vowel (2026-10-28)
+### The happy vowel
 
 The user: "babysitter" "sort of sounds like 'bay-bah-sitter'". eSpeak reads a word's unstressed "ee" (CMUdict's
 IY0) as lax ɪ in compounds and before vowels - "babysitter" bˈeɪbɪsˌɪɾɚ where "baby" alone is bˈeɪbi - and in 65
@@ -730,7 +721,7 @@ short vowel it learned: in Puck, "babysitter"'s middle vowel measured F1 360, F2
 - **Open:** a voice taught here is taught on `ids_of`, whose tokens carry no dictionary reading, so it learns
   eSpeak's ɪ where it is now sent i; utterances.py would need CMUdict to match.
 
-### A colon is not faded (2026-10-28)
+### A colon is not faded
 
 The user: "colons almost always get munged, as if they are silenced/faded-out too early. At 'Mine were: you do not
 ask' - the 'were' is almost completely deleted." Its level said otherwise (the trail took 4-8 dB off its last 90
@@ -751,7 +742,7 @@ semicolon's trail are as they were. A colon announces what follows - the voice h
 word one so often follows ("were:", "said:") lost its end to the fade. Gate: hosts/voice/test_trail.py
 `test_a_colon_is_not_faded`.
 
-### The head of a take (2026-11-03): ours, not the model's
+### The head of a take: ours, not the model's
 
 The user, of Heart's "Hello, my loves": "almost like a record skipping, like several clicks in a row, 'h-h-h-ello'"; other
 voices "Uh-hello"; "I'm inclined to think we're doing something wrong with our own processing". They were right. It was
@@ -775,7 +766,7 @@ so Kokoro reads about 5% quicker than it has since 10-27.
 one-word sentence reads on a pack's weakest row. Not traced either: where in the model the silent stretch comes from.
 Files for the ear: `dist/voice_ab/kokoro_head/listen/`, each with a `_before` and an `_after`.
 
-**The user's ear (2026-11-03), on those files:** "Hands-down, the 'after' examples sound a LOT better. Let's definitely
+**The user's ear, on those files:** "Hands-down, the 'after' examples sound a LOT better. Let's definitely
 get this approach integrated." Kept. Checked after through `host.py`'s own protocol (Heart, Sarah and Michael at Pace 1,
 Puck at 1.6, Emma at 0.85): the first word 42 ms in and the head 39 to 166 dB under the peak, but for Emma's "Guilty." at
 0.85, the largest left - about 40 ms ahead of the word at -16 dB, heard right by Whisper.
@@ -849,7 +840,7 @@ newer does.
 **Next, after listening:** Kokoro's own dwell measured and the pause figures made per backend; F0 as
 an input (the Tone's `noise` as the F0 range); then, for an actor, the style fit before the recipe.
 
-## Blending Kokoro voices (2026-11-11)
+## Blending Kokoro voices
 
 The user: "new voices can be synthesized by merging tensors from separate model checkpoints, through averaging,
 through interpolation, through weighted merges ... we have boolean toggles for each one. If we select 2 or more ...
@@ -882,7 +873,7 @@ recording, scored by Resemblyzer.
   moved.
 - Test at the top of Browse… is the Voice card's own (`ReadingCast.press_test`): a press while it plays ALWAYS stops
   it, and the next press reads what is ticked then. (A first cut started it over when the voice had changed meanwhile;
-  the user: "ensure that we always stop before we allow the Test button to be started for playback again".) Nothing
+  a press always stops first.) Nothing
   ticked is allowed on the way to another reader; the tab reads on in what it had. The browser is at most 80% of the
   stage's height, its summary one line (a wrapped label opened it 1,500 px tall).
 - Gates: `hosts/voice/test_kokoro.py` (11), `tests/voice/voice_blend_check.gd` (the same lines read alike in both
@@ -928,7 +919,7 @@ embedding is a Gather inside the graph - patchable the way `rest_floor` was), bl
 decoder was retrained), a blend saved under a name of its own, voice arithmetic (A + B - C, an accent moved), and a
 kvoicewalk-style search from a blend toward a recording.
 
-## Training Kokoro (2026-10-26)
+## Training Kokoro
 
 **The user:** "Sadly, I likely won't use Piper models for anything other than testing now, given that Kokoro is so
 much better-sounding. So, you think fine-tuning Kokoro might be possible... I would ask you to give that a try. To be
@@ -1044,7 +1035,7 @@ Voice card: "Manzanita (their timbre)", "Manzanita (their intonation)".
 libraries are not in the speech environment - medium.en on the processor is slow); a better aligner than a warp from
 another voice; teaching their delivery once the data is clean enough to carry it.
 
-### The user's ear (2026-10-27)
+### The user's ear
 
 The card run end to end in the app ("Matana", all 13 ticked videos): **"that voice sounded horrible. It's totally
 unusable. It sounds nothing like the original actress, and there's tons of static and electricity sound, very
@@ -1093,7 +1084,7 @@ under its loudest; words misheard by medium.en, of 188 - two or three either way
   here hears "electric". The three voices are on every Voice card for the ear ("Manzanita (judged)", "(quiet
   edges)", "(her pitch)"); dist/kokoro_ft/evalset/ck/<run>/listen/said/ holds the 20 sentences of each.
 
-### kikiri-tts read again (2026-10-27)
+### kikiri-tts read again
 
 The user, of the research voices ("far too muffled ... a weird electric resonance ... almost like a coiled spring"):
 would more of her data help, and does [kikiri-tts](https://github.com/semidark/kikiri-tts) show how to teach Kokoro
@@ -1177,7 +1168,7 @@ teaches as before (kept, no ear, Hear with the VAD) until the user has listened.
 
 **Still open:** the floor between words (61 dB down, stock 71); 2.4-4 kHz 5.7 dB short; a style per recording.
 
-## Chatterbox read (2026-10-27)
+## Chatterbox read
 
 The user: Kokoro "is likely a heavily distilled model ... trained on AWS Polly synthetic examples. I feel like we might
 be barking up the wrong tree" - is Chatterbox's 110M variant worth trying, inference first, tuning after? Read in

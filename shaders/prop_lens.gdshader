@@ -17,9 +17,8 @@ uniform float clarity : hint_range(0.0, 1.0) = 0.9;
 // how much of the bend runs up and down the screen: a ball turns the view over both ways, a straight-
 // sided body (water in a tumbler) bends it sideways only
 uniform float bend_y : hint_range(0.0, 1.0) = 1.0;
-// how much it bends at all: a PANE (Props._pane - a spectacle lens, a compass's glass, a drink's skin) has
-// parallel flat faces, which turn no line of sight, so it reads the screen straight through. Told to bend,
-// its one tilted normal moved the whole view through it sideways, and the frame it sits in came in with it
+// how much it bends at all: a pane (Props._pane - a spectacle lens, a compass's glass, a drink's skin) has
+// parallel flat faces, which turn no line of sight, so it reads the screen straight through (0)
 uniform float bend : hint_range(0.0, 1.0) = 1.0;
 #include "res://shaders/prop_common.gdshaderinc"
 
@@ -28,15 +27,13 @@ void fragment() {
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
 	float fr = pow(1.0 - facing, 3.0);
 	float frost = clamp(max(1.0 - clarity, o.y * orn_depth), 0.0, 1.0);
-	// TURNED OVER: the line of sight is bent toward the middle and past it, so the edge of the
+	// Turned over: the line of sight is bent toward the middle and past it, so the edge of the
 	// thing shows what lies beyond its far side - the further away it stands, the smaller the bend
 	// is on the screen
 	float k = bend * (0.02 + 0.025 * facing) / max(-VERTEX.z, 0.15);
 	vec2 bent = clamp(SCREEN_UV + NORMAL.xy * vec2(-1.0, bend_y) * k, vec2(0.0), vec2(1.0));
-	// ONLY WHAT IS BEHIND IT: the screen holds what stands in front of the glass too, and a card held up
-	// before a glass block was bent into it beside the card's own edge - a white strip that moved with the
-	// card (true-tarot 626717, every card held up). A bent sample nearer the lens than this point of the
-	// glass is not seen through it: the line of sight goes straight through instead
+	// Only what is behind it: the screen holds what stands in front of the glass too, so a bent sample nearer the
+	// lens than this point of the glass is not seen through it; the line of sight goes straight through instead
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
 	vec3 ndc = vec3(bent, textureLod(depth, bent, 0.0).r) * 2.0 - 1.0;
 #else

@@ -2,27 +2,20 @@ extends Scene3D
 
 ## Spires - a fractal metropolis of harmonic spires over a landscape.
 ##
-## Each spire is a lofted PROFILE, not a stack of jittered boxes: its radius-as-a-function-of-height
-## is a short series of cosine MODES. A GLOBAL set of mode amplitudes/frequencies is the city's shared
-## architectural "style"; each spire carries a per-spire DEVIATION (amplitude scale + phase) so the
-## towers are a family, not clones. The live SPECTRUM drives the modes (each mode is pinned to a band),
-## so the silhouettes - tapers, bulges, tiers - re-sculpt with the music: the point being proved.
+## Each spire is a lofted profile: its radius as a function of height is a short series of cosine
+## modes. A global set of mode amplitudes and frequencies is the city's shared architectural
+## style; each spire carries a deviation (amplitude scale and phase), so towers are a family, not
+## clones. The live spectrum drives the modes (each pinned to a band), so tapers, bulges and tiers
+## re-sculpt with the music.
 ##
-## Spires are lofted ring by ring from the GROUND UP and grow in over the intro (from the center
-## outward), so the city assembles itself rather than starting fully formed. The key light gives each
-## face directional + vertical-ambient shading, drops a contact shadow on the ground, and distance fog
-## dissolves the far skyline into haze.
+## Spires are lofted ring by ring from the ground up and grow in over the intro, from the center
+## outward. The key light gives each face directional and vertical-ambient shading, drops a
+## contact shadow on the ground, and distance fog dissolves the far skyline.
 ##
-## Prototyped from a photograph of ornate towered architecture: the
-## recursive tiering, the repeating turret motif and the way height and ornament scale together,
-## read off one building and turned into a rule that makes endless variations of it.
-##
-## RENDERING follows the [FrameForge] contract: update() snapshots the frame's
-## inputs into a [SpireJob] (a plain RefCounted - the worker's Callable keeps
-## it alive, and it never touches the scene node), the job builds the whole
-## frame - shadow pass, terrain merge, loft, sort, batch - off the main
-## thread, and _draw() only submits the finished packet. The UI cannot block
-## on this scene, whatever the city costs.
+## Rendering follows the [FrameForge] contract: update() snapshots the frame's inputs into a
+## [SpireJob] (a plain RefCounted that never touches the scene node), the job builds the frame
+## (shadow pass, terrain merge, loft, sort, batch) off the main thread, and _draw() only submits
+## the finished packet.
 
 const C := 10                    # city is C x C spire slots
 const UP := Vector3(0, 1, 0)
@@ -33,11 +26,8 @@ const MODES := 4                 # cosine modes that define the radius-vs-height
 var _f: AudioFeatures = AudioFeatures.new()
 var _terrain: Terrain
 var _spires: Array = []
-# CITY PALETTES. The hue was a single hardcoded band (0.07-0.13), so every city
-# ever generated was brass. Each entry is a whole material mood: the stone hue,
-# how far individual towers drift from it, a saturation bias, and the color of
-# a lit window - which is what actually sells the material, since a window is
-# the only self-lit thing in the scene.
+# City palettes: each entry is a whole material mood - the stone hue, how far individual towers
+# drift from it, a saturation bias and the color of a lit window (the only self-lit thing here).
 const PALETTES := [
 	{"name": "brass",     "hue": 0.10, "spread": 0.05, "sat": 0.00, "win": Color(0.95, 0.74, 0.36)},
 	{"name": "verdigris", "hue": 0.44, "spread": 0.05, "sat": -0.08, "win": Color(0.98, 0.86, 0.52)},
@@ -68,8 +58,8 @@ var _mode_amp: Array = []        # base amplitude, per mode
 var _mode_pos: Array = []        # spectral position each mode is driven by
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed.
 const FIELDS := {
 	"density": {"label": "Density", "type": "num", "range": [0.62, 1.0], "default": null,
 		"blurb": "How many of the city's lots hold a spire rather than a plaza or a gap."},
@@ -87,7 +77,7 @@ const FIELDS := {
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	_terrain = Terrain.new()
-	# A gentle, low landscape - the spires are the subject; the ground just grounds them.
+	# A gentle, low landscape: the spires are the subject.
 	var ttype: String = "hills" if rng.randf() < 0.6 else "mesa"
 	_terrain.build(rng, ttype, 3.0, rng.randf_range(0.4, 0.6), null,
 		"temperate" if rng.randf() < 0.5 else "tundra")
@@ -98,11 +88,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_win_col = pal["win"]
 	var spread := float(pal["spread"])
 
-	# LAYOUT VARIETY. Every slot always got a spire and the height law was the
-	# same each time, so the footprint and the skyline were identical from seed
-	# to seed - only the noise under them changed. `density` opens plazas and
-	# gaps; `core` decides whether the tall towers cluster downtown (positive),
-	# ring the edge (negative), or spread evenly (near zero).
+	# Layout variety: `density` opens plazas and gaps; `core` decides whether tall towers cluster
+	# downtown (positive), ring the edge (negative), or spread evenly (near zero).
 	var density: float = number("density", rng)
 	var core: float = number("downtown", rng)
 	# The shared profile modes: low modes shape the broad form, higher modes add fine tiers. Each is
@@ -118,15 +105,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			var wx := _slot(gx) + rng.randf_range(-0.06, 0.06)
 			var wz := _slot(gy) + rng.randf_range(-0.06, 0.06)
 			var ground: float = _terrain.height_at(wx, wz) * _terrain.relief
-			# PLUMB. This used to lean four percent toward the terrain normal, which is a nearest-cell
-			# finite difference of a fractal heightfield, so every tower tilted its own way. Measured
-			# on this scene it was only 1.2 degrees at the worst and invisible on a tapered loft -
-			# terrain_city, whose hard vertical box edges made the same rule read as a city falling
-			# over, is where it actually showed. Corrected here anyway, because it is the same
-			# mistake; the variety in this scene is in the PROFILES, which is where it belongs.
-			#
-			# Deliberately WITHOUT drawing from `rng`: an extra draw here shifts the whole stream and
-			# re-rolls every existing seed's city, which is a large change to make for 1.2 degrees.
+			# Plumb: no lean toward the terrain normal (a nearest-cell finite difference of a
+			# fractal heightfield would tilt every tower its own way). Deliberately without drawing
+			# from `rng`: an extra draw shifts the whole stream and re-rolls every seed's city.
 			var up := UP
 			var bx := Vector3(0.0, 0.0, -1.0)
 			var bz := Vector3(1.0, 0.0, 0.0)
@@ -137,18 +118,18 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 				continue                     # a plaza, a park, a hole in the block
 			var bulk := rng.randf_range(0.4, 1.0)
 			var base_r := _terrain.half / float(C) * (0.40 + 0.7 * bulk)
-			# `core` bends the skyline: >0 puts the towers downtown, <0 rings them
-			# around a low middle, ~0 is an even sprawl. t is 0 at center, 1 at rim.
+			# `core` bends the skyline: >0 towers downtown, <0 ringed around a low middle, ~0 even.
+			# t is 0 at center, 1 at rim.
 			var law := 1.0 + core * (0.5 - t) * 1.6
 			var height := rng.randf_range(1.0, 2.1) * (1.2 - 0.3 * bulk) * clampf(law, 0.35, 2.0)
-			# Per-spire mode deviations + phases: a family resemblance to the global style, each unique.
+			# Per-spire mode deviations and phases: a family resemblance to the global style.
 			var mamp: Array = []
 			var mph: Array = []
 			for k in MODES:
 				mamp.append(rng.randf_range(0.5, 1.5))
 				mph.append(rng.randf() * TAU)
-			# `body` = the fraction that stays a COLUMNAR shaft before the taper begins; small = a pure
-			# spire/needle, large = a fat tower with a short spire cap. The mix gives varied architecture.
+			# `body` = the fraction that stays a columnar shaft before the taper begins; small = a
+			# pure needle, large = a fat tower with a short spire cap.
 			_spires.append({
 				"base": Vector3(wx, ground, wz), "up": up, "bx": bx, "bz": bz, "t": t,
 				"base_r": base_r, "height": height, "taper": rng.randf_range(0.6, 1.4),
@@ -180,9 +161,9 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_glow = Nonlinear.flare(_glow, clampf(0.3 * f.energy + 0.7 * f.beat, 0.0, 1.0), delta, 9.0, 1.6)
 	_yaw += delta * (0.05 + 0.12 * f.energy) * _yaw_dir
 	lens.orbit(Vector3(0.0, 1.15, 0.0), _dist, _yaw, _pitch + 0.03 * sin(_life * 0.11))
-	# The city assembles itself: maturity rises (BURST fast at the start, so a short scene still fills in,
-	# then easing to a crawl) and each spire eases toward its own maturity-gated completion (staggered by
-	# radius, so growth spreads from the center out).
+	# The city assembles itself: maturity rises fast at the start (so a short scene still fills in)
+	# then eases to a crawl, and each spire eases toward its own maturity-gated completion,
+	# staggered by radius so growth spreads outward.
 	var burst: float = 1.0 + 3.5 * exp(-_life * 0.7)
 	_maturity = minf(1.0, _maturity + delta * 0.05 * burst)
 	var ease := 1.0 - exp(-3.0 * delta * burst)
@@ -192,10 +173,9 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_light_az += delta * 0.03 * _light_dir
 	_terrain.set_light(_light_az, _light_el)
 	_terrain.step_light(delta)
-	# Snapshot the frame into a job for the worker. Spire dicts are DUPLICATED
-	# (main keeps easing `grow`); the terrain rides by reference (its per-frame
-	# light writes are in-place float updates - a concurrently-read cell is at
-	# worst a frame stale, never unsafe); the lens is copied (main re-orbits it).
+	# Snapshot the frame into a job for the worker. Spire dicts are duplicated (main keeps easing
+	# `grow`); the terrain rides by reference (per-frame light writes are in-place float updates,
+	# at worst a frame stale); the lens is copied (main re-orbits it).
 	var job := SpireJob.new()
 	job.f = f
 	job.life = _life
@@ -229,9 +209,8 @@ func _draw() -> void:
 	_forge.submit(self)
 
 
-## The whole frame, built off the main thread (the FrameForge job): shadow
-## pass, terrain merge, spire loft, painter sort, batch runs. Reads ONLY its
-## own members - never the scene node - so a mid-job Director cut is harmless.
+## The whole frame, built off the main thread (the FrameForge job): shadow pass, terrain merge,
+## spire loft, painter sort, batch runs. Reads only its own members, never the scene node.
 class SpireJob:
 	extends RefCounted
 
@@ -267,7 +246,7 @@ class SpireJob:
 		fog_far = dist * 2.3
 		var embed: float = 0.3 * terrain.relief + 0.14
 		# Pass A: rasterize every spire (as tapering segments) into a light-space shadow map, so a
-		# spire casts a real volumetric shadow onto the ground AND onto other spires.
+		# spire casts a volumetric shadow onto the ground and onto other spires.
 		var shadow := ShadowField.new()
 		shadow.build(ldir, Vector3(-terrain.half, -terrain.relief, -terrain.half),
 			Vector3(terrain.half, terrain.relief + 3.5, terrain.half))
@@ -275,8 +254,8 @@ class SpireJob:
 			for spire in spires:
 				var g: float = clampf(float(spire.grow), 0.0, 1.0)
 				var height: float = float(spire.height) * (0.78 + 0.34 * Nonlinear.apply("spike", _band(float(spire.t)), 1.4))
-				# Only the part ABOVE the ground casts a shadow (the base is sunk `embed` into the
-				# terrain), so the shadow GROWS with the visible height, as tapering stacked segments.
+				# Only the part above the ground casts a shadow (the base is sunk `embed` into the
+				# terrain), so the shadow grows with the visible height.
 				var vis_h: float = g * height - embed
 				if vis_h < 0.05:
 					spire["ext"] = 0.0
@@ -288,15 +267,15 @@ class SpireJob:
 				var seg_h := vis_h / float(segs)
 				for si in segs:
 					var f0 := float(si) / float(segs)
-					# ROUND: a spire is a tapering shaft, not a box, and its bounding square cast a
-					# rectangular shadow with hard corners. See ShadowField.add_box.
+					# Round: a spire is a tapering shaft, and its bounding square cast a rectangular
+					# shadow. See ShadowField.add_box.
 					shadow.add_box(base + up * (float(si) * seg_h), up, spire.bx, spire.bz,
 						br * (1.0 - 0.72 * f0), seg_h, true)
 				# Self-shadow bias = the spire's own light-depth reach, so a taller neighbor still shadows it.
 				spire["ext"] = absf(shadow.light_depth(base + up * vis_h) - shadow.light_depth(base)) + br * 1.4
 
-		# ONE merged list: terrain quads (shadowed by the spires) + spire faces/windows, depth-sorted
-		# together, so the LAND occludes the buried spire bases and spires occlude one another correctly.
+		# One merged list: terrain quads (shadowed by the spires) and spire faces/windows, sorted
+		# together, so the land occludes the buried bases and spires occlude one another.
 		var faces: Array = terrain.collect_surface(lens, u, lit, life, shadow)
 		if reveal >= 0.02:
 			for spire in spires:
@@ -316,16 +295,15 @@ class SpireJob:
 				tb.quad_colored(fc.poly, fc.cols)
 		return tb.take_chunks()
 
-	# The drive at spectral position `tt`: the LIVE band, or - when quiet/absent - a slow traveling
-	# wave across the spectrum, so the city is always alive even in idle preview.
+	# The drive at spectral position `tt`: the live band, or when quiet a slow traveling wave
+	# across the spectrum, so the city is alive in idle preview.
 	func _band(tt: float) -> float:
 		var live: float = f.sample(tt)
 		var idle := 0.30 + 0.34 * sin(life * 0.4 + tt * 8.0)
 		return clampf(maxf(live, idle * 0.85), 0.0, 1.0)
 
-	# The spire's radius at normalized height u (0 = base, 1 = tip): a taper envelope modulated by the
-	# harmonic mode series (the tiers / bulges the spectrum sculpts), stepped into set-back tiers with
-	# cornice lips.
+	# The spire's radius at normalized height u (0 = base, 1 = tip): a taper envelope modulated by
+	# the harmonic mode series, stepped into set-back tiers with cornice lips.
 	func _profile_r(uu: float, spire: Dictionary) -> float:
 		var body := float(spire.body)
 		var env: float
@@ -345,18 +323,18 @@ class SpireJob:
 		var cornice: float = 0.17 * exp(-pow((tf - floor(tf) - 0.9) / 0.07, 2.0))
 		return maxf(float(spire.base_r) * 0.02, float(spire.base_r) * env * (clampf(m, 0.2, 1.9) * setback + cornice))
 
-	# Loft one spire: sample its profile bottom-up into rings (only as high as it has GROWN), close the
-	# current top to a point, then emit the side faces.
+	# Loft one spire: sample its profile bottom-up into rings (only as high as it has grown),
+	# close the top to a point, then emit the side faces.
 	func _emit_spire(faces: Array, spire: Dictionary, ldir: Vector3, lit: float,
 			shadow: ShadowField, embed: float) -> void:
 		var g: float = clampf(float(spire.grow), 0.0, 1.0)
 		var band := _band(float(spire.t))
 		var height: float = float(spire.height) * (0.78 + 0.34 * Nonlinear.apply("spike", band, 1.4))
 		var base: Vector3 = spire.base
-		# The TERRAIN shadows the spire: standing in a hill's cast shadow darkens the whole tower.
+		# The terrain shadows the spire: a hill's cast shadow darkens the whole tower.
 		lit = lit * (0.42 + 0.58 * terrain.shadow_at(base.x, base.z))
-		# Sink the base BELOW the surface so the loft starts underground; the merged terrain hides the
-		# buried shaft, so the spire rises out of the land with a ragged base.
+		# Sink the base below the surface so the loft starts underground; the merged terrain hides
+		# the buried shaft.
 		base.y -= embed
 		var up: Vector3 = spire.up
 		var bx: Vector3 = spire.bx
@@ -392,7 +370,7 @@ class SpireJob:
 		for l in range(1, rings.size()):
 			var lo: PackedVector3Array = rings[l - 1]
 			var hi: PackedVector3Array = rings[l]
-			# Windows go on the tower BODY (below the roof taper), never on the collapsed tip rings.
+			# Windows go on the tower body (below the roof taper), never on the tip rings.
 			var body_face: bool = float(us[l]) < 0.78 and l < rings.size() - 1
 			for s in SIDES:
 				var s2 := (s + 1) % SIDES
@@ -400,9 +378,9 @@ class SpireJob:
 				_emit_face(faces, lo[s], lo[s2], hi[s2], hi[s], thue, band, lit, ldir,
 					base.y, float(us[l]), shadow, body_face, wseed, sext)
 
-	# Emit one lofted quad face, shaded by the key light with a vertical ambient gradient and distance
-	# fog. Every wall face draws (no back-face cull - the towers are hollow lofted tubes; far-to-near
-	# fill closes them); windows go only on front-facing walls.
+	# Emit one lofted quad face, shaded by the key light with a vertical ambient gradient and
+	# distance fog. Every wall face draws (no back-face cull: the towers are hollow tubes and
+	# far-to-near fill closes them); windows go only on front-facing walls.
 	func _emit_face(faces: Array, p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3,
 			thue: float, band: float, lit: float, ldir: Vector3, ao_lo: float, uu: float,
 			shadow: ShadowField, body_face := false, wseed := 0.0, sext := 0.0) -> void:
@@ -436,7 +414,7 @@ class SpireJob:
 			cols.append(fc2)
 		var depth: float = (pr[0].z + pr[1].z + pr[2].z + pr[3].z) * 0.25
 		faces.append({"d": depth, "poly": poly, "cols": cols})
-		# Intricate detail: arched windows, only on faces big enough on screen to read (automatic LOD).
+		# Arched windows, only on faces big enough on screen to read (automatic LOD).
 		if body_face and front and area > 60.0:
 			_add_windows(faces, poly[0], poly[1], poly[2], poly[3], depth, col, band, wseed)
 
@@ -444,7 +422,7 @@ class SpireJob:
 	func _fp(a: Vector2, b: Vector2, c: Vector2, d: Vector2, s: float, v: float) -> Vector2:
 		return a.lerp(b, s).lerp(d.lerp(c, s), v)
 
-	# Two columns of a pointed (gothic) arched window per wall face: a lit stone frame with a recessed
+	# Two columns of a pointed arched window per wall face: a lit stone frame with a recessed
 	# dark (or warmly lit) pane, drawn as flat depth-sorted polys just in front of the wall.
 	func _add_windows(faces: Array, a: Vector2, b: Vector2, c: Vector2, d: Vector2,
 			depth: float, wall: Color, band: float, wseed: float) -> void:
@@ -453,7 +431,7 @@ class SpireJob:
 		for c_i in 2:
 			var uc := 0.30 + 0.40 * float(c_i)
 			var hw := 0.13
-			# Stable per-window lottery: some panes glow warm (lit interior), most are dark recesses.
+			# Stable per-window lottery: some panes glow warm, most are dark recesses.
 			var h := fposmod(sin((wseed + float(c_i) * 5.7) * 12.9898) * 43758.5453, 1.0)
 			var pane: Color
 			if h > 0.78:

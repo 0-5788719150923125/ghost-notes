@@ -4,31 +4,26 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/table/effects_check.gd
 ##
-## - WHATEVER IS WRITTEN BUILDS: unknown kinds, looks, places and moments are dropped, and so is air
-##   past its caps (effects, fogs, motes in all); sizes stay in their look's range, colors are
-##   colors, and a look's own color stands in for none.
-## - THE VOCABULARY names every kind, look, place and moment, with each look's sizes.
-## - A FUNCTION OF SHOW TIME: a mote's place and brightness are the same whenever asked; a mote that
-##   is away is where it went (out of the picture); a firefly blinks; an ember rises through its
-##   region and round again; nothing sinks under the air's floor (the room's, not its region's).
-## - BURSTS are born the same way from the same moments - within their moment, most at its start, at
-##   the emitter - and a moved moment is born again (in time, or its emitter's path); one not moved is
-##   left alone. A burst marks every time its moment happens, or only the first, the last or the times
-##   it names.
-## - A MOTE'S HOME IS SEEN: in the picture, in front of the stage's occluders and short of where the air
-##   ends. Two-sided: homes drawn from the region's volume alone are hidden behind the table often, and
-##   without the limit some lie past the room's picture. Away, a mote is out of the picture or off in
-##   the distance - some of each.
-## - A FLY FLIES LIKE ONE: fast legs with sharp turns, hardly ever still and never for long (a hover is a
-##   fraction of a second), never faster than a fly; its planned flight loops without a jump; gone, it is
-##   out of the picture or off in the distance blurred past seeing, about as long as asked; it carries
-##   no light. Two-sided: pixies over the same cloth neither zip nor turn sharply, and a lens without
-##   blur keeps a distant fly whole.
-## - NOTHING FLIES THROUGH WHAT STANDS: a mote over the table or a thing on it stays above its top - a lit
-##   one by LIT_CLEAR, where its light at full glow burns no spot that blooms - and the floor lifting it
-##   over a thing never makes it jump. Two-sided: with nothing under them (the old floor) motes go into
-##   the table.
-## - BUILT: a fog volume per fog, a sprite per mote, no more lights than the cap.
+## - Whatever is written builds: unknown kinds, looks, places and moments are dropped, and so is air past its caps (effects, fogs,
+##   motes in all); sizes stay in their look's range, colors are colors, and a look's own color stands in for none.
+## - The vocabulary names every kind, look, place and moment, with each look's sizes.
+## - A function of show time: a mote's place and brightness are the same whenever asked; a mote that is away is where it went (out
+##   of the picture); a firefly blinks; an ember rises through its region and round again; nothing sinks under the air's floor (the
+##   room's, not its region's).
+## - Bursts are born the same way from the same moments - within their moment, most at its start, at the emitter - and a moved
+##   moment is born again (in time, or its emitter's path); one not moved is left alone. A burst marks every time its moment
+##   happens, or only the first, the last or the times it names.
+## - A mote's home is seen: in the picture, in front of the stage's occluders and short of where the air ends. Two-sided: homes drawn
+##   from the region's volume alone are hidden behind the table often, and without the limit some lie past the room's picture. Away,
+##   a mote is out of the picture or off in the distance - some of each.
+## - A fly flies like one: fast legs with sharp turns, hardly ever still and never for long (a hover is a fraction of a second),
+##   never faster than a fly; its planned flight loops without a jump; gone, it is out of the picture or off in the distance blurred
+##   past seeing, about as long as asked; it carries no light. Two-sided: pixies over the same cloth neither zip nor turn sharply,
+##   and a lens without blur keeps a distant fly whole.
+## - Nothing flies through what stands: a mote over the table or a thing on it stays above its top - a lit one by LIT_CLEAR, where
+##   its light at full glow burns no spot that blooms - and the floor lifting it over a thing never makes it jump. Two-sided: with
+##   nothing under them motes go into the table.
+## - Built: a fog volume per fog, a sprite per mote, no more lights than the cap.
 
 var _fails := 0
 
@@ -43,9 +38,8 @@ func _ok(cond: bool, what: String) -> void:
 		print("  FAIL: " + what)
 
 
-## A stage like the card table's: a camera looking down across a table, the air's regions round it,
-## and its lens - sharp over the table, blurring past it to the room's 1% of the frame at 3.2 m, the air
-## ending short of the room (as TableMedium._air_stage reckons them).
+## A stage like the card table's: a camera looking down across a table, the air's regions round it, and its lens - sharp over the
+## table, blurring past it to the room's 1% of the frame at 3.2 m, the air ending short of the room (as TableMedium._air_stage reckons them).
 func _stage() -> Dictionary:
 	var lay := CardTable.layout_of(1234)
 	var cam: Transform3D = lay["camera"]
@@ -195,7 +189,7 @@ func _flies() -> bool:
 	_ok(fly["turns"] > 1.0, "a fly turns sharply only %.2f times a second" % fly["turns"])
 	_ok(fly["still"] > 0.01 and fly["still"] < 0.25, "a fly is still for %.0f%% of half-seconds (hardly ever, but now and then)" % (fly["still"] * 100.0))
 	_ok(pixie["top"] < 0.6 and pixie["turns"] < fly["turns"] * 0.2, "control: pixies zip (%.2f m/s) or turn sharply (%.2f a second) like flies" % [pixie["top"], pixie["turns"]])
-	# A HOVER IS A FRACTION OF A SECOND, and the plan loops without a jump
+	# a hover is a fraction of a second, and the plan loops without a jump
 	var longest := 0.0
 	var loops := true
 	for pop in [air.motes[0], air.motes[2]]:
@@ -211,7 +205,7 @@ func _flies() -> bool:
 			loops = loops and before.distance_to(after) < 0.005
 	_ok(longest > 0.0 and longest <= 0.5, "a fly hovered for %.2f s in one place" % longest)
 	_ok(loops, "a fly's flight jumps where its plan loops")
-	# GONE IS OUT OF THE PICTURE OR OFF IN THE DISTANCE, blurred away, about as much of the time as asked
+	# gone is out of the picture or off in the distance, blurred away, about as much of the time as asked
 	var gone := 0
 	var seen_gone := 0
 	var deep_gone := 0
@@ -248,9 +242,8 @@ func _flies() -> bool:
 	return true
 
 
-## How a population flies over a minute at 60 Hz: its top speed, its SHARP TURNS a second (its heading
-## swung past 60 degrees within a twentieth of a second, at speed) and the share of half-seconds it
-## went under 2 cm (still, its buzz aside).
+## How a population flies over a minute at 60 Hz: its top speed, its sharp turns a second (its heading swung past 60 degrees within
+## a twentieth of a second, at speed) and the share of half-seconds it went under 2 cm (still, its buzz aside).
 func _flight(pop: Dictionary) -> Dictionary:
 	var dt := 1.0 / 60.0
 	var top := 0.0
@@ -295,7 +288,7 @@ func _bursts() -> bool:
 	_ok(near == a.size(), "%d of %d particles were born away from the emitter" % [a.size() - near, a.size()])
 	var moved := Effects.births(fx, [{"t": 12.0, "dur": 1.0, "from": "card", "path": path}], 7)
 	_ok(str(moved) != str(a), "a moved moment was born the same")
-	# PLANNED ONCE PER MOMENT: a burst whose moments did not move is not born again
+	# planned once per moment: a burst whose moments did not move is not born again
 	var root := Node3D.new()
 	var air := Effects.build([fx], _stage(), 5)
 	root.add_child(air.root)
@@ -305,14 +298,13 @@ func _bursts() -> bool:
 	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 1 and mm.instance_count == 80, "an unmoved moment was planned again")
 	air.plan({"jumper": [{"t": 20.0, "dur": 1.0, "from": "card", "path": path}]})
 	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 2, "a moved moment was not planned again")
-	# A CARD'S POSE CAN MOVE WHILE ITS MOMENT'S TIME STANDS: born again from where its emitter now is
+	# a card's pose can move while its moment's time stands: born again from where its emitter now is
 	var shifted := [[10.0, (path[0][1] as Transform3D).translated(Vector3(0.0, 0.0, 0.1))], [11.0, path[1][1]]]
 	air.plan({"jumper": [{"t": 20.0, "dur": 1.0, "from": "card", "path": shifted}]})
 	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 3, "a moment whose emitter moved (its time the same) was not planned again")
 	root.free()
-	# WHICH TIMES IT MARKS: a moment that comes with every card is marked at every card only when asked -
-	# the first, the last, or the times named (2026-10-07: "reveal" and "lay" could only burst at every
-	# card, which a show that wants bursts "never every card" cannot use)
+	# which times it marks: a moment that comes with every card is marked at every card only when asked - the first, the last, or the
+	# times named
 	var five: Array = []
 	for i in 5:
 		five.append({"t": 10.0 * float(i + 1), "dur": 0.3, "from": "card", "path": path})
@@ -342,7 +334,7 @@ func _homes() -> bool:
 		seen += 1 if s != null and (s as Vector2).x >= 0.0 and (s as Vector2).x <= 1.0 and (s as Vector2).y >= 0.0 and (s as Vector2).y <= 1.0 else 0
 		hidden += 1 if Effects._hidden(stage, p) else 0
 	_ok(seen == 200 and hidden == 0, "mote homes were out of the picture (%d) or behind the table (%d)" % [200 - seen, hidden])
-	# NONE PAST WHERE THE AIR ENDS (the room's picture stands there): control - without the limit, some are
+	# none past where the air ends (the room's picture stands there): control - without the limit, some are
 	var past := 0
 	var past_open := 0
 	var open := stage.duplicate()
@@ -401,7 +393,7 @@ func _floors() -> bool:
 	_ok(bare_into > 0, "control: with nothing under them motes never went into the table")
 	print("  a frame's longest step: %.1f cm with the floor, %.1f without" % [step * 100.0, bare_step * 100.0])
 	_ok(step < bare_step * 1.5, "the floor makes a mote jump: %.1f cm in a frame against %.1f without it" % [step * 100.0, bare_step * 100.0])
-	# THE LIGHT AT ITS CLOSEST: at full glow, LIT_CLEAR off a pale surface, it burns no spot that blooms
+	# the light at its closest: at full glow, LIT_CLEAR off a pale surface, it burns no spot that blooms
 	var glare := 0.0
 	var fog := INF
 	for i in 40:

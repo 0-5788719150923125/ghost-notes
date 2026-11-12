@@ -1,23 +1,16 @@
 #!/usr/bin/env python3
 """Tests for punctuation pauses in the Piper backend.
 
-Run it directly with the voice venv's python - no pytest needed:
+Run it directly with the voice venv's python (no pytest):
 
     ~/.local/share/godot/app_userdata/ghost/voice_venv/bin/python \
         hosts/voice/test_pauses.py
 
-Three things are being checked, and the third is the one that matters most:
+Checked: the splice maths (inserted length, placement, shifted timings landing on the silence they
+describe); that the cut does not click, by construction; and that `pause_scale` = 0 reproduces the HEAD
+revision of piper.py byte for byte (run in a subprocess).
 
-  1. the splice maths - inserted length, placement, and the shifted timings
-     still landing on the silence they describe;
-  2. that the cut does not click, by construction rather than by ear;
-  3. that `pause_scale` = 0 reproduces the PREVIOUS code byte for byte. That
-     last one is run against the actual HEAD revision of piper.py in a
-     subprocess, not against a remembered number, so it cannot rot.
-
-Synthesis runs against a fake ONNX session: deterministic audio, deterministic
-durations, no model download, no eSpeak. The real graph is stochastic, so it
-could not answer a byte-identity question at all.
+Synthesis runs against a fake ONNX session: deterministic audio and durations, no model download, no eSpeak.
 """
 
 from __future__ import annotations
@@ -149,13 +142,13 @@ PHONES_MARKS = [
     ".",
 ]
 
-# name -> (kind, items, params). Params are chosen so everything but the two
-# *_marks cases MUST reproduce the previous implementation byte for byte.
+# name -> (kind, items, params). Params are chosen so everything but the two *_marks cases must reproduce
+# the previous implementation byte for byte.
 CASES = {
     "tok_one_sentence_scale0": ("tokens", TOKENS_ONE, {"pause_scale": 0.0}),
     "tok_two_sentences_default": ("tokens", TOKENS_TWO, {}),
-    # `trail` off: the word before a mark is held now (`test_trail.py`), and what is pinned
-    # here is that turning it off is the audio this file always made
+    # `trail` off: what is pinned here is that turning it off is the audio this file always made (the held
+    # word is `test_trail.py`'s)
     "tok_marks_scale1": ("tokens", TOKENS_MARKS, {"pause_scale": 1.0, "trail": 0.0}),
     "ph_one_sentence_scale0": ("phones", PHONES_ONE, {"pause_scale": 0.0}),
     "ph_marks_scale1": ("phones", PHONES_MARKS, {"pause_scale": 1.0}),
@@ -174,8 +167,8 @@ def _result(data: bytes, res: dict) -> dict:
 
 
 def synth(tokens: list, params: dict) -> dict:
-    """Run the real _synth_tokens against the fake voice, the trail off: these checks are
-    about the splice, and a held word changes the silence it measures."""
+    """Run the real _synth_tokens against the fake voice, the trail off: a held word changes the silence the
+    splice measures."""
     from backends.piper import PiperBackend
 
     be = PiperBackend()
@@ -261,14 +254,11 @@ def ok(cond, what: str):
 
 
 def within(got, want, what: str, slop: int = 2):
-    """`eq` for a SAMPLE COUNT that went through the waveform on its way here.
+    """`eq` for a sample count that went through the waveform on its way here.
 
-    The splicer measures the silence already at a mark rather than looking it up, and
-    even this fake voice - a continuous sine - dips under the quiet threshold for a
-    sample here and there. So a prediction made with `have = 0` lands a sample or two off
-    the real insertion, every time, and always by the same tiny amount. That is the
-    measurement working; demanding exactness here would only ever gate the sine's zero
-    crossings.
+    The splicer measures the silence already at a mark, and even this fake voice (a continuous sine) dips
+    under the quiet threshold for a sample here and there, so a prediction made with `have = 0` lands a
+    sample or two off, always by the same tiny amount.
     """
     ok(abs(got - want) <= slop, "%s == %r (got %r)" % (what, want, got))
 
@@ -280,23 +270,18 @@ def within(got, want, what: str, slop: int = 2):
 def test_table_and_scale():
     from backends.piper import PAUSE_AFTER, _gap_for, _pause_for
 
-    # AT 1.0 THE TABLE IS THE ANSWER, exactly - the dial's whole job is to leave the
-    # calibrated default alone and this is where that is pinned down.
+    # At 1.0 the table is the answer, exactly: the dial leaves the calibrated default alone.
     eq(_pause_for(",", {}), PAUSE_AFTER[","], "comma at default scale")
     eq(_pause_for(";", {"pause_scale": 0.0}), 0.0, "semicolon at scale 0")
     eq(_pause_for("x", {}), 0.0, "a non-mark gets nothing")
-    # the unification: no explicit sentence_gap means the table, and the table's
-    # sentence-final value IS the old 0.32 default
+    # no explicit sentence_gap means the table, and the table's sentence-final value is the old 0.32 default
     eq(_gap_for(".", {}), 0.32, "sentence gap default")
     eq(_gap_for("?", {}), 0.32, "question mark uses the same gap")
     eq(_gap_for(".", {"sentence_gap": 0.5}), 0.5, "explicit sentence_gap still wins")
     eq(_gap_for(".", {"pause_scale": "nonsense"}), 0.32, "a bad scale falls back")
-    # ...AND AWAY FROM 1.0 IT IS NOT A MULTIPLICATION. These were `table x scale` and are
-    # not any more, deliberately: the dial scales the whole rest (the model's own dwell
-    # included, see DWELL) along a saturating curve, so our share of it is what is left
-    # after the model's is subtracted back off. Doubling the dial does NOT double the
-    # splice - it doubles neither, it moves the REST toward its ceiling, which is the
-    # only reading a listener can hear as "the same pacing, slower".
+    # Away from 1.0 it is not a multiplication: the dial scales the whole rest (the model's own dwell
+    # included, see DWELL) along a saturating curve, so our share is what is left after the model's is
+    # subtracted.
     near(
         _pause_for(":", {"pause_scale": 2.0}),
         0.446739,
@@ -335,9 +320,8 @@ def test_splice_length_and_placement():
         [round(pad_a / SR, 6), round(pad_b / SR, 6)],
         "reported durations",
     )
-    # The reported time is where the silence ACTUALLY went, not the nominal mark: the cut
-    # slides forward to the quiet place between the words, and a timing shifted from the
-    # nominal point would drift off the waveform by exactly that much.
+    # The reported time is where the silence actually went, not the nominal mark: the cut slides forward to
+    # the quiet place between the words.
     slack = round(3.0 * SR / 1000.0) / SR + 1e-9
     for got, want in zip([t for t, _ in inserted], [0.25, 0.60]):
         ok(
@@ -815,19 +799,11 @@ def test_synth_tokens_inserts_the_right_totals():
     def frames(r):
         return (r["bytes"] - 44) // 2
 
-    # ASK THE RULE, don't restate it. What this gates is that `_synth_tokens` inserts and
-    # accounts for what the pause rule says - the rule itself is gated in
-    # check_the_punctuation_hierarchy_survives_the_slider, and a second copy of it here
-    # only ever meant this test failed whenever that one changed. At scale 1.0 the rule
-    # returns the table exactly (asserted in test_table_and_scale), so the default case is
-    # pinned to the same numbers it always was.
-    # The fake voice's audio never goes quiet, so there is no dwell at these marks to
-    # MEASURE - and the splicer therefore has to supply the whole of the target, which is
-    # the property being gated here. The target comes from the table (`_dwell_for`) and
-    # what is already in the waveform is subtracted from it; those are two different
-    # numbers and conflating them is the bug `_rest_from` documents. On a real voice the
-    # measured dwell is not zero and the same call adds less, which is measured end to
-    # end rather than here.
+    # Ask the rule, don't restate it: what this gates is that `_synth_tokens` inserts and accounts for what
+    # the pause rule says (the rule itself is gated in check_the_punctuation_hierarchy_survives_the_slider).
+    # The fake voice never goes quiet, so there is no dwell to measure and the splicer must supply the whole
+    # target, which comes from the table (`_dwell_for`) with what is already in the waveform subtracted (see
+    # `_rest_from`).
     from backends.piper import _dwell_for, _gap_for, _pause_multiplier, _rest_from
 
     for scale, res in ((1.0, one), (2.0, two)):
@@ -838,19 +814,16 @@ def test_synth_tokens_inserts_the_right_totals():
         }
         rule["."] = _gap_for(".", {"pause_scale": scale})
         want = sum(round(rule[m] * SR) for m in (",", ":", "."))
-        # Within a sample or two, not exact: the dwell is measured off the waveform, and
-        # even this fake voice dips under the quiet threshold for a sample here and there,
-        # which is the measurement working rather than an accounting error.
+        # Within a sample or two, not exact: the dwell is measured off the waveform, and even this fake
+        # voice dips under the quiet threshold now and then.
         got = frames(res) - frames(zero)
         ok(
             abs(got - want) <= 2,
             f"samples added at scale {scale} (comma + colon + sentence gap): {got} ~ {want}",
         )
 
-    # the token AFTER the comma must move by the comma's pause, not by more. ASK THE RULE
-    # here too: the fake voice rests nothing at the mark, so the splicer supplies the whole
-    # target rather than only the top-up, and restating the top-up would be gating what
-    # this file used to do instead of what it does.
+    # the token after the comma must move by the comma's pause, not by more. Ask the rule here too: the fake
+    # voice rests nothing at the mark, so the splicer supplies the whole target.
     t_zero = {t["index"]: t for t in zero["tokens"]}
     t_one = {t["index"]: t for t in one["tokens"]}
     comma_at_1 = _rest_from(_dwell_for(","), PAUSE_AFTER[","], 1.0, 0.0)
@@ -888,10 +861,9 @@ def test_semicolon_and_bang():
     zero = synth(toks, {"pause_scale": 0.0})
     one = synth(toks, {"pause_scale": 1.0})
     eq(one["sentences"], 2, "! ends a sentence")
-    # The `;` is spliced INTO the sentence, so it is topped up to its target against a
-    # fake voice that rests nothing; the `!` ends one, so it goes through `_gap_for` and
-    # is the top-up exactly. Two different paths through the same rule, which is the point
-    # of checking them in one sentence.
+    # The `;` is spliced into the sentence, so it is topped up to its target against a fake voice that rests
+    # nothing; the `!` ends one, so it goes through `_gap_for` and is the top-up exactly. Two paths through
+    # the same rule.
     want = round(_rest_from(_dwell_for(";"), PAUSE_AFTER[";"], 1.0, 0.0) * SR) + round(
         _gap_for("!", {"pause_scale": 1.0}) * SR
     )
@@ -900,10 +872,10 @@ def test_semicolon_and_bang():
 
 @check
 def test_a_short_tail_rests_a_share_of_a_comma():
-    """A comma that leaves its sentence a word or two ("a copy, too.") rests SHORT_TAIL_REST of a comma
-    (2026-10-29, the user: ", too" "just feels really slow"), at the user's own Pause of 7, and its word
-    trails by that rest; the control, three words left ("a copy, and so on."), rests a whole comma. A
-    list's last comma, a comma before another mark, a colon and a sentence cut short keep theirs."""
+    """A comma that leaves its sentence a word or two ("a copy, too.") rests SHORT_TAIL_REST of a comma at a
+    Pause of 7, and its word trails by that rest; the control, three words left ("a copy, and so on."),
+    rests a whole comma. A list's last comma, a comma before another mark, a colon and a sentence cut short
+    keep theirs."""
     from backends.piper import (
         PAUSE_AFTER,
         SHORT_TAIL_REST,
@@ -958,8 +930,8 @@ def test_phones_path_inserts_the_right_totals():
     zero = synth_phones(PHONES_MARKS, {"pause_scale": 0.0})
     one = synth_phones(PHONES_MARKS, {"pause_scale": 1.0})
     eq(one["sentences"], 2, "the phones front end still splits on the full stop")
-    # Same rule as the token path, asked the same way - the two front ends splicing
-    # different amounts at the same mark is a thing this file exists to catch.
+    # Same rule as the token path, asked the same way: the two front ends must splice the same amount at the
+    # same mark.
     want = sum(
         round(_rest_from(_dwell_for(m), PAUSE_AFTER[m], 1.0, 0.0) * SR)
         for m in (",", ":")
@@ -1080,14 +1052,7 @@ def test_byte_identical_to_head():
     for case, (kind, items, params) in CASES.items():
         got = run_case(kind, items, params)
         r = ref[case]
-        # A ONE-TIME MIGRATION ASSERTION, now retired. The two *_marks cases used to
-        # assert they DIFFERED from HEAD, because the punctuation splice was the change
-        # being landed and its whole point was to make those cases longer. That
-        # expectation is self-invalidating: once the change was committed, HEAD contained
-        # it, current matched HEAD, and "must differ" could never pass again - which is
-        # exactly how it was found, failing identically with and without the edit under
-        # review. Every case now asserts byte-identity, which is the property actually
-        # worth guarding from here on: nothing changes the audio unless it means to.
+        # Every case asserts byte-identity with HEAD: nothing changes the audio unless it means to.
         eq(got["sha256"], r["sha256"], f"{case}: byte-identical to HEAD")
 
 
@@ -1098,17 +1063,12 @@ def test_byte_identical_to_head():
 def check_syllabic_fold():
     """A syllabic consonant a voice cannot spell becomes schwa + consonant.
 
-    eSpeak marks the American glottalized -ten/-tain family with U+0329: "written" comes
-    back as /r\u026a\u0294n\u0329/, "certain" as /s\u025c\u0294n\u0329/, "gotten" as /g\u0251\u0294n\u0329/. Four of the five
-    installed voices carry that symbol in their 157-entry maps; en_US-libritts-high
-    carries 130 and does not, and there the mark was simply dropped - leaving a glottal
-    stop and a bare consonant with nothing to stand as the second syllable. Across
-    north-star that is 146 tokens over 19 word types, led by "written" (51), "certain"
-    (34) and "gotten" (15), so it is not an edge case.
+    eSpeak marks the American glottalized -ten/-tain family with U+0329 ("written" /rɪʔn̩/, "certain",
+    "gotten"). en_US-libritts-high has no such symbol in its 130-entry map (the others' 157-entry maps do),
+    so the mark would be dropped, leaving a glottal stop and a bare consonant.
 
-    A syllabic consonant IS a schwa plus that consonant, and eSpeak spells the
-    un-glottalized members of the same family that way itself ("sudden" -> /s\u028cd\u0259n/),
-    so this is a faithful rewrite rather than a patch over a gap.
+    A syllabic consonant is a schwa plus that consonant (eSpeak spells the un-glottalized members that way:
+    "sudden" -> /sʌdən/), so this is a faithful rewrite.
     """
     from backends.piper import PiperBackend, SYLLABIC, SCHWA
 
@@ -1150,21 +1110,13 @@ def check_syllabic_fold():
 @check
 @check
 def check_the_punctuation_hierarchy_survives_the_slider():
-    """A comma may never out-rest a full stop, and their RATIO may not move with the dial.
+    """A comma may never out-rest a full stop, and their ratio may not move with the dial.
 
-    Three bugs live in this one function's history, all reported by ear, and the third is
-    only visible if you measure what a listener hears rather than what we splice.
-
-      1. An inversion. Mid-sentence marks were uncapped while the sentence gap was pinned,
-         so past 1.0 the commas overtook the full stops.
-      2. A dead dial. Capping each mark at its share of one absolute ceiling meant they all
-         hit it at 3.75x, and the top 62% of the slider did nothing.
-      3. Drifting proportions. Scaling only OUR silence linearly does not scale the REST
-         linearly, because the model is resting too - so the dial stretched the gaps between
-         the marks rather than the marks themselves, and no setting suited both ends of the
-         punctuation ladder at once.
-
-    So the assertions below are on the TOTAL rest, which is the only thing anyone hears.
+    Three failures to guard: mid-sentence marks uncapped while the sentence gap was pinned (commas overtake
+    full stops past 1.0); each mark capped at its share of one absolute ceiling (the top of the slider does
+    nothing); scaling only our silence linearly (the model's own rest does not scale, so the gaps between
+    marks stretch instead of the marks). So the assertions are on the total rest, which is what a listener
+    hears.
     """
     from backends import piper
 
@@ -1180,12 +1132,9 @@ def check_the_punctuation_hierarchy_survives_the_slider():
             "at %gx the order , <= ; <= : <= . holds (%.3f %.3f %.3f %.3f)"
             % (scale, c, sm, cl, g),
         )
-    # BELOW 1.0 THE ORDER IS THE MODEL'S, not ours, and that is not a failure to assert
-    # around: we can only ADD silence. This voice dwells 0.30 s at a colon and 0.18 after a
-    # full stop, so under about 0.6 on the dial - where the target rest falls below what the
-    # model is already doing - the colon genuinely out-rests the sentence and there is
-    # nothing to subtract. What must hold is that we are not making it worse: nothing is
-    # spliced anywhere down there.
+    # Below 1.0 the order is the model's: we can only add silence. This voice dwells 0.30 s at a colon and
+    # 0.18 after a full stop, so under about 0.6 on the dial the colon out-rests the sentence and nothing is
+    # spliced anywhere.
     for scale in (0.0, 0.25):
         for mark in (",", ";", ":"):
             ok(
@@ -1193,16 +1142,14 @@ def check_the_punctuation_hierarchy_survives_the_slider():
                 "at %gx `%s` splices nothing - the model is already resting longer"
                 % (scale, mark),
             )
-    # ...and just under 1.0 it is down to milliseconds rather than exactly nothing, which is
-    # the floor arriving smoothly instead of as a cliff.
+    # ...and just under 1.0 it is down to milliseconds rather than exactly nothing: the floor arrives
+    # smoothly.
     for mark in (",", ";", ":"):
         v = piper._pause_for(mark, {"pause_scale": 0.5})
         ok(v < 0.02, "at 0.5x `%s` splices next to nothing (%.4fs)" % (mark, v))
 
-    # THE RATIO IS THE FIX. A full stop rests twice as long as a comma at 1.0; it has to
-    # rest twice as long as a comma everywhere, or one setting cannot suit both.
-    # From 1.0 up, which is the dial's whole working range: below it the floor above is
-    # what decides, and a ratio nobody can influence is not a claim about this rule.
+    # The ratio: a full stop rests twice as long as a comma at 1.0 and must everywhere from 1.0 up (below it
+    # the floor above decides).
     at_one = total(".", 1.0) / total(",", 1.0)
     for scale in (1.0, 2.0, 3.0, 3.75, 5.0, 6.0, 7.5, 10.0):
         r = total(".", scale) / total(",", scale)
@@ -1229,10 +1176,8 @@ def check_the_punctuation_hierarchy_survives_the_slider():
         "the top of the slider rests far past its middle (%.2fs vs %.2fs)"
         % (total(".", 10.0), total(".", 3.75)),
     )
-    # AND THE TOP IS REACHABLE AT ALL. The curve this replaced was a saturating exponential
-    # that reached 3.2x at the dial's top, 3.28 at 20 and 3.29 at 100 - so "the pause effect
-    # barely seems to work at 10x" could not have been answered by allowing a bigger number.
-    # A power law keeps climbing, and this is the assertion that it does.
+    # And the top is reachable: the saturating exponential reached 3.2x at the dial's top, 3.28 at 20 and
+    # 3.29 at 100; a power law keeps climbing.
     from backends.piper import _pause_multiplier
 
     ok(
@@ -1241,16 +1186,15 @@ def check_the_punctuation_hierarchy_survives_the_slider():
         % _pause_multiplier({"pause_scale": 10.0}),
     )
 
-    # ...and NOT finicky: every step up the dial adds less than the step before it, and the
-    # one the report named (5 to 6) is a nudge rather than a lurch.
+    # ...and every step up the dial adds less than the step before it, the 5 to 6 step a nudge rather than a
+    # lurch.
     steps = [total(".", s + 1.0) - total(".", s) for s in range(1, 10)]
     ok(
         all(b <= a + 1e-9 for a, b in zip(steps, steps[1:])),
         "from 1.0 up, each unit of dial adds less than the one before (%s)"
         % " ".join("%.2f" % x for x in steps),
     )
-    # Reach costs step size - that is the trade, made deliberately and bounded here. 13% per
-    # whole unit of dial is a nudge; the linear law that prompted the complaint moved 18%.
+    # Reach costs step size, bounded here: 13% per whole unit of dial (a linear law moved 18%).
     jump = (total(".", 6.0) - total(".", 5.0)) / total(".", 5.0)
     ok(
         jump < 0.15,
@@ -1262,11 +1206,10 @@ def check_the_punctuation_hierarchy_survives_the_slider():
 def check_real_voice_comma():
     """On the real checkpoint, a comma the voice runs straight through.
 
-    "Hello, my loves." with no rest floor (a graph that cannot take one) - this voice
-    lengthens the vowel into the comma rather than pausing, so there is no silence to cut
-    in. Old and new splice the SAME render: the old cut at the token boundary with 2 ms
-    ramps must leave a loud edge (the click), the new must not. Skipped when the voice is
-    not installed.
+    "Hello, my loves." with no rest floor: this voice lengthens the vowel into the comma instead of pausing,
+    so there is no silence to cut in. Old and new splice the same render: the old cut at the token boundary
+    with 2 ms ramps must leave a loud edge (the click), the new must not. Skipped when the voice is not
+    installed.
     """
     import numpy as np
     import backends.piper as P
@@ -1344,11 +1287,10 @@ def check_real_voice_comma():
 def check_real_voice_rests_at_a_mark():
     """On the real checkpoint, the word before a comma is ended by the model, not the splice.
 
-    With no rest floor this voice runs through the comma and the spliced silence starts
-    its fade inside the vowel - the word heard cut off. With the floor the model rests
-    there itself and the splice lands in that rest. Two-sided on the same sentences and
-    settings (the tarot narrator's): without the floor most cuts have voice in the 30 ms
-    before them, with it none do. Skipped when the voice is not installed.
+    With no rest floor this voice runs through the comma and the spliced silence starts its fade inside the
+    vowel (the word heard cut off). With the floor the model rests there itself and the splice lands in that
+    rest. Two-sided on the same sentences: without the floor most cuts have voice in the 30 ms before them,
+    with it none do. Skipped when the voice is not installed.
     """
     import numpy as np
     import backends.piper as P
@@ -1559,13 +1501,10 @@ def test_a_rest_after_says_what_the_model_rested():
 def check_real_voice_rests_after_a_word():
     """On the real checkpoint, a word before a hesitation is ended by the model, not the splice.
 
-    The report (2026-10-25): "it had moved on to <!-- hesitation --> Someone", the "to" read tə
-    and run on into the /s/, the 1.5 s cut in after a "t" and a frame of schwa. Told of the
-    rest, the model reads the word whole, rests there itself, and the cut ghost makes at the
-    word's `rest` lands in that silence, which the row counts toward the hesitation. Two-sided
-    on the same sentences at the tarot narrator's settings: without `rest_after` most cuts have
-    voice in the 30 ms before them, with it none do (under 2 kHz, so a hiss is no voice).
-    Skipped when the voice is not installed.
+    Told of the rest, the model reads the word whole and rests there itself, and the cut ghost makes at the
+    word's `rest` lands in that silence, which the row counts toward the hesitation. Two-sided on the same
+    sentences: without `rest_after` most cuts have voice in the 30 ms before them, with it none do (under 2
+    kHz, so a hiss is no voice). Skipped when the voice is not installed.
     """
     import numpy as np
     from backends.piper import PiperBackend
@@ -1587,9 +1526,8 @@ def check_real_voice_rests_after_a_word():
     ]
 
     def voiced(seg) -> float:
-        """RMS of `seg` under 2 kHz: the voice, never a hiss - a word's own final /z/ is kept to
-        the model's level before the rest (`_HISSES`), and the next word's lead hiss reaches into
-        it (LEAD_KEEP), neither of them a word cut off."""
+        """RMS of `seg` under 2 kHz: the voice, never a hiss (a word's own final /z/ and the next word's
+        lead hiss are not a word cut off)."""
         spec = np.fft.rfft(seg)
         spec[np.fft.rfftfreq(seg.size, 1.0 / sr) > 2000.0] = 0.0
         return float(np.sqrt(np.mean(np.fft.irfft(spec, seg.size) ** 2)))
@@ -1622,27 +1560,19 @@ def check_real_voice_rests_after_a_word():
     print("      rested: %s" % " ".join("%.3f" % x for x in rested))
     ok(max(bare) >= 0.01, "untold, a cut is in voice (control)")
     ok(max(told) < 0.01, "told, every cut is in the model's own rest")
-    # the report's own sentence: a vowel into a lead hiss, the rest the model's silence (the
-    # other ends on a /z/ into a /θ/, its rest mostly the two hisses - no silence to count)
+    # a vowel into a lead hiss, the rest the model's silence (the other ends on a /z/ into a /θ/: no silence
+    # to count)
     ok(min(rested[:8]) > 0.03 and max(rested) <= 1.5, "and the row says how much of the rest it is")
 
 
 def check_hyphen_is_a_word_boundary():
-    """A hyphen INSIDE a word reaches the phonemizer as a word space.
+    """A hyphen inside a word reaches the phonemizer as a word space.
 
-    The reported symptom was a rest in the middle of "ten-forty" and
-    "eleven-thirty". eSpeak returns the same phones for the hyphenated spelling
-    and the spaced one and differs only in the word space, so the boundary was
-    being dropped on the way in - and en_US-libritts-high answers two primary
-    stresses welded together with a hole where the boundary should be (measured
-    on "forty-second": 0.40 s of near-silence inside one word, 0.07 s once the
-    space is sent). See _espeak_word.
-
-    The two HOLDS matter as much as the switch. The hyphen must survive in the
-    token's own text, because the karaoke draws the source spelling, and a token
-    must never be handed to the phonemizer as an empty string - phonemizer drops
-    an empty input instead of returning "" for it, which pairs every later word
-    with its neighbor's phonemes.
+    eSpeak returns the same phones for "ten-forty" and "ten forty" and differs only in the word space, and
+    en_US-libritts-high answers two welded primary stresses with a hole where the boundary should be (see
+    _espeak_word). The hyphen must survive in the token's own text (the karaoke draws the source spelling),
+    and a token must never reach the phonemizer as an empty string (phonemizer drops it, which pairs every
+    later word with its neighbor's phonemes).
     """
     from backends.piper import LEAD_IN_SPACES, PiperBackend, _espeak_word
 

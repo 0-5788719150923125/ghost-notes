@@ -1,23 +1,20 @@
 extends RefCounted
 class_name TableCardPose
 
-## TableCardPose - where each drawn card is at a moment of the show: taken from the deck or the
-## box, dealt, laid, turned, held up to be read, a jumper's flight, a card searched for in the box,
-## and how it rests when another comes down on it. A part of [TableMedium].
+## TableCardPose - where each drawn card is at a moment of the show: taken from the deck or the box, dealt, laid,
+## turned, held up to be read, a jumper's flight, a card searched for in the box, and how it rests when another comes
+## down on it. A part of [TableMedium].
 ##
-## NO STATE OF ITS OWN. [method card_pose] is card i at show time t, read off the episode's plan
-## ([TablePlan]), the schedule the reading laid down, and where the box's cards are filed; the
-## medium's frame loop applies what it answers to the meshes. So a pose is the same whenever it is
-## asked - live, in an export, after a scrub, or ahead of time on another thread - which is what
-## makes it safe to compute in any order (next/structure.md, "Many kinds of show, and rounds").
+## No state of its own. [method card_pose] is card i at show time t, read off the episode's plan ([TablePlan]), the
+## schedule the reading laid down, and where the box's cards are filed; the medium's frame loop applies what it answers
+## to the meshes. A pose is the same whenever it is asked - live, in an export, after a scrub, or ahead of time on
+## another thread - so it is safe to compute in any order (next/structure.md).
 ##
-## WHAT IT IS HANDED is written out: every `medium.` below is something it reads of the table -
-## mostly the plan (`medium._plan`), the timing constants a show shares, and where the box and the
-## deck are now. [method card_pose], [method looks], [method held_span], [method searched_xf],
-## [method search_looks], [method jump_riffle] and [method righting] are what the table asks of it.
+## Every `medium.` below is something it reads of the table: mostly the plan (`medium._plan`), the timing constants a
+## show shares, and where the box and the deck are now. [method card_pose], [method looks], [method held_span],
+## [method searched_xf], [method search_looks], [method jump_riffle] and [method righting] are what the table asks of it.
 
-## The [TableMedium] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [TableMedium] this is a part of: everything read through it is what this part is handed.
 var medium: TableMedium
 
 const PRESENT := Vector2(-0.087, 0.012)
@@ -62,25 +59,21 @@ const LAY_LAND := 0.04
 ## descent, tilted still, reaches a few millimeters past where it lies, and the spread leaves the box
 ## more than this (TablePositions.DECK_CLEAR).
 const BOX_GRAZE := 0.008
-## A held card is turned over now and then, to look at its back ([method _look_of]): the chance a
-## card is at all, the chance of each look after that, the seconds between looks, how long a turn
-## takes (each its own), and how long its back is looked at - drawn evenly in its logarithm, so most
-## looks are short and now and then one is long (a fixed-feeling 1.1-1.8 s was reported as "the
-## exact same length, always"). Most cards are never turned: 4-5 looks in one draw was too many.
+## A held card is turned over now and then, to look at its back ([method _look_of]): the chance a card is at all, the
+## chance of each look after that, the seconds between looks, how long a turn takes (each its own), and how long its
+## back is looked at - drawn evenly in its logarithm, so most looks are short and now and then one is long. Most cards
+## are never turned.
 const TURN_CHANCE := 0.25
 const LOOK_AGAIN := 0.25
 const LOOK_GAP := Vector2(25.0, 45.0)
 const TURN_HOLD := Vector2(0.6, 5.0)
-## THE PIROUETTE (the user's, 2026-10-05: "the kind of trick a person might do in their own hands
-## to show off"): the chance a look ends in one - over to the back and held there a few seconds,
-## then on round the SAME way, five half turns more, to face on again three whole turns from where
-## it started - the hold, and how long the twirl takes. Rare, and once a card at most: the plain
-## half turn is the common look.
+## The pirouette: the chance a look ends in one - over to the back and held there a few seconds, then on round the same
+## way, five half turns more, to face on again three whole turns from where it started - the hold, and how long the
+## twirl takes. Rare, and once a card at most: the plain half turn is the common look.
 const PIROUETTE_CHANCE := 0.1
-## A CARD RIGHTED IN THE HAND ([constant CardTable.REVERSALS] "righted", the user, 2026-10-25: "start as a
-## reversal, but then is turned/reoriented to the upright position after we pull it"): it comes up upside
-## down and, this long after it faces the camera, is turned the right way up in its own plane - a half
-## turn either way, taking this long - well before it goes down ([method righting]).
+## A card righted in the hand ([constant CardTable.REVERSALS] "righted"): it comes up upside down and, this long after
+## it faces the camera, is turned the right way up in its own plane - a half turn either way, taking this long - well
+## before it goes down ([method righting]).
 const RIGHT_AFTER := Vector2(0.5, 1.3)
 const RIGHT_TURN := Vector2(0.55, 0.8)
 ## ...and it is turned the right way up at least this long before it goes down.
@@ -104,11 +97,10 @@ func search_looks() -> int:
 	return TableMedium.SEARCH_LOOKS if absf(_search_seat(0).basis.y.normalized().y) < 0.7 else SEARCH_LOOKS_LYING
 
 
-## HOW FAR OF ITS HEIGHT [param v] a card on edge at [param seat] is drawn up to be looked at
-## ([constant SEARCH_RISE]) - less, down to [constant SEARCH_RISE_LEAST], while the picture's top edge
-## would cut into its painting, an eighth of the card down from its top: a box at the back of the table
-## stands near the frame's top, and a front that cannot be seen is the look wasted. [param up] is the
-## way it rises and [param axis] what it leans back about.
+## How far of its height [param v] a card on edge at [param seat] is drawn up to be looked at ([constant SEARCH_RISE])
+## - less, down to [constant SEARCH_RISE_LEAST], while the picture's top edge would cut into its painting, an eighth
+## of the card down from its top (a box at the back of the table stands near the frame's top). [param up] is the way
+## it rises and [param axis] what it leans back about.
 func _search_rise(seat: Transform3D, up: Vector3, v: float, axis: Vector3) -> float:
 	var hinge := seat.origin + up * v * 0.5
 	var tip := Basis(axis, SEARCH_TIP)
@@ -142,18 +134,17 @@ func _ground(seat: Transform3D, reach: float) -> float:
 	return top
 
 
-## A LYING CARD TURNED UP TO THE EYE, its FACE showing and the right way up: turned over about its long
+## A lying card turned up to the eye, its face showing and the right way up: turned over about its long
 ## side from where it lay face down, its far edge [constant SEARCH_TURN] up from lying.
 static func _turned_up() -> Basis:
 	var a := PI * 0.5 - SEARCH_TURN
 	return Basis(Vector3(-1.0, 0.0, 0.0), Vector3(0.0, -sin(a), -cos(a)), Vector3(0.0, -cos(a), sin(a)))
 
 
-## The card a search is looking at, the [param which]-th it has looked at, [param beat] (0 to 1) of
-## the way through its look ([method _pose_rummage]). A LOOK STOPS ON THE CARD: its front is held to
-## the eye for half of the look on edge and nearly half off a pile - about a second either way
-## ([constant TableActions.RUMMAGE]) - and it is quick to come up and go back. It used to be in view
-## for a tenth of the look, under half a second, and read as pulled and put straight back.
+## The card a search is looking at, the [param which]-th it has looked at, [param beat] (0 to 1) of the way through its
+## look ([method _pose_rummage]). A look stops on the card: its front is held to the eye for half of the look on edge
+## and nearly half off a pile - about a second either way ([constant TableActions.RUMMAGE]) - and it is quick to come
+## up and go back.
 func searched_xf(which: int, beat: float) -> Transform3D:
 	var inner: AABB = medium._box_part.stood["inner"]
 	var world: AABB = medium._box_part.stood["world"]
@@ -163,7 +154,7 @@ func searched_xf(which: int, beat: float) -> Transform3D:
 	var look := smoothstep(0.1, 0.25, beat) * (1.0 - smoothstep(0.75, 0.9, beat))
 	var n := seat.basis.y.normalized()
 	if absf(n.y) < 0.7:
-		# ON EDGE: up along its own plane, then leaned about the line where it leaves the file - its
+		# On edge: up along its own plane, then leaned about the line where it leaves the file - its
 		# top away from the eye, which looks down on it, so the side it shows the eye turns up to it
 		var up := (Vector3.UP - n * n.y).normalized()
 		var v := size.y if bool(medium._box_part.stood.get("upright", true)) else size.x
@@ -172,20 +163,18 @@ func searched_xf(which: int, beat: float) -> Transform3D:
 		var axis := shown.cross(up).normalized()
 		var tip := Basis(axis, SEARCH_TIP * look)
 		return Transform3D(tip * seat.basis, hinge + tip * (seat.origin + up * v * _search_rise(seat, up, v, axis) * lift - hinge))
-	# LYING, face down: lifted clear of the rim, turned over toward the eye and the right way round, and
-	# turned back as it is laid down - up sooner and held longer than a card on edge, a turn over being
-	# half a turn each way. High enough to turn with its low edge a centimeter over the rim -
-	# and no higher than the picture: a box at the back of the table stands near the frame's top, and
-	# the card's far edge went out of it (2026-10-12) - the picture's top edge may cut the card's border,
-	# an eighth of it, never its painting. Never lower than it takes to turn the card over clear of its
-	# pile.
+	# Lying, face down: lifted clear of the rim, turned over toward the eye and the right way round, and turned back as
+	# it is laid down - up sooner and held longer than a card on edge, a turn over being half a turn each way. High
+	# enough to turn with its low edge a centimeter over the rim, and no higher than the picture: a box at the back of
+	# the table stands near the frame's top, and the picture's top edge may cut the card's border (an eighth of it),
+	# never its painting. Never lower than it takes to turn the card over clear of its pile.
 	var half := sin(SEARCH_TURN) * size.y * 0.5
 	var reach := cos(SEARCH_TURN) * size.y * 0.5
-	# toward the eye, and never through the wall: held low, in a box near the frame's top, the card's
-	# near edge is under the rim, and a pile by the front wall brought it out through the cardboard
+	# toward the eye, and never through the wall: held low, in a box near the frame's top, the near edge is under the
+	# rim, and a pile by the front wall would bring it out through the cardboard
 	var toward := minf(world.size.z * 0.15, inner.end.z - 0.004 - reach - seat.origin.z)
-	# clear of the highest card it turns over, not only its own pile: turned toward the eye, its corner
-	# swept through a taller pile in front of it (box_clip_check)
+	# clear of the highest card it turns over, not only its own pile: turned toward the eye, its corner sweeps through
+	# a taller pile in front of it (box_clip_check)
 	var least := maxf(seat.origin.y, _ground(seat, size.y * 0.5 + toward)) + half + 0.005
 	var clear := maxf(maxf(world.end.y, inner.end.y) + half + 0.01, least)
 	while clear > least:
@@ -194,13 +183,13 @@ func searched_xf(which: int, beat: float) -> Transform3D:
 		if edge != null and (edge as Vector2).y > 0.0:
 			break
 		clear = maxf(least, clear - 0.004)
-	# UP FIRST, THEN OVER: lifted flat off its pile to where it is held, and only then turned over and
-	# brought toward the eye - the way back the same, turned back before it goes down
+	# Up first, then over: lifted flat off its pile to where it is held, and only then turned over and brought toward the
+	# eye - the way back the same, turned back before it goes down
 	lift = smoothstep(0.02, 0.16, beat) * (1.0 - smoothstep(0.84, 0.98, beat))
 	look = smoothstep(0.16, 0.33, beat) * (1.0 - smoothstep(0.67, 0.84, beat))
 	var basis := seat.basis.orthonormalized().slerp(_turned_up(), look)
-	# ON ITS WAY OVER A CARD STANDS ON A CORNER, lower than it is held: it is carried as high as keeps
-	# its lowest corner where the held card's low edge would be, so it never turns down into its pile
+	# On its way over a card stands on a corner, lower than it is held: it is carried as high as keeps its lowest corner
+	# where the held card's low edge would be, so it never turns down into its pile
 	var low := (size.x * absf(basis.x.y) + size.y * absf(basis.z.y)) * 0.5
 	var up := maxf((clear - seat.origin.y) * lift, (clear - half - 0.002 - seat.origin.y) * lift + low)
 	# ...and reaches further toward the eye than it does held: no nearer the front wall than that corner
@@ -210,11 +199,10 @@ func searched_xf(which: int, beat: float) -> Transform3D:
 	return Transform3D(basis, seat.origin + Vector3(0.0, up, come))
 
 
-## CARD [param k] AT [param t], from its timeline [param ev] ([method _times]): `{xf, visible, up (held
-## up), page (how far its booklet page is open), since (when its last event began)}`. The state the
-## events before the one under way left it in - lying (its quarter turns, turned over or not) or held
-## up - and the event under way posed from it. A card no event has reached waits in its source: unseen
-## in a deck, standing in its place in a box's file.
+## Card [param k] at [param t], from its timeline [param ev] ([method _times]): `{xf, visible, up (held up), page (how
+## far its booklet page is open), since (when its last event began)}`. The state the events before the one under way
+## left it in - lying (its quarter turns, turned over or not) or held up - and the event under way posed from it. A
+## card no event has reached waits in its source: unseen in a deck, standing in its place in a box's file.
 func card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 	var out := {"xf": Transform3D.IDENTITY, "visible": false, "up": false, "page": 0.0, "since": 0.0}
 	var cur := -1
@@ -258,7 +246,7 @@ func card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 	var t0 := float(e["t0"])
 	var u := (t - t0) / s - float(e["off"])
 	out["since"] = t0
-	# WHERE IT LIES, on whatever lay there first ([method _rest_lift]) - for a card picked up, as it lay
+	# Where it lies, on whatever lay there first ([method _rest_lift]) - for a card picked up, as it lay
 	# at that moment
 	var lying := medium._slot_xf(k, quarter, over)
 	var lay_t := minf(t, t0 + float(e["off"]) * s) if String(e["k"]) == "show" else t
@@ -360,10 +348,10 @@ func card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 	return out
 
 
-## WHEN THE CARD WHOSE TIMELINE IS [param ev] WAS LAST SET DOWN, as of [param t]: the moment it lands -
-## counted from the start of its way down, so what it comes to rest on is settled before it arrives -
-## or INF while it is in its source or in a hand. A card being picked up still lies until it has slid
-## out ([constant SHOW_SLIDE]): what lies on it stays up until then.
+## When the card whose timeline is [param ev] was last set down, as of [param t]: the moment it lands - counted from
+## the start of its way down, so what it comes to rest on is settled before it arrives - or INF while it is in its
+## source or in a hand. A card being picked up still lies until it has slid out ([constant SHOW_SLIDE]): what lies on
+## it stays up until then.
 func _down_at(ev: Array, t: float) -> float:
 	var down := INF
 	for item in ev:
@@ -390,12 +378,10 @@ func _down_at(ev: Array, t: float) -> float:
 	return down
 
 
-## HOW MUCH HIGHER CARD [param k] LIES at [param t] than its place alone says: ON every card set down
-## before it that it overlaps, a card's thickness above the highest of them. The spread's own heights
-## are a hair apart in the order the cards are dealt, which a card picked up and put back breaks: in
-## the Libra reading (true-tarot 871516, the user: the second card "was pulled THROUGH the 1st") a
-## waterfall's first card went back down under the second, through it. What lies on what follows from
-## when each was set down ([method _down_at]), so a card put back lies on top.
+## How much higher card [param k] lies at [param t] than its place alone says: on every card set down before it that it
+## overlaps, a card's thickness above the highest of them. The spread's own heights are a hair apart in the order the
+## cards are dealt, which a card picked up and put back breaks. What lies on what follows from when each was set down
+## ([method _down_at]), so a card put back lies on top.
 func _rest_lift(k: int, t: float) -> float:
 	if medium._laps_of(k).is_empty() or k >= medium._all_events.size():
 		return 0.0
@@ -420,12 +406,10 @@ func _rest_lift(k: int, t: float) -> float:
 	return float(high[k]) - float((medium._plan.slots[k]["pos"] as Vector3).y)
 
 
-## CARD [param k] SLID OUT from under the cards lying on it at [param t] (set down after it, over its
-## place), from [param lying]: along the cloth, the shortest way that clears them all without running
-## into a card lying beside it, the deck or the cloth's edge - straight away from them when that is as
-## short as any. It was lifted straight up through them (the user, 2026-10-11: "it may have looked even
-## better to slide the 2nd card out to the right"). [param lying] itself when nothing lies on it, or
-## there is no way out.
+## Card [param k] slid out from under the cards lying on it at [param t] (set down after it, over its place), from
+## [param lying]: along the cloth, the shortest way that clears them all without running into a card lying beside it,
+## the deck or the cloth's edge - straight away from them when that is as short as any. [param lying] itself when
+## nothing lies on it, or there is no way out.
 func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
 	var laps := medium._laps_of(k)
 	if laps.is_empty() or k >= medium._all_events.size():
@@ -479,12 +463,11 @@ func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
 	return Transform3D(lying.basis, lying.origin + Vector3(way.x, 0.0, way.y) * (best + SLIDE_STEP))
 
 
-## HOW HIGH A CARD LAID DOWN IS LIFTED at [param f] of its way (0..1, eased) from [param from] (held up)
-## to [param to] (lying): the usual [constant LAY_ARC]'s arc, or - when the straight way there carries
-## the card across the box the cards are kept in - enough to hold its lowest edge [constant PULL_CLEAR]
-## over the box's top for every step it is over it, kept there until it has passed the rim and eased
-## down after (the card's footprint, turned as it is at each step; [constant LAY_SAMPLES] steps), and
-## gone by the time it lies. Feedback 0010: a card laid behind the box went down through it.
+## How high a card laid down is lifted at [param f] of its way (0..1, eased) from [param from] (held up) to [param to]
+## (lying): the usual [constant LAY_ARC]'s arc, or - when the straight way there carries the card across the box the
+## cards are kept in - enough to hold its lowest edge [constant PULL_CLEAR] over the box's top for every step it is over
+## it, kept there until it has passed the rim and eased down after (the card's footprint, turned as it is at each step;
+## [constant LAY_SAMPLES] steps), and gone by the time it lies.
 func _lay_lift(from: Transform3D, to: Transform3D, f: float) -> float:
 	# set down: nothing is left of it where the card lies
 	return minf(maxf(sin(PI * f) * LAY_ARC, _box_lift(from, to, f)), LAY_LIFT_MAX) * smoothstep(1.0, 1.0 - LAY_LAND, f)
@@ -520,11 +503,10 @@ func _box_lift(from: Transform3D, to: Transform3D, f: float) -> float:
 	return lift
 
 
-## A CARD PUT BACK IN THE BOX, [param way] (0 to 1, linear) of its way from [param from] (held up) to
-## [param to] (its place in the box): carried over the box and turned as it will lie there, then let
-## straight down into its place - between the cards filed either side of it, or flat onto its pile. Laid
-## along the one curve every card takes, it came down still turning, and scraped through the cards
-## beside it (box_clip_check).
+## A card put back in the box, [param way] (0 to 1, linear) of its way from [param from] (held up) to [param to] (its
+## place in the box): carried over the box and turned as it will lie there, then let straight down into its place -
+## between the cards filed either side of it, or flat onto its pile. Laid along the one curve every card takes it would
+## come down still turning and scrape through its neighbors (box_clip_check).
 func _put_back_xf(from: Transform3D, to: Transform3D, way: float) -> Transform3D:
 	var size := CardTable.card_size(medium._plan.look)
 	var v := 0.0
@@ -539,7 +521,7 @@ func _put_back_xf(from: Transform3D, to: Transform3D, way: float) -> Transform3D
 	return over.interpolate_with(to, TableMedium._ease((way - PUT_OVER) / (1.0 - PUT_OVER)))
 
 
-## WHERE CARD [param k] WAITS before it is taken: on top of the deck, or standing in the box's file (on
+## Where card [param k] waits before it is taken: on top of the deck, or standing in the box's file (on
 ## top of a tin's flat deck).
 func _source_xf(k: int) -> Transform3D:
 	if medium._box_part.filed_on_edge() and k < (medium._box_part.stood["at_k"] as Array).size():
@@ -547,7 +529,7 @@ func _source_xf(k: int) -> Transform3D:
 	return medium._deck_top_xf(k)
 
 
-## CARD [param k] TAKEN FROM ITS SOURCE to [param to], [param u] seconds into a taking of [param span]
+## Card [param k] taken from its source to [param to], [param u] seconds into a taking of [param span]
 ## seconds - a draw's own phases ([method _draw_xf]) at its pace: off the top of the deck and turned
 ## over, or pulled straight up out of the box's file ([method _pull_xf]); then on to [param to].
 func _take_xf(k: int, u: float, to: Transform3D, span: float) -> Transform3D:
@@ -557,7 +539,7 @@ func _take_xf(k: int, u: float, to: Transform3D, span: float) -> Transform3D:
 	return _draw_xf(k, r, to)
 
 
-## A card PULLED FROM THE BOX at [param r] (a draw's phases): still in the file while the hand finds it,
+## A card pulled from the box at [param r] (a draw's phases): still in the file while the hand finds it,
 ## then up along its own plane until it clears the rim and every card in the box, then on to [param to].
 func _pull_xf(k: int, r: float, to: Transform3D) -> Transform3D:
 	var at: Transform3D = (medium._box_part.stood["at_k"] as Array)[k]
@@ -571,10 +553,10 @@ func _pull_xf(k: int, r: float, to: Transform3D) -> Transform3D:
 		return at.interpolate_with(raised, TableMedium._ease((r - TableMedium.SQUARE) / (FLIP_END - TableMedium.SQUARE)))
 	if r < TableMedium.RISE_END:
 		var xf := raised.interpolate_with(to, TableMedium._ease((r - FLIP_END) / (TableMedium.RISE_END - FLIP_END)))
-		# PUT DOWN LYING (dealt, or swept out): turning over on its way, its lower edge keeps to the line
-		# it travels, as a card swept off a deck does ([method _sweep_xf]) - turning at its middle's
-		# height, it cut into the card of its waterfall it came to lie on
-		# - and while it is still over the box it keeps over the card coming up out of it behind it
+		# Put down lying (dealt, or swept out): turning over on its way, its lower edge keeps to the line it travels, as
+		# a card swept off a deck does ([method _sweep_xf]) - turning at its middle's height, it would cut into the card
+		# of its waterfall it came to lie on - and while it is still over the box it keeps over the card coming up out
+		# of it behind it
 		if absf(to.basis.y.normalized().y) > 0.9:
 			var b := xf.basis
 			var size := CardTable.card_size(medium._plan.look)
@@ -590,7 +572,7 @@ func _over_box() -> float:
 		float(medium._box_part.stood.get("top_y", -INF)))
 
 
-## A card IN A WATERFALL at [param v] seconds of its own slide ([constant FAN_MOVE]): off the deck and
+## A card in a waterfall at [param v] seconds of its own slide ([constant FAN_MOVE]): off the deck and
 ## along the cloth to [param to], low, turning face up as it goes - or pulled up out of the box first.
 func _sweep_xf(k: int, v: float, to: Transform3D) -> Transform3D:
 	if medium._box_part.filed_on_edge():
@@ -599,12 +581,12 @@ func _sweep_xf(k: int, v: float, to: Transform3D) -> Transform3D:
 	if v >= TableMedium.FAN_MOVE:
 		return to
 	var f := TableMedium._ease(clampf(v / TableMedium.FAN_MOVE, 0.0, 1.0))
-	# OFF THE DECK FLAT, then turning over (SWEEP_FLAT of the way): turning from the first, it crossed
-	# the card leaving a beat behind it
+	# Off the deck flat, then turning over (SWEEP_FLAT of the way): turning from the first, it would cross the card
+	# leaving a beat behind it
 	var xf := Transform3D(from.basis.orthonormalized().slerp(to.basis.orthonormalized(), smoothstep(SWEEP_FLAT, 1.0, f)),
 		from.origin.lerp(to.origin, f))
-	# TURNING OVER, its lower edge keeps to the line it travels: skimming at its middle's height, the
-	# tilted card cut into the deck it left and into the card it came to lie on
+	# Turning over, its lower edge keeps to the line it travels: skimming at its middle's height, the tilted card would
+	# cut into the deck it left and into the card it came to lie on
 	var b := xf.basis
 	var card := CardTable.card_size(medium._plan.look)
 	xf.origin.y += sin(PI * f) * 0.018 + (card.x * absf(b.x.y) + card.y * absf(b.z.y)) * 0.5
@@ -648,14 +630,13 @@ func _held_turn(k: int, t: float) -> float:
 	return PI + float(r["way"]) * PI * f
 
 
-## WHEN CARD [param k] IS RIGHTED in the hand: `{at, turn, way}` - the half turn begins `at` (show time),
-## takes `turn` seconds, and goes `way` (1 or -1) - for a card that came out upside down ([method
-## TableMedium._righted]) and is held up as it arrives, drawn, pulled from the box or a jumper picked up
-## ([constant RIGHT_AFTER] after it is up). Empty for any other: a card dealt or swept out is turned the
-## right way up on its way down (the take's own turn, from its source to where it lies). Done
-## [constant RIGHT_CLEAR] before it goes down - a short hold turns it sooner, as it comes up. A card with
-## its text on its back is always turned as it comes up: its hold is for turning it over to read that
-## ([method looks]), and righted after it was up, a short passage's card was never turned over at all.
+## When card [param k] is righted in the hand: `{at, turn, way}` - the half turn begins `at` (show time), takes `turn`
+## seconds, and goes `way` (1 or -1) - for a card that came out upside down ([method TableMedium._righted]) and is held
+## up as it arrives, drawn, pulled from the box or a jumper picked up ([constant RIGHT_AFTER] after it is up). Empty for
+## any other: a card dealt or swept out is turned the right way up on its way down (the take's own turn, from its source
+## to where it lies). Done [constant RIGHT_CLEAR] before it goes down - a short hold turns it sooner, as it comes up. A
+## card with its text on its back is always turned as it comes up: its hold is for turning it over to read that
+## ([method looks]).
 func righting(k: int) -> Dictionary:
 	if not medium._righted(k) or k >= medium._all_events.size() or (medium._all_events[k] as Array).is_empty():
 		return {}
@@ -696,7 +677,7 @@ func _turn_of(k: int, t: float, up_at: float, until: float) -> float:
 	return 0.0
 
 
-## EVERY LOOK AT CARD [param k]'s BACK while it is held - up at [param up_at], going down at
+## Every look at card [param k]'s back while it is held - up at [param up_at], going down at
 ## [param until] - in order: `[{at, look}]` ([method _look_of]). What [method _turn_of] poses, and
 ## what the air's pirouettes are timed by, from one place.
 func looks(k: int, up_at: float, until: float) -> Array:
@@ -712,8 +693,8 @@ func looks(k: int, up_at: float, until: float) -> Array:
 	var at := 0.0
 	var forced := k == medium._spin_card()
 	if String(medium._plan.staging["text"]) == "back":
-		# ITS TEXT IS ON ITS BACK: turned over to show it every time, a few seconds after it is up, and
-		# held there long enough to read
+		# Its text is on its back: turned over to show it every time, a few seconds after it is up, and held there long
+		# enough to read
 		var back := RandomNumberGenerator.new()
 		back.seed = hash([medium._plan.seed_value, k, "back"])
 		var turn := back.randf_range(TableMedium.TURN.x, TableMedium.TURN.y)
@@ -741,7 +722,7 @@ func looks(k: int, up_at: float, until: float) -> Array:
 		var look := _look_of(rng, not spun, forced)
 		spun = spun or float(look["twirl"]) > 0.0
 		if forced and float(look["twirl"]) > 0.0 and at + float(look["total"]) > until - 1.0:
-			# THE TWIRL A BURST MARKS fits in somewhere while the card is held, or it is not done
+			# The twirl a burst marks fits in somewhere while the card is held, or it is not done
 			at = maxf(up_at + 1.5, until - 1.0 - float(look["total"]))
 		if at + float(look["total"]) > until - 1.0:
 			return out
@@ -752,7 +733,7 @@ func looks(k: int, up_at: float, until: float) -> Array:
 	return out
 
 
-## WHEN CARD [param k] IS HELD UP: from the moment it faces the camera to the moment it goes down (INF
+## When card [param k] is held up: from the moment it faces the camera to the moment it goes down (INF
 ## when it is never laid) - `Vector2(INF, INF)` for a card never held up - as [method _air_moments]
 ## reads them off [param tm] ([method _times]).
 func held_span(k: int, tm: Dictionary) -> Vector2:
@@ -777,11 +758,10 @@ func held_span(k: int, tm: Dictionary) -> Vector2:
 	return Vector2(INF, INF)
 
 
-## ONE LOOK AT A HELD CARD'S BACK, drawn: which way it turns (`way`, 1 or -1 - a hand turns a card
-## either way), how long the turn over takes (`turn`), how long the back is held (`hold`), then
-## either how long the turn back takes (`back`) or, for a PIROUETTE, the twirl on round (`twirl`) -
-## the other 0; `total` its seconds. A card that has already pirouetted does not again
-## ([param may_spin] false).
+## One look at a held card's back, drawn: which way it turns (`way`, 1 or -1), how long the turn over takes (`turn`),
+## how long the back is held (`hold`), then either how long the turn back takes (`back`) or, for a pirouette, the twirl
+## on round (`twirl`) - the other 0; `total` its seconds. A card that has already pirouetted does not again ([param
+## may_spin] false).
 static func _look_of(rng: RandomNumberGenerator, may_spin := true, force := false) -> Dictionary:
 	var way := 1.0 if rng.randf() < 0.5 else -1.0
 	var turn := rng.randf_range(TableMedium.TURN.x, TableMedium.TURN.y)
@@ -853,7 +833,7 @@ func _jump_ride(k: int, v: float) -> Transform3D:
 	return medium._deck_top_xf(k).interpolate_with(top, TableMedium._ease(v / 0.35)) if v < 0.35 else top
 
 
-## THE JUMPER OUT OF A WASH at [param u] seconds into its action ([param t] show time): thrown as
+## The jumper out of a wash at [param u] seconds into its action ([param t] show time): thrown as
 ## the wash's card it was ([method _flight_xf]) - the drawn card's own mesh, a spread card's
 ## thickness - lying face up where it fell until [param rest_at], then picked up and shown.
 func _wash_jump_xf(u: float, t: float, rest_at: float, pres: Transform3D, wj: Dictionary) -> Transform3D:
@@ -889,8 +869,8 @@ func _jump_xf(k: int, u: float, pres: Transform3D) -> Transform3D:
 		var e := clampf((u - TableMedium.JUMP_FLY.x) / (TableMedium.JUMP_FLY.y - TableMedium.JUMP_FLY.x), 0.0, 1.0)
 		var pos := top.origin.lerp(land.origin, e) + Vector3(0, sin(PI * e) * 0.13, 0)
 		var b := Basis(Vector3.UP, 0.6 * e + 1.3 * PI * e) * top.basis * Basis(Vector3(0, 0, 1), 3.0 * PI * e)
-		# ...COMING DOWN AS IT LIES: the tumble alone ends a third of a turn off the card's landing (it
-		# snapped round as it touched the cloth), so what is left over is taken up along the flight
+		# ...coming down as it lies: the tumble alone ends a third of a turn off the card's landing, so what is left over
+		# is taken up along the flight
 		var end := Basis(Vector3.UP, 0.6 + 1.3 * PI) * top.basis.orthonormalized() * Basis(Vector3(0, 0, 1), 3.0 * PI)
 		var left := Quaternion(land.basis * end.orthonormalized().inverse())
 		return Transform3D(Basis(Quaternion.IDENTITY.slerp(left, e)) * b, pos)

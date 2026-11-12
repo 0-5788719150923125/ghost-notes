@@ -1,17 +1,15 @@
 extends RefCounted
 class_name PainterTools
 
-## PainterTools - THE PAINTER's tools (next/painted_surface.md, "The painter"): where a face was painted first (`face_ref.png`), it is painted
-## again AT THE TABLE, an operation at a time, by a writer that sees each land - not traced once as shapes and handed to code that guesses
-## the rest (the user, 2026-11-08: "a real artist would go into this with a plan. They'd start with layers, with wide areas, and they would
-## keep refining their work at every step ... with an agent, we can peak at each step, and make informed decisions about what to do next").
-## Served over ghost's MCP server ([AgentTools]) in the `skin` step ([TableProducer]).
+## PainterTools - the painter's tools (next/painted_surface.md, "The painter"): where a face was painted first (`face_ref.png`), it is painted
+## again at the table, an operation at a time, by a writer that sees each land. Served over ghost's MCP server ([AgentTools]) in the
+## `skin` step ([TableProducer]).
 ##
-## AN OPERATION is a tool of the table's, a paint of its pots, how it is laid (a sponge's dabs, a brush's dots, sweeps or fine lines) and
+## An operation is a tool of the table's, a paint of its pots, how it is laid (a sponge's dabs, a brush's dots, sweeps or fine lines) and
 ## where (a closed path, or the whole surface), as strong as asked and no longer than asked, in one of the episode's beats - its intro, a
 ## stage, its close. [PaintLayers] lays it as the show will ([method PaintLayers.lay]: toward the painting itself, each mark by what it
 ## really lays) on a canvas that is the show's own, and the writer looks: the painting, the canvas and where it is still wrong side by side.
-## What it hands in is the design ([method designs]: `skin.json`, an element an operation, its `plan` saying with what and when) from
+## What it hands in is the design ([method designs]: `skin.json`, an element per operation, its `plan` saying with what and when) from
 ## which the acts are made, a beat's operations in order, a tool's run an act ([method TableProducer._acts_from_painting]).
 
 const SUBMITTED := "submitted.json"
@@ -19,7 +17,7 @@ const LOOKS := 60
 ## Operations at most, and undone at most in a row.
 const PAINTS_MOST := 90
 const UNDO_KEEP := 6
-## THE PAINTING'S TIME (seconds) the writer is told it has, all its beats together - the readers are told what its operations took.
+## The painting's time (seconds) the writer is told it has, all its beats together.
 const BUDGET := 1500.0
 ## An operation laid at most this long (seconds) if it says no time of its own, and never longer than this.
 const SECONDS_GUESS := 60.0
@@ -29,14 +27,14 @@ const LOOK_PX := 3.0
 const GRID := 10.0
 ## A paint this polished, or that plays (a glitter), is a finish: never the painting's ground.
 const FINISH_POLISH := 0.9
-## A sponge laid on the canvas here as a dab this share of its width across (the table's sponge presses its real sides, its broad face most -
-## sized as a corner's touch, a foundation had taken 3,636 dabs); a foundation's half again as wide.
+## A sponge is laid on the canvas as a dab this share of its width across (it presses its real sides, its broad face most; sized as a
+## corner's touch, a foundation took 3,636 dabs); a foundation's is half again as wide.
 const SPONGE_DAB := 0.35
 const SPONGE_GROUND := 0.5
-## How each way of laying is named to the writer, and what [PaintLayers] lays it as - a blend no paint of its own, the paint already on
-## moved by a clean brush; what each finish is laid as (no color of its own the canvas follows).
+## How each way of laying is named to the writer, and what [PaintLayers] lays it as (a blend has no paint of its own: a clean brush moves
+## the paint already on).
 const HOWS := {"sponge": "stipple", "dab": "dab", "sweep": "sweep", "line": "line", "blend": "blend"}
-## A BRUSH WHOSE TIP IS A COTTON SWAB'S BUD ([constant Bristles.KINDS]) lays no paint of its own: it lifts, or blends (feedback 0020).
+## A brush whose tip is a cotton swab's bud ([constant Bristles.KINDS]) lays no paint of its own: it lifts, or blends.
 const SWAB_TIP := "bud"
 const FINISHES := {"pat": "powder"}
 
@@ -71,7 +69,7 @@ func _init(job_dir: String, table_doc: Dictionary, plan_doc: Dictionary, referen
 	dir = job_dir
 	table = table_doc
 	plan = plan_doc
-	# (...only what is on the table, looked at - [method scan]: no folder touched, no canvas)
+	# only what is on the table, looked at ([method scan]): no folder touched, no canvas
 	if only_scan:
 		_find_tools()
 		return
@@ -96,9 +94,9 @@ func _init(job_dir: String, table_doc: Dictionary, plan_doc: Dictionary, referen
 			_creams.append((p as Dictionary)["color"])
 
 
-## THE CANVAS BEGUN, on the first call (a worker's - a few seconds of the engine's, never the app's thread): the picture balanced to its
-## ground, the plain paint most of it stands nearest - a gloss or a glitter is a finish, never a ground: voted in, a grey gloss had been
-## taken for the painting's white - until the first operation over the whole surface says what the ground is.
+## The canvas begun, on the first call (a worker's - a few seconds of the engine's, never the app's thread): the picture balanced to its
+## ground, the plain paint most of it stands nearest (a gloss or a glitter is a finish, never a ground) until the first operation over
+## the whole surface says what the ground is.
 func _begin() -> void:
 	if _pl != null or _creams.is_empty() or _ref == null:
 		return
@@ -160,7 +158,7 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 	if _released:
 		return {"text": "The painting has been handed in and its tools are closed.", "error": true}
 	_busy = true
-	# ...LAID ON A WORKER, never on the app's thread (a foundation takes the engine ten seconds): the frame goes on while it works
+	# laid on a worker, never on the app's thread (a foundation takes the engine ten seconds): the frame goes on while it works
 	var out := {}
 	var task := WorkerThreadPool.add_task(func() -> void: out.merge(_call(name, args), true))
 	while not WorkerThreadPool.is_task_completed(task):
@@ -188,15 +186,14 @@ func _call(name: String, args: Dictionary) -> Dictionary:
 
 # --- the table: its tools, its paints, the episode's beats -------------------------------------------------------------------------
 
-## THE TABLE'S TOOLS AND PAINTS as the painter is given them ([method _find_tools]), for a step that paints without one - the painter
-## at the table run as a host (TableProducer._land_skin_host): `{tools: [{name, thing, part, kind, mm, tip}], paints: [{name, color, pot,
-## powder, finish}]}`.
+## The table's tools and paints as the painter is given them ([method _find_tools]), for a step that paints without one (the painter
+## run as a host, TableProducer._land_skin_host): `{tools: [{name, thing, part, kind, mm, tip}], paints: [{name, color, pot, powder, finish}]}`.
 static func scan(table_doc: Dictionary) -> Dictionary:
 	var pt := PainterTools.new("", table_doc, {}, "", true)
 	return {"tools": pt._tools, "paints": pt._paints}
 
 
-## THE TOOLS THAT PAINT on the table: each movable part a brush (its hairs) or a sponge (its foam) - or a puff, for a powder - named as a
+## The tools that paint on the table: each movable part a brush (its hairs) or a sponge (its foam) - or a puff, for a powder - named as a
 ## track names it (`thing/part`), its kind and how wide it lays (millimeters, [method Skins.width_for]).
 func _find_tools() -> void:
 	_tools = []
@@ -206,7 +203,7 @@ func _find_tools() -> void:
 	for t in safe.get("things", []):
 		var td: Dictionary = t
 		_tools_in(td["parts"], String(td["name"]), mats)
-		# (...and its pots: a thing holding a cream or a powder - the paint named as its material is)
+		# its pots: a thing holding a cream or a powder - the paint named as its material is
 		for pd in _leaf_parts(td["parts"]):
 			var mn := String((pd as Dictionary).get("material", ""))
 			var m: Dictionary = mats.get(mn, {})
@@ -223,7 +220,7 @@ func _tools_in(parts: Array, thing: String, mats: Dictionary) -> void:
 			var got := Skins._tool_of_parts([pd], mats)
 			var kind := String(got[0]) if not got.is_empty() else ""
 			if kind in ["brush", "sponge"] or (kind == "tool" and _soft(pd, mats)):
-				# (...and a brush's tip, its tuft's kind: a cotton swab's bud lays no paint - [constant Bristles.KINDS])
+				# a brush's tip, its tuft's kind: a cotton swab's bud lays no paint ([constant Bristles.KINDS])
 				_tools.append({"name": "%s/%s" % [thing, named], "thing": thing, "part": named, "kind": kind if kind != "tool" else "puff",
 					"mm": float(got[1]), "tip": String(got[2]) if got.size() > 2 else ""})
 				continue
@@ -252,7 +249,7 @@ static func _leaf_parts(parts: Array) -> Array:
 	return out
 
 
-## THE EPISODE'S BEATS, as its readers speak over them: its intro, each stage of its plan, its close - what each was planned to paint.
+## The episode's beats, as its readers speak over them: its intro, each stage of its plan, its close - what each was planned to paint.
 func _find_beats() -> void:
 	_beats = [{"key": "intro", "name": "intro", "work": String(plan.get("work_intro", ""))}]
 	var spread: Dictionary = plan.get("spread", {}) if plan.get("spread") is Dictionary else {}
@@ -304,12 +301,12 @@ func _paint(args: Dictionary) -> Dictionary:
 		wrong.append("`beat` is one of %s" % ", ".join(_beats.map(func(b: Dictionary) -> String: return "\"%s\"" % b["key"])))
 	if tool.is_empty():
 		wrong.append("`tool` is one of %s" % ", ".join(_tools.map(func(t: Dictionary) -> String: return "\"%s\"" % t["name"])))
-	# (...a blend lays no paint of its own: the brush is clean)
+	# a blend lays no paint of its own: the brush is clean
 	if how == "blend":
 		paint = {"name": "nothing - a clean brush", "pot": "", "color": _ground, "powder": false}
 	if paint.is_empty():
 		wrong.append("`paint` is one of %s" % ", ".join(_paints.map(func(p: Dictionary) -> String: return "\"%s\"" % p["name"])))
-	# (...and what it may be mixed with on the palette, mark by mark)
+	# what it may be mixed with on the palette, mark by mark
 	var mixes: Array = []
 	var mix_of: Variant = args.get("mix", [])
 	for m in (mix_of if mix_of is Array else [mix_of]):
@@ -359,12 +356,12 @@ func _paint(args: Dictionary) -> Dictionary:
 	if _snaps.size() > UNDO_KEEP:
 		_snaps.pop_front()
 	if FINISHES.has(how):
-		# (...a finish lays no color the canvas follows: its time as asked)
+		# a finish lays no color the canvas follows: its time as asked
 		op["took"] = seconds
 	else:
 		var manner: String = HOWS[how]
 		var base := where == "all" and not _based and manner in ["stipple", "sweep"]
-		# (...the painting's ground the first whole-surface operation's paint, the canvas begun again on it where nothing is laid yet)
+		# the painting's ground is the first whole-surface operation's paint; the canvas is begun again on it where nothing is laid yet
 		if base and _ops.is_empty() and (paint["color"] as Color) != _ground:
 			_ground = paint["color"]
 			_pl = PaintLayers.begin(_ref, _frame, _bare, _creams, _ground, _surface)
@@ -376,7 +373,7 @@ func _paint(args: Dictionary) -> Dictionary:
 			"mix": mixes.map(func(m: Dictionary) -> Color: return m["color"]), "no_maps": true})
 		op["marks"] = int(res["marks"])
 		op["took"] = float((res["program"] as Dictionary).get("natural", 0.0))
-		# (...its marks kept as laid, for drawing again - [method laid])
+	# its marks kept as laid, for drawing again ([method laid])
 		_laid[id] = {"kind": res["kind"], "marks": res["laid"], "color": paint["color"]}
 		op["traced"] = res.get("traced", {})
 		if base:
@@ -386,8 +383,7 @@ func _paint(args: Dictionary) -> Dictionary:
 	var after := _pl.off()
 	var said := "Laid \"%s\" in %s: %d marks in %.0f s; the canvas %.1f off the painting on average, from %.1f.%s" % [id, beat["name"], int(op["marks"]),
 		float(op["took"]), after, before, " It laid nothing: the painting asks for none of that paint there, with that tool." if int(op["marks"]) == 0 and not FINISHES.has(how) else ""]
-	# (...and a line's lines found in the painting - how many it drew, and how long the rest would take: a crackle the painting shows
-	# whole is drawn whole only if it is given the time)
+	# a line's lines found in the painting: how many it drew, and how long the rest would take (a whole crackle needs the time)
 	var tr: Dictionary = op.get("traced", {})
 	if int(tr.get("lines", 0)) > 0:
 		said += " It found %d lines of that paint in the painting there (%.0f mm in all) and drew %d of them%s." % [int(tr["lines"]),
@@ -503,7 +499,7 @@ func laid() -> Dictionary:
 	return _laid
 
 
-## THE PAINTING AS A DESIGN ([TablePaint] reads `skin.json`): an element an operation, in the order laid - its region a fill, its paint
+## The painting as a design ([TablePaint] reads `skin.json`): an element per operation, in the order laid - its region a fill, its paint
 ## its pot's, its strength its opacity - and its `plan`: the tool, how, the beat, and the seconds it took.
 func designs() -> Dictionary:
 	var skin: Dictionary = skins[0]

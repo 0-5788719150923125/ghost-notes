@@ -25,9 +25,9 @@ class_name ActorSteps
 ##   version   bumped when what the step makes changes, which makes every one made before stale
 ##   blurb     what it does, for the row's tooltip
 ##
-## A video that came from a folder has nothing to fetch: its `fetch` is MOOT ([method ActorFolder.moot]),
-## and a step that needs it reads the file where it is; one with no captions link has no `captions`
-## to fetch either (a linked video's come with it).
+## A video that came from a folder has nothing to fetch: its `fetch` is moot ([method ActorFolder.moot]), and a step that
+## needs it reads the file where it is; one with no captions link has no `captions` to fetch either (a linked video's
+## come with it).
 const REGISTRY := {
 	"fetch": {"label": "Fetch", "per": "video", "needs": [], "runs": "download", "env": ["ytdlp_venv"],
 		"outputs": [], "settings": [], "version": 1,
@@ -90,9 +90,8 @@ const REGISTRY := {
 		"outputs": ["voice.json", "voice"], "settings": ["voice_steps"], "version": 1, "voice": true, "of": "actor",
 		"blurb": "Teaches a voice to speak as they do: a public-domain voice fine-tuned on their sentences on the graphics card - an hour or more, beside the other steps - then offered on the Voice card under their name. Stop keeps what it has learned, and ▶ goes on from there."},
 
-	# A VOICE ALONE IS KOKORO'S (2026-10-26, the user: "I likely won't use Piper models for anything other than testing now,
-	# given that Kokoro is so much better-sounding"): their sentences cut at Kokoro's rate in its own ids, and Kokoro
-	# taught them by a loop of our own (hosts/voice_train/kokoro_*.py)
+	# a voice alone is Kokoro's: their sentences cut at Kokoro's rate in its own ids, and Kokoro taught them by a loop of
+	# our own (hosts/voice_train/kokoro_*.py)
 	"kokoro_utterances": {"label": "Utterances", "per": "actor", "needs": ["hear"], "runs": "python",
 		"env": ["ffmpeg", "voice_venv", "speech_venv", "voice_train_venv"], "outputs": ["kokoro/sentences.json", "kokoro/sentences"],
 		"settings": [], "version": 2, "voice": true, "of": "voice",
@@ -102,8 +101,8 @@ const REGISTRY := {
 		"voice": true, "of": "voice",
 		"blurb": "Teaches Kokoro their sound, on the graphics card: each sentence said by Kokoro and laid on theirs, the room's steady noise taken out, their pitch and energy read, then Kokoro's decoder taught their sentences - its reading of English and its delivery (how it times and pitches speech) kept, which their few minutes of soft speech only blurred - and the voice written into Kokoro's own graph, checked against it and offered on the Voice card under their name. About an hour; Stop keeps what it has learned, and ▶ goes on from there."},
 
-	# ONE HEAD FOR EVERY SET (next/likeness.md, "One head"): each video's moments, their face from all of them,
-	# and their head learned from every video at once
+	# one head for every set (next/likeness.md, "One head"): each video's moments, their face from all of them, and
+	# their head learned from every video at once
 	"head_frames": {"label": "Head frames", "per": "video", "needs": ["survey", "audit"], "runs": "python",
 		"env": ["ffmpeg", "face_venv"], "outputs": ["head/frames.npz", "head/img", "head/mask"], "settings": [],
 		"version": 1, "renderer": "gaussian",
@@ -115,7 +114,7 @@ const REGISTRY := {
 		"outputs": ["head/head.npz"], "settings": ["head_videos", "head_steps"], "version": 3, "renderer": "gaussian",
 		"blurb": "Learns their head as Gaussian splats from their videos at once - the Head videos with the most of them facing the camera, each its Head steps - on the graphics card: hair, beard and skin as they look, moved by their face's expressions, and each video's look - its light, the little that differs - learned beside it. Under two hours."},
 
-	# A SET'S AVATAR (next/likeness.md, "A head of splats", "One head"): its moments, posed against their face,
+	# a set's avatar (next/likeness.md, "A head of splats", "One head"): its moments, posed against their face,
 	# their head baked as the set looks, and their body fitted to its still
 	"frames": {"label": "Frames", "per": "set", "needs": ["stills"], "runs": "python", "env": ["ffmpeg", "face_venv"],
 		"outputs": ["avatar/frames.npz", "avatar/img", "avatar/mask"], "settings": [], "version": 2, "renderer": "gaussian",
@@ -133,7 +132,7 @@ const REGISTRY := {
 		"blurb": "Fits them to the still they are played from, on the graphics card: the weave of their clothes, their hands, hair, ears, beard and neck as the still has them, where every frame together gave a blur - all but their lips and eyes, which move as every video taught them - held to the set's own moments, so nothing breaks as they move. Picking another still fits it again. A few minutes."},
 }
 
-## THE RENDERERS an actor is played with (the note's `renderer`): what each needs of an actor to play them.
+## The renderers an actor is played with (the note's `renderer`): what each needs of an actor to play them.
 const RENDERERS := {
 	"2d": {"label": "2D", "plays": ["motion", "stills", "rig", "library"],
 		"blurb": "Their still, warped: the head turned through its points, the mouth and eyes drawn from real frames of theirs for each sound."},
@@ -141,8 +140,8 @@ const RENDERERS := {
 		"blurb": "Them as 3D Gaussian splats: their head learned from every video at once, in the set's look, and their body fitted to the set's still - moved by their face's expressions and their body's bones - over the set's room."},
 }
 
-## THE SETTINGS an actor is built under, on the card's Advanced fold: each a row, as a layer's FIELDS
-## are (`label`, `type`, `default`, `min`, `max`, `step`, `blurb`).
+## The settings an actor is built under, on the card's Advanced fold: each a row, as a layer's FIELDS are (`label`,
+## `type`, `default`, `min`, `max`, `step`, `blurb`).
 const SETTINGS := {
 	"survey_interval": {"label": "Survey every", "type": "float", "default": 0.2, "min": 0.1, "max": 1.0, "step": 0.05,
 		"blurb": "Seconds between the survey's looks: enough to find cuts and sets, their range of mouth shapes and their head's motion."},
@@ -172,7 +171,7 @@ const ORDER := ["fetch", "captions", "probe", "survey", "shots", "sets", "audit"
 	"fit", "hear", "utterances", "voice", "kokoro_utterances", "kokoro_voice"]
 
 
-## WHAT [param renderer] NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.
+## What [param renderer] needs of an actor to play them: the chosen set's steps and the actor's own.
 static func plays(renderer: String) -> Array:
 	return Registry.field(RENDERERS, renderer if RENDERERS.has(renderer) else "2d", "plays", []) as Array
 
@@ -215,8 +214,8 @@ static func is_voice(step: String) -> bool:
 	return bool(Registry.field(REGISTRY, step, "voice", false))
 
 
-## THEIR VOICE AND WHAT IT IS MADE FROM, in order: all a voice alone is made of ([method ActorFolder.sound_only],
-## the Voice training card) - fetched, measured, heard, cut into sentences and Kokoro taught them.
+## Their voice and what it is made from, in order: all a voice alone is made of ([method ActorFolder.sound_only], the
+## Voice training card) - fetched, measured, heard, cut into sentences and Kokoro taught them.
 static func voice_chain() -> Array:
 	return with_needs("kokoro_voice")
 

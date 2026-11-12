@@ -1,18 +1,18 @@
 extends Node
 
-## take_play_check - THE TAKE KEPT PLAYS AS THE SESSION'S AUDIO ([method ReadingStream.play], [method ReadingPanel.kept_take];
-## next/editing.md step 3: "the take itself played as the session's audio, so a seek is a seek inside one file").
+## take_play_check - the kept take plays as the session's audio ([method ReadingStream.play],
+## [method ReadingPanel.kept_take]; next/editing.md step 3), so a seek is a seek inside one file.
 ##
 ##   tests/run_boot_probe.sh tests/reading/take_play_check.gd 90
 ##
 ## On a take of its own under user:// (never the author's), a panel built by hand, its episode keeping that take:
-##   - what a take is said from ([method ReadingPanel.take_sig]) is the same for the same words and voices; THE CONTROLS another
+##   - what a take is said from ([method ReadingPanel.take_sig]) is the same for the same words and voices; controls: another
 ##     word and another pace each another;
-##   - the take is the reading's only where it was said from these words in these voices; THE CONTROLS other words, a voice
+##   - the take is the reading's only where it was said from these words in these voices; controls: other words, a voice
 ##     changed, an episode with no take;
 ##   - Play plays it as a file with no voice host at all: the transport's length is the file's and all of it is ready, a seek
 ##     while paused lands inside the file and stays paused, its end is the reading's end and Play plays it again, Stop ends it;
-##     THE CONTROL: a voice changed, Play plays no take;
+##     control: a voice changed, Play plays no take;
 ##   - an export is handed a copy of it, nothing said again, the copy's book written as it stands.
 
 const ROOT := "user://take_play_check"
@@ -82,7 +82,7 @@ func _ready() -> void:
 		Spectrum.stop()
 	Spectrum.conduct(_ed, _ed.transport_hooks())
 
-	# WHAT A TAKE IS SAID FROM
+	# what a take is said from
 	var sig := _ed.take_sig(BODY)
 	_ok(sig.length() == 64 and sig == _ed.take_sig(BODY), "the same words in the same voices: the same take")
 	var pace := _ed._cast._rate.value
@@ -92,7 +92,7 @@ func _ready() -> void:
 	_ok(_ed.take_sig(BODY + " Seven.") != sig and paced != sig and _ed.take_sig(BODY) == sig,
 		"the controls: another word, another pace - each another take")
 
-	# THE TAKE KEPT
+	# the take kept
 	var wav := root.path_join("take.wav")
 	var frames := PackedVector2Array()
 	frames.resize(int(SECONDS * SR))
@@ -115,7 +115,7 @@ func _ready() -> void:
 	_ok(_ed.kept_take(BODY + " Seven.").is_empty() and changed.is_empty() and none.is_empty(),
 		"the controls: other words, a voice changed, an episode with no take - no take")
 
-	# PLAY: THE FILE, NO HOST
+	# play: the file, no host
 	_ed._stream.play()
 	_ok(_begun == 1 and _ed.take_playing() and _ed._stream.live() and Spectrum.audio_path() == wav,
 		"Play plays the take as a file, with no voice host at all (begun %d)" % _begun)
@@ -141,7 +141,7 @@ func _ready() -> void:
 	_ok(_begun == 2 and not _ed.take_playing(), "the control: a voice changed, Play plays no take")
 	_ed._cast._rate.value = pace
 
-	# AN EXPORT: A COPY, NOTHING SAID AGAIN
+	# an export: a copy, nothing said again
 	var out: String = await _ed.export_take()
 	var copied: Variant = JSON.parse_string(FileAccess.get_file_as_string(out.get_basename() + ".json")) if not out.is_empty() else null
 	_ok(not out.is_empty() and out != wav and out.begins_with(root) and FileAccess.get_file_as_bytes(out) == FileAccess.get_file_as_bytes(wav)

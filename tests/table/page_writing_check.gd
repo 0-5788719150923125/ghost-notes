@@ -1,31 +1,28 @@
 extends SceneTree
 
-## The gate of A PAGE WRITTEN AT THE TABLE ([TableInk], [SheetWriting.page], the `write` law; next/proof.md, "Proof became a
-## table show"): which writes TeX lays out, how a record is written stroke by stroke, how a sheet's writes become a page, and
-## the order a page is written in. No renderer, no TeX: the records are TeX's own answer, kept as the ink gate's fixture
-## (tests/table/ink_layout.json).
+## The gate of a page written at the table ([TableInk], [SheetWriting.page], the `write` law; next/proof.md): which writes TeX lays out,
+## how a record is written stroke by stroke, how a sheet's writes become a page, and the order a page is written in. No renderer, no
+## TeX: the records are TeX's own answer, kept as the ink gate's fixture (tests/table/ink_layout.json).
 ##
 ##   godot --headless --path . --script res://tests/table/page_writing_check.gd
 ##
-## - WHICH WRITES TEX LAYS OUT: a `tex` (math, or a display environment set as one), a `draw` (a figure) and words with
-##   `$...$` in them, each once whatever acts repeat it; words with no math never (the control).
-## - A RECORD IS WRITTEN AS A HAND WRITES IT: the picture has ink, every point of it put down between 0 and 0.98, and a formula
-##   is written left to right (the left third's ink is put down before the right third's) - the control, a record with no
-##   glyphs, has none.
-## - A SHEET'S WRITES ARE A PAGE: the first write's ink is put down in the first half of the page's time and the second's in the
-##   second; a few writes fit a sheet at their own size, and many run off it and are written smaller, said (`shrunk` - the
-##   control: two writes are not). A LINE CROSSED OUT is drawn through the line it names, in its own share of the page's time, and
-##   takes no room (the control: a strike at nothing draws nothing).
-## - THE LAW TAKES A FORMULA AND A DRAWING: `tex` and `draw` are kept; a `draw` that is no SVG is refused with a note; a write
-##   that names nothing is refused (the control).
-## - A PAGE IS WRITTEN IN THE READING'S ORDER ([method TableWork._order_writing]): writes on one sheet, listed out of order, are
-##   numbered by beat - the intro's first - each taking its share of the sheet's `written`; one write of plain words is the
-##   sheet's alone (the control), fitted to it as before.
-## - A PEN SEEN WRITES IT, AND POINTS (the user, 2026-11-11: "we probably do want the point marker, and we probably do want the pen"):
-##   a write `with` a pen on a real table has the pen's tip on the ink as it goes down - on a stroke, on the paper, inside the line's
-##   box - lifted before the first stroke and clear after the last; a `point` at the line brings the tip beside its right end, just
-##   over the paper. The controls: a pen nobody put on the table, and a point at a name nothing written carries, are refused, the
-##   names that can be pointed at said.
+## - Which writes TeX lays out: a `tex` (math, or a display environment set as one), a `draw` (a figure) and words with `$...$` in them,
+##   each once whatever acts repeat it; words with no math never (the control).
+## - A record is written as a hand writes it: the picture has ink, every point of it put down between 0 and 0.98, and a formula is
+##   written left to right (the left third's ink is put down before the right third's) - the control, a record with no glyphs, has none.
+## - A sheet's writes are a page: the first write's ink is put down in the first half of the page's time and the second's in the
+##   second; a few writes fit a sheet at their own size, and many run off it and are written smaller, said (`shrunk` - the control:
+##   two writes are not). A line crossed out is drawn through the line it names, in its own share of the page's time, and takes no
+##   room (the control: a strike at nothing draws nothing).
+## - The law takes a formula and a drawing: `tex` and `draw` are kept; a `draw` that is no SVG is refused with a note; a write that
+##   names nothing is refused (the control).
+## - A page is written in the reading's order ([method TableWork._order_writing]): writes on one sheet, listed out of order, are
+##   numbered by beat - the intro's first - each taking its share of the sheet's `written`; one write of plain words is the sheet's
+##   alone (the control), fitted to it.
+## - A pen seen writes it, and points: a write `with` a pen on a real table has the pen's tip on the ink as it goes down - on a
+##   stroke, on the paper, inside the line's box - lifted before the first stroke and clear after the last; a `point` at the line
+##   brings the tip beside its right end, just over the paper. Controls: a pen nobody put on the table, and a point at a name nothing
+##   written carries, are refused, the names that can be pointed at said.
 
 var _fails := 0
 var _doc := {}

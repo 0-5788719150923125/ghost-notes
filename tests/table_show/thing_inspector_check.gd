@@ -1,22 +1,22 @@
 extends Node
 
-## thing_inspector_check - ONE THING PICKED, ONE INSPECTOR, ON AN EPISODE (next/editing.md steps 5 to 8: [EpisodeCard.open_dock],
+## thing_inspector_check - one thing picked, one inspector, on an episode (next/editing.md steps 5 to 8: [EpisodeCard.open_dock],
 ## [TableRows], [TablePlanView], [ThingLibrary]).
 ##
 ##   tests/run_boot_probe.sh tests/table_show/thing_inspector_check.gd 90
 ##
 ## On an episode and a library of its own (never the author's), the Episode card's timeline docked:
 ##   - an act picked is its rows; a field set is written into `acts.json` as a hand's version, kept, and Undo puts back what it
-##     was. THE CONTROL: a field the acts would be read otherwise than written (a track with no such law) is refused and said;
-##   - a track picked is its law's rows ([method TableRows.law_fields]: the puppeteer's own sentences; THE CONTROL an unknown law
+##     was. The control: a field the acts would be read otherwise than written (a track with no such law) is refused and said;
+##   - a track picked is its law's rows ([method TableRows.law_fields]: the puppeteer's own sentences; the control an unknown law
 ##     has only what every track names), a field written where it lives, a law that is none refused;
 ##   - a thing picked on the stage is its rows, its parts each a press, the part picked as its own rows; a thing's field and a
 ##     part's are written into `table.json` where they live, and Undo takes the last back; a part of a shape there is and a new
-##     thing are put on and picked. THE CONTROL: a thing not in the
+##     thing are put on and picked. The control: a thing not in the
 ##     table's data says so;
 ##   - the table from above: a thing's foot picked by a click, and a drag hands back where it would stand, in centimeters from
-##     the middle of the reading. THE CONTROL: a click on bare table picks nothing;
-##   - the library keeps a thing with the materials its parts use (THE CONTROL: not one it does not), and puts it on a table
+##     the middle of the reading. The control: a click on bare table picks nothing;
+##   - the library keeps a thing with the materials its parts use (the control: not one it does not), and puts it on a table
 ##     named its own there, only the materials that table lacks added;
 ##   - an agent asked about what is picked needs a note, and a read-only session asks none (no agent is ever started here);
 ##   - an Undo with nothing changed says so.
@@ -62,7 +62,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	_ok(dock != null and dock.inspector.is_valid() and dock.undo.is_valid(), "the episode's timeline docks with an inspector and an Undo")
 
-	# AN ACT
+	# An act
 	dock.inspect({"item": {"source": ["acts", 0], "label": "base", "kind": "span"}, "group": 1})
 	var forms := dock._inspector.find_children("*", "SchemaForm", true, false)
 	_ok(forms.size() == 1, "an act picked is its rows (%d forms)" % forms.size())
@@ -76,8 +76,8 @@ func _run() -> void:
 	_ok(refused.contains("levitate") and String((ep.read_json("acts") as Dictionary)["acts"][0]["tracks"][0]["law"]) == "to",
 		"the control: a track with no such law is refused, said, the acts unchanged (%s)" % refused)
 
-	# WHAT IS KEPT OF THE NOTE, ON ITS BODY CARD ([NoteKept]): Cache and Restore…, Restore listing the episode's step versions beside the
-	# note's saves; a version put back is the step as it stood - THE CONTROL: a read-only session puts nothing back
+	# What is kept of the note, on its body card ([NoteKept]): Cache and Restore…, Restore listing the episode's step versions beside the
+	# note's saves; a version put back is the step as it stood - the control: a read-only session puts nothing back
 	var kept: NoteKept = _ed.get("_kept")
 	var names: Array = kept.find_children("*", "Button", true, false).map(func(b: Node) -> String: return (b as Button).text) if kept != null else []
 	var listed: Array = kept.entries().filter(func(e: Dictionary) -> bool:
@@ -91,7 +91,7 @@ func _run() -> void:
 		"a version put back is the step as it stood (%s -> %s)" % [length_now, (ep.read_json("acts") as Dictionary)["acts"][0]["length"]])
 	_show._take_back()
 
-	# A TRACK: its law's rows, the puppeteer's own sentences - THE CONTROL an unknown law has only what every track names
+	# A track: its law's rows, the puppeteer's own sentences - the control an unknown law has only what every track names
 	var rows := TableRows.law_fields("turn")
 	var said_rate := String((Motions.LAWS["turn"]["fields"] as Array)[0][1])
 	_ok(rows.has("rate") and String(rows["rate"]["blurb"]) == said_rate and rows.has("tick"), "a law's fields are rows, each the sentence the puppeteer reads")
@@ -108,7 +108,7 @@ func _run() -> void:
 		"the control: a law that is none is refused, and said (%s)" % dock._said.text)
 	_show._take_back()
 
-	# A THING AND ITS PART
+	# A thing and its part
 	dock.inspect({"thing": "mask", "part": "face"})
 	forms = dock._inspector.find_children("*", "SchemaForm", true, false)
 	var presses := dock._inspector.find_children("*", "Button", true, false).filter(func(b: Node) -> bool:
@@ -126,7 +126,7 @@ func _run() -> void:
 	_show._take_back()
 	mask = (ep.read_json("table") as Dictionary)["things"][0]
 	_ok(String(mask["parts"][1]["material"]) == "face form" and float(mask.get("turn", 0.0)) == 30.0, "Undo takes the last back")
-	# ...MORE FROM WHAT THERE IS: a part of a shape there is, a new thing of its own
+	# ...more from what there is: a part of a shape there is, a new thing of its own
 	dock.inspect({"thing": "mask"})
 	var adds := dock._inspector.find_children("*", "MenuButton", true, false).filter(func(m: Node) -> bool: return (m as MenuButton).text.begins_with("+ Part"))
 	if not adds.is_empty():
@@ -142,12 +142,12 @@ func _run() -> void:
 	_ok(dock._inspector.find_children("*", "Label", true, false).any(func(l: Node) -> bool: return (l as Label).text.contains("not written")),
 		"the control: a thing not in the table's data says so")
 
-	# AN AGENT ASKED ABOUT WHAT IS PICKED - never started from a gate: refused with no note, and in a session that may not write
+	# An agent asked about what is picked - never started from a gate: refused with no note, and in a session that may not write
 	_ok(_show.ask_about("table", "the mask", "  ") == "write what should change first", "an ask with no note is refused")
 	_ok(_show.ask_about("table", "the mask", "make it smaller") == "this session is read-only" and not _show._producer.running,
 		"the control: a read-only session asks no agent")
 
-	# THE TABLE FROM ABOVE
+	# The table from above
 	var plan := TablePlanView.new()
 	var foot := PackedVector2Array([Vector2(-0.05, -0.05), Vector2(0.05, -0.05), Vector2(0.05, 0.05), Vector2(-0.05, 0.05)])
 	plan.show_plan({"things": [{"name": "mask", "foot": foot, "bb": Rect2(-0.05, -0.05, 0.1, 0.1), "at": Vector2.ZERO}]})
@@ -173,7 +173,7 @@ func _run() -> void:
 		"a thing's foot picked by a click, and a drag hands back where it would stand (%s, want %s)" % [str(moved), want])
 	plan.free()
 
-	# THE LIBRARY
+	# The library
 	var table: Dictionary = ep.read_json("table")
 	_ok(ThingLibrary.keep(table["things"][0], table).is_empty() and ThingLibrary.names() == ["mask"], "a thing is kept in the library")
 	var entry := ThingLibrary.read("mask")

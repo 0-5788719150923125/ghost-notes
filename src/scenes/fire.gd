@@ -2,19 +2,16 @@ extends GhostScene
 
 ## Fire - a living flame attuned to the harmonics.
 ##
-## One GPU temperature field (see [Layer.Fire] / shaders/flame.gdshader): heat sources
-## along the bed, each listening to its own harmonic band (bass at the center, treble
-## at the rim), raise columns that rising turbulence carves into licks. CPU sparks
-## crackle out of whichever region is roaring, and smoke sometimes hazes the top.
-## Quiet passages sit as embers; powerful ones send columns up the frame.
+## One GPU temperature field (see [Layer.Fire] / shaders/flame.gdshader): heat sources along the bed, each
+## listening to its own harmonic band (bass at the center, treble at the rim), raise columns that rising
+## turbulence carves into licks. CPU sparks crackle out of whichever region is roaring, and smoke sometimes
+## hazes the top. Quiet passages sit as embers; powerful ones send columns up the frame.
 ##
-## The flame's own colors are the shader's (a real fire is the temperature of its
-## fuel), so what the seed varies here is the HEARTH around it: the ambient the fire
-## burns in, how wide it is laid, and how much smoke it throws.
+## The flame's colors are the shader's (the temperature of its fuel), so the seed varies the hearth around
+## it: the ambient, how wide it is laid, and how much smoke it throws.
 
-# The hearth. Each is a place a fire is found, and it decides the ambient wash behind the
-# flame, how far the sources are laid across the frame, and how heavily it smokes - so a
-# forge, a bonfire and a fire on a cold night are three different scenes, not one tint.
+# The hearth: each is a place a fire is found, and decides the ambient wash behind the flame, how far the
+# sources are laid across the frame and how heavily it smokes.
 const HEARTHS := {
 	"forge":   {"moods": ["ember", "sodium", "brass"], "spread": [0.45, 0.75],
 		"val": [0.07, 0.11], "smoke": 0.35, "sheets": [1, 1]},
@@ -25,8 +22,8 @@ const HEARTHS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"hearth": {"label": "Hearth", "type": "choice", "options": "HEARTHS", "default": null,
 		"blurb": "Where the fire is found: a forge, a bonfire, or a fire on a cold night, which sets the wash behind the flame, how widely the flames are laid and how heavily it smokes."},
@@ -49,14 +46,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"val": rng.randf_range(float(val_r[0]), float(val_r[1])),
 		"pools": rng.randi_range(1, 4),
 	})
-	# No hue passed to the flame itself: its palette is the temperature ramp in
-	# flame.gdshader, and a fire that took an arbitrary hue would stop reading as one.
+	# No hue is passed to the flame: its palette is the temperature ramp in flame.gdshader.
 	add_layer("fire", rng, {
 		"count": number("sparks", rng),                       # the SPARK pool (born from heat)
 		"spread": rng.randf_range(float(spread_r[0]), float(spread_r[1])),
 	})
-	# Smoke drifting off the top, sometimes - on the mood's accent, so a cold-night fire
-	# smokes cold and a forge smokes warm.
+	# Smoke drifting off the top, sometimes, on the mood's accent.
 	if rng.randf() < float(h["smoke"]):
 		var sheets: Array = h["sheets"]
 		for i in rng.randi_range(int(sheets[0]), int(sheets[1])):

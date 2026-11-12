@@ -6,15 +6,10 @@ extends GhostScene
 ## A blue-green bed, swaying god-[Rays] from the surface above, and [Bubbles] drifting up
 ## through them. The light shafts brighten with the music; the whole frame drifts gently.
 
-# WATERS. The hue was pinned to 0.50-0.58 and the layer mix never changed, so
-# every dive was the same blue-green room with the same tall kelp. A water is a
-# whole place: its color, how much light reaches it, what grows there, and how
-# much life is suspended in it.
-#
-# `depth` is the organizing idea - a bright shallow reef gets many rays, small
-# stiff plants and busy bubbles; an abyss gets almost no light, sparse tall
-# whips and bioluminescence instead. `silt` adds suspended matter, which is what
-# makes an estuary read as murky rather than merely darker.
+# Waters: a water is a whole place - its color, how much light reaches it, what grows there and
+# how much life is suspended in it. `depth` organizes it: a bright shallow reef gets many rays,
+# small stiff plants and busy bubbles; an abyss gets almost no light, sparse tall whips and
+# bioluminescence. `silt` adds suspended matter, which makes an estuary murky rather than darker.
 const WATERS := [
 	{"name": "reef",     "hue": [0.47, 0.52], "sat": 0.52, "val": 0.22,
 	 "rays": [6, 9], "form": "fan",   "fronds": [16, 26], "glows": [1, 3],
@@ -37,8 +32,8 @@ const WATERS := [
 ]
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed.
 const FIELDS := {
 	"caustics": {"label": "Caustics", "type": "num", "range": [7, 11], "default": null,
 		"blurb": "How many wavy bands of light from the surface shimmer across the water."},
@@ -54,9 +49,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var hr: Array = w["hue"]
 	var hue: float = rng.randf_range(float(hr[0]), float(hr[1]))
 	add_layer("bed", rng, {"hue": hue, "sat": float(w["sat"]), "val": float(w["val"]), "pools": 3})
-	# The lit surface far above (fills the dead space at the top with a real light source + caustics),
-	# then the god-rays through it, a floor of whatever grows in this water, and bubbles rising
-	# through it all. Deep waters get few rays and many glows; shallow ones the reverse.
+	# The lit surface far above (a light source with caustics), then god-rays through it, a floor
+	# of whatever grows in this water, and bubbles rising through all. Deep waters get few rays
+	# and many glows; shallow ones the reverse.
 	add_layer("surface", rng, {"hue": fposmod(hue + 0.02, 1.0), "caustics": number("caustics", rng),
 		"sun_x": number("sun", rng)})
 	add_layer("rays", rng, {"hue": fposmod(hue + 0.02, 1.0),

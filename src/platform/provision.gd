@@ -1,22 +1,19 @@
 extends RefCounted
 class_name Provision
 
-## Provision - what ghost installs for itself, and the one door every feature asks through.
+## Provision - what ghost installs for itself, and the one door every feature asks through. ghost needs FFmpeg,
+## uv, a Python for uv's environments, and per-feature packages (neural voice, face tracking, URL import, page
+## capture); none is the user's to install. Each piece is downloaded from its upstream release, checked against the
+## published SHA-256, kept under the user data directory and kept current.
 ##
-## ghost needs FFmpeg for video, uv to build Python environments, a Python for those to run on, and
-## per-feature packages (the neural voice, face tracking, URL import, page capture). None of it is
-## the user's to install. ghost downloads each piece from its upstream release, checks it against
-## the published SHA-256, keeps it under the user data directory and keeps it current.
+## This is the static half: where things live, which release fits this machine, how an archive is unpacked,
+## and whether an environment is the one its requirements describe. It runs anywhere, so
+## tests/platform/provision_check.gd covers it with no network. The live half is the `Provisioner` autoload
+## (provisioner.gd): downloads, uv, progress. Features never name the autoload; they call [method ensure] here,
+## which reaches it while the app runs and otherwise answers from what is on disk.
 ##
-## This file is the static half: where things live, which release fits this machine, how an archive
-## is unpacked, and whether an environment is the one its requirements describe. It runs anywhere,
-## which is how tests/platform/provision_check.gd covers it with no network. The live half is the
-## `Provisioner` autoload (provisioner.gd), which downloads, runs uv and reports progress. Features
-## never name the autoload: they call [method ensure] here, which reaches it while the app runs and
-## otherwise answers from what is on disk.
-##
-## The table of what exists is [Deps]: `Deps.FETCHED` for downloaded programs, `Deps.MANAGED` for
-## Python and the environments.
+## The table of what exists is [Deps]: `Deps.FETCHED` for downloaded programs, `Deps.MANAGED` for Python and
+## the environments.
 
 ## The Python every environment runs on: the newest stable minor that every environment's wheels
 ## support. uv installs its newest patch, and updates move the environments to newer patches in place
@@ -263,9 +260,8 @@ static func log_path(key: String, step := "") -> String:
 		key + ("" if step.is_empty() else "_" + step) + ".log")
 
 
-## The flags every uv call carries: ghost's own cache, and no uv.toml of anybody's. uv is also
-## handed paths for everything else it touches, never environment variables, because those would
-## reach every other program ghost starts (a dispatched assistant run included).
+## The flags every uv call carries: ghost's own cache, and no uv.toml of anybody's. uv is handed paths for
+## everything else it touches, never environment variables, which would reach every other program ghost starts.
 static func uv_args() -> PackedStringArray:
 	return PackedStringArray(["--cache-dir", cache_dir(), "--no-config"])
 
@@ -339,10 +335,9 @@ static func tool_ok(key: String) -> bool:
 	return true
 
 
-## Remove every version of `key` but the one in use, and what a killed session left
-## half-unpacked. A staging directory younger than a day may be another ghost window's unpack in
-## progress, so it is left alone; so is anything that cannot be removed (a program in it is still
-## running), until next time.
+## Remove every version of `key` but the one in use, and what a killed session left half-unpacked. A staging
+## directory younger than a day may be another ghost window's unpack in progress, so it is left alone; so is
+## anything that cannot be removed (a program in it is running), until next time.
 static func prune(key: String) -> void:
 	var dir := tools_dir().path_join(key)
 	var keep := String(installed(key).get("dir", ""))
@@ -532,11 +527,10 @@ static func unpack(archives: PackedStringArray, programs: PackedStringArray, des
 	return {"ok": true, "files": files}
 
 
-## Why the zip at `archive` must not be unpacked: a member whose name climbs out (`..`) or is
-## absolute, or no zip at all. "" when it may. Reads the names only - [ZIPReader] finds a member by
-## scanning its directory, so reading a whole 18,571-file toolchain through it is quadratic
-## (measured: 600 MB of Lean's 3.4 GB in four minutes, slowing); ghost's own Python unpacks it
-## instead, in 30 s, and this is the guard in front of it.
+## Why the zip at `archive` must not be unpacked: a member whose name climbs out (`..`) or is absolute, or no
+## zip at all. "" when it may. Reads the names only. [ZIPReader] finds a member by scanning its directory, so
+## reading a whole 18,571-file toolchain through it is quadratic (600 MB of 3.4 GB in four minutes); ghost's own
+## Python unpacks it in 30 s, and this is the guard in front of it.
 static func zip_unsafe(archive: String) -> String:
 	var zr := ZIPReader.new()
 	if zr.open(archive) != OK:
@@ -623,10 +617,10 @@ static func _find_bin(root: String, name: String) -> String:
 
 # --- Lean ---------------------------------------------------------------------
 #
-# Lean is three things that must agree: a toolchain (`lean`, a fetched tree), Mathlib (compiled
-# for exactly that toolchain) and the REPL ghost checks proofs through (tagged per toolchain too).
-# Mathlib's release names the toolchain, and the REPL tags the same names, so ONE TAG picks all
-# three: the newest Mathlib release the REPL also has.
+# Lean is three things that must agree: a toolchain (`lean`, a fetched tree), Mathlib (compiled for exactly
+# that toolchain) and the REPL ghost checks proofs through (tagged per toolchain too). Mathlib's release names
+# the toolchain and the REPL tags the same names, so one tag picks all three: the newest Mathlib release the
+# REPL also has.
 
 ## The newest Mathlib release (from the `/releases` list) that the REPL has a tag for: {tag}, or
 ## {error}. Drafts and prereleases are passed over; so is a release the REPL has not caught up with,

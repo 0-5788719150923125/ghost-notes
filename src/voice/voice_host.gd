@@ -1,23 +1,18 @@
 extends Node
 class_name VoiceHost
 
-## VoiceHost - Godot's end of the neural voice subprocess (see VOICE_PLAN.md).
+## VoiceHost - Godot's end of the neural voice subprocess.
 ##
-## Owns a Python process running `hosts/voice/host.py` and talks to it in
-## newline-delimited JSON over stdio. Adding a model is a file in
-## `hosts/voice/backends/` and a registry entry; nothing here changes. That is the
-## swappability requirement, and it is why this is a subprocess rather than a
-## GDExtension wrapping ONNX Runtime - a native binding would mean per-platform
-## binaries and a rebuild per model.
+## Owns a Python process running `hosts/voice/host.py` and talks to it in newline-delimited JSON over
+## stdio. Adding a model is a file in `hosts/voice/backends/` and a registry entry; nothing here changes
+## (a subprocess, not a GDExtension, so there are no per-platform binaries).
 ##
-## The environment is ghost's own (`voice_venv`, see [Provision]): built by uv on
-## ghost's own Python the first time the voice is wanted, kept current with the rest,
-## and reported on the home screen. This waits for it, saying what the install is
-## doing, then starts `hosts/voice/host.py` with that environment's Python and keeps it
-## warm for the session.
+## The environment is ghost's own (`voice_venv`, see [Provision]): built by uv the first time the voice is
+## wanted. This waits for it, saying what the install is doing, then starts the host with that
+## environment's Python and keeps it warm for the session.
 ##
-## Nothing here blocks the frame. The wait is polled; synthesis is a request whose
-## reply arrives on a later frame. The caller gets signals, not return values.
+## Nothing here blocks the frame. The wait is polled; synthesis is a request whose reply arrives on a
+## later frame. The caller gets signals, not return values.
 
 signal host_ready(backends: PackedStringArray)  # not `ready`: Node already has one
 signal failed(stage: String, message: String)
@@ -61,10 +56,8 @@ func start() -> void:
 
 
 func stop() -> void:
-	# Only ask a host that is actually there. On the way out `Boot` has already reaped the
-	# registry by the time this runs from `_exit_tree`, so the pipe's far end is gone and the
-	# polite shutdown is a write into a dead process (see the note in subprocess.gd, which is
-	# where the visible half of this bug was).
+	# Only ask a host that is actually there: on the way out `Boot` has already reaped the registry
+	# when this runs from `_exit_tree`, and the polite shutdown would write into a dead process.
 	if _state == "up" and Subprocess.alive(_pid):
 		_send({"op": "shutdown"})
 	if _pid > 0:
@@ -123,8 +116,7 @@ func ensure(voice: String) -> int:
 
 
 ## Take requests [param ids] out of the host's line: each one still waiting is answered `cancelled`
-## and never made, and the one being made finishes. Neither answer is signaled - whoever cancels has
-## let them go. Without it a request let go was still made, and everything asked after it waited.
+## and never made, and the one being made finishes. Neither answer is signaled.
 func cancel(ids: Array) -> void:
 	if ids.is_empty() or _state != "up":
 		return
@@ -176,21 +168,16 @@ func _spawn_host() -> void:
 	_state = "starting"
 	Provision.hold(ENV, "voice host")
 	var py := _venv_python()
-	# blocking=false gives a FileAccess over the child's stdio pair. Through [Subprocess] so
-	# the host dies with ghost: it is a python process holding a voice model in memory, and a
-	# detached one survives the app invisibly, still holding the model and the venv.
+	# blocking=false gives a FileAccess over the child's stdio pair. Through [Subprocess] so the host
+	# dies with ghost and does not outlive it holding the model.
 	var info := Subprocess.start_with_pipe(py, ["-u", _host_script()], "voice host")
 	if info.is_empty():
 		_fail("host", "could not start the voice host process")
 		return
 	_pid = int(info.get("pid", -1))
 	_stdio = info.get("stdio")
-	# The child's stderr is a SEPARATE pipe. Leaving it unread loses every
-	# diagnostic the host prints AND risks the child blocking once the pipe
-	# fills, which presents as "the voice host exited unexpectedly" with no
-	# explanation anywhere. Drained every frame and echoed with print(), so it
-	# lands in the app's log and the console (`>_`), as a [Subprocess.start]
-	# child's output does.
+	# The child's stderr is a separate pipe: it is drained every frame and echoed with print(), so
+	# diagnostics reach the app's log and console (`>_`) and the child never blocks on a full pipe.
 	_stderr = info.get("stderr")
 	_rx = ""
 	_erx = ""
@@ -248,9 +235,7 @@ func _drain() -> void:
 			_handle(line)
 
 
-## Echo the host's stderr to the terminal, line by line. Godot's print() goes to
-## the launching shell's stdout, which is the one place the user can select and
-## copy text from.
+## Echo the host's stderr to the terminal, line by line (print() goes to the launching shell's stdout).
 func _drain_stderr() -> void:
 	if _stderr == null:
 		return
@@ -294,7 +279,7 @@ func _handle(line: String) -> void:
 	if not bool(msg.get("ok", false)):
 		var err := String(msg.get("error", "unknown error"))
 		print("ghost/voice: request %d failed: %s" % [id, err])
-		# WHICH REQUEST: a failed `ensure` or listing is not a chunk the reading is waiting on
+		# a failed `ensure` or listing is not a chunk the reading is waiting on
 		failed.emit(String(meta.get("op", "synthesize")), err)
 		return
 	synthesized.emit(id, msg)

@@ -1,70 +1,44 @@
 extends Node
 
-## notes_list_check - Ghost Notes opens on its notes (next/notes.md step 8), through the real main
-## scene, with a notes folder of the gate's own (`NoteStore.root`) so the author's notes are never
-## listed, made or touched.
+## notes_list_check - Ghost Notes opens on its notes, through the real main scene, with a notes folder of
+## the gate's own (`NoteStore.root`) so the author's notes are never listed, made or touched.
 ##
 ##   tests/run_boot_probe.sh tests/app/notes_list_check.gd 300
 ##
-## THE LIST MAKES NOTES AND NOTHING ELSE (2026-10-06, the user: "the launch screen should be clean"):
-## no path or URL field - its one field the search (2026-10-31) - no Open…, and the name once, over the
-## search. New and "Existing note…" stand side by side as icons with no words (2026-10-31: "just replace
-## them plain icons, no text"), each saying what it does in its tooltip, and the folder asks for markdown
-## alone. The grid itself is note_grid_check's.
-##
-## NEW HAS NO OPTIONS (2026-10-12, the user: "'New' has no options at all. Every note would open in
-## exactly the same way"): it is a button, not a menu; it makes a note with nothing attached - no
-## `ghost:` key in its file - and that note opens in its card on the list (2026-10-31, [NoteEditor]), whose
-## open icon takes it to the note's own panel, whatever is installed.
-##
-## THE APP STARTS ON THE LIST: the list is up, no home screen, the ⌂ hidden, the ⤓ export not there
-## at all and no claim on the bottom of the frame (the row sits where it sits in every note), nothing
-## in the row over the Environment panel (open, and with a detail open), and the keyed handover - a
-## note's claims survive the list leaving after it.
-##
-## WHAT NEEDS AN AGENT IS GATED IN "+", where a note becomes something (the home screen's rule,
-## moved from New): with every agent's program hidden in `Deps._resolved` - the cache a launch
-## reads, never a seam - New still makes a note, and in its "+" Cards is grayed, with a tooltip that
-## says what is missing, lists every supported agent from the registries, suggests installing one or
-## several, and is written as paragraphs that survive Boot's re-flow; a press on it attaches nothing;
-## restored, it is lit exactly when the machine has both roles.
-##
-## A NOTE GOES WHEN ASKED (2026-10-06): the list's × asks first ([DeleteDialog]) - canceled, the note
-## stays; confirmed, it goes to the trash (here the gate's seam, `NoteStore.discard`: a plain delete,
-## never the author's trash) and out of the list. A note's own "⋯" does the same from inside it, and
-## the list comes back.
-##
-## THE ROUND TRIP - A NOTE BECOMES A SHOW BY WHAT IS ATTACHED: New, then "+" Song (the note opens
-## again with a Song card asking for one, nothing timed, no stage, and a Medium grayed no longer),
-## "+" Medium (in the Auto format: the seeded show); choosing a song writes it into the note and
-## opens the note again around it, loaded and WAITING at its start ("start from the baseline of off,
-## not played yet"); it plays through the transport; "+" Storyboard puts its card on the same note
-## and the seed still chooses until something is written. A SECOND CLOCK IS REFUSED, WITH THE REASON
-## (a Voice on a note with a song: "detach that first"), and a component COMES OFF AGAIN: the Song
-## card's ×, once asked, takes the `song:` block out and leaves the note's other blocks and its
-## words as they were. The ⌂ leaves it; New then "+" Voice reopens a plain note as a reading; and
-## back on the list nothing is left behind (the claims, the row, the conductor, the stage, the
-## background programs, no mode node).
-##
-## A SHOW OF CARDS STARTS WITH A BRIEF: attaching Cards to a note with no words fills it with the
-## bundled starter, and the Cards workspace opens showing it.
-##
-## SAVE… TAKES THE NOTE WITH IT (2026-10-12, the user: "That selection keeps getting reverted back to
-## the untitled cards label, and I am unsure if my edits are even being used"): the Script card has
-## Save… and a [SaveMark], the editor window has no button of the kind, and Save… asks for a file
-## every time. Saved into a file elsewhere, the note IS that file - for main, for "⋯", for the list -
-## the one Ghost Notes was keeping goes (the gate's `discard`), and left and opened again it is still
-## that file, with the words typed before and after - AND WHAT WAS MADE FOR IT GOES WITH IT (2026-10-29: a
-## chapter saved under another name drew none of its sketches, "that workflow should definitely rename the
-## underlying generated files path as well"): a letter's sketches and its steps' work, kept in folders named
-## by its path, are in the new file's (the gate's own roots). A file of the author's own that a note is saved
-## out of stays on disk and leaves the list. THE CONTROL is the old behavior: a script sent to a file
-## the note does not follow is the old file again the next time the note opens, its folders where they were.
-##
-## OPEN… LOADS A FILE FROM DISK (the user, the same day: "The 'Save' button would just overwrite the
-## file on disk"): in a note it asks for a file to open, and the file chosen becomes the note - its
-## own text on screen, byte for byte unwritten - while the note left behind keeps the words typed a
-## moment before and stays in the list. A file with no blocks opens as a plain note.
+## - The list makes notes and nothing else: no path or URL field, its one field the search, no Open…, the
+##   name once over the search. New and "Existing note…" stand side by side as icons with no words, each
+##   saying what it does in its tooltip; the folder asks for markdown alone.
+## - New has no options: a button, not a menu; it makes a note with nothing attached (no `ghost:` key) that
+##   opens in its card ([NoteEditor]), whose open icon takes it to the note's own panel.
+## - The app starts on the list: no home screen, the ⌂ hidden, the ⤓ export not there, no claim on the
+##   bottom of the frame, nothing in the row over the Environment panel, and the keyed handover (a note's
+##   claims survive the list leaving after it).
+## - What needs an agent is gated in "+": with every agent's program hidden in `Deps._resolved`, New still
+##   makes a note and in its "+" Cards is grayed with a tooltip that says what is missing and lists every
+##   supported agent, as paragraphs that survive Boot's re-flow; a press attaches nothing; restored, it is
+##   lit exactly when the machine has both roles.
+## - A note goes when asked: the list's × asks first ([DeleteDialog]) - canceled, the note stays; confirmed,
+##   it goes to the trash (the gate's seam, `NoteStore.discard`) and out of the list. A note's own "⋯" does
+##   the same and the list comes back.
+## - The round trip: New, then "+" Song (a Song card asking for one, nothing timed, no stage, a Medium no
+##   longer grayed), "+" Medium (Auto: the seeded show); choosing a song writes it into the note and opens it
+##   again loaded and waiting at its start; it plays through the transport; "+" Storyboard adds its card and
+##   the seed still chooses until something is written. A second clock is refused with the reason (a Voice
+##   on a note with a song), and a component comes off again: the Song card's ×, once asked, takes the
+##   `song:` block out and leaves the other blocks and words. The ⌂ leaves it; New then "+" Voice reopens a
+##   plain note as a reading; back on the list nothing is left behind (claims, row, conductor, stage,
+##   background programs, mode node).
+## - A show of cards starts with a brief: attaching Cards to a note with no words fills it with the bundled
+##   starter, and the Cards workspace opens showing it.
+## - Save… takes the note with it: the Script card has Save… and a [SaveMark], the editor window has no such
+##   button, and Save… asks for a file every time. Saved elsewhere, the note is that file for main, "⋯" and
+##   the list; the one Ghost Notes kept goes (`discard`); left and opened again it is still that file, with
+##   the words typed before and after; and what was made for it (a letter's sketches and its steps' work, in
+##   folders named by its path) is in the new file's. A file of the author's own stays on disk and leaves
+##   the list. Control: a script sent to a file the note does not follow is the old file again the next time.
+## - Open… loads a file from disk: in a note it asks for a file, and the file chosen becomes the note (its
+##   text on screen, byte for byte unwritten) while the note left behind keeps the words typed a moment
+##   before and stays in the list. A file with no blocks opens as a plain note.
 
 var _fails: Array = []
 var _main: Node
@@ -109,9 +83,9 @@ func _run() -> void:
 
 # --- a title names the file ----------------------------------------------------------------------
 
-## THE BODY CARD (2026-10-31, the Script card renamed): its words' first lines, a click from the editor, and a
-## Title that renames a file named after it - the note followed everywhere, as Save… is followed. THE CONTROL: a
-## file under a name of its own keeps it when its title changes.
+## The Body card: its words' first lines, a click from the editor, and a Title that renames a file named
+## after it, the note followed everywhere. Control: a file under a name of its own keeps it when its title
+## changes.
 func _check_title_renames() -> void:
 	print("-- the Body card, and a title that names its file")
 	var named := NoteStore.create("Plan", "Words for the plan.\n")
@@ -162,8 +136,8 @@ func _check_title_renames() -> void:
 
 func _check_clean(list: NotesList) -> void:
 	print("-- the list makes notes and nothing else")
-	# (a PopupMenu carries a search field of its own - Godot's, not ours)
-	# (the card a note opens in has a Title of its own, unseen until a note is opened in it)
+	#(a PopupMenu carries a search field of its own - Godot's, not ours)
+	#(the card a note opens in has a Title of its own, unseen until a note is opened in it)
 	var fields := list.find_children("*", "LineEdit", true, false).filter(func(f: Node) -> bool:
 		if not (f as Control).is_visible_in_tree():
 			return false
@@ -225,8 +199,8 @@ func _check_furniture(list: NotesList) -> void:
 		_ok(not (b as Control).get_global_rect().intersects(notes),
 			"%s is not over the notes" % (b as Button).text)
 	ch.set_environment_open(false, false)
-	# THE HANDOVER: a note opens FIRST and the list leaves SECOND - the note's claims must stand.
-	# Stood up as a note does, then the real list freed, as its own handler frees it.
+	#The handover: a note opens first and the list leaves second - the note's claims must stand. Stood up as a
+	#note does, then the real list freed, as its own handler frees it.
 	ch.claim_bottom(&"note", 240.0)
 	ch.suppress_export(&"note")
 	list.queue_free()
@@ -323,7 +297,7 @@ func _check_delete() -> void:
 	_ok(not FileAccess.file_exists(path), "confirmed, it goes")
 	list.refresh()
 	_ok(not _row_of(list, path), "...and leaves the list")
-	# FROM INSIDE THE NOTE: its own "⋯", asked first, and the list comes back
+	# From inside the note: its own "⋯", asked first, and the list comes back
 	var inside := NoteStore.create("Delete me from inside", "Words.\n")
 	list._open(inside)
 	await _frames(12)
@@ -383,9 +357,8 @@ func _check_round_trip() -> void:
 		"+ Medium: a Medium card, in the Auto format (%s)" % Director.medium)
 	if panel == null:
 		return
-	# twenty seconds, as teardown_check's: the eight-second silence opens on spires, whose worker-thread
-	# builds trip Godot's own teardown fault after the verdict (tests/run_scene_smoke.sh) - this gate is
-	# about the list, not about that scene
+	#twenty seconds, as teardown_check's: the eight-second silence opens on spires, whose worker-thread builds
+	#trip Godot's own teardown fault after the verdict (tests/run_scene_smoke.sh)
 	var song := FixtureAudio.silence(20.0)
 	panel._song.chosen.emit(song)
 	await _frames(20)
@@ -461,7 +434,7 @@ func _check_round_trip() -> void:
 				var titles: Array = (reading._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
 				_ok(titles == ["Body", "Voice"], "a voice alone: its words and its voice, and no picture until one is attached (%s)" % str(titles))
 				_ok(not bool(reading.show_plan()["picture"]), "...so its reading puts no stage up")
-				# THE REAL WAY IN: a panel built in the tree, which the panel gates' are not
+				# The real way in: a panel built in the tree, which the panel gates' are not
 				var pipe: PipelineCard = reading._pipeline
 				_ok(pipe.card != null and pipe.card.head.is_ancestor_of(pipe._generate) and not pipe.card.body.is_ancestor_of(pipe._generate),
 					"opened for real, the Pipeline's Generate stands on its title bar, not in its list")
@@ -557,7 +530,7 @@ func _check_new_card_starter() -> void:
 		_ok(bool(editor.show_plan()["picture"]), "...and the table is what it is seen in")
 
 
-## SAVE… ON THE SCRIPT CARD, from the Cards note the last check left open.
+## Save… on the Script card, from the Cards note the last check left open.
 func _check_save_moves_the_note() -> void:
 	print("-- Save… takes the note with it")
 	var ch: Chrome = _main._chrome
@@ -584,7 +557,7 @@ func _check_save_moves_the_note() -> void:
 		_ok(dlg != null and dlg.file_mode == FileDialog.FILE_MODE_SAVE_FILE, "Save… asks for a file, every time")
 		editor._doc._close_dialog()
 		await _frames(2)
-	# WHAT WAS MADE FOR IT, kept in folders named by its path (a letter's sketches, its steps' work) - the gate's own roots
+	# What was made for it, kept in folders named by its path (a letter's sketches, its steps' work) - the gate's own roots
 	LetterSketches.root = MADE.path_join("letters")
 	NoteUpload.root = MADE.path_join("readings")
 	var made := [LetterSketches.folder_of(old).path_join("sketches").path_join("a.json"),
@@ -592,7 +565,7 @@ func _check_save_moves_the_note() -> void:
 	for f in made:
 		DirAccess.make_dir_recursive_absolute((f as String).get_base_dir())
 		FileAccess.open(f, FileAccess.WRITE).store_string("{}")
-	# THE CONTROL - what "Sync to…" did in a note: the script goes, the note does not follow
+	# The control - what "Sync to…" did in a note: the script goes, the note does not follow
 	editor._doc.moved.disconnect(editor._on_note_moved)
 	var astray := dir.path_join("astray.md")
 	_ok(editor._doc.save_to(astray) and _main._note == old, "the control: the script was sent where the note did not follow")
@@ -608,7 +581,7 @@ func _check_save_moves_the_note() -> void:
 		"the control: opened again, such a note is the old file once more")
 	if editor == null:
 		return
-	# THE REAL THING
+	# The real thing
 	var te: TextEdit = editor._text
 	te.set_caret_line(te.get_line_count() - 1)
 	te.set_caret_column(te.get_line(te.get_line_count() - 1).length())
@@ -656,7 +629,7 @@ func _check_save_moves_the_note() -> void:
 		await _frames(2)
 	_ok(FileAccess.get_file_as_string(now).contains("Typed after the move.") and mark.writes > writes,
 		"an edit made in the note afterwards is in the file, and the mark ticked for it")
-	# A FILE OF THE AUTHOR'S OWN is left where it is, and leaves the list
+	# A file of the author's own is left where it is, and leaves the list
 	var third := dir.path_join("third.md")
 	_ok(editor._doc.save_to(third) and _main._note == third, "saved on again, the note follows again")
 	_ok(FileAccess.file_exists(now) and not NoteStore.is_added(now) and NoteStore.is_added(third),
@@ -669,7 +642,7 @@ func _check_save_moves_the_note() -> void:
 		NoteStore.remove(p)
 
 
-## OPEN… ON THE SCRIPT CARD, from the Cards note [param from] the check above ends in.
+## Open… on the Script card, from the Cards note [param from] the check above ends in.
 func _check_open_from_disk(dir: String, from: String) -> void:
 	print("-- Open… loads a file from disk")
 	var editor := _main._generative as ReadingPanel
@@ -745,8 +718,8 @@ func _quiet(home_procs: int) -> void:
 		await _frames(5)
 
 
-## The Environment panel's first probe lands from a thread, its rows built as it does: waited on by
-## the clock (teardown_check's header says why). The panel's layout is checked with its rows in it.
+## The Environment panel's first probe lands from a thread, its rows built as it does: waited on by the clock
+## (teardown_check's header says why). The panel's layout is checked with its rows in it.
 func _settle_probe() -> void:
 	var env: DepsPanel = _main._chrome.environment
 	var t0 := Time.get_ticks_msec()

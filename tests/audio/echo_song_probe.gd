@@ -1,12 +1,11 @@
 extends SceneTree
 
-## Echo LATENCY PROBE against a real song (a measurement tool, not a pass/fail check):
+## Echo latency probe against a real song (a measurement tool, not a pass/fail check):
 ##   godot --path . --headless --script res://tests/audio/echo_song_probe.gd
-## Bakes the song offline (same FFT pipeline the export render uses), then simulates a
-## manual session: pass 1 records the echo map while the cursor tracks; the audio then
-## LOOPS while the cursor free-runs on into the tail claim. Reports, per descriptor
-## time constant: when recognition confirms after the wrap, what schedule time it
-## resolves to, any false fires, and refire behavior after a top rejoin.
+## Bakes the song offline, then simulates a manual session: pass 1 records the echo map while the cursor
+## tracks; the audio then loops while the cursor free-runs into the tail claim. Reports, per descriptor time
+## constant: when recognition confirms after the wrap, what schedule time it resolves to, any false fires,
+## and refire behavior after a top rejoin.
 
 const Bake := preload("res://src/audio/bake.gd")
 const SONG := "/home/crow/Music/Beats Able/Beats Enable.wav"

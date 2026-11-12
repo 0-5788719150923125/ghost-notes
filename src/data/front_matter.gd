@@ -3,70 +3,54 @@ class_name FrontMatter
 
 ## FrontMatter - YAML frontmatter on a Markdown document, read and (carefully) written.
 ##
-## WHAT IT IS FOR. A reading's script lives in a real file the author is editing in their
-## own editor, not in ghost's text box (see [DocSource]). Two things then have to pass
-## between the document and the panel:
+## A reading's script lives in a real file the author edits in their own editor (see [DocSource]). Two things
+## pass between the document and the panel:
 ##
-##   THE BODY, which is everything after the frontmatter. Frontmatter is metadata for
-##   whatever else reads the document - a title, a date, tags - and reading it aloud would
-##   be nonsense, so [method split] cuts it off before a word reaches the voice.
+##   The body: everything after the frontmatter. [method split] cuts the frontmatter off before a word reaches
+##   the voice.
 ##
-##   THE VOICE, which ghost writes back INTO the frontmatter under one key of its own.
-##   Before this, every dial - the reader, the tone, the room, the whole cast of a
-##   multi-speaker chapter - lived in ghost's own settings file, which holds exactly one
-##   of them; opening a second document silently inherited the first one's voice, and
-##   returning to the first had lost it. A document that carries its own voice is a
-##   document that sounds the same tomorrow.
+##   The voice: ghost writes every dial (reader, tone, room, the cast of a multi-speaker chapter) back into the
+##   frontmatter under one key of its own, so a document sounds the same tomorrow.
 ##
-## THE WRITE IS THE DANGEROUS HALF, because the file is the author's work and is often open
-## in their own editor at the same time. Four rules, enforced in [method write_block] for the
-## voice and mirrored in [method write_body] for the words written in ghost's own editor:
+## The write is the dangerous half, because the file is the author's work and often open in their editor at the
+## same time. Four rules, enforced in [method write_block] for the voice and mirrored in [method write_body]
+## for the words written in ghost's own editor:
 ##
-##   1. NEVER FROM A CACHE. The file is re-read from disk immediately before the edit, so
-##      what is written back is the document as it is now, not as it was when it was
-##      opened. The author is expected to be typing in it off-screen; that is the point.
-##   2. ONE KEY, TEXTUALLY. The replacement is line surgery on our own top-level key -
-##      nothing else in the frontmatter is re-serialized, so a comment, a quoting style,
-##      a key order or a construct this file cannot even parse survives untouched.
-##   3. VERIFY BEFORE COMMITTING. [method _verify] re-splits the proposed text and
-##      requires the body to be byte-identical and every foreign frontmatter line to be
-##      unchanged. A mismatch aborts with an error rather than writing.
-##   4. ATOMIC. The new text goes to a sibling temp file, is read back, and only then is
-##      renamed over the original - so an interrupted write cannot leave a half-file.
+##   1. Never from a cache: the file is re-read from disk immediately before the edit.
+##   2. One key, textually: line surgery on our own top-level key; nothing else in the frontmatter is
+##      re-serialized, so a comment, quoting style, key order or unparseable construct survives.
+##   3. Verify before committing: [method _verify] re-splits the proposed text and requires the body to be
+##      byte-identical and every foreign frontmatter line unchanged; a mismatch aborts with an error.
+##   4. Atomic: the new text goes to a sibling temp file, is read back, then renamed over the original.
 ##
-## Nothing here touches the scene tree, so [code]tests/notes/doc_source_check.gd[/code] can hold
-## all of it to account headless.
+## Nothing here touches the scene tree, so [code]tests/notes/doc_source_check.gd[/code] holds all of it headless.
 
 const MiniYaml_ := preload("res://src/data/yaml.gd")
 
-## The one top-level frontmatter key ghost owns. Everything it writes lives under this and
-## nothing outside it is ever touched.
+## The one top-level frontmatter key ghost owns. Nothing outside it is ever touched.
 const KEY := "ghost"
-## Suffix for the temp file rule 4 renames from. Beside the original, because a rename is
-## only atomic within one filesystem.
+## Suffix for the temp file rule 4 renames from. Beside the original, because a rename is only atomic within
+## one filesystem.
 const TEMP_SUFFIX := ".ghost-tmp"
-## Heads the reason [method write_body] gives when the file moved under the editor, so the
-## caller can tell "someone else edited this" from "the write failed".
+## Heads the reason [method write_body] gives when the file moved under the editor, so the caller can tell
+## "someone else edited this" from "the write failed".
 const CONFLICT := "conflict: "
 
 
 ## Cut [param raw] into its frontmatter and its body.
 ##
-## STRICT ON PURPOSE. A document has frontmatter only when its very first line is exactly
-## `---` and a later line is exactly `---` or `...`; an unterminated opening fence is a
-## document with no frontmatter, not a document that is all frontmatter. The looser rule -
-## "find a `---` anywhere" - would eat the prose above a horizontal rule.
+## Strict on purpose: a document has frontmatter only when its very first line is exactly `---` and a later
+## line is exactly `---` or `...`; an unterminated opening fence is a document with no frontmatter. A looser
+## rule would eat the prose above a horizontal rule.
 ##
-## Returns [code]{has, head, body, open, close, nl, bom}[/code]: [code]head[/code] is the
-## frontmatter WITHOUT its fences, [code]body[/code] everything after the closing one,
-## [code]open[/code]/[code]close[/code] the fence line indices (-1 when there is none),
-## [code]nl[/code] the document's line ending, [code]open_fence[/code]/[code]fence[/code]
-## the two fence lines VERBATIM (`...` closes frontmatter too, and neither is ours to
-## rewrite) and [code]bom[/code] whether it opened with a byte-order mark.
+## Returns [code]{has, head, body, open, close, nl, bom}[/code]: [code]head[/code] is the frontmatter without
+## its fences, [code]body[/code] everything after the closing one, [code]open[/code]/[code]close[/code] the
+## fence line indices (-1 when none), [code]nl[/code] the document's line ending, [code]open_fence[/code]/
+## [code]fence[/code] the two fence lines verbatim, and [code]bom[/code] whether it opened with a byte-order mark.
 static func split(raw: String) -> Dictionary:
 	var nl := "\r\n" if raw.contains("\r\n") else "\n"
-	# A literal U+FEFF in GDScript source is stripped from exported scripts, making
-	# begins_with("") true for every note and eating the first '-' of its fence.
+	#A literal U+feff in GDScript source is stripped from exported scripts, making begins_with("") true for
+	#every note and eating the first '-' of its fence.
 	var bom := not raw.is_empty() and raw.unicode_at(0) == 0xFEFF
 	var text := raw.substr(1) if bom else raw
 	var lines := _lines(text)
@@ -88,19 +72,13 @@ static func split(raw: String) -> Dictionary:
 	return out
 
 
-## Everything the document says about the voice: the value of our own key, or an empty
-## dictionary when there is none.
+## Everything the document says about the voice: the value of our own key, or an empty dictionary when there
+## is none.
 ##
-## ONE KEY, TEXTUALLY - the reading rule is the mirror of rule 2, and for the same reason.
-## [MiniYaml] reads a documented subset and rejects the rest loudly, which is right for a
-## storyboard ghost owns and wrong for a document it is a guest in: `summary: |` is ordinary
-## frontmatter and a block scalar is outside the subset, so parsing the WHOLE head would
-## mean a voice could never be restored from a perfectly normal document. Only our own key's
-## lines are cut out and parsed, so nothing anywhere else in the frontmatter can reach this.
-##
-## What is left to fail is our own block being malformed - hand-edited into something the
-## parser refuses. That is reported rather than raised, so the panel can say why no voice
-## was restored and the reading goes ahead regardless.
+## One key, textually, the mirror of rule 2: [MiniYaml] reads a documented subset and rejects the rest, which
+## is wrong for a document ghost is a guest in (`summary: |` is ordinary frontmatter). Only our own key's lines
+## are cut out and parsed, so nothing elsewhere in the frontmatter can reach this. A malformed block of our own
+## is reported rather than raised, so the panel can say why no voice was restored.
 ##
 ## Returns [code]{ok, data, error}[/code].
 static func read_block(raw: String, key := KEY) -> Dictionary:
@@ -125,15 +103,12 @@ static func read_block(raw: String, key := KEY) -> Dictionary:
 	return {"ok": true, "data": v as Dictionary, "error": ""}
 
 
-## The document with [param value] stored under [param key], and NOTHING else different.
+## The document with [param value] stored under [param key], and nothing else different. Pure (text in, text
+## out), so the gate can check the guarantee on documents never on a disk; [method write_block] touches files.
 ##
-## Pure: it takes text and returns text, so the gate can check the guarantee on documents
-## that were never on a disk. [method write_block] is the half that touches files.
-##
-## Three cases, in the order they are tried: our key is already there and its block is
-## replaced in place; the document has frontmatter without our key and the block is
-## appended to it; the document has no frontmatter at all and a fresh one is opened above
-## the body. A null [param value] REMOVES the key (and changes nothing if it is absent).
+## Three cases in order: our key is there and its block is replaced in place; the document has frontmatter
+## without our key and the block is appended; the document has no frontmatter and a fresh one is opened above
+## the body. A null [param value] removes the key (and changes nothing if it is absent).
 static func put_block(raw: String, value: Variant, key := KEY) -> String:
 	var parts := split(raw)
 	var nl := String(parts.nl)
@@ -150,8 +125,7 @@ static func put_block(raw: String, value: Variant, key := KEY) -> String:
 	var block := _block_lines(value, key)
 	var prefix := String.chr(0xFEFF) if parts.bom else ""
 	if not parts.has:
-		# A fresh frontmatter, and a blank line under it so the first line of the
-		# document is not welded to the closing fence.
+		#A fresh frontmatter, and a blank line under it so the first line is not welded to the closing fence.
 		var body := String(parts.body)
 		var lead: Array = ["---"] + block + ["---"]
 		if not body.is_empty():
@@ -161,16 +135,14 @@ static func put_block(raw: String, value: Variant, key := KEY) -> String:
 	var span := _span_of(head, key)
 	var ghost := _span_of(head, KEY) if key != KEY else []
 	if span.is_empty() and not ghost.is_empty():
-		# A NEW FIELD OF THE AUTHOR'S KIND (tags, a byline) goes in just above ghost's block, as a
-		# new document's title does (see [method create]): ghost's block stays the machine-written
-		# one at the bottom, and the author's own keys stay where they were put.
+		#A new field of the author's kind (tags, a byline) goes just above ghost's block, as a new document's title
+		#does (see [method create]): ghost's block stays the machine-written one at the bottom.
 		var rest: Array = head.slice(int(ghost[0]))
 		head = head.slice(0, int(ghost[0]))
 		head.append_array(block)
 		head.append_array(rest)
 	elif span.is_empty():
-		# Appended rather than inserted: an author's own keys stay where they were put,
-		# and ghost's block is recognizably the machine-written one at the bottom.
+		#Appended rather than inserted: the author's own keys stay where they were put.
 		head.append_array(block)
 	else:
 		var tail: Array = head.slice(int(span[1]))
@@ -183,22 +155,20 @@ static func put_block(raw: String, value: Variant, key := KEY) -> String:
 	return prefix + nl.join(out)
 
 
-## Store [param value] in the frontmatter of the file at [param path], on disk.
-##
-## The four rules at the top of this file, in order. Returns "" on success and a
-## human-readable reason on failure - and on failure the file has not been touched.
+## Store [param value] in the frontmatter of the file at [param path], on disk, by the four rules at the top.
+## Returns "" on success and a human-readable reason on failure, in which case the file is untouched.
 static func write_block(path: String, value: Variant, key := KEY) -> String:
 	if path.is_empty():
 		return "no document is open"
 	if not FileAccess.file_exists(path):
 		return "there is no file at %s" % path
-	# RULE 1: from the disk, now. Never a copy the panel has been holding.
+	# Rule 1: from the disk, now. Never a copy the panel has been holding.
 	var fh := FileAccess.open(path, FileAccess.READ)
 	if fh == null:
 		return "could not read %s (error %d)" % [path, FileAccess.get_open_error()]
 	var before := fh.get_as_text()
 	fh.close()
-	# RULES 2 and 3: line surgery on one key, then prove nothing else moved.
+	# Rules 2 and 3: line surgery on one key, then prove nothing else moved.
 	var after := put_block(before, value, key)
 	if after == before:
 		return ""
@@ -208,17 +178,14 @@ static func write_block(path: String, value: Variant, key := KEY) -> String:
 	return _commit(path, after)
 
 
-## THE BODY, written from ghost's own editor ([ScriptWriter]). The mirror image of
-## [method write_block]: the same four rules with the roles swapped - here the body is
-## ours to replace and the frontmatter must survive BYTE FOR BYTE, ghost's own key
-## included (the voice is written by [method write_block] and nothing else).
+## The body, written from ghost's own editor ([ScriptWriter]). The mirror of [method write_block]: the same
+## four rules with the roles swapped; here the body is ours to replace and the frontmatter must survive byte
+## for byte, ghost's own key included.
 ##
-## [param expected] is the body as ghost last read or wrote it. If the file's body is no
-## longer that, the author has edited the document somewhere else since, and replacing it
-## would throw that edit away - so the write is REFUSED with [constant CONFLICT] at the
-## head of the reason, which the caller turns into a choice rather than a loss. Bodies are
-## compared with their line endings folded, because the editor holds LF whatever the file
-## uses.
+## [param expected] is the body as ghost last read or wrote it. If the file's body is no longer that, the
+## author edited the document elsewhere, so the write is refused with [constant CONFLICT] at the head of the
+## reason, which the caller turns into a choice rather than a loss. Bodies are compared with line endings
+## folded, because the editor holds LF whatever the file uses.
 static func write_body(path: String, body: String, expected: String) -> String:
 	if path.is_empty():
 		return "no document is open"
@@ -243,12 +210,11 @@ static func write_body(path: String, body: String, expected: String) -> String:
 	return _commit(path, after)
 
 
-## A NEW document: [param body] with [param value] stored at [param key]. What "Sync to…"
-## does. [param template] is the document being saved FROM, if any: its frontmatter (a
-## title, the other panel's voice) comes along. [param fields] are top-level keys (`title`,
-## `author`...) written ahead of ghost's block where the template does not have them. An
-## existing file at [param path] is replaced only because the save dialog has already asked;
-## the write is still atomic.
+## A new document: [param body] with [param value] stored at [param key]. What "Sync to…" does. [param
+## template] is the document being saved from, if any: its frontmatter (a title, the other panel's voice)
+## comes along. [param fields] are top-level keys (`title`, `author`...) written ahead of ghost's block where
+## the template does not have them. An existing file at [param path] is replaced (the save dialog has already
+## asked); the write is still atomic.
 static func create(path: String, value: Variant, body: String, template := "",
 		key := KEY, fields := {}) -> String:
 	if path.is_empty():
@@ -289,10 +255,9 @@ static func _has_key(raw: String, key: String) -> bool:
 	return parts.has and not _span_of(_lines(String(parts.head)), key).is_empty()
 
 
-## The document with its body replaced by [param body] and every byte before the body
-## unchanged. Pure, like [method put_block]. Returns "" when the head cannot be cut off
-## exactly - a document whose line endings differ inside it - because a rewrite that
-## guessed would change bytes the author did not touch.
+## The document with its body replaced by [param body] and every byte before the body unchanged. Pure, like
+## [method put_block]. Returns "" when the head cannot be cut off exactly (line endings differ inside it),
+## since a rewrite that guessed would change bytes the author did not touch.
 static func put_body(raw: String, body: String) -> String:
 	var parts := split(raw)
 	var nl := String(parts.nl)
@@ -301,7 +266,7 @@ static func put_body(raw: String, body: String) -> String:
 		return ""
 	var head := raw.substr(0, raw.length() - old.length())
 	var text := lf(body).replace("\n", nl) if nl != "\n" else lf(body)
-	# `---` closing a file with no body yet: the first line of the new one must not weld to it.
+	#`---` closing a file with no body yet: the first line of the new one must not weld to it.
 	if parts.has and not text.is_empty() and old.is_empty() and not head.ends_with("\n"):
 		head += nl
 	return head + text
@@ -312,7 +277,7 @@ static func lf(text: String) -> String:
 	return text.replace("\r\n", "\n")
 
 
-## RULE 3 for a body write: everything ahead of the body - BOM, fences, every frontmatter
+## Rule 3 for a body write: everything ahead of the body - BOM, fences, every frontmatter
 ## line - must be identical.
 static func _verify_body(before: String, after: String) -> String:
 	var a := split(before)
@@ -323,7 +288,7 @@ static func _verify_body(before: String, after: String) -> String:
 	return ""
 
 
-## RULE 4: write beside, read back, rename over.
+## Rule 4: write beside, read back, rename over.
 static func _commit(path: String, after: String) -> String:
 	var tmp := path + TEMP_SUFFIX
 	var out := FileAccess.open(tmp, FileAccess.WRITE)
@@ -345,11 +310,9 @@ static func _commit(path: String, after: String) -> String:
 	return ""
 
 
-## RULE 3, on its own so the gate can call it: what [param after] destroys, if anything.
-##
-## The body must be identical BYTE FOR BYTE - not trimmed, not normalized - and every
-## frontmatter line outside our key's span must survive in order. Anything else returns
-## the reason, and the reason is what the panel shows instead of writing.
+## Rule 3, on its own so the gate can call it: what [param after] destroys, if anything. The body must be
+## identical byte for byte and every frontmatter line outside our key's span must survive in order; otherwise
+## the reason is returned, and is what the panel shows instead of writing.
 static func _verify(before: String, after: String, key: String) -> String:
 	var a := split(before)
 	var b := split(after)
@@ -360,8 +323,8 @@ static func _verify(before: String, after: String, key: String) -> String:
 	if a.has and (String(a.fence) != String(b.fence) \
 			or String(a.open_fence) != String(b.open_fence)):
 		return "the edit would have changed a frontmatter fence - refusing to write"
-	# AN EMPTY HEAD HAS NO LINES: the only key taken out (a note's title emptied) left "---" over "---", which read
-	# as one blank line where there had been none, and the write was refused as changing another key
+	#An empty head has no lines: the only key taken out (a note's title emptied) left "---" over "---", which
+	#read as one blank line where there had been none.
 	var old_head := _lines(String(a.head)) if a.has and not String(a.head).is_empty() else []
 	var new_head := _lines(String(b.head)) if not String(b.head).is_empty() else []
 	var kept_old := _without(old_head, _span_of(old_head, key))
@@ -371,13 +334,10 @@ static func _verify(before: String, after: String, key: String) -> String:
 	return ""
 
 
-## The half-open line range [code][from, to)[/code] that [param key]'s block occupies in
-## [param head], or [] when the key is not there.
-##
-## THE END OF A BLOCK is the next line at column zero that is not blank - a sibling key.
-## Blank lines and comments trailing our block belong to whatever follows it, so the span
-## is then pulled back to the last line that actually carries content; without that, a
-## blank line an author left between two keys would be eaten by every save.
+## The half-open line range [code][from, to)[/code] that [param key]'s block occupies in [param head], or []
+## when the key is not there. A block ends at the next non-blank line at column zero (a sibling key); blank
+## lines and comments trailing it belong to what follows, so the span is pulled back to the last line with
+## content and a blank line an author left between two keys survives every save.
 static func _span_of(head: Array, key: String) -> Array:
 	var start := -1
 	for i in head.size():

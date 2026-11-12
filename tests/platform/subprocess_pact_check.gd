@@ -1,33 +1,23 @@
 extends SceneTree
 
-## Does a background program ghost started die with ghost? Reported as: both windows shut,
-## and `ffmpeg` still transcoding to disk with no "godot" left in `ps` to explain it.
+## Does a background program ghost started die with ghost? Two mechanisms answer that (see [Subprocess]) and
+## each is measured on its own:
+##   The registry - `reap_all()` kills whatever is still registered when the app closes.
+##   The death pact - `setpriv --pdeathsig KILL` binds the child to this process in the kernel, the only thing
+##   that helps when no shutdown code runs. Ghost's own quit ends in `OS.kill(OS.get_process_id())`
+##   (main._shutdown), so the SIGKILL this gate stages is what closing the window does.
 ##
-## Two mechanisms answer that (see [Subprocess]) and they fail differently, so each is
-## measured on its own:
-##   THE REGISTRY - `reap_all()` kills whatever is still registered when the app closes.
-##   THE DEATH PACT - `setpriv --pdeathsig KILL` binds the child to this process in the
-##   KERNEL, which is the only thing that can help when no shutdown code runs at all. That
-##   is the ordinary case here, not the exotic one: ghost's own quit ends in
-##   `OS.kill(OS.get_process_id())` (main._shutdown, an audio-teardown workaround), so the
-##   SIGKILL this gate stages is exactly what closing the window does.
-##
-## The pact half is TWO-SIDED and has to be: a test that only checks "the child is gone
-## after the parent is killed" passes just as well if the child never started, if it exited
-## on its own, or if something else swept it up. So the child process starts TWO sleepers -
-## one bound, one deliberately detached - and the check is that the parent's death took the
-## first and NOT the second. Only the difference between them is evidence of a pact.
+## The pact half is two-sided: the child process starts two sleepers, one bound and one deliberately detached,
+## and the check is that the parent's death took the first and not the second. Only the difference is evidence
+## of a pact.
 ##
 ##   godot --headless --path . --script tests/platform/subprocess_pact_check.gd
 ##
-## Linux only, because PR_SET_PDEATHSIG is; elsewhere it reports the registry half and says
-## the pact was unavailable rather than failing.
+## Linux only (PR_SET_PDEATHSIG); elsewhere it reports the registry half and says the pact was unavailable.
 ##
-## THE ECHO HALF holds the log's parity with the terminal: what a `start()` child prints must
-## reach the app's loggers (the file the console tails), because it used to inherit the terminal
-## and nobody without one ever saw it. Its control is a child started the old way
-## (`start_detached`, inherited stdio): its line reaches the terminal and must NOT reach the
-## loggers, or catching the other proves nothing.
+## The echo half holds that what a `start()` child prints reaches the app's loggers (the file the console tails).
+## Its control is a child started with inherited stdio (`start_detached`): its line reaches the terminal and
+## must not reach the loggers.
 
 const PID_FILE := "user://subprocess_pact_probe.txt"
 const SLEEP_S := "120"
@@ -59,9 +49,8 @@ func _check(ok: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-# THE CHILD: start one bound sleeper and one detached one, publish both pids, then sit
-# there until the parent kills us. Nothing here may quit on its own - the whole point is
-# that this process dies by SIGKILL, with no chance to clean up after itself.
+# The child: start one bound sleeper and one detached one, publish both pids, then sit until the parent kills us.
+# Nothing here may quit on its own; this process must die by SIGKILL.
 func _child_role() -> void:
 	var bound := Subprocess.start("sleep", [SLEEP_S], "pact probe")
 	var loose := Subprocess.start_detached("sleep", [SLEEP_S])
@@ -81,10 +70,9 @@ func _registry_half() -> void:
 	_check(pid > 0, "a tracked child started (pid %d)" % pid)
 	_check(Subprocess.tracked() == before + 1, "it is registered (%d tracked)" % Subprocess.tracked())
 	_check(_running(pid), "and it is actually running")
-	# THE READERS ARE DONE WHEN THE REAP RETURNS: a killed child's log reader sees its pipe end only
-	# after a few empty reads (40 ms at least), then calls back into Subprocess, whose functions a
-	# closing engine has cleared by then. The control is a stop - kill, let go - which leaves its
-	# reader running, or finding none running after the reap proves nothing.
+	# The readers are done when the reap returns: a killed child's log reader calls back into Subprocess after a
+	# few empty reads, and a closing engine has cleared its functions. The control is a stop (kill, let go), which
+	# leaves its reader running.
 	var log_path := OS.get_user_data_dir().path_join("subprocess_reap_probe.log")
 	var stopped := Subprocess.start_logged("sleep", [SLEEP_S], log_path, "reap control")
 	Subprocess.start_logged("sleep", [SLEEP_S], log_path, "reap probe")
@@ -101,23 +89,18 @@ func _registry_half() -> void:
 	_check(Subprocess.closing(), "...and says ghost is closing, for whoever was watching a child")
 	_check(not _running(pid), "the child is gone after reap_all()")
 	_check(Subprocess.tracked() == 0, "the registry is empty (%d tracked)" % Subprocess.tracked())
-	# ...and the registry FORGETS a child that exited on its own, or a shutdown reap could
-	# signal a pid the OS has since handed to somebody else.
+	# ...and the registry forgets a child that exited on its own, or a shutdown reap could signal a recycled pid.
 	var quick := Subprocess.start("true", [], "exit probe")
 	OS.delay_msec(300)
 	_check(not Subprocess.alive(quick), "a child that exited is reported not alive")
 	_check(Subprocess.tracked() == 0, "...and is forgotten (%d tracked)" % Subprocess.tracked())
 
-	# THE SECOND STOP. Reported as an error on every close: `Boot` reaps the registry, then the
-	# tree tears down and the owning autoload's `_exit_tree` stops its own pid again - and the
-	# old `stop()` asked `OS.is_process_running` first, which waitpid()s a child Godot has
-	# already reaped and prints "The process N does not exist or is not a child of the calling
-	# process". So a stop after a reap must answer from the REGISTRY and never reach the kernel.
+	# The second stop: after a reap, `stop` must answer from the registry and never reach the kernel (the old
+	# `OS.is_process_running` call printed "The process N does not exist or is not a child of the calling process").
 	_check(not Subprocess.stop(pid), "a second stop, after the reap, is a no-op")
 	_check(not Subprocess.stop(-1), "stopping a pid that was never started is a no-op")
-	# And the sharp version of the same claim, which cannot pass by accident: hand `stop` a pid
-	# that IS running but is not ours - this very process. Without the registry check it would
-	# SIGKILL the gate, so surviving to make the next assertion IS the assertion.
+	# The sharp version: hand `stop` a running pid that is not ours - this very process. Without the registry
+	# check it would SIGKILL the gate, so surviving to the next assertion is the assertion.
 	var me := OS.get_process_id()
 	_check(not Subprocess.alive(me), "alive() answers from the registry, not from the OS")
 	_check(not Subprocess.stop(me), "stop() refuses a pid it did not start...")
@@ -126,11 +109,9 @@ func _registry_half() -> void:
 
 
 # --- start_logged: output pumped into a log, no shell ------------------------------------
-# The seven `/bin/bash -c '... > log 2>&1'` call sites are this now, so it has to hold what
-# the shell held. More than a pipe's worth (64 KiB) on BOTH streams, interleaved: a single
-# reader blocked on one stream while the child fills the other deadlocks, and that is the
-# case that would hang a pip install forever. And `alive()` must not report the child gone
-# before its last line is in the log - callers read the log the frame it exits.
+# start_logged must hold what the shell redirect held: more than a pipe's worth (64 KiB) on both streams,
+# interleaved (a single reader blocked on one stream deadlocks while the child fills the other), and `alive()`
+# must not report the child gone before its last line is in the log.
 func _logged_half() -> void:
 	print("LOGGED (start_logged: both streams into one file, drained before alive() lets go)")
 	var log_path := OS.get_user_data_dir().path_join("subprocess_logged_probe.log")
@@ -206,7 +187,7 @@ func _echo_half() -> void:
 		"debug/file_logging/log_path", "user://logs/godot.log")))
 	_check(own.size() == 2 and own[0] == "--log-file" and own[1] != live,
 		"own_log() names a file other than the app's log (%s)" % own[1])
-	# RELEASE BUILDS: the raw settings, since a debug run reads the `.debug` override instead
+	# Release builds: the raw settings, since a debug run reads the `.debug` override instead
 	var cfg := ConfigFile.new()
 	cfg.load("res://project.godot")
 	_check(cfg.get_value("application", "run/flush_stdout_on_print", false) == true,
@@ -224,8 +205,7 @@ func _pact_half() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(PID_FILE))
 	var exe := OS.get_executable_path()
 	var project := ProjectSettings.globalize_path("res://")
-	# Detached ON PURPOSE: this probe must die by SIGKILL and by nothing else, so it must
-	# not be bound to the process running the gate.
+	# Detached on purpose: this probe must die by SIGKILL and nothing else, so it must not be bound to the gate.
 	var child := Subprocess.start_detached(exe, PackedStringArray([
 		"--headless", "--path", project, "--script",
 		"res://tests/platform/subprocess_pact_check.gd", "--", "--child"]))
@@ -266,7 +246,7 @@ func _pact_half() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(PID_FILE))
 
 
-# Liveness WITHOUT OS.is_process_running: these are grandchildren, and polling a pid this
-# process did not spawn is the ECHILD hazard mask_editor documents. /proc is the plain fact.
+# Liveness without OS.is_process_running: these are grandchildren, and polling a pid this process did not spawn
+# is the ECHILD hazard mask_editor documents. /proc is the plain fact.
 func _running(pid: int) -> bool:
 	return pid > 0 and DirAccess.dir_exists_absolute("/proc/%d" % pid)

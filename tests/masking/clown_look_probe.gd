@@ -1,23 +1,18 @@
 extends SceneTree
 
-## LOOK at the clown on a real face, on a real frame, through the real track.
+## Renders the clown on a real face, a real frame and the real track.
 ##   godot --path . --position -5000,-5000 --script res://tests/masking/clown_look_probe.gd -- \
 ##       --frame /abs/frame.png --track /abs/track.bin --time 10.0 --out /abs/out.png
 ## Needs a real renderer (the paint field is a ping-pong SubViewport pair).
 ##
-## Not a gate - it asserts nothing and always exits 0. The gates measure claims;
-## this exists because several rounds of "it looks terrible" were answered by
-## reasoning about the shader instead of rendering the author's own clip and
-## looking at it, and each time the reasoning was wrong about something the frame
-## would have shown immediately. Run it, open the PNG.
+## Not a gate: it asserts nothing and always exits 0. Run it and open the PNG. It also prints the model it
+## resolved (eye centers, measured radii, the derived drip source and width), the numbers the geometry is
+## built from.
 ##
-## It also PRINTS the model it resolved - eye centers, measured radii, the derived
-## drip source and width - because those numbers are what the geometry is actually
-## built from, and a shape that is wrong on a real face is usually one of them
-## being much larger or smaller than the guess in the code assumed.
-##
-## Optional `--knob field=value` (repeatable) sets any MaskSession field, so the
-## same probe renders a sweep of one control.
+## Options: `--knob field=value` (repeatable) sets any MaskSession field; `--sweep field=a,b,c` renders one
+## PNG per value in one process; `--session <session.json>` starts from a stored clown marker instead of
+## the defaults; `--reset 1` deposits every step with no advection or decay, to look at the deposit's own
+## geometry.
 
 var _ed: Node
 var _frame: Texture2D
@@ -73,14 +68,10 @@ func _initialize() -> void:
 		quit(2)
 		return
 
-	# The blob fitter runs once, only for its COLOR statistics (mean tint and
-	# luminance) - landmarks cannot give those and the coat's match test needs
-	# them. Every geometric term it sets is overwritten by _ft_apply_model.
+	# The blob fitter runs once, only for its color statistics (mean tint and luminance), which landmarks
+	# cannot give and the coat's match test needs; _ft_apply_model overwrites every geometric term.
 	_ed._update_face_model(img)
-	# A SWEEP RENDERS IN ONE PROCESS. Godot has no offscreen GPU path on this
-	# machine (--headless forces the dummy renderer, which returns no image on
-	# readback), so every render is a window that steals focus - nine of them for a
-	# nine-cell contact sheet. One process, nine PNGs.
+	# A sweep renders in one process: --headless returns no image on readback, so every render is a window.
 	var cases: Array = []
 	var sweep := String(_args.get("sweep", ""))
 	if sweep.contains("="):
@@ -103,11 +94,7 @@ func _one(knobs: Dictionary, t: float, out_path: String) -> void:
 	var l := {}
 	for k in MaskSession.VECTOR_FIELDS:
 		l[k] = MaskSession.DEFAULTS.get(k, 0.0)
-	# `--session <session.json>` starts from the author's OWN clown marker instead
-	# of the stored defaults. It matters more than it sounds: their Eye size is 3.6
-	# against a default of 2.2 and their Hollow is wound to the top, so a fault that
-	# is barely visible at the defaults is glaring in their editor - which is most
-	# of why several rounds of "can you not see what I'm seeing" were fair.
+	# `--session <session.json>` starts from a stored clown marker instead of the defaults.
 	if _args.has("session"):
 		var f := FileAccess.open(String(_args["session"]), FileAccess.READ)
 		if f != null:
@@ -134,9 +121,7 @@ func _one(knobs: Dictionary, t: float, out_path: String) -> void:
 	_ed._clown_smile_w = 1.0 + (clampf(float(l["feather"]), 0.0, 0.5) - 0.12) * 8.0
 	_ed._clown_smile_curve = (clampf(float(l["fx_speed"]), 0.0, 2.0) - 1.0) * 0.12
 	_ed._clown_feather = 0.012 + clampf(float(l["fx_x"]), 0.0, 1.0) * 0.055
-	# The blob fitter is run only for its COLOR statistics (mean tint/luminance),
-	# which landmarks cannot give and the coat's match test needs; the landmark
-	# model is applied after it and overwrites every geometric term.
+	# (The blob fitter ran above for its color statistics only; the landmark model is applied after it.)
 	_ed._face.apply_model(t)
 	_ed._face.update_stencil(t)
 	for j in 3:
@@ -159,9 +144,8 @@ func _one(knobs: Dictionary, t: float, out_path: String) -> void:
 		% [_ed._clown_drip, _ed._clown_drip_w, _ed._clown_drip_curve, _ed._clown_eye_size])
 
 	var paint := await _sim()
-	# The eye channel on its own, as gray. mask_split's own gating, the coat and
-	# the craquelure all sit on top of this in the composite, so a run that looks
-	# wrong there might be wrong here or might be wrong there.
+	# The eye channel on its own, as gray: mask_split's gating, the coat and the craquelure sit on top of it
+	# in the composite.
 	var pi: Image = paint.get_image()
 	var gray := Image.create_empty(pi.get_width(), pi.get_height(), false, Image.FORMAT_RGB8)
 	for gy in pi.get_height():
@@ -207,10 +191,7 @@ func _sim() -> Texture2D:
 		mm.set_shader_parameter("u_eye_smudge", _ed._clown_smudge)
 		mm.set_shader_parameter("u_drip_curve", _ed._clown_drip_curve)
 		mm.set_shader_parameter("u_dt", 0.033)
-		# `--reset 1` deposits every step with no advection or decay, which is how
-		# you look at the DEPOSIT's own geometry rather than at what the liquid did
-		# to it afterwards. Several rounds of guessing why a run "died early" were
-		# actually the sim thinning a tail the deposit had drawn correctly.
+			# `--reset 1` deposits every step with no advection or decay.
 		mm.set_shader_parameter("u_reset",
 			1 if (step == 0 or _args.has("reset")) else 0)
 		mm.set_shader_parameter("u_time", float(step) * 0.033)

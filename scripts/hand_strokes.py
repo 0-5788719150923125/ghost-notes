@@ -335,7 +335,7 @@ def strokes_of(g: Graph, w: float):
             stroke.extend(p2[1:])
             unused.discard(k2)
             at = g.edges[k2][0] if rev2 else g.edges[k2][1]
-        # A LINE BEGUN AT ITS TAIL IS WRITTEN THE OTHER WAY: an a, an e or a g has one free end, its tail,
+        # A line begun at its tail is written the other way: an a, an e or a g has one free end, its tail,
         # and walked from there it was written backward
         if stroke[0] != stroke[-1] and score(stroke[-1]) < score(stroke[0]) - FLIP * EM:
             stroke.reverse()

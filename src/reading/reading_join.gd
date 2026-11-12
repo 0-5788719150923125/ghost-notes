@@ -1,29 +1,27 @@
 extends RefCounted
 class_name ReadingJoin
 
-## ReadingJoin - a reading's take, joined a chunk at a time: the rest at each seam, the hesitations
-## spliced in, where the room changes voice and distance, every word timed in the take's own
-## seconds, where each chunk starts and where the outro mark's fade begins.
+## ReadingJoin - a reading's take, joined a chunk at a time: the rest at each seam, the hesitations spliced in,
+## where the room changes voice and distance, every word timed in the take's own seconds, where each chunk starts
+## and where the outro mark's fade begins.
 ##
-## ONE JOIN FOR THE LIVE READING AND THE EXPORT (next/structure.md, step 18). The live window joined
-## each chunk as it arrived and the export joined the whole reading after it, in two copies of the
-## same steps kept alike by comments ("as in _drain_ready"); they had already parted - a reading
-## started part way through rested a seam before its first sentence and the export never did, and
-## the two placed an unaligned word on either side of a hesitation's cut. Both hold one of these now,
-## so the take that renders is the performance that was heard.
+## One join for the live reading and the export (next/structure.md, step 18): both hold one of these, so the take
+## that renders is the performance that was heard.
 ##
-## THE COORDINATE IS FRAMES OF THE TAKE, from its first: the lead (the intro's silence, when the take
-## opens on one) and every chunk and seam since. A word's seconds are its frame over the rate, so
-## a long reading's subtitles cannot drift from its audio a seam at a time, as a running total of
-## seconds did. What is appended is the caller's to hold - the live window's queue for the ring, the
-## export's buffer - and the room's [member marks] are the caller's to consume.
+## The coordinate is frames of the take, from its first: the lead (the intro's silence, when the take opens on
+## one) and every chunk and seam since. A word's seconds are its frame over the rate, so a long reading's
+## subtitles cannot drift from its audio. What is appended is the caller's to hold (the live window's queue for
+## the ring, the export's buffer), and the room's [member marks] are the caller's to consume.
 ##
-## VOICES OVER EACH OTHER (next/tabletop.md; [constant Manuscript.OVER], [constant Manuscript.TOGETHER]): the take is one line and its chain one voice at a time, so a turn that comes in over the last goes on
-## a SIDE TRACK of its own ([member side]): its audio, the frame it starts at, whose it is. What it runs past the line's end is silence on the line, so whatever is said next waits for it. Whoever holds the
-## take asks [method side_between] for the side voices of the frames it is about to hand the chain, placed in the ears where each sits ([method VoiceFX.lean_gains]), and the chain mixes them past its lean - the
-## room hears everyone and each voice stays where it sits ([member VoiceFX.side]). A LIVE WINDOW MUST HOLD a turn until whatever overlaps it has been made ([method ReadingStream._drain_ready]).
+## Voices over each other (next/tabletop.md; [constant Manuscript.OVER], [constant Manuscript.TOGETHER]): the
+## take is one line and its chain one voice at a time, so a turn that comes in over the last goes on a side track
+## of its own ([member side]): its audio, the frame it starts at, whose it is. What it runs past the line's end is
+## silence on the line, so whatever is said next waits for it. Whoever holds the take asks [method side_between]
+## for the side voices of the frames it is about to hand the chain, placed in the ears where each sits
+## ([method VoiceFX.lean_gains]); the chain mixes them past its lean ([member VoiceFX.side]). A live window must
+## hold a turn until whatever overlaps it has been made ([method ReadingStream._drain_ready]).
 
-## How long after the line's last start a table's turn together comes in (seconds), each by its own: nobody reacts at the same instant.
+## How long after the line's last start a table's turn together comes in (seconds), each by its own.
 const TOGETHER_LEAST := 0.05
 const TOGETHER_MOST := 0.26
 
@@ -31,17 +29,16 @@ const TOGETHER_MOST := 0.26
 var sr := 22050
 ## Frames joined so far: the lead and every seam and chunk.
 var frames := 0
-## WHEN THE ROOM CHANGES, ascending, in frames of the take: `{at, speaker, heard}` dials a voice's room in (and what it
-## is heard through, [constant VoiceFX.HEARD], "" the room),
-## `{at, near}` moves the reader (see [method Delivery.near_mark]). The first voice's is at 0, so a
-## lead is heard in the opening voice's room rather than in nobody's.
+## When the room changes, ascending, in frames of the take: `{at, speaker, heard}` dials a voice's room in (and
+## what it is heard through, [constant VoiceFX.HEARD], "" the room); `{at, near}` moves the reader (see
+## [method Delivery.near_mark]). The first voice's is at 0, so a lead is heard in the opening voice's room.
 var marks: Array = []
-## Every word joined, timed in the take's seconds - handed in, and appended to in place (the live
-## window's is the subtitle overlay's own list, held by reference).
+## Every word joined, timed in the take's seconds - handed in, and appended to in place (the live window's is the
+## subtitle overlay's own list, held by reference).
 var words: Array = []
-## EVERY SOUND JOINED, timed as the words are (`{p, t0, t1}` in the take's seconds) - what a mouth
-## that says them follows ([LikenessMedium]). Handed in when wanted, appended to in place like
-## [member words]; a host that hands back no phones leaves it as it was.
+## Every sound joined, timed as the words are (`{p, t0, t1}` in the take's seconds): what a mouth that says them
+## follows ([LikenessMedium]). Handed in when wanted, appended to in place like [member words]; a host that hands
+## back no phones leaves it as it was.
 var phones: Array = []
 ## Chunk index -> the frame its audio starts at.
 var chunk_at := {}
@@ -49,13 +46,11 @@ var chunk_at := {}
 var fade_at := -1
 ## What the log calls these takes when a word comes back with no timing.
 var label := "chunk"
-## THE VOICES OVER THE LINE, in order: `{at, pcm, speaker}`, `at` in frames of the take.
+## The voices over the line, in order: `{at, pcm, speaker}`, `at` in frames of the take.
 var side: Array = []
 
-# A chunk is in: the next rests a seam before it, and the opening voice's mark is written. NOT
-# `marks.is_empty()`: whoever plays the take consumes the list as it goes, so mid-reading it is empty
-# again, and a handover written then at 0 was dialed at once - the next voice's room seconds before
-# the next voice.
+# A chunk is in: the next rests a seam before it, and the opening voice's mark is written. Not `marks.is_empty()`:
+# whoever plays the take consumes the list, so mid-reading it is empty again and a handover would be dialed at 0.
 var _opened := false
 var _voice := ""           # the voice the last room mark dialed
 var _heard := ""           # ...and what it was heard through
@@ -66,9 +61,9 @@ var _group_at := 0         # where the last on the line began: what a table's tu
 var _side_read := 0        # the first of [member side] still wanted by what asks in order
 
 
-## A take at [param sample_rate] whose words go into [param into], opening on [param lead] frames of
-## silence the caller already holds. [member sr] may be set again before the first chunk: the rate
-## is the host's, known when its first take arrives.
+## A take at [param sample_rate] whose words go into [param into], opening on [param lead] frames of silence the
+## caller already holds. [member sr] may be set again before the first chunk (the host's rate is known when its
+## first take arrives).
 func _init(sample_rate := 22050, into: Array = [], lead := 0) -> void:
 	sr = sample_rate
 	words = into
@@ -83,8 +78,8 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 		said: Array = []) -> PackedFloat32Array:
 	var ch: Dictionary = chunks[idx]
 	var who := String(ch.get("speaker", ""))
-	# THE TONE IS ALREADY IN IT: the host played the take back at the preset's ratio, and every
-	# time it returned is in the take's own seconds (`play_ratio`), so there is no ratio to apply.
+	# The tone is already in it: the host played the take back at the preset's ratio and every time it returned
+	# is in the take's own seconds (`play_ratio`), so there is no ratio to apply.
 	var spliced := Splice.chunk(pcm, ch.get("holds", []), spans, 1.0, sr)
 	var take: PackedFloat32Array = spliced["pcm"]
 	if _opened and overlaps(ch):
@@ -93,20 +88,16 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 	var opening := not _opened
 	var out := PackedFloat32Array()
 	if not opening:
-		# THE READER MOVES IN THE PAUSE before the sentence they come in for - so this mark goes
-		# BEFORE the seam (the first one follows the voice's, which opens the chain)
+		# The reader moves in the pause before the sentence they come in for, so this mark goes before the seam
+		# (the first one follows the voice's, which opens the chain).
 		Delivery.near_mark(marks, near, frames, _near)
-		# a breath between sentences, at the seam the host cannot see. Scaled by Pause like every
-		# other rest, or the control would do nothing at all at CHUNK_SENTENCES = 1 - every sentence
-		# boundary in the reading IS a seam. A handover takes the Turn rest on top.
+		# A breath between sentences, at the seam the host cannot see. Scaled by Pause like every other rest (at
+		# CHUNK_SENTENCES = 1 every sentence boundary is a seam). A handover takes the Turn rest on top.
 		out.resize(int(Delivery.gap_before(chunks, idx, s, turn) * float(sr)))
 		frames += out.size()
-	# THE ROOM CHANGES AFTER THE SEAM, deliberately: the handover silence belongs to the voice
-	# leaving it, whose reverb is still decaying through it. Dialing the new room at the start of
-	# the rest would cut that tail over to a different space halfway down, which is the one thing
-	# a room never does. The mark carries the frame; whoever plays the take dials it there.
-	# ...AND WHAT IT IS HEARD THROUGH, A CHANGE OF ROOM TOO ([constant Manuscript.HEARD]): a voice through a phone, then
-	# the same voice from a phone lying on the desk
+	# The room changes after the seam: the handover silence belongs to the voice leaving it, whose reverb is still
+	# decaying through it. The mark carries the frame; whoever plays the take dials it there. What it is heard
+	# through changes the room too ([constant Manuscript.HEARD]).
 	var heard := String(ch.get("heard", ""))
 	if opening or who != _voice or heard != _heard:
 		_voice = who
@@ -115,22 +106,21 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 	if opening:
 		Delivery.near_mark(marks, near, frames, _near)
 	_opened = true
-	# the host timed the chunk from zero; its words move by the rests spliced in before them, then
-	# into the take's time
+	# the host timed the chunk from zero; its words move by the rests spliced in before them, then into the take's time
 	var t0 := float(frames) / float(sr)
 	for w in ReadingPlan.words_for(ch, spans, "%s %d" % [label, idx]):
 		var d: Dictionary = w
 		d["t0"] = Splice.shifted(float(d["t0"]), spliced["cuts"], 1.0, true) + t0
 		d["t1"] = Splice.shifted(float(d["t1"]), spliced["cuts"], 1.0, false) + t0
 		words.append(d)
-	# THE PHONES MOVE AS THE WORDS DO: by the rests spliced in before them, then into the take's time
+	# The phones move as the words do: by the rests spliced in before them, then into the take's time
 	for ph in said:
 		var p: Dictionary = ph
 		phones.append({"p": String(p.get("p", "")),
 			"t0": Splice.shifted(float(p.get("t0", 0.0)), spliced["cuts"], 1.0, true) + t0,
 			"t1": Splice.shifted(float(p.get("t1", 0.0)), spliced["cuts"], 1.0, false) + t0})
 	chunk_at[idx] = frames
-	# THE OUTRO MARK: the fade starts where the first chunk after it does
+	# The outro mark: the fade starts where the first chunk after it does
 	if fade_at < 0 and bool(ch.get("fade", false)):
 		fade_at = frames
 	out.append_array(take)
@@ -146,7 +136,8 @@ static func overlaps(ch: Dictionary) -> bool:
 	return float(ch.get("over", -1.0)) >= 0.0 or bool(ch.get("together", false))
 
 
-## Is everything that comes in over chunk [param idx] here, among [param ready] (`{index}`)? Once it is on a live stream its frames are gone, and a voice arriving late for them has nowhere to go ([method ReadingStream._drain_ready]).
+## Is everything that comes in over chunk [param idx] here, among [param ready] (`{index}`)? Once it is on a live
+## stream its frames are gone, and a voice arriving late for them has nowhere to go ([method ReadingStream._drain_ready]).
 static func overlaps_ready(chunks: Array, idx: int, ready: Array) -> bool:
 	var k := idx + 1
 	while k < chunks.size() and overlaps(chunks[k]):
@@ -161,8 +152,9 @@ static func overlaps_ready(chunks: Array, idx: int, ready: Array) -> bool:
 	return true
 
 
-## A TURN OVER THE LAST: where it comes in - before the last chunk's end, never before its start ([constant Manuscript.OVER]), or just after the line's last start, a person's reaction apart ([constant
-## Manuscript.TOGETHER]); its words on the take's clock, its audio on the side track. What the line gets back is only the silence of what it runs past its end.
+## A turn over the last: it comes in before the last chunk's end, never before its start ([constant Manuscript.OVER]),
+## or just after the line's last start, a person's reaction apart ([constant Manuscript.TOGETHER]); its words on the
+## take's clock, its audio on the side track. The line gets back only the silence of what it runs past its end.
 func _add_over(ch: Dictionary, idx: int, who: String, spliced: Dictionary, spans: Array, said: Array) -> PackedFloat32Array:
 	var take: PackedFloat32Array = spliced["pcm"]
 	var at: int
@@ -193,7 +185,9 @@ func _add_over(ch: Dictionary, idx: int, who: String, spliced: Dictionary, spans
 	return out
 
 
-## THE VOICES OVER THE LINE FROM FRAME [param a] TO [param b], left and right, each placed where it sits: [param seat_of] takes a name and says where, as a pan from -1 to 1. Empty when there is nothing there. Asked in order, as a take goes out.
+## The voices over the line from frame [param a] to [param b], left and right, each placed where it sits:
+## [param seat_of] takes a name and says where, as a pan from -1 to 1. Empty when there is nothing there. Asked in
+## order, as a take goes out.
 func side_between(a: int, b: int, seat_of: Callable) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	if side.is_empty() or b <= a:
@@ -204,7 +198,7 @@ func side_between(a: int, b: int, seat_of: Callable) -> PackedVector2Array:
 		var v: Dictionary = side[i]
 		var at := int(v["at"])
 		if at >= b:
-			# (a later one may start earlier than this by a little, so one more look would not hurt, but [method add] keeps them nearly in order and the next call has it)
+			# (a later one may start slightly earlier, but [method add] keeps them nearly in order and the next call has it)
 			continue
 		var pcm: PackedFloat32Array = v["pcm"]
 		if at + pcm.size() <= a:
@@ -222,10 +216,9 @@ func fade_end(fade: float) -> int:
 	return -1 if fade_at < 0 else fade_at + int(fade * float(sr))
 
 
-## THE TAKE ENDS AT FRAME [param end] (where the outro mark's fade runs out): what was joined past it
-## is never heard, so neither is a word that starts there. Returns how many frames the caller drops
-## from the end of what it holds - negative when the text ran out first, and that many frames of
-## silence fill the take out to its end.
+## The take ends at frame [param end] (where the outro mark's fade runs out): what was joined past it is never
+## heard, so neither is a word that starts there. Returns how many frames the caller drops from the end of what it
+## holds - negative when the text ran out first, and that many frames of silence fill the take out.
 func end_at(end: int) -> int:
 	var over := frames - end
 	frames = end

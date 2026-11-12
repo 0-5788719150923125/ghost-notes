@@ -1,24 +1,22 @@
 class_name TouchText
 extends TextEdit
 
-## TouchText - a TextEdit a finger can use (2026-10-31, the user on a phone: "the note is unscrollable because
-## clicking and swiping selects/highlights the text, instead of scrolling the body"). Godot 4.7's TextEdit knows
-## only a mouse: Android hands it a finger as one (`input_devices/pointing/emulate_mouse_from_touch`), and a mouse
-## dragged over a TextEdit selects. With [member touch] on, the left button's presses and drags are taken here,
-## before the TextEdit sees them, and read as a phone's notes app reads a finger:
+## TouchText - a TextEdit a finger can use. Godot 4.7's TextEdit knows only a mouse: Android hands it a
+## finger as one (`input_devices/pointing/emulate_mouse_from_touch`), and a mouse dragged over a TextEdit
+## selects. With [member touch] on, the left button's presses and drags are taken here, before the
+## TextEdit sees them, and read as a phone's notes app reads a finger:
 ##
-## - A DRAG SCROLLS, and a flick runs on, slowing ([constant FRICTION]); a press stops it.
-## - A TAP puts the caret there and takes focus, and the keyboard comes up then and only then. Until a tap the box
-##   cannot take focus at all ([member Control.focus_mode] NONE): Godot gives a box focus on a press, before the
-##   box sees it, and the keyboard comes with focus - every swipe had opened it.
-## - A LONG PRESS ([constant LONG_MS], held within [constant SLOP]) selects the word under it, and a drag before
-##   letting go carries the selection on; a double tap selects the word too.
-## - MARKERS under each end of a selection drag that end ([method _draw_marks]), and a bar of Cut, Copy, Paste and
-##   Select all stands over it ([method _place_bar]).
+## - A drag scrolls, and a flick runs on, slowing ([constant FRICTION]); a press stops it.
+## - A tap puts the caret there and takes focus, and the keyboard comes up then and only then. Until a tap
+##   the box cannot take focus at all ([member Control.focus_mode] NONE): Godot gives a box focus on a
+##   press, before the box sees it, and the keyboard comes with focus.
+## - A long press ([constant LONG_MS], held within [constant SLOP]) selects the word under it, and a drag
+##   before letting go carries the selection on; a double tap selects the word too.
+## - Markers under each end of a selection drag that end ([method _draw_marks]), and a bar of Cut, Copy,
+##   Paste and Select all stands over it ([method _place_bar]).
 ##
-## Godot's own does none of it in 4.7 (its touch handles came later), and its drag-and-drop of a selection - off
-## here - moved the words a swipe began on. The wheel, the right button and the keys reach the TextEdit as ever;
-## with [member touch] off it is a plain TextEdit. [method tick] and [member now_ms] are a gate's seams.
+## Drag-and-drop of a selection is off here. The wheel, the right button and the keys reach the TextEdit
+## as ever; with [member touch] off it is a plain TextEdit. [method tick] and [member now_ms] are a gate's seams.
 
 ## How long a press must be held, unmoved, to select, in ms (Android's own long press is 400-500).
 const LONG_MS := 450

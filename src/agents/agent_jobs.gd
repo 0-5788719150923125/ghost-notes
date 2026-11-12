@@ -3,46 +3,37 @@ class_name AgentJobs
 
 ## AgentJobs - every piece of writing and painting ghost asks an AI for, in one queue.
 ##
-## A job is ONE run of a [TextGen] writer or an [ImageGen] painter. Whoever wants the work
-## submits it and keeps the id; this file starts it when there is room, notices when it ends,
-## and holds the outcome until it is asked for. It knows nothing about what the words or the
-## pictures are FOR - that is the caller's - so anything in ghost that wants an agent's output
-## asks here rather than growing its own copy of a subprocess pump.
+## A job is one run of a [TextGen] writer or an [ImageGen] painter. Whoever wants the work submits it and
+## keeps the id; this file starts it when there is room, notices when it ends, and holds the outcome
+## until it is asked for. It knows nothing about what the words or pictures are for.
 ##
-## LANES. A job may name a lane, and jobs in one lane run ONE AT A TIME, in the order they were
-## submitted - which is how a chain of pictures that reference each other (each one is sent the
-## ones before it) and a writer that continues its own earlier replies are expressed, without
-## the queue knowing either thing. Jobs in different lanes, or in none, run side by side up to
-## [constant LIMITS] per kind.
+## Lanes: a job may name a lane, and jobs in one lane run one at a time in submission order (a chain of
+## pictures that reference each other, a writer continuing its own earlier replies). Jobs in different
+## lanes, or none, run side by side up to [constant LIMITS] per kind.
 ##
-## THE JOB'S DIRECTORY IS THE CALLER'S, not this file's: it holds the prompt exactly as sent, the
-## reply and the log, and it is KEPT. So the record of what a writer was shown lives beside what
-## it wrote, wherever the caller keeps its own data - the evidence a reading never cheated is on
-## disk, not in a promise.
+## The job's directory is the caller's, not this file's: it holds the prompt exactly as sent, the reply
+## and the log, and is kept, so the record of what a writer was shown lives beside what it wrote.
 ##
-## A BACKEND MAY WORK IN STEPS: when a step's process ends, its `advance(job)` may start the next
-## one and return that pid, and the job runs on - a writer that has to look its route up before it
-## can write does both without ever blocking a frame. A one-step backend's `advance` returns 0 and
-## the job lands, as it always did. Its timeout counts from the first step.
+## A backend may work in steps: when a step's process ends, its `advance(job)` may start the next one and
+## return that pid, and the job runs on (a writer that looks its route up before writing). A one-step
+## backend's `advance` returns 0. The timeout counts from the first step.
 ##
-## A JOB MAY WORK WITH TOOLS ghost serves ([AgentTools], a text job's `tools_url`): it then runs as
-## a loop of calls rather than one reply, and takes as long as the loop does - and so may name its own
-## `timeout`, if it wants one. The tool server is polled from [method pump] with everything else.
+## A job may work with tools ghost serves ([AgentTools], a text job's `tools_url`): it then runs as a loop
+## of calls, takes as long as the loop does, and may name its own `timeout`. The tool server is polled
+## from [method pump] with everything else.
 ##
-## Polled from `main._process`, the [Films] / [Illustrations] rule: a job is a subprocess, and
-## something with a frame has to see it end. NOTHING STARTS ON ITS OWN - a job runs because a
-## person pressed something - and a read-only process (a render, a probe) refuses every
-## submission, since a render booted against the author's settings must not spend their quota.
+## Polled from `main._process`, the [Films] / [Illustrations] rule: something with a frame has to see a
+## subprocess end. Nothing starts on its own (a person pressed something), and a read-only process (a
+## render, a probe) refuses every submission, so a render never spends the author's quota.
 
-## How many runs of each kind at once. Each mostly waits on a network round trip, so more than
-## one is cheap; more than a couple is a burst against the author's quota.
+## How many runs of each kind at once. Each mostly waits on a network round trip, but more than a couple
+## is a burst against the author's quota.
 const LIMITS := {"text": 2, "image": 2, "aside": 4}
-## A JOB ANOTHER JOB IS WAITING ON ([GameTools]: a player asked what they do, while the game master's job runs) takes a `slot` of its own, for a parent job waiting on its children must not be
-## holding the place they would start in.
-## NO RUN HAS A TIME LIMIT BY DEFAULT. A writer that is still running is still working - a long
-## plan, a set dresser looking at its own pictures - and killing it for the clock threw away work
-## the person was waiting for (a cards plan was cut at 420 s). The person ends a run with [method
-## cancel]; a caller that wants a limit asks for one with `timeout`.
+## A job another job is waiting on ([GameTools]: a player asked what they do while the game master's job
+## runs) takes a `slot` of its own, so a parent waiting on its children does not hold the place they would
+## start in.
+## No run has a time limit by default: a writer still running is still working. The person ends a run with
+## [method cancel]; a caller that wants a limit asks for one with `timeout`.
 
 ## id -> the job as submitted, while it waits: [{id, kind, ...}], in submission order.
 static var _queue: Array = []
@@ -55,8 +46,8 @@ static var _seq := 0
 static var _forced_read_only := -1
 
 
-## For a gate or a command-line tool booted with `--script`, where no [Settings] autoload exists
-## (which [method read_only] would otherwise take as read-only).
+## For a gate or a command-line tool booted with `--script`, where no [Settings] autoload exists (which
+## [method read_only] would otherwise take as read-only).
 static func allow_for_tool(writable := true) -> void:
 	_forced_read_only = 0 if writable else 1
 
@@ -69,19 +60,15 @@ static func read_only() -> bool:
 	return st == null or bool(st.is_read_only())
 
 
-## Where a painter is told to save its picture: inside the job's own directory, never at the
-## caller's target - a file appearing at the target is a finished picture, and a painter writing
-## there directly made a half-written one look finished (the next card was sent it as a
-## reference).
+## Where a painter is told to save its picture: inside the job's own directory, never at the caller's
+## target, since a file appearing at the target reads as a finished picture.
 static func paint_target(dir: String) -> String:
 	return dir.path_join("image.png")
 
 
-## A JOB DIRECTORY IS REUSED - a redo runs in the folder its first run left - so whatever that run
-## wrote must be gone before this one starts, or a run that ends without writing (a painter that
-## skips the copy, a quota refusal) hands back the OLD output as its own and the step shows as
-## made. The prompt, the system prompt and the log are rewritten by the run itself. "" when
-## clear, else why not.
+## A job directory is reused (a redo runs in the folder its first run left), so whatever that run wrote
+## must be gone before this one starts, or a run that ends without writing would hand back the old output
+## as its own. The prompt, system prompt and log are rewritten by the run itself. "" when clear, else why not.
 static func clear_outputs(job: Dictionary) -> String:
 	var dir := String(job.get("dir", ""))
 	var outs: Array = []
@@ -108,9 +95,8 @@ static func clear_outputs(job: Dictionary) -> String:
 ##   system   - text only: the system prompt
 ##   tier     - text only: one of [constant TextGen.TIERS]
 ##   refs     - image only: reference images, absolute paths, in the order the prompt names them
-##   target   - image only: where the finished PNG goes. The painter is NOT told this path - it
-##              paints into its job directory ([method paint_target], which the prompt names) and
-##              the picture is moved here whole, so nothing ever sees a half-written file there
+##   target   - image only: where the finished PNG goes. The painter is not told this path: it paints
+##              into its job directory ([method paint_target]) and the picture is moved here whole
 ##   lane     - optional: jobs sharing a lane run one at a time, in order
 ##   label    - optional: a few words for logs and status lines
 ##   tools_url - text only, optional: the [AgentTools] endpoint whose tools the writer may call
@@ -146,15 +132,14 @@ static func state(id: String) -> String:
 	return ""
 
 
-## The outcome of an ended job: {ok, text (text jobs), path (image jobs), error}. Empty while it
-## has not ended.
+## The outcome of an ended job: {ok, text (text jobs), path (image jobs), error}. Empty while it has not ended.
 static func result(id: String) -> Dictionary:
 	return (_ended.get(id, {}) as Dictionary).duplicate()
 
 
-## WHAT A JOB'S AGENT IS DOING NOW, as a status line - "thinking (~11K tokens) · 6:30", "calling look
-## · 14:02" - read off its run's own stream ([method TextGen.status_of]); "waiting its turn" while it
-## is queued; "" for a job this queue is not holding.
+## What a job's agent is doing now, as a status line ("thinking (~11K tokens) · 6:30"), read off its run's
+## own stream ([method TextGen.status_of]); "waiting its turn" while queued; "" for a job this queue does
+## not hold.
 static func activity(id: String) -> String:
 	if _running.has(id):
 		return TextGen.status_of(_running[id])
@@ -217,8 +202,8 @@ static func pump() -> void:
 		_start(_queue.pop_at(i))
 
 
-## The first queued job that may start now: its kind has a free slot, and nothing ahead of it
-## in its lane is waiting or running.
+## The first queued job that may start now: its kind has a free slot, and nothing ahead of it in its lane
+## is waiting or running.
 static func _next_startable() -> int:
 	var counts := {}
 	var busy_lanes := {}
@@ -285,9 +270,8 @@ static func _land(job: Dictionary) -> Dictionary:
 		if made.is_empty() or img.load(made) != OK or img.is_empty():
 			out["error"] = String(gen.failure(job))
 		else:
-			# RE-ENCODED, never copied: whatever the painter wrote (a JPEG named .png has been
-			# seen from image tools), the caller is handed a real PNG at the place it asked for -
-			# by rename, so it appears there whole or not at all.
+		#Re-encoded, never copied: image tools sometimes write a JPEG named .png, and the caller is handed a
+		#real PNG at the place it asked for, by rename, so it appears there whole or not at all.
 			var target := String(job.get("dest", ""))
 			if target.is_empty():
 				target = String(job["dir"]).path_join("final.png")

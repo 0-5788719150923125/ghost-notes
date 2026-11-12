@@ -1,14 +1,14 @@
 extends RefCounted
 class_name FaceForm
 
-## FaceForm - A MASK: a face with no one in it (next/painted_surface.md; next/table_work.md section 11, "A MASK FORM"). The
-## second exception to "no body" after the skulls: a life-size face form, its eyes and lips closed, no hair and no ears - what
-## a makeup artist practises on, a milliner's block, a theater's mask before it is painted. A shape of [Props] (`mask`).
+## FaceForm - a mask: a face with no one in it (next/painted_surface.md; next/table_work.md section 11, "a mask form"). A life-size face
+## form, its eyes and lips closed, no hair and no ears - what a makeup artist practises on, a milliner's block, a theater's mask before
+## it is painted. A shape of [Props] (`mask`).
 ##
-## IT IS A RELIEF OVER ITS OWN FRONT: every point of the face is one point seen from the front, z = [method height] of (x, y)
-## inside an egg-shaped outline, over a flat back. So a design drawn on the face from the front ([Skins], in millimeters across
-## and down) lands on exactly one place, and the face's LANDMARKS - the closed eyes, the brows, the nose's tip, the mouth - are
-## numbers the designer can be told ([method landmarks]).
+## It is a relief over its own front: every point of the face is one point seen from the front, z = [method height] of (x, y) inside an
+## egg-shaped outline, over a flat back. So a design drawn on the face from the front ([Skins], in millimeters across and down) lands on
+## exactly one place, and the face's landmarks - the closed eyes, the brows, the nose's tip, the mouth - are numbers the designer can be
+## told ([method landmarks]).
 ##
 ## Units: centimeters in, meters out (as [Props] builds); the part stands on its chin (y = 0) facing +z.
 
@@ -36,7 +36,7 @@ const DOME_FLAT := Vector2(2.6, 0.6)
 ## The features fade out toward the rim from this share of the way there, so the rim stays where the outline is.
 const FEATURES_FADE := Vector2(0.82, 1.0)
 
-## THE FEATURES, as bumps (a positive height) and hollows (negative) - each [across, up, its width across, its height up,
+## The features, as bumps (a positive height) and hollows (negative) - each [across, up, its width across, its height up,
 ## how high, mirrored], in shares: across of half the face's width (s, -1 at the left as seen to 1 at the right), up of its
 ## height (t, 0 at the chin), how high of its depth. Drawn by eye against a face's proportions.
 const BUMPS := [
@@ -59,11 +59,11 @@ const BUMPS := [
 	[0.0, 0.82, 0.55, 0.12, 0.035, false],      # the forehead
 	[0.85, 0.66, 0.15, 0.12, -0.03, true],      # the temples
 ]
-## THE NOSE'S RIDGE from between the eyes down to its tip: [up at its top, up at its bottom, how high at the top, at the bottom,
+## The nose's ridge from between the eyes down to its tip: [up at its top, up at its bottom, how high at the top, at the bottom,
 ## how wide at the top, at the bottom] - and where it ends under the tip.
 const RIDGE := [0.62, 0.43, 0.10, 0.30, 0.07, 0.10]
 const RIDGE_ENDS := Vector2(0.375, 0.405)
-## THE CREASES - a closed eye's lash line and the closed mouth's line: [across, up at its lowest, how far it rises at its ends
+## The creases - a closed eye's lash line and the closed mouth's line: [across, up at its lowest, how far it rises at its ends
 ## (a share of the height), its half-length across, its width, how deep].
 const LASH := [0.36, 0.540, 0.015, 0.17, 0.0085, 0.022]
 const LIPS := [0.0, 0.277, -0.004, 0.29, 0.0065, 0.03]
@@ -75,7 +75,7 @@ static func size_of(v: Variant) -> Vector3:
 	return Vector3(clampf(s.x, SIZE_LEAST.x, SIZE_MOST.x), clampf(s.y, SIZE_LEAST.y, SIZE_MOST.y), clampf(s.z, SIZE_LEAST.z, SIZE_MOST.z))
 
 
-## HOW FAR OUT OF THE OUTLINE (s, t) IS: 0 at the middle, 1 on the rim, more outside - an egg, narrowing to the chin.
+## How far out of the outline (s, t) is: 0 at the middle, 1 on the rim, more outside - an egg, narrowing to the chin.
 static func outside(s: float, t: float) -> float:
 	var dy := t - MIDDLE
 	var by := (1.0 - MIDDLE) if dy > 0.0 else MIDDLE
@@ -83,7 +83,7 @@ static func outside(s: float, t: float) -> float:
 	return sqrt(pow(s / ax, 2.0) + pow(dy / by, 2.0))
 
 
-## THE FACE'S HEIGHT over its rim at (s, t) - in shares of its depth, scaled by [param relief] (its features, 0-1.5) - and how
+## The face's height over its rim at (s, t) - in shares of its depth, scaled by [param relief] (its features, 0-1.5) - and how
 ## shut in it is there ([method cavity]).
 static func height(s: float, t: float, relief := 1.0) -> float:
 	var r := outside(s, t)
@@ -119,7 +119,7 @@ static func _bump(s: float, t: float, s0: float, t0: float, rs: float, rt: float
 	return exp(-pow((s - s0) / rs, 2.0) - pow((t - t0) / rt, 2.0))
 
 
-## A CREASE's depth at (s, t) ([constant LASH], [constant LIPS]) - mirrored for a pair.
+## A crease's depth at (s, t) ([constant LASH], [constant LIPS]) - mirrored for a pair.
 static func _crease(s: float, t: float, c: Array, pair: bool) -> float:
 	var out := 0.0
 	for side in ([-1.0, 1.0] if pair else [1.0]):
@@ -132,13 +132,13 @@ static func _crease(s: float, t: float, c: Array, pair: bool) -> float:
 	return out
 
 
-## THE FACE'S POINT at (x, y) centimeters (x across from its middle, y up from its chin): [x, y, z] centimeters, z its height
+## The face's point at (x, y) centimeters (x across from its middle, y up from its chin): [x, y, z] centimeters, z its height
 ## out of its rim - for a face [param size] (centimeters) of [param relief].
 static func point(x: float, y: float, size: Vector3, relief := 1.0) -> Vector3:
 	return Vector3(x, y, height(x / (size.x * 0.5), y / size.y, relief) * size.z)
 
 
-## ITS NORMAL there, from the height's own slope.
+## Its normal there, from the height's own slope.
 static func normal(x: float, y: float, size: Vector3, relief := 1.0) -> Vector3:
 	var e := 0.02
 	var dx := (point(x + e, y, size, relief).z - point(x - e, y, size, relief).z) / (2.0 * e)
@@ -146,7 +146,7 @@ static func normal(x: float, y: float, size: Vector3, relief := 1.0) -> Vector3:
 	return Vector3(-dx, -dy, 1.0).normalized()
 
 
-## THE MASK as [Props] builds it, from its made-safe part [param p] (`size`, `relief`, `thick`): the face, its flat back, and
+## The mask as [Props] builds it, from its made-safe part [param p] (`size`, `relief`, `thick`): the face, its flat back, and
 ## the rim between. UV is (s, t); UV2's y how shut in it is (prop.gdshader). Built once a size and kept: every episode's mask
 ## is the same one, and a face is some hundred thousand evaluations of [method height].
 static func build(p: Dictionary) -> Props.Tris:
@@ -179,15 +179,11 @@ static var _kept := {}
 static var _lock := Mutex.new()
 
 
-## THE FACE IS CUT TO ITS OWN OUTLINE (feedback 0025: "ridge-marks along the chin ... like we stretched a plastic mask over the
-## mannequin"): a grid over the front had been cut where the outline crossed it, its points outside moved in onto the rim, and the
-## face's height falls to the rim ever more steeply - so the last point inside stood anywhere from 1 to 5 mm high as the rows
-## happened to meet the outline: a sawtooth all round the rim, plainest where the outline runs along the grid (the chin, the
-## sides). Now every point of the grid is kept and its outer band PULLED IN along its way from the middle ([method _pulled_in]):
-## the grid's edge lands on the rim, every row near it runs smoothly into it, and inside [constant PULL_FROM] - every feature -
-## the grid is as it was, its rows along the creases (a grid pushed out in copies of the outline whole crossed the mouth's line
-## aslant and drew it in stairs). Its normals are the surface's own, across the two ways the grid runs; the rim's, the height's
-## slope there.
+## The face is cut to its own outline: every point of the grid over the front is kept and its outer band is pulled in along its way from
+## the middle ([method _pulled_in]), so the grid's edge lands on the rim and every row near it runs smoothly into it, and inside
+## [constant PULL_FROM] (every feature) the grid is unchanged, its rows along the creases. (Cutting the grid where the outline crosses it
+## leaves the last point inside anywhere from 1 to 5 mm high, a sawtooth round the rim; pushing the grid out in copies of the outline
+## draws the mouth's line in stairs.) Its normals are the surface's own, across the two ways the grid runs; the rim's, the height's slope there.
 static func _built(size: Vector3, relief: float, thick: float) -> Props.Tris:
 	var g := Props.Tris.new()
 	var step := STEP * maxf(size.x / SIZE.x, 1.0)
@@ -228,7 +224,7 @@ static func _built(size: Vector3, relief: float, thick: float) -> Props.Tris:
 			var d := a + w
 			g.tri(pts[a], pts[b], pts[c], nrm[a], nrm[b], nrm[c], sts[a], sts[b], sts[c], cav[a], cav[b], cav[c])
 			g.tri(pts[a], pts[c], pts[d], nrm[a], nrm[c], nrm[d], sts[a], sts[c], sts[d], cav[a], cav[c], cav[d])
-	# THE RIM, the grid's own edge round from the face back to the back's, and THE BACK, flat: a fan from its middle
+	# The rim, the grid's own edge round from the face back to the back's, and the back, flat: a fan from its middle
 	var ring := PackedInt32Array()
 	for i in nx:
 		ring.append(i)
@@ -254,7 +250,7 @@ static func _built(size: Vector3, relief: float, thick: float) -> Props.Tris:
 	return g
 
 
-## The grid's point (s, t) of the front's box (s -1 to 1, t 0 to 1) PULLED IN onto the face: along its way from the middle, as it
+## The grid's point (s, t) of the front's box (s -1 to 1, t 0 to 1) pulled in onto the face: along its way from the middle, as it
 ## was out to [constant PULL_FROM] of the way to the rim, and from there to the box's edge laid evenly over what is left of the
 ## way to the rim - the box's edge on the rim. [param reach] is [method _rim_reach].
 static func _pulled_in(s: float, t: float, reach: PackedFloat32Array) -> Vector2:
@@ -304,7 +300,7 @@ static func _rim_point(a: float) -> Vector2:
 	return Vector2(d.x * lo, MIDDLE + d.y * lo)
 
 
-## THE FACE'S LANDMARKS, as a designer reads them: each a place in MILLIMETERS from the top left corner of the face seen from
+## The face's landmarks, as a designer reads them: each a place in millimeters from the top left corner of the face seen from
 ## the front (x to the right as you look at it, y down), and how wide it is - for a face [param size] centimeters. Left and right
 ## are as you look at the face, never the face's own.
 static func landmarks(size: Vector3) -> Dictionary:
@@ -336,7 +332,7 @@ static func landmarks(size: Vector3) -> Dictionary:
 	return out
 
 
-## THE OUTLINE as a closed SVG path in the designer's millimeters ([method landmarks]) - the edge of the face, for a design to
+## The outline as a closed SVG path in the designer's millimeters ([method landmarks]) - the edge of the face, for a design to
 ## stay inside, or to fill all of it.
 static func outline_path(size: Vector3) -> String:
 	var bits := PackedStringArray()

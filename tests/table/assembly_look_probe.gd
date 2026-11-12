@@ -1,18 +1,21 @@
 extends Node
 
-## NOT a gate. WHAT IS BUILT ON THE TABLE, photographed ([TableAssembly], next/assembly.md): a real hollow tub, a pile on the table, a
-## plate, and a little of what a slow build does - digging, trying, a wall, a wreck, a silence - read with a synthetic voice, and a
-## frame at the middle of each act or at the times asked for. Real advances, so it is scheduled as a reading schedules it.
+## NOT a gate. What is built on the table, photographed ([TableAssembly], next/assembly.md): a real hollow tub, a pile on the
+## table, a plate, and a little of what a slow build does (digging, trying, a wall, a wreck, a silence), read with a synthetic voice,
+## with a frame at the middle of each act or at the times asked for. Real advances, scheduled as a reading schedules them.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/assembly_look_probe.gd 400 [--times 12,30] [--out <dir>/bricks] [--size 1280x720]
 ##
-## `--episode <dir>` looks at a real one instead, from a copy (`--acts N`: only its first N acts, for what is quicker): its table, its acts, its
-## words at a synthetic pace.
+## `--episode <dir>` looks at a real one instead, from a copy (`--acts N`: only its first N acts): its table, acts and words at a
+## synthetic pace.
 ##
-## `--jump` goes straight to each moment asked (a record is a lookup, so it lands exactly there). `--final` photographs all of what is built as its last step leaves it. `--plan` makes no record, and shows where the plan has things: what is built as it stands, in moments, with nothing moving. `--model <design.json>` stands a design ([AssemblyModel]) on it, `--work <acts.json>` plays acts of your own, and `--holds` says how long every piece is in hand, stop by stop.
+## `--jump` goes straight to each moment asked (a record is a lookup, so it lands exactly there). `--final` photographs all that is
+## built as its last step leaves it. `--plan` makes no record and shows where the plan has things, with nothing moving.
+## `--model <design.json>` stands a design ([AssemblyModel]) on it, `--work <acts.json>` plays acts of your own, and `--holds` says
+## how long every piece is in hand, stop by stop.
 ##
-## `--clip A,B` writes every frame from A to B seconds, for judging motion and for the frame's cost (printed at the end), and the work's
-## own sound under them to <out>.wav - no voice, none of the room's - for judging that:
+## `--clip A,B` writes every frame from A to B seconds, for judging motion and the frame's cost (printed at the end), and the work's
+## own sound under them to <out>.wav (no voice, none of the room's):
 ##   ffmpeg -framerate 30 -i <out>_c%04d.png -i <out>.wav -pix_fmt yuv420p -shortest bricks.mp4
 
 const DT := 1.0 / 30.0

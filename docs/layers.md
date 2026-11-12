@@ -3,13 +3,11 @@
 
 Reusable appearance components any scene composes by key via `add_layer` / `update_layers` / `draw_layers(z)`.
 
-Layer - the registry of reusable visual components.
+Layer - the registry of reusable visual components: appearance composed by key.
 
-The visual sibling of `Primitives` (the force registry). Where Primitives lets a scene compose *physics* by key, Layer lets a scene compose *appearance* by key: a drift of snow, a bank of rolling fog, a swarm of fireflies, a field of stars - each a small self-contained class that seeds itself, advances on the audio, and draws itself onto the scene's canvas. The point is **integration**: the same snow that is a scene on its own also falls over a city or a hillside, because it is a component, not bespoke per-scene code.
+The visual sibling of `Primitives` (the force registry). A layer is a small self-contained class that seeds itself, advances on the audio, and draws itself onto the scene's canvas (a drift of snow, a bank of fog, a swarm of fireflies, a field of stars); the same snow that is a scene on its own also falls over a city, because it is a component.
 
-A scene composes layers through `GhostScene` helpers (add_layer / update_layers / draw_layers); see snowfall.gd, fog_bank.gd, etc. Layers draw in ghost's centered unit-fraction space (multiply by the scene's unit() at draw time) and are handed the visible half-extents each frame, so they fill any aspect ratio / fullscreen / 4K without showing an edge.
-
-Two methods to override: update(f, dt, half) - advance state; `half` is the visible half-size in unit fractions (Vector2), so a layer knows where the frame ends. draw(ci, u)         - draw onto CanvasItem `ci` at unit `u` (pixels per unit).
+A scene composes layers through `GhostScene` helpers (add_layer / update_layers / draw_layers); see snowfall.gd, fog_bank.gd. Layers draw in ghost's centered unit-fraction space (multiply by the scene's unit() at draw time) and are handed the visible half-extents each frame, so they fill any aspect ratio without showing an edge. Two methods to override: update(f, dt, half) - advance state; `half` is the visible half-size in unit fractions (Vector2), so a layer knows where the frame ends. draw(ci, u)         - draw onto CanvasItem `ci` at unit `u` (pixels per unit).
 
 Registry: `Layer.REGISTRY` in [src/scene_kit/layer.gd](../src/scene_kit/layer.gd) (22 entries)
 
@@ -21,7 +19,7 @@ Every entry also takes:
 
 ## `bed` - Bed
 
-Bed - a full-frame color wash: a soft vertical gradient plus a few slow color pools that breathe with the spectrum. The "colors underneath / inside" that fog, snow, or stars sit on; on its own it is a calm aurora-of-color ground.
+Bed - a full-frame color wash: a soft vertical gradient plus a few slow color pools that breathe with the spectrum; the ground that fog, snow or stars sit on.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -30,11 +28,11 @@ Bed - a full-frame color wash: a soft vertical gradient plus a few slow color po
 | `sat` Saturation | `0.5` | Color saturation of the wash, 0 to 1; the pools take 0.1 more. |
 | `val` Brightness | `0.32` | Brightness of the wash's middle band; the top is half that, the bottom about a third, and loudness scales it 0.7x to 1.2x. |
 
-Source: [src/scene_kit/layer.gd:235](../src/scene_kit/layer.gd#L235)
+Source: [src/scene_kit/layer.gd:208](../src/scene_kit/layer.gd#L208)
 
 ## `surface` - Surface
 
-Surface - the lit water SURFACE far above: a bright wash of light pouring down from a distant sun in the sky, and drifting CAUSTIC ripples (the refracted light-net). Fills the "dead space" at the top of the underwater scenes with a real light source and topological refraction. Soft, additive, brightest at the top and fading into the depths; brightens and shimmers with the music.
+Surface - the lit water surface far above: a bright wash of light pouring down from a distant sun, and drifting caustic ripples (the refracted light-net). Fills the dead space at the top of the underwater scenes. Soft, additive, brightest at the top and fading into the depths; brightens and shimmers with the music.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -42,11 +40,11 @@ Surface - the lit water SURFACE far above: a bright wash of light pouring down f
 | `sun_x` Sun position | unset | Where the distant sun glows across the top, as a fraction of the half-width (-1 left edge, 1 right). Unset, drawn between -0.45 and 0.45. |
 | `caustics` Caustics | `8` | How many wavy bands of refracted light shimmer across the frame, packed toward the top and fading with depth. |
 
-Source: [src/scene_kit/layer.gd:2462](../src/scene_kit/layer.gd#L2462)
+Source: [src/scene_kit/layer.gd:2236](../src/scene_kit/layer.gd#L2236)
 
 ## `kelp` - Kelp
 
-Kelp - the sea FLOOR: tall soft kelp fronds swaying up from the bottom, and a few blurry bioluminescent glows pooled among them - abstract, transparent, all out of focus in the deep water. Anchors the underwater scenes with a floor and life instead of empty blue below.
+Kelp - the sea floor: tall soft kelp fronds swaying up from the bottom, and a few blurry bioluminescent glows pooled among them; abstract, transparent, all out of focus in the deep water.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -55,11 +53,11 @@ Kelp - the sea FLOOR: tall soft kelp fronds swaying up from the bottom, and a fe
 | `fronds` Fronds | `14` | How many fronds rise from the floor, swaying more toward their tips. |
 | `glows` Glows | `4` | How many blurry bioluminescent lights pool near the floor, pulsing slowly. |
 
-Source: [src/scene_kit/layer.gd:2543](../src/scene_kit/layer.gd#L2543)
+Source: [src/scene_kit/layer.gd:2314](../src/scene_kit/layer.gd#L2314)
 
 ## `fog` - Fog
 
-Fog - big faint blobs rolling across the frame, diffusing whatever is behind them. A tempo-kicked swirl gives the bank velocity that decays (feedback: not uniform).
+Fog - big faint blobs rolling across the frame, diffusing whatever is behind them. A tempo-kicked swirl gives the bank velocity that decays.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -69,11 +67,11 @@ Fog - big faint blobs rolling across the frame, diffusing whatever is behind the
 | `sat` Saturation | `0.12` | Color saturation of the fog; near 0 it is gray-white. |
 | `alpha` Opacity | `0.045` | Opacity of each blob; it builds up where blobs overlap. |
 
-Source: [src/scene_kit/layer.gd:307](../src/scene_kit/layer.gd#L307)
+Source: [src/scene_kit/layer.gd:276](../src/scene_kit/layer.gd#L276)
 
 ## `snow` - Snow
 
-Snow - a drift of falling flakes. Soft out-of-focus dots for the many small ones, a procedural six-fold dendrite for the few large near ones. Async by construction: each flake has its own depth (parallax fall speed), sway phase, and spin. Gusts ride the energy/treble. Wraps seamlessly, so it is an endless field at any aspect.
+Snow - a drift of falling flakes: soft out-of-focus dots for the many small ones, a procedural six-fold dendrite for the few large near ones. Each flake has its own depth (parallax fall speed), sway phase and spin; gusts ride the energy/treble; it wraps seamlessly, so it is an endless field at any aspect.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -90,11 +88,11 @@ Snow - a drift of falling flakes. Soft out-of-focus dots for the many small ones
 | `hue` Hue | `0.58` | Tint of the flakes and of the whiteout that builds on big moments, 0 to 1 around the wheel. |
 | `sat` Saturation | `0.06` | Color saturation of the flakes; near 0 they are white. |
 
-Source: [src/scene_kit/layer.gd:375](../src/scene_kit/layer.gd#L375)
+Source: [src/scene_kit/layer.gd:339](../src/scene_kit/layer.gd#L339)
 
 ## `rain` - Rain
 
-Rain - fast streaks falling at a wind-blown slant, with faint splash flecks near the floor. Density and slant ride the audio. Cheap line draws, many of them.
+Rain - fast streaks falling at a wind-blown slant, with faint splash flecks near the floor. Density and slant ride the audio.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -107,11 +105,11 @@ Rain - fast streaks falling at a wind-blown slant, with faint splash flecks near
 | `sat` Saturation | `0.14` | Color saturation of the streaks; near 0 they are white. |
 | `width` Line width | `1.5` | Line width of the nearest streaks in pixels (never under 1); farther drops are thinner. |
 
-Source: [src/scene_kit/layer.gd:564](../src/scene_kit/layer.gd#L564)
+Source: [src/scene_kit/layer.gd:498](../src/scene_kit/layer.gd#L498)
 
 ## `fireflies` - Fireflies
 
-Fireflies - warm motes wandering a curl-noise flow field, blinking async. Each has its own glow phase; a beat lights the subset whose threshold it crosses (the embers trick), so the meadow sparkles in ripples, not in unison.
+Fireflies - warm motes wandering a curl-noise flow field, blinking async. Each has its own glow phase; a beat lights the subset whose threshold it crosses, so the meadow sparkles in ripples, not in unison.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -121,22 +119,22 @@ Fireflies - warm motes wandering a curl-noise flow field, blinking async. Each h
 | `hue` Hue | `0.16` | Color of their glow, 0 to 1 around the wheel (0.16 is yellow); each varies a little from it. |
 | `real_light` Real light | off | Draw each as a light source - a wide faint wash and a white-hot core - instead of a tighter soft glow. |
 
-Source: [src/scene_kit/layer.gd:655](../src/scene_kit/layer.gd#L655)
+Source: [src/scene_kit/layer.gd:578](../src/scene_kit/layer.gd#L578)
 
 ## `stars` - Stars
 
-Stars - a parallax starfield that twinkles, with the occasional shooting star streaking across. A nebula-quiet backdrop; pairs with bed/fog/aurora.
+Stars - a parallax starfield that twinkles, with the occasional shooting star. A quiet backdrop; pairs with bed/fog/aurora.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `count` Stars | `150` | How many stars fill the sky; a shooting star crosses now and then whatever the count. |
 | `hue` Hue | `0.6` | Base color of the stars, 0 to 1 around the wheel; each strays up to 0.12 either way, and all are pale. |
 
-Source: [src/scene_kit/layer.gd:737](../src/scene_kit/layer.gd#L737)
+Source: [src/scene_kit/layer.gd:654](../src/scene_kit/layer.gd#L654)
 
 ## `aurora` - Aurora
 
-Aurora - slow flowing curtains of light. A few horizontal ribbons, each a wavy band whose vertical wander and brightness ride a band of the spectrum. Green / violet by default; deeply atmospheric over stars.
+Aurora - slow flowing curtains of light: a few horizontal ribbons, each a wavy band whose vertical wander and brightness ride a band of the spectrum. Green / violet by default.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -144,11 +142,11 @@ Aurora - slow flowing curtains of light. A few horizontal ribbons, each a wavy b
 | `hue` Hue | `0.38` | Base color of the curtains, 0 to 1 around the wheel (0.38 is green); each ribbon shifts up to 0.18 from it. |
 | `sat` Saturation | `0.55` | Color saturation of the curtains. |
 
-Source: [src/scene_kit/layer.gd:818](../src/scene_kit/layer.gd#L818)
+Source: [src/scene_kit/layer.gd:730](../src/scene_kit/layer.gd#L730)
 
 ## `petals` - Petals
 
-Petals - drifting petals / leaves that tumble as they fall, riding a curl-noise breeze. Flat quads rotating slowly (the flat-subject discipline: drift + spin, never fake depth). Warm or pink by default; a soft botany weather.
+Petals - drifting petals / leaves that tumble as they fall, riding a curl-noise breeze. Flat quads rotating slowly (drift and spin, never fake depth). Warm or pink by default.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -157,11 +155,11 @@ Petals - drifting petals / leaves that tumble as they fall, riding a curl-noise 
 | `hue` Hue | `0.95` | Base color of the petals, 0 to 1 around the wheel (0.95 is pink); each strays up to 0.05 either way. |
 | `sat` Saturation | `0.5` | Color saturation of the petals. |
 
-Source: [src/scene_kit/layer.gd:922](../src/scene_kit/layer.gd#L922)
+Source: [src/scene_kit/layer.gd:828](../src/scene_kit/layer.gd#L828)
 
 ## `dust` - Dust
 
-Dust - tiny slow motes adrift in a soft light shaft. Subtle; reads as floating particles in a sunbeam. Great as a faint overlay on any scene.
+Dust - tiny slow motes adrift in a soft light shaft; a faint overlay for any scene.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -173,11 +171,11 @@ Dust - tiny slow motes adrift in a soft light shaft. Subtle; reads as floating p
 | `shaft_x` Shaft position | `-0.2` | Where the beam falls across the frame, as a fraction of the half-width (-1 left edge, 1 right). |
 | `hue` Hue | `0.12` | Color of the motes and the beam, 0 to 1 around the wheel (0.12 is warm gold); both are pale. |
 
-Source: [src/scene_kit/layer.gd:1023](../src/scene_kit/layer.gd#L1023)
+Source: [src/scene_kit/layer.gd:921](../src/scene_kit/layer.gd#L921)
 
 ## `bubbles` - Bubbles
 
-Bubbles - underwater bubbles released in BURSTS (gurgles) from bed emitters, rising, meandering, and POPPING near the surface. Not a tidy field of identical discs: a few vents trickle bubbles and periodically (and on beats - a burp) belch a cluster of mostly-tiny ones, which ascend at size-dependent speeds and burst into a quick ring.
+Bubbles - underwater bubbles released in bursts (gurgles) from bed emitters, rising, meandering and popping near the surface: a few vents trickle bubbles and periodically (and on beats) belch a cluster of mostly tiny ones, which ascend at size-dependent speeds and burst into a quick ring.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -185,11 +183,11 @@ Bubbles - underwater bubbles released in BURSTS (gurgles) from bed emitters, ris
 | `rise` Rise speed | `0.17` | How fast bubbles climb, in the frame's shorter side per second; larger bubbles climb a little faster. |
 | `hue` Hue | `0.55` | The water's color tinting the glass, 0 to 1 around the wheel. |
 
-Source: [src/scene_kit/layer.gd:1099](../src/scene_kit/layer.gd#L1099)
+Source: [src/scene_kit/layer.gd:992](../src/scene_kit/layer.gd#L992)
 
 ## `embers` - Embers
 
-Embers - warm sparks rising on the wind, twinkling and flaring async (the embers scene, as a reusable layer). A beat lights only the subset above its own threshold.
+Embers - warm sparks rising on the wind, twinkling and flaring async. A beat lights only the subset above its own threshold.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -199,22 +197,22 @@ Embers - warm sparks rising on the wind, twinkling and flaring async (the embers
 | `jitter` Wander | `0.12` | Strength of the random wander added to each spark. |
 | `lift` Lift | `-0.05` | Steady vertical drift in the frame's shorter side per second; negative rises, and a spark leaving the top returns at the bottom. |
 
-Source: [src/scene_kit/layer.gd:1279](../src/scene_kit/layer.gd#L1279)
+Source: [src/scene_kit/layer.gd:1156](../src/scene_kit/layer.gd#L1156)
 
 ## `cosmos` - Cosmos
 
-Cosmos - large, distant background bodies that give a star field DEPTH instead of just dots: a shaded PLANET (a lit crescent over a dark globe, sometimes ringed), a soft colored NEBULA cloud, or a slowly turning spiral GALAXY. Few, dim, drawn behind the stars (z = back). Seeded; a scene adds it sometimes so the void isn't barren.
+Cosmos - large, distant background bodies that give a star field depth: a shaded planet (a lit crescent over a dark globe, sometimes ringed), a soft colored nebula cloud, or a slowly turning spiral galaxy. Few, dim, drawn behind the stars (z = back); seeded.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `count` Bodies | `1` | How many distant bodies hang in the background, each a nebula or a spiral galaxy by a coin flip. |
 | `hue` Hue | `0.6` | Base color of the bodies, 0 to 1 around the wheel; each strays up to 0.25 either way. |
 
-Source: [src/scene_kit/layer.gd:1347](../src/scene_kit/layer.gd#L1347)
+Source: [src/scene_kit/layer.gd:1220](../src/scene_kit/layer.gd#L1220)
 
 ## `clouds` - Clouds
 
-Clouds - soft cloud masses drifting horizontally across the sky, wrapping at the edges. Each cloud is a clump of overlapping soft puffs; the wind picks up with energy.
+Clouds - soft cloud masses drifting horizontally across the sky, wrapping at the edges. Each is a clump of overlapping soft puffs; the wind picks up with energy.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -224,28 +222,28 @@ Clouds - soft cloud masses drifting horizontally across the sky, wrapping at the
 | `val` Brightness | `0.62` | Brightness of the nearest clouds; farther ones are dimmer. |
 | `alpha` Opacity | `0.07` | Opacity of each puff in the nearest clouds; farther ones are fainter. |
 
-Source: [src/scene_kit/layer.gd:1453](../src/scene_kit/layer.gd#L1453)
+Source: [src/scene_kit/layer.gd:1322](../src/scene_kit/layer.gd#L1322)
 
 ## `fire` - Fire
 
-Fire - a living flame. The BODY is one shared GPU temperature field (see shaders/flame.gdshader) on a quad child item: heat SOURCES along the bed - each fed by its own harmonic band - raise columns that rising domain-warped noise carves into licks; tongues pinch free, climb and dissolve. On top, CPU SPARKS ride a curl-noise wind out of the hottest regions and crackle up on beats. The dynamic range is the point: a quiet passage sits as a seam of embers, a swell sends columns up the frame - and WHERE it roars is the spectrum (bass at the center, treble at the rim).
+Fire - a living flame. The body is one shared GPU temperature field (see shaders/flame.gdshader) on a quad child item: heat sources along the bed, each fed by its own harmonic band, raise columns that rising domain-warped noise carves into licks. On top, CPU sparks ride a curl-noise wind out of the hottest regions and crackle up on beats. A quiet passage sits as a seam of embers, a swell sends columns up the frame, and where it roars is the spectrum (bass at the center, treble at the rim).
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `spread` Spread | `1.0` | How wide the bed of flames reaches: 1 spans 0.82 of the half-width each side of center. |
 | `count` Sparks | `90` | How many sparks can be alive at once; they are born from the heat, so a quiet passage has few. |
 
-Source: [src/scene_kit/layer.gd:1521](../src/scene_kit/layer.gd#L1521)
+Source: [src/scene_kit/layer.gd:1386](../src/scene_kit/layer.gd#L1386)
 
 ## `vapor` - Vapor
 
-Vapor - colored ink-in-water: heavy twisting masses with fibrous strands drawn out of them, lit from inside. The GPU field lives in shaders/vapor_field.gdshader (read its header for the twist / fiber / hardness construction and why blobs cannot do it); this half is the part that has to be a simulation rather than arithmetic - WHERE the masses are, WHAT COLOR each one is, and HOW LOUD it is right now.
+Vapor - colored ink-in-water: heavy twisting masses with fibrous strands drawn out of them, lit from inside. The GPU field lives in shaders/vapor_field.gdshader (its header has the twist / fiber / hardness construction); this half is the simulation: where the masses are, what color each one is, and how loud it is right now.
 
-A PLUME is one mass: an elliptical gaussian that listens to its own harmonic band (fast attack, slow release, expanded through a per-plume gamma), drifts on a slow lissajous about its home, and carries its own hue. The field mixes their colors by contribution, so a violet mass and a teal one blend where they overlap and stay themselves where they do not - that two-sided color is the whole point, and it is the reason plumes are separate objects instead of one density.
+A plume is one mass: an elliptical gaussian that listens to its own harmonic band (fast attack, slow release, expanded through a per-plume gamma), drifts on a slow lissajous about its home, and carries its own hue. The field mixes their colors by contribution, so a violet mass and a teal one blend where they overlap and stay themselves where they do not; that is why plumes are separate objects instead of one density.
 
-THE LAMP is a real position in the same space, traveling on its own slow orbit. The shader tapping the plume envelope toward it is what makes the masses read as volume; moving it is what keeps them from looking like a still.
+The lamp is a real position in the same space, traveling on its own slow orbit; the shader taps the plume envelope toward it, which makes the masses read as volume.
 
-Tint it with hue / accent / sat / val, shape it with swirl / churn / crease / stretch / hard / thresh / haze / scale, and choose where the masses sit with `layout`. Additive, so it composes over anything - a bed, a landscape, a city - without occluding it.
+Tint it with hue / accent / sat / val, shape it with swirl / churn / crease / stretch / hard / thresh / haze / scale, and choose where the masses sit with `layout`. Additive, so it composes over anything without occluding it.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -270,43 +268,43 @@ Tint it with hue / accent / sat / val, shape it with swirl / churn / crease / st
 | `sat` Saturation | `0.85` | Color saturation of the masses, 0 to 1; the fringe color takes 0.9 of it. |
 | `val` Brightness | `1.0` | Brightness of each mass's color before the lighting, 0 to 1. |
 
-Source: [src/scene_kit/layer.gd:1781](../src/scene_kit/layer.gd#L1781)
+Source: [src/scene_kit/layer.gd:1621](../src/scene_kit/layer.gd#L1621)
 
 ## `rays` - Rays
 
-Rays - god-rays / light shafts angling down from the top edge, swaying slowly, brighter at the top and fading to nothing below. The underwater (and fog-lit) light cue.
+Rays - god-rays / light shafts angling down from the top edge, swaying slowly, brighter at the top and fading to nothing below: the underwater (and fog-lit) light cue.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `count` Shafts | `5` | How many shafts of light angle down from above the frame, swaying slowly. |
 | `hue` Hue | `0.52` | Color of the shafts, 0 to 1 around the wheel; they are pale. |
 
-Source: [src/scene_kit/layer.gd:2095](../src/scene_kit/layer.gd#L2095)
+Source: [src/scene_kit/layer.gd:1893](../src/scene_kit/layer.gd#L1893)
 
 ## `planet` - Planet
 
-Planet - a REAL 3D sphere: a smooth-shaded `Mesh3D` icosphere drawn through a private `Lens3D`, exactly the way the eye's sclera is built, so it is genuinely round and lit with a true terminator (not a flat stack of discs). Opaque, so the stars behind it are occluded. Drawn AFTER the stars by the scene for that occlusion.
+Planet - a real 3D sphere: a smooth-shaded `Mesh3D` icosphere drawn through a private `Lens3D`, the way the eye's sclera is built, so it is round and lit with a true terminator. Opaque, so the stars behind it are occluded; drawn after the stars by the scene.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `hue` Hue | `0.6` | Base color of the planet, 0 to 1 around the wheel; the seed shifts it up to 0.3 either way. |
 
-Source: [src/scene_kit/layer.gd:2161](../src/scene_kit/layer.gd#L2161)
+Source: [src/scene_kit/layer.gd:1951](../src/scene_kit/layer.gd#L1951)
 
 ## `volumetric` - Volumetric
 
-Volumetric - REAL 3D clouds / fog. A field of soft gaussian puffs placed in 3D space, lit VOLUMETRICALLY (sorted from the sun inward, accumulating optical depth, so puffs facing the sun are bright and those buried behind others fall into shadow), depth-sorted and projected through a private `Lens3D`, drifting and billowing over time. Simulated dynamics, not a flat 2D sprite - and being atmospheric it washes well over other scenes (the LAYER transition can stack it).
+Volumetric - real 3D clouds / fog: a field of soft gaussian puffs placed in 3D space, lit volumetrically (sorted from the sun inward, accumulating optical depth, so puffs facing the sun are bright and those buried behind others fall into shadow), depth-sorted and projected through a private `Lens3D`, drifting and billowing over time. Atmospheric, so it washes well over other scenes (the LAYER transition can stack it).
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `mode` Mode | `cloud` | What it builds: cloud (three or four billowing sunlit masses in the sky) or fog (a wide bank of haze receding into depth). |
 | `hue` Hue | `-1.0` | Tint of the sunlit side, 0 to 1 around the wheel, the shade 0.55 of a turn away; below 0, warm white and cool gray. |
 
-Source: [src/scene_kit/layer.gd:2217](../src/scene_kit/layer.gd#L2217)
+Source: [src/scene_kit/layer.gd:2003](../src/scene_kit/layer.gd#L2003)
 
 ## `veil` - Veil
 
-Veil - a composable harmonic OBSCURING layer: drifting gaussian masses (snow squalls, rain sheets, haze) that swell with musical intensity and fade out between, softening and hiding the scene behind. The general form of the snow whiteout, so ANY scene can add moving patterns of visibility and obscuration. Tint with hue/sat/val; floor/gain/max shape how the swell maps to opacity. Add it last (front) so it veils what is beneath.
+Veil - a composable harmonic obscuring layer: drifting gaussian masses (snow squalls, rain sheets, haze) that swell with musical intensity and fade out between, softening and hiding the scene behind. The general form of the snow whiteout. Tint with hue/sat/val; floor/gain/max shape how the swell maps to opacity. Add it last (front).
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -317,15 +315,15 @@ Veil - a composable harmonic OBSCURING layer: drifting gaussian masses (snow squ
 | `sat` Saturation | `0.05` | Color saturation of the veil; near 0 it is white. |
 | `val` Brightness | `1.0` | Brightness of the veil's color, 0 to 1. |
 
-Source: [src/scene_kit/layer.gd:2416](../src/scene_kit/layer.gd#L2416)
+Source: [src/scene_kit/layer.gd:2193](../src/scene_kit/layer.gd#L2193)
 
 ## `flare` - Flare
 
-Flare - a lens flare drawn IN FRONT: a bright off-frame source with a starburst and anamorphic streak, plus a chain of translucent "ghost" discs and rings marching along the line from the source through the optical center to the far side (where real lens flares sit). Its brightness pulses with the harmonics, and a barrel "fisheye" bows the whole chain outward. Composable, so any scene can wear a flare over the top. Add it LAST (front).
+Flare - a lens flare drawn in front: a bright off-frame source with a starburst and anamorphic streak, plus a chain of translucent "ghost" discs and rings along the line from the source through the optical center to the far side. Its brightness pulses with the harmonics, and a barrel "fisheye" bows the whole chain outward. Add it last (front).
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `hue` Hue | `0.58` | Color of the flare's source, 0 to 1 around the wheel; its ghost discs stray from -0.18 to +0.22 of it. |
 | `fisheye` Fisheye | `0.22` | How strongly a barrel distortion bows the source and its chain of discs outward; 0 leaves them straight. |
 
-Source: [src/scene_kit/layer.gd:2338](../src/scene_kit/layer.gd#L2338)
+Source: [src/scene_kit/layer.gd:2119](../src/scene_kit/layer.gd#L2119)

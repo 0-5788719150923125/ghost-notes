@@ -1,23 +1,16 @@
 extends SceneTree
 
-## Does the clown's paint TRAVEL WITH THE FACE, or sit on the screen?
+## Does the clown's paint travel with the face, or sit on the screen?
 ##   godot --path . --position -5000,-5000 --script res://tests/masking/clown_anchor_check.gd
 ## Needs a real renderer (the paint field is a ping-pong SubViewport pair).
 ##
-## Two things here are patterns rather than placed features - the eye-drip's
-## rivulets and (in mask_split) the craquelure - and both were first written in
-## SCREEN space. A pattern keyed on UV does not move when the head does, so the
-## head slides through it: reported for the cracks as "squiggly smears", and for
-## the drip as "the streaks remain fixed, rooted in place, and more streaks pop in
-## from nowhere". Both are the same bug and the same fix - evaluate the pattern in
-## the FACE's own frame (origin at its center, x along the eye line, scaled by the
-## eye separation) so it travels, rotates and resizes with the head.
+## The eye-drip's rivulets and (in mask_split) the craquelure are patterns, not placed features, so they
+## are evaluated in the face's own frame (origin at its center, x along the eye line, scaled by the eye
+## separation) and travel, rotate and resize with the head. A pattern keyed on UV would let the head slide
+## through it.
 ##
-## The test: render the SAME face at two positions and ask whether the paint moved
-## with it. A face-anchored pattern shifts by exactly the amount the face shifted;
-## a screen-anchored one stays where it was. Comparing the second render against
-## the first SHIFTED BY THE SAME OFFSET is the whole measurement - it should match
-## if the paint is anchored, and mismatch if it is not.
+## The same face is rendered at two positions; the second render is compared against the first shifted by
+## the same offset. A face-anchored pattern matches the shifted comparison and mismatches the unshifted one.
 
 const W := 320
 const H := 320
@@ -33,9 +26,8 @@ var _fails: PackedStringArray = []
 func _initialize() -> void:
 	var a := await _run(0.0)
 	var b := await _run(SHIFT)
-	# Compare b against a shifted by SHIFT. Only the drip band is examined - below
-	# the eyes, where the rivulets live - and only inside the face, so the
-	# comparison is about the pattern rather than about the silhouette.
+	# Compare b against a shifted by SHIFT. Only the drip band is examined (below the eyes, inside the
+	# face), so the comparison is about the pattern and not the silhouette.
 	var dx := int(round(SHIFT * float(W)))
 	var matched := 0.0
 	var moved := 0.0
@@ -57,9 +49,8 @@ func _initialize() -> void:
 		moved /= float(n)
 		print("drip over %d pixels: mismatch when the comparison FOLLOWS the face %.4f, "
 			% [n, matched] + "when it stays on screen %.4f" % moved)
-		# If the pattern is anchored to the face, following the face is the better
-		# match by a clear margin. If it is anchored to the screen, the two are
-		# comparable or reversed.
+		# Anchored to the face, following the face is the better match by a clear margin; anchored to the
+		# screen, the two are comparable or reversed.
 		_expect(matched < moved * 0.75,
 			"the drip matches the screen (%.4f) about as well as it matches the FACE "
 			% moved + "(%.4f) - the rivulets are keyed on frame position, so the head "
@@ -80,8 +71,8 @@ func _expect(ok: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-## The same face, offset by `dx` in UV. Everything else is identical, so any
-## difference in the paint is the anchoring and nothing else.
+## The same face, offset by `dx` in UV. Everything else is identical, so any difference in the paint is
+## the anchoring.
 func _run(dx: float) -> Image:
 	var cx := CX + dx
 	var sten := _stencil(cx)
@@ -117,9 +108,8 @@ func _run(dx: float) -> Image:
 		mm.set_shader_parameter("u_drip_w", 1.15)   # enough pixels to compare
 		mm.set_shader_parameter("u_drip_curve", 1.4)
 		mm.set_shader_parameter("u_dt", 0.033)
-		# RESET every step. The sim's own advection and decay would otherwise carry
-		# paint from before the move and blur the question; what is under test is
-		# where the deposit PUTS the rivulets, not how the liquid then flows.
+		# Reset every step: the sim's advection and decay would carry paint from before the move; what is
+		# under test is where the deposit puts the rivulets.
 		mm.set_shader_parameter("u_reset", 1)
 		mm.set_shader_parameter("u_time", 3.0)
 		mm.set_shader_parameter("u_aspect", 1.0)
@@ -149,8 +139,7 @@ func _run(dx: float) -> Image:
 	return img
 
 
-## Two eye patches and a face oval, at `cx`. The drip reads the eye channel and
-## runs downward from it, so the eyes are what it needs.
+## Two eye patches and a face oval, at `cx`. The drip reads the eye channel and runs downward from it.
 func _stencil(cx: float) -> Texture2D:
 	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
 	for y in H:

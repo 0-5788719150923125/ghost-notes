@@ -1,75 +1,42 @@
 extends RefCounted
 class_name Drifts
 
-## Drifts - what the wind carries: petals, leaves, seeds, keys and feathers, falling from a tree
-## overhead or blowing through the scene, settling on the table and lifted off it again by a gust (the
-## user, 2026-10-08: "petals could fall from that tree ... either blowing through the scene, or settling
-## on the table, or getting carried-off from the table again after another gust"). The air's `drift`
-## ([Effects]): its registry, made safe there, built and posed here.
+## Drifts - what the wind carries: petals, leaves, seeds, keys and feathers, falling from a tree overhead or blowing through the scene,
+## settling on the table and lifted off it again by a gust. The air's `drift` ([Effects]): its registry, made safe there, built and posed
+## here. Rare, and shaken loose by the wind: now and then one comes loose in the breeze (`every`, seconds between, about), and a gust shakes
+## a few more loose (`shake`). Only petals, never whole flowers.
 ##
-## RARE, AND SHAKEN LOOSE BY THE WIND (the user, the same day, of a tree that shed all the time: "falling
-## petals should be a rare event - because it takes days or even weeks for all of the foliage to fall"):
-## now and then one comes loose in the breeze (`every`, seconds between, about), and a gust shakes a few
-## more loose as it blows (`shake`). Never whole flowers - "whole flowers rarely, if ever, fall from
-## trees" - only their petals.
+## Everything is a function of show time. Each piece lives a planned life ([method _live]): it falls, drifting with the air
+## ([method Winds.carried], in closed form), in one of its look's ways (flat, fluttering, tumbling, or twirling down a small circle), and a
+## gust sets any of them turning over ([method Winds.gust_run]). It lands flat on the cloth, lies there shivering, and each gust strong
+## enough to beat its grip skids it across the cloth or carries it off over the edge. Lives are planned on dice of their own, as far as
+## asked, so any time, asked in any order, poses every piece the same way.
 ##
-## EVERYTHING IS A FUNCTION OF SHOW TIME. Each piece LIVES a planned life ([method _live]): it falls -
-## drifting with the air ([method Winds.carried], in closed form), in one of its look's WAYS: flat,
-## barely rocking; fluttering side to side as a falling leaf does; tumbling over and over, gliding off to
-## one side; or twirling down round a small circle, tipped in to it - and a gust sets any of them
-## turning over, harder the harder it blows ([method Winds.gust_run]), so nothing sails flat on the wind
-## like a thrown disc (the user: "they fly like frisbies. But petals should twirl and spin ... in some
-## cases. Not all"). It lands flat on the cloth, lies there shivering in the breeze, and each gust
-## strong enough to beat its grip skids it across the cloth or carries it off over the edge, turning
-## over as it goes. Lives are planned on dice of their own, as far as they have been asked and no
-## further, so any time, asked in any order, poses every piece the same way.
+## Never through a thing: a fall whose path would pass through the table's edge or anything standing on it is thrown again from elsewhere;
+## a skid stops short of what it runs into. The table says where the deck and every card on the cloth are at any time (its `cover`): a
+## piece never comes down where one lies, never skids into one, and a card coming down on one blows it aside ([method laid]) before the
+## card is down. A piece lies higher than a card is thick and is cupped, so one left under a card would stand up through it.
 ##
-## NEVER THROUGH A THING: a fall whose path would pass through the table's edge or anything standing on
-## it is thrown again from elsewhere; a skid stops short of what it runs into. NOR THROUGH THE CARDS: the
-## table says where the deck and every card lying on the cloth are at any time (its `cover`); a piece
-## never comes down where one lies (one once fell through the deck and lay under it), never skids into
-## one - and A CARD COMING DOWN ON ONE BLOWS IT ASIDE ([method laid]): out past the card's nearest edge,
-## low over the cloth, before the card is down. A piece lies higher than a card is thick and is cupped, so
-## one left under a card stood up through it (the user, 2026-10-11: a card "clipped through a leaf that
-## had fallen on the table").
+## A wash's cards ([method laid]'s `sweeps`, the table's [method TableShuffle.sweeps]: each card's place every 1/20 s) never leave a piece
+## under them. Each card it meets does one of three things on a die of its own: shoves it out the side that came against it, lets it ride
+## (the edge slides in under it onto the face the wash poses), or flicks it (a hop and a tumble; [method _shove]). A rider has momentum:
+## the face under its middle changes its way by no more than it grips, and the still air holds it back, so a card hauled hard or swept
+## fast goes on without it; it slides off the edge and drops to the cloth. Once off, it is free: a card meets a piece only pressing into it
+## with the side it came in by ([method _contact]), and nothing carries it unless its middle is on the face. A card under it is a floor,
+## never a wall. Rides are the rarer outcome and short ([constant SHOVE_ODDS], [constant RIDE_AIR]). Everything a wash does is planned
+## whole from the cards' tracks; once it is over the piece lies where it ended and the gusts take it from there.
 ##
-## NOR UNDER A WASH'S CARDS (the user, 2026-10-14: a petal on the table was "completely unaffected by the
-## card-washing: cards are clipping through the petals ... I would expect the petal to move, possibly even
-## catching on the cards, riding around on them, falling off, tumbling"): the cards a wash slides over the
-## cloth are told ([method laid]'s `sweeps`, the table's [method TableShuffle.sweeps]: each card's place
-## every 1/20 s), and a piece lying where one comes is not left under it. Each card it meets does one of
-## three things to it, on a die of its own: SHOVES it - out the side that came against it; lets it RIDE -
-## the edge slides in under it, onto the face the wash poses; or FLICKS it - a hop and a tumble, to come
-## down on the cloth or on the card beyond ([method _shove]). A RIDER HAS MOMENTUM (the user, same day, of a
-## petal that "keeps following the card even while it is NOT TOUCHING": it "probably needs a little bit of
-## momentum, such that when the underlying card moves - the petal is shaken off of it"): the face under its
-## middle changes its way by no more than it grips, and the still air holds it back as the card sweeps it
-## along, so a card hauled hard or swept fast goes on without it; it slides back over the face, off the
-## edge, and drops to the cloth, which stops it in a few centimeters.
-##
-## AND ONCE OFF, IT IS FREE (the user, again: the petals were "riding" cards around the wash, "which is
-## pretty strange", and slid off them "yet remain attached to them - even though they are way out to the
-## side"): a card meets a piece only pressing into it, with the side it came in by ([method _contact]) -
-## the card it has just slid off, going away, never catches it again, and a side going by is not the far
-## edge it once leapt to, a card's width in a step - and nothing carries it unless its middle is on the
-## face. A card under it is a floor, never a wall: what slides off one card lands on the next. Rides are
-## the rarer outcome and short ([constant SHOVE_ODDS], [constant RIDE_AIR]). Everything a wash does to it
-## is planned whole from the cards' tracks, so any time asked poses it the same; once the wash is over it
-## lies where it ended, and the gusts take it from there.
-##
-## A piece is real geometry - a cupped quad cut to its outline in the shader (shaders/air_drift.gdshader),
-## lit by every light on the table, glowing through where the sun is behind it, casting its small
-## shadow, and blurred by the lens like everything else.
+## A piece is real geometry - a cupped quad cut to its outline in the shader (shaders/air_drift.gdshader), lit by every light on the
+## table, glowing through where the sun is behind it, casting its small shadow, and blurred by the lens like everything else.
 
 const SHADER := preload("res://shaders/air_drift.gdshader")
 
-## WHAT CAN DRIFT: its outline (the shader's `shape`), its length (mm) and the range an agent may set it
-## in, its width against its length, how fast it falls through still air (m/s), how closely it follows
-## the air (1 a petal, more a seed's tuft, which a breath lifts), how far it sways (meters) and how often
-## (a second), how far it rocks as it flutters (radians), how fast it turns over when it tumbles, turns
-## about the upright, and goes round when it twirls (radians a second), how far a gust turns it over
-## (radians a meter of gust), the share of pieces falling each WAY, how deep it is cupped, how much light
-## comes through it, its colors when none are given, and how readily it settles where it lands.
+## What can drift: its outline (the shader's `shape`), its length (mm) and the range an agent may set it in, its width against its length,
+## how fast it falls through still air (m/s), how closely it follows the air (1 a petal, more a seed's tuft, which a breath lifts), how
+## far it sways (meters) and how often (a second), how far it rocks as it flutters (radians), how fast it turns over when it tumbles,
+## turns about the upright, and goes round when it twirls (radians a second), how far a gust turns it over (radians a meter of gust),
+## the share of pieces falling each way, how deep it is cupped, how much light comes through it, its colors when none are given, and
+## how readily it settles where it lands.
 const LOOKS := {
 	"petals": {"about": "blossom petals - cherry, apple, almond, plum - small and pale, fluttering, tumbling or twirling down", "shape": 0,
 		"size": 13.0, "sizes": Vector2(6.0, 25.0), "aspect": 0.78, "fall": 0.45, "carry": 1.0, "sway": 0.05, "beat": 0.9,
@@ -105,13 +72,13 @@ const LOOKS := {
 		"ways": {"flat": 0.3, "flutter": 0.55, "twirl": 0.15},
 		"curl": 0.25, "through": 0.5, "colors": ["#efe9e0", "#d9d2c6"], "settle": 0.6},
 }
-## WHERE THEY COME FROM.
+## Where they come from.
 const FROMS := {
 	"above": "falling from overhead - a tree, a vine, a pergola's flowers - onto the table and round it",
 	"wind": "blown in from the side the wind comes from, across the shot, some landing on the table on the way",
 }
 
-## HOW OFTEN: the seconds between one piece coming loose in the breeze and the next (about - the
+## How often: the seconds between one piece coming loose in the breeze and the next (about - the
 ## default, and the range an agent may set), and the most a gust at its strongest shakes loose.
 const EVERY := Vector3(60.0, 6.0, 600.0)
 const SHAKE := Vector2(1.0, 6.0)
@@ -140,26 +107,22 @@ const LIFT := Vector2(0.12, 1.4)
 const DECK_UP := 0.04
 ## The share of a fall it spends turning flat before it lands (seconds).
 const LANDING := 0.45
-## A lift: how high it hops (meters, at most). A GUST LIFTS WHAT IT IS BLOWING ALONG, never what it is
-## not moving (the user, 2026-10-14: petals "feel like UFOs taking-off. They hover straight up, then drift
-## off", one "straight up, then straight back down"): a skid's hop is at most HOP_SLOPE of the distance it
-## is carried (a piece that goes nowhere does not rise), and one carried off rises as it is blown, to its
-## full height over about OFF_RUN meters, so it leaves along a slant and never straight up. HOW HIGH
-## FOLLOWS HOW HARD (the user, same day: a petal blown along "is probably going to tumble across the
-## table, not lift-off like a helicopter - BOTH should be a possibility"): the hop of a skid and the
-## height of one carried off are both scaled by the gust's peak over the grip ([method _hop]), so a
-## breath just past the grip slides it over the edge a few millimeters up, and a strong gust lifts it.
+## A lift: how high it hops (meters, at most). A gust lifts what it is blowing along, never what it is not moving: a skid's hop is at
+## most HOP_SLOPE of the distance it is carried (a piece that goes nowhere does not rise), and one carried off rises as it is blown, to
+## its full height over about OFF_RUN meters, so it leaves along a slant and never straight up. How high follows how hard: the hop of a
+## skid and the height of one carried off are both scaled by the gust's peak over the grip ([method _hop]), so a breath just past the
+## grip slides it over the edge a few millimeters up, and a strong gust lifts it.
 const HOP := 0.04
 const HOP_SLOPE := 0.16
 const OFF_RUN := 0.3
-## BLOWN ASIDE by a card coming down on it ([method laid]): how long before the card is down it goes, and
+## Blown aside by a card coming down on it ([method laid]): how long before the card is down it goes, and
 ## by when it is clear (seconds); how high it hops and how much room it leaves the card (meters), and
 ## how much further it may go.
 const ASIDE := Vector2(0.85, 0.4)
 const ASIDE_HOP := 0.012
 const ASIDE_ROOM := 0.01
 const ASIDE_MORE := 0.03
-## A WASH'S CARDS SHOVE WHAT LIES ([method _shove]): the share of the cards that shove a piece and, with
+## A wash's cards shove what lies ([method _shove]): the share of the cards that shove a piece and, with
 ## it, that let it ride (the rest flick it); how hard a card must be hauled for a piece riding it to slip
 ## (m/s each second, about: each piece its own - the most the card can change its way); how hard the
 ## still air holds a rider back edge on, against its weight at the speed it falls (so a fast sweep leaves
@@ -191,7 +154,7 @@ const GONE := 3.0
 const BEYOND := 0.3
 
 
-## THE VOCABULARY, as an agent reads it: [method Effects.describe]'s lines for a drift.
+## The vocabulary, as an agent reads it: [method Effects.describe]'s lines for a drift.
 static func describe() -> PackedStringArray:
 	var lines := PackedStringArray()
 	lines.append("DRIFT: {\"name\", \"kind\": \"drift\", \"look\", \"from\", \"every\" %d-%d (seconds, about, between one piece coming loose in the breeze and the next; %d when left out), \"shake\" 0-%d (how many a gust at its strongest shakes loose; %d when left out), \"colors\" [\"#rrggbb\", ...] (each piece takes one), \"size\" (millimeters long, within the look's range), \"settle\" 0-1 (how many of those that land on the table stay there; the rest skid off with the next breath), \"grip\" 0-1 (how hard a gust must blow to lift one lying on the cloth and carry it off: 0 any breath, 1 none ever), \"lying\" 0-%d (how many already lie on the table when the reading begins)} - what the wind carries: now and then one comes loose and falls - flat, fluttering, tumbling over or twirling round - lands on the cloth (never on the deck or a card) and lies there trembling in the breeze, and a gust shakes a few more loose, sets those in the air turning over, and skids what lies across the cloth or carries it off over the edge. The light's `wind` blows them (still air when it has none). Looks, each with its size and the sizes it can be:" % [
@@ -207,7 +170,7 @@ static func describe() -> PackedStringArray:
 	return lines
 
 
-## WHAT AN AGENT WROTE as a drift ([param d]), made safe - or `{}` when its look is not one.
+## What an agent wrote as a drift ([param d]), made safe - or `{}` when its look is not one.
 static func sanitize(d: Dictionary) -> Dictionary:
 	var look := String(d.get("look", "")).strip_edges().to_lower() if d.get("look") is String else ""
 	if not LOOKS.has(look):
@@ -224,7 +187,7 @@ static func sanitize(d: Dictionary) -> Dictionary:
 		"lying": int(Props._num(d.get("lying"), 0.0, 0.0, float(MAX_LYING)))}
 
 
-## A DRIFT BUILT for [param fx] (made safe) on a host's [param stage] ([method Effects.build]: its camera,
+## A drift built for [param fx] (made safe) on a host's [param stage] ([method Effects.build]: its camera,
 ## its `occluders` - the table first, then what stands on it - its regions, and `wind`, a [method
 ## Winds.plan] shared with the light, or still air) from [param salt]: its pieces drawn as one MultiMesh,
 ## its lives planned as they are asked for ([method at]).
@@ -265,10 +228,10 @@ static func build(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D) ->
 		# the breeze's next piece and its number, the next gust to shake some loose, and those shaken loose
 		# that start past the plan
 		"calm_t": 0.0, "calm_n": 0, "gust_i": 0, "pending": []}
-	# THE FIRST may already be on its way down when the show begins
+	# The first may already be on its way down when the show begins
 	var r := _dice(pop, 0, -1, "calm")
 	pop["calm_t"] = -r.randf() * _fall_time(pop) + r.randf() * float(fx["every"]) * 0.5
-	# WHAT ALREADY LIES on the table when the reading begins
+	# What already lies on the table when the reading begins
 	for j in int(fx["lying"]):
 		var lv := _lying(pop, j)
 		if not lv.is_empty():
@@ -281,7 +244,7 @@ static func _fall_time(pop: Dictionary) -> float:
 	return 1.4 / maxf(float((pop["look"] as Dictionary)["fall"]), 0.05)
 
 
-## EVERY PIECE AS IT IS at show time [param t]: `[{xf: Transform3D, color: Color, data: Color}]` - its
+## Every piece as it is at show time [param t]: `[{xf: Transform3D, color: Color, data: Color}]` - its
 ## place, its turn and its size, its color, and the shader's (curl, a seed of its own).
 static func at(pop: Dictionary, t: float) -> Array:
 	_plan_to(pop, t + AHEAD)
@@ -346,7 +309,7 @@ static func _plan_to(pop: Dictionary, until: float) -> void:
 		if not lv.is_empty():
 			_add(pop, lv)
 	pop["pending"] = later
-	# EVERY LIFE STILL GOING is filed into the bins it spans as far as the plan now runs
+	# Every life still going is filed into the bins it spans as far as the plan now runs
 	var lives: Array = pop["lives"]
 	var bins: Dictionary = pop["bins"]
 	var still: Array = []
@@ -392,14 +355,14 @@ static func _blocked(pop: Dictionary, p: Vector3) -> bool:
 	return false
 
 
-## THE RNG of piece [param j] of [param k]: dice of its own.
+## The rng of piece [param j] of [param k]: dice of its own.
 static func _dice(pop: Dictionary, k: int, j: int, what: String) -> RandomNumberGenerator:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([int(pop["salt"]), k, j, what])
 	return r
 
 
-## A PIECE'S OWN WAYS: its size, its color, how it falls - its WAY ([constant LOOKS]' `ways`) - and how
+## A piece's own ways: its size, its color, how it falls - its WAY ([constant LOOKS]' `ways`) - and how
 ## it sways, rocks, turns, tumbles, twirls and is turned over by a gust.
 static func _body(pop: Dictionary, r: RandomNumberGenerator) -> Dictionary:
 	var look: Dictionary = pop["look"]
@@ -462,7 +425,7 @@ static func _cover(pop: Dictionary, p: Vector3, t: float) -> float:
 	return float(f.call(Vector2(p.x, p.z), t, float(pop["size"]) * 0.5)) if f.is_valid() else -INF
 
 
-## PIECE [param j] OF [param k] (0 the breeze's, 1 + a gust's own), its fall starting at [param t0]: where
+## Piece [param j] of [param k] (0 the breeze's, 1 + a gust's own), its fall starting at [param t0]: where
 ## it starts so that it comes down where it was meant to (over the table or past it, or across the shot
 ## from the wind's side), and all it does after - landing, lying, skidding, carried off - planned to its
 ## end. `{}` when no fall clear of everything on the table is found.
@@ -480,7 +443,7 @@ static func _live(pop: Dictionary, k: int, j: int, t0: float) -> Dictionary:
 		# borne on the wind, it sinks slowly
 		lv["fall"] = float(lv["fall"]) * 0.35
 	for attempt in THROWS:
-		# WHERE IT IS MEANT TO COME DOWN, and how high it starts: out of the shot above it
+		# Where it is meant to come down, and how high it starts: out of the shot above it
 		var target: Vector3
 		if blown:
 			# a place in the shot over the table, a little above the cloth, the wind carrying it there
@@ -507,7 +470,7 @@ static func _live(pop: Dictionary, k: int, j: int, t0: float) -> Dictionary:
 			start_y = target.y + float(lv["fall"]) * back
 		var drift := Winds.carried_between(wind, t0, t_at) * float(lv["c"])
 		lv["p0"] = Vector3(target.x - drift.x, start_y, target.z - drift.y)
-		# WHERE IT REALLY GOES, falling to the cloth's height: on the top it lands; past it, on to the floor
+		# Where it really goes, falling to the cloth's height: on the top it lands; past it, on to the floor
 		var land := _fall_until(pop, lv, rest_y)
 		lv["t1"] = land
 		if land < INF:
@@ -517,7 +480,7 @@ static func _live(pop: Dictionary, k: int, j: int, t0: float) -> Dictionary:
 			break
 		if attempt == THROWS - 1:
 			return {}
-	# AFTER IT LANDS
+	# After it lands
 	var segs: Array = []
 	if float(lv["t1"]) < INF:
 		var p: Vector3 = lv["land"]
@@ -596,7 +559,7 @@ static func _xz3(v: Vector2) -> Vector3:
 	return Vector3(v.x, 0.0, v.y)
 
 
-## WHERE A FALLING PIECE IS at [param t]: carried by the air from where it started, swaying - or going
+## Where a falling piece is at [param t]: carried by the air from where it started, swaying - or going
 ## round its small circle as it twirls, or gliding off to one side as it tumbles - sinking at its own
 ## pace with a little lift at the ends of each sway; [param lands] eases the lift out before it lands,
 ## so it comes down on the cloth at its landing time exactly.
@@ -677,7 +640,7 @@ static func _gone_at(pop: Dictionary, lv: Dictionary) -> float:
 	return minf(t, float(lv["t0"]) + 60.0)
 
 
-## ALL IT DOES ONCE IT IS DOWN at [param p] at [param t]: it lies there until a gust blows past
+## All it does once it is down at [param p] at [param t]: it lies there until a gust blows past
 ## [param lift] (m/s); the gust skids it across the cloth to where the gust alone would take it - short
 ## of anything in the way, the deck and the cards too - or, when that is past the table's edge, carries
 ## it off. Under a card no gust reaches it (a card coming down on it sends it aside first: [method
@@ -701,13 +664,13 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 		var go := span.x + (span.z - span.x) * 0.6
 		after = span.x + 1e-3
 		if _cover(pop, here, go) > -INF:
-			# UNDER A CARD: the gust cannot reach it
+			# Under a card: the gust cannot reach it
 			continue
 		segs.append({"kind": "rest", "t": now, "end": go, "from": here, "flip": flip, "yaw": yaw})
 		var stop := span.x + span.y
 		var shift := Winds.gust_carried(wind, g, go, stop) * float(lv["c"])
 		var to := here + _xz3(shift)
-		# SHORT OF WHAT IS IN THE WAY: the first thing on its line stops it there
+		# Short of what is in the way: the first thing on its line stops it there
 		var hit := 1.0
 		for o in pop["things"]:
 			var box: AABB = (o as AABB).grow(float(pop["size"]) * 0.5)
@@ -724,7 +687,7 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 				break
 		var turn := r.randf() < 0.4
 		if hit >= 1.0 and not _over_table(pop, Vector2(to.x, to.z)):
-			# CARRIED OFF, over the edge and away
+			# Carried off, over the edge and away
 			var off := {"kind": "off", "t": go, "end": go + 20.0, "from": here, "flip": flip, "yaw": yaw, "gust": g, "edge": go + 20.0,
 				"rise": _hop(wind, g, lift) * 2.0}
 			var stopped: Variant = _off_plan(pop, lv, off)
@@ -771,9 +734,9 @@ static func _hop(wind: Dictionary, g: int, lift: float) -> float:
 	return HOP * clampf((float((wind["peaks"] as PackedFloat32Array)[g]) - lift) / maxf(lift, 0.05), 0.15, 1.0)
 
 
-## THE CARDS SET DOWN ([param lays]: the air's `lay` moments - `{t, path: [[t, Transform3D], ...]}`, each
-## card as it lies from the moment it is down), whenever the schedule moves. EVERY PIECE LYING WHERE ONE
-## COMES DOWN IS BLOWN ASIDE FIRST ([method _make_way]): each life is what it was planned to do, amended
+## The cards set down ([param lays]: the air's `lay` moments - `{t, path: [[t, Transform3D], ...]}`, each
+## card as it lies from the moment it is down), whenever the schedule moves. every piece lying where one
+## Comes down is blown aside first ([method _make_way]): each life is what it was planned to do, amended
 ## by these - the same for the same cards, asked at any time. The cards a voice has not reached yet are
 ## not known: a piece goes when its card is. [param sweeps] are the wash's cards sliding on the cloth
 ## ([method TableShuffle.sweeps]): what lies where they go is shoved by them ([method _shoved]).
@@ -817,7 +780,7 @@ static func _make_way(pop: Dictionary, lv: Dictionary) -> void:
 	var segs: Array = ((lv["planned"] as Dictionary)["segs"] as Array).duplicate()
 	lv["segs"] = segs
 	lv["end"] = (lv["planned"] as Dictionary)["end"]
-	# THE WASH'S CARDS first: what they leave is what a card coming down then finds
+	# The wash's cards first: what they leave is what a card coming down then finds
 	var sweeps: Array = pop.get("sweeps", [])
 	if not sweeps.is_empty() and not segs.is_empty():
 		_shoved(pop, lv, segs, sweeps)
@@ -864,7 +827,7 @@ static func _make_way(pop: Dictionary, lv: Dictionary) -> void:
 	lv["end"] = float((segs[segs.size() - 1] as Dictionary)["end"])
 
 
-## WHERE A PIECE AT [param from] GOES, out from under the card coming down at [param xf] ([param l] its
+## Where a piece at [param from] goes, out from under the card coming down at [param xf] ([param l] its
 ## place on the card, [param reach] the card's half and the piece's own): past the card's nearest edge
 ## and a little further, or the next nearest when that way is off the top, into a thing, or onto the
 ## deck or another card lying there at [param down]. Null when no way is clear.
@@ -1020,20 +983,16 @@ static func _face(cards: PackedFloat32Array, j: int, p: Vector2) -> float:
 	return maxf(cards[o + 5] + cards[o + 6] * (p.x - cards[o]) + cards[o + 7] * (p.y - cards[o + 1]), 0.0)
 
 
-## HOW A WASH'S CARDS TREAT A PIECE lying at [param seg]'s place from frame [param f0] of wash [param sw]:
-## `{seg: the track, to: where it lies after, end: when, lies: {flip, yaw}}`. Stepped through the cards'
-## own tracks, each step one of three: ON THE CLOTH it slides on what it was given and the cloth soon
-## stops it ([method _slowed]); ON A CARD the face under its middle carries it, no harder than it grips -
-## sticking, it goes where the card does and turns with it; hauled harder, it slides on the face, the
-## way it was going - and once its middle is off the edge it is off, and drops (its card gathered or
-## thrown, with a hop); IN THE AIR it falls as a petal does, turning, to the cloth or the highest face
-## there. A CARD MEETS IT ONLY PRESSING INTO IT ([method _contact]: the side it came in by, never a side
-## moving away - one it has just slid off does not catch it again) and SHOVES it out that side, lets it
-## RIDE - the edge slides in under it, and nothing carries it until its middle is on the face - or FLICKS
-## it ([constant SHOVE_ODDS], a die of its own for each card): a card of the deck is only ever a wall, a
-## card covering what rides another's face is met as one on the cloth. It goes on until the cards are
-## done and it lies still, flat and on the cloth (or three seconds past, whatever it is doing), and what
-## the table's top or a thing standing on it refuses is never taken.
+## How a wash's cards treat a piece lying at [param seg]'s place from frame [param f0] of wash [param sw]: `{seg: the track, to: where it
+## lies after, end: when, lies: {flip, yaw}}`. Stepped through the cards' own tracks, each step one of three: on the cloth it slides on
+## what it was given and the cloth soon stops it ([method _slowed]); on a card the face under its middle carries it, no harder than it
+## grips - sticking, it goes where the card does and turns with it; hauled harder, it slides on the face, the way it was going - and once
+## its middle is off the edge it is off, and drops (its card gathered or thrown, with a hop); in the air it falls as a petal does,
+## turning, to the cloth or the highest face there. A card meets it only pressing into it ([method _contact]: the side it came in by,
+## never a side moving away) and shoves it out that side, lets it ride (the edge slides in under it, and nothing carries it until its
+## middle is on the face) or flicks it ([constant SHOVE_ODDS], a die of its own for each card): a card of the deck is only ever a wall,
+## a card covering what rides another's face is met as one on the cloth. It goes on until the cards are done and it lies still, flat and
+## on the cloth (or three seconds past, whatever it is doing), and what the table's top or a thing standing on it refuses is never taken.
 static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Dictionary, f0: int, r: RandomNumberGenerator) -> Dictionary:
 	var dice: Array = lv.get("dice", [0, 0])
 	var hz := float(sw["hz"]) * float(SUBSTEPS)
@@ -1072,7 +1031,7 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 		s += 1
 		var cur := _cards_at(sw, mini(s, last))
 		var pp := p
-		# WHERE IT GOES ON ITS OWN, by what it is doing
+		# Where it goes on its own, by what it is doing
 		match mode:
 			0:
 				p += v * dt
@@ -1082,8 +1041,8 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 				var c := Vector2(cur[o], cur[o + 1])
 				var w := cur[o + 2]
 				if cur[o + 3] < 0.5:
-					# ITS CARD THROWN out from under it: tossed with a hop and a tumble, the way the card
-					# went; GATHERED into the deck: off it, out the nearest side, in the air until it is clear
+					# Its card thrown out from under it: tossed with a hop and a tumble, the way the card
+					# went; gathered into the deck: off it, out the nearest side, in the air until it is clear
 					# (the deck is a wall)
 					mode = 2
 					vy = r.randf_range(0.1, 0.3)
@@ -1100,14 +1059,11 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 					spin = r.randf_range(FLICK_SPIN.x, FLICK_SPIN.y) * (1.0 if r.randf() < 0.5 else -1.0) * 0.6
 					aloft = 0.0
 				else:
-					# THE FACE UNDER ITS MIDDLE CARRIES IT (the user, 2026-10-14: petals slid off the cards
-					# "yet remain attached to them - even though they are way out to the side"): the way
-					# the card's own point under it goes this step, changed by no more than it grips -
-					# and nothing at all while it is not on the face (climbing on, the edge sliding in
-					# under it)
+										# the face under its middle carries it: the way the card's own point under it goes this step, changed by no more than
+										# it grips - and nothing at all while it is not on the face (climbing on, the edge sliding in under it)
 					var lb := _local(pp, Vector2(before[o], before[o + 1]), before[o + 2])
 					if minf(half.x - absf(lb.x), half.y - absf(lb.y)) >= 0.0:
-						# and THE AIR it is carried through holds it back: as hard as its weight when it goes
+						# and the air it is carried through holds it back: as hard as its weight when it goes
 						# as fast as it falls, but edge on ([constant RIDE_AIR]) - a card swept fast goes on
 						# without it
 						var drag := -v * (9.8 * RIDE_AIR * v.length() / (fall * fall))
@@ -1124,7 +1080,7 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 					var depth := minf(half.x - absf(l.x), half.y - absf(l.y))
 					up = up or depth >= 0.0
 					if (up and depth < 0.0) or depth < -m:
-						# OFF ITS EDGE, with the way it was going: down to the cloth (or a face), which stops it
+						# Off its edge, with the way it was going: down to the cloth (or a face), which stops it
 						mode = 2
 						vy = 0.0
 						spin = r.randf_range(FLICK_SPIN.x, FLICK_SPIN.y) * (1.0 if r.randf() < 0.5 else -1.0) * 0.3
@@ -1137,12 +1093,12 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 				roll += spin * dt
 				aloft += dt
 				tilt = 0.4 * sin(aloft * 9.0)
-		# WHAT IS UNDER IT: the highest face of the cards on the cloth that hold it
+		# What is under it: the highest face of the cards on the cloth that hold it
 		var under := _under(cur, p)
 		var top := int(under.x)
 		var support := under.y
 		if mode == 2 and y <= support:
-			# LANDED, on the card that is there - or the cloth
+			# Landed, on the card that is there - or the cloth
 			spin = 0.0
 			vy = 0.0
 			if top >= 0:
@@ -1153,7 +1109,7 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 			else:
 				mode = 0
 				y = 0.0
-		# THE CARDS PRESSING INTO IT, as the one nearest the top is met first; a few turns to settle between two
+		# The cards pressing into it, as the one nearest the top is met first; a few turns to settle between two
 		var touched := false
 		if mode != 2 or y < support + 0.003:
 			for _it in 3:
@@ -1203,12 +1159,12 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 				if kind != 1 and refused and not wall:
 					kind = 1
 				if kind == 1 and not wall:
-					# UP ONTO IT: the edge slides in under it, where it is
+					# Up onto it: the edge slides in under it, where it is
 					mode = 1
 					on = hit
 					up = false
 				elif kind == 2 and not wall and not refused:
-					# FLICKED: out of the way with a hop, and over
+					# Flicked: out of the way with a hop, and over
 					p = to
 					v = out_w * r.randf_range(FLICK_SPEED.x, FLICK_SPEED.y) + vc * 0.6
 					mode = 2
@@ -1217,21 +1173,20 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 					aloft = 0.0
 					break
 				elif not refused:
-					# SHOVED, ahead of the card's edge (off the face it rode, perhaps: then it drops)
+					# Shoved, ahead of the card's edge (off the face it rode, perhaps: then it drops)
 					p = to
 					v = out_w * maxf(vc.dot(out_w), 0.0)
 					if bool(hit_c["under"]):
-						# out from under a card no faster than SQUEEZE, however many it is under
+						# out from under a card no faster than squeeze, however many it is under
 						break
 				else:
 					break
-		# WHAT THE TABLE'S TOP AND ITS THINGS REFUSE
+		# What the table's top and its things refuse
 		if mode != 1 and p != pp and (not _on_top(pop, p) or _blocked(pop, Vector3(p.x, base_y + 0.004, p.y))):
 			p = pp
 			v = Vector2.ZERO
-		# OVER A FACE, IT LIES ON IT, never under it: on the cloth and pushed onto a card, or one slid in
-		# under it faster than it could be met - and in the air, flicked from the cloth to a place over
-		# a card, it starts from that card's face (it had hung a step at the cloth's height, under it)
+				# over a face, it lies on it, never under it: on the cloth and pushed onto a card, or one slid in under it faster than it could be
+				# met - and in the air, flicked from the cloth to a place over a card, it starts from that card's face
 		under = _under(cur, p)
 		if mode == 0 and under.x >= 0.0:
 			mode = 1
@@ -1239,11 +1194,11 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 			up = true
 		elif mode == 2 and under.x >= 0.0 and y < under.y + 0.0003:
 			y = under.y + 0.0003
-		# ITS HEIGHT AND TURN: up with the face it lies on at once, and down to where it lies by easing
+		# Its height and turn: up with the face it lies on at once, and down to where it lies by easing
 		if mode != 2:
 			var want := under.y + 0.0003 if under.x >= 0.0 else 0.0
 			if mode == 1:
-				# CLIMBING ON: the face's height comes in as its middle comes over the edge, from half its
+				# Climbing on: the face's height comes in as its middle comes over the edge, from half its
 				# own size outside it - never held up in the air beside the card
 				var l := _local(p, Vector2(cur[on * st], cur[on * st + 1]), cur[on * st + 2])
 				var depth := minf(half.x - absf(l.x), half.y - absf(l.y))
@@ -1254,7 +1209,7 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 		pos.append(Vector3(p.x, base_y + y, p.y))
 		ang.append(Vector3(yaw, roll, tilt))
 		before = cur
-		# DONE: the cards are over, and it lies still on the cloth
+		# Done: the cards are over, and it lies still on the cloth
 		if s >= last and mode == 0 and not touched and v.length() < 0.003 and absf(y) < 0.0003 \
 				and absf(roll - roundf(roll / PI) * PI) < 0.02 and absf(tilt) < 0.02:
 			calm += 1
@@ -1262,7 +1217,7 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 				break
 		else:
 			calm = 0
-	# IT LIES FLAT, on the cloth, where it is
+	# It lies flat, on the cloth, where it is
 	roll = roundf(roll / PI) * PI
 	pos[pos.size() - 1] = Vector3(p.x, base_y, p.y)
 	ang[ang.size() - 1] = Vector3(yaw, roll, 0.0)
@@ -1273,15 +1228,13 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 		"lies": {"flip": posmod(int(roundf(roll / PI)), 2) == 1, "yaw": yaw}}
 
 
-## HOW CARD [param j] OF [param cur] PRESSES INTO a piece at [param p] going [param v] (at [param pp] a step
-## of [param dt] ago, when the cards were [param was]), the piece inside its edge by [param m] (half its
-## own size): `{out: the way it is pushed (xz), depth: how far, vel: the card's own point there (m/s),
-## under: whether it was there already}` - or empty when the card is not pressing into it. The side it
-## presses with is the side the piece came in by (once the side the card was going toward, which could be
-## the far one: a piece leapt a card's width in a step). A card that was there already - it came down
-## there, or the piece is caught in the deck it was gathered into - presses only while the piece's middle
-## is under it, out the nearest side, [constant SQUEEZE] at most a second; one that is not moving into it
-## (the card it has just slid off, one going by alongside) does not touch it at all.
+## How card [param j] of [param cur] presses into a piece at [param p] going [param v] (at [param pp] a step of [param dt] ago, when the
+## cards were [param was]), the piece inside its edge by [param m] (half its own size): `{out: the way it is pushed (xz), depth: how far,
+## vel: the card's own point there (m/s), under: whether it was there already}` - or empty when the card is not pressing into it. The
+## side it presses with is the side the piece came in by (not the side the card was going toward, which could be the far one: a piece
+## can leap a card's width in a step). A card that was there already - it came down there, or the piece is caught in the deck it was
+## gathered into - presses only while the piece's middle is under it, out the nearest side, [constant SQUEEZE] at most a second; one
+## that is not moving into it (the card it has just slid off, one going by alongside) does not touch it at all.
 static func _contact(cur: PackedFloat32Array, was: PackedFloat32Array, j: int, p: Vector2, pp: Vector2, v: Vector2,
 		m: float, dt: float) -> Dictionary:
 	var o := j * CARD_STRIDE
@@ -1308,7 +1261,7 @@ static func _contact(cur: PackedFloat32Array, was: PackedFloat32Array, j: int, p
 				side = k
 	var there := side < 0 or out_by < -0.0002
 	if there:
-		# THERE ALREADY: the nearest way out
+		# There already: the nearest way out
 		side = 0
 		for k in 4:
 			if absf(reach.dot(sides[k])) - l.dot(sides[k]) < absf(reach.dot(sides[side])) - l.dot(sides[side]):
@@ -1407,7 +1360,7 @@ static func _off_plan(pop: Dictionary, lv: Dictionary, s: Dictionary) -> Variant
 
 # --- posed ---------------------------------------------------------------------------------------------
 
-## LIFE [param lv] POSED at [param t]: its place, its turn and its size (x across it, z along it, y the
+## Life [param lv] posed at [param t]: its place, its turn and its size (x across it, z along it, y the
 ## way its face looks).
 static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 	var size := float(lv["size"])
@@ -1417,7 +1370,7 @@ static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 		var at := _fall_pos(pop, lv, t)
 		var b := _falling_basis(pop, lv, t)
 		if t1 < INF and t > t1 - LANDING:
-			# TURNING FLAT as it comes down
+			# Turning flat as it comes down
 			var e := smoothstep(t1 - LANDING, t1, t)
 			b = Basis(b.get_rotation_quaternion().slerp(_lying_basis(bool(lv["flip"]), float(lv["rest_yaw"])).get_rotation_quaternion(), e))
 		return Transform3D(b * scale, at)
@@ -1428,7 +1381,7 @@ static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 		var flat := _lying_basis(bool(d["flip"]), float(d["yaw"]))
 		match String(d["kind"]):
 			"rest":
-				# TREMBLING IN THE BREEZE, harder as it rises
+				# Trembling in the breeze, harder as it rises
 				var shiver := 0.18 * Winds.strength_at(pop["wind"], t) * sin(17.0 * t + float(lv["seed"]) * 40.0)
 				return Transform3D(Basis(lv["shiver_ax"], shiver) * flat * scale, d["from"])
 			"skid", "aside":
@@ -1448,7 +1401,7 @@ static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 						b = Basis(axis.normalized(), PI * along) * flat
 				return Transform3D(b * scale, at)
 			"shoved":
-				# SHOVED, RIDING AND FLICKED by a wash's cards: the planned track, a sample a step
+				# Shoved, riding and flicked by a wash's cards: the planned track, a sample a step
 				var at: PackedVector3Array = d["pos"]
 				var an: PackedVector3Array = d["ang"]
 				var f := clampf((t - float(d["t"])) * float(d["hz"]), 0.0, float(at.size() - 1))
@@ -1458,7 +1411,7 @@ static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 				var b := Basis(Vector3.UP, w.x) * Basis(Vector3.RIGHT, w.z) * Basis(Vector3.FORWARD, w.y)
 				return Transform3D(b * scale, at[i0].lerp(at[i1], f - float(i0)))
 			"off":
-				# TURNING OVER as the gust carries it, harder the harder it blows; a key spins as it falls
+				# Turning over as the gust carries it, harder the harder it blows; a key spins as it falls
 				var dt := t - float(d["t"])
 				var b := flat
 				if String(lv["way"]) == "rotor":
@@ -1475,7 +1428,7 @@ static func _lying_basis(flip: bool, yaw: float) -> Basis:
 	return Basis(Vector3.UP, yaw) * (Basis(Vector3.FORWARD, PI) if flip else Basis.IDENTITY)
 
 
-## HOW A FALLING PIECE IS TURNED at [param t], by its way: turning slowly about the upright; rocking
+## How a falling piece is turned at [param t], by its way: turning slowly about the upright; rocking
 ## with its sway (tipped toward the way it swings, as a falling leaf rocks); tumbling over and over; or
 ## twirling round, tipped in toward the circle it goes round. Whatever its way, a gust turns it over,
 ## harder the harder it blows. A seed's tuft keeps upright, its fluff to the sky; a key spins on its own.
@@ -1484,7 +1437,7 @@ static func _falling_basis(pop: Dictionary, lv: Dictionary, t: float) -> Basis:
 	var b := Basis(Vector3.UP, float(lv["yaw"]) + float(lv["spin"]) * dt)
 	match String(lv["way"]):
 		"rotor":
-			# A KEY'S WING tips down from its seed as it spins
+			# A key's wing tips down from its seed as it spins
 			return b * Basis(Vector3.RIGHT, 0.35)
 		"twirl":
 			var a := float(lv["phase"]) + float(lv["twirl"]) * dt

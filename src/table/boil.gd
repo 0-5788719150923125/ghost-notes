@@ -1,23 +1,19 @@
 extends RefCounted
 class_name Boil
 
-## Boil - A LIQUID'S BUBBLES, ONE STREAM SEEN AND HEARD (next/table_physics.md, "Primitives"): how hard a liquid boils (its
-## `boil`, [constant Motions.STATES], 0 still to 2 a rolling boil) is a seeded stream of bubbles breaking at its surface, each
-## with its moment, its place and its size - a pure function of the liquid, the time and how hard it boils then, so the table
-## draws each where it breaks ([method TablePhysics._draw_liquids]), the bake lets the big ones dent the surface
-## ([SurfaceWaves]), and [WorkSounds] hears each one as it breaks: the same bubbles, never a sound with nothing seen.
+## Boil - a liquid's bubbles, one stream seen and heard (next/table_physics.md, "Primitives"): how hard a liquid boils (its `boil`,
+## [constant Motions.STATES], 0 still to 2 a rolling boil) is a seeded stream of bubbles breaking at its surface, each with its moment,
+## its place and its size - a pure function of the liquid, the time and how hard it boils then, so the table draws each where it breaks
+## ([method TablePhysics._draw_liquids]), the bake lets the big ones dent the surface ([SurfaceWaves]), and [WorkSounds] hears each one as
+## it breaks: the same bubbles, never a sound with nothing seen.
 ##
-## The user, 2026-10-31, of a pot "only steaming", its brew built at `boil` 0.2: "there is a "bloop" sound playing constantly in
-## the background, maybe 1 or 2 times per second ... If it is supposed to be the sound of liquid boiling, then I think it's too
-## slow: a boil would have more rapid bubbling ... unless it was a very quiet, fast one (a very low rolling boil)." It had been
-## seven bubbles a second at a boil of 1, each 320 to 900 Hz - a bubble 4 to 10 mm across - so a simmer was a slow run of big
-## bloops. A REAL POT (Minnaert, 1933; Leighton, "The Acoustic Bubble", 1994): a bubble rings at about 3.26 / its radius (Hz, the
-## radius in meters) - a millimeter's at 3.3 kHz, a centimeter's at 330 Hz; a pot coming up to a simmer sends many small bubbles
-## up from its floor, faint and quick, and a rolling boil many big ones. So the stream grows FASTER than the boil (its rate a
-## power of it, [constant RATE] at a rolling boil over a pot [constant ACROSS] wide), its bubbles grow with it ([method radii]),
-## and each is as loud as it is big: a simmer is a quiet fizz of ticks, a rolling boil a busy bubbling, never a slow bloop.
+## A bubble rings at about 3.26 / its radius (Hz, radius in meters; Minnaert, 1933; Leighton, "The Acoustic Bubble", 1994): a millimeter's
+## at 3.3 kHz, a centimeter's at 330 Hz. A pot coming up to a simmer sends many small, faint, quick bubbles up from its floor, and a rolling
+## boil many big ones. So the stream grows faster than the boil (its rate a power of it, [constant RATE] at a rolling boil over a pot
+## [constant ACROSS] wide), its bubbles grow with it ([method radii]), and each is as loud as it is big: a simmer is a quiet fizz of ticks,
+## a rolling boil a busy bubbling.
 
-## Bubbles a second breaking over a surface ACROSS wide (meters) at a rolling boil (`boil` 2), and the power of the boil they
+## Bubbles a second breaking over a surface across wide (meters) at a rolling boil (`boil` 2), and the power of the boil they
 ## come at (0.2, a simmer: about a tenth of a rolling boil's share, eighteen a second).
 const RATE := 220.0
 const ACROSS := 0.16
@@ -64,7 +60,7 @@ static func pitch(r: float) -> float:
 	return MINNAERT / maxf(r, 1e-5)
 
 
-## THE BUBBLES of the liquid keyed [param key] that break from [param t0] to [param t1] (show seconds): `[{t, at (Vector2, on
+## The bubbles of the liquid keyed [param key] that break from [param t0] to [param t1] (show seconds): `[{t, at (Vector2, on
 ## its surface from its middle, a share of its radius), r (meters)}]`, in time order - how hard it boils at a slot's start read
 ## from [param boil_at] (a Callable of show time), its surface [param across] meters wide. The same for every asker.
 static func bubbles(key: int, t0: float, t1: float, boil_at: Callable, across: float) -> Array:

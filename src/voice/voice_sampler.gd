@@ -1,33 +1,26 @@
 extends PanelContainer
 class_name VoiceSampler
 
-## VoiceSampler - "echo a living voice": record the player reading a fixed
-## passage, MEASURE the voice (never keep it), and mint a brand-new seed
-## whose traits and prosody genome mimic the source.
+## VoiceSampler - "echo a living voice": record the player reading a fixed passage, measure the voice
+## (the recording is never kept), and mint a new seed whose traits and prosody genome mimic the source.
 ##
-## The recording is statistics fodder only: what leaves this panel is ~20
-## scalars - a trait vector (the closed-form inversions of
-## [Voice.Spec.from_traits]) and a partial walk genome (the measured keys;
-## [Voice.ProsodyWalk] backfills the rest from its PRIOR, the same contract
-## a frozen adrenochrome genome already rides). The synthesized voice stays
-## fully synthetic - the seed just SITS where the living voice sits: its
-## pitch, its tempo, its breathiness, its pausing, its melodic spread.
+## What leaves this panel is ~20 scalars: a trait vector (the closed-form inversions of
+## [Voice.Spec.from_traits]) and a partial walk genome (the measured keys; [Voice.ProsodyWalk] backfills
+## the rest from its prior, as for a frozen adrenochrome genome). The voice stays synthetic - the seed
+## sits where the living voice sits: pitch, tempo, breathiness, pausing, melodic spread.
 ##
-## Recording is the stock Godot microphone pattern: an
-## [AudioStreamMicrophone] played onto a MUTED bus carrying an
-## [AudioEffectRecord]. The Master bus is pulled down while the mic is
-## open, so the looping take cannot bleed into the measurement. Analysis
-## runs on a [WorkerThreadPool] thread (a few seconds of GDScript DSP);
-## `seed_ready` fires back on the main thread.
+## Recording is the stock Godot microphone pattern: an [AudioStreamMicrophone] played onto a muted bus
+## carrying an [AudioEffectRecord]. The Master bus is pulled down while the mic is open, so the take
+## cannot bleed into the measurement. Analysis runs on a [WorkerThreadPool] thread; `seed_ready` fires
+## back on the main thread.
 
 signal seed_ready(traits: Dictionary, genome: Dictionary, report: String)
 
 const BUS_NAME := "VoiceIn"
 const MIN_SECONDS := 8.0            # too little speech = statistics of nothing
 const MAX_SECONDS := 45.0           # auto-stop; the passage reads in ~20-30 s
-# The passage is the measurement instrument: statements AND a question (for
-# terminal contours), an unpunctuated run (for emergent breath placement),
-# commas (for pause style), and plenty of vowels to track pitch through.
+# The passage is the measurement instrument: statements and a question (terminal contours), an
+# unpunctuated run (breath placement), commas (pause style), and plenty of vowels for pitch tracking.
 const PASSAGE := ("Once upon a time, the river spoke softly to the stones. "
 	+ "Did the water remember every voice it carried? "
 	+ "I think it kept them all somewhere below the surface waiting "
@@ -94,17 +87,15 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 11)
 	_status.modulate = Color(1, 1, 1, 0.75)
 	col.add_child(_status)
-	# the bus is created ONCE, at boot, not lazily mid-session: reshaping the
-	# audio server's bus layout while the mixer is live is exactly the kind
-	# of thing that corrupts from under the audio thread
+	# the bus is created once, at boot: reshaping the bus layout while the mixer is live can corrupt
+	# state under the audio thread
 	_ensure_bus()
 
 
 func open() -> void:
 	if _analyzing:
 		return
-	# the show goes quiet the moment the booth opens - a voice looping under
-	# the passage would read along into the microphone
+	# the show goes quiet when the booth opens, or a looping voice would read into the microphone
 	_set_show_quiet(true)
 	_device_pick.clear()
 	for dev in AudioServer.get_input_device_list():
@@ -128,8 +119,7 @@ func _ensure_bus() -> void:
 		idx = AudioServer.bus_count
 		AudioServer.add_bus(idx)
 		AudioServer.set_bus_name(idx, BUS_NAME)
-		# muted: the mic must never reach the speakers (feedback), but a muted
-		# bus still feeds its effects - the stock Godot mic-record pattern
+		# muted so the mic never reaches the speakers, but a muted bus still feeds its effects
 		AudioServer.set_bus_mute(idx, true)
 		_effect = AudioEffectRecord.new()
 		_effect.format = AudioStreamWAV.FORMAT_16_BITS
@@ -150,9 +140,8 @@ func _toggle_record() -> void:
 		_start_recording()
 
 
-## Quiet (or restore) the whole show while the recording booth is open. The
-## mute lives on the MASTER bus volume so the take, the grain, everything
-## the mic could overhear goes down together; balanced calls only.
+## Quiet (or restore) the whole show while the recording booth is open. The mute is on the Master bus
+## volume so everything the mic could overhear goes down together; calls must be balanced.
 func _set_show_quiet(quiet: bool) -> void:
 	if quiet == _show_quiet:
 		return
@@ -214,8 +203,7 @@ func _analysis_done(out: Dictionary) -> void:
 
 
 func _exit_tree() -> void:
-	# shutdown hardening: never leave the record effect or the mic stream
-	# live while the engine tears the audio driver down
+	# shutdown: never leave the record effect or the mic stream live while the audio driver tears down
 	if _recording and _effect != null:
 		_effect.set_recording_active(false)
 	if _player != null:
@@ -246,15 +234,15 @@ static func _wav_to_mono(wav: AudioStreamWAV) -> Dictionary:
 
 
 # ---- the measurement --------------------------------------------------------
-# Static and UI-free so tests/voice/sampler_check.gd can round-trip it headless
-# against SYNTHESIZED voices with known traits.
+# Static and UI-free so tests/voice/sampler_check.gd can round-trip it headless against synthesized
+# voices with known traits.
 
 
 ## Analyze a mono recording into {traits, genome, report}, or {} if there is
 ## not enough usable speech. Deterministic per input.
 static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
-	# two decimation ladders: ~5.5 kHz for the f0/periodicity work (cheap
-	# autocorrelation lags), ~8 kHz for energy and band balance
+	# two decimation ladders: ~5.5 kHz for f0/periodicity (cheap autocorrelation lags), ~8 kHz for
+	# energy and band balance
 	var x0 := _decimate(pcm, maxi(int(round(sr / 5500.0)), 1))
 	var fs0 := sr / float(maxi(int(round(sr / 5500.0)), 1))
 	var x8 := _decimate(pcm, maxi(int(round(sr / 8000.0)), 1))
@@ -320,10 +308,8 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 				best_r = r
 				best_lag = lag
 			lag += 2
-		# octave robustness: a subharmonic (double-period) lock often scores a
-		# hair above the true period and flips the track down an octave -
-		# measured as wildly inflated melodic spread. Prefer the SHORTEST lag
-		# within 90% of the best correlation.
+		# octave robustness: a subharmonic lock often scores a hair above the true period and flips
+		# the track down an octave, so take the shortest lag within 90% of the best correlation
 		for k in lags_arr.size():
 			if rs_arr[k] >= best_r * 0.9:
 				best_lag = lags_arr[k]
@@ -363,11 +349,9 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 		semis.append(12.0 * log(v / f0_med) / log(2.0))
 	semis.sort()
 	var spread: float = semis[int(semis.size() * 0.85)] - semis[int(semis.size() * 0.15)]
-	# melodic MODES: the histogram of where the melody actually sits (0.5 st
-	# bins, smoothed) - its peaks are the recording's own pitch anchors (they
-	# will REPLACE the seeded shelf, see Voice.ProsodyWalk), and how much of
-	# the melody sits ON them is the measured gravity: how strongly this
-	# speaker quantizes toward their notes. This is the inflection.
+	# melodic modes: the histogram of where the melody sits (0.5 st bins, smoothed). Its peaks are the
+	# recording's own pitch anchors (they replace the seeded shelf, see Voice.ProsodyWalk), and the
+	# share of melody on them is the gravity: how strongly this speaker quantizes toward their notes.
 	var nbins := 57
 	var hist := PackedFloat32Array()
 	hist.resize(nbins)
@@ -394,8 +378,7 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 				near += 1
 				break
 	var gravity := clampf((float(near) / maxf(float(semis.size()), 1.0) - 0.3) * 1.6, 0.0, 0.8)
-	# jitter proxy: second difference of the voiced f0 track (removes the
-	# slow intonation trend, keeps the cycle-scale wobble)
+	# jitter proxy: second difference of the voiced f0 track (drops the slow intonation trend)
 	var jits: Array = []
 	for i in range(1, vf0.size() - 1):
 		jits.append(absf(float(vf0[i]) - (float(vf0[i - 1]) + float(vf0[i + 1])) * 0.5) / f0_med)
@@ -423,12 +406,9 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 			if run_len * 0.02 >= 0.15:
 				pauses.append(run_len * 0.02)
 			run_len = 0
-	# syllable nuclei: peaks of a deliberately re-smoothed envelope. The raw
-	# EMA envelope wobbles with the voice's amp modulation and splits long
-	# vowels into extra peaks - the count then scales with duration and the
-	# RATE reads constant (measured). A centered boxcar plus a wider
-	# refractory keeps one peak per nucleus. (An envelope-autocorrelation
-	# tempo was tried and locked onto stress feet / f0 ripple instead.)
+	# syllable nuclei: peaks of a re-smoothed envelope. The raw EMA envelope wobbles with amplitude
+	# modulation and splits long vowels into extra peaks, so the rate would scale with duration; a
+	# centered boxcar plus a wider refractory keeps one peak per nucleus.
 	var env2 := PackedFloat32Array()
 	env2.resize(nframes)
 	for f in nframes:
@@ -447,10 +427,8 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 		if env[f] >= e95 * 0.07:
 			speech_time += 0.02
 	var syll_rate: float = float(peaks.size()) / maxf(speech_time, 1.0)
-	# cadence RANGE from 2 s windows: a human tempo is not one number - the
-	# walk realizes it as a journey between pace_hot (the fast stretches) and
-	# pace_calm (the slow ones), so measure the recording's OWN percentiles
-	# and hand the walk that actual range instead of a heuristic
+	# cadence range from 2 s windows: the walk realizes tempo as a journey between pace_hot and
+	# pace_calm, so measure the recording's own percentiles and hand it that range
 	var wrates: Array = []
 	var wstart := 0
 	while wstart + 100 <= nframes:
@@ -502,9 +480,8 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 	var pitch := clampf(log(f0_med / 130.0) / log(2.0) / 0.85, -1.0, 1.0)
 	var tract := clampf(0.6 * pitch + 1.2 * (hf_med - 0.25), -1.0, 1.0)
 	if float(fm[0]) > 0.0 and float(fm[1]) > 0.0:
-		# formant_scale = 2^(0.22 * tract); the measured F1/F2 medians against
-		# the reference vowel space give the scale directly (log-mean of the
-		# two ratios), so tract inverts in closed form like everything else
+		# formant_scale = 2^(0.22 * tract); the measured F1/F2 medians against the reference vowel
+		# space give the scale directly (log-mean of the two ratios)
 		tract = clampf((log(float(fm[0]) / F1_REF) + log(float(fm[1]) / F2_REF))
 			/ log(2.0) * 0.5 / 0.22, -1.0, 1.0)
 	var traits := {
@@ -528,11 +505,9 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 		"pace_hot": clampf(syll_rate / maxf(rate_hi, 0.1), 0.6, 1.1),
 		"pace_calm": clampf(syll_rate / maxf(rate_lo, 0.1), 0.9, 1.7),
 		"gravity": gravity,
-		# THE ECHO IS THE IDENTITY: the rolled ornament layer is clamped down
-		# so nothing performs what the recording never did - heavy damp
-		# starves spawned oscillators, low verve keeps descendants refining
-		# instead of elaborating, moderate act_gain keeps the sparse
-		# activations (echo, swell, stretch) from firing theatrically
+		# the rolled ornament layer is clamped down so nothing performs what the recording never did:
+		# heavy damp starves spawned oscillators, low verve keeps descendants refining, moderate
+		# act_gain keeps the sparse activations (echo, swell, stretch) from firing theatrically
 		"damp": 0.8,
 		"verve": 0.15,
 		"act_gain": 0.7,
@@ -545,19 +520,16 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 	return {"traits": traits, "genome": genome, "report": report}
 
 
-# Reference vowel-space medians: what _formants measures at formant_scale
-# 1.0 - the anchor the tract inversion measures against. Calibrated as the
-# geometric midpoint of tract +-0.7 renderings measured by THIS estimator
-# (tests/voice/sampler_check.gd round-trips it: +-0.7 recovers to ~+-0.68).
+# Reference vowel-space medians: what _formants measures at formant_scale 1.0, the anchor the tract
+# inversion measures against (the geometric midpoint of tract +-0.7 renderings measured by this
+# estimator; tests/voice/sampler_check.gd round-trips it).
 const F1_REF := 458.0
 const F2_REF := 1720.0
 
 
-## LPC formant estimate: median F1/F2 across strong voiced frames (the vowel
-## space's center of mass). Levinson-Durbin on pre-emphasized 30 ms frames;
-## the envelope's peaks are picked on a coarse frequency grid - medians need
-## no root-finding. Returns [F1_med, F2_med, frames_used]; F1_med <= 0 when
-## tracking failed (too few clean frames).
+## LPC formant estimate: median F1/F2 across strong voiced frames. Levinson-Durbin on pre-emphasized
+## 30 ms frames; the envelope's peaks are picked on a coarse frequency grid. Returns [F1_med, F2_med,
+## frames_used]; F1_med <= 0 when tracking failed (too few clean frames).
 static func _formants(x8: PackedFloat32Array, fs8: float, hop8: int,
 		voiced: PackedByteArray, energies: PackedFloat32Array, e95: float) -> Array:
 	var order := 10

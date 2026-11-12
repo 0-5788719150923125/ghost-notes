@@ -1,21 +1,21 @@
 extends RefCounted
 class_name Stitch
 
-## Stitch - A STRETCH OF AN EXPORT RENDERED AGAIN, PUT BACK IN ITS PLACE (next/editing.md step 13; next/cloud_render.md's
-## `--from` and stitch, on this machine): a late fix renders its stretch, not the hours a long video takes (about 9x its length).
+## Stitch - a stretch of an export rendered again and put back in its place (next/editing.md step 13; next/cloud_render.md's
+## `--from` and stitch, on this machine): a late fix renders its stretch, not the whole video.
 ##
-## WHY IT CAN BE CUT WITHOUT ENCODING AGAIN: an export's keyframes stand every [constant GOP_S] seconds exactly (the encoder's
-## keyframe interval and its least are both that - [method Exporter._start_transcode]), so a stretch widened out to those
-## seconds ([method span]) begins and ends where the old video's pictures stand on their own. The stretch is rendered there
-## (`--from`/`--until`) and encoded with the same settings; then the old video's head and tail are COPIED, never decoded, the
-## three joined by ffmpeg's concat demuxer, and the old video's WHOLE audio laid under them - one track, no seam. What it
-## replaces is kept beside it ([method kept_name]). Every step is one ffmpeg run whose argv is built here, so a gate holds them.
+## An export's keyframes stand every [constant GOP_S] seconds exactly (the encoder's keyframe interval and its least are both
+## that, see [method Exporter._start_transcode]), so a stretch widened to those seconds ([method span]) begins and ends where
+## the old video's pictures stand on their own. The stretch is rendered there (`--from`/`--until`) and encoded with the same
+## settings; the old video's head and tail are copied, never decoded, the three joined by ffmpeg's concat demuxer, and the old
+## video's whole audio laid under them as one track. What it replaces is kept beside it ([method kept_name]). Every step is
+## one ffmpeg run whose argv is built here, so a gate holds them.
 
 ## An export's keyframe interval, seconds: what the encoder is told ([method Exporter._start_transcode]).
 const GOP_S := 2.0
 
 
-## THE STRETCH AS RENDERED: [param t0] to [param t1] (seconds of the video) widened to the keyframes about them, within
+## The stretch as rendered: [param t0] to [param t1] (seconds of the video) widened to the keyframes about them, within
 ## [param length]. Vector2(start, end).
 static func span(t0: float, t1: float, length: float) -> Vector2:
 	var a := floorf(maxf(t0, 0.0) / GOP_S) * GOP_S
@@ -23,10 +23,9 @@ static func span(t0: float, t1: float, length: float) -> Vector2:
 	return Vector2(a, maxf(b, minf(a + GOP_S, length)))
 
 
-## The old video's pictures before [param t0], copied: [] when there are none. COUNTED IN PICTURES, [param fps] a second, never
-## cut by time: copying to `-t` keeps the next keyframe and a picture after it, decoded before their time (measured: 42
-## pictures for 40) - and an export's keyframe groups are closed, so the first [param t0] x fps in decoding order are exactly
-## the pictures before it.
+## The old video's pictures before [param t0], copied: [] when there are none. Counted in pictures ([param fps] a second),
+## never cut by time: copying to `-t` keeps the next keyframe and a picture after it. An export's keyframe groups are closed,
+## so the first [param t0] x fps in decoding order are exactly the pictures before it.
 static func head_args(old: String, t0: float, fps: float, out: String) -> PackedStringArray:
 	if t0 <= 0.0:
 		return PackedStringArray()
@@ -53,7 +52,7 @@ static func list_text(parts: Array) -> String:
 	return "\n".join(lines) + "\n"
 
 
-## THE PARTS JOINED (the list at [param list]) under [param old]'s whole sound, copied, into [param out].
+## The parts joined (the list at [param list]) under [param old]'s whole sound, copied, into [param out].
 static func join_args(list: String, old: String, out: String) -> PackedStringArray:
 	return PackedStringArray(["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list, "-i", old,
 		"-map", "0:v", "-map", "1:a?", "-c", "copy", "-movflags", "+write_colr+faststart", out])

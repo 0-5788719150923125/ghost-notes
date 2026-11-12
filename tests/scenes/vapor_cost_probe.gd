@@ -1,17 +1,15 @@
 extends Node
 
-## Throwaway probe: what does one `vapors` frame cost at export resolution?
+## Throwaway probe: what one `vapors` frame costs at export resolution.
 ##
-## The field is a full-frame fragment program with ~20 value-noise lookups per pixel, so its
-## cost is 2 million pixels' worth of that and nothing else in the scene comes close. This
-## measures it the only honest way - render the real scene at 1920x1080 with the field's quad
-## visible, then again with it HIDDEN, and difference the frame times. The delta is the field;
-## the baseline is the bed, stars and motes it sits on.
+## The field is a full-frame fragment program with ~20 value-noise lookups per pixel and dominates the
+## scene. It renders the real scene at 1920x1080 with the field's quad visible, then hidden, and
+## differences the frame times: the delta is the field, the baseline the bed, stars and motes.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/vapor_cost_probe.gd 240
 ##
-## Needs the real renderer (a dummy driver renders no fragments and would report the field as
-## free). Vsync is switched off first, or every frame reports as the refresh interval.
+## Needs the real renderer (a dummy driver renders no fragments). Vsync is switched off first, or every
+## frame reports as the refresh interval.
 
 const W := 1920
 const H := 1080
@@ -52,8 +50,8 @@ func _run() -> void:
 
 
 func _time(sc, f: AudioFeatures, _vp: SubViewport, field_on: bool) -> float:
-	# The field lives on a child quad of the scene, so hiding it removes exactly the
-	# fragment program and leaves every CPU path (the plume sim, the layers) running.
+	# The field lives on a child quad, so hiding it removes the fragment program and leaves every CPU path
+	# (the plume sim, the layers) running.
 	for _i in WARM:
 		sc.update(f, 1.0 / 60.0)
 		await get_tree().process_frame

@@ -1,51 +1,27 @@
 extends Node
 
-## glyph_frame_check - that the glyphs camera actually frames the writing, in EVERY layout.
+## glyph_frame_check - that the glyphs camera frames the writing in every layout, and that the written
+## row holds still.
 ##
-## The bug this gates: `_track_pen` aimed at the page cursor `_cx` / `_cy`, and only three of
-## the six layouts write there. A SPIRAL advances `_s` along its coil and never touches
-## `_cx` / `_cy` after _write_opening, so the camera sat on the page's top-left corner watching
-## blank paper for the whole hold while the writing went round the middle of the frame. A BANNER
-## recenters its live line by `_shift_cur`, which the camera did not apply, so at the start of
-## every line the pen was about half a measure outside the frame.
+## `_track_pen` must aim at where the layout writes: a spiral advances `_s` along its coil and never
+## touches the page cursor `_cx` / `_cy`, and a banner recenters its live line by `_shift_cur`. The
+## tracker must also not glide back across the page at a carriage return (the `_chasing` band in
+## _track_pen).
 ##
-## A third defect, older than either and shared by all four layouts, only showed up once this
-## probe existed: the tracker eased at ONE loose rate, so a line break - a carriage return, not
-## a drift - had the frame gliding back across the page for 1.47 s while the hand wrote at the
-## start of the new line. That is the `_chasing` band in _track_pen.
+## The probe runs the shipped camera beside a shadow camera on the retired rule and reports the fraction
+## of 900 frames with the nib in shot (retired -> shipped): page 68.3% -> 97.9%, column 87.6% -> 99.7%,
+## banner 31.3% -> 100.0%, spiral 100.0% (no honest before: the fix changed what the camera aims at, the
+## coil's center, and how far it is zoomed).
 ##
-## MEASURED, both rules at once. The probe runs the shipped camera and, beside it, a shadow
-## camera on the old rule, and reports for each what fraction of 900 frames had the nib in shot:
+## The row: the banner's centering shift is integrated on the fixed clock off a target that moves with
+## the reveal (`Glyphs._ease_shift`). The probe records the shift every frame and reports the worst
+## single-frame step as a fraction of one advance, beside the same measure on the retired rule (0.5 of
+## an advance in one frame before, under 0.05 after).
 ##
-##   page    68.3% -> 97.9%
-##   column  87.6% -> 99.7%
-##   banner  31.3% -> 100.0%
-##   spiral    n/a -> 100.0%
+## It asserts the sustained case, not the instantaneous one: tracking is eased over about 1.4 s so a
+## frame or two of overshoot is the feature, but the nib gone for a second at a time is the bug.
 ##
-## The spiral has no honest before/after in that column: the fix changed what the camera AIMS at
-## (the coil's center, not the orbiting nib) and how far it is zoomed, so the shadow camera is no
-## longer running the old system. Its recorded numbers are 3.7% under the old rule, and 1.3%
-## under a first attempt that tracked the nib along the coil - worse than doing nothing, which is
-## what sent the fix to framing the composition instead.
-##
-## AND THAT THE ROW ITSELF HOLDS STILL, which is a second report on the same layout: "the entire
-## row of glyphs kept shifting in hard, discrete jumps. The text wasn't stable... you would expect
-## the row of glyphs to remain where they were written, and you would expect the camera to track
-## the writing. The camera was working here: but the jumping row was the part that needs fixing."
-## The banner's centering shift was recomputed at draw time off the page CURSOR, which advances a
-## whole character at a time, so the row stepped by half an advance at every commit. It is
-## integrated on the fixed clock now, off a target that moves with the reveal (see
-## `Glyphs._ease_shift`). The probe records the shift every frame and reports the worst
-## single-frame step as a fraction of one advance, beside the same measurement on the OLD rule -
-## the numbers are 0.5 of an advance in one frame before, and under 0.05 after.
-##
-## It asserts on the SUSTAINED case, not the instantaneous one. The tracking is deliberately
-## eased over about 1.4 s so the nib drifts across the frame and the camera catches up between
-## words - a frame or two of overshoot is the feature - but the nib being gone for a second at a
-## time is the bug that was reported.
-##
-## The scene reaches Spectrum and Director, so it needs a REAL boot - autoloads do not exist
-## under a bare `--script` run (see CLAUDE.md's validation notes, and run_boot_probe's header).
+## The scene reaches Spectrum and Director, so it needs a real boot (see run_boot_probe's header).
 ##
 ## Run: tests/run_boot_probe.sh tests/scenes/glyph_frame_check.gd 120
 
@@ -53,49 +29,39 @@ const W := 1920.0
 const H := 1080.0
 const FPS := 60.0
 const FRAMES := 900
-## THE ROW'S STABILITY, as a shape rather than a size. An absolute per-frame limit cannot tell a
-## jump from a fast hand: the centering legitimately travels at half the pen's own rate, which at
-## the shortest character spans is about 0.08 of an advance per frame all by itself. What separates
-## a glide from a jump is the DISTRIBUTION - both rules move the row by the same total amount over
-## a line (they must; it is the same centering), but one spreads it over every frame and the other
-## delivers it in one step per character. Measured on the same seed: peak/mean 5.6 against 36.8.
-## So: a peak no more than this many times the mean step, with an absolute backstop for the case
-## where everything is jumping equally.
+## The row's stability, as a shape rather than a size. An absolute per-frame limit cannot tell a jump
+## from a fast hand (the centering legitimately travels at half the pen's rate, about 0.08 of an
+## advance per frame at the shortest character spans). Both rules move the row by the same total over a
+## line, but one spreads it over every frame and the other delivers it in one step per character:
+## peak/mean 5.6 against 36.8. So: a peak no more than this many times the mean step, with an absolute
+## backstop for when everything jumps equally.
 const MAX_PEAK_RATIO := 12.0
 const MAX_STEP := 0.20
-## The nib may leave the frame for this long while the eased camera catches up. 0.5 s is a third
-## of the tracker's own 1.4 s time constant, which is as long as a catch-up can honestly take.
+## The nib may leave the frame this long while the eased camera catches up (0.5 s, a third of the
+## tracker's 1.4 s time constant).
 const MAX_GONE := 30
-## And it has to be in frame for most of the hold, not merely return to it.
+## And it must be in frame for most of the hold, not merely return to it.
 const MIN_INSIDE := 0.90
-## THE CAMERA'S OWN SMOOTHNESS, which went ungated until it was reported: "the camera can be
-## rather jerky at times - because it is responding to new glyphs being drawn, which is
-## constant". The row-shift ratio above did not catch it because the row and the camera are
-## different things - the row was already steady while the frame carrying it was not.
+## The camera's own smoothness is measured as acceleration, not speed: a camera that pans quickly is
+## fine, one that changes how fast it pans reads as a jerk. The retired rule (a position lerp whose
+## velocity is its error, switched between two gains 13x apart) changed it on every commit: peak
+## acceleration 139-594 against a flat 16 on the new one, the cap the tracker enforces.
 ##
-## ACCELERATION, not speed, is the measure. A camera that pans quickly is fine; one that
-## CHANGES how fast it is panning is what reads as a jerk, and the retired rule (a position
-## lerp, whose velocity IS its error, switched between two gains 13x apart) changed it on every
-## commit. Measured paired on the same writing: peak acceleration 139-594 on the old rule
-## against a flat 16 on the new one, which is the cap the tracker now enforces.
-##
-## The bound is the cap plus room for ONE bound contact. The camera can still be stopped by the
-## page edge, and that is a real deceleration the cap cannot govern - measured at 48.5 on the
-## worst seed - but it happens at most once a line, where the old rule did it every character.
+## The bound is the cap plus room for one bound contact: the page edge can still stop the camera, a
+## deceleration the cap cannot govern (48.5 on the worst seed), but at most once a line.
 const MAX_CAM_ACCEL := 90.0
-## ...and the retired rule has to be worse than that, or this is measuring nothing.
+## ...and the retired rule must be worse than that, or this measures nothing.
 const MIN_CAM_ACCEL_GAIN := 2.5
 
 var _fails: Array = []
 var _seen: Dictionary = {}
-## The worst ratio of retired-rule to shipped-rule peak acceleration, over every layout in the
-## run. See the control note in the camera block below.
+## The worst ratio of retired-rule to shipped-rule peak acceleration over every layout in the run.
 var _accel_gain := 0.0
 
 
 func _ready() -> void:
 	var script := load("res://src/scenes/glyphs.gd")
-	# The layout is a seeded roll, so sweep seeds until every one of the four has been measured.
+	# The layout is a seeded roll, so sweep seeds until all four have been measured.
 	for s in range(0, 400):
 		if _seen.size() >= 4:
 			break
@@ -103,7 +69,7 @@ func _ready() -> void:
 	for want in ["page", "column", "banner", "spiral"]:
 		if not _seen.has(want):
 			_fails.append("no seed in 0..399 produced the %s layout - the probe never tested it" % want)
-	# THE CAMERA CONTROL, once for the run. See the note where `_accel_gain` is accumulated.
+	# The camera control, once for the run (see where `_accel_gain` is accumulated).
 	if _accel_gain < MIN_CAM_ACCEL_GAIN:
 		_fails.append("the retired camera peaked at only %.1fx the shipped one's worst frame "
 			% _accel_gain + "(want %.1fx) - no layout here shows the jerk this measures"
@@ -133,11 +99,9 @@ func _run(script, seed_value: int) -> void:
 	sc._open = true
 	sc._write_opening()
 	sc._cam = sc._clamp_cam(sc._pen_at())
-	# DRIVE THE PATH THAT SHIPS. An earlier version of this probe called _commit() on a timer
-	# instead of running _step, and _step is where `_scroll` is eased toward `_scroll_to` - so
-	# `_cy` walked off the bottom of a page that never scrolled and every layout measured about
-	# 50%, an artifact of the harness rather than of the scene. Audio the pen will actually
-	# write to: above Director.silence_floor, with a plausible tempo.
+	# Drive the path that ships (_step eases `_scroll` toward `_scroll_to`; driving _commit() on a timer
+	# lets `_cy` walk off a page that never scrolled). Audio the pen will write to: above
+	# Director.silence_floor, with a plausible tempo.
 	sc._f = AudioFeatures.new()
 	sc._f.energy = 0.25
 	sc._f.beat_period = 0.5
@@ -155,8 +119,8 @@ func _run(script, seed_value: int) -> void:
 	var old_inside := 0
 	var gone := 0
 	var worst_gone := 0
-	# The row's own stability: the worst single-frame step of the centering shift, and the same
-	# for the rule that was there, both as a fraction of one character advance.
+	# The row's own stability: the worst single-frame step of the centering shift, and the same for the
+	# retired rule, both as a fraction of one character advance.
 	var shift_prev: float = sc._shift_cur
 	var raw_prev: float = -(sc._cx + sc._adv + sc._left) * 0.5
 	var worst_step := 0.0
@@ -171,23 +135,17 @@ func _run(script, seed_value: int) -> void:
 			sc._pending_word = true         # a section change, as update() would raise it
 		sc._step(dt)
 		sc._track_pen(dt)
-		# The OLD target: the raw page cursor, no centering shift, and nothing for the spiral.
+	# The old target: the raw page cursor, no centering shift, and nothing for the spiral.
 		var old_target := Vector2(sc._cx + sc._adv * 0.5,
 			sc._cy - sc._scroll - sc._line_step * 0.25)
-		# THE RETIRED CAMERA IN FULL - and aimed where IT was aimed, which is not where the
-		# shadow above is aimed. Those are two different controls for two different bugs and
-		# conflating them made this check wrong for one layout:
-		#
-		#   `old_cam` above is the loose lerp at the RAW cursor, no centering shift. That is the
-		#   camera from before the row-centering fix, and it is the control for the in-frame
-		#   column - it is meant to be badly aimed, which is why banner scores 26% on it.
-		#
-		#   `old_sw` here is the camera as it shipped LAST: the same committed-cursor target the
-		#   scene was using a change ago, centering shift included, with the 0.7/9.0 gain switch.
-		#   Anything else is not a fair control for the acceleration - measured with the raw
-		#   target by mistake, banner's shadow flew around the page chasing a swing of half a
-		#   measure and traveled twice as far as the real thing, which read as the new camera
-		#   having "stopped following" when what it had stopped doing was missing.
+	# The retired camera in full, aimed where it was aimed. Two controls for two bugs:
+	#
+	#   `old_cam` above is the loose lerp at the raw cursor, no centering shift: the control for the
+	#   in-frame column, badly aimed on purpose (banner scores 26% on it).
+	#
+	#   `old_sw` is the camera as it shipped last: the committed-cursor target, centering shift
+	#   included, with the 0.7/9.0 gain switch. The raw target is not a fair control for the
+	#   acceleration (banner's shadow flew around chasing a half-measure swing).
 		var sw_target := Vector2(sc._cx + sc._adv * 0.5 + sc._shift_cur,
 			sc._cy - sc._scroll - sc._line_step * 0.25)
 		var sw_off := sw_target - old_sw
@@ -202,11 +160,9 @@ func _run(script, seed_value: int) -> void:
 		if sc._centered:
 			var adv: float = maxf(0.0001, sc._adv)
 			var now_shift: float = sc._shift_cur
-			# MEASURED ONLY WHILE THE LIVE LINE HAS INK ON IT, and never across a carriage
-			# return. The claim is that a row of glyphs does not move once written - and at a
-			# line break the new line is empty, so its centering may (and should) snap: nothing
-			# is drawn with it yet. Measuring that frame would report the one jump that moves no
-			# ink and hide the ones that do.
+	# Measured only while the live line has ink on it, never across a carriage return: a row of
+	# glyphs must not move once written, but a new empty line may snap its centering (nothing is
+	# drawn with it yet), and measuring that frame would hide the jumps that move ink.
 			var mid_line: bool = sc._line == line_prev and sc._cx > sc._left + 0.0001
 			if mid_line:
 				worst_step = maxf(worst_step, absf(now_shift - shift_prev) / adv)
@@ -214,7 +170,7 @@ func _run(script, seed_value: int) -> void:
 				steps += 1
 			line_prev = sc._line
 			shift_prev = now_shift
-			# THE CONTROL: the expression that used to be evaluated at draw time.
+	# the control: the expression that used to be evaluated at draw time
 			var raw_now: float = -(sc._cx + sc._adv + sc._left) * 0.5
 			if mid_line:
 				worst_raw = maxf(worst_raw, absf(raw_now - raw_prev) / adv)
@@ -234,8 +190,7 @@ func _run(script, seed_value: int) -> void:
 		var oo: Vector2 = pen - old_cam
 		if absf(oo.x) <= h.x and absf(oo.y) <= h.y:
 			old_inside += 1
-		# The frame's own motion, both ways round. Speed this frame, from which the check
-		# below takes the change in speed - the acceleration.
+	# The frame's own motion: speed this frame, from which the check takes the acceleration.
 		cam_sp.append((sc._cam - cam_prev).length() * FPS)
 		old_sp.append((old_sw - old_prev).length() * FPS)
 		cam_prev = sc._cam
@@ -270,9 +225,8 @@ func _run(script, seed_value: int) -> void:
 		if travel < 1.0:
 			_fails.append("%s: the centering shift moved %.2f advances over %d frames - it is not "
 				% [sc._layout, travel, FRAMES] + "recentering at all, so this measures nothing")
-		# BOTH CONTROLS. The old rule has to fail both of the checks above, or they are not
-		# measuring the reported bug - and its MEAN has to match, or the comparison is between
-		# two different amounts of centering rather than between two ways of delivering it.
+	# Both controls: the old rule must fail both checks above, and its mean must match, or the
+	# comparison is between two amounts of centering rather than two ways of delivering it.
 		if raw_ratio < MAX_PEAK_RATIO * 1.5:
 			_fails.append("%s: the OLD rule's peak/mean is only %.1f - this measure cannot see "
 				% [sc._layout, raw_ratio] + "the jump it exists for")
@@ -280,10 +234,9 @@ func _run(script, seed_value: int) -> void:
 			_fails.append("%s: the two rules travel different distances (%.4f vs %.4f per frame), "
 				% [sc._layout, raw_mean, mean_step] + "so the comparison is not about jumpiness")
 
-	# --- THE FRAME'S OWN MOTION: how hard it CHANGES SPEED, against the rule it replaced ---
-	# The spiral is exempt: it is framed rather than tracked (see _pen_at), so its camera holds
-	# still and there is no acceleration to bound - and a ratio taken on a mean of 0.0003 is
-	# noise, not a measurement.
+	# --- the frame's own motion: how hard it changes speed, against the rule it replaced ---
+	# The spiral is exempt: it is framed rather than tracked (see _pen_at), so its camera holds still and
+	# a ratio on a mean of 0.0003 is noise.
 	if sc._layout != "spiral":
 		var now_acc := _peak_accel(cam_sp)
 		var was_acc := _peak_accel(old_sp)
@@ -294,15 +247,11 @@ func _run(script, seed_value: int) -> void:
 		if now_acc > MAX_CAM_ACCEL:
 			_fails.append("%s: the camera changed speed at %.0f per second squared (want under "
 				% [sc._layout, now_acc] + "%.0f) - that is a lurch, not a pan" % MAX_CAM_ACCEL)
-		# THE CONTROL, kept for the RUN rather than for each layout, and that is not a
-		# loophole - it is where the jerk actually was. Measured: peak acceleration on the
-		# retired rule was 594 on `page` and 227 on `column`, and 15 on `banner`, which
-		# recenters its live line and so barely pans at all. Demanding that every layout show
-		# a jerk would be demanding that banner have a bug it never had. One layout has to
-		# show it or the measure is blind, and that is asserted once, below.
+	# The control is kept for the run, not each layout: peak acceleration on the retired rule was 594
+	# on `page`, 227 on `column` and 15 on `banner` (which recenters its live line and barely pans).
+	# One layout must show the jerk or the measure is blind; that is asserted once, below.
 		_accel_gain = maxf(_accel_gain, was_acc / maxf(1.0, now_acc))
-		# ...and the two have to be doing the same JOB, or the comparison is between a tracker
-		# and a parked frame rather than between two ways of tracking.
+	# ...and the two must be doing the same job, not a tracker against a parked frame.
 		if now_mean < was_mean * 0.5:
 			_fails.append("%s: the camera now travels %.3f against the old rule's %.3f - it is "
 				% [sc._layout, now_mean, was_mean] + "smoother because it stopped following")

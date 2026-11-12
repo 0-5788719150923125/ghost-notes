@@ -1,14 +1,14 @@
 extends RefCounted
 class_name ModelTools
 
-## ModelTools - WHAT THE MODELER WORKS WITH ([TablePrompts.modeler], [AssemblyModel]): a loop, as the set dresser's and the puppeteer's are, because nobody draws a thing well without looking at it.
+## ModelTools - what the modeler works with ([TablePrompts.modeler], [AssemblyModel]): a loop, like the set dresser's and the puppeteer's.
 ##
 ##   shape   - write sections of it (one of a name already there replaces it), told what the whole now comes to in real parts, and what holds on to nothing
 ##   remove  - take sections out
 ##   look    - see it from four sides, as far as a section if asked ([ModelStudio])
 ##   submit  - hand it in: refused while it comes to too many parts, or anything floats until handed in so twice
 ##
-## What it writes is data, worked out on a worker: a model takes seconds, and the app goes on drawing. EVERY PICTURE COUNTS against [constant LOOKS]; words cost nothing.
+## What it writes is data, worked out on a worker: a model takes seconds, and the app goes on drawing. Every picture counts against [constant LOOKS]; words cost nothing.
 
 const SUBMITTED := "submitted.json"
 ## How many pictures one modeler may take.

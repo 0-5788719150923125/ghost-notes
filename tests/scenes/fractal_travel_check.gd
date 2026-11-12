@@ -1,44 +1,30 @@
 extends Node
 
-## Gate for the one thing a fractal zoom must not do: turn round while you are watching it.
+## Gate that a fractal zoom never turns round while you watch it.
 ##
 ##   tests/run_boot_probe.sh tests/scenes/fractal_travel_check.gd 240
 ##
-## No GPU needed - this is the CPU half of scenes/fractal_zoom.gd, and the claim is about the
-## sign of a number rather than about pixels. fractal_depth_check.gd is the one that renders.
+## No GPU: this is the CPU half of scenes/fractal_zoom.gd and the claim is the sign of a number.
+## fractal_depth_check.gd is the one that renders.
 ##
-## WHAT WENT WRONG. The scene had three directions - push, pull, and a `breathe` that turned
-## round on its own clock - and the clock that drove `breathe` was armed in `build_params`
-## BEFORE the direction was chosen, so it ran for all three. Every push and every pull
-## reversed after 11-26 seconds. Reported as "it rolled forward for a bit, before slowing and
-## rolling backwards again", and measured over 240 seeds at the settings it was reported on:
-## 100% of scenes reversed inside thirty seconds, the first turn at 18 s on average, and the
-## net travel across a whole scene was under two e-folds because the picture kept coming back
-## to where it had been. `breathe` went with the bug, on the reporter's argument, which is
-## also the argument for gating this: "reversing direction just reveals the same patterns
-## we've already seen".
+## The scene has push and pull directions (a `breathe` direction that reversed on its own clock was
+## removed). Every push and pull must keep its sign over the hold, and the net travel must be real.
 ##
-## THE CONTROL IS THE RETIRED LAW. "Nothing reversed" is exactly what a scene that never moves
-## reports, and it is also what a broken probe reports. So the same instances, with the same
-## sampled parameters, are ALSO stepped through the law this replaced - the breathe clock and
-## the bounce off each bound - and that has to reverse, or this file is asserting nothing.
-## Travel is checked at the same time, for the other half of the same trap.
+## The control is the retired law (the breathe clock and the bounce off each bound), stepped over the
+## same instances with the same parameters: it must reverse, or "nothing reversed" is just what a scene
+## that never moves, or a broken probe, reports. Travel is checked as well, for the same reason.
 
 const DT := 1.0 / 30.0
-## A scene holds for `Director.max_hold` x `pace_calm_scale` x `pacing`. 28 x 1.2 x 1.8 is
-## about 60 s at the pacing this was reported on; 45 covers the ordinary case and 60 the long
-## one, and both are checked because the interesting question is what happens as a scene runs.
+## A scene holds for `Director.max_hold` x `pace_calm_scale` x `pacing` (28 x 1.2 x 1.8, about 60 s);
+## 45 s covers the ordinary case and 60 s the long one.
 const HOLDS := [15.0, 30.0, 45.0, 60.0]
-## Loudness scales the rate (0.55 at silence, 1.45 at full drive), so the fast end has to be
-## checked or the gate only ever sees the slow one.
+## Loudness scales the rate (0.55 at silence, 1.45 at full drive); both ends are checked.
 const ENERGIES := [0.15, 0.55, 0.95]
 const SEEDS := 160
 ## The retired law's turning clock, at the middle of the range it used to sample (11-26 s).
-## The control only has to demonstrate that a timer-and-bounce law reverses; it does at any
-## value in that range, so the midpoint is the honest one to state.
 const OLD_BREATHE := 18.5
-## Held ten minutes at full drive - far past any hold - every instance should have come to
-## rest against its bound, and none should have stepped past it or backed away from it.
+## Held ten minutes at full drive, far past any hold, every instance should have come to rest against
+## its bound, none past it or backing away.
 const LONG := 600.0
 
 var _fails: Array = []
@@ -53,8 +39,8 @@ func _ok(cond: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-## The law this file replaced, run on one instance's own numbers. Returns the number of times
-## the direction changed sign inside `hold` seconds.
+## The retired law, run on one instance's numbers. Returns how many times the direction changed sign
+## inside `hold` seconds.
 func _old_rule_turns(zl: float, zl_min: float, zl_max: float, speed: float, dir: float,
 		energy: float, hold: float) -> int:
 	var dir_now := dir
@@ -130,15 +116,13 @@ func _run() -> void:
 					travel[travel.size() * 9 / 10]])
 			_ok(reversed == 0, "hold %.0fs energy %.2f: %d of %d scenes reversed direction"
 				% [hold, energy, reversed, SEEDS])
-			# THE CONTROL, and the reason a green run here means anything. Only asked of a
-			# hold long enough for the retired clock to have fired: at 15 s against an 18.5 s
-			# timer the old law would not have turned either, and demanding that it did would
-			# be gating the control's own arithmetic rather than the scene. Those rows still
-			# carry the shipped claim and the travel claim - they just cannot carry this one.
+	# The control: only asked of a hold long enough for the retired clock to have fired (at 15 s
+	# against an 18.5 s timer the old law would not have turned either). Those rows still carry
+	# the shipped claim and the travel claim.
 			_ok(float(hold) <= OLD_BREATHE or control >= SEEDS / 2,
 				"hold %.0fs energy %.2f: the RETIRED law only turned %d times in %d scenes, so this check cannot see a reversal"
 				% [hold, energy, control, SEEDS])
-			# ...and the other half of the trap: a scene that never moves never reverses.
+	# ...and a scene that never moves never reverses.
 			_ok(travel[travel.size() / 10] > 0.10 * (float(hold) / 30.0),
 				"hold %.0fs energy %.2f: the slowest tenth traveled only %.2f e-folds - the zoom is not moving"
 				% [hold, energy, travel[travel.size() / 10]])

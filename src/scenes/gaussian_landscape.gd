@@ -2,21 +2,16 @@ extends GhostScene
 
 ## Gaussian landscape - rolling terrain with fog in the valleys.
 ##
-## A heightfield built from a handful of Gaussian bumps, drawn as rows of filled
-## ridgelines receding toward a horizon (near rows occlude far ones). Each bump's
-## height is driven by a slice of the spectrum, so peaks rise and fall with the
-## music. Over the low ground sits a translucent fog whose top edge undulates and
-## scrolls sideways - the valleys breathing in a gentle wind while the peaks stay
-## clear above it.
+## A heightfield built from a handful of Gaussian bumps, drawn as rows of filled ridgelines receding toward
+## a horizon (near rows occlude far ones). Each bump's height is driven by a slice of the spectrum. Over the
+## low ground sits a translucent fog whose top edge undulates and scrolls sideways.
 ##
-## The land is not one shape or one color: a [Scheme] mood colors the ridgelines (with the
-## fog and the sky layers on its accent, so the weather belongs to the same evening), and a
-## sampled RELIEF picks the landform - broad dunes, rolling hills, a crowded range of narrow
-## ridges, or a couple of massifs - along with how finely it is drawn.
+## A [Scheme] mood colors the ridgelines (fog and sky layers take its accent), and a sampled relief picks
+## the landform (broad dunes, rolling hills, a crowded range of narrow ridges, or a couple of massifs) and
+## how finely it is drawn.
 
-## Landforms. Bump count and sigma together decide whether the horizon is a few wide swells
-## or a crowded serration, so they are sampled as a set; row/column counts follow, since a
-## serrated range needs the resolution a dune field does not.
+## Landforms. Bump count and sigma together decide whether the horizon is a few wide swells or a crowded
+## serration, so they are sampled as a set; row/column counts follow (a serrated range needs more resolution).
 const RELIEFS := {
 	"dunes":   {"bumps": [3, 5],  "sigma": [0.22, 0.40], "height": [0.14, 0.24],
 		"rows": [12, 17], "cols": [40, 56]},
@@ -38,8 +33,8 @@ var _cols := 56                     # samples across one ridgeline (its crispnes
 var _fog_bands := 3
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"relief": {"label": "Relief", "type": "choice", "options": "RELIEFS", "default": null,
 		"blurb": "The landform on the horizon: a few wide dunes, rolling swells, a crowded serration of ridges, or a massif."},
@@ -73,12 +68,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			"band": rng.randf(),
 		})
 	_amps.resize(n)
-	# Fog is the scene's other half, so how much of it there is varies too: a thin single
-	# band clinging to the low ground, or a deep stack drowning the valleys.
+	# Fog is the scene's other half: a thin band clinging to the low ground, or a deep stack drowning the valleys.
 	_fog_bands = number("fog_bands", rng)
-	# Sky + weather over the hills, composed from the Layer registry: stars behind the
-	# ridgelines, snow drifting over them - "snow on a hillside" from shared components.
-	# Both take the scheme's ACCENT, so the weather is lit by the same sky as the land.
+	# Sky and weather over the hills from the Layer registry (stars behind the ridgelines, snow drifting
+	# over them), both on the scheme's accent.
 	var sky := rng.randf()
 	if sky < 0.35:
 		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(80, 150),
@@ -93,8 +86,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"relief": relief,
 		"rows": _rows,
 		"bumps": n,
-		# How far the receding rows walk from the base hue toward the accent - some evenings
-		# are one color into the distance, others grade the whole way across the scheme.
+		# How far the receding rows walk from the base hue toward the accent.
 		"reach": rng.randf_range(0.25, 1.0),
 		"height": rng.randf_range(float(rl.height[0]), float(rl.height[1])),  # fraction of unit
 		"fog_bands": _fog_bands,
@@ -136,8 +128,7 @@ func _draw() -> void:
 	var hpx: float = float(params.height) * unit()
 	var horizon := -size.y * 0.15
 	var span := size.y * 0.55
-	# The near rows walk toward the scheme's accent by the sampled reach - the shortest way
-	# round the wheel, so the grade is always the short arc between two related hues.
+	# The near rows walk toward the accent by the sampled reach, the short arc between two related hues.
 	var to_accent := fposmod(_sch.accent - _sch.hue + 0.5, 1.0) - 0.5
 	var reach: float = float(params.reach) * to_accent
 
@@ -178,6 +169,5 @@ func _draw_fog(left: float, w: float, foot: float) -> void:
 		pts[_cols] = Vector2(left + w, foot)
 		pts[_cols + 1] = Vector2(left, foot)
 		var a := 0.06 + 0.025 * _f.low_mid
-		# Fog on the scheme's accent, barely saturated: it belongs to the same weather as
-		# the hills instead of being an unrelated second hue.
+		# Fog on the scheme's accent, barely saturated, so it belongs to the same weather as the hills.
 		draw_colored_polygon(pts, _sch.color(_sch.accent, 0.15, 1.15, a))

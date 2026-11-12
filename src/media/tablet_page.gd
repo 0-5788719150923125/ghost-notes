@@ -4,19 +4,16 @@ class_name TabletPage
 ## TabletPage - one web page of a [TabletScript], set into a column of a given width.
 ##
 ## Pages are typeset, not rendered from HTML: the blocks the chapter wrote (headings, paragraphs,
-## pictures, links) in a site's own face and color, and PLACEHOLDERS for everything it did not
-## write. A placeholder is drawn as squiggles - lines of wavy strokes in the shape of text - so
-## it reads at a glance as "there is something here" and never as words someone forgot to
-## write. A heading with nothing under it gets a squiggled body; `<!-- filler: N -->` puts N
-## placeholder stories in; and every page is padded with them to [member min_height], because a
-## page with nothing past the fold has nothing to scroll - and past its last written block by
-## TAIL_SHARE at least, so the last lines are never read at the screen's foot.
+## pictures, links) in a site's own face and color, and placeholders for everything it did not write,
+## drawn as squiggles (wavy strokes in the shape of text). A heading with nothing under it gets a
+## squiggled body, `<!-- filler: N -->` puts N placeholder stories in, and every page is padded to
+## [member min_height] (so there is something to scroll) and past its last written block by TAIL_SHARE
+## at least (so the last lines are not read at the screen's foot).
 ##
-## THE SITE'S LOOK IS ITS HOST: face, accent color and masthead are hashed off the address, so
-## the same site looks the same wherever the chapter visits it, and two sites never match by
-## accident. Two kinds are recognized from what the chapter does with them, not declared: a
-## page searched FROM that has little else on it is a search engine's home (a centered logo and
-## a box), and a page reached BY a search is its results.
+## The site's look is its host: face, accent color and masthead are hashed off the address, so a site
+## looks the same wherever the chapter visits it. Two kinds are recognized from what the chapter does
+## with them: a page searched from that has little else on it is a search engine's home (a centered
+## logo and a box), and a page reached by a search is its results.
 
 const BODY := 30
 const SIZES := {1: 52, 2: 40, 3: 34}
@@ -26,13 +23,10 @@ const MAX_COLUMN := 1060.0    # sites have a max width; landscape centers the co
 
 const SANS := ["Inter", "Roboto", "Helvetica Neue", "Helvetica", "Arial", "Liberation Sans",
 	"DejaVu Sans"]
-## EACH SITE IS SET IN ITS OWN TYPE: one serif and one sans family, chosen by its host from the
-## plain text faces most desks have some version of - never a display face, a script or an
-## italic. Each entry is a family and its look-alikes, best first, so a machine without the
-## first still sets the same KIND of page (on Linux: Noto Serif, Liberation Serif / Nimbus
-## Roman, P052, C059, DejaVu Serif; Liberation Sans / Nimbus Sans, Roboto, Adwaita Sans, DejaVu
-## Sans, Noto Sans). Every family needs a real bold - headings are set in it. The browser's own
-## chrome keeps [constant SANS].
+## Each site is set in its own type: one serif and one sans family chosen by its host from plain text
+## faces most desks have some version of (no display faces, scripts or italics). Each entry is a family
+## and its look-alikes, best first, so a machine without the first sets the same kind of page. Every
+## family needs a real bold (headings use it). The browser's own chrome keeps [constant SANS].
 const SERIF_FAMILIES := [
 	["Georgia", "Gelasio", "Noto Serif"],
 	["Times New Roman", "Liberation Serif", "Nimbus Roman", "Tinos"],
@@ -53,8 +47,8 @@ var index := -1
 var width := 1200.0
 var height := 0.0
 var min_height := 0.0
-## Placeholder stories after the last written block, at least, as a share of [member
-## min_height]: about half a screen.
+## Placeholder stories after the last written block, at least, as a share of [member min_height]:
+## about half a screen.
 const TAIL_SHARE := 0.2
 var items: Array = []         # in page coordinates, in drawing order
 var word_rect := {}           # global word index -> Rect2
@@ -164,9 +158,8 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float) -> void:
 				else:
 					if i == 0 and not bool(page["results"]) and not _site_name().is_empty():
 						_band(_site_name())
-						# A LATER PAGE OPENING ON THE SITE'S OWN NAME: that title IS the band above
-						# it - set again, "Omnipedia" sat twice at the top of every article after the
-						# first. The article's own title follows it as the page's.
+						# A later page opening on the site's own name: that title is the band above it, so
+						# it is not set again; the article's own title follows as the page's.
 						if lvl == 1 and _plain(b).strip_edges().to_lower() == _site_name().strip_edges().to_lower():
 							continue
 					if bool(page["results"]) and _is_link(b):
@@ -200,8 +193,8 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float) -> void:
 				_y += 24.0
 	if not boxed:
 		_search_box("")
-	# A PAGE GOES ON PAST ITS ARTICLE - related stories, comments - so its last written lines can
-	# be scrolled up to where the rest were read, instead of being read at the screen's foot
+	# A page goes on past its article (related stories, comments) so its last written lines can be
+	# scrolled up to where the rest were read.
 	var want := maxf(min_h, _y + min_h * TAIL_SHARE)
 	var k := 0
 	while _y < want:
@@ -254,9 +247,8 @@ func _text(b: Dictionary, level: int, emph: int, col := Color(0, 0, 0, 0), cente
 			_line_x -= sp                  # no space before it, as written
 		if _line_x > 0.0 and _line_x + ww > _col:
 			_end_line()
-		# A LINK LOOKS LIKE ONE ONLY INLINE. A heading that links is set as a heading - a site's
-		# titles are all clickable, by convention, and say so by being titles; blue and
-		# underlined, it announced the tap before it happened
+		# A link looks like one only inline: a heading that links is set as a heading (a site's titles
+		# are all clickable by convention).
 		var link := not String(w["link"]).is_empty() and level == 0
 		var c := col if col.a > 0.0 else (accent if link else ink)
 		_line.append({"kind": "word", "wi": wi, "x": _line_x, "w": ww, "fs": fs, "lvl": lvl,
@@ -306,8 +298,8 @@ func _item(b: Dictionary) -> void:
 	_y += BODY * 0.35
 
 
-## A TABLE: the header on a tinted band, the rows ruled apart, each cell's words set in its own
-## column. Columns are as wide as what they hold asks - by their longest cell, within reason.
+## A table: the header on a tinted band, the rows ruled apart, each cell's words set in its own column,
+## columns as wide as their longest cell asks, within reason.
 func _table(b: Dictionary) -> void:
 	var head: Array = b.get("head_cells", [])
 	var rows: Array = b.get("row_cells", [])
@@ -316,9 +308,8 @@ func _table(b: Dictionary) -> void:
 		n = maxi(n, (r as Array).size())
 	if n == 0:
 		return
-	# NO COLUMN NARROWER THAN ITS WIDEST WORD: a word cannot wrap, and one wider than its cell
-	# ran into the next - "Status" over "Details", the column sized by its cells, "Open" and
-	# "Filled". The rest of the width is shared by how much each column holds.
+	# No column narrower than its widest word (a word cannot wrap); the rest of the width is shared by
+	# how much each column holds.
 	var weights: Array = []
 	var mins: Array = []
 	for k in n:
@@ -416,8 +407,7 @@ func _chars(cell: Variant) -> int:
 	return n
 
 
-## THE FOOT OF A LIST: Back and Next, Back grayed out - the first page of many, a sample of a
-## longer listing.
+## The foot of a list: Back (grayed) and Next, a sample of a longer listing.
 func _pager(salt: String) -> void:
 	_y += BODY * 0.3
 	var r := Rect2(_x0, _y, _col, 60.0)
@@ -425,8 +415,8 @@ func _pager(salt: String) -> void:
 	_y = r.end.y + BODY * 0.7
 
 
-## A REAL page: its capture, edge to edge at the tablet's width, as long as the capture is. Not
-## captured yet, a plain page saying so - with the address, so the panel row is easy to find.
+## A real page: its capture, edge to edge at the tablet's width, as long as the capture is. Not captured
+## yet, a plain page saying so, with the address.
 func _real(page: Dictionary, w: float, min_h: float) -> void:
 	bg = Color.WHITE
 	var key := String(page["snap"])
@@ -441,8 +431,8 @@ func _real(page: Dictionary, w: float, min_h: float) -> void:
 	height = h
 
 
-## The name an EARLIER page on this host gave the site (its opening H1, set as the masthead),
-## or "" when this is the first page of the host seen - whose own H1 then becomes the masthead.
+## The name an earlier page on this host gave the site (its opening H1, set as the masthead), or "" when
+## this is the first page of the host seen (whose own H1 then becomes the masthead).
 func _site_name() -> String:
 	var host := String((script_doc["pages"][index] as Dictionary)["host"])
 	for k in index:
@@ -455,8 +445,8 @@ func _site_name() -> String:
 	return ""
 
 
-## The site's name, remembered from an earlier page, in a thinner band of its color - not
-## words of this page, so nothing to read or highlight.
+## The site's name, remembered from an earlier page, in a thinner band of its color: not words of this
+## page, so nothing to read or highlight.
 func _band(name: String) -> void:
 	var top := _y - 34.0
 	items.append({"kind": "band", "rect": Rect2(0.0, top, width, 96.0), "col": accent.darkened(0.25)})
@@ -666,10 +656,10 @@ func _draw_word(ci: CanvasItem, d: Dictionary, dy: float, hl: Dictionary) -> voi
 			ci.draw_string(f, Vector2(x, p.y), text[c], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, lc)
 			x += f.get_string_size(text[c], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		return
-	# EVERY WORD IS DRAWN GLYPH BY GLYPH, lit or not, exactly as the book does it: two drawing
-	# paths snap glyphs to the pixel grid differently, and the letters would jump as the color
-	# reached them. The color is the book's: each letter its own hue by its place in the text,
-	# lit as the voice reaches it and cooling back to ink behind it.
+	# Every word is drawn glyph by glyph, lit or not, as the book does it: two drawing paths snap glyphs
+	# to the pixel grid differently and the letters would jump as the color reached them. The color is
+	# the book's: each letter its own hue by its place in the text, lit as the voice reaches it and
+	# cooling back to ink behind it.
 	var times: Dictionary = hl.get("times", {})
 	var lit := times.has(wi)
 	var cur := int(hl.get("cur", -1))
@@ -733,8 +723,7 @@ static func glyphs(font: Font, text: String, fs: int) -> Array:
 func _draw_image(ci: CanvasItem, r: Rect2, d: Dictionary, textures: Callable) -> void:
 	var tex: Texture2D = textures.call(String(d["key"])) if not String(d["key"]).is_empty() else null
 	if tex == null:
-		# NOT YET PAINTED: soft blobs of color - the picture's placeholder, as the squiggles are
-		# the writing's
+		# Not yet painted: soft blobs of color, the picture's placeholder as squiggles are the writing's
 		blobs(ci, r, int(d.get("seed", 0)))
 		return
 	var ts := Vector2(tex.get_size())
@@ -806,10 +795,9 @@ func _draw_search(ci: CanvasItem, r: Rect2, query: String) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 100.0, 30, ink)
 
 
-## A picture nobody painted: a pale wash with a few soft, overlapping blobs of related colors -
-## the shape of a photograph's color and none of its content, the way a page shows an image
-## still loading. Painted small and stretched, so the blobs blur smoothly into each other.
-## Deterministic in [param seed].
+## A picture nobody painted: a pale wash with a few soft overlapping blobs of related colors, the shape
+## of a photograph's color and none of its content. Painted small and stretched so the blobs blur
+## smoothly. Deterministic in [param seed].
 static func blobs(ci: CanvasItem, r: Rect2, seed: int) -> void:
 	var key := "%d|%d" % [seed, int(r.size.x / r.size.y * 100.0)]
 	if not _blob_cache.has(key):

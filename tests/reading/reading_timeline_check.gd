@@ -1,12 +1,11 @@
 extends SceneTree
 
-## reading_timeline_check - A NOTE'S WORDS AS A TIMELINE ([ReadingTimeline]; next/editing.md step 12: "the Letter and the Dispatch
-## desk hand a score from the marks they have").
+## reading_timeline_check - a note's words as a timeline ([ReadingTimeline]; next/editing.md step 12).
 ##
 ##   godot --headless --path . --script res://tests/reading/reading_timeline_check.gd
 ##
 ## Each heading of the words a group, each mark a flag in its own lane where the reader comes to it (each word as long as the reader
-## says one, a rest a mark asks for counted in), its source its place in the text; THE CONTROL: words with no marks have none.
+## says one, a rest a mark asks for counted in), its source its place in the text. Control: words with no marks have none.
 
 const BODY := "# One\n\nHello there friend. <!-- pause: 2 --> Then more words here.\n\n# Two\n\n<!-- heard: phone --> On the line now."
 

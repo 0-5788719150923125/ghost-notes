@@ -1,27 +1,27 @@
 extends Node
 
-## panel_deck_check - a side panel's cards as a deck ([PanelDeck]; next/panel_deck.md; the user, 2026-11-02: "cards stack or
-## unstack, overlap or expand", and of the panel pinned under the scroll, "They should all be scrollable").
+## panel_deck_check - a side panel's cards as a deck ([PanelDeck]; next/panel_deck.md).
 ##
 ##   tests/run_boot_probe.sh tests/ui/panel_deck_check.gd 120
 ##
-## THE PILES: with more than fits, the bars of the cards below the view lie at its foot and those scrolled past at its top, in
-## order, each showing, all inside the view, the last whole (THE CONTROL: a panel that fits has no pile, every bar over its card,
-## and a bar in the middle of a scroll moves with its card).
-## A BAR IS THE CARD'S OWN: what is on it works from a pile, and the pointer finds it there rather than what scrolls under it
-## (THE CONTROL: off the bars, the pointer finds what scrolls).
-## A TITLE SHOWS WHOLE IN A PILE, on a component's card too, whose × must not make its bar taller and push the title under the next
-## bar (THE CONTROL: a bar made taller by what is on it does hide its title's line).
-## A PRESS BRINGS ITS CARD INTO VIEW WHOLE, wherever its bar lies (2026-11-09, the user: folding "doesn't belong here anymore"):
-## one cut off by the bottom pile comes up until its foot clears it, one in the bottom pile comes whole, one in the top pile
-## comes under the bars above it, and one taller than the room comes with its bar there (THE CONTROL: a card already whole in view
-## stays where it is, and a press never folds it). A CHIP'S PRESS brings its card as a bar's does. THE WHEEL over a bar scrolls.
-## THE FAN: pointing at a bar in a pile moves those on it off it (THE CONTROL: a bar the other side of it stays).
-## A VIEW AT THE END STAYS THERE as what is in the cards grows, in the last card or above it, a list built again and a list gone
-## shorter too, and a panel that fits follows its last card past the window's foot (THE CONTROLS: a view at the top, or short of
-## the end, stays where it is; the wheel lets go of the end; a panel that fits does not follow a card above its last, or a new card; a card
-## a press brings is never dragged back to the end, and one pressed where it stands whole keeps its bar under the pointer).
-## A SMALL WINDOW closes the piles up, and a large one holds them at their peek. A CARD FREED takes its bar along.
+## - The piles: with more than fits, the bars of the cards below the view lie at its foot and those scrolled past at its top, in
+##   order, each showing, all inside the view, the last whole (control: a panel that fits has no pile, every bar over its card,
+##   and a bar in the middle of a scroll moves with its card).
+## - A bar is the card's own: what is on it works from a pile, and the pointer finds it there rather than what scrolls under it
+##   (control: off the bars, the pointer finds what scrolls).
+## - A title shows whole in a pile, on a component's card too, whose x must not make its bar taller and push the title under the
+##   next bar (control: a bar made taller by what is on it does hide its title's line).
+## - A press brings its card into view whole, wherever its bar lies: one cut off by the bottom pile comes up until its foot
+##   clears it, one in the bottom pile comes whole, one in the top pile comes under the bars above it, and one taller than the
+##   room comes with its bar there (control: a card already whole in view stays where it is, and a press never folds it). A
+##   chip's press brings its card as a bar's does. The wheel over a bar scrolls.
+## - The fan: pointing at a bar in a pile moves those on it off it (control: a bar the other side of it stays).
+## - A view at the end stays there as what is in the cards grows, in the last card or above it, a list built again and a list
+##   gone shorter too, and a panel that fits follows its last card past the window's foot (controls: a view at the top, or
+##   short of the end, stays where it is; the wheel lets go of the end; a panel that fits does not follow a card above its
+##   last, or a new card; a card a press brings is never dragged back to the end, and one pressed where it stands whole
+##   keeps its bar under the pointer).
+## - A small window closes the piles up, and a large one holds them at their peek. A card freed takes its bar along.
 
 var _fails: Array = []
 
@@ -101,7 +101,7 @@ func _point_at(at: Vector2) -> void:
 	get_viewport().push_input(ev, true)
 
 
-## A PANEL THAT FITS HAS NO PILE
+## A panel that fits has no pile
 func _fits() -> void:
 	var panel := await _panel(3, 2)
 	var all := _cards(panel)
@@ -118,12 +118,12 @@ func _fits() -> void:
 	await _settle(1)
 
 
-## THE PILES
+## The piles
 func _piles() -> void:
 	var panel := await _panel(8, 40)
 	var all := _cards(panel)
 	var n := all.size()
-	# THE LAST BAR TALLER THAN THE REST, as the Pipeline's is: the one before it must show as much as any
+	# The last bar taller than the rest, as the Pipeline's is: the one before it must show as much as any
 	var taller := Button.new()
 	taller.text = "Generate"
 	taller.custom_minimum_size.y = (all[0] as Card).head.size.y + 10.0
@@ -148,7 +148,7 @@ func _piles() -> void:
 	var last: Card = all[n - 1]
 	_ok(absf(_bar_y(panel, last) + last.head.size.y - view) < 1.0, "...the last whole, on the view's foot")
 	_ok(last.head.is_visible_in_tree() and (all[n - 2] as Card).head.get_index() < last.head.get_index(), "...a later bar over an earlier one")
-	# THE POINTER FINDS A BAR IN A PILE, off it what scrolls
+	# The pointer finds a bar in a pile, off it what scrolls
 	var x: float = last.head.global_position.x + 20.0
 	_point_at(Vector2(x, last.head.global_position.y + 4.0))
 	await _settle(2)
@@ -159,7 +159,7 @@ func _piles() -> void:
 	hit = get_viewport().gui_get_hovered_control()
 	_ok(hit != null and panel._scroll.is_ancestor_of(hit), "the control: off the bars it finds what scrolls (%s)" % str(hit))
 	_point_at(Vector2(1000, 600))
-	# THE MIDDLE: a bar in the middle of the scroll moves with its card
+	# The middle: a bar in the middle of the scroll moves with its card
 	var mid: Card = all[3]
 	bar.value = mid.position.y + panel.body.position.y - 3.0 * close - 100.0
 	await _settle()
@@ -167,7 +167,7 @@ func _piles() -> void:
 	_ok(panel._deck.side_of(mid) == 0 and with_card, "in the middle of a scroll, a bar moves with its card")
 	var moved := absf((all[0] as Card).head.global_position.y - panel._scroll.global_position.y) < 1.0
 	_ok(moved and panel._deck.side_of(all[0]) == -1 and panel._deck.side_of(all[n - 1]) == 1, "...with a pile above it and a pile below")
-	# THE END: all but the last are in the top pile
+	# The end: all but the last are in the top pile
 	bar.value = bar.max_value
 	await _settle()
 	var high := true
@@ -175,7 +175,7 @@ func _piles() -> void:
 		var card: Card = all[i]
 		high = high and panel._deck.side_of(card) == -1 and absf(_bar_y(panel, card) - float(i) * close) < 1.0
 	_ok(high, "scrolled to the end, the cards scrolled past have their bars in a pile at the top, in order")
-	# NOTHING IS OUT OF REACH
+	# Nothing is out of reach
 	var rows := last.body.get_children()
 	var below: float = panel._scroll.global_position.y + view
 	_ok((rows[rows.size() - 1] as Control).get_global_rect().end.y <= below + 1.0, "...and its last row can be read")
@@ -191,7 +191,7 @@ func _line_shows(card: Card, close: float) -> bool:
 	return inside + tall <= close + 2.5
 
 
-## A TITLE SHOWS WHOLE IN A PILE
+## A title shows whole in a pile
 func _titles_show() -> void:
 	var panel := SidePanel.new()
 	add_child(panel)
@@ -236,9 +236,9 @@ func _glided() -> void:
 	await _settle()
 
 
-## A PRESS
+## A press
 func _presses() -> void:
-	# A CARD WHOLE IN VIEW STAYS WHERE IT IS, AND IS NEVER FOLDED
+	# A card whole in view stays where it is, and is never folded
 	var panel := await _panel(3, 4)
 	var first: Card = _cards(panel)[0]
 	var tall := first.size.y
@@ -248,7 +248,7 @@ func _presses() -> void:
 	await _glided()
 	_ok(first.body.is_visible_in_tree() and absf(first.size.y - tall) < 0.5, "a press on its bar never folds it")
 	_ok(absf(first.head.global_position.y - y) < 0.5, "...and it stays where it is")
-	# CARDS SHORTER THAN THE VIEW, MORE OF THEM THAN FIT: each about 0.6 of it (a row and its gap are 32 px), so the second stands
+	# Cards shorter than the view, more of them than fit: each about 0.6 of it (a row and its gap are 32 px), so the second stands
 	# in view with its foot under the bottom pile, whatever the window makes of the view
 	var room := panel.room()
 	panel.free()
@@ -276,7 +276,7 @@ func _presses() -> void:
 	await _glided()
 	_ok(panel._deck.side_of(high) == 0 and absf(_bar_y(panel, high) - 2.0 * panel._deck.peek()) < 1.0 and _clears_pile(panel, high),
 		"a press on it in the pile brings it, its bar under the bars above it, whole")
-	# A CHIP'S PRESS
+	# A chip's press
 	var chips := CardRow.new()
 	add_child(chips)
 	chips.track(all[6])
@@ -292,7 +292,7 @@ func _presses() -> void:
 	chips.free()
 	panel.free()
 	await _settle(1)
-	# A CARD TALLER THAN THE ROOM COMES WITH ITS BAR UNDER THE BARS ABOVE IT
+	# A card taller than the room comes with its bar under the bars above it
 	panel = await _panel(8, 40)
 	all = _cards(panel)
 	far = all[5]
@@ -301,7 +301,7 @@ func _presses() -> void:
 	await _glided()
 	_ok(panel._deck.side_of(far) == 0 and absf(_bar_y(panel, far) - 5.0 * panel._deck.peek()) < 1.0,
 		"a press brings it, its bar under the bars above it and its start showing")
-	# THE WHEEL
+	# The wheel
 	bar = panel._scroll.get_v_scroll_bar()
 	bar.value = 200.0
 	await _settle()
@@ -312,7 +312,7 @@ func _presses() -> void:
 	await _settle(1)
 
 
-## THE FAN
+## The fan
 func _fan() -> void:
 	var panel := await _panel(8, 40)
 	var all := _cards(panel)
@@ -357,7 +357,7 @@ func _foot_shows(panel: SidePanel, card: Card) -> bool:
 	return (rows[rows.size() - 1] as Control).get_global_rect().end.y <= below + 1.0
 
 
-## A VIEW AT THE END STAYS THERE
+## A view at the end stays there
 func _keeps_the_end() -> void:
 	var panel := await _panel(8, 40)
 	var all := _cards(panel)
@@ -384,7 +384,7 @@ func _keeps_the_end() -> void:
 	_grow(all[2], 6)
 	await _settle(2)
 	_ok(bar.value > was + 100.0 and _at_end(panel) and _foot_shows(panel, last), "...and rows added to a card above it")
-	# THE LIST BUILT AGAIN, longer: what it had freed, and more, in one frame
+	# The list built again, longer: what it had freed, and more, in one frame
 	var rows := last.body.get_children()
 	for r in rows.slice(rows.size() - 4):
 		last.body.remove_child(r)
@@ -392,7 +392,7 @@ func _keeps_the_end() -> void:
 	_grow(last, 10)
 	await _settle(2)
 	_ok(_at_end(panel) and _foot_shows(panel, last), "...and a list built again, longer")
-	# SHORTER, THEN LONGER, frames apart
+	# Shorter, then longer, frames apart
 	rows = last.body.get_children()
 	for r in rows.slice(rows.size() - 10):
 		last.body.remove_child(r)
@@ -402,7 +402,7 @@ func _keeps_the_end() -> void:
 	_grow(last, 12)
 	await _settle(2)
 	_ok(_at_end(panel) and _foot_shows(panel, last), "...and it follows the list longer again")
-	# THE WHEEL LETS GO
+	# The wheel lets go
 	_click(last, MOUSE_BUTTON_WHEEL_UP)
 	await _settle(2)
 	var away := bar.value
@@ -410,7 +410,7 @@ func _keeps_the_end() -> void:
 	_grow(last, 6)
 	await _settle(2)
 	_ok(is_equal_approx(bar.value, away), "...and from there it is left where it is")
-	# A CARD A PRESS BRINGS IS NOT DRAGGED BACK TO THE END
+	# A card a press brings is not dragged back to the end
 	var above: Card = all[1]
 	bar.value = bar.max_value
 	await _settle(2)
@@ -418,7 +418,7 @@ func _keeps_the_end() -> void:
 	_click(above)
 	await _glided()
 	_ok(panel._deck.side_of(above) == 0 and not _at_end(panel), "a press brings it, and the view is not dragged back to the end")
-	# ...AND THE LAST CARD ITSELF, LONG, SHOWS ITS BAR AND ITS FIRST ROWS, NOT ITS FOOT
+	# ...and the last card itself, long, shows its bar and its first rows, not its foot
 	bar.value = bar.max_value
 	await _settle(2)
 	_ok(_at_end(panel) and panel._deck.side_of(last) == -1, "the control: at the end, the long last card's bar lies in the top pile")
@@ -427,7 +427,7 @@ func _keeps_the_end() -> void:
 	_ok(panel._deck.side_of(last) == 0 and not _at_end(panel), "a press on the last card's bar shows its start, not its foot")
 	panel.free()
 	await _settle(1)
-	# A SHORT CARD WHOLE WHERE IT STANDS: nothing has to bring it, so nothing takes the view from the end, and its bar stays under the pointer
+	# A short card whole where it stands: nothing has to bring it, so nothing takes the view from the end, and its bar stays under the pointer
 	panel = await _panel(2, 40)
 	for key in ["short", "foot"]:
 		var box := panel.add_card(key, key, &"paper")
@@ -450,7 +450,7 @@ func _keeps_the_end() -> void:
 		"a press leaves its bar under the pointer and the view at the end (%d to %d)" % [int(bar_y), int(_bar_y(panel, short_card))])
 	panel.free()
 	await _settle(1)
-	# A PANEL THAT FITS FOLLOWS ITS LAST CARD PAST THE WINDOW'S FOOT
+	# A panel that fits follows its last card past the window's foot
 	panel = await _panel(3, 2)
 	all = _cards(panel)
 	bar = panel._scroll.get_v_scroll_bar()
@@ -460,7 +460,7 @@ func _keeps_the_end() -> void:
 	_ok(bar.value > 0.0 and _at_end(panel) and _foot_shows(panel, all[2]), "a panel that fits, its last card grown past the window: it follows (%d)" % int(bar.value))
 	panel.free()
 	await _settle(1)
-	# ...AND NOTHING ELSE
+	# ...and nothing else
 	panel = await _panel(3, 2)
 	all = _cards(panel)
 	bar = panel._scroll.get_v_scroll_bar()
@@ -482,7 +482,7 @@ func _keeps_the_end() -> void:
 	await _settle(1)
 
 
-## A SMALL WINDOW
+## A small window
 func _sizes() -> void:
 	_ok(is_equal_approx(PanelDeck.peek_for(8, 1000.0), PanelDeck.PEEK), "a large window holds the piles at their peek")
 	var tight := PanelDeck.peek_for(8, 300.0)
@@ -491,7 +491,7 @@ func _sizes() -> void:
 	_ok(is_equal_approx(PanelDeck.peek_for(8, 100.0), PanelDeck.PEEK_LEAST), "...and never past its least")
 
 
-## A CARD FREED
+## A card freed
 func _freed() -> void:
 	var panel := await _panel(3, 2)
 	var card: Card = _cards(panel)[1]

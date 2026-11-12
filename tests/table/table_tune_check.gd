@@ -1,6 +1,6 @@
 extends SceneTree
 
-## table_tune_check - THE NUMBERS A PERSON HAS JUDGED, AS ROWS ([TableTune]; next/editing.md step 11).
+## table_tune_check - the numbers a person has judged, as rows ([TableTune]; next/editing.md step 11).
 ##
 ##   godot --headless --path . --script res://tests/table/table_tune_check.gd
 ##
@@ -8,10 +8,10 @@ extends SceneTree
 ##   - told nothing, every row is the number the code had (a show with no `tune:` plays as it did) - each default against the
 ##     constant it took over;
 ##   - a number told is taken; one outside a row's bounds is brought inside them and said; a key with no row is said and left
-##     out. THE CONTROL: a show's tune changes the number the table reads;
-##   - as a form shows them ([method TableTune.fields] in a [SchemaForm]): a slider per row within its bounds (THE CONTROL: a row
-##     with no bound draws none); each offered by the laws it paces (THE CONTROL: acts that only turn things are offered none); the
-##     panel's Pacing card shown while a section offers a row, a row moved handed back (THE CONTROL: nothing offered, no card).
+##     out. The control: a show's tune changes the number the table reads;
+##   - as a form shows them ([method TableTune.fields] in a [SchemaForm]): a slider per row within its bounds (the control: a row
+##     with no bound draws none); each offered by the laws it paces (the control: acts that only turn things are offered none); the
+##     panel's Pacing card shown while a section offers a row, a row moved handed back (the control: nothing offered, no card).
 
 var _fails := 0
 
@@ -43,7 +43,7 @@ func _initialize() -> void:
 	_ok(not v.has("pace_of_tide") and said.contains("pace_of_tide") and not v.has("move_pace") and said.contains("move_pace"),
 		"a key with no row, and a value that is no number, are said and left out")
 	_ok(TableTune.value(v, "slow_most") != TableTune.value({}, "slow_most"), "the control: a show's tune changes the number the table reads")
-	# AS A FORM (the Episode card's rows): a slider per row, its bounds the row's, a number told standing where it was told
+	# As a form (the Episode card's rows): a slider per row, its bounds the row's, a number told standing where it was told
 	var form := SchemaForm.new()
 	form.show_fields(TableTune.fields(), {"slow_most": 3.0})
 	var sliders := form.find_children("*", "HSlider", true, false)
@@ -55,12 +55,12 @@ func _initialize() -> void:
 	form.show_fields(loose, {})
 	_ok(form.find_children("*", "HSlider", true, false).size() == TableTune.ROWS.size() - 1, "the control: a row with no bound draws no slider")
 	form.free()
-	# OFFERED BY WHAT THE ACTS USE: the brush's numbers to a show that paints, the laid rest to one that sets things down - THE CONTROL
+	# Offered by what the acts use: the brush's numbers to a show that paints, the laid rest to one that sets things down - the control
 	# a show whose acts only turn things is offered none
 	_ok(TableTune.fields(["paint"]).keys() == ["slow_most", "rest_most", "move_pace"] and TableTune.fields(["carry", "turn"]).keys() == ["laid_rest"],
 		"each law brings the numbers that pace it: %s, %s" % [TableTune.fields(["paint"]).keys(), TableTune.fields(["carry", "turn"]).keys()])
 	_ok(TableTune.fields(["turn", "clock"]).is_empty(), "the control: acts that only turn things are offered nothing to pace")
-	# THE PACING CARD: shown while a section offers a row, a row moved handed to its section - THE CONTROL: nothing offered, no card
+	# The pacing card: shown while a section offers a row, a row moved handed to its section - the control: nothing offered, no card
 	var offer := Offer.new()
 	offer.offered = TableTune.fields(["paint"])
 	var card := Card.new("check.pacing", "Pacing", &"producer")

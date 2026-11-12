@@ -1,16 +1,14 @@
 extends Node
 class_name ShowcaseRecorder
 
-## ShowcaseRecorder - the README's recording, inside the second ghost that [Showcase] starts under
-## Movie Maker with `--showcase <work>`. It makes what a person would - a note with a song,
-## on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once
-## [method Showcase.frames] frames have been drawn since. Movie Maker has been writing every frame
-## from the first; [Showcase] keeps the last of them, so the boot and the note opening never show.
+## ShowcaseRecorder - the README's recording, inside the second ghost that [Showcase] starts under Movie
+## Maker with `--showcase <work>`. It makes a note with a song on the showcase storyboard, opens it the way
+## the notes list does, presses Play, and quits once [method Showcase.frames] frames have been drawn since.
+## [Showcase] keeps the last of the frames Movie Maker wrote, so the boot and the note opening never show.
 ##
-## Everything it writes is under the work folder: the song, the note (`NoteStore.root`) and, from
-## its process environment, user:// itself. As it plays it collects the files the show has loaded
-## ([method Showcase.loaded_files]) - more than once, because a resource freed before the end is
-## gone from the cache - and leaves them in `capture.json` for the stamp.
+## Everything it writes is under the work folder: the song, the note (`NoteStore.root`) and, from its
+## process environment, user:// itself. As it plays it collects the files the show has loaded ([method
+## Showcase.loaded_files]), more than once because a freed resource leaves the cache, into `capture.json`.
 
 ## The song: 120 bpm, so the prisms have a beat to move on.
 const BPM := 120.0
@@ -46,9 +44,8 @@ func _run() -> void:
 		_fail("could not make the note")
 		return
 	main.open_note(note)
-	# A FIRST RUN OPENS THE ENVIRONMENT PANEL (`[deps] open` defaults to true, and this user:// is
-	# new), and so does any problem its probe finds later: closed now, and after each, so the
-	# picture is the note and its show
+	#A first run opens the Environment panel (`[deps] open` defaults to true, and this user:// is new), and so
+	#does any problem its probe finds later: closed now and after each, so the picture is the note and its show
 	var ch: Chrome = main._chrome
 	ch.set_environment_open(false, false)
 	ch.environment.problem_found.connect(func() -> void: ch.set_environment_open(false, false))

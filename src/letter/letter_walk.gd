@@ -1,14 +1,12 @@
 extends TextWalk
 class_name LetterWalk
 
-## LetterWalk - a letter reads its own words, as the desk writes them: the voice is handed the letter with
-## the pen's rests in it ([method LetterScript.speakable]) - a turn of the page, a strike, a tap, a
-## drawing the pen owes after its paragraph, a line written and never said - sized from what the Letter
-## card made exactly as [LetterMedium] writes and lays it out, so the voice and the pen keep time. A
-## [TextWalk] the Letter's rows on the Medium card hand its reading ([LetterFormat]).
+## LetterWalk - a letter reads its own words, as the desk writes them: the voice is handed the letter with the pen's rests in it
+## ([method LetterScript.speakable]: a turn of the page, a strike, a tap, a drawing the pen owes after its paragraph, a line
+## written and never said), sized from what the Letter card made exactly as [LetterMedium] writes and lays it out, so the voice and
+## the pen keep time. A [TextWalk] the Letter's rows on the Medium card hand its reading ([LetterFormat]).
 ##
-## NO TITLE IS ANNOUNCED: a letter does not begin with its own name - it is on the title screen, over the
-## desk, while the intro holds.
+## No title is announced: a letter does not begin with its own name; it is on the title screen, over the desk, while the intro holds.
 
 var card: LetterFormat
 

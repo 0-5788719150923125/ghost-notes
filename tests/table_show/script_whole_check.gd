@@ -1,6 +1,6 @@
 extends SceneTree
 
-## script_whole_check - THE SCRIPT IS ONE TEXT (next/editing.md, design point 3; [method CardReading.split],
+## script_whole_check - the script is one text (next/editing.md, design point 3; [method CardReading.split],
 ## [method TableProducer.write_script]).
 ##
 ##   godot --headless --path . --script res://tests/table_show/script_whole_check.gd
@@ -9,7 +9,7 @@ extends SceneTree
 ##   - what compose joined, split gives back: the marks and each passage's words;
 ##   - one passage's words edited inside the whole script are written to that passage alone - a hand's version, kept, what
 ##     stood a version back - and the script put together again is the text as edited;
-##   - THE CONTROLS: a script with a mark taken out, and one with words before its first mark, are refused, and no passage
+##   - the controls: a script with a mark taken out, and one with words before its first mark, are refused, and no passage
 ##     is written.
 
 const ROOT := "user://script_whole_check"
@@ -42,20 +42,20 @@ func _initialize() -> void:
 		"one passage's words are written to it alone, kept, what stood a version back: %s" % ep.read_text("say:1"))
 	_ok(ep.read_text("say:2") == "The second beat's words." and not ep.kept("say:2"), "the passages not edited are left as they were")
 	_ok(ep.read_text("script") == edited, "the script put together again is the text as edited")
-	# THE CONTROLS
+	# The controls
 	var marks := RegEx.create_from_string("(?m)^<!-- table: work 2 -->\\n")
 	var cut := marks.sub(edited, "")
 	_ok(cut != edited and not prod.write_script(cut).is_empty() and ep.read_text("say:2") == "The second beat's words.",
 		"the control: a script with a mark taken out is refused, and nothing is written")
 	_ok(not prod.write_script("Words first.\n\n" + edited).is_empty(), "the control: words before the first mark are refused")
-	# ASKED AGAIN WITH A NOTE (next/editing.md step 9): the author's note goes on that step's prompt alone
+	# Asked again with a note (next/editing.md step 9): the author's note goes on that step's prompt alone
 	prod.asked = {"say:1": "Say it in half the words."}
 	var p1 := prod._asked("say:1", "THE PROMPT")
 	_ok(p1.begins_with("THE PROMPT") and p1.contains("Say it in half the words.") and p1.contains("ASKS FOR IT AGAIN"),
 		"a step asked again with a note carries it on its own prompt")
 	_ok(prod._asked("say:2", "THE PROMPT") == "THE PROMPT", "the control: another step's prompt is as it was")
-	# BEGUN BY HAND (next/editing.md step 8): every part made by a hand and kept, the pictures it has not got waiting for one -
-	# Generate passes them by; THE CONTROL a ⟳ asking for one, which it does not
+	# Begun by hand (next/editing.md step 8): every part made by a hand and kept, the pictures it has not got waiting for one -
+	# Generate passes them by; the control a ⟳ asking for one, which it does not
 	var hand := TableEpisode.open("whole-show", 6)
 	var fixed := {"things": [{"name": "the mask", "shapes": []}]}
 	_ok(hand.begin_by_hand(2, fixed).is_empty() and hand.has("plan") and hand.has("say:2") and hand.has("script") and hand.cardless(),
@@ -69,8 +69,8 @@ func _initialize() -> void:
 	hp.again = ["image:surface"]
 	_ok(not hp.passes_by("image:surface"), "the control: a ⟳ asking for it is not passed by")
 	_ok(not hand.begin_by_hand().is_empty(), "an episode begun is not begun again")
-	# THE WAY BACK, WHERE KEEP A COPY WAS (the Body card's Restore): a passage changed is listed among the episode's step versions,
-	# and put back is the words as they were, kept, what changed since a version back - THE CONTROL: a version not there is refused
+	# The way back, where keep a copy was (the Body card's Restore): a passage changed is listed among the episode's step versions,
+	# and put back is the words as they were, kept, what changed since a version back - the control: a version not there is refused
 	ep.write_text("say:2", "Changed after the first words.")
 	var listed := ep.step_versions().filter(func(v: Dictionary) -> bool: return String((v["key"] as Array)[0]) == "say:2")
 	var back := ep.versions("say:2").size()
@@ -79,7 +79,7 @@ func _initialize() -> void:
 		and ep.read_text("say:2") == "The second beat's words." and ep.kept("say:2") and ep.versions("say:2").size() == back + 1,
 		"put back: the words as they were, kept, what changed since a version back")
 	_ok(not ep.restore("say:2", 99).is_empty(), "the control: a version that is not there is not put back")
-	# THE HOST'S MAPS ONE BACK (TableProducer.swap_paint): the new put in place, the old kept, the one before that gone
+	# The host's maps one back (TableProducer.swap_paint): the new put in place, the old kept, the one before that gone
 	for pass_n in [1, 2, 3]:
 		var fresh := ep.dir.path_join(TableProducer.PAINT_NEXT)
 		DirAccess.make_dir_recursive_absolute(fresh)
@@ -90,7 +90,7 @@ func _initialize() -> void:
 	var prev := ep.dir.path_join("versions/_paint_prev/elements.json")
 	_ok(FileAccess.get_file_as_string(ep.dir.path_join("paint/elements.json")).contains("3") and FileAccess.get_file_as_string(prev).contains("2")
 		and not DirAccess.dir_exists_absolute(ep.dir.path_join(TableProducer.PAINT_NEXT)), "the new maps stand, the last kept one back, the one before that gone")
-	# ONE LAYER LAID AGAIN (TableProducer.lay_layer): refused where there is no such layer; THE CONTROL a start without one lays the whole
+	# One layer laid again (TableProducer.lay_layer): refused where there is no such layer; the control a start without one lays the whole
 	_ok(not prod.lay_layer(1).is_empty() and prod.skin_layer == -1, "a layer the episode has not got is not laid again")
 	# (the agents' queue read-only here, as a gate's must be: the start lands nothing and starts no agent - bedrock_check's seam)
 	AgentJobs.allow_for_tool(false)
@@ -99,7 +99,7 @@ func _initialize() -> void:
 	prod.stop()
 	AgentJobs.allow_for_tool(false)
 	_ok(prod.skin_layer == -1, "the control: any other start lays the whole painting, never a layer left over")
-	# ...AND THE DESIGN AFTER IT (TableProducer.merged_layer): the other layers as they stood, a hand's edits kept, this one's anew
+	# ...and the design after it (TableProducer.merged_layer): the other layers as they stood, a hand's edits kept, this one's anew
 	var stood := {"designs": [{"elements": [{"id": "a", "stage": "base"}, {"id": "b2", "stage": "rust", "plan": {"seconds": 3.0}},
 		{"id": "c", "stage": "lines"}]}]}
 	var fresh := [{"id": "a", "stage": "base"}, {"id": "n1", "stage": "rust"}, {"id": "n2", "stage": "rust"}, {"id": "c", "stage": "lines"},

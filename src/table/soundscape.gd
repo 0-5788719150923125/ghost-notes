@@ -1,113 +1,82 @@
 extends SoundBed
 class_name Soundscape
 
-## Soundscape - what a place sounds like behind the reader: the wind, the sea, rain, a fire, a stream,
-## the insects of a summer night. The user, 2026-10-08: "there are a lot of scenes that take place in
-## places where pure environmental silence feels inappropriate. One scene was on a boat at sea: you
-## might expect to hear waves oscillating and crashing ... if the wind gusts strongly, the sound
-## increases in strength accordingly." The set dresser writes it as the table's `sound`, beside its
-## `light` ([method describe], [method sanitize]); the reading mixes it under the voice, live and in
-## the exported take alike ([ReadingPanel], the Environment dial).
+## Soundscape: what a place sounds like behind the reader - the wind, the sea, rain, a fire, a stream, the insects of a summer night. The
+## set dresser writes it as the table's `sound`, beside its `light` ([method describe], [method sanitize]); the reading mixes it under the
+## voice, live and in the exported take alike ([ReadingPanel], the Environment dial).
 ##
-## EVERYTHING HERE IS SYNTHESIZED, from noise and a few sines - no recordings, so nothing to license
-## and nothing to fetch (the method is Farnell's, "Designing Sound", 2010):
-##   - WIND is noise through band-pass filters whose center and level follow the wind's speed - a rush
-##     that brightens and swells in a gust - with what it blows THROUGH on top: leaves hiss a moment
-##     after a gust reaches them, rigging sings (an Aeolian tone rises in proportion to the speed),
-##     eaves moan, canvas flaps.
-##   - NOTHING OUT OF DOORS PULSES. A noise chopped by a sine is a machine: the user, 2026-10-12, of
-##     a ketch at sea (wind through canvas, the sea against the hull): "weird bursts of oscillation
-##     sound happening, over and over. It almost sounds like a fan spinning." Two things were that.
-##     The awning's flap was one band pulsed deep at 2 to 9 Hz for as long as the wind was up: cloth
-##     flaps as EVENTS now (each its own thump, strength and pitch, the waits between them uneven,
-##     [method _wind_block]) - "the wind sounds fine". And THE SLOSH after every slap on the hull
-##     was a burst of noise near 1100 Hz pulsed at 8 to 16 Hz - and, by an accident of how it was
-##     struck, 5 dB LOUDER than the slap it trails, in the band an ear hears best. Making its pulse
-##     ragged was not enough ("the water still has the oscillation sounds, and it's still pretty
-##     bad"): a pulsed burst is a pulsed burst. It is a plain wash now, under its slap, and the
-##     gurgle is the bubbles' ([method _water_block]). The cicadas' one deep pulse had been "a
-##     horrible screeching" and the eaves' narrow moan "whirred like something spinning": the same
-##     mistake each time. Only an insect keeps a pulse, far too fast to hear as one.
-##   - THE SEA is a wave's ENVELOPE over filtered noise - the swell gathering low, the break opening the
-##     filter, the wash fizzing away for seconds - or, against a hull or a piling, slaps (a short thump
-##     of band-passed noise), the slosh after them and a few bubbles.
-##   - A BUBBLE is a sine whose pitch rises as it decays (Minnaert's resonance of a closing bubble):
-##     the plunk of a lapping wave, the babble of a stream, the plink of rain falling on water.
-##   - RAIN is a hiss and many drops, each a click through a resonance tuned by what it falls on.
-##   - FIRE is a low roar, a flickering hiss and crackles - very short bursts, often in clusters.
-##   - A CRICKET is a few short tone pulses, chirp after chirp; cicadas a chorus - several broad bands
-##     of noise, each pulsing shallowly at its own rate, so the pulses blur into a shimmer.
-##   - THE RIDE ([Rides], the table's `ride`) is a rumble through the floor (low noise, steady) and the
-##     roll of the wheels, and every jolt the table feels struck as it is felt, from the SAME PLAN - a
-##     wheel over a rail joint a thump and a steel tick, a cart's wheel over a stone a clack, a hard bump
-##     a thud and a rattle after it ([method _ride_block]). Struck events, never a pulse: the knocks'
-##     rhythm is the rails' and the car's, da-da ... da-da, as the camera and the flowers feel it.
+## Everything is synthesized from noise and a few sines - no recordings (the method is Farnell's, "Designing Sound", 2010):
+##   - Wind is noise through band-pass filters whose center and level follow the wind's speed - a rush that brightens and swells in a gust
+##     - with what it blows through on top: leaves hiss a moment after a gust reaches them, rigging sings (an Aeolian tone rises in
+##     proportion to the speed), eaves moan, canvas flaps.
+##   - Nothing out of doors pulses. A noise chopped by a sine reads as a machine (a fan): cloth flaps as events (each its own thump,
+##     strength and pitch, the waits between them uneven, [method _wind_block]); the slosh after a slap on a hull is a plain wash under
+##     its slap, the gurgle being the bubbles' ([method _water_block]); an eaves' moan is broad, a cicada chorus shallow. Only an insect
+##     keeps a pulse, far too fast to hear as one.
+##   - The sea is a wave's envelope over filtered noise - the swell gathering low, the break opening the filter, the wash fizzing away for
+##     seconds - or, against a hull or a piling, slaps (a short thump of band-passed noise), the slosh after them and a few bubbles.
+##   - A bubble is a sine whose pitch rises as it decays (Minnaert's resonance of a closing bubble): the plunk of a lapping wave, the
+##     babble of a stream, the plink of rain falling on water.
+##   - Rain is a hiss and many drops, each a click through a resonance tuned by what it falls on.
+##   - Fire is a low roar, a flickering hiss and crackles - very short bursts, often in clusters.
+##   - A cricket is a few short tone pulses, chirp after chirp; cicadas a chorus - several broad bands of noise, each pulsing shallowly at
+##     its own rate, so the pulses blur into a shimmer.
+##   - The ride ([Rides], the table's `ride`) is a rumble through the floor (low noise, steady) and the roll of the wheels, and every jolt
+##     the table feels struck as it is felt, from the same plan - a wheel over a rail joint a thump and a steel tick, a cart's wheel over
+##     a stone a clack, a hard bump a thud and a rattle after it ([method _ride_block]). Struck events, never a pulse.
 ##
-## THE WIND IS THE TABLE'S OWN ([Winds], the light's `wind`, planned on the same seed as [TableMedium]
-## plans it): its speed is read at every block of samples from the same closed-form plan the leaves,
-## the swinging shadows and the drifting petals read, so a gust is heard as it is seen - the user's
-## "align sound with motion". The fire roars and the rain thickens in a gust too; the sea slaps harder.
+## The wind is the table's own ([Winds], the light's `wind`, planned on the same seed as [TableMedium]): its speed is read at every block of
+## samples from the same closed-form plan the leaves, the swinging shadows and the drifting petals read, so a gust is heard as it is seen.
+## The fire roars and the rain thickens in a gust too; the sea slaps harder.
 ##
-## ONE DIAL ([method set_level], Environment): how present the place is. Low is far and steady - a bed
-## behind the voice, its gusts and breakers flattened and dulled; high is close and vivid - louder,
-## brighter, every gust and crash and crackle hitting harder. It ducks a little under speech
-## ([constant DUCK]), so the voice is never fought.
+## One dial ([method set_level], Environment): how present the place is. Low is far and steady - a bed behind the voice, its gusts and
+## breakers flattened and dulled; high is close and vivid - louder, brighter, every gust and crash and crackle hitting harder. It ducks a
+## little under speech ([constant DUCK]).
 ##
-## RENDERED IN WHOLE BLOCKS of [constant CR] samples from the moment it starts, so the samples are the
-## same however the caller slices its calls - live, a buffer at a time; in an export, the whole take.
+## Rendered in whole blocks of [constant CR] samples from the moment it starts, so the samples are the same however the caller slices its
+## calls - live, a buffer at a time; in an export, the whole take.
 
 ## Samples per control block: the wind is read, the waves stepped and the events placed this often.
 const CR := 64
 const _NM := 65535
-## HOW FAR A PLACE EBBS below its typical gust or wave, at most (dB): at the bottom of the dial and the
-## top. A wind or a sea is never silent between its gusts and its breakers.
+## How far a place ebbs below its typical gust or wave, at most (dB): at the bottom of the dial and the top. A wind or a sea is never
+## silent between its gusts and its breakers.
 const FLOOR_DB := Vector2(-6.0, -11.0)
-## THE WIND HEARD HOLDS (seconds): it rises toward a gust this fast and lets go of it this slowly, so a
-## gust is held near its height and the air falls back only part way before the next. The plan's own
-## gusts ([Winds]) rise and fall in a few seconds - right for a leaf, and heard that way they came on
-## hard, held for an instant and fell away (the user, 2026-10-08: "the ramp up and down also seems
-## rather fast, while the hold at volume is short ... it would decay to half-volume, or 3-quarters").
+## The wind heard holds (seconds): it rises toward a gust this fast and lets go of it this slowly, so a gust is held near its height and
+## the air falls back only part way before the next (the plan's own gusts ([Winds]) rise and fall in a few seconds, right for a leaf but
+## abrupt heard).
 ##
-## IN DECIBELS, ON AN S-CURVE (the user, 2026-10-08: "are you increasing the volume in a linear fashion,
-## or a logarithmic one?"). It was one smoothing stage on the speed itself - a curve steepest at its very
-## start, so in what the ear hears every gust began with a jump (27 dB/s at its steepest). Now the LOG of
-## the speed is smoothed, through two stages (a rise starts from no slope at all, swells, and eases into
-## its height, as a fade does), and no rise may be faster than [constant RISE_MOST]. Each stage's time.
+## In decibels, on an S-curve: the log of the speed is smoothed, through two stages (a rise starts from no slope at all, swells, and eases
+## into its height, as a fade does), and no rise may be faster than [constant RISE_MOST] (smoothing the speed itself starts every gust
+## with a jump). Each stage's time.
 const HOLD := Vector2(0.45, 1.8)
-## The fastest the wind heard may grow, in its log per second: 0.4 keeps a gust's entry, everything
-## that follows the wind together (the rush's level and its widening band, the rumble), near 6 dB a
-## second at the dial's middle - a fade's pace, not a jump.
+## The fastest the wind heard may grow, in its log per second: 0.4 keeps a gust's entry, and everything that follows the wind together
+## (the rush's level and its widening band, the rumble), near 6 dB a second at the dial's middle - a fade's pace, not a jump.
 const RISE_MOST := 0.4
-## HEARD A MOMENT AHEAD (seconds): the plan is known before it blows, so the slow fade into a gust starts
-## this much before it is seen and reaches its height as the leaves and the petals do - as a real gust
-## is heard coming through the trees before it arrives. Without it a gentle entry was a late one.
+## Heard a moment ahead (seconds): the plan is known before it blows, so the slow fade into a gust starts this much before it is seen and
+## reaches its height as the leaves and the petals do, as a real gust is heard coming through the trees before it arrives.
 const LEAD := 0.8
-## ITS OWN SLOW SWELLS: periods (seconds) that never line up, and how deep they are together - the
-## aperiodic rise and fall a wind and a sea have between gusts and sets.
+## Its own slow swells: periods (seconds) that never line up, and how deep they are together - the aperiodic rise and fall a wind and a
+## sea have between gusts and sets.
 const BREATHS := [7.3, 17.9, 41.0]
 const BREATH := 0.15
 ## How long a place takes to fade in when it starts (seconds) - never a hard edge.
 const FADE := 1.5
-## BROWN NOISE, white integrated - with a leak, so its corner is about 80 Hz at the voice's rate. With
-## the corner at ~10 Hz most of its power was under 50 Hz, near subsonic, and a low rumble made of it
-## churned like a washing machine (measured: 5 dB of wobble against the rush's 1.4).
+## Brown noise, white integrated - with a leak, so its corner is about 80 Hz at the voice's rate (a lower corner puts most of its power
+## near subsonic, and a rumble made of it churns).
 const BROWN := 0.977
 const BROWN_IN := 0.2
-## THE WIND'S BODY IS EDDIES, never one band: real wind is many uncorrelated eddies arriving from a
-## little apart, and one band of noise with a moving center is the "filtered noise sweep" an ear knows
-## for a synthesizer (the user, 2026-10-08: "it sounds ALMOST natural ... the uncanny valley"). Each
-## eddy is pink noise through a steep (24 dB) low-pass, its cutoff and level drifting on its own slow
-## random course (seconds), at its own slowly wandering place. Their cutoffs, as fractions of the wind's.
-## (None very low: a low-passed noise with a low cutoff is a narrow band, and a narrow band's loudness
-## wobbles - the darkest eddy at ~110 Hz rumbled like a motor.)
+## The wind's body is eddies, never one band: real wind is many uncorrelated eddies arriving from a little apart, and one band of noise
+## with a moving center is the "filtered noise sweep" an ear knows for a synthesizer. Each eddy is pink noise through a steep (24 dB)
+## low-pass, its cutoff and level drifting on its own slow random course (seconds), at its own slowly wandering place. Their cutoffs, as
+## fractions of the wind's. (None very low: a low-passed noise with a low cutoff is a narrow band, and a narrow band's loudness wobbles.)
 const EDDIES := [1.0, 1.6, 2.6]
 ## How long each eddy takes to drift (seconds), and how far its place wanders.
 const EDDY_DRIFT := [2.0, 3.5, 6.0]
 const EDDY_WANDER := 0.45
-## THE SPACE: every place heard in a little of its own room - a short, dark, diffuse tail (a feedback
-## delay network: four lines mixed into each other), wetter as the dial comes down (further away). Dry,
-## a sound arrives at the ears as no outdoor sound does. Its tail (seconds to fall 60 dB), its darkness
-## (Hz), and how wet it is at the dial's bottom and top.
+## The space: every place heard in a little of its own room - a short, dark, diffuse tail (a feedback delay network: four lines mixed into
+## each other), wetter as the dial comes down (further away). Dry, a sound arrives at the ears as no outdoor sound does. Its tail (seconds
+## to fall 60 dB), its darkness (Hz), and how wet it is at the dial's bottom and top.
 const SPACE_TAIL := 1.1
 const SPACE_DARK := 2600.0
 const SPACE_WET := Vector2(0.5, 0.22)
@@ -119,23 +88,19 @@ const DUCK := 0.42
 ## The duck's follower: how fast it closes on a word and how slowly it lets go (seconds).
 const DUCK_ATTACK := 0.03
 const DUCK_RELEASE := 0.9
-## THE DIAL'S LEVEL: dB at its bottom and its top, over the layers' own levels, and a straight line
-## between them ([method level_db]) - a step of the dial (0.05) is 2.5 dB wherever it is. It was -30 to
-## -2 on a curve steepest at the bottom: the first step was already at -27, the whole dial covered 25 dB,
-## and its upper half was a place as loud as the reader (the user, 2026-10-11: "even at a value of 0.05
-## (the lowest), the 'Environment' audio is really quite loud" - a stream and a light wind in the trees,
-## measured there at -48 dBFS RMS under a voice near -23). That level is now two thirds of the way up;
-## the middle is 8 dB under it, and the bottom 30.
+## The dial's level: dB at its bottom and its top, over the layers' own levels, and a straight line between them ([method level_db]) - a
+## step of the dial (0.05) is 2.5 dB wherever it is. The top is a place about as loud as the reader; the middle is 8 dB under it, and the
+## bottom 30.
 const LEVEL_DB := Vector2(-60.0, -10.0)
-## THE LOUDEST A PLACE GETS, alone (linear): a gust at the top of the dial, a breaker, a downpour are held
-## under it by a slow limiter, so the place never reaches the voice's own peaks.
+## The loudest a place gets, alone (linear): a gust at the top of the dial, a breaker, a downpour are held under it by a slow limiter, so
+## the place never reaches the voice's own peaks.
 const CEILING := 0.56
 ## How fast the limiter lets go again (seconds).
 const LIMIT_RELEASE := 1.2
 ## ...faded in over this much of its travel, so 0 is a clean off and not a step.
 const FADE_IN := 0.05
 
-## THE VOCABULARY. What each part of `sound` is, as an agent reads it.
+## The vocabulary: what each part of `sound` is, as an agent reads it.
 const LAYERS := {
 	"wind": "the wind, heard - the table's own wind (the light's `wind`) when it has one, every gust heard as it moves the light and the air",
 	"water": "the sea, a lake or a harbor, close by",
@@ -146,9 +111,9 @@ const LAYERS := {
 	"ride": "the ride, heard - the table's own `ride`: a rumble through the floor and the roll of the wheels, every knock and jolt heard as it shakes the table",
 	"creatures": "animals heard and never seen, each made of numbers rather than a kind - a hatchling dragon dozing by the hearth, a cat asleep on a chair, frogs at the pond's edge, pigeons roosting under the eaves, an owl out in the yard, a puppy in its basket",
 }
-## THE RIDE HEARD, by what the table is aboard ([method _ride_block]): the rumble's corner (Hz) and level,
-## the wheels' roll (its middle, Hz - 0 none - and level), a jolt's thump and its tick (Hz - 0 none), and
-## whether the patter is heard (a cart's wheels over stones; a road's grain is in its roll).
+## The ride heard, by what the table is aboard ([method _ride_block]): the rumble's corner (Hz) and level, the wheels' roll (its middle,
+## Hz - 0 none - and level), a jolt's thump and its tick (Hz - 0 none), and whether the patter is heard (a cart's wheels over stones; a
+## road's grain is in its roll).
 const RIDE_TONES := {
 	"rails": {"rumble": 140.0, "low": 0.4, "roll": 950.0, "rolls": 0.18, "thump": 190.0, "tick": 2400.0, "patter": false},
 	"road": {"rumble": 110.0, "low": 0.36, "roll": 420.0, "rolls": 0.22, "thump": 150.0, "tick": 0.0, "patter": false},
@@ -197,9 +162,9 @@ const INSECTS := {
 	"crickets": "crickets in the grass - chirp after chirp, each at its own pace",
 	"cicadas": "cicadas in the trees - a dry buzz that swells and fades",
 }
-## THE CREATURES' CALLS ([method _creatures_block]): what each is, as an agent reads it, and how awake a body
-## is when it makes it (`awake`, 0 asleep to 1 lively: a dozing body snores and purrs, a lively one chirps and
-## squeaks). A call is made of the creature's numbers - its size, its breath - and never of a species.
+## The creatures' calls ([method _creatures_block]): what each is, as an agent reads it, and how awake a body is when it makes it
+## (`awake`, 0 asleep to 1 lively: a dozing body snores and purrs, a lively one chirps and squeaks). A call is made of the creature's
+## numbers - its size, its breath - and never of a species.
 const CALLS := {
 	"chirp": {"about": "a short bright note, sliding up or down", "awake": 0.7},
 	"trill": {"about": "a quick warbling run of notes", "awake": 0.8},
@@ -215,20 +180,19 @@ const CALLS := {
 const MAX_CREATURES := 4
 const MAX_BODIES := 6
 const MAX_CALLS := 12
-## THE CREATURES' PLAN is made a window at a time (seconds), each window from its own dice ([method _calls_in]):
-## the calls between any two moments are the same whoever asks - the sound, and whatever shows a huff's breath
-## ([method seen_calls]) - and however the samples are sliced. A call, or a bunch of them, may run on past its
-## window, at most this long (seconds).
+## The creatures' plan is made a window at a time (seconds), each window from its own dice ([method _calls_in]): the calls between any
+## two moments are the same whoever asks - the sound, and whatever shows a huff's breath ([method seen_calls]) - and however the samples
+## are sliced. A call, or a bunch of them, may run on past its window, at most this long (seconds).
 const CREATURE_WINDOW := 8.0
 const LONGEST_CALL := 24.0
-## THE CALLS THAT ARE SEEN as well as heard: a huff's breath, a puff of smoke past the table's edge.
+## The calls that are seen as well as heard: a huff's breath, a puff of smoke past the table's edge.
 const SEEN_CALLS := ["huff"]
 ## Each call's level, beside the rest of a place (measured alone: tests/table/creatures_check.gd).
 const CALL_LEVEL := {"chirp": 0.19, "trill": 0.14, "purr": 0.22, "huff": 0.65, "snore": 0.33, "squeak": 0.13,
 	"coo": 0.38, "croak": 0.5}
 
 
-## THE VOCABULARY, as an agent reads it ([TablePrompts.set_dresser], `insert: sounds`).
+## The vocabulary, as an agent reads it ([TablePrompts.set_dresser], `insert: sounds`).
 static func describe() -> String:
 	var lines := PackedStringArray()
 	lines.append("THE SOUND (`sound`): {\"why\", \"wind\", \"water\", \"rain\", \"fire\", \"stream\", \"insects\", \"creatures\"} - what the place sounds like behind the reader's voice, every part optional. Leave `sound` out, or a part of it, for a quiet room: the reader alone, as every earlier table was.")
@@ -258,8 +222,8 @@ static func describe() -> String:
 	return "\n".join(lines)
 
 
-## WHATEVER AN AGENT WROTE as `sound`, made safe: `{}` when nothing was written. Every part kept is
-## complete. What had to change is said in [param notes].
+## Whatever an agent wrote as `sound`, made safe: `{}` when nothing was written. Every part kept is complete. What had to change is said
+## in [param notes].
 static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray()) -> Dictionary:
 	if raw == null:
 		return {}
@@ -354,7 +318,7 @@ static func _kind(v: Variant, table: Dictionary, fallback: String, what: String,
 	return fallback
 
 
-## THE SOUND IN A LINE, for the set dresser's answer and an episode's archive. "" for none.
+## The sound in a line, for the set dresser's answer and an episode's archive. "" for none.
 static func summary(sound: Dictionary) -> String:
 	var parts := PackedStringArray()
 	if sound.get("wind") is Dictionary:
@@ -382,11 +346,10 @@ static func summary(sound: Dictionary) -> String:
 	return ", ".join(parts)
 
 
-## WHAT A TABLE SOUNDS LIKE: its `sound` made safe, and the wind it hears planned exactly as
-## [TableMedium] plans the light's (the episode's [param seed]), and its ride as the table plans it ([Rides]:
-## `{}` unless the sound hears it). `{sound, wind, ride}`; `sound` is `{}` for a quiet table. THE AGENT DECIDES: a light with a wind and a sound with none is silent - the wind is
-## heard only where the set dresser wrote it into the sound (the user, 2026-10-08: "we should defer to
-## the agents here"; many places are silent at every level of the dial).
+## What a table sounds like: its `sound` made safe, and the wind it hears planned exactly as [TableMedium] plans the light's (the
+## episode's [param seed]), and its ride as the table plans it ([Rides]: `{}` unless the sound hears it). `{sound, wind, ride}`; `sound`
+## is `{}` for a quiet table. The agent decides: a light with a wind and a sound with none is silent - the wind is heard only where the
+## set dresser wrote it into the sound.
 static func of_table(table: Dictionary, seed: int) -> Dictionary:
 	var sound := sanitize(table.get("sound"))
 	var light: Dictionary = Lights.sanitize(table["light"]) if table.get("light") is Dictionary else {}
@@ -441,9 +404,9 @@ static func _creature(c: Dictionary, notes: PackedStringArray) -> Dictionary:
 		"awake": awake, "over": Props._num(c.get("over"), 900.0, 30.0, 7200.0)}
 
 
-## HOW LIVELY creature [param c] is at show time [param t], 0 asleep to 1 wide awake: from its `awake` at the
-## start to its end over its `over` seconds, eased, with a slow wander of its own about that - a dozing body
-## stirs and settles again. [param salt] is the creature's own.
+## How lively creature [param c] is at show time [param t], 0 asleep to 1 wide awake: from its `awake` at the start to its end over its
+## `over` seconds, eased, with a slow wander of its own about that - a dozing body stirs and settles again. [param salt] is the
+## creature's own.
 static func _awake_at(c: Dictionary, t: float, salt: int) -> float:
 	var aw: Array = c["awake"]
 	var a := lerpf(float(aw[0]), float(aw[1]), smoothstep(0.0, 1.0, clampf(t / float(c["over"]), 0.0, 1.0)))
@@ -451,8 +414,8 @@ static func _awake_at(c: Dictionary, t: float, salt: int) -> float:
 	return clampf(a + 0.12 * sin(TAU * t / 97.0 + ph) + 0.06 * sin(TAU * t / 41.0 + 2.3 * ph), 0.0, 1.0)
 
 
-## THE BODIES creature [param ci] of a place is (its `count`): `[{side, pitch}]` - each a little apart from the
-## rest round the creature's `side`, and each its own voice, a little higher or lower.
+## The bodies creature [param ci] of a place is (its `count`): `[{side, pitch}]` - each a little apart from the rest round the creature's
+## `side`, and each its own voice, a little higher or lower.
 static func _bodies(c: Dictionary, seed: int, ci: int) -> Array:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([seed, "bodies", ci])
@@ -480,11 +443,10 @@ static func _pick_call(calls: Array, aw: float, r: RandomNumberGenerator) -> Str
 	return String(calls[calls.size() - 1])
 
 
-## THE CALLS creature [param ci] (made safe, [param c]) begins in window [param k] ([constant CREATURE_WINDOW]):
-## `[{t, call, body, dur, parts, pitch, amp, salt}]`, in order. A BODY MAKES ONE CALL AT A TIME: a call is left
-## out while its body is still making one - one of this window's kept before it, or any the windows before drew
-## that is still sounding ([method _drawn_in], as drawn: so this stays a closed form of the window, never a
-## chain back to the first).
+## The calls creature [param ci] (made safe, [param c]) begins in window [param k] ([constant CREATURE_WINDOW]): `[{t, call, body, dur,
+## parts, pitch, amp, salt}]`, in order. A body makes one call at a time: a call is left out while its body is still making one - one of
+## this window's kept before it, or any the windows before drew that is still sounding ([method _drawn_in], as drawn: so this stays a
+## closed form of the window, never a chain back to the first).
 static func _calls_in(c: Dictionary, ci: int, k: int, seed: int) -> Array:
 	var busy: Array = []
 	for j in range(maxi(1, ceili(LONGEST_CALL / CREATURE_WINDOW)), 0, -1):
@@ -503,11 +465,10 @@ static func _calls_in(c: Dictionary, ci: int, k: int, seed: int) -> Array:
 	return out
 
 
-## THE CALLS drawn for window [param k] from its own dice, before [method _calls_in] keeps a body to one at a time.
-## They come in BUNCHES - a run of chirps, two coos - more and closer together the livelier it is, the waits
-## between the bunches uneven (a Poisson count of them in the window, each at its own moment); a long call (a
-## purr, a snore) ends its bunch. A purr's `parts` are its breaths, a snore's its breath in, breath out and rest,
-## again (seconds).
+## The calls drawn for window [param k] from its own dice, before [method _calls_in] keeps a body to one at a time. They come in bunches
+## - a run of chirps, two coos - more and closer together the livelier it is, the waits between the bunches uneven (a Poisson count of
+## them in the window, each at its own moment); a long call (a purr, a snore) ends its bunch. A purr's `parts` are its breaths, a snore's
+## its breath in, breath out and rest, again (seconds).
 static func _drawn_in(c: Dictionary, ci: int, k: int, seed: int) -> Array:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([seed, "creature", ci, k])
@@ -574,10 +535,9 @@ static func _drawn_in(c: Dictionary, ci: int, k: int, seed: int) -> Array:
 	return out
 
 
-## THE CALLS THAT ARE SEEN between show times [param t0] and [param t1] ([constant SEEN_CALLS]: a huff's
-## breath), from the same plan the sound plays - for [param sound] as [method sanitize] gives it and the
-## [param seed] the soundscape was made with: `[{t, call, side, near, size, name}]`, in order of `t`. For the
-## medium, to put a puff of smoke past the table's edge on that side as each huff is heard.
+## The calls that are seen between show times [param t0] and [param t1] ([constant SEEN_CALLS]: a huff's breath), from the same plan the
+## sound plays - for [param sound] as [method sanitize] gives it and the [param seed] the soundscape was made with: `[{t, call, side,
+## near, size, name}]`, in order of `t`. For the medium, to put a puff of smoke past the table's edge on that side as each huff is heard.
 static func seen_calls(sound: Dictionary, seed: int, t0: float, t1: float) -> Array:
 	var out: Array = []
 	var cs: Array = sound["creatures"] if sound.get("creatures") is Array else []
@@ -596,9 +556,9 @@ static func seen_calls(sound: Dictionary, seed: int, t0: float, t1: float) -> Ar
 
 # --- the synthesizer --------------------------------------------------------------------------------
 
-## ONE FILTERED NOISE: a source (white, or brown - white integrated), a state-variable filter (Simper's,
-## stable under modulation), a level for each ear eased across the block, an envelope struck by events
-## (a difference of two exponentials - an attack and a decay) and an optional pulse (a flap, a buzz).
+## One filtered noise: a source (white, or brown - white integrated), a state-variable filter (Simper's, stable under modulation), a
+## level for each ear eased across the block, an envelope struck by events (a difference of two exponentials - an attack and a decay) and
+## an optional pulse (a flap, a buzz).
 class Band:
 	var src := 0           # 0 white, 1 brown
 	var leak := BROWN      # brown's leak and its input (see BROWN)
@@ -630,10 +590,9 @@ class Band:
 		e1 += amount / peak
 		e2 += amount / peak
 
-	## STRUCK TO A PEAK: as [method strike], with [param peak] the height the envelope really
-	## reaches. ([method strike]'s own scale is the envelope one sample after the strike, floored
-	## at 0.05 - so its `amount` is a fraction of the peak, about a fourteenth for a slap, and every
-	## sound struck with it was tuned by ear on that. This one is for a level worked out, not tuned.)
+	## Struck to a peak: as [method strike], with [param peak] the height the envelope really reaches. ([method strike]'s own scale is the
+	## envelope one sample after the strike, floored at 0.05 - so its `amount` is a fraction of the peak, about a fourteenth for a slap.
+	## This one is for a level worked out, not tuned.)
 	func hit(peak: float, decay: float, attack: float, sr: float) -> void:
 		k1 = exp(-1.0 / maxf(1.0, decay * sr))
 		k2 = exp(-1.0 / maxf(1.0, attack * sr))
@@ -647,8 +606,8 @@ class Band:
 		e2 += peak / top
 
 
-## ONE EDDY of the wind's body: pink noise, a 24 dB low-pass (two state-variable stages), its own slow
-## drift of cutoff and level and its own place.
+## One eddy of the wind's body: pink noise, a 24 dB low-pass (two state-variable stages), its own slow drift of cutoff and level and its
+## own place.
 class Eddy:
 	var share := 1.0       # its cutoff, beside the wind's (EDDIES)
 	var tau := 2.0         # how slowly it drifts (EDDY_DRIFT)
@@ -662,11 +621,10 @@ class Eddy:
 	var s := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])   # two svf stages, three pink poles
 
 
-## ONE CALL SOUNDING ([method _run_call]): its source - a TONE (a sine with a little of its octave: chirps,
-## trills, squeaks), a VOICE (a sawtooth with its edges smoothed so a high one does not alias: coos, croaks) or
-## BREATH (noise: huffs, purrs, snores) - through two formants, its pitch and its level each a closed form of
-## the call's own time, and its ears. Its own dice ([member rng]), so a call sounds the same whatever else
-## is sounding.
+## One call sounding ([method _run_call]): its source - a tone (a sine with a little of its octave: chirps, trills, squeaks), a voice (a
+## sawtooth with its edges smoothed so a high one does not alias: coos, croaks) or breath (noise: huffs, purrs, snores) - through two
+## formants, its pitch and its level each a closed form of the call's own time, and its ears. Its own dice ([member rng]), so a call
+## sounds the same whatever else is sounding.
 class Call:
 	var kind := ""
 	var start := 0           # the sample it starts on, counted from the soundscape's first
@@ -829,8 +787,8 @@ func set_level(d: float) -> void:
 		_gain0 = _gain
 
 
-## THE VOICE WITH THE PLACE UNDER IT: [param voice] with this many samples of the soundscape added,
-## ducked under speech, and the next call carrying on where this one stopped.
+## The voice with the place under it: [param voice] with this many samples of the soundscape added, ducked under speech, and the next
+## call carrying on where this one stopped.
 func mix(voice: PackedVector2Array) -> PackedVector2Array:
 	var n := voice.size()
 	_fill(n)
@@ -874,10 +832,9 @@ func render(n: int) -> PackedVector2Array:
 	return out
 
 
-## RENDER AHEAD ON A WORKER, so the main thread only copies: called every frame by whoever plays it,
-## it keeps [param seconds] rendered past what has been handed out. The synthesis is GDScript, sample
-## by sample - a tenth of a core or more for a busy place - and on the main thread it was frame time.
-## The worker alone touches the synthesis while it runs; [method mix] waits for it before going on.
+## Render ahead on a worker, so the main thread only copies: called every frame by whoever plays it, it keeps [param seconds] rendered
+## past what has been handed out. The synthesis is GDScript, sample by sample, too costly for the main thread. The worker alone touches
+## the synthesis while it runs; [method mix] waits for it before going on.
 func prefetch(seconds := 1.5) -> void:
 	_collect(false)
 	if _task < 0 and _ol.size() - _oat < int(seconds * _sr):
@@ -974,12 +931,9 @@ static func _ears(from: float, width := 0.8) -> Vector2:
 	return _pan(sin(deg_to_rad(from)) * width)
 
 
-## THE EARS for a balance [param p], -1 the left to 1 the right: the far ear never more than
-## [constant MOST_APART] dB under the near one, and the power the same wherever it is. A sound to one
-## side is heard in BOTH ears, quieter in the far one - the head shadows it by some 6-10 dB, not
-## wholly. A pan law did this first, and a wind heard through a window on the right was all in the
-## right ear (the user, 2026-10-08: "that feels terrible ... you would still hear that sound in BOTH
-## ears"). The voice's own Lean holds the same line (never past 70/30, [VoiceFX]).
+## The ears for a balance [param p], -1 the left to 1 the right: the far ear never more than [constant MOST_APART] dB under the near one,
+## and the power the same wherever it is. A sound to one side is heard in both ears, quieter in the far one - the head shadows it by some
+## 6-10 dB, not wholly. The voice's own Lean holds the same line (never past 70/30, [VoiceFX]).
 static func _pan(p: float) -> Vector2:
 	p = clampf(p, -1.0, 1.0)
 	var far := db_to_linear(-MOST_APART * absf(p))
@@ -992,7 +946,7 @@ func _setup() -> void:
 	if _sound.get("wind") is Dictionary and not _wind.is_empty():
 		var w: Dictionary = _sound["wind"]
 		var through := String(w["through"])
-		# THIS WIND'S TYPICAL GUST, as the sound reckons speed: its breeze and an average gust over it
+		# This wind's typical gust, as the sound reckons speed: its breeze and an average gust over it
 		var peaks: PackedFloat32Array = _wind["peaks"]
 		var mean := 0.0
 		for p in peaks:
@@ -1024,7 +978,7 @@ func _setup() -> void:
 				_w["modes"] = [[_band(0, 3, f0, 6.0, false), f0, 0.05], [_band(0, 3, f0 * 2.0, 7.0, false), f0 * 2.0, 0.035],
 					[_band(0, 3, f0 * 3.07, 8.0, false), f0 * 3.07, 0.02]]
 			"eaves":
-				# broad enough not to beat: a narrower moan whirred like something spinning
+				# broad enough not to beat: a narrower moan whirrs like something spinning
 				_w["moan"] = _band(0, 3, 220.0, 3.5, false)
 				_w["gap"] = _band(0, 3, 900.0, 16.0, false)
 			"canvas":
@@ -1118,11 +1072,9 @@ func _setup() -> void:
 					"next": _range(0.0, 1.0), "sing": _range(4.0, 20.0)})
 			_in = {"crickets": crickets, "strength": strength}
 		else:
-			# A CHORUS IN THE TREES, never two whines: each of two groups swelling and fading in turn is
-			# several cicadas at once, each its own broad band and its own shallow pulse, so the pulses
-			# blur into the shimmer of a chorus some way off. They were two narrow bands (Q 5), each
-			# chopped 12:1 at one rate near 200 Hz, and the first episode with them (#761227) was "a
-			# horrible screeching sound throughout" (the user, 2026-10-09).
+			# A chorus in the trees, never two whines: each of two groups swelling and fading in turn is several cicadas at once, each its
+			# own broad band and its own shallow pulse, so the pulses blur into the shimmer of a chorus some way off (two narrow bands
+			# chopped at one rate screech).
 			var bands: Array = []
 			for c in 2:
 				var from := _range(0.0, 360.0)
@@ -1207,23 +1159,20 @@ func _block() -> void:
 	_limit = lim
 	_gain0 = _gain
 	_n += CR
-	# ON A WORKER, A BREATH now and then: GDScript calls in a tight worker loop once starved the main
-	# thread to a few frames a second (TableMedium._breathe). Not measured here (a busy place rendered
-	# beside a main loop kept its frame rate), and it costs nothing.
+	# On a worker, a breath now and then: GDScript calls in a tight worker loop can starve the main thread (TableMedium._breathe).
 	if (_n / CR) % 16 == 0 and OS.get_thread_caller_id() != OS.get_main_thread_id():
 		OS.delay_usec(0)
 
 
-## THE WIND HEARD at [param t]: the table's plan, with the quick turbulence real air has over it (the
-## plan's breeze and gusts are seconds long; a gust is ragged within).
+## The wind heard at [param t]: the table's plan, with the quick turbulence real air has over it (the plan's breeze and gusts are seconds
+## long; a gust is ragged within).
 func _air(t: float, dt: float) -> void:
 	if _wind.is_empty():
 		return
 	var s := Winds.speed_at(_wind, t + LEAD)
 	var breeze := Winds.breeze_at(_wind, t + LEAD)
-	# REAL AIR IS RAGGED - slowly: a drift over a second or two and a little shimmer, each a smoothed
-	# noise scaled back to unit size. It was one noise at ~4 Hz moving the level by 60% and the rush's
-	# pitch with it, and in a gust that churned like a washing machine.
+	# Real air is ragged - slowly: a drift over a second or two and a little shimmer, each a smoothed noise scaled back to unit size (a
+	# faster, deeper noise moves the level and the rush's pitch and churns in a gust).
 	var k1 := 1.0 - exp(-dt / 1.5)
 	var k2 := 1.0 - exp(-dt / 0.35)
 	_drift += (_rand() * 2.0 - 1.0 - _drift) * k1
@@ -1248,8 +1197,8 @@ func _air(t: float, dt: float) -> void:
 	_speed = w
 	_gust = clampf((_held - breeze) / Winds.FULL, 0.0, 1.0)
 	_lag += (w - _lag) * (1.0 - exp(-dt / 0.35))
-	# WHICH WAY IT BLOWS NOW: the breeze's way and each gust's own, by how hard each blows - so a gust
-	# that veers moves the balance with it. The air comes from the opposite way it goes.
+	# Which way it blows now: the breeze's way and each gust's own, by how hard each blows - so a gust that veers moves the balance with
+	# it. The air comes from the opposite way it goes.
 	var v: Vector2 = (_wind["dir"] as Vector2) * breeze
 	var span := Winds._blowing(_wind, t)
 	var dirs: PackedVector2Array = _wind["dirs"]
@@ -1260,15 +1209,13 @@ func _air(t: float, dt: float) -> void:
 	_side += (side - _side) * (1.0 - exp(-dt / 0.3))
 
 
-## A PLACE EBBS AND FLOWS, NEVER TO NOTHING: [param rel] is how hard it is now beside how hard it
-## usually is (1 its typical gust or wave), shaped by [param e] (the dial's contrast), with a floor
-## [param f] under it - the two added as powers, so the floor is a soft knee and not a corner. Reported
-## 2026-10-08 on a breeze through eaves: "a big gust of sound, which drops to 0" - the loudness was a
-## power of the wind's speed alone, and a breeze between gusts is a quarter of a gust's speed, so the
-## place fell 30 dB and more, silent, between every gust.
+## A place ebbs and flows, never to nothing: [param rel] is how hard it is now beside how hard it usually is (1 its typical gust or
+## wave), shaped by [param e] (the dial's contrast), with a floor [param f] under it - the two added as powers, so the floor is a soft
+## knee and not a corner. (A loudness that is a power of the wind's speed alone falls silent between gusts, since a breeze is a quarter
+## of a gust's speed.)
 ##
-## Above its typical gust a place swells more gently than below it (a square root of the excess), so
-## the strongest gust of a show stands out without leaping 20 dB over the rest.
+## Above its typical gust a place swells more gently than below it (a square root of the excess), so the strongest gust of a show stands
+## out without leaping 20 dB over the rest.
 static func _ebb(rel: float, e: float, f: float) -> float:
 	var r := clampf(rel, 0.0, 3.0)
 	if r > 1.0:
@@ -1276,10 +1223,9 @@ static func _ebb(rel: float, e: float, f: float) -> float:
 	return sqrt(pow(r, 2.0 * e) + f * f)
 
 
-## THE WIND HEARD, by what it blows through. Its loudness follows the wind beside the wind's own TYPICAL
-## gust (`ref`, from its plan), so a light breeze ebbs and swells as much as a gale does; how strong
-## the wind is sets the place's level only gently (its square root), and the agent's `level` is the
-## volume. What sounds only in a gust (a moan, rigging singing, canvas flapping) waits for this wind's
+## The wind heard, by what it blows through. Its loudness follows the wind beside the wind's own typical gust (`ref`, from its plan), so
+## a light breeze ebbs and swells as much as a gale does; how strong the wind is sets the place's level only gently (its square root),
+## and the agent's `level` is the volume. What sounds only in a gust (a moan, rigging singing, canvas flapping) waits for this wind's
 ## gusts, not for some absolute speed a breeze never reaches. The pitches follow the real speed.
 func _wind_block(dt: float) -> void:
 	# the agent's level, gently: 0.3 is quieter than the rest, not a tenth as loud
@@ -1291,7 +1237,7 @@ func _wind_block(dt: float) -> void:
 	var size := sqrt(minf(ref, 1.3))
 	var through := String(_w["through"])
 	var low: Band = _w["low"]
-	# WHERE IT IS HEARD: at the opening it gets in by, or louder on the side it blows from
+	# Where it is heard: at the opening it gets in by, or louder on the side it blows from
 	var at: Variant = _w.get("at")
 	var ears := _ears(float(at), 0.85) if at != null else _pan(0.55 * _side)
 	var rg := lvl * 0.3 * size * _ebb(rel, 0.9 * c, _floor)
@@ -1304,11 +1250,10 @@ func _wind_block(dt: float) -> void:
 	elif through in ["trees", "grass"]:
 		rg *= 0.6
 	var fw := curve.x + curve.y * minf(w, 1.3)
-	# A GUST BRIGHTENS AS MUCH AS IT SWELLS: a low-pass on pink noise passes more as its cutoff rises,
-	# so the eddies give some of that back, or a gust's brightening came in as loudness on top of its own
+	# A gust brightens as much as it swells: a low-pass on pink noise passes more as its cutoff rises, so the eddies give some of that
+	# back, or a gust's brightening would come in as loudness on top of its own
 	rg *= pow(fw / (curve.x + curve.y * minf(ref, 1.3)), -0.35)
-	# THE EDDIES: each drifting on its own course round the wind's cutoff and level, at its own place
-	# round where the wind is heard
+	# The eddies: each drifting on its own course round the wind's cutoff and level, at its own place round where the wind is heard
 	var centre := (float(at) if at != null else 0.0)
 	for e in _w["eddies"]:
 		var ed: Eddy = e
@@ -1316,14 +1261,14 @@ func _wind_block(dt: float) -> void:
 		ed.drift += (_rand() * 2.0 - 1.0 - ed.drift) * k
 		var m := clampf(ed.drift / sqrt(k / 6.0), -2.0, 2.0)
 		ed.place = clampf(ed.place + (_rand() * 2.0 - 1.0) * sqrt(dt) * 0.25, -1.0, 1.0)
-		# slow and shallow: a quick, deep drift was itself a gust, and came in faster than the gusts may
+		# slow and shallow: a quick, deep drift is itself a gust
 		ed.fc = fw * ed.share * pow(2.0, 0.35 * m)
 		var eg := rg * 0.45 / sqrt(float(EDDIES.size())) * (1.0 + 0.15 * m)
 		var pe := _pan(clampf(0.55 * _side + EDDY_WANDER * ed.place, -1.0, 1.0)) if at == null \
 			else _pan(clampf(sin(deg_to_rad(centre)) * 0.85 + 0.15 * ed.place, -1.0, 1.0))
 		ed.gl = eg * pe.x
 		ed.gr = eg * pe.y
-	# THE RUMBLE: under the rush, and up only in a real gust
+	# The rumble: under the rush, and up only in a real gust
 	low.fc = 220.0 + 160.0 * minf(w, 1.3)
 	var lg := lvl * (0.16 if through == "tunnel" else 0.09) * size * _ebb(rel, 1.3 * c, _floor * 0.3)
 	low.gl = lg * ears.x
@@ -1367,10 +1312,8 @@ func _wind_block(dt: float) -> void:
 			gap.gl = gg * ears.x
 			gap.gr = gg * ears.y
 		"canvas":
-			# CLOTH FLAPS ONE FLAP AT A TIME: each a thump of its own strength and pitch, the gaps
-			# between them uneven, now and then the cloth filling and holding (a lull), now and
-			# then coming straight back (a double). Quicker and harder as the wind rises, as the
-			# steady pulse this replaces was - which at one rate was a fan (see the header).
+			# Cloth flaps one flap at a time: each a thump of its own strength and pitch, the gaps between them uneven, now and then the
+			# cloth filling and holding (a lull), now and then coming straight back (a double). Quicker and harder as the wind rises.
 			var fg := lvl * 0.6 * size * pow(smoothstep(0.35, 1.2, rel), 1.4 * c)
 			var sg := lvl * 0.18 * _snap * size * pow(smoothstep(0.8, 1.7, rel), 1.6 * c)
 			var left := float(_w["flap_in"]) - dt
@@ -1379,7 +1322,7 @@ func _wind_block(dt: float) -> void:
 				_w["flap_k"] = k + 1
 				var back := float(_w["flap_back"])
 				var hit := (back if back > 0.0 else _range(0.3, 1.0) * _range(0.5, 1.0))
-				# as loud at its hardest as the pulse's own peaks were (twice its level)
+				# as loud at its hardest as a pulse's own peaks would be (twice its level)
 				if fg * hit > 1e-5:
 					var flap: Band = (_w["flaps"] as Array)[k % 2]
 					flap.fc = _range(170.0, 330.0)
@@ -1403,7 +1346,7 @@ func _wind_block(dt: float) -> void:
 					_w["flap_back"] = hit * _range(0.35, 0.7)
 			_w["flap_in"] = left
 		"tunnel":
-			# A HOLLOW: the passage's own modes, a low howl that rises with the air and booms in a gust
+			# A hollow: the passage's own modes, a low howl that rises with the air and booms in a gust
 			for mode in _w["modes"]:
 				var b: Band = mode[0]
 				b.fc = float(mode[1]) * (1.0 + 0.06 * minf(w, 1.3) + 0.01 * _turb)
@@ -1422,7 +1365,7 @@ func _water_block(t: float, dt: float) -> void:
 	var c := _contrast
 	var rough := size * (0.85 + 0.3 * _gust)
 	if kind == "shore":
-		# WAVES: each gathers, breaks, and washes away; the next often arrives before the last is gone
+		# Waves: each gathers, breaks, and washes away; the next often arrives before the last is gone
 		var waves: Array = _wa["waves"]
 		if t >= float(_wa["next"]):
 			var amp := _range(0.5, 1.0) * (0.45 + 0.55 * size)
@@ -1459,8 +1402,8 @@ func _water_block(t: float, dt: float) -> void:
 					continue
 			keep.append(d)
 		_wa["waves"] = keep
-		# A BREAKER HOLDS: the water heard follows the waves up at once and lets go slowly, so a wash
-		# falls back to half or so before the next set rather than to the bed
+		# A breaker holds: the water heard follows the waves up at once and lets go slowly, so a wash falls back to half or so before the
+		# next set rather than to the bed
 		var held := float(_wa.get("held", body))
 		held += (body - held) * (1.0 - exp(-dt / (0.25 if body > held else 2.2)))
 		_wa["held"] = held
@@ -1490,7 +1433,7 @@ func _water_block(t: float, dt: float) -> void:
 			_bubble(_range(1500.0, 3800.0) * dull, _range(0.003, 0.008), _range(0.1, 0.3), 0.06 * near * _hard(0.6),
 				_ears(float(_wa["from"]) + _range(-40.0, 40.0), 0.8))
 		return
-	# AGAINST A HULL OR A PILING: the swell under it, and slaps as each wave meets it
+	# Against a hull or a piling: the swell under it, and slaps as each wave meets it
 	var hull := kind == "hull"
 	var ph2: Vector2 = _wa["ph"]
 	# the swell rises and falls on three periods that never line up, and drifts besides
@@ -1520,8 +1463,8 @@ func _water_block(t: float, dt: float) -> void:
 		slap.gl = side.x
 		slap.gr = side.y
 		slap.strike(amp * _snap * (0.14 if hull else 0.1) * near, _range(0.1, 0.2) if hull else _range(0.06, 0.12), 0.006, _sr)
-		# THE WASH AFTER IT, under it: the slap's real peak is about twice `amp * near` (see
-		# [method Band.strike]), and this comes to about half of that once its wider band is counted
+		# The wash after it, under it: the slap's real peak is about twice `amp * near` (see [method Band.strike]), and this comes to
+		# about half of that once its wider band is counted
 		slosh.fc = _range(550.0, 1000.0) * dull
 		slosh.gl = side.x
 		slosh.gr = side.y
@@ -1622,7 +1565,7 @@ func _fire_block(t: float, dt: float) -> void:
 		var amt := (0.05 if pop else 0.03) * near * _snap * _hard(0.7)
 		b.strike(amt, _range(0.012, 0.02) if pop else _range(0.0012, 0.004), 0.0002, _sr)
 		struck += 1
-		# CRACKLES COME IN CLUSTERS: a split log often fires again a few tens of milliseconds later
+		# Crackles come in clusters: a split log often fires again a few tens of milliseconds later
 		var follow := int(_fi["follow"])
 		if follow > 0:
 			_fi["follow"] = follow - 1
@@ -1634,9 +1577,8 @@ func _fire_block(t: float, dt: float) -> void:
 			_fi["next"] = t + -log(maxf(1e-6, _rand())) / rate
 
 
-## THE RIDE HEARD at [param t]: the rumble and the roll, steady at how hard and how fast it goes, and every
-## jolt of the plan in this block struck where it falls - the same jolts that move the camera and the table's
-## things ([method Rides.jolts]).
+## The ride heard at [param t]: the rumble and the roll, steady at how hard and how fast it goes, and every jolt of the plan in this block
+## struck where it falls - the same jolts that move the camera and the table's things ([method Rides.jolts]).
 func _ride_block(t: float, dt: float) -> void:
 	var lv := float(_ri["level"])
 	var tone: Dictionary = _ri["tone"]
@@ -1668,21 +1610,21 @@ func _ride_block(t: float, dt: float) -> void:
 		thump.fc = float(tone["thump"]) * _range(0.85, 1.15)
 		match kind:
 			1:
-				# A WHEEL OVER A RAIL JOINT: a thump and a steel tick
+				# A wheel over a rail joint: a thump and a steel tick
 				var a := lv * minf(s / maxf(float(row["knock"]), 1e-4), 1.5)
 				thump.hit(KNOCK.x * a, KNOCK_RING.x, 0.002, _sr)
 				if float(tone["tick"]) > 0.0:
 					tick.fc = float(tone["tick"]) * _range(0.8, 1.2)
 					tick.hit(KNOCK.y * a, KNOCK_RING.y, 0.0005, _sr)
 			2:
-				# A WHEEL OVER A STONE: a clack
+				# A wheel over a stone: a clack
 				if bool(tone["patter"]):
 					var a := lv * minf(s / maxf((row["patter"] as Vector2).y, 1e-4), 1.5)
 					thump.hit(PATTER.x * a, 0.04, 0.002, _sr)
 					tick.fc = float(tone["tick"]) * _range(0.7, 1.4)
 					tick.hit(PATTER.y * a, 0.01, 0.0005, _sr)
 			_:
-				# A HARD JOLT: a thud through the floor, and what is loose rattling after it
+				# A hard jolt: a thud through the floor, and what is loose rattling after it
 				var a := lv * minf(s / maxf((row["bump"] as Vector2).y, 1e-4), 1.5)
 				var thud: Band = _ri["thud"]
 				thud.gl = side.x
@@ -1725,7 +1667,7 @@ func _stream_block(dt: float) -> void:
 	var lg := 0.18 * near * size
 	low.gl = lg * e.x
 	low.gr = lg * e.y
-	# THE BABBLE: bubbles, many a second, each its own size
+	# The babble: bubbles, many a second, each its own size
 	var rate := (30.0 + 170.0 * size) * near
 	var n := 0
 	var p := rate * dt
@@ -1793,13 +1735,12 @@ func _insects_block(t: float, dt: float) -> void:
 				b.gr = gg * e.y
 
 
-## A SINE THAT RISES AS IT DIES: [param f] Hz, decaying over [param decay] seconds while its pitch
-## climbs by [param rise] (a fraction) over that time - a bubble closing (Minnaert). A chirp is one
-## that does not rise.
+## A sine that rises as it dies: [param f] Hz, decaying over [param decay] seconds while its pitch climbs by [param rise] (a fraction)
+## over that time - a bubble closing (Minnaert). A chirp is one that does not rise.
 func _bubble(f: float, decay: float, rise: float, amp: float, ears: Vector2, attack := 0.0004) -> void:
 	if f >= _sr * 0.45 or amp <= 0.0:
 		return
-	# THE QUIETEST VOICE is taken, never one still sounding: cut short mid-ring, a bubble clicked
+	# The quietest voice is taken, never one still sounding: cut short mid-ring, a bubble clicks
 	var i := 0
 	var least := INF
 	for v in VOICES:
@@ -1817,10 +1758,9 @@ func _bubble(f: float, decay: float, rise: float, amp: float, ears: Vector2, att
 	_vr[i] = ears.y
 
 
-## ONE EDDY over the block: pink noise (two of Kellet's poles), a high-pass at ~60 Hz, two low-pass
-## stages, its ears eased. Pink noise is heaviest at the very bottom and a low-pass keeps all of that:
-## with the third pole and no high-pass the darkest eddy was mostly near-subsonic and churned (3.4 dB
-## of wobble against 1.6), as the old rumble had.
+## One eddy over the block: pink noise (two of Kellet's poles), a high-pass at ~60 Hz, two low-pass stages, its ears eased. Pink noise
+## is heaviest at the very bottom and a low-pass keeps all of that, so the darkest eddy is high-passed (without it, it is near-subsonic
+## and churns).
 func _run_eddy(e: Eddy) -> void:
 	if maxf(maxf(e.gl, e.gr), maxf(e.gl0, e.gr0)) < 1e-7:
 		e.gl0 = e.gl
@@ -1892,10 +1832,9 @@ func _space() -> void:
 	_line_a = 1.0 - exp(-TAU * SPACE_DARK / _sr)
 
 
-## THE SPACE over the block: four delay lines, each fed back through a mix of all four (a Hadamard
-## matrix - every line hears every other, so the tail is dense and never rings) and darkened on the way;
-## the left feeds two lines and the right two, and each ear hears its own two back, so even a sound
-## at one point comes back from round about.
+## The space over the block: four delay lines, each fed back through a mix of all four (a Hadamard matrix - every line hears every other,
+## so the tail is dense and never rings) and darkened on the way; the left feeds two lines and the right two, and each ear hears its own
+## two back, so even a sound at one point comes back from round about.
 func _run_space() -> void:
 	var wet := _wet
 	if wet <= 0.0:
@@ -1989,9 +1928,8 @@ func _run_voices() -> void:
 		_vph[v] = fmod(ph + w * float(CR), TAU)
 
 
-## ONE BAND over the block: noise, the filter, the bed eased from the last block's level, the struck
-## envelope, the pulse. The filter's output is a mix of its three taps - low-pass, band-pass, and the
-## input for the high-pass - so the loop carries no branch on the mode.
+## One band over the block: noise, the filter, the bed eased from the last block's level, the struck envelope, the pulse. The filter's
+## output is a mix of its three taps - low-pass, band-pass, and the input for the high-pass - so the loop carries no branch on the mode.
 func _run(b: Band) -> void:
 	var steady := b.steady
 	var e1 := b.e1
@@ -2036,7 +1974,7 @@ func _run(b: Band) -> void:
 	var gr := b._gr0 * steady
 	var dgl := (b.gl - b._gl0) * steady / float(CR)
 	var dgr := (b.gr - b._gr0) * steady / float(CR)
-	# a struck envelope's ears ease across the block too: moved at a stroke under a ringing tail, they clicked
+	# a struck envelope's ears ease across the block too: moved at a stroke under a ringing tail, they click
 	var el := b._gl0
 	var er := b._gr0
 	var del := (b.gl - b._gl0) / float(CR)
@@ -2146,9 +2084,8 @@ static func _call_rand(v: Call) -> float:
 	return float(x) / 4294967296.0
 
 
-## THE CREATURES over the block: every window of their plan that has begun planned ([method _calls_in]), and
-## every call that begins before the block ends started where it begins - joined part way when it began before
-## the soundscape did - while there is room for it.
+## The creatures over the block: every window of their plan that has begun planned ([method _calls_in]), and every call that begins
+## before the block ends started where it begins - joined part way when it began before the soundscape did - while there is room for it.
 func _creatures_block(t: float, dt: float) -> void:
 	for d in _cr:
 		var cd: Dictionary = d
@@ -2169,9 +2106,9 @@ func _creatures_block(t: float, dt: float) -> void:
 	_calls = left
 
 
-## A CALL MADE READY to sound, from its creature [param c], its body and its moment in the plan [param e]: its
-## source, its pitch and formants by the creature's size (formants move less than the pitch: a body's throat
-## is not its voice), its breath, and where it is heard - quieter and duller the further off.
+## A call made ready to sound, from its creature [param c], its body and its moment in the plan [param e]: its source, its pitch and
+## formants by the creature's size (formants move less than the pitch: a body's throat is not its voice), its breath, and where it is
+## heard - quieter and duller the further off.
 func _voice_of(c: Dictionary, body: Dictionary, e: Dictionary) -> Call:
 	var v := Call.new()
 	var kind := String(e["call"])
@@ -2311,10 +2248,9 @@ static func _part_at(v: Call, tau: float) -> Vector2:
 	return Vector2(-1.0, 1.0)
 
 
-## THE LEVEL of call [param v] at [param tau] seconds into it, 0-1. A PURR BREATHES: louder breathing out
-## than in (5 dB), falling almost away where a breath turns, and faded in and out as a whole - its rattle is a pulse,
-## the one a place keeps, and a pulse held steady is a machine (see the class note). A snore is its breath in,
-## louder and rattling, its breath out, soft, and a rest.
+## The level of call [param v] at [param tau] seconds into it, 0-1. A purr breathes: louder breathing out than in (5 dB), falling almost
+## away where a breath turns, and faded in and out as a whole - its rattle is a pulse, the one a place keeps, and a steady pulse is a
+## machine. A snore is its breath in, louder and rattling, its breath out, soft, and a rest.
 func _level_at(v: Call, tau: float) -> float:
 	if tau < 0.0 or tau >= v.dur:
 		return 0.0
@@ -2370,9 +2306,9 @@ static func _formant_at(v: Call, tau: float) -> float:
 	return 1.0
 
 
-## ONE CALL over the block, from the sample it starts on (or the block's first) to the block's end or its own:
-## the source, its rattle, the two formants (Simper's state-variable band-passes, unit peak, as [method _run]'s),
-## the low-pass of distance, and its level eased across the block. True when it is over.
+## One call over the block, from the sample it starts on (or the block's first) to the block's end or its own: the source, its rattle, the
+## two formants (Simper's state-variable band-passes, unit peak, as [method _run]'s), the low-pass of distance, and its level eased across
+## the block. True when it is over.
 func _run_call(v: Call) -> bool:
 	var i0 := maxi(0, v.start - _n)
 	if i0 >= CR:

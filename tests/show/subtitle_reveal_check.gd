@@ -1,35 +1,29 @@
 extends Node
 
-## Gate for HOW A LINE REVEALS ITS WORDS ([constant Subtitles.REVEALS]). Asked 2026-10-07: "allow for other
-## forms of subtitle text revealing, and make the options available to the user ... the reveal that uses
-## glitchy/chaotic characters ... the true-word reveal would happen just as the speaker is speaking it -
-## because we don't want to glitch the actual words they are saying".
+## Gate for how a line reveals its words ([constant Subtitles.REVEALS]): the glitch reveal must never
+## glitch the words being said.
 ##
-##   - A WORD SETTLES AS IT IS SAID: every letter of it shows itself from no later than GLITCH_SETTLE after
-##     the word begins, however long the word is spoken - two-sided, letters spread over the whole spoken
-##     word (the obvious timing) are still noise most of the way through a long one.
-##   - ONE STEADY SWEEP (reported 2026-10-07: the glitch "stops/pauses at comma boundaries, waiting for the
-##     hesitation"): the front never goes back, never speeds up, has every word written by the time it
-##     settles, and keeps moving through a pause - two-sided: the old front, each word written as it starts,
+##   - A word settles as it is said: every letter of it shows from no later than GLITCH_SETTLE after the
+##     word begins, however long it is spoken. Two-sided: letters spread over the whole spoken word are
+##     still noise most of the way through a long one.
+##   - One steady sweep: the front never goes back, never speeds up, has every word written by the time it
+##     settles, and keeps moving through a pause. Two-sided: the old front (each word written as it starts)
 ##     stands still through the same pause.
-##   - ONLY A FEW LETTERS AHEAD (asked 2026-10-07: "glitching just a few short characters ahead", and "predict
-##     ahead, then retract, then predict again"): the noise reaches no further than GLITCH_AHEAD letters
-##     past the front, grows and backs off a letter at a time, and backs off part way before reaching again
-##     - two-sided, a reach that never backed off or covered the line (the first glitch) fails.
-##   - THE NOISE IS A FUNCTION OF SHOW TIME, and each letter keeps its own (2026-10-07: "the glitching is
-##     extremely fast ... holding transitions for a minimum number of frames?"): the same letter at the same
-##     moment is the same glyph, holds it at least GLITCH_HOLD.x, changes a handful of times a second, and
+##   - Only a few letters ahead: the noise reaches no further than GLITCH_AHEAD letters past the front,
+##     grows and backs off a letter at a time, and backs off part way before reaching again. Two-sided: a
+##     reach that never backed off or covered the line fails.
+##   - The noise is a function of show time, and each letter keeps its own: the same letter at the same
+##     moment is the same glyph, holds it at least GLITCH_HOLD.x, changes a handful of times a second and
 ##     not on the same frames as its neighbor; the letter at the front is drawn from the simple set.
-##   - THE CHOICE IS THE SHOW'S: the Director takes a known key and refuses an unknown one, and the Look
+##   - The choice is the show's: the Director takes a known key and refuses an unknown one, and the Look
 ##     card writes it into the note's `look:` block and reads it back.
-##   - A ROW WRITTEN OUT IS ITS WORDS (2026-10-15: "at the end of subtitle lines... there is almost always a
-##     trailing space"): the glitch centers a row, and sizes its plate, on its words and the gaps between
-##     them - none after its last - two-sided: in the middle of a row, the gap after a written word counts.
-##   - A LINE BEING WRITTEN IS CENTERED (2026-10-26: "the subtitles appear to be shifted slightly right of
-##     center"): the plate round the words and the noise past them sits on the middle, on the mean, as the
-##     sweep crosses a row; a row written out is centered on its words - two-sided: centered on what is
-##     written alone, the noise hanging off its right end, the line sat right of center.
-##   - BOTH DRAW: the overlay draws a line in either reveal without an error.
+##   - A row written out is its words: the glitch centers a row, and sizes its plate, on its words and the
+##     gaps between them, none after its last. Two-sided: in the middle of a row the gap after a written
+##     word counts.
+##   - A line being written is centered: the plate round the words and the noise past them sits on the
+##     middle, on the mean, as the sweep crosses a row; a row written out is centered on its words.
+##     Two-sided: centered on what is written alone, the line sits right of center.
+##   - Both draw: the overlay draws a line in either reveal without an error.
 ##
 ##   tests/run_boot_probe.sh tests/show/subtitle_reveal_check.gd 60
 
@@ -165,7 +159,7 @@ func _noise() -> void:
 	_ok(changes >= 8 and changes <= 40, "a scrambled letter changes %d times in two seconds" % changes)
 	_ok(shortest >= Subtitles.GLITCH_HOLD.x - 1.0 / 120.0, "a glyph is held only %.3f s" % shortest)
 	_ok(together < changes / 2, "neighboring letters turn over together (%d of %d changes)" % [together, changes])
-	# control: the old noise turned every letter over on one clock, sixteen times a second - the same
+	# control: the old noise turned every letter over on one clock, sixteen times a second; the same
 	# measure finds its neighbors turning together, and more often than the holds allow
 	var old := func(c: int, t: float) -> int:
 		return hash([3, c, floori(t * 16.0)])

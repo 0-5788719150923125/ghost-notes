@@ -3,22 +3,15 @@ class_name Filament
 
 ## Filament - an organic growing path: root, tendril, lightning, or thread.
 ##
-## The procedural-growth primitive the visualizer was missing. One mechanism, many
-## lives: a path is grown segment by segment by *following a [Flow2D] field* (so it
-## meanders and curls), turning toward that flow through a nonlinearity (so the turn
-## is smooth but decisive, not a uniform arc), branching stochastically, tapering as
-## it goes, and carrying a per-segment *birth time* so it can be revealed along a
-## growth front - it crawls into being rather than popping in. The `variant` sets
-## the character: roots that spread and droop, tendrils that coil, lightning that
-## kinks and forks, threads that flow. Built once from a seed; drawn growing.
+## A path is grown segment by segment by following a [Flow2D] field (so it meanders and curls), turning toward that flow
+## through a nonlinearity, branching stochastically, tapering as it goes, and carrying a per-segment birth time so it can be
+## revealed along a growth front. The `variant` sets the character: roots that spread and droop, tendrils that coil, lightning
+## that kinks and forks, threads that flow. Built once from a seed; drawn growing.
 ##
-## All coordinates are ghost's centered unit-fraction space; widths are pixels.
-## Compose it: a scene grows a handful of filaments and draws them, color and
-## growth driven by audio. See `rooted_growth` and `filaments`.
+## All coordinates are ghost's centered unit-fraction space; widths are pixels. See `rooted_growth` and `filaments`.
 
-## variant -> shaping config. flow_follow: how hard it turns toward the flow.
-## branch: per-step fork chance. spread: fork half-angle. jitter: per-step wobble.
-## kink: occasional sharp deflection (lightning). taper: width kept per segment.
+## variant -> shaping config. flow_follow: how hard it turns toward the flow. branch: per-step fork chance. spread: fork
+## half-angle. jitter: per-step wobble. kink: occasional sharp deflection (lightning). taper: width kept per segment.
 ## bias_ang/bias_amt: a pull toward a fixed heading (gravity / upward reach).
 const VARIANTS := {
 	"root":      {"flow_follow": 0.45, "branch": 0.30, "max_depth": 4, "ratio": 0.74,
@@ -30,11 +23,8 @@ const VARIANTS := {
 		"bias_amt": 0.10, "tendril": 0.26},
 	"thread":    {"flow_follow": 0.92, "branch": 0.05, "max_depth": 2, "ratio": 0.85,
 		"spread": 0.50, "jitter": 0.01, "kink": 0.0, "taper": 0.96, "bias_ang": 0.0, "bias_amt": 0.0},
-	# fur: long, mostly-unbranched strands that hold a LEAN (bias_amt is meaningfully
-	# strong, reasserted every step) rather than wandering freely - the flow field
-	# adds a gentle organic curl on top, it doesn't dominate the direction the way
-	# root/tendril growth does. bias_ang is a per-call override in practice (see
-	# scenes/furry.gd) - every tuft leans its own way, not one fixed heading.
+	# fur: long, mostly-unbranched strands that hold a lean (bias_amt strong, reasserted every step); the flow field adds a gentle
+	# curl. bias_ang is a per-call override in practice (see scenes/furry.gd): every tuft leans its own way.
 	"fur":       {"flow_follow": 0.22, "branch": 0.05, "max_depth": 1, "ratio": 0.85,
 		"spread": 0.55, "jitter": 0.05, "kink": 0.0, "taper": 0.965, "bias_ang": 0.0, "bias_amt": 0.11},
 }
@@ -48,21 +38,16 @@ var _total := 0.0             # max arclength to any tip (normalizer for born ti
 var _max_depth := 0           # deepest branch level (so trunk vs tip can be told apart)
 
 
-## The deepest branch level reached (0 = an unbranched trunk). Lets a scene fade or color
-## a filament by depth - tips (high depth) versus the main channel (depth 0).
+## The deepest branch level reached (0 = an unbranched trunk), so a scene can fade or color a filament by depth.
 func max_depth() -> int:
 	return _max_depth
 
 
-## Grow a filament from [param origin] heading [param heading] (radians), of about
-## [param length] over [param steps] segments, starting [param width] px wide,
-## following [param flow]. Seeded by [param rng]. [param cluster] (0..1) makes the growth
-## *chunky*: each forked branch's reveal time is delayed past its parent's, so the shape
-## accumulates region by region in chunks (granular within a branch) instead of fanning out
-## all at once. 0 = the old smooth, uniform growth front. [param bias_ang_override], if not
-## NAN, replaces the variant's own fixed bias_ang - a per-CALL pull direction rather than a
-## per-variant constant, for callers whose bias depends on where they're growing FROM (e.g.
-## fur leaning toward a scene's own bright spots - see scenes/furry.gd).
+## Grow a filament from [param origin] heading [param heading] (radians), of about [param length] over [param steps] segments,
+## starting [param width] px wide, following [param flow]. Seeded by [param rng]. [param cluster] (0..1) makes the growth
+## chunky: each forked branch's reveal time is delayed past its parent's, so the shape accumulates region by region; 0 is a
+## smooth, uniform front. [param bias_ang_override], if not NAN, replaces the variant's own bias_ang (a per-call pull direction,
+## e.g. fur leaning toward a scene's bright spots, see scenes/furry.gd).
 static func grow(variant: String, origin: Vector2, heading: float, length: float,
 		width: float, steps: int, flow: Flow2D, rng: RandomNumberGenerator, cluster := 0.0,
 		bias_ang_override := NAN) -> Filament:
@@ -85,8 +70,7 @@ func _build(p: Vector2, ang: float, seg_len: float, width: float, depth: int,
 	for s in steps:
 		if segs.size() >= MAX_SEGS:
 			return
-		# Turn toward the flow (nonlinear follow), then a gentle pull toward the
-		# variant's bias heading, then per-step wobble and the occasional sharp kink.
+		# Turn toward the flow (nonlinear follow), then a gentle pull toward the variant's bias heading, then wobble and the occasional kink.
 		var fdir := flow.angle_at(p, ang)
 		ang = lerp_angle(ang, fdir, float(cfg.flow_follow))
 		if float(cfg.bias_amt) > 0.0:
@@ -111,14 +95,12 @@ func _build(p: Vector2, ang: float, seg_len: float, width: float, depth: int,
 			var side := 1.0 if rng.randf() < 0.5 else -1.0
 			var child_len := seg_len * float(cfg.ratio)
 			var child_steps := maxi(2, int(float(steps) * float(cfg.ratio)))
-			# Clustered growth: delay the child branch's birth time so it reveals as a later
-			# CHUNK, after this run, rather than fanning out in lockstep with the trunk.
+			# Clustered growth: delay the child's birth time so it reveals as a later chunk, after this run.
 			var gap := seg_len * float(cfg.get("cluster", 0.0)) * rng.randf_range(1.5, 4.5)
 			_build(p, ang + side * float(cfg.spread), child_len, w * 0.7,
 				depth + 1, child_steps, cfg, flow, rng, born + gap)
 
-			# Tiny tendril: a brief hair-thin offshoot at a sharp angle that does NOT keep
-			# growing - the fine fuzz that real lightning frays into along its length.
+			# Tiny tendril: a brief hair-thin offshoot at a sharp angle that does not keep growing (the fine fuzz lightning frays into).
 			if float(cfg.get("tendril", 0.0)) > 0.0 and rng.randf() < float(cfg.tendril):
 				var tside := 1.0 if rng.randf() < 0.5 else -1.0
 				_stub(p, ang + tside * float(cfg.spread) * 1.7, seg_len * 0.5, w * 0.5,
@@ -145,14 +127,11 @@ func _stub(p: Vector2, ang: float, seg_len: float, width: float, born: float,
 		born = born1
 
 
-## Draw the filament revealed up to growth front [param grown] (0..1). `u` is the
-## pixel unit. `color_for` is a Callable(depth:int) -> Color so the scene owns the
-## palette. A bud glows at the live tip while it grows.
+## Draw the filament revealed up to growth front [param grown] (0..1). `u` is the pixel unit. `color_for` is a Callable(depth:int)
+## -> Color so the scene owns the palette. A bud glows at the live tip while it grows.
 ##
-## `jitter` (unit-fraction) + `t` (time) give the timelapse twitch the growth wants:
-## the trunk (low depth) is rock-steady while the young tips (high depth) tremble,
-## and segments right at the advancing front shake hardest - so it reads as living
-## growth, not a static drawing, with stable trunks and unstable new shoots.
+## `jitter` (unit-fraction) + `t` (time) give a timelapse twitch: the trunk is steady while young tips tremble, and segments at the
+## advancing front shake hardest.
 func draw_growing(ci: CanvasItem, u: float, grown: float, color_for: Callable,
 		tip: Color = Color(1, 1, 1, 0.9), jitter := 0.0, t := 0.0) -> void:
 	var maxd := float(maxi(1, _max_depth))
@@ -166,7 +145,7 @@ func draw_growing(ci: CanvasItem, u: float, grown: float, color_for: Callable,
 			frac = clampf((grown - s.born0) / maxf(1e-6, s.born1 - s.born0), 0.0, 1.0)
 		var jo := Vector2.ZERO
 		if jitter > 0.0:
-			# Stable trunk -> twitchy tip (depth), strongest near the live front.
+			# Stable trunk, twitchy tip (by depth), strongest near the live front.
 			var depth_f := float(s.depth) / maxd
 			var front_f := clampf(1.0 - (grown - s.born1) / 0.18, 0.0, 1.0)
 			var amt := jitter * depth_f * (0.25 + 0.75 * front_f)
@@ -175,8 +154,7 @@ func draw_growing(ci: CanvasItem, u: float, grown: float, color_for: Callable,
 		var a: Vector2 = (s.a + jo) * u
 		var b: Vector2 = ((s.a as Vector2).lerp(s.b, frac) + jo) * u
 		var w: float = maxf(0.6, lerpf(s.w0, s.w1, frac))
-		# Pass the segment's position along the path (born0, 0 base .. 1 tip) so the scene can
-		# shade a gradient / texture along the strand, not just a flat color per depth.
+		# Pass the segment's position along the path (born0, 0 base .. 1 tip) so the scene can shade a gradient along the strand.
 		ci.draw_line(a, b, color_for.call(int(s.depth), float(s.born0)), w, true)
 		if frac > 0.0 and frac < 1.0:                 # the live, advancing tip
 			ci.draw_circle(b, w * 1.3, tip)

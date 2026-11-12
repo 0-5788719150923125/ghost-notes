@@ -1,20 +1,18 @@
 extends Node
 
-## text_field_check - words too long for a line on a card ([TextField]; the user, 2026-11-03: "the inner scrolling of
-## the YouTube card's "description" can be pretty annoying and unexpected ... it's annoying that I even have to scroll
-## it, to read it").
+## text_field_check - words too long for a line on a card ([TextField]).
 ##
 ##   tests/run_boot_probe.sh tests/ui/text_field_check.gd 60
 ##
-## THE WHEEL OVER THE WORDS SCROLLS THE PANEL: a real wheel event, at a real place on a real panel (THE CONTROL: the box
-## it took the place of, in that place, keeps the wheel and the panel stays where it was).
-## THE CARD SHOWS THEIR FIRST LINES, no taller for thousands more (THE CONTROL: one line is shorter than that), and no
-## words is a dimmed placeholder.
-## A LEFT CLICK OPENS THE WINDOW on all of them (THE CONTROL: a right click does not).
-## IT ANSWERS AS THE BOX DID: a hand's edit reaches the words and the preview and says so, once; words arriving say
-## nothing, and reach the window if it is open. Done and Esc shut it, and the words stay.
-## SPACE IS THE WORDS' WHILE IT IS OPEN: the box stood in the main window, where the transport asked whether someone was
-## typing, and the window has a focus of its own - a key goes to it, and nothing behind hears it (THE CONTROL: shut, it does).
+## - The wheel over the words scrolls the panel: a real wheel event, at a real place on a real panel (control: the box it took
+##   the place of, in that place, keeps the wheel and the panel stays where it was).
+## - The card shows their first lines, no taller for thousands more (control: one line is shorter than that), and no words is a
+##   dimmed placeholder.
+## - A left click opens the window on all of them (control: a right click does not).
+## - It answers as the box did: a hand's edit reaches the words and the preview and says so, once; words arriving say nothing,
+##   and reach the window if it is open. Done and Esc shut it, and the words stay.
+## - Space is the words' while it is open: the window has a focus of its own - a key goes to it, and nothing behind hears it
+##   (control: shut, it does).
 
 ## Hears what keys reach the main window's nodes, as the transport does.
 class Ears extends Node:
@@ -124,7 +122,7 @@ func _wheel() -> void:
 	var moved := await _wheel_over(panel, field._preview)
 	_ok(moved > 0.0, "the wheel over the words scrolls the panel (to %.0f)" % moved)
 	panel.free()
-	# THE CONTROL: what the user was scrolling
+	# The control: what was being scrolled before
 	var box := TextEdit.new()
 	box.custom_minimum_size.y = 120.0
 	box.text = _long(200)

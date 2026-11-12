@@ -1,39 +1,26 @@
 extends Node
 
-## glyph_spiral_check - that writing, once written, STAYS WHERE IT WAS WRITTEN.
+## glyph_spiral_check - that writing, once written, stays where it was written.
 ##
-## The complaint this gates: "glyphs were rendered into a spiral shape, but they were not
-## moving at all. They remained rooted for ~30 seconds, and then the entire scene full of them
-## started rotating rapidly."
+## The coil's shift along its own arc (`_sshift`) turned every glyph at once when the coil filled, as a
+## glyph's angle on an Archimedean spiral is `sqrt(2 s / coil)` (about a radian per character at the
+## innermost turn). The coil is now drawn to fit (`_refit`): what is written keeps its arc length, and
+## the whole picture scales down uniformly as the writing reaches the frame, eased over a second.
 ##
-## Both halves of that were one line. The coil had a shift along its own arc (`_sshift`), zero
-## while there was still room and advancing once per character the moment the coil filled - and
-## a glyph's angle on an Archimedean spiral is `sqrt(2 s / coil)`, so subtracting from every
-## glyph's `s` turns every glyph at once. Worst at the middle, where that square root is
-## steepest: about a radian per character for the innermost turn, which at eight characters a
-## second is more than a revolution a second. Hence rooted, and then suddenly spinning.
-##
-## The coil is drawn to FIT now (`_refit`): what is written keeps the arc length it was written
-## at forever, and the whole picture is scaled down as the writing reaches the frame. A scale is
-## uniform, so nothing moves relative to anything else, and it eases over a second rather than
-## arriving with a character.
-##
-## TWO-SIDED, because "nothing rotated" is also what a scene that never draws would report:
-##   - the shipped rule, measured on the real scene over a minute of writing;
-##   - the OLD rule's rotation for the same glyphs, computed from the same numbers, which has
-##     to be large or this file is asserting nothing;
-##   - and the coil must still be growing and still be in frame, or it is holding still for
-##     the wrong reason.
+## Two-sided: "nothing rotated" is also what a scene that never draws reports. So:
+##   - the shipped rule is measured on the real scene over a minute of writing;
+##   - the old rule's rotation for the same glyphs, from the same numbers, must be large;
+##   - the coil must still be growing and in frame, or it holds still for the wrong reason.
 ##
 ## Run: tests/run_boot_probe.sh tests/scenes/glyph_spiral_check.gd 180
 
 const DT := 1.0 / 60.0
 const SECONDS := 60.0
-## Radians per frame. A written glyph should not move at all; this is a floating-point floor,
-## not a tolerance - the measured worst case is 0.0000.
+## Radians per frame. A written glyph should not move; this is a floating-point floor (the measured
+## worst case is 0.0000).
 const STILL := 0.002
-## What the old rule managed, in radians per frame, and the bar the control has to clear to
-## prove this check can see rotation at all.
+## What the old rule managed, in radians per frame: the bar the control must clear to show this check
+## can see rotation.
 const CONTROL_MIN := 0.05
 
 var _fails: Array = []
@@ -70,8 +57,8 @@ func _run() -> void:
 		get_tree().quit(1)
 		return
 
-	# Follow ONE early glyph - the fifth ever placed, which sits in the innermost turn where
-	# the old rule moved hardest - and watch the angle it is actually drawn at.
+	# Follow one early glyph, the fifth placed (the innermost turn, where the old rule moved hardest),
+	# and watch the angle it is drawn at.
 	var tracked := 5
 	var prev := 0.0
 	var have_prev := false
@@ -106,8 +93,8 @@ func _run() -> void:
 	var r_out: float = sc._coil * theta_out * fit
 	var half: float = minf(sc._half.x, sc._half.y) / maxf(0.001, sc._zoom_in)
 
-	# THE CONTROL. What the retired rule would have done to that same glyph, per character, at
-	# the arc length it sits at: the shift advanced by one advance-width per character written.
+	# The control: what the retired rule would do to that glyph per character at its arc length (the
+	# shift advanced by one advance-width per character written).
 	var s_g: float = float((sc._placed[mini(tracked, placed - 1)] as Dictionary)["s"])
 	var old_a: float = sqrt(2.0 * maxf(s_g, 0.0001) / sc._coil)
 	var old_b: float = sqrt(2.0 * maxf(s_g - sc._adv, 0.0001) / sc._coil)

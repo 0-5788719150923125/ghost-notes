@@ -1,21 +1,18 @@
 extends SceneTree
 
-## warp_check - the Likeness's one pass (next/likeness.md, "Rendering"): a still read through a mesh,
-## by `src/likeness/likeness_warp.gdshader` and the medium's own drawing of it ([LikenessMedium.Warp]).
+## warp_check - the Likeness's one pass (next/likeness.md, "Rendering"): a still read through a mesh, by
+## `src/likeness/likeness_warp.gdshader` and the medium's own drawing of it ([LikenessMedium.Warp]).
 ##
 ##   tests/run_quiet.sh warp_check
 ##
-## NOT `--headless`: every claim is a rendered frame read back.
+## Not `--headless`: every claim is a rendered frame read back.
 ##
-## THE IDENTITY: a made frame (noise, so a pixel out of place shows) drawn through a mesh whose every
-## vertex sits where it reads comes back within 1/255. The control moves the inner vertices 2 px, and
-## the frame must come back different.
+## The identity: a made frame (noise, so a pixel out of place shows) drawn through a mesh whose every vertex sits where it reads
+## comes back within 1/255. Control: the inner vertices moved 2 px, and the frame must come back different.
 ##
-## THE LAYOUT COORDINATE RIDES IN THE VERTEX COLOR, and must arrive as a float: the question M4 was to
-## answer first. A library image of noise, read through the layout coordinates with the mouth's mask full
-## on, must come back as itself - at 8 bits a coordinate would be off by up to a texel of a 256-texel
-## image, and the noise would not match - and so must it through the eyes' mask (the second build's
-## blinks). Its control reads the coordinates rounded to 8 bits, and must not match.
+## The layout coordinate rides in the vertex color and must arrive as a float: a library image of noise, read through the layout
+## coordinates with the mouth's mask full on, must come back as itself (at 8 bits a coordinate would be off by up to a texel of a
+## 256-texel image), and so must it through the eyes' mask. Control: the coordinates rounded to 8 bits must not match.
 
 const SIZE := Vector2i(256, 256)
 const GRID := 9
@@ -52,7 +49,7 @@ func _run() -> void:
 			moved[i] += Vector2(2.0, 0.0)
 	var off := await _render(base, mouths, moved, pts, pts, "")
 	_ok(_diff(off, base) > 4.0 / 255.0, "a mesh moved 2 px came back the frame unchanged (%.4f)" % _diff(off, base))
-	# THE LAYOUT COORDINATE AS A FLOAT: the mouths read through it come back as themselves
+	# The layout coordinate as a float: the mouths read through it come back as themselves
 	var read := await _render(base, mouths, pts, pts, pts, "mouth")
 	var dm := _diff(read, mouths)
 	_ok(dm <= 2.0 / 255.0 + 1e-4, "the mouths read through the vertex color came back %.4f off - the coordinate is not a float" % dm)

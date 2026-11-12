@@ -1,21 +1,21 @@
 extends Node
 
-## note_names_check - a note's file is named after its title, and stays so ([method NoteStore.retitle];
-## 2026-10-31), on a notes folder of the gate's own (`NoteStore.root`).
+## note_names_check - a note's file is named after its title, and stays so ([method NoteStore.retitle]), on a notes
+## folder of the gate's own (`NoteStore.root`).
 ##
 ##   tests/run_boot_probe.sh tests/notes/note_names_check.gd 120
 ##
-## A NAME FOLLOWS ITS TITLE while it is the title's, or that and a number another note made it take ("Plan 2"
-## titled "Plan"), and not otherwise: "Plan 2" titled "Plan 2" follows, "Plan two" titled "Plan" does not.
-## RETITLED, A FOLLOWING NOTE IS RENAMED, its words untouched; a title another file has takes a number, and the
-## note is never numbered past itself (retitled back to what it is called, it stays). A title that has what a file
-## system refuses is named without it; one that opens on a dot is no hidden file.
+## A name follows its title while it is the title's, or that and a number another note made it take ("Plan 2" titled
+## "Plan"), and not otherwise: "Plan 2" titled "Plan 2" follows, "Plan two" titled "Plan" does not. Retitled, a
+## following note is renamed, its words untouched; a title another file has takes a number, and the note is never
+## numbered past itself. A title with what a file system refuses is named without it; one that opens on a dot is no
+## hidden file.
 ##
-## THE CONTROLS, A NAME OF ITS OWN: a file saved or brought in under another name than its title keeps that name
-## when its title changes - and a title emptied leaves the file as it is.
+## Controls: a file saved or brought in under another name than its title keeps that name when its title changes, and
+## a title emptied leaves the file as it is.
 ##
-## A NEW NOTE LEFT EMPTY GOES ([method NoteStore.discard_if_empty]) - and one with words, or with something
-## attached, never does.
+## A new note left empty goes ([method NoteStore.discard_if_empty]); one with words, or with something attached, never
+## does.
 
 const ROOT := "user://note_names_check"
 var _fails: Array = []

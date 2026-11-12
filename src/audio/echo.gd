@@ -3,40 +3,26 @@ class_name Echo
 
 ## Echo - content re-localization: "have I heard this before, and where?"
 ##
-## The Director keeps the show's cursor aligned to the MUSIC ITSELF, not to the
-## playhead - a playhead is metadata about the file, and it lies the moment the
-## audio is doubled into one track, trimmed, or looped. Echo instead builds a MAP
-## of what the song sounds like at each position of the show's schedule (the
-## [HarmonicSignature] descriptor: octave-folded chroma + spectral tilt - loudness-
-## invariant and robust to re-encoding), then continuously matches the LIVE
-## signature against that map. When the incoming audio accumulates enough evidence
-## that it belongs somewhere the cursor is NOT - the song looped back to its
-## opening, a cloned section arrived, the board sat frozen past its end - the
-## localizer reports the schedule position the audio says we are at, and the
-## Director corrects course.
+## The Director keeps the show's cursor aligned to the music itself, not the playhead (which lies once the
+## audio is doubled into one track, trimmed or looped). Echo builds a map of what the song sounds like at each
+## position of the show's schedule (the [HarmonicSignature] descriptor) and continuously matches the live
+## signature against it. When the incoming audio accumulates enough evidence that it belongs somewhere the
+## cursor is not (the song looped back, a cloned section arrived, the board sat frozen past its end), it
+## reports the schedule position the audio says we are at, and the Director corrects course.
 ##
-## The matcher is an accumulator over ALIGNMENTS (lags), not a best-frame streak.
-## Every tick, each map cell resembling the live audio votes for its LAG (cell time
-## minus the monotonic listening clock - constant while playback stays aligned to
-## the map). A true alignment gathers weak-but-consistent votes through the whole
-## pass; a lookalike twin (a repeated chorus, the outro resembling the swell) only
-## gathers votes during its own section, and old votes decay. This is what makes
-## it reliable on SELF-SIMILAR music, where any single-frame argmax flickers
-## between twins. What keeps it honest:
-##   frontier  - the map is WRITE-ONCE, recorded the first time each schedule
-##               position plays; a corrected/replayed pass never overwrites it.
-##   explained - self-match is EXPLANATION, not evidence: cells near the cursor
-##               feed a separate "here" tally (never the lag bins), and while the
-##               cursor is inside the map a correction must decisively out-vote
-##               that tally. A tracking cursor self-matches every tick, so twins
-##               can never out-vote it; a cursor beyond the map (a tail after a
-##               loop) explains nothing and defends nothing.
-##   decay     - evidence has a half-life; a section of coincidental resemblance
-##               fades instead of festering into a correction minutes later.
+## The matcher is an accumulator over alignments (lags), not a best-frame streak. Every tick each map cell
+## resembling the live audio votes for its lag (cell time minus the monotonic listening clock, constant while
+## playback stays aligned). A true alignment gathers weak-but-consistent votes through the whole pass; a
+## lookalike twin (a repeated chorus) only gathers votes during its own section, so self-similar music does not
+## flicker between twins.
+##   frontier  - the map is write-once, recorded the first time each schedule position plays.
+##   explained - self-match is explanation, not evidence: cells near the cursor feed a separate "here" tally
+##               (never the lag bins), and while the cursor is inside the map a correction must decisively
+##               out-vote it. A cursor beyond the map explains nothing and defends nothing.
+##   decay     - evidence has a half-life, so coincidental resemblance fades.
 ##   cooldown  - after a correction the accumulator restarts from silence.
 ##
-## Echo holds no rng and no Godot scene state - it is a pure listener, testable
-## headlessly (see tests/audio/echo_check.gd).
+## Echo holds no rng and no Godot scene state: a pure listener, testable headlessly (tests/audio/echo_check.gd).
 
 const CELL := 0.5          # map resolution: one signature snapshot per this many schedule seconds
 const TICK := 0.25         # how often the live signature is matched against the map (s)
@@ -45,21 +31,15 @@ const FIRE := 2.2          # accumulated votes to fire, in SECONDS of full-stren
 const BEAT := 1.5          # a correction must carry this multiple of the RECENT self-match
 const HALF_LIFE := 6.0     # confidence half-life (s) - long enough that a weak-but-real
                            # alignment can integrate to FIRE, short enough that fades
-# The explained-check runs on SHORT-memory tallies: confidence wants a long integral,
-# but the defense must be responsive - after a loop the cursor's old self-match is
-# stale within seconds, and a long-memory defense made the show out-wait it (observed:
-# rejoins at ~9s instead of ~5). A twin (chorus) still ties the equally-FRESH here
-# tally, so short memory does not weaken the tie.
+# The explained-check runs on short-memory tallies: confidence wants a long integral, but the defense must be
+# responsive, since after a loop the cursor's old self-match goes stale within seconds. A twin still ties the
+# equally fresh "here" tally.
 const HALF_FAST := 1.5
 const LAG_BIN := 1.0       # lag quantization (s); the reported time uses the exact vote mean
 const COOLDOWN := 4.0      # silence after a correction (s)
-# The SELF radius, one concept with one constant: map cells within this of the cursor's
-# claim are the show explaining itself (they feed the defense, never the bins), and a
-# bin whose implied target lands within this of the cursor is not a correction at all.
-# It must comfortably exceed the music's LOCAL self-similarity: cells from a few
-# seconds ago keep matching the live signature through any steady passage, building a
-# standing trailing-lag bin that - if candidate - fires the moment the cursor passes
-# the map's end and burns the cooldown right when a loop needs recognizing.
+# The self radius: map cells within this of the cursor's claim are the show explaining itself (they feed the
+# defense, never the bins), and a bin whose implied target lands within it is not a correction. It must exceed
+# the music's local self-similarity, or a standing trailing-lag bin fires as the cursor passes the map's end.
 const NEAR := 6.0
 
 var _times := PackedFloat32Array()   # schedule time of each map cell (monotonic)
@@ -75,7 +55,7 @@ var _cool := 0.0
 
 ## Record what schedule position [param t] sounds like. Write-once: positions at or
 ## behind the frontier (a replayed pass after a correction) are ignored, so the map
-## always describes the FIRST hearing. Call every frame; the CELL gate is internal.
+## always describes the first hearing. Call every frame; the cell gate is internal.
 func record(t: float, sig: PackedFloat32Array) -> void:
 	if t < _frontier + CELL:
 		return
@@ -112,7 +92,7 @@ func listen(heard_t: float, cursor_t: float, sig: PackedFloat32Array, dt: float)
 		return -1.0                    # silence: cast no votes, let the old ones fade
 	# Each sufficiently-similar cell votes for its lag; one vote per bin per tick
 	# (the strongest), so a run of near-identical neighboring cells - the EMA makes
-	# neighbors alike - doesn't multiply its say. Cells NEAR THE CURSOR are the show
+	# neighbors alike - doesn't multiply its say. Cells near the cursor are the show
 	# explaining itself: they feed the "here" defense, never the lag bins.
 	var tick_w := {}
 	var tick_lag := {}
@@ -137,7 +117,7 @@ func listen(heard_t: float, cursor_t: float, sig: PackedFloat32Array, dt: float)
 		_lag_sum[b] = float(_lag_sum.get(b, 0.0)) + tick_lag[b] * tick_w[b] * TICK
 	if _cool > 0.0:
 		return -1.0
-	# The winning alignment among ELIGIBLE bins: enough long-memory confidence, and an
+	# The winning alignment among eligible bins: enough long-memory confidence, and an
 	# implied target genuinely elsewhere (a bin near the cursor is self-similarity, not
 	# a correction - and being ineligible, it can never mask a real alignment either).
 	var best_w := 0.0
@@ -149,7 +129,7 @@ func listen(heard_t: float, cursor_t: float, sig: PackedFloat32Array, dt: float)
 		var t2 := clampf(heard_t + float(_lag_sum[b]) / w2, 0.0, _frontier)
 		if absf(t2 - cursor_t) < NEAR:
 			continue
-		# The RECENT votes must decisively out-vote the cursor's RECENT self-match.
+		# The recent votes must decisively out-vote the cursor's recent self-match.
 		# _here_fast is self-regulating - fed only by cells near the cursor's claim,
 		# so it stays high exactly as long as that claim explains the audio (even a
 		# cursor just past the map's end still holds the outro) and dies within a

@@ -1,11 +1,10 @@
 extends RefCounted
 class_name GameTools
 
-## GameTools - THE TABLE, LIVE (next/tabletop.md "Play is live"): what the game master has while it runs one scene of a game really being played. Served as tools
-## ([AgentTools]), as the set dresser's are. The user, 2026-11-04: "game states that could end in both success or failure... or maybe even in complete deviation into something
-## that never resolves (i.e. the last remaining player bought a boat and became a fisherman at the end)".
+## GameTools - the table, live (next/tabletop.md "Play is live"): what the game master has while it runs one scene of a game really being played. Served as tools
+## ([AgentTools]) like the set dresser's.
 ##
-## THE SCENE IS WRITTEN BY THE CALLS, IN ORDER, and the tools write the script ([method compose]):
+## The scene is written by the calls, in order, and the tools write the script ([method compose]):
 ##
 ##   say       lines, in batches: who, their words, whether they come in over the last line or together with it. Said is said.
 ##   roll      dice thrown from where a person sits: the number comes back then, from the seed ([GameLedger], [DiceNotation]), and its mark is in the script at this point.
@@ -15,14 +14,13 @@ class_name GameTools
 ##   ask       a player, asked: see below           ask_table                         all of them at once
 ##   end_scene this scene is done                   game_over                         the game is done, and the scenes left will not be played
 ##
-## SO NOTHING WRITTEN CAN CONTRADICT THE DICE, which came first; no mark can be malformed; a roll cannot be hidden or thrown again until it suits, for everything rolled is on the table
-## by the time the agent knows it; and everyone speaking is someone at the table. No tool takes anything back: what is said at a table is said.
+## So nothing written can contradict the dice, which came first; no mark can be malformed; a roll cannot be hidden or re-thrown, for everything rolled is on the table
+## by the time the agent knows it; and everyone speaking is someone at the table. No tool takes anything back.
 ##
-## THE PLAYERS ARE OTHER AGENTS: [method _ask] starts a job for that person, knowing only their sheet, their own want and what has been said aloud, and hands its answer back to this
-## one's call. The game master is told it may not decide what they do, only what comes of it. An author writing one story will not abandon it; a person at a table with a want of their
-## own will bid on a boat at the worst moment, and a game master who must honor that has to run the boat. A gate replaces the job ([member asker]).
+## The players are other agents: [method _ask] starts a job for that person, knowing only their sheet, their own want and what has been said aloud, and hands its answer back to this
+## one's call. The game master may not decide what they do, only what comes of it. A gate replaces the job ([member asker]).
 ##
-## NO GAME IS NAMED HERE: dice, fields, a board, a table of people. The rules are the brief's and the game master's.
+## No game is named here: dice, fields, a board, a table of people. The rules are the brief's and the game master's.
 
 const SUBMITTED := "submitted.json"
 ## A line that overlaps the one before, when it does not say by how much ([constant Manuscript.OVER]'s bare mark).
@@ -53,7 +51,7 @@ var seed_value := 0
 var items: Array = []
 var submitted := false
 var game_over := false
-## A GATE'S SEAM: answers a question in place of an agent, `(who, question) -> String`.
+## A gate's seam: answers a question in place of an agent, `(who, question) -> String`.
 var asker: Callable = Callable()
 ## How long this scene is meant to run, in words said (the rules tell it).
 var words_aim := Vector2i(400, 1000)
@@ -229,7 +227,7 @@ func _say(args: Dictionary) -> Dictionary:
 	return {"text": _running()}
 
 
-## WHAT A PERSON CAN SAY: words, and the voice's own marks. A stage direction or a bracket is nothing a voice can read ([method TableProducer.clean_spoken]), and a change of speaker is the line's own.
+## What a person can say: words and the voice's own marks. A stage direction or bracket is nothing a voice can read ([method TableProducer.clean_spoken]); a change of speaker is the line's own.
 static func _spoken(text: String) -> String:
 	var t := TableProducer.clean_spoken(text)
 	t = Manuscript._rx(Manuscript.SPEAKER).sub(t, "", true)
@@ -274,7 +272,7 @@ func _ask_table(args: Dictionary) -> Dictionary:
 	var q := String(args.get("what", "")).strip_edges()
 	if q.is_empty():
 		return {"text": "`what` is what you say to them.", "error": true}
-	# ALL AT ONCE, each on their own: started together, and waited for in turn
+	# all at once, each on their own: started together, waited for in turn
 	var jobs := {}
 	for who in people.slice(1):
 		if not asker.is_valid():
@@ -338,7 +336,7 @@ func _want_of(who: String) -> String:
 	return String((sheet as Dictionary).get("wants", "")) if sheet is Dictionary else ""
 
 
-## WHAT HAS BEEN SAID ALOUD, as [param who] heard it: names on the lines, a hidden roll no number, the last [constant HEARD_MOST] words. Nothing a player is not at the table for reaches them.
+## What has been said aloud, as [param who] heard it: names on the lines, a hidden roll no number, the last [constant HEARD_MOST] words.
 func heard(_who := "") -> String:
 	var text := said_before
 	var here := transcript(items, ledger.events)
@@ -350,7 +348,7 @@ func heard(_who := "") -> String:
 	return text
 
 
-## A SCRIPT AS IT WAS HEARD: each line with its speaker, each roll as what the table saw land ([param events]: the rolls by their ids).
+## A script as it was heard: each line with its speaker, each roll as what the table saw land ([param events]: the rolls by their ids).
 static func transcript(list: Array, events: Array) -> String:
 	var by_id := {}
 	for e in events:
@@ -382,7 +380,7 @@ func _submit() -> Dictionary:
 	return {"text": "Handed in. Your work is done."}
 
 
-## THE SCENE AS A SCRIPT ([CardReading]): each line under its speaker's cue, an overlap's mark after the cue, each thing a viewer sees as its own-line mark, in the order it happened.
+## The scene as a script ([CardReading]): each line under its speaker's cue, an overlap's mark after the cue, each thing a viewer sees as its own-line mark, in order.
 ## The game master speaks as the reader ([constant Manuscript.NARRATOR]), since the show's first voice is its voice.
 static func compose(list: Array, cast: PackedStringArray) -> String:
 	var out := PackedStringArray()

@@ -40,7 +40,7 @@ from __future__ import annotations
 # ghost's own formant synthesizer, which is not a result a neural model can
 # produce unless its input is wrong. eSpeak writes length marks and its own
 # rhotics: "room" is ɹuːm, not ɹum, and "thirty" is θɜːɾi, not θɚti. Five
-# symbols were wrong: AA, AO, ER, IY, UW.
+# symbols were wrong: Aa, ao, er, iy, uw.
 ARPA_TO_IPA: dict[str, str] = {
     # monophthongs
     "AA": "ɑː",  # odd, father

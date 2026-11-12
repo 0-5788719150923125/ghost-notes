@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""Gate for the optimizer's hand (2026-11-10, the user: "the model will pick yellow, make two marks with yellow, then go through the whole
-process of grabbing green. Then it'll move to black, then back to yellow, back to white ... half the video is just watching the brushes
-change their color" - "An intelligent model should know: it can draw a single line, pull it all the way through, as a base color. And
+"""Gate for the optimizer's hand ("An intelligent model should know: it can draw a single line, pull it all the way through, as a base color. And
 then it can correct itself, painting other colors on top of that").
 
 Run it directly with the paint venv's python - no pytest (the optimizer on the GPU where there is one, else the CPU, a minute or two):
@@ -18,7 +16,7 @@ On a made surface - a white face, a tear down it 44 mm long and 3 mm wide, black
   3. ONE RUN A BRUSH AND PAINT (optimize.LayerOpt.key_of): no brush is taken up in a paint twice in the layer.
 
 And on a white face with a brow drawn on it - an arc 46 mm long and 0.6 mm wide, black for half its length and red for the rest
-(feedback 0013, 2026-11-10: "the brush bounces around everywhere, makes one tiny mark, moves on to somewhere else") - painted as a layer:
+ - painted as a layer:
 
   4. A LINE AS A HAND DRAWS ONE (plan.LINE_JOIN, layers_paint.LINES_WHOLE): its longest pull lies along BROW_COVERS_LEAST of it.
      CONTROL: its lines found inside each paint's own points, as they were, it is cut into pieces where its color changes.

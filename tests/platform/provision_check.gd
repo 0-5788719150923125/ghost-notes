@@ -1,18 +1,14 @@
 extends SceneTree
 
-## Is ghost's own installer right about what to fetch, where it lands, and when an environment has
-## to be rebuilt?
+## Is ghost's own installer right about what to fetch, where it lands, and when an environment has to be rebuilt?
 ##
-## The Provisioner's jobs are thin over [Provision]'s static half, and every way that half goes
-## wrong is silent: a wheel picked for the wrong machine installs a binary that cannot run, a
-## mis-parsed release reports a version that does not exist, an unpack that keeps a decoy file
-## ships `ffmpeg.html` as ffmpeg, and an environment that is not recognized as stale keeps
-## importing packages its requirements do not name. So each is checked against a fixture with a
-## known answer, and the checks that guard a rule are two-sided: the wrong input must fail.
+## Every way [Provision]'s static half goes wrong is silent (a wheel for the wrong machine, a mis-parsed release
+## version, an unpack that keeps a decoy file, an environment not recognized as stale), so each is checked
+## against a fixture with a known answer, and the checks that guard a rule are two-sided: the wrong input must
+## fail.
 ##
-## No network, and nothing outside a scratch folder: release documents are canned, archives are
-## built here with [ZIPPacker], and [member Provision.base_override] points every path at
-## user://provision_check, which is removed at the end.
+## No network, and nothing outside a scratch folder: release documents are canned, archives are built here with
+## [ZIPPacker], and [member Provision.base_override] points every path at user://provision_check, removed at the end.
 ##
 ##   godot --headless --path . --script tests/platform/provision_check.gd
 
@@ -66,8 +62,7 @@ func _platforms() -> void:
 		"this machine is named as <os>-<arch> (%s)" % key)
 	for plat in Provision.PLATFORMS:
 		_check(Provision.WHEEL_TAGS.has(plat), "%s has a wheel tag pattern" % plat)
-	# A PHONE HAS NO BUILDS OF ANYTHING. Android used to be named "linux", so a phone asked for
-	# linux-arm64 - a platform there ARE downloads for - and fetched FFmpeg it could never run.
+	# A phone has no builds of anything: it must not ask for linux-arm64 and fetch an FFmpeg it cannot run.
 	var mine := Provision.unsupported("ffmpeg")
 	for plat in ["android", "ios", "web"]:
 		Deps.platform_override = plat
@@ -251,10 +246,9 @@ func _unpack() -> void:
 
 # --- whole distributions ---------------------------------------------------------
 
-## A TeX or a Lean toolchain is unpacked whole: its programs find their libraries by where they
-## sit. What can go wrong silently: a zip's lost permissions (Lean's 17 programs would not start), a
-## program taken from a nested tool's own `bin` instead of the distribution's, a member that climbs
-## out of the folder, and a tree missing a program left half in place.
+## A TeX or a Lean toolchain is unpacked whole: its programs find their libraries by where they sit. Checked: a
+## zip's lost permissions, a program taken from a nested tool's own `bin`, a member that climbs out of the
+## folder, and a tree missing a program left half in place.
 func _trees() -> void:
 	print("-- whole distributions")
 	var dir := _scratch.path_join("trees")
@@ -380,8 +374,7 @@ func _lean() -> void:
 	var both := ["v4.36.0-rc1", "v4.35.0", "v4.34.1", "v4.34.0"]
 	_check(String(Provision.pick_mathlib(rels, both).get("tag", "")) == "v4.35.0",
 		"the newest release wins, a prerelease passed over")
-	# The control: when the REPL has not caught up with the newest Mathlib, the one before it wins -
-	# picking v4.35.0 here would build a workbench whose REPL does not exist.
+	# The control: when the REPL has not caught up with the newest Mathlib, the one before it wins.
 	_check(String(Provision.pick_mathlib(rels, ["v4.34.1", "v4.34.0"]).get("tag", "")) == "v4.34.1",
 		"a release the REPL lacks is passed over")
 	_check(Provision.pick_mathlib(rels, ["v4.20.0"]).has("error"), "no common release is an error")

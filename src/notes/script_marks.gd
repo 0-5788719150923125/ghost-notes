@@ -3,32 +3,23 @@ class_name ScriptMarks
 
 ## ScriptMarks - every authoring mark a script may carry, registered with what it does.
 ##
-## A script is plain Markdown, and ghost reads more out of it than the words: speaker cues,
-## hesitations, picture markers, inline pronunciations, template macros, emphasis. Each of
-## those used to be documented only where it was implemented, so a new author had no way to
-## find out what ghost understands short of reading the source. This is the one list: the
-## [ScriptWriter] palette is built from it, [ScriptHighlighter] colors a script with its
-## patterns, and docs.py writes docs/script.md from it.
+## A script is plain Markdown, and ghost reads more out of it than the words: speaker cues, hesitations, picture
+## markers, inline pronunciations, template macros, emphasis. This is the one list: the [ScriptWriter] palette is built
+## from it, [ScriptHighlighter] colors a script with its patterns, and docs.py writes docs/script.md from it.
 ##
-## AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are
-## ([Manuscript] for cues, rests and pictures; [TextNorm] and [Phonemes] for the rest), and
-## `tests/notes/script_marks_check.gd` inserts every entry's example and asks THOSE parsers what
-## they make of it - so an entry that drifts from what the reader actually does fails there,
-## and a new entry without a check fails too.
+## An entry does not implement its mark. The parsers of record stay where they are ([Manuscript] for cues, rests and
+## pictures; [TextNorm] and [Phonemes] for the rest), and `tests/notes/script_marks_check.gd` inserts every entry's
+## example and asks those parsers what they make of it, so an entry that drifts from what the reader does fails
+## there, and a new entry without a check fails too.
 ##
-## A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of
-## the supported macros and features missing from 'cards' editor mode? I would expect that most if
-## not all of the features from generative mode should also work here"). The palette was empty
-## there because no entry named the mode: a show's document is the BRIEF its agents work from,
-## never read aloud, so a mark in it does something only where the code reads it out of the brief
-## or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it
-## does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its
-## deck, a macro reads as its default and a note to self is taken out before any agent sees the
-## brief ([method TablePrompts.brief]), and a hesitation, a delivery or a stressed word stands in
-## a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of
-## a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the
-## table is the only medium there, its pictures are the painter's, and a reader's passage keeps no
-## bracket ([method TableProducer.clean_spoken]).
+## A table brief is not a script, and has marks of its own: a show's document is the brief its agents work from,
+## never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told
+## to honor it. Those are offered ("table" in `modes`), each saying what it does there (`blurbs`): a speaker cue gives
+## the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken
+## out before any agent sees the brief ([method TablePrompts.brief]), and a hesitation, a delivery or a stressed word
+## stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or
+## a tablet (pictures, scene lines, web pages) and the inline pronunciation are not offered: the table is the only
+## medium there, and a reader's passage keeps no bracket ([method TableProducer.clean_spoken]).
 
 ## Fields of an entry:
 ##   label    the palette button
@@ -45,12 +36,12 @@ class_name ScriptMarks
 ##   pattern  how [ScriptHighlighter] finds it. Registry ORDER is highlight priority: a span
 ##            claimed by an earlier entry is not recolored by a later one.
 
-## The heading that opens a show's deck in a Cards brief: `## Cards` or `## The Cards` ([CardDeck]
-## reads the deck under it).
+## The heading that opens a show's deck in a table brief: `## Cards` or `## The Cards` ([CardDeck] reads the deck under
+## it).
 const DECK_HEADING := "(?i)^(#{1,6})\\s*(?:the\\s+)?cards\\s*:?\\s*$"
 
-## THE REGIONS a mark can be `within`: a section of the script, named, with the pattern of the
-## heading that opens it ([method Manuscript.section_span] finds where it is).
+## The regions a mark can be `within`: a section of the script, named, with the pattern of the heading that opens it
+## ([method Manuscript.section_span] finds where it is).
 const REGIONS := {"deck": DECK_HEADING}
 
 const REGISTRY := {
@@ -679,13 +670,10 @@ static func example(key: String, fill := "") -> String:
 		+ String(e["after"])
 
 
-## INSERT A MARK at the caret of [param te], as the palette does.
-##
-## A selection becomes the fill - select a name and press Speaker cue, and it is that
-## speaker's cue - except for a mark with no fill, which goes after the selection rather
-## than over it. Whatever ends up in the fill is left SELECTED, so the example is replaced
-## by typing. One undo step. [param value] fills the mark outright (a known speaker's name),
-## and is then left unselected.
+## Insert a mark at the caret of [param te], as the palette does. A selection becomes the fill (select a name and press
+## Speaker cue, and it is that speaker's cue), except for a mark with no fill, which goes after the selection. Whatever
+## ends up in the fill is left selected, so the example is replaced by typing. One undo step. [param value] fills the
+## mark outright (a known speaker's name), and is then left unselected.
 static func insert(te: TextEdit, key: String, value := "") -> void:
 	var e: Dictionary = REGISTRY[key]
 	var before := String(e["before"])

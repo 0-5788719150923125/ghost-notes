@@ -1,66 +1,47 @@
 extends CanvasLayer
 class_name Exporter
 
-## Exporter - render the visualization to a video, in the background, in two steps.
+## Exporter - renders the visualization to a video in the background, as separate processes polled by PID.
 ##
-## Persistent (main creates it once, never frees it), so an in-flight export and its
-## status survive the song ending and the return to the home screen. In a song's
-## window it shows an Export button; clicking it asks for a quality (720p@30 /
-## 1080p@60 / 4K@60) and a path, then:
+## Persistent (main creates it once, never frees it), so an in-flight export and its status survive the song ending and the
+## return to the home screen. The Export button asks for a quality (720p@30 / 1080p@60 / 4K@60) and a path, then:
 ##
-##   1. BAKE (headless, no window): a one-shot `bake_runner` process analyzes the song
-##      into a spectrum cache. This is the slow part, and it now runs windowless and
-##      off the render's critical path - so there is no gray, frozen render window.
-##      Cached per song, so only the first export of a song pays for it.
-##   2. RENDER (Movie Maker): a second process loads that cache (`--bake-file`, no
-##      in-process baking) and draws immediately, recording the visualization + audio
-##      to a scratch AVI. Its window is moved off-screen by main.
-##   3. TRANSCODE (ffmpeg): the scratch AVI is re-encoded to the chosen MP4 (H.264 + AAC)
-##      WHILE it is written, and on Linux what has been encoded is given back as it goes and
-##      the scratch leaves the folder (see [member _live_encode]). Godot only writes AVI, and
-##      AVI is a 32-bit/RIFF container that corrupts past ~4 GB (the 4K exports had a broken
-##      index + glitchy audio); the MP4 we ship uses 64-bit offsets, is ~10-20x smaller, and
-##      plays everywhere.
-##   4. UPLOAD (only when the note has a YouTube card and its "Upload after export" is ticked): the
-##      saved MP4 goes up to the channel the card picks, as the card and the mode describe it - its
-##      title, who may see it, the playlist it joins - see [member upload_provider], [YouTubeCard] and
-##      youtube.gd. The sign-in it needs is settled as the export starts, beside the render, while
-##      the person is still at the machine. The menu says nothing of YouTube: the card holds the
-##      choice, the Google client, the sign-in and a waiting upload's resume (2026-10-07).
+##   1. Bake (headless): a one-shot `bake_runner` process analyzes the song into a spectrum cache, kept per song.
+##   2. Render (Movie Maker): a second process loads the cache (`--bake-file`) and records the visualization and audio to a
+##      scratch AVI. Its window is moved off-screen by main.
+##   3. Transcode (ffmpeg): the AVI is encoded to the chosen MP4 (H.264 + AAC) while it is written; on Linux what has been
+##      encoded is given back as it goes and the scratch leaves the folder (see [member _live_encode]). Godot writes only
+##      AVI, whose 32-bit RIFF sizes corrupt past ~4 GB; the MP4 uses 64-bit offsets and is far smaller.
+##   4. Upload (only when the note has a YouTube card with "Upload after export" ticked): the saved MP4 goes up as the card
+##      describes it, see [member upload_provider], [YouTubeCard] and youtube.gd. The sign-in it needs is settled as the
+##      export starts, beside the render. The menu says nothing of YouTube: the card holds the choice, the Google client,
+##      the sign-in and a waiting upload's resume.
 ##
-## All three steps are separate processes, polled by PID; status ("Analyzing… / Rendering… /
-## Finalizing… / Saved ✓") shows here in the main window. Nothing to watch, nothing to force-quit.
+## Status ("Analyzing… / Rendering… / Finalizing… / Saved ✓") shows in the main window.
 
 const Bake := preload("res://src/audio/bake.gd")
 const YouTube := preload("res://src/export/youtube.gd")
 
-# Output quality presets, offered when the Export button is pressed. `w`/`h` is the file's
-# resolution and `fps` what Movie Maker records at, so the file is exactly what is chosen here.
+# Output quality presets, offered when the Export button is pressed. `w`/`h` is the file's resolution and `fps` what Movie
+# Maker records at.
 #
-# `ss` is the SUPERSAMPLE factor: the render runs at ss x the output and ffmpeg resolves it back
-# down. That is ghost's antialiasing, because it has no other. Everything is drawn as flat
-# CanvasItem triangles (see TriBatch) - a wireframe edge is a thin QUAD, not a line primitive, so
-# it gets no smoothing of its own - and Godot's msaa_2d, which would otherwise cover it, is inert
-# in the export: rendering the same clip at msaa_2d 0, 4x and 8x under the export's own
-# "viewport" stretch override produces BYTE-IDENTICAL frames. (It does work in the live window,
-# which is why an export has always looked worse than the session it came from.) Measured at 1.5x:
-# the excess energy near Nyquist - the direct spectral signature of aliasing - falls from +114% of
-# ground truth to +16% before the codec and from +62% to +2.6% in the delivered file, and the
-# fraction of edge pixels with no partial coverage at all goes from 61-73% down to 12-19%.
+# `ss` is the supersample factor: the render runs at ss x the output and ffmpeg resolves it back down. This is the only
+# antialiasing there is: everything is drawn as flat CanvasItem triangles (see TriBatch), a wireframe edge is a thin quad,
+# and Godot's msaa_2d is inert in the export (frames at msaa_2d 0, 4x and 8x are byte-identical). At 1.5x the excess energy
+# near Nyquist falls from +114% to +16% of ground truth before the codec, and edge pixels with no partial coverage from
+# 61-73% to 12-19%.
 #
-# 1.5x rather than 2x because the cost is the SCRATCH FILE, not the time: drawing is CPU-geometry
-# bound and flat with resolution (+8% end to end at 1.5x), but the MJPEG intermediate grows 80%,
-# which pulls Godot's 4 GiB AVI wrap in from ~5.7 to ~3.1 minutes of 60 fps video. 2x is better
-# still (85% of visibly-wrong edge pixels removed against 48%) but wraps at ~2.0 minutes.
-# 4K stays native: 1.5x of it is 5760x3240, which wraps in about a minute.
+# 1.5x rather than 2x because the cost is the scratch file, not time: the MJPEG intermediate grows 80%, which pulls Godot's
+# 4 GiB AVI wrap in from ~5.7 to ~3.1 minutes of 60 fps video (2x wraps at ~2.0 minutes). 4K stays native: 1.5x of it wraps
+# in about a minute.
 const QUALITIES := [
 	{"label": "720p · 30 fps  (HD, smaller file)", "w": 1280, "h": 720, "fps": 30, "tag": "720p", "ss": 1.5},
 	{"label": "1080p · 60 fps  (Full HD)", "w": 1920, "h": 1080, "fps": 60, "tag": "1080p", "ss": 1.5},
 	{"label": "4K · 60 fps  (UHD, full resolution)", "w": 3840, "h": 2160, "fps": 60, "tag": "4k", "ss": 1.0},
 ]
 const DEFAULT_QUALITY := 1
-## THE PORTRAIT PRESETS, the landscape ones turned (next/notes.md step 10). No 4K portrait: Shorts stop
-## at 1080p and Instagram at 1920 pixels wide.
+## The portrait presets, the landscape ones turned (next/notes.md step 10). No 4K portrait: Shorts stop at 1080p and
+## Instagram at 1920 pixels wide.
 const PORTRAIT_QUALITIES := [
 	{"label": "720 x 1280 · 30 fps  (portrait: Shorts, Reels, TikTok)", "w": 720, "h": 1280, "fps": 30, "tag": "720p-portrait", "ss": 1.5},
 	{"label": "1080 x 1920 · 60 fps  (portrait, Full HD)", "w": 1080, "h": 1920, "fps": 60, "tag": "1080p-portrait", "ss": 1.5},
@@ -68,22 +49,18 @@ const PORTRAIT_QUALITIES := [
 ## A portrait video longer than this is not a Short (seconds).
 const SHORT_MAX := 180.0
 
-# Checkable item in the quality menu: for a synthesis take, record the Synthesis
-# workspace itself (panel and all) instead of a silent narration - and since
-# nobody is there to click Throw/Pull in a background render, the game plays
-# itself (see synth_editor.gd's `autopilot`). Meaningless for a plain song
-# export (no game to automate), so it's disabled when there's no take_provider.
+# Checkable item in the quality menu: for a synthesis take, record the Synthesis workspace itself instead of a silent
+# narration; the game plays itself (see synth_editor.gd's `autopilot`). Disabled when there is no take_provider.
 const UI_TOGGLE_ID := 1000
 ## The quality menu's "A stretch again" ([method _ask_stretch]; [Stitch]).
 const STRETCH_ID := 1001
-# Generous but arbitrary: a catch's own reel alone can run 45-240s (see
-# synth_editor.gd's _begin_hook), so no fixed window guarantees a full throw
-# -> catch -> hold/fold cycle. This is long enough to usually show one.
+# Long enough to usually show one throw -> catch -> hold/fold cycle (a catch's own reel runs 45-240 s, see synth_editor.gd's
+# _begin_hook).
 const SYNTH_AUTOPLAY_DURATION := 150.0
 ## The status line's widest (see [method _place_status]).
 const STATUS_W := 588.0
-## What the sign-in dialog says. Google's "Access blocked" page is a dead end that never comes back
-## to Ghost Notes, so the dialog names it rather than waiting the whole timeout out in silence.
+## What the sign-in dialog says. Google's "Access blocked" page never comes back to Ghost Notes, so the dialog names it
+## rather than waiting out the timeout in silence.
 const SIGN_BLOCKED := ("\"Access blocked\" or \"has not completed the Google verification process\"? "
 	+ "While the Google Cloud project %s is in Testing, only its own test users can sign in - another "
 	+ "project's list does not count. Add your Google account as a test user of that project (Google "
@@ -94,14 +71,9 @@ const SIGN_WAIT := ("Your browser should be showing Google's sign-in. Choose the
 	+ "No page? It may have opened behind another window: open it again, or copy the link into the "
 	+ "browser you use.")
 
-## Set by a mode that owns its OWN export path, so the shared button steps aside
-## instead of sitting dead on top of it. Masking is the one such mode: its export
-## is a headless RELAUNCH of the app against the session json, not this bake
-## pipeline, so it builds its own button - at the same bottom-right offsets,
-## because that is where an export button lives in every mode. This layer is 250
-## and the editor's is 100, so without this the shared button is drawn OVER the
-## working one and eats its clicks while grayed out, which is exactly how it was
-## reported: "the export button is grayed-out and I cannot click it".
+## Set by a mode that owns its own export path (Masking: a headless relaunch against the session json), so the shared button
+## steps aside. That mode builds its own button at the same bottom-right offsets; this layer is 250 and the editor's is 100,
+## so without this the shared button would sit over the working one and eat its clicks.
 var suppressed := false
 ## How far up the current mode has asked the bottom-right row to sit. See
 ## Chrome.bottom_inset.
@@ -112,7 +84,7 @@ var _status: Label
 var _dialog: FileDialog
 var _quality_menu: PopupMenu
 var _state := "idle"     # idle | baking | rendering | transcoding | stitching | upload_wait | uploading | done
-## A STRETCH RENDERED AGAIN ([Stitch]): {old, t0, t1, span} while one is under way, {} otherwise.
+## A stretch rendered again ([Stitch]): {old, t0, t1, span} while one is under way, {} otherwise.
 var _stretch := {}
 var _stretch_dialog: ConfirmationDialog
 var _stretch_old: LineEdit
@@ -123,29 +95,22 @@ var _stitch_pid := -1
 var _bake_pid := -1
 var _render_pid := -1
 var _transcode_pid := -1
-## THE SLIDING WINDOW. The transcode runs DURING the render, reading the AVI as Movie Maker
-## writes it (`-follow`), and on Linux the bytes it has already read are released from disk
-## behind it (`fallocate --punch-hole`), so the scratch AVI holds seconds of video, not the film.
-## A 250 GB intermediate for a few-GB result was the report; measured on a 1080p render: 47 MB
-## written, 9.4 MB ever on disk, every frame and the audio intact.
+## The sliding window. The transcode runs during the render, reading the AVI as Movie Maker writes it (`-follow`), and on
+## Linux the bytes it has read are released from disk behind it (`fallocate --punch-hole`), so the scratch holds seconds of
+## video, not the film.
 var _live_encode := false        # the transcode is following the render
 var _punched := 0                # bytes released from the head of the AVI so far
 var _punch_t := 0.0
-## ...AND THE SCRATCH LEAVES THE FOLDER. A release frees blocks but cannot shorten the file:
-## Movie Maker writes at its own offset, so the AVI's LENGTH still grows to the whole film, and
-## the length is what a file manager shows - a second file beside the MP4, "growing constantly"
-## (reported 2026-10-06; measured on that render: 13 GB listed, 40 MB on disk). So once a
-## release has worked, the name is unlinked. The render and the encoder go on writing and
-## reading the same file through the handles they hold, ghost holds one more ([member _hold],
-## reached by path as [member _held]) to measure and release through, and the kernel frees what
-## is left when the last of them closes - however ghost ends.
+## The scratch also leaves the folder. A release frees blocks but cannot shorten the file: Movie Maker writes at its own
+## offset, so the AVI's length still grows to the whole film, which is what a file manager shows. Once a release has worked,
+## the name is unlinked. The render and the encoder go on through the handles they hold; ghost holds one more ([member _hold],
+## reached by path as [member _held]) to measure and release through, and the kernel frees the file when the last closes.
 var _hold: FileAccess = null
 var _held := ""                  # /proc/<ghost>/fd/<n> for _hold; "" = reach the scratch by name
 var _unlinked := false           # the scratch's name is gone from the folder
 var _released := false           # some of it was given back, so it can never be encoded again
-## True when this render is running on the real desktop rather than a display of its own -
-## the state in which burying the window corrupts the picture. Shown to the user, because a
-## six-hour job that can be spoiled by another window needs to say so BEFORE it is spoiled.
+## True when this render runs on the real desktop rather than a display of its own, where burying the window corrupts the
+## picture. Shown to the user before it can be spoiled.
 var _note_no_virtual_display := false
 var _out := ""           # the final file the user chose (.mp4)
 var _avi := ""           # the intermediate Movie Maker AVI (transcoded away, then deleted)
@@ -183,20 +148,15 @@ var _sign_dialog: AcceptDialog # what Ghost Notes is waiting for while the brows
 var _sign_again: Button
 var _sign_copy: Button
 
-# The watchdog exists for ONE failure: a render that can never finish (the
-# audio failed to load, so the session has no end and Movie Maker records
-# silence until the disk fills). It must never fire on a render that is merely
-# SLOW - heavy scenes at 4K can spend minutes on a few seconds of video.
+# The watchdog exists for one failure: a render that can never finish (the audio failed to load, so the session has no end
+# and Movie Maker records silence until the disk fills). It must never fire on a render that is merely slow.
 #
-# Liveness is two independent FINE-GRAINED signals - the fractional playback
-# position and the movie file GROWING on disk - and either one counts, with a
-# long fuse. Integer percent is far too coarse to mean "alive": one percent point
-# of a 344 s take is 3.4 s of video, which a heavy scene can spend over a minute
-# producing, and a healthy 720p render was killed for it.
+# Liveness is two fine-grained signals, the fractional playback position and the movie file growing on disk; either counts,
+# with a long fuse. Integer percent is too coarse: one percent of a 344 s take is 3.4 s of video, which a heavy scene can
+# spend over a minute producing.
 const STALL_LIMIT := 300.0
-## How long the following encoder waits on a file that has stopped growing before it decides the
-## render is over (microseconds, ffmpeg's unit). Longer than any pause a live render makes; a
-## render that does pause longer is caught by [method _encoder_quit_early].
+## How long the following encoder waits on a file that has stopped growing before it decides the render is over
+## (microseconds, ffmpeg's unit). A render that pauses longer is caught by [method _encoder_quit_early].
 const FOLLOW_TIMEOUT_US := 60000000
 ## Seconds the render's virtual display outlives its last client (see [method virtual_display]).
 const XVFB_LINGER := 10
@@ -206,47 +166,37 @@ const PUNCH_KEEP := 1 << 20
 const PUNCH_BEHIND := 8 << 20
 const STALL_MIN_GROWTH := 65536   # bytes; below this the file is not really moving
 
-## Synthesis hook: a mode whose audio is REPRODUCIBLE ON DEMAND (the voice is
-## a pure function of the text and the seed) registers a provider that renders
-## the current take to disk and returns its path. Export then works from the
-## very first moment - the click IS the trigger that makes the audio.
+## Synthesis hook: a mode whose audio is reproducible on demand (the voice is a pure function of the text and the seed)
+## registers a provider that renders the current take to disk and returns its path, so export works from the first moment.
 var take_provider := Callable()
 
-## THE TAKE PROVIDER MAKES THE EXPORT'S AUDIO even while a file plays: a reading's take kept plays as a file
-## ([method ReadingStream.play]), and its export still pins its episode and writes what goes with the take
-## ([method ReadingPanel.export_take], which hands over the kept take rather than saying it again).
+## The take provider makes the export's audio even while a file plays: a reading's kept take plays as a file ([method
+## ReadingStream.play]), and its export still pins its episode and writes what goes with the take ([method
+## ReadingPanel.export_take], which hands over the kept take).
 var take_first := false
 
-## Optional companion to [member take_provider]: returns true when the provider
-## has something worth rendering (in synthesis: at least one seed on the belt,
-## or a voice already cast). When it returns false the button grays out - a
-## click could only produce a video of nothing.
+## Optional companion to [member take_provider]: true when the provider has something worth rendering (in synthesis: a seed
+## on the belt, or a voice already cast). When false the button grays out.
 var take_ready := Callable()
 
-## What the video is called, when the mode knows: returns a name without an extension (an
-## episode's title, say), or "" for the exporter's own `ghost_notes_<quality>`. Asked as the save
-## dialog opens; whatever it returns goes through [method safe_name].
+## What the video is called, when the mode knows: a name without an extension (an episode's title), or "" for the exporter's
+## own `ghost_notes_<quality>`. Asked as the save dialog opens; goes through [method safe_name].
 var name_provider := Callable()
 
-## Whether this mode has a UI worth recording. Only the fishing game does; the
-## generative path has a text box and some sliders, and an option offering to
-## "record the game" there is noise.
+## Whether this mode has a UI worth recording. Only the fishing game does.
 var automation_available := false
 
-## What an upload of the take at the given path says: `{title, description, chapters, tags, privacy,
-## playlist, playlist_title, channel, channel_name, record}` - `channel` the id of the channel it goes
-## up to, "" when the note has none yet, and `record` a file the upload's result is kept in - and its
-## thumbnail, as the YouTube card chose it: `thumbnail` (a picture), `thumbnail_at` (a moment of the
-## video to take a frame at) or neither, `thumbnail_why` saying why the choice could not be had - or {}
-## when nothing is to go up (no YouTube card, or its "Upload after export" not ticked). Asked with ""
-## as the save path is chosen, which decides whether this export goes up; asked again with the take
-## once it is rendered, so a mode can time chapters from it and describe the episode the take was
-## made of.
+## What an upload of the take at the given path says: `{title, description, chapters, tags, privacy, playlist,
+## playlist_title, channel, channel_name, record}` - `channel` the id of the channel it goes to ("" when the note has none
+## yet), `record` a file the upload's result is kept in - plus the thumbnail as the YouTube card chose it: `thumbnail` (a
+## picture), `thumbnail_at` (a moment of the video to take a frame at) or neither, `thumbnail_why` saying why the choice
+## could not be had. {} when nothing is to go up (no YouTube card, or "Upload after export" not ticked). Asked with "" as the
+## save path is chosen, which decides whether this export goes up; asked again with the take once rendered, so a mode can
+## time chapters from it.
 var upload_provider := Callable()
-## WHAT THE NOTE'S SHOW IS (`() -> Dictionary`, a panel's `show_plan()`): the storyboard the render
-## must walk comes from the note, not from whatever the Director happens to hold - a reading that
-## is not playing has let its storyboard go, and its export would have rendered the seeded show.
-## Unset (the command line), the Director's own is used.
+## What the note's show is (`() -> Dictionary`, a panel's `show_plan()`): the storyboard the render must walk comes from the
+## note, not from what the Director holds (a reading that is not playing has let its storyboard go). Unset (the command
+## line), the Director's own is used.
 var show_provider := Callable()
 
 
@@ -254,8 +204,7 @@ var show_provider := Callable()
 const GROUP := "ghost_exporter"
 
 
-## The exporter in this tree, or null - for what sits beside it in `export/` and needs it (the
-## YouTube card's sign-in), without asking the shell that built it.
+## The exporter in this tree, or null - for what sits beside it in `export/` and needs it (the YouTube card's sign-in).
 static func of(n: Node) -> Exporter:
 	if n == null or not n.is_inside_tree():
 		return null
@@ -265,8 +214,8 @@ static func of(n: Node) -> Exporter:
 func _ready() -> void:
 	add_to_group(GROUP)
 	layer = 250          # above the notes list (200), so status shows there too
-	# remove a stale override.cfg left by a crashed/killed render - never from a read-only process
-	# (a probe, the README's recording), which may be running beside the author's own export
+	# remove a stale override.cfg left by a killed render - never from a read-only process (a probe, the README's recording),
+	# which may run beside the author's own export
 	if not Settings.is_read_only():
 		_clear_override()
 	_build_ui()
@@ -274,21 +223,13 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_place_status)
 
 
-## AN EXPORT DOES NOT SURVIVE THE APP, and until this existed it did. Every step of the
-## export is a separate process (see the class doc) and `OS.create_process` detaches them
-## completely, so closing ghost mid-export left the bake, the Movie Maker render or the
-## `ffmpeg` transcode running with nothing on screen, no way to stop them, and no "godot"
-## in `ps` to explain what was still writing to the disk. Reported from the transcode: both
-## windows shut, ffmpeg still finalizing the file.
+## An export does not survive the app. Every step is a separate process (see the class doc) and `OS.create_process` detaches
+## them, so on close the bake, the render and the transcode are stopped here. The pids go through [Subprocess], so `Boot`
+## would reap them anyway; this does it first and also clears the render's `override.cfg`, which the generic reap cannot
+## know about. The scratch AVI goes with the render: nothing resumes a render.
 ##
-## The pids go through [Subprocess], so `Boot` would reap them anyway - this is the owner
-## doing it first and at the right moment, and it also clears the render's `override.cfg`,
-## which is the one piece of shutdown state the generic reap cannot know about. The scratch AVI
-## goes with the render: nothing resumes a render, and what the encoder read has already been
-## given back, so a scratch left behind is only a large file in the author's folder.
-##
-## WM_CLOSE_REQUEST reaches every node when the window is asked to close; EXIT_TREE covers
-## the programmatic-quit paths. Both, because either can be the one that happens.
+## WM_CLOSE_REQUEST reaches every node when the window is asked to close; EXIT_TREE covers programmatic quits. Both, because
+## either can be the one that happens.
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_WM_CLOSE_REQUEST and what != NOTIFICATION_EXIT_TREE:
 		return
@@ -317,8 +258,8 @@ func _build_ui() -> void:
 	_btn.visible = false
 	_btn.modulate.a = 0.0       # fade in elegantly when it becomes eligible
 	_btn.pressed.connect(_on_export)
-	# THE ROW'S (Chrome.row_button): hidden, it closes up rather than leaving a hole. With no
-	# Chrome (a gate building an exporter by hand), at its old slot in the row.
+	# The row's (Chrome.row_button): hidden, it closes up rather than leaving a hole. With no Chrome (a gate building an
+	# exporter by hand), at its old slot in the row.
 	var ch := Shell.of(self)
 	if ch != null:
 		ch.row_button(&"export", _btn)
@@ -334,8 +275,7 @@ func _build_ui() -> void:
 	_status.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_status.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	# WRAPPED, and growing UP and LEFT - never toward the buttons or past the screen's edge
-	# (see _place_status)
+	# wrapped, growing up and left, never toward the buttons or past the screen's edge (see _place_status)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_status.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -346,7 +286,7 @@ func _build_ui() -> void:
 	add_child(_status)
 	_place_status()
 
-	# Quality picker - shown first when Export is pressed, before the save dialog.
+	# Quality picker, shown first when Export is pressed, before the save dialog.
 	_quality_menu = PopupMenu.new()
 	for i in QUALITIES.size():
 		_quality_menu.add_item(QUALITIES[i].label, i)
@@ -355,11 +295,9 @@ func _build_ui() -> void:
 	_quality_menu.set_item_tooltip(_quality_menu.get_item_index(UI_TOGGLE_ID),
 		"Synthesis takes only: instead of a silent narration, plays the fishing game\n"
 		+ "itself - Throw, Pull, hold or fold - live, with its panel visible in the video.")
-	# Checkable items close the popup like any other by default - that would eat the
-	# toggle on the very click meant to set it, so only quality items (uncheckable)
-	# close it.
+	# Checkable items would close the popup on the click meant to set them, so only quality items (uncheckable) close it.
 	_quality_menu.hide_on_checkable_item_selection = false
-	# ...AND A STRETCH OF AN EARLIER EXPORT RENDERED AGAIN (next/editing.md step 13; [Stitch])
+	# a stretch of an earlier export rendered again (next/editing.md step 13; [Stitch])
 	_quality_menu.add_item("A stretch again, into an earlier export…", STRETCH_ID)
 	_quality_menu.set_item_tooltip(_quality_menu.get_item_index(STRETCH_ID),
 		"Render only a stretch of an export you made before - a late fix - and put it back in its place: the rest of the\n"
@@ -375,8 +313,7 @@ func _build_ui() -> void:
 	_dialog.title = "Export video"
 	_dialog.filters = PackedStringArray(["*.mp4 ; Video (MP4, H.264 + AAC)"])
 	_dialog.current_file = "ghost_notes.mp4"
-	# Default to the Downloads folder so an export lands somewhere predictable (the native dialog
-	# otherwise opens in its last-used directory, which is easy to lose track of).
+	# Default to the Downloads folder so an export lands somewhere predictable.
 	var downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
 	if not downloads.is_empty():
 		_dialog.current_dir = downloads
@@ -384,8 +321,7 @@ func _build_ui() -> void:
 	_dialog.file_selected.connect(_on_path)
 	add_child(_dialog)
 
-	# The author's Google client file, asked for the first time an upload is ticked and kept from
-	# then on (see youtube.gd).
+	# The author's Google client file, asked for the first time an upload is ticked and kept from then on (see youtube.gd).
 	_client_dialog = FileDialog.new()
 	_client_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_client_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -400,8 +336,8 @@ func _build_ui() -> void:
 	add_child(_client_dialog)
 	_yt = YouTube.new()
 	add_child(_yt)
-	# The sign-in, visible while it waits: the page can open behind another window, and Google's
-	# "Access blocked" never comes back, so the person needs to see what is awaited and act on it.
+	# The sign-in, visible while it waits: the page can open behind another window, and Google's "Access blocked" never comes
+	# back, so the person sees what is awaited.
 	_sign_dialog = AcceptDialog.new()
 	_sign_dialog.title = "Sign in to YouTube"
 	_sign_dialog.dialog_autowrap = true
@@ -463,22 +399,20 @@ func _process(dt: float) -> void:
 	# the take renders with the state still idle: keep its line, and the sign-in beside it, current
 	if _prepping and _upload_this:
 		_set_status("⏳  Rendering the take…", Color(0.95, 0.92, 0.7))
-	# The button fades in once eligible (idle, not mid-export, past the delay) and
-	# fades out otherwise - never a hard pop.
+	# The button fades in once eligible (idle, not mid-export, past the delay) and out otherwise.
 	# an informational note (e.g. "nothing to export yet") clears itself
 	if _note_t > 0.0 and _state == "idle":
 		_note_t -= dt
 		if _note_t <= 0.0:
 			_status.visible = false
-	# A PANEL OPEN ABOVE THE ROW (the log, the Assistant, the Environment) has the space the
-	# progress line uses: the line steps aside while one is open, and comes back after.
+	# A panel open above the row (the log, the Assistant, the Environment) has the space the progress line uses: the line steps
+	# aside while one is open.
 	var ch := Shell.of(self)
 	_status.modulate.a = 0.0 if ch != null and ch.panel_open() else 1.0
 	if suppressed:
 		_btn.visible = false
 		_btn.modulate.a = 0.0
-		# The STATUS line stays: an export started before the mode took over is
-		# still running, and its progress is worth seeing.
+		# The status line stays: an export started before the mode took over is still running.
 		return
 	var want := _state == "idle" and _can_export()
 	if want and not _announced:
@@ -486,7 +420,7 @@ func _process(dt: float) -> void:
 		print("ghost: export ready (⤓ bottom-right)")
 	_btn.modulate.a = lerpf(_btn.modulate.a, 1.0 if want else 0.0, 1.0 - exp(-6.0 * dt))
 	_btn.visible = _btn.modulate.a > 0.02
-	# grayed, never gone: nothing to render yet (see _can_export's history)
+	# grayed, never gone: nothing to render yet
 	var content := _has_content()
 	_btn.disabled = not content
 	_btn.tooltip_text = ("Render this visualization + audio to a video file (in the background)"
@@ -497,11 +431,10 @@ func _process(dt: float) -> void:
 func _tick_render(dt: float) -> void:
 	if not Subprocess.alive(_render_pid):
 		_clear_override()                # render finished -> restore live resolution
-		# The render only reports success by PID exit; make sure it actually produced the AVI
-		# (a crashed Movie Maker exits too) before spending minutes transcoding nothing.
+		# The render reports success only by PID exit; check it produced the AVI (a crashed Movie Maker exits too) before
+		# transcoding nothing.
 		if _live_encode:
-			# the encoder has been following all along; it finishes by itself once the
-			# file stops growing (FOLLOW_TIMEOUT_US)
+			# the encoder has been following all along; it finishes by itself once the file stops growing (FOLLOW_TIMEOUT_US)
 			_state = "transcoding"
 		elif FileAccess.file_exists(_avi) and _file_size(_avi) > 65536:
 			_repair_avi_sizes(_avi)
@@ -510,10 +443,7 @@ func _tick_render(dt: float) -> void:
 			_fail("⚠  Render produced no file (see console)")
 		return
 	_poll_pct()
-	# STALL WATCHDOG (see the consts): alive = the playback
-	# position advanced at ALL, or the movie file grew. A slow
-	# render satisfies both; only a render that cannot finish
-	# satisfies neither.
+	# stall watchdog (see the consts): alive = the playback position advanced at all, or the movie file grew
 	_stall_t += dt
 	var frac := Bake.read_progress()
 	if frac > _stall_frac:
@@ -543,13 +473,8 @@ func _tick_render(dt: float) -> void:
 		push_warning("ghost export: render stalled (no frames, no progress); killed pid %d"
 			% _render_pid)
 		return
-	# one decimal, deliberately: whole percents on a long take
-	# sit still for minutes on heavy scenes, which reads as a
-	# freeze. A moving number is the difference between "slow"
-	# and "hung" for the person watching it.
-	# THE WARNING RIDES THE PROGRESS LINE, not a one-shot notice: this is
-	# the only text on screen for hours, and "leave the render window
-	# alone" is advice that has to still be visible at hour five.
+	# one decimal: whole percents on a long take sit still for minutes on heavy scenes, which reads as a freeze
+	# the warning rides the progress line: it is the only text on screen for hours
 	var how := " …  %.1f%%" % (maxf(_stall_frac, 0.0) * 100.0)
 	if _note_no_virtual_display:
 		how += "   ⚠ leave the render window visible"
@@ -580,7 +505,7 @@ func _tick_transcode() -> void:
 		_set_status("⚠  Transcode failed (see console)", Color(1.0, 0.7, 0.6))
 		push_warning("ghost export: transcode failed")
 	else:
-		# Transcode failed (ffmpeg missing/errored). Keep the raw AVI so the work isn't lost.
+		# Transcode failed (ffmpeg missing or errored): keep the raw AVI so the work is not lost.
 		_upload_this = false
 		_drop_scratch(false)
 		_state = "done"
@@ -637,7 +562,7 @@ static func clock_seconds(s: String) -> float:
 	return t if not parts.is_empty() else -1.0
 
 
-## THE STRETCH ASKED FOR: the earlier export read (its size and rate must be one of the qualities, so the stretch is encoded as
+## The stretch asked for: the earlier export read (its size and rate must be one of the qualities, so the stretch is encoded as
 ## it was), and the export's own way taken from there with only the stretch rendered.
 func _on_stretch() -> void:
 	var old := _stretch_old.text.strip_edges()
@@ -665,7 +590,7 @@ func _on_stretch() -> void:
 	_on_path(old.get_basename() + ".stretch.mp4")
 
 
-## THE STRETCH PUT BACK ([Stitch]): the earlier export's head and tail copied, the stretch's pictures, joined under its whole sound.
+## The stretch put back ([Stitch]): the earlier export's head and tail copied, the stretch's pictures, joined under its whole sound.
 func _start_stitch() -> void:
 	var old := String(_stretch["old"])
 	var sp: Vector2 = _stretch.get("span", Vector2.ZERO)
@@ -741,18 +666,9 @@ static func _media_seconds(path: String) -> float:
 	return float(String("".join(got)).strip_edges())
 
 
-# THE BUTTON IS ALWAYS VISIBLE. History, because this exact gate regressed
-# repeatedly: eligibility was time-gated (30s of playback / half the song),
-# then length-gated for streams, then time-gated again by a concurrent edit
-# whose premise (that synthesis paces to real time) was wrong - and in
-# synthesis sessions EVERY throw/edit resets the playback clock via the
-# stream restart cycle, so a time gate can NEVER be satisfied while the user
-# iterates. Each version HID the button from someone.
-#
-# So the rule is: never hide it, and never gate it on TIMING. It may only be
-# DISABLED (grayed, still there, with a tooltip that says why) for the one
-# honest reason - there is no content: no song loaded, and no provider that
-# could make one (synthesis with an empty belt and nothing cast).
+# The button is always visible. It may only be disabled (grayed, with a tooltip saying why) when there is no content: no
+# song loaded and no provider that could make one. It is never gated on timing: in synthesis sessions every throw or edit
+# resets the playback clock, so a time gate can never be satisfied.
 func _can_export() -> bool:
 	return true
 
@@ -772,19 +688,14 @@ func _poll_pct() -> void:
 		_pct = int(round(p * 100.0))
 
 
-# Step 0: pick the output resolution / fps. Pop the menu up by the button.
-# THE PICKERS COME FIRST - the same order as every other session: quality,
-# then path, then the background pipeline. A synthesis take that still needs
-# rendering is made in _on_path, AFTER the user commits - doing it here made
-# the click sit on "Rendering the take…" with no dialog in sight, which read
-# as a button that never asks anything (and a cancel cost a wasted render).
-# A click with nothing to export and no way to make it explains itself
-# instead of opening a doomed dialog.
+# Step 0: pick the output resolution / fps; the menu pops up by the button. The pickers come first (quality, then path, then
+# the background pipeline): a synthesis take that needs rendering is made in _on_path, after the user commits. A click with
+# nothing to export and no way to make it explains itself instead of opening a doomed dialog.
 func _on_export() -> void:
 	if _prepping:
 		return
-	# Every export ends in an ffmpeg transcode. ghost downloads FFmpeg itself, so on a
-	# first run it may still be on its way - say so now rather than after the render.
+	# Every export ends in an ffmpeg transcode. ghost downloads FFmpeg itself, so on a first run it may still be on its way:
+	# say so now rather than after the render.
 	if not Deps.has("ffmpeg"):
 		Provision.ensure("ffmpeg")
 		_note_t = 6.0
@@ -796,17 +707,14 @@ func _on_export() -> void:
 		_set_status("⚠  Nothing to export yet - play or speak something first",
 			Color(1.0, 0.85, 0.6))
 		return
-	# AN UPLOAD WHOSE TITLE CANNOT BE MADE says so now, before the render it would follow (the note's
-	# YouTube card names a macro the note does not fill - YouTubeCard.why_not)
+	# An upload whose title cannot be made (the note's YouTube card names a macro the note does not fill, YouTubeCard.why_not)
+	# says so now, before the render it would follow
 	var refused := str(_upload_peek().get("refused", ""))
 	if not refused.is_empty():
 		_note_t = 8.0
 		_set_status("⚠  " + refused, Color(1.0, 0.85, 0.6))
 		return
-	# Only the FISHING game has a game to automate. take_provider is no longer a
-	# proxy for that - the generative path sets one too - so the option is driven
-	# by an explicit flag and REMOVED rather than grayed where it is meaningless,
-	# since a permanently disabled item just invites the question of what it is.
+	# Only the fishing game has a game to automate: driven by an explicit flag, and removed rather than grayed elsewhere.
 	var ui_idx := _quality_menu.get_item_index(UI_TOGGLE_ID)
 	if automation_available and ui_idx < 0:
 		_quality_menu.add_check_item("Automate the Synthesis game (record the UI)", UI_TOGGLE_ID)
@@ -859,18 +767,14 @@ static func safe_name(title: String) -> String:
 
 
 func _on_path(out_path: String) -> void:
-	# RE-ENTRANCY GUARD, and it is load-bearing: this method awaits a take
-	# render, and the native file dialog can deliver file_selected more than
-	# once (and the user can re-export while a take is still rendering). Two
-	# overlapping runs rendered the SAME take file from two threads - a reader
-	# in another process (the export render itself) opened it mid-write and
-	# saw a truncated WAV, which is how a render ended up recording silence
-	# forever. write_wav is atomic now; this keeps the work from doubling too.
+	# Re-entrancy guard: this method awaits a take render, and the native file dialog can deliver file_selected more than once.
+	# Two overlapping runs would render the same take file from two threads and a reader in another process could open it
+	# mid-write.
 	if _prepping:
 		return
-	# THE UPLOAD IS DECIDED WITH THE PATH, by the note's YouTube card, and the sign-in starts now -
-	# while the person is still at the machine to answer the browser - asking for what this upload
-	# needs (a playlist needs more than an upload), and runs beside the render rather than in front of it.
+	# The upload is decided with the path, by the note's YouTube card, and the sign-in starts now, while the person is still
+	# at the machine to answer the browser, asking for what this upload needs (a playlist needs more than an upload). It runs
+	# beside the render rather than in front of it.
 	var peek := _upload_peek()
 	_upload_this = not peek.is_empty() and not peek.has("refused")
 	_upload_meta = {}
@@ -880,12 +784,9 @@ func _on_path(out_path: String) -> void:
 	if _upload_this:
 		_check_sign_in(Callable(), scopes_for(peek), str(peek.get("channel", "")), str(peek.get("channel_name", "")),
 			str(peek.get("client", "")))
-	# _song was resolved at click time (_on_export) - the live audio path. A
-	# synthesis session without a finished take renders one NOW, after the
-	# quality and path are committed: the provider is a coroutine that runs
-	# the synthesis on a worker thread (rendering it on the main thread froze
-	# the window while the audio kept playing), and awaiting a coroutine
-	# through a Callable is verified to work - the await is required.
+	# _song was resolved at click time (_on_export): the live audio path. A synthesis session without a finished take renders
+	# one now, after quality and path are committed: the provider is a coroutine that runs the synthesis on a worker thread,
+	# and the await is required.
 	if _song.is_empty() and take_provider.is_valid():
 		_prepping = true
 		_set_status("⏳  Rendering the take…", Color(0.95, 0.92, 0.7))
@@ -909,16 +810,14 @@ func _on_path(out_path: String) -> void:
 		if _upload_meta.is_empty():
 			_upload_this = false
 			push_warning("ghost export: the mode described nothing to upload - the video is only saved")
-	# Capture the duration NOW, while the song is loaded: the transcode (esp. 4K) runs for minutes, by
-	# which point the live song may have ended/unloaded and Spectrum.song_length() would read 0.
+	# Capture the duration now: the transcode runs for minutes, and the live song may have ended and Spectrum.song_length()
+	# read 0.
 	_song_dur = Spectrum.song_length()
 	if _song_dur <= 0.0 and _song.get_extension().to_lower() == "wav":
-		# a provider-rendered take Spectrum hasn't finished streaming: the file itself says how
-		# long it is ([method _wav_seconds]).
+		# a provider-rendered take Spectrum has not finished streaming: the file itself says how long it is ([method
+		# _wav_seconds])
 		_song_dur = _wav_seconds(_song)
-	# Say what was decided, in the terminal. Every export failure so far has been
-	# a disagreement about WHICH file and HOW LONG - a stale path, or a duration
-	# read at the wrong sample rate that cut the render in half - and neither is
+	# Say what was decided, in the terminal: which file and how long are what export failures disagree about, and neither is
 	# visible from the UI.
 	print("ghost/export: take=%s  %.2fs @ %d Hz  ->  %s"
 		% [_song, _song_dur, _wav_rate(_song) if _song.get_extension().to_lower() == "wav" else 0, _out])
@@ -926,10 +825,9 @@ func _on_path(out_path: String) -> void:
 		printerr("ghost/export: WARNING - the take reads as %.2fs, so the render "
 			% _song_dur + "will stop there. Check the text in the panel.")
 
-	# Movie Maker records to this intermediate AVI (beside the final file, on the same disk), and it
-	# is encoded to the chosen .mp4 as it is written - on Linux given back as it goes and taken out
-	# of the folder (see _hold). The AVI is only ever scratch - it never ships, so its 4 GB/RIFF
-	# index limit (which corrupts 4K exports) can't reach the user.
+	# Movie Maker records to this intermediate AVI (beside the final file, on the same disk), encoded to the chosen .mp4 as it
+	# is written and on Linux taken out of the folder (see _hold). It is scratch only, so its 4 GB RIFF limit never reaches
+	# the user.
 	_avi = _out.get_basename() + ".render.avi"
 	_cache = Bake.cache_path(_song)
 	if FileAccess.file_exists(_cache):
@@ -961,14 +859,10 @@ func _start_render() -> void:
 	_pct = 0
 	_begin_scratch()
 	Bake.write_progress(0.0)
-	# Movie Maker locks its output resolution to the project's viewport size at engine
-	# startup, before any script runs - so the only way to drive it is override.cfg, which
-	# Godot reads from the project root at boot. We write the chosen resolution there (in
-	# "viewport" stretch mode, so the render is an offscreen buffer of exactly that size,
-	# independent of the physical display - true 4K on a 1080p monitor). It is removed
-	# when the render finishes, restoring the live window to its native canvas_items mode.
-	# Render at the supersampled size; the transcode resolves it back to w x h (see QUALITIES).
-	# Kept EVEN, because yuv420p needs even dimensions and a half-pixel would be rejected.
+	# Movie Maker locks its output resolution to the project's viewport size at engine startup, so the only way to drive it is
+	# override.cfg, which Godot reads from the project root at boot. The chosen resolution is written there in "viewport"
+	# stretch mode (an offscreen buffer of exactly that size, independent of the display) and removed when the render
+	# finishes. Render at the supersampled size; the transcode resolves it back to w x h (see QUALITIES).
 	_write_override(_render_w(), _render_h())
 	var exe := OS.get_executable_path()
 	var args := Subprocess.own_log("render") + Boot.project_args() + PackedStringArray([
@@ -979,61 +873,34 @@ func _start_render() -> void:
 		var sp := Stitch.span(float(_stretch["t0"]), float(_stretch["t1"]), _song_dur)
 		_stretch["span"] = sp
 		args.append_array(PackedStringArray(["--from", "%.3f" % sp.x, "--until", "%.3f" % sp.y]))
-	# THE SEED: pin it only when there is a live session to reproduce. Without
-	# one (exporting a take straight from the belt - no cast, no show watched
-	# yet) passing session_seed() would pin the render to 0, which is not a
-	# session, just a constant. Omitting --seed lets the render resolve the
-	# seed the way every songless boot does: from the AUDIO'S OWN fingerprint
-	# (see Director._resolve_seed) - spectral determinism, so the same take
-	# always renders the same show, and the show belongs to the voice.
+	# The seed: pin it only when there is a live session to reproduce (passing session_seed() otherwise would pin the render to
+	# 0). Omitting --seed lets the render resolve it from the audio's own fingerprint (see Director._resolve_seed), so the
+	# same take always renders the same show.
 	var seed_val := Director.session_seed()
 	if seed_val != 0:
 		args.append("--seed")
 		args.append(str(seed_val))
-	# THE MEDIUM, passed explicitly rather than left to the render's own config read. The
-	# saved setting would usually agree - the render process loads the same user://ghost.cfg
-	# this one wrote - but `--medium` overrides that setting for one run, and a render
-	# started from such a session must reproduce THE SESSION, not the remembered default.
+	# The medium, passed explicitly: `--medium` overrides the saved setting for one run, and the render must reproduce the
+	# session, not the remembered default.
 	args.append("--medium")
 	args.append(Director.resolved_medium())
-	# ...and THE FRAME, for the same reason
+	# ...and the frame, for the same reason
 	args.append("--frame")
 	args.append(Director.resolved_frame())
 	var board := _storyboard_arg()
 	if not board.is_empty():
 		args.append("--storyboard")
 		args.append(board)
-	# "Automate the Synthesis game (record the UI)" was checked: tell the render
-	# to open the Synthesis panel over the take and let it play itself (Throw /
-	# Pull / reel / hold-or-fold on timers). Without this flag the render runs
-	# clean, exactly as a plain song does.
+	# "Automate the Synthesis game (record the UI)" was checked: tell the render to open the Synthesis panel over the take and
+	# let it play itself (Throw / Pull / reel / hold-or-fold on timers).
 	if _synth_autoplay:
 		args.append("--synth-autopilot")
-	# A DISPLAY OF ITS OWN, so the desktop cannot freeze the recording.
+	# A display of its own, so the desktop cannot freeze the recording. Godot does not render while the compositor is not
+	# drawing its window (`window_can_draw()`), and the movie writer then re-captures the last buffer while the audio clock
+	# advances: the film holds a still for as long as the window is minimized, covered or throttled. On its own X display
+	# there is no compositor; the NVIDIA driver still renders on the real GPU (tests/run_quiet.sh relies on that).
 	#
-	# THE BUG THIS IS FOR, reported as "the newly-exported video is freezing in some places -
-	# the scene and subtitles pause while the audio continues uninterrupted, and it recovers
-	# after 20 seconds or so". Measured on the delivered file: a subtitle card sitting
-	# nineteen seconds past the end of its own sentence with the karaoke fill frozen
-	# mid-word, then snapping back into sync, while the audio ran smoothly through it.
-	#
-	# Godot does not render while the compositor is not drawing its window
-	# (`window_can_draw()`), and the movie writer then re-captures the LAST BUFFER while the
-	# audio clock keeps advancing - so the film holds a still for exactly as long as the
-	# window was minimized, covered or throttled. boot.gd has carried that explanation since
-	# the "4K exports partially freeze for seconds" bug, along with the remedy it could not
-	# reach at the time: "avoidable without a virtual display; this gets it as close as
-	# possible". Shrinking the window to a 480x270 floater got close - it is drawable, and it
-	# is also easy to bury under another window for an hour without thinking about it.
-	#
-	# A render that takes six hours cannot ask for the machine to be left alone for six
-	# hours. On its own X display there is no compositor, nothing to minimize and nothing to
-	# throttle: the NVIDIA driver still renders on the real GPU (tests/run_quiet.sh has
-	# relied on exactly that for the pixel gates), and the desktop is free.
-	#
-	# It is NOT required. Without xvfb the render works as it always has and the caller is
-	# told what that costs, because a silent fallback here is a six-hour job that may quietly
-	# come out wrong.
+	# Not required: without xvfb the render works, and the caller is told the cost.
 	var runner := exe
 	var run_args := args
 	var virtual := virtual_display(exe, args)
@@ -1042,8 +909,7 @@ func _start_render() -> void:
 		run_args = virtual.slice(1)
 		print("ghost export: rendering on a virtual display - the desktop cannot freeze it")
 	else:
-		# xvfb-run is Linux-only; on Windows and macOS there is no virtual display to offer,
-		# so the advice is the whole message there.
+		# xvfb-run is Linux-only; elsewhere the advice is the whole message.
 		var fix := ("  " + Deps.hint("xvfb")) if OS.get_name() == "Linux" else ""
 		push_warning("ghost export: no virtual display; the render window must stay drawable "
 			+ "for the WHOLE render. Minimizing or burying it freezes the recorded picture "
@@ -1066,18 +932,13 @@ func _start_render() -> void:
 		_fail("⚠  Could not start the render process")
 
 
-## The argv that runs `exe args` on a virtual display of its own (see [method _start_render]), or
-## [] without xvfb-run. `-a` picks a free display number; the screen must be at least the size of
-## the WINDOW (the 480x270 floater), never of the recorded viewport - the movie records the
-## viewport, which is independent of the window in "viewport" stretch mode. [param screen] is for
-## a caller that records the window itself ([Showcase]).
+## The argv that runs `exe args` on a virtual display of its own (see [method _start_render]), or [] without xvfb-run. `-a`
+## picks a free display number; the screen must be at least the size of the window (the 480x270 floater), never of the
+## recorded viewport. [param screen] is for a caller that records the window itself ([Showcase]).
 ##
-## GODOT DIES WITH ITS WRAPPER. Subprocess binds xvfb-run's shell to ghost, but a pact does not
-## pass to the shell's children: stopping a render killed the shell and left Godot rendering and
-## Xvfb running (measured 2026-10-06) - a render that could not be stopped, writing on into a
-## scratch nothing reads. So Godot gets a pact with the shell, and Xvfb ends [constant
-## XVFB_LINGER] seconds after its last client leaves (the delay covers any connection a client
-## opens and closes before its own).
+## Godot dies with its wrapper: Subprocess binds xvfb-run's shell to ghost, but a pact does not pass to the shell's
+## children, so Godot gets a pact with the shell, and Xvfb ends [constant XVFB_LINGER] seconds after its last client leaves
+## (the delay covers a connection a client opens and closes before its own).
 static func virtual_display(exe: String, args: PackedStringArray, screen := Vector2i(960, 540)) -> PackedStringArray:
 	var xvfb := Deps.resolve("xvfb-run")
 	if xvfb.is_empty():
@@ -1089,61 +950,40 @@ static func virtual_display(exe: String, args: PackedStringArray, screen := Vect
 	return argv
 
 
-# Step 3: transcode the scratch AVI into the chosen MP4 (H.264 + AAC) via ffmpeg. This is what the
-# user actually keeps: MP4 uses 64-bit offsets so its index is valid at any size (Godot's AVI is
-# 32-bit and corrupts past 4 GB, which is why 4K exports had a broken index and glitchy audio), and
-# H.264 is ~10-20x smaller than the MJPEG intermediate. `-fflags +genpts` re-derives timestamps so a
-# damaged AVI index is bypassed; audio is re-encoded from decoded PCM, so it comes out clean.
+# Step 3: transcode the scratch AVI into the chosen MP4 (H.264 + AAC) via ffmpeg. `-fflags +genpts` re-derives timestamps so
+# a damaged AVI index is bypassed; audio is re-encoded from decoded PCM.
 func _start_transcode(follow := false) -> void:
 	var dur := _song_dur
 	if not follow:
 		_pct = 0              # reset from the render's 100% so "Finalizing" starts fresh, not stuck full
 	_progress_reset()
-	# COLOR SIGNALING. Godot's MJPEG is yuvj420p - FULL range, BT.601 matrix - and ffmpeg passes
-	# those pixels through untouched (measured: blacks bit-exact, no gamma, mean delta -0.33 of a
-	# code value). What it did NOT do was SAY so: primaries and transfer came out "unspecified" and
-	# the container had no `colr` box at all, so a player reading only the container guesses - and
-	# for 1080p the guess is BT.709 LIMITED range. On this content that guess is ruinous rather
-	# than subtle, because ghost is nearly all shadow: 46-91% of pixels sit below code 16, so a
-	# limited-range decoder crushes a quarter to a half of the frame to pure black (measured 25.0%
-	# of one frame lost outright, mean luma 17.7 -> 8.3). That is the "muddy, washed out, something
-	# is wrong" half of a bad-looking export, with nothing actually wrong in the pixels.
+	# Color signaling. Godot's MJPEG is yuvj420p (full range, BT.601) and ffmpeg passes the pixels through untouched, but did
+	# not say so: without a `colr` box a player guesses BT.709 limited range for 1080p, which crushes the quarter to half of
+	# the frame below code 16 to black (this content is mostly shadow).
 	#
-	# `setparams` is required rather than decorative: the bare -color_primaries/-color_trc OUTPUT
-	# options are silently ignored by ffmpeg 8.x (verified - they left primaries=2, trc=2 in the
-	# VUI). setparams stamps the FRAMES, which is what the encoder reads. Pixels are bit-identical
-	# either way; the file grows by 19 bytes.
-	#
-	# The matrix stays bt470bg (BT.601) because that is genuinely what Godot's writer used -
-	# converting it to 709 costs 6.2 dB for nothing. And do NOT reach for ffmpeg's `colorspace`
-	# filter to force limited range: it CLAMPS instead of scaling here, pinning 92% of the frame to
-	# code 16 and collapsing PSNR from 46.8 to 29.0 dB while exiting 0.
+	# `setparams` is required: the bare -color_primaries/-color_trc output options are silently ignored by ffmpeg 8.x;
+	# setparams stamps the frames, which the encoder reads. The matrix stays bt470bg because that is what Godot's writer
+	# used. Do not use ffmpeg's `colorspace` filter to force limited range: it clamps instead of scaling.
 	var gop := int(_quality.fps * Stitch.GOP_S)   # a keyframe every 2 s - YouTube's guidance (x264 defaults to 250), and where a stretch is cut ([Stitch])
-	# THE DOWNSCALE is the antialiasing resolve (see QUALITIES). lanczos rather than bicubic: bicubic
-	# scores marginally higher on edge PSNR but lands ~18% BELOW ground truth in near-Nyquist energy,
-	# i.e. slightly soft - and the complaint here was blurry AND aliased, so the kernel that keeps the
-	# most true detail wins. It must come BEFORE setparams, which stamps the outgoing frames.
+	# The downscale is the antialiasing resolve (see QUALITIES). lanczos rather than bicubic, which lands ~18% below ground
+	# truth in near-Nyquist energy (slightly soft). It must come before setparams, which stamps the outgoing frames.
 	var vf := "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt470bg:range=pc"
 	if _render_w() != int(_quality.w):
 		vf = "scale=%d:%d:flags=lanczos," % [int(_quality.w), int(_quality.h)] + vf
-	# FOLLOWING THE RENDER: read the AVI as it grows, and take a quiet file as the end of it
+	# following the render: read the AVI as it grows, and take a quiet file as the end of it
 	var input := PackedStringArray(["-i", _avi])
 	if follow:
 		input = PackedStringArray(["-nostdin", "-follow", "1", "-rw_timeout", str(FOLLOW_TIMEOUT_US),
 			"-i", "file:" + _avi])
 	var args := PackedStringArray(["-y", "-fflags", "+genpts"]) + input + PackedStringArray([
 		"-vf", vf,
-		# crf 20 is NOT the quality floor - the MJPEG intermediate is, and crf 16 measured +0.1 dB
-		# for +51% size. What DOES pay is `-tune grain`: on bright frames the default settings smear
-		# ghost's fine procedural detail, retaining 93.3% of the source's high-frequency energy,
-		# and grain tuning brings that to 99.6% for +1% file size. Its parts do far less alone
-		# (no-dct-decimate +0.03 dB, deadzone +0.19, chroma-qp-offset +0.35) - the gain is the set.
-		# `medium` rather than `fast` because grain tuning needs the extra analysis to pay off; the
-		# encode is a small share of export time next to the render itself.
+		# crf 20: the MJPEG intermediate is the quality floor (crf 16 gains +0.1 dB for +51% size). `-tune grain` is what pays:
+		# the default settings smear fine procedural detail (93.3% of high-frequency energy kept, 99.6% with grain tuning for
+		# +1% size). `medium` rather than `fast` because grain tuning needs the extra analysis.
 		"-c:v", "libx264", "-crf", "20", "-preset", "medium", "-tune", "grain", "-pix_fmt", "yuv420p",
 		"-color_range", "pc", "-colorspace", "bt470bg",
 		"-color_primaries", "bt709", "-color_trc", "bt709", "-chroma_sample_location", "center",
-		# +faststart puts the index at the front: Instagram's API requires it, and nothing minds it
+		# +faststart puts the index at the front: Instagram's API requires it
 		"-g", str(gop), "-keyint_min", str(gop), "-movflags", "+write_colr+faststart",
 		"-c:a", "aac", "-b:a", "192k",
 		"-progress", ProjectSettings.globalize_path(_PROGRESS_FILE), "-nostats", "-loglevel", "error",
@@ -1161,23 +1001,21 @@ func _start_transcode(follow := false) -> void:
 		_state = "transcoding"
 		print("ghost: transcoding (pid %d, %.0fs) %s -> %s" % [_transcode_pid, dur, _avi, _out])
 	else:
-		# No ffmpeg: we can't produce the MP4. Leave the raw AVI so the render isn't wasted.
+		# No ffmpeg: the MP4 cannot be made. Leave the raw AVI so the render is not wasted.
 		_state = "done"
 		_done_t = 30.0
 		_set_status("⚠  ffmpeg not found; raw file kept: %s" % _avi, Color(1.0, 0.7, 0.6))
 
 
-## Release the AVI's bytes the following encoder has already read. Linux only (a punched hole
-## frees the blocks while the file keeps its length, so Movie Maker writes on undisturbed); the
-## encoder's read position comes from /proc. Elsewhere the encode still follows the render, it
-## just cannot give the space back until the end.
+## Release the AVI's bytes the following encoder has already read. Linux only (a punched hole frees the blocks while the file
+## keeps its length); the encoder's read position comes from /proc. Elsewhere the encode still follows the render but the
+## space comes back only at the end.
 func _punch_behind_encoder() -> void:
 	if OS.get_name() != "Linux" or _transcode_pid <= 0 or not Deps.has("fallocate"):
 		return
-	# ONLY WHILE THE HEADER SAYS "SIZE UNKNOWN". Mid-render Movie Maker writes 0 for the RIFF
-	# size (measured), so the encoder can only read straight through and everything behind its
-	# position is done with. A finished header names the index at the end, and a reader that
-	# jumps there would have its unread data released under it - never release then.
+	# Only while the header says "size unknown": mid-render Movie Maker writes 0 for the RIFF size, so the encoder reads
+	# straight through and everything behind it is done with. A finished header names the index at the end, and a reader that
+	# jumps there would have its unread data released under it.
 	if _riff_size() != 0:
 		return
 	var pos := _encoder_read_pos()
@@ -1210,7 +1048,7 @@ func _encoder_read_pos() -> int:
 		var link := d.read_link(dir.path_join(fd))
 		if link != want and link != want + " (deleted)":
 			continue
-		# READ, NOT SIZED: /proc files report a length of 0, so a whole-file read returns nothing
+		# read, not sized: /proc files report a length of 0
 		var f := FileAccess.open("/proc/%d/fdinfo/%s" % [_transcode_pid, fd], FileAccess.READ)
 		if f == null:
 			return -1
@@ -1220,8 +1058,7 @@ func _encoder_read_pos() -> int:
 	return -1
 
 
-## A fresh scratch for a new render. A file already at the path goes first: the live encoder
-## starts on whatever is there, and one left by an earlier run would be taken for this render's.
+## A fresh scratch for a new render. A file already at the path goes first: the live encoder starts on whatever is there.
 func _begin_scratch() -> void:
 	_drop_scratch(false)
 	_unlinked = false
@@ -1233,10 +1070,9 @@ func _begin_scratch() -> void:
 		DirAccess.remove_absolute(_avi)
 
 
-## Hold the scratch open and learn which descriptor holds it, so it can still be measured and
-## released once its name is gone (see [member _hold]). The render and the encoder are other
-## processes, so the one descriptor of ghost's that names the scratch is this one. Linux only:
-## elsewhere there is no /proc to reach it by, and it keeps its name to the end.
+## Hold the scratch open and learn which descriptor holds it, so it can still be measured and released once its name is
+## gone (see [member _hold]). The render and the encoder are other processes, so the one descriptor of ghost's that names
+## the scratch is this one. Linux only (needs /proc); elsewhere the scratch keeps its name to the end.
 func _hold_scratch() -> void:
 	_drop_scratch(false)
 	if OS.get_name() != "Linux":
@@ -1253,8 +1089,7 @@ func _hold_scratch() -> void:
 			return
 
 
-## Take the scratch's name out of the folder. Only once a release has worked through ghost's own
-## handle: a scratch that cannot shrink keeps its name, so it can at least be seen and deleted.
+## Take the scratch's name out of the folder, only once a release has worked through ghost's own handle.
 func _unlink_scratch() -> void:
 	if _unlinked or _held.is_empty():
 		return
@@ -1263,8 +1098,8 @@ func _unlink_scratch() -> void:
 		print("ghost: the scratch is given back as it is encoded - %s is out of the folder" % _avi.get_file())
 
 
-## Where fallocate reaches the scratch: through ghost's own descriptor when there is one -
-## checked to still be the scratch, so a release can never land on another file - else by name.
+## Where fallocate reaches the scratch: through ghost's own descriptor when there is one (checked to still be the scratch),
+## else by name.
 func _release_target() -> String:
 	var want := ProjectSettings.globalize_path(_avi)
 	if _held.is_empty():
@@ -1274,9 +1109,7 @@ func _release_target() -> String:
 	return _held if link == want or link == want + " (deleted)" else ""
 
 
-## Let go of the scratch: close ghost's handle - once its name is gone, the kernel frees it when
-## the render and the encoder have closed theirs too - and with [param remove], delete it if it
-## still has a name.
+## Let go of the scratch: close ghost's handle; with [param remove], delete it if it still has a name.
 func _drop_scratch(remove := true) -> void:
 	if _hold != null:
 		_hold.close()
@@ -1290,8 +1123,7 @@ func _scratch_len() -> int:
 	return _hold.get_length() if _hold != null else _file_size(_avi)
 
 
-## The RIFF size in the scratch's header: 0 while Movie Maker is still writing (it finishes the
-## header last), -1 when it cannot be read.
+## The RIFF size in the scratch's header: 0 while Movie Maker is still writing, -1 when it cannot be read.
 func _riff_size() -> int:
 	var f := _hold if _hold != null else FileAccess.open(_avi, FileAccess.READ)
 	if f == null:
@@ -1300,10 +1132,9 @@ func _riff_size() -> int:
 	return f.get_32()
 
 
-## THE ENCODER QUIT WHILE THE RENDER WENT ON - the header is unfinished, so Movie Maker is still
-## writing. A following encoder ends itself only after FOLLOW_TIMEOUT_US with nothing new, so this
-## is a render that stalled that long, or ffmpeg failing. Left alone, the render fills a file
-## nobody reads (unseen, once its name is gone) and the export then calls the short MP4 saved.
+## The encoder quit while the render went on: the header is unfinished, so Movie Maker is still writing. A following
+## encoder ends itself only after FOLLOW_TIMEOUT_US with nothing new, so this is a render stalled that long, or ffmpeg
+## failing. Left alone, the render fills a file nobody reads and the export calls the short MP4 saved.
 func _encoder_quit_early() -> void:
 	if not _released:
 		# nothing given back yet, so the AVI is whole: let the render finish and encode it then
@@ -1328,9 +1159,8 @@ func _progress_reset() -> void:
 		f.close()
 
 
-# ffmpeg writes `out_time_us=<microseconds>` lines to the progress file; the fraction of the song's
-# duration (captured at export start) it has reached is the transcode percent. Robust to partial/mid-
-# write reads, and to the live song having ended (we use the captured `_song_dur`, not a live read).
+# ffmpeg writes `out_time_us=<microseconds>` lines to the progress file; the fraction of the captured song duration
+# (`_song_dur`) it has reached is the transcode percent. Tolerates partial reads.
 func _read_transcode_pct() -> int:
 	if _song_dur <= 0.0 or not FileAccess.file_exists(_PROGRESS_FILE):
 		return _pct
@@ -1346,15 +1176,9 @@ func _read_transcode_pct() -> int:
 	return _pct
 
 
-# Godot's AVI writer keeps 32-bit RIFF/LIST size fields, and a 4K render crosses
-# 4 GiB in a few minutes of video - past that the written sizes WRAP (mod 2^32) and
-# the container lies about where the frame data ends, even though every 00db/01wb
-# chunk after it is written correctly all the way to EOF (verified by walking a 5 GB
-# artifact chunk-by-chunk). Demuxers that trust those fields (players especially -
-# their seeks also hit the equally-wrapped idx1 offsets) stall or repeat frames.
-# The repair is two words: RIFF size and the movi LIST size become 0 - "size
-# unknown, read to end of file" - turning any demux into a clean sequential walk of
-# the intact chunks. No-op for files under 4 GiB (their sizes are correct).
+# Godot's AVI writer keeps 32-bit RIFF/LIST size fields; past 4 GiB the sizes wrap (mod 2^32) while the chunks after them
+# stay correct. The repair sets the RIFF size and the movi LIST size to 0 ("size unknown, read to end of file"), so any
+# demux becomes a sequential walk of the intact chunks. No-op under 4 GiB.
 func _repair_avi_sizes(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ_WRITE)
 	if f == null:
@@ -1380,9 +1204,8 @@ func _repair_avi_sizes(path: String) -> void:
 	f.close()
 
 
-## The sample rate a WAV declares, from its fmt chunk (canonical 44-byte header,
-## rate at byte 24). Falls back to the procedural synthesizer's rate if the file
-## cannot be read, which is the only rate that was ever assumed before.
+## The sample rate a WAV declares, from its fmt chunk (canonical 44-byte header, rate at byte 24). Falls back to the
+## procedural synthesizer's rate if the file cannot be read.
 static func _wav_rate(path: String) -> int:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null or f.get_length() < 44:
@@ -1393,13 +1216,9 @@ static func _wav_rate(path: String) -> int:
 	return rate if rate > 0 else Voice.SR
 
 
-## HOW LONG A PCM WAV PLAYS: its `data` chunk over the byte rate its `fmt ` chunk gives (rate x
-## channels x bytes a sample), the chunks walked in case others come between; 0 when unreadable.
-## Never from an assumed format: a take at Voice.SR (44100) is only the procedural synthesizer's - a
-## neural voice renders at its model's rate (Piper's 22050), which read as HALF its length and stopped
-## the render halfway ("it only produced 5 seconds") - and a take is STEREO when a voice leans
-## ([VoiceFX]), which read as mono was twice its length: a nine-minute lesson exported as eighteen
-## (2026-10-16).
+## How long a PCM WAV plays: its `data` chunk over the byte rate its `fmt ` chunk gives (rate x channels x bytes a sample),
+## the chunks walked in case others come between; 0 when unreadable. Never from an assumed format: a neural voice renders at
+## its model's rate (Piper's 22050), and a take is stereo when a voice leans ([VoiceFX]).
 static func _wav_seconds(path: String) -> float:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null or f.get_length() < 12 or f.get_buffer(4).get_string_from_ascii() != "RIFF":
@@ -1432,16 +1251,14 @@ func _file_size(path: String) -> int:
 	return s
 
 
-# override.cfg lives in the project root only for the duration of a render; Godot reads
-# it at startup to override project.godot (here: the export's output resolution + stretch
-# mode). _ready() also clears any stale copy left by a render that never exited cleanly.
+# override.cfg lives in the project root only for the duration of a render; Godot reads it at startup to override
+# project.godot (the export's output resolution and stretch mode). _ready() also clears a stale copy.
 func _override_path() -> String:
 	return Boot.project_dir().path_join("override.cfg")
 
 
-## The size the SCENE is rendered at - the output size times the preset's supersample factor,
-## rounded to an even number of pixels (yuv420p cannot encode an odd dimension). The output size
-## itself is `_quality.w/h`; ffmpeg resolves one to the other.
+## The size the scene is rendered at: the output size times the preset's supersample factor, rounded to an even number of
+## pixels (yuv420p cannot encode an odd dimension). The output size is `_quality.w/h`; ffmpeg resolves one to the other.
 func _render_w() -> int:
 	return _even(int(_quality.w) * float(_quality.get("ss", 1.0)))
 
@@ -1459,8 +1276,8 @@ static func qualities_for(frame: String) -> Array:
 	return PORTRAIT_QUALITIES if frame == "portrait" else QUALITIES
 
 
-## The quality items as the show's frame has them: a portrait show's two presets in the first two
-## places, the 4K one grayed with why. The items keep their ids, so nothing else in the menu moves.
+## The quality items as the show's frame has them: a portrait show's two presets in the first two places, the 4K one grayed
+## with why. The items keep their ids.
 func _label_qualities() -> void:
 	var list := qualities_for(Director.resolved_frame())
 	for i in QUALITIES.size():
@@ -1473,12 +1290,10 @@ func _label_qualities() -> void:
 		_quality_menu.set_item_tooltip(at, "" if have else "No 4K portrait: Shorts stop at 1080p and Instagram at 1920 pixels wide.")
 
 
-## The OS window an export records in, and the override's stretch: a window SHAPED LIKE THE FRAME.
-## Under the project's `expand` aspect Godot widens the viewport to the window's shape: a 1080x1920
-## render in the old 480x270 window laid the show out in a 3413x1920 view, and Movie Maker recorded
-## its middle 1080 - the file the size asked, the edges of the picture gone (next/notes.md, "the
-## trap", measured). So a portrait override shapes the window like the frame and says
-## `aspect="keep"`. A landscape one is written exactly as it always was.
+## The OS window an export records in, and the override's stretch: a window shaped like the frame. Under the project's
+## `expand` aspect Godot widens the viewport to the window's shape, so a 1080x1920 render in a 480x270 window would lose the
+## edges of the picture (next/notes.md, "the trap"). A portrait override shapes the window like the frame and says
+## `aspect="keep"`; a landscape one is written plainly.
 static func override_text(w: int, h: int) -> String:
 	var portrait := h > w
 	var win := Vector2i(270, 480) if portrait else Vector2i(480, 270)
@@ -1488,10 +1303,9 @@ static func override_text(w: int, h: int) -> String:
 	return t + "\n[editor]\n\nmovie_writer/video_quality=1.0\n"
 
 
-## WHAT THE RENDER IS TOLD TO WALK, "" for the seeded show: the note's storyboard, as its panel
-## plans it ([member show_provider]), else the one the Director is walking. A file's is its name or
-## path, so the render loads the same file; one a note keeps in its own block is written out now,
-## in its loaded form (the render needs none of the note), beside the render's other scratch.
+## What the render is told to walk, "" for the seeded show: the note's storyboard as its panel plans it ([member
+## show_provider]), else the one the Director is walking. A file's is its name or path; one a note keeps in its own block is
+## written out in its loaded form beside the render's other scratch.
 func _storyboard_arg() -> String:
 	var plan: Variant = show_provider.call() if show_provider.is_valid() else {}
 	var board: Variant = (plan as Dictionary).get("board", {}) if plan is Dictionary else {}
@@ -1520,17 +1334,12 @@ func _write_override(w: int, h: int) -> void:
 	if f == null:
 		push_warning("ghost export: could not write override.cfg (resolution may default)")
 		return
-	# viewport_* set the RENDERED (recorded) resolution; window_*_override shrink the
-	# OS window itself to an unobtrusive floater. In "viewport" stretch mode the two
-	# are independent - true 4K on any monitor, tiny window. The window must stay a
-	# normal, drawable window: minimizing it makes Godot skip rendering and the movie
-	# records frozen frames (see boot.gd).
-	# AND THE INTERMEDIATE'S QUALITY (the [editor] half of [method override_text]) - see the
-	# matching note in MaskExport.write_override. Godot writes .avi as MJPEG in yuvj420p
-	# at `video_quality` 0.75, so the scratch file is a lossy, chroma-subsampled generation before
-	# x264 ever sees a frame. Measured on a real frame: 42.6 dB through the default intermediate
-	# against 45.5 for a single generation, and 44.3 at 1.0. The bigger scratch file is deleted
-	# seconds later.
+	# viewport_* set the rendered (recorded) resolution; window_*_override shrink the OS window to a floater. In "viewport"
+	# stretch mode the two are independent. The window must stay drawable: minimizing it makes Godot skip rendering (see
+	# boot.gd).
+	# The intermediate's quality (the [editor] half of [method override_text]; see MaskExport.write_override): Godot writes
+	# .avi as MJPEG in yuvj420p at `video_quality` 0.75, a lossy generation before x264 sees a frame (42.6 dB through the
+	# default intermediate against 45.5 for a single generation). The bigger scratch file is deleted seconds later.
 	f.store_string(override_text(w, h))
 	f.close()
 
@@ -1555,8 +1364,7 @@ func _set_status(text: String, color: Color) -> void:
 	var t := text + _sign_note()
 	if t != _status.text:
 		_status.text = t
-		# back to one line's height, AFTER the text: a label grown by a long line does not shrink
-		# by itself, and reset before the new text it grows straight back to the old one's height
+		# back to one line's height after the text: a label grown by a long line does not shrink by itself
 		_status.offset_top = -110.0 - _inset
 	_status.add_theme_color_override("font_color", color)
 	_status.visible = true
@@ -1564,8 +1372,7 @@ func _set_status(text: String, color: Color) -> void:
 
 # --- YouTube -------------------------------------------------------------------------------------
 
-## While an export that is going to YouTube is being made, how its sign-in stands - on the progress
-## line, the one thing on screen for the length of the render.
+## While an export going to YouTube is being made, how its sign-in stands, on the progress line.
 func _sign_note() -> String:
 	if not _upload_this or not (_prepping or _state in ["baking", "rendering", "transcoding"]):
 		return ""
@@ -1582,9 +1389,8 @@ func _sign_note() -> String:
 	return ""
 
 
-## Is a mode's take being made for an export right now? The take is a coroutine on the mode's
-## panel ([member take_provider]), so the mode must not be left meanwhile - the export would wait on
-## it forever (see main.leave_blocker).
+## Is a mode's take being made for an export right now? The take is a coroutine on the mode's panel ([member
+## take_provider]), so the mode must not be left meanwhile (see main.leave_blocker).
 func preparing() -> bool:
 	return _prepping
 
@@ -1605,23 +1411,19 @@ static func scopes_for(meta: Dictionary) -> Array:
 
 # --- what a YouTube card asks of the exporter -----------------------------------------------------
 #
-# The sign-in, its dialog and the Google client's file dialog stay here, beside the upload that
-# waits on them: the exporter outlives every note, and an upload's sign-in is the same one a card
-# starts. A card ([YouTubeCard]) calls these and reads [method youtube].
+# The sign-in, its dialog and the Google client's file dialog stay here, beside the upload that waits on them: the exporter
+# outlives every note. A card ([YouTubeCard]) calls these and reads [method youtube].
 
-## The sign-in and the upload (youtube.gd), for a card to read its phase and progress, and to list
-## playlists through.
+## The sign-in and the upload (youtube.gd), for a card to read its phase and progress and to list playlists through.
 func youtube() -> Node:
 	return _yt
 
 
-## SET UPLOADS UP, as far as they need, visibly: the sign-in of channel [param channel] (called
-## [param named]) - "" for a new one, whichever the person picks - asking for [param scopes], when
-## none is kept or it may not do all of them; and the Google client file first when a sign-in is
-## needed and none is kept. A browser goes through the client [param through] names, "" for the channel's
-## own ([method YouTube.client_for]); [param move] opens it even for a channel still signed in, which
-## keeps that sign-in unless this one lands. [param then] runs once signed in, handed the channel's id;
-## nothing runs on a cancel or a failure (the dialog says why).
+## Sets uploads up, visibly: the sign-in of channel [param channel] (called [param named]; "" for a new one) asking for
+## [param scopes], when none is kept or it may not do all of them; and the Google client file first when a sign-in is
+## needed and none is kept. A browser goes through the client [param through] names, "" for the channel's own ([method
+## YouTube.client_for]); [param move] opens it even for a channel still signed in, which keeps that sign-in unless this one
+## lands. [param then] runs once signed in, handed the channel's id; nothing runs on a cancel or a failure.
 func youtube_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel := "", named := "", through := "", move := false) -> void:
 	_check_sign_in(then, scopes, channel, named, through, move)
 
@@ -1647,16 +1449,13 @@ func youtube_busy() -> bool:
 	return _state in ["preparing", "upload_wait", "uploading"]
 
 
-## THE SIGN-IN AN UPLOAD NEEDS, settled where the person can see it: channel [param channel]'s kept
-## sign-in is renewed (which proves Google still honors it), and one that is missing, has lapsed or
-## may not do all of [param scopes] - or a new channel's, [param channel] "" - opens the browser beside
-## a dialog that says what is awaited, opens the page again, copies its link, names Google's usual
-## block, and cancels; with no Google client kept, its file is asked for first. A sign-in that lands
-## on another channel than [param channel] (called [param named]) is kept for that one, and fails
-## this, saying so. A newer check replaces one still waiting. [param then] runs once signed in, handed
-## the channel (a card's tick, its playlists, its "+"); the export's own check runs nothing - its
-## upload waits on [member _sign]. [param through] and [param move]: see [method youtube_sign_in]. Only the
-## person's own press moves a channel: an export never opens a browser for one still signed in.
+## The sign-in an upload needs, settled where the person can see it: channel [param channel]'s kept sign-in is renewed, and
+## one that is missing, has lapsed or may not do all of [param scopes] (or a new channel's, "") opens the browser beside a
+## dialog that says what is awaited, can open the page again, copy its link, and cancel; with no Google client kept, its
+## file is asked for first. A sign-in that lands on another channel than [param channel] (called [param named]) is kept for
+## that one and fails this, saying so. A newer check replaces one still waiting. [param then] runs once signed in, handed
+## the channel; the export's own check runs nothing (its upload waits on [member _sign]). [param through] and [param move]:
+## see [method youtube_sign_in]. Only the person's own press moves a channel.
 func _check_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel := "", named := "", through := "", move := false) -> void:
 	_sign_attempt += 1
 	var mine := _sign_attempt
@@ -1687,8 +1486,7 @@ func _check_sign_in(then := Callable(), scopes: Array = [YouTube.SCOPE], channel
 		_client_then = func() -> void: _check_sign_in(then, scopes, channel, named, through, move)
 		_client_dialog.popup_centered()
 		return
-	# A SIGN-IN REPLACES THE ONE KEPT, so it asks again for what that one could already do: a
-	# playlist granted once is not lost to an upload's sign-in after the token lapsed
+	# A sign-in replaces the one kept, so it asks again for what that one could already do
 	var ask: Array = [YouTube.SCOPE]
 	for sc in scopes + ([YouTube.PLAYLIST_SCOPE] if YouTube.granted(YouTube.PLAYLIST_SCOPE, channel) else []):
 		if not ask.has(sc):
@@ -1765,8 +1563,8 @@ func _on_sign_action(action: StringName) -> void:
 			_sign_copy.text = "Link copied"
 
 
-## The dialog closed: while a sign-in waits, that cancels it. An export goes on and saves its video;
-## the upload then waits to be resumed from the menu.
+## The dialog closed: while a sign-in waits, that cancels it. An export goes on and saves its video; the upload then waits
+## to be resumed from the menu.
 func _on_sign_close() -> void:
 	_sign_copy.text = "Copy the link"
 	if _sign != "signing_in":
@@ -1796,8 +1594,7 @@ func _on_client_file(path: String) -> void:
 		then.call()
 
 
-## No client file was picked: a sign-in that waited on one has failed, and an upload waiting on it
-## stays resumable.
+## No client file was picked: a sign-in that waited on one has failed, and an upload waiting on it stays resumable.
 func _on_client_cancel() -> void:
 	_client_then = Callable()
 	_client_failed("no Google client file was imported")
@@ -1811,14 +1608,13 @@ func _client_failed(why: String) -> void:
 	_sign_why = why
 
 
-## The saved export joins the queue at once - so a quit, a lapsed sign-in or a dropped connection
-## leaves it resumable - and goes up once the sign-in settles (see the `upload_wait` state).
+## The saved export joins the queue at once, so a quit, a lapsed sign-in or a dropped connection leaves it resumable, and
+## goes up once the sign-in settles (see the `upload_wait` state).
 func _queue_upload() -> void:
 	_upload_this = false
-	# THE THUMBNAIL FIRST, as the YouTube card chose it: a picture made for it (a painted one), beside the
-	# video so the queued upload holds its own; or a frame of the saved video itself at the moment named
-	# (its title screen), so it is exactly what the video shows. One that cannot be had only costs the
-	# thumbnail, and the line says why.
+	# The thumbnail first, as the YouTube card chose it: a picture made for it, beside the video so the queued upload holds its
+	# own; or a frame of the saved video at the moment named. One that cannot be had only costs the thumbnail, and the line
+	# says why.
 	var thumb := ""
 	var given := str(_upload_meta.get("thumbnail", ""))
 	var at := float(_upload_meta.get("thumbnail_at", -1.0))
@@ -1843,8 +1639,8 @@ func _queue_upload() -> void:
 	_state = "upload_wait"
 
 
-## A frame of [param video] at [param at] seconds, as a 1280x720 JPEG beside it (YouTube's thumbnail
-## size): its path, or "" when ffmpeg could not make one.
+## A frame of [param video] at [param at] seconds, as a 1280x720 JPEG beside it (YouTube's thumbnail size): its path, or ""
+## when ffmpeg could not make one.
 func _take_thumbnail(video: String, at: float) -> String:
 	var jpg := video.get_basename() + ".thumbnail.jpg"
 	DirAccess.remove_absolute(jpg)
@@ -1864,8 +1660,8 @@ func _take_thumbnail(video: String, at: float) -> String:
 	return jpg
 
 
-## The picture at [param image] copied beside [param video] as its thumbnail: the copy's path - or, when
-## it cannot be copied, the picture's own.
+## The picture at [param image] copied beside [param video] as its thumbnail: the copy's path, or the picture's own when it
+## cannot be copied.
 static func _beside(image: String, video: String) -> String:
 	var to := video.get_basename() + ".thumbnail." + image.get_extension().to_lower()
 	if not FileAccess.file_exists(image):
@@ -1874,8 +1670,7 @@ static func _beside(image: String, video: String) -> String:
 	return to if DirAccess.copy_absolute(image, to) == OK else image
 
 
-## ffmpeg's arguments for [method _take_thumbnail]: seek, one frame, scaled to 1280x720 - or, cut at a
-## portrait frame's shape, 720x1280 (a landscape scale squashed it).
+## ffmpeg's arguments for [method _take_thumbnail]: seek, one frame, scaled to 1280x720 (720x1280 for a portrait frame).
 static func thumbnail_args(video: String, jpg: String, at: float, portrait := false) -> PackedStringArray:
 	return PackedStringArray(["-y", "-nostdin", "-loglevel", "error", "-ss", "%.3f" % maxf(at, 0.0), "-i", video,
 		"-frames:v", "1", "-vf", "scale=%s:flags=lanczos" % ("720:1280" if portrait else "1280:720"), "-q:v", "2", jpg])
@@ -1898,8 +1693,8 @@ func _resume_upload() -> void:
 	_check_sign_in(Callable(), scopes_for(p), str(p.get("channel", "")))
 
 
-## Send the queued upload; the state is set before the first await, so the frame loop starts it once.
-## One queued before its note had a channel goes to the one its sign-in landed on.
+## Send the queued upload; the state is set before the first await, so the frame loop starts it once. One queued before its
+## note had a channel goes to the one its sign-in landed on.
 func _run_upload() -> void:
 	_state = "uploading"
 	if _sign == "ok":
@@ -1945,8 +1740,8 @@ func _sign_out(channel: String) -> void:
 		% (named if not named.is_empty() else "the channel"), Color(0.95, 0.92, 0.7))
 
 
-## Lift the button and its status line clear of whatever the mode has put along
-## the bottom of the frame. See Chrome.bottom_inset.
+## Lift the button and its status line clear of whatever the mode has put along the bottom of the frame. See
+## Chrome.bottom_inset.
 func set_bottom_inset(v: float) -> void:
 	_inset = v
 	if _btn != null and _btn.get_parent() == self:      # in the row, the row moves it
@@ -1955,13 +1750,9 @@ func set_bottom_inset(v: float) -> void:
 	_place_status()
 
 
-## THE STATUS LINE HAS A ROW OF ITS OWN, ABOVE THE BUTTONS, AND WRAPS. It used to get that row
-## only when a mode claimed the bottom of the frame (see [method set_bottom_inset]) and otherwise
-## shared the button row - and a Label that does not wrap grows to its right, so a long export
-## line ("⏺ Rendering <an episode's whole title>.mp4 … 12.3%") ran under the buttons and off the
-## screen, hiding the very progress it showed (reported 2026-10-06). Now it is as wide as the
-## window allows, never wider than [constant STATUS_W], ends at the row's right edge, and extra
-## lines grow UPWARD, away from the buttons.
+## The status line has a row of its own above the buttons, and wraps: as wide as the window allows, never wider than
+## [constant STATUS_W], ending at the row's right edge, extra lines growing upward. (See [method set_bottom_inset] for when
+## a mode claims the bottom of the frame.)
 func _place_status() -> void:
 	if _status == null:
 		return

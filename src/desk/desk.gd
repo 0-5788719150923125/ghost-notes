@@ -1,109 +1,44 @@
 extends Medium
 class_name DeskMedium
 
-## DeskMedium - a desk with a legal pad under a lamp, and a pen that writes on it by itself while the
-## voice reads aloud what it writes (next/proof.md, "The desk"): the base a Letter is written at
-## ([LetterMedium]). Proof's own medium until 2026-11-11, when Proof became a table show (next/proof.md,
-## "Proof became a table show") - so no row of [constant Medium.REGISTRY] names it any more, and what is
-## below about a lesson's formulas is the pen a Letter inherits.
+## DeskMedium - a desk with a legal pad under a lamp, and a pen that writes on it by itself while the voice reads aloud
+## what it writes (next/proof.md, "The desk"): the base a Letter is written at ([LetterMedium]). No row of [constant
+## Medium.REGISTRY] names it.
 ##
-## WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the words with the
-## pen's marks ([DeskScript]); its `desk`, what the component hands the reading: every formula as TeX
-## laid it out (`ink`) and the seed, which is the hand's; and its `title` and `byline`, the channel's,
-## for the title screen.
+## Draws from the reading's document (`_subs.document`): `source` (the words with the pen's marks, [DeskScript]), `desk`
+## (every formula as TeX laid it out, `ink`, and the hand's `seed`), `title` and `byline`. Opens and closes as the card
+## table does ([ShowOpening]): the name over the desk far out of focus while the intro holds, focus pulled at the first
+## word, black a beat after the last.
 ##
-## IT OPENS AND CLOSES AS THE CARD TABLE DOES ([ShowOpening], the user, 2026-10-16: "the intro/outro
-## doesn't inherit the behavior from cards mode"): the channel's name over the desk thrown far out of
-## focus while the intro holds, the focus pulled as the lesson's first word is said, and black a beat
-## after its last word, as the outro runs out.
+## The pen writes what the voice says, as it says it: a formula's writing runs across exactly the words of its dictation,
+## on average between [constant DeskScript.MIN_PACE] and [constant DeskScript.MAX_PACE] of the pen's own pace; where it
+## would lag, the voice waits at the dictation's end, a rest the script already gave it. The pen is elastic and never stops
+## mid-writing: it follows the voice's progress smoothed, with a steady share under it ([method elastic]).
 ##
-## THE PEN WRITES WHAT THE VOICE SAYS, AS IT SAYS IT ([DeskScript], the user the same day: "we need to
-## narrate the text being written, as it is being written"): a formula's writing runs across exactly
-## the words of its dictation, on the average never faster than [constant DeskScript.MAX_PACE] of the
-## pen's own pace nor slower than [constant DeskScript.MIN_PACE]; where it would lag, the voice waits
-## at the dictation's end, a rest the script already gave it, and nowhere inside it.
+## A pure function of the voice's time: a pad item is written at `_ink_time`, a function of the words' times and now, so a
+## seek lands on the page as it was. A reading started mid-way begins where its first words are (`start_words`); the camera
+## alone eases. A live reading's word times arrive a sentence at a time, so a plan made again holds the past ([method
+## _hold_past]): what has begun keeps its start and its page's turn, what is done stays done, a line being written goes on
+## from where it is ([method _ink_time]). A reading whose times are all known at once (an export) is never planned again.
 ##
-## THE PEN IS ELASTIC, AND NEVER STOPS MID-WRITING (the user, 2026-10-17: "the pen stopping at weird
-## moments - like halfway between drawing a straight line, pausing for a second or two ... If the
-## speech is gaining too far ahead, speed-up the pen. If the pen is too far ahead of the speech, slow
-## down the motions. But NEVER should we just be stopping"). The ink's clock was the share of the
-## words said, which stands still in every gap between two words - a comma, a breath, a rest - so the
-## nib froze mid-stroke; and where the voice rested FOR the pen, the pen, waiting for words, rested
-## too. Now it follows the voice's progress smoothed, with a steady share under it ([method elastic]):
-## it slows over a pause and speeds over a run of words, and is never still until its line is done.
+## A drawing runs on past its dictation, through the talk about it (`about`), at the hand's pace ([constant DRAW_PACE]),
+## done [constant DRAW_SETTLE] and the nib's way before the pen's next action is due ([method _drawn_by]). The voice gets no
+## added or removed rest.
 ##
-## A PURE FUNCTION OF THE VOICE'S TIME. A pad item is written at `_ink_time`, a function of the words'
-## times and now, so any moment can be drawn without the ones before it: a seek lands on the page as it
-## was. A READING STARTED MID-WAY (a scrub that starts the voice again from a later chunk) begins where
-## its first words are (the document's `start_words`, as the card table and the tablet find theirs):
-## everything before them was said long ago, so it is written on the first frame - matched from the
-## top instead, no word of the new reading was ever found, and the pen stood still to the end (the
-## user, 2026-10-16: "scrubbing the timeline seems to have broken the pen completely"). The camera alone eases (as the book's and the tablet's do), and lands at once on a seek.
+## The pad: a legal pad page (8.5 x 11 in), ruled, filled top to bottom ([method DeskScript.lay_out]) and turned only when
+## the next item would run off the foot ([LegalPad]). Each episode's desk is its own ([DeskLook], from the seed), lit by the
+## room and candles ([DeskLight]). The camera is the book's kind ([BookMedium]): a long lens from high and a little in
+## front, wide over the intro and a page turn, closer while the pen writes, on one slow critically damped spring, with a
+## wander over minutes.
 ##
-## WHAT IS ON THE PAGE STAYS (the user, 2026-10-19: "two graphs are drawn side-by-side. Then suddenly,
-## the 2nd one disappears and is re-drawn"). A live reading's word times arrive a sentence at a time,
-## a few seconds before it is heard, so a dictation of several sentences is planned on a guess at its
-## end; when its last words came in later than the guess, the share written fell and the newest strokes
-## were taken back. So a plan made again holds the past ([method _hold_past]): what has begun keeps its
-## start and its page's turn, what is done stays done, and a line being written goes on from where it is
-## to the new end ([method _ink_time]). A reading whose times are all known at once (an export) is
-## never planned again, and stays a pure function of time.
-##
-## A DRAWING TAKES ITS TIME (the user, 2026-10-20: "a lot of the chart and picture-drawing felt REALLY
-## fast, relative to the voice describing the charts ... it could have been a lot slower and there still
-## would have been plenty of buffer room to prepare for the next thing"). A drawing is said in a short
-## line - "axes, the graph, its corner" - and its ink is long (every tick's number and label handwritten):
-## held to its line, every drawing of an episode went at three and a half to four times the hand's pace,
-## 26 to 59 seconds of ink in 6 to 15, and the pen then sat 2 to 11 seconds before its next action. So
-## a drawing runs on past its line, through the talk about it (the paragraph after: `about`), as slow as
-## the hand's own pace ([constant DRAW_PACE]) - done [constant DRAW_SETTLE] and the nib's way before
-## the pen's next action is due ([method _drawn_by]), so that action is never late. The voice is the
-## same: no rest is added or taken away.
-##
-## THE PAD: a page of a legal pad (8.5 x 11 in), ruled, filled top to bottom - every formula on the next
-## rules ([method DeskScript.lay_out]) - and TURNED only when the next would run off the foot: the
-## written sheet is lifted at its foot, rolls up over the binding and is folded round the back of the
-## pad, its head lifted for it, and stays there; the clean page is under it ([LegalPad]; the user: "a
-## page with text on it is just 'wiped' clean, for seemingly no reason ... use all of the available
-## space on a page, and then turn the page if we need more space"). A struck line gets a stroke through
-## it.
-##
-## EACH EPISODE'S DESK IS ITS OWN ([DeskLook], from the episode's seed): the pad's paper and binding,
-## the ink, the pen, the desk's top and a mat on it, the lamp, a few things lying about, and how it is lit -
-## the room's light and the candles burning on it, the card table's ([DeskLight]).
-##
-## THE CAMERA IS THE BOOK'S KIND ([BookMedium]: "something closer to what we did with the 'book' medium,
-## with a further zoom and mostly vertical orientation ... the actor swapping for a calculator, or a
-## tablet, or a laptop"): a long lens, looking down at the desk from high and a little in front; wide
-## over the intro and as a page turns, closer while the pen writes, following the line being written
-## through one slow critically damped spring; each page its own slight yaw and tilt, and a wander over
-## minutes, so it never sits dead still and never reads as a move.
-##
-## THE PEN has no hand (the writer is unseen). It leans to the top right of the frame from its nib
-## (the user: "it should angle to the top-right, which would be a more natural writing position") -
-## which also keeps what it has just written, to the left of the nib, in view. THE HAND IS ALIVE (the
-## user, 2026-10-16: "A hand holding a pen would never keep it at a perfectly static angle"): the lean
-## sways slowly about that direction ([method lean]), turns a little with where on the page the nib
-## is, as a forearm pivoting at the elbow turns it, and its top trails the nib's travel; off the paper
-## the nib drifts a few millimeters ([method drift]) - never while it writes, where it is the ink's.
-##
-## THE PEN POINTS AT WHAT IS SPOKEN OF ([DeskScript]'s `point`; the user: "never POINTING to any of
-## it ... after 2 minutes of no movement - it's very hard to get my attention back on track"): at the
-## word, the nib comes down close over the named thing - sweeping along under it when it is wide - and
-## stays beside its right end, low on its height, so the pen's body leans away over clean paper and
-## never onto the line below; the camera goes there.
-##
-## AN IDLE PEN GETS OUT OF THE WAY (the user, 2026-10-19: "as it told the story, doing nothing, for ~30
-## or 60 seconds, the pen was just frozen, right in the middle of the page, covering a bunch of the
-## text's visibility ... it would be better for the pen to drift to the right and top"): over a stretch
-## of [constant PARK_WORDS] words or more with nothing for it to do, and before a page turns, the nib
-## drifts off the pad's top right ([constant PARK]) - its body leaning on away from the page, clear of a
-## turning sheet - waits there, and comes back as its next action begins ([method _waiting]). Between
-## two actions closer than that it waits beside what it just did. Every move between actions is
-## continuous, and as long as its way ([method _reach]): the wait starts where the action ended and the
-## reach where the wait is - the nib once jumped to its rest the frame an action ended, and across the
-## page (1025 px in a frame) as one was about to turn it. The plan leaves that time between them
-## ([method _way]), or a reach squeezed into nothing is a jump all the same.
+## The pen has no hand. It leans to the top right of the frame from its nib, swaying slowly ([method lean]), turning a
+## little with where the nib is on the page, its top trailing the nib's travel; off the paper the nib drifts a few
+## millimeters ([method drift]), never while it writes. It points at what is spoken of ([DeskScript]'s `point`): the nib
+## comes down close over the named thing, sweeping along under a wide one, and stays beside its right end so the body
+## leans over clean paper. An idle pen gets out of the way: over [constant PARK_WORDS] words or more with nothing to do, and
+## before a page turns, it drifts off the pad's top right ([constant PARK]), and comes back as its next action begins
+## ([method _waiting]). Every move between actions is continuous and as long as its way ([method _reach]); the plan leaves
+## that time ([method _way]).
 
 ## The page's canvas (an 8.5 x 11 sheet) and the sheet in the world, in meters.
 const PW := DeskScript.PW
@@ -119,45 +54,40 @@ const REST_EASE := 0.9
 const REACH_EASE := 0.45
 ## The pen comes down this long before its dictation's first word.
 const PEN_LEAD := 0.2
-## A DRAWING TAKES ITS TIME (see the class note): never quicker than its dictation, and on past it, through
-## the talk about it, to as slow as the hand's own pace - done this long, and the nib's way, before the
-## pen's next action is due.
+## A drawing takes its time (see the class note): never quicker than its dictation, and on past it, through the talk about
+## it, to as slow as the hand's own pace - done this long, and the nib's way, before the pen's next action is due.
 const DRAW_PACE := 1.0
 const DRAW_SETTLE := 1.0
-## THE PEN IS ELASTIC ([method elastic]): the voice's progress through a dictation is smoothed over
-## this many seconds, and this share of the pen's progress runs steady - the least it ever moves at,
-## against its average pace over the dictation.
+## The pen is elastic ([method elastic]): the voice's progress through a dictation is smoothed over this many seconds, and
+## this share of the pen's progress runs steady - the least it ever moves at, against its average pace.
 const ELASTIC_WINDOW := 1.5
 const ELASTIC_FLOOR := 0.3
-## POINTING: how close over the paper the nib comes; a thing this wide (px) or wider is swept under
-## (this far below it) in the first [constant POINT_SWEEP] seconds - or all of a point the next one cuts
-## shorter, so it ends where the pen waits from (cut at a third of its sweep, the nib jumped 366 px in a
-## frame to the sweep's end, 2026-10-20); where the nib stays, this far right of the thing's end; and the
-## least time a point is held.
+## Pointing: how close over the paper the nib comes; a thing this wide (px) or wider is swept under (this far below it) in
+## the first [constant POINT_SWEEP] seconds (or all of a point the next one cuts shorter, so it ends where the pen waits
+## from); where the nib stays, this far right of the thing's end; and the least time a point is held.
 const POINT_LIFT := 0.0035
 const POINT_WIDE := 90.0
 const POINT_SWEEP := 0.9
 const POINT_GAP := 14.0
 const POINT_MIN := 1.0
-## OUT OF THE WAY: a stretch of this many words or more with nothing for the pen (about 15 s of a
-## voice) sends it off the pad - this long after its last action ends, over this long - to this place
-## (px of the page: right of its edge, level with its top margin).
+## Out of the way: a stretch of this many words or more with nothing for the pen (about 15 s of a voice) sends it off the
+## pad - this long after its last action ends, over this long - to this place (px of the page: right of its edge, level
+## with its top margin).
 const PARK_WORDS := 40
 const PARK_AFTER := 1.0
 const PARK_EASE := 2.5
 const PARK := Vector2(DeskScript.PW + 90.0, DeskScript.FIRST_RULE * 0.5)
-## It goes right first, and is off the pad this long after it sets off: a page never turns sooner
-## after the last action before it (the sheet lifts at its foot, where that action was). It comes back
-## over the new page once this share of the turn is over: the sheet folded under and the pad's head
-## down again ([method LegalPad.tilt]).
+## It goes right first, and is off the pad this long after it sets off: a page never turns sooner after the last action
+## before it (the sheet lifts at its foot, where that action was). It comes back over the new page once this share of the
+## turn is over: the sheet folded under and the pad's head down again ([method LegalPad.tilt]).
 const PARK_CLEAR := 1.0
 const PARK_BACK := 0.93
 ## How fast the nib travels to its next action between two (px of the page a second, on the average).
 const REACH_SPEED := 1000.0
-## THE HAND IS ALIVE: the lean's slow sway (degrees, about the vertical and in its rise), its turn
-## across the page's width (degrees from the left edge to the right), how far the top trails the nib
-## (seconds of its travel, at most [constant TRAIL_MAX] degrees), measured over [constant MOTION_DT];
-## and the nib's drift off the paper (px, and meters of lift), full at rest and none while it writes.
+## The hand: the lean's slow sway (degrees, about the vertical and in its rise), its turn across the page's width (degrees
+## from the left edge to the right), how far the top trails the nib (seconds of its travel, at most [constant TRAIL_MAX]
+## degrees), measured over [constant MOTION_DT]; and the nib's drift off the paper (px, and meters of lift), full at rest
+## and none while it writes.
 const SWAY_YAW := 5.0
 const SWAY_TILT := 3.0
 const REACH_YAW := 10.0
@@ -168,9 +98,8 @@ const DRIFT_PX := 12.0
 const DRIFT_LIFT := 0.003
 ## How it leans from its nib: up, to the right, and away from the writer - the frame's top right.
 const PEN_UP := Vector3(0.42, 0.64, -0.40)
-## THE CAMERA: a long lens (the book's: a wide one stood close bends the page's lines), wide enough to
-## hold the whole pad with room round it for the tools still to come, closer while the pen writes;
-## mostly looking down. Distances in meters, pitches in degrees above the desk.
+## The camera: a long lens (a wide one stood close bends the page's lines), wide enough to hold the whole pad with room
+## round it, closer while the pen writes; mostly looking down. Distances in meters, pitches in degrees above the desk.
 const VFOV := 20.0
 const WIDE := {"dist": 1.45, "pitch": 74.0}
 ## The room's light where the desk's look writes none ([DeskLight]): a warm gray.
@@ -185,14 +114,14 @@ const TILT_SPREAD := 1.5
 const ANGLE_SLOW := 3.0
 ## How long the framing looks ahead of the pen, as the book's does (springs make every move late).
 const CAM_LEAD := 2.0
-## A PAGE TURN IS SEEN WHOLE: the camera stands back this long before it (its springs are slow) and
-## aims this far down the page, so the pad's head, where the page goes round, is in the shot.
+## A page turn is seen whole: the camera stands back this long before it (its springs are slow) and aims this far down the
+## page, so the pad's head, where the page goes round, is in the shot.
 const TURN_BACK := 3.0
 const TURN_AIM := 0.36
-## The page's margin line, from its left edge (px). Its colors, the paper's and the ink's are the
-## desk's look's ([member look]).
+## The page's margin line, from its left edge (px). Its colors, the paper's and the ink's are the desk's look's ([member
+## look]).
 const MARGIN_X := 128.0
-## A FAINT line ([constant Ink.FAINT] - a figure's grid): how thin it may be drawn (px) and how light.
+## A faint line ([constant Ink.FAINT], a figure's grid): how thin it may be drawn (px) and how light.
 const FAINT_W := 1.3
 const FAINT_ALPHA := 0.38
 
@@ -207,10 +136,8 @@ var _follower := ReadingFollower.new()
 var _built_n := -1
 var _plan: Array = []              # per action: {start, end, turn_at} (seconds), INF while not placed
 var _held := {}                    # action -> what was shown of it when the plan was made again
-## WORKED OUT ONCE, NOT EVERY FRAME (2026-10-27, the user: "performance can be really quite laggy in the realtime
-## viewer"): the plans made so far, which a frame's answers are kept for ([method _pages]), and each finished
-## action's ink, the same at any later moment ([method _done_ink_of]) - a page of handwriting was rebuilt point by
-## point every time a line was finished, a 20 to 35 ms frame every few seconds.
+## Worked out once, not every frame: the plans made so far, which a frame's answers are kept for ([method _pages]), and
+## each finished action's ink, the same at any later moment ([method _done_ink_of]).
 var _plan_rev := 0
 var _done_ink := {}
 var _pages_now := NAN
@@ -220,7 +147,7 @@ var _by_page := {}                  # a page -> its actions, in order ([method _
 var _turning: Array = []            # ...and the actions a page is turned for, in order
 var _by_kind := {}                  # ...and each kind's ([method _of_kind])
 var _by_page_of: Array = []
-## WHERE THE PEN'S WALK GOES ON FROM ([method pen_at]): the actions before [member _pen_k] are all done at any moment
+## Where the pen's walk goes on from ([method pen_at]): the actions before [member _pen_k] are all done at any moment
 ## from [member _pen_upto] on, the last of them the pen did [member _pen_last] - for the plan [member _pen_rev].
 var _pen_k := 0
 var _pen_last := -1
@@ -245,7 +172,7 @@ var _attrs: CameraAttributesPractical
 var _env: Environment
 var _pad: LegalPad
 var _desk: Node3D                  # the desk's top and the things on it
-## THE DESK'S LIGHT beyond its lamp: the room's and the candles' ([DeskLight]).
+## The desk's light beyond its lamp: the room's and the candles' ([DeskLight]).
 var _light := DeskLight.new()
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _lamp: SpotLight3D
@@ -254,7 +181,7 @@ var _lacquer: StandardMaterial3D   # the pen's body
 var _trim: StandardMaterial3D      # ...and its metal
 var _pen: Node3D
 var _dressed := -1                 # the seed the desk was last dressed for
-## THE DESK'S LOOK ([method DeskLook.of]): its colors and what is on it, from the episode's seed.
+## The desk's look ([method DeskLook.of]): its colors and what is on it, from the episode's seed.
 var look: Dictionary = DeskLook.of(1)
 var _blur: IntroBlur
 var _title: TitleCard
@@ -273,12 +200,10 @@ var _v_roll := 0.0
 
 ## A page, drawn: paper, rules, and the ink on page [member page] now - all of it, or one [member part].
 ##
-## REDRAWN ONLY WHEN WHAT IT SHOWS HAS CHANGED ([method show_page]). A redraw frees and rebuilds every
-## stroke on it - each polyline is a GPU polygon of its own, some 400 on a full page - and redrawn every
-## frame, the desk made and threw away tens of thousands a second over a page that stood still, all
-## night after an export, until the engine crashed freeing one (2026-10-16: signal 11 in
-## `free_polygon`). So the page being written is two: its `dry` ink, redrawn as a formula is finished
-## or the page changes, under its `wet`, only what the pen is writing now.
+## Redrawn only when what it shows has changed ([method show_page]): a redraw frees and rebuilds every stroke on it (each
+## polyline is a GPU polygon of its own, some 400 on a full page), so redrawing every frame is costly and has crashed the
+## engine in `free_polygon`. The page being written is therefore two: its `dry` ink, redrawn as a formula is finished or
+## the page changes, under its `wet`, only what the pen is writing now.
 class PadCanvas extends Node2D:
 	var desk: DeskMedium
 	var page := 0
@@ -343,9 +268,8 @@ class PadCanvas extends Node2D:
 
 func mount(st: SubViewport) -> void:
 	super.mount(st)
-	# THE STAGE AS THE CARD TABLE SETS IT ([constant TableMedium.STAGE]): the lamp's shadow in a slot of its own of
-	# a big atlas, debanded - on the stage's own the page and the desk wore a fine diagonal moire of the lamp's
-	# shadow map (2026-10-27, the user: "weird stripey rings of light across the desk and paper")
+	# the stage as the card table sets it ([constant TableMedium.STAGE]): the lamp's shadow in a slot of its own of a big
+	# atlas, debanded (the stage's own atlas shows a diagonal moire of the lamp's shadow map on the page and desk)
 	_stage_was = {}
 	for key in TableMedium.STAGE:
 		_stage_was[key] = st.get(key)
@@ -355,10 +279,9 @@ func mount(st: SubViewport) -> void:
 	_placeholder.init_with_seed(1, "drift")
 	_placeholder.visible = false
 	add_child(_placeholder)
-	# A PAGE IS RENDERED ONLY WHEN IT CHANGES (2026-10-27, the user: "performance can be really quite laggy"): both
-	# had rendered every frame, a page of handwriting some 2,100 draw calls - its finished ink is a viewport of its
-	# own, rendered as a line is finished; the page the pad shows is that under the line being written, rendered as
-	# the pen moves; the turning page once a turn ([method _show_pages])
+	# a page is rendered only when it changes: its finished ink is a viewport of its own, rendered as a line is finished;
+	# the page the pad shows is that under the line being written, rendered as the pen moves; the turning page once a turn
+	# ([method _show_pages])
 	_vp_dry = _page_viewport(["dry"])
 	_canvas = _vp_dry.get_child(0) as PadCanvas
 	_vp = _page_viewport([])
@@ -375,14 +298,13 @@ func mount(st: SubViewport) -> void:
 	_vp_turn = _page_viewport(["all"])
 	_canvas_turn = _vp_turn.get_child(0) as PadCanvas
 	_build_world()
-	# THE OPENING, the card table's: the intro's blur over the desk, and the name over the blur
 	_blur = IntroBlur.new(ShowOpening.INTRO_SHADER)
 	add_child(_blur)
 	_title = TitleCard.new()
 	_title.face = CardTable.font("roman")
 	_title.italic = CardTable.font(CardTable.BOOK_ITALIC)
-	# IN THE PAD'S OWN INK: the card table's light name (chosen to stand out from a painted table)
-	# was cream on cream over the paper; dark, its shade turns light round it (CardTable.title_shade)
+	# in the pad's own ink: the card table's light name is cream on cream over the paper; dark, its shade turns light
+	# round it (CardTable.title_shade)
 	_title.ink = look["ink"]
 	add_child(_title)
 	_dress()
@@ -413,24 +335,22 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = AMBIENT
 	_env.ambient_light_energy = AMBIENT_ENERGY
-	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	# The tonemapper, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
 	Tonemaps.dress(_env, 1.0)
 	_env.adjustment_enabled = true
-	# BOUNCE LIGHT, as the Graphics panel has it (off unless chosen: it changes the look)
+	# Bounce light, as the Graphics panel has it (off unless chosen: it changes the look)
 	Graphics.dress(_env)
 	_cam = Camera3D.new()
 	_cam.fov = VFOV
 	_cam.near = 0.05
 	_cam.far = 40.0
 	_cam.environment = _env
-	# the lens's own blur is the opening's, as the card table's is ([ShowOpening])
 	_attrs = CameraAttributesPractical.new()
 	_attrs.dof_blur_far_enabled = false
 	_cam.attributes = _attrs
 	_root3.add_child(_cam)
-	# THE LAMP, up and to the left of the pad, so the pen's shadow falls across the page to the right
-	# - a white page under the tablet's lamp (4.2, set for a dark screen) burned out to no rules at all;
-	# where exactly, how warm and how bright are the desk's look's
+	# the lamp, up and to the left of the pad, so the pen's shadow falls across the page to the right; where exactly, how
+	# warm and how bright are the desk's look's
 	_lamp = SpotLight3D.new()
 	_lamp.spot_range = 4.0
 	_lamp.spot_angle = 42.0
@@ -462,8 +382,8 @@ func _build_world() -> void:
 	_pen.add_child(_cyl(PEN_R * 1.04, PEN_R * 1.04, 0.006, 0.02 + PEN_LEN * 0.62, _trim))
 
 
-## THE DESK DRESSED in [member look]: its top and the things on it, the pad's paper and binding, the
-## pen, the lamp and the title's ink - once for each seed, as a lesson is loaded.
+## The desk dressed in [member look]: its top and the things on it, the pad's paper and binding, the pen, the lamp and the
+## title's ink - once for each seed, as a lesson is loaded.
 func _dress() -> void:
 	if _root3 == null or _dressed == _seed:
 		return
@@ -560,7 +480,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_last_now = _now
 	if _subs != null and is_instance_valid(_subs) and not _actions.is_empty():
 		take_words(_subs.words)
-	# UP FROM BLACK as the session starts, down to it after the last word - the desk owns its
+	# Up from black as the session starts, down to it after the last word - the desk owns its
 	# bookend, as the card table does; an outro mark's fade still is the feed's
 	_env.adjustment_brightness = clampf(clampf(t / 1.2, 0.0, 1.0)
 		* _end_fade() * feed.live_fade, 0.0, 1.0)
@@ -581,15 +501,15 @@ func _exit_tree() -> void:
 			stage.set(key, _stage_was[key])
 
 
-## THE CLOSE: 1 until the lesson is over, then down to black over the outro ([method ShowOpening.end_fade]).
+## The close: 1 until the lesson is over, then down to black over the outro ([method ShowOpening.end_fade]).
 func _end_fade() -> float:
 	return ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail())
 
 
-## THE VOICE'S WORDS SO FAR (the overlay's growing `words`), matched, and the plan made again when more
-## came. More of the same reading keeps what the page shows ([method _hold_past]) - taken before the new
-## times are, since they move where a dictation's unheard words were guessed; a new one (fewer words)
-## starts clean. Public for a gate, which hands it words as a live reading would.
+## The voice's words so far (the overlay's growing `words`), matched, and the plan made again when more came. More of the
+## same reading keeps what the page shows ([method _hold_past]) - taken before the new times are, since they move where a
+## dictation's unheard words were guessed; a new one (fewer words) starts clean. Public for a gate, which hands it words
+## as a live reading would.
 func take_words(words: Array) -> void:
 	var grown := words.size() != _built_n
 	if grown:
@@ -603,7 +523,7 @@ func take_words(words: Array) -> void:
 		_build_plan()
 
 
-## THE LESSON OPENS a settle before its first word, which the pen's first dictation is ([method Openings.settle]: the
+## The lesson opens a settle before its first word, which the pen's first dictation is ([method Openings.settle]: the
 ## desk seen sharp, the name gone, before the teacher speaks): INF until it is heard.
 func _opening() -> float:
 	var t := _word_t0(0)
@@ -630,10 +550,9 @@ func _ensure_doc() -> void:
 	load_lesson(src, desk, start, int(d.get("start_index", -1)))
 
 
-## LOAD A LESSON: [param source] (the lesson's text, the pen's marks in it) and [param desk] (`{ink,
-## seed}` - the typeset items and the hand's seed); for a reading started mid-way, its first words
-## [param start] (normalized), [param near] the index they are about. Public for a gate, which hands
-## it one by hand.
+## Load a lesson: [param source] (the lesson's text, the pen's marks in it) and [param desk] (`{ink, seed}` - the typeset
+## items and the hand's seed); for a reading started mid-way, its first words [param start] (normalized), [param near] the
+## index they are about. Public for a gate, which hands it one by hand.
 func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(), near := -1) -> void:
 	_seed = int(desk.get("seed", _seed))
 	look = DeskLook.of(_seed)
@@ -659,7 +578,6 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
 	var est := PackedFloat32Array()
 	if from > 0:
-		# the past, spaced as a steady voice would have said it, rests and all
 		for w in DeskScript.rehearsal(parsed):
 			est.append(float((w as Dictionary)["t0"]))
 	_follower.reset(spoken, from, est)
@@ -676,17 +594,14 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 			(c as PadCanvas).forget()
 
 
-## WHEN EACH ACTION HAPPENS. A written item starts as its dictation's first word is said (the pen down
-## [constant PEN_LEAD] before it) and ends as the words do - no sooner than the pen can write it at
-## [constant DeskScript.MAX_PACE], no later than at [constant DeskScript.MIN_PACE] - and never before
-## the one before it has ended; a drawing goes on past its words ([method _drawn_by]). One with no dictation, and a strike, are performed in the rest before
-## the next words. A POINT is there as its word is said and held to its sentence's end, never into
-## the time the pen needs to reach what comes next. A page turn comes in the rest before the item that
-## needs it, never over writing still going on nor before the pen is off the pad ([constant
-## PARK_CLEAR]), and the item waits for it. No action begins before the nib can get there from the
-## last ([method _way]). An action whose words have not arrived waits. What [member _held] keeps of the
-## past is kept: a start, a turn, a done action's end; one under way ends no sooner than the pen can
-## finish it from where it is.
+## When each action happens. A written item starts as its dictation's first word is said (the pen down [constant PEN_LEAD]
+## before it) and ends as the words do, between [constant DeskScript.MAX_PACE] and [constant DeskScript.MIN_PACE] of the
+## pen's own pace, never before the one before it has ended; a drawing goes on past its words ([method _drawn_by]). An item
+## with no dictation, and a strike, are performed in the rest before the next words. A point is there as its word is said,
+## held to its sentence's end. A page turn comes in the rest before the item that needs it, never over writing still going
+## on nor before the pen is off the pad ([constant PARK_CLEAR]). No action begins before the nib can get there from the
+## last ([method _way]); an action whose words have not arrived waits. What [member _held] keeps of the past is kept: a
+## start, a turn, a done action's end; one under way ends no sooner than the pen can finish it from where it is.
 func _build_plan() -> void:
 	_plan_rev += 1
 	var prev_end := -INF
@@ -697,8 +612,8 @@ func _build_plan() -> void:
 		var a: Dictionary = _actions[i]
 		var held: Dictionary = _held.get(i, {})
 		if held.has("start") and held.has("end"):
-			# DONE BEFORE THE PLAN WAS MADE AGAIN, and kept as it was - all that is worked out below for it is then
-			# overwritten (a live reading makes the plan again as each sentence's words arrive)
+			# done before the plan was made again, and kept as it was: all that is worked out below for it is overwritten
+			# (a live reading makes the plan again as each sentence's words arrive)
 			_plan[i] = {"start": float(held["start"]), "end": float(held["end"]), "turn_at": float(held.get("turn_at", INF))}
 			prev_end = float(held["end"])
 			if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
@@ -738,7 +653,7 @@ func _build_plan() -> void:
 			var before := _word_t1(after - 1) if after > 0 else maxf(feed.intro_hold, 0.6) + _blank() - 0.25
 			if before == INF:
 				break
-			# an action the writer DECIDES on first (a letter's strike, [constant LetterScript.DECIDE]): the
+			# an action the writer decides on first (a letter's strike, [constant LetterScript.DECIDE]): the
 			# voice and the pen both done, then that long, the pen held still
 			var decide := float(a.get("decide", 0.0))
 			var due := maxf(before, prev_end) + decide if decide > 0.0 else before + 0.25
@@ -746,7 +661,6 @@ func _build_plan() -> void:
 			end = _paced_end(i, start, start + write)
 		var turn_at := float(held.get("turn_at", INF))
 		if bool(a.get("turn", false)) and not held.has("start"):
-			# early enough for the pen to come back over the new page behind the sheet, at its pace
 			var back := DeskScript.TURN * PARK_BACK + _travel(PARK.distance_to(_action_point(a, true)))
 			if not held.has("turn_at"):
 				turn_at = maxf(start - back - 0.1, prev_end + PARK_CLEAR)
@@ -765,11 +679,9 @@ func _build_plan() -> void:
 			last = i
 
 
-## HOW LONG THE NIB NEEDS to get from action [param last] to action [param next]: its way at
-## [constant REACH_SPEED], never under [constant REACH_EASE] - none for a point at nothing on its page,
-## which the pen leaves be. [method _build_plan] leaves it between them, so no reach is squeezed into
-## nothing: a point said while a drawing was still being written began the frame the drawing ended, and
-## the nib crossed 326 px in one frame (2026-10-19, the Universal Approximation episode).
+## How long the nib needs to get from action [param last] to action [param next]: its way at [constant REACH_SPEED],
+## never under [constant REACH_EASE] - none for a point at nothing on its page, which the pen leaves be. [method
+## _build_plan] leaves it between them, so no reach is squeezed into nothing.
 func _way(last: int, next: int) -> float:
 	var b: Dictionary = _actions[next]
 	if String(b["kind"]) == "point" and target_box(b).size.x < 0.0:
@@ -784,11 +696,11 @@ func _travel(px: float) -> float:
 	return maxf(px / REACH_SPEED, REACH_EASE)
 
 
-## THE LATEST DRAWING [param i] MAY END: as the talk about it ends (a drawing with none, the next mark
-## right after its line, has the voice's rest before it), and [constant DRAW_SETTLE] and the nib's way
-## before the pen's next action is due - a write's pen down, a point's word, a page's turn early
-## enough for the pen to come back behind the sheet ([method _build_plan] gives each the same time). A
-## word not heard yet is guessed a steady word on from the last that was ([method _guess]).
+## The latest drawing [param i] may end: as the talk about it ends (a drawing with none, the next mark right after its
+## line, has the voice's rest before it), and [constant DRAW_SETTLE] and the nib's way before the pen's next action is due
+## (a write's pen down, a point's word, a page's turn early enough for the pen to come back behind the sheet; [method
+## _build_plan] gives each the same time). A word not heard yet is guessed a steady word on from the last that was
+## ([method _guess]).
 func _drawn_by(i: int) -> float:
 	var a: Dictionary = _actions[i]
 	var about := int(a.get("about", 0))
@@ -827,9 +739,9 @@ func _guess(si: int, ends: bool) -> float:
 	return _follower.said1[k] + float(si - k - (0 if ends else 1)) * DeskScript.EST_WORD
 
 
-## WHAT THE PAGE HAS SHOWN, taken as the plan is about to be made again at [member _now]: for each action
-## begun, its start and when it began to be held; its end once done, else how much of it is written; and
-## a page turn begun. [method _build_plan] keeps them, and [method _ink_time] goes on from them.
+## What the page has shown, taken as the plan is about to be made again at [member _now]: for each action begun, its start
+## and when it began to be held; its end once done, else how much of it is written; and a page turn begun. [method
+## _build_plan] keeps them, and [method _ink_time] goes on from them.
 func _hold_past() -> void:
 	var held := {}
 	for i in _actions.size():
@@ -849,9 +761,9 @@ func _hold_past() -> void:
 	_held = held
 
 
-## When spoken word [param si] began and ended: INF while the voice has not reached it. A word it went
-## past without matching has the time it was most likely said ([member ReadingFollower.said0]) - a
-## word that waited for one held every action after it.
+## When spoken word [param si] began and ended: INF while the voice has not reached it. A word it went past without
+## matching has the time it was most likely said ([member ReadingFollower.said0]), so a word that waited for one does not
+## hold every action after it.
 func _word_t0(si: int) -> float:
 	if si < 0 or si >= _follower.said0.size() or _follower.said0[si] == ReadingFollower.NO_TIME:
 		return INF
@@ -864,14 +776,13 @@ func _word_t1(si: int) -> float:
 	return _follower.said1[si]
 
 
-## HOW FAR THROUGH ITS WRITING action [param i] is at [member _now], as the ink's own clock (seconds
-## of [method Ink.schedule]): a dictated item's by [method elastic], over its dictation's words; one
-## written in silence at an even pace, across the rest the voice gives it. One under way when the plan
-## was made again ([member _held]) goes on from what was written then: the rest of it is spread over
-## what the new plan has left of it, so the ink never goes back and never jumps.
+## How far through its writing action [param i] is at [member _now], as the ink's own clock (seconds of [method
+## Ink.schedule]): a dictated item's by [method elastic], over its dictation's words; one written in silence at an even
+## pace, across the rest the voice gives it. One under way when the plan was made again ([member _held]) goes on from what
+## was written then: the rest of it is spread over what the new plan has left of it, so the ink never goes back or jumps.
 func _ink_time(i: int) -> float:
-	# asked of the line being written four or five times a frame - the page, its wet ink, the pen now and a moment
-	# before - and each works the dictation out word by word
+	# asked of the line being written four or five times a frame (the page, its wet ink, the pen now and a moment before),
+	# and each works the dictation out word by word
 	if _ink_t_rev != _plan_rev or _ink_t.size() > 8:
 		_ink_t = {}
 		_ink_t_rev = _plan_rev
@@ -927,17 +838,15 @@ func _dictation(after: int, span: int, start: float) -> Array:
 	return [t0s, t1s]
 
 
-## THE PEN'S CLOCK, ELASTIC: how far through its writing (0 to 1) the pen is at [param now], for
-## writing planned from [param start] to [param end] across words said at [param t0s] to [param t1s].
-## A pure function, so a seek lands where the pen would be.
+## The pen's clock, elastic: how far through its writing (0 to 1) the pen is at [param now], for writing planned from
+## [param start] to [param end] across words said at [param t0s] to [param t1s]. A pure function, so a seek lands where the
+## pen would be.
 ##
-## The voice's progress through the words (a word counts as it is said) is smoothed over
-## [constant ELASTIC_WINDOW], so a pause in it is a slope and not a step, and its time is stretched
-## onto the pen's - the pen that lags runs the whole way behind, evenly, rather than slowing as the
-## voice ends. [constant ELASTIC_FLOOR] of the pen's progress runs steady from its start to its end, so
-## the pen never stands still while it writes: over a long pause it slows to about that share of its
-## average pace, and makes it up over the words after. Then it is set to run from 0 at
-## [param start] to 1 at [param end] exactly.
+## The voice's progress through the words is smoothed over [constant ELASTIC_WINDOW], so a pause in it is a slope and not a
+## step, and its time is stretched onto the pen's. [constant ELASTIC_FLOOR] of the pen's progress runs steady from its
+## start to its end, so the pen never stands still while it writes: over a long pause it slows to about that share of its
+## average pace and makes it up over the words after. The result is set to run from 0 at [param start] to 1 at [param end]
+## exactly.
 static func elastic(now: float, start: float, end: float, t0s: PackedFloat32Array,
 		t1s: PackedFloat32Array) -> float:
 	if now <= start:
@@ -1026,12 +935,11 @@ func _show_pages() -> void:
 		if float(_plan[i]["turn_at"]) < INF:
 			ta = float(_plan[i]["turn_at"])
 			break
-	# the pages before it lie over the pad's head, and it goes over them
 	_pad.show_turned(p.y, clampf((_now - ta) / DeskScript.TURN, 0.0, 1.0))
 
 
-## THE INK ON PAGE [param page] NOW, in the page's pixels: [{points, width}] - what [PadCanvas] draws;
-## all of it, or the [param part] finished (`dry`) or still being written (`wet`).
+## The ink on page [param page] now, in the page's pixels: [{points, width}] - what [PadCanvas] draws; all of it, or the
+## [param part] finished (`dry`) or still being written (`wet`).
 func page_ink(page: int, part := "all") -> Array:
 	var out: Array = []
 	for i in _on_page(page):
@@ -1042,7 +950,7 @@ func page_ink(page: int, part := "all") -> Array:
 	return out
 
 
-## A FINISHED ACTION'S INK, made once: all of it, at any moment after its end ([method _ink_of]).
+## A finished action's ink, made once: all of it, at any moment after its end ([method _ink_of]).
 func _done_ink_of(i: int) -> Array:
 	if not _done_ink.has(i):
 		_done_ink[i] = _ink_of(i)
@@ -1079,8 +987,8 @@ func _on_page(page: int) -> Array:
 	return out
 
 
-## THE ACTIONS LAID ON PAGE [param page], in order - made once a lesson or a letter is laid out: the pages, the pen
-## and the camera ask every frame, and walking every action of a letter from its first had cost a frame milliseconds.
+## The actions laid on page [param page], in order - made once a lesson or a letter is laid out, since the pages, the pen
+## and the camera ask every frame.
 func _page_actions(page: int) -> Array:
 	_index()
 	return _by_page.get(page, [])
@@ -1124,8 +1032,8 @@ func _written(i: int) -> float:
 	var a: Dictionary = _actions[i]
 	if String(a["kind"]) == "strike":
 		return clampf((_now - float(_plan[i]["start"])) / maxf(float(a["write"]), 0.01), 0.0, 1.0)
-	# DONE IS DONE: past its end its share is 1 whatever the dictation ([method _share], held or not) - and this is
-	# asked of every action on the page every frame, where the dictation is worked out word by word
+	# done is done: past its end its share is 1 whatever the dictation ([method _share], held or not); this is asked of
+	# every action on the page every frame, where the dictation is worked out word by word
 	if _now >= float(_plan[i]["end"]):
 		return 1.0
 	var length := _length(i)
@@ -1142,8 +1050,8 @@ func _ink_of(i: int) -> Array:
 			if sched.is_empty():
 				return out
 			var k := float(a["k"]) * DeskScript.PX_PER_PT
-			# onto the page in one native step, never point by point: a line of handwriting is thousands of them,
-			# and the line being written is drawn again every frame
+			# onto the page in one native step, never point by point: a line of handwriting is thousands of them, and the
+			# line being written is drawn again every frame
 			var to_page := Transform2D(0.0, Vector2(k, k), 0.0, a["at"] as Vector2)
 			for s in Ink.at(sched, _ink_time(i))["ink"]:
 				var pts: PackedVector2Array = to_page * PackedVector2Array((s as Dictionary)["points"])
@@ -1153,7 +1061,7 @@ func _ink_of(i: int) -> Array:
 		"strike":
 			var line := _struck_line(a)
 			out.append({"points": PackedVector2Array([line[0], line[0].lerp(line[1], _written(i))]), "width": 3.2})
-	# IN ITS PEN'S INK: a letter's action names the ink it is written in ([constant LetterScript.COLOR]); none, the desk's
+	# in its pen's ink: a letter's action names the ink it is written in ([constant LetterScript.COLOR]); none, the desk's
 	var named := String(a.get("ink", ""))
 	if not named.is_empty():
 		var col := NotebookLayout.ink_color(named)
@@ -1183,14 +1091,14 @@ func _struck_line(s: Dictionary) -> Array:
 
 # --- the pen ---------------------------------------------------------------------------------
 
-## WHERE THE NIB IS NOW, on the page (px), and how high above it (m): writing, it is the ink's nib;
+## Where the nib is now, on the page (px), and how high above it (m): writing, it is the ink's nib;
 ## between strokes it lifts and travels; between actions it waits ([method _waiting]) and reaches the
 ## next as it begins ([method _reach]); before the first, it waits where [method _before_first] says.
 func pen_at() -> Dictionary:
 	var rest := _before_first()
 	var last := -1                  # the last action the pen did
-	# FROM WHERE THE LAST WALK FOUND ALL DONE (asked twice a frame, it had walked from the letter's first action): a
-	# done action stays done as the time goes on, and which points aim at nothing is the layout's
+	# from where the last walk found all done: a done action stays done as the time goes on, and which points aim at
+	# nothing is the layout's
 	if _pen_rev != _plan_rev:
 		_pen_rev = _plan_rev
 		_pen_k = 0
@@ -1210,7 +1118,6 @@ func pen_at() -> Dictionary:
 		if start == INF:
 			return _waiting(last, i) if last >= 0 else rest
 		if _now < start:
-			# on its way to the action: from where it waits to where the action begins
 			var wait := _waiting(last, i) if last >= 0 else rest
 			var u := _ease(clampf(1.0 - (start - _now) / _reach(last, i), 0.0, 1.0))
 			return {"p": (wait["p"] as Vector2).lerp(_action_point(a, true), u),
@@ -1225,7 +1132,7 @@ func pen_at() -> Dictionary:
 	return _waiting(last, -1) if last >= 0 else rest
 
 
-## WHERE THE NIB WAITS at [member _now], after action [param last] and before action [param next] (-1:
+## Where the nib waits at [member _now], after action [param last] and before action [param next] (-1:
 ## none comes): it settles beside the end of what it did, a little lifted; and where [method _parks]
 ## says the wait is long, or a page is to turn, it drifts on from there to [constant PARK] - before a
 ## turn at once, as the sheet will lift. One continuous way from where the action left the nib.
@@ -1247,7 +1154,7 @@ func _waiting(last: int, next: int) -> Dictionary:
 	return {"p": p, "lift": lift}
 
 
-## WHERE THE NIB WAITS BEFORE THE FIRST ACTION: `{p, lift}` (page px, m) - at the desk, at the page's right, a
+## Where the nib waits before the first action: `{p, lift}` (page px, m) - at the desk, at the page's right, a
 ## little lifted. A letter's waits over its first stroke, where it is carried from the desk ([LetterMedium]).
 func _before_first() -> Dictionary:
 	return {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": REST_LIFT}
@@ -1267,11 +1174,9 @@ func _parks(last: int, next: int) -> bool:
 	return to - (int(a.get("after", 0)) + int(a.get("span", 0))) >= PARK_WORDS
 
 
-## HOW LONG THE NIB TAKES TO REACH action [param next] after action [param last] (-1: none came): its
-## way from where it waits at [constant REACH_SPEED], never quicker than [constant REACH_EASE] - and
-## never longer than the wait, so it sets off from where the last action left it (over a page being
-## turned, once [constant PARK_BACK] of the turn is over). Every reach once took
-## [constant REACH_EASE], and 30 of an episode's 110 crossed most of the page in it (2026-10-19).
+## How long the nib takes to reach action [param next] after action [param last] (-1: none came): its way from where it
+## waits at [constant REACH_SPEED], never quicker than [constant REACH_EASE], and never longer than the wait, so it sets
+## off from where the last action left it (over a page being turned, once [constant PARK_BACK] of the turn is over).
 func _reach(last: int, next: int) -> float:
 	var to := _action_point(_actions[next], true)
 	if last < 0:
@@ -1304,7 +1209,6 @@ func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 				var t1 := float(st["t1"])
 				var pts: PackedVector2Array = st["points"]
 				if local < t0:
-					# lifted, travelling from the last stroke's end to this one's start
 					var from: Vector2 = prev if prev != Vector2.INF else pts[0]
 					var u := clampf((local - prev_t1) / maxf(t0 - prev_t1, 0.05), 0.0, 1.0)
 					return {"p": at + from.lerp(pts[0], _ease(u)) * k, "lift": sin(u * PI) * LIFT}
@@ -1348,7 +1252,7 @@ func _action_point(a: Dictionary, first: bool) -> Vector2:
 	return Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0)
 
 
-## WHAT A POINT POINTS AT, on the page (px): the box of the thing it names - a part's, from its ink
+## What a point points at, on the page (px): the box of the thing it names - a part's, from its ink
 ## record's `anchors`, else the whole thing's - or a box of negative size when that is not on the page
 ## the point is made over (or was never written).
 func target_box(a: Dictionary) -> Rect2:
@@ -1370,11 +1274,10 @@ func target_box(a: Dictionary) -> Rect2:
 	return Rect2(at.x, at.y - float(t["h"]), float(t["w"]), float(t["h"]) + float(t["d"]))
 
 
-## THE NIB'S WAY WHILE IT POINTS: `[down, along, stays]` - it comes down under a wide thing (a
-## formula, a curve) and sweeps along under it, then stays beside its right end, low on its height;
-## at a small one (a dot, a label, a short line) it comes straight to that place. Beside the end, the
-## pen's body leans away over clean paper, and never onto a line below (an aligned block's next line
-## is closer than a rule).
+## The nib's way while it points: `[down, along, stays]` - it comes down under a wide thing (a formula, a curve) and
+## sweeps along under it, then stays beside its right end, low on its height; at a small one (a dot, a label, a short
+## line) it comes straight to that place. Beside the end, the pen's body leans away over clean paper, never onto a line
+## below (an aligned block's next line is closer than a rule).
 func point_path(a: Dictionary) -> Array:
 	var b := target_box(a)
 	var stays := Vector2(b.end.x + POINT_GAP * 0.5, b.position.y + b.size.y * 0.7)
@@ -1404,7 +1307,7 @@ func _place_pen() -> void:
 	_pen.global_transform = _pen_xf()
 
 
-## THE PEN'S TRANSFORM at [member _now]: its nib where [method pen_at] says, its body leaning as the hand does
+## The pen's transform at [member _now]: its nib where [method pen_at] says, its body leaning as the hand does
 ## ([method lean], [method drift]). A medium that lays poses of its own over it answers for itself.
 func _pen_xf() -> Transform3D:
 	var at := pen_at()
@@ -1430,7 +1333,7 @@ func _pen_up() -> Vector3:
 	return PEN_UP
 
 
-## THE PEN'S LEAN at [param now]: [param base] swayed slowly about the vertical and in its rise (the
+## The pen's lean at [param now]: [param base] swayed slowly about the vertical and in its rise (the
 ## phases the hand's [param seed]'s), turned toward the page's top as the nib goes left
 ## ([param x_share], 0 at the page's left edge, 1 at its right - a forearm pivoting at the elbow), and
 ## its top trailing [param motion], the nib's travel across the desk (m/s). A unit vector, always within
@@ -1452,7 +1355,7 @@ static func lean(base: Vector3, now: float, seed: int, x_share: float, motion: V
 	return (up + trail).normalized()
 
 
-## THE NIB'S DRIFT off the paper at [param now]: `{dp, dlift}` (px, m) - slow, a few millimeters, in
+## The nib's drift off the paper at [param now]: `{dp, dlift}` (px, m) - slow, a few millimeters, in
 ## proportion to how high it is held ([param lift] of [constant REST_LIFT]): full at rest, slight while
 ## it points, none while it writes, where the nib is the ink's.
 static func drift(now: float, seed: int, lift: float) -> Dictionary:
@@ -1473,7 +1376,7 @@ static func _phases(seed: int) -> PackedFloat32Array:
 
 # --- the camera -------------------------------------------------------------------------------
 
-## THE FRAMING'S TARGET at [member _now]: how close (0 wide, 1 local) and where on the page. Wide until
+## The framing's target at [member _now]: how close (0 wide, 1 local) and where on the page. Wide until
 ## the lesson opens, as a page turns and once the last word is said; local on the line being written -
 ## looked for [constant CAM_LEAD] ahead, the springs being late.
 func _framing() -> Dictionary:
@@ -1601,24 +1504,23 @@ func _blank() -> float:
 	return Openings.SETTLE
 
 
-## WHEN DICTATED action [param i] MAY BEGIN, its first word said at [param t0] (INF while it is not): at the
+## When dictated action [param i] may begin, its first word said at [param t0] (INF while it is not): at the
 ## desk, as it is said - a little before, the pen's lead. INF holds the plan there until it is known.
 ## A medium whose pen writes ahead (a letter's, [LetterMedium]) answers for itself.
 func _due(_i: int, t0: float) -> float:
 	return t0 - PEN_LEAD if t0 < INF else INF
 
 
-## WHEN action [param i], begun at [param start], ends: [param end], the desk's - a dictated one's the elastic
+## When action [param i], begun at [param start], ends: [param end], the desk's - a dictated one's the elastic
 ## pen's, keeping time with its words, and one done in silence its ink's at the hand's pace. A medium that paces
 ## its pen otherwise answers for itself ([LetterMedium]).
 func _paced_end(_i: int, _start: float, end: float) -> float:
 	return end
 
 
-## THE QUICKEST action [param i] is ever done, against the hand's pace: one under way when the plan is made again
-## ends no sooner than the rest of it takes at this ([method _build_plan]). A medium that dashes some off quicker
-## answers for itself ([LetterMedium]'s sketches) - held to the desk's, a live reading's next sentence slowed one
-## mid-stroke.
+## The quickest action [param i] is ever done, against the hand's pace: one under way when the plan is made again ends no
+## sooner than the rest of it takes at this ([method _build_plan]). A medium that dashes some off quicker answers for
+## itself ([LetterMedium]'s sketches).
 func _quickest(_i: int) -> float:
 	return DeskScript.MAX_PACE
 

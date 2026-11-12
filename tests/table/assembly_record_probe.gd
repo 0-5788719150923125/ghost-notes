@@ -1,8 +1,8 @@
 extends SceneTree
 
-## NOT a gate. WHAT A BRICK RECORD CAME TO, read from its files alone ([AssemblyBake] wrote them; nothing is baked or rendered): stretch by stretch, how many pieces lie loose, how many of those
-## have left their stock, lie on the plate, lie past the drawn table's edge or stand in something solid, and where each part that was built was taken from. Read-only: a record being written
-## may be read while it grows, each stretch landing whole.
+## NOT a gate. What a brick record came to, read from its files alone ([AssemblyBake] wrote them; nothing is baked or rendered):
+## stretch by stretch, how many pieces lie loose, have left their stock, lie on the plate, lie past the drawn table's edge or
+## stand in something solid, and where each built part was taken from. Read-only; a record still being written may be read.
 ##
 ##   godot --headless --path . --log-file dist/brick4/record.log --script tests/table/assembly_record_probe.gd -- <record's folder> [--top 1.5,0.92] [--deep 0.0015] [--upto K] [--list N]
 ##
@@ -208,8 +208,8 @@ func _add_solid(faces: PackedVector3Array) -> void:
 	_grids.append(grid)
 
 
-## HOW DEEP A PIECE STANDS IN WHAT IS SOLID: of every triangle it overlaps, the most by which it would have to be moved off that triangle (separating axes). 0 for none. Studs are left out, as what a
-## piece rests on is under them.
+## How deep a piece stands in what is solid: of every triangle it overlaps, the most by which it would have to move off that
+## triangle (separating axes); 0 for none. Studs are left out, since what a piece rests on is under them.
 func _depth_in_solids(id: int, x: Transform3D) -> float:
 	var box: Array = _boxes[id]
 	var e: Vector3 = (box[0] as Vector3) - Vector3.ONE * SHRINK

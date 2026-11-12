@@ -1,9 +1,7 @@
 extends SceneTree
 
-## Per-phone diagnostic dump: renders a text and prints every phoneme with its
-## position, duration, broadband RMS and three band energies, so a specific
-## reported word ("the F in father is silent") can be checked against what the
-## synthesizer actually emitted rather than against a whole-take average.
+## Per-phone diagnostic dump: renders a text and prints every phoneme with its position, duration, broadband
+## RMS and three band energies, to check a reported word against what the synthesizer emitted.
 ##
 ## Run: godot --headless --path . --script tests/app/phone_dump.gd -- "your text"
 

@@ -1,40 +1,31 @@
 class_name AppIcon
 extends RefCounted
 
-## AppIcon - Ghost Notes' icon, drawn where it is needed and never shipped as a file (2026-10-31,
-## the user: "I don't like how we've pre-created it, and shipped as a static thing"). A ghost whose
-## color, body, pose, face, backdrop and what floats beside it are each read off a hash:
+## AppIcon - Ghost Notes' icon, drawn where it is needed and never shipped as a file. A ghost whose color,
+## body, pose, face, backdrop and floating prop are each read off a hash:
 ##
-## - OF THE MACHINE for the window's icon, set at launch by Boot ([method apply]):
-##   `OS.get_unique_id()` - /etc/machine-id, Windows' hardware profile, Android's ANDROID_ID, the
-##   Mac's platform UUID - salted and hashed, so every machine keeps its own ghost and the id itself
-##   is kept nowhere.
-## - OF THE BUILD for the icons a phone shows ([method packaged], written by app_icon_tool.gd from
-##   scripts/build.sh): Android and iOS read a launcher icon out of the package, and an app cannot
-##   draw a new one there, so each build is seeded by its commit and every update comes with a new
-##   ghost.
+## - Of the machine, for the window's icon, set at launch by Boot ([method apply]): `OS.get_unique_id()`
+##   salted and hashed, so every machine keeps its own ghost and the id itself is kept nowhere.
+## - Of the build, for the icons a phone shows ([method packaged], written by app_icon_tool.gd from
+##   scripts/build.sh): a package's launcher icon cannot be drawn at runtime, so each build is seeded by its commit.
 ##
-## THE GHOST IS DATA. Every part is a row: a body's outline an SVG path in the ghost's own frame
-## (its middle at 0,0, about 64 across), a face's or a prop's an SVG fragment with its colors left
-## as `{names}`. [method svg_of] composes one SVG and the engine's own ThorVG draws it at any size
-## (`Image.load_svg_from_string`), so a new body, face or prop is a row. A pick is one byte of the
-## hash modulo its table's size: a row added re-draws the ghosts that land on it. A ROW THORVG
-## CANNOT READ MAY CRASH THE ENGINE (a stray `<` in one did, in tvg::Paint), and Boot draws at every
-## launch: tests/platform/app_icon_check.gd draws every row, so it crashes there first.
+## The ghost is data. Every part is a row: a body's outline an SVG path in the ghost's own frame (its middle
+## at 0,0, about 64 across), a face's or a prop's an SVG fragment with its colors left as `{names}`.
+## [method svg_of] composes one SVG and the engine's ThorVG draws it at any size
+## (`Image.load_svg_from_string`). A pick is one byte of the hash modulo its table's size, so adding a row
+## re-draws the ghosts that land on it. A row ThorVG cannot read may crash the engine and Boot draws at every
+## launch: tests/platform/app_icon_check.gd draws every row first.
 ##
-## LAYERS, for the platforms that put an icon together themselves ([const LAYERS]): the window's
-## whole icon, a full-bleed opaque backdrop (Android's adaptive background, iOS under its own mask),
-## the figure alone within Android's safe circle, and the figure in white with its face cut out
-## (Android 13's themed icon, iOS's tinted one).
+## [const LAYERS] serve platforms that compose an icon themselves: the whole icon, a full-bleed opaque
+## backdrop, the figure alone within Android's safe circle, and the figure in white with its face cut out
+## (Android 13 themed, iOS tinted).
 
-## Mixed into every hash, so this icon's draw is its own: another use of the machine's id hashes to
-## something unrelated. Renaming it re-draws every ghost.
+## Mixed into every hash, so this icon's draw is its own. Changing it re-draws every ghost.
 const SALT := "ghost-icon"
 ## The SVG's own frame; every coordinate below is in it.
 const FRAME := 128.0
-## EVERY GHOST STANDS IN THE MIDDLE (2026-10-31, the user: "quite a few of the ghosts are
-## off-center"), the same size with a prop or without: its body's drawn box is centered on the
-## frame's middle, and a prop perches on the head, over its outline but never its face.
+## Every ghost stands in the middle, the same size with a prop or without: its body's drawn box is centered
+## on the frame's middle, and a prop perches on the head, over its outline but never its face.
 const SIZE := 0.86
 ## How far it may lean either way, about its middle (degrees).
 const TILT_MOST := 9.0

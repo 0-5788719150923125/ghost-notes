@@ -1,14 +1,12 @@
-// REDACTED WORDS HIDDEN OVER THE PICTURE (src/dispatch/dispatch_censor.gd): each box drawn is cracked along straight
-// lines into large shards, each one flat, the average color of the frame under it - as an editor hides a name in a video
-// after it was shot (2026-11-10, the user: "a big rectangle region with large straight cracks in it"). Drawn after the
+// Redacted words hidden over the picture (src/dispatch/dispatch_censor.gd): each box is cracked along straight lines into
+// large flat shards, each the average color of the frame under it, as an editor hides a name in a video. Drawn after the
 // desk's 3D, it reads the finished frame back.
 //
-// THE CRACKS are a tree of lines per box (DispatchCensor.cracks), in box heights from its top left: a point's shard is the
-// leaf its sides of them lead to (DispatchCensor.shard, line for line). A SHARD'S COLOR is read off a grid of taps over
-// that shard's own bounds, each jittered in its cell so the grid never falls in step with the letters, averaged over the
-// taps inside it - every shard as many taps whatever its size or the frame's, and never off the screen texture's mipmaps,
-// which Godot blurs (every shard came out near the box's mean). Every point of a shard reads the same taps, so a shard is
-// one color exactly.
+// The cracks are a tree of lines per box (DispatchCensor.cracks), in box heights from its top left; a point's shard is the
+// leaf its sides of them lead to (DispatchCensor.shard, line for line). A shard's color is the average of a grid of taps
+// over its own bounds, each jittered in its cell so the grid does not fall in step with the letters; every shard gets
+// the same number of taps, and none are read from the screen texture's mipmaps (Godot blurs them, so every shard would
+// come out near the box's mean). Every point of a shard reads the same taps, so a shard is one color.
 shader_type canvas_item;
 render_mode unshaded;
 

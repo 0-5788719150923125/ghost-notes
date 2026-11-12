@@ -1,27 +1,26 @@
 extends Control
 class_name StoryboardStrip
 
-## StoryboardStrip - a storyboard's entries laid along a ruler: one block per entry, as wide as it
-## is scheduled to stay, the tail's after the sequence's. The top row of the [StoryboardEditor].
+## StoryboardStrip - a storyboard's entries laid along a ruler: one block per entry, as wide as it is
+## scheduled to stay, the tail's after the sequence's. The top row of the [StoryboardEditor].
 ##
-## WHAT IS DRAWN IS WHAT PLAYS: the blocks' starts and lengths are [method Storyboard.schedule]'s,
-## the same arithmetic the Director walks, handed in as rows ([member rows]) - this control works
-## nothing out about a storyboard itself. An entry held for a fixed time has a hard right edge; one
-## that leaves on a cue, or runs its scene's own length, has no fixed end, so its block stops where
-## the schedule counts it from and its edge is drawn broken.
+## What is drawn is what plays: the blocks' starts and lengths are [method Storyboard.schedule]'s, the
+## same arithmetic the Director walks, handed in as rows ([member rows]). An entry held for a fixed time
+## has a hard right edge; one that leaves on a cue, or runs its scene's own length, has no fixed end, so
+## its block stops where the schedule counts it from and its edge is drawn broken.
 ##
-## IT ASKS, THE EDITOR DOES. A click picks an entry ([signal picked]); a block dragged along the
-## row is moved to where it is dropped ([signal moved]); the right edge of a fixed hold dragged is
-## a new length ([signal stretched]). Each gesture is ONE signal, raised when the button comes up, so
-## a drag is one edit and one step back - the block follows the pointer in between, as a drawing.
-## The wheel pans the ruler; with Ctrl it zooms about the pointer ([TimelineView]).
+## It asks, the editor does. A click picks an entry ([signal picked]); a block dragged along the row is
+## moved to where it is dropped ([signal moved]); the right edge of a fixed hold dragged is a new length
+## ([signal stretched]). Each gesture is one signal, raised when the button comes up, so a drag is one
+## edit; the block follows the pointer in between. The wheel pans the ruler; with Ctrl it zooms about the
+## pointer ([TimelineView]).
 
 ## An entry was clicked: its index, the tail's counted on from the sequence's end; -1 for a click
 ## on none.
 signal picked(index: int)
 ## An entry was dragged to another place in its own list.
 signal moved(from: int, to: int)
-## A fixed hold's right edge was dragged: the entry's new SCHEDULED length, in seconds.
+## A fixed hold's right edge was dragged: the entry's new scheduled length, in seconds.
 signal stretched(index: int, length: float)
 
 const RULER_H := 18.0
@@ -147,7 +146,7 @@ func _on_edge(i: int, x: float) -> bool:
 	return absf(x - _rect(i).end.x) <= EDGE
 
 
-## Where entry [param from] lands when it is let go at [param x]: an index in its OWN list (the
+## Where entry [param from] lands when it is let go at [param x]: an index in its own list (the
 ## sequence's entries stay in the sequence, the tail's in the tail).
 func _drop_index(from: int, x: float) -> int:
 	var tail := bool((rows[from] as Dictionary)["tail"])

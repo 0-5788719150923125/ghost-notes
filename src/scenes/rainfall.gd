@@ -2,15 +2,15 @@ extends GhostScene
 
 ## Rainfall - slanting rain over a brooding sky, fog rolling through it.
 ##
-## Fast streaks fall at a wind-blown slant whose angle sways with the bass; a low color
-## bed and drifting fog give it weather and depth. Density and slant ride the audio, so a
-## loud passage is a downpour. The seed picks the STORM first - hanging mist, drizzle,
-## steady rain, downpour, or rain in a lit street at night - and the storm decides its own
-## palette along with its density. `bed` + `fog` + `rain` + `veil` (+ `flare`).
+## Fast streaks fall at a wind-blown slant whose angle sways with the bass; a low color bed and
+## drifting fog give weather and depth. Density and slant ride the audio, so a loud passage is a
+## downpour. The seed picks the storm first - hanging mist, drizzle, steady rain, downpour, or
+## rain in a lit street at night - which decides the palette and density.
+## Layers: `bed` + `fog` + `rain` + `veil` (+ `flare`).
 
-# A storm is an intensity AND a light. Count, fall speed, slant and streak width belong
-# together (a downpour is not a drizzle with more drops), and so does what the water
-# catches: sunless mist is gray, a lit street is sodium and neon. One roll picks all of it.
+# A storm is an intensity and a light. Count, fall speed, slant and streak width belong together
+# (a downpour is not a drizzle with more drops), and so does what the water catches: sunless
+# mist is gray, a lit street is sodium and neon. One roll picks all of it.
 #   streak - which end of the scheme the drops take: 0 the base water, 2 the accent light
 const STORMS := {
 	"mist": {
@@ -38,8 +38,7 @@ const STORMS := {
 		"density": [0.68, 0.95], "veil": 0.62, "flare": 0.20, "streak": 0,
 	},
 	"lit": {
-		# Rain in a lit street at night: the streaks take the LAMP's color, not the sky's,
-		# and there is a source in frame throwing a flare - the one warm, loud storm.
+		# A lit street at night: the streaks take the lamp's color, and a source in frame throws a flare.
 		"moods": ["sodium", "ember", "magenta", "brass", "violet", "toxic", "rose", "teal", "dawn"],
 		"count": [150, 260], "fall": [1.1, 1.6], "slant": [0.15, 0.40], "width": [1.2, 1.8],
 		"fog_a": [0.03, 0.06], "fog_n": [4, 8], "val": [0.10, 0.18], "sat": [0.7, 1.0],
@@ -48,8 +47,8 @@ const STORMS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"storm": {"label": "Storm", "type": "choice", "options": "STORMS", "default": null,
 		"blurb": "What kind of rain falls: mist, drizzle, steady rain, a downpour, or rain in a lit street at night."},
@@ -81,28 +80,24 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"count": rng.randi_range(int(st["fog_n"][0]), int(st["fog_n"][1])),
 	})
 	add_layer("rain", rng, {
-		# Water has no color of its own - it shows whatever lights it, which is why the
-		# storm names the end of the scheme its streaks are drawn from.
+		# Water has no color of its own: the storm names the end of the scheme its streaks use.
 		"hue": sch.hue_at(int(st["streak"]), 3),
 		"sat": clampf(sch.sat * (0.7 if int(st["streak"]) > 0 else 0.3), 0.05, 0.8),
 		"count": count, "fall": rng.randf_range(float(st["fall"][0]), float(st["fall"][1])),
 		"slant": rng.randf_range(float(st["slant"][0]), float(st["slant"][1])), "width": width,
-		# The drizzle-to-downpour axis, now owned by the music instead of by the seed
-		# alone: the storm sets how hard it rains at its quietest and how much harder a
-		# loud passage pushes it. A downpour is already near its ceiling, so it swells
-		# little; a mist has most of its range still ahead of it.
+		# The drizzle-to-downpour axis: the storm sets how hard it rains at its quietest and how
+		# much a loud passage pushes it. A downpour swells little; a mist has most of its range ahead.
 		"density_floor": float(st["density"][0]),
 		"density_gain": float(st["density"][1]),
 	})
-	# Harmonic obscuring veil: drifting gray sheets of rain that thicken on loud passages and soften
-	# the view, then clear - moving patterns of visibility riding the music (the snow-squall effect,
-	# generalized). Heavier rain pushes a denser veil.
+	# Harmonic veil: drifting gray sheets of rain that thicken on loud passages and soften the
+	# view, then clear. Heavier rain pushes a denser veil.
 	add_layer("veil", rng, {
 		"hue": sch.hue, "sat": clampf(sch.sat * 0.25, 0.02, 0.35), "val": 0.78,
 		"floor": 0.10, "gain": 0.8,
 		"max": clampf(float(st["veil"]) * (0.8 + 0.2 * width), 0.15, 0.7),
 	})
-	# The lamp itself, in front of the weather - what makes a lit storm read as lit.
+	# The lamp itself, in front of the weather.
 	if rng.randf() < float(st["flare"]):
 		add_layer("flare", rng, {"hue": sch.accent, "fisheye": number("fisheye", rng)})
 	return {"hue": sch.hue, "mood": sch.name, "storm": storm, "count": count, "width": width}

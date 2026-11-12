@@ -322,8 +322,7 @@ def test_hands():
     pose[30:, 15, 1] = 0.7             # raised, as a gesture at the chest
     cost = actor.hands_up(pose.reshape(40, -1))
     check(cost[:30].max() < 1e-9 and cost[30:].min() > 1.0, "a raised hand costs %.2f, one at rest %.2f" % (cost[30:].min(), cost[:30].max()))
-    # the control: what the first build did - their median place as rest - costs a hand at rest when
-    # most hands seen are raised (2026-10-21)
+    # the control: their median place as rest costs a hand at rest when most hands seen are raised
     pose[5:, 15, 1] = 0.7
     cost = actor.hands_up(pose.reshape(40, -1))
     median = float(np.median(pose[:, 15, 1]))
@@ -410,10 +409,10 @@ def test_rig(tmp):
 
 
 def test_skin():
-    """THE BODY'S BONES (the fourth pass): a made seated pose's skeleton - the hips under the neck, a hand
-    seen in the picture resting and one seen too faintly not - and each place weighed to the bone it is on:
-    the torso's middle to the torso, a resting wrist to its hand, a forearm to the forearm, the head to the
-    head, the room to nothing; no place weighs more than whole."""
+    """The body's bones: a made seated pose's skeleton - the hips under the neck, a hand seen in the picture
+    resting and one seen too faintly not - and each place weighed to the bone it is on: the torso's middle to
+    the torso, a resting wrist to its hand, a forearm to the forearm, the head to the head, the room to
+    nothing; no place weighs more than whole."""
     import numpy as np
     W, H = 1920, 1080
     pose = np.zeros((33, 4))

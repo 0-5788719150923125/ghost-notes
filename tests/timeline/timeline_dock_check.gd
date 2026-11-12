@@ -1,23 +1,23 @@
 extends Node
 
-## timeline_dock_check - ANY SHOW'S TIMELINE, DOCKED ([TimelineDock]; next/editing.md, "The Timeline").
+## timeline_dock_check - any show's timeline, docked ([TimelineDock]; next/editing.md, "The Timeline").
 ##
 ##   tests/run_boot_probe.sh tests/timeline/timeline_dock_check.gd 60
 ##
-## On an episode of its own (a cardless fixture under its own root, never the author's), read as a Timeline
+## On an episode of its own (a cardless fixture under its own root), read as a Timeline
 ## ([method TableEpisode.timeline]) and docked:
 ##   - its groups are flags on the strip across the whole show, the first picked, its acts and cues on the lanes below;
 ##   - a group picked by its flag shows its own items; a moment scrubbed to picks the group it falls in, and is asked for;
 ##   - a group is read as a stage entry's track: a span from/to, a flag at, aimed at its lane;
-##   - worked there: an act's block stretched is its length in `acts.json`, a cue's flag moved its place in the words, each
-##     kept with what stood a version back (THE CONTROL: with no one to write it, the dock is read-only);
-##   - ONE INSPECTOR: a block picked is shown at the right, by the owner where there is one (THE CONTROL: with none, the dock says
+##   - an act's block stretched is its length in `acts.json`, a cue's flag moved its place in the words, each
+##     kept with what stood a version back (control: with no one to write it, the dock is read-only);
+##   - one inspector: a block picked is shown at the right, by the owner where there is one (control: with none, the dock says
 ##     what the item is); what the owner picks elsewhere is shown there too; Undo is the owner's, what it could not do said;
-##   - THE SHOW'S TIME: the playhead is the show's clock, the strip scrubbed moves the show; every item in order, a row a press
+##   - the playhead is the show's clock, the strip scrubbed moves the show; every item in order, a row a press
 ##     (the group picked, the item inspected, the show moved there); the panel's Timeline card lists them while a dock is open
-##     (THE CONTROL: none open, no card); a flag's name is its tooltip, never drawn; the transport's Timeline button is the highest
-##     offer standing (THE CONTROL: an offerer gone is not offered);
-##   - THE CONTROL: a timeline with a fault says so over the strip, and a sound one says nothing.
+##     (control: none open, no card); a flag's name is its tooltip, never drawn; the transport's Timeline button is the highest
+##     offer standing (control: an offerer gone is not offered);
+##   - control: a timeline with a fault says so over the strip, and a sound one says nothing.
 
 const ROOT := "user://timeline_dock_check"
 
@@ -55,7 +55,7 @@ func _ready() -> void:
 		and (tr["spans"] as Array).any(func(s: Dictionary) -> bool: return s.has("at") and String(s["target"]) == "words"),
 		"a group read as a stage entry's track: spans from/to, flags at, aimed at their lanes")
 	_ok(not dock._problems.visible, "a sound timeline says nothing over the strip")
-	# WORKED THERE (the owner writes): the act stretched to 9 s and the cue moved to the first word, each a hand's version
+	# Worked there (the owner writes): the act stretched to 9 s and the cue moved to the first word, each a hand's version
 	_ok(dock._lanes.read_only, "the control: with no one to write it, the dock is read-only")
 	dock.edit = func(it: Dictionary, from: float, to: float) -> String:
 		var src: Array = it["source"]
@@ -79,8 +79,8 @@ func _ready() -> void:
 	dock._lanes.retimed.emit(cue, 0.0, 0.0)
 	_ok(ep.read_text("say:1").begins_with("<!-- act: base -->") and ep.kept("say:1") and dock.picked == 1,
 		"a cue's flag moved to the start puts its mark before the first word, the passage kept: %s" % ep.read_text("say:1"))
-	# ONE INSPECTOR: a block picked is shown at the right - by itself with no owner to fill it (THE CONTROL), else by the owner,
-	# handed the item; what the owner picks elsewhere too; and UNDO is the owner's, what it could not do said over the timeline
+	# One inspector: a block picked is shown at the right - by itself with no owner to fill it (control), else by the owner,
+	# handed the item; what the owner picks elsewhere too; and undo is the owner's, what it could not do said over the timeline
 	dock.pick(1)
 	dock._lanes.picked.emit(base)
 	var said_alone := dock._inspector.get_children().any(func(c: Node) -> bool: return c is Label and (c as Label).text.contains("base"))
@@ -104,7 +104,7 @@ func _ready() -> void:
 	_ok(dock._undo_b.visible and dock.take_back().is_empty() and undone[0] == 1 and not dock._said.visible, "Undo is the owner's, and done says nothing")
 	_ok(dock.take_back() == "nothing left" and dock._said.visible and dock._said.text.contains("nothing left"),
 		"the control: what it could not take back is said over the timeline")
-	# THE SHOW'S TIME: the playhead is the show's clock, on the strip and inside the group picked; the strip scrubbed moves the show
+	# The show's time: the playhead is the show's clock, on the strip and inside the group picked; the strip scrubbed moves the show
 	var g1: Dictionary = dock.timeline["groups"][1]
 	dock.clock = func() -> float: return float(g1["start"]) + 1.0
 	await get_tree().process_frame
@@ -115,7 +115,7 @@ func _ready() -> void:
 	dock.seek = func(t: float) -> void: asked_t.append(t)
 	dock._groups.scrubbed.emit(2.5)
 	_ok(asked_t == [2.5], "the strip scrubbed moves the show there (%s)" % str(asked_t))
-	# EVERY ITEM IN ORDER, A ROW A PRESS: the group picked, the item in the inspector, the show moved to it
+	# Every item in order, a row a press: the group picked, the item in the inspector, the show moved to it
 	var all := dock.timeline_items()
 	var ordered := true
 	for k in range(1, all.size()):
@@ -130,7 +130,7 @@ func _ready() -> void:
 	dock.pick_item(first_item)
 	_ok(ordered and first_item >= 0 and dock.picked == 2 and dock.inspected.get("item") == all[first_item]["item"] and asked_t.size() == 1
 		and is_equal_approx(asked_t[0], float(all[first_item]["at"])), "every item in the order it comes; a row picks it and moves the show to it")
-	# THE PANEL'S TIMELINE CARD: the open editor's items, a row a press - THE CONTROL: no editor open, no card
+	# The panel's Timeline card: the open editor's items, a row a press - control: no editor open, no card
 	var card := Card.new("check.timeline", "Timeline", &"picture")
 	add_child(card)
 	var list := TimelineList.new()
@@ -140,12 +140,12 @@ func _ready() -> void:
 	asked_t.clear()
 	list.press(first_item)
 	_ok(asked_t.size() == 1, "a row of it pressed goes there")
-	# A FLAG'S NAME IS ITS TOOLTIP, never drawn beside it
+	# A flag's name is its tooltip, never drawn beside it
 	var f0: Dictionary = dock._flags[1]
 	var tip := dock._groups._get_tooltip(Vector2(dock._groups.tview.x_of(float(f0["time"])), 4.0))
 	_ok(tip.contains(String(f0["label"])) and dock._groups._get_tooltip(Vector2(-500.0, 4.0)).is_empty(),
 		"a flag's name is its tooltip (%s); the control: away from any flag, none" % tip)
-	# THE TRANSPORT'S BUTTON STANDS FOR THE HIGHEST OFFER STANDING - THE CONTROL: an offerer gone is not offered
+	# The transport's button stands for the highest offer standing - control: an offerer gone is not offered
 	var low := Node.new()
 	var high := Node.new()
 	add_child(low)

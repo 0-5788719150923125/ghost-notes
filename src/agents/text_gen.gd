@@ -3,54 +3,43 @@ class_name TextGen
 
 ## TextGen - who writes the words. The text counterpart of [ImageGen].
 ##
-## A backend turns ONE system prompt plus ONE prompt into ONE reply on disk. Everything above
-## that - what is asked, what the reply is for, where it is kept - belongs to the caller (see
-## [AgentJobs], which queues the work, and [TableProducer], which asks for it), so a second
-## writer is a registry entry and a class here, never a branch at a call site.
+## A backend turns one system prompt plus one prompt into one reply on disk. What is asked, what the
+## reply is for and where it is kept belong to the caller ([AgentJobs] queues the work, [TableProducer]
+## asks for it), so a second writer is a registry entry and a class here, never a branch at a call site.
 ##
-## THE CONTRACT is [ImageGen]'s, all on the main thread (spawns go through [Subprocess], whose
-## death pact is per-thread):
+## The contract is [ImageGen]'s, all on the main thread (spawns go through [Subprocess], whose death
+## pact is per-thread):
 ##
 ##   start(job)    - launch the work; return a pid (<= 0 is a failure, with job.error set)
 ##   resolve(job)  - after the pid exits: the reply text, or ""
 ##   failure(job)  - after an empty resolve: one line saying why
 ##
-## `job` is a Dictionary the queue owns: {prompt, system, dir, tier, images}. `dir` is the job's
-## own directory - the prompt, the system prompt, the reply and the log are all written there and
-## KEPT, so what a writer was shown can always be read back afterwards.
+## `job` is a Dictionary the queue owns: {prompt, system, dir, tier, images}. `dir` is the job's own
+## directory; the prompt, system prompt, reply and log are written there and kept.
 ##
-## PICTURES go with the words when a caller has them: `images` is `[{path, label, flip}]`, each
-## sent ahead of the prompt under its label (turned over when `flip` - a card that came up
-## reversed is seen upside down), and listed at the top of `prompt.txt`, so the record says
-## which pictures a writer was shown as plainly as which words.
+## Pictures: `images` is `[{path, label, flip}]`, each sent ahead of the prompt under its label
+## (turned over when `flip`) and listed at the top of `prompt.txt`.
 ##
-## A WRITER, NOT AN AGENT - unless ghost hands it tools. A run works from its prompt alone: Claude
-## is run with none of its own tools; Codex, whose `exec` keeps a read-only shell, is TOLD to work
-## only from the message and never to open, list or read a file ([constant Codex.ONLY_THIS]) - the
-## user's call (2026-10-04): asking is enough, agents follow it. Grok keeps `read_file` only when it
-## has pictures to look at, and is told to open nothing else. Each run is also STATELESS (no
-## session is kept or resumed) - a caller that wants a conversation sends the conversation, so
-## every run's whole input is the prompt file beside its reply.
+## A writer, not an agent, unless ghost hands it tools. A run works from its prompt alone and is
+## stateless (no session kept or resumed; a caller wanting a conversation sends it). Claude is run with
+## none of its own tools; Codex, whose `exec` keeps a read-only shell, is told to work only from the
+## message ([constant Codex.ONLY_THIS]); Grok keeps `read_file` only when it has pictures to look at.
 ##
-## GHOST'S TOOLS. A job carrying `tools_url` (an [AgentTools] endpoint) is run as an agent whose
-## ONLY tools are the ones ghost serves there - it calls them, sees what they return, and works in
-## that loop until it is done; every call is kept beside its prompt (`tools.jsonl`). A backend that
-## can take them says so ([method Backend.takes_tools]); one that cannot is asked the one-shot way.
+## Ghost's tools: a job with `tools_url` (an [AgentTools] endpoint) runs as an agent whose only tools
+## are the ones ghost serves there; every call is kept beside its prompt (`tools.jsonl`). A backend
+## that can take them says so ([method Backend.takes_tools]); one that cannot is asked one-shot.
 ##
-## THE PROMPT IS NEVER IN ARGV, for the reason [AssistantBackends] gives: it reaches the CLI on
-## stdin from a file, and the system prompt from a file the CLI reads itself.
+## The prompt is never in argv (see [AssistantBackends]): it reaches the CLI on stdin from a file, and
+## the system prompt from a file the CLI reads itself.
 
-## A picture is sent no larger than this on its long edge: enough to see what is painted, and a
-## fraction of the tokens of the painter's full size.
+## A picture is sent no larger than this on its long edge: enough to see what is painted, at a fraction
+## of the tokens.
 const PICTURE_EDGE := 768
 
-## Keys are what `ghost: table: writer` (and anything else that asks for words) stores.
-##
-## One row a backend, the one shape every registry here has (next/structure.md, step 6):
-##   label    its name in a picker
-##   backend  the inner class that runs it
-##   blurb    one line, for the picker's tooltip and docs/agents.md - ONE string literal, not a
-##            `+` continuation, so docs.py reads it whole
+## Keys are what `ghost: table: writer` (and anything else that asks for words) stores. One row a
+## backend, the one shape every registry here has (next/structure.md): `label` (its name in a picker),
+## `backend` (the inner class that runs it), `blurb` (one line for the tooltip and docs/agents.md - one
+## string literal, not a `+` continuation, so docs.py reads it whole).
 const REGISTRY := {
 	"claude": {"label": "Claude (Claude Code CLI)", "backend": Claude,
 		"blurb": "Anthropic's models through the Claude Code CLI, run with no tools and no project context. Uses the Claude Code login."},
@@ -62,14 +51,13 @@ const REGISTRY := {
 		"blurb": "Models on Amazon Bedrock - Amazon's own Nova by default, and the open models Bedrock hosts - through the AWS CLI with your AWS credentials and region (aws configure). Billed per token to your AWS account; a model from another provider may subscribe the account to it through AWS Marketplace on first use."},
 }
 
-## THE TIER is what a caller asks for instead of a model name: `best` for words somebody will
-## hear or read, `fast` for structured bookkeeping nobody sees verbatim. Each backend maps it to
-## its own models, so a caller never learns one.
+## What a caller asks for instead of a model name: `best` for words somebody will hear or read, `fast`
+## for structured bookkeeping nobody sees verbatim. Each backend maps it to its own models.
 const TIERS := ["best", "fast"]
 
 
-## Build the backend for [param key], falling back to the first entry for an unknown one: a
-## stale document must never leave a caller without a writer.
+## Build the backend for [param key], falling back to the first entry for an unknown one: a stale
+## document must not leave a caller without a writer.
 static func make(key: String) -> Backend:
 	var cls: Variant = Registry.field(REGISTRY, key, "backend", REGISTRY[REGISTRY.keys()[0]]["backend"])
 	return cls.new()
@@ -79,9 +67,9 @@ static func has(key: String) -> bool:
 	return REGISTRY.has(key)
 
 
-## THE JSON IN A REPLY, leniently. A writer asked for "only a JSON object" still sometimes
-## fences it, or says a word first; neither should cost a run. Takes the outermost object (or
-## array) in [param text], with code fences ignored. null when there is none that parses.
+## The JSON in a reply, leniently: a writer asked for only a JSON object sometimes fences it or says a
+## word first. Takes the outermost object (or array) in [param text], code fences ignored; null when
+## none parses.
 static func extract_json(text: String) -> Variant:
 	var t := text.strip_edges()
 	if t.begins_with("```"):
@@ -101,8 +89,8 @@ static func extract_json(text: String) -> Variant:
 	return null
 
 
-## A picture as a writer is sent it: no larger than [constant PICTURE_EDGE], turned over when
-## [param flip]; null when it cannot be read.
+## A picture as a writer is sent it: no larger than [constant PICTURE_EDGE], turned over when [param
+## flip]; null when it cannot be read.
 static func picture(path: String, flip := false) -> Image:
 	var img := Image.load_from_file(path) if FileAccess.file_exists(path) else null
 	if img == null or img.is_empty():
@@ -146,9 +134,8 @@ static func put(path: String, text: String) -> String:
 	return ""
 
 
-## The base every backend extends. It does nothing; a backend that forgets a method fails
-## visibly (no pid, no reply) rather than silently.
-## A picker's efforts: [param dflt] (key "") first, then each of [param levels].
+## The base every backend extends. It does nothing; a backend that forgets a method fails visibly (no
+## pid, no reply). A picker's efforts: [param dflt] (key "") first, then each of [param levels].
 static func effort_list(levels: Array, dflt := "Default") -> Array:
 	var out: Array = [{"key": "", "label": dflt}]
 	for e in levels:
@@ -164,15 +151,12 @@ static func effort_label(key: String) -> String:
 
 # --- what an agent is doing now ---------------------------------------------------------------
 #
-# A run of many minutes showed nothing but its glyph, and a person could not tell a model thinking
-# from one stuck (the user, 2026-10-09: "so we know if agents are thinking, or writing, or looking,
-# or whatever. So we know they aren't stuck"). Every backend that writes a stream reads it here as it
-# grows, into `job["_now"]`: {doing, tokens (thought, estimated), chars (written), heard (when the
-# stream last grew)}; [method AgentJobs.activity] makes the line a status shows.
+# Every backend that writes a stream reads it here as it grows, into `job["_now"]`: {doing, tokens
+# (thought, estimated), chars (written), heard (when the stream last grew)}; [method
+# AgentJobs.activity] makes the line a status shows.
 
-## The events [param path] has gained since this was last asked for [param job], as objects: the
-## lines finished since, read from a byte offset kept in the job (see [method
-## AssistantBackends.lines_since]), so a stream of thousands of lines is never read twice.
+## The events [param path] has gained since this was last asked for [param job], as objects: the lines
+## finished since, read from a byte offset kept in the job (see [method AssistantBackends.lines_since]).
 static func new_events(job: Dictionary, path: String) -> Array:
 	var seen: Dictionary = job.get("_seen", {})
 	var got := AssistantBackends.lines_since(path, int(seen.get(path, 0)))
@@ -186,16 +170,16 @@ static func new_events(job: Dictionary, path: String) -> Array:
 	return out
 
 
-## The job's state as last read, made if it has none: what it is doing, and how much it has thought
-## and written. [param idle] is what it is doing before its stream says.
+## The job's state as last read, made if it has none: what it is doing, and how much it has thought and
+## written. [param idle] is what it is doing before its stream says.
 static func now_of(job: Dictionary, idle := "starting") -> Dictionary:
 	if not (job.get("_now") is Dictionary):
 		job["_now"] = {"doing": idle, "tokens": 0, "chars": 0, "heard": 0}
 	return job["_now"]
 
 
-## [param path]'s new events read into the job's state by [param read] (`func(now, event)`), and
-## when the stream last grew. The state.
+## [param path]'s new events read into the job's state by [param read] (`func(now, event)`), and when
+## the stream last grew. Returns the state.
 static func follow(job: Dictionary, path: String, read: Callable, idle := "starting") -> Dictionary:
 	var now := TextGen.now_of(job, idle)
 	for e in TextGen.new_events(job, path):
@@ -210,12 +194,9 @@ static func tool_name(name: String) -> String:
 	return name.get_slice("__", name.get_slice_count("__") - 1) if name.contains("__") else name
 
 
-## THE STATUS LINE: what the agent is doing, how much it has thought or written, for how long, and -
-## past [param quiet_after] seconds with nothing new on a stream that should be growing - how long
-## it has said nothing. "thinking (~11K tokens) · 6:30". WHAT IT HAS THOUGHT IS SAID WHATEVER IT IS DOING
-## (2026-10-26: a puppeteer calling its tools for 18 minutes read "calling act" and a clock, and the user saw
-## "no token counts ... or anything to indicate if this is doing anything at all"): "calling act · ~74K
-## tokens thought · 18:00".
+## The status line: what the agent is doing, how much it has thought or written (whatever it is doing),
+## for how long, and - past [param quiet_after] seconds with nothing new on a stream that should be
+## growing - how long it has said nothing. "calling act · ~74K tokens thought · 18:00".
 static func activity_line(now: Dictionary, elapsed: int, quiet := 0, quiet_after := 180) -> String:
 	var doing := String(now.get("doing", "working"))
 	var line := doing
@@ -231,8 +212,8 @@ static func activity_line(now: Dictionary, elapsed: int, quiet := 0, quiet_after
 	return line
 
 
-## A RUNNING JOB'S STATUS LINE ([method activity_line]) from its backend's `activity`, read again
-## at most once a second: a row redrawn four times a second must not reparse a stream that often.
+## A running job's status line ([method activity_line]) from its backend's `activity`, read at most once
+## a second.
 static func status_of(job: Dictionary) -> String:
 	var t := int(Time.get_unix_time_from_system())
 	if int(job.get("_status_at", -1)) != t or not job.has("_status"):
@@ -272,9 +253,9 @@ class Backend:
 	static func models() -> Array:
 		return [{"key": "", "label": "Default"}]
 
-	## The reasoning efforts a picker offers for this writer running [param model]: `[{key, label}]`,
-	## the writer's own default (key "") first - and alone when the writer takes no such setting.
-	## A job's `effort` is one of the keys.
+	## The reasoning efforts a picker offers for this writer running [param model]: `[{key, label}]`, the
+	## writer's own default (key "") first, and alone when the writer takes no such setting. A job's
+	## `effort` is one of the keys.
 	static func efforts(_model := "") -> Array:
 		return [{"key": "", "label": "Default"}]
 
@@ -287,19 +268,19 @@ class Backend:
 	func failure(job: Dictionary) -> String:
 		return String(job.get("error", "the writer produced nothing"))
 
-	## A writer that works in steps starts the next one here once a step's process has ended, and
-	## returns its pid; 0 when there is no next step (see [AgentJobs]).
+	## A writer that works in steps starts the next one here once a step's process has ended, and returns
+	## its pid; 0 when there is no next step (see [AgentJobs]).
 	func advance(_job: Dictionary) -> int:
 		return 0
 
-	## WHAT THE WRITER IS DOING NOW (see "what an agent is doing now" above): its state, read off
-	## what its run has written so far. A writer that writes no stream is "working".
+	## What the writer is doing now (see "what an agent is doing now" above), read off what its run has
+	## written so far. A writer that writes no stream is "working".
 	func activity(job: Dictionary) -> Dictionary:
 		return TextGen.now_of(job, "working")
 
-	## The files every backend writes into the job's directory, named once. `prompt` is the
-	## record a person reads; `input` is exactly what the CLI was sent; `reply` is its output
-	## stream and `last` its final message, where a backend writes one separately.
+	## The files every backend writes into the job's directory. `prompt` is the record a person reads;
+	## `input` is exactly what the CLI was sent; `reply` is its output stream and `last` its final
+	## message, where a backend writes one separately.
 	static func paths(job: Dictionary) -> Dictionary:
 		var dir := String(job["dir"])
 		return {"prompt": dir.path_join("prompt.txt"), "system": dir.path_join("system.txt"),
@@ -307,29 +288,24 @@ class Backend:
 			"last": dir.path_join("reply.txt"), "log": dir.path_join("stderr.log")}
 
 
-## CLAUDE THROUGH THE CLAUDE CODE CLI, as a bare writer.
+## Claude through the Claude Code CLI, as a bare writer.
 ##
-## `--safe-mode` leaves out everything the author has customized - CLAUDE.md, memory, skills,
-## hooks, MCP servers, plugins, output styles - and `--system-prompt-file` replaces Claude
-## Code's own agent prompt, so the model sees the two files and nothing else (measured: ~480
-## input tokens for a one-line prompt). `--tools ""` takes every tool away, so a reply is
-## words and only words. `--no-session-persistence`: nothing is resumed, see the class note.
-## The message goes in as STREAM-JSON (one user message on stdin), the only input that carries
-## pictures; the reply comes back as the stream's `result` event (`--verbose` is required with
-## stream-json output). Measured with a picture attached: the tool list stays empty.
-## `--bare` would be tighter still and is NOT used - it reads only ANTHROPIC_API_KEY, never the
-## subscription login the rest of ghost's Claude runs use.
+## `--safe-mode` leaves out the author's CLAUDE.md, memory, skills, hooks, MCP servers, plugins and
+## output styles, and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees
+## the two files and nothing else. `--tools ""` removes every tool. `--no-session-persistence`: nothing
+## is resumed. The message goes in as stream-json (one user message on stdin), the only input that
+## carries pictures; the reply is the stream's `result` event (`--verbose` is required with stream-json
+## output). `--bare` is not used: it reads only ANTHROPIC_API_KEY, never the subscription login.
 class Claude:
 	extends Backend
 
 	const MODELS := {"best": "opus", "fast": "sonnet"}
-	## `--effort`'s levels, as the CLI names them when handed another. Unset, a run takes the
-	## author's own Claude Code default for its model (see [method saved_effort]).
+	## `--effort`'s levels, as the CLI names them. Unset, a run takes the author's own Claude Code default
+	## for its model (see [method saved_effort]).
 	const EFFORTS := ["low", "medium", "high", "xhigh", "max"]
-	## The longest one of ghost's tools may take, in milliseconds: the server's `timeout` in `mcp.json`
-	## (CLI 2.1.303's per-server limit, the fetch's wait and the call's both). Unset it is a minute -
-	## "The operation timed out." at 60 s, measured 2026-10-19 - and `set` stands a whole table up and
-	## photographs it; as [constant Codex.TOOL_TIMEOUT].
+	## The longest one of ghost's tools may take, in milliseconds: the server's `timeout` in `mcp.json`.
+	## Unset it is a minute, and `set` stands a whole table up and photographs it; as [constant
+	## Codex.TOOL_TIMEOUT].
 	const TOOL_TIMEOUT_MS := 600000
 
 	static func efforts(model := "") -> Array:
@@ -347,8 +323,8 @@ class Claude:
 					return str((d as Dictionary)["effortLevel"])
 		return ""
 
-	## Claude Code's own aliases - each the newest model of its family, so the list never goes
-	## stale. "Default" is the tiers above: Opus for what is heard, Sonnet for the bookkeeping.
+	## Claude Code's own aliases - each the newest model of its family, so the list never goes stale.
+	## "Default" is the tiers above: Opus for what is heard, Sonnet for the bookkeeping.
 	static func models() -> Array:
 		return [{"key": "", "label": "Default (Opus)"}, {"key": "fable", "label": "Fable"},
 			{"key": "opus", "label": "Opus"}, {"key": "sonnet", "label": "Sonnet"}]
@@ -390,12 +366,10 @@ class Claude:
 			job["error"] = "could not start claude (is the Claude Code CLI installed and logged in?)"
 		return pid
 
-	## Flags and paths only - the prompt is on stdin. [param tools]: [method tool_args]'s.
-	##
-	## NONE OF THE AUTHOR'S OWN SETUP: `--safe-mode`, which also drops every MCP server - ghost's
-	## included (measured, CLI 2.1.291) - so a writer given ghost's tools loads no settings at all
-	## instead (`--setting-sources ""`: no plugin, hook or memory; measured, it is shown no
-	## CLAUDE.md), and the system prompt replaces Claude Code's either way.
+	## Flags and paths only; the prompt is on stdin. [param tools]: [method tool_args]'s. Normally
+	## `--safe-mode`, which also drops every MCP server, so a writer given ghost's tools loads no settings
+	## instead (`--setting-sources ""`: no plugin, hook, memory or CLAUDE.md); the system prompt replaces
+	## Claude Code's either way.
 	static func argv(job: Dictionary, system_path: String, tools: PackedStringArray) -> PackedStringArray:
 		var args := PackedStringArray(["-p", "--model", Claude.model_of(job)])
 		if not String(job.get("effort", "")).is_empty():
@@ -408,12 +382,11 @@ class Claude:
 		args.append_array(tools)
 		return args
 
-	## GHOST'S TOOLS for a job with a `tools_url`: the server named in a config file beside the
-	## prompt (`mcp.json` - a path in argv, never the URL's token), no other server the author has
-	## set up (`--strict-mcp-config`), and its tools allowed to run without asking - a print run has
-	## nobody to ask - and as long as [constant TOOL_TIMEOUT_MS] to answer. Claude's own tools stay off
-	## (`--tools ""`), so ghost's are the only ones. Empty for a job without tools, or when the config
-	## cannot be written.
+	## Ghost's tools for a job with a `tools_url`: the server named in a config file beside the prompt
+	## (`mcp.json` - a path in argv, never the URL's token), no other server (`--strict-mcp-config`), its
+	## tools allowed without asking (a print run has nobody to ask) and as long as [constant
+	## TOOL_TIMEOUT_MS] to answer. Claude's own tools stay off (`--tools ""`). Empty for a job without
+	## tools, or when the config cannot be written.
 	static func tool_args(job: Dictionary) -> PackedStringArray:
 		var url := String(job.get("tools_url", ""))
 		if url.is_empty():
@@ -425,10 +398,9 @@ class Claude:
 			return PackedStringArray()
 		return PackedStringArray(["--mcp-config", cfg, "--strict-mcp-config", "--allowedTools", "mcp__ghost"])
 
-	## THE MESSAGE: each picture under its label, then the prompt - as the stream-json line the
-	## CLI reads (`input`), and as the record a person reads (`shown`: the pictures listed, then
-	## the prompt). `error` names a picture that could not be read: a writer told to talk about
-	## a card it was never sent would make it up.
+	## The message: each picture under its label, then the prompt - as the stream-json line the CLI reads
+	## (`input`) and as the record a person reads (`shown`). `error` names a picture that could not be
+	## read: a writer told to talk about a card it was never sent would make it up.
 	static func compose(job: Dictionary) -> Dictionary:
 		var content: Array = []
 		var record := PackedStringArray()
@@ -468,9 +440,8 @@ class Claude:
 			return String(lines[lines.size() - 1]).substr(0, 240)
 		return String(job.get("error", "claude finished without a reply"))
 
-	## WHAT CLAUDE IS DOING, off its stream as it grows. Its text arrives as it is written only with
-	## `--include-partial-messages` (measured: without it, a whole message at once, so a long reading
-	## read as thinking until it was done); its thinking is counted by the CLI's own estimates.
+	## What Claude is doing, off its stream as it grows. Its text arrives as it is written only with
+	## `--include-partial-messages`; its thinking is counted by the CLI's own estimates.
 	func activity(job: Dictionary) -> Dictionary:
 		return TextGen.follow(job, String(Backend.paths(job)["reply"]), Claude.read)
 
@@ -511,21 +482,18 @@ class Claude:
 		return out
 
 
-## OPENAI THROUGH THE CODEX CLI.
+## OpenAI through the Codex CLI.
 ##
-## `codex exec` has no system prompt of its own to replace, so the system prompt leads the
-## message, after [constant ONLY_THIS]: an agent that keeps a shell is asked to work from the
-## message alone. Read-only, in the job's own folder, `--ephemeral` so no session is kept, and
-## `-o` names the file the final message is written to. Pictures go as `--image` files - each
-## prepared the way Claude is sent it ([method TextGen.picture]) and saved beside the prompt -
-## and the message says which is which. The tier is the reasoning effort; the model is the CLI's.
+## `codex exec` has no system prompt to replace, so the system prompt leads the message, after
+## [constant ONLY_THIS]. Read-only, in the job's own folder, `--ephemeral` so no session is kept, and
+## `-o` names the file the final message is written to. Pictures go as `--image` files, prepared as
+## Claude is sent them ([method TextGen.picture]) and saved beside the prompt; the message says which is
+## which. The tier is the reasoning effort; the model is the CLI's.
 ##
-## GHOST'S TOOLS ([AgentTools]) are its server `ghost`, named in `-c mcp_servers.ghost.*` overrides: the
-## bare endpoint in argv and the job's token read from an environment variable set for this run alone
-## (`bearer_token_env_var`), so no argv holds it; its calls approved (`default_tools_approval_mode =
-## "approve"`: `codex exec` never asks, and refused ghost's call with "requires approval, but approval
-## policy is never"); and room for a slow one (`tool_timeout_sec`). A tool's picture reaches the model
-## (measured, codex-cli 0.157.0: described rightly).
+## Ghost's tools ([AgentTools]) are its server `ghost`, named in `-c mcp_servers.ghost.*` overrides: the
+## bare endpoint in argv and the job's token in an environment variable set for this run alone
+## (`bearer_token_env_var`), so no argv holds it; calls approved (`default_tools_approval_mode =
+## "approve"`, since `codex exec` never asks); and room for a slow one (`tool_timeout_sec`).
 class Codex:
 	extends Backend
 
@@ -585,8 +553,8 @@ class Codex:
 			job["error"] = "could not start codex (is the Codex CLI installed and logged in?)"
 		return pid
 
-	## THE MESSAGE: what an agent with tools is told first, the system prompt, which picture is
-	## which, then the prompt - and the pictures to attach, `{from, flip, to}`, in that order.
+	## The message: what an agent with tools is told first, the system prompt, which picture is which,
+	## then the prompt - and the pictures to attach, `{from, flip, to}`, in that order.
 	static func compose(job: Dictionary) -> Dictionary:
 		var head := PackedStringArray([ONLY_THIS])
 		if not String(job.get("tools_url", "")).is_empty():
@@ -619,7 +587,7 @@ class Codex:
 			args.append_array(["-m", String(job["model"])])
 		var url := String(job.get("tools_url", ""))
 		if not url.is_empty():
-			# ghost's server - its token in the environment, never here (see the class note)
+			#ghost's server - its token in the environment, never here (see the class note)
 			for kv in [["url", JSON.stringify(AgentTools.endpoint(url))], ["bearer_token_env_var", JSON.stringify(TOKEN_ENV)],
 					["default_tools_approval_mode", "\"approve\""], ["tool_timeout_sec", str(TOOL_TIMEOUT)]]:
 				args.append_array(["-c", "mcp_servers.ghost.%s=%s" % kv])
@@ -642,8 +610,8 @@ class Codex:
 			return String(lines[lines.size() - 1]).substr(0, 240)
 		return String(job.get("error", "codex finished without a reply"))
 
-	## WHAT CODEX IS DOING, off its `--json` events. It says nothing while it reasons or paints - an
-	## item is told when it starts or ends - so between items it is "working".
+	## What Codex is doing, off its `--json` events. It says nothing while it reasons or paints (an item
+	## is told when it starts or ends), so between items it is "working".
 	func activity(job: Dictionary) -> Dictionary:
 		return TextGen.follow(job, String(Backend.paths(job)["reply"]), Codex.read)
 
@@ -671,51 +639,40 @@ class Codex:
 				now["doing"] = "finishing"
 
 
-## XAI'S GROK THROUGH THE GROK BUILD CLI (`grok`), as a bare writer.
+## xAI's Grok through the Grok Build CLI (`grok`), as a bare writer.
 ##
-## Grok Build is a coding agent, and four things make it a writer. Its system prompt is ghost's: an
-## agent file beside the prompt (`agent.md`, `promptMode: full`) whose body is the system prompt, so
-## Grok's own agent prompt is never sent (measured, CLI 1.0.50: a one-line prompt in ~1.7K input
-## tokens instead of ~16K). The message is a file the CLI reads itself (`--prompt-file`;
-## `--verbatim`, so it is sent as written and never parsed as a slash command). It has none of its
-## own tools ([method argv]). And none of the author's own setup comes along ([constant ISOLATION],
-## and `skills: []`, without which Grok lists its bundled skills to the model mid-run): Grok reads
-## Claude Code's, Cursor's and Codex's instruction files, skills, hooks and MCP servers by default -
-## a writer here was shown ~/.claude/CLAUDE.md - and keeps a memory across sessions. What stays is
-## Grok's own: a few lines naming the workspace, and one built-in style rule (state things
-## affirmatively) that no switch removes.
+## Its system prompt is ghost's: an agent file beside the prompt (`agent.md`, `promptMode: full`) whose
+## body is the system prompt. The message is a file the CLI reads itself (`--prompt-file`; `--verbatim`,
+## so it is never parsed as a slash command). It has none of its own tools ([method argv]), and none of
+## the author's setup comes along ([constant ISOLATION] and `skills: []`): Grok otherwise reads Claude
+## Code's, Cursor's and Codex's instruction files, skills, hooks and MCP servers, and keeps a memory.
 ##
-## THE REPLY is the words after the run's last tool call, read off its event stream: Grok's one-JSON
-## reply joins every turn's words (measured: "I am about to search." ran straight into the answer).
+## The reply is the words after the run's last tool call, read off its event stream.
 ##
-## PICTURES ARE FILES IT READS. Headless Grok attaches nothing (`@path` arrives as text), and
-## `read_file` hands the model the picture itself, so a job with pictures gets that one tool and is
-## told which files they are (Rules `agents/grok.writer_pictures`), each prepared as Claude is sent it.
+## Pictures are files it reads: headless Grok attaches nothing (`@path` arrives as text), so a job with
+## pictures gets `read_file` and is told which files they are (Rules `agents/grok.writer_pictures`).
 ##
-## GHOST'S TOOLS ([AgentTools]): the server is named in the agent file (`mcpServers`, a list), and
-## Grok reaches its tools as MCP tools always are there - `search_tool` finds them (`ghost__put`...),
-## `use_tool` calls them. A picture a tool returns reaches the model as a picture, outside the 20 KB cap
-## on a tool's text (measured: a 130 KB JPEG, described rightly), and the text cap is raised for these
-## runs ([constant TOOLS_ENV]). THE CALLS ARE ALLOWED BY RULE (`--allow MCPTool(ghost__*)`): left to
-## Grok's headless auto mode, a classifier judges each call, and it refused ghost's as "Unknown MCP
-## tool with unclear behavior" in one run of three; with the rule, three of three ran.
+## Ghost's tools ([AgentTools]): the server is named in the agent file (`mcpServers`, a list); Grok
+## reaches them as MCP tools (`search_tool` finds them, `use_tool` calls them). A returned picture
+## reaches the model outside the 20 KB cap on a tool's text, which is raised for these runs ([constant
+## TOOLS_ENV]). Calls are allowed by rule (`--allow MCPTool(ghost__*)`), since Grok's headless
+## classifier refuses some.
 ##
-## AN AGENT FILE'S BODY IS A TEMPLATE: a `${{ ... }}` in it is filled in (measured: it vanished). A
-## system prompt holding one leads the message instead, as Codex is sent its, and arrives as written.
+## An agent file's body is a template (`${{ ... }}` is filled in), so a system prompt holding one leads
+## the message instead, as Codex is sent its.
 ##
-## NO SESSION IS KEPT. Grok keeps every run (its messages, the pictures it read, the text in a search
-## index) and has no switch against it, so a finished run's sessions are deleted with Grok's own
-## `sessions delete`, as the job's last steps ([method forget]). The painter ([ImageGen.Grok]) shares
-## all of this.
+## No session is kept: Grok keeps every run and has no switch against it, so a finished run's sessions
+## are deleted with `sessions delete` as the job's last steps ([method forget]). The painter
+## ([ImageGen.Grok]) shares all of this.
 class Grok:
 	extends Backend
 
-	## The tier is the reasoning effort, as Codex's: what is heard runs at the model's own default
-	## (Grok recommends its "high"), the bookkeeping at the lightest.
+	## The tier is the reasoning effort, as Codex's: what is heard runs at the model's own default (Grok
+	## recommends "high"), the bookkeeping at the lightest.
 	const EFFORT := {"best": "", "fast": "low"}
-	## The switches that leave the author's setup out of a run, set for that run alone: every source
-	## Grok borrows from another agent (instructions, rules, skills, MCP servers, hooks, sessions),
-	## its memory, its workflows and its helpers, and the update check.
+	## The switches that leave the author's setup out of a run, set for that run alone: every source Grok
+	## borrows from another agent (instructions, rules, skills, MCP servers, hooks, sessions), its memory,
+	## workflows and helpers, and the update check.
 	const ISOLATION := {
 		"GROK_CLAUDE_AGENTS_ENABLED": "0", "GROK_CLAUDE_RULES_ENABLED": "0", "GROK_CLAUDE_SKILLS_ENABLED": "0",
 		"GROK_CLAUDE_MCPS_ENABLED": "0", "GROK_CLAUDE_HOOKS_ENABLED": "0", "GROK_CLAUDE_SESSIONS_ENABLED": "0",
@@ -726,7 +683,7 @@ class Grok:
 		"GROK_MEMORY": "0", "GROK_WORKFLOWS": "0", "GROK_SUBAGENTS": "0", "GROK_DISABLE_AUTOUPDATER": "1",
 	}
 	## What a run with ghost's tools adds to [constant ISOLATION]: room for a long tool answer's text
-	## (Grok cuts one past 20 KB and leaves the rest in a file); its pictures are not counted in it.
+	## (Grok cuts one past 20 KB); pictures are not counted in it.
 	const TOOLS_ENV := {"GROK_MAX_MCP_OUTPUT_BYTES": "200000"}
 	## The name ghost's tool server has in an agent file, and the calls the rule allows.
 	const SERVER := "ghost"
@@ -748,8 +705,8 @@ class Grok:
 		var h := OS.get_environment("GROK_HOME")
 		return h if not h.is_empty() else Deps.home().path_join(".grok")
 
-	## THE MODELS THIS INSTALLATION HAS: the catalog the CLI keeps for itself (`models_cache.json`,
-	## what `grok models` prints), `{id: info}` in its own order; {} before the CLI has fetched one.
+	## The models this installation has: the catalog the CLI keeps (`models_cache.json`, what `grok
+	## models` prints), `{id: info}` in its own order; {} before the CLI has fetched one.
 	static func catalog() -> Dictionary:
 		var j := JSON.new()
 		if j.parse(FileAccess.get_file_as_string(Grok.home().path_join("models_cache.json"))) != OK or not (j.data is Dictionary):
@@ -792,7 +749,7 @@ class Grok:
 				out.append({"key": String(id), "label": Grok.field(info, "name") if not Grok.field(info, "name").is_empty() else String(id)})
 		return out
 
-	## THE EFFORTS GROK OFFERS [param model] (the default model's for ""), lightest first: the catalog's
+	## The efforts Grok offers [param model] (the default model's for ""), lightest first: the catalog's
 	## `reasoning_efforts`, so a picker never offers a level the model would refuse. A model the catalog
 	## does not list gets every level any listed model takes.
 	static func levels(model := "") -> PackedStringArray:
@@ -830,10 +787,10 @@ class Grok:
 		var own := Grok.own_effort(model)
 		return TextGen.effort_list(Grok.levels(model), "Default (%slow for designs)" % ((own + ", ") if not own.is_empty() else ""))
 
-	## THE AGENT FILE a run is started with: the frontmatter Grok reads it by, then [param body] - the
-	## system prompt, as it is sent. [param bare] takes away the tools Grok adds to every agent (the
-	## image tools among them, which a painter keeps). No skill is found, inherited or listed either
-	## way. [param tools_url] names ghost's tool server, the run's only one ([constant SERVER]).
+	## The agent file a run is started with: the frontmatter Grok reads it by, then [param body] - the
+	## system prompt. [param bare] takes away the tools Grok adds to every agent (the image tools among
+	## them, which a painter keeps). No skill is found, inherited or listed either way. [param tools_url]
+	## names ghost's tool server, the run's only one ([constant SERVER]).
 	static func agent_file(role: String, body: String, bare: bool, tools_url := "") -> String:
 		var lines := PackedStringArray(["---", "name: ghost-" + role,
 			"description: The %s for Ghost Notes." % role, "promptMode: full"])
@@ -892,11 +849,10 @@ class Grok:
 			job["error"] = "could not start grok (is the Grok Build CLI installed and logged in?)"
 		return pid
 
-	## THE MESSAGE (`message`, written to prompt.txt - exactly what the CLI reads): a system prompt that
+	## The message (`message`, written to prompt.txt - exactly what the CLI reads): a system prompt that
 	## cannot be the agent file's body ahead of everything, then which picture is which file, then the
 	## prompt; the agent file's `body`; and the pictures to prepare, `{from, flip, to}`, in that order.
-	## `error` names a picture that cannot be read: a writer told to talk about a card it was never
-	## sent would make it up.
+	## `error` names a picture that cannot be read.
 	static func compose(job: Dictionary) -> Dictionary:
 		var sys := String(job.get("system", "")).strip_edges()
 		var fold := sys.contains("${{")
@@ -920,10 +876,10 @@ class Grok:
 			"body": sys if not (fold or sys.is_empty()) else Rules.say("agents/grok.writer"),
 			"message": ("\n\n".join(head) + "\n\n---\n\n" + prompt) if not head.is_empty() else prompt}
 
-	## Flags and paths only - the message is in its file. A writer's own tools: `read_file` for its
-	## pictures, or none (the allowlist names it, then the denylist takes it back: an empty `--tools`
-	## is no allowlist at all). The two MCP tools every allowlist keeps stay only for a job with ghost's
-	## tools, whose calls are then allowed by rule (see the class note).
+	## Flags and paths only; the message is in its file. A writer's own tools: `read_file` for its
+	## pictures, or none (the allowlist names it, then the denylist takes it back: an empty `--tools` is no
+	## allowlist at all). The two MCP tools every allowlist keeps stay only for a job with ghost's tools,
+	## whose calls are then allowed by rule.
 	static func argv(job: Dictionary, pictures: bool) -> PackedStringArray:
 		var tools := not String(job.get("tools_url", "")).is_empty()
 		var deny := PackedStringArray([] if pictures else ["read_file"])
@@ -939,15 +895,13 @@ class Grok:
 		args.append_array(["--output-format", "streaming-json"])
 		return args
 
-	## A field of what the CLI wrote, as text: "" for a missing or null one. Its streams carry
-	## `"status": null` while a tool runs, and `String(null)` is a script error (it stopped the first
-	## real painter run).
+	## A field of what the CLI wrote, as text: "" for a missing or null one (its streams carry
+	## `"status": null` while a tool runs, and `String(null)` is a script error).
 	static func field(d: Variant, key: String) -> String:
 		var v: Variant = (d as Dictionary).get(key) if d is Dictionary else null
 		return "" if v == null else str(v)
 
-	## WHAT GROK IS DOING, off its stream: it streams its thinking and its words as they come, so a
-	## Grok run is never silent while it works.
+	## What Grok is doing, off its stream: it streams its thinking and words as they come.
 	func activity(job: Dictionary) -> Dictionary:
 		var now := TextGen.follow(job, String(Backend.paths(job)["reply"]), Grok.read)
 		if String(job.get("step", "")) == "forget":
@@ -996,9 +950,8 @@ class Grok:
 				out.append(j.data)
 		return out
 
-	## WHAT A RUN SAID, off its `--output-format streaming-json` stream: `said`, the words after its
-	## last tool call (words before a call were said on the way to it); `stop` and `session`, from its
-	## `end` event; `error`, from an `error` event.
+	## What a run said, off its `--output-format streaming-json` stream: `said`, the words after its last
+	## tool call; `stop` and `session`, from its `end` event; `error`, from an `error` event.
 	static func outcome(path: String) -> Dictionary:
 		var said := ""
 		var out := {"said": "", "stop": "", "session": "", "error": ""}
@@ -1040,8 +993,8 @@ class Grok:
 			return String(lines[lines.size() - 1]).substr(0, 240)
 		return "grok finished without a reply"
 
-	## The folder Grok keeps a working directory's sessions in (`sessions/<the path, URL-encoded>`,
-	## measured); "" for no directory.
+	## The folder Grok keeps a working directory's sessions in (`sessions/<the path, URL-encoded>`); "" for
+	## no directory.
 	static func group_of(dir: String) -> String:
 		return "" if dir.is_empty() else Grok.home().path_join("sessions").path_join(dir.uri_encode())
 
@@ -1050,7 +1003,7 @@ class Grok:
 		return s.length() >= 8 and RegEx.create_from_string("^[0-9A-Za-z-]+$").search(s) != null
 
 	## The sessions a run left: the one its reply names, and any other in the folder Grok keeps for the
-	## job's directory, whose only runs are this job's (a run that failed before replying names none).
+	## job's directory (a run that failed before replying names none).
 	static func sessions_of(dir: String, named: String) -> Array:
 		var out: Array = []
 		if Grok.is_session_id(named):
@@ -1062,11 +1015,10 @@ class Grok:
 					out.append(s)
 		return out
 
-	## THE JOB'S LAST STEPS, one per session in `job.sessions`: `grok sessions delete`, which also takes
-	## the session out of Grok's search index (removing its folder alone would leave its text there).
-	## Once none is left, the job directory's own folder goes too - all it holds then is the prompt's
-	## text, as Grok's prompt history. The next step's pid, or 0 when there is none. Best effort: a
-	## session that stays costs disk, never the job.
+	## The job's last steps, one per session in `job.sessions`: `grok sessions delete`, which also takes the
+	## session out of Grok's search index. Once none is left, the job directory's own folder goes too.
+	## Returns the next step's pid, or 0 when there is none. Best effort: a session that stays costs disk,
+	## never the job.
 	static func forget(job: Dictionary, bin: String) -> int:
 		var left: Array = job.get("sessions", [])
 		while not left.is_empty():
@@ -1090,29 +1042,28 @@ class Grok:
 		DirAccess.remove_absolute(g)
 
 
-## MODELS ON AMAZON BEDROCK, THROUGH THE AWS CLI: Amazon's own Nova (the default) and the open
-## models Bedrock hosts, run on the machine's AWS credentials and region (`aws configure`) and
-## billed per token to that account.
+## Models on Amazon Bedrock, through the AWS CLI: Amazon's own Nova (the default) and the open models
+## Bedrock hosts, run on the machine's AWS credentials and region (`aws configure`), billed per token to
+## that account.
 ##
-## One `bedrock-runtime converse` call per job. Its whole request - the system prompt, the pictures
-## (JPEG, base64) and the prompt - is a JSON file the CLI reads itself (`--cli-input-json
-## file://...`), so nothing the author wrote is ever in argv. `--cli-binary-format base64` is
-## explicit because a `cli_binary_format = raw-in-base64-out` in the user's config would send the
-## pictures' base64 as the bytes themselves.
+## One `bedrock-runtime converse` call per job. Its whole request - system prompt, pictures (JPEG,
+## base64) and prompt - is a JSON file the CLI reads itself (`--cli-input-json file://...`), so nothing
+## the author wrote is in argv. `--cli-binary-format base64` is explicit because a `cli_binary_format =
+## raw-in-base64-out` in the user's config would send the base64 as the bytes themselves.
 ##
-## WHICH MODELS, AND WHERE TO CALL THEM, is the account's own answer: [BedrockCatalog]. A model is
-## kept by its base id and called on its route, in the region that serves it; a job finding no
-## fresh catalog looks it up first, as steps of its own ([method advance]).
+## Which models, and where to call them, is the account's own answer: [BedrockCatalog]. A model is kept
+## by its base id and called on its route, in the region that serves it; a job finding no fresh catalog
+## looks it up first, as steps of its own ([method advance]).
 ##
-## ONE API, MANY MODELS: Converse evens out most differences between providers, and the two that
-## remain are retried as steps: a model that takes no system prompt is sent it at the head of the
-## message, and one whose output limit is under [constant MAX_TOKENS] is asked again inside it.
+## Converse evens out most differences between providers; the two that remain are retried as steps: a
+## model that takes no system prompt is sent it at the head of the message, and one whose output limit
+## is under [constant MAX_TOKENS] is asked again inside it.
 class Bedrock:
 	extends Backend
 
 	const Catalog := preload("res://src/agents/bedrock_catalog.gd")
-	## The model per tier: Amazon's newest for what is heard, its cheaper one for bookkeeping. Both
-	## see pictures - a card's passage is sent its card.
+	## The model per tier: Amazon's newest for what is heard, its cheaper one for bookkeeping. Both see
+	## pictures.
 	const MODELS := {"best": "amazon.nova-2-lite-v1:0", "fast": "amazon.nova-lite-v1:0"}
 	## Nova 1 models stop at 10K output tokens (Nova 2 Lite at 64K); a card show's plan runs to ~6K.
 	const MAX_TOKENS := 10000
@@ -1214,9 +1165,8 @@ class Bedrock:
 						return _converse(job)
 		return 0
 
-	## What to do about a failed call, from the CLI's complaint: "fold" (the model takes no system
-	## prompt - send it in the message), "cap" (ask inside the model's own output limit) or "".
-	## Each is tried once.
+	## What to do about a failed call, from the CLI's complaint: "fold" (the model takes no system prompt -
+	## send it in the message), "cap" (ask inside the model's own output limit) or "". Each is tried once.
 	static func retry_of(job: Dictionary, why: String) -> String:
 		var t := why.to_lower()
 		if t.contains("system message") and not bool(job.get("fold", false)) \
@@ -1239,7 +1189,7 @@ class Bedrock:
 				best = n
 		return best
 
-	## WHAT IT IS DOING: Converse answers all at once, so its step is all there is to say.
+	## What it is doing: Converse answers all at once, so its step is all there is to say.
 	func activity(job: Dictionary) -> Dictionary:
 		var now := TextGen.now_of(job, "working")
 		match String(job.get("step", "")):
@@ -1249,8 +1199,7 @@ class Bedrock:
 				now["doing"] = "waiting for " + Bedrock.bare_name(Bedrock.model_of(job))
 		return now
 
-	## A model's own name, with no provider before it ("Nova Pro"): a status line's parts are already
-	## set apart by " · ".
+	## A model's own name, with no provider before it ("Nova Pro").
 	static func bare_name(id: String) -> String:
 		for m in Bedrock.listed() + SEED:
 			if String((m as Dictionary)["id"]) == id:
@@ -1275,9 +1224,8 @@ class Bedrock:
 		return Catalog.run(job, binary(), Bedrock.argv(String(p["input"]), String(e["region"])),
 			String(p["reply"]), String(p["log"]), "bedrock writer")
 
-	## THE MESSAGE: each picture under its label, then the prompt, as Converse content blocks
-	## (`content`), and the record a person reads (`shown`). `error` names a picture that could not
-	## be read: a writer told to talk about a card it was never sent would make it up.
+	## The message: each picture under its label, then the prompt, as Converse content blocks (`content`),
+	## and the record a person reads (`shown`). `error` names a picture that could not be read.
 	static func compose(job: Dictionary) -> Dictionary:
 		var content: Array = []
 		var record := PackedStringArray()
@@ -1304,9 +1252,9 @@ class Bedrock:
 			return {}
 		return {"image": {"format": "jpeg", "source": {"bytes": Marshalls.raw_to_base64(img.save_jpg_to_buffer(0.9))}}}
 
-	## The Converse request, as the CLI reads it from its input file. [param fold] sends the system
-	## prompt at the head of the message, for a model that takes none. [param effort] turns on a
-	## thinking model's extended thinking; at "high", Nova 2 wants no output cap at all.
+	## The Converse request, as the CLI reads it from its input file. [param fold] sends the system prompt
+	## at the head of the message, for a model that takes none. [param effort] turns on a thinking model's
+	## extended thinking; at "high", Nova 2 wants no output cap at all.
 	static func request(model_id: String, system: String, content: Array, max_tokens := MAX_TOKENS,
 			fold := false, effort := "") -> Dictionary:
 		var blocks := content.duplicate()
@@ -1337,8 +1285,8 @@ class Bedrock:
 	func resolve(job: Dictionary) -> String:
 		return Bedrock.reply_text(job, String(Backend.paths(job)["reply"]))
 
-	## A Converse reply's words: its text blocks, joined (a reasoning model's thinking is left out);
-	## "" for a reply cut off at the token limit, which is a failure and not a short answer.
+	## A Converse reply's words: its text blocks, joined (a reasoning model's thinking is left out); ""
+	## for a reply cut off at the token limit, which is a failure and not a short answer.
 	static func reply_text(job: Dictionary, path: String) -> String:
 		if String(job.get("step", "")) != "converse":
 			return ""

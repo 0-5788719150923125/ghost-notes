@@ -6,15 +6,10 @@ class_name SaveMark
 ## moment the change is in the file, an amber mark when a write was refused, a hollow ring when
 ## the script is saved nowhere.
 ##
-## IT IS THE AUTOSAVE, SHOWN (2026-10-12, the user: "giving it a little autosave animation... if
-## any actions are taken from in-app, the little autosave animation runs, and we can be sure that
-## our save feature is syncing/bound to the underlying file correctly"). Saving had no sign at
-## all: a dial moved was a dial written a second later, and nothing on screen said so - or said
-## which file took it, which is how a script could be saved into a file nothing read. So the mark
-## reads the [DocSource] it is given and nothing else: the turning is [method
-## DocSource.save_state] saying "pending", the flash is [signal DocSource.written], raised only
-## after a verified write, and the tooltip is the file's whole path and when it was last written.
-## A mark that ticked without a write would be worse than no mark.
+## It is the autosave, shown. The mark reads the [DocSource] it is given and nothing else: the turning is [method
+## DocSource.save_state] saying "pending", the flash is [signal DocSource.written] (raised only after a verified
+## write), and the tooltip is the file's whole path and when it was last written. A mark that ticked without a write
+## would be worse than no mark.
 
 ## The mark's box, in pixels.
 const SIZE := 16.0

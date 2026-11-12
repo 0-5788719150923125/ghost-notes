@@ -1,6 +1,6 @@
 extends Node
 
-## table_game_check - A GAME ON A TABLE, AS IT PLAYS (next/tabletop.md): a session stood on a real table with its dice really thrown, then asked at each moment what is where. What shows on a die is what was rolled, once it lands; a throw comes from where its person sits; a figure stands on its square, hops to the next, lies flat when it falls and is gone with its map; a picture comes up to the lens and goes; the camera goes to the dice and comes back; dice are heard only when they are. A control: nothing has happened before its time, and the camera does not move for a throw behind a screen.
+## table_game_check - a game on a table, as it plays (next/tabletop.md): a session stood on a real table with its dice really thrown, then asked at each moment what is where. What shows on a die is what was rolled, once it lands; a throw comes from where its person sits; a figure stands on its square, hops to the next, lies flat when it falls and is gone with its map; a picture comes up to the lens and goes; the camera goes to the dice and comes back; dice are heard only when they are. A control: nothing has happened before its time, and the camera does not move for a throw behind a screen.
 ##
 ##     tests/run_boot_probe.sh tests/table/table_game_check.gd 200
 
@@ -71,7 +71,7 @@ func _run() -> void:
 		return
 	tg.wait_whole()
 	_check(not tg._record.is_empty(), "the dice were really thrown: %s" % tg.report())
-	# ...WHEN EACH HAPPENED: the marks a reading would place
+	# ...when each happened: the marks a reading would place
 	var when := {}
 	var t := 1.0
 	var sched: Array = []
@@ -105,7 +105,7 @@ func _camera(tm: TableMedium, tg: TableGame, ev: Array, when: Dictionary) -> voi
 	_check(far_edge != null and (far_edge as Vector2).y > 0.02, "the far edge of the biggest map is in the picture")
 	_check(near_edge != null and (near_edge as Vector2).y < 0.98, "and the near edge")
 	_check(side != null and (side as Vector2).x < 0.98, "and its side")
-	# THE SHOT: to the dice and back, and never for what is behind a screen
+	# The shot: to the dice and back, and never for what is behind a screen
 	var r1: Dictionary = ev[3]
 	var id := int(r1["id"])
 	var thrown := float(when[id]) + TableGame.RISE + TableGame.SHAKE
@@ -173,7 +173,7 @@ func _board(tg: TableGame, ev: Array, when: Dictionary) -> void:
 	_check(not (pic["node"] as Node3D).visible, "and goes")
 
 
-## WHAT SHOWS ON A DIE IS WHAT WAS ROLLED.
+## What shows on a die is what was rolled.
 func _dice(tg: TableGame, ev: Array, when: Dictionary) -> void:
 	for r in tg._rolls:
 		var rd: Dictionary = r
@@ -208,7 +208,7 @@ func _dice(tg: TableGame, ev: Array, when: Dictionary) -> void:
 	tg.tick(next + TableGame.HOME_TAKES + 0.1)
 	for nd in r0["nodes"]:
 		_check(not ((nd as Dictionary)["node"] as Node3D).visible, "the last throw's dice have gone home")
-	# EACH KEEPS THEIR SET AT THEIR PLACE, and a die in the air is not lying there too
+	# Each keeps their set at their place, and a die in the air is not lying there too
 	var bea_d6 := -1
 	for i in tg._homes.size():
 		if String((tg._homes[i] as Dictionary)["who"]) == "Bea" and int((tg._homes[i] as Dictionary)["shape"]) == 6:

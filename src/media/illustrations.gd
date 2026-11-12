@@ -3,53 +3,44 @@ class_name Illustrations
 
 ## Illustrations - the library of generated pictures a book prints.
 ##
-## A chapter describes its pictures in `<!-- image: ... -->` markers ([Manuscript.images]);
-## this turns each description into a PNG through an [ImageGen] backend and remembers it.
-## The book medium only ever asks [method path_for], so it neither knows nor cares who
-## painted what.
+## A chapter describes its pictures in `<!-- image: ... -->` markers ([Manuscript.images]); this turns
+## each description into a PNG through an [ImageGen] backend and remembers it. A medium only asks
+## [method path_for].
 ##
-## THE CACHE IS THE POINT. A picture costs about a minute and a share of the author's quota,
-## so nothing is ever made twice by accident: the key is [method Manuscript.image_key] of the
-## description, the files live under `user://illustrations/<key>/vNNN.png`, and the index of
-## which versions exist and which one is chosen is persisted through [Settings] like every
-## other setting. Relaunching, re-reading the chapter or re-wrapping a comment changes nothing.
+## The cache avoids paying twice (a picture costs about a minute and a share of the author's quota): the
+## key is [method Manuscript.image_key] of the description, files live under
+## `user://illustrations/<key>/vNNN.png`, and the index of versions and the chosen one is persisted
+## through [Settings].
 ##
-## GENERATION IS EXPLICIT. Nothing here starts a job on its own - not on launch, not on a
-## chapter being opened - because the cost is the author's. The panel's buttons are the only
-## callers of [method generate].
+## Generation is explicit: nothing starts a job on its own; the panel's buttons are the only callers of
+## [method generate].
 ##
-## A REROLL IS A NEW VERSION, never a replacement. The previous ones stay on disk and the
-## panel can step back to any of them, since "the second try was worse" is a normal outcome.
+## A reroll is a new version, never a replacement; earlier ones stay and the panel can step back.
 ##
-## STALE, NOT INVALID. Changing the style or the reference set does not throw pictures away:
-## each version records the signature of the look it was made under ([method look_signature]),
-## and one made under a different look is flagged stale and still used until the author
-## rerolls it. Invalidating the whole book because a comma changed in the style would be the
-## expensive kind of correct.
+## Stale, not invalid: each version records the signature of the look it was made under
+## ([method look_signature]); one made under a different look is flagged stale and still used until
+## rerolled.
 ##
-## Settings is reached by NAME at runtime rather than as the autoload identifier, so this file
-## also loads in a bare `--script` gate where no autoload exists (see [method use_for_test]).
+## Settings is reached by name at runtime so this file loads in a bare `--script` gate where no
+## autoload exists (see [method use_for_test]).
 
 ## Pictures under `<key>/vNNN.png`, reference copies under `refs/`, job dirs under `jobs/`.
 const DIR := "user://illustrations"
 const SECTION := "illustrations"
-## How many pictures may be painting at once. Each is a network round trip that mostly waits,
-## so more than one is cheap - and more than a couple is a burst against the author's quota.
+## How many pictures may be painting at once: each mostly waits on the network, but more than a couple
+## is a burst against the author's quota.
 const MAX_JOBS := 2
-## A job that runs this long is abandoned rather than watched forever. Measured ~60 s each.
+## A job that runs this long is abandoned. Measured ~60 s each.
 const JOB_TIMEOUT_S := 600
 const IMAGE_EXTS := ["png", "jpg", "jpeg", "webp"]
-## SELF-REFERENCE, a switch per kind (on unless the document says otherwise): each picture is
-## also sent the ones already made before it in the chapter, so ten pictures read as one hand
-## rather than ten separate tries at the style. It rides ALONGSIDE the static references and is
-## never written into them - those are the author's list, and a generated picture appended to it
-## would outlive the reroll that replaced it. At most this many are sent - the FIRST, which set
-## the look, and the most recent - because the run grows with the chapter, and a pile of
-## attachments makes a model worse at matching, not better.
+## Self-reference, a switch per kind (on unless the document says otherwise): each picture is also sent
+## the ones already made before it in the chapter, so they read as one hand. It rides alongside the
+## static references and is never written into them. At most this many are sent: the first (which set
+## the look) and the most recent, since a pile of attachments makes a model worse at matching.
 const CHAIN_MAX := 4
 
-## Bumped whenever a picture lands or the chosen version changes, so a medium holding page
-## textures knows to re-typeset without polling the disk.
+## Bumped whenever a picture lands or the chosen version changes, so a medium holding page textures
+## re-typesets without polling the disk.
 static var revision := 0
 
 ## key -> job Dictionary, for the pictures being painted right now.
@@ -59,13 +50,12 @@ static var _queue: Array = []
 ## key -> the last failure, for the panel. Session-only: a failure is news, not state.
 static var _errors := {}
 
-# THE TEST SEAM, the same shape as Films.use_for_test: an in-memory store instead of the
-# author's settings, and a flag, because an EMPTY library is a state worth testing.
+# The test seam, as in Films.use_for_test: an in-memory store instead of the author's settings, and a
+# flag because an empty library is a state worth testing.
 static var _test_active := false
 static var _test_store := {}
 static var _test_read_only := false
-## Where pictures, references and jobs live. Moved aside under test so a gate never writes
-## into the author's own library.
+## Where pictures, references and jobs live; moved aside under test.
 static var _root := DIR
 
 
@@ -81,9 +71,8 @@ static func use_for_test(store := {}, read_only := false) -> void:
 	_memo = {}
 
 
-## The chapter's pictures in reading order ([method Manuscript.images] rows), which is what
-## "the pictures before this one" means for a self-referenced kind. Set by whoever holds the
-## text - the Illustrations panel, on every read of it.
+## The chapter's pictures in reading order ([method Manuscript.images] rows): what "the pictures before
+## this one" means for a self-referenced kind. Set by whoever holds the text (the Illustrations panel).
 static var _chapter: Array = []
 
 static func set_chapter(images: Array) -> void:
@@ -97,13 +86,10 @@ static func _settings() -> Node:
 	return tree.root.get_node_or_null("Settings") if tree != null else null
 
 
-## WHAT WAS LAST READ OR WRITTEN, per key, held here rather than fetched again. Settings hands
-## out a deep copy on every read (rightly - see settings.gd), and the Illustrations panel asks
-## every frame whether any picture changed: status and signature for each one, each a read of
-## the whole index. With 24 pictures in a 64-entry index that was 12.7 ms of every frame - most
-## of a 60 fps budget, and the real-time view lagged. This library is the only writer of its
-## section, so what it holds cannot go stale. Callers that change a value they read write it
-## back (_put_entry, set_*), which is what keeps the held copy and the file the same.
+## What was last read or written, per key. Settings hands out a deep copy on every read and the panel
+## asks every frame whether any picture changed (24 pictures in a 64-entry index cost 12.7 ms a frame).
+## This library is the only writer of its section, so the held copy cannot go stale; callers that change
+## a value they read write it back (_put_entry, set_*).
 static var _memo := {}
 
 static func _read(key: String, dflt: Variant) -> Variant:
@@ -132,8 +118,8 @@ static func _write(key: String, value: Variant) -> void:
 		st.write(SECTION, key, value)
 
 
-## A render, the offline analyzer and a test probe boot this app against the author's own
-## settings. None of them may spend quota or rewrite the index.
+## A render, the offline analyzer and a test probe boot this app against the author's own settings; none
+## may spend quota or rewrite the index.
 static func read_only() -> bool:
 	if _test_active:
 		return _test_read_only
@@ -143,11 +129,10 @@ static func read_only() -> bool:
 
 # --- the look ----------------------------------------------------------------
 
-## THE STYLE IS PER KIND, named by the marker that asks for the picture: `image` for the
-## pictures put into the book, `sketch` for the drawings its writer makes on the page. One style
-## for both was wrong both ways - a painter's brief turned every margin sketch into a painting,
-## and a pen-sketch brief would flatten every plate. Each kind is edited, stored, signed and
-## judged stale on its own. The references are the pictures' alone; a sketch never gets them.
+## The style is per kind, named by the marker that asks for the picture: `image` for the pictures put
+## into the book, `sketch` for the drawings its writer makes on the page (a painter's brief would turn
+## a sketch into a painting). Each kind is edited, stored, signed and judged stale on its own. The
+## references are the pictures' alone.
 const STYLE_KINDS := ["image", "sketch"]
 const STYLE_LABELS := {"image": "Pictures", "sketch": "Sketches"}
 
@@ -157,11 +142,9 @@ static func kind_of(placement: String) -> String:
 	return "sketch" if placement == "sketch" else "image"
 
 
-## `{kind: text}` for every kind. A library from before there were kinds held one string: it
-## was the pictures' style, and it stays theirs.
+## `{kind: text}` for every kind. A library from before there were kinds held one string: the pictures'.
 static func styles() -> Dictionary:
-	# NOT a null default: ConfigFile takes null as "no default given" and logs an error for
-	# every read of a key that is not there yet, which is every read on an older config.
+	# Not a null default: ConfigFile takes null as "no default given" and logs an error for a missing key.
 	var raw: Variant = _read("styles", {})
 	var out := {}
 	for k in STYLE_KINDS:
@@ -184,9 +167,8 @@ static func set_style(text: String, kind := "image") -> void:
 	_write("styles", all)
 
 
-## The reference images for [param kind], as `user://` paths of the COPIES this library holds.
-## PER KIND, like the style: a sketch and a painting should not be pulled toward the same
-## pictures. A library from before there were kinds held one list, and it was the pictures'.
+## The reference images for [param kind], as `user://` paths of the copies this library holds. Per kind,
+## like the style. A library from before there were kinds held one list: the pictures'.
 static func references(kind := "image") -> Array:
 	var out: Array = []
 	for p in (_all_refs().get(kind, []) as Array):
@@ -227,10 +209,9 @@ static func _set_refs(kind: String, list: Array) -> void:
 	_write("refs_by_kind", all)
 
 
-## Copy [param paths] into the library. A copy, because a reference that vanishes when the
-## author tidies their Downloads folder would silently change every later picture. Named by
-## content, so importing the same file twice is one reference. Returns one line per file that
-## could not be taken.
+## Copy [param paths] into the library. A copy, so a reference does not vanish when the author tidies
+## their Downloads folder. Named by content, so importing a file twice is one reference. Returns one
+## line per file that could not be taken.
 static func add_references(paths: Array, kind := "image") -> PackedStringArray:
 	var errs := PackedStringArray()
 	if read_only():
@@ -245,8 +226,8 @@ static func add_references(paths: Array, kind := "image") -> PackedStringArray:
 	return errs
 
 
-## One file into the library, by content: the copy's `user://` path, or "" with the reason
-## appended to [param errs]. A file that IS already a library copy comes back as itself.
+## One file into the library, by content: the copy's `user://` path, or "" with the reason appended to
+## [param errs]. A file that is already a library copy comes back as itself.
 static func _take(s: String, errs: PackedStringArray) -> String:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_root.path_join("refs")))
 	var ext := s.get_extension().to_lower()
@@ -274,8 +255,7 @@ static func remove_reference(i: int, kind := "image") -> void:
 		return
 	list.remove_at(i)
 	_set_refs(kind, list)
-	# The COPY stays: references are per document now (see [method look]), so another
-	# chapter may still name this file, and a copy named by its content costs nothing to keep.
+	# The copy stays: another chapter may still name this file (references are per document).
 
 
 static func _sha(bytes: PackedByteArray) -> String:
@@ -285,8 +265,8 @@ static func _sha(bytes: PackedByteArray) -> String:
 	return h.finish().hex_encode()
 
 
-## The signature of the look a picture is made under: the style text and the reference set.
-## Reference files are named by content, so their names ARE their content.
+## The signature of the look a picture is made under: the style text and the reference set (files are
+## named by content, so their names are their content).
 static func look_signature(style_text: String, refs: Array) -> String:
 	var names := PackedStringArray()
 	for r in refs:
@@ -295,11 +275,10 @@ static func look_signature(style_text: String, refs: Array) -> String:
 	return (style_text.strip_edges() + "|" + ",".join(names)).sha256_text().substr(0, 12)
 
 
-## The look a [param kind] of picture is made under now. The chain of earlier pictures is NOT
-## part of it: rerolling the first picture would otherwise mark every later one stale.
+## The look a [param kind] of picture is made under now. The chain of earlier pictures is not part of
+## it: rerolling the first picture would otherwise mark every later one stale.
 static func current_signature(kind := "image") -> String:
-	# an EDITED reference instruction changes the look; the default does not, so a library from
-	# before the instructions could be edited does not wake up with every picture stale
+	# an edited reference instruction changes the look; the default does not
 	var extra := ""
 	for which in ["references", "self_reference"]:
 		if not String(_all_prompts(which).get(kind, "")).is_empty():
@@ -307,13 +286,10 @@ static func current_signature(kind := "image") -> String:
 	return look_signature(style(kind) + extra, references(kind))
 
 
-## HOW THE ATTACHMENTS ARE TO BE USED, per kind and per group - `references` (the author's
-## reference images) and `self_reference` (the chapter's earlier pictures) - editable in the
-## document as `reference_prompt:` / `self_reference_prompt:`, which is written out with these
-## defaults so there is something to edit. It was entirely internal: nothing showed what the
-## model was told to do with a reference, let alone let the author change it. Only WHICH
-## attachments a group is ("the first 3 attached images") stays internal - that depends on the
-## counts, and is prepended by [method build_prompt].
+## How the attachments are to be used, per kind and per group - `references` (the author's reference
+## images) and `self_reference` (the chapter's earlier pictures) - editable in the document as
+## `reference_prompt:` / `self_reference_prompt:`, written out with these defaults. Which attachments a
+## group is ("the first 3 attached images") stays internal and is prepended by [method build_prompt].
 const REF_PROMPT_DEFAULTS := {
 	"references": {
 		"image": "STYLE REFERENCES ONLY. Match their rendering style: medium, palette, linework, texture, lighting and level of detail. Do NOT copy their subjects, characters, objects or composition - the content comes only from the description above.",
@@ -326,8 +302,7 @@ const REF_PROMPT_DEFAULTS := {
 }
 
 
-## The instruction for [param which] group of attachments on [param kind]: the document's, or
-## the default.
+## The instruction for [param which] group of attachments on [param kind]: the document's, or the default.
 static func ref_prompt(which: String, kind := "image") -> String:
 	var v := String(_all_prompts(which).get(kind, "")).strip_edges()
 	return v if not v.is_empty() else String(REF_PROMPT_DEFAULTS[which][kind])
@@ -345,13 +320,10 @@ static func _all_prompts(which: String) -> Dictionary:
 	return (raw as Dictionary).duplicate() if raw is Dictionary else {}
 
 
-## THE LOOK AS A DOCUMENT CARRIES IT - the painter, the style and the reference images -
-## so a chapter keeps the look its pictures were made under, the way it keeps its cast. The
-## references are ABSOLUTE paths to the library's own copies: links a person can open, and
-## files that stay put whatever happens to the originals.
+## The look as a document carries it - the painter, the style and the reference images - so a chapter
+## keeps the look its pictures were made under. References are absolute paths to the library's own copies.
 static func look() -> Dictionary:
-	# Only what is set: a kind with no style or no references is simply not named, and
-	# [method set_look] reads a kind it is not given as none.
+	# Only what is set: [method set_look] reads a kind it is not given as none.
 	var st := {}
 	var refs := {}
 	for k in STYLE_KINDS:
@@ -362,8 +334,7 @@ static func look() -> Dictionary:
 			list.append(ProjectSettings.globalize_path(String(r)))
 		if not list.is_empty():
 			refs[k] = list
-	# Written for EVERY kind, on or off: the switch is a decision about this chapter's pictures,
-	# and a default that changed later must not silently change it.
+	# Written for every kind, on or off: a default that changed later must not silently change it.
 	var sr := {}
 	for k in STYLE_KINDS:
 		sr[k] = self_reference(k)
@@ -381,16 +352,13 @@ static func look() -> Dictionary:
 	return out
 
 
-## ...and back. Any image path is accepted (it is copied in by content, so a library copy is
-## itself and a new file is imported).
+## ...and back. Any image path is accepted (copied in by content, so a library copy is itself and a new
+## file is imported).
 ##
-## THE BLOCK IS THE WHOLE LOOK. A style or a reference list the block does not name is NONE,
-## not "whatever the last chapter left": a chapter written without reference images, opened
-## after one written with them, would otherwise have been painted against the other chapter's
-## pictures, silently. Only the painter carries over - that is the machine's, not the book's - and a
-## block naming one names its model and effort too (none named is the painter's own default).
-## `style` and `references` may each be a map by kind or, as older documents wrote them, a
-## bare string / list, which is the pictures'. Returns one line per file that could not be taken.
+## The block is the whole look: a style or reference list it does not name is none, not what the last
+## chapter left. Only the painter carries over (it is the machine's, not the book's); a block naming
+## one names its model and effort too. `style` and `references` may each be a map by kind or, as older
+## documents wrote them, a bare string / list (the pictures'). Returns one line per file not taken.
 static func set_look(d: Dictionary) -> PackedStringArray:
 	var errs := PackedStringArray()
 	if read_only():
@@ -448,7 +416,7 @@ static func set_backend(key: String) -> void:
 		_write("backend", key)
 
 
-## The model the painter runs and how hard it reasons ([AgentPick]'s choice, "" for the CLI's own),
+## The model the painter runs and how hard it reasons ([AgentPick]'s choice, "" for the cli's own),
 ## handed to every job.
 static func painter_model() -> String:
 	return String(_read("painter_model", ""))
@@ -469,16 +437,12 @@ static func set_painter(key: String, model: String, effort: String) -> void:
 
 # --- the prompt --------------------------------------------------------------
 
-## THE PROMPT, assembled. Pure, so the gate can hold it to its rules.
+## The prompt, assembled. Pure, so the gate can hold it to its rules.
 ##
-## The description goes in VERBATIM: it is the author's own sentence and every clause in it
-## was chosen. The rest is what every picture in the book shares - the style, what the
-## references are FOR, the shape of the space it will be printed in - and the prohibitions,
-## because an image model left to itself captions a courtroom and frames a portrait.
-##
-## THE REFERENCES ARE STYLE, NOT SUBJECT, and the prompt has to say so outright. Handed a
-## picture of a wolf and asked for a courtroom, a model will happily put the wolf in the
-## courtroom.
+## The description goes in verbatim. The rest is what every picture shares - the style, what the
+## references are for, the shape of the space it is printed in - and the prohibitions (an image model
+## left alone captions a courtroom and frames a portrait). The references are style, not subject, and
+## the prompt says so outright.
 static func build_prompt(description: String, placement: String, style_text: String,
 		ref_count: int, target: String, chain_count := 0, ref_text := "", chain_text := "") -> String:
 	var lines := PackedStringArray()
@@ -488,18 +452,15 @@ static func build_prompt(description: String, placement: String, style_text: Str
 	lines.append("")
 	lines.append("THE PICTURE (the author's description - follow it exactly):")
 	lines.append(description.strip_edges())
-	# A REAL ANIMAL IS THAT ANIMAL. A style can ask for inventive creatures, and a reference can
-	# show one: "a giant zebra" came back as a sabretooth with zebra stripes, twice - the one
-	# black-and-white striped animal among the author's references (a white tiger) won over the
-	# word. The description decides what each thing IS; the style and references only how it
-	# is drawn.
+	# A real animal is that animal: the description decides what each thing is; the style and
+	# references only how it is drawn (a reference can otherwise win over the word).
 	lines.append("Every real animal the description names is drawn as that animal, with its "
 		+ "true anatomy, unmistakable at a glance: never replaced by, or mixed with, a creature from "
 		+ "the references or the earlier pictures, however alike they look. Inventive creatures are "
 		+ "only for what the description itself invents.")
 	lines.append("")
 	lines.append("FORMAT: " + placement_guide(placement))
-	# A SKETCH IS THE WRITER'S OWN HAND, not the book's illustrator: [param style_text] and the
+	# A sketch is the writer's own hand, not the book's illustrator: [param style_text] and the
 	# references are the sketches' own.
 	var sketch := placement == "sketch"
 	if not style_text.strip_edges().is_empty():
@@ -508,10 +469,9 @@ static func build_prompt(description: String, placement: String, style_text: Str
 				+ "wherever they disagree): " + style_text.strip_edges())
 		else:
 			lines.append("STYLE (applies to every illustration in this book): " + style_text.strip_edges())
-	# The attachments arrive in that order - the author's references, then the chain - so each
-	# group is named by its place in it.
-	# What each group IS TO BE USED FOR is the author's (see REF_PROMPT_DEFAULTS); which
-	# attachments it is stays here, because it depends on the counts.
+	# The attachments arrive in that order (the author's references, then the chain), so each group is
+	# named by its place. What each group is for is the author's (see REF_PROMPT_DEFAULTS); which
+	# attachments it is stays here because it depends on the counts.
 	var kind := kind_of(placement)
 	if ref_text.strip_edges().is_empty():
 		ref_text = String(REF_PROMPT_DEFAULTS["references"][kind])
@@ -528,8 +488,7 @@ static func build_prompt(description: String, placement: String, style_text: Str
 			("the last %d attached image%s" % [chain_count, "" if chain_count == 1 else "s"]) if both
 				else ("the %d attached image%s" % [chain_count, "" if chain_count == 1 else "s"]),
 			chain_text.strip_edges()])
-	# A sketch may be labeled - a ledger entry, an arrow marked "leak" - when its description
-	# says so; a picture never is.
+	# A sketch may be labeled when its description says so; a picture never is.
 	if sketch:
 		lines.append("ALWAYS: no borders, no frames, no watermark, no signature; write words only "
 			+ "where the description asks for them, in plain handwriting.")
@@ -539,8 +498,8 @@ static func build_prompt(description: String, placement: String, style_text: Str
 	return "\n".join(lines)
 
 
-## What each placement asks for. A full page is a plate; an inline picture has to read at a
-## few inches wide inside a column of prose, so it wants one clear subject.
+## What each placement asks for: a plate for a full page; one clear subject for an inline picture (it
+## reads at a few inches wide).
 static func placement_guide(placement: String) -> String:
 	if placement == "sketch":
 		return ("a quick pen sketch as drawn in a research notebook: PURE BLACK INK LINES ONLY "
@@ -608,11 +567,10 @@ static func select_version(key: String, i: int) -> void:
 	revision += 1
 
 
-## Delete version [param i] of [param key] - its file and its place in the index - and show the
-## one before it (or, when it was the first, the next). With none left the picture is simply
-## missing again. This is how a bad picture stops being passed on: [method chain_refs] sends
-## whatever is CURRENT, so rerolling alone kept the bad one in front of every later picture
-## until the new one landed, and kept it as a version forever. Returns false when nothing went.
+## Delete version [param i] of [param key] - its file and its place in the index - and show the one
+## before it (or, when it was the first, the next). With none left the picture is missing again.
+## [method chain_refs] sends whatever is current, so deleting is how a bad picture stops being passed on.
+## Returns false when nothing went.
 static func delete_version(key: String, i: int) -> bool:
 	if read_only():
 		return false
@@ -679,7 +637,7 @@ static func busy() -> int:
 	return _jobs.size() + _queue.size() + PageCapture.pending()
 
 
-## CAPTURE A REAL PAGE as [param image]'s picture - a tablet page with a `url` (see
+## Capture A real page as [param image]'s picture - a tablet page with a `url` (see
 ## [PageCapture]). Like generation it is explicit, and a recapture is a new version. "" when
 ## queued, else why not.
 static func capture(image: Dictionary) -> String:
@@ -717,8 +675,8 @@ static func generate(image: Dictionary) -> String:
 	return ""
 
 
-## STOP PAINTING [param keys]: each waiting its turn is taken out of the line, and each being painted has its painter
-## stopped. What was painted before stays, each its current version.
+## Stop painting [param keys]: each waiting is taken out of the line, each being painted has its painter
+## stopped. What was painted before stays.
 static func stop(keys: Array) -> void:
 	_queue = _queue.filter(func(q: Dictionary) -> bool: return not keys.has(String(q["key"])))
 	for key in keys:
@@ -728,8 +686,8 @@ static func stop(keys: Array) -> void:
 		_jobs.erase(key)
 
 
-## Start what fits, notice what finished. Called from main._process and from the panel, the
-## Films.pump rule: a job is a subprocess, and something with a frame has to see it end.
+## Start what fits, notice what finished. Called from main._process and from the panel (a job is a
+## subprocess and something with a frame has to see it end).
 static func pump() -> void:
 	if read_only():
 		return
@@ -771,9 +729,8 @@ static func _advance_jobs() -> void:
 		_land(String(key), job)
 
 
-## The first queued request that may start now. A self-referencing kind runs ONE AT A TIME, in
-## the order it was asked for: two of its pictures painting together could not reference each
-## other, and the second would come out as unanchored as the first.
+## The first queued request that may start now. A self-referencing kind runs one at a time, in the
+## order asked: two painting together could not reference each other.
 static func _next_startable() -> int:
 	for i in _queue.size():
 		var kind := kind_of(String((_queue[i] as Dictionary)["placement"]))
@@ -864,8 +821,8 @@ static func _land(key: String, job: Dictionary) -> void:
 		_errors[key] = err
 		return
 	print("ghost: illustration %s ready (v%d)" % [key, versions(key).size()])
-	# The job's scratch is done with once the picture is in the library. A failed job keeps
-	# its directory: the event log in it is the only record of why.
+	# The job's scratch is done with once the picture is in the library; a failed job keeps its
+	# directory (its event log is the only record of why).
 	_remove_tree(String(job.get("dir", "")))
 
 
@@ -875,15 +832,13 @@ static func _add_version(key: String, img: Image, rec: Dictionary, prompt: Strin
 		placement: String) -> String:
 	var e := entry(key)
 	var vs: Array = e.get("versions", [])
-	# The first free number, not the count: after a version is deleted the count names a file
-	# that still exists, and the new picture would overwrite it.
+	# The first free number, not the count: after a delete the count names an existing file.
 	var num := vs.size() + 1
 	while FileAccess.file_exists(_root.path_join(key).path_join("v%03d.png" % num)):
 		num += 1
 	var file := _root.path_join(key).path_join("v%03d.png" % num)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(file.get_base_dir()))
-	# Re-encoded rather than copied: whatever the painter wrote (a JPEG named .png has been
-	# seen from image tools), the library holds a real PNG.
+	# Re-encoded rather than copied, so the library holds a real PNG whatever the painter wrote.
 	if img.save_png(ProjectSettings.globalize_path(file)) != OK:
 		return "could not write %s" % file
 	rec["file"] = file
@@ -899,10 +854,9 @@ static func _add_version(key: String, img: Image, rec: Dictionary, prompt: Strin
 	return ""
 
 
-## USE A PICTURE FROM DISK instead of painting one: [param path] becomes [param image]'s newest
-## version, exactly as a generated one would (so the versions, the arrows and delete all work
-## on it), marked `imported` - it was made under no style, so a style change never calls it
-## stale. Spends no quota, so it is allowed whatever the painter. "" on success, else why not.
+## Use a picture from disk instead of painting one: [param path] becomes [param image]'s newest version
+## as a generated one would, marked `imported` (made under no style, so a style change never calls it
+## stale). Spends no quota. "" on success, else why not.
 static func import_file(image: Dictionary, path: String) -> String:
 	if read_only():
 		return "this session is read-only (a render or a probe) - nothing is imported here"

@@ -1,15 +1,13 @@
 extends SceneTree
 
-## back_frame_check - that an arch round a card's BACK stands round the back's design (feedback 0006: "that
-## border should be shifted upward on the card, so that it's around the rectangular part"). The painting keeps
-## its marks inside the middle four sixths of the card, so the arch's springing line is above the first sixth and
-## its foot under the last, and its dome rises to the window's top. Pure geometry
-## ([method CardFaces.back_arch], [method CardFaces.outline]).
+## back_frame_check - that an arch round a card's back stands round the back's design. The painting keeps its marks inside the
+## middle four sixths of the card, so the arch's springing line is above the first sixth, its foot under the last, and its dome
+## rises to the window's top. Pure geometry ([method CardFaces.back_arch], [method CardFaces.outline]).
 ##
 ##   godot --headless --path . --script tests/table/back_frame_check.gd
 ##
-## Control: the arch as the face's front has it (a half circle dome over the whole window) springs from below the
-## first sixth - it cuts across the design's top corners - and its foot runs past the last.
+## Control: the arch as the face's front has it (a half circle dome over the whole window) springs from below the first sixth
+## and its foot runs past the last.
 
 var _fails := 0
 var _checks := 0

@@ -1,33 +1,26 @@
 extends RefCounted
 class_name AssistantBackends
 
-## AssistantBackends - the CLIs [Assistant] can dispatch a feedback note to, and everything
-## that differs between them: how a run is launched, how it is resumed, and how its event
-## stream reads.
+## AssistantBackends - the CLIs [Assistant] can dispatch a feedback note to, and everything that differs
+## between them: how a run is launched, how it is resumed, and how its event stream reads.
 ##
-## A REGISTRY, NOT A BRANCH per call site. The first backend was written inline, so its
-## command line, its event names and its cost field were spread through assistant.gd as
-## literals. Adding a second as `if backend == ...` at each of those places is how one of
-## them gets missed and a Codex run is parsed as Claude's stream - which fails silently,
-## as a run that never reports progress and never finishes cleanly.
+## A registry, not a branch per call site: adding a backend as `if backend == ...` at each place invites a
+## run being parsed as another CLI's stream, which fails silently.
 ##
-## Everything here is PURE (strings and dictionaries in, strings and dictionaries out), so
-## tests/app/assistant_backend_check.gd can drive it with recorded streams and no subprocess.
+## Everything here is pure (strings and dictionaries in and out), so tests/app/assistant_backend_check.gd
+## drives it with recorded streams and no subprocess.
 ##
-## THE PROMPT IS NEVER IN ARGV. [method argv] returns flags, ids and paths only; the prompt
-## reaches the CLI on stdin (`claude -p` reads it there when no prompt argument is given,
-## `codex exec -` by request), from a file [method Subprocess.start_redirected] feeds in. No
-## shell ever parses it, and Windows' command-line quoting - which does not escape quotes
-## inside an argument - never sees it.
+## The prompt is never in argv. [method argv] returns flags, ids and paths only; the prompt reaches the
+## CLI on stdin (`claude -p` reads it there with no prompt argument, `codex exec -` by request) from a
+## file [method Subprocess.start_redirected] feeds in, so no shell or Windows command-line quoting sees it.
 
-## Key -> display label, the short `name` the agent picker shows, the [Deps] row that resolves its binary, and the
-## `writer`: the [TextGen] row whose models and reasoning levels it offers, so the Assistant is chosen with the same
-## agent, model and level a writer is ([AgentPick], the user 2026-11-07: "Rather than re-implementing, I think it would be
-## preferable to use the same agent interface"). Keys are what `[assistant] backend` in ghost.cfg stores; "claude_cli"
-## predates this file and must never change, or every saved choice and entry would stop resolving.
+## Key -> display label, the short `name` the agent picker shows, the [Deps] row that resolves its binary,
+## and the `writer`: the [TextGen] row whose models and reasoning levels it offers, so the Assistant is
+## chosen with the same agent, model and level a writer is ([AgentPick]). Keys are what `[assistant]
+## backend` in ghost.cfg stores; "claude_cli" must not change, or every saved choice and entry stops resolving.
 ##
-## A WRITER IS AN ASSISTANT ONLY WHERE ITS CLI IS AN AGENT that edits the working tree with tools of its own. Bedrock
-## is not: the AWS CLI makes one `converse` call, with no tools and no loop to run them.
+## A writer is an assistant only where its CLI is an agent that edits the working tree with tools of its
+## own. Bedrock is not: the AWS CLI makes one `converse` call, with no tools and no loop.
 const REGISTRY := {
 	"claude_cli": {"label": "Claude Code CLI", "name": "Claude", "dep": "claude", "writer": "claude",
 		"blurb": "Claude Code in this repository with its own tools and every permission, reading CLAUDE.md as an interactive session does. Uses the Claude Code login."},
@@ -36,14 +29,13 @@ const REGISTRY := {
 	"grok_cli": {"label": "Grok Build CLI (xAI)", "name": "Grok", "dep": "grok", "writer": "grok",
 		"blurb": "Grok Build in this repository with its own tools, every one approved. Uses the Grok login (grok login)."},
 }
-## THE MODEL WHEN NONE IS CHOSEN, where the CLI's own would not be what the picker says: a writer's Claude "Default" is
-## Opus (TextGen.Claude), and `claude -p` left to itself takes the author's own default instead.
+## The model when none is chosen, where the CLI's own would not be what the picker says: a writer's Claude
+## "Default" is Opus (TextGen.Claude), while `claude -p` alone takes the author's own default.
 const CLAUDE_DEFAULT := "opus"
 ## Codex's level when none is chosen: the writer's "Default (medium ...)".
 const CODEX_EFFORT := "medium"
 
-## An entry saved before backends were recorded was dispatched to Claude, the only
-## backend there was.
+## An entry saved before backends were recorded was dispatched to Claude, the only backend there was.
 const LEGACY := "claude_cli"
 
 
@@ -73,18 +65,19 @@ static func new_session_id() -> String:
 	return "%s-%s-%s-%s-%s" % [h.substr(0, 8), h.substr(8, 4), h.substr(12, 4), h.substr(16, 4), h.substr(20, 12)]
 
 
-## The CLI's own argument vector for one run, the prompt excluded (it goes on stdin, or - for Grok, which reads no
-## stdin - from the file it is in). [param session] is empty for a fresh run and the saved session/thread id for a
-## resume or follow-up. [param run]: `model` and `effort` as the picker holds them ("" each: its "Default"),
-## `prompt_path` (Grok) and `fresh` (Grok: the id a fresh run is to take, so it is known before the run says it).
+## The CLI's own argument vector for one run, the prompt excluded (it goes on stdin, or, for Grok, which
+## reads no stdin, from the file it is in). [param session] is empty for a fresh run and the saved
+## session/thread id for a resume or follow-up. [param run]: `model` and `effort` as the picker holds them
+## ("" each: its "Default"), `prompt_path` (Grok) and `fresh` (Grok: the id a fresh run takes, so it is
+## known before the run says it).
 static func argv(key: String, bin: String, session: String, repo_root: String, run := {}) -> PackedStringArray:
 	var a := PackedStringArray([bin])
 	var model := String(run.get("model", ""))
 	var effort := String(run.get("effort", ""))
 	match key:
 		"codex_cli":
-			# `resume` is its own subcommand with a narrower flag set - no -C, which is why
-			# the launcher cd's into the repo for every run rather than relying on the flag.
+			#`resume` is its own subcommand with a narrower flag set (no -C), so the launcher cd's into the repo
+			#for every run.
 			a.append("exec")
 			if not session.is_empty():
 				a.append_array(["resume", session])
@@ -97,7 +90,7 @@ static func argv(key: String, bin: String, session: String, repo_root: String, r
 				a.append_array(["-C", repo_root])
 			a.append("-")         # the prompt: read it from stdin
 		"grok_cli":
-			# Claude Code's own stream format (`streaming-messages-json`), so it reads as Claude's does
+			#Claude Code's own stream format (`streaming-messages-json`), so it reads as Claude's does
 			a.append_array(["--prompt-file", String(run.get("prompt_path", "")), "--cwd", repo_root,
 				"--always-approve", "--output-format", "streaming-messages-json"])
 			if not model.is_empty():
@@ -109,8 +102,8 @@ static func argv(key: String, bin: String, session: String, repo_root: String, r
 			elif not String(run.get("fresh", "")).is_empty():
 				a.append_array(["-s", String(run["fresh"])])
 		_:
-			# The level left out when none is chosen: the CLI's --effort has no "auto", and unset it
-			# takes the author's own. stream-json needs --verbose alongside -p.
+			#The level is left out when none is chosen: --effort has no "auto", and unset it takes the author's
+			#own. stream-json needs --verbose alongside -p.
 			a.append_array(["-p", "--model", model if not model.is_empty() else CLAUDE_DEFAULT])
 			if not effort.is_empty():
 				a.append_array(["--effort", effort])
@@ -131,8 +124,8 @@ static func session_of(key: String, evt: Dictionary) -> String:
 			return str(evt.get("session_id", "")) if evt.has("session_id") else ""
 
 
-## Dig an id out of raw captured text, for a run whose id was never saved: the first that is not empty (Grok's opening
-## event carries an empty one).
+## Dig an id out of raw captured text, for a run whose id was never saved: the first that is not empty
+## (Grok's opening event carries an empty one).
 static func recover_session(key: String, text: String) -> String:
 	var k := "\"thread_id\":\"" if key == "codex_cli" else "\"session_id\":\""
 	var i := text.find(k)
@@ -192,9 +185,8 @@ static func describe(key: String, evt: Dictionary) -> String:
 			return "thinking…"
 
 
-## The outcome of a finished run, from every event it wrote:
-## `{ok, response, session, cost_usd, usage}` - `usage` is the line shown under a done entry
-## (dollars for Claude, tokens for Codex, which reports no price).
+## The outcome of a finished run, from every event it wrote: `{ok, response, session, cost_usd, usage}`;
+## `usage` is the line shown under a done entry (dollars for Claude, tokens for Codex, which reports no price).
 static func result(key: String, events: Array) -> Dictionary:
 	var out := {"ok": false, "response": "", "session": "", "cost_usd": 0.0, "usage": "", "error": ""}
 	match key:
@@ -223,9 +215,8 @@ static func result(key: String, events: Array) -> Dictionary:
 					"error":
 						out.error = str(evt.get("message", "error"))
 			out.response = last_msg
-			# A top-level `error` is not by itself a failure - the CLI also reports stream
-			# retries that way and then carries on. `turn.failed` is, and it clears
-			# `completed` because it is the last word on the turn.
+			#A top-level `error` is not by itself a failure (the CLI also reports stream retries that way);
+			#`turn.failed` is, and clears `completed` as the last word on the turn.
 			out.ok = completed and last_msg != ""
 			if out.ok:
 				out.error = ""
@@ -233,8 +224,8 @@ static func result(key: String, events: Array) -> Dictionary:
 				out.usage = "%s in (%s cached) · %s out" % [_k(int(tokens.get("input_tokens", 0))),
 					_k(int(tokens.get("cached_input_tokens", 0))), _k(int(tokens.get("output_tokens", 0)))]
 		_:
-			# Claude Code's stream, and Grok's in the same format: its result may carry no `result`
-			# text (the last thing it said is the reply then), and says what went wrong in `errors`
+			#Claude Code's stream, and Grok's in the same format: its result may carry no `result` text (the last
+			#thing it said is the reply then), and says what went wrong in `errors`
 			var parsed: Dictionary = {}
 			var last_text := ""
 			for e in events:
@@ -272,13 +263,11 @@ static func events_in(text: String) -> Array:
 	return out
 
 
-## The lines of a run's stream finished since byte [param offset], for a reader tailing it while
-## it is written: `{lines, offset}`, where `offset` is past the last line end. A line still being
-## written waits for the next call. BYTES FROM THE OFFSET, NOT get_as_text(), which reads the
-## whole file from its start whatever the seek: the old reader added every re-read to the offset,
-## ran it past the end and stopped seeing new lines, and counted a String index as bytes, which
-## it is not once the stream holds anything outside ASCII. A file now shorter than [param offset]
-## was replaced, and is read from its start.
+## The lines of a run's stream finished since byte [param offset], for a reader tailing it while it is
+## written: `{lines, offset}`, where `offset` is past the last line end. A line still being written waits
+## for the next call. Reads bytes from the offset, not get_as_text() (which reads from the start whatever
+## the seek, and a String index is not a byte count once the stream holds non-ASCII). A file shorter than
+## [param offset] was replaced and is read from its start.
 static func lines_since(path: String, offset: int) -> Dictionary:
 	var fa := FileAccess.open(path, FileAccess.READ)
 	if fa == null:
@@ -338,10 +327,9 @@ static func installed() -> Array:
 	return REGISTRY.keys().filter(func(k: String) -> bool: return Deps.has(dep(k)))
 
 
-## The persisted choice as the picker shows it ("" = Off, else a row of [constant REGISTRY]),
-## installed or not - read from the Settings autoload BY NAME rather than through it, so this file
-## still compiles under a bare `--script`, and so it answers in a Masking session from `--mask-edit`
-## with whatever a previous run chose.
+## The persisted choice as the picker shows it ("" = Off, else a row of [constant REGISTRY]), installed or
+## not - read from the Settings autoload by name so this file compiles under a bare `--script` and answers
+## in a Masking session from `--mask-edit`.
 static func choice() -> String:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
@@ -350,10 +338,9 @@ static func choice() -> String:
 	return String(st.read("assistant", "backend", "")) if st != null else ""
 
 
-## THE ASSISTANT THAT CAN ACTUALLY RUN: the choice, when its CLI is installed; "" (Off) otherwise.
-## Whatever dispatches a note or offers to - the console's Ask box, the feedback list's Send - asks
-## this, so a CLI missing from this machine is never offered and with no AI installed the feature is
-## off. [method gap] says why.
+## The assistant that can actually run: the choice, when its CLI is installed; "" (Off) otherwise.
+## Whatever dispatches a note or offers to (the console's Ask box, the feedback list's Send) asks this, so
+## a missing CLI is never offered. [method gap] says why.
 static func runnable() -> String:
 	return choice() if gap().is_empty() else ""
 

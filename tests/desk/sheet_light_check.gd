@@ -1,19 +1,16 @@
 extends SceneTree
 
-## A SHEET'S BACK PASSES ONLY THE LIGHT ON ITS FACE ([constant LegalPad.SHEET_SHADER]'s light(); 2026-10-29, the user:
-## "You can see written text on the back of pages ... the text disappears immediately after the page turn settles ...
-## at the binding ... you would not expect to see as much text as we do - because that's the header section"). Godot's
-## own BACKLIGHT adds `(1/PI - diffuse) * BACKLIGHT` on whichever side a light is, so the lamp lighting a turned
-## sheet's back showed the writing on its face through it - on the binding's top, where that face lies face down. A
-## sheet whose face is half ink and half paper, a light square over its middle, seen from behind:
+## A sheet's back passes only the light on its face ([constant LegalPad.SHEET_SHADER]'s light()). Godot's own BACKLIGHT adds
+## `(1/PI - diffuse) * BACKLIGHT` on whichever side a light is, so a lamp lighting a turned sheet's back would show the
+## writing on its face through it. A sheet whose face is half ink and half paper, a light square over its middle, seen from
+## behind:
 ##
-##   - LIT FROM BEHIND (the camera's side), ITS BACK SHOWS NONE OF THE WRITING: its two halves alike (under
-##     [constant SAME_MOST]) - the control, Godot's own term (the shader without its light()), shows it (over
-##     [constant SHOWN_LEAST]).
-##   - LIT ON ITS FACE, ITS BACK SHOWS THE WRITING THROUGH IT (over [constant THROUGH_LEAST]) - a shader that only
-##     stopped the writing would pass the first.
-##   - ITS FACE IS LIT AS GODOT LIGHTS IT: seen from the front, the same picture under both (each pixel within
-##     [constant FACE_MOST] of 255) - the page under the candles was tuned in Godot's own model.
+##   - Lit from behind (the camera's side), its back shows none of the writing: its two halves alike (under [constant
+##     SAME_MOST]); the control, Godot's own term (the shader without its light()), shows it (over [constant SHOWN_LEAST]).
+##   - Lit on its face, its back shows the writing through it (over [constant THROUGH_LEAST]); a shader that only stopped
+##     the writing would pass the first.
+##   - Its face is lit as Godot lights it: seen from the front, the same picture under both (each pixel within [constant
+##     FACE_MOST] of 255).
 ##
 ##   tests/run_quiet.sh sheet_light_check
 ##

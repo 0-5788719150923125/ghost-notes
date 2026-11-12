@@ -1,22 +1,22 @@
 extends RefCounted
 class_name Vessel
 
-## Vessel - THE INSIDE OF A HOLLOW PART, what a liquid fills (next/table_physics.md, "Liquids"): a lathe's inside
-## up from its inner floor to its rim, as a radius at each height ([member radius]); or a walled extrude's, its
-## outline drawn smaller about its middle ([member ShapeField.k_in]) above its floor. Measured in the part's own space
-## (meters), its warp's scale laid over it.
+## Vessel - the inside of a hollow part, what a liquid fills (next/table_physics.md, "Liquids"): a
+## lathe's inside up from its inner floor to its rim, as a radius at each height ([member radius]); or a
+## walled extrude's, its outline drawn smaller about its middle ([member ShapeField.k_in]) above its
+## floor. Measured in the part's own space (meters), its warp's scale laid over it.
 ##
-## What it answers is a LEVEL: the user, 2026-10-28, of a vial tipped to pour - "The liquids are not liquids". A
-## liquid's surface is level in the table's space however its vessel is turned, and keeps the volume under it: the
-## level for any tilt and any share of the inside is a QUANTILE of a few thousand equal-volume points filling it
-## ([member points]), taken along the up the vessel sees ([method level]) - made once, as a table by tilt (a lathe
-## is the same all round) or by tilt and bearing (an outline). And it answers an OVERFLOW: how much leaves over the
-## rim where the liquid stands above it, as a weir's flow ([method overflow]). EACH POINT STANDS FOR ITS WHOLE CELL ([method _table]): the bare middles of a grid
-## lie in layers, and a quantile of them stays on a layer while the share runs through it, then jumps (841899, feedback 0009: the cauldron's cells 1 cm tall, its
-## surface at 9.54 cm from 668 ml down to 546, then at 8.59 - "the liquid level decreases" as the ladle took a few ml).
+## It answers a level. A liquid's surface is level in the table's space however its vessel is turned,
+## and keeps the volume under it: the level for any tilt and any share of the inside is a quantile of a
+## few thousand equal-volume points filling it ([member points]), taken along the up the vessel sees
+## ([method level]) - made once, as a table by tilt (a lathe is the same all round) or by tilt and
+## bearing (an outline). It also answers an overflow: how much leaves over the rim where the liquid
+## stands above it, as a weir's flow ([method overflow]). Each point stands for its whole cell
+## ([method _table]): the bare middles of a grid lie in layers, and a quantile of them would stay on a
+## layer while the share runs through it, then jump.
 
-## The heights a lathe's inside is measured at, the points it is filled with (about), its rim's points round, and the
-## level table's tilts, bearings (an outline's) and shares.
+## The heights a lathe's inside is measured at, the points it is filled with (about), its rim's points
+## round, and the level table's tilts, bearings (an outline's) and shares.
 const LEVELS := 48
 const POINTS := 1800
 const RIM := 48
@@ -24,7 +24,7 @@ const TILTS := 37
 const BEARINGS := 16
 const SHARES := 41
 const GOLDEN := 0.6180339887
-## A WEIR's coefficient of discharge (a sharp crest, Q = 2/3 Cd sqrt(2g) b H^3/2) and gravity.
+## A weir's coefficient of discharge (a sharp crest, Q = 2/3 Cd sqrt(2g) b H^3/2) and gravity.
 const CD := 0.62
 const GRAVITY := 9.81
 ## How far inside its walls the liquid drawn in it stands (meters): never in the vessel's own surface.
@@ -44,7 +44,7 @@ var _arc := 0.0               # the crest's length a rim point stands for
 var _levels: Array = []       # [tilt][bearing] -> PackedFloat32Array of heights along up, a share apiece
 
 
-## THE INSIDE OF [param f], or null when it has none (a solid part, a shallow one).
+## The inside of [param f], or null when it has none (a solid part, a shallow one).
 static func of(f: ShapeField) -> Vessel:
 	if f == null or not f.hollow():
 		return null
@@ -119,8 +119,8 @@ func _inside(q: Vector3) -> bool:
 	return inner < -INSET
 
 
-## EQUAL VOLUMES FILLING IT: the middles of the cells of an even grid that fall inside - each the same volume, so a
-## level is a quantile of their heights.
+## Equal volumes filling it: the middles of the cells of an even grid that fall inside - each the same
+## volume, so a level is a quantile of their heights.
 func _fill() -> void:
 	var lo: Vector3
 	var hi: Vector3
@@ -171,7 +171,7 @@ func _warped(q: Vector3) -> Vector3:
 	return field.pivot + (q - field.pivot) * field.scale if field.scale != Vector3.ONE else q
 
 
-## ITS CREST, round the inside's top edge, and where what goes over it leaves: the rim's outer edge at the same bearing.
+## Its crest, round the inside's top edge, and where what goes over it leaves: the rim's outer edge at the same bearing.
 func _rim() -> void:
 	rim = PackedVector3Array()
 	lip = PackedVector3Array()
@@ -212,8 +212,8 @@ func _rim() -> void:
 	_arc /= float(maxi(rim.size(), 1))
 
 
-## THE LEVEL TABLE: for each tilt (and, for an outline, each bearing), the heights along up that leave each share of
-## the inside under them.
+## The level table: for each tilt (and, for an outline, each bearing), the heights along up that leave
+## each share of the inside under them.
 func _table() -> void:
 	_levels = []
 	var bearings := 1 if field.kind == "lathe" else BEARINGS
@@ -244,8 +244,8 @@ func _table() -> void:
 		_levels.append(row)
 
 
-## THE LEVEL: how far along [param up] (the table's up, in the part's own space, unit) the surface stands that leaves
-## [param share] (0-1) of the inside under it.
+## The level: how far along [param up] (the table's up, in the part's own space, unit) the surface
+## stands that leaves [param share] (0-1) of the inside under it.
 func level(up: Vector3, share: float) -> float:
 	var u := up.normalized()
 	var th := acos(clampf(u.y, -1.0, 1.0))
@@ -281,8 +281,9 @@ func share_under(up: Vector3, s: float) -> float:
 	return (lo + hi) * 0.5
 
 
-## WHAT FLOWS OVER THE RIM with the surface at [param s] along [param up]: `{q (cubic meters a second), at (the rim point
-## it leaves over most), head (meters, there)}` - a weir along the part of the crest the liquid stands above.
+## What flows over the rim with the surface at [param s] along [param up]: `{q (cubic meters a second),
+## at (the rim point it leaves over most), head (meters, there)}` - a weir along the part of the crest
+## the liquid stands above.
 func overflow(up: Vector3, s: float) -> Dictionary:
 	var q := 0.0
 	var best := -INF
@@ -332,9 +333,10 @@ func surface_radius(up: Vector3, s: float) -> float:
 	return maxf(sqrt(volume / (PI * maxf((top_y - floor_y) * sc.y, 1e-4))), 0.002)
 
 
-## THE INSIDE AS A SHADER READS IT ([code]prop_liquid.gdshader[/code], whose cut surface is drawn only within it): its
-## radius at [constant SHADER_N] heights from its floor to its rim (a lathe's), or at as many bearings round its middle
-## (an outline's) - the other all ones - its heights, its middle, its warp's scale and pivot.
+## The inside as a shader reads it ([code]prop_liquid.gdshader[/code], whose cut surface is drawn only
+## within it): its radius at [constant SHADER_N] heights from its floor to its rim (a lathe's), or at as
+## many bearings round its middle (an outline's) - the other all ones - its heights, its middle, its
+## warp's scale and pivot.
 const SHADER_N := 32
 
 
@@ -373,9 +375,9 @@ func _outline_reach(a: float) -> float:
 	return best
 
 
-## THE INSIDE AS A PART [Props] can build (centimeters, unwarped - [method warp_point] lays the warp over what it
-## makes; an outline's from its floor up, [member floor_y] below it): what a liquid in it is drawn as, cut at its
-## surface.
+## The inside as a part [Props] can build (centimeters, unwarped - [method warp_point] lays the warp
+## over what it makes; an outline's from its floor up, [member floor_y] below it): what a liquid in it
+## is drawn as, cut at its surface.
 func part_spec() -> Dictionary:
 	if field.kind == "lathe":
 		var prof: Array = [Vector2(0.0, floor_y * 100.0)]

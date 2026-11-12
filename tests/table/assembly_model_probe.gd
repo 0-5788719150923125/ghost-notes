@@ -1,6 +1,6 @@
 extends Node
 
-## NOT a gate. A MODEL LOOKED AT ([AssemblyModel], [ModelStudio]): what a design written by hand comes to, in words and from four sides.
+## NOT a gate. A model looked at ([AssemblyModel], [ModelStudio]): what a hand-written design comes to, in words and from four sides.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/assembly_model_probe.gd 200 --model <file.json> --out <file.png> [--upto N]
 

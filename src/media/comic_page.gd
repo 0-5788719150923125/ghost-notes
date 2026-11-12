@@ -3,62 +3,44 @@ class_name ComicPage
 
 ## ComicPage - one seeded page of comic panels. The layout half of [ComicMedium].
 ##
-## Cattle, not pets, applied to page design: a page is not a hand-drawn template picked
-## from a list of six, it is a RECIPE - a row split, a per-row column split, gutters, a
-## corner radius, a cant - whose numbers are all sampled from ranges around sensible
-## centers. So the show does not cycle through the same half-dozen grids; it draws from
-## the space of comic pages, and a given song always draws the same ones.
+## A page is a recipe - a row split, a per-row column split, gutters, a corner radius - whose
+## numbers are sampled from ranges around sensible centers, so a given song always draws the same
+## pages and the show draws from the space of comic pages rather than a fixed list of grids.
 ##
-## The page lives in PAGE SPACE: x and y both in [-1, 1], y DOWN, so a panel rect is
-## directly usable as the u/v of a quad on the page plane and needs no aspect handed to
-## it. [member aspect] is how tall the page is relative to its width, and panel rects are
-## expressed in that same normalized box - the medium scales by it when it places the
-## page in the world.
+## Page space: x and y both in [-1, 1], y down, so a panel rect is directly the u/v of a quad on
+## the page plane. [member aspect] is page height over width; panel rects are in that normalized
+## box and the medium scales by it when it places the page in the world.
 ##
-## WHY THE GRID IS ROWS-THEN-COLUMNS and not a free-form packing: a comic page reads in
-## rows. A layout engine that can place a panel anywhere produces pages with no reading
-## order, which is the one thing a comic page must have. Rows of varying height, split
-## into a varying number of columns of varying width, is the whole classic vocabulary -
-## including the full-width establishing panel (a row of one) and the tall splash.
+## The grid is rows then columns, not a free packing, because a comic page reads in rows: that
+## gives a reading order, and covers the classic vocabulary (a full-width establishing row of
+## one, a tall splash, rows of varying height split into columns of varying width).
 
-## A page is between these many panels. Under three there is barely a page; over six the
-## panels are too small for a scene to read at the wide shot.
+## A page is between these many panels: under three is barely a page; over six the panels are
+## too small to read at the wide shot.
 const MIN_PANELS := 3
 const MAX_PANELS := 6
 
 ## Page proportion (height / width). Around the American comic's 1.5, sampled.
 const ASPECT := Vector2(1.34, 1.60)
-## Gutter between panels, in page-width fractions. Comics run wider gutters than people
-## remember; too tight and the panels read as one grid rather than as separate moments.
+## Gutter between panels, in page-width fractions.
 const GUTTER := Vector2(0.030, 0.062)
-## Margin between the outermost panels and the page edge. Always at least the gutter,
-## because a panel touching the trim reads as a printing error rather than a bleed.
+## Margin between the outermost panels and the page edge. At least the gutter.
 const MARGIN := Vector2(0.045, 0.085)
-## Corner radius, in units of the panel's shorter side. 0 for a page that wants hard
-## corners - which most classic pages do, so the low end is weighted.
+## Corner radius, in units of the panel's shorter side. The low end is weighted: most classic
+## pages have hard corners.
 const RADIUS := Vector2(0.0, 0.055)
-## How far a canted panel is rotated off square, in radians, and HOW OFTEN one is canted.
+## How far a canted panel is rotated off square, in radians (the rate is [constant CANT_RATE]).
 ##
-## THE RATE IS ZERO, and that is a decision rather than a disabled feature. A tilted panel is
-## a flat-page gesture: on printed paper, square-on, 2.5 degrees off the grid reads as a
-## deliberate scrapbook panel. This medium draws the page in real 3D through a perspective
-## lens, and there every vertical edge on the sheet converges toward ONE vanishing point -
-## which is what the eye reads as depth. A canted panel's edges converge toward a DIFFERENT
-## point, so the gutter beside it opens into a wedge, and the eye reads that local
-## inconsistency as a printing misregistration rather than as a tilt.
+## The rate is zero: the page is drawn in real 3D through a perspective lens, where every vertical
+## edge converges toward one vanishing point, and a canted panel's edges converge toward another,
+## so the gutter beside it opens into a wedge that reads as misregistration.
 ##
-## Measured before removing it: 69% of spreads carried a canted panel, and in every one of
-## those the canted panel sat beside a square one in the same row - so two thirds of all
-## pages had a pair of adjacent panels further apart at one end than the other. Reported as
-## "they were further apart at the top from each other than they were at the bottom. The
-## frame alignment was off."
-##
-## The plumbing stays (panel_point, panel_uv and corners all still apply a cant, at the cost
-## of one is_zero_approx), so a page that wants to tilt again is one number away.
+## The plumbing stays (panel_point, panel_uv and corners all still apply a cant), so a tilt is one
+## number away.
 const CANT := 0.045
 const CANT_RATE := 0.0
-## The widest and narrowest a panel may be allowed to get. Outside this a subject sized
-## to the panel's shorter side is cropped through, so the roll is retried.
+## The widest and narrowest a panel may be. Outside this a subject sized to the panel's shorter
+## side is cropped through, so the roll is retried.
 const PANEL_ASPECT := Vector2(0.42, 2.6)
 
 ## Height / width of the page, sampled.
@@ -68,36 +50,30 @@ var gutter := 0.045
 var margin := 0.06
 ## Corner radius in units of the shorter panel side.
 var radius := 0.0
-## The panels, in READING ORDER. Each is `{rect: Rect2, cant: float}` where `rect` is in
-## the normalized page box (x, y both 0..1, y down) and `cant` is its rotation off square.
+## The panels, in reading order. Each is `{rect: Rect2, cant: float}`: `rect` in the normalized
+## page box (x, y both 0..1, y down), `cant` its rotation off square.
 var panels: Array = []
 
 
-## Roll a page. [param key] is folded into every draw, so the same session seed and page
-## index always produce the same page - and two different pages of one session are
-## independent rolls rather than a walk of one stream.
+## Roll a page. [param key] is folded into every draw, so the same session seed and page index
+## give the same page and different pages are independent rolls.
 ##
-## [param style] OVERRIDES the print style - the page proportion, the gutter, the margin and
-## the corner radius - leaving only the panel GRID to be rolled here. That is how
-## [ComicSpread] makes two facing pages read as one printed sheet: those four numbers belong
-## to the edition, not to the page, and sampling them per page put square corners opposite
-## rounded ones across the spine. An empty dictionary keeps the old behavior exactly, so a
-## page rolled on its own is unchanged.
+## [param style] overrides the print style (page proportion, gutter, margin, corner radius),
+## leaving only the panel grid to roll: [ComicSpread] uses it so two facing pages read as one
+## printed sheet. An empty dictionary rolls all of it.
 func _init(key: int, style: Dictionary = {}) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = key
 	aspect = float(style.get("aspect", rng.randf_range(ASPECT.x, ASPECT.y)))
 	gutter = float(style.get("gutter", rng.randf_range(GUTTER.x, GUTTER.y)))
 	margin = float(style.get("margin", maxf(gutter, rng.randf_range(MARGIN.x, MARGIN.y))))
-	# Hard corners are the classic look, so weight toward zero rather than sampling flat:
-	# a squared roll pulls the mass down and leaves the rounded pages as the minority.
+	# Hard corners are the classic look: a squared roll pulls the mass toward zero.
 	radius = float(style.get("radius", RADIUS.y * pow(rng.randf(), 2.2)))
 	_roll_grid(rng)
 
 
-# Rows first, then columns inside each row. Retried until every panel's aspect is inside
-# PANEL_ASPECT: it is far simpler to reject a bad roll than to constrain the split so it
-# cannot happen, and the rejection rate is low enough not to matter (a handful of tries).
+# Rows first, then columns inside each row, retried until every panel's aspect is inside
+# PANEL_ASPECT (rejecting a bad roll is simpler than constraining the split).
 func _roll_grid(rng: RandomNumberGenerator) -> void:
 	for _attempt in 24:
 		panels = _try_grid(rng)
@@ -109,14 +85,9 @@ func _roll_grid(rng: RandomNumberGenerator) -> void:
 
 func _try_grid(rng: RandomNumberGenerator) -> Array:
 	var want := rng.randi_range(MIN_PANELS, MAX_PANELS)
-	# Split `want` panels into rows. Two or three; a 4-row page of singles is a strip, not a
-	# page, and one row is a strip on its side.
-	#
-	# SAMPLED, because the arithmetic that used to pick it could only ever say 2. It was
-	# `clampi(int(round(sqrt(want))), 2, 3)`, and sqrt(6) is 2.449, which rounds to 2 - so
-	# for every panel count this page can roll, the three-row branch was unreachable and the
-	# tall-thin classic layouts simply never appeared. Constrained to what the row can hold:
-	# at least one panel per row, at most three.
+	# Split `want` panels into rows: two or three (a 4-row page of singles is a strip, and one row
+	# is a strip on its side), sampled within what the rows can hold: at least one panel per row,
+	# at most three.
 	var lo_rows := maxi(2, int(ceil(float(want) / 3.0)))
 	var hi_rows := mini(3, want)
 	if hi_rows < lo_rows:
@@ -146,9 +117,8 @@ func _try_grid_fixed(_rows: int, per_row: Array) -> Array:
 	return _lay_out(per_row, rng)
 
 
-# Turn a per-row panel count into rects. Row heights and, inside a row, column widths are
-# each a normalized random split - so a page gets a tall row over a short one, and a wide
-# panel beside a narrow one, without either being authored.
+# Turn a per-row panel count into rects. Row heights and, inside a row, column widths are each a
+# normalized random split.
 func _lay_out(per_row: Array, rng: RandomNumberGenerator) -> Array:
 	var rows: int = per_row.size()
 	var inner_w := 1.0 - 2.0 * margin
@@ -167,8 +137,7 @@ func _lay_out(per_row: Array, rng: RandomNumberGenerator) -> Array:
 			var a := w / maxf(h, 1e-4)
 			if a < PANEL_ASPECT.x or a > PANEL_ASPECT.y:
 				return []
-			# a cant is rare and small - about one panel in seven, and only when the page
-			# has room for it (a panel on the trim edge would rotate off the paper)
+			# a cant is rare and small, and only when the page has room for it
 			var canted := rng.randf() < CANT_RATE \
 				and x > margin * 0.6 and y > margin * 0.6 \
 				and x + w < 1.0 - margin * 0.6 and y + h < aspect - margin * 0.6

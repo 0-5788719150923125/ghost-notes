@@ -1,36 +1,23 @@
 extends Node
 
-## Gate for WHEN the karaoke line is on screen.
-##
-## The overlay used to pick its sentence as "the one being spoken, or else the first one
-## not yet spoken" - with no bound on how far ahead that second case reached. So before a
-## word had been said it showed the opening line, and with a five second intro in front
-## of the reading that line sat on screen, plate and all, for the whole intro. Nothing
-## brought it off at the other end either.
-##
-## What is asserted here is the SHAPE of the presence envelope, because that is what was
-## wrong - not the text, not the color, not the layout, all of which were fine:
-##   nothing on screen during a long silence before the first word;
+## Gate for when the karaoke line is on screen. What is asserted is the shape of the presence envelope:
+##   nothing on screen during a long silence before the first word (the line must not sit through an
+##   intro, plate and all);
 ##   the line arriving shortly before it is spoken, not minutes early;
 ##   the line leaving shortly after the last word rather than hanging through the outro;
-##   and - the constraint that stops the fix becoming its own bug - NO blink across an
-##   ordinary gap between two sentences.
+##   and no blink across an ordinary gap between two sentences.
 ##
-## THE SECOND BUG, from a ch19 render: "at exactly the same place where the colon is, the
-## subtitles briefly disappeared, then reappeared... the SAME subtitles flickered". There were
-## TWO rules for what is on screen - the presence ease asked about the SENTENCE's span, the draw
-## asked about the nearest WORD (+/- 0.4 s) - and they disagree for any pause longer than 1.2 s
-## inside a sentence, which is what a colon's clause pause becomes once pause_scale stretches it.
-## So the second half of this gate asks BOTH paths the same questions through a long internal
-## pause, and its control is the case that must still go dark: a real silence between sentences.
-## Asking only the presence path would have passed while the bug was live.
+## One rule decides what is on screen: the presence ease and the draw must agree through a pause longer
+## than 1.2 s inside a sentence (a colon's clause pause once pause_scale stretches it), or the line
+## flickers. The second half of this gate asks both paths the same questions through a long internal
+## pause; its control is a real silence between sentences, which must still go dark. Asking only the
+## presence path would pass with the bug live.
 ##
-## THE MEDIUM'S SAY ([member Subtitles.captions]; the letter captions only what cannot be read on its page): a
-## line the medium does not caption goes dark, and the one after, captioned, is on again - the control,
-## the same line with no medium asked, on.
+## The medium's say ([member Subtitles.captions]; the letter captions only what cannot be read on its
+## page): a line the medium does not caption goes dark and the one after, captioned, is on again; the
+## control is the same line with no medium asked, on.
 ##
-## Run inside a real boot (the overlay is a CanvasLayer, and Subtitles reads the
-## Spectrum autoload):
+## Run inside a real boot (the overlay is a CanvasLayer, and Subtitles reads the Spectrum autoload):
 ##   tests/run_boot_probe.sh tests/show/subtitle_presence_check.gd 90
 
 var _fails: Array = []
@@ -38,8 +25,8 @@ var _fails: Array = []
 
 func _ready() -> void:
 	var subs := Subtitles.new()
-	# Two sentences: one at 5.0-6.1s (after a 5s intro), the next at 6.5-9.0s, then a
-	# long tail of nothing - the exact shape a bookended take has.
+	# Two sentences: one at 5.0-6.1s (after a 5s intro), the next at 6.5-9.0s, then a long tail of
+	# nothing, the shape of a bookended take.
 	subs.words = [
 		{"text": "This", "t0": 5.00, "t1": 5.30, "sentence": 0},
 		{"text": "one", "t0": 5.30, "t1": 5.60, "sentence": 0},
@@ -78,9 +65,8 @@ func _ready() -> void:
 	# --- and the ease actually eases, rather than snapping ---
 	_check_ease(subs)
 
-	# --- A LONG PAUSE INSIDE ONE SENTENCE MAY NOT BLINK (the colon) ---
-	# One sentence, spoken either side of a 1.8s pause where the colon is. Both paths are asked,
-	# every 50ms, right through it: the drawn line must stay the SAME five words the whole way.
+	# One sentence, spoken either side of a 1.8s pause where the colon is. Both paths are asked every 50ms
+	# right through it: the drawn line must stay the same five words the whole way.
 	var colon := Subtitles.new()
 	add_child(colon)
 	colon.words = [
@@ -106,8 +92,8 @@ func _ready() -> void:
 			% dark + "that is the reported flicker")
 	if thin > 0:
 		_fails.append("colon: presence dropped at %d instants inside one sentence" % thin)
-	# THE CONTROL. The fix must not become "the line never leaves": a genuine silence between two
-	# sentences, longer than HANG + LEAD, still has to clear the frame.
+	# The control: the fix must not become "the line never leaves": a genuine silence between two
+	# sentences, longer than HANG + LEAD, must still clear the frame.
 	colon.words = [
 		{"text": "one.", "t0": 1.00, "t1": 1.50, "sentence": 0},
 		{"text": "two.", "t0": 5.00, "t1": 5.50, "sentence": 1},
@@ -126,7 +112,7 @@ func _ready() -> void:
 			+ "rule now holds a line on screen through anything")
 	colon.queue_free()
 
-	# --- THE MEDIUM'S SAY: a line it does not caption is dark, the next it does is on ---
+	# --- the medium's say: a line it does not caption is dark, the next it does is on ---
 	var asked := Subtitles.new()
 	add_child(asked)
 	asked.words = [
@@ -168,9 +154,8 @@ func _off(subs: Subtitles, t: float, why: String) -> void:
 		_fails.append("t=%.2fs should show NOTHING: %s" % [t, why])
 
 
-## Presence is eased, not switched. Stepping the real _process arithmetic from 0 toward 1
-## must take a handful of frames - if it arrived in one, the line would pop on at full
-## brightness, which is the only hard cut anywhere in the frame.
+## Presence is eased, not switched: stepping the real _process arithmetic from 0 toward 1 must take a
+## handful of frames, or the line pops on at full brightness.
 func _check_ease(subs: Subtitles) -> void:
 	var p := 0.0
 	var dt := 1.0 / 60.0

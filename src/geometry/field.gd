@@ -3,16 +3,12 @@ class_name Field
 
 ## Field - a composable procedural scalar field; the universal "texture / modulation".
 ##
-## The reusable surface under terrain, texture, and any spatial modulation. A Field is a
-## function of position you sample with at(p) -> 0..1. Build a base kind (fbm rolling
-## hills, ridged mountains, billow puffs, cells/cracks, strata bands, a gradient), then
-## shape it: domain-WARP it by another field, push it through a Nonlinear CURVE, scale /
-## offset it, and COMBINE fields (add / mul / mask / max / min / sub) into a tree. The
-## same field drives a mountain's height, mottles a rock's color, carves a fissure, or
-## modulates any scalar elsewhere - textures abstracted into one primitive.
+## A function of position sampled with at(p) -> 0..1. Build a base kind (fbm rolling hills, ridged mountains, billow puffs,
+## cells/cracks, strata bands, a gradient), then shape it: domain-warp it by another field, push it through a Nonlinear curve,
+## scale / offset it, and combine fields (add / mul / mask / max / min / sub) into a tree. One field can drive a mountain's
+## height, mottle a rock's color or carve a fissure.
 ##
-## Sampling is pure and stateless, so a scene samples a Field once into a grid at build
-## (terrain is static) and renders the cheap grid thereafter.
+## Sampling is pure and stateless, so a scene samples a Field once into a grid at build and renders the grid thereafter.
 
 # Leaf (a noise generator) -----------------------------------------------------------
 var _noise: FastNoiseLite

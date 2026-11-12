@@ -4,26 +4,25 @@ class_name PipelineSection
 ## PipelineSection - what one card hands a note's Pipeline card ([PipelineCard]; next/pipeline.md): its rows
 ## ([PipelineRow]), what Generate asks of it, and whether it is busy.
 ##
-## THE ONE WAY IN (the user, 2026-11-02: "the pipeline is not a unified, generic card - it is multiple branching paths,
-## and we are forced to build logic that pushes steps into different lists, at different times, depending upon the
-## context"). A card answers `pipeline() -> PipelineSection` and the panel adds it ([method ReadingPanel._offer_pipeline]):
-## no card names another, none is told where it stands, and none lists anyone else's steps.
+## The one way in: a card answers `pipeline() -> PipelineSection` and the panel adds it ([method
+## ReadingPanel._offer_pipeline]); no card names another, none is told where it stands, and none lists anyone else's
+## steps.
 ##
-## A CARD SUBCLASSES IT, usually as a small inner class over its own methods. The card keeps its own producer, and how it
+## A card subclasses it, usually as a small inner class over its own methods. The card keeps its own producer and how it
 ## ticks it; a section is only what the Pipeline card asks of that.
 
 ## Its heading.
 var title := ""
-## THE CARD IT IS OF: gone with it, so a card freed under the Pipeline card takes its section along ([method alive]). None for
-## a section of nobody's.
+## The card it is of: gone with it, so a card freed under the Pipeline card takes its section along ([method alive]).
+## None for a section of nobody's.
 var owner: Object = null:
 	set(by):
 		owner = by
 		_owned = by != null
-## THE EPISODE A STEP MADE FROM ONE READS, `() -> EpisodeFeed`: the panel hands it to every section ([EpisodeSteps] reads
-## it). Whoever makes the note's episode says which is shown, and no section need know who.
+## The episode a step made from one reads, `() -> EpisodeFeed`: the panel hands it to every section ([EpisodeSteps]
+## reads it). Whoever makes the note's episode says which is shown.
 var episode := Callable()
-## WHAT IT WAS LAST TOLD TO SAY: a refusal or a note from the card, said over [method line] until the next press.
+## What it was last told to say: a refusal or a note from the card, said over [method line] until the next press.
 var told := ""
 
 var _owned := false
@@ -85,10 +84,9 @@ func busy() -> bool:
 	return false
 
 
-## WHETHER GENERATE WOULD START MORE HERE WHILE IT IS BUSY (the user, 2026-11-09: "Can we perhaps make that "Generate" button available
-## for clicking immediately after steps become tainted ... That way, I could click both buttons at the same time - and come back to the
-## full pipeline finished later"): making only some of what it is missing - a row made again, what was made from it waiting - so Generate
-## widens it to the rest, and what is under way carries on. False by default: a busy section is left to finish.
+## Whether Generate would start more here while it is busy: making only some of what it is missing (a row made again,
+## what was made from it waiting), so Generate widens it to the rest and what is under way carries on. False by
+## default: a busy section is left to finish.
 func widens() -> bool:
 	return false
 
@@ -99,11 +97,11 @@ func missing() -> bool:
 	return true
 
 
-## THE PANEL IS GOING: stop what must not outlive it. A card's own producer is the card's to stop.
+## The panel is going: stop what must not outlive it. A card's own producer is the card's to stop.
 func leave() -> void:
 	pass
 
 
-## THE EPISODE IN [param feed] IS BEING LEFT OR THROWN AWAY: stop what is being made of it.
+## The episode in [param feed] is being left or thrown away: stop what is being made of it.
 func episode_left(_feed: EpisodeFeed) -> void:
 	pass

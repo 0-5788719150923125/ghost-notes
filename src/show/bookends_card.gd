@@ -2,18 +2,16 @@ extends VBoxContainer
 class_name BookendsCard
 
 ## BookendsCard - the intro and the outro: seconds held before the first word and after the last
-## (next/notes.md step 5: one card per section, in every panel that has it - the Cards panel used
-## to declare both sliders a second time). Its block in a document is `bookends:`.
+## (next/notes.md; one card per section, in every panel that has it). Its block in a document is
+## `bookends:`.
 ##
-## Like the Look they are the DIRECTOR'S, so they hold in every session a picture is made in. What
-## the picture DOES during them is the presentation's, so a panel may say it in its own words:
-## [method _init] takes the two tooltips, and the defaults are a written chapter's.
+## Like the Look they are the Director's, so they hold in every session a picture is made in. What the
+## picture does during them is the presentation's, so [method _init] takes the two tooltips (the
+## defaults are a written chapter's).
 ##
-## THE OPENING IS PICKED HERE TOO (2026-10-28, the user: "default to no intro blur/title display, or we
-## can enable it via a pick list"): what the picture does through the intro ([Openings]: none, out of
+## The opening is picked here too: what the picture does through the intro ([Openings]: none, out of
 ## focus, the show's name over it), the Director's beside the holds ([method Director.set_opening]).
-## Shown only while the medium in use draws an opening ([method Medium.uses] "opening") - a dial that
-## does nothing is a control the author cannot trust.
+## Shown only while the medium in use draws an opening ([method Medium.uses] "opening").
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "bookends"
@@ -95,9 +93,9 @@ func capture() -> Dictionary:
 		"opening": Director.opening}
 
 
-## ...and back, through the sliders - so the card shows the holds and the Director saves them. A
-## hold the block does not name is left as it is, and so is the opening (none, as a note opens:
-## [method Director.reset_show]).
+## ...and back, through the sliders, so the card shows the holds and the Director saves them. A hold
+## the block does not name is left as it is, and so is the opening (none, as a note opens: [method
+## Director.reset_show]).
 func apply(block: Dictionary) -> void:
 	for pair in [["intro", _intro], ["outro", _outro]]:
 		var sl: HSlider = pair[1]

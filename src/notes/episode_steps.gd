@@ -1,14 +1,14 @@
 extends PipelineSection
 class_name EpisodeSteps
 
-## EpisodeSteps - THE STEPS ONE CARD MAKES FROM THE EPISODE ANOTHER CARD MAKES ([EpisodeStep], [EpisodeFeed]), as a section
-## of the note's Pipeline card ([PipelineSection]): each refresh what their jobs ended with is landed and the episode shown
-## is said to each, Generate makes them at their turn - after the section that writes the words - and Stop stops them.
+## EpisodeSteps - the steps one card makes from the episode another card makes ([EpisodeStep], [EpisodeFeed]), as a
+## section of the note's Pipeline card ([PipelineSection]): each refresh what their jobs ended with is landed and the
+## episode shown is said to each, Generate makes them at their turn (after the section that writes the words) and Stop
+## stops them.
 ##
-## THE CARD THAT OFFERS THEM HANDS THIS (the YouTube card's "YouTube" section: its tags and its thumbnail), so where they
-## are listed is never a question (the user, 2026-11-02: "why is there a regenerate button for YouTube tags up under the
-## 'Episode' list, and why is it under 'Letter' in other scenarios?"). Which episode they are of is the panel's to say
-## ([member PipelineSection.episode], [method ReadingPanel.episode_feed]).
+## The card that offers them hands this (the YouTube card's "YouTube" section: its tags and thumbnail), so where they
+## are listed is never a question. Which episode they are of is the panel's to say ([member PipelineSection.episode],
+## [method ReadingPanel.episode_feed]).
 
 var _offered: Callable
 

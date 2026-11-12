@@ -9,39 +9,35 @@ godot --path . -- --mask-edit masks/<video>/session.json
 
 ## The data model
 
-MaskSession - the data model for one mask-mode editing session.
+MaskSession - the data model for one mask-mode editing session: one imported clip (video + its extracted audio, see masks/README) with a timeline of markers, the points where the mask changes.
 
-A session pairs one imported clip (video + its extracted audio, see masks/README) with a timeline of MARKERS: distinct points where the mask changes. A marker is a fixed-schema scalar VECTOR (see VECTOR_FIELDS), so a session's marker list is literally a small matrix - the same shape as the harmonic-signature / seed-bias vectors elsewhere in this project, and inspectable the same way instead of living as opaque nested JSON.
+A marker is a fixed-schema scalar vector (see VECTOR_FIELDS), so a session's marker list is a small matrix. Every marker is one layer, carrying one channel (one target color, effect, strength and pattern placement) plus its own transition envelope. Layers stack chronologically: a later marker adds to the earlier ones without disturbing them.
 
-EVERY MARKER IS ONE LAYER, carrying a single channel - one target color, one effect, one strength, one pattern placement - plus its own transition envelope. Layers STACK chronologically: place a marker that devours the blues, and a later marker adding fire to the reds layers on top WITHOUT disturbing the blue layer.
+The envelope's kind (see MARKER_KINDS) is which side of the anchor its transition occupies: RAMP  - eases in over the `duration` seconds before the anchor, complete exactly at the marker's time. DAMP  - begins at the anchor and accumulates over the `duration` seconds after it. A zero-length marker of either kind is an instant cut.
 
-The envelope's KIND (see MARKER_KINDS) is which side of the anchor its transition occupies: RAMP  - the layer eases in over the `duration` seconds BEFORE the anchor, arriving complete exactly at the marker's time (anticipation). DAMP  - the layer begins AT the anchor and accumulates over the `duration` seconds AFTER it. Nothing happens before the anchor. A zero-length marker of either kind is an instant cut - the degenerate case, not a third kind.
+Once in, a layer holds until one of three things ends it: 1. The raw checkpoint (the rebase). A full-raw marker (view_mode 2) is a canvas reset: once its transition to raw has completed (at its anchor for a ramp, anchor+duration for a damp, never mid-fade), no earlier marker's layer exists beyond it. The reset is pop-free because nothing is on screen, so history never crosses a raw boundary. 2. "restore" - draws nothing. It targets a color like a keying marker (own picker, own threshold for how wide around the color it reaches, own envelope, intensity = how completely it restores) and fades out every earlier layer on that color over its window. 3. "clear" - restore for all colors at once.
 
-Once in, a layer HOLDS until one of exactly three things ends it: 1. THE RAW CHECKPOINT (the rebase). A full-raw marker (view_mode 2) is a canvas reset: once its transition to raw has COMPLETED (at its anchor for a ramp, anchor+duration for a damp - never mid-fade, or the cut would pop), no earlier marker's layer exists beyond it. Raw is the one place a reset is pop-free BY CONSTRUCTION, since nothing is on screen while it happens, so composition history never crosses a raw boundary - a sliding window whose edges are explicit, user-authored timeline events rather than a silent time constant. 2. "restore" - fades out earlier layers matching ITS color. It draws nothing of its own: it targets a color exactly like a keying marker does (own picker, own threshold for how wide around that color it reaches, own envelope, intensity = how completely it restores) and fades out every EARLIER layer on that color over its window. 3. "clear" - restore for ALL colors at once.
+Otherwise layering is additive: a later marker keying a second color stacks with the earlier work.
 
-Layering is otherwise continuous and ADDITIVE: a later marker keying a second color, however near or far in hue, stacks WITH the earlier work rather than superseding it. Mask a color out at minute one, restore it at minute five, mask it differently at minute six - a chain of explicit operations.
-
-THE TRANSITION CONTRACT. Every visual quantity leaving at_time() must be transition-safe in exactly one of three shapes; any new modulation MUST pick one, and nothing may drive a visual straight off a discrete snap: 1. CONTINUOUS  - global keying scalars (threshold, feather, sat_floor), lerped across transition windows. List: GLOBAL_CONTINUOUS. 2. PRESENCE    - which screen layers are up (view_mode): the discrete value is kept for storage and labeling, but the visuals consume the derived AMOUNT_FIELDS, which lerp. A mode change is a presence fade. 3. LAYER       - everything a marker's own channel carries (color, effect, strength, placement, coverage, contrast, resonance), baked into that marker's layer, whose ENVELOPE does the transitioning. An identity change is two layers with complementary envelopes - a dissolve, never a swap.
+The transition contract: every visual quantity leaving at_time() is transition-safe in one of three shapes, and nothing may drive a visual straight off a discrete snap: 1. CONTINUOUS - global keying scalars (threshold, feather, sat_floor), lerped across transition windows (GLOBAL_CONTINUOUS). 2. PRESENCE   - which screen layers are up (view_mode): the discrete value is kept for storage and labeling, the visuals consume the derived AMOUNT_FIELDS, which lerp. 3. LAYER      - everything a marker's channel carries (color, effect, strength, placement, coverage, contrast, resonance), baked into the layer, whose envelope does the transitioning. An identity change is two layers with complementary envelopes, a dissolve.
 
 Source: [src/masking/mask_session.gd](../src/masking/mask_session.gd)
 
 ## The editor
 
-MaskEditor - the mask-mode authoring surface.
+MaskEditor - the mask-mode authoring surface: load a clip, key colors apart (per-pixel hue classification, see shaders/mask_split.gdshader), place markers where the split or effect changes, scrub the timeline, export. See src/masking/mask_session.gd for the data model: markers are fixed-schema scalar vectors, each a RAMP (eases in before its anchor) or a DAMP (accumulates after it).
 
-Load a clip, key two colors apart (per-pixel hue classification, see shaders/mask_split.gdshader), place MARKERS where the split/effect should change, scrub the timeline, export. See src/masking/mask_session.gd for the data model - a session's markers are fixed-schema scalar vectors, not free-form params, and every one is either a RAMP (eases in before its anchor) or a DAMP (accumulates after it) - there's no third, undifferentiated "marker" kind.
+Standalone: a mask session is tied to one external clip, so it does not route through the Director, and the clip plays through its own players (the video is the master clock). Only the shared transport's verbs leave it, handed to the shell (`Shell.conduct_transport`): the editor conducts it (`transport_hooks`), so play, stop, the rail, Space and the arrows are the same as in every mode, and its timeline stands above the rail (`bottom_lift`). Two entry points (see main.gd): --mask-edit [path]    interactive editor --mask-render <json>  the export relaunch's render mode (`render_mode` = true; no panel, autoplay, quits when the audio ends - mirrors --export/_export_mode).
 
-Standalone by design: a mask session is tied to one specific external clip, not the audio-reactive show, so this does NOT route through the Director, and the clip plays through its own players - the video the master clock. Only the shared transport's verbs leave it, handed to the shell whose furniture the transport is (`Shell.conduct_transport`): the editor CONDUCTS it (`transport_hooks`), so ▶, ■, the rail, Space and the arrows are the same as in every mode, and its timeline stands above the rail (`bottom_lift`). Two entry points (see main.gd): --mask-edit [path]    interactive editor (this file's normal mode) --mask-render <json>  the export relaunch's headless-ish render mode (`render_mode` = true; no panel, autoplay, quits when the audio ends - mirrors --export/_export_mode).
+The timeline is a bespoke Control (`MaskTimeline`); the export button, status and FileDialog follow exporter.gd; color entry is Godot's ColorPickerButton.
 
-Widget choices mirror the rest of ghost: the timeline is a bespoke-drawn Control (`MaskTimeline`), the export button/status/FileDialog are the exact pattern from exporter.gd, color entry is Godot's native ColorPickerButton (precision input, not an "instrument" worth hand-drawing).
+View modes (MaskSession.VIEW_MODES + _build_video_composition) are the main screen and the inset as independent axes, cycled by one button (VIEW_CYCLE). Only one video decodes (`_player`, always raw); the fx layers re-draw its texture through [const SHADER], each only while visible, so "raw" costs no shader pass.
 
-The preview's view modes (see MaskSession.VIEW_MODES + _build_video_composition) are the main screen and the inset as independent axes - raw, inset-raw, inset-fx, both-fx, full-fx - cycled in that "evolution" order by one button (VIEW_CYCLE). Only one video ever decodes (`_player`, always raw); the fx layers just re-draw its decoded texture through [const SHADER], each only while visible - so "raw" costs no shader pass at all.
+view_mode is a per-marker field, not an editing preference: the toggle edits the marker at the playhead like every panel control (see _edit), the preview renders what session.at_time() resolves to, and the export relaunch (render_mode) runs the same per-frame logic, so the rendered file matches what is seen.
 
-view_mode is a per-MARKER field (see MaskSession.VECTOR_FIELDS), not an editing- only preference: the toggle button edits the marker at the playhead exactly like every other panel control (see _edit), the live preview always renders whatever session.at_time() resolves to, and the export relaunch (render_mode) runs the identical per-frame logic - so a marker set to "raw" plays raw in the rendered file too, not just live. What you see while editing is what you get.
+The region is universal, not an entry in EFFECT_CONTROLS: each marker carries a box in frame UV (reg_x0/y0/x1/y1 + reg_soft) that multiplies into its layer's on-screen weight, resolved per pixel; the default is the whole frame. It separates what a color key cannot (a yellow wall from a gold coin). The box is dragged on the video (see _build_region_overlay).
 
-THE REGION is the one control here that is spatial rather than chromatic, and it is UNIVERSAL - not an entry in EFFECT_CONTROLS, because "where may this layer act" is meaningful for every effect. Each marker carries a box in frame UV (reg_x0/y0/x1/y1 + reg_soft) which multiplies into its layer's on-screen weight, so confining a layer is the same operation as fading it, resolved per pixel; the default is the whole frame. It exists because a color key cannot separate two things that ARE the same color - a yellow wall and a gold coin in front of it - and their positions separate them trivially. The box is dragged on the video itself, not typed (see _build_region_overlay).
-
-ANY FRAME SHAPE. The clip's own pixel dimensions are read once (`_src_size`) and are the only thing that decides the picture's geometry: the editor fits the whole frame inside its video area (a portrait phone clip gets black bars left and right, a wide one keeps them above and below), the effects' patterns stay isotropic through the shader's `u_aspect`, and the export records at the SOURCE's resolution - a 1080x1920 clip renders a 1080x1920 movie. Nothing in here assumes 16:9; see _src_size and _write_render_override.
+Any frame shape: the clip's pixel size is read once (`_src_size`) and decides the picture's geometry. The editor fits the frame inside its video area (bars left and right for portrait), patterns stay isotropic through the shader's `u_aspect`, and the export records at the source's resolution. Nothing assumes 16:9; see _src_size and _write_render_override.
 
 Source: [src/masking/mask_editor.gd](../src/masking/mask_editor.gd)
 
@@ -64,13 +60,13 @@ Source: [src/masking/mask_editor.gd](../src/masking/mask_editor.gd)
 | 10 | `fur` | `keying`, `pattern`, `fur` | a keyed volumetric + its own tendril-dynamics knobs |
 | 11 | `oracle` | `pattern`, `echo` | echo inverted: pan=premonition step, coverage=copies, contrast=mute, lag=lead |
 | 12 | `serpent` | `pattern` | keyless, like snow: contrast-driven, no color to gate on |
-| 13 | `chimera` | `pattern` | color steers the anchor/claim; scale=window, pan=graft offset, coverage=dominance, contrast=interleave sharpness |
-| 14 | `arealight` | `pattern` | keyless; pattern group exists only to expose the single Envelope/contrast dial |
-| 15 | `meta` | - | mirrors the workspace; keyless, no pattern - only intensity/duration/kind matter |
+| 13 | `chimera` | `pattern` | scale=window, pan=graft offset, coverage=dominance, contrast=interleave sharpness |
+| 14 | `arealight` | `pattern` | keyless; one Envelope/contrast dial |
+| 15 | `meta` | - | mirrors the workspace; keyless, no pattern |
 | 16 | `clown` | `pattern`, `clown` | pan=layout nudge, scale=feature size, coverage=Wear, contrast=Smear, + its own Bleed/Settle/Hollow |
-| 17 | `umbra` | `pattern`, `umbra` | keyless - the ghost IS her silhouette; coverage=Loom, contrast=Roil, + its own Stand/Lead/Lean/Narrow/Gaze/Wisp/Cling/Depth |
-| 18 | `repaint` | `repaint` | projection-based like erase/crystal: no keying gates, no pattern - just the paint color + its reach and edge smoothing |
-| 19 | `rain` | `pattern`, `rain` | keyless: coverage=Amount, velocity=fall speed, scale=streak length, pan=wind, contrast=Depth - where near rain gives way to far - plus its own Squall |
+| 17 | `umbra` | `pattern`, `umbra` | keyless; coverage=Loom, contrast=Roil, + its own Stand/Lead/Lean/Narrow/Gaze/Wisp/Cling/Depth |
+| 18 | `repaint` | `repaint` | projection-based, no keying gates, no pattern: the paint color + its reach and edge smoothing |
+| 19 | `rain` | `pattern`, `rain` | keyless: coverage=Amount, velocity=fall speed, scale=streak length, pan=wind, contrast=Depth, + its own Squall |
 | 20 | `audio` | `audio` | draws nothing: lag=Echo time, smooth=Echo mix, density=Ambience, scale=Room, contrast=Resonance, stick=Bass |
 
 ## Headless marker insertion

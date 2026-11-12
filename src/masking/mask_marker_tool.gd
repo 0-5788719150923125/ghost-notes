@@ -1,31 +1,21 @@
 extends SceneTree
 
-## mask_marker_tool - headless CLI: insert one marker into a mask session file
-## at a given time.
+## mask_marker_tool - headless CLI: insert one marker into a mask session file at a given time.
 ##
-## Built for the assistant dispatch flow (src/app/assistant.gd): a feedback
-## record already carries the timestamp the user was looking at when they
-## wrote their note (its "time" field - see feedback.gd), so a fix landing a
-## new effect can plant a marker demonstrating it AT that exact point instead
-## of just describing the fix in prose. MaskSession is a plain RefCounted
-## with no autoload dependency, so this needs no real app boot - it loads the
-## session, edits its marker list, and re-saves, exactly like mask_editor.gd's
-## own save path.
+## Used by the assistant dispatch flow (src/app/assistant.gd): a feedback record carries the time its note was
+## written at, so a fix can plant a marker demonstrating a new effect there. MaskSession is a plain RefCounted, so
+## no app boot is needed: it loads the session, edits its marker list and re-saves.
 ##
 ## Usage (run from the project root):
 ##   godot --headless --path . --script src/masking/mask_marker_tool.gd -- \
 ##       <session.json path, res:// or absolute> <time seconds> [field=value ...]
 ##
-## The new marker is seeded from whichever marker was governing at that time
-## (add_marker's own continuation convention, so an untouched field holds
-## whatever was already playing there), then each field=value pair overrides
-## one of MaskSession.VECTOR_FIELDS - e.g. effect_a=14 fx_contrast=0.6
-## view_mode=1 duration=0.5 kind=0. Unknown field names are rejected loudly
-## rather than silently ignored - a typo here should never save silently wrong.
+## The new marker continues the one governing at that time (`add_marker`); each field=value pair overrides one of
+## MaskSession.VECTOR_FIELDS, e.g. effect_a=14 fx_contrast=0.6 view_mode=1 duration=0.5 kind=0. An unknown field
+## name is rejected.
 ##
-## CAUTION: an editor still open on the same session autosaves its OWN copy on the next
-## edit and silently clobbers a marker planted here. It is safe once that session has been
-## reopened (which a new effect needs anyway: a running editor's dropdown will not show it).
+## An editor still open on the same session autosaves its own copy on the next edit and clobbers the marker: reopen
+## the session first.
 
 func _init() -> void:
 	var argv := OS.get_cmdline_user_args()

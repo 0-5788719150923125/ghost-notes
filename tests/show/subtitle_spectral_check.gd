@@ -1,21 +1,19 @@
 extends Node
 
-## THE SUBTITLES' SEA ([SubtitleSea]): the eye's harmonics raise waves that run back through the words
+## The subtitles' sea ([SubtitleSea]): the eye's harmonics raise waves that run back through the words
 ## already said. Synthetic bands and a synthetic eye; it holds that
-##   - A QUIET VOICE STIRS THE WORDS JUST SAID: speech at the level a real take's bands sit (0.1-0.3 of
-##     Spectrum's window, where the old fixed threshold read nothing) moves the letters just behind the eye
-##     off their rest and keeps them moving (reported 2026-10-20: "about 2 or 3 words in an entire sentence
-##     will be highlighted ... There is little to no movement"). THE CONTROL: the same eye in silence
-##     stirs nothing, so the measure can fail;
-##   - AND THEY SETTLE: letters far behind the eye are back at the rest color however loud the voice, and
-##     no said letter is ever vivid (the next report, the same day: "too distracting. The colors are very
-##     intense, and they never decay back to the baseline color");
-##   - a wave runs BACK at SPEED and STAYS IN THE TEXT: a burst raised at one place is found SPEED letters
+##   - a quiet voice stirs the words just said: speech at the level a real take's bands sit (0.1-0.3 of
+##     Spectrum's window, where a fixed threshold read nothing) moves the letters just behind the eye off
+##     their rest and keeps them moving. The control: the same eye in silence stirs nothing, so the
+##     measure can fail;
+##   - and they settle: letters far behind the eye are back at the rest color however loud the voice, and
+##     no said letter is ever vivid;
+##   - a wave runs back at SPEED and stays in the text: a burst raised at one place is found SPEED letters
 ##     a second behind it however far the eye has gone on since (measured from the eye, it would ride along);
 ##   - each harmonic crests in its own hue: the fundamental pulls one way round the wheel, sibilance the other;
 ##   - paused, nothing moves; a seek starts calm;
-##   - the places are the reading's letters, a gap one, read on as the words grow and over again when
-##     they are replaced in place.
+##   - the places are the reading's letters, a gap one, read on as the words grow and over again when they
+##     are replaced in place.
 ## tests/run_boot_probe.sh tests/show/subtitle_spectral_check.gd 60
 
 const FPS := 30.0

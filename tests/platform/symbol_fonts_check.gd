@@ -1,20 +1,19 @@
 extends Node
 
-## symbol_fonts_check - THE SYMBOLS' FONTS ARE FOUND ONCE (Boot.lend_symbol_fonts, 2026-11-07): Godot's default font, which
-## has no ○ ✓ ✕ ⚙, is handed the system's sans families as its own fallbacks, so the shaper stops asking fontconfig each
-## time a label with one is laid out (5-8 ms, against 0.15).
+## symbol_fonts_check - the symbols' fonts are found once (Boot.lend_symbol_fonts): Godot's default font, which
+## has no ○ ✓ ✕ ⚙, is handed the system's sans families as its own fallbacks, so the shaper stops asking
+## fontconfig each time a label with one is laid out (5-8 ms, against 0.15).
 ##
 ##   tests/run_boot_probe.sh tests/platform/symbol_fonts_check.gd 60
 ##
-## What it holds, on whatever fonts this machine has:
-##   - what is lent is only SYMBOL_FONTS families that are installed, each a SystemFont of that one family at the default
-##     font's weight, in that order;
-##   - NO LABEL GROWS: a plain label and a button stand exactly as tall with the fallbacks as without them. The control is a
-##     font taller than the default lent on purpose (Noto Sans Symbols 2 where it is installed, else a FontVariation of the
-##     default with extra spacing): it makes the same label taller, which is why such a font is never lent;
-##   - where DejaVu Sans is installed, ○ ✓ ✕ ⚙ are in a lent font, and the default font has none of them (the control: had
-##     it one, lending would buy nothing).
-## Nothing is timed: the cost is the 5-8 ms system search, which only a font on the list avoids.
+## Holds, on whatever fonts this machine has:
+##   - what is lent is only SYMBOL_FONTS families that are installed, each a SystemFont of that one family at the
+##     default font's weight, in that order;
+##   - no label grows: a plain label and a button stand exactly as tall with the fallbacks as without. The control
+##     is a taller font lent on purpose (Noto Sans Symbols 2 where installed, else a FontVariation of the default
+##     with extra spacing), which makes the same label taller;
+##   - where DejaVu Sans is installed, ○ ✓ ✕ ⚙ are in a lent font and the default font has none of them (control).
+## Nothing is timed.
 
 var _fails: Array = []
 
@@ -42,7 +41,7 @@ func _run() -> void:
 	base.fallbacks = []
 	var without := _heights()
 	_ok(with == without, "no label grows: plain label and button %s with the fallbacks, %s without" % [with, without])
-	# THE CONTROL: a font taller than the default, lent, makes the same label taller
+	# The control: a font taller than the default, lent, makes the same label taller
 	var tall: Font
 	if have.has("Noto Sans Symbols 2"):
 		var sf := SystemFont.new()

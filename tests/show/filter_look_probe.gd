@@ -1,28 +1,22 @@
 extends SceneTree
 
-## filter_look_probe - NOT a gate. It asserts almost nothing, renders the Look filters and
-## writes PNGs to LOOK at.
+## filter_look_probe - not a gate. It asserts almost nothing, renders the Look filters and writes PNGs to
+## look at.
 ##
 ##   tests/run_quiet.sh -- res://tests/show/filter_look_probe.gd --out /tmp/look
 ##   ... --filter static --sweep 0.2,0.45,0.7,1.0        one filter across its range
-##   ... --filter static --frames 6                      consecutive FRAMES of one setting
+##   ... --filter static --frames 6                      consecutive frames of one setting
 ##   ... --set monochrome=1,static=0.5                   a combination, one image
 ##
-## WHY IT EXISTS. [code]stage_filter_check.gd[/code] measures each filter against the property
-## that names it, and every one of those measurements passed on a grain that was reported as
-## "too uniform and consistent... it doesn't look like any version of film grain I've ever
-## seen" - because "is there noise, is it in the midtones, is it absent from the blacks" are
-## all true of television static as well. Some questions about a picture can only be answered
-## by rendering it and looking, and the standing rule in this project is to do exactly that
-## rather than to reason about the shader.
+## [code]stage_filter_check.gd[/code] measures each filter against the property that names it, but some
+## questions about a picture can only be answered by rendering it and looking (grain that is noise, in the
+## midtones and absent from the blacks is also television static).
 ##
-## --frames is for the parts that only exist over TIME: grain re-rolls at a film's rate and the
-## gate slip displaces a band for a single frame, so one still cannot show either. Successive
-## PNGs are successive film frames.
+## --frames is for the parts that only exist over time: grain re-rolls at a film's rate and the gate slip
+## displaces a band for a single frame. Successive PNGs are successive film frames.
 ##
-## The test picture is photographic on purpose - a broad tonal ramp with flat patches in it -
-## because grain is judged on midtones and a vignette on edges, and a synthetic chart with hard
-## borders hides both.
+## The test picture is photographic on purpose, a broad tonal ramp with flat patches, because grain is
+## judged on midtones and a vignette on edges, and a synthetic chart with hard borders hides both.
 
 const Filters_ := preload("res://src/show/filters.gd")
 
@@ -58,8 +52,7 @@ func _run() -> void:
 				wrote.append(await _shot({which: a},
 					"%s_%03d%s" % [which, int(a * 100.0), "_f%d" % f if frames > 1 else ""]))
 	else:
-		# The default contact sheet: every filter at its registry default, plus the
-		# unfiltered picture to compare against.
+	# The default contact sheet: every filter at its registry default, plus the unfiltered picture.
 		wrote.append(await _shot({}, "none"))
 		for key in Filters_.REGISTRY:
 			wrote.append(await _shot({String(key): float(Filters_.REGISTRY[key]["default"])},
@@ -71,8 +64,8 @@ func _run() -> void:
 	quit()
 
 
-## Render one setting and write it. Several engine frames per shot, so anything keyed to TIME
-## has actually moved between consecutive images.
+## Render one setting and write it. Several engine frames per shot, so anything keyed to time has moved
+## between consecutive images.
 func _shot(amounts: Dictionary, name: String) -> String:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(W, H)
@@ -96,17 +89,16 @@ func _shot(amounts: Dictionary, name: String) -> String:
 	return path
 
 
-## A photographic picture rather than a chart: a sky-to-ground tonal ramp with a bright source
-## in it, a mid-gray card to judge grain on, and soft shapes so an edge effect has something to
-## fall across.
+## A photographic picture rather than a chart: a sky-to-ground tonal ramp with a bright source, a mid-gray
+## card to judge grain on, and soft shapes for an edge effect to fall across.
 func _make_picture() -> ImageTexture:
 	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
 	for y in H:
 		var v := float(y) / float(H)
 		for x in W:
 			var u := float(x) / float(W)
-			# A broad vertical ramp, warm below and cool above, with a slow horizontal tilt -
-			# the tonal range a vignette falls across and grain lives in the middle of.
+	# A broad vertical ramp, warm below and cool above, with a slow horizontal tilt: the tonal
+	# range a vignette falls across and grain lives in the middle of.
 			var base := Color(0.62 - 0.34 * v, 0.66 - 0.30 * v, 0.74 - 0.22 * v)
 			base = base.lerp(Color(0.42, 0.33, 0.24), clampf((v - 0.55) * 2.2, 0.0, 1.0))
 			base.r *= 0.88 + 0.24 * u
@@ -119,8 +111,7 @@ func _make_picture() -> ImageTexture:
 			var d2 := Vector2(u - 0.76, v - 0.74).length()
 			base = base.lerp(Color(0.04, 0.05, 0.07), clampf(1.0 - d2 * 4.2, 0.0, 1.0))
 			img.set_pixel(x, y, base)
-	# A mid-gray card. Grain is judged here: it is flat in the source, so everything visible on
-	# it is the filter's.
+	# A mid-gray card: flat in the source, so everything visible on it is the filter's.
 	for y in range(H / 2 - 26, H / 2 + 26):
 		for x in range(W / 2 - 60, W / 2 + 60):
 			img.set_pixel(x, y, Color(0.5, 0.5, 0.5))

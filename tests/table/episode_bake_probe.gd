@@ -1,9 +1,9 @@
 extends Node
 
-## AN EPISODE BAKED AS ITS EXPORT BAKED IT (next/table_physics.md): the episode a take's sidecar names, stood from a COPY of
-## its folder, its acts scheduled on the take's own word times, and what is in things baked through the whole show on this
-## thread - then the parts asked for followed frame by frame, and the liquids, streams and holds said. Every cause in
-## next/table_physics.md was found this way, never by rendering: the bake is what the picture draws.
+## An episode baked as its export baked it (next/table_physics.md): the episode a take's sidecar names, stood from a copy of its
+## folder, its acts scheduled on the take's own word times, and what is in things baked through the whole show on this thread - then
+## the parts asked for followed frame by frame, and the liquids, streams and holds said. The bake is what the picture draws, so
+## causes are found here, not by rendering.
 ##
 ##   tests/run_boot_probe.sh tests/table/episode_bake_probe.gd 3600 --take=<user://generative/take_N.json> \
 ##       [--watch=ladle,feather,cork] [--from=0] [--to=end] [--every=0.5] [--acts] [--acts-file=<acts.json>]
@@ -11,55 +11,50 @@ extends Node
 ##       [--seek=T[:after],wK[:after],... [--after=20]]
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/episode_bake_probe.gd 3600 --take=... --shots=29,228.5 [--out=<dir>]
 ##
-## THE TAKE AN EPISODE KEEPS is one too (next/editing.md step 3): `--take=<the episode's folder>/take.json`, the "Voice" row's - its
-## words the times the live table and the export plan on (`TablePlan.take_times`).
+## `--take=<the episode's folder>/take.json` (the "Voice" row's take, next/editing.md) works too: its words are the times the live
+## table and the export plan on (`TablePlan.take_times`). A take whose book names `start_words`, `start_index` and `start_time` is a
+## reading started mid-way (a scrub): its words from there, timed from 0, and what was done before them baked first
+## ([member TablePhysics._t0]).
 ##
-## A take whose book names `start_words`, `start_index` and `start_time` is a reading started mid-way (a scrub): its words from
-## there, timed from 0, and what was done before them baked first ([member TablePhysics._t0]).
-##
-## - `--watch`: parts or things whose names hold any of these words: each one's place (cm), its tilt from upright and its
-##   turn (degrees), whether a hand has it and how far off its hand it is, and what last held it back.
-## - `--acts`: when each act runs, as the schedule placed it.
-## - `--acts-file`: the copy's `acts.json` replaced by this one - an act tried on the episode as it was exported.
-## - `--shots`: on a real renderer, the picture at each of these moments (seconds) as the export drew it, 1280x720, written to
-##   `--out` (by default the copy's folder) as `shot_<t>.png` - the bake run up to each, and nothing else baked or followed.
-## - `--live`: PLAYED AS THE APP PLAYS IT - the table built on a worker (each frame drawn meanwhile said), the words a sentence at a
-##   time, `--ahead` seconds before they are said, the bake on a
-##   thread of its own, the clock the wall's (held only while the show waits for its bake) - and each frame that held this
-##   thread over 50 ms said, with what took it: what a viewer sees frozen while the voice goes on.
-## - `--script`: the episode's `script.md` as it stands now, its words timed from the plan's estimate (`--pace=1`) - a take carries the
-##   script it was exported from, and a script written again since cues its acts at other words.
-## - `--trace=T0,T1,step`: baked to each moment on this thread, each watched body's state there - held, asleep, its host, what it
-##   last touched, what held it back - which no frame keeps.
-## - `--seek=T,wK:after,...` (with `--live`): played to `--to`, then SCRUBBED as the reading scrubs, each in turn - started again from
-##   the sentence holding T, or from spoken word K, its words timed from 0 - and played `after` seconds (`--after`): whether the table and its bake stood, how long the show
-##   waited, and how far each watched part is drawn from where the first pass drew it at the same moment of the episode.
+## - `--watch`: parts or things whose names hold any of these words: place (cm), tilt and turn (degrees), whether a hand has it and
+##   how far off its hand, and what last held it back.
+## - `--acts`: when each act runs, as the schedule placed it. `--acts-file`: the copy's `acts.json` replaced by this one.
+## - `--shots`: on a real renderer, the picture at each of these moments (seconds) as the export drew it, 1280x720, written to `--out`
+##   (default the copy's folder) as `shot_<t>.png`.
+## - `--live`: played as the app plays it - the table built on a worker, the words a sentence at a time `--ahead` seconds before they
+##   are said, the bake on a thread of its own, the wall's clock (held only while the show waits for its bake) - and each frame that
+##   held this thread over 50 ms said, with what took it. Its first frames: the medium mounted, the table put back in the tree, and
+##   the 20 frames that first draw it (the camera is never placed, so they draw all of it, a cost the app never pays).
+## - `--script`: the episode's `script.md` as it stands now, its words timed from the plan's estimate (`--pace=1`); a take carries the
+##   script it was exported from.
+## - `--trace=T0,T1,step`: baked to each moment on this thread, each watched body's state there (held, asleep, host, last touched,
+##   what held it back).
+## - `--seek=T,wK:after,...` (with `--live`): played to `--to`, then scrubbed as the reading scrubs - started again from the sentence
+##   holding T, or from spoken word K, timed from 0 - and played `after` seconds (`--after`): whether the table and its bake stood,
+##   how long the show waited, and how far each watched part is drawn from where the first pass drew it.
 ## - `--stalls=T0,T1`: the stretch baked first, then every frame of it played - each over 50 ms said, with what took it.
-## - `--held`: each painting program's held keys - how many a tool is stood off its surface at, and how far, and where; how far it is
-##   lifted on its way between them. With `--audit`, a painting tool OFF what it paints while the law has it pressing is said too
+## - `--held`: each painting program's held keys: how many a tool is stood off its surface at, how far, where, and how far it is
+##   lifted between them. With `--audit`, a painting tool off what it paints while the law has it pressing is said too
 ##   (`GHOST_AUDIT_WHY=1`: whether the law's own place or the drawn one is off).
-## - `--live`, its first frames: the medium mounted, the table put back in the tree, and the 20 frames that first draw it (the Director
-##   held, the camera is never placed: those frames draw all of it, a cost the app never pays).
-## - `--profile=T`: bake through T+2, then measure 60 frames of playback there, with the bake already available. Prints
-##   the work's CPU cost, the whole medium's CPU cost and wall time per frame (use GHOST_PROBE_GPU=1 for rendering).
-## - `--audit`: THE SHOW AGAINST WHAT MUST ALWAYS HOLD, baked whole and every frame looked at: liquid neither made nor lost; a body in nothing solid, nor through the table; no
-##   jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the air; a loose thing inside its vessel's walls; a surface moving smoothly;
-##   a painting tool's own surface in nothing but what gives, to a millimeter (a pot's wall is three).
-##   Each said once, with when and how much - what a viewer would report, found before they must.
-## - `--no-keep-out`: the drawn tools left as their plans place them (TablePaint.keep_out off) - what the guard against standing in the
-##   work changes.
+## - `--profile=T`: bake through T+2, then measure 60 frames of playback there: the work's CPU cost, the medium's CPU cost and wall
+##   time per frame (GHOST_PROBE_GPU=1 for rendering).
+## - `--audit`: baked whole and every frame looked at against what must always hold: liquid neither made nor lost; a body in nothing
+##   solid, nor through the table; no jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the
+##   air; a loose thing inside its vessel's walls; a surface moving smoothly; a painting tool's own surface in nothing but what gives,
+##   to a millimeter (a pot's wall is three). Each said once, with when and how much.
+## - `--no-keep-out`: the drawn tools left as their plans place them (TablePaint.keep_out off).
 ## - `--plan-only` (with `--heard`): the live plans alone, nothing baked - each act's time and every stretch over 8 s the painting hand
-##   stands idle, between acts or put down inside one. Minutes for a whole episode where a bake takes many; `--to` stops it there.
-## - `--heard[=LEAD]`: THE SHOW AS A LIVE PLAN COMES TO KNOW IT, on this thread: the words a sentence at a time, `--ahead` seconds before
-##   they are said, the bake LEAD seconds (12) past the clock, each new plan taken as the app takes it, to the end - and whatever follows
-##   (`--audit`, `--series`) reads that bake. No wall clock, so as quick as the bake.
-## - `--series=<file>`, `--against=<file>`: every body and liquid sampled five times a second into a file, and said where it parts from another's -
-##   `--series=whole.bin` on the whole plan, `--heard --series=heard.bin --against=whole.bin`: WHAT A LIVE SHOW DOES THAT THE WHOLE PLAN DOES NOT, none of
-##   which a bake of the whole plan can show (feedback 0013: a cork not yet brought, unheard, stopped the pour). `--compare=a,b`: just that, of two files.
-## - always: each liquid whose volume changed, at every sample; the streams in the air; each act's HELD BACK.
+##   stands idle. `--to` stops it there.
+## - `--heard[=LEAD]`: the show as a live plan comes to know it, on this thread: words a sentence at a time, `--ahead` seconds before
+##   they are said, the bake LEAD seconds (12) past the clock, each new plan taken as the app takes it - and whatever follows
+##   (`--audit`, `--series`) reads that bake. No wall clock.
+## - `--series=<file>`, `--against=<file>`: every body and liquid sampled five times a second into a file, and said where it parts from
+##   another's (`--series=whole.bin` on the whole plan, then `--heard --series=heard.bin --against=whole.bin`: what a live show does
+##   that the whole plan does not). `--compare=a,b`: just that, of two files.
+## - always: each liquid whose volume changed, at every sample; the streams in the air; each act's held back.
 ##
-## READ-ONLY: the episode is copied to a scratch folder on the real disk (`--copy=<dir>`, by default the project's
-## `dist/episode_bake_probe/`, which Godot never imports), and nothing is written but the copy.
+## Read-only: the episode is copied to a scratch folder on the real disk (`--copy=<dir>`, by default the project's `dist/episode_bake_probe/`,
+## which Godot never imports), and nothing is written but the copy.
 
 var medium: TableMedium
 var subs: Subtitles
@@ -139,16 +134,16 @@ func _run() -> void:
 	var held_in := float((take.get("bookend", {}) as Dictionary).get("in", Director.intro_hold)) if take.get("bookend") is Dictionary else Director.intro_hold
 	Director.intro_hold = held_in
 	subs.words = take.get("words", [])
-	# ...or THE EPISODE'S SCRIPT AS IT STANDS NOW (`--script`): a take's own words and marks are the script's as it was exported, and
-	# a script written again since has its acts cued at other words - its words timed from the plan's own estimate instead
+	# ...or the episode's script as it stands now (`--script`), its words timed from the plan's own estimate (a take carries the script it
+	# was exported from)
 	var from_script := _arg(args, "script", "") != ""
 	if from_script:
 		book["source"] = FileAccess.get_file_as_string(src_dir.path_join("script.md"))
 		for key in ["start_words", "start_index", "start_time"]:
 			book.erase(key)
 		subs.words = []
-	# ...or, played live, A SENTENCE AT A TIME, its words arriving `--ahead` seconds before its first is said (the reading's
-	# window), and the bake on a thread of its own, as the app has it
+	# ...or, played live, a sentence at a time, its words arriving `--ahead` seconds before its first is said, and the bake on a thread
+	# of its own, as the app has it
 	var live := _arg(args, "live", "") != ""
 	var ahead := _arg(args, "ahead", "4").to_float()
 	var all_words: Array = subs.words
@@ -162,7 +157,7 @@ func _run() -> void:
 	subs.document = book
 	var clock := Time.get_ticks_msec()
 	medium._key = ""
-	# ...PLAYED LIVE, the table is built as the app builds it: on a worker, the app drawing meanwhile - each frame it drew said
+	# ...played live, the table is built as the app builds it: on a worker, the app drawing meanwhile - each frame it drew said
 	TableMedium.away_in_tests = live
 	medium._ensure_doc()
 	if medium._build_task >= 0:
@@ -186,8 +181,8 @@ func _run() -> void:
 				settled_us = Time.get_ticks_usec() - s0
 		print("episode_bake_probe: the table built on a worker in %d ms - %d frames drawn meanwhile, %d over 50 ms, the longest %d ms" % [
 			Time.get_ticks_msec() - clock, drawn, over, longest])
-		# ...AND WHAT IS STILL ON THIS THREAD: the medium mounted (`medium 'table'`), the first frame after it, the table put back in the
-		# tree, and the frames that first draw it (its materials' pipelines, its shadow maps, the probe catching its faces)
+		# ...and what is still on this thread: the medium mounted, the first frame after it, the table put back in the tree, and the
+		# frames that first draw it (materials' pipelines, shadow maps)
 		var after := PackedStringArray()
 		medium._work.profiling = true
 		medium._work.profile = {}
@@ -233,7 +228,7 @@ func _run() -> void:
 	if _arg(args, "no-keep-out", "") != "" and w.paint != null:
 		w.paint.keep_out = false
 	print("episode_bake_probe: %s - %d things, %d works, %d acts, stood in %d ms" % [copy, w.things.size(), w.works.size(), w.acts.size(), Time.get_ticks_msec() - clock])
-	# ...HOW FAR EACH PAINTING TOOL IS HELD OFF ITS SURFACE (`--held`): each program's held keys' stand-off, where the surface is under it
+	# ...how far each painting tool is held off its surface (`--held`): each program's held keys' stand-off, where the surface is under it
 	if _arg(args, "held", "") != "" and w.paint != null:
 		for si in w.paint.skins.size():
 			var sd: Dictionary = w.paint.skins[si]
@@ -298,7 +293,7 @@ func _run() -> void:
 	for p in picks:
 		var key := int((p as Dictionary)["wi"]) if int((p as Dictionary)["wi"]) >= 0 else -1 - int((p as Dictionary)["ti"])
 		print("  watching %s (%s)" % [(p as Dictionary)["label"], "a rigid body" if ph._rigid_of.has(key) else ("loose" if ph._loose_of.has(key) else "posed by the work")])
-	# ...OR AS A LIVE PLAN COMES TO KNOW IT (`--heard`): new words, a new plan, the bake already past where it changes
+	# ...or as a live plan comes to know it (`--heard`): new words, a new plan, the bake already past where it changes
 	if heard:
 		var lead := _arg(args, "heard", "12").to_float()
 		lead = 12.0 if lead <= 1.0 else lead
@@ -343,9 +338,8 @@ func _run() -> void:
 				if hand_end > -INF and float(r["t0"]) - hand_end > 8.0:
 					print("    IDLE %.1f s (%.1f - %.1f)" % [float(r["t0"]) - hand_end, hand_end, float(r["t0"])])
 					gaps += 1
-				# ...AND THE HAND PUT DOWN INSIDE ITS ACT (2026-11-10, the user: "Starting around 5:30, and continuing for at least 90
-				# seconds... there is no animation at all"): an act longer than its work, slowed as far as it may be, puts its tool back and
-				# stands still to its end ([method TablePaint.plan_of]'s `still`) - between acts this had said nothing was idle
+				# ...and the hand put down inside its act: an act longer than its work puts its tool back and stands still to its end
+				# ([method TablePaint.plan_of]'s `still`)
 				var done := float(r["t1"])
 				for tr in a["tracks"]:
 					if String((tr as Dictionary)["law"]) != "paint":
@@ -397,7 +391,7 @@ func _run() -> void:
 		Spectrum.virtual_clock = -1.0
 		get_tree().quit(0)
 		return
-	# THE SPOKEN WORDS (`--spoken=A,B`): each with its index and where the plan's estimate has it
+	# the spoken words (`--spoken=A,B`): each with its index and where the plan's estimate has it
 	if _arg(args, "spoken", "") != "":
 		var sp_at := _arg(args, "spoken", "").split(",")
 		var spoken_all: PackedStringArray = medium._plan.parse.get("spoken", PackedStringArray())
@@ -410,8 +404,8 @@ func _run() -> void:
 		print(" ".join(line))
 		get_tree().quit(0)
 		return
-	# EACH WATCHED BODY AS THE BAKE HAS IT (`--trace=T0,T1,step`): baked up to each moment on this thread, and what it is doing there -
-	# held, asleep, what it rests on and last touched, what held it back - what no frame keeps
+	# each watched body as the bake has it (`--trace=T0,T1,step`): baked up to each moment on this thread - held, asleep, what it rests on
+	# and last touched, what held it back
 	if _arg(args, "trace", "") != "":
 		var tr_at := _arg(args, "trace", "").split(",")
 		var ts := String(tr_at[0]).to_float()
@@ -473,8 +467,8 @@ func _run() -> void:
 			ts += step
 		get_tree().quit(0)
 		return
-	# WHAT ONE ACT'S MOVES COST TO WORK OUT (`--carry-cost=<act>`): each of its entries posed afresh at its end (what every plan made
-	# asks) and at its middle (where it lifts over what is in its way), on this thread, by what took the time
+	# what one act's moves cost to work out (`--carry-cost=<act>`): each entry posed afresh at its end and at its middle (where it lifts
+	# over what is in its way), on this thread, by what took the time
 	if _arg(args, "carry-cost", "") != "":
 		var act_name := _arg(args, "carry-cost", "")
 		w.profiling = true
@@ -496,17 +490,15 @@ func _run() -> void:
 						(Time.get_ticks_usec() - c0) / 1000.0, ", ".join(parts)])
 		get_tree().quit(0)
 		return
-	# PLAYED LIVE, from `--from` to `--to`: the clock the wall's, as the voice's player keeps it - on through a frame this thread
-	# spent elsewhere, held only while the show waits for its bake - every frame's cost on this thread, each over 50 ms said with
-	# what took it and how far the bake was ahead
+	# played live, from `--from` to `--to`: the clock the wall's, as the voice's player keeps it (held only while the show waits for its
+	# bake) - every frame's cost on this thread, each over 50 ms said with what took it and how far the bake was ahead
 	if live:
 		var seen := {}    # a tenth of a second of the episode's clock -> each watched part's place as drawn then
 		var first: Dictionary = await _play(all_words, ahead, t_from, t_to, picks, seen, false)
 		_said_played(first)
 		_streams_said(medium._work.physics)
-		# ...AND SCRUBBED BACK (`--seek=T`): the reading started again from the sentence holding T, its words timed from 0, as the
-		# reading hands a scrub - and how long until the show plays, whether the table and its bake stood, and where the watched parts
-		# are drawn against where the first pass drew them at the same moment of the episode
+		# ...and scrubbed back (`--seek=T`): the reading started again from the sentence holding T, its words timed from 0 - and how long
+		# until the show plays, whether the table and its bake stood, and where the watched parts are drawn against the first pass
 		var seek_arg := _arg(args, "seek", "")
 		for step in (seek_arg.split(",", false) if seek_arg != "" else PackedStringArray()):
 			# ...T[:after], or wK[:after]: spoken word K, the script's words being the spoken words one for one
@@ -557,9 +549,8 @@ func _run() -> void:
 		Spectrum.virtual_clock = -1.0
 		get_tree().quit(0)
 		return
-	# THE FRAMES THAT STALL A LIVE SHOW, from T0 to T1: the whole stretch baked first, then every frame of it played at 60 a
-	# second as the app's thread plays it, and each that took over 50 ms of this thread said with what it spent it on - what a
-	# viewer sees frozen while the voice goes on, whatever the bake
+	# The frames that stall a live show, from T0 to T1: the stretch baked first, then every frame of it played at 60 a second as the app's
+	# thread plays it, each over 50 ms said with what it spent it on.
 	if _arg(args, "stalls", "") != "":
 		var span := _arg(args, "stalls", "0,%f" % end).split(",")
 		var s0 := String(span[0]).to_float()
@@ -601,9 +592,8 @@ func _run() -> void:
 		Spectrum.virtual_clock = -1.0
 		get_tree().quit(0)
 		return
-	# THE GAPS ASKED FOR, AS DRAWN: at each moment the medium posed as the export posed it, every watched part's drawn
-	# surface against what is drawn under it - a ray down from over each of its vertices onto everything else (the
-	# table's top too): the least is how far it floats (or, under 0, sinks), as the eye sees a shadow's gap
+	# the gaps asked for, as drawn: every watched part's drawn surface against what is drawn under it - a ray down from over each vertex
+	# onto everything else (the table's top too): the least is how far it floats (or, under 0, sinks)
 	var gaps := _arg(args, "gaps", "").split(",", false)
 	if not gaps.is_empty():
 		for sh in gaps:
@@ -618,7 +608,7 @@ func _run() -> void:
 		print("episode_bake_probe: done")
 		get_tree().quit(0)
 		return
-	# THE PICTURES ASKED FOR, as the export drew them: the medium advanced to each moment (the bake runs up to it)
+	# the pictures asked for, as the export drew them: the medium advanced to each moment (the bake runs up to it)
 	var shots := _arg(args, "shots", "").split(",", false)
 	if not shots.is_empty():
 		var out := _arg(args, "out", copy)
@@ -639,7 +629,7 @@ func _run() -> void:
 		print("episode_bake_probe: done")
 		get_tree().quit(0)
 		return
-	# THE BAKE, on this thread, as a render bakes it
+	# the bake, on this thread, as a render bakes it
 	clock = Time.get_ticks_msec()
 	var t := 0.0
 	var chunk := _arg(args, "chunk", "30").to_float()
@@ -687,7 +677,7 @@ func _run() -> void:
 		print("episode_bake_probe: done")
 		get_tree().quit(0)
 		return
-	# WHAT IT CAME TO, sampled
+	# what it came to, sampled
 	var last_v := {}
 	var s := t_from
 	while s <= t_to:
@@ -716,7 +706,7 @@ func _run() -> void:
 				line.append("%d stream(s) in the air, the lowest at %.1f cm" % [streams.size(), lo * 100.0])
 		print("%7.2f [%s] %s" % [s, ",".join(acts_now), " | ".join(line)])
 		s += every
-	# EACH POUR'S PLAN, as the bake made it: where its lip was held, against the mouth it poured into
+	# each pour's plan, as the bake made it: where its lip was held, against the mouth it poured into
 	for k in ph._held:
 		var h: Variant = ph._held[k]
 		if h is Dictionary and (h as Dictionary).get("_pour") is Dictionary and not ((h as Dictionary)["_pour"] as Dictionary).is_empty():
@@ -725,7 +715,7 @@ func _run() -> void:
 			print("  pour %s into %s: lip held at %s cm over the mouth found at %s cm, pre-tilt %.0f, rise %.1f cm; the mouth now %s" % [k, tr.get("into"),
 				(pl["at"] as Vector3) * 100.0, (pl["mouth"] as Vector3) * 100.0, rad_to_deg(float(pl["pre"])), float(pl["rise"]) * 100.0,
 				ph.twin._mouth_of(String(tr.get("into")), float((h as Dictionary)["t0"]))])
-	# EACH ACT'S REPORT, as the puppeteer would be told it
+	# each act's report, as the puppeteer would be told it
 	for r in w.runs:
 		if float(r["t1"]) > t_to or float(r["t1"]) < t_from:
 			continue
@@ -777,9 +767,8 @@ func _pose_line(w: TableWork, ph: TablePhysics, p: Dictionary, s: float) -> Stri
 	return "%s (%.1f, %.1f, %.1f) tilt %.0f turn %.0f%s" % [p["label"], xf.origin.x * 100.0, xf.origin.y * 100.0, xf.origin.z * 100.0, tilt, yaw, extra]
 
 
-## Picked part [param p]'s drawn surface against everything solid drawn under it, as posed now (no liquid's surface): the
-## least drop from any of its vertices to what is under it (mm; a vertex as much as [constant SINK] into what is under it reads
-## under 0), where, and onto what.
+## Picked part [param p]'s drawn surface against everything solid drawn under it, as posed now (no liquid's surface): the least drop
+## from any vertex to what is under it (mm; a vertex as much as [constant SINK] into it reads under 0), where, and onto what.
 func _drawn_gap(w: TableWork, p: Dictionary) -> String:
 	var wi := int(p["wi"])
 	var own_root: Node3D = (w.works[wi] as Dictionary)["node"] if wi >= 0 else (w.things[int(p["ti"])] as Dictionary)["node"]
@@ -838,17 +827,17 @@ func _drawn_gap(w: TableWork, p: Dictionary) -> String:
 const SINK := 0.003
 
 
-## A LIVE READING PLAYED from [param s0] to [param s1] of its own clock, [param words] arriving a sentence at a time [param ahead]
-## of being said: each frame's cost on this thread, the stalls and the watched parts' jumps said as they happen - and, kept in
-## [param seen] by the tenth of a second of the episode's clock (the table's, [member TableMedium._now]), where each watched part was
-## drawn; with [param against], how far it is drawn now from where it was drawn at that moment before (the worst, per part).
+## A live reading played from [param s0] to [param s1] of its own clock, [param words] arriving a sentence at a time [param ahead] of
+## being said: each frame's cost on this thread, the stalls and the watched parts' jumps said as they happen. Where each watched part
+## was drawn is kept in [param seen] by the tenth of a second of the episode's clock ([member TableMedium._now]); with [param against],
+## how far it is drawn now from there (the worst, per part).
 func _play(words: Array, ahead: float, s0: float, s1: float, picks: Array, seen: Dictionary, against: bool) -> Dictionary:
 	var w: TableWork = medium._work
 	var ph: TablePhysics = w.physics
 	var s := s0
 	var last := Time.get_ticks_usec()
 	var out := {"from": s0, "to": s1, "n": 0, "spent": 0.0, "worst": 0.0, "over": [0, 0], "waited": 0.0, "against": {}}
-	# ...each watched part AS DRAWN: a jump in one frame past a hand's reach (3 cm, 15 degrees), or shown or hidden, said
+	# ...each watched part as drawn: a jump in one frame past a hand's reach (3 cm, 15 degrees), or shown or hidden, said
 	var drawn_was := {}
 	var off_said := {}
 	w.profiling = true
@@ -884,7 +873,7 @@ func _play(words: Array, ahead: float, s0: float, s1: float, picks: Array, seen:
 			print("  STALL at %7.2f s: %6.0f ms, baked to %7.2f s%s  [%s]  (%s)" % [medium._now, ms, ph.baked_to(), "  (waiting)" if Spectrum.waiting() else "",
 				", ".join(parts), ", ".join(acting)])
 		var bin := int(round(medium._now * 10.0))
-		# ...EACH LIQUID AS THE FRAME DRAWN HAS IT, each half second one has changed: what a report of a level would read (feedback 0013)
+		# ...each liquid as the frame drawn has it, each half second one has changed: what a report of a level would read
 		if bin % 5 == 0 and bin != int(out.get("liq_bin", -1)):
 			out["liq_bin"] = bin
 			var fr: Variant = ph.frame_at(medium._now)
@@ -912,7 +901,7 @@ func _play(words: Array, ahead: float, s0: float, s1: float, picks: Array, seen:
 						(", shown" if vis else ", HIDDEN") if vis != bool((was as Array)[1]) else "", str(xf.origin.snapped(Vector3.ONE * 0.001)),
 						ph.baked_to(), "  (waiting)" if Spectrum.waiting() else "", "  (outran)" if (int(pd["wi"]) >= 0 and w._outran(int(pd["wi"]), medium._now)) else ""])
 			drawn_was[pd["label"]] = [xf, vis]
-			# ...AND DRAWN WHERE THE BAKE HAS IT? - a part is a child of its thing's node, posed against it each frame it can change
+			# ...and drawn where the bake has it? - a part is a child of its thing's node, posed against it each frame it can change
 			var key2 := int(pd["wi"]) if int(pd["wi"]) >= 0 else -1 - int(pd["ti"])
 			if ph._rigid_of.has(key2):
 				var baked: Variant = ph.pose_of(key2, medium._now)
@@ -934,8 +923,8 @@ func _play(words: Array, ahead: float, s0: float, s1: float, picks: Array, seen:
 		var now := Time.get_ticks_usec()
 		var real := (now - last) / 1e6
 		last = now
-		# ...and the WHOLE FRAME, the picture drawn too (on a real renderer, GHOST_PROBE_GPU=1): one held past 200 ms with this
-		# thread's work quick was the drawing - a shader made, a buffer allocated
+		# ...and the whole frame, the picture drawn too (on a real renderer, GHOST_PROBE_GPU=1): a frame held past 200 ms with this thread's
+		# work quick was the drawing (a shader made, a buffer allocated)
 		if real > 0.2:
 			print("  FRAME at %7.2f s: %6.0f ms in all, %6.0f ms of it the table's work" % [medium._now, real * 1000.0, ms])
 		if Spectrum.waiting():
@@ -951,8 +940,8 @@ const SERIES_DEG := 6.0
 const SERIES_ML := 1.0
 
 
-## EVERY BODY AND LIQUID sampled to [param t_to] (`--series`): `{t, items: {label: PackedFloat32Array}}`, a body's seven numbers a sample
-## (its place in cm, its turn), a liquid's one (ml). Named by label, each copy told by its number: a table stood twice lists them alike.
+## Every body and liquid sampled to [param t_to] (`--series`): `{t, items: {label: PackedFloat32Array}}`, a body's seven numbers a sample
+## (its place in cm, its turn), a liquid's one (ml). Named by label, copies told by number.
 func _series(w: TableWork, ph: TablePhysics, t_to: float) -> Dictionary:
 	var ts := PackedFloat32Array()
 	var items := {}
@@ -1002,8 +991,8 @@ func _series_read(path: String) -> Dictionary:
 	return d
 
 
-## WHERE [param mine] PARTS FROM [param other]: each stretch a body stands over [constant SERIES_CM] cm or [constant SERIES_DEG] degrees from the
-## other's, or a liquid holds over [constant SERIES_ML] ml other than the other's - once, with its worst.
+## Where [param mine] parts from [param other]: each stretch a body stands over [constant SERIES_CM] cm or [constant SERIES_DEG] degrees from the
+## other's, or a liquid holds over [constant SERIES_ML] ml other than the other's, once, with its worst.
 func _series_against(mine: Dictionary, other: Dictionary) -> void:
 	var ta: PackedFloat32Array = mine["t"]
 	var n := mini(ta.size(), (other["t"] as PackedFloat32Array).size())
@@ -1051,8 +1040,8 @@ func _series_against(mine: Dictionary, other: Dictionary) -> void:
 	print("episode_bake_probe: %d stretch(es) apart over %d samples, %.1f s" % [said, n, ta[n - 1] if n > 0 else 0.0])
 
 
-## WHERE EACH STREAM WENT, by the liquid it left and what caught it: how much, over what stretch, and where the first and last of it
-## fell from and to (feedback 0013: a ladle's 27 ml poured over a vial that stayed empty, live only).
+## Where each stream went, by the liquid it left and what caught it: how much, over what stretch, and where the first and last of it
+## fell from and to.
 func _streams_said(ph: TablePhysics) -> void:
 	var by := {}
 	for p in ph.parcels:
@@ -1090,7 +1079,7 @@ func _said_played(r: Dictionary) -> void:
 
 
 ## The script's own spoken words as a voice would say them, each where the plan's estimate has it ([member TableMedium._est]), at
-## [param pace] times its speed - a "sentence" a dozen words, for what arrives together.
+## [param pace] times its speed; a "sentence" is a dozen words.
 func _words_of_plan(pace: float) -> Array:
 	var spoken: PackedStringArray = medium._plan.parse.get("spoken", PackedStringArray())
 	var out: Array = []
@@ -1123,8 +1112,8 @@ static func _copy_dir(from: String, to: String) -> void:
 		_copy_dir(from.path_join(d), to.path_join(d))
 
 
-## How deep a body may stand in what it meets before the audit says so, a jump in a frame, how far off its hand a held thing may be and for how long, how far over what
-## is under it what has come to rest may lie (meters, seconds).
+## How deep a body may stand in what it meets before the audit says so, a jump in a frame, how far off its hand a held thing may be and
+## for how long, how far over what is under it what has come to rest may lie (meters, seconds).
 const AUDIT_DEEP := 0.004
 const AUDIT_JUMP := 0.05
 const AUDIT_OFF := 0.03
@@ -1136,7 +1125,7 @@ const AUDIT_THROUGH := 0.0005
 const AUDIT_STRETCHED := 0.05
 
 
-## THE SHOW AGAINST WHAT MUST ALWAYS HOLD (`--audit`): each kind of thing wrong, said once a stretch, with its worst. The bake is done: this only reads frames.
+## The show against what must always hold (`--audit`): each kind of thing wrong, said once a stretch, with its worst. Only reads frames of a finished bake.
 func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 	var found := {}       # what -> {t0, t1, worst}
 	var note := func(what: String, t: float, how: float) -> void:
@@ -1147,7 +1136,7 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 		if how > float(d["worst"]):
 			d["worst"] = how
 			d["at"] = t
-	# ...LIQUID: what is in every vessel, in the air and spilled is what there was, but for what the work fills by hand; and each surface moves smoothly
+	# ...liquid: what is in every vessel, in the air and spilled is what there was, but for what the work fills by hand; and each surface moves smoothly
 	var filled := false
 	for li in ph.liquids.size():
 		filled = filled or w._chan.has("w%d:fill" % int((ph.liquids[li] as Dictionary)["wi"]))
@@ -1185,7 +1174,7 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 			by_where[src] = float(by_where.get(src, 0.0)) + float(pp["vol"])
 	for src in by_where:
 		print("  AUDIT %.1f ml spilled from %s" % [float(by_where[src]) * 1e6, src])
-	# ...BODIES: each frame's move, each step what it stands in
+	# ...bodies: each frame's move, each step what it stands in
 	var keys: Array = ph._rigid_of.keys()
 	var label := func(key: int) -> String:
 		return w._part_label(key) if key >= 0 else String((w.things[-1 - key] as Dictionary)["name"])
@@ -1314,7 +1303,7 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 					if past > AUDIT_THROUGH:
 						note.call("%s out through the wall of %s (mm)" % [String(L["name"]), ph._liquid_label(vs_i)], t, past * 1000.0)
 		t += AUDIT_STEP
-	# ...WHAT CAME OF WHAT EACH MOVE LEFT: how far it went on after its hand was done, by itself - fell, slid, tipped
+	# ...what came of what each move left: how far it went on after its hand was done, by itself - fell, slid, tipped
 	for key in keys:
 		var ch: String = ph._ch_of(int(key))
 		var entries: Array = w._chan.get(ch, [])
@@ -1338,7 +1327,7 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 			var gap := _audit_float(w, ph, keys, int(key), after) if ((ph.rigid.bodies[int(ph._rigid_of[key])] as Dictionary).get("seat", PackedInt32Array()) as PackedInt32Array).is_empty() else 0.0
 			if gap > AUDIT_FLOAT:
 				note.call("%s after %s hangs in the air (cm)" % [label.call(key), String(e.get("act", "?"))], after, gap * 100.0)
-	# ...AND WHAT HAS COME TO REST: over what is under it, by how much, and how it lies
+	# ...and what has come to rest: over what is under it, by how much, and how it lies
 	for key in keys:
 		var bi := int(ph._rigid_of[key])
 		var f: Dictionary = ph.frame_at(t_to - 0.1)
@@ -1363,10 +1352,10 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 	print("  AUDIT %d kind(s) of thing said" % said.size())
 
 
-## A PAINTING TOOL, LOOKED AT CLOSER THAN A BODY IS: its own mesh's points every [constant AUDIT_PAINT_STEP] of each act it paints in, against
+## A painting tool, looked at closer than a body is: its own mesh's points every [constant AUDIT_PAINT_STEP] of each act it paints in, against
 ## every solid that does not give ([constant AUDIT_GIVES]: the paint in a pot, water, powder, a towel) - deeper than [constant AUDIT_PAINT_DEEP],
-## or than [constant AUDIT_PAINT_PRESS] in the surface it paints, where it is pressed. A body's own look ([constant AUDIT_DEEP]) said nothing of a
-## sponge through a pot's tin wall 3 mm thick (feedback 0016, joker-motivation 209459).
+## or than [constant AUDIT_PAINT_PRESS] in the surface it paints, where it is pressed ([constant AUDIT_DEEP] would miss a sponge through a
+## pot's 3 mm tin wall).
 const AUDIT_PAINT_STEP := 0.05
 const AUDIT_PAINT_DEEP := 0.0008
 const AUDIT_PAINT_PRESS := 0.0035
@@ -1392,9 +1381,9 @@ func _audit_paint(w: TableWork, ph: TablePhysics, t_to: float, note: Callable) -
 		var own := AABB(pts[0], Vector3.ZERO)
 		for q in pts:
 			own = own.expand(q)
-		# ...AND ON WHAT IT PAINTS WHILE IT PAINTS (feedback 0019: "This brush is not touching the mask; it is floating above it"): each
-		# moment the law has it pressing on the surface, its tip as the bake has it no further off the surface than AUDIT_PAINT_OFF
-		# (measured on the skin's own meshes along the tool, as the picture draws it - its field is coarse at a rim)
+		# ...and on what it paints while it paints: each moment the law has it pressing on the surface, its tip as the bake has it no further
+		# off the surface than AUDIT_PAINT_OFF (measured on the skin's own meshes along the tool, as the picture draws it; its field is
+		# coarse at a rim)
 		var skin_tm: TriangleMesh = null
 		for sd in w.paint.skins:
 			var faces := PackedVector3Array()
@@ -1426,8 +1415,8 @@ func _audit_paint(w: TableWork, ph: TablePhysics, t_to: float, note: Callable) -
 					if bool(h[3]) and float(h[2]) > 0.5:
 						var c := TablePaint._contact(tool, TablePaint._contact_of(h))
 						var tip_w := x * (c["tip"] as Vector3)
-						# (straight in along the face's front, and how far off it that is along the surface's own normal there - along the
-						# tool, a brush meeting a steep rim at a graze read a small gap as a long one)
+						# (straight in along the face's front, and how far off it that is along the surface's own normal there - along the tool,
+						# a brush meeting a steep rim at a graze reads a small gap as a long one)
 						var skin_w := w.paint.holder_world(0, tt)
 						var along: Vector3 = (skin_w.basis * ((w.paint.skins[0] as Dictionary)["surface"] as Dictionary)["front"]).normalized()
 						var hit := TableWork._ray(skin_tm, tip_w + along * 0.05, -along)

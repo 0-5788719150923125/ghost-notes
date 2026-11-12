@@ -1,20 +1,21 @@
 extends SceneTree
 
-## timeline_check - ONE DOCUMENT FOR WHAT A SHOW DOES WHEN ([Timeline]; next/editing.md, "The Timeline").
+## timeline_check - one document for what a show does when ([Timeline]; next/editing.md, "The Timeline").
 ##
 ##   godot --headless --path . --script res://tests/scene_kit/timeline_check.gd
 ##
 ## What it holds:
-##   - THE CHECK: a timeline made by the contract's own hands has no problems; THE CONTROL is one with a clock, a kind and an
-##     engine that have no row and an item outside its group, each named.
-##   - A STORYBOARD READ AS ONE (storyboards/showcase.yaml, the demo note's): a group per entry, at the times the Director's
-##     schedule gives; the first entry's blue prism a lane, its `arrive` a span scaled into the entry's seconds; every item's
-##     `source` the span it was read from; every item a `verb` (a simulation, reached by playing from the start - THE CONTROL
-##     for seeking); and it survives JSON whole.
-##   - AN EPISODE READ AS ONE (a cardless fixture under its own root, never the author's): the intro, each beat and the close a
-##     group; an act a span on the `time` engine (seekable) in its thing's lane, found under way at a moment inside it; a cue a
-##     flag at the word it stands before; a beat with acts and no words as long as its acts; its problems, as `--episode-check`
-##     prints them, none for it as made - THE CONTROL a cue naming nothing and data that does not parse, each said.
+##   - The check: a timeline made by the contract's own hands has no problems; the control is one with a clock, a kind
+##     and an engine that have no row and an item outside its group, each named.
+##   - A storyboard read as one (storyboards/showcase.yaml, the demo note's): a group per entry, at the times the
+##     Director's schedule gives; the first entry's blue prism a lane, its `arrive` a span scaled into the entry's
+##     seconds; every item's `source` the span it was read from; every item a `verb` (a simulation, reached by playing
+##     from the start - the control for seeking); and it survives JSON whole.
+##   - An episode read as one (a cardless fixture under its own root, never the author's): the intro, each beat and
+##     the close a group; an act a span on the `time` engine (seekable) in its thing's lane, found under way at a
+##     moment inside it; a cue a flag at the word it stands before; a beat with acts and no words as long as its acts;
+##     its problems, as `--episode-check` prints them, none for it as made - the control a cue naming nothing and data
+##     that does not parse, each said.
 
 const ROOT := "user://timeline_check"
 
@@ -123,8 +124,8 @@ func _episode() -> void:
 	f.store_string("{ broken")
 	f.close()
 	_ok(" ".join(ep.problems()).contains("table.json does not parse"), "a step's data that does not parse is a problem said")
-	# THE TAKE KEPT (next/editing.md step 3): kept with the script it was said from, it matches until the script changes - THE CONTROL -
-	# and the table's words take its times, aligned as a render's follower aligns them, a word it does not place keeping its guess
+	# The take kept (next/editing.md step 3): kept with the script it was said from, it matches until the script changes
+	# (the control), and the table's words take its times, aligned as a render's follower aligns them, a word it does not place keeping its guess
 	ep.write_text("script", "<!-- table: work 1 -->\n\nOne two three.\n")
 	var scratch := ProjectSettings.globalize_path(ROOT).path_join("rendered.wav")
 	var wf := FileAccess.open(scratch, FileAccess.WRITE)

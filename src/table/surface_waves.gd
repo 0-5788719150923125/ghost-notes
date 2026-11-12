@@ -1,17 +1,15 @@
 extends RefCounted
 class_name SurfaceWaves
 
-## SurfaceWaves - A LIQUID'S SURFACE, MOVED (next/table_physics.md, "Liquids"): its heights over an even grid across its
-## vessel's inside, stepped as a damped wave equation, by [TablePhysics] on the bake's thread. The user, 2026-10-29, of
-## the-quiet-crucible 841899's ladle going round in its cauldron: "I am not seeing any water physics, surface tension, or
-## any of that. I still think we need better liquid physics, which would react to ANYTHING we put into them." So:
+## SurfaceWaves: a liquid's surface, moved (next/table_physics.md, "Liquids"). Its heights over an even grid across its vessel's inside,
+## stepped as a damped wave equation by [TablePhysics] on the bake's thread:
 ##
-##   - its ripples run at [constant SPEED], water's slowest (at a 1.7 cm wavelength, where its surface tension and its
-##     weight pull alike: shorter ripples run faster for their tension, longer for their weight), die away over a
-##     second or two, and come back off its vessel's walls, which nothing flows through;
-##   - EVERYTHING THAT CROSSES IT MOVES IT: a solid coming into a cell of the surface pushes it up as it comes, and going,
-##     lets it down - a ladle going round heaps a bow wave before it and leaves a wake, a vial dipped rings it; whatever
-##     falls in dents it where it lands ([method dent]); what floats rides it ([method height_at]).
+##   - its ripples run at [constant SPEED], water's slowest (at a 1.7 cm wavelength, where its surface tension and its weight pull alike:
+##     shorter ripples run faster for their tension, longer for their weight), die away over a second or two, and come back off its
+##     vessel's walls, which nothing flows through;
+##   - everything that crosses it moves it: a solid coming into a cell of the surface pushes it up as it comes, and going, lets it down - a
+##     ladle going round heaps a bow wave before it and leaves a wake, a vial dipped rings it; whatever falls in dents it where it lands
+##     ([method dent]); what floats rides it ([method height_at]).
 ##
 ## Its own state is a Dictionary ([method fresh]) the bake keeps in its checkpoints; this holds only the grid. Pure data.
 
@@ -38,7 +36,7 @@ var nb := PackedInt32Array()   # each cell's four neighbors - itself where its n
 var _key := ""
 
 
-## THE GRID OVER VESSEL [param vs]'s inside, its cells as many as fit [constant CELLS] across its widest.
+## The grid over vessel [param vs]'s inside, its cells as many as fit [constant CELLS] across its widest.
 static func of(vs: Vessel) -> SurfaceWaves:
 	var w := SurfaceWaves.new()
 	var lo := Vector2(INF, INF)
@@ -76,9 +74,8 @@ func cell_of(q: Vector3) -> int:
 	return j * n + i if i >= 0 and j >= 0 and i < n and j < n else -1
 
 
-## WHICH CELLS ARE LIQUID, the surface [param s] along [param up] in [param vs]: each whose middle there is inside - and each
-## one's neighbors, a wall's own cell standing for what is beyond it. Found again only as the surface moves a quarter
-## of a cell.
+## Which cells are liquid, the surface [param s] along [param up] in [param vs]: each whose middle there is inside - and each one's
+## neighbors, a wall's own cell standing for what is beyond it. Found again only as the surface moves a quarter of a cell.
 func remask(vs: Vessel, up: Vector3, s: float) -> void:
 	var q := cell * 0.25
 	var key := "%d %d %d %d" % [roundi(s / q), roundi(up.x * 40.0), roundi(up.z * 40.0), roundi(up.y * 40.0)]
@@ -105,8 +102,8 @@ func push(st: Dictionary, c: int, dh: float) -> void:
 	st["on"] = true
 
 
-## A DENT where something lands: [param depth] meters down at [param q] (its vessel's own space), less out to
-## [param radius] - the ring it makes running out from it.
+## A dent where something lands: [param depth] meters down at [param q] (its vessel's own space), less out to [param radius] - the ring
+## it makes running out from it.
 func dent(st: Dictionary, q: Vector3, depth: float, radius: float) -> void:
 	var r := maxf(radius, cell * 0.75)
 	var reach := int(ceil(r * 2.0 / cell))

@@ -1,16 +1,13 @@
 extends RefCounted
 class_name TextWalk
 
-## TextWalk - what a reading reads of its note: the words the voice says, the title it announces,
-## the text its cast of speakers and its fingerprint come from, and the passage a voice is
-## auditioned with. This one is the note's own words (a tablet chapter read off its screen); a
-## component that rewrites what the voice reads hands the reading another - Cards' [EpisodeWalk],
-## which reads the episode it produced and never the brief.
+## TextWalk - what a reading reads of its note: the words the voice says, the title it announces, the text its
+## cast of speakers and its fingerprint come from, and the passage a voice is auditioned with. This one is the
+## note's own words (a tablet chapter read off its screen); a component that rewrites what the voice reads hands
+## the reading another (a table show's [EpisodeWalk] reads the episode it produced, never the brief).
 ##
-## A WALK IS HANDED, NOT OVERRIDDEN (next/structure.md, step 8). These were five methods every
-## mode built on [ReadingPanel] overrode; a walk is an object the mode gives the panel instead, so
-## what is read is a thing of its own - the first piece of "the voice as a card that reads what the
-## note's components hand it" (next/notes.md, "One place where order matters: text walks").
+## A walk is handed, not overridden (next/structure.md, step 8): an object the mode gives the panel, so what is
+## read is a thing of its own (next/notes.md, "One place where order matters: text walks").
 
 ## The words to read, fresh - what Play, a scrub and an export read. [param pulled] is the note as
 ## the panel has just pulled it from its file (a pull also flushes a voice change into the file).

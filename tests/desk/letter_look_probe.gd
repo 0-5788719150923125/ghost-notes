@@ -1,20 +1,19 @@
 extends Node
 
-## NOT a gate. Drives a real letter-medium session ([LetterMedium]) over a letter with a SYNTHETIC voice
-## ([method DeskScript.rehearsal] over [method LetterScript.parse]: every spoken word at a steady pace,
-## and the rests the letter asks the voice for) - and writes PNGs to look at.
+## Not a gate. Drives a real letter-medium session ([LetterMedium]) over a letter with a synthetic voice ([method
+## DeskScript.rehearsal] over [method LetterScript.parse]: every spoken word at a steady pace, and the rests the letter
+## asks the voice for) and writes PNGs to look at.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/desk/letter_look_probe.gd 400 \
 ##       --out <dir>/l --letter <a letter .md> [--svgs <key -> svg .json>] [--ink <typeset answer .json>] \
 ##       [--picture <png>] [--seed N] [--hand kalam] [--things mug,dog_tag] [--mood lamplight] [--card 'a\nb'] \
 ##       --times 3,8,20 [--every S] [--page 1] [--words W]
 ##
-## `--svgs` and `--ink` are what the Letter card would hand it (a sketch's drawing by its key, and
-## hosts/math/typeset.py's answer for them); `--picture` stands in for every picture the letter shows.
-## `--every S` photographs every S seconds to the end instead of `--times`; `--page 1` also writes the
-## flat pad texture beside each frame. `--words W` reads at W seconds a word (0.32 by default). `--things` and
-## `--mood` are what the card chose for the desk ([method DeskLook.picks_of]; none: the seed's), `--card` what is written
-## on its index cards (`\n` a new line).
+## `--svgs` and `--ink` are what the Letter card would hand it (a sketch's drawing by its key, and hosts/math/typeset.py's
+## answer for them); `--picture` stands in for every picture the letter shows. `--every S` photographs every S seconds to
+## the end instead of `--times`; `--page 1` also writes the flat pad texture beside each frame. `--words W` reads at W
+## seconds a word (0.32 by default). `--things` and `--mood` are what the card chose for the desk ([method
+## DeskLook.picks_of]; none: the seed's), `--card` what is written on its index cards (`\n` a new line).
 ## It asserts only that a frame is not uniform.
 
 const W := 1280
@@ -110,7 +109,7 @@ func _run() -> void:
 	if medium.bind_captions(subs):
 		subs.overlay_hidden = true
 	var end := float((words.back() as Dictionary)["t1"]) + 8.0
-	# WHERE THINGS HAPPEN, for choosing `--times`: each action but a line, and each span, at its first word
+	# Where things happen, for choosing `--times`: each action but a line, and each span, at its first word
 	for a in parsed["actions"]:
 		var k := String((a as Dictionary)["kind"])
 		if k != "pad-text" or bool(a.get("turn", false)):
@@ -172,9 +171,8 @@ func _run() -> void:
 	get_tree().quit(1 if _flat > 0 else 0)
 
 
-## [method DeskScript.rehearsal], and a hesitation's rest too (a timed one its seconds, a bare one
-## [constant HESITATE]): a letter's still is held over one, and a rehearsal that skipped it held it over
-## nothing.
+## [method DeskScript.rehearsal], and a hesitation's rest too (a timed one its seconds, a bare one [constant HESITATE]): a
+## letter's still is held over one.
 const HESITATE := 1.5
 
 

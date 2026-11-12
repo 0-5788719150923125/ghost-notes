@@ -1,77 +1,49 @@
 extends GhostScene
 
-## Clockwork - meshing gears under forced restraint, dramatic by physics not by clipart.
+## Clockwork - meshing gears under forced restraint: a real mechanism in the dark.
 ##
-## Gears go cheesy the instant they become decoration: brass cogs, googly spinning, a
-## rainbow steampunk sticker. This scene avoids all of that by being a real mechanism in
-## the dark. Every gear is a luminous cog edge over a near-black body; the only color is
-## one cold metal tint and the white specular that sweeps the lit teeth as the wheel
-## turns. What sells it is the MOTION, and the motion is true:
+## Every gear is a luminous cog edge over a near-black body; the only color is one cold metal tint and the
+## white specular that sweeps the lit teeth as the wheel turns. The motion is true:
 ##
-##   meshing   - two gears mesh only if they share a module (tooth size); a child's tooth
-##               count is m = 2R, so a bigger wheel has more teeth. Meshed wheels
-##               counter-rotate with angular speed inversely proportional to teeth
-##               (omega_b = -omega_a * N_a/N_b), and their phases interlock tip-into-gap
-##               and STAY interlocked for all time (a rolling constraint, derived once).
-##   in unison - a group can also be a chorus: equal wheels, unmeshed, all turning at the
-##               same speed and direction - a hypnotic wall, not a meshed train.
-##   ticking   - a group can run an escapement: instead of turning smoothly it advances
-##               one tooth per tick, snapping on a slight underdamped spring (the clock
+##   meshing   - two gears mesh only if they share a module (tooth size); a child's tooth count is m = 2R.
+##               Meshed wheels counter-rotate with angular speed inversely proportional to teeth
+##               (omega_b = -omega_a * N_a/N_b), and their phases interlock tip-into-gap for all time
+##               (a rolling constraint, derived once).
+##   in unison - a chorus: equal wheels, unmeshed, all turning at the same speed and direction.
+##   ticking   - an escapement: one tooth per tick, snapping on a slightly underdamped spring (the clock
 ##               recoil), locked to the beat and a fallback cadence.
-##   async     - several groups at once, each its own speed / direction / mode - and a
-##               vast slow wheel bigger than the frame arcing behind everything for depth.
+##   async     - several groups at once, each with its own speed / direction / mode, and a vast slow
+##               wheel bigger than the frame arcing behind everything for depth.
 ##
-## A scene's seed picks a mode (one big mechanism, scattered trains, a clock, a chorus)
-## and then samples every constant, so it is never the same machine twice. Audio drives
-## the turn rate, the tick, the glow, and the traveling specular highlight.
+## The seed picks a mode (one big mechanism, scattered trains, a clock, a chorus) and samples every
+## constant. Audio drives the turn rate, the tick, the glow and the traveling specular highlight.
 
 const MODES := ["orrery", "trains", "clockwork", "chorus", "split", "split"]   # split weighted up
 
-# METAL. This used to be five hardcoded tints, which meant five machines forever.
-# The restraint that keeps gears from going steampunk-clipart is not the SHORT LIST
-# though - it is the low saturation. So the list becomes any mood a worked metal
-# plausibly takes (blued steel, nickel, brass, copper, verdigris, anodized), and the
-# restraint becomes a CAP: whatever mood is drawn, its saturation is scaled down and
-# clamped, so the wheels always read as machined material lit in the dark.
+# Metal: any mood a worked metal plausibly takes (blued steel, nickel, brass, copper, verdigris,
+# anodized). Restraint is a cap: whatever mood is drawn, its saturation is scaled down and clamped, so
+# the wheels read as machined material lit in the dark.
 const METAL_MOODS := ["ash", "bone", "brass", "sodium", "ember", "glacier", "abyss",
 	"teal", "verdant", "violet"]
 const SAT_CAP := 0.34
 
-# FINISH. Every gear rolled flat-or-wire independently at a fixed 40%, so every
-# machine was the same mongrel mix. A shop builds to one spec: a skeletal frame of
-# spoked wheels, solid plate cogs, or a machine assembled from both.
+# Finish: a shop builds to one spec - a skeletal frame of spoked wheels, solid plate cogs, or both.
 const FINISHES := [
 	{"name": "skeletal", "flat": 0.04},
 	{"name": "mixed", "flat": 0.40},
 	{"name": "plate", "flat": 0.88},
 ]
 
-## HOW MUCH OF THE RIM THE SPOKES TAKE UP, sampled per machine and jittered per wheel. This is
-## the knob the wheel vocabulary was missing entirely: the spoke was a `draw_line` at a FIXED
-## 1.4% of the wheel's radius, so every spoked wheel in every machine wore the same hairline.
-## Measured over 60 machines and 1038 wheels before this existed, spoke width over radius was
-## the constant 0.014 - not a narrow range, a single value - which is what "the gears always
-## have a very similar kind of look: long spokes, with many of them" was.
-##
-## Expressed as a FRACTION OF THE CIRCUMFERENCE rather than as a width, because that is the
-## quantity that has to stay sane: whatever the spoke count, the spokes together take up this
-## much of the rim and the gaps take up the rest, so three fat spokes and eight thin ones are
-## both reachable and neither can ever overlap itself.
+## How much of the rim the spokes take up, sampled per machine and jittered per wheel. A fraction of the
+## circumference, so whatever the spoke count the spokes together take this much of the rim and the gaps
+## the rest: three fat spokes and eight thin ones are both reachable and none overlaps itself.
 const FILL_MIN := 0.12
 const FILL_MAX := 0.78
 
-## WHAT THE MACHINE HAS CORRODED INTO. Wear used to be one color and one shape: the mark hue
-## was `0.05 + hue * 0.1` (orange-brown, always), the saturation was the constant 0.60 and the
-## value the constant 0.30, and every mark was a soft round blob. Reported as "rust is always
-## brown, and blotchy; it always looks exactly the same", and two of its three color channels
-## were literally constants, so it was.
-##
-## Metals do not all fail the same way, and the ones here are the ones you can name on sight:
-## iron goes orange, copper and bronze go green, brass darkens to olive, a hot machine sooths
-## over black, a neglected one pits, and a machine in service wears BRIGHT where it is handled.
-## `mark` picks the shape as well as the color - a blotch, a radial streak, a scatter of pits,
-## or a burnished arc - because a patina that is always the same shape reads as a texture that
-## was pasted on rather than as something that happened to the metal.
+## What the machine has corroded into: iron goes orange, copper and bronze go green, brass darkens to
+## olive, a hot machine soots over black, a neglected one pits, and a machine in service wears bright where
+## it is handled. `mark` picks the shape as well as the color - a blotch, a radial streak, a scatter of
+## pits or a burnished arc.
 const WEARS := [
 	{"name": "rust", "h": [0.015, 0.075], "s": [0.45, 0.85], "v": [0.18, 0.44], "mark": "blotch"},
 	{"name": "verdigris", "h": [0.33, 0.45], "s": [0.25, 0.60], "v": [0.20, 0.46], "mark": "blotch"},
@@ -104,8 +76,8 @@ var _light_drift := 0.0
 var _light_sigma := 0.8       # angular width of the lit arc of teeth
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"mechanism": {"label": "Mechanism", "type": "choice", "options": "MODES", "default": null,
 		"blurb": "What kind of machine is built: one big orrery, scattered gear trains, a clock with a ticking escapement, a chorus of equal wheels turning together, or a split composition."},
@@ -128,30 +100,23 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var sch := Scheme.among(METAL_MOODS, rng)
 	_hue = sch.hue
 	_sat = clampf(sch.sat * rng.randf_range(0.30, 0.60), 0.04, SAT_CAP)
-	# The hub light is the scheme's accent, unclamped-ish: the one warm/cold spark in
-	# an otherwise gray mechanism, and harmonious with the metal by construction.
+	# The hub light is the scheme's accent: the one warm/cold spark in a gray mechanism.
 	_glow_hue = sch.accent
 	_glow_sat = clampf(sch.sat * 0.55, 0.03, 0.55)
 	var finish: Dictionary = FINISHES[rng.randi() % FINISHES.size()]
 	_flat_p = float(finish["flat"])
-	# Most machines are built to ONE spoke pattern, as a single shop would; a minority
-	# are assembled from mixed parts.
-	# TWO IS A COUNT. A wheel cast with a pair of opposed arms is a real thing and it was not
-	# reachable - the pool started at three - which is half of "fewer".
+	# Most machines are built to one spoke pattern; a minority are mixed. Two is a count (a pair of opposed arms).
 	var spokes_all := [2, 3, 3, 4, 4, 5, 6, 8]
 	_spoke_pool = spokes_all if rng.randf() < 0.35 \
 		else [spokes_all[rng.randi() % spokes_all.size()]]
-	# ...and how heavy the arms are, machine-wide, because a shop casts to one weight.
+	# ...and how heavy the arms are, machine-wide.
 	_fill = rng.randf_range(FILL_MIN, FILL_MAX)
-	# A plate cog with holes drilled in it is a spoked wheel by another name, and it is the
-	# only interior structure a solid cog has ever had here - before this they were blank discs.
+	# A plate cog with holes drilled in it is a spoked wheel by another name: the only interior structure a solid cog has.
 	_hole_p = 0.0 if rng.randf() < 0.35 else rng.randf_range(0.35, 0.9)
 	_wear_kind = WEARS[rng.randi() % WEARS.size()]
-	# Tooth size, machine-wide: a fine-toothed instrument or a chunky mill drive. Every
-	# module sample below scales by this, so meshing stays exact - only the grain changes.
+	# Tooth size, machine-wide. Every module sample below scales by this, so meshing stays exact.
 	_mod_mul = number("tooth_size", rng)
-	# Wear: a quarter of machines come out of the crate pristine, the rest corroded to
-	# varying degrees.
+	# Wear: a quarter of machines come out pristine, the rest corroded to varying degrees.
 	_wear = 0.0 if rng.randf() < 0.25 else rng.randf_range(0.20, 0.85)
 	_light_ang = rng.randf_range(-PI, PI)
 	_light_drift = rng.randf_range(-0.06, 0.06)
@@ -175,13 +140,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"split":
 			_build_split(rng)
 
-	# Some free, unmeshed gears - teeth need not always connect. (Skip for split: it is already
-	# a deliberate composition.)
+	# Some free, unmeshed gears (skipped for split, which is already a deliberate composition).
 	if mode != "split" and rng.randf() < 0.55:
 		_build_free(rng, rng.randi_range(1, 3))
 	# A gear or two behind the others, counter-rotating, for depth.
 	_build_bg(rng, 1 if mode == "split" else rng.randi_range(1, 3))
-	# A vast, dim, almost-still wheel arcing behind it all, sometimes - extra depth and gravity.
+	# A vast, dim, almost-still wheel arcing behind it all, sometimes.
 	if rng.randf() < 0.40:
 		_build_backdrop(rng)
 
@@ -189,16 +153,15 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_gears.sort_custom(func(a, b): return float(a.depth) < float(b.depth))
 	return {"mode": mode, "mood": sch.name, "finish": String(finish["name"]),
 		"tooth_scale": _mod_mul, "wear": _wear, "gears": _gears.size(),
-		# What the wheels are SHAPED like and what they have corroded into - the two rolls the
-		# console could not show before, and the two the scene was reported as never varying.
+		# What the wheels are shaped like and what they have corroded into.
 		"patina": String(_wear_kind["name"]), "arms": _spoke_pool, "arm_weight": _fill,
 		"drilled": _hole_p > 0.0}
 
 
 # --- group + gear construction ----------------------------------------------
 
-# A motion driver shared by every gear assigned to it. "smooth" integrates an angle
-# continuously; "tick" advances one driver-tooth per tick and settles on a spring.
+# A motion driver shared by every gear assigned to it. "smooth" integrates an angle continuously; "tick"
+# advances one driver-tooth per tick and settles on a spring.
 func _new_group(kind: String, rng: RandomNumberGenerator, depth: float) -> int:
 	_groups.append({
 		"kind": kind,
@@ -218,19 +181,17 @@ func _new_group(kind: String, rng: RandomNumberGenerator, depth: float) -> int:
 	return _groups.size() - 1
 
 
-# Build one gear's local geometry (unit pitch radius = 1) and append it. The tooth
-# count fixes the module; geometry is sampled per wheel so spokes and hub vary.
+# Build one gear's local geometry (unit pitch radius = 1) and append it. The tooth count fixes the
+# module; geometry is sampled per wheel so spokes and hub vary.
 func _add_gear(group: int, pos: Vector2, R: float, teeth: int, phase: float,
 		omega: float, depth: float) -> Dictionary:
-	# Tooth LENGTH varies per wheel: the addendum is the module baseline scaled by a sampled
-	# factor, so some wheels wear short stubby teeth and others long ones (not all the same).
+	# Tooth length varies per wheel: the addendum is the module baseline scaled by a sampled factor.
 	var add: float = clampf(2.2 / float(teeth), 0.05, 0.20) * _rng.randf_range(0.6, 1.6)
 	var ded := add * _rng.randf_range(1.0, 1.4)              # dedendum (root depth) varies too
 	var tip_r := 1.0 + add
 	var root_r := 1.0 - ded
 	var p := TAU / float(teeth)
-	# Tooth WIDTH varies per wheel, at BOTH ends: tip half-width and the wider root half-width
-	# (the flank angle), so teeth range from slim and pointed to broad and blocky across gears.
+	# Tooth width varies per wheel at both ends: tip half-width and the wider root half-width (the flank angle).
 	var tw := _rng.randf_range(0.08, 0.26)                    # tip half-width
 	var bw := _rng.randf_range(0.30, 0.46)                    # root (base) half-width - always > tw
 	var style := "flat" if _rng.randf() < _flat_p else "wire"  # per the machine's finish
@@ -250,36 +211,22 @@ func _add_gear(group: int, pos: Vector2, R: float, teeth: int, phase: float,
 	for i in spoke_n:
 		spokes.append(s0 + TAU * float(i) / float(spoke_n))
 
-	# THE WHEEL'S PROPORTIONS, and all three of them were missing. A spoke ran from the hub to
-	# very nearly the tooth root at a fixed hairline width, so every spoked wheel was long,
-	# thin and many-armed. It now has a hub to start at, a RIM BAND to stop against, and a real
-	# width - so a wheel can be three fat arms between a heavy hub and a heavy rim, or eight
-	# hairlines, or anything between.
-	#
-	# `rim_in` is where the spokes end and the rim begins; a low one is a thick rim, which
-	# shortens the spokes from the outside as a bigger hub shortens them from the inside.
+	# The wheel's proportions: a hub to start at, a rim band to stop against and a real width, so a wheel
+	# can be three fat arms between a heavy hub and rim, or eight hairlines. `rim_in` is where the spokes
+	# end and the rim begins; a low one is a thick rim.
 	var rim_in := root_r * _rng.randf_range(0.55, 0.94)
 	var hub_r := root_r * _rng.randf_range(0.16, 0.42)
-	# Half-width in wheel units: the fraction of the ROOM BETWEEN ARMS that the arm fills,
-	# jittered per wheel off the machine's figure. Half the gap between two adjacent arms at
-	# the rim is `rim_in * sin(PI / n)`, so scaling by that is self-limiting - at any count the
-	# arms can be hairlines or nearly touching and can never overlap, and the same number means
-	# the same visual weight whether the wheel has two arms or eight.
-	#
-	# Arc length was the first parameterization and it does not survive a wide arm: a straight
-	# bar of half-width w subtends 2*asin(w/r), not 2w/r, so a "78% of the circumference" wheel
-	# with two arms came out with a half-width of 2.03 - an arm twice as wide as the wheel it
-	# was on. Measured, before this line was rewritten.
+	# Half-width in wheel units: the fraction of the room between arms that the arm fills, jittered per
+	# wheel. Half the gap between adjacent arms at the rim is `rim_in * sin(PI / n)`, so scaling by that is
+	# self-limiting (arms never overlap) and the same number means the same visual weight at any count.
+	# (A bar of half-width w subtends 2*asin(w/r), not 2w/r, so an arc-length fraction fails on wide arms.)
 	var fill := clampf(_fill * _rng.randf_range(0.75, 1.3), FILL_MIN, FILL_MAX)
 	var spoke_w := rim_in * sin(PI / float(spoke_n)) * fill
-	# A drilled plate: one hole per gap, sized to the gap it sits in. This is what gives a
-	# solid cog any interior at all.
+	# A drilled plate: one hole per gap, sized to the gap it sits in.
 	var holes := _rng.randf() < _hole_p
 
-	# WEAR: patches of whatever this machine has corroded into (see WEARS), pinned to the wheel
-	# in polar (a, d) so they turn with it. Every mark rolls its OWN color inside the finish's
-	# ranges - the old code fixed saturation at 0.60 and value at 0.30 for every mark on every
-	# wheel of every machine, which is most of why it always looked the same.
+	# Wear: patches of whatever this machine corroded into (see WEARS), pinned to the wheel in polar
+	# (a, d) so they turn with it. Every mark rolls its own color inside the finish's ranges.
 	var rust := []
 	if _rng.randf() < _wear:
 		var kind := String(_wear_kind["mark"])
@@ -297,7 +244,7 @@ func _add_gear(group: int, pos: Vector2, R: float, teeth: int, phase: float,
 				"h": _rng.randf_range(float(_wear_kind["h"][0]), float(_wear_kind["h"][1])),
 				"s": _rng.randf_range(float(_wear_kind["s"][0]), float(_wear_kind["s"][1])),
 				"v": _rng.randf_range(float(_wear_kind["v"][0]), float(_wear_kind["v"][1])),
-				# how far a streak runs, and which way an arc bends - unused by the other shapes
+				# how far a streak runs, and which way an arc bends (unused by other shapes)
 				"len": _rng.randf_range(0.10, 0.34) * root_r,
 				"span": _rng.randf_range(0.35, 1.5) * (1.0 if _rng.randf() < 0.5 else -1.0),
 			})
@@ -316,11 +263,10 @@ func _add_gear(group: int, pos: Vector2, R: float, teeth: int, phase: float,
 	return g
 
 
-# The meshing solution: given a parent gear and the direction `alpha` from parent center
-# to the child center, return the child's [phase, omega] so the two interlock tip-into-gap
-# and remain meshed for all time. Counter-rotation and the 1/N speed ratio fall out; the
-# phase is solved so the contact-line tooth coordinates stay complementary (sum = 1/2),
-# which - because d(sum)/ds = 0 - holds forever, not just at the first frame.
+# The meshing solution: given a parent gear and the direction `alpha` from parent center to the child
+# center, return the child's [phase, omega] so the two interlock tip-into-gap and stay meshed. The phase
+# is solved so the contact-line tooth coordinates stay complementary (sum = 1/2), which holds forever
+# because d(sum)/ds = 0.
 func _mesh(parent: Dictionary, alpha: float, child_teeth: int) -> Array:
 	var np := float(parent.teeth)
 	var nc := float(child_teeth)
@@ -331,8 +277,7 @@ func _mesh(parent: Dictionary, alpha: float, child_teeth: int) -> Array:
 	return [phase_c, omega_c]
 
 
-# Sun-and-planets: one large central wheel with several satellites meshed around it, all
-# coupled into a single smooth mechanism that turns in concert.
+# Sun-and-planets: one large central wheel with satellites meshed around it, coupled into one smooth mechanism.
 func _build_orrery(rng: RandomNumberGenerator) -> void:
 	var depth := rng.randf_range(0.45, 0.9)
 	var grp := _new_group("smooth", rng, depth)
@@ -352,8 +297,7 @@ func _build_orrery(rng: RandomNumberGenerator) -> void:
 		_add_gear(grp, pos, rs, ns, m[0], m[1], clampf(depth + rng.randf_range(-0.04, 0.10), 0.0, 1.0))
 
 
-# A short meshed chain placed somewhere in frame: gear drives gear drives gear. `kind`
-# makes the whole chain run smoothly or tick like an escapement.
+# A short meshed chain placed somewhere in frame; `kind` makes it run smoothly or tick like an escapement.
 func _build_train(rng: RandomNumberGenerator, kind: String) -> void:
 	var depth := rng.randf_range(0.30, 0.95)
 	var grp := _new_group(kind, rng, depth)
@@ -373,17 +317,14 @@ func _build_train(rng: RandomNumberGenerator, kind: String) -> void:
 		prev = _add_gear(grp, npos, rn, nn, m[0], m[1], clampf(depth + rng.randf_range(-0.06, 0.06), 0.0, 1.0))
 
 
-# A chorus: equal, unmeshed wheels on a loose grid, ALL turning at one speed and one
-# direction - in unison. Either smooth (a slow synchronized field) or ticking together
-# (a wall of clocks striking as one).
+# A chorus: equal, unmeshed wheels on a loose grid, all turning at one speed and direction, either
+# smooth or ticking together.
 func _build_chorus(rng: RandomNumberGenerator) -> void:
 	var depth := rng.randf_range(0.45, 0.9)
 	var ticking := rng.randf() < 0.65          # lean toward click-turn over smooth
 	var module := rng.randf_range(0.022, 0.032) * _mod_mul
 	var dir := 1.0 if rng.randf() < 0.5 else -1.0
-	# A chorus is a WALL, so the grid is sized first and the wheels are then fitted to
-	# it: a wide sparse rank of small clocks and a tight block of big ones are both
-	# choruses, but a fixed spacing could only ever draw one of them.
+	# A chorus is a wall, so the grid is sized first and the wheels fitted to it (a fixed spacing could draw only one density).
 	var cols: int = number("columns", rng)
 	var rows: int = number("rows", rng)
 	var gx := minf(rng.randf_range(0.30, 0.50), 1.75 / maxf(1.0, float(cols - 1)))
@@ -394,9 +335,8 @@ func _build_chorus(rng: RandomNumberGenerator) -> void:
 	var y0 := -gy * float(rows - 1) / 2.0
 	var count := cols * rows
 	var period := rng.randf_range(0.5, 0.9)
-	# One SHARED smooth group (unison) unless ticking, in which case each wheel gets its OWN
-	# escapement with a staggered tick phase and no beat-lock, so a wave of clicks travels across
-	# the grid in sequence - a row of clocks ticking one after another, not all at once.
+	# One shared smooth group (unison) unless ticking, in which case each wheel gets its own escapement
+	# with a staggered tick phase and no beat-lock, so a wave of clicks travels across the grid.
 	var shared := -1
 	if not ticking:
 		shared = _new_group("smooth", rng, depth)
@@ -420,9 +360,8 @@ func _build_chorus(rng: RandomNumberGenerator) -> void:
 			idx += 1
 
 
-# Split composition: 2-3 LARGE wheels stacked on one side, and a loose CLUSTER of ~20 small
-# wheels on the other - all with variance (size, tooth width, flat/wire, speed, direction, and
-# the small cluster ticking asynchronously). The asymmetry reads as a real, busy mechanism.
+# Split composition: 2-3 large wheels stacked on one side and a loose cluster of ~20 small wheels on the
+# other, all with variance; the small cluster ticks asynchronously.
 func _build_split(rng: RandomNumberGenerator) -> void:
 	var big_left := rng.randf() < 0.5
 	var big_x := -0.55 if big_left else 0.55
@@ -457,8 +396,7 @@ func _build_split(rng: RandomNumberGenerator) -> void:
 			r, teeth, rng.randf_range(-PI, PI), 1.0, depth)
 
 
-# One enormous, dim, nearly-still wheel behind everything - only an arc of its rim ever
-# crosses the frame. Pure depth and weight.
+# One enormous, dim, nearly-still wheel behind everything; only an arc of its rim crosses the frame.
 func _build_backdrop(rng: RandomNumberGenerator) -> void:
 	var depth := rng.randf_range(0.05, 0.18)
 	var grp := _new_group("smooth", rng, depth)
@@ -471,9 +409,8 @@ func _build_backdrop(rng: RandomNumberGenerator) -> void:
 	_add_gear(grp, pos, r, n, rng.randf_range(-PI, PI), 1.0, depth)
 
 
-# Free gears: unmeshed wheels that just spin on their own - the teeth need not always connect.
-# Each is its own group with its own speed and DIRECTION, scattered (often overlapping the
-# meshed mechanism), some smooth and some ticking.
+# Free gears: unmeshed wheels that spin on their own, each its own group with its own speed and
+# direction, scattered (often overlapping the meshed mechanism), some smooth and some ticking.
 func _build_free(rng: RandomNumberGenerator, n: int) -> void:
 	for i in n:
 		var depth := rng.randf_range(0.35, 0.95)
@@ -487,9 +424,8 @@ func _build_free(rng: RandomNumberGenerator, n: int) -> void:
 		_add_gear(grp, pos, r, teeth, rng.randf_range(-PI, PI), 1.0, depth)
 
 
-# Background wheels: large, dim, slow gears placed to OVERLAP the mechanism from behind (low
-# depth -> drawn first + hazy), each COUNTER-rotating at its own rate, so gears turn behind
-# gears and the picture gains real depth.
+# Background wheels: large, dim, slow gears placed to overlap the mechanism from behind (low depth: drawn
+# first, hazy), each counter-rotating at its own rate.
 func _build_bg(rng: RandomNumberGenerator, n: int) -> void:
 	for i in n:
 		var depth := rng.randf_range(0.04, 0.22)
@@ -525,8 +461,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 		if grp.kind == "smooth":
 			grp.s += float(grp.dir) * float(grp.speed) * delta * drive
 		else:
-			# Escapement: advance one driver-tooth per tick (beat-locked, with a fallback
-			# cadence), then chase the goal on an underdamped spring for the clock recoil.
+			# Escapement: advance one driver-tooth per tick (beat-locked, with a fallback cadence), then
+			# chase the goal on an underdamped spring for the clock recoil.
 			grp.tick_t += delta
 			if (bool(grp.beat_sync) and beat_edge) or grp.tick_t >= float(grp.tick_period):
 				grp.tick_t = 0.0
@@ -569,14 +505,12 @@ func _draw_gear(g: Dictionary, u: float) -> void:
 		# Solid flat-color cog: the whole tooth ring filled, with a dark rim edge for relief.
 		draw_colored_polygon(world, Color.from_hsv(_hue, _sat, clampf(0.16 * db + 0.26 + 0.30 * _glow, 0.0, 1.0), 0.95 * af))
 		draw_polyline(world, Color.from_hsv(_hue, _sat, 0.05, 0.6 * af), maxf(1.0, rw * 0.7), true)
-		# ...and, if this shop drills them, lightening holes: one in each gap between the arms
-		# the casting would have had. A blank disc is the one thing a real cog never is.
+		# ...and, if this shop drills them, lightening holes: one in each gap between the arms.
 		if bool(g.holes):
 			var hole_c := Color.from_hsv(_hue, _sat * 0.7, 0.045 * db + 0.012, 0.85 * af)
 			var mid_r := (hub_r + rim_in) * 0.5
 			var gap := TAU / float((g.spokes as Array).size())
-			# Sized to the gap it sits in AND to the band it spans, so it can never eat the
-			# hub or the rim however few arms the wheel has.
+			# Sized to the gap and to the band it spans, so it never eats the hub or rim.
 			var hr := minf(mid_r * sin(gap * 0.5) * 0.72, (rim_in - hub_r) * 0.42)
 			if hr > 0.01:
 				for sa in g.spokes:
@@ -586,39 +520,31 @@ func _draw_gear(g: Dictionary, u: float) -> void:
 		# Skeletal wire wheel: a dark body, a rim band, the arms, and a bright tooth rim.
 		draw_circle(center, float(g.body_r) * sc, Color.from_hsv(_hue, _sat * 0.55, 0.05 * db + 0.015, 0.6 * af))
 		var spoke_c := Color.from_hsv(_hue, _sat * 0.85, clampf(0.22 * db + 0.20 + 0.30 * _glow, 0.0, 1.0), 0.85 * af)
-		# THE RIM AS A BAND, not as a line. It is what the arms stop against, and without it a
-		# wheel with short heavy arms reads as a hub with stubs rather than as a cast wheel.
+		# The rim as a band: what the arms stop against; without it short heavy arms read as stubs on a hub.
 		var band: float = (float(g.body_r) - rim_in) * sc
 		if band > 1.0:
 			draw_arc(center, (rim_in + float(g.body_r)) * 0.5 * sc, 0.0, TAU, 48, spoke_c, band, true)
-		# THE ARMS, as filled bars rather than as lines, which is the whole of "fewer, shorter,
-		# wider". A line has one width for every wheel; a bar has the width the casting was
-		# given, and it is flared where it meets the hub the way a fillet is.
+		# The arms, as filled bars (a line has one width for every wheel), flared where they meet the hub like a fillet.
 		var half: float = maxf(float(g.spoke_w) * sc, 1.0)
 		for sa in g.spokes:
 			var a := theta + float(sa)
 			var d := Vector2(cos(a), sin(a))
 			var q := Vector2(-d.y, d.x)
 			var r0 := hub_r * 0.85
-			# A fillet where the arm meets the hub, and a MODEST one: flaring by a fixed
-			# fraction of the arm's own width turns a broad cast arm into a petal, because the
-			# flare grows with the thing it is supposed to be a detail on.
+			# A modest fillet: flaring by a fixed fraction of the arm's width turns a broad arm into a petal.
 			var flare := 1.0 + 0.9 * minf(1.0, 3.0 / maxf(1.0, half))
 			draw_colored_polygon(PackedVector2Array([
 				center + d * r0 * sc - q * half * flare,
 				center + d * r0 * sc + q * half * flare,
 				center + d * rim_in * sc + q * half,
 				center + d * rim_in * sc - q * half]), spoke_c)
-			# A BOLT IS A BOLT, whatever the arm is. Sized to the wheel, not to the arm, and
-			# only where there is arm to put it on - scaled to the arm it became a round pad
-			# the width of the arm, and every wide wheel came out looking like a propeller.
+			# A bolt is sized to the wheel, not the arm, and only where there is arm to put it on.
 			var boss := clampf(0.022 * sc, 1.2, half * 0.7)
 			draw_circle(center + d * (rim_in * sc - boss * 1.6), boss, spoke_c)
 		draw_polyline(world, Color.from_hsv(_hue, _sat, clampf(0.26 * db + 0.28 + 0.35 * _glow, 0.0, 1.0), 0.92 * af), rw, true)
 
-	# WEAR, in whatever this machine corroded into and in that finish's own shape - see WEARS.
-	# Pinned to the wheel in polar (a, d) so it turns with the metal, and every mark carries the
-	# color it rolled for itself rather than one the whole scene shares.
+	# Wear, in whatever this machine corroded into (see WEARS), pinned to the wheel in polar (a, d) so it
+	# turns with the metal; every mark carries the color it rolled.
 	var mark := String(g.wear_mark)
 	for sp in g.rust:
 		var ra := theta + float(sp.a)
@@ -628,7 +554,7 @@ func _draw_gear(g: Dictionary, u: float) -> void:
 			float(sp.al) * af)
 		match mark:
 			"streak":
-				# A run of corrosion following the metal outward, not a dot.
+				# A run of corrosion following the metal outward.
 				var steps := 5
 				var step := dir * float(sp.len) * sc / float(steps - 1)
 				for k in steps:

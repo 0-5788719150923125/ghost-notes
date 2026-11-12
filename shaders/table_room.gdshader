@@ -1,11 +1,9 @@
 shader_type spatial;
 render_mode unshaded;
 
-// THE ROOM PAST THE TABLE, out of focus as a lens focused on the table sees it: every point is a
-// disc of the picture - a real lens's bokeh, so a bright reflection opens into a soft round spot -
-// read at the picture's full resolution. Shrinking the picture to blur it (to an eighth and back)
-// left the dozen rows of it the camera sees past the table magnified into blocks (feedback 0006:
-// "very pixelated, and not because of blurring").
+// The room past the table, out of focus as a lens focused on the table sees it: every point is a disc of the picture
+// (a real lens's bokeh, so a bright reflection opens into a soft round spot), read at the picture's full resolution;
+// shrinking the picture to blur it would magnify the few rows the camera sees past the table into blocks.
 
 uniform sampler2D picture : source_color, filter_linear_mipmap, repeat_disable;
 // the room's color where there is no picture yet

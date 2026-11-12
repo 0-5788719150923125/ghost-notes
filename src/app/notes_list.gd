@@ -1,35 +1,27 @@
 extends CanvasLayer
 class_name NotesList
 
-## NotesList - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on
-## its notes - the default folder and every folder or file the user added ([NoteStore]), newest first.
+## NotesList - where Ghost Notes opens (next/notes.md, "No home screen"): the user's notes - the default
+## folder and every folder or file added ([NoteStore]), newest first.
 ##
-## THEY ARE NOTES ON THE SCREEN, NOT A LIST IN A PANEL (2026-10-31, the user: "the home screen certainly
-## doesn't give us the feeling of a notes app. It gives us a list of unlabeled projects"): a [NoteGrid]
-## fills the window - the name, a search, and each note a square [NoteTile] bearing its title, its first
-## words and its components, in a color its components make. Beside the search, two [Icons] and no words
-## ("just replace them plain icons, no text"): "+" is New, the folder "Existing note…" for a markdown file
-## brought into the list. Each tile has an × that deletes its note, asked first ([DeleteDialog]). The
-## phone's [PhoneShell] shows the same grid.
+## A [NoteGrid] fills the window: the name, a search, and each note a square [NoteTile] bearing its title,
+## first words and components, in a color its components make. Beside the search, two [Icons]: "+" is New,
+## the folder "Existing note…" for a markdown file brought into the list. Each tile has an × that deletes
+## its note, asked first ([DeleteDialog]). The phone's [PhoneShell] shows the same grid.
 ##
-## A NOTE OF WORDS ALONE IS WRITTEN IN ITS CARD (2026-10-31): New, or a click on a note with nothing attached,
-## opens it in a [NoteEditor] over the grid - title and words, in place - and its "open" icon takes it to its
-## own panel, where "+" attaches what it becomes. A note with something attached opens on its panel at once.
+## A note of words alone is written in its card: New, or a click on a note with nothing attached, opens it
+## in a [NoteEditor] over the grid (title and words, in place), and its "open" icon takes it to its own
+## panel, where "+" attaches what it becomes. A note with something attached opens on its panel at once.
 ##
-## NEW MAKES A NOTE, AND THERE IS ONE KIND (2026-10-12, the user: "'New' has no options at all.
-## Every note would open in exactly the same way"): its words and nothing else. What it becomes is
-## what "+" attaches to it inside ([Components]) - a song, a Medium, a Voice, a show of cards - so
-## the list never asks what a note is going to be. It offered a menu of the old modes until then,
-## which was a mode switch with the word "template" on it.
+## New makes one kind of note: its words and nothing else. What it becomes is what "+" attaches inside
+## ([Components]) - a song, a Medium, a Voice, a show of cards - so the list never asks what a note is
+## going to be.
 ##
-## IT MAKES NOTES AND NOTHING ELSE (2026-10-06, the user: "the launch screen should be clean, and a
-## URL input panel causes immediate confusion"): a song or a video is a component of a note - the
-## Song card's Choose…, the Clip card's file or link - never a button here. Its one field is the
-## search, which finds notes and nothing else.
+## It makes notes and nothing else: a song or a video is a component of a note (the Song card's Choose…,
+## the Clip card's file or link), never a button here. Its one field is the search, which finds notes only.
 ##
-## THE ⤓ EXPORT BUTTON HAS NO BUSINESS HERE: nothing is playing, so there is nothing to render.
-## Suppressed on the way in and released on the way out - KEYED, because main opens the note FIRST
-## and frees this list SECOND, so the note's own claims are already made when this lets go.
+## The ⤓ export button is suppressed here (nothing is playing) on the way in and released on the way out,
+## keyed: main opens the note first and frees this list second, so the note's own claims are already made.
 
 ## Set by main: open_note.call(path).
 var open_note: Callable
@@ -97,7 +89,7 @@ func new_note() -> void:
 		_editor.open(path, true)
 
 
-## A NOTE CLICKED: one of words alone opens in its card; one with something attached, on its own panel.
+## A note clicked: one of words alone opens in its card; one with something attached, on its own panel.
 func _pick(path: String) -> void:
 	if Components.attached_of(NoteStore.blocks_of(path)).size() > 1:
 		_open(path)
@@ -105,7 +97,7 @@ func _pick(path: String) -> void:
 		_editor.open(path)
 
 
-## THE CARD'S "OPEN": the note in it, what waits written, on its own panel.
+## The card's "open": the note in it, what waits written, on its own panel.
 func open_whole() -> void:
 	var path := _editor.path
 	if path.is_empty():
@@ -141,7 +133,7 @@ func _open(path: String) -> void:
 	queue_free()
 
 
-## EXISTING NOTE…: a markdown file from anywhere, kept in the list where it is ([method
+## Existing note…: a markdown file from anywhere, kept in the list where it is ([method
 ## NoteStore.add]) and opened.
 func _open_dialog() -> void:
 	if _dialog != null and is_instance_valid(_dialog):
@@ -149,8 +141,7 @@ func _open_dialog() -> void:
 	_dialog = FileDialog.new()
 	_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	# In-window, never native: the portal dialog shows nothing at all on a Linux box without
-	# xdg-desktop-portal ("I pressed it and nothing happened").
+	#In-window, never native: the portal dialog shows nothing on a Linux box without xdg-desktop-portal.
 	_dialog.use_native_dialog = false
 	_dialog.title = "Bring a markdown note into the list"
 	_dialog.filters = PackedStringArray(["*.md, *.markdown ; Notes"])

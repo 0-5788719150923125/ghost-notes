@@ -1,41 +1,41 @@
 extends RefCounted
 class_name TableWork
 
-## TableWork - WORK AT THE TABLE, played: a part of [TableMedium] (next/table_work.md). The set dresser's
+## TableWork - work at the table, played: a part of [TableMedium] (next/table_work.md). The set dresser's
 ## working parts ([Motions]: joints, points, states, what runs all the time, what smokes) and the
 ## puppeteer's acts (`acts.json` in the episode), posed at every moment of the show.
 ##
-## A PURE FUNCTION OF SHOW TIME, as everything on the table is ([method tick]): a part's turn, a vessel's
-## fill, a tool's place are worked out from the time and the schedule, never stepped - so a render, a scrub
-## and a tool's picture of the same moment agree. What persists persists by the schedule: an act's end is
-## where the next act on the same part begins ([method schedule] keeps each one's `from`).
+## A pure function of show time, as everything on the table is ([method tick]): a part's turn, a vessel's
+## fill, a tool's place are worked out from the time and the schedule, never stepped, so a render, a
+## scrub and a tool's picture of the same moment agree. What persists persists by the schedule: an act's
+## end is where the next act on the same part begins ([method schedule] keeps each one's `from`).
 ##
-## WHEN EACH ACT RUNS is the reading's ([method schedule]): an act belongs to a BEAT - the intro, a card's
-## work (the `work K` mark, [TableActions]), or the close - and runs under that beat's words, in order: each
-## from where the last ended, or from the word the reader marked it at (`<!-- act: name -->`,
+## When each act runs is the reading's ([method schedule]): an act belongs to a beat - the intro, a
+## card's work (the `work K` mark, [TableActions]), or the close - and runs under that beat's words, in
+## order: each from where the last ended, or from the word the reader marked it at (`<!-- act: name -->`,
 ## [CardReading]); an act that is "under" fills the time its beat leaves it; acts that would run past the
-## beat's last word are quickened, never cut, except that separate collection trips keep their minimum duration.
-## A word cue waits for the preceding act to finish. A begun act never moves when the plan is made again as a live
-## reading's words arrive ([member _begun]).
+## beat's last word are quickened, never cut, except that separate collection trips keep their minimum
+## duration. A word cue waits for the preceding act to finish. A begun act never moves when the plan is
+## made again as a live reading's words arrive ([member _begun]).
 ##
-## NOTHING AN AGENT WROTE RUNS AS CODE: the laws are [Motions]'s closed forms and a formula is [Formula]'s.
-## A LIT THING IS NEVER MOVED WHOLE: its flames are the light's, lit where it stood (a track that would is
-## refused, and said so).
+## Nothing an agent wrote runs as code: the laws are [Motions]'s closed forms and a formula is
+## [Formula]'s. A lit thing is never moved whole: its flames are the light's, lit where it stood (a track
+## that would is refused, and said so).
 
 ## The [TableMedium] this is a part of.
 var medium: TableMedium
 ## What is built on this table ([TableAssembly]; null where the table has no `assembly`), and what the table wrote of it.
 var assembly: TableAssembly
 var assembly_spec := {}
-## WHAT IS PAINTED HERE ([TablePaint], next/painted_surface.md): every part with a `skin`, the designs on them (the episode's
-## `skin.json`, as parsed - [member skin_doc]) and the acts that paint them.
+## What is painted here ([TablePaint], next/painted_surface.md): every part with a `skin`, the designs on
+## them (the episode's `skin.json`, as parsed - [member skin_doc]) and the acts that paint them.
 var paint: TablePaint
 var skin_doc := {}
-## THE SHOW'S TUNING ([TableTune]), made safe: what it tells of the numbers a person judged; a row's default where it tells none.
+## The show's tuning ([TableTune]), made safe: what it tells of the numbers a person judged; a row's default where it tells none.
 var tune := {}
-## ...and THE PICTURE THE DESIGNS WERE MADE FROM (`face_ref.png`; null none) and the surface it is of (`face.json`'s `on`, "thing/part"):
-## where each operation's paint is still wanted ([PaintLayers]) - never laid itself, every mark a tool's (feedback 0049; next/painted_surface.md,
-## "The painting is the design").
+## ...and the picture the designs were made from (`face_ref.png`; null none) and the surface it is of
+## (`face.json`'s `on`, "thing/part"): where each operation's paint is still wanted ([PaintLayers]) -
+## never laid itself, every mark a tool's (next/painted_surface.md, "The painting is the design").
 var skin_ref: Image = null
 var skin_ref_on := ""
 ## The episode's folder, where the painter at the table kept what it laid (`paint/elements.json` - TablePaint._from_host); "" none.
@@ -45,13 +45,14 @@ var game: TableGame
 var game_spec := {}
 var game_dir := ""
 var game_seed := 0
-## WHAT IS WRITTEN THAT TEX LAID OUT ([TableInk]): the episode's `ink.json` as parsed (`{}` before the ink step), and the seed the
-## hand that writes it is drawn from.
+## What is written that TeX laid out ([TableInk]): the episode's `ink.json` as parsed (`{}` before the
+## ink step), and the seed the hand that writes it is drawn from.
 var ink_doc := {}
 var ink_seed := 0
 
-## A FRAME POSES ONLY WHAT CAN HAVE CHANGED ([method _settled]): every part after a jump in show time longer than QUIET_JUMP
-## (seconds - a scrub, a seek), and a part from QUIET_EDGE before a move of it to twice that after it, so its last value is drawn.
+## A frame poses only what can have changed ([method _settled]): every part after a jump in show time
+## longer than QUIET_JUMP (seconds - a scrub, a seek), and a part from QUIET_EDGE before a move of it to
+## twice that after it, so its last value is drawn.
 const QUIET_JUMP := 0.25
 const QUIET_EDGE := 0.05
 ## How far over what is under it a thing a move leaves may be before `act` says it is left in the air (meters, [method _aloft_said]).
@@ -63,11 +64,11 @@ const BLEND_IN := 0.8
 ## all from nearer than BLEND_NEAR.x, wholly from further than BLEND_NEAR.y (meters).
 const BLEND_LIFT := 0.1
 const BLEND_NEAR := Vector2(0.01, 0.05)
-## A PEN SEEN, as the desk's (Proof's, at the table since 2026-11-11 - next/proof.md; [method _pen_nib], [method _point_nib]): how
-## high its nib lifts between strokes and once a line is done (meters); how it leans from its nib - up, to the right and away from
-## the chair, the frame's top right - and how far that sways (degrees); how near over the paper it points, how wide a thing it
-## sweeps under before it settles beside its end (TeX points), how far off the thing it stays, and how long the sweep and the
-## settling take (seconds).
+## A pen seen, as the desk's (at the table since next/proof.md; [method _pen_nib], [method _point_nib]):
+## how high its nib lifts between strokes and once a line is done (meters); how it leans from its nib -
+## up, to the right and away from the chair, the frame's top right - and how far that sways (degrees);
+## how near over the paper it points, how wide a thing it sweeps under before it settles beside its end
+## (TeX points), how far off the thing it stays, and how long the sweep and the settling take (seconds).
 const PEN_LIFT := 0.004
 const PEN_REST_LIFT := 0.022
 const PEN_UP := Vector3(0.42, 0.64, -0.40)
@@ -77,50 +78,50 @@ const POINT_WIDE := 40.0
 const POINT_GAP := 6.0
 const POINT_SWEEP := 0.9
 const POINT_SETTLE := 0.4
-## ...and lifted a hand's whole BLEND_LIFT however clear its way, turned more than BLEND_TURN.y on the way there - from nothing at
-## BLEND_TURN.x (radians): what turns sweeps where its way does not go.
+## ...and lifted a hand's whole BLEND_LIFT however clear its way, turned more than BLEND_TURN.y on the
+## way there - from nothing at BLEND_TURN.x (radians): what turns sweeps where its way does not go.
 const BLEND_TURN := Vector2(0.35, 1.0)
 ## How far a point against a vessel's wall may be from its inside, toward its axis, and still be in it (meters, [method _against_inside]).
 const INSIDE_NEAR := 0.008
-## HOW HEAVY WHAT IS SET DOWN IS ([method set_down]): the share of a thing's box that is its stuff - a whole thing
-## mostly hollow (a jar, a pot), a part of one mostly solid (a stopper, a pestle).
+## How heavy what is set down is ([method set_down]): the share of a thing's box that is its stuff - a
+## whole thing mostly hollow (a jar, a pot), a part of one mostly solid (a stopper, a pestle).
 const HOLLOW := 0.25
 const SOLID := 0.6
 ## A liquid boils, and is heard to, past this much `boil` ([method boiling]).
 const BOIL_HEARD := 0.02
 ## How far above a pressed point its ray starts (meters): above the point, below a vessel's rim.
 const PRESS_FROM := 0.06
-## THE CHECK OF AN ACT ([method check]): where its rehearsal begins (seconds; every picture of the work rehearses from
-## there too, [TablePreview], so what one baked the next takes up - [method TablePhysics.carry]), the moments it is
-## looked at, the most points of a moving thing tried, and how far through the table's top a point may go before it is
-## through it (meters).
+## The check of an act ([method check]): where its rehearsal begins (seconds; every picture of the work
+## rehearses from there too, [TablePreview], so what one baked the next takes up - [method
+## TablePhysics.carry]), the moments it is looked at, the most points of a moving thing tried, and how
+## far through the table's top a point may go before it is through it (meters).
 const REHEARSAL := 10.0
 const CHECK_STEPS := 24
 const CHECK_POINTS := 260
 const THROUGH_TOP := 0.002
-## A THING'S SHADE ON THE CLOTH FOLLOWS IT ([method _tick_shades]): gone while it is lifted more than this or
-## tipped more than this (meters, radians) - set down elsewhere, it lies where it is set; and a moving part
-## carries its thing's shade only when it is at least this share of the thing seen from above.
+## A thing's shade on the cloth follows it ([method _tick_shades]): gone while it is lifted more than this
+## or tipped more than this (meters, radians) - set down elsewhere, it lies where it is set; and a moving
+## part carries its thing's shade only when it is at least this share of the thing seen from above.
 const SHADE_LIFT := 0.003
 const SHADE_TIP := 0.05
 const SHADE_SHARE := 0.5
-## THE CREATURES SEEN AS THEY ARE HEARD ([method Soundscape.seen_calls]): how far into a video their huffs are
-## looked for (seconds), and where a huff's puff of smoke rises - past the table's far edge, this far behind it
-## (meters) at its nearest and how much further when it is far.
+## The creatures seen as they are heard ([method Soundscape.seen_calls]): how far into a video their
+## huffs are looked for (seconds), and where a huff's puff of smoke rises - past the table's far edge,
+## this far behind it (meters) at its nearest and how much further when it is far.
 const HUFFS_UNTIL := 3600.0
 const HUFF_BEHIND := Vector2(0.06, 0.35)
-## A PLACE FOUND THROUGH ANOTHER THING'S MOVES ([method _thing_world]) - a pestle ground round a mortar that is
-## itself carried - is followed this many things deep; past it, a thing is where it stood.
+## A place found through another thing's moves ([method _thing_world]) - a pestle ground round a mortar
+## that is itself carried - is followed this many things deep; past it, a thing is where it stood.
 const PLACE_DEPTH := 3
-## A moving thing within this much of where it was built (meters, radians) is HOME, as it was built ([method check]):
-## what it stands in there is the set dresser's, never the act's.
+## A moving thing within this much of where it was built (meters, radians) is home, as it was built
+## ([method check]): what it stands in there is the set dresser's, never the act's.
 const HOME_NEAR := 0.01
 const HOME_TURN := 0.09
 ## ...and the room it stood in as built, grown this much (meters), is its own slot: a vial set back down into its
 ## rack goes home through no wall of the rack.
 const SLOT_GROW := 0.002
-## A PINCH FALLS FROM WHAT HOLDS IT: a sprinkle naming a thing the same act moves falls within this much of it (meters), or
-## [method check] says how far off it falls ([method _sprinkles_said]).
+## A pinch falls from what holds it: a sprinkle naming a thing the same act moves falls within this much
+## of it (meters), or [method check] says how far off it falls ([method _sprinkles_said]).
 const PINCH_NEAR := 0.03
 ## A thing set down rests this far above what it is set on (meters): on it, never in it.
 const SET_GAP := 0.0005
@@ -134,19 +135,18 @@ const GUESS_FROM := 10.0
 ## A carry or path begun within this long of the last one's end on the same thing goes on from it, one move ([method
 ## _chains]) (seconds).
 const CHAIN_GAP := 0.05
-## WHAT A HAND LAYS DOWN RESTS (2026-11-01, feedback 0008, the phoenix feather "came to the table, touched the table, then immediately bounced
-## upward again and into the cauldron": `fetch-feather` laid it on the bench and `feather-in`, uncued, began as that ended): before the same
-## thing's next move, LAID_REST seconds - a hand lets go and takes it up again, never one curve through the table. Laid: set `down`, or
-## brought by its last move to where its lowest point is within LAID_NEAR of the table's top ([method _laid_by]). A thing lowered in the air
-## (a jar coming down over a pot, to pour) goes straight on.
+## What a hand lays down rests: before the same thing's next move, LAID_REST seconds - a hand lets go and
+## takes it up again, never one curve through the table. Laid: set `down`, or brought by its last move to
+## where its lowest point is within LAID_NEAR of the table's top ([method _laid_by]). A thing lowered in
+## the air (a jar coming down over a pot, to pour) goes straight on.
 const LAID_REST := 1.2
 const LAID_NEAR := 0.03
-## What posing an entry finds and keeps on it - a carry's room, how far it is set down, its way over what is in it and its
-## rise, a path's, a pour's or a dip's plan, a tool's way in - kept for the next plan where nothing it rests on changed, with
-## where it began and ended ([method _timelines]).
+## What posing an entry finds and keeps on it - a carry's room, how far it is set down, its way over what
+## is in it and its rise, a path's, a pour's or a dip's plan, a tool's way in - kept for the next plan
+## where nothing it rests on changed, with where it began and ended ([method _timelines]).
 const FOUND := ["_down", "_clear", "_clear_path", "_room", "_rise", "_pour", "_dip", "_entry"]
-## HELD UP between moves ([method _held_up]): how long a hand's unsteadiness takes to come on after a move and to die
-## away before the next (seconds), and how near anything a thing is touching it (meters).
+## Held up between moves ([method _held_up]): how long a hand's unsteadiness takes to come on after a
+## move and to die away before the next (seconds), and how near anything a thing is touching it (meters).
 const HOLD_IN := 0.6
 const TOUCHING := 0.004
 ## How far into what it is pressed onto a tool may go and still be meeting it, not passing through it ([method check]):
@@ -154,10 +154,10 @@ const TOUCHING := 0.004
 const PRESS_INTO := 0.006
 ## The scale the work's meshes are cast on in ([method _ray_mesh]): centimeters.
 const RAY_SCALE := 100.0
-## A CARRY CLEARS WHAT STANDS IN ITS WAY ([method _clearance]): its lowest point this far over the highest thing under it
-## (meters), looked at in this many places through this stretch of the move - where the hand's lift is at least this share of
-## its highest ([method Hands.lift_at]) - from this far up (meters); a carry shorter than CLEAR_FROM (meters) is a nudge, and
-## the most a hand lifts (meters).
+## A carry clears what stands in its way ([method _clearance]): its lowest point this far over the highest
+## thing under it (meters), looked at in this many places through this stretch of the move - where the
+## hand's lift is at least this share of its highest ([method Hands.lift_at]) - from this far up
+## (meters); a carry shorter than CLEAR_FROM (meters) is a nudge, and the most a hand lifts (meters).
 const CLEAR_GAP := 0.02
 const CLEAR_SAMPLES := 12
 const CLEAR_SPAN := Vector2(0.1, 0.8)
@@ -169,17 +169,20 @@ const CLEAR_MOST := 0.35
 const CLEAR_GRID := 6
 ## What stands this close round a thing (meters) it rises clear of before it goes, or comes down among last ([method _rise_among]).
 const AMONG := 0.015
-## ROOM FOR IT ([method _room]): a thing a move leaves where another already stands is set the nearest place beside it that is
-## clear - looked for in rings ROOM_STEP apart out to ROOM_MOST (meters), clear when none of its surface (ROOM_POINTS of its points,
-## each solid) is further into another solid than ROOM_DEEP (meters), and set ROOM_SPARE further out than that.
+## Room for it ([method _room]): a thing a move leaves where another already stands is set the nearest
+## place beside it that is clear - looked for in rings ROOM_STEP apart out to ROOM_MOST (meters), clear
+## when none of its surface (ROOM_POINTS of its points, each solid) is further into another solid than
+## ROOM_DEEP (meters), and set ROOM_SPARE further out than that.
 const ROOM_STEP := 0.01
 const ROOM_MOST := 0.2
 const ROOM_POINTS := 60
 const ROOM_DEEP := 0.002
 ## ...and set this much further out than the first place clear (meters).
 const ROOM_SPARE := 0.005
-## A DRINK ([method _drink_at]): the share of its stretch each way, how far from the lens it is held along the lens's axis (meters), how far clear of the frame's foot all of it then is (meters), how far it is
-## tipped toward the lens (degrees: under a full cup's brink), how high it rises at the least on its way (meters), and the least its stretch takes (seconds).
+## A drink ([method _drink_at]): the share of its stretch each way, how far from the lens it is held along
+## the lens's axis (meters), how far clear of the frame's foot all of it then is (meters), how far it is
+## tipped toward the lens (degrees: under a full cup's brink), how high it rises at the least on its way
+## (meters), and the least its stretch takes (seconds).
 const DRINK_UP := 0.36
 const DRINK_FAR := 0.18
 const DRINK_CLEAR := 0.02
@@ -188,30 +191,31 @@ const DRINK_LIFT := 0.07
 const DRINK_LEAST := 6.0
 ## ...how far over what is built it passes, whatever it is (meters).
 const DRINK_OVER := 0.04
-## WHAT RISES FROM WHAT IS AT THE LENS IS NOT SEEN (a cup at the mouth: its steam would cross the whole picture): from how near it fades, and to how near it is gone (meters).
+## What rises from what is at the lens is not seen (a cup at the mouth: its steam would cross the whole picture): from how near it fades, and to how near it is gone (meters).
 const PLUME_LENS := Vector2(0.55, 0.3)
-## ...AND COOLER STEAM RISES SLOWER, LIVES LESS AND IS SMALLER, at the least by these shares of its own ([method _tick_plume]).
+## ...and cooler steam rises slower, lives less and is smaller, at the least by these shares of its own ([method _tick_plume]).
 const STEAM_COOL_RISE := 0.55
 const STEAM_COOL_LIFE := 0.6
 const STEAM_COOL_SIZE := 0.7
-## A POUR ([method _pour_at]): the share of its stretch that brings the vessel over the mouth, and the share at its end that
-## turns it back level; the shares of its inside its brink is found at ([method _pour_plan]); the least it is
-## lifted on its way there (meters); how far a vessel's pivot must be from its opening to be a handle turned away (meters);
-## and how far its body keeps clear of the mouth's rim (meters).
+## A pour ([method _pour_at]): the share of its stretch that brings the vessel over the mouth, and the
+## share at its end that turns it back level; the shares of its inside its brink is found at ([method
+## _pour_plan]); the least it is lifted on its way there (meters); how far a vessel's pivot must be from
+## its opening to be a handle turned away (meters); and how far its body keeps clear of the mouth's rim
+## (meters).
 const POUR_BRING := 0.3
 ## ...tipped this share of its `tip` as it comes in, so its body swings away from the mouth before it is over it
 const POUR_PRE := 0.3
-## ...of its bringing, the share spent carrying it level to over the mouth (the rest lowers it onto the mouth, tipping); a lip held
-## over a mouth this many of its radii up, between these (meters), unless `over` says; and the head over its lip a stream is aimed
-## for (meters): a careful pour's.
+## ...of its bringing, the share spent carrying it level to over the mouth (the rest lowers it onto the
+## mouth, tipping); a lip held over a mouth this many of its radii up, between these (meters), unless
+## `over` says; and the head over its lip a stream is aimed for (meters): a careful pour's.
 const POUR_OVER := 0.65
 const POUR_OVER_R := 1.5
 const POUR_OVER_LEAST := 0.008
 const POUR_OVER_MOST := 0.02
 const POUR_HEAD := 0.004
-## A DIP ([method _dip_at]): where its stretch ends bringing it over the mouth, lowering it in, holding it under, drawing it up
-## (the rest levels it); how high over the rim it is brought and drawn up to, and how near the floor it is lowered (meters); and
-## the tips tried for going in, up to the most (degrees).
+## A dip ([method _dip_at]): where its stretch ends bringing it over the mouth, lowering it in, holding it
+## under, drawing it up (the rest levels it); how high over the rim it is brought and drawn up to, and
+## how near the floor it is lowered (meters); and the tips tried for going in, up to the most (degrees).
 const DIP_PHASES := Vector4(0.25, 0.45, 0.55, 0.88)
 ## ...and of a pour's or a dip's way there, the share it is lifted before it turns.
 const BRING_TURN_FROM := 0.2
@@ -226,10 +230,9 @@ const DIP_POINTS := 160
 const DIP_WALL := 0.008
 const POUR_BACK := 0.25
 const POUR_SHARES := 20
-## ...of its tipping, the least and the most share that follows its liquid's brink (its share is the share of the turn the brink
-## makes): the rest turns it on to its `tip`, so what does not flow - grains, powder, loose pieces - slides out over the lip too. (2026-11-01, 841899: a mortar of ground frankincense `pour`ed
-## into the brew stopped at 62 degrees, where an empty liquid's brink ends, and poured nothing - the puppeteer then tipped it
-## by hand, and missed.)
+## ...of its tipping, the least and the most share that follows its liquid's brink (its share is the
+## share of the turn the brink makes): the rest turns it on to its `tip`, so what does not flow - grains,
+## powder, loose pieces - slides out over the lip too.
 const POUR_WET := Vector2(0.3, 0.9)
 ## ...and how much higher its lip is held, at most, rather than tipped early (meters).
 const POUR_HIGHER := 0.015
@@ -239,10 +242,9 @@ const POUR_GAP := 0.005
 
 var things: Array = []        # [{name, node, rest, works: [i], lit, box (the thing's own), mesh (world, lazily)}]
 var works: Array = []         # [{thing, name, node, w (Props._worker's work), kind, mats, color, glow}]
-## A PART WITH COPIES IS ONE PART to the puppeteer (a stack of slips, a bed of coals): by its name alone every
-## copy is worked - a state on each, a move as one body - and by "name K" its K-th copy alone, in the order they
-## were built ([method _part_of]). Each copy had been a part of the same name, and a name found the first: a
-## stack's bottom slip lifted alone, into the four above it, and nothing a puppeteer wrote could say otherwise.
+## A part with copies is one part to the puppeteer (a stack of slips, a bed of coals): by its name alone
+## every copy is worked - a state on each, a move as one body - and by "name K" its K-th copy alone, in
+## the order they were built ([method _part_of]).
 var groups: Array = []        # [{thing, name, members: [work index], middle (the copies', in the first's space)}]
 var _group_of := {}           # work index -> its group, for a copy
 var acts: Array = []          # the episode's acts, made safe (Motions.sanitize_acts)
@@ -256,8 +258,8 @@ var _writing := {}            # work -> what is written on it ([method _order_wr
 var _drunk := {}              # a liquid's work -> how full the drinks so far leave it ([method _drunk_from])
 var _aloft_of := {}           # a channel and where a move left it -> whether it touches nothing there ([method _held_up])
 var _parent_work := {}        # work index -> the work it is a part of, or -1 ([method _within])
-## WHAT POSING FOUND IN THE LAST PLAN ([method _timelines]): an entry's name ([method _found_key]) -> [its run's t0, t1, what it
-## found ([constant FOUND])] - and the runs it was found under.
+## What posing found in the last plan ([method _timelines]): an entry's name ([method _found_key]) ->
+## [its run's t0, t1, what it found ([constant FOUND])] - and the runs it was found under.
 var _sheet_bends := {}        # a sheet that bends -> its meshes' [SheetBend]s, made as it is first drawn
 var _laid_of: Array = []      # act -> the channels it leaves laid down ([method _laid_by]), found once for the acts
 var _found_before := {}
@@ -265,20 +267,21 @@ var _still_of := {}           # "t3"/"w12" -> whether it is where it was built a
 var _runs_before: Array = []
 var _solids_ref: Array = []   # the physics' solids, their fields ([method _foot]) - the twin's the bake's own, this work's copies of them
 var _liquids_ref: Array = []  # ...and its vessels, each `{solid, vessel, full_v}` ([method _pour_plan])
-## WHAT THE PHYSICS MOVES, not the acts ([TablePhysics]): each hinge that hangs free and swings by its weight and what
-## lies on it - a balance's beam - and each part hung from one, kept level (`{from: the hinge, at: where it hangs, axis}`,
-## its node's own space)...
+## What the physics moves, not the acts ([TablePhysics]): each hinge that hangs free and swings by its
+## weight and what lies on it - a balance's beam - and each part hung from one, kept level (`{from: the
+## hinge, at: where it hangs, axis}`, its node's own space)...
 var swings := {}
 var hung := {}
-## ...and, on the bake's own twin, where it has them as it bakes: each swinging hinge's angle (degrees), each part it
-## moves as a rigid body ([RigidParts]) and each whole thing - the work itself asks the bake's frames ([method
-## TablePhysics.swing_of], [method TablePhysics.thing_pose_of]).
+## ...and, on the bake's own twin, where it has them as it bakes: each swinging hinge's angle (degrees),
+## each part it moves as a rigid body ([RigidParts]) and each whole thing - the work itself asks the
+## bake's frames ([method TablePhysics.swing_of], [method TablePhysics.thing_pose_of]).
 var swung := {}
 var posed := {}
 var posed_things := {}
 var _first_drawn := {}        # each part's node as first drawn ([method drawn_report])
-## WHILE AN ACT IS CHECKED ([method check]), a part the work picks up is where the acts put it, never where the physics
-## stopped it: what the puppeteer is told passes through something is what its acts would put through it.
+## While an act is checked ([method check]), a part the work picks up is where the acts put it, never
+## where the physics stopped it: what the puppeteer is told passes through something is what its acts
+## would put through it.
 var _planned := false
 var _steady := false          # while that is found: nothing drifts
 var _air = null               # the acts' cue bursts (Effects.Air), or null
@@ -310,8 +313,8 @@ var _spot := Vector3.INF      # the work's spot, once found ([method work_spot])
 var _depth := 0               # how deep a place is being found through another thing's moves ([method _thing_world])
 ## The table's materials, made safe ([method Props.sanitize]): what each part is made of, as the physics reads it.
 var materials := {}
-## WHAT IS IN THINGS ([TablePhysics], next/table_physics.md): the liquids, the grains and the loose things, and the
-## solids they meet - baked over show time from the schedule this keeps.
+## What is in things ([TablePhysics], next/table_physics.md): the liquids, the grains and the loose things,
+## and the solids they meet - baked over show time from the schedule this keeps.
 var physics: TablePhysics = null
 ## A probe's: whether each frame's cost is kept by section ([method _spent]), and what it came to.
 var profiling := false
@@ -320,7 +323,7 @@ var profile := {}
 
 # --- building -----------------------------------------------------------------------------------
 
-## A NEW TABLE: everything the last one worked is let go.
+## A new table: everything the last one worked is let go.
 func clear() -> void:
 	if _root != null and is_instance_valid(_root):
 		_root.queue_free()
@@ -370,9 +373,10 @@ func clear() -> void:
 	_depth = 0
 
 
-## Thing [param t], built as [param b] ([method Props.build]) and stood as [param node]: its working parts
-## kept, and its liquids, so they can be worked ([method TableThings.put] hands every thing here) - and its
-## shade on the cloth ([param shades]: the contact shade and the slab that casts its foot's), which goes with it.
+## Thing [param t], built as [param b] ([method Props.build]) and stood as [param node]: its working
+## parts kept, and its liquids, so they can be worked ([method TableThings.put] hands every thing here)
+## - and its shade on the cloth ([param shades]: the contact shade and the slab that casts its foot's),
+## which goes with it.
 func take(t: Dictionary, b: Dictionary, node: Node3D, shades: Array = []) -> void:
 	var ti := things.size()
 	var first := works.size()
@@ -427,16 +431,17 @@ func take(t: Dictionary, b: Dictionary, node: Node3D, shades: Array = []) -> voi
 	physics.take(ti, t, b, node, first)
 
 
-## THE ACTS of this episode ([param raw], `acts.json` as parsed, or null) for a reading of [param beats]
-## beats (a card's each, or a show's with no cards), made safe and found on the table - and everything the table works by itself: what runs, what
-## smokes, the liquids' surfaces, and a puff of smoke past the far edge wherever the place's creatures
-## ([param sound]'s, [Soundscape]) are heard to huff. Called once every thing stands.
+## The acts of this episode ([param raw], `acts.json` as parsed, or null) for a reading of [param beats]
+## beats (a card's each, or a show's with no cards), made safe and found on the table - and everything
+## the table works by itself: what runs, what smokes, the liquids' surfaces, and a puff of smoke past the
+## far edge wherever the place's creatures ([param sound]'s, [Soundscape]) are heard to huff. Called once
+## every thing stands.
 func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	_root = Node3D.new()
 	_root.name = "Work"
 	medium._root3.add_child(_root)
 	_sound = sound
-	# WHAT IS BUILT HERE, STOOD OVER THE THINGS AS THEY STAND ([TableAssembly]): before the acts are taken, which it answers for
+	# What is built here, stood over the things as they stand ([TableAssembly]): before the acts are taken, which it answers for
 	if not assembly_spec.is_empty():
 		var noted := notes.size()
 		assembly = TableAssembly.new(self, assembly_spec)
@@ -450,7 +455,7 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	_take_acts(raw, beats)
 	if assembly != null:
 		assembly.perform(acts)
-	# WHAT EACH PART IS BEFORE ANYTHING ACTS ON IT, and what it follows all the time
+	# What each part is before anything acts on it, and what it follows all the time
 	for wi in works.size():
 		var wk: Dictionary = works[wi]
 		var w: Dictionary = wk["w"]
@@ -475,11 +480,11 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 		if w.get("emits") is Dictionary:
 			_plumes.append(_plume(wi, w["emits"]))
 	_fit_acts()
-	# EACH THING'S BODY, what a loose part of it is IN when it is in it: the thing without its loose parts - a mortar's
-	# bowl, not the corner its pestle lies in
+	# Each thing's body, what a loose part of it is in when it is in it: the thing without its loose parts
+	# - a mortar's bowl, not the corner its pestle lies in
 	for ti in things.size():
 		(things[ti] as Dictionary)["body"] = _body_of(ti)
-	# WHAT A TOOL GOES INTO: a part that changes from its start, or a liquid, or what is loose - the table's own, kept apart from
+	# What a tool goes into: a part that changes from its start, or a liquid, or what is loose - the table's own, kept apart from
 	# what the acts add ([method _fit_acts]), so the acts can be bound again ([method rebind])
 	_soft_table = {}
 	for wi in works.size():
@@ -493,14 +498,14 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 				_soft_table[wi] = true
 	for wi in _soft_table:
 		_soft[wi] = true
-	# WHAT IS PAINTED, AND BY WHICH ACTS: each element's program and pictures, and each act that paints its length at a hand's pace
+	# What is painted, and by which acts: each element's program and pictures, and each act that paints its length at a hand's pace
 	if paint != null:
 		paint.prepare()
 	for ti in things.size():
 		_rest["t%d:pose" % ti] = _world_rest_thing(ti)
 	for wi in works.size():
 		_rest["w%d:pose" % wi] = _world_of((works[wi] as Dictionary)["node"])
-	# A PART'S COPIES MOVED AS ONE, from where the first stands, about the middle of them all
+	# A part's copies moved as one, from where the first stands, about the middle of them all
 	for gi in groups.size():
 		var g: Dictionary = groups[gi]
 		var x0 := _world_of((works[int((g["members"] as Array)[0])] as Dictionary)["node"])
@@ -514,8 +519,8 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	_build_cues()
 	_plan_key = ""
 	plan_cues()
-	# READY FOR THE PHYSICS' OWN THREAD ([TablePhysics]): each thing's place as it stood, its surface, the work's spot, which
-	# part is in which - nothing the bake reads may need a node
+	# Ready for the physics' own thread ([TablePhysics]): each thing's place as it stood, its surface, the
+	# work's spot, which part is in which - nothing the bake reads may need a node
 	for ti in things.size():
 		(things[ti] as Dictionary)["rest_world"] = _world_rest_thing(ti)
 	var of_node := {}
@@ -537,11 +542,11 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 			notes.append(n)
 
 
-## THE SAME TABLE, OTHER ACTS ([param raw], `acts.json` as parsed): what the acts decide is made again - the acts, their cues'
-## bursts, what the work moves - and nothing of the table is; the physics keeps what it has baked and is planned again from the
-## first moment the new acts change ([method TablePhysics.rebind], [method _timelines]). What a puppeteer's every `act` does
-## ([TablePreview]): a table stood and built again for each had taken 6.5 s and its work and physics 10 s more before anything
-## was baked, and its bake then began at the show's start (next/framework_audit.md).
+## The same table, other acts ([param raw], `acts.json` as parsed): what the acts decide is made again -
+## the acts, their cues' bursts, what the work moves - and nothing of the table is; the physics keeps
+## what it has baked and is planned again from the first moment the new acts change ([method
+## TablePhysics.rebind], [method _timelines]). What a puppeteer's every `act` does ([TablePreview]), so
+## no table is stood and built again for each (next/framework_audit.md).
 func rebind(raw: Variant, beats: int) -> void:
 	runs = []
 	_chan = {}
@@ -613,13 +618,13 @@ func _take_acts(raw: Variant, beats: int) -> void:
 		if kept.is_empty():
 			notes.append("%s: none of its tracks found anything on the table to move" % String(act["name"]))
 			continue
-		# ...A WRITE BY A PEN SEEN brings the pen with it: its nib on the ink as it goes down ([method _pen_nib])
+		# ...a write by a pen seen brings the pen with it: its nib on the ink as it goes down ([method _pen_nib])
 		for tr in kept.duplicate():
 			if String((tr as Dictionary)["law"]) == "write" and (tr as Dictionary).has("with"):
 				var pen := _pen_track(act, tr as Dictionary)
 				if not pen.is_empty():
 					kept.append(pen)
-		# ...AND THE WATER A BRUSH IS RINSED IN CLOUDS WITH WHAT IS RINSED OUT OF IT ([method TablePaint.cloud_at])
+		# ...and the water a brush is rinsed in clouds with what is rinsed out of it ([method TablePaint.cloud_at])
 		for tr in kept.duplicate():
 			if String((tr as Dictionary)["law"]) == "paint" and (tr as Dictionary).has("rinse"):
 				var cloud := _cloud_of(tr as Dictionary)
@@ -630,10 +635,11 @@ func _take_acts(raw: Variant, beats: int) -> void:
 	_order_writing()
 
 
-## WHAT IS WRITTEN ON EACH SHEET, in the order it is written: the acts' writes taken a sheet at a time by beat, then as listed. One
-## write of words is the sheet's alone, fitted to it ([method SheetWriting.node]); more than one, or a formula or a drawing, is a
-## PAGE ([method SheetWriting.page]) - write K of N taking the sheet's `written` from K/N to (K+1)/N, and its picture made here,
-## on the worker the table is built on, never on the frame that first shows it.
+## What is written on each sheet, in the order it is written: the acts' writes taken a sheet at a time by
+## beat, then as listed. One write of words is the sheet's alone, fitted to it ([method
+## SheetWriting.node]); more than one, or a formula or a drawing, is a page ([method SheetWriting.page])
+## - write K of N taking the sheet's `written` from K/N to (K+1)/N, and its picture made here, on the
+## worker the table is built on, never on the frame that first shows it.
 func _order_writing() -> void:
 	for wr in _writing.values():
 		if (wr as Dictionary).has("node") and is_instance_valid((wr as Dictionary)["node"]):
@@ -704,7 +710,7 @@ func _order_writing() -> void:
 			for k in mini(laid.size(), (named[wi] as Array).size()):
 				(laid[k] as Dictionary)["act"] = String(named[wi][k])
 		_writing[wi] = wr
-	# WHAT EACH POINT POINTS AT, found on its page now the pages are laid ([method _point_nib]) - or said, while it can be put right
+	# What each point points at, found on its page now the pages are laid ([method _point_nib]) - or said, while it can be put right
 	for pair in points:
 		if (pair[1] as Dictionary).has("_ch") and not (pair[1] as Dictionary).has("_tip"):
 			_tool_ends(pair[1] as Dictionary)
@@ -713,8 +719,9 @@ func _order_writing() -> void:
 			notes.append("%s: %s" % [String(pair[0]), why])
 
 
-## THE PEN THAT WRITES [param tr] (its `with`, "thing" or "thing/part"), as a track of act [param act] on the pen's own pose - its nib
-## where the ink goes down ([method _pen_nib]) - or `{}`, said, where there is no such pen.
+## The pen that writes [param tr] (its `with`, "thing" or "thing/part"), as a track of act [param act] on
+## the pen's own pose - its nib where the ink goes down ([method _pen_nib]) - or `{}`, said, where there
+## is no such pen.
 func _pen_track(act: Dictionary, tr: Dictionary) -> Dictionary:
 	var said := String(tr["with"])
 	var cut := said.find("/")
@@ -731,14 +738,15 @@ func _pen_track(act: Dictionary, tr: Dictionary) -> Dictionary:
 	return pen
 
 
-## A HELD TOOL'S ENDS, found once as the table is built and kept on its track [param tr] (`_tip`, `_grip`: its node's space) - by a
-## painter of its own ([method TablePaint.tool_of]: its points `tip` and `grip`, else the ends of its length), so the bake's twin,
-## which poses it on another thread, never reads the tool's nodes while the app's thread moves them.
+## A held tool's ends, found once as the table is built and kept on its track [param tr] (`_tip`, `_grip`:
+## its node's space) - by a painter of its own ([method TablePaint.tool_of]: its points `tip` and `grip`,
+## else the ends of its length), so the bake's twin, which poses it on another thread, never reads the
+## tool's nodes while the app's thread moves them.
 func _tool_ends(tr: Dictionary) -> void:
 	var tool := TablePaint.new(self).tool_of(String(tr["_ch"]), tr)
 	tr["_tip"] = tool.get("tip", Vector3.ZERO)
 	tr["_grip"] = tool.get("grip", Vector3.UP * 0.1)
-	# ...A WHOLE THING held by a point one of its parts names (a pen's nib on its body): that point, in the thing's own space
+	# ...a whole thing held by a point one of its parts names (a pen's nib on its body): that point, in the thing's own space
 	if tr.has("_ti") and not tr.has("_wi"):
 		var ti := int(tr["_ti"])
 		var inv := _world_of((things[ti] as Dictionary)["node"]).affine_inverse()
@@ -749,9 +757,9 @@ func _tool_ends(tr: Dictionary) -> void:
 					tr["_" + String(k).to_lower()] = inv * (_world_of((works[wi] as Dictionary)["node"]) * (pts[k] as Vector3))
 
 
-## WHAT POINT [param tr] POINTS AT, found on its page: its sheet (`on`) and the box there of what it names (`at`: a formula's part
-## written as `\pin{name}{...}`, a drawing's element by its id, or the act that wrote the line), kept as `_pointed` - "" found, else
-## why not, naming what can be pointed at.
+## What point [param tr] points at, found on its page: its sheet (`on`) and the box there of what it names
+## (`at`: a formula's part written as `\pin{name}{...}`, a drawing's element by its id, or the act that
+## wrote the line), kept as `_pointed` - "" found, else why not, naming what can be pointed at.
 func _find_pointed(tr: Dictionary) -> String:
 	tr.erase("_pointed")
 	var on := String(tr["on"])
@@ -786,10 +794,11 @@ func _find_pointed(tr: Dictionary) -> String:
 	return "nothing written on \"%s\" is called \"%s\" (what can be pointed at there: %s)" % [on, at, ", ".join(names) if not names.is_empty() else "nothing yet"]
 
 
-## WHERE A PEN'S NIB IS at show time [param T] as it writes ([param tr], a write's pen, [method _pen_track]): `{sheet, at (the page's
-## TeX points), lift (meters)}` - or `{}`. It follows the sheet's own `written`, so it is always where the ink is going down: coming
-## down to the first stroke in the write's lead, on each stroke as far along it as the ink is, lifted between strokes, and lifted
-## clear to the right of what it wrote in the tail ([constant SheetWriting.PEN_LEAD]).
+## Where a pen's nib is at show time [param T] as it writes ([param tr], a write's pen, [method
+## _pen_track]): `{sheet, at (the page's TeX points), lift (meters)}` - or `{}`. It follows the sheet's
+## own `written`, so it is always where the ink is going down: coming down to the first stroke in the
+## write's lead, on each stroke as far along it as the ink is, lifted between strokes, and lifted clear
+## to the right of what it wrote in the tail ([constant SheetWriting.PEN_LEAD]).
 func _pen_nib(tr: Dictionary, T: float) -> Dictionary:
 	var w: Dictionary = tr["_write"]
 	var wi := int(w.get("_sheet", -1))
@@ -863,9 +872,10 @@ static func _along(pts: PackedVector2Array, f: float) -> Vector2:
 	return pts[pts.size() - 1]
 
 
-## WHERE A POINT HOLDS THE NIB [param tau] of [param d] seconds into its act: under a wide thing (a formula, a curve) it comes down at its
-## start and sweeps along under it, then settles beside its right end, low on its height - where the pen's body leans away over clean
-## paper; at a small one (a part of a formula, a label, a dot) it comes straight to that place. `{sheet, at, lift}`, or `{}` for a point
+## Where a point holds the nib [param tau] of [param d] seconds into its act: under a wide thing (a
+## formula, a curve) it comes down at its start and sweeps along under it, then settles beside its right
+## end, low on its height - where the pen's body leans away over clean paper; at a small one (a part of a
+## formula, a label, a dot) it comes straight to that place. `{sheet, at, lift}`, or `{}` for a point
 ## that found nothing ([method _find_pointed]).
 func _point_nib(tr: Dictionary, tau: float, d: float) -> Dictionary:
 	if not (tr.get("_pointed") is Dictionary):
@@ -884,8 +894,9 @@ func _point_nib(tr: Dictionary, tau: float, d: float) -> Dictionary:
 	return {"sheet": int((tr["_pointed"] as Dictionary)["sheet"]), "at": at, "lift": POINT_LIFT}
 
 
-## A POINT OF SHEET [param wi]'s PAGE ([param at], TeX points from the head of its room) in the table's space at show time [param T],
-## [param lift] meters off the paper - on the sheet as it lies, bent and folded, wherever it has been moved to.
+## A point of sheet [param wi]'s page ([param at], TeX points from the head of its room) in the table's
+## space at show time [param T], [param lift] meters off the paper - on the sheet as it lies, bent and
+## folded, wherever it has been moved to.
 func _page_world(wi: int, at: Vector2, lift: float, T: float) -> Vector3:
 	var sheet: Dictionary = ((works[wi] as Dictionary)["w"] as Dictionary)["sheet"]
 	var scale := float((((_writing[wi] as Dictionary)["page"] as Dictionary)["layout"] as Dictionary)["scale"])
@@ -901,9 +912,9 @@ func _page_world(wi: int, at: Vector2, lift: float, T: float) -> Vector3:
 	return world * (place * Vector3(x, y, z)) + (world.basis * place.basis * Vector3.UP).normalized() * lift
 
 
-## THE PEN HELD BY ITS TIP AT [param A] (the table's space) at show time [param T]: its tip and grip as a tool's are found
-## ([method _tool_ends]), its body leaning from the nib to the frame's top right as a writer's hand holds it, swaying a few degrees
-## over seconds - [param x0] its rest.
+## The pen held by its tip at [param A] (the table's space) at show time [param T]: its tip and grip as a
+## tool's are found ([method _tool_ends]), its body leaning from the nib to the frame's top right as a
+## writer's hand holds it, swaying a few degrees over seconds - [param x0] its rest.
 func _held_by_tip(tr: Dictionary, A: Vector3, T: float, x0: Transform3D) -> Transform3D:
 	var a0 := x0 * (tr.get("_tip", Vector3.ZERO) as Vector3)
 	var g0 := x0 * (tr.get("_grip", Vector3.UP * 0.1) as Vector3)
@@ -914,9 +925,10 @@ func _held_by_tip(tr: Dictionary, A: Vector3, T: float, x0: Transform3D) -> Tran
 	return Transform3D(r, A - r * a0) * x0
 
 
-## WHAT IS WRITTEN, FOR THE BAKE'S TWIN ([TablePhysics]): each page's layout - made once and never written again - in dictionaries of its
-## own, so the pen and what points are posed alike on the twin, and the app's thread, which adds each page's skin to the work's own
-## when it is first drawn, shares nothing it writes with the bake.
+## What is written, for the bake's twin ([TablePhysics]): each page's layout - made once and never
+## written again - in dictionaries of its own, so the pen and what points are posed alike on the twin, and
+## the app's thread, which adds each page's skin to the work's own when it is first drawn, shares nothing
+## it writes with the bake.
 func pages_for_twin() -> Dictionary:
 	var out := {}
 	for wi in _writing:
@@ -934,8 +946,8 @@ static func _beat_rank(b: Variant) -> int:
 	return int(b) if (b is int or b is float or (b is String and String(b).is_valid_int())) else 1 << 29
 
 
-## HOW MUCH WATER cloud track [param tr] ([method _cloud_of]) clouds, milliliters: its vessel's as the physics found it drawn, or a
-## glass's ([constant TablePaint.WATER_ML]).
+## How much water cloud track [param tr] ([method _cloud_of]) clouds, milliliters: its vessel's as the
+## physics found it drawn, or a glass's ([constant TablePaint.WATER_ML]).
 func _water_ml(tr: Dictionary) -> float:
 	if physics != null:
 		for L in physics.liquids:
@@ -944,8 +956,8 @@ func _water_ml(tr: Dictionary) -> float:
 	return TablePaint.WATER_ML
 
 
-## THE WATER PAINT TRACK [param tr] RINSES ITS BRUSH IN, as a track of its own on the water's color - or empty where what it names
-## holds no liquid with a name.
+## The water paint track [param tr] rinses its brush in, as a track of its own on the water's color - or
+## empty where what it names holds no liquid with a name.
 func _cloud_of(tr: Dictionary) -> Dictionary:
 	var rinse := String(tr.get("rinse", ""))
 	var ti := _thing_named(rinse.get_slice("/", 0))
@@ -966,8 +978,9 @@ func _cloud_of(tr: Dictionary) -> Dictionary:
 	return {}
 
 
-## WHAT DRINK [param tr] OF ACT [param act] TAKES: as much of what is in it as it says goes while it is out of sight, by a `to` on each liquid's fill, added to [param tracks], one drink after another. A stretch too
-## short for a hand to get there and back is made long enough, if the act has a length of its own.
+## What drink [param tr] of act [param act] takes: as much of what is in it as it says goes while it is out
+## of sight, by a `to` on each liquid's fill, added to [param tracks], one drink after another. A stretch
+## too short for a hand to get there and back is made long enough, if the act has a length of its own.
 func _drunk_from(act: Dictionary, tr: Dictionary, tracks: Array) -> void:
 	var w: Vector2 = tr["between"]
 	if act.get("length") is float and float(act["length"]) * (w.y - w.x) < DRINK_LEAST:
@@ -996,11 +1009,10 @@ func _drunk_from(act: Dictionary, tr: Dictionary, tracks: Array) -> void:
 		notes.append("%s: \"%s\" has no liquid with a `name` in it: it is drunk from, and nothing goes down" % [String(act["name"]), String(tr.get("thing", ""))])
 
 
-## WHAT THE ACTS COME TO on this table: a part that runs never turned again, each move its own hand, what the work moves.
+## What the acts come to on this table: a part that runs never turned again, each move its own hand, what the work moves.
 func _fit_acts() -> void:
 	_still_of = {}
-	# A PART THAT RUNS IS NOT TURNED AGAIN by an act (the first real puppeteer wrote a clock's three hands into every
-	# one of its 31 acts, where its set dresser's had not been kept): a turn on it would run it twice as fast
+	# A part that runs is not turned again by an act: a turn on it would run it twice as fast
 	for a in acts:
 		var kept: Array = []
 		for t in a["tracks"]:
@@ -1011,7 +1023,7 @@ func _fit_acts() -> void:
 			kept.append(tr)
 		a["tracks"] = kept
 	acts = acts.filter(func(a: Dictionary) -> bool: return not (a["tracks"] as Array).is_empty())
-	# EACH MOVE ITS OWN HAND ([Hands]). Equal animation data is not a physical attachment: two jars can take the same path
+	# Each move its own hand ([Hands]). Equal animation data is not a physical attachment: two jars can take the same path
 	# independently. A seated cork rides its jar through the physics' seat constraint, not a second kinematic weld.
 	for a in acts:
 		var tracks: Array = a["tracks"]
@@ -1022,15 +1034,15 @@ func _fit_acts() -> void:
 			for end in ["tip", "grip"]:
 				if tr.get(end) is Dictionary:
 					(tr[end] as Dictionary)["_hand"] = hs
-	# WHAT THE WORK MOVES, from every act, scheduled or not: a loose part an act will pick up lies where it was put
-	# until then - it had ridden its thing until its act was placed, and a live reading places an act only as its
-	# words are heard (the pestle went to the middle of the bench with its mortar, and jumped back to its corner)
+	# What the work moves, from every act, scheduled or not: a loose part an act will pick up lies where it
+	# was put until then - a live reading places an act only as its words are heard, so a part riding its
+	# thing until then would jump back to its corner
 	for a in acts:
 		for t in a["tracks"]:
 			var ch := String((t as Dictionary).get("_ch", ""))
 			if ch.ends_with(":pose"):
 				_moved[ch] = true
-	# WHAT A TOOL GOES INTO: the table's own ([member _soft_table]) and a part an act makes change - fills, grows, comes and goes (a
+	# What a tool goes into: the table's own ([member _soft_table]) and a part an act makes change - fills, grows, comes and goes (a
 	# heap of herbs ground down): a pestle pressed into it goes into it, never through it
 	_soft = _soft_table.duplicate()
 	for a in acts:
@@ -1040,9 +1052,9 @@ func _fit_acts() -> void:
 				_soft[int(tr["_wi"])] = true
 
 
-## THE BURSTS the acts' cues throw, and the creatures' huffs as they are heard ([member _sound]) - a rebind's made again.
+## The bursts the acts' cues throw, and the creatures' huffs as they are heard ([member _sound]) - a rebind's made again.
 func _build_cues() -> void:
-	# THE BURSTS an act's cues throw
+	# The bursts an act's cues throw
 	var fxs: Array = []
 	var moments: Array = []
 	for a in acts:
@@ -1056,13 +1068,13 @@ func _build_cues() -> void:
 			fxs.append(fx)
 			moments.append(nm)
 			_cues.append({"act": String(a["name"]), "cue": c, "name": nm})
-	# THE CREATURES, SEEN as they are heard: their huffs' times from the sound's own plan
+	# The creatures, seen as they are heard: their huffs' times from the sound's own plan
 	_huffs = Soundscape.seen_calls(_sound, medium._plan.seed_value, 0.0, HUFFS_UNTIL) if _sound.get("creatures") is Array else []
 	if not _huffs.is_empty():
 		fxs.append({"kind": "burst", "name": "huffs", "on": "huffs", "look": "smoke", "count": 10, "size": 24.0,
 			"speed": 0.35, "spread": 35.0, "life": 2.6, "glow": 0.0, "colors": ["#8f8b86", "#a6a29c"]})
 		moments.append("huffs")
-	# THE PUFFS A POWDER RAISES as it is patted on and swept off ([TablePaint])
+	# The puffs a powder raises as it is patted on and swept off ([TablePaint])
 	_paint_bursts = []
 	if paint != null and paint.raises("mist"):
 		_paint_bursts.append("mist")
@@ -1071,8 +1083,8 @@ func _build_cues() -> void:
 		moments.append("paint mist")
 	if paint != null and paint.raises("dust"):
 		_paint_bursts.append("dust")
-		# (one faint cloud of many soft puffs laid over each other, never a few bright ones - feedback 0018 - nor puffs that wander in
-		# loops: it billows out a little and sinks - feedback 0026, "They twirl and spin. Real life dust wouldn't do that")
+		# (one faint cloud of many soft puffs laid over each other, never a few bright ones, nor puffs that
+		# wander in loops: it billows out a little and sinks)
 		fxs.append({"kind": "burst", "name": "paint dust", "on": "paint dust", "look": "powder", "count": 20, "size": 9.0,
 			"speed": 0.08, "spread": 150.0, "life": 3.0, "glow": 0.0, "colors": ["#f4efe8", "#e6dfd6"]})
 		moments.append("paint dust")
@@ -1128,8 +1140,7 @@ func _resolve(track: Dictionary) -> String:
 	if law == "write" and not ((works[wi] as Dictionary)["w"] as Dictionary).has("sheet"):
 		track.erase("_copies")
 		return "\"%s\" of \"%s\" is not a sheet: only a sheet (a slip, a label, a page) is written on" % [part, String(track["thing"])]
-	# A LOOSE THING'S SIZE IS ITS OWN: ground, it breaks (the-quiet-crucible 119515's dragon's blood and pumpkin seeds were
-	# shrunk with `grow` while the pestle went round over them - the user: "They didn't crush: they just scaled down a bit")
+	# A loose thing's size is its own: ground, it breaks, never shrinks with `grow` while the pestle goes round over it
 	if state == "grow" and bool(((works[wi] as Dictionary)["w"] as Dictionary).get("loose", false)):
 		track.erase("_copies")
 		return ("\"%s\" of \"%s\" is loose: its size is its own, never grown or shrunk - to grind it, bring a tool's point down " +
@@ -1159,7 +1170,7 @@ func _resolve(track: Dictionary) -> String:
 	return ""
 
 
-## A PAINT TRACK [param track] found on what it paints ([method TablePaint.resolve]) - "" for any other law.
+## A paint track [param track] found on what it paints ([method TablePaint.resolve]) - "" for any other law.
 func _painted(track: Dictionary) -> String:
 	if String(track["law"]) != "paint":
 		return ""
@@ -1175,15 +1186,15 @@ func _painter() -> TablePaint:
 	return paint
 
 
-## A THING IS ONE ONLY AS FAR AS SOMETHING HOLDS IT TOGETHER (next/table_physics.md, "Primitives"): a hand moving a thing whole
-## grips what is fixed to it - its own unjointed geometry - and what stands free in it or on it (a `free` joint: a jar, a cork,
-## a ladle on its rest) rides that as a body of its own, or does not. A thing with NOTHING fixed to it - four jars side by side
-## with no tray under them - is the hand's TRIPS: act [param act_name]'s whole moves of it (its [param tracks]) made by its free
-## parts one at a time, each to its own place in the arrangement. Each trip keeps the original move's duration; the act
-## grows to make room, and the reading's scheduler cannot quicken it below that duration. (the-quiet-crucible 841899,
-## 2026-10-31: "the little tray of resin jars" carried whole had been one rigid body of four jars, and the user: "All 4 jars of
-## ingredients are stuck together, and moved together here.") A part of one of them moved with it in the same stretch (a cork
-## fetched with its jar) goes in its jar's trip.
+## A thing is one only as far as something holds it together (next/table_physics.md, "Primitives"): a
+## hand moving a thing whole grips what is fixed to it - its own unjointed geometry - and what stands free
+## in it or on it (a `free` joint: a jar, a cork, a ladle on its rest) rides that as a body of its own, or
+## does not. A thing with nothing fixed to it - four jars side by side with no tray under them - is the
+## hand's trips: act [param act_name]'s whole moves of it (its [param tracks]) made by its free parts
+## one at a time, each to its own place in the arrangement. Each trip keeps the original move's
+## duration; the act grows to make room, and the reading's scheduler cannot quicken it below that
+## duration. A part of one of them moved with it in the same stretch (a cork fetched with its jar) goes
+## in its jar's trip.
 func _trips(act: Dictionary, tracks: Array) -> Array:
 	var act_name := String(act["name"])
 	var by_thing := {}
@@ -1380,11 +1391,10 @@ func _part_label(wi: int) -> String:
 	return nm if gi < 0 else "%s %d" % [nm, ((groups[gi] as Dictionary)["members"] as Array).find(wi) + 1]
 
 
-## WHAT IS IN THINGS OUTRUN: whether a live show at [param t] is past the last frame [member physics] has baked and the
-## work has held loose work [param wi] since that frame - then it is where the work has it, never where the bake last saw
-## it. A live reading's bake can fall behind the reading, and a plan changed as its words arrive is baked again from the
-## change: the-quiet-crucible 707668's slip, carried over the cauldron, "poofed" back to the middle of the table where the
-## bake had last set it down, and the mortar was set down on it.
+## What is in things outrun: whether a live show at [param t] is past the last frame [member physics]
+## has baked and the work has held loose work [param wi] since that frame - then it is where the work has
+## it, never where the bake last saw it. A live reading's bake can fall behind the reading, and a plan
+## changed as its words arrive is baked again from the change.
 func _outran(wi: int, t: float) -> bool:
 	return _outran_ch(["w%d:pose" % wi, "g%d:pose" % int(_group_of.get(wi, -1))], t)
 
@@ -1451,10 +1461,10 @@ func _world_rest_thing(ti: int) -> Transform3D:
 	return _parent_world(th["node"]) * (th["rest"] as Transform3D)
 
 
-## A PLACE A LAW NAMES ([method Motions._place]) in meters in the table's space: [x, y, z] centimeters from the
-## middle of the reading, the work's spot (`work`, [method work_spot]), or a thing's point by name
-## (`thing.point`; `top`, `middle` and `base` of any thing too) WHERE THE THING IS AT SHOW TIME [param T] - a
-## mortar carried to the middle is ground in there ([method _thing_world]); where it stood, for NAN.
+## A place a law names ([method Motions._place]) in meters in the table's space: [x, y, z] centimeters
+## from the middle of the reading, the work's spot (`work`, [method work_spot]), or a thing's point by name
+## (`thing.point`; `top`, `middle` and `base` of any thing too) where the thing is at show time [param T]
+## - a mortar carried to the middle is ground in there ([method _thing_world]); where it stood, for NAN.
 ## [param fallback] when it names nothing on the table.
 func place_of(v: Variant, fallback: Vector3, T := NAN) -> Vector3:
 	if v is Vector3:
@@ -1488,8 +1498,8 @@ func place_of(v: Variant, fallback: Vector3, T := NAN) -> Vector3:
 	return mid
 
 
-## THE WORK'S SPOT ([method TablePlan.work_spot]): the middle of the picture, clear of the cards' places and of
-## everything standing on the table - where a thing is brought to be worked. Found once.
+## The work's spot ([method TablePlan.work_spot]): the middle of the picture, clear of the cards' places
+## and of everything standing on the table - where a thing is brought to be worked. Found once.
 func work_spot() -> Vector3:
 	if _spot != Vector3.INF:
 		return _spot
@@ -1502,9 +1512,10 @@ func work_spot() -> Vector3:
 	return _spot
 
 
-## THING [param ti] WHERE IT IS AT SHOW TIME [param T], in the table's space: moved by the work, or as it stood
-## (for NAN, or a thing nothing moves). A pure function of the schedule - never the node as it was last posed. On the
-## bake's twin, a thing an act moves is where the bake has it, a rigid body ([member posed_things]).
+## Thing [param ti] where it is at show time [param T], in the table's space: moved by the work, or as it
+## stood (for NAN, or a thing nothing moves). A pure function of the schedule - never the node as it was
+## last posed. On the bake's twin, a thing an act moves is where the bake has it, a rigid body ([member
+## posed_things]).
 func _thing_world(ti: int, T: float) -> Transform3D:
 	if not is_nan(T) and posed_things.has(ti):
 		return posed_things[ti]
@@ -1517,13 +1528,11 @@ func _thing_world(ti: int, T: float) -> Transform3D:
 	return x
 
 
-## WORK [param wi] WHERE IT IS AT SHOW TIME [param T]: a free part moved by the work where it was moved (riding
-## its thing when it was left in it, [method _ridden]), any other part where the part it is a part of has it - or its
-## thing - turned on its own joint ([method _joint]): a balance's pan where its beam has tipped it. (Each part had stood
-## where its thing had it, its joint and the part it hangs from never asked: the beam tipped and its pan dipped on the
-## table, and in the physics neither moved - a lump laid on the pan stayed in the air where the pan had been, the
-## user, 2026-10-29: "It still floats above it, the weight never transfers to the scale".) A part the physics moves as a
-## rigid body is where the bake has it, on the bake's twin ([member posed]).
+## Work [param wi] where it is at show time [param T]: a free part moved by the work where it was moved
+## (riding its thing when it was left in it, [method _ridden]), any other part where the part it is a part
+## of has it - or its thing - turned on its own joint ([method _joint]): a balance's pan where its beam
+## has tipped it, so a lump laid on the pan moves with it. A part the physics moves as a rigid body is
+## where the bake has it, on the bake's twin ([member posed]).
 func _work_world(wi: int, T: float) -> Transform3D:
 	if not is_nan(T) and posed.has(wi):
 		return posed[wi]
@@ -1554,9 +1563,10 @@ func _base_world(wi: int, T: float) -> Transform3D:
 	return _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse() * at_rest
 
 
-## WORK [param wi]'s JOINT at show time [param t], in its node's own space: a hinge turned about its pivot by its angle,
-## a slide moved along its axis - a hinge that swings free by its own weight where the physics has it - and a part hung
-## from a swinging hinge turned back about where it hangs, so it hangs level as the beam tips (a balance's pans).
+## Work [param wi]'s joint at show time [param t], in its node's own space: a hinge turned about its pivot
+## by its angle, a slide moved along its axis - a hinge that swings free by its own weight where the
+## physics has it - and a part hung from a swinging hinge turned back about where it hangs, so it hangs
+## level as the beam tips (a balance's pans).
 func _joint(wi: int, t: float) -> Transform3D:
 	var wk: Dictionary = works[wi]
 	var jt: Dictionary = (wk["w"] as Dictionary).get("joint", {}) if (wk["w"] as Dictionary).get("joint") is Dictionary else {}
@@ -1596,10 +1606,10 @@ func _angle(wi: int, t: float) -> float:
 	return a
 
 
-## A LOOSE PART RIDES ITS THING: a free part let go IN its own thing (a pestle left in its mortar), or standing in it
-## as built and not yet picked up, goes with the thing when the thing is moved after - [param x], its place as the
-## work left it, carried as the thing has been since; one laid down anywhere else stays where it was laid. While a
-## track holds it, it is where the track has it.
+## A loose part rides its thing: a free part let go in its own thing (a pestle left in its mortar), or
+## standing in it as built and not yet picked up, goes with the thing when the thing is moved after -
+## [param x], its place as the work left it, carried as the thing has been since; one laid down anywhere
+## else stays where it was laid. While a track holds it, it is where the track has it.
 func _ridden(wi: int, x: Transform3D, T: float) -> Transform3D:
 	var ti := int((works[wi] as Dictionary)["thing"])
 	if not _chan.has("t%d:pose" % ti):
@@ -1613,8 +1623,8 @@ func _ridden(wi: int, x: Transform3D, T: float) -> Transform3D:
 		if T < float((e as Dictionary)["s1"]):
 			return x
 		let_go = float((e as Dictionary)["s1"])
-	# NOT YET PICKED UP, it is where it was built: in its thing (a pestle standing in its bowl), it goes where the thing
-	# is carried - it had stayed in the air where the bowl stood, and its first act swept it 30 cm in a moment
+	# Not yet picked up, it is where it was built: in its thing (a pestle standing in its bowl), it goes
+	# where the thing is carried
 	var then := _thing_world(ti, let_go) if not is_nan(let_go) else _world_rest_thing(ti)
 	var now := _thing_world(ti, T)
 	if then.is_equal_approx(now):
@@ -1641,8 +1651,8 @@ func _point_local(wi: int, name: String) -> Vector3:
 
 
 ## [param p] (meters, the table's space) kept on thing [param target]'s surface below it, [param gap]
-## centimeters above it - the thing where it is at show time [param T], its surface carried there - or as it was
-## where nothing is below it.
+## centimeters above it - the thing where it is at show time [param T], its surface carried there - or as
+## it was where nothing is below it.
 func _press(target: String, p: Vector3, gap: float, T := NAN) -> Vector3:
 	var y := _surface_under(target, p, T)
 	return p if is_nan(y) else Vector3(p.x, y + gap * 0.01, p.z)
@@ -1674,7 +1684,7 @@ func _is_soft(mi: Node) -> bool:
 	return false
 
 
-## Thing [param ti]'s surface AS IT STOOD, for a ray to meet: made once, whatever the work has posed it at since.
+## Thing [param ti]'s surface as it stood, for a ray to meet: made once, whatever the work has posed it at since.
 func _mesh_of(ti: int) -> TriangleMesh:
 	var th: Dictionary = things[ti]
 	if th["mesh"] != null or bool(th.get("meshless", false)):
@@ -1705,9 +1715,10 @@ func _mesh_of(ti: int) -> TriangleMesh:
 	return tm
 
 
-## FREE PART [param wi]'s surface as it was built (the table's space), for a ray to meet where the part is at a moment ([method
-## _top_under]) - a thing's own mesh leaves its free parts out, and a jar fetched on its own, or a ladle on its rest, stood in
-## nothing a hand carried over or set down onto. Its own free parts left out; null for a loose part or one that is not free.
+## Free part [param wi]'s surface as it was built (the table's space), for a ray to meet where the part
+## is at a moment ([method _top_under]) - a thing's own mesh leaves its free parts out, so a jar fetched
+## on its own, or a ladle on its rest, would stand in nothing a hand carried over or set down onto. Its
+## own free parts left out; null for a loose part or one that is not free.
 func _part_mesh_of(wi: int) -> TriangleMesh:
 	var wk: Dictionary = works[wi]
 	if wk.has("mesh"):
@@ -1740,11 +1751,10 @@ func _part_mesh_of(wi: int) -> TriangleMesh:
 	return wk["mesh"]
 
 
-## A MESH RAYS ARE CAST ON, from [param faces] (meters): kept in centimeters ([constant RAY_SCALE]). Godot's ray and
-## triangle test takes a triangle whose edges' product is under its epsilon (0.00001) for one the ray runs along - in
-## meters, a lathe's slivers round its axis, a bowl's floor two centimeters across: a pestle pressed into a mortar's
-## middle fell through its floor to the table, and a thing set down there sank to the bottom of its base. Cast on with
-## [method _ray].
+## A mesh rays are cast on, from [param faces] (meters): kept in centimeters ([constant RAY_SCALE]).
+## Godot's ray and triangle test takes a triangle whose edges' product is under its epsilon (0.00001) for
+## one the ray runs along - in meters, a lathe's slivers round its axis and a bowl's two-centimeter floor
+## would be missed. Cast on with [method _ray].
 ## What [param faces] fill (meters): a ray mesh's box ([method _meshes_at]).
 static func _faces_box(faces: PackedVector3Array) -> AABB:
 	var box := AABB(faces[0], Vector3.ZERO)
@@ -1774,11 +1784,12 @@ static func _ray(tm: TriangleMesh, from: Vector3, dir: Vector3) -> Dictionary:
 
 # --- when each act runs ---------------------------------------------------------------------------
 
-## WHICH ACT EACH CUE STARTS (next/editing.md step 2: words do not name the work's place in line): [param cues] as
-## [method CardReading.parse] gives them, each named for the act it starts - its own name where an act is called that, else
-## the next act not yet cued that lays the LAYER it names (an act made from a painting is named by its place in line, which a
-## repaint changes; its layers keep their names). A cue naming neither is left as it is, and starts nothing: the problem a
-## Timeline says ([method TableEpisode.timeline]). -> the cues, each a copy, `name` the act's.
+## Which act each cue starts (next/editing.md step 2: words do not name the work's place in line):
+## [param cues] as [method CardReading.parse] gives them, each named for the act it starts - its own name
+## where an act is called that, else the next act not yet cued that lays the layer it names (an act made
+## from a painting is named by its place in line, which a repaint changes; its layers keep their names).
+## A cue naming neither is left as it is, and starts nothing: the problem a Timeline says ([method
+## TableEpisode.timeline]). -> the cues, each a copy, `name` the act's.
 static func resolve_cues(cues: Array, acts: Array) -> Array:
 	var named := {}
 	for a in acts:
@@ -1802,25 +1813,21 @@ static func resolve_cues(cues: Array, acts: Array) -> Array:
 	return out
 
 
-## WHEN EACH ACT RUNS, from the reading's placed schedule [param sched] (`[{a, t0, s}]`, [method
-## ReadingFollower.place]), its walk [param parse] ([method CardReading.parse]) and when each spoken word was
-## said ([param said0], [param said1] - [constant ReadingFollower.NO_TIME] where not yet; [param est], each
-## word's estimated time from the top, gives the pace of what is not yet heard). [param now]: what has begun by
-## then never moves.
+## When each act runs, from the reading's placed schedule [param sched] (`[{a, t0, s}]`, [method
+## ReadingFollower.place]), its walk [param parse] ([method CardReading.parse]) and when each spoken word
+## was said ([param said0], [param said1] - [constant ReadingFollower.NO_TIME] where not yet; [param est],
+## each word's estimated time from the top, gives the pace of what is not yet heard). [param now]: what
+## has begun by then never moves.
 ##
-## NOTHING BEGINS ON A GUESS (the-quiet-crucible 181083, live: "absolute chaos ... the green dish moved on top of
-## the crucible, then floated back to its position ... tipped-over"): an act cued at a word not yet heard waits for
-## it, and so does every act that follows it in its beat. The words of a live reading arrive a sentence at a time,
-## and the guess for the rest had been the plan's estimate from the top - 0.4 s a word, two minutes behind a hushed
-## voice by the work - so every act cued in the beat lay before the beat began, all of them began together at its
-## start, quickened, and were held there as begun: three moves of the moonlight's jar at once, the shell fetched,
-## tipped over the pot and put away in the same seconds. An export knows every word from its first frame and never
-## guessed, and a scrub's estimates lie AFTER its words (its show time starts again at 0), so neither showed it.
-## What is still guessed - where a beat ends, for quickening its acts and for one "under" - is guessed from the
-## last word heard, at the pace the voice has kept ([method _guessed]). What the plan in force has begun is
-## begun, whatever the words say after; an act placed only once its moment has passed begins now, never part way
-## through; and acts keep their declared order even on different parts - a word cue is the earliest start, never
-## permission to bypass an earlier act (opening a jar must finish before taking a pinch from it).
+## Nothing begins on a guess: an act cued at a word not yet heard waits for it, and so does every act
+## that follows it in its beat. The words of a live reading arrive a sentence at a time, and a guess at
+## the rest from the plan's estimate would put every act cued in the beat before the beat began. What is
+## still guessed - where a beat ends, for quickening its acts and for one "under" - is guessed from the
+## last word heard, at the pace the voice has kept ([method _guessed]). What the plan in force has begun
+## is begun, whatever the words say after; an act placed only once its moment has passed begins now,
+## never part way through; and acts keep their declared order even on different parts - a word cue is the
+## earliest start, never permission to bypass an earlier act (opening a jar must finish before taking a
+## pinch from it).
 func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1: PackedFloat32Array,
 		est: PackedFloat32Array, now: float) -> void:
 	if game != null:
@@ -1828,7 +1835,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 	if acts.is_empty():
 		return
 	var c0 := Time.get_ticks_usec() if profiling else 0
-	# WHAT IS PLAYING IS BEGUN: the plan in force had it under way, and seen
+	# What is playing is begun: the plan in force had it under way, and seen
 	for r in runs:
 		var nm := String((acts[int((r as Dictionary)["i"])] as Dictionary)["name"])
 		if float(r["t0"]) <= now and not _begun.has(nm):
@@ -1848,7 +1855,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 		if si < said1.size() and said1[si] != ReadingFollower.NO_TIME:
 			return said1[si]
 		return guess.call(si)
-	# EACH BEAT'S SPAN: from its mark's move to the last word of the passage after it
+	# Each beat's span: from its mark's move to the last word of the passage after it
 	var placed := {}
 	for e in sched:
 		placed[(e as Dictionary)["a"]] = e
@@ -1867,22 +1874,22 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 			continue
 		var si0 := int(a["after"])
 		var si1 := int((actions[i + 1] as Dictionary)["after"]) if i + 1 < actions.size() else n_spoken
-		# IT BEGINS WHEN ITS MARK'S MOVE IS DONE - the shuffle begun, the card laid, the spread settled - or,
+		# It begins when its mark's move is done - the shuffle begun, the card laid, the spread settled - or,
 		# before the mark is placed, never
 		var e: Dictionary = placed.get(a, {})
 		var b0 := INF
 		if not e.is_empty():
 			b0 = float(e["t0"]) + float(a["dur"]) * float(e["s"])
 		var b1 := float(w1.call(si1 - 1)) if si1 > si0 else b0 + 2.0
-		# ...AND ITS LAST SILENCE IS ITS OWN ([CardReading], a quiet its words end on): the work goes on through it
+		# ...and its last silence is its own ([CardReading], a quiet its words end on): the work goes on through it
 		b1 += float(a.get("tail", 0.0))
 		spans[beat] = Vector2(b0, maxf(b1, b0 + 1.0))
-	# EACH CUE AS THE ACT IT STARTS ([method resolve_cues]): an act's own name, or a painted layer's
+	# Each cue as the act it starts ([method resolve_cues]): an act's own name, or a painted layer's
 	var cues := resolve_cues(parse.get("cues", []), acts)
 	var cued := {}
 	for c in cues:
 		var cd: Dictionary = c
-		# ...A CUE IN A SILENCE is timed from the word the silence follows: the next word is not said until the silence is over, and
+		# ...a cue in a silence is timed from the word the silence follows: the next word is not said until the silence is over, and
 		# what was cued to begin in it would wait out the whole of it
 		if cd.has("quiet"):
 			var heard_to := int(cd["si"]) - 1
@@ -1894,11 +1901,10 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				cued[String(cd["name"])] = ended + float(cd["quiet"]) if ended != INF else INF
 		else:
 			cued[String(cd["name"])] = float(w0.call(int(cd["si"])))
-	# ...AND A CUE AT THE WORD A SILENCE COMES BEFORE MAY BEGIN AS THE SILENCE DOES, the hand free by then (feedback 0013, 2026-11-09: "we
-	# have been sitting here for at least 15 seconds, doing nothing. No animations, no speaking"): a silence is written for the work to be
-	# watched, and a paint act's end is kept from the guess made as it began - 732687's sponge, its words read slower than guessed, was done
-	# 15 s into the 24 s silence after them, and the liner cued at the word after it waited the rest out. Where the guess held, the act
-	# before ends at that word and nothing moves.
+	# ...and a cue at the word a silence comes before may begin as the silence does, the hand free by
+	# then: a silence is written for the work to be watched, and a paint act's end is kept from the guess
+	# made as it began, so the act cued after it would otherwise wait out the whole silence. Where the
+	# guess held, the act before ends at that word and nothing moves.
 	# (...and the word each act is cued at, for the act before it to be sized by while that word is still to come)
 	var cue_si := {}
 	var cue_into := {}     # ...a cue in a silence: how far into it, after the word the silence follows
@@ -1913,7 +1919,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 	for c in cues:
 		var cd: Dictionary = c
 		var si := int(cd["si"])
-		# (...a cue INSIDE the silence too - one at its end, the next passage's first act, is one: 732687's liner waited out the intro's 24 s)
+		# (...a cue inside the silence too - one at its end, the next passage's first act, is one)
 		if (cd.has("quiet") or before_quiet.has(si)) and si > 0 and si - 1 < said1.size() and said1[si - 1] != ReadingFollower.NO_TIME:
 			early[String(cd["name"])] = said1[si - 1]
 	var out: Array = []
@@ -1949,8 +1955,8 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 					at = minf(at, maxf(float(early[nm]), t0))
 				t0 = maxf(t0, maxf(at, span.x))
 			var parts := _channels_of(a)
-			# ...ONE HAND PAINTS ONE THING AT A TIME: an act that paints waits for the last to be done with its tool, whichever it was (a
-			# paint act is never hurried far, [constant TablePaint.LEAST], and one run past its words had the next tool start beside it)
+			# ...one hand paints one thing at a time: an act that paints waits for the last to be done with its tool, whichever it was (a
+			# paint act is never hurried far, [constant TablePaint.LEAST])
 			if _paints(a):
 				parts = parts.duplicate()
 				parts.append(PAINT_HAND)
@@ -1978,11 +1984,10 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 					if cued.has(String(b["name"])) and float(cued[String(b["name"])]) < INF:
 						until = minf(until, float(cued[String(b["name"])]))
 						break
-					# ...OR AS FAR AS ITS WORD IS GUESSED TO COME, where it is not heard yet (2026-11-09, the user: "At 2:30, there is at least
-					# 30 seconds of speaking but no actions being taken at all. The sponge was put down ... Around 3:15, a brush is picked
-					# up"): an act cued at a later word cannot begin before that word, so the acts after it took no share of this one's
-					# time - shared with them, 732687's sponge had been sized to a seventh of the intro and put down 45 s before the
-					# liner's word. The guess only ends this act; nothing is begun by it.
+					# ...or as far as its word is guessed to come, where it is not heard yet: an act cued at a later
+					# word cannot begin before that word, so the acts after it take no share of this one's time -
+					# shared with them, a painting act would be sized to a fraction of its passage and put down long
+					# before the next word. The guess only ends this act; nothing is begun by it.
 					if cue_si.has(String(b["name"])) and int(cue_si[String(b["name"])]) > 0:
 						until = minf(until, float(guess.call(int(cue_si[String(b["name"])]) - 1)) + float(cue_into.get(String(b["name"]), 0.0)))
 						break
@@ -1997,11 +2002,10 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				t1 = maxf(t0 + 1.0, until - after)
 				if a.has("_natural") and shared > 0.0 and until < INF:
 					t1 = t0 + (until - t0) * float(a["_natural"]) / shared
-					# ...AND THE TIME TO SPARE GIVEN TO THE WORK, NEVER TO ITS TRIPS (2026-11-10, the user: "Starting around 5:30, and
-					# continuing for at least 90 seconds... there is no animation at all. There is only the spoken voice"): what an act's
-					# trips and moves take (`_fixed`, [method TablePaint.plan_of]) is never slowed, so a share of the spare by the whole
-					# length gave an act of few strokes and many trips more than its strokes could be slowed to fill - 732687's painting made
-					# again shorter than its words, such an act put its tool down and the hand waited out the rest. Each act's work slowed alike.
+					# ...and the time to spare given to the work, never to its trips: what an act's trips and moves
+					# take (`_fixed`, [method TablePaint.plan_of]) is never slowed, so a share of the spare by the
+					# whole length would give an act of few strokes and many trips more than its strokes could be
+					# slowed to fill. Each act's work slowed alike.
 					var work_all := shared - fixed_all
 					if work_all > 0.0 and until - t0 > shared:
 						var own := float(a.get("_fixed", 0.0))
@@ -2009,10 +2013,10 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				t1 = maxf(t1, t0 + float(a.get("_min_length", 0.0)))
 				if t1 == INF:
 					t1 = t0 + Motions.UNDER_GUESS
-			# ...AND ONCE BEGUN, HOW LONG IT RUNS: an act of fixed length, and an act that paints - a paint act's every stroke is laid out
-			# over its whole length, so each sentence's new guess at the word that ends it moved every stroke from its first, and the bake
-			# went back to the act's start every sentence while the show waited for it (joker-motivation 856886, 2026-11-05: "it keeps
-			# stalling/buffering ... the buffer on the timeline is still quite far ahead")
+			# ...and once begun, how long it runs: an act of fixed length, and an act that paints - a paint
+			# act's every stroke is laid out over its whole length, so each sentence's new guess at the word
+			# that ends it would move every stroke from its first, and the bake would go back to the act's
+			# start every sentence while the show waited for it
 			if _begun.has(nm) and (not bool(a["under"]) or _paints(a)):
 				t1 = float((_begun[nm] as Array)[1])
 			if t0 <= now:
@@ -2049,9 +2053,10 @@ static func _paints(a: Dictionary) -> bool:
 	return false
 
 
-## THE CHANNELS ACT [param i] LEAVES LAID DOWN ([constant LAID_REST]): each whose last track in it is set `down`, or a path ending with what it
-## moves at the table - its lowest point as built, and each path's way up or down since, followed through the acts in their order (a carry
-## sent elsewhere leaves it unknown, and it is not counted). Found once for the acts.
+## The channels act [param i] leaves laid down ([constant LAID_REST]): each whose last track in it is set
+## `down`, or a path ending with what it moves at the table - its lowest point as built, and each path's
+## way up or down since, followed through the acts in their order (a carry sent elsewhere leaves it
+## unknown, and it is not counted). Found once for the acts.
 func _laid_by(i: int) -> Array:
 	if _laid_of.size() != acts.size():
 		_laid_of = []
@@ -2091,9 +2096,10 @@ func _lowest_built(ch: String, tr: Dictionary) -> float:
 	return (rest * (((works[int(tr["_wi"])] as Dictionary)["w"] as Dictionary).get("box", AABB()) as AABB)).position.y
 
 
-## WHEN A WORD NOT YET HEARD WILL END, guessed (a Callable of its spoken index, seconds): from the last word heard, as
-## far on as the plan's estimate ([param est]) puts it, at the pace the voice has kept against that estimate over
-## what it has said - INF where nothing gives a guess. Never when an act begins: only where a beat ends.
+## When a word not yet heard will end, guessed (a Callable of its spoken index, seconds): from the last
+## word heard, as far on as the plan's estimate ([param est]) puts it, at the pace the voice has kept
+## against that estimate over what it has said - INF where nothing gives a guess. Never when an act
+## begins: only where a beat ends.
 static func _guessed(said0: PackedFloat32Array, said1: PackedFloat32Array, est: PackedFloat32Array, n: int) -> Callable:
 	var last := -1
 	for si in range(mini(said1.size(), n) - 1, -1, -1):
@@ -2130,7 +2136,7 @@ static func _channels_of(a: Dictionary) -> PackedStringArray:
 	return out
 
 
-## A SCHEDULE OF ITS OWN, for a picture of the work with no reading under it ([TablePreview]): every act
+## A schedule of its own, for a picture of the work with no reading under it ([TablePreview]): every act
 ## one after another from [param from] (seconds), at its own length, beat by beat in the reading's order.
 ## `{name: [t0, t1]}`.
 func rehearse(from: float) -> Dictionary:
@@ -2159,8 +2165,7 @@ func rehearse(from: float) -> Dictionary:
 			t += len
 			for ch in _laid_by(i):
 				rests[ch] = t + TableTune.value(tune, "laid_rest")
-	# ...THE SAME REHEARSAL AS STANDS, nothing made again: each act a call checks had rebuilt every channel's timeline (841899's
-	# 38 acts, six checks a call - half of what a puppeteer's `act` waited on)
+	# ...the same rehearsal as stands, nothing made again: each act a call checks would rebuild every channel's timeline
 	var key := "rehearsed %f" % from
 	if key == _plan_key and out == runs:
 		return times
@@ -2172,7 +2177,7 @@ func rehearse(from: float) -> Dictionary:
 	return times
 
 
-## THE REHEARSAL every picture of the work is taken on ([method check], [TablePreview]): from [constant REHEARSAL].
+## The rehearsal every picture of the work is taken on ([method check], [TablePreview]): from [constant REHEARSAL].
 func rehearsed() -> Dictionary:
 	return rehearse(REHEARSAL)
 
@@ -2187,10 +2192,10 @@ func checks_reach(times: Dictionary, names: Array) -> float:
 	return t
 
 
-## EACH CHANNEL'S TIMELINE, from [member runs]: every act's tracks, each with where its channel was as it
+## Each channel's timeline, from [member runs]: every act's tracks, each with where its channel was as it
 ## began (`from`) and where it left it (`end`) - the end of one the start of the next. A track holds its
-## channel over ITS OWN STRETCH of its act (`s0`..`s1`: its `between`, or a path's first and last keys), so an
-## act can carry a thing over, tip it, and carry it back, one track after another on the same part.
+## channel over its own stretch of its act (`s0`..`s1`: its `between`, or a path's first and last keys), so
+## an act can carry a thing over, tip it, and carry it back, one track after another on the same part.
 func _timelines() -> void:
 	_chan = {}
 	_quiet_spans = {}
@@ -2211,13 +2216,13 @@ func _timelines() -> void:
 			order += 1
 	items.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
 		return float(x["s0"]) < float(y["s0"]) or (float(x["s0"]) == float(y["s0"]) and (float(x["t0"]) < float(y["t0"]) or (float(x["t0"]) == float(y["t0"]) and int(x["order"]) < int(y["order"])))))
-	# WHAT POSING FOUND, KEPT FROM THE PLAN BEFORE ([member _found_before]): a live reading makes a plan a sentence, and each had
-	# worked out again where every carry so far comes to rest and how it is set down - its room, how far it settles, a pour's plan -
-	# twice, on the app's thread: by the second stir of 841899, 2.6 s of every sentence, the picture frozen while the voice went on.
-	# What ends before the first moment this plan is not the last one ([method _same_until]) is posed as it was, and keeps it.
+	# What posing found, kept from the plan before ([member _found_before]): a live reading makes a plan a
+	# sentence, and each would work out again where every carry so far comes to rest and how it is set
+	# down - its room, how far it settles, a pour's plan - on the app's thread. What ends before the first
+	# moment this plan is not the last one ([method _same_until]) is posed as it was, and keeps it.
 	var same_until := _same_until(_runs_before, runs)
 	var c := Time.get_ticks_usec() if profiling else 0
-	# TWICE: an end can lie where another thing has been moved to by then (a pestle ground round a mortar
+	# Twice: an end can lie where another thing has been moved to by then (a pestle ground round a mortar
 	# carried to the middle), and the first pass has not yet laid that thing's later moves down
 	for pass_i in 2:
 		var now := {}
@@ -2227,7 +2232,7 @@ func _timelines() -> void:
 			var ch := String(e["ch"])
 			for key in FOUND:
 				e.erase(key)
-			# ...AND, ENDED BEFORE IT, WHERE IT BEGAN AND ENDED: posed as it was, nothing of it is worked out again
+			# ...and, ended before it, where it began and ended: posed as it was, nothing of it is worked out again
 			if float(e["s1"]) < same_until:
 				var was: Variant = _found_before.get(_found_key(e))
 				if was != null and float((was as Array)[0]) == float(e["t0"]) and float((was as Array)[1]) == float(e["t1"]):
@@ -2240,7 +2245,7 @@ func _timelines() -> void:
 						_add(ch, e)
 					continue
 			e["from"] = now.get(ch, _run_value(ch, float(e["s0"])))
-			# A LOOSE PART BEGINS WHERE ITS THING HAS CARRIED IT since it was let go in it (or since it was built in it) -
+			# A loose part begins where its thing has carried it since it was let go in it (or since it was built in it) -
 			# one of a set of copies keeps its own place in the set's frame
 			if pass_i == 1 and ch.begins_with("w") and ch.ends_with(":pose") and not _group_of.has(int(ch.substr(1, ch.find(":") - 1))) \
 					and float(until.get(ch, -INF)) < float(e["s0"]) - CHAIN_GAP:
@@ -2267,7 +2272,7 @@ func _timelines() -> void:
 			(e as Dictionary).erase("_clear")
 			(e as Dictionary).erase("_clear_path")
 	c = _spent("plan: chains", c)
-	# WHEN EACH ELEMENT IS LAID, from where its act now runs ([TablePaint])
+	# When each element is laid, from where its act now runs ([TablePaint])
 	if paint != null:
 		var painting: Array = []
 		for ch in _chan:
@@ -2313,10 +2318,11 @@ static func _found_key(e: Dictionary) -> String:
 	return "%s|%s|%d" % [e["ch"], e["act"], int(e["order"])]
 
 
-## ONE MOVE THROUGH ITS PLACES: a run of carries and paths on one thing or part, each begun as the last ended (a vial
-## carried "the low way" past three things, a waypoint a carry), goes on through every place it passes and stops only
-## where it holds or turns back, and at the run's ends - each a cubic through them all ([method Motions.slopes]), the
-## slope at each of its places kept on its entry as `_m` (meters a second). A run of one carry keeps its own ease.
+## One move through its places: a run of carries and paths on one thing or part, each begun as the last
+## ended (a vial carried "the low way" past three things, a waypoint a carry), goes on through every place
+## it passes and stops only where it holds or turns back, and at the run's ends - each a cubic through
+## them all ([method Motions.slopes]), the slope at each of its places kept on its entry as `_m` (meters a
+## second). A run of one carry keeps its own ease.
 func _chains() -> void:
 	for ch in _chan:
 		if not String(ch).ends_with(":pose"):
@@ -2404,7 +2410,7 @@ func _run_value(ch: String, T: float) -> Variant:
 	return v
 
 
-## A CHANNEL'S VALUE at show time [param t].
+## A channel's value at show time [param t].
 func value(ch: String, t: float) -> Variant:
 	var list: Array = _chan.get(ch, [])
 	var last: Dictionary = {}
@@ -2418,10 +2424,10 @@ func value(ch: String, t: float) -> Variant:
 	if last.is_empty():
 		return _run_value(ch, t)
 	if t >= float(last["s1"]):
-		# A PART THAT RUNS GOES ON RUNNING from where an act let it go: a clock set by hand keeps time after
+		# A part that runs goes on running from where an act let it go: a clock set by hand keeps time after
 		if last["end"] is float and _runs_of.has(ch):
 			return float(last["end"]) + float(_run_value(ch, t)) - float(_run_value(ch, float(last["s1"])))
-		# A HAND HOLDING A THING UP IS NEVER STILL ([method _held_up])
+		# A hand holding a thing up is never still ([method _held_up])
 		if last["end"] is Transform3D:
 			var up := _held_up(ch, last, next, t)
 			if up > 0.0:
@@ -2432,14 +2438,13 @@ func value(ch: String, t: float) -> Variant:
 	return _eval(last, t - float(last["t0"]), t)
 
 
-## HELD UP BETWEEN ITS MOVES: how much of a hand's unsteadiness ([method Hands.drift]) a thing or part has at [param t],
-## the move [param e] on channel [param ch] having left it where it touches nothing - a pestle lifted out of its mortar
-## and held aside, a vial held over a pot - coming on as the move ends and dying away before [param next] begins, so a
-## move still begins where it was sent. The user, 2026-10-29: "when the actor is holding the pestle in the air, it is
-## perfectly still: but you would expect it to be gently bobbing/moving, since a hand cannot remain perfectly still".
-## None for what was set `down` or rests on or against anything, or what the physics holds (a loose thing let go falls),
-## and none in the twin the physics bakes by (it touches nothing, so nothing it meets would tell). The bake holds a rigid
-## part so too, swaying alike ([method TablePhysics._held_aloft]).
+## Held up between its moves: how much of a hand's unsteadiness ([method Hands.drift]) a thing or part has
+## at [param t], the move [param e] on channel [param ch] having left it where it touches nothing - a
+## pestle lifted out of its mortar and held aside, a vial held over a pot - coming on as the move ends
+## and dying away before [param next] begins, so a move still begins where it was sent. None for what
+## was set `down` or rests on or against anything, or what the physics holds (a loose thing let go
+## falls), and none in the twin the physics bakes by (it touches nothing, so nothing it meets would
+## tell). The bake holds a rigid part so too, swaying alike ([method TablePhysics._held_aloft]).
 func _held_up(ch: String, e: Dictionary, next: Dictionary, t: float) -> float:
 	if physics == null or _steady or bool((e["track"] as Dictionary).get("down", false)):
 		return 0.0
@@ -2458,11 +2463,10 @@ func _held_up(ch: String, e: Dictionary, next: Dictionary, t: float) -> float:
 	return up
 
 
-## Whether channel [param ch]'s thing or part, posed [param x] at show time [param T], touches nothing: no point of its
-## own surface within [constant TOUCHING] of the table's top or of any solid but its own, where each is then. ITS
-## SURFACE, NEVER ITS BOX: a round lid set on its crock has its box's corners out in the air past the rim, and was held
-## up, swaying, to the end of the show (the-quiet-crucible 841899: "moving about wildly on top of the pot, never
-## stopping").
+## Whether channel [param ch]'s thing or part, posed [param x] at show time [param T], touches nothing:
+## no point of its own surface within [constant TOUCHING] of the table's top or of any solid but its own,
+## where each is then. Its surface, never its box: a round lid set on its crock has its box's corners out
+## in the air past the rim.
 func _aloft(ch: String, x: Transform3D, T: float) -> bool:
 	var own_t := -1
 	var own_w := -1
@@ -2536,7 +2540,7 @@ func _eval(e: Dictionary, tau: float, T: float) -> Variant:
 	return Motions.scalar(tr, float(e["from"]), tau, d, T)
 
 
-## A POSE at [param tau] of [param d] seconds into its act: where the part or the thing is, in the table's
+## A pose at [param tau] of [param d] seconds into its act: where the part or the thing is, in the table's
 ## space - as a held tool goes, from where it was ([param e]'s `from`).
 func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 	var tr: Dictionary = e["track"]
@@ -2557,12 +2561,11 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			var lin := clampf((u - w.x) / maxf(w.y - w.x, 1e-6), 0.0, 1.0)
 			var s := Hands.timing(lin)
 			var to := _carried_to(tr, q0, T)
-			# ...BACK WHERE IT WAS BUILT, AS IT WAS BUILT, unless turned: a stopper laid on its side goes back in upright (the
-			# the-quiet-crucible 841899: the sulfur's cork went back into its jar on its side)
+			# ...back where it was built, as it was built, unless turned: a stopper laid on its side goes back in upright
 			var r_to := Basis.from_euler((tr["turn"] as Vector3) * (PI / 180.0)) if tr.has("turn") else (r_from if tr.has("to") else Basis.IDENTITY)
 			if not tr.has("to"):
 				r_to = _home_of(tr, float(e["t0"]) + w.y * d).basis.orthonormalized() * r_to
-			# ...WHERE THERE IS ROOM FOR IT ([method _room]), as it will stand there - set down on what is under it first
+			# ...where there is room for it ([method _room]), as it will stand there - set down on what is under it first
 			var pc := Time.get_ticks_usec() if profiling else 0
 			if not e.has("_room"):
 				var end0 := _rebuilt(r_to.orthonormalized(), to, q0, x0)
@@ -2576,21 +2579,20 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			var h := (w.y - w.x) * d
 			var ma := m[0] * h if m.size() == 2 else Vector3.ZERO
 			var mb := m[1] * h if m.size() == 2 else Vector3.ZERO
-			# AS A HAND CARRIES IT ([Hands]): minimum jerk, bowed a little to one side, lifted early and lowered late,
+			# As a hand carries it ([Hands]): minimum jerk, bowed a little to one side, lifted early and lowered late,
 			# leaning with the hand's pull, and never quite still while it is off the table
 			var seed := int(tr.get("_hand", 0))
 			var lift := float(tr["lift"]) * 0.01
-			# ...AND OVER WHAT STANDS IN ITS WAY, however low its lift was written ([method _clearance]) - looked for only once it is
+			# ...and over what stands in its way, however low its lift was written ([method _clearance]) - looked for only once it is
 			# on its way: at either end it is where it is set ([method Hands.carried] - no lift, no bow, no lean, no drift), and every
-			# plan made works out where each carry ends, on the app's thread, a sentence at a time (a live reading's 80 ms a sentence,
-			# 841899)
+			# plan made works out where each carry ends, on the app's thread, a sentence at a time
 			var going := lin > 0.0 and lin < 1.0
 			if going and not e.has("_clear"):
 				pc = Time.get_ticks_usec() if profiling else 0
 				e["_clear"] = _clearance(tr, p_from, to, ma, mb, r_from, r_to, q0, x0, seed, float(e["t0"]) + (w.x + w.y) * 0.5 * d)
 				_spent("carry: way over", pc)
 			lift = maxf(lift, float(e.get("_clear", 0.0)))
-			# ...UP CLEAR OF WHAT STANDS CLOSE ROUND IT BEFORE IT GOES, AND DOWN AMONG WHAT STANDS CLOSE WHERE IT GOES LAST ([method
+			# ...up clear of what stands close round it before it goes, and down among what stands close where it goes last ([method
 			# _rise_among], [method Hands.carried])
 			if going and not e.has("_rise"):
 				pc = Time.get_ticks_usec() if profiling else 0
@@ -2604,7 +2606,7 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			r = Hands.lean(func(x: float) -> Vector3: return Hands.carried(p_from, to, ma, mb, lift, x, seed, rise), lin, h) * r
 			var dr: Array = Hands.drift(T, seed, Hands.held(lin))
 			out = _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
-			# SET DOWN on what is under it: how far is found once, where it ends, and taken over the way there
+			# Set down on what is under it: how far is found once, where it ends, and taken over the way there
 			if tr.get("down", false):
 				if not e.has("_down"):
 					pc = Time.get_ticks_usec() if profiling else 0
@@ -2629,18 +2631,18 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 					r = Basis.from_euler((k1.get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
 			if u < float((keys[0] as Dictionary)["at"]):
 				r = Basis.from_euler(((keys[0] as Dictionary).get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
-			# ITS PLACE GOES ON THROUGH ITS KEYS ([method _chains]: their slopes, a second's, to the act's whole), or eases
+			# Its place goes on through its keys ([method _chains]: their slopes, a second's, to the act's whole), or eases
 			# from each to the next - bowed between them as a hand goes ([method _path_at])
 			var where := func(x: float) -> Vector3: return _path_at(keys, mk, p_from, d, x, seed)
 			var p: Vector3 = where.call(u)
-			# ...ENDING WHERE THERE IS ROOM FOR IT ([method _room]), the whole of its way bent there
+			# ...ending where there is room for it ([method _room]), the whole of its way bent there
 			var win_p := _window(tr)
 			if not e.has("_room"):
 				var kl: Dictionary = keys[keys.size() - 1]
 				var rl := Basis.from_euler((kl.get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
 				e["_room"] = _room(tr, _rebuilt(rl, _path_at(keys, mk, p_from, d, win_p.y, seed), q0, x0), float(e["t0"]) + win_p.y * d)
 			p += (e["_room"] as Vector3) * Hands.timing(clampf((u - win_p.x) / maxf(win_p.y - win_p.x, 1e-6), 0.0, 1.0))
-			# ...AND OVER WHAT STANDS IN ITS WAY between its keys ([method _path_clearance])
+			# ...and over what stands in its way between its keys ([method _path_clearance])
 			# ...looked for only between its first key and its last, where it lifts ([method Hands.lift_at] is none at a key)
 			if u > float((keys[0] as Dictionary)["at"]) and u < float((keys[keys.size() - 1] as Dictionary)["at"]) and not e.has("_clear_path"):
 				var pc := Time.get_ticks_usec() if profiling else 0
@@ -2687,28 +2689,27 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			if absf(roll) > 1e-6 and v.length() > 0.5:
 				r = Basis(v, roll) * r
 			out = Transform3D(r, A - r * a0) * x0
-		# A PEN SEEN: its nib on the ink as it goes down, or by what it points at, leaning as a hand holds it
+		# A pen seen: its nib on the ink as it goes down, or by what it points at, leaning as a hand holds it
 		"pen", "point":
 			var nib := _pen_nib(tr, T) if String(tr["law"]) == "pen" else _point_nib(tr, tau, d)
 			if not nib.is_empty() and _writing.has(int(nib["sheet"])):
 				out = _held_by_tip(tr, _page_world(int(nib["sheet"]), nib["at"], float(nib["lift"]), T), T, x0)
 	if String(tr["law"]) in ["aim", "circle", "pen", "point"] and tau < BLEND_IN:
-		# A HAND BRINGS IT THERE FIRST: from where it was to where the law has it, over the first moment - lifted
+		# A hand brings it there first: from where it was to where the law has it, over the first moment - lifted
 		# in an arc, so it goes over a rim rather than through it, early, as a hand lifts a tool before it reaches
 		var lin := tau / BLEND_IN
 		var s := Hands.timing(lin)
-		# ...LIFTED AS FAR AS WHAT IS UNDER ITS WAY ASKS, as a carry is ([method _clearance], [method _entry_lift]) - never a set
-		# height: from over its mortar, a pestle goes straight down into it (2026-11-01, feedback 0002: held 14 cm over the mortar,
-		# it rose a set 10 cm more before it went down to grind); from beside it, it goes over the rim
+		# ...lifted as far as what is under its way asks, as a carry is ([method _clearance], [method _entry_lift]) - never a set
+		# height: from over its mortar, a pestle goes straight down into it; from beside it, it goes over the rim
 		var lift := _entry_lift(e, tr, from, d, x0, q0) * Hands.lift_at(lin) * smoothstep(BLEND_NEAR.x, BLEND_NEAR.y, from.origin.distance_to(out.origin))
-		# Resuming work INSIDE one vessel needs no trip over its rim. A ladle left leaning in a pot and taken up to stir
-		# had been raised ten centimeters out of it by this generic entry arc, then plunged straight back in.
+		# Resuming work inside one vessel needs no trip over its rim: a ladle left leaning in a pot and taken up to stir
+		# is not raised out of it by this generic entry arc.
 		var contact := _point_local(wi, String((tr["tip"] as Dictionary)["point"])) if String(tr["law"]) == "aim" and wi >= 0 else x0.affine_inverse() * q0
 		if _same_inside(from * contact, out * contact, T, wi):
 			lift = 0.0
-		# ...AS A CARRY GOES: about the part's own middle, never its node's origin, and LIFTED BEFORE IT TURNS ([method _turn_share])
-		# - a big turn with a hand's whole lift. A ladle lying on its rest, turned up into its stir pose about an origin far from its
-		# middle and lifted only as the way asked, swept its bowl through the table and was held back 12 cm (841899).
+		# ...as a carry goes: about the part's own middle, never its node's origin, and lifted before it turns ([method _turn_share])
+		# - a big turn with a hand's whole lift. A tool turned about an origin far from its middle and lifted only as the way
+		# asked would sweep through the table.
 		var rel_from := from * x0.affine_inverse()
 		var rel_to := out * x0.affine_inverse()
 		var q_from := Quaternion(rel_from.basis.orthonormalized())
@@ -2723,10 +2724,10 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 	return out
 
 
-## HOW HIGH A HAND LIFTS A TOOL IT BRINGS TO ITS WORK (meters, the lift at the middle of the way): entry [param e]'s law where it
-## has the tool once it is there ([constant BLEND_IN] in), from [param from] - what clearing the way there asks ([method
-## _clearance]), found once an entry. ([param tr]: its track, [param d] its act's length, [param x0] and [param q0] the part as
-## built.)
+## How high a hand lifts a tool it brings to its work (meters, the lift at the middle of the way): entry
+## [param e]'s law where it has the tool once it is there ([constant BLEND_IN] in), from [param from] -
+## what clearing the way there asks ([method _clearance]), found once an entry. ([param tr]: its track,
+## [param d] its act's length, [param x0] and [param q0] the part as built.)
 func _entry_lift(e: Dictionary, tr: Dictionary, from: Transform3D, d: float, x0: Transform3D, q0: Vector3) -> float:
 	if e.has("_entry"):
 		return float(e["_entry"])
@@ -2760,8 +2761,7 @@ func _same_inside(a: Vector3, b: Vector3, t: float, own: int) -> bool:
 
 
 ## Whether point [param p] (a vessel's own space) is in [param vessel]'s inside - or against its wall, a few millimeters short of it
-## ([constant INSIDE_NEAR]): a pestle leaning in its mortar has its tip against the wall, where the inside, inset from it, is not
-## (841899: read as reaching in from outside, it was lifted 9 cm out of the mortar before it ground).
+## ([constant INSIDE_NEAR]): a pestle leaning in its mortar has its tip against the wall, where the inside, inset from it, is not.
 static func _against_inside(vessel: Vessel, p: Vector3) -> bool:
 	if vessel.contains(p):
 		return true
@@ -2772,16 +2772,17 @@ static func _against_inside(vessel: Vessel, p: Vector3) -> bool:
 	return vessel.contains(Vector3(q.x, p.y, q.y))
 
 
-## HOW HIGH A HAND LIFTS A TOOL it brings to where a law has it, [param s] of the way there from [param far] meters
-## off: as far as it has to go - a step from no lift at all to the whole of one, as the law's place moved 2 cm off,
-## threw 181083's pestle 6 cm up in a frame as it began to grind.
+## How high a hand lifts a tool it brings to where a law has it, [param s] of the way there from [param
+## far] meters off: as far as it has to go - never a step from no lift at all to the whole of one, which a
+## law's place moving 2 cm would throw a tool up in a frame.
 static func blend_lift(s: float, far: float) -> float:
 	return BLEND_LIFT * Hands.lift_at(s) * smoothstep(BLEND_NEAR.x, BLEND_NEAR.y, far)
 
 
-## A PATH'S PLACE at [param u] through its act ([param d] seconds): through its [param keys] from [param p_from] - on
-## through them with slopes [param mk] (meters a second, [method _chains]) or eased from each to the next - and bowed
-## between each two a little to one side, as a hand goes ([method Hands.bow], [param seed]).
+## A path's place at [param u] through its act ([param d] seconds): through its [param keys] from [param
+## p_from] - on through them with slopes [param mk] (meters a second, [method _chains]) or eased from each
+## to the next - and bowed between each two a little to one side, as a hand goes ([method Hands.bow],
+## [param seed]).
 static func _path_at(keys: Array, mk: PackedVector3Array, p_from: Vector3, d: float, u: float, seed: int) -> Vector3:
 	var ps := PackedVector3Array()
 	var ats := PackedFloat32Array()
@@ -2819,7 +2820,7 @@ func _pivot(tr: Dictionary) -> Vector3:
 	return x0 * pivot_local
 
 
-## A DRINK AT [param u] OF ITS ACT, [param d] seconds long: up off the table and toward the lens until all of it has left the frame, held there while what is drunk goes, and back exactly where it stood, turned as it
+## A drink at [param u] of its act, [param d] seconds long: up off the table and toward the lens until all of it has left the frame, held there while what is drunk goes, and back exactly where it stood, turned as it
 ## was. It is the hand that knows where the mouth is ([method _to_the_mouth]): nothing written says, so a drink is the same one word on any table under any lens.
 func _drink_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from: Transform3D, x0: Transform3D, q0: Vector3) -> Transform3D:
 	var w: Vector2 = tr["between"]
@@ -2830,10 +2831,10 @@ func _drink_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from
 	var seed := int(tr.get("_hand", 0))
 	var mouth := _to_the_mouth(tr, x0, q0)
 	var r_at := Basis(medium._plan.cam_base.basis.x.normalized(), deg_to_rad(DRINK_TIP)) * r_from
-	# ...OVER WHAT STANDS IN ITS WAY ([method _clearance]), as a carry goes
+	# ...over what stands in its way ([method _clearance]), as a carry goes
 	if lin > 0.0 and lin < 1.0 and not e.has("_clear"):
 		e["_clear"] = _clearance(tr, p_from, mouth, Vector3.ZERO, Vector3.ZERO, r_from, r_at, q0, x0, seed, float(e["t0"]) + (w.x + w.y) * 0.5 * d)
-		# ...AND OVER WHAT HAS BEEN BUILT: the bricks are in another world from what an act moves, and a cup taken up late in the show would go through the model
+		# ...and over what has been built: the bricks are in another world from what an act moves, and a cup taken up late in the show would go through the model
 		if assembly != null and assembly.log != null:
 			e["_clear"] = maxf(float(e["_clear"]), lift_over(p_from, mouth, seed, assembly.built_reach(), q0.y - _lowest_under(tr, x0)))
 	var lift := maxf(DRINK_LIFT, float(e.get("_clear", 0.0)))
@@ -2852,7 +2853,7 @@ func _drink_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from
 	return _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
 
 
-## HOW HIGH THE FOOT OF WHAT TRACK [param tr] MOVES STANDS, where [param x0] builds it (meters).
+## How high the foot of what track [param tr] moves stands, where [param x0] builds it (meters).
 func _lowest_under(tr: Dictionary, x0: Transform3D) -> float:
 	var box: AABB
 	if tr.has("_ti"):
@@ -2862,7 +2863,7 @@ func _lowest_under(tr: Dictionary, x0: Transform3D) -> float:
 	return box.position.y
 
 
-## THE LEAST LIFT THAT TAKES A MOVE FROM [param a] TO [param b] OVER WHAT [param built] SAYS STANDS THERE ([method TableAssembly.built_reach]), the thing's foot [param foot] under the point moved. Looked at along the way,
+## The least lift that takes a move from [param a] to [param b] over what [param built] says stands there ([method TableAssembly.built_reach]), the thing's foot [param foot] under the point moved. Looked at along the way,
 ## with a little more each time until it clears: none, for a way that never comes over it.
 static func lift_over(a: Vector3, b: Vector3, seed: int, built: Dictionary, foot: float) -> float:
 	var at: Vector2 = built["at"]
@@ -2882,7 +2883,7 @@ static func lift_over(a: Vector3, b: Vector3, seed: int, built: Dictionary, foot
 	return lift
 
 
-## WHERE WHAT IS DRUNK FROM IS HELD, its pivot [param q0] being where [param x0] builds it: close under the lens, all of it past the frame's foot however big it is. The lens sees as far down as its field does, so
+## Where what is drunk from is held, its pivot [param q0] being where [param x0] builds it: close under the lens, all of it past the frame's foot however big it is. The lens sees as far down as its field does, so
 ## at [constant DRINK_FAR] along its axis the thing's middle goes as far below that as it reaches, measured square to the frame's edge.
 func _to_the_mouth(tr: Dictionary, x0: Transform3D, q0: Vector3) -> Vector3:
 	var box: AABB
@@ -2909,9 +2910,10 @@ func _carried_to(tr: Dictionary, q0: Vector3, T: float) -> Vector3:
 	return place_of(tr.get("to"), q0, T) + (tr["by"] as Vector3) * 0.01 + off if tr.has("to") else _home_of(tr, T) * q0 + (tr["by"] as Vector3) * 0.01
 
 
-## HOME, for carry [param tr] with no `to` (show time [param T]): for a thing, where it was built; for a part, where it was
-## built IN ITS THING, the thing as it stands now - a pestle put back goes into its mortar where the mortar is, never into
-## the air or the wall where the mortar had stood (the-quiet-crucible 841899). As a move from where it was built.
+## Home, for carry [param tr] with no `to` (show time [param T]): for a thing, where it was built; for a
+## part, where it was built in its thing, the thing as it stands now - a pestle put back goes into its
+## mortar where the mortar is, never into the air or the wall where the mortar had stood. As a move from
+## where it was built.
 func _home_of(tr: Dictionary, T: float) -> Transform3D:
 	if tr.has("_ti"):
 		return Transform3D.IDENTITY
@@ -2922,9 +2924,8 @@ func _home_of(tr: Dictionary, T: float) -> Transform3D:
 		return Transform3D.IDENTITY
 	var ti := int((works[wi] as Dictionary)["thing"])
 	var home := _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse()
-	# ...ON THE BAKE'S TWIN, INTO THE PART IT IS A PART OF WHERE THAT PART REALLY IS: a rigid body the physics set down a
-	# centimeter from where the acts put it ([member posed]) takes its stopper back where it is - put back where the acts had
-	# the jar, the sulfur's cork stood on its rim and fell beside it when let go
+	# ...on the bake's twin, into the part it is a part of where that part really is: a rigid body the physics set down a
+	# centimeter from where the acts put it ([member posed]) takes its stopper back where it is
 	var pw := int(_parent_work.get(wi, -1))
 	if pw >= 0 and posed.has(pw):
 		var real: Transform3D = posed[pw]
@@ -2935,13 +2936,12 @@ func _home_of(tr: Dictionary, T: float) -> Transform3D:
 	return home
 
 
-## HOW HIGH A CARRY MUST LIFT to clear what stands under its way (meters, the lift at its highest): carry [param tr]'s thing
-## or part, from pivot [param p_from] to [param to] turned from [param r_from] to [param r_to] ([param ma], [param mb], [param
-## seed]: its way as [method Hands.carried] has it), looked at through the middle of its move where the hand has lifted it -
-## its lowest point kept [constant CLEAR_GAP] over the highest thing under it there, at show time [param T]. A hand lifts a
-## thing over what is in its way: the written lift is the least it rises, never what it must. (the-quiet-crucible 841899: the
-## ladle carried home with a 6 cm lift went into the 8.5 cm recipe tin between it and its rest, was held back on it, and lay
-## on it to the end of the show.)
+## How high a carry must lift to clear what stands under its way (meters, the lift at its highest):
+## carry [param tr]'s thing or part, from pivot [param p_from] to [param to] turned from [param r_from] to
+## [param r_to] ([param ma], [param mb], [param seed]: its way as [method Hands.carried] has it), looked
+## at through the middle of its move where the hand has lifted it - its lowest point kept [constant
+## CLEAR_GAP] over the highest thing under it there, at show time [param T]. A hand lifts a thing over
+## what is in its way: the written lift is the least it rises, never what it must.
 func _clearance(tr: Dictionary, p_from: Vector3, to: Vector3, ma: Vector3, mb: Vector3, r_from: Basis, r_to: Basis, q0: Vector3,
 		x0: Transform3D, seed: int, T: float) -> float:
 	var skip := int(tr.get("_ti", -1))
@@ -2966,7 +2966,7 @@ func _clearance(tr: Dictionary, p_from: Vector3, to: Vector3, ma: Vector3, mb: V
 	return minf(need, CLEAR_MOST)
 
 
-## HOW HIGH TRACK [param tr]'s THING OR PART, posed [param x] at show time [param T], must rise straight before it goes across - or
+## How high track [param tr]'s thing or part, posed [param x] at show time [param T], must rise straight before it goes across - or
 ## come down straight after - to clear what stands close round it (meters, its lowest point over the highest thing within
 ## [constant AMONG] of what it covers, and [constant CLEAR_GAP] more): a jar in a row, a vial in its rack. Nothing close, none.
 func _rise_among(tr: Dictionary, x: Transform3D, T: float) -> float:
@@ -2980,10 +2980,10 @@ func _rise_among(tr: Dictionary, x: Transform3D, T: float) -> float:
 	return maxf(top + CLEAR_GAP - low, 0.0) if top > -INF and top > low + 0.002 else 0.0
 
 
-## WHERE TO LOOK UNDER box [param box] posed [param x]: `[points across the whole of what it covers, its lowest point's height]`
-## - a grid [constant CLEAR_GRID] by CLEAR_GRID over it, never its corners alone: an open jar's rim is a ring four millimeters
-## wide, and the corners and middle of another jar's box carried over it looked down into its hollow at its floor, and the jar
-## was carried into the rim (the-quiet-crucible 841899's resin jars, fetched one at a time).
+## Where to look under box [param box] posed [param x]: `[points across the whole of what it covers,
+## its lowest point's height]` - a grid [constant CLEAR_GRID] by CLEAR_GRID over it, never its corners
+## alone: an open jar's rim is a ring four millimeters wide, and a box's corners and middle could look
+## down into another jar's hollow at its floor.
 static func _probes_of(x: Transform3D, box: AABB) -> Array:
 	var lo := Vector3(INF, INF, INF)
 	var hi := Vector3(-INF, -INF, -INF)
@@ -2998,12 +2998,12 @@ static func _probes_of(x: Transform3D, box: AABB) -> Array:
 	return [probes, lo.y]
 
 
-## HOW HIGH EACH STRETCH OF A PATH MUST RISE over what stands under its way (meters, at its middle): path entry [param e] of
-## track [param tr], its [param keys] from pivot [param p_from] turned [param r_from], its slopes [param mk] ([method _chains]),
-## [param d] seconds. A path's keys are where the puppeteer sends it, and a hand going from one to the next goes over what is in
-## between, as a carry's does ([method _clearance]) - a stretch shorter across than [constant CLEAR_FROM] (a lift, a lowering) is
-## its own. (the-quiet-crucible 841899, 2026-10-31: the balance's way home at 17 cm, the recipe tin's open lid under it, was held
-## back 53 cm short and left there.)
+## How high each stretch of a path must rise over what stands under its way (meters, at its middle): path
+## entry [param e] of track [param tr], its [param keys] from pivot [param p_from] turned [param r_from],
+## its slopes [param mk] ([method _chains]), [param d] seconds. A path's keys are where the puppeteer
+## sends it, and a hand going from one to the next goes over what is in between, as a carry's does
+## ([method _clearance]) - a stretch shorter across than [constant CLEAR_FROM] (a lift, a lowering) is
+## its own.
 func _path_clearance(e: Dictionary, tr: Dictionary, keys: Array, mk: PackedVector3Array, p_from: Vector3, r_from: Basis, d: float,
 		q0: Vector3, x0: Transform3D, seed: int) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
@@ -3040,16 +3040,15 @@ func _path_clearance(e: Dictionary, tr: Dictionary, keys: Array, mk: PackedVecto
 	return out
 
 
-## A POUR ([constant Motions.LAWS] `pour`) at [param u] through its act ([param d] seconds; show time [param T]): the vessel
-## its track [param tr] moves, from [param from], BROUGHT OVER THE MOUTH of what it pours into, its lip [param tr]'s `over`
-## above it, its handle turned away and tipped toward it as far as its body needs, at most [constant POUR_PRE] of the way (the first [constant
-## POUR_BRING] of its stretch, over what stands between), then TURNED ABOUT THAT LIP across the view ALONG ITS BRINK - share by
-## share of its inside as the stretch goes, so what flows flows steadily - and back level, its lip rising as it comes back (the
-## last [constant POUR_BACK]). Turned about its lip, the lip stays where it was put, and what flows leaves there, over
-## the mouth: a hand pours so. The physics says what flows, and how much. (the-quiet-crucible 841899, the user: the ladle
-## "dumps liquid into a vial in a strange way, both missing the vial AND pouring from much too high in the air. Not carefully,
-## not slow enough to not make a mess" - its keys, written by hand, held the bowl 8 cm over the vial and turned it about its
-## middle, so the lip swung across the mouth as it tipped.)
+## A pour ([constant Motions.LAWS] `pour`) at [param u] through its act ([param d] seconds; show time
+## [param T]): the vessel its track [param tr] moves, from [param from], brought over the mouth of what it
+## pours into, its lip [param tr]'s `over` above it, its handle turned away and tipped toward it as far as
+## its body needs, at most [constant POUR_PRE] of the way (the first [constant POUR_BRING] of its
+## stretch, over what stands between), then turned about that lip across the view along its brink - share
+## by share of its inside as the stretch goes, so what flows flows steadily - and back level, its lip
+## rising as it comes back (the last [constant POUR_BACK]). Turned about its lip, the lip stays where it
+## was put, and what flows leaves there, over the mouth: a hand pours so. The physics says what flows,
+## and how much.
 func _pour_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from: Transform3D, x0: Transform3D, q0: Vector3) -> Transform3D:
 	var w: Vector2 = tr["between"]
 	var lin := clampf((u - w.x) / maxf(w.y - w.x, 1e-6), 0.0, 1.0)
@@ -3069,7 +3068,7 @@ func _pour_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from:
 	var seed := int(tr.get("_hand", 0))
 	var above := at + Vector3.UP * float(plan["rise"])
 	if lin < POUR_BRING * POUR_OVER:
-		# ...BROUGHT OVER IT LEVEL, as a hand carries what is full, over what is between ([method _clearance]) - its lip over the
+		# ...brought over it level, as a hand carries what is full, over what is between ([method _clearance]) - its lip over the
 		# mouth, high enough that its body clears it
 		var s := lin / (POUR_BRING * POUR_OVER)
 		var p_at := above - r_level * lip
@@ -3081,7 +3080,7 @@ func _pour_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from:
 		var dr: Array = Hands.drift(T, seed, Hands.held(s))
 		return _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
 	if lin < POUR_BRING:
-		# ...THEN LOWERED ONTO IT, tipping toward it about its lip as it comes down - so its body swings away from the mouth, and
+		# ...then lowered onto it, tipping toward it about its lip as it comes down - so its body swings away from the mouth, and
 		# whatever comes over the lip already falls into it
 		var sd := Hands.timing((lin - POUR_BRING * POUR_OVER) / (POUR_BRING * (1.0 - POUR_OVER)))
 		var r := Basis(axis, pre * sd) * r_level
@@ -3095,7 +3094,7 @@ func _pour_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from:
 	var wet_end := maxf(pre, brink[POUR_SHARES])
 	var most := maxf(wet_end, float(plan.get("tip", brink[POUR_SHARES])))
 	# ...the tipping's time shared by the turn each part makes: the brink's as much of it as its turn is of the whole (a full jug's
-	# most of it; a dry dish's, whose brink ends 26 degrees over, a little - it had flipped from there to its tip in half a second)
+	# most of it; a dry dish's, whose brink ends 26 degrees over, a little)
 	var wet := clampf((wet_end - pre) / maxf(most - pre, 1e-6), POUR_WET.x, POUR_WET.y) if most > wet_end + 1e-4 else 1.0
 	if s2 < back * wet:
 		# ...along its brink, share by share as the stretch goes - a little eased in and out - and never less than it came in at
@@ -3117,10 +3116,11 @@ func _pour_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from:
 	return _rebuilt(r, lip_at - r * lip + (dr[0] as Vector3), q0, x0)
 
 
-## WHAT A POUR DOES ([method _pour_at]), found once: track [param tr]'s vessel, its pivot [param p_from] and turn [param
-## r_from] as it begins (from as built), the pivot as built [param q0], show time [param T] - `{level: its turn brought
-## level with its handle away from the mouth, lip: its lip from the pivot as built, at: where the lip is held, axis: what it
-## turns about}`, or empty: it holds no vessel, or names nothing to pour into.
+## What a pour does ([method _pour_at]), found once: track [param tr]'s vessel, its pivot [param p_from]
+## and turn [param r_from] as it begins (from as built), the pivot as built [param q0], show time [param
+## T] - `{level: its turn brought level with its handle away from the mouth, lip: its lip from the pivot
+## as built, at: where the lip is held, axis: what it turns about}`, or empty: it holds no vessel, or
+## names nothing to pour into.
 func _pour_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: float) -> Dictionary:
 	var vs_sd: Dictionary = {}
 	var vs: Vessel = null
@@ -3136,7 +3136,7 @@ func _pour_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: 
 	if vs == null or mouth.is_empty():
 		return {}
 	var rest: Transform3D = vs_sd["rest"]
-	# BROUGHT LEVEL: its opening turned straight up, the least turn from how it is held
+	# Brought level: its opening turned straight up, the least turn from how it is held
 	var axis0 := (rest.basis * Vector3.UP).normalized()
 	var r_level := Basis(Quaternion(r_from * axis0, Vector3.UP)) * r_from
 	var rim_mid := Vector3.ZERO
@@ -3146,7 +3146,7 @@ func _pour_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: 
 	var m: Vector3 = mouth["at"]
 	var way := Vector3(m.x - (p_from.x + (r_level * (rim_mid - q0)).x), 0.0, 0.0)
 	var dir := Vector3(signf(way.x) if absf(way.x) > 0.005 else -1.0, 0.0, 0.0)
-	# ...ITS HANDLE AWAY FROM THE MOUTH: what it is held by (its pivot) turned about its opening to the far side, across the view
+	# ...its handle away from the mouth: what it is held by (its pivot) turned about its opening to the far side, across the view
 	var handle := r_level * (q0 - rim_mid)
 	handle.y = 0.0
 	if handle.length() > POUR_HANDLE:
@@ -3163,9 +3163,9 @@ func _pour_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: 
 	var lip := rest * vs.lip[k_best] - q0
 	var axis := Vector3.UP.cross(dir).normalized()
 	var tip := deg_to_rad(float(tr.get("tip", 120.0)))
-	# ITS BRINK, share by share: the least tip at which what fills that share of its inside reaches the lip's crest - tipped along
-	# it, a full vessel's flow is steady, never a gush (841899's ladle, tipped 36 degrees on its way in and then quickly, gushed,
-	# and a gush throws its stream past a mouth 1.6 cm across)
+	# Its brink, share by share: the least tip at which what fills that share of its inside reaches the
+	# lip's crest - tipped along it, a full vessel's flow is steady, never a gush (a gush throws its
+	# stream past a small mouth)
 	var brink := PackedFloat32Array()
 	for j in POUR_SHARES + 1:
 		var f := maxf(1.0 - float(j) / float(POUR_SHARES), 0.02)
@@ -3177,23 +3177,23 @@ func _pour_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: 
 				found = th
 				break
 		brink.append(minf(found, tip))
-	# HELD OVER THE MOUTH: `over` above its rim - as low as its width allows, left out - and SHORT OF ITS MIDDLE BY THE STREAM'S
-	# THROW: over a crest what flows leaves at about sqrt(2/3 g head) and is carried sideways as it falls, sqrt(4/3 head fall)
-	# (841899's ladle, its lip over the vial's middle 2 cm up, threw its stream 1.3 cm past a mouth 1.6 cm across) - then high
-	# enough that the vessel's body clears the rim beside it as it tips from where it comes in to its most ([method _pour_clear])
+	# Held over the mouth: `over` above its rim - as low as its width allows, left out - and short of its
+	# middle by the stream's throw: over a crest what flows leaves at about sqrt(2/3 g head) and is carried
+	# sideways as it falls, sqrt(4/3 head fall) - then high enough that the vessel's body clears the rim
+	# beside it as it tips from where it comes in to its most ([method _pour_clear])
 	var mr := float(mouth["r"])
 	var over := float(tr.get("over", -1.0)) * 0.01 if float(tr.get("over", -1.0)) >= 0.0 else clampf(mr * POUR_OVER_R, POUR_OVER_LEAST, POUR_OVER_MOST)
 	var throw := sqrt(4.0 / 3.0 * POUR_HEAD * over)
 	var at := m + Vector3.UP * over - dir * minf(throw, mr * 0.8)
-	# ...ITS BODY CLEAR of the mouth's rim beside it, all of it ([method _pour_clear]): tipped from where it comes in to its most,
+	# ...its body clear of the mouth's rim beside it, all of it ([method _pour_clear]): tipped from where it comes in to its most,
 	# held there - and on the way down onto it, tipping as it comes, from as high as it was brought level
 	var own: Array = []
 	for sd in _solids_ref:
 		if (tr.has("_ti") and int((sd as Dictionary)["thing"]) == int(tr["_ti"])) or (tr.has("_wi") and _within(int((sd as Dictionary)["wi"]), int(tr["_wi"])) == 1):
 			own.append(sd)
-	# ...TIPPED AS IT COMES IN ONLY AS FAR AS ITS BODY NEEDS to swing clear of the mouth: a tall jug well, a shallow ladle hardly
-	# - and HELD A LITTLE HIGHER rather than tipped early: past its brink as it comes in, a full vessel gushes before it is over the
-	# mouth (841899's ladle, tipped 36 degrees coming in, threw 25 ml past a vial)
+	# ...tipped as it comes in only as far as its body needs to swing clear of the mouth: a tall jug well,
+	# a shallow ladle hardly - and held a little higher rather than tipped early: past its brink as it
+	# comes in, a full vessel gushes before it is over the mouth
 	var pre := tip * POUR_PRE
 	for kk in 7:
 		var th := tip * POUR_PRE * float(kk) / 6.0
@@ -3233,13 +3233,12 @@ func _pour_clear(own: Array, r: Basis, p: Vector3, q0: Vector3, m: Vector3, mr: 
 	return maxf(m.y + POUR_GAP - low, 0.0) if low < INF else 0.0
 
 
-## A DIP ([constant Motions.LAWS] `dip`) at [param u] through its act ([param d] seconds; show time [param T]): the vessel its
-## track [param tr] moves, from [param from], BROUGHT OVER THE MOUTH of what holds the liquid, its handle out over the rim the
-## way it already points, tipped only as far as its handle needs to clear the rim ([method _dip_plan]); LOWERED STRAIGHT IN until it is
-## near the floor, HELD while it fills, DRAWN UP SLOWLY at that tip - so what it cannot hold falls back in - and BROUGHT LEVEL
-## once it is out. (the-quiet-crucible 841899: its ladle, its dip written as an aim's keys, came up full and tipped 30 degrees at
-## 16 cm a second beside the rim, and 10 ml went over the rim onto the table - "the spoon spills liquid in a strange way when
-## lifting from the cauldron".)
+## A dip ([constant Motions.LAWS] `dip`) at [param u] through its act ([param d] seconds; show time
+## [param T]): the vessel its track [param tr] moves, from [param from], brought over the mouth of what
+## holds the liquid, its handle out over the rim the way it already points, tipped only as far as its
+## handle needs to clear the rim ([method _dip_plan]); lowered straight in until it is near the floor,
+## held while it fills, drawn up slowly at that tip - so what it cannot hold falls back in - and brought
+## level once it is out.
 func _dip_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from: Transform3D, x0: Transform3D, q0: Vector3) -> Transform3D:
 	var w: Vector2 = tr["between"]
 	var lin := clampf((u - w.x) / maxf(w.y - w.x, 1e-6), 0.0, 1.0)
@@ -3274,7 +3273,7 @@ func _dip_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from: 
 		c = low
 	elif lin < DIP_PHASES.w:
 		c = low.lerp(top, Hands.timing((lin - DIP_PHASES.z) / (DIP_PHASES.w - DIP_PHASES.z)))
-	# ...TIPPED AT EACH DEPTH NO MORE THAN ITS WALLS ASK, so it comes up as level as it can, and level at last
+	# ...tipped at each depth no more than its walls ask, so it comes up as level as it can, and level at last
 	var tip := _dip_tip(plan, c.y)
 	if lin >= DIP_PHASES.w:
 		tip *= 1.0 - Hands.timing((lin - DIP_PHASES.w) / (1.0 - DIP_PHASES.w))
@@ -3283,13 +3282,14 @@ func _dip_at(e: Dictionary, tr: Dictionary, u: float, d: float, T: float, from: 
 	return _rebuilt(r, c - r * mid + (dr[0] as Vector3), q0, x0)
 
 
-## WHAT A DIP DOES ([method _dip_at]), found once: track [param tr]'s vessel, its pivot [param p_from] and turn [param r_from] as
-## it begins (from as built), the pivot as built [param q0], show time [param T] - `{level, down: its turn level and tipped to go
-## in, mid: its rim's middle from the pivot as built, top: where that middle is held over the mouth, low: and down near the floor}`,
-## or empty. THE LEAST TIP AT EACH DEPTH: tipped in steps until its body - every solid of what moves - clears the other's walls
-## by [constant POUR_GAP], at depths from over the rim down to [constant DIP_FLOOR] over its floor - as deep as any tip goes -
-## with its bowl as far across from the rim its handle goes over as goes deepest and least tipped (a straight handle at a bowl's
-## rim tips 45 degrees to go in from the middle of a deep pot, and a shallow bowl holds nothing at 45).
+## What a dip does ([method _dip_at]), found once: track [param tr]'s vessel, its pivot [param p_from] and
+## turn [param r_from] as it begins (from as built), the pivot as built [param q0], show time [param T] -
+## `{level, down: its turn level and tipped to go in, mid: its rim's middle from the pivot as built, top:
+## where that middle is held over the mouth, low: and down near the floor}`, or empty. The least tip at
+## each depth: tipped in steps until its body - every solid of what moves - clears the other's walls by
+## [constant POUR_GAP], at depths from over the rim down to [constant DIP_FLOOR] over its floor - as deep
+## as any tip goes - with its bowl as far across from the rim its handle goes over as goes deepest and
+## least tipped.
 func _dip_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: float) -> Dictionary:
 	var vs_sd: Dictionary = {}
 	var vs: Vessel = null
@@ -3316,9 +3316,9 @@ func _dip_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: f
 	rim_mid /= float(maxi(vs.rim.size(), 1))
 	var mid := rim_mid - q0
 	var m: Vector3 = into["at"]
-	# ...ITS HANDLE OUT OVER THE RIM WHICHEVER WAY IT ALREADY POINTS - a rim goes all round; turned to point back the way it came,
-	# 841899's ladle was swung round 160 degrees lying on its rest, swept into the table and was 44 cm behind its hand - or, with
-	# no handle, the way it came
+	# ...its handle out over the rim whichever way it already points - a rim goes all round; turned to
+	# point back the way it came, a tool would swing round lying on its rest and sweep into the table - or,
+	# with no handle, the way it came
 	var handle := r_level * (q0 - rim_mid)
 	handle.y = 0.0
 	var out := p_from + r_level * mid - m
@@ -3348,7 +3348,7 @@ func _dip_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: f
 			if tf.sample(tinv * (c + r * q)).x < POUR_GAP:
 				return false
 		return true
-	# ...AS FAR ACROSS AS IT GOES: the further its bowl from the rim its handle goes over, the less it must tip to go in
+	# ...as far across as it goes: the further its bowl from the rim its handle goes over, the less it must tip to go in
 	var reach := 0.0
 	for q in vs.rim:
 		var o := r_level * (rest * q - rim_mid)
@@ -3358,7 +3358,7 @@ func _dip_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: f
 	var pick: Dictionary = {}
 	for kx in 4:
 		var xz := m - hdir * across * float(kx) / 3.0
-		# THE LEAST TIP AT EACH DEPTH, from over the rim down toward the floor: it goes in no further than some tip clears
+		# The least tip at each depth, from over the rim down toward the floor: it goes in no further than some tip clears
 		var hs := PackedFloat32Array()
 		var tips := PackedFloat32Array()
 		var floor_c := float(into["floor"]) + DIP_FLOOR
@@ -3389,7 +3389,7 @@ func _dip_plan(tr: Dictionary, p_from: Vector3, r_from: Basis, q0: Vector3, T: f
 		"top": Vector3(xz_p.x, hs_p[0], xz_p.z), "low": Vector3(xz_p.x, hs_p[hs_p.size() - 1], xz_p.z)}
 
 
-## How far a thing brought somewhere has turned at [param s] of its way there: LIFTED BEFORE IT TURNS - none of it for the first
+## How far a thing brought somewhere has turned at [param s] of its way there: lifted before it turns - none of it for the first
 ## [constant BRING_TURN_FROM] of the way, so a long thing lying down never sweeps the table as it turns.
 static func _turn_share(s: float) -> float:
 	return clampf((s - BRING_TURN_FROM) / (1.0 - BRING_TURN_FROM), 0.0, 1.0)
@@ -3408,9 +3408,9 @@ static func _dip_tip(plan: Dictionary, y: float) -> float:
 	return tips[tips.size() - 1]
 
 
-## WHAT HOLDS THE LIQUID A DIP NAMES ([param into]: a thing, a part, or "thing/part") at show time [param T]: `{sd: its vessel's
-## solid, xf: where that solid is, at: its rim's middle, rim: its rim's lowest height, floor: its inside's lowest (the table's
-## space, meters)}` - its biggest inside - or empty.
+## What holds the liquid a dip names ([param into]: a thing, a part, or "thing/part") at show time
+## [param T]: `{sd: its vessel's solid, xf: where that solid is, at: its rim's middle, rim: its rim's
+## lowest height, floor: its inside's lowest (the table's space, meters)}` - its biggest inside - or empty.
 func _vessel_into(into: String, T: float) -> Dictionary:
 	var name := into.strip_edges()
 	if name.is_empty():
@@ -3456,9 +3456,9 @@ func _vessel_into(into: String, T: float) -> Dictionary:
 	return out
 
 
-## THE MOUTH OF WHAT A POUR NAMES ([param into]: a thing, a part - "vial 1" or "rack/vial 1" - or a point "thing.point") at
-## show time [param T]: `{at: the middle of its rim (the table's space), r: its radius (meters)}` - a point's, 1 cm across -
-## or empty, naming nothing on the table.
+## The mouth of what a pour names ([param into]: a thing, a part - "vial 1" or "rack/vial 1" - or a point
+## "thing.point") at show time [param T]: `{at: the middle of its rim (the table's space), r: its radius
+## (meters)}` - a point's, 1 cm across - or empty, naming nothing on the table.
 func _mouth_of(into: String, T: float) -> Dictionary:
 	var name := into.strip_edges()
 	if name.is_empty():
@@ -3523,17 +3523,18 @@ func _top_under(probes: Array, skip: int, T: float, skip_wi := -1, meshes: Varia
 	return top
 
 
-## Whether a ray straight down through point [param c] can meet [method _meshes_at]'s mesh [param m]: its box where it is spans
-## the point across - a set-down's forty rays and a way over's hundreds had each been cast at every mesh on the table.
+## Whether a ray straight down through point [param c] can meet [method _meshes_at]'s mesh [param m]: its
+## box where it is spans the point across - so a set-down's rays are not each cast at every mesh on the table.
 static func _over(m: Array, c: Vector3) -> bool:
 	var b: AABB = m[2]
 	return c.x >= b.position.x - 0.001 and c.x <= b.end.x + 0.001 and c.z >= b.position.z - 0.001 and c.z <= b.end.z + 0.001
 
 
-## WHETHER A THING ([param owner] "t", [param oi] its index) OR PART ("w") IS WHERE IT WAS BUILT AT EVERY MOMENT: no act moves it,
-## nor the parts it hangs from, nor its thing, none of them runs, swings or hangs from a swing - so where a search finds it needs
-## nothing worked out ([method _room], [method _meshes_at]: of a table's three hundred solids, most). The app's work only - the
-## bake's twin has where the physics has things ([member posed]), and asks every one. Found once an act's set ([member _still_of]).
+## Whether a thing ([param owner] "t", [param oi] its index) or part ("w") is where it was built at every
+## moment: no act moves it, nor the parts it hangs from, nor its thing, none of them runs, swings or hangs
+## from a swing - so where a search finds it needs nothing worked out ([method _room], [method
+## _meshes_at]: of a table's three hundred solids, most). The app's work only - the bake's twin has where
+## the physics has things ([member posed]), and asks every one. Found once an act's set ([member _still_of]).
 func _still(owner: String, oi: int) -> bool:
 	if not posed.is_empty() or not posed_things.is_empty():
 		return false
@@ -3558,10 +3559,10 @@ func _still(owner: String, oi: int) -> bool:
 	return out
 
 
-## WHAT A RAY DOWN MEETS AT SHOW TIME [param T]: `[[its mesh, the table's space back to where it was built, its box there]]` - every thing but
-## [param skip], AND EVERY FREE PART WHERE IT IS THEN ([method _part_mesh_of]), but the one moved ([param skip_wi]) and what is in
-## it, or the thing moved whole's own. Posed once for all a search's points ([method _top_under], [method _settle]): a carry's
-## way over the table asked it [constant CLEAR_SAMPLES] times over at one moment, a set-down once a point of its foot.
+## What a ray down meets at show time [param T]: `[[its mesh, the table's space back to where it was
+## built, its box there]]` - every thing but [param skip], and every free part where it is then ([method
+## _part_mesh_of]), but the one moved ([param skip_wi]) and what is in it, or the thing moved whole's own.
+## Posed once for all a search's points ([method _top_under], [method _settle]), not once a point of a foot.
 func _meshes_at(skip: int, T: float, skip_wi := -1) -> Array:
 	var out: Array = []
 	for tj in things.size():
@@ -3580,14 +3581,15 @@ func _meshes_at(skip: int, T: float, skip_wi := -1) -> Array:
 	return out
 
 
-## ROOM FOR IT: how far to one side (meters, level) track [param tr]'s thing or part, its move ending at [param end] at show time
-## [param T], is set so that it stands in nothing - the nearest place, in rings out from where it was sent ([constant ROOM_STEP]),
-## where none of its own surface is [constant ROOM_DEEP] into a solid as the plan has that solid then; nothing where it was sent
-## is clear, or nothing near is. What it is a part of or was built in is never in its way: a cork goes back into its jar, a
-## pestle into its mortar, a ladle onto its rest. Measured on the solids' own fields ([member _solids_ref]), so a cup dipped into
-## a bowl's hollow is clear of the bowl, where any box round the bowl is not. THE PUPPETEER SAYS WHERE, THE HAND FINDS ROOM
-## (next/table_physics.md, "Primitives"): two acts had sent the balance and the batch jars to the same spot, and each held the
-## other back by ten and nineteen centimeters for minutes (the-quiet-crucible 841899, 2026-10-31).
+## Room for it: how far to one side (meters, level) track [param tr]'s thing or part, its move ending at
+## [param end] at show time [param T], is set so that it stands in nothing - the nearest place, in rings
+## out from where it was sent ([constant ROOM_STEP]), where none of its own surface is [constant
+## ROOM_DEEP] into a solid as the plan has that solid then; nothing where it was sent is clear, or
+## nothing near is. What it is a part of or was built in is never in its way: a cork goes back into its
+## jar, a pestle into its mortar, a ladle onto its rest. Measured on the solids' own fields ([member
+## _solids_ref]), so a cup dipped into a bowl's hollow is clear of the bowl, where any box round the bowl
+## is not. The puppeteer says where, the hand finds room (next/table_physics.md, "Primitives"): two acts
+## that send things to the same spot do not hold each other back.
 func _room(tr: Dictionary, end: Transform3D, T: float) -> Vector3:
 	if _solids_ref.is_empty():
 		return Vector3.ZERO
@@ -3655,10 +3657,9 @@ func _room(tr: Dictionary, end: Transform3D, T: float) -> Vector3:
 	return Vector3.ZERO
 
 
-## HOW FAR A THING SET DOWN rises or falls to rest on what is under it (carry's `down`, [constant Motions.LAWS]):
-## [param tr]'s thing or part, posed [param x], its lowest point brought onto the table's top or onto the highest
-## thing under it where that thing is at show time [param T] (meters). The first real puppeteer laid a stopper, a
-## lid and a pestle down by hand-worked heights, and was told each passed through the table.
+## How far a thing set down rises or falls to rest on what is under it (carry's `down`, [constant
+## Motions.LAWS]): [param tr]'s thing or part, posed [param x], its lowest point brought onto the table's
+## top or onto the highest thing under it where that thing is at show time [param T] (meters).
 func _settle(tr: Dictionary, x: Transform3D, T: float) -> float:
 	var skip := int(tr.get("_ti", -1))
 	var box: AABB = (things[skip] as Dictionary)["box"] if skip >= 0 else (((works[int(tr["_wi"])] as Dictionary)["w"] as Dictionary).get("box", AABB()) as AABB)
@@ -3670,9 +3671,8 @@ func _settle(tr: Dictionary, x: Transform3D, T: float) -> float:
 		low = minf(low, c.y)
 		top = maxf(top, c.y)
 		probes.append(c)
-	# ITS FOOT, NEVER ITS BOX: what it stands on is what is under its own lowest surface - a round mortar's box corners stand
-	# out past its base, over the edge of what is beside it, and it was set down 9 mm up on that (the-quiet-crucible 841899:
-	# its pestle, put back where it was built in it, went into its wall)
+	# Its foot, never its box: what it stands on is what is under its own lowest surface - a round
+	# mortar's box corners stand out past its base, over the edge of what is beside it
 	var foot := _foot(tr, x)
 	if not foot.is_empty():
 		probes = foot
@@ -3682,8 +3682,7 @@ func _settle(tr: Dictionary, x: Transform3D, T: float) -> float:
 	var under := 0.0
 	var own_wi := int(tr.get("_wi", -1))
 	# ...each thing, and each free part where it is then ([method _part_mesh_of]: a jar set down beside another fetched on its
-	# own), POSED ONCE, then met by every point of the foot (posed again for each point, a ladle set down on its rest asked the
-	# whole table where it stood forty times over: 109 ms on the app's thread, every plan a live reading made - 841899)
+	# own), posed once, then met by every point of the foot
 	var meshes := _meshes_at(skip, T, own_wi)
 	for c in probes:
 		var from := Vector3((c as Vector3).x, top + 0.02, (c as Vector3).z)
@@ -3699,7 +3698,7 @@ func _settle(tr: Dictionary, x: Transform3D, T: float) -> float:
 	return under - low + SET_GAP
 
 
-## WHERE TRACK [param tr]'s THING OR PART STANDS, posed [param x]: the points of its own surfaces within [constant FOOT]
+## Where track [param tr]'s thing or part stands, posed [param x]: the points of its own surfaces within [constant FOOT]
 ## of its lowest ([method ShapeField.surface_points]) - none where the physics' solids are not to hand.
 func _foot(tr: Dictionary, x: Transform3D) -> Array:
 	if _solids_ref.is_empty():
@@ -3780,7 +3779,7 @@ static func _rebuilt(r: Basis, p: Vector3, q0: Vector3, x0: Transform3D) -> Tran
 
 # --- posing ---------------------------------------------------------------------------------------
 
-## EVERYTHING THE WORK MOVES, at show time [param t]: whole things, then their parts, then what smokes and
+## Everything the work moves, at show time [param t]: whole things, then their parts, then what smokes and
 ## pours and bursts, and every liquid's surface.
 func tick(t: float) -> void:
 	if assembly != null:
@@ -3790,11 +3789,11 @@ func tick(t: float) -> void:
 	if things.is_empty():
 		return
 	var c := Time.get_ticks_usec() if profiling else 0
-	# WHAT IS IN THINGS, baked as far as this moment - first, since a thing an act moves is drawn where the bake has it
+	# What is in things, baked as far as this moment - first, since a thing an act moves is drawn where the bake has it
 	if physics != null:
 		physics.tick(t)
 	c = _spent("physics drawn", c)
-	# WHAT MOVED THIS FRAME: -1 - a thing, or a part. A NODE TAKES WHAT HANGS FROM IT, in the picture, and what the bake has elsewhere
+	# What moved this frame: -1 - a thing, or a part. A node takes what hangs from it, in the picture, and what the bake has elsewhere
 	# is posed against it again (below)
 	var stirred := {}
 	for ti in things.size():
@@ -3803,7 +3802,7 @@ func tick(t: float) -> void:
 			continue
 		var th: Dictionary = things[ti]
 		var node: Node3D = th["node"]
-		# ...WHERE THE BAKE HAS IT, a rigid body ([method TablePhysics._make_rigid]) - the acts' own pose while an act is
+		# ...where the bake has it, a rigid body ([method TablePhysics._make_rigid]) - the acts' own pose while an act is
 		# checked, or where the bake has not got to while the work moves it
 		var baked: Variant = physics.thing_pose_of(ti, t) if physics != null and not _planned and not _outran_ch([ch], t) else null
 		var x := _parent_world(node).affine_inverse() * ((baked as Transform3D) if baked != null else (value(ch, t) as Transform3D))
@@ -3811,21 +3810,20 @@ func tick(t: float) -> void:
 			stirred[-1 - ti] = true
 		node.transform = x
 	c = _spent("things posed", c)
-	# ...and its loose parts and the parts it picks up posed by it ([method _pose_work]) - ONLY WHAT CAN HAVE CHANGED ([method
-	# _settled]): of a table's three hundred parts a frame finds a few moving, and posing every one had been 10 ms of every frame a
-	# live show drew (841899, next/framework_audit.md). After a jump in time, a new plan or a check, every one.
+	# ...and its loose parts and the parts it picks up posed by it ([method _pose_work]) - only what can
+	# have changed ([method _settled]): of a table's three hundred parts a frame finds a few moving. After
+	# a jump in time, a new plan or a check, every one.
 	var full := _full or absf(t - _last_t) > QUIET_JUMP or _planned != _last_planned \
 		or (physics != null and physics._outrun != _last_outrun)
 	_full = false
 	_last_t = t
 	_last_planned = _planned
 	_last_outrun = physics._outrun if physics != null else false
-	# ...AND WHATEVER HANGS FROM WHAT MOVED (2026-11-01, feedback 0004-0007: the pestle laid aside "moving in-sync" with its mortar, "as
-	# if they are stuck together", through the card box, then "clipped through the table", gone and back): a free part's node hangs from
-	# its thing's, and is where the bake has it only as it is posed against that node. [method _settled] asks of the moves WRITTEN on the
-	# thing, and its body moves outside them too - let go and falling, swaying in a hold, catching up - so a part at rest was dragged
-	# along in the picture, the bake never moving it, until the next pose took it back. Parents first, so each is posed against
-	# where its parent is now.
+	# ...and whatever hangs from what moved: a free part's node hangs from its thing's, and is where the
+	# bake has it only as it is posed against that node. [method _settled] asks of the moves written on the
+	# thing, and its body moves outside them too - let go and falling, swaying in a hold, catching up - so
+	# a part at rest would be dragged along in the picture, the bake never moving it, until the next pose
+	# took it back. Parents first, so each is posed against where its parent is now.
 	for wi in _order_of_posing():
 		var wk: Dictionary = works[wi]
 		var pw := int(_parent_work.get(wi, -1))
@@ -3876,7 +3874,7 @@ func _order_of_posing() -> PackedInt32Array:
 	return _pose_order
 
 
-## A FRAME'S COST BY WHAT TOOK IT, while [member profiling] (a probe's): microseconds by section.
+## A frame's cost by what took it, while [member profiling] (a probe's): microseconds by section.
 func _spent(section: String, since: int) -> int:
 	if not profiling:
 		return 0
@@ -3885,10 +3883,10 @@ func _spent(section: String, since: int) -> int:
 	return now
 
 
-## EVERY PART DRAWN OFF WHERE IT FIRST STOOD at [param t], and how it is posed: whether an act holds it then, what the bake
-## has it as (a rigid body's held, asleep, host and touch; a loose thing's), and the bake's pose against the work's - a
-## feedback capture's record of what the live viewer drew (841899's lid, "matching the ladle", moved only live). Each row says the table's own
-## clock (`now`): after a scrub it is neither the report's `time` nor the rail's (feedback 0013: 482 s of bake, 508 s of `time`, 5:19 on the rail).
+## Every part drawn off where it first stood at [param t], and how it is posed: whether an act holds it
+## then, what the bake has it as (a rigid body's held, asleep, host and touch; a loose thing's), and the
+## bake's pose against the work's - a feedback capture's record of what the live viewer drew. Each row
+## says the table's own clock (`now`): after a scrub it is neither the report's `time` nor the rail's.
 func drawn_report(t: float) -> Array:
 	var out: Array = []
 	for wi in _first_drawn:
@@ -3929,7 +3927,7 @@ func drawn_report(t: float) -> Array:
 			if bp != null:
 				r["bake_off_work_cm"] = snappedf((bp as Transform3D).origin.distance_to(_work_world(wi, t).origin) * 100.0, 0.1)
 		out.append(r)
-	# ...and each liquid that holds other than it began with, as the bake has it: a report of a level had nothing to read (feedback 0009-0011)
+	# ...and each liquid that holds other than it began with, as the bake has it
 	if physics != null:
 		var now: Variant = physics.frame_at(t)
 		var began: Variant = physics.frame_at(0.0)
@@ -3943,10 +3941,10 @@ func drawn_report(t: float) -> Array:
 	return out
 
 
-## EACH THING'S SHADE ON THE CLOTH where the thing is now: gone while it is lifted or tipped, under it where it
-## is set down - a thing moved whole, or one whose moving part is most of it seen from above (a pestle that is
-## its own thing; a mortar's pestle leaves the mortar's shade alone). The one place the work reads back what it
-## posed: the shade follows the pose, never the other way.
+## Each thing's shade on the cloth where the thing is now: gone while it is lifted or tipped, under it
+## where it is set down - a thing moved whole, or one whose moving part is most of it seen from above (a
+## pestle that is its own thing; a mortar's pestle leaves the mortar's shade alone). The one place the
+## work reads back what it posed: the shade follows the pose, never the other way.
 func _tick_shades() -> void:
 	for ti in things.size():
 		var th: Dictionary = things[ti]
@@ -3961,7 +3959,7 @@ func _tick_shades() -> void:
 		var box: AABB = th["box"]
 		var area := maxf(box.size.x * box.size.z, 1e-8)
 		var probe := box.get_center()
-		# A FREE PART THAT IS MOST OF THE THING carries the shade as the thing would
+		# A free part that is most of the thing carries the shade as the thing would
 		for wi in th["works"]:
 			var wk: Dictionary = works[wi]
 			if String(wk["kind"]) != "free" or not _part_moves(int(wi)):
@@ -3984,10 +3982,11 @@ func _tick_shades() -> void:
 			n.position = ((sh as Dictionary)["at"] as Vector3) + d
 
 
-## WHETHER WORK [param wi] IS DRAWN AS IT IS AT [param t] ALREADY ([method tick]): no channel it is posed by - its own, its copies',
-## the parts it hangs from, its thing's when it is free - has a move at [param t] (a little either side, so a move's last value is
-## drawn), none of them runs all the time, it swings, hangs from a swing or is written on by no one - and what the physics has it
-## as (a body's pose, a loose thing's, whether it is whole, a liquid's fill) is what was drawn last.
+## Whether work [param wi] is drawn as it is at [param t] already ([method tick]): no channel it is posed
+## by - its own, its copies', the parts it hangs from, its thing's when it is free - has a move at
+## [param t] (a little either side, so a move's last value is drawn), none of them runs all the time, it
+## swings, hangs from a swing or is written on by no one - and what the physics has it as (a body's
+## pose, a loose thing's, whether it is whole, a liquid's fill) is what was drawn last.
 func _settled(wi: int, t: float) -> bool:
 	if not _quiet_spans.has(wi):
 		_quiet_spans[wi] = _spans_for(wi)
@@ -4072,7 +4071,7 @@ func _pose_work(wi: int, t: float) -> void:
 	var base: Vector3 = w.get("base", Vector3.ZERO)
 	var fill := float(value("w%d:fill" % wi, t))
 	var grow := float(value("w%d:grow" % wi, t))
-	# A LIQUID THE PHYSICS KEEPS is as full as it is, its surface cut level ([TablePhysics]): never scaled
+	# A liquid the physics keeps is as full as it is, its surface cut level ([TablePhysics]): never scaled
 	var kept := physics.liquid_volume(wi, t) if physics != null else -1.0
 	if kept >= 0.0:
 		fill = 1.0 if kept > 1e-9 else 0.0
@@ -4094,7 +4093,7 @@ func _pose_work(wi: int, t: float) -> void:
 		j = _joint(wi, t)
 	node.transform = j * s
 	node.visible = float(value("w%d:shown" % wi, t)) > 0.5 and grow > 0.001 and fill > 0.001
-	# ...A SHEET AS IT IS BENT ([SheetBend]) - as a hand or the acts' own pose has it, straight
+	# ...a sheet as it is bent ([SheetBend]) - as a hand or the acts' own pose has it, straight
 	if physics != null and bool(w.get("loose", false)) and physics.bends(wi):
 		_bend_sheet(wi, physics.bend_of(wi, t) if not _outran(wi, t) and not _planned else null)
 	# a loose thing ground to pieces is drawn as its pieces
@@ -4145,7 +4144,7 @@ func _brittle(wi: int) -> bool:
 	return false
 
 
-## WORDS WRITTEN ON SHEET [param wi] ([SheetWriting]) as far as the pen has got at [param t] - drawn the first time any
+## Words written on sheet [param wi] ([SheetWriting]) as far as the pen has got at [param t] - drawn the first time any
 ## of them is.
 func _written(wi: int, t: float) -> void:
 	var wr: Dictionary = _writing[wi]
@@ -4164,7 +4163,7 @@ func _written(wi: int, t: float) -> void:
 
 # --- what the work sounds like ([WorkSounds]) ----------------------------------------------------------
 
-## WHAT IS SET DOWN from show time [param t0] up to [param t1]: each carry `down` that ends then, `{t, at (the table's
+## What is set down from show time [param t0] up to [param t1]: each carry `down` that ends then, `{t, at (the table's
 ## space), mass (kilograms, about), kind (its material's), size (meters, its widest)}`.
 func set_down(t0: float, t1: float) -> Array:
 	var out: Array = []
@@ -4220,7 +4219,7 @@ func _heft(tr: Dictionary, T: float) -> Dictionary:
 		"mass": box.size.x * box.size.y * box.size.z * density * solid * float(n)}
 
 
-## WHAT IS PRESSED ONTO SOMETHING at show time [param t] - a pestle's tip in its mortar, as an `aim` or a `circle`
+## What is pressed onto something at show time [param t] - a pestle's tip in its mortar, as an `aim` or a `circle`
 ## `press`es it: `[{wi, at (its pressed point, the table's space), touch (meters over the surface, past the gap it is
 ## held at; INF where none of it is under), kind (what it is pressed onto), size (meters, how wide that is)}]`.
 func pressed(t: float) -> Array:
@@ -4265,7 +4264,7 @@ func pressed(t: float) -> Array:
 	return out
 
 
-## WHAT BOILS at show time [param t] ([constant Motions.STATES] `boil`): `[{wi, boil, at (its surface's middle, the
+## What boils at show time [param t] ([constant Motions.STATES] `boil`): `[{wi, boil, at (its surface's middle, the
 ## table's space), size (meters across)}]` - those boiling at all.
 func boiling(t: float) -> Array:
 	var out: Array = []
@@ -4284,12 +4283,11 @@ func boiling(t: float) -> Array:
 
 # --- what smokes and pours -----------------------------------------------------------------------------
 
-## A PLUME of work [param wi]'s `emits`: a pool of puffs ([constant Motions.MAX_PUFFS] at most), each born in
-## turn from its point and rising - in closed form, the k-th puff born at k over its rate - and as thick as the
-## part's `emit` says (so how hard it smokes can change and stay a function of time). A TRAIL, NEVER TUFTS: puffs
-## are born at least half a puff's size apart as they rise, and a plume asked for fewer is fainter, never broken
-## (the-quiet-crucible 181083: 1.4 puffs a second asked, half of them dropped by the dice, rose as tufts - the
-## user: "normal heat would produce consistent steam trails").
+## A plume of work [param wi]'s `emits`: a pool of puffs ([constant Motions.MAX_PUFFS] at most), each born
+## in turn from its point and rising - in closed form, the k-th puff born at k over its rate - and as
+## thick as the part's `emit` says (so how hard it smokes can change and stay a function of time). A
+## trail, never tufts: puffs are born at least half a puff's size apart as they rise, and a plume asked
+## for fewer is fainter, never broken.
 func _plume(wi: int, e: Dictionary) -> Dictionary:
 	var look: Dictionary = Motions.EMITS[String(e["kind"])]
 	var trail := float(look["rise"]) / (float(look["size"]) * 0.001 * 0.5)
@@ -4334,7 +4332,7 @@ func _works_of_thing_with(wi: int) -> Array:
 	return [wi]
 
 
-## HOW MUCH OF ITS STEAM A PLUME GIVES AT [param t], by how hot what it rises from is ([method Motions.temperature]): all of it while that boils, and all of what does not cool.
+## How much of its steam a plume gives at [param t], by how hot what it rises from is ([method Motions.temperature]): all of it while that boils, and all of what does not cool.
 func _plume_heat(p: Dictionary, t: float) -> float:
 	if not bool((p["look"] as Dictionary).get("cools", false)):
 		return 1.0
@@ -4399,7 +4397,7 @@ static func _hash01(k: int, salt: int) -> float:
 	return float(h & 0xFFFFFF) / float(0x1000000)
 
 
-## THE CUES' MOMENTS, when the schedule is made: each burst at its act's moment, at its point as it is then.
+## The cues' moments, when the schedule is made: each burst at its act's moment, at its point as it is then.
 func plan_cues() -> void:
 	if _air == null:
 		return
@@ -4452,7 +4450,7 @@ func plan_cues() -> void:
 
 # --- telling the agents -----------------------------------------------------------------------------
 
-## THE TABLE'S WORKING PARTS in words, for the puppeteer ([PuppeteerTools]): each thing, whether it may be
+## The table's working parts in words, for the puppeteer ([PuppeteerTools]): each thing, whether it may be
 ## moved whole, and its named parts - their joints, points, states and what they run and emit.
 func parts_report() -> String:
 	var lines := PackedStringArray()
@@ -4476,7 +4474,7 @@ func parts_report() -> String:
 			var wk: Dictionary = works[wi]
 			var w: Dictionary = wk["w"]
 			var bits := PackedStringArray()
-			# A PART WITH COPIES: worked as one by its name, a copy alone by its number - each where it is now
+			# A part with copies: worked as one by its name, a copy alone by its number - each where it is now
 			if gi >= 0:
 				var nm0 := String(wk["name"])
 				var at := PackedStringArray()
@@ -4513,8 +4511,7 @@ func parts_report() -> String:
 				bits.append("soft: a blade cuts it")
 			if bool(w.get("loose", false)) and _brittle(wi):
 				bits.append("it breaks: a tool's point pressed down onto it (`press`), going round over it, grinds it to pieces and powder")
-			# ON ITS SIDE AS BUILT (the-quiet-crucible 119515's stopper, laid down in its tray, went into its vial's mouth
-			# sideways - the user: "it is attached sideways")
+			# On its side as built: a stopper laid down in its tray would otherwise go into its vial's mouth sideways
 			if String(wk["kind"]) == "free" and _rest.has("w%d:pose" % wi) \
 					and (_rest["w%d:pose" % wi] as Transform3D).basis.y.normalized().angle_to(Vector3.UP) > deg_to_rad(45.0):
 				# a carry's `turn` is from as it was built: the one that brings its own up to the world's
@@ -4530,14 +4527,14 @@ func parts_report() -> String:
 				lines.append("    - %s" % c)
 	if assembly != null:
 		lines.append(assembly.report())
-	# WHAT CAN BE PAINTED, its design element by element, and what paints ([TablePaint])
+	# What can be painted, its design element by element, and what paints ([TablePaint])
 	if paint != null:
 		lines.append_array(paint.report())
 	return "\n".join(lines)
 
 
-## WHAT ACT [param name] DOES, in numbers, after a rehearsal ([method rehearse]): how long, how far each moving
-## thing travels and how fast at the most, and ANYTHING PASSING THROUGH ANYTHING - a moving thing's points
+## What act [param name] does, in numbers, after a rehearsal ([method rehearse]): how long, how far each moving
+## thing travels and how fast at the most, and anything passing through anything - a moving thing's points
 ## inside another thing, or through the table's top - with the moment it happens. `{text, through}`.
 func check(name: String) -> Dictionary:
 	var times := rehearsed()
@@ -4552,7 +4549,7 @@ func check(name: String) -> Dictionary:
 	for a in acts:
 		if String((a as Dictionary)["name"]) == name:
 			act = a
-	# WHAT MOVES IN IT, and the meshes that do not - a part's copies moved as one together
+	# What moves in it, and the meshes that do not - a part's copies moved as one together
 	var movers: Array = []          # [{nodes, label}]
 	for tr in act["tracks"]:
 		var ch := String((tr as Dictionary).get("_ch", ""))
@@ -4635,9 +4632,8 @@ func check(name: String) -> Dictionary:
 		var pts := PackedVector3Array()
 		var owners: Array = []
 		var meshes: Array = []
-		# ...NEVER WHAT LIES LOOSE IN IT OR STANDS FREE IN IT: a part of its own body (a dish's stone, a jar's cork, a mortar's
-		# pestle) goes where the physics takes it, never where the hand does - counted with the dish, its stone in the bowl was
-		# 342 points "passing through" the bowl's floor
+		# ...never what lies loose in it or stands free in it: a part of its own body (a dish's stone, a jar's cork, a mortar's
+		# pestle) goes where the physics takes it, never where the hand does, so it is not counted with the dish
 		var apart: Array = []
 		for n in mv["nodes"]:
 			for wj in works.size():
@@ -4670,20 +4666,19 @@ func check(name: String) -> Dictionary:
 		var first_hit := ""
 		var hits := 0
 		var below := 0
-		# A PART THAT STARTS SEATED in something - a vial in its rack, a ladle in its pot, a stopper in its bottle,
-		# as the set dresser built it or an earlier act left it - may come out of it: a point inside something as
-		# the act begins is not counted until it has once come out, and after that going in anywhere is. (The
-		# first real puppeteer was told its rack's vial passed through something "0.0 s in" on 12 acts of 69.)
+		# A part that starts seated in something - a vial in its rack, a ladle in its pot, a stopper in its
+		# bottle, as the set dresser built it or an earlier act left it - may come out of it: a point inside
+		# something as the act begins is not counted until it has once come out, and after that going in
+		# anywhere is.
 		var seated := PackedByteArray()
 		seated.resize(pts.size())
 		var seated_n := 0
-		# A TOOL PRESSED ONTO A THING meets it, never passes through it: a pestle's head ground round a mortar's floor
-		# touches its sloping wall as it goes (the-quiet-crucible 119515's puppeteer, told its pestle passed through the
-		# mortar, lifted it clear of what it was grinding - and shrank the lumps instead)
+		# A tool pressed onto a thing meets it, never passes through it: a pestle's head ground round a mortar's
+		# floor touches its sloping wall as it goes
 		var pressed := _pressed_by(act, mv)
-		# ...AND WHAT A PAINTING TOOL GOES INTO, it is never looked for inside at all ([method TablePaint.touches]): measured by the
-		# solids' fields, a palette's cream and the cradle under a face's rim still read 3 to 74 points "passing through" where the
-		# triangles had it inside and the field did not (joker-motivation 856886)
+		# ...and what a painting tool goes into, it is never looked for inside at all ([method TablePaint.touches]): measured by the
+		# solids' fields, a palette's cream and the cradle under a face's rim still read points "passing through" where the
+		# triangles had it inside and the field did not
 		var still_of := still
 		var has_faces := not faces.is_empty()
 		if not (pressed.get("free", []) as Array).is_empty():
@@ -4702,7 +4697,7 @@ func check(name: String) -> Dictionary:
 				travel += step
 				fastest = maxf(fastest, step / ((t1 - t0) / float(CHECK_STEPS)))
 			last = mid
-			# BACK WHERE IT WAS BUILT it is as the set dresser built it: a vial put back in its rack is home
+			# Back where it was built it is as the set dresser built it: a vial put back in its rack is home
 			var now_xf := _world_of(node)
 			var home_xf: Transform3D = mv["rest"]
 			var home := now_xf.origin.distance_to(home_xf.origin) < HOME_NEAR \
@@ -4747,12 +4742,12 @@ func check(name: String) -> Dictionary:
 	return {"text": "\n".join(lines), "through": through}
 
 
-## WHAT [param act] LEAVES IN THE AIR: each thing or part its last move on it leaves with its lowest point more than [constant
-## ALOFT_GAP] over what is under it, standing in no vessel and set `down` nowhere - said, with what then happens: a hand holds a
-## thing in the air only while its next move follows at once ([constant TablePhysics.HOLD_MOST]), and a live reading places a move
-## only when its words come, so it is set down where it is first. A rehearsal plays the acts back to back and never shows it
-## (2026-11-01, feedback 0001-0002: the ladle carried "over the cauldron" and the pestle lifted "over the crushed tear", each left
-## in the air for the words before its next act).
+## What [param act] leaves in the air: each thing or part its last move on it leaves with its lowest
+## point more than [constant ALOFT_GAP] over what is under it, standing in no vessel and set `down`
+## nowhere - said, with what then happens: a hand holds a thing in the air only while its next move
+## follows at once ([constant TablePhysics.HOLD_MOST]), and a live reading places a move only when its
+## words come, so it is set down where it is first. A rehearsal plays the acts back to back and never
+## shows it.
 func _aloft_said(act: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	var last := {}
@@ -4800,10 +4795,9 @@ func _track_label(tr: Dictionary) -> String:
 	return String(tr.get("thing", "it"))
 
 
-## EACH SPRINKLE OF [param act] (run [param t0] to [param t1]) NAMING A THING THE ACT MOVES, falling further than
-## [constant PINCH_NEAR] from it at the middle of its stretch: where it falls from, and how far off. (841899's puppeteer
-## tipped its mortar 30 degrees two centimeters short of the cauldron and under its rim, and let a pinch of the powder fall
-## from a point over the brew: the brew took it, and the user saw a mortar "to the side, tipping onto the table".)
+## Each sprinkle of [param act] (run [param t0] to [param t1]) naming a thing the act moves, falling
+## further than [constant PINCH_NEAR] from it at the middle of its stretch: where it falls from, and how
+## far off.
 func _sprinkles_said(act: Dictionary, t0: float, t1: float) -> PackedStringArray:
 	var out := PackedStringArray()
 	for tr in act["tracks"]:
@@ -4871,10 +4865,9 @@ func _pressed_by(act: Dictionary, mv: Dictionary) -> Dictionary:
 				var ti := _thing_named(String((end as Dictionary)["press"]))
 				if ti >= 0 and not tis.has(ti):
 					tis.append(ti)
-		# ...A PAINTING TOOL, what it paints and the pots, water and towel it goes to ([method TablePaint.touches]) - AT ANY DEPTH:
-		# where it goes is the paint law's, which the puppeteer cannot move clear (a sponge stippled to the face's rim gave onto the
-		# board under it, 7 mm, and every act was told it passed through the mask - joker-motivation 856886); the law's own gate
-		# holds it to the surface (tests/table/paint_check.gd)
+		# ...a painting tool, what it paints and the pots, water and towel it goes to ([method TablePaint.touches]) - at any depth:
+		# where it goes is the paint law's, which the puppeteer cannot move clear; the law's own gate holds it to the surface
+		# (tests/table/paint_check.gd)
 		if String(tr.get("law", "")) == "paint" and paint != null:
 			for ti in paint.touches(tr):
 				if not tis.has(ti):

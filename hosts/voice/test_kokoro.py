@@ -1,43 +1,37 @@
 #!/usr/bin/env python3
 """Tests for the Kokoro backend (backends/kokoro.py): Piper's path on another model.
 
-Run it directly with the voice venv's python - no pytest needed:
+Run it directly with the voice venv's python (no pytest):
 
     ~/.local/share/godot/app_userdata/ghost/voice_venv/bin/python \
         hosts/voice/test_kokoro.py
 
-What is held, each with the case that must not change:
+Held, each with the case that must not change:
 
-  1. eSpeak's reading is written in misaki's symbols (A for eɪ, T for the flap, ᵊ for a syllabic
-     consonant, ː dropped in American and kept in British) - and a pair is merged only inside one
-     word;
-  2. the ids are one a symbol with a pad at each end, no blanks and nothing before the sentence, and the
-     style is the pack's row for its tokens; the first pad keeps its own length at every pace, the words
-     alone following the pace (a graph that takes no scale is the control);
-  3. no rest is floored; the word before a rest has its last vowel held at HOLD_LEAST ("uː" sharing it),
-     less at a weaker boundary, none without the trail; a rest is cut in its window, after a stop's
-     release, never in its closure; the trail fades a vowel held into the next word whole and comes back
-     up without a step;
+  1. eSpeak's reading is written in misaki's symbols (A for eɪ, T for the flap, ᵊ for a syllabic consonant,
+  ː dropped in American and kept in British); a pair is merged only inside one word;
+  2. the ids are one a symbol with a pad at each end, no blanks and nothing before the sentence; the style
+  is the pack's row for its tokens; the first pad keeps its own length at every pace (a graph that takes no
+  scale is the control);
+  3. no rest is floored; the word before a rest has its last vowel held at HOLD_LEAST, less at a weaker
+  boundary, none without the trail; a rest is cut in its window after a stop's release, never in its
+  closure; the trail fades a vowel held into the next word and comes back up without a step;
   4. a leaned-on word scales its stressed syllable alone, and an unmarked one feeds no scale;
-  5. the spans and phones are the plan's frames of 600 samples at 24 kHz, the phones in eSpeak's
-     symbols (A's time shared by e and ɪ), and the take is handed back at 22,050 with its seconds kept;
-     its head is trimmed through the pad to SEAM_LEAD before the first sound;
+  5. spans and phones are the plan's frames of 600 samples at 24 kHz (phones in eSpeak's symbols), the take
+  is handed back at 22,050 with its seconds kept, its head trimmed to SEAM_LEAD before the first sound;
   6. a sentence over 510 tokens is read in pieces cut after a mark, each with its own pads;
-  7. the length a pitch move is measured against is the ROUNDED plan's, exact at ratio 1, a take's
-     trimmed ends counted as they stand;
-  8. the graph patch: unfed, the stock graph's output; the scale before the Round, the floor after,
-     the plan handed back whole - and a graph of another shape is left alone;
+  7. the length a pitch move is measured against is the rounded plan's, exact at ratio 1;
+  8. the graph patch: unfed, the stock graph's output; the scale before the Round, the floor after, the plan
+  handed back whole; a graph of another shape is left alone;
   9. a voice taught here (trained/<id>/) is listed beside the checkpoints, one speaker, never fetched, read
-     in its own accent - and the ids a voice is taught on (`ids_of`) are the ones the graph is sent;
- 10. the happy vowel: where the word's dictionary reading has an unstressed "ee" and eSpeak a lax ɪ, after a
-     stress or before a vowel, Kokoro is sent i ("babysitter", "everything", "video", "reaction") - an
-     unstressed prefix before a consonant ("pretend"), vowels that do not line up, a word no dictionary holds
-     and every word Piper reads are left as eSpeak read them;
- 11. a blend of readers (blend.py): its line read as src/voice/voice_blend.gd writes it; mix, spherical and
-     split made row by row; its accent its heaviest reader's (a split's delivery's) unless it says one, its level
-     its readers' (a split's sound side's); a request's `blend` made of the checkpoint's packs, once, and fed to
-     the graph - a reader it does not hold left out, fewer than two the speaker's own pack, a voice taught here
-     never blended.
+  in its own accent, and the ids it is taught on (`ids_of`) are the ones the graph is sent;
+ 10. the happy vowel: where the dictionary reading has an unstressed "ee" and eSpeak a lax ɪ, after a stress
+ or before a vowel, Kokoro is sent i; an unstressed prefix before a consonant, vowels that do not line up, a
+ word no dictionary holds and every word Piper reads are left as eSpeak read them;
+ 11. a blend of readers (blend.py): its line as src/voice/voice_blend.gd writes it; mix, spherical and split
+ made row by row; its accent its heaviest reader's unless it says one, its level its readers'; a request's
+ `blend` made of the checkpoint's packs once and fed to the graph (a reader it does not hold left out, fewer
+ than two the speaker's own pack, a voice taught here never blended).
 
 Synthesis runs against a fake session, as in test_expression.py: no model download, no eSpeak.
 """

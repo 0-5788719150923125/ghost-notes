@@ -1,64 +1,33 @@
 extends Node
 
-## HOW THE CARDS COME AND ARE SHOWN, beyond the tarot's draw (2026-10-07, the user: a collector "might
-## have a box... and just draw cards at random from it"; cards in a box "stand vertical... like files in a
-## filing cabinet"; a card "tapped... turned sideways"; "a waterfall... presenting several at once,
-## overlapping"; cards "stacked vertically, like land in MTG"; a baseball card "held in the center of the
-## screen, alone"; a box mixing printings whose "front and backs would be different"):
-##
-##   - THE MARKS: `fan 3-5` names a run and writes back the same; a box's first card waits for no push
-##     (a deck's does - the control); a waterfall rests longer the more cards it sweeps.
-##   - THE LAYOUT ([method TablePositions.staged]) over many seeds: stacks lie a step behind the card
-##     under them, a waterfall's cards overlap in a run, a sideways card lies a quarter turn round - all
-##     on the cloth, in the frame, clear of the deck or the box. A spread asking none of it is the seeded
-##     preset, draw for draw (the control).
-##   - THE CHOREOGRAPHY ([method TableProducer.choreography]): the plan's positions become the verbs, in
-##     order - the opening by the source, drawn, dealt, swept then each shown, `then`'s taps after.
-##   - THE TABLE, posed from show time. A deck show: a stacked card lies on the card before it, a dealt
-##     card is never held up, a tap turns a lying card a quarter turn, a drawn card is held up LEFT of
-##     the middle with its page open. A box show: the box stands with the cards filed in it on edge, a
-##     card waits standing in the file and rises out past the rim, is held up ALONE in the middle with no
-##     page and turned over to show its printed back; the waterfall's cards lie overlapping. EVERY CARD
-##     IN THE BOX IS A CARD, FRONT AND BACK (2026-10-12, the user: a card "changed to something else
-##     after getting pulled from the box"; 2026-10-13: a search showed "the BACK of the cards", and
-##     nobody looks for a card by its back): the cards nobody drew are printed as the deck's own cards
-##     the draw left in, each with a front of its own - its name, and a part of a drawn card's painting
-##     in its window - and the file stands FACE to the reader, so a card comes up showing its front as
-##     every card left in does (two-sided: stood the other way round, it shows its back). A SEARCH
-##     ("a card was lifted from the deck FLAT, and THREE times in a row") draws three different cards
-##     up out of their places on edge, part of the way, their faces leaned back to the eye, and lets
-##     them back down; off a pile it lifts the top card and turns it over to be seen (two-sided: a
-##     lying card's place is looked at lying; a card only lifted shows its back). THE CARD LOOKED AT
-##     IS THE BOX'S OWN, lying or standing in its place before the look and after it, on a pile nothing
-##     is drawn from or put back on (two-sided: a box with no card of its own is lent one for the look).
-##     THE BOX STANDS in its own place in the room kept for it, a different one each episode, an open
-##     box toward the spread (two-sided: a box as big as its room stands where it always did). The file
-##     holds the planned count, and a mixed box keeps each printing's own back and share of the cards.
-##   - THE AIR'S BURSTS COME FROM THE CARD (2026-10-08, the user: a burst of sparkles came "just BEFORE"
-##     a card held up on the left was laid, "detached from the card itself"): over a deck show, a show
-##     whose spread lays the card still held, a box show and a jumper's, with a pirouette asked for,
-##     every particle a burst on a card moment would throw is born at that card as the table draws it
-##     at its birth time - its middle and its edges - and the close waits until every card is down.
-##     Two-sided: the close as it was planned (at the spread's mark, from where each card would lie)
-##     is far from the card the spread is still laying. A jumper comes down as it lies: its flight
-##     ends where it lands, turned as it lands (it snapped a third of a turn round as it touched).
-##
-##   - WHAT LIES ON WHAT (2026-10-11, the user, of a waterfall's two cards shown one after the other: the
-##     second "was pulled THROUGH the 1st card... it may have looked even better to slide the 2nd card
-##     out to the right"): through a waterfall, each card shown and laid again, no card passes through
-##     another or lies in it - a card under another is slid out along the cloth before it rises, and one
-##     put back lies on top. Two-sided: a card lifted straight up from under the one on it does pass
-##     through it, and the check says so.
-##   - THE CARDS IN THE BOX (the same day: the box's cards "did not match the ones we were drawing";
-##     "perfect little stacks, equally-spaced apart"): with the text on the back, every card nobody
-##     drew has a printed back as the drawn ones do, never the shared artwork (which a front-text box
-##     keeps - the control, in the front details). Piles are of different heights, unevenly spaced and
-##     not squared, each card on its own plot of the floor; the drawn cards wait on top of piles, and
-##     a card put back goes on a pile. Two-sided: the same piles laid with no mess are the squared grid.
+## The gate of how cards come and are shown, beyond the draw: a box's cards on edge, a tap, a waterfall, stacks, a card held alone.
 ##
 ##   tests/run_boot_probe.sh tests/table/table_staging_check.gd 300
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - poses are transforms.
+## A boot probe (the medium reaches the Director); no GPU - poses are transforms. Where a point says two-sided, a control must fail it.
+##   - The marks: `fan 3-5` names a run and writes back the same; a box's first card waits for no push (a deck's does); a waterfall
+##     rests longer the more cards it sweeps.
+##   - The layout ([method TablePositions.staged]) over many seeds: stacks lie a step behind the card under them, a waterfall's
+##     cards overlap in a run, a sideways card lies a quarter turn round - all on the cloth, in the frame, clear of the deck or
+##     the box. A spread asking none of it is the seeded preset, draw for draw.
+##   - The choreography ([method TableProducer.choreography]): the plan's positions become the verbs, in order.
+##   - The table, posed from show time. A deck show: a stacked card lies on the card before it, a dealt card is never held up, a
+##     tap turns a lying card a quarter turn, a drawn card is held up left of the middle with its page open. A box show: the cards
+##     stand filed on edge, one rises out past the rim, is held up alone in the middle and turned over to show its printed back.
+##   - Every card in the box has a front and a back: the cards nobody drew are printed as the deck's own cards the draw left in,
+##     and the file faces the reader (two-sided: stood the other way round, it shows its back).
+##   - A search draws three different cards up out of their places on edge, faces leaned back to the eye, and lets them back down;
+##     off a pile it lifts the top card and turns it over. The card looked at is the box's own, in its place before and after the
+##     look (two-sided: a box with no card of its own is lent one for the look).
+##   - The box stands in its own place in the room kept for it, a different one each episode (two-sided: a box as big as its room
+##     stands where it always did). The file holds the planned count; a mixed box keeps each printing's back and share of the cards.
+##   - The air's bursts come from the card: every particle a burst on a card moment throws is born at that card as drawn at its
+##     birth time, and the close waits until every card is down. A jumper's flight ends where it lands, turned as it lands.
+##   - What lies on what: through a waterfall no card passes through another - a card under another is slid out along the cloth
+##     before it rises, and one put back lies on top (two-sided: lifted straight up from under the one on it, it does pass through).
+##   - The cards in the box: with the text on the back, every card nobody drew has a printed back, never the shared artwork. Piles
+##     are of different heights, unevenly spaced and not squared, each card on its own plot; the drawn cards wait on top of piles.
+##     Two-sided: the same piles laid with no mess are the squared grid.
 
 const SEEDS := 40
 
@@ -133,11 +102,9 @@ func _marks() -> void:
 		"a waterfall of four rests longer than one of two")
 
 
-## WHERE THE BOX STANDS (2026-10-12, the user: "some ability for random placement might be good"; a card
-## coming up out of a box at the side of the table rose half outside the picture): a box smaller than
-## the room kept for it stands in a different place every episode, always inside that room - which
-## the spread keeps off - and an open box in the inner half of it. Two-sided: a box as big as its
-## room has nowhere to go, and stands where it always did.
+## Where the box stands: a box smaller than the room kept for it stands in a different place every episode, always inside that room - which
+## the spread keeps off - and an open box in the inner half of it. Two-sided: a box as big as its room has nowhere to go, and stands where
+## it always did.
 func _box_places() -> void:
 	print("-- where the box stands")
 	var most := Vector2(CardTable.BOX_MAX.x, CardTable.BOX_MAX.z)
@@ -214,7 +181,7 @@ func _layouts() -> void:
 							shaped += 1
 		_ok(bad == 0, "every %s lies on the cloth, in the frame, clear of the deck and of the box (%d did not)" % [name, bad])
 		_ok(shaped == SEEDS * 2, "and lies as a %s (%d of %d)" % [name, shaped, SEEDS * 2])
-	# THE CONTROL: a spread asking for none of it is the preset, draw for draw
+	# The control: a spread asking for none of it is the preset, draw for draw
 	var same := true
 	for s in range(1, SEEDS + 1):
 		var r1 := RandomNumberGenerator.new()
@@ -272,8 +239,7 @@ func _search_and_linger() -> void:
 	var e: Dictionary = searches[0]
 	var start := float(e["t0"]) + float(e["off"]) * float(e["s"])
 	var span := TableActions.RUMMAGE * float(e["s"])
-	# THE CARD LOOKED AT LIES ON ITS PILE BEFORE THE LOOK (2026-10-12: a card that was not on the pile a
-	# moment before appeared on it as the look began): one of the box's own, on a pile of its own
+	# The card looked at lies on its pile before the look: one of the box's own, on a pile of its own
 	var seats: Array = medium._box_part.stood.get("search", [])
 	_posed(start - 0.5)
 	var rests := not medium._box_part.searched.is_empty() and medium._box_part.searched.size() == seats.size() and medium._box_part.looking == null
@@ -295,7 +261,7 @@ func _search_and_linger() -> void:
 		own = own and Vector2(back.x - seat.origin.x, back.z - seat.origin.z).length() > NEAR
 	_ok(rests, "the cards a search looks at lie in the box before it, on top of piles (%d)" % medium._box_part.searched.size())
 	_ok(own, "each on a pile nothing is drawn from or put back on, the top of it")
-	# LYING CARDS ARE TURNED OVER TO BE SEEN, which takes longer: fewer looks share the search's rest
+	# Lying cards are turned over to be seen, which takes longer: fewer looks share the search's rest
 	var looks := medium._card_poses.search_looks()
 	_ok(looks == TableCardPose.SEARCH_LOOKS_LYING and looks < TableMedium.SEARCH_LOOKS, "a search of lying cards looks at fewer of them (%d)" % looks)
 	var fronts: Array = ((medium._backs[""] as Dictionary).get("fronts", []) as Array).map(func(f: Dictionary) -> Material: return f["mat"])
@@ -311,7 +277,7 @@ func _search_and_linger() -> void:
 			and (medium._box_part.stood["inner"] as AABB).grow(0.002).has_point(from.origin)
 			and card.position.y - from.origin.y > 0.03 and _in_picture(card.transform),
 			"searched card %d is lifted off its pile, from where it lay, and held in the picture (%.0f mm)" % [i + 1, (card.position.y - from.origin.y) * 1000.0])
-		# ITS FRONT, the right way up: it lay face down, and is turned over to the eye
+		# its front, the right way up: it lay face down, and is turned over to the eye
 		_ok(card != null and _faces_camera(from) < 0.0 and _faces_camera(card.transform) > 0.7 and _top_up(card.transform) > 0.5
 			and fronts.has(card.get_surface_override_material(0)),
 			"it lay face down and is turned over: its front to the eye, the right way up (%.2f, top %.2f up)" % [
@@ -327,9 +293,8 @@ func _search_and_linger() -> void:
 	_posed(start + span * 0.5 / float(looks))
 	_ok(medium._box_part.looking != null and not _in_picture(medium._box_part.looking.transform.translated(Vector3(0.0, 0.2, 0.0))),
 		"control: lifted far higher, its far edge is over the top of the picture")
-	# NEVER THROUGH THE BOX'S WALL (seen in a render of 65803 restaged as piles: from a pile by the front
-	# wall, a card held low came out through the cardboard): from a pile as near that wall as a pile
-	# lies, the card held up is inside it, and on its way over no corner gets past the wall's middle
+	# Never through the box's wall: from a pile as near that wall as a pile lies, the card held up is inside it, and on its way over no corner
+	# gets past the wall's middle
 	var inner: AABB = medium._box_part.stood["inner"]
 	var size := CardTable.card_size(medium._plan.look)
 	var by_wall := Transform3D(Basis.IDENTITY, Vector3(inner.get_center().x, inner.position.y + 0.01,
@@ -444,12 +409,11 @@ func _deck_reversals() -> void:
 	(cards[1] as Dictionary)["reversed"] = true
 	var draws: Array = medium._times()["draw"]
 	var top := medium._deck[medium._plan.deck_n - 1] as MeshInstance3D
-	# THE WAY IT FACES, NOT ITS TILT: the first card is drawn as the shuffle ends, and a riffle under way
-	# then is cut short, its cards still tipped in the hand while the deck squares (2026-10-17: a riffle
-	# a third shorter left the top card tipped 9 degrees at the draw, upright all the same)
+	# The way it faces, not its tilt: the first card is drawn as the shuffle ends, and a riffle under way then is cut short, its cards still
+	# tipped in the hand while the deck squares
 	var way := func(a: Vector3, b: Vector3) -> float: return Vector2(a.x, a.z).normalized().dot(Vector2(b.x, b.z).normalized())
-	# A CARD ON THE DECK IS THE DECK'S OWN TOP CARD until the hand takes it (TableMedium._taken_by): the
-	# back on top is the first card's until it leaves, then the next card's, on the card under it
+	# A card on the deck is the deck's own top card until the hand takes it (TableMedium._taken_by): the back on top is the first card's until
+	# it leaves, then the next card's, on the card under it
 	var under := medium._deck[medium._plan.deck_n - 2] as MeshInstance3D
 	_posed(medium._leaves(0) - 0.01)
 	_ok(top.visible and not (medium._cards[0] as MeshInstance3D).visible
@@ -472,15 +436,11 @@ func _deck_reversals() -> void:
 		"the following upright card is ready under the reversed card")
 
 
-## A CARD RIGHTED IN THE HAND (2026-10-25, the user: "start as a reversal, but then is turned/reoriented
-## to the upright position after we pull it ... a box full of Pokemon cards, or a pile of messy baseball
-## cards"), out of a deck and out of a box: it waits upside down, comes up upside down, is turned the
-## right way up in the hand - a beat after it is up, or as it comes up when its text is on its back -
-## well before it goes down and never while its back is being looked at, and lies the right way up.
-## Two-sided: a card read reversed is held and laid upside down throughout, and a plain card is the right
-## way up throughout; a card with its text on its back is still turned over to show it (righted after it
-## was up, a short passage's never was). Out of the box, nothing upside down is turned round on its way
-## out of the file (a reversed card was: it stood in the file the right way up).
+## A card righted in the hand, out of a deck and out of a box: it waits upside down, comes up upside down, is turned the right way up in the
+## hand - a beat after it is up, or as it comes up when its text is on its back - well before it goes down and never while its back is being
+## looked at, and lies the right way up. Two-sided: a card read reversed is held and laid upside down throughout, and a plain card is the
+## right way up throughout; a card with its text on its back is still turned over to show it. Out of the box, nothing upside down is turned
+## round on its way out of the file.
 func _righted() -> void:
 	for source in ["deck", "box"]:
 		print("-- a card righted in the hand, out of a %s" % source)
@@ -586,14 +546,13 @@ func _box_show() -> void:
 	var filed := 0
 	for f in medium._box_part.files:
 		filed += ((f as MultiMeshInstance3D).multimesh as MultiMesh).instance_count
-	# AN OPEN BOX IS FILED OUT, as a shoebox is (feedback 0020: "barely any cards in the box"): the planned
-	# cards at least, standing through at least OPEN_FILE_SHARE of its depth
+	# An open box is filed out, as a shoebox is: the planned cards at least, standing through at least OPEN_FILE_SHARE of its depth
 	var depth: float = (medium._box_part.stood["inner"] as AABB).size.z
 	# (the places a search looks are cards of the file too, each out of the fill)
 	var kept := filed + medium._cards.size() + (medium._box_part.stood.get("search", []) as Array).size()
 	_ok(kept >= deck.size() and float(kept) * TableBox.FILE_PITCH >= depth * TableBox.OPEN_FILE_SHARE - TableBox.FILE_PITCH,
 		"the box shows its twelve planned cards and is filed out to half its depth (%d cards, %.0f mm of %.0f)" % [kept, float(kept) * TableBox.FILE_PITCH * 1000.0, depth * 1000.0])
-	# THE TEXT IS ON THE BACK: the cards nobody drew are printed as the drawn ones are
+	# The text is on the back: the cards nobody drew are printed as the drawn ones are
 	var blanks: Array = ((medium._backs[""] as Dictionary).get("blank", []) as Array).map(func(b: Dictionary) -> Material: return b["mat"])
 	var printed := not blanks.is_empty()
 	for f in medium._box_part.files:
@@ -612,8 +571,8 @@ func _box_show() -> void:
 		"with the text on the back, the cards nobody drew have printed backs like the drawn ones, not the shared artwork")
 	_ok(not medium._box_part.searched.is_empty() and medium._box_part.searched.all(func(c: MeshInstance3D) -> bool: return blanks.has(c.get_surface_override_material(1))),
 		"the cards a search looks at have printed backs too")
-	# ...AND EVERY ONE HAS A FRONT (2026-10-13: a search showed only backs): the same card's, by name,
-	# a front and never a back, with a part of a drawn card's painting to go in its window
+	# ...and every one has a front: the same card's, by name, a front and never a back, with a part of a drawn card's painting to go in its
+	# window
 	var unseen: Array = (medium._backs[""] as Dictionary).get("fronts", [])
 	var blank: Array = (medium._backs[""] as Dictionary).get("blank", [])
 	var fronted := unseen.size() == TableMedium.WRITTEN and unseen.size() == blank.size()
@@ -653,7 +612,7 @@ func _box_show() -> void:
 	_ok(places.size() == kept and places.all(func(xf: Transform3D) -> bool:
 			return _faces_camera(xf) > 0.0 and _top_up(xf) > 0.5),
 		"and so does every card in the file, drawn or not (%d)" % places.size())
-	# control: stood the other way round - as the file stood while its cards had no fronts - it shows its back
+	# control: stood the other way round, the file shows its back
 	_ok(_faces_camera(Transform3D(Basis(Vector3.UP, PI) * waiting.basis, waiting.origin)) < -0.5,
 		"control: turned half round where it stands, a card shows the reader its back")
 	_ok(not (medium._deck[0] as MeshInstance3D).visible, "no deck lies on the table")
@@ -695,7 +654,7 @@ func _in_picture(xf: Transform3D) -> bool:
 	return true
 
 
-## How squarely [param xf]'s card shows the camera its FACE (1) or its back (-1).
+## How squarely [param xf]'s card shows the camera its face (1) or its back (-1).
 func _faces_camera(xf: Transform3D) -> float:
 	return -xf.basis.y.normalized().dot((medium._plan.cam_base.origin - xf.origin).normalized())
 
@@ -716,10 +675,8 @@ func _lowest(xf: Transform3D) -> float:
 	return low
 
 
-## A SEARCH OF A FILE (the user, 2026-10-12: "a card was lifted from the deck FLAT, and THREE times in a
-## row"; 2026-10-13: "we only see the BACK of the cards"): each look draws one of the file's own cards
-## up out of its place on edge, its FACE to the reader and leaned back to the eye, and lets it back down
-## - three different cards from three different places, each a front with a name on it.
+## A search of a file: each look draws one of the file's own cards up out of its place on edge, its face to the reader and leaned back to
+## the eye, and lets it back down - three different cards from three different places, each a front with a name on it.
 func _file_search() -> void:
 	print("-- a search of cards on edge")
 	var deck: Array = []
@@ -776,19 +733,19 @@ func _file_search() -> void:
 	_ok(seen.size() == 3 and places.size() == 3, "three different cards from three different places (%d, %d)" % [seen.size(), places.size()])
 	_ok(named.size() == 3 and named.keys().all(func(n: String) -> bool: return n.begins_with("Card ")),
 		"each shows the front of a card the draw left in, by name (%s)" % ", ".join(named.keys()))
-	# NO HIGHER THAN THE PICTURE: from the same place a hand's breadth up - a box at the back of the
-	# table, near the frame's top - the card is drawn up less, and never less than the least
+	# No higher than the picture: from the same place a hand's breadth up - a box at the back of the table, near the frame's top - the card is
+	# drawn up less, and never less than the least
 	var seat0: Transform3D = seats[0]
 	var plain := medium._card_poses._search_rise(seat0, Vector3.UP, v, Vector3.LEFT)
 	var high := medium._card_poses._search_rise(seat0.translated(Vector3(0.0, 0.25, 0.0)), Vector3.UP, v, Vector3.LEFT)
 	_ok(plain <= TableCardPose.SEARCH_RISE and high < plain and high >= TableCardPose.SEARCH_RISE_LEAST,
 		"a card whose painting the picture's top would cut is drawn up less (%.2f of its height, %.2f in the picture)" % [high, plain])
-	# control: the look the file used to get - its back to the camera - shows no front at all
+	# control: a file's look with its back to the camera shows no front at all
 	_posed(start + span * 0.5 / 3.0)
 	var about := medium._box_part.looking.transform
 	_ok(_faces_camera(Transform3D(Basis(Vector3.UP, PI) * about.basis, about.origin)) < -0.3,
 		"control: the same card stood back to the camera shows its back at the top of its look")
-	# control: a place where a card LIES is lifted flat - the old look, which a file never gets
+	# control: a place where a card lies is lifted flat, which a file never gets
 	var kept: Array = seats.duplicate()
 	var kept_cards: Array = medium._box_part.searched
 	medium._box_part.searched = []
@@ -906,8 +863,7 @@ func _placement_drift() -> void:
 	_ok(medium._plan.lay_jit.size() == medium._cards.size() and
 		(medium._plan.lay_jit[0] as Vector3).distance_to(medium._plan.lay_jit[1]) > 0.0001,
 		"cards laid in a row have different small, repeatable hand offsets")
-	# THE DECK DOES NOT SLIDE (the user, 2026-10-14: "floaty" - the deck's origin drifted round the table
-	# through every shuffle, cut and wash): its origin is the one place through every move and between them
+	# The deck does not slide: its origin is the one place through every move and between them
 	medium._shuffles.move_at(45.0)
 	var tm: Dictionary = medium._times()
 	var until := float(tm["end"])
@@ -966,8 +922,8 @@ func _loose_box() -> void:
 	_ok(apart and not _buried(return_at), "a card put back goes on top of a pile none is drawn from")
 
 
-## THE CONTROL for the open box's fill: only a box of cards on edge is filed out - the same box with its
-## cards loose keeps exactly the planned collection.
+## The control for the open box's fill: only a box of cards on edge is filed out - the same box with its cards loose keeps exactly the
+## planned collection.
 func _open_loose_box() -> void:
 	print("-- loose cards in an open box")
 	var deck: Array = []
@@ -1010,11 +966,9 @@ func _box_poses() -> Array:
 	return out
 
 
-## A CARD LAID BEHIND THE BOX (feedback 0010: "the seventh card... clips through the card box on the
-## right... A real human would probably have started a new row by this point"): the spread keeps off the
-## box's whole column - a long row becomes two rather than reaching behind the box - and a card that is
-## given a place behind it is carried over its rim, never through it. Two-sided: the same cards laid with
-## no box do reach into the column (the oracle), and the old flat arc over the box does clip it.
+## A card laid behind the box: the spread keeps off the box's whole column - a long row becomes two rather than reaching behind the box -
+## and a card that is given a place behind it is carried over its rim, never through it. Two-sided: the same cards laid with no box do reach
+## into the column (the oracle), and a flat arc over the box does clip it.
 func _laid_over_box() -> void:
 	print("-- laid over the box")
 	var size := Vector2(CardTable.BOX_MAX.x, CardTable.BOX_MAX.z)
@@ -1044,9 +998,7 @@ func _laid_over_box() -> void:
 	_ok(behind == 0, "no card lies in the box's column, in front of it or behind (%d did)" % behind)
 	_ok(rows_of_two > 0, "a long row that would reach it is two rows (%d of %d spreads)" % [rows_of_two, SEEDS * 3])
 	_ok(oracle > 0, "control: with no box the same spreads do lie in its column (%d cards)" % oracle)
-	# NOT OFF THE CLOTH (feedback 0020: ten cards beside a box, stepped back past the cloth's far edge and
-	# the first of them in the far corner, with the front of the table bare): a row that cannot step aside
-	# past the box's column is two rows, every card on the cloth
+	# Not off the cloth: a row that cannot step aside past the box's column is two rows, every card on the cloth
 	var off_cloth := 0
 	var cloth := Rect2(TablePositions.CLOTH_MIDDLE - TablePositions.CLOTH * 0.5, TablePositions.CLOTH).grow(-TablePositions.HEM)
 	for s in range(1, SEEDS + 1):
@@ -1061,7 +1013,7 @@ func _laid_over_box() -> void:
 	var stepped_back := [{"pos": Vector3(0.0, 0.0, -0.44), "yaw": 0.0}]
 	_ok(not TablePositions._on_cloth(stepped_back) and TablePositions._on_cloth([{"pos": Vector3(0.0, 0.0, -0.165), "yaw": 0.0}]),
 		"control: a row stepped back to z -0.44 is off the cloth, one at -0.165 is not")
-	# THE FLIGHT: from held up in front of the lens to a place right behind the box
+	# The flight: from held up in front of the lens to a place right behind the box
 	if medium._box_part.stood.is_empty():
 		_ok(false, "a box stands to lay over")
 		return
@@ -1207,7 +1159,7 @@ func _bursts() -> void:
 				worst = [w[0], "%s, %s" % [name, w[1]]]
 		_ok(float(worst[0]) < 0.002, "%s: every burst is born at its card as drawn (%s; worst %.2f mm, %s)"
 			% [epi[0], ", ".join(seen), float(worst[0]) * 1000.0, worst[1]])
-		# THE CLOSE WAITS for every card to be down: from its first birth, each lies where it stays
+		# The close waits for every card to be down: from its first birth, each lies where it stays
 		var close: Array = moments["close"]
 		var still := 0.0
 		if not close.is_empty():
@@ -1226,13 +1178,13 @@ func _bursts() -> void:
 			_posed(touch + 0.002)
 			var snap := _off_card(flying, medium._cards[0])
 			_ok(String(ev["how"]) == "jumper" and snap < 0.002, "a jumper comes down as it lies: %.1f mm between its flight's end and its landing" % (snap * 1000.0))
-			# THE CONTROL: the tumble alone, as it was flown, ends off the landing
+			# The control: the tumble alone, as it was flown, ends off the landing
 			var top := medium._card_poses._jump_ride(0, TableMedium.JUMP_FLY.x)
 			var tumbled := Basis(Vector3.UP, 0.6 + 1.3 * PI) * top.basis * Basis(Vector3(0, 0, 1), 3.0 * PI)
 			var old := _off_card(Transform3D(tumbled, flying.origin), medium._cards[0])
 			_ok(old > 0.03, "control: the tumble alone ends %.0f mm off its landing" % (old * 1000.0))
 		if String(epi[0]) == "a spread that lays the card still held":
-			# THE CONTROL: the close as it was planned - at the spread's mark, from where each card would lie
+			# The control: the close as it was planned - at the spread's mark, from where each card would lie
 			var tm := medium._times()
 			var ts := float(tm["spread"])
 			var wj0 := medium._shuffles.wash_jump(maxf(float(tm["shuffle"]), minf(0.0, medium._now)))
@@ -1319,9 +1271,8 @@ func _piles() -> void:
 		[int(grid["low"]), int(grid["high"]), float(grid["gaps"]) * 1000.0, float(grid["ragged"]) * 1000.0])
 
 
-## How many times a card passes through another, or lies in it, between [param from] and [param to]
-## (two poses of every card, a frame apart: `[Transform3D or null when unseen]`): a point of one card
-## over the other's face changing sides of it, or within it.
+## How many times a card passes through another, or lies in it, between [param from] and [param to] (two poses of every card, a frame apart:
+## `[Transform3D or null when unseen]`): a point of one card over the other's face changing sides of it, or within it.
 func _through(from: Array, to: Array) -> int:
 	var n := 0
 	var half := TablePositions.CARD * 0.5
@@ -1389,7 +1340,7 @@ func _waterfall_shown() -> void:
 	_posed(_at(1, "show") - 0.02)
 	_ok((medium._cards[0] as MeshInstance3D).transform.origin.y - (medium._cards[1] as MeshInstance3D).transform.origin.y > TableMedium.CARD_T * 0.99,
 		"laid again, the first lies on top of the second")
-	# THE CONTROL: lifted straight up from where it lay under the second, it passes through it
+	# The control: lifted straight up from where it lay under the second, it passes through it
 	var straight := 0
 	var was: Array = [under, over]
 	for i in 12:

@@ -2,24 +2,20 @@ extends GhostScene
 
 ## Prism split - one prism strains, then breaks into two (from "the-point").
 ##
-## It begins as a SINGLE blue [PrismBody] at center. Energy builds a TENSION: a red clone is pulled
-## out of it as a faint SHADE, stretching toward its anchor but held back by an attractor BOND
-## between them (a taut filament). When the tension crosses its breaking point, the bond SNAPS - a
-## flash - and the freed clone SPRINGS to its anchor with an overshoot, both prisms settling to the
-## left/right anchors. Thereafter each prism strains against its own anchor (the rubber-band core in
-## [PrismBody]), so the pair keeps straining and springing with the music. The whole split is driven
-## by energy: a quiet passage barely stretches it; a surge breaks it.
+## It begins as a single [PrismBody] at center. Energy builds a tension: a clone is pulled out
+## as a faint shade, stretching toward its anchor but held back by an attractor bond (a taut
+## filament). When the tension crosses its breaking point the bond snaps with a flash and the
+## clone springs to its anchor with an overshoot, both prisms settling at the left/right
+## anchors. After that each prism strains against its own anchor (the rubber-band core in
+## [PrismBody]). A quiet passage barely stretches it; a surge breaks it.
 ##
-## Color and geometry both come off one roll. The pair takes a [Scheme] mood - the
-## original on its base hue, the clone on the mood's counter hue (see [method
-## Scheme.opposed]) - so "blue splits into red" is now one outcome of many rather than
-## the only one. The structural liberty is the SPLIT ITSELF: which way the thing comes
-## apart, which is this scene's whole composition.
+## The pair takes a [Scheme] mood: the original on its base hue, the clone on the counter hue
+## (see [method Scheme.opposed]). The seeded structure is the split itself: which way it comes
+## apart.
 
-## How the prism comes apart. `angle` is the axis the two halves separate along (0 =
-## sideways), `throw` how far each ends up from center, `size` the body scale that
-## still reads at that separation - a tight vertical cleave wants smaller prisms than
-## a wide lateral break, so the three travel together rather than being rolled apart.
+## How the prism comes apart. `angle` is the axis the halves separate along (0 = sideways),
+## `throw` how far each ends up from center, `size` the body scale that still reads at that
+## separation (a tight vertical cleave wants smaller prisms than a wide lateral break).
 const SPLIT := {
 	"lateral":  {"angle": [0.00, 0.12], "throw": [0.30, 0.38], "size": [0.26, 0.34]},
 	"diagonal": {"angle": [0.45, 0.85], "throw": [0.28, 0.34], "size": [0.24, 0.30]},
@@ -44,8 +40,8 @@ var _counter := 0.0        # .. and the clone's
 var _bond_col := Color(0.7, 0.85, 1.0)   # the taut filament, tinted by the mood
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice]): a storyboard entry's `set`, by
+## name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"split": {"label": "Split", "type": "choice", "options": "SPLIT", "default": null,
 		"blurb": "How the prism comes apart: a wide sideways break, a diagonal one, or a tight vertical cleave."},
@@ -87,8 +83,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	var drive := clampf(f.energy * 0.85 + f.beat * 0.6, 0.0, 1.0)
 	_blue.update(delta, drive)
 	_red.update(delta, drive)
-	# While still coupled, the red is a SHADE of the same prism: phase-lock it to the blue so the two
-	# spin as ONE. It only starts turning on its own once the bond breaks and it becomes real.
+	# While coupled the clone is a shade of the same prism: phase-locked so the two spin as
+	# one. It turns on its own only once the bond breaks.
 	if not _broke:
 		_red.lock_pose_to(_blue)
 	var follow := 1.0 - exp(-7.0 * delta)
@@ -126,8 +122,8 @@ func _draw() -> void:
 	# The halves travel along the rolled split axis; -1/+1 stay the two ends of it.
 	var bc := _axis * (_bx * anchor)
 	var rc := _axis * (_rx * anchor)
-	# The attractor bond: a taut filament from the original to the emerging clone - brightening as
-	# the tension winds up and FLASHING white as it snaps.
+	# The attractor bond: a filament from the original to the emerging clone, brightening as
+	# tension winds up and flashing white as it snaps.
 	if _tension > 0.02 or _snap > 0.01:
 		_draw_bond(bc, rc, clampf(0.1 * _tension + 0.95 * _snap, 0.0, 1.0))
 	_blue.draw(self, bc, sc, _lead, 1.0)
@@ -139,8 +135,8 @@ func _draw() -> void:
 func _draw_bond(a: Vector2, b: Vector2, k: float) -> void:
 	if k <= 0.001:
 		return
-	# The bow is PERPENDICULAR to the split axis, so a vertical cleave sags sideways
-	# rather than along its own line (where the bow would be invisible).
+	# The bow is perpendicular to the split axis, so a vertical cleave sags sideways (along its
+	# own line the bow would be invisible).
 	var perp := Vector2(-_axis.y, _axis.x)
 	var mid := (a + b) * 0.5 + perp * (5.0 * sin(_life * 2.5))
 	var pts := PackedVector2Array([a, mid, b])

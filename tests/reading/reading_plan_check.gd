@@ -4,30 +4,26 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/reading/reading_plan_check.gd
 ##
-## WHAT IT HOLDS (next/structure.md, step 17). [ReadingPlan] is planned here with no panel, no voice
-## and no host - only text in and a plan out:
+## Holds ([ReadingPlan] planned with no panel, no voice and no host: text in, plan out):
 ##
-## - THE SAME WORDS, THE SAME PLAN: planned twice, the two are equal, and the `ask` handed in comes
-##   back unchanged; told something else (Hesitate off), the plan differs - so "equal" can fail;
-## - THE READER'S CUE IS THE READER'S: a cue naming the narrator goes to the `reader` asked, whoever
-##   that is, and so does the text before the first cue;
-## - A PASSAGE'S RESTS ARE ITS OWN: each passage carries the lengths of its own hesitations, and its
-##   chunks rest exactly those - none are left over to shift onto the next voice's;
-## - THE VOICE IS TOLD OF A REST: the word a hesitation follows carries its length to the host
-##   (`rest_after`), which reads that word as the end of a phrase and rests after it itself (piper.py
-##   `REST_AFTER_FLOOR`; 2026-10-25, "moved on to <!-- hesitation --> Someone" came back a "t" and a
-##   frame of schwa before the rest);
-## - THE FADE IS THE PLAN'S: an outro mark fades for the Outro asked (at least half a second), and
-##   text with no mark has none;
-## - A READING CAN GROW: a second piece planned on from the first's `sentences` numbers its sentences
-##   after the first's, says the same words it would have said as one script, and starts where the
-##   scrub's estimate of the first ends.
+## - same words, same plan: planned twice, the two are equal and the `ask` handed in comes back unchanged;
+##   told something else (Hesitate off), the plan differs;
+## - the reader's cue is the reader's: a cue naming the narrator goes to the `reader` asked, whoever that is,
+##   and so does the text before the first cue;
+## - a passage's rests are its own: each passage carries the lengths of its own hesitations and its chunks
+##   rest exactly those;
+## - the voice is told of a rest: the word a hesitation follows carries its length to the host (`rest_after`),
+##   which reads that word as the end of a phrase and rests after it itself (piper.py `REST_AFTER_FLOOR`);
+## - the fade is the plan's: an outro mark fades for the Outro asked (at least half a second), text with no
+##   mark has none;
+## - a reading can grow: a second piece planned on from the first's `sentences` numbers its sentences after the
+##   first's, says the same words it would as one script, and starts where the scrub's estimate of the first ends.
 ##
-## THE CONTROLS: Hesitate off rests nowhere and tells the voice of nothing (and is a different plan), a reader asked by another
-## name gets the cue, and a second piece planned from sentence 0 collides with the first.
+## Controls: Hesitate off rests nowhere and tells the voice of nothing; a reader asked by another name gets the
+## cue; a second piece planned from sentence 0 collides with the first.
 ##
-## Loaded by path after the tree is up: named here, the plan would be compiled with this gate before
-## the autoloads its libraries read exist.
+## Loaded by path after the tree is up: named here, the plan would compile with this gate before the autoloads
+## its libraries read exist.
 
 var _fails: Array = []
 var _plan: GDScript

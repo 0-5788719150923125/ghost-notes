@@ -1,21 +1,21 @@
 extends SceneTree
 
-## The agent tool server's gate: [AgentTools] spoken to over a real socket, the way an agent CLI
-## speaks to it - with no agent and no model.
+## The agent tool server's gate: [AgentTools] spoken to over a real socket, as an agent CLI speaks to it,
+## with no agent and no model.
 ##
 ##   godot --headless --path . --script res://tests/agents/agent_tools_check.gd
 ##
-## - A JOB'S URL is its own: an unknown token is not found, a closed one stops answering.
-## - THE HANDSHAKE: initialize echoes the client's protocol version and names the toolset's
-##   instructions; a notification is accepted with nothing to say; an id comes back as it was sent.
-## - A CALL reaches the toolset and comes back as content: words, then pictures as JPEGs that decode
-##   to the picture made. A tool that takes frames is waited for. Every call is logged in the job's
-##   folder, and every picture kept there.
-## - THE WIRE: a request split across writes is answered only once whole (two-sided: the first half
-##   alone is incomplete); a chunked body reads as the same request; a batch gets a batch; GET is not
-##   served; a browser's Origin is refused and a local one is not; junk is a parse error.
-## - A RUNAWAY LOOP ENDS: past the most calls a job may make, a call is refused.
-## - A READ-ONLY process serves nothing.
+## - A job's URL is its own: an unknown token is not found, a closed one stops answering.
+## - The handshake: initialize echoes the client's protocol version and names the toolset's instructions;
+##   a notification is accepted with nothing to say; an id comes back as sent.
+## - A call reaches the toolset and comes back as content: words, then pictures as JPEGs that decode to the
+##   picture made. A tool that takes frames is waited for. Every call is logged in the job's folder and
+##   every picture kept there.
+## - The wire: a request split across writes is answered only once whole (the first half alone is
+##   incomplete); a chunked body reads as the same request; a batch gets a batch; GET is not served; a
+##   browser's Origin is refused and a local one is not; junk is a parse error.
+## - A runaway loop ends: past the most calls a job may make, a call is refused.
+## - A read-only process serves nothing.
 
 const DIR := "user://agent_tools_check"
 
@@ -50,7 +50,7 @@ class Toolset:
 				for i in 3:
 					await tree.process_frame
 				return {"text": "done after three frames"}
-			# AN ERROR IN WORDS, and none in words: what a toolset may say (SolverTools, DealerTools)
+			#An error in words, and none in words: what a toolset may say (SolverTools, DealerTools)
 			"fails":
 				return {"text": "", "error": "the disk is full"}
 			"fine":
@@ -84,7 +84,7 @@ func _run() -> void:
 		"the job's URL is not a local one with its own token: %s" % url)
 	var path := "/mcp/" + url.get_file()
 
-	# THE HANDSHAKE
+	# The handshake
 	var r := await _post(path, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
 		"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "gate", "version": "1"}}})
 	var res: Dictionary = (r["json"] as Dictionary).get("result", {}) if r["json"] is Dictionary else {}
@@ -96,7 +96,7 @@ func _run() -> void:
 	_ok(String(res.get("instructions", "")) == "Tools for the gate.", "the toolset's instructions were not passed on")
 	_ok(String(r["text"]).contains("\"id\":1,") or String(r["text"]).contains("\"id\":1}"),
 		"the id did not come back as the integer sent: %s" % r["text"])
-	# THE TOKEN AS A BEARER, to the bare endpoint - the way Codex sends it, from an environment variable
+	#The token as a bearer, to the bare endpoint - the way Codex sends it, from an environment variable
 	var bare := "/mcp/"
 	var hello := JSON.stringify({"jsonrpc": "2.0", "id": 9, "method": "ping"})
 	_ok(AgentTools.endpoint(url) == "http://127.0.0.1:%d/mcp/" % AgentTools.port() and AgentTools.token_of(url) == url.get_file(),
@@ -117,7 +117,7 @@ func _run() -> void:
 	_ok(names == ["echo", "picture", "slow"] and String((r["json"] as Dictionary)["id"]) == "a",
 		"tools/list gave %s" % str(names))
 
-	# A CALL, its content, its log
+	# A call, its content, its log
 	r = await _post(path, {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "echo", "arguments": {"say": "hi"}}})
 	var content: Array = (r["json"] as Dictionary).get("result", {}).get("content", [])
 	_ok(content.size() == 1 and String(content[0]["text"]) == "you said: hi"
@@ -144,7 +144,7 @@ func _run() -> void:
 	_ok(log.size() >= 2 and String(log[1]).contains("look_01.jpg"), "the log does not name the picture kept")
 	_ok(AgentTools.calls(url) == 3, "the job's calls were counted as %d" % AgentTools.calls(url))
 
-	# THE WIRE
+	# The wire
 	var body := JSON.stringify({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "echo", "arguments": {"say": "in two"}}})
 	var raw := _raw("POST", path, body)
 	var half := raw.slice(0, raw.size() / 2 + 7)
@@ -172,8 +172,7 @@ func _run() -> void:
 	r = await _send(_raw("POST", "/mcp/" + "0".repeat(32), body))
 	_ok(int(r["status"]) == 404, "an unknown token was answered %d" % r["status"])
 
-	# AN ERROR SAID IN WORDS reaches the agent as one; "" is no error (2026-10-15: `bool()` of the
-	# words threw inside the answer, and the Proof solver's notebook calls were never answered)
+	#An error said in words reaches the agent as one; "" is no error
 	r = await _post(path, {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "fails", "arguments": {}}})
 	var failed: Dictionary = (r["json"] as Dictionary).get("result", {}) if r["json"] is Dictionary else {}
 	_ok(bool(failed.get("isError", false)) and String(failed.get("content", [{}])[0].get("text", "")) == "the disk is full",
@@ -183,7 +182,7 @@ func _run() -> void:
 	_ok(not bool(fine.get("isError", true)) and String(fine.get("content", [{}])[0].get("text", "")) == "kept",
 		"the control: an empty error is no error, answered %s" % str(r))
 
-	# A RUNAWAY LOOP ENDS
+	# A runaway loop ends
 	AgentTools._the._jobs[url.get_file()]["calls"] = AgentTools.MAX_CALLS
 	var echoes := ts.seen.count("echo")
 	r = await _post(path, {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "echo", "arguments": {"say": "more"}}})
@@ -192,7 +191,7 @@ func _run() -> void:
 		"a call past the most a job may make was answered %s" % str(over))
 	_ok(ts.seen.count("echo") == echoes, "a call past the most a job may make reached its tool")
 
-	# A CLOSED JOB stops answering
+	# A closed JOB stops answering
 	AgentTools.close(url)
 	r = await _post(path, {"jsonrpc": "2.0", "id": 11, "method": "ping"})
 	_ok(int(r["status"]) == 404, "a closed job was answered %d" % r["status"])

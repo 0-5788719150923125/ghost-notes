@@ -1,33 +1,27 @@
 extends Node
 
-## NOT a gate. Drives the tarot table over an episode on disk with a SYNTHETIC voice - every
-## spoken word at a steady pace, and the rest each action asks the voice for - and writes PNGs
-## to look at.
+## Not a gate. Drives the table over an episode on disk with a synthetic voice - every spoken word at a steady pace, and the rest
+## each action asks the voice for - and writes PNGs to look at.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/table_look_probe.gd 300 \
 ##       --out /tmp/tarot/t --show truthful-tarot --seed 1 --times 2,9,30 [--every S] [--camera 1]
 ##
-## `--marks 1` photographs each action instead: the moment it starts, a beat in, and the card
-## held up after it. `--things 1` prints what stands on the table and every flame's light;
-## `--dark 0,2` puts out those lights (a lit thing's one light; -1 the lamp), to find which light does something;
+## `--marks 1` photographs each action instead: the moment it starts, a beat in, and the card held up after it. `--things 1` prints
+## what stands on the table and every flame's light; `--dark 0,2` puts out those lights (a lit thing's one light; -1 the lamp);
 ## `--dark-lamps 0,2` the set dresser's lamps out of the shot (`light.lamps`, in order; the sun is -1).
-## `--name N --byline B` set the title screen's name and byline (the show's own); `--ink #rrggbb` prints
-## the name in that color, as a set dresser's choice would.
+## `--name N --byline B` set the title screen's name and byline; `--ink #rrggbb` prints the name in that color.
 ## `--root user://somewhere` reads the episode from another root than the author's (a copy restaged to look at).
-## `--looks 1` prints when each held card looks at its back, and which looks are pirouettes - to
-## aim a `--clip` at one.
-## `--size 2880x1600` renders at a reported resolution. To try a shadow without rebuilding the table:
-## `--candle light_size=0,shadow_blur=1.5` sets those properties on every candle's light,
-## `--atlas 8192` the stage's shadow atlas, `--quality 4` the soft shadow filter's quality
-## (RenderingServer.ShadowQuality). Each photograph's line says what the stage's last frame took on the GPU;
-## `--timing N` plays N frames on past the last one and prints their median.
-## `--graphics export` draws at the Export column's defaults ([Graphics]; `live` the viewer's), and `--graphics
-## supersample=2,anisotropy=4` tells rows outright (laid over either); without it the stage is as Godot leaves it.
-## `--env tonemap_mode=4,ssil_enabled=true` sets those properties on the table's Environment (4 is AgX) - a look
-## tried without editing the medium.
+## `--looks 1` prints when each held card looks at its back, and which looks are pirouettes - to aim a `--clip` at one.
+## `--size 2880x1600` renders at that resolution. To try a shadow without rebuilding the table: `--candle light_size=0,shadow_blur=1.5`
+## sets those properties on every candle's light, `--atlas 8192` the stage's shadow atlas, `--quality 4` the soft shadow filter's
+## quality (RenderingServer.ShadowQuality). Each photograph's line says what the stage's last frame took on the GPU; `--timing N`
+## plays N frames on past the last one and prints their median.
+## `--graphics export` draws at the Export column's defaults ([Graphics]; `live` the viewer's), and `--graphics supersample=2,anisotropy=4`
+## tells rows outright (laid over either); without it the stage is as Godot leaves it.
+## `--env tonemap_mode=4,ssil_enabled=true` sets those properties on the table's Environment (4 is AgX).
 ## `--tonemap agx` shows the table through that tonemapper at its preset ([Tonemaps], as the Look card would).
-## `--wash W` makes the shuffle one wash (seed W, its longest) and `--clip A,B` writes EVERY frame
-## from A to B seconds into it (`<out>_c0000.png`...) - motion is judged in motion:
+## `--wash W` makes the shuffle one wash (seed W, its longest) and `--clip A,B` writes every frame from A to B seconds into it
+## (`<out>_c0000.png`...) - motion is judged in motion:
 ##   ffmpeg -framerate 30 -i <out>_c%04d.png -pix_fmt yuv420p wash.mp4
 ## Asserts only that a frame is not uniform.
 
@@ -160,7 +154,7 @@ func _run() -> void:
 	subs.words = timeline(parse, _word, Director.intro_hold)
 	subs.document = {"source": script, "title": _name, "byline": _byline, "table": ep.document()}
 	if _from > 0:
-		# A SCRUB: the voice starts at word N with no intro, and the medium is handed its first words
+		# A scrub: the voice starts at word N with no intro, and the medium is handed its first words
 		var later: Array = []
 		var t0 := float((subs.words[_from] as Dictionary)["t0"]) - 0.5
 		for i in range(_from, subs.words.size()):

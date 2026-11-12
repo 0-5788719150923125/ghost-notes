@@ -2,37 +2,29 @@ extends VBoxContainer
 class_name ActorCard
 
 ## ActorCard - the Actor component's card: makes and manages an actor of the [Actors] library
-## (next/likeness.md, "The Actor card"), and PUTS THEM ON THE STAGE: a note with an Actor is read by them,
-## in their own room. One component since 2026-10-22 (it had been two, an Actor that built and a Likeness
-## that played; the user: "If we're doing all that pipeline work with Actor... then the implication is we
-## want to use that actor in the scene").
+## (next/likeness.md, "The Actor card") and puts them on the stage: a note with an Actor is read by them, in their own room.
 ##
-## TOP TO BOTTOM: the actor (picked from the library, or a new one) and their name; their SOURCES - a
-## folder read where it is, a link (a video, a playlist, a channel) listed and fetched one video at a
-## time, or a link for captions only, matched to the folder's videos by title - with a tick per video;
-## the SETS the footage fell into, each with its
-## sheet, its minutes and its look in words, whether it is built, and the one in use ("Use this set");
-## the STILL they are drawn on, picked from the set's stills; what the library and their motion hold;
-## who labels; and the steps' settings, folded.
+## Top to bottom: the actor (picked from the library, or a new one) and their name; their sources (a folder read
+## where it is, a link - a video, a playlist, a channel - listed and fetched one video at a time, or a link for
+## captions only, matched to the folder's videos by title) with a tick per video; the sets the footage fell into,
+## each with its sheet, minutes, look in words, whether it is built, and "Use this set"; the still they are drawn on;
+## what the library and their motion hold; who labels; and the steps' settings, folded.
 ##
-## WHILE IT IS UP IT PINS ITS MEDIUM ([LikenessMedium], as Proof pins the desk: [member
-## Director.medium_override]) and HANDS THE READING how it goes out ([ActorCard.Publish]): an export waits
-## for the set in use to be built, and the document a render draws from carries the actor's folder, the
-## set, its still and the seed of their performance, which is the note's own ([method performance]). And
-## WHAT IS READ ([ActorCard.Walk]): the note's words, with no title announced before them.
+## While it is up it pins its medium ([LikenessMedium], as Proof pins the desk: [member Director.medium_override])
+## and hands the reading how it goes out ([ActorCard.Publish]: an export waits for the set in use to be built, and the
+## document a render draws from carries the actor's folder, set, still and the seed of their performance, which is the
+## note's own, [method performance]) and what is read ([ActorCard.Walk]: the note's words, no title announced).
 ##
-## THEIR STEPS ARE ON THE NOTE'S PIPELINE CARD ([ActorPipeline]; next/pipeline.md), with Generate and Stop: ✓ made, ⚠
+## Their steps are on the note's Pipeline card ([ActorPipeline]; next/pipeline.md), with Generate and Stop: ✓ made, ⚠
 ## stale, its share while it runs, ▶ to make it and what it needs, ⟳ to make it again.
 ##
-## NOTHING HERE WAITS ON THE DISK (the user, 2026-10-23: "every single one of them comes with ~10 seconds of
-## reloading-freeze ... We shouldn't be blocking the main thread for ANY operation"): the steps' states are worked
-## out on a worker, on a folder of its own ([method ActorBuilder.states_of]), and the runs laid over them by their
-## section ([ActorPipeline], with the sources and videos' [ActorSourceList] shared with the Voice training card); the
-## sets' and stills' pictures are read on a worker; a video ticked rebuilds no row. Tick all and Untick all take the
-## whole list at once.
+## Nothing here waits on the disk: the steps' states are worked out on a worker, on a folder of its own
+## ([method ActorBuilder.states_of]), and the runs laid over them by their section ([ActorPipeline], with the sources and
+## videos' [ActorSourceList] shared with the Voice training card); the sets' and stills' pictures are read on a worker;
+## a video ticked rebuilds no row. Tick all and Untick all take the whole list at once.
 ##
-## GENERATION IS EXPLICIT: nothing runs on open. The survey costs hours of CPU and the audit quota, so a
-## button is the only caller ([ActorBuilder]).
+## Generation is explicit: nothing runs on open, since the survey costs hours of CPU and the audit quota; a button
+## is the only caller ([ActorBuilder]).
 
 const KEY := "actor"
 
@@ -152,8 +144,8 @@ func renderer() -> String:
 	return String(_knobs["renderer"])
 
 
-## THE CARD FOR ITS RENDERER: the steps and settings it is made with, and those every renderer shares;
-## the others' are hidden, and their settings kept as they were for a turn back.
+## The card for its renderer: the steps and settings it is made with, and those every renderer shares;
+## the others' are hidden, and their settings kept as they were.
 func _show_renderer() -> void:
 	var r := renderer()
 	if _builder != null:
@@ -172,10 +164,9 @@ func _show_renderer() -> void:
 
 # --- what it hands the reading -------------------------------------------------------------------
 
-## HOW THEY GO OUT: an export waits for the set in use to be built, the render's document names the
-## actor, the set and its still, and an upload says whose likeness it is and how it was made
-## ([method disclosure]) - under the description written on the YouTube card, the note being its own
-## episode ([NoteUpload]), whose steps this card lists.
+## How they go out: an export waits for the set in use to be built, the render's document names the actor, set and
+## still, and an upload says whose likeness it is and how it was made ([method disclosure]) under the description
+## written on the YouTube card, the note being its own episode ([NoteUpload]), whose steps this card lists.
 class Publish extends ReadingPublish:
 	var card: ActorCard
 
@@ -205,10 +196,8 @@ class Publish extends ReadingPublish:
 			"effort": String(card._knobs["writer_effort"])}
 
 
-## WHAT THEY READ: the note's own words, AND NO TITLE ANNOUNCED FIRST (the user, 2026-10-23: "In this mode,
-## the actor should NOT speak the title. It's very strange that the video starts with the actor saying, 'Bad
-## Yestermorrow'"). A reader announces a chapter; a person talking to the camera does not. A heading written
-## in the words is said, as everything written is.
+## What they read: the note's own words and no title announced first (a reader announces a chapter; a person talking
+## to the camera does not). A heading written in the words is said, as everything written is.
 class Walk extends TextWalk:
 	func spoken(text: String, title: String) -> Dictionary:
 		var d := super.spoken(text, title)
@@ -216,24 +205,24 @@ class Walk extends TextWalk:
 		return d
 
 
-## WHOSE LIKENESS AN UPLOAD IS, AND HOW IT WAS MADE, said by the code under the description written for it:
-## [param name], played by [param renderer] - the 2D one bends their own pixels; Gaussian draws splats
-## learned from their footage, which are no pixel of it.
+## Whose likeness an upload is and how it was made, said by the code under the description written for it:
+## [param name], played by [param renderer] - the 2D one bends their own pixels; Gaussian draws splats learned from
+## their footage, which are no pixel of it.
 static func disclosure(name: String, renderer: String) -> String:
 	if renderer == "gaussian":
 		return "A likeness of %s, learned from %s's own footage and drawn as Gaussian splats; the voice is synthetic." % [name, name]
 	return "A likeness of %s, animated from %s's own footage. Every pixel of them is a real one from their footage, bent; the voice is synthetic." % [name, name]
 
 
-## THE PERFORMANCE: the seed their motion's pieces, blinks, glances and posture are drawn from - the
-## note's own file's, so the same note plays the same way (a draft with no file, always the first).
+## The performance: the seed their motion's pieces, blinks, glances and posture are drawn from - the note's own file's,
+## so the same note plays the same way (a draft with no file, always the first).
 func performance() -> int:
 	var doc := _panel.doc_source() if _panel != null else null
 	var path := doc.doc_path() if doc != null else ""
 	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
 
 
-## THE DOCUMENT'S `likeness`: the actor's folder, the set and its still, the seed of their performance.
+## The document's `likeness`: the actor's folder, the set and its still, the seed of their performance.
 func document() -> Dictionary:
 	if _actor == null:
 		return {}
@@ -335,8 +324,8 @@ func _show_actor() -> void:
 	_syncing = false
 
 
-## THEIR OWN VOICE HAS LANDED: the reading this card is on asks for its voices again and reads in it
-## ([method ReadingPanel.voice_made]) - the list was asked for when the note opened, hours before.
+## Their own voice has landed: the reading this card is on asks for its voices again and reads in it
+## ([method ReadingPanel.voice_made]).
 func _voice_made(voice: String) -> void:
 	if _panel != null and is_instance_valid(_panel):
 		_panel.voice_made(voice)
@@ -362,8 +351,8 @@ func _generate() -> void:
 	_say("Generating: every step that is missing or stale, in order. The survey of each video takes about a quarter of its length; the rest a few minutes.")
 
 
-## WHETHER THEY CAN PLAY: `{ready, busy, said}` - ready once the set in use is built, whether anything is
-## being made, and a line saying what is missing or under way.
+## Whether they can play: `{ready, busy, said}` - ready once the set in use is built, whether anything is being made,
+## and a line saying what is missing or under way.
 func likeness_status() -> Dictionary:
 	if _actor == null:
 		return {"ready": false, "busy": false, "said": "The Actor card has no actor yet: pick one or make one."}
@@ -376,7 +365,7 @@ func likeness_status() -> Dictionary:
 		var scope := ("s:" + sid) if ActorSteps.per(String(step)) == "set" else ""
 		if sid.is_empty() or _actor.state_of(String(step), scope) == "missing":
 			missing.append(String(Registry.field(ActorSteps.REGISTRY, step, "label", step)).to_lower())
-	# THE ACTOR CARD BUILDS, and an export held back says so (2026-10-21: a Generate on each card confused)
+	# the Actor card builds, and an export held back says so
 	var said := ("Building %s: the set in use still needs %s." if busy
 		else "%s is not built yet (the set in use needs %s): Generate on the Pipeline card builds them.") % [_actor.name(), ", ".join(missing)]
 	return {"ready": false, "busy": busy, "said": said}
@@ -393,8 +382,7 @@ func _refresh() -> void:
 	_take_pictures()
 
 
-## A PICTURE READ ON A WORKER: [param path] into [param pic] once read, made [param most] pixels at most (a sheet
-## is shown far smaller than it is).
+## A picture read on a worker: [param path] into [param pic] once read, made [param most] pixels at most.
 func _want_picture(pic: TextureRect, path: String, most: Vector2i) -> void:
 	_pics_wanted.append([pic, path, most])
 	_read_pictures()
@@ -438,7 +426,7 @@ func _take_pictures() -> void:
 
 # --- on the Pipeline card ------------------------------------------------------------------------
 
-## WHAT THIS CARD MAKES, on the note's one list ([PipelineCard]): their steps.
+## What this card makes, on the note's one list ([PipelineCard]): their steps.
 func pipeline() -> PipelineSection:
 	return _steps
 
@@ -502,9 +490,8 @@ func _fill_sets() -> void:
 			(d.get("shots", []) as Array).size(), (" · %d out" % int(d["excluded"])) if int(d.get("excluded", 0)) > 0 else "",
 			" · handheld" if bool(d.get("handheld", false)) else "", ("\n" + look) if not look.is_empty() else ""]
 		col.add_child(l)
-		# WHICH SET THE LIKENESS USES: each set is built on its own (its still, its rig, its library - a
-		# few minutes), so the row says whether this one is, and using another keeps this one's work
-		# (2026-10-21: "Play this set" read as a preview, and switching looked like losing a build)
+		# which set the likeness uses: each set is built on its own (its still, rig and library), so the row says
+		# whether this one is, and using another keeps this one's work
 		var sid := String(d.get("id", ""))
 		var built := _actor.playable(sid, renderer())
 		var foot := HBoxContainer.new()
@@ -536,15 +523,15 @@ func _fill_sets() -> void:
 		foot.add_child(said)
 
 
-## ROUGHLY HOW LONG SET [param _d] TAKES TO BUILD once the survey is done: its stills, its rig and its
-## library seek a few hundred frames, whatever its length.
+## Roughly how long set [param _d] takes to build once the survey is done: its stills, rig and library seek a few
+## hundred frames, whatever its length.
 func _build_time(_d: Dictionary) -> String:
 	return "a few minutes"
 
 
-## THE STILL THE LIKENESS IS DRAWN ON: the set in use's stills - those At rest found them at ease in
-## first, most at ease first, and marked - the one in use marked, a click picking another; nothing is made
-## again (the library is the set's, matched to each still's light).
+## The still the likeness is drawn on: the set in use's stills - those At rest found them at ease in first, most at
+## ease first, and marked - the one in use marked, a click picking another; nothing is made again (the library is the
+## set's, matched to each still's light).
 func _fill_stills() -> void:
 	var sid := _actor.chosen_set()
 	var p := _actor.set_dir(sid).path_join("stills.json") if not sid.is_empty() else ""
@@ -597,7 +584,7 @@ func _fill_stills() -> void:
 
 func _fill_library() -> void:
 	var sid := _actor.chosen_set()
-	# READ ONLY WHEN MADE AGAIN: this runs four times a second
+	# read only when made again: this runs four times a second
 	var files := [_actor.dir.path_join("visemes.json"), _actor.dir.path_join("motion.json"),
 		_actor.dir.path_join("mouth_model.json")]
 	if not sid.is_empty():
@@ -630,7 +617,7 @@ func _fill_library() -> void:
 			parts.append("Their mouth for %d sounds, each placed in their own range: their words scarcely show in their mouth in this footage (the sounds' mouths span %d%% of their jaw's range)" % [cl.size(), int(round(100.0 * shows))])
 		else:
 			parts.append("Their mouth for %d sounds, each placed in their own range of movement (no words to learn from)" % cl.size())
-	# THE LEARNED MOUTH'S OWN MEASURE: how much of their mouth it explains on a video it never saw
+	# the learned mouth's own measure: how much of their mouth it explains on a video it never saw
 	var mm: Variant = ActorFolder.read_kept(files[2])
 	if mm is Dictionary and (mm as Dictionary).get("scores") is Dictionary and not ((mm as Dictionary)["scores"] as Dictionary).is_empty():
 		var sc: Dictionary = (mm as Dictionary)["scores"]
@@ -818,15 +805,14 @@ func _build() -> void:
 	_show_renderer()
 
 
-## A PICTURE CLICKED: the left button's press, nothing else - the wheel's notches are button presses too (2026-10-23:
-## scrolling over the sets opened dozens of their sheets). The pictures pass what they do not take on (MOUSE_FILTER_PASS),
-## so the wheel scrolls the card under them.
+## A picture clicked: the left button's press only (the wheel's notches are button presses too). The pictures pass what
+## they do not take on (MOUSE_FILTER_PASS), so the wheel scrolls the card under them.
 static func clicked(e: InputEvent) -> bool:
 	var mb := e as InputEventMouseButton
 	return mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT
 
 
-## A HEADING over a part of the card (the Voice training card's too).
+## A heading over a part of the card (the Voice training card's too).
 static func heading(text: String) -> Label:
 	var l := Label.new()
 	l.text = text

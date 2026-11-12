@@ -1,20 +1,14 @@
 extends Node2D
 class_name TableBlueprint
 
-## TableBlueprint - the reader's table drawn as a plan, for the set dresser to lay its things out on
-## (the user, 2026-10-18: "draw a literal blueprint: black lines on white paper, with measurements ...
-## then simply ask the model to place props onto the blueprint at certain points, and with certain
-## orientations"). Before it, a thing named a zone and the table hunted that zone for room: the set
-## dresser of True Tarot #15853 moved a felt pad to lie under wherever the hunt had put its journal, and
-## a glass of grass was LEFT OFF, "not in front of another group", until it was named into another
-## zone. Now each thing is written where it stands ([method TableThings.stand_at]) and this is what
-## the set dresser plans it on:
+## TableBlueprint - the reader's table drawn as a plan, for the set dresser to lay its things out on: each thing is written where
+## it stands ([method TableThings.stand_at]) rather than named into a zone for the table to hunt room for. The sheet:
 ##
 ##   - paper ruled in centimeters from the middle of the reading - where a thing's `at` is measured
 ##     from, as a layer's is - with rulers along the top and the left, the reader at the bottom;
 ##   - the top's outline, heavy; each layer's, dashed, with its name; the floor past the top hatched;
 ##   - gray wherever the camera does not see, its frame's edge dashed;
-##   - HOW TALL A THING CAN STAND AND BE SEEN WHOLE ([method CardTable.headroom_at]): a line for each of
+##   - how tall a thing can stand and be seen whole ([method CardTable.headroom_at]): a line for each of
 ##     [constant HEIGHTS] - straight, the frame's top being a plane through the lens;
 ##   - where the cards go, hatched: the spread's cards, the deck, the shuffle; the reader's workspace,
 ##     dotted; the line the flames stand behind;
@@ -291,7 +285,7 @@ func _key(font: Font) -> void:
 
 # --- where everything falls on the sheet (no renderer needed) -------------------------------------------
 
-## WHERE THE TABLE FALLS ON A SHEET of [param sheet] pixels: the stretch of the table drawn (`area`,
+## Where the table falls on a sheet of [param sheet] pixels: the stretch of the table drawn (`area`,
 ## meters - what the camera sees of the top, the cards and every thing, [constant PAD] round them), how
 ## many pixels a meter is (`scale`), where the table's (0, 0) falls (`origin`) and the drawing's own
 ## rectangle on the sheet (`room`). x runs to the right, z down: the reader sits at the bottom.
@@ -335,7 +329,7 @@ static func _px(v: Dictionary, poly: PackedVector2Array) -> PackedVector2Array:
 	return out
 
 
-## THE OUTLINE [param o] ([method Tables.top_outline], [method Tables.layer_outline]) as a polygon of
+## The outline [param o] ([method Tables.top_outline], [method Tables.layer_outline]) as a polygon of
 ## [param n] points, walked round from its middle: each where its edge crosses the ray out to it.
 static func outline(o: Dictionary, n := 160) -> PackedVector2Array:
 	var out := PackedVector2Array()
@@ -355,7 +349,7 @@ static func outline(o: Dictionary, n := 160) -> PackedVector2Array:
 	return out
 
 
-## THE CAMERA'S FRAME ON THE TABLE: its edge walked round, each ray to where it meets the table - or
+## The camera's frame on the table: its edge walked round, each ray to where it meets the table - or
 ## [param reach] out, where it never comes down to it. A polygon on the table (x, z).
 static func seen(cam: Transform3D, fov: float, reach := 3.0) -> PackedVector2Array:
 	var k := tan(deg_to_rad(fov * 0.5))
@@ -380,7 +374,7 @@ static func seen(cam: Transform3D, fov: float, reach := 3.0) -> PackedVector2Arr
 	return out
 
 
-## WHERE A THING [param h] meters tall is just seen whole ([method CardTable.headroom_plane]): the two ends
+## Where a thing [param h] meters tall is just seen whole ([method CardTable.headroom_plane]): the two ends
 ## of that line across [param area], or none when it does not cross it. Nearer the reader than the line,
 ## a thing that tall is seen whole; farther back, its top is cut by the frame.
 static func height_line(cam: Transform3D, fov: float, h: float, area: Rect2) -> PackedVector2Array:

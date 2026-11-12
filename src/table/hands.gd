@@ -1,25 +1,21 @@
 extends RefCounted
 class_name Hands
 
-## Hands - HOW A HAND MOVES A THING (next/table_physics.md, "The hand"). Nobody is in the chair, but what moves
-## moves as if held: the user, 2026-10-28, of the first alchemy episode - "the motions are somewhat jerky, and they
-## follow straight lines. A real human might move in curves, or in nonlinear patterns, or it might gently jitter ...
-## akin to what we do with cards management already". So every move [TableWork] plays is shaped here, from what
-## the study of reaching has measured, each with a share of its own drawn from its act's seed - no two alike, every
-## one a function of its act's time:
+## Hands - how a hand moves a thing (next/table_physics.md, "The hand"). Nobody is in the chair, but what moves moves as if held. Every
+## move [TableWork] plays is shaped here, from what the study of reaching has measured, each with a share of its own drawn from its
+## act's seed - no two alike, every one a function of its act's time:
 ##
-##   - MINIMUM JERK in time (Flash and Hogan, 1985), skewed so a thing slows longer into a careful placing than it
-##     took to leave (MacKenzie et al., 1987: the deceleration phase lengthens with the precision asked);
-##   - A PATH THAT BOWS a little to one side (point-to-point hand paths are gently curved - Morasso, 1981), and a lift
-##     that rises early and comes down late: lifted before it travels, lowered after it arrives;
-##   - A HELD THING LAGS ITS HAND, tilted as a pendulum from the grip by the hand's acceleration - back as it sets
-##     off, forward as it stops (a carried liquid sloshes from the same acceleration);
-##   - A HELD THING IS NEVER STILL: a slow drift and a smaller quicker waver while it is off the table, none where it
-##     rests - so a move still begins and ends exactly where it was sent;
-##   - A ROUND IS NEVER THE SAME TWICE: a stir's or a grind's pace, radius and middle wander a little.
+##   - minimum jerk in time (Flash and Hogan, 1985), skewed so a thing slows longer into a careful placing than it took to leave
+##     (MacKenzie et al., 1987: the deceleration phase lengthens with the precision asked);
+##   - a path that bows a little to one side (point-to-point hand paths are gently curved - Morasso, 1981), and a lift that rises early
+##     and comes down late: lifted before it travels, lowered after it arrives;
+##   - a held thing lags its hand, tilted as a pendulum from the grip by the hand's acceleration - back as it sets off, forward as it
+##     stops (a carried liquid sloshes from the same acceleration);
+##   - a held thing is never still: a slow drift and a smaller quicker waver while it is off the table, none where it rests - so a move
+##     still begins and ends exactly where it was sent;
+##   - a round is never the same twice: a stir's or a grind's pace, radius and middle wander a little.
 ##
-## Pure functions of their arguments: [TableWork] and its checker, the physics' bake and a picture all get the same
-## move.
+## Pure functions of their arguments: [TableWork] and its checker, the physics' bake and a picture all get the same move.
 
 ## The peak of a move's speed comes early by this much ([method timing]: a warp of time, 0 for the textbook's even
 ## minimum jerk) - a peak at 44% of the move, the slower half spent placing it.
@@ -29,15 +25,15 @@ const SKEW := 0.25
 const BOW := Vector2(0.015, 0.045)
 const BOW_MOST := 0.012
 const BOW_FROM := Vector2(0.02, 0.08)
-## A LIFT's shape over the move's time ([method lift_at]): t^a (1 - t)^b, at its highest at a / (a + b) of the way.
+## A lift's shape over the move's time ([method lift_at]): t^a (1 - t)^b, at its highest at a / (a + b) of the way.
 const LIFT_SHAPE := Vector2(2.0, 3.0)
-## A HELD THING'S LAG ([method lean]): this share of the angle a hanging thing would swing to under the hand's
+## A held thing's lag ([method lean]): this share of the angle a hanging thing would swing to under the hand's
 ## acceleration (the grip holds the rest), never more than LEAN_MOST (radians).
 const LAG := 0.6
 const LEAN_MOST := 0.14
 ## How far through a move its unsteadiness grows from nothing, and dies back to nothing ([method held]).
 const HELD_IN := 0.18
-## THE DRIFT of a held thing ([method drift]): each wave's frequency range (hertz), how far it moves the thing (meters)
+## The drift of a held thing ([method drift]): each wave's frequency range (hertz), how far it moves the thing (meters)
 ## and how far it turns it (radians) - a slow drift, a waver over it, and a faint quick one - and how much of it is up
 ## and down.
 const DRIFT := [
@@ -46,12 +42,10 @@ const DRIFT := [
 	{"hz": Vector2(2.3, 3.4), "move": 0.00012, "turn": 0.0015},
 ]
 const DRIFT_UP := 0.5
-## A HAND HOLDING A THING UP, WAITING, sways this many times as much as one moving it with care: an arm held out sways
-## millimeters (the user, 2026-10-29, of a pestle held up between moves: "you would expect it to be gently
-## bobbing/moving"), where a stroke of a knife or a cork brought to a mouth is steady to a fraction of one - at that
-## drift a held thing had been seen perfectly still.
+## A hand holding a thing up, waiting, sways this many times as much as one moving it with care: an arm held out sways millimeters, where
+## a stroke of a knife or a cork brought to a mouth is steady to a fraction of one - at that drift a held thing looks perfectly still.
 const HOLD_SWAY := 3.0
-## A ROUND'S WANDER ([method round_of]): how far its phase leads and lags (radians), how much its radius breathes (a
+## A round's wander ([method round_of]): how far its phase leads and lags (radians), how much its radius breathes (a
 ## share), and how far its middle wanders (meters), each over a few rounds.
 const ROUND_PHASE := 0.2
 const ROUND_RADIUS := 0.08
@@ -59,21 +53,21 @@ const ROUND_WANDER := 0.0012
 const GRAVITY := 9.81
 
 
-## MINIMUM JERK over 0..1 (Flash and Hogan): 10x^3 - 15x^4 + 6x^5 - at rest at both ends, its acceleration rising and
+## Minimum jerk over 0..1 (Flash and Hogan): 10x^3 - 15x^4 + 6x^5 - at rest at both ends, its acceleration rising and
 ## falling without a step.
 static func smooth(x: float) -> float:
 	var u := clampf(x, 0.0, 1.0)
 	return u * u * u * (u * (u * 6.0 - 15.0) + 10.0)
 
 
-## A MOVE'S PROGRESS at [param lin] of its time: minimum jerk through time warped by [param skew] (its speed's peak
+## A move's progress at [param lin] of its time: minimum jerk through time warped by [param skew] (its speed's peak
 ## early, the placing slow).
 static func timing(lin: float, skew := SKEW) -> float:
 	var x := clampf(lin, 0.0, 1.0)
 	return smooth(x + skew * x * (1.0 - x))
 
 
-## A LIFT's height at [param lin] of the move, as a share of the most it rises: zero at both ends and level there,
+## A lift's height at [param lin] of the move, as a share of the most it rises: zero at both ends and level there,
 ## highest early.
 static func lift_at(lin: float) -> float:
 	var x := clampf(lin, 0.0, 1.0)
@@ -88,14 +82,12 @@ static func share(seed: int, salt: int) -> float:
 	return float(hash([seed, salt, "hand"]) & 0xFFFFFF) / float(0x1000000)
 
 
-## WHERE A CARRIED THING IS at [param lin] of its move from [param a] to [param b] (meters), rising [param lift]
-## meters on the way: minimum jerk along the way, or - [param ma], [param mb] not both zero (a move going on through its
-## places, [method TableWork._chains]) - the cubic through them with those slopes (meters, per the whole move); bowed
-## to the side [param seed] draws; lifted early, lowered late.
-## UP CLEAR FIRST, DOWN AMONG THEM LAST ([param rise], meters): it goes across only once it has risen [code]rise.x[/code], and is
-## across before it comes down past [code]rise.y[/code] - a jar taken from among others comes up straight before it goes, and is
-## let down straight among those where it goes (the-quiet-crucible 841899: lifted from a row 8 mm apart and moving off as it rose,
-## the first of four resin jars knocked the next, was held back 22 cm behind its hand, and ended on its side).
+## Where a carried thing is at [param lin] of its move from [param a] to [param b] (meters), rising [param lift] meters on the way:
+## minimum jerk along the way, or - [param ma], [param mb] not both zero (a move going on through its places, [method TableWork._chains]) -
+## the cubic through them with those slopes (meters, per the whole move); bowed to the side [param seed] draws; lifted early, lowered late.
+## Up clear first, down among them last ([param rise], meters): it goes across only once it has risen [code]rise.x[/code], and is across
+## before it comes down past [code]rise.y[/code] - a jar taken from among others comes up straight before it goes, and is let down
+## straight among those where it goes (else it knocks the next).
 static func carried(a: Vector3, b: Vector3, ma: Vector3, mb: Vector3, lift: float, lin: float, seed: int, rise := Vector2.ZERO) -> Vector3:
 	var x := clampf(lin, 0.0, 1.0)
 	var span := across(lift, rise)
@@ -137,7 +129,7 @@ static func across(lift: float, rise: Vector2) -> Vector2:
 	return out
 
 
-## THE BOW of a move from [param a] to [param b] at [param lin]: across the way, level, to the side [param seed] draws -
+## The bow of a move from [param a] to [param b] at [param lin]: across the way, level, to the side [param seed] draws -
 ## nothing at either end, its slope nothing there too (a run of moves through its places stays smooth where they meet).
 static func bow(a: Vector3, b: Vector3, lin: float, seed: int) -> Vector3:
 	var flat := Vector3(b.x - a.x, 0.0, b.z - a.z)
@@ -151,7 +143,7 @@ static func bow(a: Vector3, b: Vector3, lin: float, seed: int) -> Vector3:
 	return side * (amount * way * s * s)
 
 
-## THE LAG of a thing held while it moves along [param where] (a Callable of 0..1 through the move, giving its place in
+## The lag of a thing held while it moves along [param where] (a Callable of 0..1 through the move, giving its place in
 ## meters) at [param lin], the move taking [param seconds]: the turn its hand's acceleration swings it by - its top
 ## toward the way the hand speeds it, as a thing hanging from a grip swings back - none at rest.
 static func lean(where: Callable, lin: float, seconds: float) -> Basis:
@@ -169,12 +161,12 @@ static func lean(where: Callable, lin: float, seconds: float) -> Basis:
 	return Basis(Vector3.UP.cross(flat / amount).normalized(), angle)
 
 
-## HOW HELD a thing is at [param lin] of a stretch it is held over: nothing at its ends, where it rests, wholly between.
+## How held a thing is at [param lin] of a stretch it is held over: nothing at its ends, where it rests, wholly between.
 static func held(lin: float) -> float:
 	return smoothstep(0.0, HELD_IN, lin) * smoothstep(0.0, HELD_IN, 1.0 - lin)
 
 
-## A HELD THING'S DRIFT at show time [param T] (its waves keep going through one move after another), as much of it as
+## A held thing's drift at show time [param T] (its waves keep going through one move after another), as much of it as
 ## [param amount] (0..1, [method held]; to [constant HOLD_SWAY] for a thing held up between moves): `[place (meters), turn]`.
 static func drift(T: float, seed: int, amount: float) -> Array:
 	if amount <= 0.0:
@@ -202,7 +194,7 @@ static func drift_most() -> float:
 	return most
 
 
-## A ROUND'S WANDER at [param t] seconds into a law going round every [param period] seconds: `{phase (radians, added to
+## A round's wander at [param t] seconds into a law going round every [param period] seconds: `{phase (radians, added to
 ## where round it is), radius (a factor), middle (meters, added)}` - for a stir or a grind, its two ends taking the same.
 static func round_of(t: float, period: float, seed: int) -> Dictionary:
 	var p := maxf(period, 0.1)

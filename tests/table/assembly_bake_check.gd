@@ -1,15 +1,13 @@
 extends SceneTree
 
-## assembly_bake_check: THE BRICKS ARE REAL BODIES ([AssemblyBake], [AssemblyWorld], next/assembly.md "Real bodies"; the user, 2026-11-03, of what stood here first:
-## "bricks gently floating around in the air ... there's no proper physics, and the blocks clip through each other ... the sound doesn't align with the actual events").
-## A real record, from a real second process, over a real hollow tub: what falls falls at gravity, nothing is flung, nothing is left in the air through a stop, no piece lies in
-## another or went through a wall, every hit is at something moving there and how hard it was is how loud it is, a press goes exactly home, the same record comes out twice, and one
-## goes on from what was written.
+## assembly_bake_check: the bricks are real bodies ([AssemblyBake], [AssemblyWorld], next/assembly.md "Real bodies"). A real record from
+## a real second process over a real hollow tub: what falls falls at gravity, nothing is flung, nothing is left in the air through a
+## stop, no piece lies in another or goes through a wall, every hit is at something moving there and its loudness follows how hard it
+## was, a press goes exactly home, the same record comes out twice, and one goes on from what was written. What is pulled turns as it
+## comes up and goes straight on into the carry; what is in hand says for how long and with how much room.
 ##
-## WHAT IS PULLED TURNS AS IT COMES UP AND GOES STRAIGHT ON INTO THE CARRY, and what is in hand says for how long, and how much room it has.
-##
-## Its controls: a straight lift and a stop reads as stopping; a fall at the wrong gravity reads as wrong; boxes laid into each other read as overlapping; a moment with nothing moving has nothing to hear; another seed is another
-## record; a changed step is a new name.
+## Controls: a straight lift and a stop reads as stopping; a fall at the wrong gravity reads as wrong; boxes laid into each other read
+## as overlapping; a moment with nothing moving has nothing to hear; another seed is another record; a changed step is a new name.
 ##
 ## Run: timeout 600 godot --headless --path . --script tests/table/assembly_bake_check.gd
 
@@ -115,7 +113,7 @@ static func _tub_faces() -> PackedVector3Array:
 	return out
 
 
-## A RECORD MADE AND READ BACK: `{log, track, names, dir}`, or `{}`.
+## A record made and read back: `{log, track, names, dir}`, or `{}`.
 func _bake(name: String, acts: Array, seed_value: int, keep := false) -> Dictionary:
 	var a := _make(seed_value)
 	a.perform(acts)
@@ -166,7 +164,7 @@ func _end_of(track: AssemblyTrack) -> float:
 	return out
 
 
-## THE STOCK LIES AS IT FELL: in its tub, on what is under it, and not one in the air.
+## The stock lies as it fell: in its tub, on what is under it, and not one in the air.
 func _stock(log: Assembly, track: AssemblyTrack) -> void:
 	var out := 0
 	var high := 0.0
@@ -191,8 +189,8 @@ func _stock(log: Assembly, track: AssemblyTrack) -> void:
 	_ok(tilted > in_tub / 4, "lying as things that fell lie, not stacked flat: %d of %d tilted" % [tilted, in_tub])
 
 
-## HOW FAST WHAT FALLS GOES ON GETTING FASTER, the middle of every long fall seen: gravity, from nothing but where things were. A fall is a run of keys going down
-## ever faster, past what any hand's move reaches, ended by a hit.
+## How fast what falls goes on getting faster, the middle of every long fall: gravity, from nothing but where things were. A fall is
+## a run of keys going down ever faster, past what any hand's move reaches, ended by a hit.
 static func _gravity_of(keys: Array) -> float:
 	var seen: Array = []
 	for k in keys:
@@ -217,11 +215,11 @@ static func _gravity_of(keys: Array) -> float:
 	return float(seen[seen.size() / 2])
 
 
-## WHAT FALLS, FALLS: at the world's gravity. What stood here before dropped a piece along a curve it was told.
+## What falls, falls at the world's gravity.
 func _falls(log: Assembly, track: AssemblyTrack) -> void:
 	var g := _gravity_of(track.keys)
 	_ok(not is_nan(g) and absf(g - 9.81) < 2.0, "what falls falls at gravity: %.2f m/s2" % g)
-	# control: a thing falling at a third of that (what the user called low gravity) reads as that
+	# control: a thing falling at a third of that reads as low gravity
 	var slow := PackedFloat32Array()
 	for i in 40:
 		var t := float(i) / 60.0
@@ -236,7 +234,7 @@ func _falls(log: Assembly, track: AssemblyTrack) -> void:
 	_ok(absf(_gravity_of([again]) - 3.2) < 0.5, "control: low gravity reads as low gravity: %.2f" % _gravity_of([again]))
 
 
-## NOTHING IS FLUNG: a hit no harder than a real drop, and no piece faster than a hand or a fall can make it. (The first run's 7 m/s was a bug: a piece in hand set loose.)
+## Nothing is flung: a hit no harder than a real drop, and no piece faster than a hand or a fall can make it.
 func _nothing_flung(track: AssemblyTrack) -> void:
 	var hardest := 0.0
 	var n := track.ev_t.size()
@@ -257,7 +255,7 @@ func _nothing_flung(track: AssemblyTrack) -> void:
 	_ok(fastest < 3.2, "no piece moves faster than a fall or a hand: %.2f m/s" % fastest)
 
 
-## A STOP IS AT REST: the record stops, so whatever is moving then hangs where it is for as long as the stop lasts.
+## A stop is at rest: the record stops, so whatever is moving then hangs where it is for as long as the stop lasts.
 func _stops_at_rest(log: Assembly, track: AssemblyTrack) -> void:
 	var worst := 0.0
 	var stops := 0
@@ -310,7 +308,7 @@ static func _sunk(a: Transform3D, ha: Vector3, b: Transform3D, hb: Vector3) -> f
 	return least
 
 
-## NO PIECE LIES IN ANOTHER: each as tall as its studs, as the world has it, wherever a dig left them.
+## No piece lies in another: each as tall as its studs, as the world has it, wherever a dig left them.
 func _no_overlap(log: Assembly, track: AssemblyTrack) -> void:
 	var boxes: Array = []
 	var end := _end_of(track)
@@ -334,7 +332,7 @@ func _no_overlap(log: Assembly, track: AssemblyTrack) -> void:
 	_ok(_sunk(Transform3D.IDENTITY, Vector3.ONE * 0.01, Transform3D(Basis.IDENTITY, Vector3(0.03, 0.0, 0.0)), Vector3.ONE * 0.01) == 0.0, "control: and apart, as apart")
 
 
-## A WALL IS A WALL: nothing crosses the tub's side below its rim, in or out.
+## A wall is a wall: nothing crosses the tub's side below its rim, in or out.
 func _walls_hold(log: Assembly, track: AssemblyTrack) -> void:
 	var through := 0
 	var crossed := 0
@@ -360,7 +358,7 @@ func _walls_hold(log: Assembly, track: AssemblyTrack) -> void:
 	_ok(under == 0, "nothing goes through the table: %d" % under)
 
 
-## WHAT IS PRESSED HOME IS EXACTLY HOME, on the lattice, goes with the plate, and comes away with the wreck.
+## What is pressed home is exactly home: on the lattice, goes with the plate, and comes away with the wreck.
 func _pressed_home(log: Assembly, track: AssemblyTrack) -> void:
 	var seated := 0
 	var off := 0
@@ -383,7 +381,8 @@ func _pressed_home(log: Assembly, track: AssemblyTrack) -> void:
 	_ok(absf(turned - deg_to_rad(30.0)) < 1e-3, "the plate turned: %.3f" % turned)
 
 
-## WHAT IS HEARD IS WHAT HAPPENED: every hit where something was really moving at that moment; a stop has none; how hard is how loud; a carry through clear air is silent; a press home clicks.
+## What is heard is what happened: every hit where something was really moving at that moment; a stop has none; how hard is how loud;
+## a carry through clear air is silent; a press home clicks.
 func _heard(log: Assembly, track: AssemblyTrack) -> void:
 	var hits := 0
 	var unexplained := 0
@@ -404,7 +403,7 @@ func _heard(log: Assembly, track: AssemblyTrack) -> void:
 		for id in track.moved_between(tau - 0.05, tau + 0.05):
 			var p0 := track.pose_of(int(id), tau - 0.05, plate).origin
 			var p1 := track.pose_of(int(id), tau + 0.05, plate).origin
-			# ...where it is at that moment: a brick falling at 2 m/s was 10 cm from where it landed a twentieth of a second before
+			# ...where it is at that moment: a brick falling at 2 m/s is 10 cm from where it landed a twentieth of a second before
 			if track.pose_of(int(id), tau, plate).origin.distance_to(at) < 0.1 and p0.distance_to(p1) > 1e-4:
 				moving = true
 				break
@@ -417,13 +416,13 @@ func _heard(log: Assembly, track: AssemblyTrack) -> void:
 	_ok(by_kind.has("hit/hand"), "a piece against the hand is a soft thing: %s" % str(by_kind.keys()))
 	_ok(WorkSounds.hit_level(1.0, 1.5, "plastic") > 8.0 * WorkSounds.hit_level(0.15, 1.5, "plastic"), "a hard hit is far louder than a gentle one: %.5f, %.5f" % [WorkSounds.hit_level(1.0, 1.5, "plastic"), WorkSounds.hit_level(0.15, 1.5, "plastic")])
 	_ok(WorkSounds.hit_level(1.0, 1.5, "hand") < WorkSounds.hit_level(1.0, 1.5, "plastic") * 0.5, "against a hand, softer")
-	# ...A STOP IS SILENT, THE RECORD HOLDS NOTHING THERE: control, a moment of nothing has nothing
+	# ...a stop is silent, the record holds nothing there: control, a moment of nothing has nothing
 	var quiet_at := -1.0
 	for k in track.steps:
 		if String((log.steps[int(k)] as Dictionary)["do"]) == "pause":
 			quiet_at = float((track.steps[k] as Dictionary)["t0"])
 	_ok(quiet_at > 0.0 and track.events_between(quiet_at, quiet_at).is_empty(), "control: a stop has nothing to hear")
-	# ...A PIECE CARRIED THROUGH THE AIR IS SILENT, the last of a put from over its place to home
+	# ...a piece carried through the air is silent, the last of a put from over its place to home
 	var put: Dictionary = {}
 	for k in track.steps:
 		if String((log.steps[int(k)] as Dictionary)["do"]) == "put":
@@ -438,8 +437,9 @@ func _heard(log: Assembly, track: AssemblyTrack) -> void:
 	_ok(hits_after == 0, "a piece lowered into its place through clear air hits nothing: %d" % hits_after)
 
 
-## WHAT IS PULLED IS PULLED, AND WHAT IS IN HAND SAYS SO ([method AssemblyBake._pull], [Fingers]; the user, 2026-11-03: "I'm unhappy with the way bricks are pulled, then how they just float there, frozen"): every piece taken has a stretch in hand with no room at either end and
-## its record exact at both. A pull turns as it comes up and never comes to rest on its way to the next move. Control: a straight lift and a stop, as it was, is called one.
+## What is pulled is pulled, and what is in hand says so ([method AssemblyBake._pull], [Fingers]): every piece taken has a stretch in
+## hand with no room at either end and its record exact at both. A pull turns as it comes up and never comes to rest on its way to
+## the next move. Control: a straight lift and a stop is called one.
 func _in_hand(log: Assembly, track: AssemblyTrack) -> void:
 	var hands := 0
 	var well := true
@@ -476,7 +476,7 @@ func _in_hand(log: Assembly, track: AssemblyTrack) -> void:
 	var up_then_go := func(at: float) -> Vector3:
 		return Vector3(0.0, 0.1 * Hands.smooth(at / 0.5), 0.0) + Vector3(0.2 * Hands.smooth((at - 0.5) / 1.0), 0.0, 0.0)
 	_ok(_least_speed(up_then_go, 0.1, 1.0) < 0.015, "control: up, stop and off, as it was, is called one: %.3f m/s" % _least_speed(up_then_go, 0.1, 1.0))
-	# ...AND WHAT IS HELD UP IS HELD SOMEWHERE OF ITS OWN, off the middle of the frame and in it
+	# ...and what is held up is held somewhere of its own, off the middle of the frame and in it
 	var lens: Transform3D = log.world["lens"]
 	var fov := float(log.world["fov"])
 	var spots: Array = []
@@ -506,7 +506,7 @@ static func _least_speed(where: Callable, a: float, b: float) -> float:
 	return least
 
 
-## THE SAME THING TWICE, TO THE BYTE: what the show is, and so what an export is. Another seed, another record.
+## The same thing twice, to the byte: what the show is, and so what an export is. Another seed, another record.
 func _same_twice(first: Dictionary) -> void:
 	var again := _bake("again", _acts(), 7)
 	var other := _bake("other", _acts(), 8)
@@ -531,7 +531,7 @@ func _same_twice(first: Dictionary) -> void:
 	_ok(differ, "control: another seed is another record")
 
 
-## A RECORD GOES ON FROM WHAT IS WRITTEN: a new act costs what comes after it. And a changed step, what comes after that.
+## A record goes on from what is written: a new act costs what comes after it, and a changed step what comes after that.
 func _goes_on() -> void:
 	var short: Array = _acts().slice(0, 2)
 	var one := _bake("on", short, 7)

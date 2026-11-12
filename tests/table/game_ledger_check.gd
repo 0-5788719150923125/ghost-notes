@@ -1,7 +1,8 @@
 extends SceneTree
 
-## game_ledger_check - WHAT IS SO AT THE TABLE is its events: a sheet's fields named by the agents, a board of squares or of inches, a state rebuilt by replay (next/tabletop.md). The
-## control: a move off the map and a change to what is not there are refused in words, and leave nothing behind.
+## game_ledger_check - what is so at the table is its events: a sheet's fields named by the agents, a board of squares or of inches, a
+## state rebuilt by replay (next/tabletop.md). Control: a move off the map and a change to what is not there are refused in words, and
+## leave nothing behind.
 ##
 ##     godot --headless --path . --script tests/table/game_ledger_check.gd
 
@@ -61,7 +62,7 @@ func _board() -> void:
 	_check(int(((g.maps.back() as Dictionary)["size"] as Array)[0]) == 8, "the last map is the one down")
 
 
-## A GAME MEASURED WITH A TAPE: the same calls, inches and no squares.
+## A game measured with a tape: the same calls, inches and no squares.
 func _free_measure() -> void:
 	var g := GameLedger.new()
 	g.map_down("The Ridge", "a ridge", [24, 24], false, "inch")
@@ -72,7 +73,7 @@ func _free_measure() -> void:
 	_check(is_equal_approx(float(((g.figures["Squad"] as Dictionary)["at"] as Array)[0]), 5.5), "a free measure keeps its fraction")
 
 
-## IT IS ITS EVENTS: the same list played again stands the same, from nothing.
+## It is its events: the same list played again stands the same, from nothing.
 func _replay() -> void:
 	var g := GameLedger.from({"Milo": {"hit points": 12}})
 	g.map_down("The Inn", "an inn", [20, 14])
@@ -95,7 +96,7 @@ func _rolls() -> void:
 	_check(int((a["event"] as Dictionary)["id"]) == 1, "ids begin at one")
 	_check(not bool(g.roll("Milo", "1d7", "nonsense", 42)["ok"]), "dice no table has are refused")
 	_check(g.events.size() == 1, "and did not happen")
-	# ...THE SAME EPISODE ROLLS THE SAME, and the next thing to happen rolls otherwise
+	# ...the same episode rolls the same, and the next thing to happen rolls otherwise
 	var h := GameLedger.new()
 	var b := h.roll("Milo", "1d20+3", "a door", 42)
 	_check(int((a["event"] as Dictionary)["total"]) == int((b["event"] as Dictionary)["total"]), "the same seed and place roll the same")

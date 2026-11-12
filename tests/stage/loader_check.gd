@@ -2,8 +2,8 @@ extends SceneTree
 
 ## One-shot loader self-check (run headless):
 ##   godot --path . --headless --script res://tests/stage/loader_check.gd
-## Exercises MiniYaml (subset accepts, rejects, typing) and Storyboard (resolution,
-## defs/use, sampling, validation). Prints PASS/FAIL lines; exits 1 on any FAIL.
+## Exercises MiniYaml (subset accepts, rejects, typing) and Storyboard (resolution, defs/use, sampling,
+## validation). Prints PASS/FAIL lines; exits 1 on any FAIL.
 
 var fails := 0
 

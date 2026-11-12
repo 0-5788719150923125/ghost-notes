@@ -1,6 +1,6 @@
 extends SceneTree
 
-## A probe for LISTENING to [Soundscape]: renders a few places to WAV files, and prints how long each
+## A probe for listening to [Soundscape]: renders a few places to WAV files, and prints how long each
 ## took to make (as a share of real time), its level, and how closely its loudness follows the wind.
 ##
 ##   godot --headless --path . --script res://tests/table/soundscape_probe.gd -- [seconds] [out dir] [dial]

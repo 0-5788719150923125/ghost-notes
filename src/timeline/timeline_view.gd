@@ -1,23 +1,18 @@
 extends RefCounted
 class_name TimelineView
 
-## TimelineView - THE TIMELINE KIT: the shared pixel<->time mapping, and the ruler, wheel and
-## playhead every timeline draws with (next/structure.md, step 26). Masking's marker strip and each of
-## its track lanes read ONE view, so a second's position agrees across every row; the storyboard's
-## strip and a stage entry's lanes keep one each. They tick their rulers by one ladder
-## ([method step_for]), zoom and pan with one wheel ([method wheel]), draw one playhead
-## ([method draw_playhead]) and tell the time one way ([method Clock.text], as the transport's
-## own rail does) - where four had each kept a copy, and the copies had parted.
+## TimelineView - the timeline kit: the shared pixel<->time mapping, and the ruler, wheel and playhead
+## every timeline draws with (next/structure.md, step 26). Masking's marker strip and each of its track
+## lanes read one view, so a second's position agrees across every row; the storyboard's strip and a
+## stage entry's lanes keep one each. They tick their rulers by one ladder ([method step_for]), zoom and
+## pan with one wheel ([method wheel]), draw one playhead ([method draw_playhead]) and tell the time one
+## way ([method Clock.text], as the transport's own rail does).
 ##
-## `extent` is DELIBERATELY a cached value, refreshed only by an explicit
-## refresh() call - never derived live from whatever a drag is currently
-## touching. In Masking (its session's `timeline_extent()`) the ruler's total length is
-## `duration` (which trimming never changes) extended to cover the furthest
-## track, plus a fixed overflow margin. Recomputing it mid-drag is exactly the
-## "drag a clip's edge and the whole ruler rescales under your cursor" bug every
-## timeline editor seems to hit eventually - refresh() is called once a gesture
-## ENDS (mouse-up), never during one, so the ruler a handle is being measured
-## against never moves while that same handle is what's moving it.
+## `extent` is a cached value, refreshed only by an explicit refresh() call, never derived live from
+## whatever a drag is touching: in Masking (its session's `timeline_extent()`) the ruler's length is
+## `duration` (which trimming never changes) extended to cover the furthest track, plus a fixed overflow
+## margin. refresh() is called once a gesture ends (mouse-up), never during one, so the ruler a handle
+## is measured against does not move while that handle is moving it.
 
 const _MAX_ZOOM := 64.0
 ## The ruler's steps, seconds: the first that fits is the one ticked ([method step_for]).
@@ -68,8 +63,8 @@ func _clamp_view() -> void:
 	view_start = clampf(view_start, 0.0, maxf(0.0, extent - visible_span()))
 
 
-## THE RULER'S STEP: the first of [constant STEPS] that puts no more than [param most] ticks across
-## [param span] seconds - finer gradations as a view zooms in, never a crowd of labels.
+## The ruler's step: the first of [constant STEPS] that puts no more than [param most] ticks across
+## [param span] seconds - finer gradations as a view zooms in.
 static func step_for(span: float, most: float) -> float:
 	for st in STEPS:
 		if span / float(st) <= maxf(most, 1.0):
@@ -92,7 +87,7 @@ static func tick_label(t: float, step: float) -> String:
 	return Clock.text(t) if step >= 1.0 else "%.1f" % t
 
 
-## THE WHEEL, the same on every ruler: Ctrl+wheel zooms about the pointer, a plain wheel pans. True
+## The wheel, the same on every ruler: Ctrl+wheel zooms about the pointer, a plain wheel pans. True
 ## when [param mb] was a wheel notch and the view moved.
 func wheel(mb: InputEventMouseButton) -> bool:
 	if not mb.pressed or not (mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]):
@@ -105,8 +100,8 @@ func wheel(mb: InputEventMouseButton) -> bool:
 	return true
 
 
-## THE PLAYHEAD on [param c] at [param x], its full height - and, given a [param tag], the time
-## riding right above it, so where the line is and what time that is are read in one look.
+## The playhead on [param c] at [param x], its full height - and, given a [param tag], the time
+## riding right above it.
 static func draw_playhead(c: Control, x: float, color: Color, tag := "") -> void:
 	c.draw_line(Vector2(x, 0), Vector2(x, c.size.y), color, 2.0)
 	if tag.is_empty():

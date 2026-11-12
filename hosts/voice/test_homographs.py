@@ -119,18 +119,18 @@ SWITCHES = [
     # a participle the perceptron calls something else; the auxiliary decides
     ("The letter was read aloud.", "read", "past", ()),
     ("The names were read out in order.", "read", "past", ()),
-    # AN ADVERB DOES NOT BREAK THE AUXILIARY'S GRIP. All three of these missed the
+    # An adverb does not break the auxiliary's grip. All three of these missed the
     # auxiliary rule while it only looked at the immediate neighbor, and a whole-book
     # measurement is what turned them up.
     ("A book that is not read has to live somewhere else.", "read", "past", ()),
     ("You have never read the first thing.", "read", "past", ()),
     ("They had only ever read about it.", "read", "past", ()),
-    # ...AND NEITHER DOES A CONTRACTION. ghost keeps `I've` as one token so the karaoke
+    # ...And neither does a contraction. ghost keeps `I've` as one token so the karaoke
     # line shows the source spelling, and the tagger calls it a proper noun - so nothing
     # in the cascade saw the auxiliary until the enclitic test existed.
     ("I've read it more times than you would believe.", "read", "past", ()),
     ("If you've read this book from the front it is obvious.", "read", "past", ()),
-    # THE SECOND REPORT, verbatim from north-star ch12 - three sites in one
+    # The second report, verbatim from north-star ch12 - three sites in one
     # paragraph, all past, all previously spoken in the present. The tagger calls
     # the first two VBP and the third VB: no morphological evidence at all, so
     # every one of these is decided by the clause around it rather than the word.
@@ -159,7 +159,7 @@ SWITCHES = [
     # other homographs the same machinery covers, for free
     ("Historians record the year.", "record", "verb", ()),
     # ...and the ones ghost's own table (Phonemes.SPEAK_AS) had picked by lists of neighbors
-    # until 2026-10-27, when its pick never reached this pass: eSpeak alone reads each as the
+    # until its pick reached this pass: eSpeak alone reads each as the
     # noun - "prisoner lives" as a compound - and the tagger reads the clause
     ("The way a prisoner lives in his cell.", "lives", "verb", ()),
     ("She lives by the river.", "lives", "verb", ()),
@@ -169,10 +169,10 @@ SWITCHES = [
     ("They will present the case.", "present", "verb", ()),
     ("The refuse was piled by the door.", "refuse", "noun", ()),
     ("He had wound the clock too tight.", "wound", "wound", ()),
-    # JOINED ON WITH NO SUBJECT OF ITS OWN, a verb takes its first conjunct's form: a participle's is past
+    # Joined on with no subject of its own, a verb takes its first conjunct's form: a participle's is past
     ("She had opened the letter and read it twice.", "read", "past", ()),
     ("The header row is shown and never read.", "read", "past", ()),
-    # THE REPORT (north-star ch43, 2026-10-27: "Live like a Spartan" used the wrong pronunciation): a first
+    # THE REPORT ("Live like a Spartan" used the wrong pronunciation): a first
     # word is tagged a proper noun for its capital, and was left to eSpeak's default, the adjective
     ("Live like a Spartan, so there's enough to go around.", "live", "verb", ()),
     ("Record the year.", "record", "verb", ()),
@@ -202,7 +202,7 @@ def check_switches() -> None:
 
 # -- HOLDS: it must not fire here ------------------------------------------
 
-# COORDINATION AGREES IN TENSE, and a VBD tag on an invariant verb is a guess the clause can
+# Coordination agrees in tense, and a VBD tag on an invariant verb is a guess the clause can
 # overrule. "They are issued a face and they read everything through it" is present in both
 # halves; the tagger says VBD and the sentence says otherwise. The three HOLDS below are the
 # constructions that must NOT be flipped by that rule, and each one broke a different clause of
@@ -228,13 +228,13 @@ HOLDS = [
     ("Read it aloud.", "read", PAST_NARRATIVE),
     ("Now read the list again.", "read", PAST_NARRATIVE),
     ("Read from the near face and stop.", "read", PAST_NARRATIVE),
-    # ...AND SO ARE THE VERBS JOINED TO ONE (732687, 2026-11-09: "and read their words back to them" was said ɹˈɛd, "It
+    # ...And so are the verbs joined to one ("and read their words back to them" was said ɹˈɛd, "It
     # should have sounded like 'reed'"): `Let's` was a word the tagger never saw whole, and the second came back VBD
     ("Let's open that file, then, and read their words back to them in good light.", "read", PAST_NARRATIVE),
     ("So let's take their words one last time, and turn each one over, and read the side that was facing you.", "read",
      PAST_NARRATIVE),
     ("Open the file and read it to me.", "read", PAST_NARRATIVE),
-    # A CONTRACTION SPLIT FOR THE TAGGER, as it learned it: whole, `I'll` and `doesn't` hid the modal and the auxiliary
+    # A contraction split for the tagger, as it learned it: whole, `I'll` and `doesn't` hid the modal and the auxiliary
     ("Tonight we write it, and I'll read it back as we go.", "read", PAST_NARRATIVE),
     ("The coordinator doesn't read the good ones.", "read", PAST_NARRATIVE),
     # words eSpeak does not distinguish at all - there is nothing to switch to
@@ -245,7 +245,7 @@ HOLDS = [
     ("The record shows nothing.", "record", ()),
     ("A record of the year.", "record", ()),
     ("The record a clerk kept was lost.", "record", ()),
-    # THE REPORT (north-star ch43, 2026-10-27): ghost's table read this "lives" as the verb, its
+    # Ghost's table read this "lives" as the verb, its
     # neighbors on none of its lists - the noun, as the tagger has it, is eSpeak's own reading
     ("Earlier lives leave things lying around, and later ones pick them up.", "lives", ()),
     ("Their lives changed overnight.", "lives", ()),
@@ -260,7 +260,7 @@ HOLDS = [
     # A REGULAR -ed FORM is already past and must not be handed the past frame:
     # eSpeak reads "they have resented them" as re-sented, the perfume.
     ("They flattered inward and resented outward.", "resented", PAST_NARRATIVE),
-    # CAPITALS ARE NOT A PART OF SPEECH - both of these come back NNP.
+    # Capitals are not a part of speech - both of these come back NNP.
     ("THAT DO NOT CONVENE.", "that", ()),
     ("Refuse, not cannot.", "refuse", ()),
     # ...and a first word that IS the adjective stays one, read as it would be mid-sentence
@@ -366,7 +366,7 @@ def check_whole_sentence_untouched() -> None:
         "The spoon went past the gills and the water closed over it.",
         "Snow came down through the lamplight, slow and without any wind.",
         "He stood at the door for a while and then he went inside.",
-        # WITH AUXILIARIES IN THEM. The first version of this check had none, and
+        # With auxiliaries in them. The first version of this check had none, and
         # that is precisely why it passed while the participle rule was quietly
         # rewriting `a`, `to`, `in` and `I` wherever one of these stood in front
         # of them.

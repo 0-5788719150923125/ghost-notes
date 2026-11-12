@@ -1,18 +1,16 @@
 extends RefCounted
 class_name Rules
 
-## Rules - what the agents are told, kept as text a person reads: `rules/<group>/<role>.yaml` (the user,
-## 2026-10-08: "extract agent instructions into a more interpretable format, like yaml ... as a human - it
-## would be easier for me to read and grok the meaning of all the various things we're asking those
-## agents to do"). The code decides WHEN a rule applies and fills in what it knows; the words are here.
+## Rules - what the agents are told, kept as text a person reads: `rules/<group>/<role>.yaml`. The code decides
+## when a rule applies and fills in what it knows; the words are here.
 ##
-## A FILE is a map of PARTS. A part is the text itself, or a list of ITEMS read in order, each one or more
-## lines of what the agent reads (the items are joined by line breaks):
+## A file is a map of parts. A part is the text itself, or a list of items read in order, each one or more lines
+## of what the agent reads (joined by line breaks):
 ##
-##   - THIS EPISODE                       a line, as it is
+##   - This episode                       a line, as it is
 ##   - ""                                 an empty line
 ##   - >-                                 a paragraph, folded from as many lines of the file as it takes
-##       You are the SET DRESSER ...
+##       You are the SET dresser ...
 ##   - {when: box, say: ...}              only when the code's flag is true; "!box" only when it is not;
 ##                                        a list, only when all are
 ##   - {insert: tables}                   a block the code makes - a registry's words, a list of earlier
@@ -21,13 +19,12 @@ class_name Rules
 ##   - {each: zones, say: ...}            the line once for each entry of a list the code gives, the
 ##                                        entry's own fields filled in
 ##
-## Inside the words, a little of Mustache's: `{{name}}` is a value the code gives; `{{#flag}}...{{/flag}}`
-## is there only when the flag is true (or a text that is not empty), `{{^flag}}...{{/flag}}` only when it
-## is not; a tag alone on its line takes its line with it. Every rule's reason - who asked for it, what
-## went wrong without it - is a `#` comment above it.
+## Inside the words, a little of Mustache's: `{{name}}` is a value the code gives; `{{#flag}}...{{/flag}}` is
+## there only when the flag is true (or a text that is not empty), `{{^flag}}...{{/flag}}` only when it is not;
+## a tag alone on its line takes its line with it. Every rule's reason is a `#` comment above it.
 ##
-## Nothing is filled in silently: a name the code did not give is left as `{{name}}` and said in
-## [member missing], which the gate holds empty (tests/data/rules_check.gd), as it holds every file to parse.
+## Nothing is filled in silently: a name the code did not give is left as `{{name}}` and said in [member
+## missing], which the gate holds empty (tests/data/rules_check.gd), as it holds every file to parse.
 
 const DIR := "res://rules"
 
@@ -36,8 +33,8 @@ static var missing := PackedStringArray()
 static var _files := {}
 
 
-## THE PART [param path] ("table/set_dresser.prompt": the file, then the part) as the agent reads it,
-## with [param vars] filled in.
+## The part [param path] ("table/set_dresser.prompt": the file, then the part) as the agent reads it, with
+## [param vars] filled in.
 static func say(path: String, vars: Dictionary = {}) -> String:
 	var dot := path.rfind(".")
 	var file := path.substr(0, dot)

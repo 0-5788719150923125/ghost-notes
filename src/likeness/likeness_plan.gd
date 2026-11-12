@@ -1,70 +1,56 @@
 extends RefCounted
 class_name LikenessPlan
 
-## LikenessPlan - how the actor moves at each moment, on their still (next/likeness.md, "The second
-## build"): the head, the body, the eyes and the mouth, each A PURE FUNCTION OF SHOW TIME - asked for any
-## moment, the answer depends on nothing asked before it, so a seek and an export draw what the live show
-## drew.
+## LikenessPlan - how the actor moves at each moment, on their still (next/likeness.md, "The second build"): the head,
+## body, eyes and mouth, each a pure function of show time - the answer depends on nothing asked before it, so a seek and
+## an export draw what the live show drew.
 ##
-## THE HEAD ([method motion]'s first three): their own motion (`motion.json`: its quick part, the slow drift
-## out, where they face the camera - the head's turn against the shoulders), played in pieces drawn from the
-## seed, each going into the next over [constant BLEND] seconds - the numbers mixed, so there is no cut -
-## read smoothly between the survey's looks, scaled to a calm size ([constant CALM] of their own, at most
-## [constant MOST]; a head of splats their own, [method size_for]) and livelier while the voice speaks; and kept
-## LEVEL, taking back most of the body's tilt.
+## The head ([method motion]'s first three): their own motion (`motion.json`: its quick part, the slow drift out, where they
+## face the camera), played in pieces drawn from the seed, each going into the next over [constant BLEND] seconds, read
+## smoothly between the survey's looks, scaled to a calm size ([constant CALM] of their own, at most [constant MOST]; a head
+## of splats their own, [method size_for]), livelier while the voice speaks, and kept level (taking back most of the body's tilt).
 ##
-## THEIR FACE MOVES ON ITS OWN ([method face], 2026-10-24, the user on the head of splats: "when the actor is not
-## talking - the face is not moving at all"): their brows, lids, cheeks and the mouth's corners as they moved at
-## the same looks as the head's piece (`motion.json`'s `face`: the slow part of those scores, along its few ways
-## of moving), at the head's calm and livelier while the voice speaks - a head of splats plays it.
+## Their face moves on its own ([method face]): brows, lids, cheeks and the mouth's corners as they moved at the same looks
+## as the head's piece (`motion.json`'s `face`: the slow part of those scores, along its few ways of moving), at the head's
+## calm and livelier while the voice speaks - a head of splats plays it.
 ##
-## THE BODY HOLDS A POSTURE AND SHIFTS IT ([method posture], the fourth pass, 2026-10-22, the user: "it is
-## just rocking around constantly ... I would have expected a more relaxed, neutral posture - and one that
-## isn't frozen in-place, rocking weirdly back and forth"): the quick part of their shoulders' motion is
-## their gestures pulling at them - 2 to 4 second swings - and a body at rest has none of it. So the torso
-## holds a posture for a while (about [constant HOLD] of their own holding time, `motion.json`'s
-## `posture`), then shifts to another over [constant SHIFT] seconds - each drawn from their own range of
-## posture, which ways going together as theirs do, at [constant POSTURE_CALM] of it, keeping [constant
-## HOLD_NEXT] of the last - with a slow sway under it ([constant SWAY]), so it is never frozen. THE CHEST
-## ([method breath]) draws in at the voice's pauses and lets out while it speaks; THE SHOULDERS ([method
-## lifts]) rise with it and wander a little apart; THE HANDS ([method hands]) rest, settling a little as the
-## body shifts.
+## The body holds a posture and shifts it ([method posture]): the quick part of their shoulders' motion is their gestures
+## pulling at them, and a body at rest has none of it. So the torso holds a posture for a while (about [constant HOLD] of
+## their own holding time, `motion.json`'s `posture`), then shifts to another over [constant SHIFT] seconds - each drawn from
+## their own range of posture, which ways going together as theirs do, at [constant POSTURE_CALM] of it, keeping [constant
+## HOLD_NEXT] of the last - with a slow sway under it ([constant SWAY]). The chest ([method breath]) draws in at the voice's
+## pauses and lets out while it speaks; the shoulders ([method lifts]) rise with it and wander a little apart; the hands
+## ([method hands]) rest, settling a little as the body shifts.
 ##
-## THE EYES ([method eyes]): blinks at their own rate (`motion.json`'s), at times drawn from the seed, and
-## one at most pauses in the voice, as people blink as a phrase ends; a blink closes in 70 ms, holds 40 and
-## opens in 130. And GLANCES ([method glance]), drawn from the seed: down, aside, up, held a moment, back
-## (the third pass: "The eyes never look around"). The open eye at the camera is the still's own; the
-## rest are the library's.
+## The eyes ([method eyes]): blinks at their own rate (`motion.json`'s), at times drawn from the seed, and one at most pauses
+## in the voice; a blink closes in 70 ms, holds 40 and opens in 130. Glances ([method glance]), drawn from the seed: down,
+## aside, up, held a moment, back. The open eye at the camera is the still's own; the rest are the library's.
 ##
-## THE MOUTH ([method mouth]): with THEIR MOUTH LEARNED (`mouth_model.json`, the third pass: an ensemble of
-## small networks trained on every video, from the sounds heard round a moment to their mouth then), the
-## mouth the ensemble says for the voice's sounds, pushed past their own as the library was ([member
-## LikenessFace.articulation]), drawn as the two library mouths nearest it - or the still's own - the
-## farther less the third, so none pops. Without one, the voice's phones pulling ([Visemes.pulls]), the
-## two strongest less the third ([Visemes.strongest]), each as one of its class's prototypes - which one
-## drawn from the seed and the phone. Silence is the still's own mouth. A head of splats mixes every pull,
-## smoothed ([method mouth_mix]).
+## The mouth ([method mouth]): with their mouth learned (`mouth_model.json`: an ensemble of small networks trained on every
+## video, from the sounds heard round a moment to their mouth then), the mouth the ensemble says for the voice's sounds,
+## pushed past their own as the library was ([member LikenessFace.articulation]), drawn as the two library mouths nearest
+## it - or the still's own - the farther less the third, so none pops. Without one, the voice's phones pulling
+## ([Visemes.pulls]), the two strongest less the third ([Visemes.strongest]), each as one of its class's prototypes drawn
+## from the seed and the phone. Silence is the still's own mouth. A head of splats mixes every pull, smoothed ([method
+## mouth_mix]).
 
-## THE LEARNED MOUTH IS DRAWN FROM only when, on the video it never saw, it explains at least this share of
-## their mouth and this much more than each sound's mean mouth does (2026-10-22, his footage: 2.5% - his
-## beard hides his mouth, and the words are timed only to the word - so his is placed by its sounds).
+## The learned mouth is drawn from only when, on the video it never saw, it explains at least this share of their mouth
+## and this much more than each sound's mean mouth does (a mouth the footage hides is placed by its sounds).
 const LEARNED_LEAST := 0.15
 const LEARNED_BEYOND := 0.05
 ## Seconds one piece of motion goes into the next over.
 const BLEND := 0.8
 ## A piece of motion lasts this long, at least and at most (seconds).
 const PIECE := [4.0, 9.0]
-## THE MOTION'S SIZE: each axis at this share of their own, never past [constant MOST] of it (degrees of
-## the head's yaw, pitch and roll; face widths across and down; the log of nearness; degrees of the
-## shoulders' tilt) - eased, not cut, past it. Their own is how they move while they talk to a camera; a
-## still bent by it should move less.
+## The motion's size: each axis at this share of their own, never past [constant MOST] of it (degrees of the head's yaw,
+## pitch and roll; face widths across and down; the log of nearness; degrees of the shoulders' tilt) - eased, not cut, past
+## it. Their own is how they move while they talk to a camera; a still bent by it should move less.
 const CALM := 0.6
 const MOST := [5.0, 4.0, 3.0, 0.05, 0.04, 0.03, 2.5]
-## A HEAD OF SPLATS TURNS AS THEY DO (2026-10-25, the user: "the actor doesn't feel truly 3D. It just feels like we're
-## morphing/warping at edges"): a head of splats is a head, not a still bent - turned 18 degrees in the trainer it holds,
-## and drawn in the still's order it is within half a percent of one sorted - so its head takes their own motion, at
-## most these degrees of yaw, pitch and roll (their own 95th percentile: 6, 5 and 3). At [constant CALM] and [constant
-## MOST] the head turned against the body in 38 of a take's 359 frames, by 1.6 px; in their own footage, in 272, by 3.9.
+## A head of splats turns as they do: it is a head, not a still bent (drawn in the still's order it is within half a
+## percent of one sorted), so it takes their own motion, at most these degrees of yaw, pitch and roll (their own 95th
+## percentile: 6, 5 and 3). At [constant CALM] and [constant MOST] the head turns against the body in 38 of a take's 359
+## frames, by 1.6 px; in their own footage, in 272, by 3.9.
 const SPLAT_CALM := 1.0
 const SPLAT_MOST := [12.0, 9.0, 6.0]
 ## The head's motion as it is played ([method size_for]): [constant CALM] and [constant MOST], or a head of splats'.
@@ -74,10 +60,10 @@ var head_most: Array = MOST
 const QUIET := 0.55
 ## Their face's own motion never goes past this many of a way's spread (eased).
 const FACE_MOST := 2.5
-## THE POSTURE: each axis (across, down, nearer, tilt) at this share of their own range - the tilt least, a
-## seated body leans aside little; a posture held about this many of their own holding times (a gamma of
-## shape 2), shifted from over this many seconds, keeping this much of the last; and the sway under it, a
-## share of its range, its knots this many seconds apart.
+## The posture: each axis (across, down, nearer, tilt) at this share of their own range - the tilt least, a seated body
+## leans aside little; a posture held about this many of their own holding times (a gamma of shape 2), shifted from over
+## this many seconds, keeping this much of the last; and the sway under it, a share of its range, its knots this many
+## seconds apart.
 const POSTURE_CALM := [0.5, 0.5, 0.5, 0.35]
 const HOLD := 1.8
 const SHIFT := [1.0, 2.2]
@@ -86,35 +72,35 @@ const SWAY := 0.3
 const SWAY_KNOT := 3.0
 ## How much of the body's tilt the head takes back, keeping its eyes level as people do.
 const LEVEL := 0.7
-## THE SHOULDERS' LIFT (shares of their width): with the breath, from empty to full; and their own wander,
-## each apart, its knots this many seconds apart.
+## The shoulders' lift (shares of their width): with the breath, from empty to full; and their own wander, each apart, its
+## knots this many seconds apart.
 const LIFT_BREATH := 0.006
 const LIFT := 0.004
 const LIFT_KNOT := 4.0
-## THE HANDS (shares of the shoulders' width): how far each settles somewhere new as the body shifts, and
-## its own small drift, its knots this many seconds apart.
+## The hands (shares of the shoulders' width): how far each settles somewhere new as the body shifts, and its own small
+## drift, its knots this many seconds apart.
 const HAND_SHIFT := 0.006
 const HAND_DRIFT := 0.002
 const HAND_KNOT := 2.5
 ## Seconds round a moment the voice's speaking is judged over.
 const SPEAKING := 0.6
-## A BLINK: seconds closing, held, opening.
+## A blink: seconds closing, held, opening.
 const BLINK := [0.07, 0.04, 0.13]
 ## The shortest gap between two blinks (seconds), and how often a pause in the voice is blinked at.
 const BLINK_GAP := 0.6
 const PAUSE_BLINK := 0.6
 ## A pause this long or longer is one a blink may fall in.
 const PAUSE := 0.35
-## THE BREATH: a pause this long or longer draws it in, full after [constant BREATH_IN] seconds of it;
-## speaking lets it out at [constant BREATH_OUT] a second, never past [constant BREATH_LEAST]; with no
-## voice yet, a breath every [constant BREATH_IDLE] seconds.
+## The breath: a pause this long or longer draws it in, full after [constant BREATH_IN] seconds of it; speaking lets it
+## out at [constant BREATH_OUT] a second, never past [constant BREATH_LEAST]; with no voice yet, a breath every [constant
+## BREATH_IDLE] seconds.
 const BREATH_PAUSE := 0.2
 const BREATH_IN := 0.5
 const BREATH_OUT := 0.12
 const BREATH_LEAST := 0.15
 const BREATH_IDLE := 4.5
-## GLANCES: about one every [constant GLANCE_EVERY] seconds (never sooner than [constant GLANCE_GAP]), each
-## held [constant GLANCE_HOLD] seconds, turned to and back in [constant GLANCE_TURN]; which way, how often.
+## Glances: about one every [constant GLANCE_EVERY] seconds (never sooner than [constant GLANCE_GAP]), each held
+## [constant GLANCE_HOLD] seconds, turned to and back in [constant GLANCE_TURN]; which way, how often.
 const GLANCE_EVERY := 4.5
 const GLANCE_GAP := 1.5
 const GLANCE_HOLD := [0.35, 1.2]
@@ -124,9 +110,8 @@ const GLANCES := {"look_down": 0.35, "look_left": 0.25, "look_right": 0.25, "loo
 var seed_value := 1
 var rate := 5.0
 var runs: Array = []          # [PackedFloat32Array of rows * axes] per run
-## THEIR FACE'S OWN MOTION: the scores it moves (MediaPipe's names), its ways of moving (each a direction over
-## those scores), each way's spread, and each run's rows of how far along each way the face is - none when their
-## motion is from before it was learned.
+## Their face's own motion: the scores it moves (MediaPipe's names), its ways of moving (each a direction over those
+## scores), each way's spread, and each run's rows of how far along each way the face is - none when their motion lacks it.
 var face_names := PackedStringArray()
 var face_basis: Array = []    # [PackedFloat32Array over face_names] per way
 var _face_sd := PackedFloat32Array()
@@ -137,9 +122,9 @@ var blinks_per_min := 16.0
 var line: Array = []          # the voice's phones as classes ([Visemes.timeline])
 var mouths_of := {}           # class -> [image]
 var eyes_of := {}             # state -> [image]
-## THEIR MOUTH, LEARNED: the ensemble's members (`{w1, b1, w2, b2, hidden}`, flat), the classes and offsets
-## it reads, its mean and spread, how much each blendshape weighs, which are pushed - and the mouths it
-## chooses among (image -> blendshapes, -1 the still's own), the mouth it says for silence.
+## Their mouth, learned: the ensemble's members (`{w1, b1, w2, b2, hidden}`, flat), the classes and offsets it reads, its
+## mean and spread, how much each blendshape weighs, which are pushed - and the mouths it chooses among (image ->
+## blendshapes, -1 the still's own), the mouth it says for silence.
 var _members: Array = []
 var _classes: Array = []
 var _offsets := PackedFloat32Array()
@@ -152,8 +137,8 @@ var _choices := {}
 var _silence := PackedFloat32Array()
 var _push := 1.0
 
-## THEIR POSTURE: each axis's spread (their own times [constant POSTURE_CALM]), the lower triangle of how
-## the axes go together (a draw's maker), and how long one holds.
+## Their posture: each axis's spread (their own times [constant POSTURE_CALM]), the lower triangle of how the axes go
+## together (a draw's maker), and how long one holds.
 var _posture_sd := PackedFloat32Array()
 var _posture_mix := PackedFloat32Array()
 var _posture_tau := 5.0
@@ -247,7 +232,7 @@ func reset() -> void:
 	_hold_rng.seed = hash([seed_value, "likeness-posture"])
 
 
-## THE VOICE'S PHONES ([param phones], `[{p, t0, t1}]`): the mouth's line, and the pauses a blink may fall in.
+## The voice's phones ([param phones], `[{p, t0, t1}]`): the mouth's line, and the pauses a blink may fall in.
 func set_voice(phones: Array) -> void:
 	line = Visemes.timeline(phones)
 	_pauses = []
@@ -320,10 +305,9 @@ func _piece_at(t: float) -> int:
 	return lo
 
 
-## THEIR MOTION AT SHOW TIME [param t]: the head's yaw, pitch and roll against the shoulders (degrees) -
-## their own motion, calm, livelier while the voice speaks, its roll taking back [constant LEVEL] of the
-## body's tilt - then the body's [method posture]: across and down (face widths), nearer (the log of its
-## scale) and its tilt (degrees).
+## Their motion at show time [param t]: the head's yaw, pitch and roll against the shoulders (degrees) - their own motion,
+## calm, livelier while the voice speaks, its roll taking back [constant LEVEL] of the body's tilt - then the body's
+## [method posture]: across and down (face widths), nearer (the log of its scale) and its tilt (degrees).
 func motion(t: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(MOST.size())
@@ -348,16 +332,15 @@ func motion(t: float) -> PackedFloat32Array:
 	return out
 
 
-## THE HEAD'S MOTION SIZED FOR [param splats] (a head of splats, which turns as they do) or for a still bent by it.
+## The head's motion sized for [param splats] (a head of splats, which turns as they do) or for a still bent by it.
 func size_for(splats: bool) -> void:
 	head_calm = SPLAT_CALM if splats else CALM
 	head_most = SPLAT_MOST if splats else MOST
 
 
-## THEIR FACE'S OWN MOTION AT SHOW TIME [param t]: how far along each of its ways ([member face_basis]) their face
-## is, read from the piece the head's [method motion] reads at the same moment - so their head and face move as
-## they moved together - at [constant CALM] of their own, livelier while the voice speaks, never past [constant
-## FACE_MOST] of a way's spread (eased). Empty when their motion has no face.
+## Their face's own motion at show time [param t]: how far along each of its ways ([member face_basis]) their face is, read
+## from the piece the head's [method motion] reads at the same moment, at [constant CALM] of their own, livelier while the
+## voice speaks, never past [constant FACE_MOST] of a way's spread (eased). Empty when their motion has no face.
 func face(t: float) -> PackedFloat32Array:
 	var ways := face_basis.size()
 	var out := PackedFloat32Array()
@@ -380,8 +363,8 @@ func face(t: float) -> PackedFloat32Array:
 
 # --- the body ----------------------------------------------------------------------------------------
 
-## THE LOWER TRIANGLE of [param corr] (an [param n] by [param n] list of lists) such that it times draws
-## of spread 1 gives draws that go together as [param corr] says; a sound one where it is not one.
+## The lower triangle of [param corr] (an [param n] by [param n] list of lists) such that it times draws of spread 1 gives
+## draws that go together as [param corr] says; a sound one where it is not one.
 static func cholesky(corr: Array, n: int) -> PackedFloat32Array:
 	var c := PackedFloat32Array()
 	c.resize(n * n)
@@ -408,7 +391,7 @@ static func cholesky(corr: Array, n: int) -> PackedFloat32Array:
 func _grow_holds(until: float) -> void:
 	while _holds.is_empty() or float(_holds[-1]["t0"]) <= until:
 		if _holds.is_empty():
-			# THE FIRST POSTURE IS THE STILL'S OWN
+			# the first posture is the still's own
 			var still := PackedFloat32Array()
 			still.resize(8)
 			_holds.append({"t0": -1.0e9, "shift": 1.0, "at": still})
@@ -428,7 +411,7 @@ func _grow_holds(until: float) -> void:
 			for k in a + 1:
 				v += _posture_mix[a * 4 + k] * z[k]
 			at[a] = HOLD_NEXT * prev[a] + fresh * v * _posture_sd[a]
-		# THE HANDS SETTLE SOMEWHERE NEW as the body shifts
+		# the hands settle somewhere new as the body shifts
 		for a in range(4, 8):
 			at[a] = HOLD_NEXT * prev[a] + fresh * _hold_rng.randfn(0.0, HAND_SHIFT)
 		var t0 := maxf(0.0, float(last["t0"]) + float(last["shift"])) + maxf(1.0, held)
@@ -461,8 +444,8 @@ func _held(t: float) -> PackedFloat32Array:
 	return out
 
 
-## THE BODY'S POSTURE AT SHOW TIME [param t]: across and down (face widths), nearer (the log of its scale)
-## and its tilt (degrees) - held and shifted, a slow sway under it, eased (never cut) past [constant MOST].
+## The body's posture at show time [param t]: across and down (face widths), nearer (the log of its scale) and its tilt
+## (degrees) - held and shifted, a slow sway under it, eased (never cut) past [constant MOST].
 func posture(t: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(4)
@@ -476,15 +459,15 @@ func posture(t: float) -> PackedFloat32Array:
 	return out
 
 
-## HOW FAR EACH SHOULDER IS LIFTED AT SHOW TIME [param t] (x theirs left, y right; shares of their width):
-## with the breath, and each wandering a little on its own.
+## How far each shoulder is lifted at show time [param t] (x theirs left, y right; shares of their width): with the breath,
+## and each wandering a little on its own.
 func lifts(t: float) -> Vector2:
 	var b := LIFT_BREATH * (breath(t) - 0.5)
 	return Vector2(b + LIFT * wander(t, LIFT_KNOT, "lift_l"), b + LIFT * wander(t, LIFT_KNOT, "lift_r"))
 
 
-## WHERE EACH RESTING HAND HAS MOVED AT SHOW TIME [param t] (theirs left, then right; shares of the
-## shoulders' width): settled somewhere new at each shift of the body, drifting a little.
+## Where each resting hand has moved at show time [param t] (theirs left, then right; shares of the shoulders' width):
+## settled somewhere new at each shift of the body, drifting a little.
 func hands(t: float) -> PackedVector2Array:
 	var held := _held(t) if _posture_sd.size() >= 4 else PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0])
 	var out := PackedVector2Array()
@@ -494,9 +477,8 @@ func hands(t: float) -> PackedVector2Array:
 	return out
 
 
-## A SMOOTH SEEDED WANDER at show time [param t], of spread about 1: a value every [param knot] seconds
-## drawn from the seed and [param key], a cubic B-spline through them - so asked at any moment it is the
-## same, and smooth in its slope.
+## A smooth seeded wander at show time [param t], of spread about 1: a value every [param knot] seconds drawn from the
+## seed and [param key], a cubic B-spline through them - so asked at any moment it is the same, and smooth in its slope.
 func wander(t: float, knot: float, key: String) -> float:
 	var u := t / knot
 	var i := int(floor(u))
@@ -521,8 +503,8 @@ func _knot(i: int, key: String) -> float:
 	return sqrt(-2.0 * log(u1)) * cos(TAU * u2)
 
 
-## HOW MUCH THE VOICE IS SPEAKING round show time [param t], 0..1: the share of the [constant SPEAKING]
-## seconds either side that its sounds cover.
+## How much the voice is speaking round show time [param t], 0..1: the share of the [constant SPEAKING] seconds either
+## side that its sounds cover.
 func speaking(t: float) -> float:
 	if line.is_empty():
 		return 0.0
@@ -541,9 +523,8 @@ func speaking(t: float) -> float:
 	return clampf(covered / (b - a), 0.0, 1.0)
 
 
-## HOW FULL THEIR CHEST IS AT SHOW TIME [param t], 0..1: let out while the voice speaks, drawn in over
-## each pause, drawn in before the first word - each going on from where the last left it (the last few
-## pauses are enough: one of half a second fills the chest, whatever came before).
+## How full their chest is at show time [param t], 0..1: let out while the voice speaks, drawn in over each pause, drawn
+## in before the first word - each going on from where the last left it (the last few pauses are enough).
 func breath(t: float) -> float:
 	var idle := 0.5 + 0.5 * sin(TAU * t / BREATH_IDLE)
 	if line.is_empty():
@@ -592,8 +573,7 @@ func _grow_glances(until: float) -> void:
 			"hold": _glance_rng.randf_range(GLANCE_HOLD[0], GLANCE_HOLD[1]), "deep": _glance_rng.randf_range(0.6, 1.0)})
 
 
-## WHERE THEY ARE GLANCING AT SHOW TIME [param t]: `[look, how far 0..1, which glance]`, or how far 0 at the
-## camera.
+## Where they are glancing at show time [param t]: `[look, how far 0..1, which glance]`, or how far 0 at the camera.
 func glance(t: float) -> Array:
 	_grow_glances(t + 2.0)
 	for i in range(_glances.size() - 1, -1, -1):
@@ -629,7 +609,7 @@ static func _closed(t: float, at: float) -> float:
 	return 1.0 - smoothstep(0.0, 1.0, (d - BLINK[0] - BLINK[1]) / BLINK[2])
 
 
-## HOW CLOSED THE EYES ARE AT SHOW TIME [param t] (0 open, 1 shut), and which blink it is.
+## How closed the eyes are at show time [param t] (0 open, 1 shut), and which blink it is.
 func blink(t: float) -> Vector2:
 	_grow_blinks(t + 1.0)
 	var best := 0.0
@@ -653,9 +633,9 @@ func blink(t: float) -> Vector2:
 	return Vector2(best, which)
 
 
-## THE EYES AT SHOW TIME [param t]: `[[image, weight]]` - a blink, the still's own (-1) going through half
-## closed to shut; else a glance, the still's own going to one of the library's looking that way; else the
-## still's own. Each one of the library's drawn from the seed and the blink or glance.
+## The eyes at show time [param t]: `[[image, weight]]` - a blink, the still's own (-1) going through half closed to shut;
+## else a glance, the still's own going to one of the library's looking that way; else the still's own. Each one of the
+## library's drawn from the seed and the blink or glance.
 func eyes(t: float) -> Array:
 	var b := blink(t)
 	if b.x <= 0.0 or not eyes_of.has("half"):
@@ -673,7 +653,7 @@ func eyes(t: float) -> Array:
 
 # --- the mouth ---------------------------------------------------------------------------------------
 
-## THE LEARNED MOUTH, read from [param path] where it is, to choose among [param library]'s mouths.
+## The learned mouth, read from [param path] where it is, to choose among [param library]'s mouths.
 func _learn(path: String, library: LikenessFace) -> void:
 	_members = []
 	_choices = {}
@@ -708,16 +688,14 @@ func _learn(path: String, library: LikenessFace) -> void:
 			_choices[img] = library.mouth_blends[img]
 	_push = library.articulation
 	_silence = _predict(_inputs_of_silence())
-	# THE STILL'S OWN MOUTH IS SILENCE: what the ensemble says for none, so silence draws it, never a mouth
-	# of the library's that happened to be nearer what was measured of the still
+		# the still's own mouth is silence: what the ensemble says for none, so silence draws it, never a library mouth
 	_choices[-1] = _silence
 	if _choices.is_empty() or _mean.is_empty():
 		_members = []
 
 
-## THE INPUTS AT [param t], as the ensemble was trained on them (actor.py's `contexts`): for each offset,
-## how much of each class is heard in the window round it - the rest wherever none is. Sparse:
-## `{input: share}`.
+## The inputs at [param t], as the ensemble was trained on them (actor.py's `contexts`): for each offset, how much of each
+## class is heard in the window round it - the rest wherever none is. Sparse: `{input: share}`.
 func _inputs(t: float) -> Dictionary:
 	var out := {}
 	var k := _classes.size()
@@ -751,7 +729,7 @@ func _inputs_of_silence() -> Dictionary:
 	return out
 
 
-## WHAT THE ENSEMBLE SAYS for [param x] (sparse inputs): their mouth's blendshapes, the members' mean.
+## What the ensemble says for [param x] (sparse inputs): their mouth's blendshapes, the members' mean.
 func _predict(x: Dictionary) -> PackedFloat32Array:
 	var m := _mean.size()
 	var out := PackedFloat32Array()
@@ -779,7 +757,7 @@ func _predict(x: Dictionary) -> PackedFloat32Array:
 	return out
 
 
-## THE MOUTH THE ENSEMBLE SAYS AT [param t], pushed past their own as the library was: the blendshapes.
+## The mouth the ensemble says at [param t], pushed past their own as the library was: the blendshapes.
 func learned(t: float) -> PackedFloat32Array:
 	var y := _predict(_inputs(t))
 	for i in _pushed:
@@ -788,9 +766,9 @@ func learned(t: float) -> PackedFloat32Array:
 	return y
 
 
-## THE MOUTH AT SHOW TIME [param t]: `[[image, weight]]`, at most two images mixed - the two library mouths
-## (or the still's own, -1) nearest the learned mouth where there is one, the farther less the third; else
-## the two strongest pulls, each one of its class's prototypes (the still's own for the rest).
+## The mouth at show time [param t]: `[[image, weight]]`, at most two images mixed - the two library mouths (or the still's
+## own, -1) nearest the learned mouth where there is one, the farther less the third; else the two strongest pulls, each one
+## of its class's prototypes (the still's own for the rest).
 func mouth(t: float) -> Array:
 	if not _members.is_empty():
 		var y := learned(t)
@@ -805,9 +783,8 @@ func mouth(t: float) -> Array:
 		near.sort_custom(func(p: Array, q: Array) -> bool: return float(p[1]) < float(q[1]))
 		if near.size() < 3:
 			return [[int(near[0][0]), 1.0]]
-		# THE NEAREST WHOLE, THE NEXT BY HOW FAR IT IS FROM THE THIRD over how far the nearest is: as the
-		# order changes nothing jumps - the next falls to nothing as the third overtakes it, and two
-		# equally near weigh alike
+		# the nearest whole, the next by how far it is from the third over how far the nearest is: as the order changes nothing
+		# jumps - the next falls to nothing as the third overtakes it, and two equally near weigh alike
 		var d1 := float(near[0][1])
 		var second := clampf((float(near[2][1]) - float(near[1][1])) / maxf(float(near[2][1]) - d1, 1e-3), 0.0, 1.0)
 		if second <= 1e-6:
@@ -823,9 +800,8 @@ func mouth(t: float) -> Array:
 	return out
 
 
-## THE SOUNDS SHAPING A HEAD OF SPLATS' MOUTH AT [param t]: `{class: share}`, every pull's share, smoothed
-## ([method Visemes.mix]) - its faces mix any number, where the 2D mouth draws two library pictures
-## ([method mouth]).
+## The sounds shaping a head of splats' mouth at [param t]: `{class: share}`, every pull's share, smoothed ([method
+## Visemes.mix]) - its faces mix any number, where the 2D mouth draws two library pictures ([method mouth]).
 func mouth_mix(t: float) -> Dictionary:
 	return Visemes.mix(t, line, _line_from(t))
 

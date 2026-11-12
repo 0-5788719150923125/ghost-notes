@@ -3,32 +3,29 @@ class_name Ink
 
 ## Ink - a formula written by hand, as a function of time.
 ##
-## TEX LAYS OUT, A HAND WRITES. `hosts/math/typeset.py` sets each formula with TeX and answers where
-## every glyph and rule landed, in TeX's own order, with each glyph's PostScript NAME ("alpha",
-## "summationdisplay", "radicalbig"). This draws each glyph as pen strokes from the Hershey fonts
-## (centerline fonts made for plotters - fonts/hands/hershey/, free with credit), fitted into the box
-## TeX gave it, so the structure is TeX's and the writing is a hand's: a fraction's bar lands between
-## its numerator and its denominator because that is where TeX set it.
+## TeX lays out, a hand writes. `hosts/math/typeset.py` sets each formula with TeX and answers where every glyph and rule landed, in TeX's
+## own order, with each glyph's PostScript name ("alpha", "summationdisplay", "radicalbig"). This draws each glyph as pen strokes from the
+## Hershey fonts (centerline fonts made for plotters - fonts/hands/hershey/, free with credit), fitted into the box TeX gave it, so the
+## structure is TeX's and the writing is a hand's: a fraction's bar lands between its numerator and its denominator because that is where
+## TeX set it.
 ##
 ## Three pure steps, so a desk can draw any moment without having drawn the ones before:
 ##   [method strokes_of] - one typeset item and a seed -> its strokes, in writing order;
 ##   [method schedule]   - strokes and a pace -> when each is drawn;
 ##   [method at]         - a schedule and a time -> the ink on the page then.
 ##
-## What was measured (next/proof.md, "Ink"), and is held by tests/table/ink_check.gd:
-## - A GLYPH KEEPS ITS OWN PROPORTIONS. Stretching a stroke glyph to its TeX box crowded
-##   superscripts into their bases and swelled commas; it is scaled uniformly and centered in the
-##   box, shrunk only where it would overrun it by much (a little overflow is handwriting).
-## - TEX'S ORDER IS A HAND'S ORDER, with one exception: TeX sets a sum's upper limit before the
-##   sign, so a big operator is moved ahead of the limits above it.
-## - WRITING TAKES AS LONG AS WRITING: a^2 + b^2 = c^2 is about 5 s at pace 1, so a desk writes under
-##   the voice rather than between its sentences.
-## - NOTHING LEAVES SILENTLY. A glyph the hand has no strokes for is drawn as its outline traced
-##   (the typeset answer's `fonts`, when asked for) and named in `missing` either way.
-## - A DRAWING IS DRAWN BY THE SAME HAND (hosts/math/figure.py lays it out: its `paths` beside its
-##   labels' glyphs, one order over both). A path is drawn as it was laid out, a little uneven - a
-##   slow wave across it and a slight tremor, pinned at its ends so lines that meet still meet - and
-##   faster than a letter is written: a hand sweeps a line it would take care over in a word.
+## Held by tests/table/ink_check.gd (next/proof.md, "Ink"):
+## - A glyph keeps its own proportions: it is scaled uniformly and centered in the box, shrunk only where it would overrun it by much (a
+##   little overflow is handwriting). Stretching crowds superscripts into their bases and swells commas.
+## - TeX's order is a hand's order, with one exception: TeX sets a sum's upper limit before the sign, so a big operator is moved ahead of
+##   the limits above it.
+## - Writing takes as long as writing: a^2 + b^2 = c^2 is about 5 s at pace 1, so a desk writes under the voice rather than between its
+##   sentences.
+## - Nothing leaves silently: a glyph the hand has no strokes for is drawn as its outline traced (the typeset answer's `fonts`, when
+##   asked for) and named in `missing` either way.
+## - A drawing is drawn by the same hand (hosts/math/figure.py lays it out: its `paths` beside its labels' glyphs, one order over both).
+##   A path is drawn as it was laid out, a little uneven - a slow wave across it and a slight tremor, pinned at its ends so lines that
+##   meet still meet - and faster than a letter is written.
 
 ## The stroke fonts, by the name the table below uses.
 const FONTS := {
@@ -90,8 +87,8 @@ const RECIPES := {
 	"arrowdblboth": {"strokes": [[[0.15, -0.32], [0.85, -0.32]], [[0.15, -0.12], [0.85, -0.12]],
 		[[0.32, -0.5], [0.0, -0.22], [0.32, 0.06]], [[0.68, -0.5], [1.0, -0.22], [0.68, 0.06]]]},
 	"logicalnot": {"strokes": [[[0.0, -0.42], [0.9, -0.42], [0.9, -0.18]]]},
-	# LONG ARROWS: TeX builds `\implies` and `\longrightarrow` from two glyphs, a bar kerned under an
-	# arrow (see [method _writing_order]); a hand writes one long arrow
+		# long arrows: TeX builds `\implies` and `\longrightarrow` from two glyphs, a bar kerned under an arrow (see
+		# [method _writing_order]); a hand writes one long arrow
 	"arrowdbllong": {"strokes": [[[0.0, -0.32], [1.62, -0.32]], [[0.0, -0.12], [1.62, -0.12]],
 		[[1.4, -0.5], [1.82, -0.22], [1.4, 0.06]]]},
 	"arrowlong": {"strokes": [[[0.0, -0.22], [1.62, -0.22]], [[1.4, -0.4], [1.82, -0.22], [1.4, -0.04]]]},
@@ -120,7 +117,7 @@ const RELATION_PAUSE := 0.25      # a longer one before a relation: "=", "<", an
 const RELATIONS := ["equal", "less", "greater", "lessequal", "greaterequal", "arrowdblright",
 	"arrowright", "equivalence", "approxequal", "element", "reflexsubset", "propersubset"]
 ## A drawing's paths, by kind: how much faster than writing the pen draws one, and its nib (points).
-## A `grid` line is FAINT - drawn fine and light, under the figure ([constant FAINT]).
+## A `grid` line is faint: drawn fine and light, under the figure ([constant FAINT]).
 const DRAW_SPEED := {"line": 2.6, "hatch": 4.0, "arrow": 1.6, "dot": 1.2, "grid": 5.0}
 const DRAW_NIB := {"line": 0.62, "hatch": 0.42, "arrow": 0.62, "dot": 0.9, "grid": 0.3}
 const FAINT := ["grid"]
@@ -129,7 +126,7 @@ const WANDER := 0.006
 const WANDER_RANGE := Vector2(0.12, 0.9)
 
 static var _fonts := {}          # font name or path -> [[left, right, strokes], ...], ASCII order from 32
-static var _names := {}          # glyph name -> "font:character", NAMED with the letters filled in
+static var _names := {}          # glyph name -> "font:character", named with the letters filled in
 static var _lock := Mutex.new()
 
 
@@ -233,10 +230,9 @@ static func covered(name: String, font := "cmr10") -> bool:
 
 # --- the glyphs -------------------------------------------------------------------
 
-## Where a glyph's strokes come from: {glyph: [l, r, strokes]}, {recipe: {...}} or {letters: name},
-## {} for none. Calligraphic capitals are cmsy's letters, blackboard bold msbm's. A LIGATURE TeX sets
-## as one glyph (ff, fi, fl, ffi, ffl - and ae, oe) is written as its letters, as a hand writes them:
-## traced, its outline drew both edges of every stroke and "different" read as bold (the first lesson).
+## Where a glyph's strokes come from: {glyph: [l, r, strokes]}, {recipe: {...}} or {letters: name}, {} for none. Calligraphic capitals
+## are cmsy's letters, blackboard bold msbm's. A ligature TeX sets as one glyph (ff, fi, fl, ffi, ffl - and ae, oe) is written as its
+## letters, as a hand writes them: traced, its outline draws both edges of every stroke and reads as bold.
 static func _source(name: String, font: String) -> Dictionary:
 	if name.length() == 1 and name.to_upper() == name and name.to_lower() != name:
 		if font.begins_with("cmsy"):
@@ -328,9 +324,8 @@ static func _glyph(g: Dictionary, rng: RandomNumberGenerator, outlines: Dictiona
 	return {"strokes": _place(unit, g, rng, font.begins_with("cmmi")), "traced": traced}
 
 
-## A Hershey glyph's strokes in the unit box: both axes in cap heights (21 font units), x from its
-## left margin, baseline 0 (the font's y = 9), up negative. ONE SCALE FOR BOTH AXES: measuring x by
-## each glyph's own advance instead drew a comma (8 units wide) 2.6 times too wide - it read as "›".
+## A Hershey glyph's strokes in the unit box: both axes in cap heights (21 font units), x from its left margin, baseline 0 (the font's
+## y = 9), up negative. One scale for both axes: measuring x by each glyph's own advance would draw a comma 2.6 times too wide.
 static func _unit(glyph: Array) -> Array:
 	var left := float(glyph[0])
 	var out: Array = []
@@ -470,9 +465,8 @@ static func _writing_order(item: Dictionary) -> Array:
 		seq.append(p)
 	seq.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("k", 0)) < int(b.get("k", 0)))
-	# A BAR UNDER AN ARROW IS ONE LONG ARROW: TeX sets `\implies` as an equals sign with a double
-	# arrow kerned back over its end (`\longrightarrow`, a minus and an arrow); drawn as two glyphs
-	# each in its own box, the first real lesson's pad said "=⇒" with a gap in it
+		# a bar under an arrow is one long arrow: TeX sets `\implies` as an equals sign with a double arrow kerned back over its end
+		# (`\longrightarrow`, a minus and an arrow); drawn as two glyphs each in its own box, it would read with a gap in it
 	var at := 0
 	while at < seq.size() - 1:
 		var bar: Dictionary = seq[at]
@@ -487,8 +481,8 @@ static func _writing_order(item: Dictionary) -> Array:
 			seq[at] = merged
 			seq.remove_at(at + 1)
 		at += 1
-	# AN OVERLAY STRIKES WHAT FOLLOWS IT: TeX's "not" slash (`negationslash`, in a not-equal) is a
-	# glyph of no width laid over the next one, so it is drawn over that one's box, not its own.
+		# an overlay strikes what follows it: TeX's "not" slash (`negationslash`, in a not-equal) is a glyph of no width laid over the
+		# next one, so it is drawn over that one's box, not its own.
 	for n in range(seq.size() - 1):
 		var g: Dictionary = seq[n]
 		var next: Dictionary = seq[n + 1]
@@ -519,7 +513,7 @@ static func _writing_order(item: Dictionary) -> Array:
 	return seq
 
 
-## A DRAWING'S PATH, as a hand draws it: [param entry]'s points (`pts`, in the record's points) cut
+## A drawing's path, as a hand draws it: [param entry]'s points (`pts`, in the record's points) cut
 ## at least every three points, each moved across the line by a slow wave (one or so across its
 ## length, [constant WANDER] of it) and a little tremor - the wave pinned at both ends, so lines that
 ## meet on the figure still meet. A dot is drawn as it was laid out.

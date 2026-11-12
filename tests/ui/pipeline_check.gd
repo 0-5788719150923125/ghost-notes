@@ -1,30 +1,26 @@
 extends SceneTree
 
-## pipeline_check - everything made for a note, one list in one place ([PipelineCard]; next/pipeline.md; the user,
-## 2026-11-02: "when we click the regenerate button - we will KNOW that it's going to regenerate that one thing, without a
-## maybe second list appearing").
+## pipeline_check - everything made for a note, one list in one place ([PipelineCard]; next/pipeline.md).
 ##
 ##   godot --headless --path . --script tests/ui/pipeline_check.gd
 ##
-## ONE PLACE: it stands last among a panel's cards, in the one scroll (THE CONTROL: the footer, which holds Masking's markers
-## alone, stays empty), its list scrolling with the panel however long it grows, with no scroll of its own (THE CONTROL: the
-## list really is longer than the window); with nothing to list it is gone and takes no room. NEW STEPS IN THE LIST LEAVE A VIEW AT
-## THE END AT THE END, the last of them in sight (the user: Generate "can insert new steps ... requiring me to scroll again";
-## THE CONTROL: a view anywhere else stays where it is).
-## ONE ⟳: a plain Button, never a menu (THE CONTROL: a MenuButton is what the walk would find). Pressed, it does its one
-## thing at once, and opens nothing. WHAT THROWS OTHER WORK AWAY SAYS SO BEFORE IT IS PRESSED, in words and in the color of
-## every other ⟳ (the user could not read the amber it once wore): the tooltip saying what, and it asks a yes or a no -
-## nothing runs until yes, and no runs nothing. A row with no ⟳ keeps its place and takes no press; one not open now takes
-## none.
-## ONE GENERATE: top to bottom, a section started only once the one before it is done (THE CONTROL: while the first is busy
-## the second is not started), asked at its turn whether it has anything to make (words written by the section before it
-## count), a section with nothing missing passed by; while it walks every ⟳ waits; Stop stops all of it. Generate is grayed
-## with nothing missing, Stop with nothing being made. The ▶ on a heading makes that section alone (THE CONTROL: the
-## other is not started). WHILE A ROW MADE AGAIN RUNS ALONE, GENERATE IS OFFERED and widens it to the rest (THE CONTROL: a section
-## busy making all of it leaves Generate grayed).
-## GROUPS: a group's rows fold under its name, which says how they stand. WHAT IS LISTED IS BUILT ONCE: a refresh with the
-## same rows keeps the same controls - a list built again under a press loses it (THE CONTROL: a new row builds it again). A
-## SECTION'S CARD FREED under it takes the section along.
+## - One place: it stands last among a panel's cards, in the one scroll (control: the footer, which holds Masking's markers
+##   alone, stays empty), its list scrolling with the panel however long it grows, with no scroll of its own (control: the
+##   list really is longer than the window); with nothing to list it is gone and takes no room. New steps in the list leave a
+##   view at the end at the end, the last of them in sight (control: a view anywhere else stays where it is).
+## - One refresh button: a plain Button, never a menu (control: a MenuButton is what the walk would find). Pressed, it does
+##   its one thing at once, and opens nothing. What throws other work away says so before it is pressed, in words and in the
+##   color of every other refresh button: the tooltip saying what, and it asks a yes or a no - nothing runs until yes, and no
+##   runs nothing. A row with no refresh button keeps its place and takes no press; one not open now takes none.
+## - One Generate: top to bottom, a section started only once the one before it is done (control: while the first is busy
+##   the second is not started), asked at its turn whether it has anything to make (words written by the section before it
+##   count), a section with nothing missing passed by; while it walks every refresh button waits; Stop stops all of it.
+##   Generate is grayed with nothing missing, Stop with nothing being made. The play button on a heading makes that section
+##   alone (control: the other is not started). While a row made again runs alone, Generate is offered and widens it to the
+##   rest (control: a section busy making all of it leaves Generate grayed).
+## - Groups: a group's rows fold under its name, which says how they stand. What is listed is built once: a refresh with the
+##   same rows keeps the same controls - a list built again under a press loses it (control: a new row builds it again). A
+##   section's card freed under it takes the section along.
 
 var _fails := 0
 # loaded once the tree is up: the card reads Settings, an autoload a `--script` gate's own compile cannot see
@@ -67,7 +63,7 @@ func _row(key: String, state := "made", again := "") -> PipelineRow:
 	return r
 
 
-## ONE PLACE
+## One place
 func _one_place() -> void:
 	var panel = load("res://src/ui/side_panel.gd").new()
 	root.add_child(panel)
@@ -77,8 +73,8 @@ func _one_place() -> void:
 	await process_frame
 	card.refresh()
 	_ok(card.card != null and not card.card.visible, "with no section it is hidden")
-	# PUT ON A PANEL ALREADY IN THE TREE, as the app does: joining it runs the card's _ready there and then, which must not take
-	# the bar for a card never put on a panel (the app's Generate stood in the list, and the engine said so only in the log)
+	# Put on a panel already in the tree, as the app does: joining it runs the card's _ready there and then, which must not take
+	# the bar for a card never put on a panel
 	_ok(card.card.head.is_ancestor_of(card._generate) and not card.card.body.is_ancestor_of(card._generate),
 		"Generate stands on the title bar, not in the list")
 	var s = Stub.new("A")
@@ -135,7 +131,7 @@ func _one_place() -> void:
 	await process_frame
 
 
-## ONE ⟳
+## One ⟳
 func _one_redo() -> void:
 	var card = _Card.new()
 	var s = Stub.new("A")
@@ -187,7 +183,7 @@ func _one_redo() -> void:
 	card.free()
 
 
-## ONE GENERATE
+## One generate
 func _one_generate() -> void:
 	var card = _Card.new()
 	var first = Stub.new("First")
@@ -244,10 +240,8 @@ func _one_generate() -> void:
 	card.free()
 
 
-## GENERATE WIDENS A ROW MADE AGAIN (the user, 2026-11-09: "make that "Generate" button available for clicking immediately after steps
-## become tainted ... I could click both buttons at the same time - and come back to the full pipeline finished later"): while a section
-## makes only some of what it is missing, Generate is offered, and pressed it starts the section again for all of it. THE CONTROL: a
-## section busy making all it is missing leaves Generate grayed.
+## Generate widens a row made again: while a section makes only some of what it is missing, Generate is offered, and
+## pressed it starts the section again for all of it. Control: a section busy making all it is missing leaves Generate grayed.
 func _widened() -> void:
 	var card = _Card.new()
 	var s = Stub.new("Episode")
@@ -268,9 +262,8 @@ func _widened() -> void:
 	card.free()
 
 
-## A LOCK BESIDE A ⟳ (the user, 2026-11-09: "a 'lock' button next to the regenerate buttons, for every step"; next/editing.md step 1):
-## a made row carries one, open until pressed; pressed, the row is KEPT and its tooltip says Generate passes it by.
-## THE CONTROL: a row that is not lockable carries none.
+## A lock beside a refresh button (next/editing.md step 1): a made row carries one, open until pressed; pressed, the row is
+## kept and its tooltip says Generate passes it by. Control: a row that is not lockable carries none.
 func _locks() -> void:
 	var card = _Card.new()
 	var s = Stub.new("Episode")

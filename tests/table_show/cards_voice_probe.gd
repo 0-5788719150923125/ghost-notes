@@ -1,6 +1,6 @@
 extends Node
 
-## NOT a gate. The Cards mode end to end in a real boot: the Cards panel opens a show, the real
+## Not a gate. The table show end to end in a real boot: the Cards panel opens a show, the real
 ## voice reads an episode already made, and the table follows the voice's real word timings -
 ## then, optionally, the panel renders the export take and its sidecar is checked.
 ##

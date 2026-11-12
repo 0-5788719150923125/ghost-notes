@@ -1,202 +1,150 @@
 # ghost: binary export and Steam
 
-Researched 2026-10-05; nothing built yet. The question: can ghost be sold (or given away) on Steam,
-given that it downloads its own dependencies at runtime and some of them might forbid commercial
-use? Answered with an audit of what ghost fetches and what a build would ship, plus web research -
-sources at the end, every one checked on 2026-10-05. File references are `file:line` from
-the repository root, as of that date. Not legal advice: the items marked **ASK** want a lawyer's or Valve's answer before
-launch.
+Nothing is built yet. The question: can ghost be sold (or given away) on Steam, given that it downloads its own
+dependencies at runtime and some might forbid commercial use? This is an audit of what ghost fetches and what a build
+would ship, plus web research (sources at the end). Not legal advice: items marked **ASK** want a lawyer's or Valve's
+answer before launch.
 
 ## The short answer
 
-- **Nothing ghost downloads blocks a release.** Piper, the one that looked risky, is already
-  handled: the voice allowlist holds only public-domain and CC BY voices, and no GPL Piper code is
-  installed.
-- **Fetching at runtime protects against terms triggered by DISTRIBUTING, not terms triggered by
-  USING.** GPL and attribution duties attach to whoever conveys a copy; ghost conveys none, it has
-  the user's machine fetch upstream's. Non-commercial and research-only licenses, YouTube's terms,
+- **Nothing ghost downloads blocks a release.** Piper, the one that looked risky, is handled: the voice allowlist holds
+  only public-domain and CC BY voices, and no GPL Piper code is installed.
+- **Fetching at runtime protects against terms triggered by distributing, not by using.** GPL and attribution duties
+  attach to whoever conveys a copy; ghost conveys none. Non-commercial and research-only licenses, YouTube's terms,
   anti-circumvention law and codec patents are about use, so fetching does nothing for them.
-- **The real work is elsewhere:** the YouTube import, what a default export would pack, the Linux
-  FFmpeg source, the Assistant, third-party notices - and the export itself, which ghost has never
-  been through (there is no `export_presets.cfg`).
+- **The real work is elsewhere:** the YouTube import, what a default export would pack, the Linux FFmpeg source, the
+  Assistant, third-party notices, and the export itself (there is no `export_presets.cfg`).
 
 ## Does price change anything?
 
-Almost nothing here is triggered by charging. Price only matters to non-commercial licenses, and
-only with no monetization at all.
+Almost nothing is triggered by charging. Price only matters to non-commercial licenses, and only with no monetization.
 
 | Restriction | Free, no monetization | Free + donations or premium |
 |---|---|---|
-| Copyleft and attribution (GPL eSpeak-NG/FFmpeg, CC BY LibriTTS, OFL fonts, BSD CMUdict, MIT Godot) | Same duties - giving copies away is still distribution | Same |
+| Copyleft and attribution (GPL eSpeak-NG/FFmpeg, CC BY LibriTTS, OFL fonts, BSD CMUdict, MIT Godot) | Same duties - giving copies away is distribution | Same |
 | Non-commercial voices (CC BY-NC-SA: ryan, hfc_*) | Arguably OK | Donations a gray zone; premium makes it commercial |
-| Research-only (Blizzard 2013: lessac and all fine-tuned from it) | Still no - a consumer app is not research | No |
+| Research-only (Blizzard 2013: lessac and all fine-tuned from it) | No | No |
 | Anthropic | Commercial Terms, unmodified binary, never touch credentials | Same |
-| OpenAI (Codex on a ChatGPT login) | Its closest docs treat open-source apps apart from paid ones; a free build of MIT code sits nearer the open-source side | Premium is the paid-app side (an interest form) |
+| OpenAI (Codex on a ChatGPT login) | Nearer the open-source side | Premium is the paid-app side (an interest form) |
 | xAI (Grok Build on a grok.com login) | Not read yet | Not read yet |
 | Steam AI disclosure, guardrails, third-party account notice | Required | Required |
-| Anti-circumvention (YouTube import) | Price-blind: DMCA §1201 bans offering a circumvention tool, sold or not | Same |
+| Anti-circumvention (YouTube import) | Price-blind: DMCA §1201 bans offering a circumvention tool | Same |
 
-What monetizing adds is Steam's own rule that in-game transactions go through Steam Wallet:
-
-- **Donations:** a "supporter pack" DLC. A Patreon or Ko-fi button inside the app risks running
-  into the rule.
-- **Premium features:** DLC or Steam microtransactions, at Valve's usual cut.
-- **Premium = the AI modes** is the worst combination: Valve's FAQ expects you to provide and bill
-  the AI service for players, and OpenAI would treat ghost as a paid app.
+Monetizing adds Steam's rule that in-game transactions go through Steam Wallet: donations as a "supporter pack" DLC (a
+Patreon or Ko-fi button inside the app risks the rule), premium features as DLC or microtransactions. Premium = the AI
+modes is the worst combination: Valve expects you to provide and bill the AI service for players, and OpenAI would treat
+ghost as a paid app.
 
 ## Before shipping, ranked
 
-1. **The YouTube import.** The one item with court rulings against tools like it (details below).
-   ghost installs yt-dlp plus Deno to solve YouTube's challenges, and says so in its own panel text
-   (`src/platform/deps.gd:128`). Fetching instead of bundling does not help: §1201 and the German rule
-   both reach PROVIDING the tool. Valve has not acted against this (VRChat ships yt-dlp), so the
-   risk is rights holders, not review. Recommendation: leave URL import out of the Steam build and
-   keep it in the source build. Keeping it is **ASK** (a lawyer).
-2. **What a default export would pack.** Godot's export ignores `.gitignore`. `masks/` holds 27
-   imported files (audio and waveforms from the clips stored there, YouTube downloads included),
-   `feedback/` its screenshots. Exclude both, plus `build/` and `tests/`, in the preset. (`reference/arcbot.webp`, a
-   photograph of unknown provenance that nothing used, was deleted 2026-10-31.)
-3. **The Linux FFmpeg source.** Martin Riedl's Linux build is configured `--enable-nonfree`
-   (DeckLink), which FFmpeg's license calls unredistributable - confirmed on the provisioned 9.0.2
-   with `ffmpeg -version`. ghost is not the one redistributing it, but there is no reason to send
-   customers there: BtbN's Linux GPL builds are a drop-in swap. Riedl's macOS build, Gyan's and
-   BtbN's Windows builds are plain GPLv3.
-4. **The Assistant.** It runs `claude --dangerously-skip-permissions` and
-   `codex --dangerously-bypass-approvals-and-sandbox` against the checkout
-   (`src/agents/assistant_backends.gd:61`, `:68`). A Steam install has no checkout, and an agent with no
-   permission checks on a customer's machine runs into Valve's ban on apps that "modify customer's
-   computers in unexpected or harmful ways". Strip it from the build. (The tarot writer and painter
-   are already locked down: `--tools ""` or ghost's own MCP tools, Codex read-only or
-   workspace-write in a job folder.)
+1. **The YouTube import.** The one item with court rulings against tools like it (below). ghost installs yt-dlp plus Deno
+   to solve YouTube's challenges, and says so in its panel text (`src/platform/deps.gd`). Fetching instead of bundling does
+   not help: §1201 and the German rule both reach providing the tool. Valve has not acted against it (VRChat ships
+   yt-dlp), so the risk is rights holders. Recommendation: leave URL import out of the Steam build, keep it in the source
+   build. Keeping it is **ASK** (a lawyer).
+2. **What a default export would pack.** Godot's export ignores `.gitignore`. `masks/` (imported clip audio, YouTube
+   downloads included) and `feedback/` (screenshots) must be excluded in the preset, plus `build/` and `tests/`.
+3. **The Linux FFmpeg source.** Martin Riedl's Linux build is configured `--enable-nonfree` (DeckLink), which FFmpeg's
+   license calls unredistributable (confirmed with `ffmpeg -version`). BtbN's Linux GPL builds are a drop-in swap. Riedl's
+   macOS build, Gyan's and BtbN's Windows builds are plain GPLv3.
+4. **The Assistant.** It runs `claude --dangerously-skip-permissions` and `codex --dangerously-bypass-approvals-and-sandbox`
+   against the checkout (`src/agents/assistant_backends.gd`). A Steam install has no checkout, and an agent with no
+   permission checks on a customer's machine runs into Valve's ban on apps that "modify customer's computers in
+   unexpected or harmful ways". Strip it from the build. (The table writers and painters are already locked down.)
 5. **Third-party notices** - see "What a build ships" below.
 
 ## Binary export: why a build would not run today
 
 Not legal issues; the reasons an exported ghost would fail as the code stands.
 
-- **No export preset** exists yet.
-- **The Python hosts are found through `res://`.** `voice_host.gd:129`, `mask_editor.gd:5389` and
-  `:5742`, and `page_capture.gd:153` hand Python `ProjectSettings.globalize_path("res://...")`.
-  Godot's docs say that does not work in an exported project, and Python could not read inside a
-  `.pck` anyway. The hosts' `.py` files and the `requirements.txt` files the Provisioner hashes and
-  installs from must ship as loose files beside the executable (a Steam depot can carry them) and be
-  found through `OS.get_executable_path().get_base_dir()`.
-- **Non-resource files are left out of the `.pck`** unless the preset's include filter names them:
-  `data/cmudict.dict`, `data/english.yml`, `storyboards/*.yml`, the hosts' files and every license
-  file. Check `.json` too.
-- **The video export and the audio bake relaunch the engine against the project folder** -
-  `--path <project>`, plus `--script res://...` for the bake (`src/export/exporter.gd:550-555`,
-  `src/masking/mask_editor.gd:8036`) - and the render reads its resolution from an `override.cfg`
-  written into the project root (`src/export/exporter.gd:886-890`). An exported build has no project
-  folder: this becomes the binary relaunching itself, with the overrides passed some way other than
-  a file in the install directory. Masking's reload check (`src/masking/mask_editor.gd:6453`) runs
-  `--editor`, which an export template does not have - dev-only, strip it with the Assistant.
-- **`MASKS_DIR` is `res://masks`** (`src/masking/mask_editor.gd:61`), read-only once exported. Masking's
-  sessions and URL downloads belong in `user://`.
-- **The Assistant finds the checkout as `res://`** (`src/app/assistant.gd:130`; it was `res://../..` until the
-  move to ghost-notes, 2026-10-06). An export has no checkout at all; see the `checkout` capability in
-  [notes.md](notes.md#platforms-desktop-and-android).
-- **Programs that stay the machine's own** (`Deps.TOOLS`: setpriv, fallocate, xvfb-run) - open
-  question below on whether a Steam-launched ghost can see them on Linux.
+- **No export preset** exists.
+- **The Python hosts are found through `res://`** (`voice_host.gd`, `mask_editor.gd`, `page_capture.gd` hand Python a
+  globalized `res://` path), which fails in an exported project. The hosts' `.py` files and the `requirements.txt` files
+  the Provisioner hashes must ship as loose files beside the executable and be found through
+  `OS.get_executable_path().get_base_dir()`.
+- **Non-resource files are left out of the `.pck`** unless the preset's include filter names them: `data/cmudict.dict`,
+  `data/english.yml`, `storyboards/*.yml`, the hosts' files, every license file. Check `.json` too.
+- **The video export and the audio bake relaunch the engine against the project folder** (`src/export/exporter.gd`,
+  `src/masking/mask_editor.gd`), and the render reads its resolution from an `override.cfg` in the project root. An
+  exported build has no project folder: the binary must relaunch itself with the overrides passed another way. Masking's
+  reload check runs `--editor`, which an export template lacks - dev-only, strip it with the Assistant.
+- **`MASKS_DIR` is `res://masks`**, read-only once exported; Masking's sessions and downloads belong in `user://`.
+- **The Assistant finds the checkout as `res://`** (`src/app/assistant.gd`); an export has none (see the `checkout`
+  capability in [notes.md](notes.md#platforms-desktop-and-android)).
+- **Programs that stay the machine's own** (`Deps.TOOLS`: setpriv, fallocate, xvfb-run): see the open question below.
 - Windows and macOS have never been run on real machines.
 
 ## Steam's rules
 
 Verified on the Steamworks pages unless marked as inference.
 
-- **Software is accepted** in listed categories, including "Audio/Video Production", "Animation &
-  Modeling" and "Design & Illustration". Banned: advertising-based business models, blockchain/NFT.
-- **AI disclosure (Content Survey).** Pre-Generated is AI content that ships; Live-Generated is
-  "content created with the help of AI tools while the game is running", for which "you'll need to
-  tell us what kind of guardrails you're putting on your AI". For ghost, Live-Generated covers the
-  neural voices, tarot's text and images and the book/notebook illustrations (inference). Players
-  can report live-generated content through the overlay; "Live-Generated AI Adult Only Sexual
-  Content" is not allowed. AI coding tools used in development need no disclosure since Valve's
-  January 2026 change ("Efficiency gains through the use of these tools is not the focus").
-- **Store page:** "Requires 3rd-Party Account" and the AI-service notice ("Connects to 3rd-Party
-  Service for AI Content Generation"). Disclose the first-run downloads and their sizes (from
-  `src/platform/deps.gd`): FFmpeg ~70 MB (~115 MB Windows), uv ~20 MB, Python ~35 MB, voice environment
-  ~320 MB, download environment ~140 MB, page capture ~150 MB + Chromium ~170 MB, body/face
-  tracking ~520 MB, Piper voices ~60 MB each.
-- **Downloading programs after install:** no rule forbids it and no store field covers it. The
-  nearest rule bans apps that "modify customer's computers in unexpected or harmful ways". So:
-  expected (a consent prompt or at least the existing progress UI), disclosed, kept in ghost's own
-  folders. Valve also expects uninstall to clean up what install created, and Steam has no Linux
-  install scripts, so a "remove downloaded components" action in the Environment panel is worth
-  having.
-- **External AI services:** the Content Survey FAQ says that for an AI service with ongoing costs
-  "you'll need to manage both access to that external service on behalf of your players and
-  collecting payment from your player using a Steam-supported payment method." Bring-your-own-
-  account tarot fits none of Valve's suggested models. AI Roguelite is live with "custom via API",
-  so it can pass, but this is **ASK** (Steamworks support) before submitting. That tarot is grayed
-  out without an agent, and every other mode works without one, helps.
-- **In-game transactions use Steam Wallet** (the review checklist).
-- **EULA:** the Steam Subscriber Agreement licenses products for personal, non-commercial use unless
-  your terms say otherwise. Give users commercial rights to their exports in ghost's EULA.
+- **Software is accepted** in categories including "Audio/Video Production", "Animation & Modeling" and "Design &
+  Illustration". Banned: advertising-based business models, blockchain/NFT.
+- **AI disclosure (Content Survey).** Pre-Generated is AI content that ships; Live-Generated is content made with AI tools
+  while the app runs, which requires describing the guardrails. For ghost, Live-Generated covers the neural voices, the
+  table's text and images and the book/notebook illustrations (inference). Players can report it through the overlay;
+  Live-Generated AI Adult Only Sexual Content is not allowed. AI coding tools used in development need no disclosure.
+- **Store page:** "Requires 3rd-Party Account" and "Connects to 3rd-Party Service for AI Content Generation". Disclose the
+  first-run downloads (from `src/platform/deps.gd`): FFmpeg ~70 MB (~115 MB Windows), uv ~20 MB, Python ~35 MB, voice
+  environment ~320 MB, download environment ~140 MB, page capture ~150 MB + Chromium ~170 MB, body/face tracking ~520 MB,
+  Piper voices ~60 MB each.
+- **Downloading programs after install:** no rule forbids it and no store field covers it. The nearest rule is the "unexpected
+  or harmful ways" ban, so downloads are expected (a consent prompt or the existing progress UI), disclosed, and kept in
+  ghost's own folders. Valve expects uninstall to clean up, and Steam has no Linux install scripts, so a "remove
+  downloaded components" action in the Environment panel is worth having.
+- **External AI services:** for a service with ongoing costs, the developer must manage access on the players' behalf and
+  collect payment through Steam. Bring-your-own-account fits none of Valve's suggested models; AI Roguelite is live with
+  "custom via API", so it can pass, but **ASK** Steamworks support. That the table is grayed out without an agent, and
+  every other mode works without one, helps.
+- **In-game transactions use Steam Wallet.**
+- **EULA:** the Steam Subscriber Agreement licenses products for personal, non-commercial use unless your terms say
+  otherwise. Give users commercial rights to their exports in ghost's EULA.
 
 ## The AI providers
 
 ghost never sees credentials; it runs the CLIs the user installed and logged into.
 
-- **Anthropic: explicitly allowed.** The Agent SDK docs: "Unless previously approved, Anthropic does
-  not allow third party developers to offer claude.ai login or rate limits for their products".
-  The legal-and-compliance page separates the cases: running Claude Code in a product "requires
-  agreeing to our Commercial Terms of Service", "The Claude Code binary must not be modified",
-  developers "may not collect, store, or intermediate Claude.ai credentials or session tokens", and
-  none of it prevents "an end user from signing in to the unmodified Claude Code binary with their
-  own Claude subscription." ghost is that case. 2026 enforcement was against tools spoofing the
-  client (OpenCode, OpenClaw). A planned change to how `claude -p` draws on a subscription was
-  paused in June 2026 - it may still move.
-- **OpenAI: unclear.** Its docs say "Use API key authentication for programmatic Codex CLI
-  workflows", while `codex exec` reuses the saved login by default. Its Sign in with ChatGPT program
-  serves "all open-source partners and selected private clients", and "a paid or remotely hosted
-  app" fills in an interest form. Nothing addresses an app that spawns `codex exec`. Safe paths:
-  the interest form, or telling Codex users to log in with an API key.
-- **Amazon Bedrock:** the user's account and bills. Outputs are "Your Content" (AWS Service Terms
-  50.2; Nova has AWS's IP indemnity). Stability's Bedrock terms give no revenue cap or attribution
-  rule (the Community License's $1M cap covers self-hosted weights). Stability's policy bans nudity,
-  so traditional Star and Lovers cards will likely be refused - a no-nudity line in the painter
-  prompt also gives you a guardrail to describe to Valve.
-- **Output ownership:** Anthropic assigns outputs to the user (consumer) or the customer owns them
-  (commercial); OpenAI's user owns the output. With players on their own accounts, those rights are
-  the player's, not yours.
-- **Inherited obligations:** Anthropic's usage policy has consumer-facing interactive agents
-  "disclose to users that they are interacting with AI"; OpenAI forbids presenting output as
-  human-made. Tarot is plainly AI.
+- **Anthropic: allowed.** Third-party developers may not offer claude.ai login or rate limits unless approved, and may not
+  collect or intermediate Claude.ai credentials, but nothing prevents an end user from signing in to the unmodified Claude
+  Code binary with their own subscription; running Claude Code in a product requires the Commercial Terms. ghost is that
+  case. Enforcement has been against tools spoofing the client. A planned change to how `claude -p` draws on a
+  subscription was paused in June 2026 and may still move.
+- **OpenAI: unclear.** Its docs say to use API-key authentication for programmatic Codex CLI workflows, while `codex exec`
+  reuses the saved login by default. Sign in with ChatGPT serves open-source partners and selected private clients; "a paid
+  or remotely hosted app" fills in an interest form. Nothing addresses an app that spawns `codex exec`. Safe paths: the
+  interest form, or telling Codex users to log in with an API key.
+- **Amazon Bedrock:** the user's account and bills. Outputs are "Your Content" (AWS Service Terms 50.2; Nova has AWS's IP
+  indemnity). Stability's Bedrock terms give no revenue cap or attribution rule. Stability's policy bans nudity, so a
+  painter prompt with a no-nudity line is also a guardrail to describe to Valve.
+- **Output ownership** is the user's (Anthropic, OpenAI); with players on their own accounts, those rights are theirs.
+- **Inherited obligations:** Anthropic's usage policy has consumer-facing agents disclose that they are AI; OpenAI forbids
+  presenting output as human-made.
 
 ## The YouTube import in detail
 
-- **Germany, final.** LG Hamburg (31 March 2023, 310 O 317/21) held Uberspace - merely the web host
-  of youtube-dl's site - liable for aiding circumvention of YouTube's rolling cipher, treated as an
-  effective technological measure. OLG Hamburg affirmed (21 November 2024, 5 U 54/23); the BGH
+- **Germany, final.** LG Hamburg (31 March 2023, 310 O 317/21) held Uberspace, merely the web host of youtube-dl's site,
+  liable for aiding circumvention of YouTube's rolling cipher. OLG Hamburg affirmed (21 November 2024, 5 U 54/23); the BGH
   declined review in October 2025. Steam sells in Germany.
-- **United States, unsettled.** The RIAA's 2020 §1201 takedown of youtube-dl was reversed by GitHub.
-  Yout v. RIAA was dismissed in 2022; the appeal was argued in February 2024 with no ruling by April
-  2026. In 2026, claims over the same cipher survived motions to dismiss (Cordova v. Huneault; Sony
-  v. Udio, where the cipher's status "requires a greater factual record"). No ruling yet names PO
-  tokens or the JavaScript challenges yt-dlp-ejs solves.
-- **Terms and stores.** YouTube's terms bar downloading "except ... as expressly authorized".
-  Apple's guideline 5.2.3 bars it on the Mac App Store; Google made Microsoft's 2013 Windows Phone
-  YouTube app drop downloads. No Steam removal found.
-- **Options:** leave it out of the Steam build (recommended); or keep yt-dlp for other sites and
-  block YouTube - though the challenge solver exists for YouTube; or keep it and take the risk with
-  a lawyer's opinion.
+- **United States, unsettled.** The RIAA's 2020 §1201 takedown of youtube-dl was reversed by GitHub. Yout v. RIAA was
+  dismissed in 2022; the appeal was argued in February 2024 with no ruling by April 2026. In 2026, claims over the same
+  cipher survived motions to dismiss (Cordova v. Huneault; Sony v. Udio). No ruling yet names PO tokens or the JavaScript
+  challenges yt-dlp-ejs solves.
+- **Terms and stores.** YouTube's terms bar downloading unless expressly authorized. Apple's guideline 5.2.3 bars it on the
+  Mac App Store; Google made Microsoft's 2013 Windows Phone YouTube app drop downloads. No Steam removal found.
+- **Options:** leave it out of the Steam build (recommended); keep yt-dlp for other sites and block YouTube; or keep it
+  with a lawyer's opinion.
 
 ## FFmpeg and video patents
 
-- **Builds:** Gyan "essentials" is GPLv3; BtbN's `gpl` variants are GPLv3 (`--enable-gpl
-  --enable-version3`); Riedl macOS GPLv3, Riedl Linux nonfree (above).
-- **Running ffmpeg as a program is aggregation.** The FSF's FAQ: "pipes, sockets and command-line
-  arguments are communication mechanisms normally used between two separate programs". ghost's GPL
-  duties for FFmpeg are none; they stay with the builders.
-- **Patents are not moved by downloading at runtime.** The exporter encodes H.264 with libx264 and
-  AAC. Patent liability covers inducing infringement (35 U.S.C. §271(b)), and the app that drives the
-  encoder is the natural target. Via LA's AVC license is $0 for 1-100,000 units a year, then $0.20,
-  and $0.10 above 5 million. The last US AVC patents expire December 2026 to January 2028 (one
-  outlier, US 9,356,620, in November 2030); AAC's last baseline patent expires in 2028, extensions
-  in 2031. The HEVC pool moved to Access Advance in December 2025. Low risk and shrinking. Options:
-  sign the free tier, encode with the OS encoders (`h264_mf` on Windows, `h264_videotoolbox` on
-  macOS), or offer AV1/Opus.
+- **Builds:** Gyan "essentials" and BtbN's `gpl` variants are GPLv3; Riedl macOS GPLv3, Riedl Linux nonfree.
+- **Running ffmpeg as a program is aggregation** (the FSF's FAQ: pipes, sockets and command-line arguments are how two
+  separate programs communicate). ghost has no GPL duties for FFmpeg; they stay with the builders.
+- **Patents are not moved by downloading at runtime.** The exporter encodes H.264 (libx264) and AAC; liability covers
+  inducing infringement (35 U.S.C. §271(b)). Via LA's AVC license is $0 for 1-100,000 units a year, then $0.20, and $0.10
+  above 5 million. The last US AVC patents expire December 2026 to January 2028 (one outlier, US 9,356,620, in November
+  2030); AAC's last baseline patent in 2028, extensions in 2031. The HEVC pool moved to Access Advance in December 2025.
+  Low risk and shrinking. Options: sign the free tier, encode with the OS encoders (`h264_mf` on Windows,
+  `h264_videotoolbox` on macOS), or offer AV1/Opus.
 
 ## What ghost fetches, and under what license
 
@@ -206,18 +154,17 @@ ghost never sees credentials; it runs the CLIs the user installed and logged int
 | uv | MIT or Apache-2.0 | |
 | CPython (via `uv python install`) | PSF and bundled permissive libraries | |
 | onnxruntime, numpy, onnx | MIT, BSD-3-Clause, Apache-2.0 | |
-| phonemizer, espeakng-loader (eSpeak-NG) | GPL-3.0 | imported IN-PROCESS by the voice host; fine while ghost is MIT (GPL-compatible) and never ships them; `phonemizer="ghost"` drops both |
-| nltk (+ tagger and stopword data it fetches) | Apache-2.0 | |
+| phonemizer, espeakng-loader (eSpeak-NG) | GPL-3.0 | imported in-process by the voice host; fine while ghost is MIT and never ships them; `phonemizer="ghost"` drops both |
+| nltk (+ data it fetches) | Apache-2.0 | |
 | yt-dlp[default], Deno | Unlicense, MIT (mutagen inside is GPL-2.0+) | the problem is what it does, not its license |
-| mediapipe + its two models | Apache-2.0 | model cards: "Any form of surveillance or identity recognition is explicitly out of scope" - guidance, not terms |
+| mediapipe + its two models | Apache-2.0 | model cards put surveillance or identity recognition out of scope - guidance, not terms |
 | opencv-contrib-python | Apache-2.0 | |
 | playwright + Chromium | Apache-2.0, BSD-style | |
 | Piper voices | per voice, below | |
 
 The AI CLIs (claude, codex, grok, aws) are the user's own installs, not fetched.
 
-**Piper voices, read MODEL_CARD by MODEL_CARD** (repo `rhasspy/piper-voices`, tagged MIT; each
-voice's card governs it):
+**Piper voices, read MODEL_CARD by MODEL_CARD** (repo `rhasspy/piper-voices`, tagged MIT; each voice's card governs it):
 
 | Voice | Dataset | License | Training |
 |---|---|---|---|
@@ -227,60 +174,47 @@ voice's card governs it):
 | en_US-norman-medium | LibriVox | public domain | from scratch |
 | en_US-john-medium | LibriVox | public domain | fine-tuned from kristin |
 
-Excluded on purpose (`hosts/voice/backends/piper.py` header): lessac (Blizzard 2013, research only,
-explicitly no "commercialization, sale or licencing of voice synthesis products") and every voice
-fine-tuned from it (amy, joe, hfc_female, hfc_male, libritts_r); ryan and the hfc pair (CC
-BY-NC-SA); kathleen (fine-tuned from ryan). Adding a voice means reading its card and its whole
-fine-tuning chain.
+Excluded on purpose (`hosts/voice/backends/piper.py` header): lessac (Blizzard 2013, research only, no commercialization)
+and every voice fine-tuned from it (amy, joe, hfc_female, hfc_male, libritts_r); ryan and the hfc pair (CC BY-NC-SA);
+kathleen (fine-tuned from ryan). Adding a voice means reading its card and its whole fine-tuning chain.
 
 ## What a build ships, and the notices it owes
 
-- **Godot** (MIT) and the libraries it bundles - Godot's "Complying with licenses" page lists the
-  ones that need credit.
-- **Fonts:** 11 OFL families - `fonts/hands/` (Caveat, Kalam, Patrick Hand) and `fonts/cards/`
-  (Bungee, Cinzel, Courier Prime, EB Garamond, IM Fell English, Limelight, Uncial Antiqua,
-  UnifrakturMaguntia). OFL is fine in a commercial app; its text must travel with the fonts.
-- **`data/cmudict.dict`:** CMU's BSD-style license - the notice reproduced in the documentation.
+- **Godot** (MIT) and the libraries it bundles - Godot's "Complying with licenses" page lists the ones that need credit.
+- **Fonts:** 11 OFL families in `fonts/hands/` and `fonts/cards/`. OFL is fine in a commercial app; its text must travel
+  with the fonts.
+- **`data/cmudict.dict`:** CMU's BSD-style license - reproduce the notice in the documentation.
 - **`data/libritts_speakers.json`:** derived from LibriTTS-P (LINE), CC BY 4.0 - credit.
-- **The libritts voice:** fetched, not shipped, but credit LibriTTS (Google LLC, CC BY 4.0) in the
-  same place. Whether a model trained on it counts as "sharing" it is unsettled; a credit line costs
-  nothing.
-- **How:** Godot exports skip `.txt`/`.LICENSE` unless included, so the license files beside the
-  fonts and data would silently drop out. Ship a `THIRD_PARTY_NOTICES.txt` beside the binary and an
-  About panel. `docs.py` could generate it from `Deps` and the license files, as it renders the
-  other docs off registries.
+- **The libritts voice:** fetched, not shipped, but credit LibriTTS (Google LLC, CC BY 4.0) in the same place.
+- **How:** Godot exports skip `.txt`/`.LICENSE` unless included, so the license files beside the fonts and data would
+  silently drop out. Ship a `THIRD_PARTY_NOTICES.txt` beside the binary and an About panel; `docs.py` could generate it
+  from `Deps` and the license files.
 
 ## Smaller items
 
-- **The license comments disagree with the code.** `hosts/voice/requirements.txt:11-12` says
-  phonemizer and espeakng-loader are not installed; lines 37-38 install them, and
-  `hosts/voice/backends/piper.py:2084` uses eSpeak by default. `src/platform/deps.gd:177` tells users no
-  GPL Piper code is installed (true only of piper-tts). Fix before anyone audits from the comments.
-- **The name.** Renamed 2026-10-05 to "Ghost Notes: A Spectral Experience": a Steam game is already
-  called Ghost, and the word is unsearchable. Still run a trademark search on the new name before it
-  goes on a store page. `application/config/name` is "Ghost Notes" (2026-10-16) and the user:// folder
-  is named outright (`custom_user_dir_name="godot/app_userdata/ghost"`, where it was while the project
-  was called "ghost"); the export preset should set the product name (Windows `product_name`, the
-  macOS bundle name) explicitly, and a shipped build probably wants a folder of its own there - with
-  a migration from `godot/app_userdata/ghost`.
-- **Everything runs locally** - face and body tracking included - and nothing reaches the
-  developer. Worth keeping true: face-geometry data is what biometric-privacy laws such as
-  Illinois's BIPA regulate.
+- **The license comments disagree with the code.** `hosts/voice/requirements.txt` says in its header that phonemizer and
+  espeakng-loader are not installed, while later lines install them, and `hosts/voice/backends/piper.py` uses eSpeak by
+  default. `src/platform/deps.gd` tells users no GPL Piper code is installed (true only of piper-tts). Fix before anyone
+  audits from the comments.
+- **The name.** The store name is "Ghost Notes: A Spectral Experience" (a Steam game is already called Ghost). Run a
+  trademark search before it goes on a store page. `application/config/name` is "Ghost Notes" and the user:// folder is
+  named outright (`custom_user_dir_name="godot/app_userdata/ghost"`); the export preset should set the product name
+  (Windows `product_name`, macOS bundle name), and a shipped build probably wants a folder of its own, with a migration
+  from `godot/app_userdata/ghost`.
+- **Everything runs locally**, face and body tracking included, and nothing reaches the developer. Keep it true:
+  face-geometry data is what biometric-privacy laws such as Illinois's BIPA regulate.
 
 ## Open questions
 
-- **Valve:** does bring-your-own-account tarot pass review? (**ASK** Steamworks support.)
+- **Valve:** does bring-your-own-account pass review? (**ASK** Steamworks support.)
 - **Lawyer:** the YouTube import, if it stays.
 - **OpenAI:** Codex on a ChatGPT login inside a paid app - the interest form.
-- **xAI:** Grok Build on a grok.com login, spawned headless by an app (added 2026-10-08) - its terms
-  not read yet.
-- **Steam Linux Runtime:** can a Steam-launched ghost see the host's xvfb-run, setpriv and
-  fallocate? A containerized runtime may hide host programs; renders depend on xvfb-run.
+- **xAI:** Grok Build on a grok.com login, spawned headless by an app - terms not read yet.
+- **Steam Linux Runtime:** can a Steam-launched ghost see the host's xvfb-run, setpriv and fallocate? Renders depend on
+  xvfb-run.
 - **macOS:** signing and notarization for a Steam build - not researched.
 
 ## Sources
-
-Checked 2026-10-05.
 
 Steam
 - https://partner.steamgames.com/doc/gettingstarted/contentsurvey

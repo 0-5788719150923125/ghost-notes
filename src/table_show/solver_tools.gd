@@ -1,33 +1,29 @@
 extends RefCounted
 class_name SolverTools
 
-## SolverTools - WORK A COMPUTER CHECKS, for any show whose plan has a problem in it ([method TableEpisode.wants_solve]): the
-## solver keeps a lab NOTEBOOK, checks a Lean file with LEAN, RUNS code, and SUBMITS what it finished. Served as tools
-## ([AgentTools]), as the set dresser's are, so any writer that takes tools works with them - and every call is kept in the
-## job's `tools.jsonl`.
+## SolverTools - work a computer checks, for any show whose plan has a problem in it ([method TableEpisode.wants_solve]): the
+## solver keeps a lab notebook, checks a Lean file with Lean, runs code, and submits what it finished. Served as tools
+## ([AgentTools]) like the set dresser's, so any writer that takes tools works with them; every call is kept in the job's
+## `tools.jsonl` (next/proof.md). Nothing here names a kind of show: a lesson's theorem, a puzzle's answer, an alchemist's yield are
+## each a problem the plan fixes, and the brief says whether its episodes have one.
 ##
-## Proof's solver, at the table since 2026-11-11 (next/proof.md, "Proof became a table show"; the user: "we implement the
-## underlying primitives ... and we allow the agents to select the tools they need dynamically"). Nothing here names a kind of
-## show: a lesson's theorem, a puzzle's answer, an alchemist's yield are each a problem the plan fixes, and the brief says
-## whether its episodes have one.
-##
-## THE WORK SHOWN IS THE WORK DONE: what the solver writes, checks and runs here is the trace the puppeteer writes on a page and
+## The work shown is the work done: what the solver writes, checks and runs here is the trace the puppeteer writes on a page and
 ## the reader teaches from, so nothing on screen claims a check that did not happen.
 ##
-## A CHECK IS LEAN'S OWN ANSWER: `hosts/math/lean_check.py` runs the Lean REPL in ghost's Mathlib workbench ([method
+## A check is Lean's own answer: `hosts/math/lean_check.py` runs the Lean REPL in ghost's Mathlib workbench ([method
 ## Provision.workbench_path]) and answers with Lean's errors, the goals before every tactic, the facts each used, the axioms and
 ## a verdict. VERIFIED means no error, no `sorry`, only Lean's three standard axioms, no forbidden fact (Mathlib's own copy of
-## the theorem, caught through the facts used) and the theorem `main` stated. A check costs 12-40 s with a warm disk
-## (2026-10-15; nearly all of it `import Mathlib`), more the first time after the cache is cold.
+## the theorem, caught through the facts used) and the theorem `main` stated. A check costs 12-40 s with a warm disk (nearly
+## all of it `import Mathlib`), more when the cache is cold.
 ##
-## NOT EVERY CLAIM IS A THEOREM (the user, 2026-10-19: "it should be a general theorem-prover and learning tool"): a claim about
-## a model, a simulation or data is settled by code that RAN. `run` hands Python to `hosts/compute/run.py`, which runs it in a
-## sandbox (bubblewrap: the system read-only, one folder to write in, no network, nothing of the author's; its memory, time and
-## files capped) in the compute environment (numpy, SciPy, SymPy). Each run is kept in the episode's `runs.json` - its code and
-## what it printed - and the series it kept with `keep()` in `data.json`, which a page's drawings plot by name (figure.py).
-## Where there is no sandbox the tool is not offered ([method can_run]), and a problem framed as a computation is not solved.
+## Not every claim is a theorem: a claim about a model, a simulation or data is settled by code that ran. `run` hands Python to
+## `hosts/compute/run.py`, which runs it in a sandbox (bubblewrap: the system read-only, one folder to write in, no network,
+## nothing of the author's; its memory, time and files capped) in the compute environment (numpy, SciPy, SymPy). Each run is kept
+## in the episode's `runs.json` - its code and what it printed - and the series it kept with `keep()` in `data.json`, which a
+## page's drawings plot by name (figure.py). Where there is no sandbox the tool is not offered ([method can_run]), and a problem
+## framed as a computation is not solved.
 ##
-## WHAT IS SUBMITTED depends on the problem's `check` ([method kind_of]): a "proof" is a Lean file, accepted only VERIFIED; a
+## What is submitted depends on the problem's `check` ([method kind_of]): a "proof" is a Lean file, accepted only VERIFIED; a
 ## "computation" is the result in words with the runs that show it, each one that ran to its end.
 
 ## The file a submission is written to, in the job's folder: what the producer lands.
@@ -163,7 +159,7 @@ func _lean(code: String, submitting: bool) -> Dictionary:
 	return {"text": report + "\n\nAccepted. The proof is handed in."}
 
 
-## RUN [param code] in the sandbox (see the class note), one run at a time - the folder is shared. The run is kept in the
+## Run [param code] in the sandbox (see the class note), one run at a time - the folder is shared. The run is kept in the
 ## episode's `runs.json` and what it kept in `data.json`, whatever it did.
 func _run(code: String, seconds: Variant) -> Dictionary:
 	if code.strip_edges().is_empty():
@@ -246,7 +242,7 @@ static func _short(v: float) -> String:
 	return String.num(v, 4) if absf(v) >= 0.001 else "%.3e" % v
 
 
-## THE RESULT of a computation, handed in: the words and the runs that show it, each one that ran to its end ([constant
+## The result of a computation, handed in: the words and the runs that show it, each one that ran to its end ([constant
 ## SUBMITTED]).
 func _submit_result(result: String, cited: Variant) -> Dictionary:
 	if result.strip_edges().is_empty():
@@ -272,7 +268,7 @@ func _submit_result(result: String, cited: Variant) -> Dictionary:
 	return {"text": "Accepted. The result is handed in."}
 
 
-## RUN [param code] in the sandbox ([code]hosts/compute/run.py[/code]), [param work] its folder, [param io_root] where each
+## Run [param code] in the sandbox ([code]hosts/compute/run.py[/code]), [param work] its folder, [param io_root] where each
 ## run's own files go (removed after): the host's answer - `{ok, exit, timed_out, seconds, stdout, stderr, kept, work_mb,
 ## error}` - or `{ok: false, error}` when it could not run (no sandbox, the compute environment missing). Awaits the host.
 static func run_code(code: String, work: String, io_root: String, seconds: float) -> Dictionary:
@@ -310,7 +306,7 @@ static func run_code(code: String, work: String, io_root: String, seconds: float
 	return answer
 
 
-## CHECK [param code] with Lean (see the class note): the host's answer - `{ok, verified, report, messages, tactics, axioms,
+## Check [param code] with Lean (see the class note): the host's answer - `{ok, verified, report, messages, tactics, axioms,
 ## forbidden_used, seconds}` - or `{ok: false, report}` when it could not run (Lean or Mathlib not installed yet, the math
 ## environment missing). Awaits the host.
 static func check(code: String, forbidden: Array, theorem := "main") -> Dictionary:
@@ -350,7 +346,7 @@ static func check(code: String, forbidden: Array, theorem := "main") -> Dictiona
 
 # --- the problem, as a plan fixes it ----------------------------------------------------------------
 
-## THE PROBLEM A PLAN FIXES ([param d], the plan's `problem`), in the shape every later step reads, or `{error}` - `{}` for none
+## The problem a plan fixes ([param d], the plan's `problem`), in the shape every later step reads, or `{error}` - `{}` for none
 ## (a plan with no problem has no solve). Static and pure for the gate.
 ##
 ## Its words, its TeX, how it is checked - `check` "proof" (Lean: a statement that names `main` and stops before its proof, and
@@ -393,7 +389,7 @@ static func land_problem(d: Variant, run := true) -> Dictionary:
 	return out
 
 
-## WHAT THE CHECK CAME TO, in a sentence a viewer reads under the video: Lean's verdict with the versions it was checked in, a
+## What the check came to, in a sentence a viewer reads under the video: Lean's verdict with the versions it was checked in, a
 ## computation that ran, or a check that did not finish - "" with no solve.
 static func check_line(solve: Dictionary, problem: Dictionary) -> String:
 	if bool(solve.get("verified", false)):

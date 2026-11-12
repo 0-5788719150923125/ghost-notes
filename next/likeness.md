@@ -4,16 +4,16 @@ Planned 2026-10-20; **built 2026-10-21** (M1 to M8 in code, M4 and M5 looked at 
 **The second build (2026-10-21, night): a still and a model** - the section right below. The rest of
 this note is the first build, kept for what it found; where the two differ, the second build holds.
 The first build's files are backed up in `dist/likeness_v1/` (they were never committed).
-**The fifth pass (2026-10-24): an audit of the head of splats and the voice** - below the sixth.
-**The sixth pass (2026-10-25): the mouth, the flicker and the edges** - below the seventh.
+**The fifth pass: an audit of the head of splats and the voice** - below the sixth.
+**The sixth pass: the mouth, the flicker and the edges** - below the seventh.
 **The seventh pass (2026-10-25, evening): the needles** - below the eighth.
 **The eighth pass (2026-10-25, night): the soft mouth and the neck, from the literature** - below the next.
 **Three alike videos, and is the approach convoluted? (2026-10-25, late)** - below the next.
 **The ninth pass (2026-10-25, late night): a head that turns, a beard that stays on it** - below the next.
 **The tenth pass (2026-10-25, later): the beard moves as one, the hands at rest are seen** - below the next.
-**A voice alone: the Voice training card (2026-10-26)** - right below.
+**A voice alone: the Voice training card** - right below.
 
-## A voice alone: the Voice training card (2026-10-26)
+## A voice alone: the Voice training card
 
 **NOW KOKORO'S (2026-10-26, later; next/voice_engines.md "Training Kokoro").** The user: "I likely won't use Piper
 models for anything other than testing now, given that Kokoro is so much better-sounding ... our own custom training
@@ -170,7 +170,7 @@ neck and around the beard. If we were going to take some next steps here, what w
   where 8% of its rim is a strong edge. The t-shirt set's left microphone is one piece with the shirt and goes with it.
   Gate: test_actor (`test_front_outlined`).
 
-Drawn by Godot over the take, left to right - as the user saw it, with their own motion, and the beard riding the head:
+Drawn by Godot over the take, left to right - with their own motion, and the beard riding the head:
 `dist/third_d/now_motion_beard.mp4`.
 
 ### What is made again
@@ -406,7 +406,7 @@ mouth opens and closes, and the neck as the head turns.
 **Still open:** the mouth is the head's, as soft as every video's mouths averaged - Fit holds it as the moments
 taught it, since fitted to the still it took the still's closed lips into every opening.
 
-## The sixth pass: the mouth, the flicker and the edges (2026-10-25)
+## The sixth pass: the mouth, the flicker and the edges
 
 **The user, on the head of splats made again after the fifth pass:** "This new attempt is decent, but it still has
 some problems. The mouth shape barely moves. The shape/color of the face and head can be stable for several seconds,
@@ -822,7 +822,7 @@ way to at least allow the body to shift and morph a little bit."
 - **Open:**
   - The head's softness: more splats or steps, and a look of more than 8 numbers for his hair.
   - Judging these by eye: a vision agent shown the bake's previews, as Cards' art director is shown each painting
-    (the user, 2026-10-23: "putting agents into that part of the loop"). PSNR called the held head as good as one
+   . PSNR called the held head as good as one
     set's own, while the collar was a smear.
 
 **The body bends** (`train.second_of`, `splat_head.gdshader`):
@@ -844,7 +844,7 @@ way to at least allow the body to shift and morph a little bit."
 - **Gate:** `actors_check` - moved, the same video with its survey still made; the control is a copy beside a
   file still there, which is a video of its own.
 
-**A video with too few moments of their face is left out** (2026-10-24, the user's first run over all 65 videos):
+**A video with too few moments of their face is left out**:
 - **Two failures:**
   - "Feeding Backyard Ants Boiled Egg Yolk": the audit gave it 131 s of shots, and the close read found no face in
     any moment. Its Head frames failed, and the error stood on the card.
@@ -932,7 +932,7 @@ it looks pretty bad."
 - The plate moving only where seen.
 - A run of any length ending well past its last reset.
 
-## The body as the still holds it (2026-10-23)
+## The body as the still holds it
 
 **What the whole of them learned** (run 2, 40,000 steps, up to 600k splats): the face as good as before, the
 body a dark blob with ragged edges, the sweater's knit gone, the hands two flesh-colored smudges. On held-out
@@ -1003,7 +1003,7 @@ past its reach (in the face and the hair kept; over the chest, far off and off t
 splat there kept), and the still as one more frame (its bones' axes read as columns, against a non-symmetric
 control; tracked and played alike).
 
-## The whole of them (2026-10-23)
+## The whole of them
 
 **The user, on the head of splats:** "an EXTREMELY solid result ... the blurriness doesn't bother me that much
 - because it actually gives the head depth ... It looks like real 3D." And: "the movement is restricted to the
@@ -1046,7 +1046,7 @@ one. Played, they were also pushed by Articulation past the range they were lear
   - **The medium** draws the avatar's room and hides the still's 2D layer, so the head cut-out is gone.
   - **The gate** holds a bone, a hidden bone and a leaning torso to the rules (10 checks).
 
-**Data, asked (the user: "Do we have enough training examples? This actor has hundreds of videos"):**
+**Data, asked:**
 - **More of this shot would add little:** 9,000 frames at 2 a second already sample his range.
 - **More videos add** expressions, mouth shapes and slightly different camera places.
 - **They also add his look's changes** (lighting, hair, beard, glasses, clothes), which pooled naively
@@ -1200,7 +1200,7 @@ glances.
 **To try it:** Renderer → Gaussian on the Actor card, then Generate. Frames takes about 25 minutes on the
 processor for a 75-minute shot, Face rig seconds, Avatar about 25 minutes on the graphics card. Then ▶.
 
-## Their own voice (2026-10-22)
+## Their own voice
 
 **The user, on the fourth pass:** "the model gives off the uncanny valley effect, and I'm doubtful we're
 ever going to get past that with this 2D method ... I would like to know how tough it would be to
@@ -1242,7 +1242,7 @@ to give that a try next."
   Voice lessons setting's epochs (150), bf16, batch 16 - about 25 seconds an epoch, an hour all told.
   The whole run is saved every 5 epochs (and at an epoch's end 10 minutes past the last save) under another
   name and renamed into place, so Stop loses a few minutes and ▶ goes on. AN EPOCH IS AS LONG AS THEIR
-  SPEECH (2026-10-24): all 65 of his videos gave 6,909 sentences, 8.3 hours, about 5 minutes an epoch -
+  SPEECH: all 65 of his videos gave 6,909 sentences, 8.3 hours, about 5 minutes an epoch -
   150 epochs about 12 hours - so each epoch's line says the time to go; that run died of the graphics
   card's memory at epoch 2 (8.3 GB of its own, the card shared with another trainer), and the allocator now
   grows its segments (`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`); other sentences or another base start again from the base. When every epoch is
@@ -1251,8 +1251,7 @@ to give that a try next."
   (`<id>.voice.json`: their name, what it was fine-tuned from), where the
   voice host lists voices trained here beside its allowlist (`TRAINED`), never fetched. It is on every
   note's Voice card as "<name> (their own voice)".
-- **The note it was trained on reads in it as it lands** (2026-10-22, the user after the first run in
-  the app: "When I click on the play button, it's still using the regular Piper voice"). The Voice card
+- **The note it was trained on reads in it as it lands**. The Voice card
   had asked for its voices once, as the note opened, so a voice made in the hours after was never on it.
   Now `ActorBuilder.voice_published` -> `ActorCard._voice_made` -> `ReadingPanel.voice_made`: the voices
   are asked for again, and the reader's tab is set to it (`ReadingCast.voice_made`). A list asked again
@@ -1288,7 +1287,7 @@ errors in the sentences (base.en; small.en's second opinion was stopped with the
 Listening (`dist/voice_train/listen/`): `0_him_heldout.wav` (his own, held out), `1_john_base.wav` and
 `2_his_voice_epoch120.wav` (the same passage, the base and his voice).
 
-## The fourth pass: a body, modeled (2026-10-22)
+## The fourth pass: a body, modeled
 
 **The user on the third pass:** "This is kind of working, but the actor's body is completely rigid, and
 it is just rocking around constantly. The hands remain in this strange open-palm gesture. The problem is
@@ -1373,7 +1372,7 @@ mount's thin rods move a little with him. The stills step takes about 13 minutes
 machine loaded (12 stills, 150 frames). **Not yet seen by the user;** At rest has not been asked of a
 writer on his sheet (the gate lands made answers).
 
-## The third pass: the whole of them (2026-10-22)
+## The third pass: the whole of them
 
 **The user on the second build:** "not a terrible attempt ... it FEELS like we might be onto something
 that could become quite decent." What is wrong: NOTHING else moves - "the body doesn't shift at all, the
@@ -1413,7 +1412,7 @@ of ensemble method."; and whether any Gaussian splatting is in it (none).
    voice's phones round a moment to their mouth's shape there, trained on every survey look against
    its transcript.
 
-**Built (2026-10-22):**
+**Built:**
 - **The room and the matte** (`stills`): each still's matte from MediaPipe's segmentation (COPIED: its
   mask is a view of a buffer the next frame overwrites - every still had kept the last frame's), less
   what stands before them - pixels whose texture matches the still's in 60% of the set's frames (the
@@ -1472,7 +1471,7 @@ of ensemble method."; and whether any Gaussian splatting is in it (none).
   a measure of his mouth his beard does not hide; or the capture session - a short scripted reading,
   his mouth lit and seen.
 
-## Status of the first build (2026-10-21)
+## Status of the first build
 
 **Built:**
 - `src/likeness/` (a row in docs.py's `FOLDERS`, after `proof/`): `Actors` (the library),
@@ -1639,7 +1638,7 @@ footage. It is not generative: every pixel of him is a real pixel from his video
 - **A splat avatar** (gsplat, FLAME, MHR, SAM 3D Body, Audio2Face): "an exercise in dependency
   hell".
 
-**The user's direction (2026-10-20):**
+**The user's direction:**
 - "just re-implementing the thing is easier and faster and more reliable".
 - Keep MediaPipe.
 - "A full-screen shader".
@@ -1721,8 +1720,7 @@ and a card that presents.
 - the sources: folders, links, and the videos found in each, each ticked or not;
 - the chosen set.
 
-**No consent rule in the app** (removed 2026-10-22, the user: "trivial to circumvent, so not worth
-keeping ... That is what the legal system and platform terms of service are for"): an upload neither asks
+**No consent rule in the app** (removed: trivial to circumvent, and the platform terms cover it): an upload neither asks
 for a license on file nor refuses one; "Consent and disclosure" below is the advice it was built from.
 
 ### The Actor card (component `actor`): makes and manages
@@ -1781,7 +1779,7 @@ The card, top to bottom:
 ### The Actor puts them on the stage (component `actor`, medium `likeness`)
 
 **One component since 2026-10-22.** It had been two: an Actor that built and a Likeness that played. The
-Likeness card lost its Generate (the user's first test: "why there are two Generate stages"), then its
+Likeness card lost its Generate, then its
 Performance (2026-10-22: "Do we really need this card with just one option?"), and was left a bare title
 bar. The user took it off with its × "because it was doing no work, except for existing" - and the
 video went with it. Then: "If we're doing all that pipeline work with Actor... then the implication is
@@ -1794,8 +1792,7 @@ we want to use that actor in the scene." So the Actor card does what the Likenes
 - **The performance is the note's:** the seed of which pieces of their motion play, when they blink and
   glance and when their posture shifts is drawn from the note's own file (`ActorCard.performance`), so
   a note always plays the same way and an export is what was watched.
-- **The intro and outro fade them** (2026-10-22, the user: "The fade-in/fade-out from the 'intro &
-  outro' component does not appear to work here"). Measured live with 9 s holds: they rose from black
+- **The intro and outro fade them**. Measured live with 9 s holds: they rose from black
   in the intro's first second and sat lit through the other eight. Now they rise across the whole intro
   (`ShowFeed.lead` - the take's own lead-in in a render, else the note's intro hold), arriving as the
   first word is said, as every picture does (`Director._bookend_fade`). They go down a beat after the
@@ -2176,7 +2173,7 @@ All are on the card's Advanced fold, so "Go!" needs no answers.
 - **Small deviations:** gaze and brows.
 - **A webcam performer** through the same MediaPipe.
 - **The step up, if the warp's range is too small:** a splat avatar. Its research is in git
-  (2026-10-20).
+ .
 
 ## Consent and disclosure
 

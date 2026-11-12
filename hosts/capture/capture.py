@@ -17,9 +17,9 @@ import re
 
 from playwright.sync_api import sync_playwright
 
-# THE POP-UPS A FIRST VISIT GETS - cookie consent, newsletter, "open in app" - answered the way a
-# person would, most private answer first: a site's own button takes its own backdrop and scroll
-# lock with it, which removing elements by force does not always manage.
+# The pop-ups a first visit gets - cookie consent, newsletter, "open in app" - answered the way a person
+# would, most private answer first: a site's own button takes its own backdrop and scroll lock with it, which
+# removing elements by force does not always manage.
 DECLINE = re.compile(
     r"^\s*(accept (only )?(necessary|essential|required)( cookies)?( only)?|"
     r"(only|use) (necessary|essential|required)( cookies)?( only)?|"

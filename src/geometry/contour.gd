@@ -1,59 +1,31 @@
 extends RefCounted
 class_name Contour
 
-## Contour - isolines out of a sampled field, and the vocabulary a technical sheet is
-## annotated with.
+## Contour - isolines out of a sampled field, and the vocabulary a technical sheet is annotated with.
 ##
-## Two halves that belong in one file because they only ever appear together. The first
-## is MARCHING SQUARES: given a grid of scalars it returns, per level, an ordered list of
-## polylines - not a soup of loose segments, which is the difference between something a
-## pen can draw and something only a scatter plot can. The second is the ANNOTATION
-## VOCABULARY - graticule ticks, a survey cross, a leader line with an elbow, a scale
-## bar - because a contour plot is not a map. What makes a sheet read as a printed survey
-## is the paperwork around the lines, and every one of those marks is a handful of
-## strokes that a later cross-section or plan view wants in exactly the same form.
+## Two halves that appear together. Marching squares: given a grid of scalars it returns, per level, an ordered list of polylines
+## (a pen can draw them; a soup of loose segments it cannot). The annotation vocabulary: graticule ticks, a survey cross, a
+## leader line with an elbow, a scale bar - the paperwork that makes a sheet read as a printed survey.
 ##
-## ONE PASS OVER THE GRID, ALL LEVELS AT ONCE. The naive loop is level-major: for each of
-## sixteen levels, walk every cell. That is sixteen full passes and, at a 144x81 grid,
-## 186k cell visits to find the two or three levels that actually cross each cell. Here
-## the cell is visited once, its four corners give a min and a max, and because the
-## interval is FIXED the crossing levels are an arithmetic range - `floor((min-lo)/step)+1`
-## through `floor((max-lo)/step)` - so only the levels genuinely present are tested. A
-## smooth field puts one to three levels in a cell, which is an order of magnitude less
-## work and is what lets the extraction sit inside a single worker job.
+## One pass over the grid, all levels at once: each cell is visited once, its four corners give a min and a max, and because the
+## interval is fixed the crossing levels are an arithmetic range (`floor((min-lo)/step)+1` through `floor((max-lo)/step)`), so
+## only levels present are tested.
 ##
-## STITCHING WITHOUT FLOAT KEYS. Segments are joined by EDGE IDENTITY, never by comparing
-## endpoint coordinates: a crossing lies on a named grid edge (horizontal or vertical,
-## indexed by the cell it starts at), so the join key is an integer and two cells sharing
-## an edge agree on it exactly. The alternative - quantizing floats to a hash - fails at
-## exactly the shallow gradients where a crossing sits arbitrarily close to a corner, and
-## a contour that silently breaks into two polylines there is a contour that cannot be
-## dashed, labeled or drawn with a consistent pen. Every segment is also emitted with
-## the high ground on the same side, so each interior crossing is the END of exactly one
-## segment and the START of exactly one other, and the walk is a lookup rather than a
-## search.
+## Stitching without float keys: segments are joined by edge identity, not by comparing endpoint coordinates. A crossing lies on
+## a named grid edge (horizontal or vertical, indexed by the cell it starts at), so the join key is an integer and two cells
+## sharing an edge agree on it exactly. Every segment is emitted with the high ground on the same side, so each interior
+## crossing is the end of exactly one segment and the start of exactly one other, and the walk is a lookup.
 ##
-## SMOOTHING IS NOT COSMETIC HERE. Marching squares on a grid whose cells are a dozen
-## pixels across produces a visibly faceted line, and a faceted contour reads as a
-## computer graphic rather than as ink. Two rounds of Chaikin corner cutting turn it into
-## a curve for the cost of one linear pass, and a following simplify pass gives the
-## points back by dropping everything that has become collinear. That pair is why a grid
-## coarse enough to sample in a few tens of milliseconds still draws like a pen.
+## Smoothing: two rounds of Chaikin corner cutting turn the faceted marching-squares line into a curve in one linear pass, and a
+## following simplify pass drops what became collinear.
 
-## The marching-squares case table, four entries per case: the two edges the first
-## segment runs between, then the two of a second segment (-1 for none). Edges are
-## numbered 0 top, 1 right, 2 bottom, 3 left, and every pair is directed so that the
-## HIGH ground lies on the same side of the direction of travel - which is the property
-## the stitch pass depends on, because it makes each interior crossing the end of exactly
-## one segment and the start of exactly one other.
+## The marching-squares case table, four entries per case: the two edges the first segment runs between, then the two of a
+## second segment (-1 for none). Edges are numbered 0 top, 1 right, 2 bottom, 3 left, and every pair is directed so the high
+## ground lies on the same side of the direction of travel, which the stitch pass depends on.
 ##
-## The single-corner cases are the whole table and everything else follows from them: two
-## adjacent corners are the union of two of them with the shared edge canceled, three
-## corners are the complement of one reversed, and the two DIAGONAL cases are ambiguous -
-## the contour either wraps the two high corners separately or joins them through the
-## middle. Rows 16 and 17 are those saddles resolved the other way, chosen at runtime on
-## the cell's own center value; a table with only one reading of a saddle produces
-## isolines that cross each other, which no amount of smoothing will hide.
+## The single-corner cases are the whole table: two adjacent corners are the union of two of them with the shared edge canceled,
+## three corners the complement of one reversed. The two diagonal cases are saddles; rows 16 and 17 are the saddles resolved the
+## other way, chosen at runtime on the cell's own center value (one reading only would make isolines cross each other).
 const CASES := [
 	-1, -1, -1, -1,     # 0  nothing above
 	3, 0, -1, -1,       # 1  corner 0
@@ -75,9 +47,8 @@ const CASES := [
 	0, 3, 2, 1,         # 17 saddle 1+3, center high
 ]
 
-## Working buffers for one extraction, one segment per slot: the two edge ids it joins,
-## its level, and its two endpoints. They are members rather than locals because the
-## stitch walk reads them from a helper, and members keep that to a plain indexed read.
+## Working buffers for one extraction, one segment per slot: the two edge ids it joins, its level, and its two endpoints. Members
+## so the stitch walk reads them from a helper as plain indexed reads.
 var _sa := PackedInt32Array()
 var _sb := PackedInt32Array()
 var _sk := PackedInt32Array()
@@ -87,11 +58,9 @@ var _bx := PackedFloat32Array()
 var _by := PackedFloat32Array()
 
 
-## Extract every level from a grid of [param nx] x [param ny] samples. Level k is
-## `lo + k * step`. Returns an Array of [param count] entries, each an Array of
-## [PackedVector2Array] polylines in GRID coordinates (x in 0..nx-1, y in 0..ny-1); a
-## closed loop repeats its first point at the end, which is how [method smooth] tells
-## the two apart.
+## Extract every level from a grid of [param nx] x [param ny] samples. Level k is `lo + k * step`. Returns an Array of
+## [param count] entries, each an Array of [PackedVector2Array] polylines in grid coordinates (x in 0..nx-1, y in 0..ny-1); a
+## closed loop repeats its first point at the end, which is how [method smooth] tells the two apart.
 func extract(h: PackedFloat32Array, nx: int, ny: int,
 		lo: float, step: float, count: int) -> Array:
 	var out: Array = []
@@ -108,8 +77,7 @@ func extract(h: PackedFloat32Array, nx: int, ny: int,
 	_bx.clear()
 	_by.clear()
 
-	# The four edge crossings of the current cell, hoisted out of both loops: a fresh
-	# local packed array per cell would be tens of thousands of allocations a pass.
+	# The four edge crossings of the current cell, hoisted out of both loops to avoid an allocation per cell.
 	var ex := PackedFloat32Array()
 	ex.resize(4)
 	var ey := PackedFloat32Array()
@@ -128,7 +96,7 @@ func extract(h: PackedFloat32Array, nx: int, ny: int,
 			var v3 := h[r1 + x]              # corner 3: (x, y+1)
 			var cmin := minf(minf(v0, v1), minf(v2, v3))
 			var cmax := maxf(maxf(v0, v1), maxf(v2, v3))
-			# The levels this cell can possibly carry, straight out of the fixed interval.
+			# The levels this cell can carry, straight out of the fixed interval.
 			var k0 := int(floor((cmin - lo) / step)) + 1
 			var k1 := int(floor((cmax - lo) / step))
 			if k0 < 0:
@@ -138,8 +106,7 @@ func extract(h: PackedFloat32Array, nx: int, ny: int,
 			if k1 < k0:
 				continue
 			var fx := float(x)
-			# Edge ids. A horizontal edge is keyed by the cell it starts in, a vertical
-			# edge likewise, and the two cells either side of an edge derive the same id.
+			# Edge ids: a horizontal or vertical edge is keyed by the cell it starts in, so the two cells either side derive the same id.
 			eid[0] = (r0 + x) * 2                # top,    between corners 0 and 1
 			eid[1] = (r0 + x + 1) * 2 + 1        # right,  between corners 1 and 2
 			eid[2] = (r1 + x) * 2                # bottom, between corners 3 and 2
@@ -169,8 +136,7 @@ func extract(h: PackedFloat32Array, nx: int, ny: int,
 				d = v3 - v0
 				ex[3] = fx
 				ey[3] = fy + (0.5 if absf(d) < 1e-9 else clampf((lv - v0) / d, 0.0, 1.0))
-				# A saddle takes its alternative reading (rows 16/17) when the cell's own
-				# center stands above the level.
+				# A saddle takes its alternative reading (rows 16/17) when the cell's own center stands above the level.
 				var ci := c
 				if c == 5 or c == 10:
 					if (v0 + v1 + v2 + v3) * 0.25 >= lv:
@@ -192,9 +158,7 @@ func extract(h: PackedFloat32Array, nx: int, ny: int,
 	var total := _sk.size()
 	if total == 0:
 		return out
-	# Bucket the segments by level with a counting sort - one pass to count, one to
-	# place. Appending into a per-level packed array instead would copy that array on
-	# every append, since a packed array read out of an Array is a value.
+	# Bucket the segments by level with a counting sort (appending into a per-level packed array would copy it each time).
 	var counts := PackedInt32Array()
 	counts.resize(count)
 	counts.fill(0)
@@ -228,16 +192,13 @@ func extract(h: PackedFloat32Array, nx: int, ny: int,
 			end_of[_sb[s]] = s
 		var used := {}
 		var polys: Array = []
-		# Open chains first: a segment whose start is nobody's end is a line that runs
-		# off the edge of the grid, and it must be walked from that end or it would be
-		# picked up mid-way and drawn as two pieces.
+		# Open chains first: a segment whose start is nobody's end runs off the grid, and must be walked from that end.
 		for j in range(b0, b1):
 			var s2 := order[j]
 			if used.has(s2) or end_of.has(_sa[s2]):
 				continue
 			polys.append(_chain(s2, start_of, used))
-		# Whatever is left is a closed loop, and closes itself: the walk ends on the
-		# segment that leads back to where it started, whose far endpoint IS that start.
+		# Whatever is left is a closed loop: the walk ends on the segment whose far endpoint is the start.
 		for j in range(b0, b1):
 			var s3 := order[j]
 			if used.has(s3):
@@ -265,9 +226,8 @@ func _chain(s0: int, start_of: Dictionary, used: Dictionary) -> PackedVector2Arr
 	return pl
 
 
-## Chaikin corner cutting, [param iters] rounds. Closed polylines (first point equal to
-## last) stay closed; open ones keep both endpoints pinned, so a line that runs off the
-## sheet still meets the edge it left through.
+## Chaikin corner cutting, [param iters] rounds. Closed polylines (first point equal to last) stay closed; open ones keep both
+## endpoints pinned, so a line that runs off the sheet still meets the edge it left through.
 static func smooth(lines: Array, iters: int) -> Array:
 	var cur := lines
 	for _r in maxi(0, iters):
@@ -297,9 +257,8 @@ static func smooth(lines: Array, iters: int) -> Array:
 	return cur
 
 
-## Drop points that lie within [param eps] of the chord their neighbors span. Run after
-## [method smooth]: cutting corners leaves long straight runs finely subdivided, and this
-## hands those points back before anything has to draw them.
+## Drop points that lie within [param eps] of the chord their neighbors span. Run after [method smooth], which leaves long
+## straight runs finely subdivided.
 static func simplify(lines: Array, eps: float) -> Array:
 	if eps <= 0.0:
 		return lines
@@ -333,9 +292,8 @@ static func simplify(lines: Array, eps: float) -> Array:
 	return out
 
 
-## Draw polylines in grid coordinates onto [param tb], mapping grid to screen by
-## `org + g * cell`. [param soft] carries [TriBatch]'s feather - on for a line that is
-## the picture, off for bulk ruling where three quads per segment is not affordable.
+## Draw polylines in grid coordinates onto [param tb], mapping grid to screen by `org + g * cell`. [param soft] carries
+## [TriBatch]'s feather: on for a line that is the picture, off for bulk ruling.
 static func stroke(tb: TriBatch, lines: Array, col: Color, width: float,
 		org: Vector2, cell: Vector2, soft := true) -> void:
 	for pl in lines:
@@ -350,13 +308,9 @@ static func stroke(tb: TriBatch, lines: Array, col: Color, width: float,
 			a = b
 
 
-## Fill everything below [param level] - the water body, or any sub-level plate.
-##
-## Per cell, the region below the level is the cell polygon clipped by the same crossing
-## points marching squares already knows how to find, so the shoreline follows the
-## contour exactly rather than stepping cell by cell. The one case that needs care is the
-## saddle, where the two below-corners are diagonal: walking the boundary there produces
-## a bowtie, so it is emitted as the two separate triangles it actually is.
+## Fill everything below [param level] (the water body, or any sub-level plate). Per cell, the region below the level is the
+## cell polygon clipped by the marching-squares crossing points, so the shoreline follows the contour exactly. At a saddle the
+## two below-corners are diagonal and are emitted as two separate triangles (walking the boundary would make a bowtie).
 static func fill_below(tb: TriBatch, h: PackedFloat32Array, nx: int, ny: int,
 		level: float, col: Color, org: Vector2, cell: Vector2) -> void:
 	if nx < 2 or ny < 2 or h.size() < nx * ny:
@@ -391,8 +345,7 @@ static func fill_below(tb: TriBatch, h: PackedFloat32Array, nx: int, ny: int,
 			var e2 := c3.lerp(c2, _cut(v3, v2, level))
 			var e3 := c0.lerp(c3, _cut(v0, v3, level))
 			if below == 2 and b0 == b2 and b1 == b3:
-				# Saddle: two opposite corners under water, connected only through the
-				# cell's middle, which this resolution deliberately does not join.
+				# Saddle: two opposite corners under water, connected only through the cell's middle, which is deliberately not joined.
 				if b0:
 					tb.tri(e3, c0, e0, col)
 					tb.tri(e1, c2, e2, col)
@@ -427,23 +380,14 @@ static func _cut(a: float, b: float, level: float) -> float:
 	return clampf((level - a) / d, 0.0, 1.0)
 
 
-## Fine diagonal ruling clipped to the band `[band_lo, band_hi)` of the same grid - the
-## hatched band between two index contours.
+## Fine diagonal ruling clipped to the band `[band_lo, band_hi)` of the same grid: the hatched band between two index contours.
 ##
-## Hatching by clipping each ruled line against a polygon would mean building the band's
-## polygon first; marching along the line and reading the grid gives the same picture for
-## far less machinery. The march is coarse (about half a cell, which is a few pixels) and
-## every run END is then refined by three bisections, so the band's edges land on the
-## contour instead of on the march grid - the ragged alternative is the one thing that
-## would immediately read as sampled rather than drawn.
+## The march along each ruled line is coarse (about half a cell) and every run end is refined by three bisections, so the
+## band's edges land on the contour instead of the march grid.
 ##
-## [param land] is where the grid's own origin sits in the LAND, in cells, and it is what
-## makes the ruling belong to the ground rather than to the sheet. The pattern is defined
-## on the land - line k is where `p_land . nrm = k * spacing` - so a window that has moved
-## across the country re-rules exactly the same lines over exactly the same ground. Anchored
-## to the grid instead (`land` left at zero), every re-extraction after a move re-lays the
-## whole pattern at a different phase, and the entire hatched band appears to slide sideways
-## under a map that did not move. Pass zero only for a window that never moves.
+## [param land] is where the grid's own origin sits in the land, in cells, and makes the ruling belong to the ground: line k is
+## where `p_land . nrm = k * spacing`, so a window that has moved re-rules the same lines over the same ground. With `land` left
+## at zero the pattern is anchored to the grid and slides under a moving map; pass zero only for a window that never moves.
 static func hatch(tb: TriBatch, h: PackedFloat32Array, nx: int, ny: int,
 		band_lo: float, band_hi: float, angle: float, spacing: float, march: float,
 		col: Color, width: float, org: Vector2, cell: Vector2,
@@ -467,10 +411,8 @@ static func hatch(tb: TriBatch, h: PackedFloat32Array, nx: int, ny: int,
 		dmax = maxf(dmax, dv)
 		tmin = minf(tmin, tv)
 		tmax = maxf(tmax, tv)
-	# Anchor the ruling to the LAND rather than to dmin, so the pattern neither crawls
-	# sideways as the band moves nor re-phases when the sampling window does: line k lies
-	# where `(p + land) . nrm = k * spacing`, which in grid coordinates is
-	# `p . nrm = k * spacing - phase`.
+	# Anchor the ruling to the land rather than to dmin: line k lies where `(p + land) . nrm = k * spacing`, which in grid
+	# coordinates is `p . nrm = k * spacing - phase`.
 	var phase := land.dot(nrm)
 	var k0 := int(ceil((dmin + phase) / spacing))
 	var k1 := int(floor((dmax + phase) / spacing))
@@ -511,9 +453,8 @@ static func hatch(tb: TriBatch, h: PackedFloat32Array, nx: int, ny: int,
 			_rule(tb, base + d * run, base + d * t1, col, width, org, cell)
 
 
-# Bisect between a t that is OUTSIDE the band and one that is inside, returning the
-# crossing. Three rounds takes a half-cell march down to about a sixteenth of a cell,
-# which at these grids is inside a pixel.
+# Bisect between a t that is outside the band and one that is inside, returning the crossing. Three rounds take a half-cell
+# march to about a sixteenth of a cell.
 static func _refine(h: PackedFloat32Array, nx: int, ny: int, base: Vector2, d: Vector2,
 		t_out: float, t_in: float, band_lo: float, band_hi: float) -> float:
 	var a := t_out
@@ -530,8 +471,7 @@ static func _refine(h: PackedFloat32Array, nx: int, ny: int, base: Vector2, d: V
 
 static func _rule(tb: TriBatch, a: Vector2, b: Vector2, col: Color, width: float,
 		org: Vector2, cell: Vector2) -> void:
-	# Hatching is the most numerous mark on the sheet and a printed rule is crisp, so it
-	# goes down hard-edged: one quad a stroke instead of [TriBatch]'s three.
+	# Hatching is the most numerous mark and a printed rule is crisp, so it goes down hard-edged: one quad a stroke instead of [TriBatch]'s three.
 	tb.line(org + Vector2(a.x * cell.x, a.y * cell.y),
 		org + Vector2(b.x * cell.x, b.y * cell.y), col, width, false)
 
@@ -553,9 +493,8 @@ static func _samp(h: PackedFloat32Array, nx: int, ny: int, p: Vector2) -> float:
 # space, and every one of them is a mark a draughtsman would recognize by name.
 # ---------------------------------------------------------------------------------
 
-## A run of graticule ticks along the neatline from [param a] to [param b], each growing
-## along [param inward]. Every [param every]-th tick is a long one, which is what gives a
-## margin a countable rhythm instead of a comb.
+## A run of graticule ticks along the neatline from [param a] to [param b], each growing along [param inward]. Every [param
+## every]-th tick is a long one.
 static func graticule(tb: TriBatch, a: Vector2, b: Vector2, inward: Vector2, divs: int,
 		minor: float, major: float, every: int, col: Color, w: float) -> void:
 	if divs < 1:
@@ -566,9 +505,7 @@ static func graticule(tb: TriBatch, a: Vector2, b: Vector2, inward: Vector2, div
 		tb.line(p, p + inward * (major if (i % ev) == 0 else minor), col, w, true)
 
 
-## A survey cross: four strokes leaving a clean gap at the center. The gap is the whole
-## mark - a plus sign points at a place, a cross with a void in it points at a POINT, and
-## that is the difference between a decoration and a station.
+## A survey cross: four strokes leaving a clean gap at the center (the gap marks a point rather than a place).
 static func cross(tb: TriBatch, p: Vector2, r: float, gap: float,
 		col: Color, w: float) -> void:
 	var g := minf(gap, r * 0.7)
@@ -578,8 +515,8 @@ static func cross(tb: TriBatch, p: Vector2, r: float, gap: float,
 	tb.line(p + Vector2(0.0, g), p + Vector2(0.0, r), col, w, true)
 
 
-## A leader line: a diagonal away from the station, then a horizontal shelf for the label
-## to sit on. Returns the far end of the shelf - the label's anchor.
+## A leader line: a diagonal away from the station, then a horizontal shelf for the label. Returns the far end of the shelf, the
+## label's anchor.
 static func leader(tb: TriBatch, p: Vector2, dir: Vector2, run: float, shelf: float,
 		col: Color, w: float) -> Vector2:
 	var knee := p + dir.normalized() * run
@@ -590,9 +527,8 @@ static func leader(tb: TriBatch, p: Vector2, dir: Vector2, run: float, shelf: fl
 	return end
 
 
-## A scale bar: alternating filled and open cells on a baseline, with a tick at every
-## division. [param paper] is the ground color, painted into the open cells so the bar
-## stays legible over hatching or water.
+## A scale bar: alternating filled and open cells on a baseline, with a tick at every division. [param paper] is the ground
+## color, painted into the open cells so the bar stays legible over hatching or water.
 static func scale_bar(tb: TriBatch, org: Vector2, length: float, cells: int, h: float,
 		ink: Color, paper: Color, w: float) -> void:
 	var n := maxi(1, cells)

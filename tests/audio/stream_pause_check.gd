@@ -1,12 +1,12 @@
 extends Node
 
-## stream_pause_check - A READING SOUGHT TO WHILE PAUSED STAYS PAUSED ([method Spectrum.begin_stream], [method
-## ReadingStream.seek_now]; next/editing.md step 3).
+## stream_pause_check - a reading sought to while paused stays paused ([method Spectrum.begin_stream], [method
+## ReadingStream.seek_now]; next/editing.md).
 ##
 ##   tests/run_boot_probe.sh tests/audio/stream_pause_check.gd 60
 ##
-## A seek restarts the stream from the sentence sought: begun while the session is paused, the new stream is held - and THE
-## CONTROL, begun while playing, plays.
+## A seek restarts the stream from the sentence sought: begun while the session is paused, the new stream is
+## held; control: begun while playing, it plays.
 
 var _fails := 0
 

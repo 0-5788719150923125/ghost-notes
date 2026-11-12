@@ -1,25 +1,22 @@
 extends Control
 class_name NoteEditor
 
-## NoteEditor - a note opened as a notes app opens one (2026-10-31, the user: "a new note with no components
-## automatically gets the 'title' and 'content' fields, akin to how Google [Keep] does it. Once we've opened a
-## note, and we're editing those fields, we should expand description to fit the content - breaking from the
-## strictly square aspect ratio of the note"): its [NoteTile] grown into a card over the grid, its Title and
-## its words both written in place - no Edit, no window.
+## NoteEditor - a note opened as a notes app opens one: its [NoteTile] grown into a card over the grid,
+## its Title and its words both written in place - no Edit, no window.
 ##
-## THE CARD GROWS WITH THE WORDS: as tall as they are, from a few lines up to the screen's height, and past
-## that its words scroll ([method _fit]). On a phone it is the whole screen ([member whole]), its bar at the top
-## where the keyboard never covers it.
+## The card grows with the words: as tall as they are, from a few lines up to the screen's height, and
+## past that its words scroll ([method _fit]). On a phone it is the whole screen ([member whole]), its
+## bar at the top where the keyboard never covers it.
 ##
-## WHO OPENS IT: on the desktop, New and a note with nothing attached ([NotesList]) - a note that is more than
-## its words opens on its own panel, where the Body card shows its first lines and Edit; the card's
+## Who opens it: on the desktop, New and a note with nothing attached ([NotesList]) - a note that is more
+## than its words opens on its own panel, where the Body card shows its first lines and Edit; the card's
 ## [Icons] "open" takes a note there, where "+" attaches what it becomes. On a phone, every note ([PhoneShell]).
 ##
-## WRITTEN AS IT IS TYPED, on a quiet period ([constant SAVE_MS]) and as it closes: the words through [method
-## FrontMatter.write_body], which keeps every byte of the frontmatter, and the title through [method
-## NoteStore.retitle] - so a note named after its title is renamed with it ([signal moved]). A NEW NOTE'S TITLE
-## BOX STARTS EMPTY, its "Untitled" kept until something is written there; and a new note closed with nothing
-## written in it is gone ([method NoteStore.discard_if_empty]), as Keep lets an empty one go.
+## Written as it is typed, on a quiet period ([constant SAVE_MS]) and as it closes: the words through
+## [method FrontMatter.write_body], which keeps every byte of the frontmatter, and the title through
+## [method NoteStore.retitle], so a note named after its title is renamed with it ([signal moved]). A new
+## note's title box starts empty, its "Untitled" kept until something is written there; a new note closed
+## with nothing written in it is gone ([method NoteStore.discard_if_empty]).
 ##
 ## Escape, a click beside the card or Close closes it; Enter in the title goes on to the words.
 
@@ -172,7 +169,7 @@ func _build() -> void:
 	_style()
 
 
-## OPEN [param p] IN THE CARD - what another note waited to write, written first. [param fresh]: a note New
+## Open [param p] in the card - what another note waited to write, written first. [param fresh]: a note New
 ## made a moment ago (its title box empty, and gone again if it is closed empty).
 func open(p: String, fresh := false) -> void:
 	if visible and not path.is_empty() and path != p:
@@ -202,7 +199,7 @@ func open(p: String, fresh := false) -> void:
 		title_edit.grab_focus.call_deferred()
 
 
-## WRITE WHAT WAITS: the words, keeping the frontmatter byte for byte, and the title ([method NoteStore.retitle] -
+## Write what waits: the words, keeping the frontmatter byte for byte, and the title ([method NoteStore.retitle] -
 ## the file renamed with it when its name follows it).
 func save() -> void:
 	if path.is_empty() or _dirty_ms < 0:
@@ -224,7 +221,7 @@ func save() -> void:
 				moved.emit(was, path)
 
 
-## CLOSE IT, what waits written: the grid shows the note as it is now ([signal closed]).
+## Close it, what waits written: the grid shows the note as it is now ([signal closed]).
 func close() -> void:
 	if not visible:
 		return
@@ -245,7 +242,7 @@ func drop() -> void:
 	visible = false
 
 
-## THE CARD GROWS WITH ITS WORDS: as many lines as they wrap to, at least [constant LEAST_LINES], and never past
+## The card grows with its words: as many lines as they wrap to, at least [constant LEAST_LINES], and never past
 ## the screen - there the words scroll inside it. On a phone it fills the screen.
 func _fit() -> void:
 	if size.x <= 0.0:

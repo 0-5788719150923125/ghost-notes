@@ -1,42 +1,36 @@
 extends RefCounted
 class_name TablePrompts
 
-## TablePrompts - what each agent behind a card episode is told. Pure: strings in, strings out,
-## so a gate can hold every prompt to the rules (see tests/table_show/cards_check.gd). THE WORDS ARE IN
-## rules/table/ (producer, designer, set_dresser, reader, painter, show - read by [Rules]); here is
-## what decides which of them apply and what fills them in: who knows what, when, and how much of
+## TablePrompts - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to
+## the rules (see tests/table_show/cards_check.gd). The words are in rules/table/ (producer, designer, set_dresser, reader, painter,
+## show - read by [Rules]); here is what decides which of them apply and what fills them in: who knows what, when, and how much of
 ## what the show has already made.
 ##
-## THE RECIPE IS HERE; THE SHOW IS THE BRIEF. Here is how a show of cards at a table is made, the same
-## for every show: who knows what when, what a spoken line may contain, what the painter must leave off
-## a card. What THIS show is - its kind of cards, its premise, its humor, its rules, its catchphrases -
-## is the brief, the body of the show's document, handed to every writer verbatim; the producer names
-## the deck's `kind` from it, which is how the painter, who never reads the brief, learns it. Nothing
-## here knows tarot (the user, 2026-10-08: "for anything else that tarot might need - declare it in the
-## markdown files"): a tarot show is a brief that says it is one, and lists its 78.
+## The recipe is here; the show is the brief. Here is how a show of cards at a table is made, the same for every show: who knows
+## what when, what a spoken line may contain, what the painter must leave off a card. What this show is - its kind of cards, its
+## premise, its humor, its rules, its catchphrases - is the brief, the body of the show's document, handed to every writer
+## verbatim; the producer names the deck's `kind` from it, which is how the painter, who never reads the brief, learns it. Nothing
+## here knows tarot: a tarot show is a brief that says it is one, and lists its 78.
 ##
-## FIVE ROLES, and each is told only what its job needs:
+## Five roles, each told only what its job needs:
 ##
-##   producer - plans the episode BEFORE the shuffle: its title and angle, the spread, and a
+##   producer - plans the episode before the shuffle: its title and angle, the spread, and a
 ##              whole deck's look. It knows no card, because no card has been drawn.
 ##   designer - the deck's creator, once per drawn card: that card's illustration and its entry in
 ##              the deck's little booklet. One card per run - it never learns what else was drawn.
-##   reader   - the voice of the video, ONE PASSAGE AT A TIME, in drawing order: each run is shown
+##   reader   - the voice of the video, one passage at a time, in drawing order: each run is shown
 ##              the reading so far and the cards turned over so far, and nothing else. The next
-##              card does not exist anywhere in its input until it has been drawn. That is the
-##              whole of "no cheating", and [method reader] is where it is kept: it is handed the
-##              cards drawn so far, and has no other way to learn one.
+##              card does not exist anywhere in its input until it has been drawn ("no cheating"):
+##              [method reader] is handed the cards drawn so far, and has no other way to learn one.
 ##   painter  - the deck's pictures; never shown the reading.
 ##   set dresser - the reader's table: what stands on it, described to be built; knows no card.
 ##
-## WHAT THE SHOW HAS ALREADY MADE ([method TableEpisode.archive]) reaches each role in the part
-## it decides, cut short: the producer sees every earlier episode's angle, running bit, deck (what
-## its cards pictured, and how) and cloth and room, and NAMES THE HABITS they share before it
-## plans; the designer sees how earlier decks pictured the same card; the set dresser, what
-## earlier tables held; a reader passage, how earlier episodes opened, met a card or closed. An
-## agent told only to vary drifts back to the likeliest choice, because it cannot steer away from
-## choices it has never seen - and the habits are in the form (every deck a human figure on every
-## card, every running bit a status revised at each card), not in the subjects, which do vary.
+## What the show has already made ([method TableEpisode.archive]) reaches each role in the part it decides, cut short: the
+## producer sees every earlier episode's angle, running bit, deck (what its cards pictured, and how) and cloth and room, and
+## names the habits they share before it plans; the designer sees how earlier decks pictured the same card; the set dresser, what
+## earlier tables held; a reader passage, how earlier episodes opened, met a card or closed. An agent told only to vary drifts
+## back to the likeliest choice, because it cannot steer away from choices it has never seen - and the habits are in the form
+## (every deck a human figure on every card, every running bit a status revised at each card), not in the subjects.
 
 ## How many cards a producer who chooses the deck puts in the box, at least, and at most; never fewer
 ## than twice the cards drawn, so the seed, not the producer, decides which come out.
@@ -60,23 +54,16 @@ const TITLE_MARK := preload("res://src/export/youtube.gd").EPISODE_MARK
 ## words of each.
 const HEARD := {"intro": [6, 40], "card": [10, 14], "jumper": [6, 24], "close": [6, 60], "beat": [8, 14]}
 
-## THE PAINTINGS A READER STOPS ON: a share of an episode's cards, at least none and at most this many of
-## every card drawn. Told the art was OPTIONAL and shown every painting, the reader of 834225 still
-## walked into four pictures of five ("See that little ant", "Look at the old tortoise"); a card left out
-## of this share reaches the reader without its painting or its description, so it cannot.
+## The paintings a reader stops on: a share of an episode's cards, at least none and at most this many of every card drawn. A card
+## left out of this share reaches the reader without its painting or its description (told only that the art was optional, a
+## reader still walked into most of the pictures).
 const REMARKS := Vector2(0.15, 0.4)
-## THE CARDS A READER READS WITH THE ONES ALREADY DOWN: a share of an episode's cards after the first
-## (the user, 2026-10-17: "the 2nd or 3rd or 4th draw often builds upon the earlier draws"). Shown every
-## card already on the table and every word said, no passage after the first of fourteen tarot episodes
-## named an earlier card - 0 of 66 - so the share is told it does; and only a share, or a link on every
-## card is the tic the next passage meets.
+## The cards a reader reads with the ones already down: a share of an episode's cards after the first. Only a share, or a link on
+## every card is the tic the next passage meets.
 const LINKS := Vector2(0.35, 0.65)
-## HOW FULL A READER KEEPS THE TABLE, besides its lit things, drawn per episode ([method table_size]):
-## each row a habit (`things`, fewest and most) and its share of episodes. The range asked was 3-4 to
-## 5-6 for every episode, and a set dresser asked for "3 to 5" set five - six things on nearly every
-## table - where a real reader's table is often crowded (the user, 2026-10-18: "real tarot videos will
-## often fill the table with all manner of items, dozens of them"). A place crowded by nature may go past
-## its habit, up to [constant CardTable.MAX_THINGS].
+## How full a reader keeps the table, besides its lit things, drawn per episode ([method table_size]): each row a habit (`things`,
+## fewest and most) and its share of episodes. A real reader's table is often crowded, so not every episode asks for the same
+## small range. A place crowded by nature may go past its habit, up to [constant CardTable.MAX_THINGS].
 const FILLS := [
 	{"things": Vector2i(3, 6), "share": 0.2},
 	{"things": Vector2i(6, 10), "share": 0.35},
@@ -97,8 +84,7 @@ static func _deck_vars(deck: Array) -> Dictionary:
 	return {"deck_size": deck.size(), "deck_names": ", ".join(names)}
 
 
-## THE PRODUCER MAKES THE DECK ([method CardDeck.chooses]): what it is told - at least twice the spread it
-## plans ([method box_range]), which it has not planned yet.
+## The producer makes the deck ([method CardDeck.chooses]): what it is told - at least twice the spread it
 static func chosen_deck_line() -> String:
 	return Rules.say("table/producer.chosen_deck", _box_vars())
 
@@ -113,7 +99,7 @@ static func box_range(n: int) -> Array:
 	return [lo, maxi(lo, int(BOX[1]))]
 
 
-## HOW AN EPISODE'S CARDS ARE STAGED, for the producer: where they come from, where their text is, which
+## How an episode's cards are staged, for the producer: where they come from, where their text is, which
 ## way up they come, and how each position's card comes and lies - the registries' own words
 ## ([constant TableActions.SOURCES], [constant CardTable.TEXTS], [constant CardTable.REVERSALS],
 ## [constant TablePositions.COMES]).
@@ -137,7 +123,7 @@ static func _staging_vars() -> Dictionary:
 	return {"sources": sources, "texts": texts, "reversals": reversals}
 
 
-## THE PRINTED CARD, for the producer: what a deck's printer chooses beyond its painting - the frame's
+## The printed card, for the producer: what a deck's printer chooses beyond its painting - the frame's
 ## rules, the window's shape, the corners, an ornament round the edge, the booklet's page - each registry's
 ## own words ([constant CardTable.FRAMES], [constant CardTable.WINDOWS], [constant CardTable.CORNERS],
 ## [constant CardTable.ORNAMENTS], [constant CardTable.PAGES]).
@@ -153,7 +139,7 @@ static func _printed_vars() -> Dictionary:
 		for k in reg[1]:
 			opts.append("\"%s\" (%s)" % [k, String((reg[1] as Dictionary)[k])])
 		printed.append({"what": reg[0], "options": "; ".join(opts)})
-	# A WRITTEN CARD's own choices ([constant CardTable.FRAMES] `written`), each with its words
+	# A written CARD's own choices ([constant CardTable.FRAMES] `written`), each with its words
 	for reg in [["`frame.hand`, a written card's hand", CardTable.HANDS], ["`frame.ruling`, a written card's stock", CardTable.RULINGS]]:
 		var opts := PackedStringArray()
 		for k in reg[1]:
@@ -182,12 +168,10 @@ static func deck_noun(look: Dictionary) -> String:
 	return kind if not kind.is_empty() else "deck"
 
 
-## THE BRIEF AS THE AGENTS ARE HANDED IT, from the body of the show's document: the deck's list
-## taken out ([method CardDeck.strip]), every `${MACRO:default}` read as its default
-## ([TextNorm]), and every comment that is not a voice's mark taken out - a note to self is the
-## author's, and a speaker cue, a hesitation and a delivery stay because the brief means them
-## ([method TableProducer.voice_marks_only]). What the editor's palette promises of a brief
-## ([ScriptMarks], "cards") is kept here.
+## The brief as the agents are handed it, from the body of the show's document: the deck's list taken out ([method CardDeck.strip]),
+## every `${MACRO:default}` read as its default ([TextNorm]), and every comment that is not a voice's mark taken out - a note to
+## self is the author's, and a speaker cue, a hesitation and a delivery stay ([method TableProducer.voice_marks_only]). What the
+## editor's palette promises of a brief ([ScriptMarks], "cards") is kept here.
 static func brief(body: String) -> String:
 	return TableProducer.voice_marks_only(TextNorm._expand_macros(CardDeck.strip(FixedTable.strip(body))))
 
@@ -197,7 +181,7 @@ static func show_context(title: String, brief: String) -> String:
 	return Rules.say("table/show.context", {"title": title, "brief": brief.strip_edges()})
 
 
-## THE DICE: numbers drawn from the seed that push an episode somewhere the show has not been.
+## The dice: numbers drawn from the seed that push an episode somewhere the show has not been.
 ## Numbers, not word lists - a place, a year, a hue, an hour - so the space they draw from is
 ## the whole world rather than a list someone typed.
 static func dice(seed: int) -> Dictionary:
@@ -215,7 +199,7 @@ static func dice(seed: int) -> Dictionary:
 	}
 
 
-## WHICH CARDS' PAINTINGS THE READER MAY STOP ON in episode [param seed]'s reading of [param n]: one bool per
+## Which cards' paintings the reader may stop on in episode [param seed]'s reading of [param n]: one bool per
 ## card, in drawing order - a [constant REMARKS] share of them, seeded, and never most of them.
 static func remarks(seed: int, n: int) -> Array:
 	var rng := RandomNumberGenerator.new()
@@ -224,7 +208,7 @@ static func remarks(seed: int, n: int) -> Array:
 	return _share(rng, range(n), count, n)
 
 
-## WHICH CARDS THE READER READS WITH THE CARDS ALREADY DOWN in episode [param seed]'s reading of
+## Which cards the reader reads with the cards already down in episode [param seed]'s reading of
 ## [param n]: one bool per card, in drawing order - a [constant LINKS] share of cards 2..n, seeded, and
 ## at least one where there is a second card. The first card has nothing down to meet.
 static func links(seed: int, n: int) -> Array:
@@ -255,7 +239,7 @@ static func _share(rng: RandomNumberGenerator, slots: Array, count: int, n: int)
 ## [param history] is the show's other episodes, newest first ([method TableEpisode.archive]).
 ## [param uploads_as] is the line the episode's title goes up in, [constant TITLE_MARK] where the title
 ## will stand ("Truthful Tarot: [episode_title]") - or "", and the producer is told of no line.
-## HOW MANY CARDS ARE DRAWN, AND WHETHER ANY, ARE THE PRODUCER'S, from the brief: its spread's positions, at
+## How many cards are drawn, and whether any, are the producer's, from the brief: its spread's positions, at
 ## most [param spread_most] ([method TableProducer._land_plan]) - or, for a show that draws none, its beats, with
 ## no staging, deck or printing.
 static func producer(title: String, brief: String, seed: int,
@@ -275,13 +259,13 @@ static func producer(title: String, brief: String, seed: int,
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/producer.prompt", vars), "dice": d}
 
 
-## The deck's creator, for ONE card: its illustration and its booklet entry. [param history] is
+## The deck's creator, for one card: its illustration and its booklet entry. [param history] is
 ## the show's other episodes ([method TableEpisode.archive]), for how their decks pictured it.
 static func designer(title: String, brief: String, look: Dictionary, card: Dictionary,
 		reversals: bool, history: Array = [], text := "booklet", siblings: Array = []) -> Dictionary:
 	var group := String(card.get("group", ""))
 	var on_back := text == "back"
-	# A WRITTEN CARD writes its face ([constant CardTable.FRAMES] `written`), in place of an entry printed under a picture
+	# A written card writes its face ([constant CardTable.FRAMES] `written`), in place of an entry printed under a picture
 	var written := CardTable.written(look)
 	var on_front := text == "front" and not written
 	var ledger := String(look.get("page", "")) == "ledger"
@@ -292,7 +276,7 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 		"plain_booklet": not ledger and not on_back and not on_front and not written, "reversals": reversals and not written,
 		"written": written, "lines_most": TableProducer.WRITING_MOST, "line_letters": WRITTEN_LETTERS,
 		"before": "\n".join(_pictured_before(history, String(card.get("name", ""))))}
-	# THE CARDS DESIGNED BEFORE IT IN THIS DRAW, their pictures only, each cut short - none, for a card with no picture
+	# The cards designed before it in this draw, their pictures only, each cut short - none, for a card with no picture
 	var sib: Array = []
 	for c in siblings if not written else []:
 		sib.append({"k": int((c as Dictionary).get("k", 0)), "name": String((c as Dictionary).get("name", "")),
@@ -301,19 +285,16 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/designer.prompt", vars)}
 
 
-## THE SET DRESSER: sets the reader's table before the camera rolls - every thing that stands on
-## it, described in parts exactly enough to be built ([Props]), and where it stands. It knows the
-## episode's plan and look, and no card: none has been drawn. [param headroom] is how tall a thing
-## can stand in each zone and be seen whole (centimeters, [method CardTable.headroom]);
-## [param seen] are the things earlier episodes' tables held; [param cloth] says the cloth's
-## picture goes with the prompt. [param looks] > 0: the set dresser works with tools and SEES what it
-## builds ([SetDresserTools], that many pictures) - it is told how to work, and hands the table in
-## with a tool instead of replying with it. [param airs]: earlier episodes' effects, to vary from.
-## [param byline]: the show's, under its name at the opening ([method title_rule]). [param tables]:
-## earlier episodes' tables themselves ([method Tables.summary]), to build otherwise. [param lights]:
-## earlier episodes' light ([method Lights.summary]), to light otherwise; [param room] says the room's
-## painting goes with the prompt. [param jumps]: a card leaps out of this episode's shuffle
-## ([method TableProducer.jumps]) - without one, a burst has no `jumper` moment to mark, and is not offered it.
+## The set dresser: sets the reader's table before the camera rolls - every thing that stands on it, described in parts exactly
+## enough to be built ([Props]), and where it stands. It knows the episode's plan and look, and no card. [param headroom] is how
+## tall a thing can stand in each zone and be seen whole (centimeters, [method CardTable.headroom]); [param seen] are the things
+## earlier episodes' tables held; [param cloth] says the cloth's picture goes with the prompt. [param looks] > 0: the set dresser
+## works with tools and sees what it builds ([SetDresserTools], that many pictures) - it hands the table in with a tool instead of
+## replying with it. [param airs]: earlier episodes' effects, to vary from. [param byline]: the show's, under its name at the
+## opening ([method title_rule]). [param tables]: earlier episodes' tables themselves ([method Tables.summary]), to build otherwise.
+## [param lights]: earlier episodes' light ([method Lights.summary]); [param room] says the room's painting goes with the prompt.
+## [param jumps]: a card leaps out of this episode's shuffle ([method TableProducer.jumps]) - without one, a burst has no `jumper`
+## moment to mark, and is not offered it.
 static func set_dresser(title: String, brief: String, plan: Dictionary, seed: int, headroom: Dictionary,
 		seen: Array, cloth: bool, looks := 0, airs: Array = [], byline := "", tables: Array = [], lights: Array = [],
 		room := false, jumps := true) -> Dictionary:
@@ -327,7 +308,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	var moments := CardTable.MOMENTS.duplicate()
 	if not jumps:
 		moments.erase("jumper")
-	# A SHOW THAT DRAWS NO CARDS has none of a card's moments for a burst to mark: its bursts are the work's own
+	# A show that draws no cards has none of a card's moments for a burst to mark: its bursts are the work's own
 	var bare := CardTable.cardless(plan)
 	if bare:
 		moments = {}
@@ -340,7 +321,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"cloth": cloth, "room": room, "jumps": jumps and not bare, "by_hand": not jumps and not bare, "cardless": bare,
 		"tools": looks > 0, "looks": looks,
 		"box": String(CardTable.staging_of(plan)["source"]) == "box",
-		# THE CARDS THE PRODUCER PUT IN ITS BOX, where the work is made of what one of them brings (a recipe box): the
+		# The cards the producer put in its box, where the work is made of what one of them brings (a recipe box): the
 		# table is set before any comes up, so it stands what they call for - every one of them listed, none drawn
 		"box_cards": _box_cards(plan) if not TableEpisode.work_of(plan).is_empty() else [],
 		# the deck's own card, as big as it is printed - a recipe card is no tarot card
@@ -369,12 +350,12 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		earlier_lights.append(clip(String(l), 50))
 	vars["earlier_tables"] = earlier_tables
 	vars["earlier_lights"] = earlier_lights
-	# THE WORK THE PLAN HAS DONE AT THE TABLE (next/table_work.md), beat by beat - no card named: none is drawn
+	# The work the plan has done at the table (next/table_work.md), beat by beat - no card named: none is drawn
 	vars["work"] = work_lines(plan)
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/set_dresser.prompt", vars)}
 
 
-## THE PLAN'S WORK beat by beat, as an agent is told it: `[{beat, when, what}]` - the intro's, each position's
+## The plan's work beat by beat, as an agent is told it: `[{beat, when, what}]` - the intro's, each position's
 ## (by its place, never a card's name - or, in a show that draws none, by the beat's own name) and the close's,
 ## in the reading's order ([method TableEpisode.work_of]).
 static func work_lines(plan: Dictionary) -> Array:
@@ -410,13 +391,13 @@ const QUIET_OPENING_WORDS := 150.0
 const QUIET_MOST := 0.85
 
 
-## HOW MUCH OF THE WORK PASSES WITH NOBODY TALKING, 0 to [constant QUIET_MOST]: the plan's `quiet`, the producer's from the brief.
+## How much of the work passes with nobody talking, 0 to [constant QUIET_MOST]: the plan's `quiet`, the producer's from the brief.
 static func quiet_of(plan: Dictionary) -> float:
 	var q: Variant = plan.get("quiet", 0.0)
 	return clampf(float(q), 0.0, QUIET_MOST) if q is float or q is int else 0.0
 
 
-## THE PUPPETEER, blocking the episode's work on its set table ([PuppeteerTools]): the plan's work, the cards
+## The puppeteer, blocking the episode's work on its set table ([PuppeteerTools]): the plan's work, the cards
 ## [param drawn] as they came (the work is made of them), the table's working parts in words ([param parts],
 ## [method TableWork.parts_report]), the laws, and - with [param looks] - its tools.
 static func puppeteer(title: String, brief: String, plan: Dictionary, seed: int, drawn: Array, parts: String, looks := 0) -> Dictionary:
@@ -439,7 +420,7 @@ static func puppeteer(title: String, brief: String, plan: Dictionary, seed: int,
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/puppeteer.prompt", vars)}
 
 
-## THE SOLVER, working the problem the plan fixed ([SolverTools]): the problem, how it is checked, and its tools - [param run], code can
+## The solver, working the problem the plan fixed ([SolverTools]): the problem, how it is checked, and its tools - [param run], code can
 ## run here.
 static func solver(title: String, brief: String, plan: Dictionary, problem: Dictionary, run := false) -> Dictionary:
 	return {"system": Rules.say("table/solver.system", {}) + "\n\n" + show_context(title, brief),
@@ -451,7 +432,7 @@ static func solver(title: String, brief: String, plan: Dictionary, problem: Dict
 			"forbidden": ", ".join(PackedStringArray(problem.get("forbidden", [])))})}
 
 
-## WHAT THE WORK CAME TO, as the roles after the solver are told it (table/solver.worked): [param worked] is the plan's `worked`
+## What the work came to, as the roles after the solver are told it (table/solver.worked): [param worked] is the plan's `worked`
 ## ([method TableProducer._plan]) - `{problem, solve, notebook, proof, runs, data}` - or `{}` where the plan fixed no problem or it
 ## is not worked yet, when `worked` is false and nothing else is said.
 static func worked_vars(worked: Dictionary) -> Dictionary:
@@ -474,7 +455,7 @@ static func worked_vars(worked: Dictionary) -> Dictionary:
 		"data_kept": not data.is_empty(), "data": data_text(data)}
 
 
-## THE RUNS as a later role reads them: the ones the result names ([param evidence]) first, then the others that ran to their end, each
+## The runs as a later role reads them: the ones the result names ([param evidence]) first, then the others that ran to their end, each
 ## with its code and what it printed, while [constant RUNS_SHOWN] lasts; every other run a line. "" for none.
 static func runs_text(runs: Array, evidence: Array) -> String:
 	var named: Array = []
@@ -512,7 +493,7 @@ static func runs_text(runs: Array, evidence: Array) -> String:
 	return text
 
 
-## THE SERIES the runs kept, as a later role reads them: a line per series - its name, its size and range, what it is, and the run
+## The series the runs kept, as a later role reads them: a line per series - its name, its size and range, what it is, and the run
 ## that kept it. "" for none.
 static func data_text(data: Dictionary) -> String:
 	var lines := PackedStringArray()
@@ -526,7 +507,7 @@ static func data_text(data: Dictionary) -> String:
 	return "\n".join(lines)
 
 
-## WHAT AN ACT WRITES ON A PAGE, as the reader is told it so the words are said as they are written: each `write`'s words or formula,
+## What an act writes on a page, as the reader is told it so the words are said as they are written: each `write`'s words or formula,
 ## and "a drawing" for a drawing - "" for an act that writes nothing.
 static func writes_of(act: Dictionary) -> String:
 	var out := PackedStringArray()
@@ -545,12 +526,12 @@ static func writes_of(act: Dictionary) -> String:
 	return "; ".join(out)
 
 
-## THE MODELER, designing what this episode builds ([AssemblyModel], [ModelTools]): what the plan says it is, what earlier episodes built, how it is written, and - with [param looks] - its tools.
+## The modeler, designing what this episode builds ([AssemblyModel], [ModelTools]): what the plan says it is, what earlier episodes built, how it is written, and - with [param looks] - its tools.
 static func modeler(title: String, brief: String, plan: Dictionary, seed: int, earlier: Array, looks := 0) -> Dictionary:
 	var vars := {"seed": seed, "episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")), "build": String(plan.get("build", "")),
 		"language": AssemblyModel.describe(), "earlier": ", ".join(PackedStringArray(earlier)), "has_earlier": not earlier.is_empty(), "tools": looks > 0, "looks": looks,
 		"lo": AssemblyModel.PARTS_AIM.x, "hi": AssemblyModel.PARTS_AIM.y}
-	# ...HOW TALL THIS EPISODE'S LENS SEES, at a plate in the middle of the picture: what is cut off by the frame is no model
+	# ...how tall this episode's lens sees, at a plate in the middle of the picture: what is cut off by the frame is no model
 	var lay := CardTable.layout_of(seed)
 	var seen := CardTable.headroom_at(lay["camera"], float(lay["fov"]), TableAssembly.base_center_under({}, lay["camera"]))
 	vars["tall_cm"] = roundi(minf(seen, float(AssemblyModel.TALL_MOST) * Assembly.PLATE) * 100.0)
@@ -558,7 +539,7 @@ static func modeler(title: String, brief: String, plan: Dictionary, seed: int, e
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/modeler.prompt", vars)}
 
 
-## THE DECORATOR designs what is painted at the table ([DecoratorTools], [Skins]; next/painted_surface.md): told the plan's words for it,
+## The decorator designs what is painted at the table ([DecoratorTools], [Skins]; next/painted_surface.md): told the plan's words for it,
 ## each surface the table has to paint, the language a design is written in, and what earlier episodes painted.
 static func decorator(title: String, brief: String, plan: Dictionary, seed: int, surfaces: Array, earlier: Array, looks := 0,
 		palette: Array = []) -> Dictionary:
@@ -566,13 +547,13 @@ static func decorator(title: String, brief: String, plan: Dictionary, seed: int,
 		"painted": String(plan.get("painted", "")), "language": Skins.describe(), "earlier": "; ".join(PackedStringArray(earlier)),
 		"has_earlier": not earlier.is_empty(), "tools": looks > 0, "looks": looks,
 		"surfaces": surfaces.map(func(s: Dictionary) -> Dictionary: return {"told": Skins.told(s)}),
-		# ...THE FACE PAINTED FIRST, to copy (feedback 0023): its colors, most of it first
+		# ...the face painted first, to copy: its colors, most of it first
 		"copies": not palette.is_empty(), "px": int(Skins.FACE_PX),
 		"palette": palette.map(func(c: Dictionary) -> Dictionary: return {"hex": String(c["hex"]), "percent": maxi(roundi(float(c["share"]) * 100.0), 1)})}
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/decorator.prompt", vars)}
 
 
-## THE PAINTER AT THE TABLE ([PainterTools]): the picture painted first painted again with the table's tools, an operation at a time, told the
+## The painter at the table ([PainterTools]): the picture painted first painted again with the table's tools, an operation at a time, told the
 ## episode's [param beats] (`[{key, name, work}]`), the [param seconds] its painting has and its [param looks].
 static func painting(title: String, brief: String, plan: Dictionary, beats: Array, seconds: float, looks: int) -> Dictionary:
 	var vars := {"episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")),
@@ -582,7 +563,7 @@ static func painting(title: String, brief: String, plan: Dictionary, beats: Arra
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/painting.prompt", vars)}
 
 
-## THE GAME MASTER'S PREPARATION (next/tabletop.md): tonight's world and every player's sheet, made alone, secret from everyone else at the table.
+## The game master's preparation (next/tabletop.md): tonight's world and every player's sheet, made alone, secret from everyone else at the table.
 static func game_prep(title: String, brief: String, plan: Dictionary, people: PackedStringArray, past: Array) -> Dictionary:
 	var vars := _game_vars(title, plan, people)
 	var earlier := PackedStringArray()
@@ -596,7 +577,7 @@ static func game_prep(title: String, brief: String, plan: Dictionary, people: Pa
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prep", vars)}
 
 
-## ONE STRETCH OF THE GAME, as its master is told it: everything said so far, its own preparation and the table as it stands. [param step] is "intro", "close" or a number.
+## One stretch of the game, as its master is told it: everything said so far, its own preparation and the table as it stands. [param step] is "intro", "close" or a number.
 static func game_master(title: String, brief: String, plan: Dictionary, people: PackedStringArray, step: String, n: int, prep: Dictionary, ledger: GameLedger, before: String, aim: Vector2i) -> Dictionary:
 	var vars := _game_vars(title, plan, people)
 	vars.merge({"prep": JSON.stringify(prep, "  "), "state": ledger.describe(), "said": not before.is_empty(), "before": before,
@@ -605,7 +586,7 @@ static func game_master(title: String, brief: String, plan: Dictionary, people: 
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prompt", vars)}
 
 
-## A PLAYER, ASKED ([GameTools]): only their sheet, their want, what was said aloud and what they were just asked.
+## A player, asked ([GameTools]): only their sheet, their want, what was said aloud and what they were just asked.
 static func game_player(title: String, brief: String, plan: Dictionary, who: String, people: PackedStringArray, sheet: Dictionary, want: String, heard_so_far: String, asked: Array, question: String) -> Dictionary:
 	var others := PackedStringArray()
 	for p in people.slice(1):
@@ -628,7 +609,7 @@ static func game_words(step: String, scenes: int) -> Vector2i:
 	return Vector2i(roundi(float(share) * 0.6), share)
 
 
-## WHAT A GAME'S SESSION ASKED TO HAVE PAINTED: a map seen from straight above, a figure on the card it stands on, or a picture handed across a table.
+## What a game's session asked to have painted: a map seen from straight above, a figure on the card it stands on, or a picture handed across a table.
 static func game_image(look: Dictionary, kind: String, thing: Dictionary, target: String) -> String:
 	var vars := _look_vars(look, target)
 	vars.merge({"name": String(thing.get("name", "")), "looks": String(thing.get("looks", "")), "art": String(look.get("art", ""))}, true)
@@ -646,7 +627,7 @@ static func set_example(tools := false) -> String:
 	return Rules.say("table/set_dresser.thing_example", {"tools": tools})
 
 
-## THE TITLE, as the set dresser is told it: the show's [param title] (and [param byline]) over its
+## The title, as the set dresser is told it: the show's [param title] (and [param byline]) over its
 ## table at the opening, and the color it chooses for it ([method CardTable.title_ink]).
 static func title_rule(title: String, byline: String) -> String:
 	return Rules.say("table/set_dresser.title", {"title": title.strip_edges(), "byline": byline.strip_edges()})
@@ -675,7 +656,7 @@ static func table_size(seed: int) -> Vector2i:
 	return Vector2i(3, 5)
 
 
-## THE BOX THE CARDS ARE KEPT IN, for the set dresser of an episode whose cards come out of one: one of
+## The box the cards are kept in, for the set dresser of an episode whose cards come out of one: one of
 ## its things, marked `holds_cards`, open, big enough to file the cards upright in, stood where the deck
 ## would be ([method TableBox.build]).
 static func box_rule() -> String:
@@ -689,45 +670,41 @@ static func _box_size(shoebox := false, contents := "file", look := {}) -> Dicti
 		"shoebox": shoebox, "filed": contents == "file", "piled": contents == "piles", "loose": contents == "loose"}
 
 
-## THE READER, one passage. [param step] is "intro", "close", or a card's place in the reading
-## ("1", "2", ...). [param said] is every passage read so far, in order; [param drawn] is every
-## card turned over so far - for a card step, ENDING with the card just turned. Nothing in here
-## knows the deck's order: a card not in [param drawn] has not been drawn, so it is nowhere in the
-## prompt. That is the property the gate checks.
+## The reader, one passage. [param step] is "intro", "close", or a card's place in the reading ("1", "2", ...). [param said] is every
+## passage read so far, in order; [param drawn] is every card turned over so far - for a card step, ending with the card just
+## turned. Nothing in here knows the deck's order: a card not in [param drawn] has not been drawn, so it is nowhere in the prompt.
+## That is the property the gate checks.
 ##
-## [param pictured]: the paintings go with this prompt (see [method TableProducer.say_prompt]) -
-## the card's own for a card, every card's for the close - so the words are told to be about
-## what is painted, and the designer's plan for the painting is left out: where the painter
-## went its own way, the picture on screen is the one the viewer is looking at.
+## [param pictured]: the paintings go with this prompt (see [method TableProducer.say_prompt]) - the card's own for a card, every
+## card's for the close - so the words are told to be about what is painted, and the designer's plan for the painting is left out.
 ##
-## [param history] is the show's other episodes ([method TableEpisode.archive]): what the
-## audience has already heard at this point of an episode. Every name in [param names] (the
-## show's deck) is masked out of it, so no card reaches a reader through another episode either.
+## [param history] is the show's other episodes ([method TableEpisode.archive]): what the audience has already heard at this point
+## of an episode. Every name in [param names] (the show's deck) is masked out of it, so no card reaches a reader through another
+## episode either.
 ##
-## [param voices] are the show's OTHER voices (a familiar on the reader's shoulder), by the names
-## its document gives them: the reader writes their lines too and hands each one over with a
-## speaker cue ([method voices_rule]). Who they are and when they speak is the brief's to say.
+## [param voices] are the show's other voices (a familiar on the reader's shoulder), by the names its document gives them: the
+## reader writes their lines too and hands each one over with a speaker cue ([method voices_rule]).
 ##
-## [param remark]: this card is one of the few whose painting the reader may stop on ([method remarks]).
-## A card that is not reaches it by name and meaning only - no painting, no description of one.
+## [param remark]: this card is one of the few whose painting the reader may stop on ([method remarks]). A card that is not reaches
+## it by name and meaning only.
 ##
-## [param link]: this card is one the reader reads with the cards already on the table ([method links]),
-## each of which reaches it with its keywords - never a card put back with a few words, or one set aside.
+## [param link]: this card is one the reader reads with the cards already on the table ([method links]), each of which reaches it
+## with its keywords - never a card put back with a few words, or one set aside.
 ##
-## [param misses]: what this card's painting gets wrong, where the art director could not have it put
-## right ([method TableProducer._land_check]) - the viewer sees the painting, so the reader is told.
+## [param misses]: what this card's painting gets wrong, where the art director could not have it put right
+## ([method TableProducer._land_check]) - the viewer sees the painting, so the reader is told.
 ##
 ## [param work]: the acts done at the table while this passage is said ([TableWork], next/table_work.md) -
 ## `[{name, about, length, under}]`, its beat's alone; a step "work:K" is card K's work passage.
 ##
-## A SHOW THAT DRAWS NO CARDS ([method CardTable.cardless]): a step "K" is beat K, said while its work is done -
-## its name, what it does, the passages before it, its acts, and no card anywhere. [param said_word]: how long a word takes the show's
-## reader to say (ReadingCast.said_word) - what its words are counted to cover.
+## A show that draws no cards ([method CardTable.cardless]): a step "K" is beat K, said while its work is done - its name, what it
+## does, the passages before it, its acts, and no card anywhere. [param said_word]: how long a word takes the show's reader to say
+## (ReadingCast.said_word) - what its words are counted to cover.
 static func reader(title: String, brief: String, plan: Dictionary, step: String, said: Array,
 		drawn: Array, spread_size: int, pictured := false, history: Array = [],
 		names: Array = [], voices: Array = [], remark := true, link := false, misses: Array = [], work: Array = [],
 		said_word := SAID_WORD) -> Dictionary:
-	# CARD K'S WORK PASSAGE: told as card K is, with no card of its own turning over
+	# Card k's work passage: told as card K is, with no card of its own turning over
 	var work_k := int(step.trim_prefix("work:")) if step.begins_with("work:") else 0
 	if work_k > 0:
 		step = str(work_k)
@@ -745,7 +722,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	var spoken: Array = []
 	for t in said:
 		spoken.append(String(t).strip_edges())
-	# THIS CARD, and the others on the table - before it, and any swept out with it in one waterfall
+	# This card, and the others on the table - before it, and any swept out with it in one waterfall
 	var at := int(step) if step.is_valid_int() else 0
 	var on_table: Array = []
 	for i in drawn.size():
@@ -761,7 +738,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		"on_the_table": CardTable.on_the_table(look), "said": spoken, "on_table": on_table, "box": boxed, "pictured": pictured,
 		"intro": step == "intro", "close": step == "close", "card": step != "intro" and step != "close", "voices": not voices.is_empty(),
 		"box_count": box_count if boxed else 0}
-	# ...AND THE WORK REALLY DONE, where the plan fixed a problem (table/solver.worked): every passage is written from it
+	# ...and the work really done, where the plan fixed a problem (table/solver.worked): every passage is written from it
 	vars.merge(worked_vars(plan.get("worked", {}) if plan.get("worked") is Dictionary else {}))
 	var bare := CardTable.cardless(plan)
 	vars["cardless"] = bare
@@ -772,7 +749,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	elif step == "close":
 		lo_hi = WORDS["close"]
 	elif bare:
-		# A BEAT: its place, its name and what it does - and no card
+		# A beat: its place, its name and what it does - and no card
 		var b: Dictionary = positions[int(step) - 1] if int(step) - 1 < positions.size() and positions[int(step) - 1] is Dictionary else {}
 		vars["card"] = false
 		vars["beat"] = true
@@ -786,7 +763,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			vars["card"] = false
 			vars["aside"] = true
 		var pace := String(staging.get("pace", "reflective"))
-		# A CARD PASSED OVER ([method TableProducer.passed]) is put back while others stay out: a few
+		# A card passed over ([method TableProducer.passed]) is put back while others stay out: a few
 		# words, and they say what makes it one to put back
 		var passed := boxed and TableProducer.passed(p, positions)
 		vars["passed"] = passed
@@ -803,24 +780,24 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			lo_hi = [35, 75]
 	var kind := step if step == "intro" or step == "close" \
 		else ("beat" if bare else ("jumper" if not drawn.is_empty() and bool((drawn[drawn.size() - 1] as Dictionary).get("jumper", false)) else "card"))
-	# WHAT IS BEING BUILT WHILE IT IS SAID ([AssemblyModel]), so the words are about what the viewer will see become it
+	# What is being built while it is said ([AssemblyModel]), so the words are about what the viewer will see become it
 	vars["model_words"] = String(plan.get("model_words", ""))
 	var heard_before := _heard_before(history, kind, brief, names)
 	vars["heard"] = "\n".join(heard_before)
 	vars["heard_" + kind] = not heard_before.is_empty()
 	if not voices.is_empty():
 		vars.merge(_voices_vars(voices))
-	# THE WORK DONE WHILE IT IS SAID: its acts, and words enough to cover them
+	# The work done while it is said: its acts, and words enough to cover them
 	if not work.is_empty():
 		var acts: Array = []
 		var seconds := 0.0
 		var told_layers := {}
 		for a in work:
 			var ad: Dictionary = a
-			# ...WHAT IS BUILT TAKES WHAT ITS STEPS TAKE ([Assembly]): under its words, but no guess
+			# ...what is built takes what its steps take ([Assembly]): under its words, but no guess
 			var timed: bool = ad.has("_natural")
 			seconds += 12.0 if bool(ad.get("under", false)) and not timed else float(ad.get("length", 0.0))
-			# A PAINTED STEP IS CALLED BY ITS LAYER (next/editing.md step 2): an act made from the painting is named by its place in
+			# A painted step is called by its layer (next/editing.md step 2): an act made from the painting is named by its place in
 			# line, which a repaint changes - the layer keeps its name, so the reader cues that, once, at the first act laying it
 			var layers: Array = ad.get("layers", []) if ad.get("layers") is Array else []
 			var name := String(ad.get("name", ""))
@@ -834,18 +811,16 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		vars["work_acts"] = acts
 		vars["work_seconds"] = roundi(seconds)
 		if work_k > 0:
-			# a passage for the work alone, at least as long as the work - spoken at about two words a second - and room
-			# for the stories told around it (the user, 2026-10-29: "it would be nice if they told stories ... The videos are
-			# quite short now"): its acts wait for the words that start them
+						# a passage for the work alone, at least as long as the work - spoken at about two words a second - and room
+						# for the stories told around it: its acts wait for the words that start them
 			lo_hi = [maxi(30, roundi(seconds / said_word * WORK_WORDS.x)), maxi(60, roundi(seconds / said_word * WORK_WORDS.y))]
 		else:
 			lo_hi = [maxi(int(lo_hi[0]), roundi(seconds / said_word * 0.8)), maxi(int(lo_hi[1]), roundi(seconds / said_word * 1.2))]
-		# A SHOW THAT GOES QUIET ([method quiet_of]; the user, 2026-11-02: "There might be stretches where we do not talk at all"): the
-		# words cover its share of the work, and what is left is silence, said where it falls
+				# a show that goes quiet ([method quiet_of]): the words cover its share of the work, and what is left is silence, said where it falls
 		var quiet := quiet_of(plan)
 		if quiet > 0.0:
 			var talk := seconds * (1.0 - quiet) / said_word
-			# ...BUT IT OPENS TALKING ([method CardReading.opens_talking]): about a minute of it, whatever the work under it takes
+			# ...but it opens talking ([method CardReading.opens_talking]): about a minute of it, whatever the work under it takes
 			var opening := step == "intro"
 			if opening:
 				talk = maxf(talk, QUIET_OPENING_WORDS)
@@ -863,7 +838,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		vars["heard_card"] = false
 		vars["heard_jumper"] = false
 		vars["after"] = after(plan, work_k, spread_size, true)
-	# THE VIDEO'S CHAPTER this passage begins, as the description calls it unless its reader names it
+	# The video's chapter this passage begins, as the description calls it unless its reader names it
 	# ([method TableEpisode.upload_notes]) - a card's work passage begins one only when named; an aside, none
 	vars["chapters"] = not bool(vars.get("aside", false))
 	vars["chapter_words"] = roundi(60.0 / said_word)
@@ -886,7 +861,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/reader.prompt", vars)}
 
 
-## CARD [param k] AS THE READER MEETS IT: which way it came (the first that holds of a jumper, dealt, the
+## CARD [param k] as the reader meets it: which way it came (the first that holds of a jumper, dealt, the
 ## first of a waterfall, the next of one, out of a box, drawn), what may be said of its picture, and its
 ## printed text - the flags and words of rules/table/reader.yaml's `card`.
 static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, n: int, boxed: bool, pictured: bool,
@@ -919,7 +894,7 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 		out["now_boxed"] = true
 	else:
 		out["now_drawn"] = true
-	# A WRITTEN CARD has no picture: its writing is what the viewer reads on it ([constant CardTable.FRAMES] `written`)
+	# A written card has no picture: its writing is what the viewer reads on it ([constant CardTable.FRAMES] `written`)
 	var written := c.get("writing") is Dictionary
 	if written:
 		out["on_card"] = true
@@ -941,7 +916,7 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 	return out
 
 
-## WHAT THE TABLE DOES AFTER PASSAGE [param k] (0 the intro) of a reading of [param n] cards, in words:
+## What the table does after passage [param k] (0 the intro) of a reading of [param n] cards, in words:
 ## the moves the plan's position [param k] makes after its passage (`then`), the card held up going down,
 ## and the next card coming as its position says - never which card it is. The same order
 ## [method TableProducer.choreography] writes the moves in.
@@ -949,7 +924,7 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 static func after(plan: Dictionary, k: int, n: int, worked := false) -> String:
 	var pos: Array = ((plan.get("spread", {}) as Dictionary).get("positions", [])) as Array if plan.get("spread") is Dictionary else []
 	var at := func(i: int) -> Dictionary: return pos[i - 1] if i >= 1 and i <= pos.size() and pos[i - 1] is Dictionary else {}
-	# A SHOW THAT DRAWS NO CARDS: the next beat begins, and its work with it - or the close
+	# A show that draws no cards: the next beat begins, and its work with it - or the close
 	if CardTable.cardless(plan):
 		if k >= n:
 			return "The close begins%s." % (" - and its work with it" if not String(plan.get("work_close", "")).strip_edges().is_empty() else "")
@@ -978,7 +953,7 @@ static func after(plan: Dictionary, k: int, n: int, worked := false) -> String:
 		var w := String(m).split(" ", false)
 		if w.size() == 2:
 			parts.append("card %s is turned %s where it lies" % [w[1], "sideways" if w[0] == "tap" else "back upright"])
-	# THE WORK BEGINS after a card that has work, and the next card waits for it
+	# The work begins after a card that has work, and the next card waits for it
 	if not worked and not work.is_empty():
 		parts.append("the work at the table begins (%s), and you talk it through in the next passage" % work.trim_suffix("."))
 		var t := "; then ".join(parts)
@@ -1007,7 +982,7 @@ static func after(plan: Dictionary, k: int, n: int, worked := false) -> String:
 	return text.substr(0, 1).to_upper() + text.substr(1) + "."
 
 
-## WHAT IS DONE AFTER POSITION [param p]'s PASSAGE (card [param k]) that its reader has to account for: the
+## What is done after position [param p]'s passage (card [param k]) that its reader has to account for: the
 ## card laid sideways or on the card before it, a card turned where it lies (`then`) - in words, or ""
 ## for a card laid down plainly, put back or piled at the side.
 static func _handled(p: Dictionary, k: int) -> String:
@@ -1049,7 +1024,7 @@ static func _how_note(p: Dictionary, i: int) -> String:
 	return (" (" + "; ".join(notes) + ")") if not notes.is_empty() else ""
 
 
-## HOW A PASSAGE HANDS A LINE TO ANOTHER VOICE: the same own-line cue a manuscript uses, back to
+## How a passage hands a line to another voice: the same own-line cue a manuscript uses, back to
 ## the reader by name ([constant Manuscript.NARRATOR]), every passage opening in the reader's voice.
 static func voices_rule(voices: Array) -> String:
 	return Rules.say("table/reader.voices", _voices_vars(voices))
@@ -1070,7 +1045,7 @@ static func _card_line(c: Dictionary) -> String:
 
 # --- what the show has already made ----------------------------------------------------------
 
-## ONE EARLIER EPISODE as the producer reads it: what it was about and how it was told, what its
+## One earlier episode as the producer reads it: what it was about and how it was told, what its
 ## deck pictured (the designs, so the cast as painted, not as planned) and how it was painted, and
 ## what it was printed and read on - every field cut short, so ten read at a glance.
 static func _past(e: Dictionary) -> String:
@@ -1085,7 +1060,7 @@ static func _past(e: Dictionary) -> String:
 	lines.append("  The reader: %s" % clip(_s(p.get("reader_mood", "")), 60))
 	if not _s(p.get("running_bit", "")).is_empty():
 		lines.append("  Running bit: %s" % clip(_s(p.get("running_bit", "")), 30))
-	# A SHOW THAT DRAWS NO CARDS: its beats, then its table - no deck, no printing
+	# A show that draws no cards: its beats, then its table - no deck, no printing
 	if CardTable.cardless(p):
 		var beats := PackedStringArray()
 		for q in _d(p.get("spread")).get("positions", []) if _d(p.get("spread")).get("positions") is Array else []:
@@ -1095,8 +1070,7 @@ static func _past(e: Dictionary) -> String:
 			clip(_s(look.get("setting", "")), 16), clip(_s(light.get("kind", "")), 12), _s(look.get("candles", ""))])
 		return "\n".join(lines)
 	lines.append("  Spread: %s, %d card%s" % [_s(_d(p.get("spread")).get("name", "")), CardTable.beats(p), "" if CardTable.beats(p) == 1 else "s"])
-	# WHERE THE CARDS CAME FROM, and never how each was handled: listed, the moves became habits to
-	# break ("never an aside, never dealt"), and the next plan staged the ones it had not seen (2026-10-18)
+		# where the cards came from, and never how each was handled (listed, the moves become habits to break)
 	if p.get("staging") is Dictionary:
 		var st := CardTable.staging_of(p)
 		var where := "in a booklet" if st["text"] == "booklet" else ("on the fronts" if st["text"] == "front" else "on the backs")
@@ -1161,7 +1135,7 @@ static func _pictured_before(history: Array, card_name: String) -> PackedStringA
 	return out
 
 
-## WHAT THE AUDIENCE HAS HEARD at this point of an episode ([param kind]: intro, card, jumper or
+## What the audience has heard at this point of an episode ([param kind]: intro, card, jumper or
 ## close): the start of each earlier intro and card passage, the end of each close - past the words
 ## the brief gives every episode, which stay ([method unfixed]) - with every card name masked.
 static func _heard_before(history: Array, kind: String, brief: String, names: Array) -> PackedStringArray:
@@ -1295,7 +1269,7 @@ static func card_image(look: Dictionary, card: Dictionary, art: String, target: 
 	return Rules.say("table/painter.card", vars)
 
 
-## THE ART DIRECTOR'S LOOK at card [param card]'s painting ([method TableProducer._make_check]): the
+## The art director's look at card [param card]'s painting ([method TableProducer._make_check]): the
 ## description it was painted from, the deck's hand (never a fault), what is printed with it on the side
 ## [param text] names, and how many [param earlier] cards of this draw it is shown beside - the images
 ## themselves go with the job.
@@ -1311,7 +1285,7 @@ static func art_director(title: String, brief: String, look: Dictionary, card: D
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/art_director.prompt", vars)}
 
 
-## THE BACK: the side every card of a printing shows face down - EXACTLY SYMMETRIC under a half turn
+## The back: the side every card of a printing shows face down - exactly symmetric under a half turn
 ## when cards come up [param reversed], and a plain middle when each card's text is [param printed] over it.
 static func back_image(look: Dictionary, target: String, reversed := true, printed := false) -> String:
 	var vars := _look_vars(look, target)
@@ -1332,14 +1306,14 @@ static func back_image(look: Dictionary, target: String, reversed := true, print
 	return Rules.say("table/painter.back", vars)
 
 
-## THE CLOTH: a texture at its true scale ([constant CardTable.CLOTH_PICTURE]), dry and bare.
+## The cloth: a texture at its true scale ([constant CardTable.CLOTH_PICTURE]), dry and bare.
 static func surface_image(look: Dictionary, target: String) -> String:
 	var vars := _look_vars(look, target)
 	vars.merge({"width": int(CardTable.CLOTH_PICTURE.x), "height": int(CardTable.CLOTH_PICTURE.y)}, true)
 	return Rules.say("table/painter.surface", vars)
 
 
-## THE FACE PAINTED FIRST (feedback 0023): what the plan paints, painted onto the attached picture of [param skin] bare from its front
+## The face painted first: what the plan paints, painted onto the attached picture of [param skin] bare from its front
 ## ([method Skins.face_canvas]) - told what the art director sent back of the paintings before ([param sent_back]), and the table's own
 ## paints ([param paints], [method Skins.table_paints]) as the colors to paint with.
 static func face_image(look: Dictionary, plan: Dictionary, skin: Dictionary, target: String, sent_back := PackedStringArray(), paints: Array = []) -> String:
@@ -1351,7 +1325,7 @@ static func face_image(look: Dictionary, plan: Dictionary, skin: Dictionary, tar
 	return Rules.say("table/painter.face", vars)
 
 
-## THE ORDER THE PICTURE PAINTED FIRST IS PAINTED IN ([method TableProducer._make_layers]): what it was asked to be, on [param skin], the
+## The order the picture painted first is painted in ([method TableProducer._make_layers]): what it was asked to be, on [param skin], the
 ## paints on the table - the picture and the bare surface go with the job.
 static func face_layers(title: String, brief: String, plan: Dictionary, skin: Dictionary, paints: Array = []) -> Dictionary:
 	var vars := {"painted": String(plan.get("painted", "")).strip_edges(), "thing": String(skin.get("thing", "the surface")),
@@ -1359,7 +1333,7 @@ static func face_layers(title: String, brief: String, plan: Dictionary, skin: Di
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/art_director.layers", vars)}
 
 
-## ONE LAYER OF THE PICTURE PAINTED FIRST ([method TableProducer._make_layer]): layer [param k] of [param n], [param add] - what it lays,
+## One layer of the picture painted first ([method TableProducer._make_layer]): layer [param k] of [param n], [param add] - what it lays,
 ## as the art director said it - painted over the picture so far, the finished picture its guide.
 static func layer_image(look: Dictionary, add: String, target: String, k: int, n: int) -> String:
 	var vars := _look_vars(look, target)
@@ -1367,7 +1341,7 @@ static func layer_image(look: Dictionary, add: String, target: String, k: int, n
 	return Rules.say("table/painter.layer", vars)
 
 
-## THE ART DIRECTOR'S LOOK at the face painted first ([method TableProducer._make_face_check]): what it was asked to be, on [param skin] -
+## The art director's look at the face painted first ([method TableProducer._make_face_check]): what it was asked to be, on [param skin] -
 ## the painting and the bare surface go with the job.
 static func face_check(title: String, brief: String, plan: Dictionary, skin: Dictionary) -> Dictionary:
 	var vars := {"painted": String(plan.get("painted", "")).strip_edges(), "premise": String(plan.get("premise", "")).strip_edges(),
@@ -1375,12 +1349,12 @@ static func face_check(title: String, brief: String, plan: Dictionary, skin: Dic
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/art_director.face", vars)}
 
 
-## THE PAINTING'S HEIGHT MAP: the same surface redrawn as depth, from the cloth's painting attached.
+## The painting's height map: the same surface redrawn as depth, from the cloth's painting attached.
 static func height_image(look: Dictionary, target: String) -> String:
 	return Rules.say("table/painter.height", _look_vars(look, target))
 
 
-## THE ROOM past the table, through a level lens ([constant CardTable.BACKDROP_LENS]).
+## The room past the table, through a level lens ([constant CardTable.BACKDROP_LENS]).
 static func backdrop_image(look: Dictionary, target: String) -> String:
 	var vars := _look_vars(look, target)
 	vars["lens"] = int(CardTable.BACKDROP_LENS)

@@ -1,16 +1,14 @@
 extends RefCounted
 class_name ShadowField
 
-## A cheap CPU SHADOW MAP in light space - the honest version of "cast shadows" for the canvas 3D
-## scenes. Occluders (buildings, spires) are rasterized into a grid on the plane perpendicular to the
-## light; each cell keeps the occluder surface CLOSEST to the light. A surface point is then in shadow
-## if something is nearer the light at its cell - so a WHOLE building casts a real volumetric shadow
-## onto the ground AND onto other buildings (it layers on the blocks), instead of a flat footprint decal.
+## A cheap CPU shadow map in light space for the canvas 3D scenes. Occluders (buildings, spires) are rasterized into a grid on
+## the plane perpendicular to the light; each cell keeps the occluder surface closest to the light. A surface point is in shadow
+## if something is nearer the light at its cell, so a whole building casts a volumetric shadow onto the ground and other
+## buildings.
 ##
-## Self-shadowing (a building darkening its own sunlit face) is avoided by biasing each building's own
-## query by its own light-depth extent: moving a point along the light never changes its cell (the axis
-## is perpendicular), only its depth, so a large-enough bias lifts it clear of its own body while a
-## TALLER neighbor still occludes it.
+## Self-shadowing is avoided by biasing each building's own query by its own light-depth extent: moving a point along the light
+## changes only its depth, not its cell, so a large-enough bias lifts it clear of its own body while a taller neighbor still
+## occludes it.
 
 const SHADOW_MIN := 0.5          # brightness of a fully cast-shadowed surface (0 = black, 1 = lit)
 
@@ -35,16 +33,10 @@ func build(light_dir: Vector3, wmin: Vector3, wmax: Vector3, res := 220) -> void
 		_lr = _l.cross(Vector3(1, 0, 0))
 	_lr = _lr.normalized()
 	_lu = _lr.cross(_l).normalized()
-	# STABLE TEXELS - the fix for "the shadows aren't stable either". The bounds used to be the
-	# world box PROJECTED into light space, so both the origin AND the scale changed every frame as
-	# the light drifted (Terrain.set_light turns the azimuth continuously). Every texel therefore
-	# landed on a new world position each frame and a stationary tree's shadow crawled and shimmered
-	# along its own edges - textbook shadow swimming.
-	#
-	# The extent comes from the box's bounding SPHERE instead, which is the same number whatever
-	# direction the light comes from, and the origin is snapped DOWN to a whole texel. The texel then
-	# has a fixed size and a fixed phase in world space, so a turning light rotates the map instead of
-	# re-quantizing it, and geometry that has not moved keeps the shadow it had.
+	# Stable texels: the extent comes from the box's bounding sphere, which is the same number whatever direction the light comes
+	# from, and the origin is snapped down to a whole texel. The texel has a fixed size and phase in world space, so a turning
+	# light (Terrain.set_light turns the azimuth continuously) rotates the map instead of re-quantizing it, and a stationary
+	# tree's shadow does not swim.
 	var pad := 0.5
 	var ctr := (wmin + wmax) * 0.5
 	var radius := (wmax - wmin).length() * 0.5 + pad
@@ -63,22 +55,15 @@ func build(light_dir: Vector3, wmin: Vector3, wmax: Vector3, res := 220) -> void
 	_ready = true
 
 
-## Rasterize an oriented box occluder (its light-space silhouette bounding rect, storing the box's
-## surface nearest the light) and its per-cell COVERAGE. Returns the box's light-DEPTH extent, which
-## the caller passes back as the self-shadow bias when shading THAT box's own faces.
+## Rasterize an oriented box occluder (its light-space silhouette bounding rect, storing the box's surface nearest the light)
+## and its per-cell coverage. Returns the box's light-depth extent, which the caller passes back as the self-shadow bias when
+## shading that box's own faces.
 ##
-## COVERAGE IS THE ANTIALIASING, and it is the other half of "the shadows are blocky". The rect used
-## to be snapped to whole cells - `int((minlx - _minx) * _sx)` - so an occluder's silhouette both
-## STARTED and ENDED on a texel boundary. Two things follow from that and both were visible: the edge
-## is a hard staircase however smoothly [method factor] then interpolates the verdicts, because there
-## is no partial cell anywhere to interpolate; and as the light drifts the rect's bounds cross whole
-## texels one at a time, so the whole patch STEPS instead of traveling. Storing the fraction of each
-## border cell the silhouette actually covers puts the edge back at its true sub-texel position, and
-## it moves continuously because the fraction does.
+## Coverage is the antialiasing: it stores the fraction of each border cell the silhouette covers, so the edge sits at its true
+## sub-texel position and moves continuously as the light drifts.
 ##
-## [param round_] treats the silhouette as the inscribed ELLIPSE rather than the rect, feathering to
-## nothing at its rim. A tree crown and a spire shaft are round; their bounding rect is a square, and
-## a square shadow under a round thing is the blockiest object in the frame. Buildings stay square.
+## [param round_] treats the silhouette as the inscribed ellipse rather than the rect, feathering to nothing at its rim (a tree
+## crown and a spire shaft are round). Buildings stay square.
 func add_box(base: Vector3, up: Vector3, bx: Vector3, bz: Vector3, w: float, h: float,
 		round_ := false) -> float:
 	if not _ready:
@@ -100,7 +85,7 @@ func add_box(base: Vector3, up: Vector3, bx: Vector3, bz: Vector3, w: float, h: 
 		minlx = minf(minlx, lx); maxlx = maxf(maxlx, lx)
 		minly = minf(minly, ly); maxly = maxf(maxly, ly)
 		maxld = maxf(maxld, ld); minld = minf(minld, ld)
-	# The silhouette in CELL units, kept fractional - the whole point of the coverage pass.
+	# The silhouette in cell units, kept fractional.
 	var fx0 := (minlx - _minx) * _sx
 	var fx1 := (maxlx - _minx) * _sx
 	var fy0 := (minly - _miny) * _sy
@@ -121,8 +106,7 @@ func add_box(base: Vector3, up: Vector3, bx: Vector3, bz: Vector3, w: float, h: 
 		for cx in range(cx0, cx1 + 1):
 			var cov := covy * clampf(minf(fx1, float(cx) + 1.0) - maxf(fx0, float(cx)), 0.0, 1.0)
 			if round_:
-				# Inscribed ellipse, feathered over its outer third so the rim is a gradient and not
-				# a circle of hard cells - the same discipline as the rect edge above.
+				# Inscribed ellipse, feathered over its outer third so the rim is a gradient.
 				var dx := (float(cx) + 0.5 - mx) / rx
 				cov *= clampf((1.0 - sqrt(dx * dx + dy * dy)) * 3.0, 0.0, 1.0)
 			if cov <= 0.0:
@@ -130,42 +114,29 @@ func add_box(base: Vector3, up: Vector3, bx: Vector3, bz: Vector3, w: float, h: 
 			var idx := row + cx
 			if maxld > _grid[idx]:
 				_grid[idx] = maxld
-			# Coverage accumulates as a MAX over occluders rather than traveling with the depth that
-			# won: a cell grazed by one tree and filled by another is filled. It can therefore only
-			# ever soften what the old whole-cell rasterizer wrote, never darken it.
+			# Coverage accumulates as a max over occluders rather than traveling with the depth that won: a cell grazed by one tree
+			# and filled by another is filled.
 			if cov > _cov[idx]:
 				_cov[idx] = cov
 	return maxld - minld
 
 
-## The light-space DEPTH of a world point (higher = nearer the light). Lets a caller measure an
-## occluder's own depth extent for its self-shadow bias.
+## The light-space depth of a world point (higher = nearer the light), for measuring an occluder's own depth extent.
 func light_depth(p: Vector3) -> float:
 	return p.dot(_l)
 
 
-## Light factor at a world point: 1 = full sun, down to SHADOW_MIN if an occluder is nearer the light
-## at this point's cell. `bias` lifts the point clear of its own occluder (pass the box's depth extent
-## for its own faces; a small value for the ground).
+## Light factor at a world point: 1 = full sun, down to SHADOW_MIN if an occluder is nearer the light at this point's cell.
+## `bias` lifts the point clear of its own occluder (the box's depth extent for its own faces; a small value for the ground).
 ##
-## BILINEAR, and that is half the fix for "very blocky" shadows. The lookup used to be one nearest
-## -neighbor tap, so a shadow edge was a hard staircase on the cell grid: at canopy's world span
-## (about 8.5 units across `_res` cells) one cell is roughly a dozen screen pixels at 1920x1080,
-## which is exactly the size of step the wood's shadows were reported to have. `Terrain.shadow_at`
-## - the terrain's own, older shadow map - already samples bilinearly for this reason; this is the
-## same discipline applied to the prop map. The other half is [method add_box]'s coverage: filtering
-## between four cells that are each fully lit or fully shadowed can only ever produce a one-cell
-## ramp, and a one-cell ramp on a grid this size IS the staircase.
-##
-## The FOUR FACTORS are blended, not the four depths: neighboring cells hold the depth of
-## DIFFERENT occluders, and the average of two unrelated occluder depths is not a surface. Each
-## cell's own lit/shadowed verdict is computed first and only those are mixed, which soft-edges the
-## silhouette without inventing geometry between two trees.
+## Bilinear: a nearest tap gives a staircase edge on the cell grid. The four factors are blended, not the four depths:
+## neighboring cells hold the depth of different occluders, and the average of two is not a surface. Each cell's own
+## lit/shadowed verdict is computed first and only those are mixed. [method add_box]'s coverage supplies the partial cells the
+## filter needs for more than a one-cell ramp.
 func factor(p: Vector3, bias := 0.06) -> float:
 	if not _ready:
 		return 1.0
-	# Cell CENTERS sit at +0.5, so subtracting it puts the sample point in the frame where the
-	# integer part is the lower-left neighbor and the fraction is the blend weight.
+	# Cell centers sit at +0.5, so subtracting it puts the integer part at the lower-left neighbor and the fraction at the blend weight.
 	var fx := (p.dot(_lr) - _minx) * _sx - 0.5
 	var fy := (p.dot(_lu) - _miny) * _sy - 0.5
 	var x0 := floori(fx)
@@ -181,8 +152,7 @@ func factor(p: Vector3, bias := 0.06) -> float:
 	var d := p.dot(_l) + bias
 	var r0 := y0 * _res
 	var r1 := y1 * _res
-	# Each cell's verdict is its depth test SCALED BY how much of it the silhouette covered, so a
-	# grazed cell casts a partial shadow and the edge sits where the occluder's outline really is.
+	# Each cell's verdict is its depth test scaled by how much of it the silhouette covered, so a grazed cell casts a partial shadow.
 	var t00 := _cov[r0 + x0] * clampf((_grid[r0 + x0] - d) / 0.35, 0.0, 1.0)     # soft ramp into shadow
 	var t10 := _cov[r0 + x1] * clampf((_grid[r0 + x1] - d) / 0.35, 0.0, 1.0)
 	var t01 := _cov[r1 + x0] * clampf((_grid[r1 + x0] - d) / 0.35, 0.0, 1.0)

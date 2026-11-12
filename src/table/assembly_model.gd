@@ -1,24 +1,23 @@
 extends RefCounted
 class_name AssemblyModel
 
-## AssemblyModel - THE THING BEING BUILT, DESIGNED BEFORE A PIECE IS PICKED UP (next/assembly.md "The model"; the user, 2026-11-03, of a video that spent an hour on a blue floor, three
-## black terraces and a small house: "we built absolutely nothing discernable ... if I asked you to produce a complex scene with voxels, you could probably build an extremely elaborate and
-## impressive one outright ... We probably need a proper modeling step, such that we aren't just randomly placing bricks, but building to some kind of grand, planned vision ... I just want
-## to have a proper model built by the end of every video").
+## AssemblyModel - the thing being built, designed before a piece is picked up (next/assembly.md "The model").
 ##
-## WHAT AN AGENT WRITES IS SHAPES, NOT PIECES ([constant SHAPES]): a program of boxes, rounds, land from a formula, walls along a line, a roof, all painted into a grid of cells a stud across and
-## a plate tall, in named SECTIONS, in the order they are built. Nobody can design a mountain piece by piece from level maps, and the first episode's puppeteer shows what they design instead.
-## Nothing it writes is run as code: formulas are [Formula]'s.
+## What an agent writes is shapes, not pieces ([constant SHAPES]): a program of boxes, rounds, land from a formula, walls along a line, a
+## roof, all painted into a grid of cells a stud across and a plate tall, in named sections, in the order they are built. Nothing it
+## writes is run as code: formulas are [Formula]'s.
 ##
-## WHAT IS LAID IS REAL PARTS ([method _lay]): what the cells come to in what is really made, each course's joints off the last's so it holds together, plates across wide floors and bricks in thin
-## walls - whatever takes up the most at once, which is what a builder does. Hollow inside ([method _hollowed]), because nobody can see in and a solid hill is thousands of pieces.
+## What is laid is real parts ([method _lay]): what the cells come to in what is really made, each course's joints off the last's so it
+## holds together, plates across wide floors and bricks in thin walls - whatever takes up the most at once. Hollow inside
+## ([method _hollowed]), because nobody can see in and a solid hill is thousands of pieces.
 ##
-## AND IT REALLY HOLDS ([method _ordered]): every part joined to the plate through studs, what is joined only through the plate above it hung from that, in an order a hand could build it. A floor
-## over a hollow gets a pillar under it where that was hidden anyway; what was designed to hang in the air is said to the designer in words, with where.
+## It really holds ([method _ordered]): every part is joined to the plate through studs, what is joined only through the plate above it
+## hung from that, in an order a hand could build it. A floor over a hollow gets a pillar under it where that was hidden anyway; what was
+## designed to hang in the air is said to the designer in words, with where.
 ##
-## A PURE FUNCTION OF WHAT WAS WRITTEN, safe on a worker: no node, no global.
+## A pure function of what was written, safe on a worker: no node, no global.
 
-## WHAT A MODEL IS MADE OF: each kind of shape, its `fields`, its words an agent's. Every shape also takes those of [constant ANY_SHAPE].
+## What a model is made of: each kind of shape, its `fields`, its words an agent's. Every shape also takes those of [constant ANY_SHAPE].
 const SHAPES := {
 	"box": {"label": "Box", "blurb": "a solid block: a wall, a floor, a tower, a base", "fields": [["from", "[x, z, y] one corner cell"], ["to", "[x, z, y] the other, inclusive"]]},
 	"round": {"label": "Round", "blurb": "an upright round: a tower, a tree's trunk, a silo; given `top_radius`, a cone or a tapering stack", "fields": [["at", "[x, z] its middle"], ["radius", "cells, or [across, deep] for an oval"], ["y", "[from, to] levels"], ["top_radius", "cells at its top (left out: as at its foot)"], ["step", "how many levels stand alike before it changes (left out: 3, a brick's: 1 is smooth and costs far more)"]]},
@@ -29,7 +28,7 @@ const SHAPES := {
 	"roof": {"label": "Roof", "blurb": "a pitched roof over a rectangle, laid in real sloped parts: two sides stepping in to a ridge, its gable ends filled", "fields": [["from", "[x, z] one corner of what it covers"], ["to", "[x, z] the other"], ["y", "the level it starts at"], ["ridge", "\"x\" or \"z\": which way the ridge runs (left out: along the longer side)"]]},
 	"part": {"label": "Part", "blurb": "one real part where it must be exactly that part: an arch for a doorway, a round post, a window's sill. What is written here is kept as it is, whatever else fills round it", "fields": [["part", "\"<kind> <across>x<deep> <color>\""], ["at", "[x, z, level] its far left corner"], ["turn", "0, 90, 180 or 270"]]},
 }
-## WHAT ANY SHAPE TAKES.
+## What any shape takes.
 const ANY_SHAPE := [["color", "a color's name (a `part` has its own)"],
 	["carve", "true: cut this shape out of what is there, for a door, a window, a cove, a tunnel"],
 	["paint", "true: color what is already there, inside this shape, and add nothing: strata, a stripe, a shoreline, moss, snow"],
@@ -37,12 +36,12 @@ const ANY_SHAPE := [["color", "a color's name (a `part` has its own)"],
 	["slopes", "true: where its edges drop by a brick or more they are finished in sloped parts rather than square steps: rock, roofs of land, hulls"],
 	["repeat", "{\"n\": how many, \"by\": [x, z, y] from each to the next}: a row of windows, of posts, a stair"],
 	["mirror", "\"x\": it and its copy across the plate's middle, left and right; \"z\": near and far; \"both\": four"]]
-## THE LIMITS: how tall (levels), how many sections and shapes, and how many parts it may come to.
+## The limits: how tall (levels), how many sections and shapes, and how many parts it may come to.
 const TALL_MOST := 150
 const SECTIONS_MOST := 24
 const SHAPES_MOST := 400
 const PARTS_MOST := 1100
-## WHAT A MODEL SHOULD COME TO (parts): about five seconds a piece, so this is most of an hour.
+## What a model should come to (parts): about five seconds a piece, so this is most of an hour.
 const PARTS_AIM := Vector2i(350, 800)
 ## How many levels make a course: a brick's height. Everything lies on these unless it was written otherwise, and a brick not on one goes down only where nothing goes on above it.
 const COURSE := 3
@@ -57,7 +56,7 @@ const EMPTY := 0
 const TAKEN := 255
 
 
-## HOW A MODEL IS WRITTEN, in words, for whoever designs one.
+## How a model is written, in words, for whoever designs one.
 static func describe() -> String:
 	var lines := PackedStringArray()
 	lines.append("A MODEL IS {\"name\": what it is in plain words, \"size\": [across, deep] studs of its plate, %d to %d, \"colors\": {a name: \"#rrggbb\", up to %d}, \"base_color\": the plate's color, \"sections\": [each {\"name\", \"about\": a short phrase, \"shapes\": [...]}, in the order they are built, up to %d]}." % [Assembly.BASE_SIZES.x, Assembly.BASE_SIZES.y, Assembly.MAX_COLORS, SECTIONS_MOST])
@@ -78,7 +77,7 @@ static func describe() -> String:
 
 # --- made ------------------------------------------------------------------------------------------------------
 
-## WHAT [param raw] COMES TO: `{name, size, colors, base_color, sections: [{name, about, parts}], parts: [{kind, w, d, turn, color, x, z, l, section}, in the order they go on], floating: [words], notes, top,
+## What [param raw] comes to: `{name, size, colors, base_color, sections: [{name, about, parts}], parts: [{kind, w, d, turn, color, x, z, l, section}, in the order they go on], floating: [words], notes, top,
 ## cells}`. [param raw] as far as it can be used: what could not be is in `notes`.
 static func make(raw: Variant) -> Dictionary:
 	var out := {"name": "", "size": [Assembly.BASE_SIZE, Assembly.BASE_SIZE], "colors": {}, "base_color": "", "sections": [], "parts": [], "floating": [], "notes": PackedStringArray(), "top": 0, "cells": 0}
@@ -221,7 +220,7 @@ static func plan_text(m: Dictionary) -> String:
 
 # --- painted -----------------------------------------------------------------------------------------------------
 
-## SHAPE [param sh] OF SECTION [param si] painted, or said why not.
+## Shape [param sh] of section [param si] painted, or said why not.
 static func _shape(g: Grid, sh: Dictionary, si: int, notes: PackedStringArray) -> void:
 	var kind := String(sh.get("shape", "")).strip_edges().to_lower()
 	if not SHAPES.has(kind):
@@ -275,7 +274,7 @@ class Flip:
 		return Vector3i(w - 1 - nx if mx else nx, y + off.y, d - 1 - nz if mz else nz)
 
 
-## ONE COPY OF A SHAPE, as a run over what could be in it: each cell a shape says is in it goes through [method Grid.touch].
+## One copy of a shape, as a run over what could be in it: each cell a shape says is in it goes through [method Grid.touch].
 static func _paint(g: Grid, sh: Dictionary, kind: String, color: int, si: int, compiled: Dictionary, fx: Flip, notes: PackedStringArray) -> void:
 	var act := Stroke.new(g, sh, color, si, fx)
 	match kind:
@@ -564,7 +563,7 @@ class Stroke:
 				return
 			g.cells[i] = color + 1
 			if top:
-				# ...ONLY WHAT IS OPEN TO THE SKY, and the brick's height under it: a single level is a plate over every stud of it
+								# ...only what is open to the sky, and the brick's height under it: a single level is a plate over every stud of it
 				g.cells[i] = cover
 				if not g.filled_at(p.x, p.z, p.y + 1):
 					for k in AssemblyModel.COURSE:
@@ -622,7 +621,7 @@ class Grid:
 			cells[index(int(c[0]), int(c[1]), int(c[2]))] = AssemblyModel.TAKEN
 		fixed.append(p)
 
-	## WHERE LAND'S EDGES DROP BY A BRICK, the sloped parts that finish them ([constant ANY_SHAPE] `slopes`): over the edge and the row behind it, its low side out, in runs along the edge as long as are made. What is above it, or would be cut, stays square.
+	## Where land's edges drop by a brick, the sloped parts that finish them ([constant ANY_SHAPE] `slopes`): over the edge and the row behind it, its low side out, in runs along the edge as long as are made. What is above it, or would be cut, stays square.
 	func slope_edges() -> void:
 		var dirs := [[Vector2i(0, 1), 0], [Vector2i(1, 0), 90], [Vector2i(0, -1), 180], [Vector2i(-1, 0), 270]]
 		for y in range(h - 3, -1, -1):
@@ -670,7 +669,7 @@ class Grid:
 
 # --- what stays, and what it is laid in ------------------------------------------------------------------------
 
-## WHAT NOBODY WILL SEE IS LEFT OUT: a cell is kept if there is anything empty within [constant SHELL] of it. [param extra] holds cells kept all the same ([method _pillars]). A byte per cell.
+## What nobody will see is left out: a cell is kept if there is anything empty within [constant SHELL] of it. [param extra] holds cells kept all the same ([method _pillars]). A byte per cell.
 static func _hollowed(g: Grid, extra: Dictionary) -> PackedByteArray:
 	var kept := PackedByteArray()
 	kept.resize(g.cells.size())
@@ -708,9 +707,10 @@ static func _hollowed(g: Grid, extra: Dictionary) -> PackedByteArray:
 	return kept
 
 
-## THE CELLS IN REAL PARTS, bottom up, added to [param parts]. WHAT TAKES UP THE MOST GOES DOWN FIRST, wherever on the level it fits, and only then what fits round it: going cell by cell a curved edge comes apart into hundreds of single studs.
-## Each course is gone over the other way from the last, and what would run its joint straight over a joint below waits for a smaller part, so a wall holds together.
-## WHAT WAS LEFT HANGING LAST TIME IS BRIDGED: [param bridge] says which cells must first take a long plate, running in from there over what holds.
+## The cells in real parts, bottom up, added to [param parts]. What takes up the most goes down first, wherever on the level it fits, and
+## only then what fits round it: going cell by cell, a curved edge comes apart into hundreds of single studs. Each course is gone over the
+## other way from the last, and what would run its joint straight over a joint below waits for a smaller part, so a wall holds together.
+## What was left hanging last time is bridged: [param bridge] says which cells must first take a long plate, running in from there over what holds.
 static func _lay(g: Grid, kept: PackedByteArray, parts: Array, bridge: Dictionary = {}) -> void:
 	var used := PackedByteArray()
 	used.resize(g.cells.size())
@@ -769,10 +769,10 @@ static func _lay(g: Grid, kept: PackedByteArray, parts: Array, bridge: Dictionar
 					continue
 				if not _all_free(g, kept, used, px, pz, y, sx, sd, tall, g.cells[from + i]):
 					continue
-				# ...WHAT OVERHANGS IS PLATES, whose joints can be off each other a level apart: a brick out over nothing is joined to nothing
+								# ...what overhangs is plates, whose joints can be off each other a level apart: a brick out over nothing is joined to nothing
 				if tall == COURSE and y > 0 and not _any_under(g, px, pz, y, sx, sd):
 					continue
-				# ...A BRICK LIES ON A COURSE, where colors and shapes change: off one, it goes only where it fills what is left
+								# ...a brick lies on a course, where colors and shapes change: off one, it goes only where it fills what is left
 				if tall == COURSE and y % COURSE != 0 and y + tall < g.h and _all_free(g, kept, used, px, pz, y + tall, 1, 1, 1, g.cells[from + i]):
 					continue
 				# ...the last size of its height always goes down; any other waits if its far edge lies along a joint below
@@ -791,7 +791,7 @@ static func _lay(g: Grid, kept: PackedByteArray, parts: Array, bridge: Dictionar
 				break
 
 
-## THE LONGEST PLATE running either way from the cell [param x], [param z], or `{}`: across a joint, for what is under it or over it to hold by.
+## The longest plate running either way from the cell [param x], [param z], or `{}`: across a joint, for what is under it or over it to hold by.
 static func _strip(g: Grid, kept: PackedByteArray, used: PackedByteArray, x: int, z: int, y: int, col: int) -> Dictionary:
 	for length in [8, 6, 4, 3, 2]:
 		# ...each level across the last
@@ -819,7 +819,7 @@ static func _sizes_largest_first() -> Array:
 			out.append([String(family[0]), w, d, int(family[1]), [w, d, 0], w * d <= 2])
 			if w != d:
 				out.append([String(family[0]), d, w, int(family[1]), [w, d, 90], w * d <= 2])
-	# ...BY HOW MUCH OF A LEVEL IT COVERS, more for a brick's height: bricks in a thin wall, where they save the most, and wide plates over anything wider - bricks side by side hold nothing together, where a plate across a hollow is held by all its walls
+		# ...by how much of a level it covers, more for a brick's height: bricks in thin walls, where they save the most, and wide plates over anything wider (a plate across a hollow is held by all its walls)
 	out.sort_custom(func(p: Array, q: Array) -> bool:
 		var vp := float(int(p[1]) * int(p[2])) * sqrt(float(p[3]))
 		var vq := float(int(q[1]) * int(q[2])) * sqrt(float(q[3]))
@@ -896,7 +896,7 @@ static func _on_a_joint(g: Grid, owner: PackedInt32Array, px: int, pz: int, y: i
 
 # --- how it holds, and the order it goes on ----------------------------------------------------------------------
 
-## THE ORDER A HAND COULD BUILD IT IN, and what can never be joined: `{parts, floating}`. A part goes on once it is on the plate or a stud joins it to what is there, from below or hanging from above: within a section,
+## The order a hand could build it in, and what can never be joined: `{parts, floating}`. A part goes on once it is on the plate or a stud joins it to what is there, from below or hanging from above: within a section,
 ## the lowest course first, each part next to the last where it can be, so the hand goes round as a builder goes. A later section's part is only taken early if nothing before it could go on without it.
 static func _ordered(parts: Array, w: int, d: int) -> Dictionary:
 	var at := {}
@@ -987,7 +987,7 @@ static func _solid_foot_at(q: Dictionary, x: int, z: int) -> bool:
 	return false
 
 
-## WHAT LIES OVER OR UNDER WHAT HANGS IS TO RUN ACROSS IT: its cells marked for [method _lay]. Whether any were new.
+## What lies over or under what hangs is to run across it: its cells marked for [method _lay]. Whether any were new.
 static func _bridged(g: Grid, floating: Array, bridge: Dictionary) -> bool:
 	var any := false
 	for f in floating:
@@ -1003,7 +1003,7 @@ static func _bridged(g: Grid, floating: Array, bridge: Dictionary) -> bool:
 	return any
 
 
-## WHAT WAS HOLLOWED OUT AND LEFT HANGING IS HELD BY WHAT WAS LEFT OUT, hidden in what is there anyway: the wall is left thicker round it, by more on each pass [param reach], so a ring out over the last one has something to bite on, and the cells straight under it come back down to what is under them. Whether any did: what hangs over cells nobody wrote is for its designer to say.
+## What was hollowed out and left hanging is held by what was left out, hidden in what is there anyway: the wall is left thicker round it, by more on each pass [param reach], so a ring out over the last one has something to bite on, and the cells straight under it come back down to what is under them. Whether any did: what hangs over cells nobody wrote is for its designer to say.
 static func _pillars(g: Grid, floating: Array, extra: Dictionary, reach: int) -> bool:
 	var any := false
 	for f in floating:

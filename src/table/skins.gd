@@ -1,26 +1,23 @@
 extends RefCounted
 class_name Skins
 
-## Skins - THE PAINTED SURFACE (next/painted_surface.md; next/table_work.md section 11): what is painted on a part's `skin`,
-## and how a tool lays it on. The user, 2026-11-05, of Joker Motivation: "The person slowly and meticulously applies a
-## foundation, and details, and eye liner, and lipstick, and gently smears things with a sponge ... We are creating a work of
-## art." Nothing here knows a face: a skin is any part painted from one side - a mask's face, a cake's top, a sign, a
-## miniature - and a DESIGN is its ELEMENTS.
+## Skins: the painted surface (next/painted_surface.md; next/table_work.md section 11): what is painted on a part's `skin`, and how a tool
+## lays it on. Nothing here knows a face: a skin is any part painted from one side - a mask's face, a cake's top, a sign, a miniature -
+## and a design is its elements.
 ##
-## A DESIGN IS DATA, never a picture: its elements, in the order they go on, each a shape in MILLIMETERS across and down the
-## skin as it is seen from its side (x to the right, y down, from its top left corner) - a `fill` (an SVG path, or "all" of the
-## surface), a `line` (an SVG path drawn with a `width`), `dots` or `stones` - with its `paint`, its `finish` and its `stage`.
-## The decorator writes it ([method sanitize]); Godot draws each shape from its own SVG ([method cover]) so the edges are the
-## design's exactly.
+## A design is data, never a picture: its elements, in the order they go on, each a shape in millimeters across and down the skin as it is
+## seen from its side (x to the right, y down, from its top left corner) - a `fill` (an SVG path, or "all" of the surface), a `line` (an
+## SVG path drawn with a `width`), `dots` or `stones` - with its `paint`, its `finish` and its `stage`. The decorator writes it ([method
+## sanitize]); Godot draws each shape from its own SVG ([method cover]) so the edges are the design's exactly.
 ##
-## A TOOL LAYS IT ON AS A HAND DOES ([method program]): a line drawn along its path in slow strokes, lifted at its corners; a
-## fill swept back and forth along its length; a base stippled with a sponge from its middle out, twice; a powder patted; dots
-## dabbed; stones carried from their dish and pressed on - going back to the paint when the tool runs dry. Every point of an
-## element is given the moment the tool first covers it, as a share of its program ([method when_map]), so the paint shows
-## exactly where the tool has been, a pure function of time ([TablePaint] plays it).
+## A tool lays it on as a hand does ([method program]): a line drawn along its path in slow strokes, lifted at its corners; a fill swept
+## back and forth along its length; a base stippled with a sponge from its middle out, twice; a powder patted; dots dabbed; stones carried
+## from their dish and pressed on - going back to the paint when the tool runs dry. Every point of an element is given the moment the tool
+## first covers it, as a share of its program ([method when_map]), so the paint shows exactly where the tool has been, a pure function of
+## time ([TablePaint] plays it).
 
-## THE FINISHES paint can have: how rough it is (0 a mirror, 1 chalk), how metallic, how much glitter is in it, and how much of
-## what is under it it hides (`opacity`, when the element says none).
+## The finishes paint can have: how rough it is (0 a mirror, 1 chalk), how metallic, how much glitter is in it, and how much of what is
+## under it it hides (`opacity`, when the element says none).
 const FINISHES := {
 	"matte": {"label": "Matte", "blurb": "a soft, flat finish - greasepaint, face paint, gouache, a set foundation", "rough": 0.62, "metal": 0.0, "glitter": 0.0, "opacity": 1.0},
 	"satin": {"label": "Satin", "blurb": "a soft sheen - cream paint, a satin lipstick, acrylic", "rough": 0.4, "metal": 0.0, "glitter": 0.0, "opacity": 1.0},
@@ -30,9 +27,9 @@ const FINISHES := {
 	"pearl": {"label": "Pearl", "blurb": "a soft pearly shimmer - a highlighter, a pearl paint, an iridescent powder", "rough": 0.24, "metal": 0.35, "glitter": 0.15, "opacity": 0.8},
 	"powder": {"label": "Powder", "blurb": "a fine translucent veil that takes the shine off what is under it - a setting powder, a dusting of flour or chalk; patted on, and patted again to sweep its excess away", "rough": 0.97, "metal": 0.0, "glitter": 0.0, "opacity": 0.38},
 }
-## WHAT A SECOND PASS OF POWDER LEAVES of the first (its excess swept off).
+## What a second pass of powder leaves of the first (its excess swept off).
 const SWEPT := 0.35
-## THE MANNERS a tool lays an element on in - the first that suits it is taken unless the act says another.
+## The manners a tool lays an element on in - the first that suits it is taken unless the act says another.
 const MANNERS := {
 	"line": {"label": "Line", "blurb": "drawn along its path in short pulls, each begun back over the last and now and then gone over again, lifted between them"},
 	"sweep": {"label": "Sweep", "blurb": "a fill swept back and forth along its length, each stroke beside the last - a flat or round brush, or a sponge's flat face"},
@@ -44,8 +41,8 @@ const MANNERS := {
 	"smear": {"label": "Smear", "blurb": "paint already on dragged along a path in one pressed stroke, thinning and streaking as it goes - a sponge's edge, a fingertip, a dry brush"},
 	"spray": {"label": "Spray", "blurb": "a mist sprayed over it from a hand's length away, a few pumps across it - a setting spray, a mister"},
 }
-## A SMEAR: how wide it is when none is given (millimeters), how much of its paint is left at its end, the streaks across it, and how
-## many pieces along it its paint thins over. A MIST: the sheen it leaves (roughness), what of it is left once dry, and how long that
+## A smear: how wide it is when none is given (millimeters), how much of its paint is left at its end, the streaks across it, and how
+## many pieces along it its paint thins over. A mist: the sheen it leaves (roughness), what of it is left once dry, and how long that
 ## takes (seconds).
 const SMEAR_WIDTH := 6.0
 const SMEAR_LEFT := 0.2
@@ -60,9 +57,8 @@ const MOST_PATH := 6000
 const MOST_DOTS := 120
 const MOST_STONES := 60
 const WIDTH := Vector2(0.2, 25.0)
-## How far an element's edge may be softened (millimeters), and how far a blend softens it when its `soft` says none - a fill, AT MOST
-## THIS SHARE OF HOW FAR ITS MIDDLE IS FROM ITS EDGE ([method inner_reach]; feedback 0046, of lips gone over with the blending brush: "now the
-## lips are fainter at the top, while smearing outside the lines at the bottom" - 4 mm softened an upper lip 8 mm deep through and through);
+## How far an element's edge may be softened (millimeters), and how far a blend softens it when its `soft` says none - a fill, at most
+## this share of how far its middle is from its edge ([method inner_reach]; a flat softening would blur a thin lip through and through);
 ## a line is feathered as far as it was.
 const SOFT_MOST := 15.0
 const BLEND_SOFT := 4.0
@@ -74,15 +70,15 @@ const WHEN_PX := 1.0
 ## How far a press's ragged edge reads its reveal map from each point, at most along each axis (millimeters) - line for line
 ## skin_paint.gdshader's `RAGGED` ([method touch_map]'s spread).
 const PRESS_RAGGED := 1.6
-## A BRUSH'S PAINT IS SMOOTHED AS PAINT SPREADS ([method touch_map]'s `foot_out`): what its hairs touched shrunk to a point this wide
-## (millimeters) and grown back smoothly, and laid where that is between these shares of whole - each bit of a hair stamped on its own, a
-## stray one beside a liner's line stood out of it as a bead (feedback 0043: "rough edges"). A lone bit fades out (0.29 of whole), a
-## millimeter's line stays whole (0.85), and what is thinner than half of one fades.
+## A brush's paint is smoothed as paint spreads ([method touch_map]'s `foot_out`): what its hairs touched shrunk to a point this wide
+## (millimeters) and grown back smoothly, and laid where that is between these shares of whole - each bit of a hair stamped on its own
+## would leave a stray one beside a liner's line standing out as a bead. A lone bit fades out (0.29 of whole), a millimeter's line stays
+## whole (0.85), and what is thinner than half of one fades.
 const FOOT_SOFT := 1.0
 const FOOT_HALF := Vector2(0.25, 0.55)
 ## ...and a point no tool ever touched (of the program's length: never reached in it) - [method touch_map].
 const NEVER := 1000.0
-## A POINT IS TOUCHED AGAIN by a touch at any other moment of its program than its first (a share of it - a press's own touches are one
+## A point is touched again by a touch at any other moment of its program than its first (a share of it - a press's own touches are one
 ## moment, and the next press is hardly a two-thousandth of a long act on): a pressed element's film thickens only where and when it is
 ## ([method touch_map]'s third channel, skin_paint.gdshader's `again`).
 const AGAIN_AFTER := 0.00001
@@ -92,18 +88,15 @@ const CLOSE_LEAST := 5
 const CLOSE_PASSES := 2
 const PATH_STEP := 0.5
 
-## THE PACE of a hand at this work, at its own speed - A CAREFUL HAND'S, a face painted as a work of art (the user, 2026-11-05: a first
-## face done in 9:22 was "a VERY fast application of elaborate clown makeup ... most GRWM videos would be closer to the range of 20 or
-## 30 minutes"; at 16 mm/s a liner outlined ten diamonds in a minute, a careful one takes three to five): millimeters a second along a
-## line, across a sweep and a blend; how long it takes to come down onto the surface and to lift off it; how far it lifts between
-## strokes (millimeters); how fast it moves between them (mm/s, never quicker than TRAVEL_LEAST seconds).
+## The pace of a hand at this work, at its own speed - a careful hand's, a face painted as a work of art: millimeters a second along a
+## line, across a sweep and a blend; how long it takes to come down onto the surface and to lift off it; how far it lifts between strokes
+## (millimeters); how fast it moves between them (mm/s, never quicker than TRAVEL_LEAST seconds).
 const LINE_SPEED := 7.0
-## A LINE IS PRESSED AS FAR AS IT IS WIDE (feedback 0052): at the least this share of what its tool gives - a hairline with a big brush
-## still bends its tip over ([method program], TablePaint.TIP_PUSH).
+## A line is pressed as far as it is wide: at the least this share of what its tool gives - a hairline with a big brush still bends its
+## tip over ([method program], TablePaint.TIP_PUSH).
 const LINE_PRESS_LEAST := 0.15
 const SWEEP_SPEED := 14.0
-## ...its edge cut in slower, as an outline is laid (millimeters a second; feedback 0056: "these strokes are being painted extremely fast" -
-## a fill went at 24 throughout)
+## ...its edge cut in slower, as an outline is laid (millimeters a second).
 const CUT_SPEED := 10.0
 const BLEND_SPEED := 16.0
 const DOWN := 0.5
@@ -111,15 +104,13 @@ const UP := 0.45
 const HOVER := 4.0
 const TRAVEL := 60.0
 const TRAVEL_LEAST := 0.35
-## A LOOK after each stroke: the tool backs off this far (millimeters) and the eye checks what it did, for between these (seconds),
+## A look after each stroke: the tool backs off this far (millimeters) and the eye checks what it did, for between these (seconds),
 ## before the next - drawn by the stroke, so the same design paints the same way.
 const LOOK := Vector2(0.6, 1.8)
 const LOOK_LIFT := 9.0
-## A DAB: down, held, up (seconds), how high it lifts between dabs and how fast it moves - a sponge bounced lightly, a press a
-## half second (it touches only what its corner touches now, so it presses many more times - feedback 0032); a PAT the same, as light: a puff is
-## pressed on and lifted again and again, briskly - two pats a second - and never slid (feedback 0027: "we are sliding it along the
-## face, and gently tapping the face periodically ... would they rapidly tap it over and over, gently?"; it had been a press of
-## more than a second lifted 9 mm).
+## A dab: down, held, up (seconds), how high it lifts between dabs and how fast it moves - a sponge bounced lightly, a press a half
+## second (it touches only what its corner touches now, so it presses many more times); a pat the same, as light: a puff is pressed on
+## and lifted again and again, briskly - two pats a second - and never slid.
 const DAB := Vector3(0.16, 0.1, 0.16)
 const DAB_LIFT := 2.5
 const DAB_MOVE := 70.0
@@ -127,34 +118,30 @@ const PAT := Vector3(0.16, 0.12, 0.16)
 const PAT_LIFT := 4.0
 ## A PRESS (an element gone over again by a tool that is never slid - [method blend_manner]) never goes back for more.
 const PRESS_MOST := 1 << 20
-## A TRIP BACK TO THE PAINT in the middle of an element (seconds), and how much is laid before the tool runs dry: of a line
-## (mm), a sweep (mm of stroke), stipple dabs, pats and dots - a sponge and a puff a few presses a load (the user, 2026-11-06:
-## "there is no way we could possibly have enough foundation to paint as much as we already have in that picture"; it had been 70).
+## A trip back to the paint in the middle of an element (seconds), and how much is laid before the tool runs dry: of a line (mm), a sweep
+## (mm of stroke), stipple dabs, pats and dots - a sponge and a puff a few presses a load.
 const RELOAD := 3.4
 const RELOAD_LINE := 110.0
 const RELOAD_SWEEP := 260.0
 const RELOAD_DABS := 16
 const RELOAD_PATS := 12
 const RELOAD_DOTS := 14
-## ...A STIPPLE'S AND A PAT'S LOAD BY THE FACE IT COVERS (square millimeters - a sponge's 16 presses a disc 24 mm across, a puff's 12 of
+## ...a stipple's and a pat's load by the face it covers (square millimeters - a sponge's 16 presses a disc 24 mm across, a puff's 12 of
 ## 45): a tool that presses lays what of it touches (TablePaint._touch_width), and a corner touching less presses more times a load.
 const LOAD_AREA_DABS := 7200.0
 const LOAD_AREA_PATS := 19000.0
-## ...AND IT LAYS LESS AS IT RUNS DRY (the user: "the application to get lighter and lighter on the mask, fainter and fainter, until
-## we are forced to pick-up more product from the case"): what each press or stretch lays, of what the first after a load lays, by
-## the time the tool goes back for more - a stipple's and a pat's presses much less, a sweep a little; a line (a liner, a pencil),
-## a dot, a smear and a mist as much to the end ([method when_map]'s second channel).
+## ...and it lays less as it runs dry: what each press or stretch lays, of what the first after a load lays, by the time the tool goes
+## back for more - a stipple's and a pat's presses much less, a sweep a little; a line (a liner, a pencil), a dot, a smear and a mist as
+## much to the end ([method when_map]'s second channel).
 const DRY_DABS := 0.25
 const DRY_PATS := 0.3
 const DRY_SWEEP := 0.85
-## ...AS A HAND RUNS A TOOL DRY, never by a count (the user, 2026-11-06: "every 16 dabs is going to be strange as well: because it's
-## constant"; "each application might use a different amount ... a person might choose to apply the dabbing even when they have very
-## little product ... you can almost always get a little bit more out of the dabs, though it becomes less and less over time"): what is
-## on the tool is taken off a share at a time - each press (or stroke) its own hand, this share more or less than the manner's - so it
-## never runs out; each load is taken up this share more or less full; and the hand goes back for more once a press would lay less than
-## this load's own STOP (shares of the manner's dry) - or, one load in PUSH_ON, only far later (PUSH_STOP). How many presses a load
-## lasts is what comes of it. Never less than LAYS_LEAST of a full first press. What never runs pale (a line, a dot) goes back after
-## LOAD_SPREAD either way of its number. All drawn from the element, so the same design always paints the same way.
+## ...as a hand runs a tool dry, never by a count: what is on the tool is taken off a share at a time - each press (or stroke) its own
+## hand, this share more or less than the manner's - so it never runs out; each load is taken up this share more or less full; and the
+## hand goes back for more once a press would lay less than this load's own STOP (shares of the manner's dry) - or, one load in PUSH_ON,
+## only far later (PUSH_STOP). How many presses a load lasts is what comes of it. Never less than LAYS_LEAST of a full first press. What
+## never runs pale (a line, a dot) goes back after LOAD_SPREAD either way of its number. All drawn from the element, so the same design
+## always paints the same way.
 const TAKE_SPREAD := 0.45
 const AMOUNT_SPREAD := 0.15
 const STOP := Vector2(0.75, 1.5)
@@ -162,12 +149,12 @@ const PUSH_ON := 0.2
 const PUSH_STOP := Vector2(0.25, 0.55)
 const LAYS_LEAST := 0.03
 const LOAD_SPREAD := 0.4
-## ...a SWEEP's, gently: its strokes and its loads this share more or less, back for more about its dry - a fill is gone over once,
-## and a stroke laid pale or a load pushed on is a stripe in it to the end.
+## ...a sweep's, gently: its strokes and its loads this share more or less, back for more about its dry - a fill is gone over once, and a
+## stroke laid pale or a load pushed on is a stripe in it to the end.
 const TAKE_SPREAD_SWEEP := 0.08
 const AMOUNT_SPREAD_SWEEP := 0.05
 const STOP_SWEEP := Vector2(0.92, 1.04)
-## A SMEAR's pace (millimeters a second). A SPRAY: how long it is held up and aimed, each pump, the time between pumps, how wide one
+## A smear's pace (millimeters a second). A spray: how long it is held up and aimed, each pump, the time between pumps, how wide one
 ## pump's mist lands (millimeters), and how much surface a pump covers (square millimeters).
 const SMEAR_SPEED := 10.0
 const AIM := 1.5
@@ -180,11 +167,10 @@ const PICK := 3.2
 const PLACE := Vector3(0.8, 0.7, 0.6)
 ## Where a line is cut into runs: at a corner sharper than this (degrees).
 const CORNER := 75.0
-## A RUN IS DRAWN IN SHORT PULLS (the user, 2026-11-06: "brush strokes are drawn perfectly, all in one line, never lifting the brush ...
-## They would draw in short, small bursts, lifting the brush each time, making strokes, correcting mistakes"): each pull this long
-## (mm, each its own), started this far back over the last one's end so they join, lifted this far between them (mm) and down and up
-## this fast (seconds); its pace each its own share of [constant LINE_SPEED], eased in and out; and now and then - this share of them -
-## part of a pull gone over again, slower, before the next. A look back only where a run ends.
+## A run is drawn in short pulls: each pull this long (mm, each its own), started this far back over the last one's end so they join,
+## lifted this far between them (mm) and down and up this fast (seconds); its pace each its own share of [constant LINE_SPEED], eased in
+## and out; and now and then - this share of them - part of a pull gone over again, slower, before the next. A look back only where a run
+## ends.
 const PULL := Vector2(6.0, 16.0)
 const PULL_OVER := 1.5
 const PULL_LIFT := 1.2
@@ -198,30 +184,26 @@ const ISLAND_LEAST := 12
 const ROWS := 0.7
 const DABS := 0.78
 const PATS := 1.05
-## ...and a sweep's row is kept every this far along (millimeters): a hand's tool is held clear of the surface at each place it is
-## kept ([method TablePaint._cleared]), and a row with its two ends alone had crossed the nose at the ends' angle.
+## ...and a sweep's row is kept every this far along (millimeters): a hand's tool is held clear of the surface at each place it is kept
+## ([method TablePaint._cleared]), and a row with only its two ends would cross the nose at the ends' angle.
 const ROW_KEYS := 4.0
-## A FILL KEEPS INSIDE ITS SHAPE, ITS EDGE CUT IN FIRST (feedback 0042: a flat brush's rows ran over a diamond's black line and onto the
-## face past it, and its paint showed only inside the diamond - "we are going to need really accurate paint-application physics"; 0043:
-## "a real artist trying to be really precise here ... would go back and clean-up those lines"): now that a brush lays its paint where
-## its hairs touch, a sweep goes once round each of its shape's outlines this share of its brush's half width inside it, the side of the
-## hairs along the edge ([method _cut_in]), and its rows stay as far inside ([method sweep_paths]) - what still runs past is cut back
-## where it is drawn ([method TablePaint._keep_inside]). A run of the edge shorter than this (millimeters) is not drawn.
+## A fill keeps inside its shape, its edge cut in first: since a brush lays its paint where its hairs touch, a sweep goes once round each
+## of its shape's outlines this share of its brush's half width inside it, the side of the hairs along the edge ([method _cut_in]), and
+## its rows stay as far inside ([method sweep_paths]) - what still runs past is cut back where it is drawn ([method
+## TablePaint._keep_inside]). A run of the edge shorter than this (millimeters) is not drawn.
 const CUT_IN := 1.0
 const CUT_LEAST := 3.0
-## A SPONGE IS HELD TWO WAYS (the user, 2026-11-05: "women generally would dab with the corner of the sponge, not with the flat side
-## of it ... They probably use the flat side to smear it and spread it, but use the corner to dip into the container, and to paint
-## features"): its flat face for the manners that spread, its corner for every other - and a corner lays paint this much of its
-## face's width ([method width_for]).
+## A sponge is held two ways: its flat face for the manners that spread, its corner for every other - and a corner lays paint this much
+## of its face's width ([method width_for]).
 const FLAT_MANNERS := ["sweep", "blend"]
 const CORNER_WIDE := 0.75
 
 
 # --- the design ---------------------------------------------------------------------------------------
 
-## WHATEVER A DECORATOR WROTE, as a design that can be painted on a skin [param frame] millimeters across and down:
-## `{name, elements: [{id, stage, paint, finish, opacity, soft, kind (fill, line, dots, stones), d (a path, or "all"), width,
-## dots, stones}], notes}` - every element with a shape and an id of its own, in the order written.
+## Whatever a decorator wrote, as a design that can be painted on a skin [param frame] millimeters across and down: `{name, elements:
+## [{id, stage, paint, finish, opacity, soft, kind (fill, line, dots, stones), d (a path, or "all"), width, dots, stones}], notes}` -
+## every element with a shape and an id of its own, in the order written.
 static func sanitize(raw: Variant, frame: Vector2, outline := "") -> Dictionary:
 	var notes := PackedStringArray()
 	var d: Dictionary = raw if raw is Dictionary else {}
@@ -252,12 +234,10 @@ static func sanitize(raw: Variant, frame: Vector2, outline := "") -> Dictionary:
 	return {"name": Props._text(d.get("name", ""), 80), "elements": out, "notes": notes}
 
 
-## A BASE COVERS ALL OF WHAT IT IS THE BASE OF: of elements [param els], the fills a design opens on that each cover at least
-## [constant BASE_SHARE] of its surface (inside [param outline], else its [param frame]) are laid over all of it, to its edges, their
-## soft edge kept off its rim. A second base drawn short of the chin ("left thinner at the right temple and jaw") was laid whole, and
-## its tan showed past it as a spot the hand had missed - twice (feedback 0050, 0051, 2026-11-07: "We missed that white spot in the
-## exact same spots on the chin, again. There are regions where tan is still showing through, not white. Our coverage is
-## incomplete"). Thinner or darker toward an edge is an element of its own over the base (decorator.yaml).
+## A base covers all of what it is the base of: of elements [param els], the fills a design opens on that each cover at least
+## [constant BASE_SHARE] of its surface (inside [param outline], else its [param frame]) are laid over all of it, to its edges, their soft
+## edge kept off its rim - a second base drawn short of an edge would otherwise leave the first coat showing past it as a missed spot.
+## Thinner or darker toward an edge is an element of its own over the base (decorator.yaml).
 const BASE_SHARE := 0.6
 ## ...measured this many pixels a millimeter
 const BASE_PX := 1.0
@@ -299,16 +279,16 @@ static func _based(els: Array, outline: String, frame: Vector2, notes: PackedStr
 static func _element(e: Dictionary, frame: Vector2, notes: PackedStringArray, before: Array = []) -> Dictionary:
 	var id := Props._text(e.get("id", e.get("name", "")), 40)
 	var out := {"id": id, "stage": Props._text(e.get("stage", ""), 30).to_lower()}
-	# (...and, laid by a painter at the table, its PLAN: the tool, how it is laid, the beat and the seconds it took - the painter's tools -
-	# and, laid by the painter host, the element of its output it plays (`host`, [method TablePaint._from_host]; dropped here, every
-	# element of the host's had fallen back to the old painter, its bounding box drawn as a line)
+	# (...and, laid by a painter at the table, its plan: the tool, how it is laid, the beat and the seconds it took - the painter's tools -
+	# and, laid by the painter host, the element of its output it plays (`host`, [method TablePaint._from_host]; dropped here, or the
+	# host's elements would fall back to the old painter))
 	if e.get("plan") is Dictionary:
 		var pl: Dictionary = e["plan"]
 		out["plan"] = {"thing": Props._text(pl.get("thing", ""), 60), "part": Props._text(pl.get("part", ""), 60), "how": Props._text(pl.get("how", ""), 12),
 			"beat": Props._text(str(pl.get("beat", "")), 20), "seconds": float(Props._num(pl.get("seconds"), 0.0, 0.0, 900.0)), "pot": Props._text(pl.get("pot", ""), 60)}
 		if pl.get("host") is String and not String(pl["host"]).is_empty():
 			out["plan"]["host"] = Props._text(pl["host"], 40)
-	# A SMEAR takes the paint of what it drags, an element laid before it
+	# A smear takes the paint of what it drags, an element laid before it
 	if e.has("smear"):
 		var from := String(e["smear"]).strip_edges().to_lower()
 		var src: Dictionary = {}
@@ -327,7 +307,7 @@ static func _element(e: Dictionary, frame: Vector2, notes: PackedStringArray, be
 			"finish": String(e["finish"]) if FINISHES.has(String(e.get("finish", ""))) else String(src["finish"]),
 			"opacity": Props._num(e.get("opacity"), float(src["opacity"]), 0.05, 1.0), "soft": Props._num(e.get("soft"), 1.0, 0.0, SOFT_MOST)})
 		return out
-	# A MIST lays no color: a wet sheen over what it lands on, which dries to a soft glow
+	# A mist lays no color: a wet sheen over what it lands on, which dries to a soft glow
 	if e.has("mist"):
 		var m: Variant = e["mist"]
 		var dm := "all" if (m is String and String(m).strip_edges().to_lower() == "all") or m == true else _path_text(m)
@@ -416,7 +396,7 @@ static func _circles(v: Variant, frame: Vector2, most: int, r: Vector2) -> Array
 	return out
 
 
-## WHERE A DESIGN PAINTS on its skin, as a decorator reads it back: each element by id, its stage, what it is and how big.
+## Where a design paints on its skin, as a decorator reads it back: each element by id, its stage, what it is and how big.
 static func summary(design: Dictionary, frame: Vector2) -> PackedStringArray:
 	var lines := PackedStringArray()
 	for e in design.get("elements", []):
@@ -430,8 +410,8 @@ static func summary(design: Dictionary, frame: Vector2) -> PackedStringArray:
 
 # --- paths --------------------------------------------------------------------------------------------
 
-## AN SVG PATH as lines: each subpath `{pts: PackedVector2Array, closed}` - curves and arcs followed every [param step]
-## millimeters. Commands SVG's own: M L H V C S Q T A Z, absolute and relative.
+## An SVG path as lines: each subpath `{pts: PackedVector2Array, closed}` - curves and arcs followed every [param step] millimeters.
+## Commands SVG's own: M L H V C S Q T A Z, absolute and relative.
 static func flatten(d: String, step := PATH_STEP) -> Array:
 	var rd := _PathReader.new()
 	rd.read(d, step)
@@ -479,7 +459,7 @@ static func _arc(a: Vector2, b: Vector2, rx: float, ry: float, phi: float, fa: b
 	return out
 
 
-## AN ELEMENT's extent in millimeters, its line's width and its dots' size in it.
+## An element's extent in millimeters, its line's width and its dots' size in it.
 static func bounds(e: Dictionary, frame := Vector2.ZERO) -> Rect2:
 	var pts := PackedVector2Array()
 	var grow := 0.0
@@ -504,8 +484,8 @@ static func bounds(e: Dictionary, frame := Vector2.ZERO) -> Rect2:
 
 # --- what each element covers -------------------------------------------------------------------------
 
-## THE SVG OF ONE ELEMENT, white on nothing, over [param rect] (millimeters) at [param px] pixels a millimeter - clipped to
-## the surface's [param outline] (a path, millimeters; "" for none).
+## The SVG of one element, white on nothing, over [param rect] (millimeters) at [param px] pixels a millimeter - clipped to the surface's
+## [param outline] (a path, millimeters; "" for none).
 static func svg_of(e: Dictionary, rect: Rect2, px: float, outline: String, frame: Vector2) -> String:
 	var w := maxi(int(ceil(rect.size.x * px)), 1)
 	var h := maxi(int(ceil(rect.size.y * px)), 1)
@@ -538,8 +518,8 @@ static func svg_of(e: Dictionary, rect: Rect2, px: float, outline: String, frame
 		w, h, rect.position.x, rect.position.y, float(w) / px, float(h) / px, clip, body]
 
 
-## A SMEAR as SVG, in [param color]: streaks side by side across its width, each thinning along the way it is dragged, from its
-## paint's own strength to [constant SMEAR_LEFT] of it - pieces along it, each a little fainter, so it fades as paint does.
+## A smear as SVG, in [param color]: streaks side by side across its width, each thinning along the way it is dragged, from its paint's
+## own strength to [constant SMEAR_LEFT] of it - pieces along it, each a little fainter, so it fades as paint does.
 static func smear_svg(e: Dictionary, color: String) -> String:
 	var out := ""
 	var w := float(e.get("width", SMEAR_WIDTH))
@@ -585,8 +565,8 @@ static func _offset(pts: PackedVector2Array, by: float) -> PackedVector2Array:
 	return out
 
 
-## WHAT ELEMENT [param e] COVERS over [param rect] at [param px] pixels a millimeter: an image whose alpha is its coverage
-## (Godot draws it from its SVG - ThorVG - so its edges are the design's), or null for stones, which are things, not paint.
+## What element [param e] covers over [param rect] at [param px] pixels a millimeter: an image whose alpha is its coverage (Godot draws it
+## from its SVG - ThorVG - so its edges are the design's), or null for stones, which are things, not paint.
 static func cover(e: Dictionary, rect: Rect2, px: float, outline: String, frame: Vector2) -> Image:
 	var svg := svg_of(e, rect, px, outline, frame)
 	if svg.is_empty():
@@ -609,7 +589,7 @@ static func rect_of(e: Dictionary, frame: Vector2, margin: float) -> Rect2:
 
 # --- how a tool lays it on ----------------------------------------------------------------------------
 
-## THE MANNER [param e] is laid on in by a tool of kind [param tool] ("brush", "sponge" or "tool"), unless [param asked].
+## The manner [param e] is laid on in by a tool of kind [param tool] ("brush", "sponge" or "tool"), unless [param asked].
 static func manner_of(e: Dictionary, tool: String, asked := "") -> String:
 	var kind := String(e.get("kind", ""))
 	if asked == "blend":
@@ -639,16 +619,15 @@ static func manner_of(e: Dictionary, tool: String, asked := "") -> String:
 	return "pat"
 
 
-## HOW AN ELEMENT ALREADY ON IS GONE OVER by a tool of [param kind]: a brush and a sponge's flat face blend it, stroke by stroke; any
-## other tool - a powder puff - presses it again where it lies, a press at a time (feedback 0027: a puff slid back and forth over
-## the face to take its powder's excess off).
+## How an element already on is gone over by a tool of [param kind]: a brush and a sponge's flat face blend it, stroke by stroke; any
+## other tool - a powder puff - presses it again where it lies, a press at a time.
 static func blend_manner(kind: String) -> String:
 	return "blend" if kind in ["brush", "sponge"] else "press"
 
 
-## HOW WIDE a tool of [param kind] ("brush", "sponge" or "tool"), [param mm] millimeters across its face, lays paint in
-## [param manner]: a sponge held by its corner ([constant FLAT_MANNERS]) lays [constant CORNER_WIDE] of it.
-## A painter's ways of laying, as the manners they are (the painter's tools; a powder patted on, a mist sprayed).
+## How wide a tool of [param kind] ("brush", "sponge" or "tool"), [param mm] millimeters across its face, lays paint in [param manner]: a
+## sponge held by its corner ([constant FLAT_MANNERS]) lays [constant CORNER_WIDE] of it. A painter's ways of laying, as the manners they
+## are (the painter's tools; a powder patted on, a mist sprayed).
 const PAINTER_HOWS := {"sponge": "stipple", "dab": "dab", "sweep": "sweep", "line": "line", "blend": "blend", "pat": "pat", "spray": "spray"}
 
 
@@ -656,11 +635,10 @@ static func width_for(kind: String, mm: float, manner: String) -> float:
 	return mm * CORNER_WIDE if kind == "sponge" and not manner in FLAT_MANNERS else mm
 
 
-## A PROGRAM: the tool's way over element [param e] in [param manner], a tool [param tool_mm] millimeters across, at a hand's
-## own pace - `{keys: [[t, x, y, lift, press, at]] (seconds, millimeters; at 0 on the surface, 1 back at its paint, 2 at its
-## stones' dish), strokes: [{pts, t, r}] (where it lays paint: millimeters, seconds, its radius), stones: [[t pick, t placed, x,
-## y, r]], natural (seconds), pats: [t], manner}`. [param cov]: what the element covers at [constant WHEN_PX] pixels a millimeter
-## over [param rect] (an image, or null).
+## A program: the tool's way over element [param e] in [param manner], a tool [param tool_mm] millimeters across, at a hand's own pace -
+## `{keys: [[t, x, y, lift, press, at]] (seconds, millimeters; at 0 on the surface, 1 back at its paint, 2 at its stones' dish), strokes:
+## [{pts, t, r}] (where it lays paint: millimeters, seconds, its radius), stones: [[t pick, t placed, x, y, r]], natural (seconds), pats:
+## [t], manner}`. [param cov]: what the element covers at [constant WHEN_PX] pixels a millimeter over [param rect] (an image, or null).
 static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, rect: Rect2, inserts := {}, paths: Variant = null,
 		frame := Vector2.ZERO) -> Dictionary:
 	var p := _Prog.new()
@@ -669,10 +647,10 @@ static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, r
 	match manner:
 		"line":
 			var lw := maxf(float(e.get("width", 1.0)) * 0.5, 0.4)
-			# ...PRESSED AS FAR AS IT IS WIDE: the share of the tool a line is, its width over the tool's, is how hard it is pressed - a
+			# ...pressed as far as it is wide: the share of the tool a line is, its width over the tool's, is how hard it is pressed - a
 			# brush's tip bent over that much of its belly (TablePaint.TIP_PUSH), never the point of it alone
 			var share := clampf(float(e.get("width", 1.0)) / maxf(tool_mm, 0.5), LINE_PRESS_LEAST, 1.0)
-			# ...A LINE WIDER THAN ITS BRUSH in pulls side by side, each as wide as the brush ([method _beside]) - a pull lays no wider
+			# ...a line wider than its brush in pulls side by side, each as wide as the brush ([method _beside]) - a pull lays no wider
 			var passes := _beside(String(e["d"]), float(e.get("width", 1.0)), tool_mm)
 			if passes.size() > 1:
 				lw = maxf(tool_mm * 0.5, 0.4)
@@ -693,8 +671,7 @@ static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, r
 					p.stroke(line_pts, LINE_SPEED * float(pl["pace"]), lw, RELOAD_LINE, true, 1.0,
 						Skins.HOVER if i == 0 else PULL_LIFT, last, true, line_press)
 					p.planned(inserts, lw)
-		# ...A SHAPE AT A TIME: an element of several apart (both eyes' diamonds) is finished in one before the next is begun (feedback
-		# 0022: "one stroke of green on one eye, and another stroke on the other eye, then back to the first eye ... over and over")
+		# ...a shape at a time: an element of several apart (both eyes' diamonds) is finished in one before the next is begun
 		"sweep", "blend":
 			# (...a sweep's edge cut in and its rows kept inside, or the ways [param paths] given - eased off and cut back where they ran
 			# past, [method TablePaint._keep_inside]: `{pts, press}` each, a press a point)
@@ -752,7 +729,7 @@ static func program(e: Dictionary, manner: String, tool_mm: float, cov: Image, r
 	return out
 
 
-## A SWEEP'S WAYS OVER SHAPE [param part] of element [param e] ([constant CUT_IN]): its edge cut in, a brush [param tool_mm] across
+## A sweep's ways over shape [param part] of element [param e] ([constant CUT_IN]): its edge cut in, a brush [param tool_mm] across
 ## running round inside each outline with its hairs' side along it ([method _cut_in]), then rows back and forth over what is as far
 ## inside it ([method _rows]) - a stretch at a time, millimeters: `{cut, rows}`. A shape too narrow for the brush to keep inside is rowed
 ## as it is.
@@ -764,7 +741,7 @@ static func sweep_paths(e: Dictionary, part: Image, rect: Rect2, tool_mm: float)
 	return {"cut": _cut_in(e, by, _eroded(part, maxf(by - 1.0, 0.0)), rect), "rows": _rows(rows_in, rect, tool_mm * ROWS)}
 
 
-## A LINE'S RUNS AS A BRUSH LAYS THEM: path [param d]'s runs ([method _strokes_of]) - and for a line [param width] millimeters wider than a
+## A line's runs as a brush lays them: path [param d]'s runs ([method _strokes_of]) - and for a line [param width] millimeters wider than a
 ## [param tool_mm] brush, each run beside itself as many times as covers its width, each a brush's width across, side by side.
 static func _beside(d: String, width: float, tool_mm: float) -> Array:
 	var runs := _strokes_of(d)
@@ -784,20 +761,16 @@ static func _beside(d: String, width: float, tool_mm: float) -> Array:
 	return out
 
 
-## WHICH WAY A HAND'S BRUSH LEANS over (x, y) [param at] millimeters of a [param frame] surface, along the surface (y down): up, and out to
+## Which way a hand's brush leans over (x, y) [param at] millimeters of a [param frame] surface, along the surface (y down): up, and out to
 ## the side the work is on - as TablePaint holds it ([constant TablePaint.HELD_UP], [constant TablePaint.HELD_SIDE]).
 static func pull_toward(at: Vector2, frame: Vector2) -> Vector2:
 	var side := clampf((at.x - frame.x * 0.5) / maxf(frame.x * TablePaint.HELD_SIDE_EDGE, 1e-3), -1.0, 1.0)
 	return Vector2(side * TablePaint.HELD_SIDE, -TablePaint.HELD_UP).normalized()
 
 
-## A BRUSH IS PULLED THROUGH EVERY STROKE (feedback 0054, 0056, 2026-11-07: "It feels like it is pushing against the direction of the
-## stroke. But for big, heavy strokes like this - I think it would be far more common to pull-through the strokes"; "the brush is PUSHING
-## against the natural direction of the stroke"): each of [param ways] (`{pts, press}`) cut where it turns against the way the hand
+## A brush is pulled through every stroke, never pushed: each of [param ways] (`{pts, press}`) cut where it turns against the way the hand
 ## leans the brush over [param frame] ([method pull_toward]), and each piece drawn toward it - the handle ahead, its hairs trailing -
-## lifted back between. A fill's rows had gone back and forth, an outline round, half of each pushed where the handle could not lean
-## the way it went (beside the nose). A piece under [constant PULL_PIECE_LEAST] is drawn as the piece before it goes. Unchanged with no
-## frame.
+## lifted back between. A piece under [constant PULL_PIECE_LEAST] is drawn as the piece before it goes. Unchanged with no frame.
 const PULL_PIECE_LEAST := 3.0
 
 
@@ -853,12 +826,10 @@ static func _pulled_ways(ways: Array, frame: Vector2) -> Array:
 	return out
 
 
-## A FILL TOO FINE FOR ITS BRUSH IS DRAWN ALONG ITS MIDDLE (feedback 0055, 2026-11-07: "This eyebrow was painted extremely fast, literally
-## in a fraction of a second. The brush didn't even draw the whole line: it touched the area once, and the entire brow just appeared" - a
-## brow's crescent, 4 mm at its widest under a 6 mm brush, had nothing a row could keep inside, and was laid at its one touch): shape
-## [param part] followed along its long way in pulls, as a line is ([method _pulls]) - the middle of it every [constant SPINE_STEP]
-## across - each point pressed as far as the shape is thick there for a [param tool_mm] brush ([constant LINE_PRESS_LEAST] at the least),
-## heavy in its middle and light at its tails. `[{pts, press, speed}]` (millimeters); empty for a shape with no length to follow.
+## A fill too fine for its brush is drawn along its middle: shape [param part] followed along its long way in pulls, as a line is
+## ([method _pulls]) - the middle of it every [constant SPINE_STEP] across - each point pressed as far as the shape is thick there for a
+## [param tool_mm] brush ([constant LINE_PRESS_LEAST] at the least), heavy in its middle and light at its tails. `[{pts, press, speed}]`
+## (millimeters); empty for a shape with no length to follow. (A crescent narrower than its brush has nothing a row could keep inside.)
 const SPINE_STEP := 1.0
 
 
@@ -910,7 +881,7 @@ static func _spine(part: Image, rect: Rect2, tool_mm: float, seed: int) -> Array
 	return out
 
 
-## THE LONG WAY OF POINTS [param pts]: `[their middle, the way they run longest (their own principal axis), the way across it]`.
+## The long way of points [param pts]: `[their middle, the way they run longest (their own principal axis), the way across it]`.
 static func _long_way(pts: PackedVector2Array) -> Array:
 	var mid := Vector2.ZERO
 	for q in pts:
@@ -929,7 +900,7 @@ static func _long_way(pts: PackedVector2Array) -> Array:
 	return [mid, along, Vector2(-along.y, along.x)]
 
 
-## HOW FAR THE MIDDLE OF WHAT [param cov] COVERS IS FROM ITS EDGE (millimeters; [constant WHEN_PX] pixels a millimeter): the most any
+## How far the middle of what [param cov] covers is from its edge (millimeters; [constant WHEN_PX] pixels a millimeter): the most any
 ## covered point is from one not covered, or past the picture's edge - a chamfer's two passes.
 static func inner_reach(cov: Image) -> float:
 	if cov == null:
@@ -993,7 +964,7 @@ static func _eroded(cov: Image, by: float) -> Image:
 	return out if any else null
 
 
-## A FILL'S EDGE CUT IN ([constant CUT_IN]): each closed outline of element [param e] moved [param by] millimeters in - each point along
+## A fill's edge cut in ([constant CUT_IN]): each closed outline of element [param e] moved [param by] millimeters in - each point along
 ## the way between its sides' insides, as far as keeps both that far in - in runs cut at its sharp corners ([constant CORNER]) and
 ## wherever the shape is too narrow for it (a point not in [param inside], what is that far in, over [param rect]); none shorter than
 ## [constant CUT_LEAST].
@@ -1068,7 +1039,7 @@ static func _cut_in(e: Dictionary, by: float, inside: Image, rect: Rect2) -> Arr
 	return kept
 
 
-## WHERE A SPRAY IS AIMED, pump by pump: across what [param cov] covers along its long way, one a [constant PUMP_AREA] of it.
+## Where a spray is aimed, pump by pump: across what [param cov] covers along its long way, one a [constant PUMP_AREA] of it.
 static func _pumps(cov: Image, rect: Rect2) -> Array:
 	var out: Array = []
 	if cov == null:
@@ -1119,7 +1090,7 @@ static func _strokes_of(d: String) -> Array:
 	return out
 
 
-## A RUN [param run] AS A HAND DRAWS IT ([constant PULL]): short pulls along it, each started back over the last one's end, and now and
+## A run [param run] as a hand draws it ([constant PULL]): short pulls along it, each started back over the last one's end, and now and
 ## then part of one gone over again - `[{pts, pace}]` in the order drawn, the same for the same [param seed].
 static func _pulls(run: PackedVector2Array, seed: int) -> Array:
 	var cum := PackedFloat32Array([0.0])
@@ -1136,7 +1107,7 @@ static func _pulls(run: PackedVector2Array, seed: int) -> Array:
 		var s1 := total if total - (s0 + len) < PULL.x * 0.5 else s0 + len
 		var pace := lerpf(PULL_PACE.x, PULL_PACE.y, drawn.call(k * 3 + 1))
 		out.append({"pts": _along(run, cum, s0, s1), "pace": pace})
-		# ...GONE OVER AGAIN: its last part, slower, from a little way back
+		# ...gone over again: its last part, slower, from a little way back
 		if drawn.call(k * 3 + 2) < PULL_AGAIN and s1 - s0 > PULL.x:
 			out.append({"pts": _along(run, cum, lerpf(s0, s1, 0.35), s1), "pace": pace * 0.7})
 		if s1 >= total:
@@ -1173,10 +1144,10 @@ static func _resampled(pts: PackedVector2Array, most: float) -> PackedVector2Arr
 	return out
 
 
-## A FILL's sweeps: rows [param spacing] millimeters apart along the long way of what [param cov] covers, back and forth, each
-## row's covered stretches a stroke.
-## COVERAGE [param cov] AS THE SHAPES APART IN IT (8-connected, alpha over 0.3), each an image of its own the same size - left to right
-## by their middles; a speck under [constant ISLAND_LEAST] pixels goes with the shape nearest it. Itself, alone, when it is one shape.
+## A fill's sweeps: rows [param spacing] millimeters apart along the long way of what [param cov] covers, back and forth, each row's
+## covered stretches a stroke.
+## Coverage [param cov] as the shapes apart in it (8-connected, alpha over 0.3), each an image of its own the same size - left to right by
+## their middles; a speck under [constant ISLAND_LEAST] pixels goes with the shape nearest it. Itself, alone, when it is one shape.
 static func _islands(cov: Image) -> Array:
 	if cov == null:
 		return [cov]
@@ -1323,8 +1294,8 @@ static func _covered_near(cov: Image, rect: Rect2, q: Vector2, reach: float) -> 
 	return false
 
 
-## A STIPPLE's dabs over what [param cov] covers, [param spacing] millimeters apart on a staggered grid (the second pass
-## [param second] off by half), from the middle outward ring by ring, round each ring as a hand goes.
+## A stipple's dabs over what [param cov] covers, [param spacing] millimeters apart on a staggered grid (the second pass [param second]
+## off by half), from the middle outward ring by ring, round each ring as a hand goes.
 static func _dabs(cov: Image, rect: Rect2, spacing: float, second: int) -> Array:
 	var out: Array = []
 	if cov == null:
@@ -1353,7 +1324,7 @@ static func _dabs(cov: Image, rect: Rect2, spacing: float, second: int) -> Array
 	return pts
 
 
-## WHERE A TOOL THAT PRESSES PRESSES ([param manner] "stipple" or "pat", a tool [param tool_mm] across, over what [param cov] covers of
+## Where a tool that presses presses ([param manner] "stipple" or "pat", a tool [param tool_mm] across, over what [param cov] covers of
 ## [param rect]): each shape apart in turn, its presses in the order a hand lays them ([method _grown]) - `[Vector3(x, y, how hard)]`.
 static func press_places(manner: String, tool_mm: float, cov: Image, rect: Rect2) -> Array:
 	var spacing := tool_mm * (DABS if manner == "stipple" else PATS)
@@ -1367,7 +1338,7 @@ static func press_places(manner: String, tool_mm: float, cov: Image, rect: Rect2
 	return out
 
 
-## THE PROGRAM OF A TOOL THAT PRESSES at [param places] in turn ([method press_places]'s, or those with presses put in where it missed -
+## The program of a tool that presses at [param places] in turn ([method press_places]'s, or those with presses put in where it missed -
 ## TablePaint._cover_gaps): each a press as hard as its z, the tool going back for more as a load runs out ([constant LOAD_AREA_DABS]).
 static func pressed(e: Dictionary, manner: String, tool_mm: float, places: Array) -> Dictionary:
 	var p := _Prog.new()
@@ -1385,11 +1356,9 @@ static func pressed(e: Dictionary, manner: String, tool_mm: float, places: Array
 	return out
 
 
-## PRESSES IN THE ORDER A HAND LAYS THEM, AN AREA FINISHED BEFORE THE NEXT (feedback 0034: "we are dabbing around the outside of the face
-## now, when there are huge, visible gaps still at and around the nose ... a real artist would probably try to fill-in empty spots, before
-## they move to completely new areas"): [param places] (each pass's, [method _dabs]) laid as one, round and round out from their middle -
-## every press within a ring [param spacing] wide before the next ring, each ring the way round from where the last ended - never a pass
-## out to the rim and another back over what it left (two passes one after the other had come back seven presses inside).
+## Presses in the order a hand lays them, an area finished before the next: [param places] (each pass's, [method _dabs]) laid as one,
+## round and round out from their middle - every press within a ring [param spacing] wide before the next ring, each ring the way round
+## from where the last ended - never a pass out to the rim and another back over what it left.
 static func _grown(places: Array, spacing: float) -> Array:
 	var out: Array = places.duplicate()
 	if out.is_empty():
@@ -1408,9 +1377,9 @@ static func _grown(places: Array, spacing: float) -> Array:
 	return out
 
 
-## THE REVEAL MAP of program [param prog] over [param rect] (millimeters): when along the program (0-1) each point is first
-## covered by the paint it lays, and how much of a full load the tool had on it then ([constant DRY_DABS]), at [constant WHEN_PX]
-## pixels a millimeter - a point of the element never reached takes the nearest reached one's. FORMAT_RGF.
+## The reveal map of program [param prog] over [param rect] (millimeters): when along the program (0-1) each point is first covered by
+## the paint it lays, and how much of a full load the tool had on it then ([constant DRY_DABS]), at [constant WHEN_PX] pixels a
+## millimeter - a point of the element never reached takes the nearest reached one's. FORMAT_RGF.
 static func when_map(prog: Dictionary, rect: Rect2) -> Image:
 	var w := maxi(int(ceil(rect.size.x * WHEN_PX)), 1)
 	var h := maxi(int(ceil(rect.size.y * WHEN_PX)), 1)
@@ -1469,20 +1438,16 @@ static func when_map(prog: Dictionary, rect: Rect2) -> Image:
 	return img
 
 
-## A REVEAL MAP OF WHAT A TOOL TOUCHED, and nothing else (feedback 0032: "we are just barely touching the mask with a corner - yet the
-## entire area around it splatters with paint ... It would be even better if we truly only painted what was touched"): each of
-## [param touches] (`[{u, load, pts}]` - when, 0-1 of the program, what was on the tool, and every millimeter of the skin it touched then,
-## [method TablePaint._touched]) stamped where it touched, [param spot_mm] across, on a map [param px] pixels a millimeter (a brush's line
-## finer than a sponge's press, or its edge is drawn in steps), the first touch giving a point its moment; a point never touched is never
-## shown ([constant NEVER]) - [method when_map] gives every point the nearest reach's, so a dab showed all that was nearest it. Given the
-## element's cover ([param inside], one a point it covers) and [param spread_mm], what lies past its edge takes the edge's moment that far
-## out ([method _spread_out]).
+## A reveal map of what a tool touched, and nothing else: each of [param touches] (`[{u, load, pts}]` - when, 0-1 of the program, what was
+## on the tool, and every millimeter of the skin it touched then, [method TablePaint._touched]) stamped where it touched, [param spot_mm]
+## across, on a map [param px] pixels a millimeter (a brush's line finer than a sponge's press, or its edge is drawn in steps), the first
+## touch giving a point its moment; a point never touched is never shown ([constant NEVER]) - [method when_map] gives every point the
+## nearest reach's, so a dab would show all that was nearest it. Given the element's cover ([param inside], one a point it covers) and
+## [param spread_mm], what lies past its edge takes the edge's moment that far out ([method _spread_out]).
 ##
-## GIVEN AN ARRAY [param foot_out], WHAT IT TOUCHED IS PUT IN IT AS PAINT (feedback 0042, of a fill brushed over its diamond's black line
-## and past it: "It's not clear why the grey paint only affects inside of the diamond ... when the brush is touching the mask the entire
-## time"): each disc's own share of each point it reaches - an edge as smooth as the canvas draws it, never in the map's steps - and what
-## the map closed round, whole; an image whose mipmaps soften it as a cover's do (skin_paint.gdshader's `foot`). Every point it reaches
-## takes the moment of the touch that reached it.
+## Given an array [param foot_out], what it touched is put in it as paint: each disc's own share of each point it reaches - an edge as
+## smooth as the canvas draws it, never in the map's steps - and what the map closed round, whole; an image whose mipmaps soften it as a
+## cover's do (skin_paint.gdshader's `foot`). Every point it reaches takes the moment of the touch that reached it.
 static func touch_map(touches: Array, rect: Rect2, px := WHEN_PX, spot_mm := 0.75 / WHEN_PX, inside := PackedByteArray(), spread_mm := 0.0,
 		foot_out: Variant = null) -> Image:
 	var w := maxi(int(ceil(rect.size.x * px)), 1)
@@ -1516,7 +1481,7 @@ static func touch_map(touches: Array, rect: Rect2, px := WHEN_PX, spot_mm := 0.7
 		if before_closing[k] < 0.0 and st.vals[k] >= 0.0:
 			st.again[k] = st.vals[k]
 	if foot_out != null:
-		# (...a point the map closed round laid whole; then the whole SMOOTHED AS PAINT SPREADS, [constant FOOT_SOFT]: a stray hair's lone
+		# ...a point the map closed round laid whole; then the whole smoothed as paint spreads, [constant FOOT_SOFT]: a stray hair's lone
 		# disc fades out, a pinhole closes, a line keeps its width)
 		var cov := PackedFloat32Array()
 		cov.resize(w * h)
@@ -1542,14 +1507,12 @@ static func touch_map(touches: Array, rect: Rect2, px := WHEN_PX, spot_mm := 0.7
 	return img
 
 
-## A LINE AS A BRUSH LAYS IT (2026-11-07, the user: "nearly all straight lines are 'splotchy' ... they make a mess, they're super jagged when
-## applied, and they require correction later. But a proper brush stroke is more often than not very smooth, with clean edges... which
-## might fade near the tail of the stroke"; feedback 0060, of the touch-ups that followed: "tapping at each jagged place"): each of program
-## [param prog]'s strokes the band its hairs' patch sweeps - as wide as the line (a stroke's `r`), pressed as far as that takes
-## ([constant LINE_PRESS_LEAST]) - its edges clean, narrowing to [constant TAIL_NARROW] and thinning to [constant TAIL_LEFT] over the last
-## [constant TAIL_SHARE] of each pull, laid as the stroke passes. Its reveal map as [method touch_map]'s (each point's share of the
-## program when it was first covered, and the load then) over [param rect] at [param px], and its paint into [param foot_out] (an L8
-## picture, mipmapped). Laid where its hairs' tips were found at moments apart, a line had been beads with gaps between them.
+## A line as a brush lays it: each of program [param prog]'s strokes the band its hairs' patch sweeps - as wide as the line (a stroke's
+## `r`), pressed as far as that takes ([constant LINE_PRESS_LEAST]) - its edges clean, narrowing to [constant TAIL_NARROW] and thinning
+## to [constant TAIL_LEFT] over the last [constant TAIL_SHARE] of each pull, laid as the stroke passes. Its reveal map as [method
+## touch_map]'s (each point's share of the program when it was first covered, and the load then) over [param rect] at [param px], and
+## its paint into [param foot_out] (an L8 picture, mipmapped). Laid where its hairs' tips were found at moments apart, a line would be
+## beads with gaps between them.
 const TAIL_SHARE := 0.25
 const TAIL_LEFT := 0.55
 const TAIL_NARROW := 0.75
@@ -1620,9 +1583,8 @@ static func band_map(prog: Dictionary, rect: Rect2, px: float, foot_out: Array) 
 	return img
 
 
-## [param vals] (one a point, [param w] by [param h]) BLURRED: shrunk to a point every [param by] points and grown back smoothly, by the
-## engine (a blur by hand, a point at a time, took a second an element; shrunk without filtering, a lone dot came through or not by where
-## it fell).
+## [param vals] (one a point, [param w] by [param h]) blurred: shrunk to a point every [param by] points and grown back smoothly, by the
+## engine (a blur by hand is slow; shrunk without filtering, a lone dot comes through or not by where it falls).
 static func _blurred(vals: PackedFloat32Array, w: int, h: int, by: float) -> PackedFloat32Array:
 	var f := maxf(by, 1.0)
 	var img := Image.create_from_data(w, h, false, Image.FORMAT_RF, vals.to_byte_array())
@@ -1631,8 +1593,8 @@ static func _blurred(vals: PackedFloat32Array, w: int, h: int, by: float) -> Pac
 	return img.get_data().to_float32_array()
 
 
-## EVERY POINT [param reached] HOLDS (one a point, nonzero) and [param vals] has no moment for, given the latest of its eight
-## neighbours' (and its load), grown [param passes] points in. In place.
+## Every point [param reached] holds (one a point, nonzero) and [param vals] has no moment for, given the latest of its eight neighbours'
+## (and its load), grown [param passes] points in. In place.
 static func _grown_into(vals: PackedFloat32Array, loads: PackedFloat32Array, reached: PackedByteArray, w: int, h: int, passes: int) -> void:
 	for _pass in passes:
 		var was := vals.duplicate()
@@ -1659,11 +1621,11 @@ static func _grown_into(vals: PackedFloat32Array, loads: PackedFloat32Array, rea
 			return
 
 
-## WHAT LIES PAST AN ELEMENT'S EDGE TAKES THE EDGE'S MOMENT (and load): [param vals] grown [param passes] points out from what is laid into
-## the points [param inside] does not have (zero), each from the latest of its eight neighbours - never shown (its picture covers none of
-## them), but read by a press's ragged edge (skin_paint.gdshader's `RAGGED`, [constant PRESS_RAGGED]), which reads the map up to that far
-## from each point: read past the face's edge into points no tool touched, the base stippled to the rim showed a ragged bare band along it,
-## 3 mm wide (520084). In place.
+## What lies past an element's edge takes the edge's moment (and load): [param vals] grown [param passes] points out from what is laid
+## into the points [param inside] does not have (zero), each from the latest of its eight neighbours - never shown (its picture covers
+## none of them), but read by a press's ragged edge (skin_paint.gdshader's `RAGGED`, [constant PRESS_RAGGED]), which reads the map up to
+## that far from each point: read past the face's edge into points no tool touched, a base stippled to the rim would show a ragged bare
+## band along it. In place.
 static func _spread_out(vals: PackedFloat32Array, loads: PackedFloat32Array, inside: PackedByteArray, w: int, h: int, passes: int) -> void:
 	for _pass in passes:
 		var was := vals.duplicate()
@@ -1689,11 +1651,10 @@ static func _spread_out(vals: PackedFloat32Array, loads: PackedFloat32Array, ins
 			return
 
 
-## WHAT PRESSES SPREAD INTO, as cream does under the foam (feedback 0039: "Look at all the huge gaps in paint on the nose" - holes a
-## millimeter across, a sliver beside a nose's steep side, left bare between presses and grown by a press's ragged edge into flecks):
-## [param vals] (each point's moment, -1 none) with every point all but closed in by what is laid round it - [constant CLOSE_LEAST] of its
-## eight neighbours - laid as its last neighbour is, [constant CLOSE_PASSES] times; [param loads] with it (or empty); only the points
-## [param mask] has (non-zero, one a point; empty all). In place.
+## What presses spread into, as cream does under the foam: [param vals] (each point's moment, -1 none) with every point all but closed in
+## by what is laid round it - [constant CLOSE_LEAST] of its eight neighbours - laid as its last neighbour is, [constant CLOSE_PASSES]
+## times; [param loads] with it (or empty); only the points [param mask] has (non-zero, one a point; empty all). In place. (Holes a
+## millimeter across between presses would otherwise be grown by a press's ragged edge into flecks.)
 static func closed_in(vals: PackedFloat32Array, loads: PackedFloat32Array, w: int, h: int, mask := PackedByteArray()) -> void:
 	var masked := mask.size() == vals.size()
 	var ring := PackedInt32Array([-w - 1, -w, -w + 1, -1, 1, w - 1, w, w + 1])
@@ -1769,7 +1730,7 @@ class _Stamps:
 			again[k] = u
 
 
-## AN SVG PATH READ ([method flatten]): its tokens in turn, the subpath being followed, and those done.
+## An SVG path read ([method flatten]): its tokens in turn, the subpath being followed, and those done.
 class _PathReader:
 	extends RefCounted
 	const LETTERS := "MmLlHhVvCcSsQqTtAaZz"
@@ -1930,9 +1891,9 @@ class _Prog:
 	func _load_of(most: float) -> float:
 		return most * lerpf(1.0 - Skins.LOAD_SPREAD, 1.0 + Skins.LOAD_SPREAD, _drawn(loads * 4 + 3)) if most < INF else INF
 
-	## A LOAD TAKEN UP: as full as this one happens to be ([constant Skins.AMOUNT_SPREAD]), and how little a press may lay before the hand
+	## A load taken up: as full as this one happens to be ([constant Skins.AMOUNT_SPREAD]), and how little a press may lay before the hand
 	## goes back for more - about the manner's [param dry] ([constant Skins.STOP]), and now and then ([constant Skins.PUSH_ON]) far less.
-	## A SWEEP's ([param pressed] false) keeps nearer its manner's, and never pushes on: no later pass fills what it leaves pale.
+	## A sweep's ([param pressed] false) keeps nearer its manner's, and never pushes on: no later pass fills what it leaves pale.
 	func _fresh(dry: float, pressed := true) -> void:
 		var amount := Skins.AMOUNT_SPREAD if pressed else Skins.AMOUNT_SPREAD_SWEEP
 		product = lerpf(1.0 - amount, 1.0 + amount, _drawn(loads * 4))
@@ -1940,7 +1901,7 @@ class _Prog:
 		var on := pressed and _drawn(loads * 4 + 2) < Skins.PUSH_ON
 		var span := Skins.STOP if pressed else Skins.STOP_SWEEP
 		stop = dry * (lerpf(Skins.PUSH_STOP.x, Skins.PUSH_STOP.y, r) if on else lerpf(span.x, span.y, r))
-		# (never before it is halfway from full to its manner's dry: a sweep's, nearly full, had gone back after every stroke)
+		# (never before it is halfway from full to its manner's dry: a sweep's, nearly full, would go back after every stroke)
 		stop = minf(stop, product * (1.0 + dry) * 0.5)
 
 	## A press's (or a stroke's) own hand: how much more or less than the manner's share it takes and lays ([constant Skins.TAKE_SPREAD]).
@@ -1953,8 +1914,8 @@ class _Prog:
 	func _shown(f: float) -> float:
 		return clampf(product * f, Skins.LAYS_LEAST, 1.0) if product >= 0.0 else 1.0
 
-	## [param units] presses or millimeters at the manner's [param rate], with hand [param f], taken off the tool: A SHARE OF WHAT IS
-	## LEFT, never all of it - there is always a little more to be had, less and less (the user, 2026-11-06).
+	## [param units] presses or millimeters at the manner's [param rate], with hand [param f], taken off the tool: a share of what is left,
+	## never all of it - there is always a little more to be had, less and less.
 	func _take(rate: float, units: float, f: float) -> void:
 		if product >= 0.0:
 			product *= exp(-rate * units * f)
@@ -1996,8 +1957,8 @@ class _Prog:
 
 	## Back to its paint for more, if it needs it: what runs pale ([param dry] below 1) once what is left lays less than this load's own
 	## [member stop] (its first load the act's own, taken up before); what never does once it has laid this load's share of [param most].
-	## A sweep's stroke [param ahead] millimeters long is not begun on a tool that would be below its stop by its end: a long row
-	## begun just over it had ended a stripe.
+	## A sweep's stroke [param ahead] millimeters long is not begun on a tool that would be below its stop by its end (a long row begun just
+	## over it would end a stripe).
 	func _reload(most: float, dry := 1.0, pressed := true, ahead := 0.0) -> void:
 		if dry < 1.0 and most < INF:
 			if product < 0.0:
@@ -2048,12 +2009,12 @@ class _Prog:
 		_key(at, Skins.PULL_LIFT if pull and not look else Skins.HOVER, 0.0)
 		if not look:
 			return
-		# ...and A LOOK at it, backing off a little ([constant Skins.LOOK])
+		# ...and a look at it, backing off a little ([constant Skins.LOOK])
 		t += lerpf(Skins.LOOK.x, Skins.LOOK.y, fposmod(sin(float(keys.size()) * 12.9898 + at.x * 0.731 + at.y * 0.317) * 43758.5453, 1.0))
 		_key(at, Skins.LOOK_LIFT, 0.0)
 
-	## A DAB at [param c]: down, held, up ([param pace]), [param lift] over it between - a pat too - each press taking its own share of
-	## what is left, about [param dry] of a full load's first by about [param most] presses (1: never pale, back every so many).
+	## A dab at [param c]: down, held, up ([param pace]), [param lift] over it between - a pat too - each press taking its own share of what
+	## is left, about [param dry] of a full load's first by about [param most] presses (1: never pale, back every so many).
 	func dab(c: Vector2, r: float, pace: Vector3, lift: float, most: int, pat := false, dry := 1.0, press := 1.0) -> void:
 		if dry < 1.0:
 			_reload(float(most), dry)
@@ -2075,8 +2036,7 @@ class _Prog:
 		_key(c, 0.0, press)
 		strokes.append({"pts": PackedVector2Array([c]), "t": PackedFloat32Array([t]), "r": r, "load": PackedFloat32Array([load]),
 			"press": PackedFloat32Array([press])})
-		# ...A CLOUD ONLY OFF A LOADED PUFF: its first press after it took up its powder, and none after (feedback 0026: "Real life dust
-		# wouldn't make much of any effect, at all")
+		# ...a cloud only off a loaded puff: its first press after it took up its powder, and none after
 		if pat and count == 1:
 			pats.append(t)
 		t += pace.y
@@ -2084,7 +2044,7 @@ class _Prog:
 		t += pace.z
 		_key(c, lift, 0.0)
 
-	## A PUMP OF MIST at [param c], from a hand's length off (`at` 3): aimed, pumped, and on to the next.
+	## A pump of mist at [param c], from a hand's length off (`at` 3): aimed, pumped, and on to the next.
 	func pump(c: Vector2) -> void:
 		var off := TablePaint.SPRAY_STANDOFF
 		if keys.is_empty():
@@ -2101,7 +2061,7 @@ class _Prog:
 		_key(c, off, 0.0, 3)
 		at = c
 
-	## A STONE, picked from its dish and pressed on at [param c].
+	## A stone, picked from its dish and pressed on at [param c].
 	func place(c: Vector2, r: float) -> void:
 		var x := at if at != Vector2.INF else c
 		if at != Vector2.INF:
@@ -2124,7 +2084,7 @@ class _Prog:
 		t += Skins.PLACE.z
 		_key(c, Skins.HOVER, 0.0)
 
-	## A PLANNED STROKE DONE ([method Skins.program]): each stroke laid since counted as its, and the dabs put in after it where it left gaps
+	## A planned stroke done ([method Skins.program]): each stroke laid since counted as its, and the dabs put in after it where it left gaps
 	## ([param inserts]: planned stroke -> [Vector3(x, y, how hard)], TablePaint._cover_gaps) laid now, [param r] across, counted as its too.
 	var origin := PackedInt32Array()
 	var planned_n := -1
@@ -2146,9 +2106,9 @@ class _Prog:
 
 # --- the skins a table has, and a design seen on one ---------------------------------------------------
 
-## THE SKINS OF TABLE [param table] (the set dresser's `table.json`, as parsed): every part painted from its front - `{thing, part,
-## shape, frame (millimeters across and down its front), outline (an SVG path in them, "" for its whole frame), landmarks (a mask's:
-## name -> {at, wide}), color, part (made safe)}` - as a designer is told them before anything is built.
+## The skins of table [param table] (the set dresser's `table.json`, as parsed): every part painted from its front - `{thing, part, shape,
+## frame (millimeters across and down its front), outline (an SVG path in them, "" for its whole frame), landmarks (a mask's: name ->
+## {at, wide}), color, part (made safe)}` - as a designer is told them before anything is built.
 static func skins_of(table: Variant) -> Array:
 	var out: Array = []
 	if not (table is Dictionary):
@@ -2183,7 +2143,7 @@ static func _skins_in(parts: Array, thing: String, mats: Dictionary, out: Array)
 			"box": box})
 
 
-## THE SKIN [param skin] ([method skins_of]) SEEN FROM ITS FRONT with [param design] painted on it, as far as stage [param upto] ("" all
+## The skin [param skin] ([method skins_of]) seen from its front with [param design] painted on it, as far as stage [param upto] ("" all
 ## of it): its bare surface shaded by a light from the top left, every element in its paint, its stones as small rings, and over it a
 ## faint grid every 10 millimeters (brighter every 50), its outline and its landmarks - drawn on the processor, [param px] pixels a
 ## millimeter. A designer's own look at what it wrote.
@@ -2249,7 +2209,7 @@ static func look(skin: Dictionary, design: Dictionary, upto := "", px := 3.0, gu
 	return base
 
 
-## A SKIN'S BARE FRONT, one pixel a millimeter: its surface shaded by a light from the top left, the room dark round it.
+## A skin's bare front, one pixel a millimeter: its surface shaded by a light from the top left, the room dark round it.
 static func _bare_front(skin: Dictionary, frame: Vector2, light := Vector3(-0.45, 0.55, 0.7), ambient := 0.38,
 		room := Color(0.1, 0.1, 0.11)) -> Image:
 	var w := maxi(int(ceil(frame.x)), 2)
@@ -2284,10 +2244,10 @@ static func _bare_front(skin: Dictionary, frame: Vector2, light := Vector3(-0.45
 
 # --- the face painted first ----------------------------------------------------------------------------
 
-## THE FACE PAINTED FIRST (feedback 0023; next/painted_surface.md: "It might even be worth generating reference artwork from the painter,
-## which we could copy from"): the painter is handed the bare surface seen from its front in its own millimeters, FACE_PX pixels a
-## millimeter, lit from the front ([constant FACE_LIGHT], [constant FACE_AMBIENT]) so its features show and little else, the room round
-## it black - in the middle of a canvas of the shape it paints in ([constant FACE_CANVAS], upright 2:3), so it paints it where it is.
+## The face painted first (next/painted_surface.md): the painter is handed the bare surface seen from its front in its own millimeters,
+## FACE_PX pixels a millimeter, lit from the front ([constant FACE_LIGHT], [constant FACE_AMBIENT]) so its features show and little
+## else, the room round it black - in the middle of a canvas of the shape it paints in ([constant FACE_CANVAS], upright 2:3), so it
+## paints it where it is.
 const FACE_PX := 3.0
 const FACE_LIGHT := Vector3(0.0, 0.25, 1.0)
 const FACE_AMBIENT := 0.62
@@ -2300,7 +2260,7 @@ const FACE_SPILL := 0.08
 const FACE_DARK := 0.08
 
 
-## THE CANVAS THE PAINTER PAINTS ON for [param skin] ([method skins_of]): `{image: the bare surface in the middle of it, at: where the
+## The canvas the painter paints on for [param skin] ([method skins_of]): `{image: the bare surface in the middle of it, at: where the
 ## surface's top-left is (pixels), px: pixels a millimeter, size: the surface's own (pixels)}`.
 static func face_canvas(skin: Dictionary) -> Dictionary:
 	var frame: Vector2 = skin["frame"]
@@ -2322,7 +2282,7 @@ static func face_canvas(skin: Dictionary) -> Dictionary:
 	return {"image": img, "at": at, "px": FACE_PX, "size": Vector2i(w, h)}
 
 
-## WHETHER A PAINTING [param painted] LIES ON THE SURFACE OF [param bare] (its canvas, [method face_canvas]): what is painted and the
+## Whether a painting [param painted] lies on the surface of [param bare] (its canvas, [method face_canvas]): what is painted and the
 ## surface each within [constant FACE_ALIGN] of the canvas of the other at every side, and little of the room round it painted
 ## ([constant FACE_SPILL]) - "" where it does, else what is wrong, said to the painter.
 static func face_fit(bare: Image, painted: Image) -> String:
@@ -2369,9 +2329,9 @@ static func _near_lit(img: Image, x: int, y: int, r: int) -> bool:
 	return false
 
 
-## THE PAINTING AS THE SURFACE WEARS IT: [param painted] cut back to the surface's own millimeters from its canvas [param canvas] ([method
-## face_canvas]; its bare picture [param bare]), FACE_PX pixels a millimeter, with the light the bare surface was shown in taken out - a
-## color as laid, for the decorator to copy (never laid by the table: feedback 0049); clear where the surface is not.
+## The painting as the surface wears it: [param painted] cut back to the surface's own millimeters from its canvas [param canvas]
+## ([method face_canvas]; its bare picture [param bare]), FACE_PX pixels a millimeter, with the light the bare surface was shown in taken
+## out - a color as laid, for the decorator to copy (never laid by the table); clear where the surface is not.
 static func face_reference(painted: Image, bare: Image, canvas: Dictionary, skin: Dictionary) -> Image:
 	var p := painted.duplicate() as Image
 	if p.get_size() != bare.get_size():
@@ -2392,9 +2352,8 @@ static func face_reference(painted: Image, bare: Image, canvas: Dictionary, skin
 	return out
 
 
-## THE PAINTS ON TABLE [param table] (`table.json`'s): each cream's and powder's name and color, `["name #rrggbb", ...]` - what the face
-## painted first is told to paint with, so a hand at the table can lay every color of it (257002's was painted a bright orange rust no
-## pot held, and its rust laid a dark brown).
+## The paints on table [param table] (`table.json`'s): each cream's and powder's name and color, `["name #rrggbb", ...]` - what the face
+## painted first is told to paint with, so a hand at the table can lay every color of it.
 static func table_paints(table: Dictionary) -> Array:
 	var out: Array = []
 	var mats: Dictionary = table.get("materials", {})
@@ -2405,7 +2364,7 @@ static func table_paints(table: Dictionary) -> Array:
 	return out
 
 
-## THE PAINTING'S OWN COLORS, as a decorator copies them: [param ref] ([method face_reference]) taken [param many] colors, most of the
+## The painting's own colors, as a decorator copies them: [param ref] ([method face_reference]) taken [param many] colors, most of the
 ## surface first - `[{hex, share}]`, each color's share of the surface's points.
 static func face_palette(ref: Image, many := 8) -> Array:
 	var pts := PackedColorArray()
@@ -2470,7 +2429,7 @@ static func face_palette(ref: Image, many := 8) -> Array:
 	return kept
 
 
-## THE LANGUAGE A DESIGN IS WRITTEN IN, as a decorator reads it: the elements, their finishes and how a tool lays each.
+## The language a design is written in, as a decorator reads it: the elements, their finishes and how a tool lays each.
 static func describe() -> String:
 	var lines := PackedStringArray()
 	lines.append("A DESIGN is {\"name\", \"elements\": [...]}: its ELEMENTS in the order they go on - what goes on later lies over what went on before. Every place is in MILLIMETERS on the surface as it is seen straight from the front: x from its left edge to the right, y from its top edge down. Each element is {\"id\" (a short name of its own), \"stage\" (which stage of the work it belongs to, a word or two), \"paint\": \"#rrggbb\", \"finish\", \"opacity\" (0.05-1: how much of what is under it shows through, left out: the finish's), \"soft\" (millimeters its edge is softened, 0-%d: a blended shadow or a glow), and its shape - one of:" % int(SOFT_MOST))
@@ -2487,7 +2446,7 @@ static func describe() -> String:
 	return "\n".join(lines)
 
 
-## A SURFACE as a designer is told it ([method skins_of]): its name, its size, its outline and its landmarks.
+## A surface as a designer is told it ([method skins_of]): its name, its size, its outline and its landmarks.
 static func told(skin: Dictionary) -> String:
 	var frame: Vector2 = skin["frame"]
 	var nm := String(skin["thing"]) + ("/" + String(skin["part"]) if not String(skin["part"]).is_empty() else "")
@@ -2510,8 +2469,8 @@ static func told(skin: Dictionary) -> String:
 	return "\n".join(lines)
 
 
-## HOW LONG PAINT ACT [param act] TAKES AT A HAND'S PACE (seconds), from the files alone - the designs ([param doc], `skin.json`) and
-## the table ([param table], `table.json`) - as [TablePaint] works it out on a table that stands; what a reader is told before one does.
+## How long paint act [param act] takes at a hand's pace (seconds), from the files alone - the designs ([param doc], `skin.json`) and the
+## table ([param table], `table.json`) - as [TablePaint] works it out on a table that stands; what a reader is told before one does.
 static func act_natural(act: Dictionary, doc: Dictionary, table: Variant, pictured := false, folded := {}) -> float:
 	var most := 0.0
 	for tr in act.get("tracks", []):
@@ -2543,8 +2502,8 @@ static func act_natural(act: Dictionary, doc: Dictionary, table: Variant, pictur
 				var mm := float(t["size"]) if t.has("size") else width_for(String(tool[0]), float(tool[1]), manner)
 				var rect := rect_of(ed, frame, 0.0)
 				var prog := program(ed, manner, mm, cover(ed, rect, WHEN_PX, String(design.get("outline", "")), frame), rect)
-				# ...LAID FROM THE PICTURE, as long as the table lets it take ([method TablePaint._from_picture]): its shape's program's
-				# time and the share more it may run to - a foundation's, whole, the most
+				# ...laid from the picture, as long as the table lets it take ([method TablePaint._from_picture]): its shape's program's time
+				# and the share more it may run to - a foundation's, whole, the most
 				var slack := 1.0
 				if pictured and manner in TablePaint.PICTURE_MANNERS and String(ed["kind"]) in ["fill", "line", "dots"]:
 					slack = TablePaint.FOUNDATION_SLACK if String(ed["kind"]) == "fill" and String(ed.get("d", "")) == "all" else TablePaint.PICTURE_TOLD
@@ -2558,9 +2517,9 @@ static func act_natural(act: Dictionary, doc: Dictionary, table: Variant, pictur
 	return most
 
 
-## THE COATS A TABLE FOLDS INTO ONE BEFORE (TablePaint._one_coat), as [param acts] (`acts.json`'s, in their order) and [param doc] say: each
-## fill over the whole surface taken up from a pot an earlier one was taken from - `{id: true}` (lowered). Their acts lay nothing: a
-## reader told 279 s for 257002's second white would talk five minutes over idle hands.
+## The coats a table folds into one before (TablePaint._one_coat), as [param acts] (`acts.json`'s, in their order) and [param doc] say:
+## each fill over the whole surface taken up from a pot an earlier one was taken from - `{id: true}` (lowered). Their acts lay nothing, so
+## a reader must not be told time for them.
 static func folded_coats(acts: Array, doc: Dictionary) -> Dictionary:
 	var whole := {}
 	for g in doc.get("designs", []):
@@ -2591,7 +2550,7 @@ static func folded_coats(acts: Array, doc: Dictionary) -> Dictionary:
 	return out
 
 
-## WHAT TOOL [param thing] (its part [param part]) IS on table [param table]: [its kind - brush, sponge or tool -, how wide it works].
+## What tool [param thing] (its part [param part]) is on table [param table]: [its kind - brush, sponge or tool -, how wide it works].
 static func _tool_in(table: Variant, thing: String, part: String) -> Array:
 	if not (table is Dictionary):
 		return ["tool", 6.0]
@@ -2619,7 +2578,7 @@ static func _tool_parts(parts: Array, part: String, within: bool, mats: Dictiona
 	return []
 
 
-## A TOOL MADE OF [param parts] (made safe), measured as [method TablePaint.tool_of] measures one that stands: a tuft makes it a brush
+## A tool made of [param parts] (made safe), measured as [method TablePaint.tool_of] measures one that stands: a tuft makes it a brush
 ## as wide as its hairs - and says its tip's kind, a third (a cotton swab's bud lays no paint: [constant Bristles.KINDS]); sponge makes it
 ## a sponge as wide as its face; anything else a tool as thin as it is.
 static func _tool_of_parts(parts: Array, mats: Dictionary) -> Array:

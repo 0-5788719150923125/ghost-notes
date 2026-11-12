@@ -7,53 +7,45 @@ Run it directly with the voice-training venv's python (its torch) - no pytest ne
 
     ~/.local/share/godot/app_userdata/ghost/voice_train_venv/bin/python hosts/avatar/test_fit.py
 
-  NEVER NEEDLES - a body splat's longest side is cut to FIT_LONG times its next, its other sides kept; one
-  within that, and any of the head's however long, is left as it was (CONTROL: before, the body's needle
-  stood past FIT_LONG).
-  THE HEAD'S SPLATS PAST ITS REACH ARE THE ASTRAY - of the head's (bound to the head or a face's triangle), the
-  ones whose centre stands outside the head's region (over the chest, off the picture) are astray, the ones in
-  it are not; a body splat standing where an astray one stands is not (CONTROL: the region is not empty and not
-  the whole picture).
-  THE STILL IS ONE MORE FRAME - its pose, scores, expression and bones appended as the poses' row has them, a
-  bone's axes read as COLUMNS (as rig.py writes them: CONTROL, the axes are no symmetric matrix, so rows would
-  differ); its points as tracked are its scores' face, so tracked and played draw it alike.
-  THE ROOM IS THE WALL THE FRAMES SHOW - a person moving over a wall, their middle never leaving it: where any
-  frames show the wall the plate is the wall, and where none does it is filled from round it with nothing of them
-  in it (CONTROL: the median of the frames as they are holds their face there); their hair painted a few pixels
-  past the mask is left out (CONTROL: with no margin it is in the plate); seen is 0 where no frame shows the wall
-  and 1 where every one does.
-  FILLED FROM ROUND IT - the known pixels kept exactly; a hole in a smooth ramp filled close to the ramp (CONTROL:
-  the hole as it was is far from it).
-  THE PLATE MOVES ONLY WHERE IT IS SEEN - moved everywhere, the plate where nothing showed it is still where it
-  started, and no pull reaches it (CONTROL: where it is seen, it moved).
-  A RUN ENDS WELL PAST ITS LAST RESET - of any length the Avatar steps setting allows, a third of the run at least
-  comes after the splats were last made faint, and the default run's schedule is as it was (CONTROL: growing until
-  DENSIFY_UNTIL whatever the length, 12,000 steps end on a reset).
-  A VIDEO WITH TOO FEW MOMENTS IS LEFT OUT OF THE HEAD - of four videos with 30, 25, 3 and 1 moments (and one
-  with none, a video of ants), those with fewer than LEAST are left out: none of their moments is learned from
-  or held out, each other video has some of each, and a left-out video's code is the others' mean (CONTROL: with
-  no floor, the video of one moment has it held out and none to learn from - the head's crash, 2026-10-24). And
-  THE HEAD VIDEOS: named some, only those it can learn from are, the rest unchosen with the mean look (CONTROL:
-  with none named, none is unchosen).
-  A ROOM IS KEPT SMALL - its move learned at 1/ROOM_COARSE of the frame's size: over any window (at the frame's
-  edges, of odd sizes) the move is the whole move's upsampling cut to it, and with no move the plate is the plate
-  kept (CONTROL: cut with no margin of cells round the window, it is not).
-  EACH PART OF THE FACE ITS OWN (parts.py) - with a glance's score tied to the jaw's in the frames, each of the
-  expression's components reads its own part's scores alone (CONTROL: one set of components over every score mixes
-  the two); a part reaches its own points and not another's; a splat on a triangle the eyes do not reach takes none
-  of an eye component's shift, one by the eye all of it (CONTROL: with no reach, the lips' splat takes it too); a
-  score moves only its own part's points in the rig's basis (CONTROL: fitted over every score, the glance moves
-  the lip); each sound's mouth moves the lips as their frames do, and the brows that went with it not at all
-  (CONTROL: the frames' own medians move them); the export takes each shift as far as its part reaches (CONTROL:
-  with no reach kept, the lips' splat keeps an eye shift).
-  THE HEAD RIDES THE HEAD (train.py's `second_of`) - a splat of the head far below the chin, on the head or on a
-  face's triangle, takes nothing of the torso's move (CONTROL: the torso's own splat at the seat keeps the still).
-  THE BEARD MOVES AS ONE (fit.py's `hang_beard`) - a splat on a turned triangle below the chin is hung from the head's
-  frame standing, sized and turned as it was, with no shifts; one under the lips keeps its triangle and loses its
-  shifts; one above them keeps both (CONTROL: its old numbers on the head's frame stand elsewhere).
-  A MOMENT IS ASKED ONLY FOR WHAT IT SHOWS (fit.py's `moment_loss`) - a green speck of three pixels is far from the
+Held, each beside a control that must fail:
+- never needles: a body splat's longest side is cut to FIT_LONG times its next, its other sides kept; one within
+  that, and any of the head's however long, is left as it was (control: the body's needle stood past FIT_LONG).
+- the head's splats past its reach are the astray: of the head's (bound to the head or a face's triangle), those
+  whose centre stands outside the head's region are astray, those in it are not; a body splat where an astray
+  one stands is not (control: the region is neither empty nor the whole picture).
+- the still is one more frame: its pose, scores, expression and bones appended as the poses' row has them, a
+  bone's axes read as columns (as rig.py writes them; control: the axes are no symmetric matrix, so rows differ);
+  its points as tracked are its scores' face, so tracked and played draw it alike.
+- the room is the wall the frames show: where any frames show the wall the plate is the wall, and where none
+  does it is filled from round it with nothing of the person in it (control: the median of the frames holds
+  their face there); hair painted a few pixels past the mask is left out (control: with no margin it is in the
+  plate); seen is 0 where no frame shows the wall and 1 where every one does.
+- filled from round it: the known pixels kept exactly; a hole in a smooth ramp filled close to the ramp.
+- the plate moves only where it is seen: elsewhere it is where it started and no pull reaches it.
+- a run ends well past its last reset: of any length the Avatar steps setting allows, a third of the run at
+  least comes after the splats were last made faint (control: growing until DENSIFY_UNTIL whatever the length
+  ends 12,000 steps on a reset).
+- a video with too few moments is left out of the head: those with fewer than LEAST are left out - none of their
+  moments is learned from or held out, and the code is the others' mean (control: with no floor, a video of one
+  moment has it held out and none to learn from). Of the head videos named, only those it can learn from are
+  chosen, the rest unchosen with the mean look.
+- a room is kept small: its move learned at 1/ROOM_COARSE of the frame's size is, over any window, the whole
+  move's upsampling cut to it, and with no move the plate is the plate kept (control: cut with no margin of
+  cells round the window, it is not).
+- each part of the face its own (parts.py): each of the expression's components reads its own part's scores
+  alone (control: one set over every score mixes the two); a part reaches its own points and not another's; a
+  splat on a triangle the eyes do not reach takes none of an eye component's shift (control: with no reach, the
+  lips' splat takes it too); a score moves only its own part's points in the rig's basis; each sound's mouth
+  moves the lips as their frames do and the brows not at all; the export takes each shift as far as its part
+  reaches.
+- the head rides the head (train.py's `second_of`): a splat of the head far below the chin takes nothing of the
+  torso's move (control: the torso's own splat at the seat keeps the still).
+- the beard moves as one (fit.py's `hang_beard`): a splat on a turned triangle below the chin is hung from the
+  head's frame, sized and turned as it was, with no shifts; one under the lips keeps its triangle and loses its
+  shifts; one above them keeps both.
+- a moment is asked only for what it shows (fit.py's `moment_loss`): a speck of three pixels is far from the
   moment's picture in its coarse squares, and hair-fine strands whose mean is the picture's are not; a speck where
-  something stands before them is not asked for (CONTROL: pixel by pixel, the strands are further off than the speck).
+  something stands before them is not asked for (control: pixel by pixel, the strands are further off).
 """
 
 from __future__ import annotations
@@ -376,7 +368,7 @@ def a_video_with_too_few_moments_is_left_out_of_the_head():
             head.LEAST = keep
         ok(3 in of(bare.held) and 3 not in of(bare.train), "CONTROL: with no floor, the video of one moment has it "
            "held out and none to learn from")
-        # THE HEAD VIDEOS: only those named are learned from, the rest taking the mean look
+        # The head videos: only those named are learned from, the rest taking the mean look
         some = head.Footage(rig, "cpu", {"v1", "v2"})
         ok(some.used == [1] and some.unchosen == [0] and of(some.train) == {1} and 2 in some.left_out,
            "named v1 and v2, it learns from %s, leaves %s unchosen (v2 too few)" % (some.used, some.unchosen))

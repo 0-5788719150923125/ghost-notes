@@ -2,23 +2,18 @@ extends Scene3D
 
 ## Shatter glass - a real pane of glass, shattering in true 3D.
 ##
-## A flat pane stands in space and is seen at a three-quarter angle through the
-## [Lens3D] camera (not pinned flat to the screen). On a beat it fractures into
-## irregular angular shards - [Geo.fracture] cracks that radiate from an impact, not
-## pizza slices - and the shards burst off the plane and **tumble through space**,
-## each spiraling on its own 3D axis, before easing back together (loop) or
-## drifting to rest (oneshot). Real depth: a shard in front occludes one behind, and
-## the glass catches the light by how each shard faces the camera. The old version
-## was flat shards sliding in the 2D plane; this one is dimensional.
+## A flat pane stands in space and is seen at a three-quarter angle through the [Lens3D] camera.
+## On a beat it fractures into irregular angular shards ([Geo.fracture] cracks radiating from an
+## impact) that burst off the plane and tumble through space, each on its own 3D axis, before
+## easing back together (loop) or drifting to rest (oneshot). A shard in front occludes one
+## behind, and the glass catches the light by how each shard faces the camera.
 
-## Glass takes a tint; it does not take a soil color. Everything cool or jeweled
-## reads as glass, plus the warm ones that read as hot or amber glass - what is left
-## out is the organic/earthy end (verdant, toxic, sodium), which reads as liquid.
+## Glass takes a tint, not a soil color: the cool and jeweled moods, plus the warm ones that read
+## as hot or amber glass. The organic/earthy end (verdant, toxic, sodium) reads as liquid.
 const GLASS_MOODS := ["glacier", "teal", "abyss", "violet", "magenta",
 	"rose", "bone", "ash", "brass", "dawn", "ember"]
 
-## The intact pane. It used to be a near-circle or a near-square and nothing else,
-## so every shatter started from one of two silhouettes.
+## The intact pane: each form is a different silhouette to fracture.
 const PANES := ["disc", "rect", "polygon", "portrait"]
 
 ## How finely the pane is divided before the first beat lands. Coarse panes throw a
@@ -45,13 +40,13 @@ var _max_shards := 60        # stop cracking once the pane is this finely divide
 var _cracks: Array = []      # transient bright fracture flashes ({a, b world endpoints, age})
 
 const PANE := 1.25       # pane half-size, world units
-# The mood brightness the glass shading was tuned against; exposure is expressed
-# relative to it, so a dim mood really is dimmer glass and a bright one glares.
+# The mood brightness the glass shading was tuned against; exposure is relative to it, so a dim
+# mood is dimmer glass and a bright one glares.
 const NOMINAL_VAL := 0.85
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"pane": {"label": "Pane", "type": "choice", "options": "PANES", "default": null,
 		"blurb": "The shape of the intact pane before it breaks: a disc, a rectangle, a polygon or a tall portrait rectangle."},
@@ -88,10 +83,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		var local := PackedVector2Array()
 		for v in poly:
 			local.append(v - cen)
-		# Each shard resonates on its own spectral CHANNEL: center shards on the low end
-		# (bass), rim shards on the high end (treble), with a little jitter so it is not a
-		# clean ring. Its channel level drives transparency in _draw, so quiet shards turn
-		# glassy and reveal the ones behind them.
+		# Each shard resonates on its own spectral channel: center shards on the low end, rim
+		# shards on the high end, with jitter. Its channel level drives transparency in _draw, so
+		# quiet shards turn glassy and reveal the ones behind.
 		var chan := clampf(cen.length() / (PANE * 1.05) + rng.randf_range(-0.1, 0.1), 0.0, 1.0)
 		_shards.append({
 			"poly": local,
@@ -100,8 +94,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			"basis": Basis.IDENTITY,
 			"vel": Vector3.ZERO,
 			"spin": Vector3.ZERO,
-			# Center shards hold the scheme's base; the rim travels toward its accent,
-			# so the pane is a graded piece of one glass rather than a hue plus a number.
+			# Center shards hold the scheme's base; the rim travels toward its accent.
 			"hue": _toward_accent(0.75 * cen.length() / PANE + 0.25 * chan),
 			"noise": Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)),
 			"chan": chan,
@@ -116,8 +109,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	return {"mood": _sch.name, "pane": form, "grain": gname, "shards": _shards.size()}
 
 
-## The intact pane, before anything cracks. Each form is a different silhouette to
-## fracture: a round port, a landscape sheet, a cut window, a tall panel.
+## The intact pane, before anything cracks. Each form is a different silhouette to fracture:
+## a round port, a landscape sheet, a cut window, a tall panel.
 func _pane(form: String, rng: RandomNumberGenerator) -> PackedVector2Array:
 	var base := PackedVector2Array()
 	match form:
@@ -160,22 +153,21 @@ func _settled() -> bool:
 	return true
 
 
-# Burst every shard off the plane: outward in-plane + toward the viewer + a random
-# kick, with a hard random spin so they tumble and spiral rather than slide flat.
+# Burst every shard off the plane: outward in-plane + toward the viewer + a random kick, with a
+# hard random spin so they tumble rather than slide flat.
 func _burst(strength: float) -> void:
 	for s in _shards:
 		var radial: Vector3 = s.home
 		var dir: Vector3 = radial.normalized() if radial.length() > 0.01 else Vector3(0, 0, 1)
-		# Outward in-plane + a SMALL push toward the viewer (a big z-kick used to fling shards past
-		# the camera, off-screen) + a little noise, scaled by strength.
+		# Outward in-plane + a small push toward the viewer (a big z-kick flings shards past the
+		# camera) + a little noise, scaled by strength.
 		s.vel += (dir + s.noise * 0.6 + Vector3(0, 0, _rng.randf_range(0.1, 0.45))) * strength
 		s.spin += s.noise * _rng.randf_range(2.5, 6.0)
 
 
-# A connected fracture RUN: a crack starts in a stressed shard and propagates from region to
-# region along a continuing, meandering line - splitting each shard it crosses - so a tiny
-# fracture turns a stretch of the pane into shards, the way real glass cracks. The line jags
-# non-linearly (occasional sharp kinks), so the resulting pattern is irregular and alive.
+# A connected fracture run: a crack starts in a stressed shard and propagates region to region
+# along a meandering line, splitting each shard it crosses. The line jags non-linearly
+# (occasional sharp kinks), so the pattern is irregular.
 func _fracture_run() -> void:
 	var start := _pick_stressed()
 	if start < 0:
@@ -199,8 +191,8 @@ func _fracture_run() -> void:
 		dir = dir.rotated(turn)
 
 
-# Pick a shard to start a fracture in: large, and weighted toward the ones currently
-# resonating (the most stressed glass). Returns its index, or -1 if none qualifies.
+# Pick a shard to start a fracture in: large, and weighted toward the ones resonating (the most
+# stressed glass). Returns its index, or -1 if none qualifies.
 func _pick_stressed() -> int:
 	var best := -1
 	var best_score := 0.0
@@ -231,9 +223,9 @@ func _shard_at(p: Vector2) -> int:
 	return -1
 
 
-# Split shard `idx` along the line through pane-space point `pane_pt` running in direction
-# `dir`. Children inherit the parent's motion, get a gentle opening kick, and leave a
-# PERMANENT thin gap so the crack never heals; the fresh break also flashes briefly.
+# Split shard `idx` along the line through pane-space point `pane_pt` in direction `dir`.
+# Children inherit the parent's motion, get a gentle opening kick, and leave a permanent thin gap
+# so the crack never heals; the fresh break also flashes briefly.
 func _split_shard_at(idx: int, pane_pt: Vector2, dir: Vector2) -> bool:
 	var s: Dictionary = _shards[idx]
 	var local_pt: Vector2 = pane_pt - Vector2(s.home.x, s.home.y)   # crack head in the shard's local frame
@@ -262,8 +254,8 @@ func _split_shard_at(idx: int, pane_pt: Vector2, dir: Vector2) -> bool:
 
 
 # Build a child shard from one piece of a split: re-center the piece on its own centroid and
-# place it so it sits EXACTLY where it currently is on the parent (no jump), with a matching
-# resting home in the pane, then inherit motion plus the small separating kick.
+# place it exactly where it is on the parent (no jump), with a matching resting home in the pane,
+# then inherit motion plus the small separating kick.
 func _child_from(parent: Dictionary, piece: PackedVector2Array, kick: Vector3, home_off := Vector3.ZERO) -> Dictionary:
 	var c := Geo.centroid(piece)                       # piece centroid, in the parent's local frame
 	var local := PackedVector2Array()
@@ -299,10 +291,9 @@ func update(f: AudioFeatures, delta: float) -> void:
 	elif beat_edge:
 		_burst(0.5)
 
-	# Cracks answer the HARMONICS, not a clock. Spectral change (flux), energy, and beats feed
-	# a "stress" that builds through a non-linear curve; when it crosses a sampled threshold it
-	# releases as a connected fracture and re-rolls the threshold. So cracks are sparse, uneven,
-	# and tied to what the music is doing - quiet stretches barely crack, busy ones split more.
+	# Cracks answer the harmonics, not a clock: flux, energy and beats feed a stress that builds
+	# through a non-linear curve and releases as a connected fracture at a sampled threshold,
+	# which is re-rolled. Quiet stretches barely crack, busy ones split more.
 	var harmonic: float = clampf(0.45 * f.energy + 3.0 * f.flux + 0.4 * f.beat, 0.0, 1.4)
 	_stress += delta * (0.05 + pow(harmonic, 1.7))     # 0.05 = a faint baseline so silence still creeps
 	if _stress >= _stress_thresh and _shards.size() < _max_shards:
@@ -316,14 +307,14 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_cracks = _cracks.filter(func(cr): return float(cr.age) < 0.6)
 
 	for s in _shards:
-		# Follow this shard's spectral channel with a resonant ease (quick to swell, slower
-		# to settle), so it lights and fades with its own band rather than the whole pane.
+		# Follow this shard's spectral channel with a resonant ease (quick to swell, slower to
+		# settle).
 		var target: float = f.sample(float(s.chan)) * float(s.resonance)
 		var rate: float = 9.0 if target > s.lev else 3.5
 		s.lev = lerpf(float(s.lev), target, 1.0 - exp(-rate * delta))
 		s.pos += s.vel * delta
-		# Re-orthonormalize: repeated incremental rotation accumulates float drift,
-		# which would otherwise make slerp/quaternion conversion below fail.
+		# Re-orthonormalize: incremental rotation accumulates float drift that breaks the
+		# slerp/quaternion conversion below.
 		s.basis = (s.basis * Basis.from_euler(s.spin * delta)).orthonormalized()
 		s.vel *= maxf(0.0, 1.0 - 1.1 * delta)        # drag
 		s.spin *= maxf(0.0, 1.0 - 0.4 * delta)
@@ -363,9 +354,8 @@ func _draw() -> void:
 		var face := absf(nrm.dot((s.pos - lens.eye).normalized()))
 		var scatter := clampf((s.pos - s.home).length() * 1.4, 0.0, 1.0)
 		var res: float = clampf(float(s.lev), 0.0, 1.0)
-		# Transparency tracks the shard's channel: when its band is quiet it goes glassy and
-		# see-through (the depth-sorted shards behind it show), when it resonates it solidifies
-		# and brightens. Drawn back-to-front (above), so the alpha layers compose correctly.
+		# Transparency tracks the shard's channel: a quiet band goes glassy (shards behind show),
+		# a resonating one solidifies and brightens. Drawn back-to-front, so alpha composes.
 		var val := clampf(0.30 + 0.45 * res + 0.28 * face, 0.1, 1.0)
 		var alpha := clampf(0.24 + 0.5 * res + 0.16 * face, 0.2, 0.92)
 		fill_aa(poly, _sch.color(s.hue, 0.55, val / NOMINAL_VAL, alpha))
@@ -375,8 +365,7 @@ func _draw() -> void:
 		draw_polyline(edge, Color.from_hsv(s.hue, _sch.sat * 0.22, 1.0,
 			clampf(0.18 + 0.4 * res + 0.4 * scatter, 0.0, 1.0)), 1.0, true)
 
-	# Fracture flashes: a bright streak along each freshly formed crack, fading as it ages -
-	# the visible "new break" the eye catches before it settles into the permanent seam.
+	# Fracture flashes: a bright streak along each fresh crack, fading as it ages.
 	for cr in _cracks:
 		var pa := lens.project(Vector3(cr.a))
 		var pb := lens.project(Vector3(cr.b))

@@ -1,25 +1,23 @@
 extends Node
 class_name DispatchScreens
 
-## DispatchScreens - WHAT THE DESK'S SCREENS AND LABELS SHOW, drawn in 2D (next/dispatch.md): the terminal's pale green
-## text on black (asleep, dark), the radar's sweep and its blip with the place written
-## beside it, the oscilloscope's trace, a phone's two little screens, the printer's paper as it feeds; and, drawn once,
-## the names on the phones' tape in marker, GOOD and BAD on the switch's, the chart of the council's hours, the handbook's
-## spine, the receiver's dial at 20.1, the radar's gain scale.
+## DispatchScreens - what the desk's screens and labels show, drawn in 2D (next/dispatch.md): the terminal's pale green
+## text on black, the radar's sweep and blip, the oscilloscope's trace, a phone's two little screens, the printer's paper;
+## and, drawn once, the names on the phones' tape, GOOD and BAD on the switch's, the chart of the council's hours, the
+## handbook's spine, the receiver's dial at 20.1, the radar's gain scale.
 ##
-## EACH A VIEWPORT OF ITS OWN, drawn only as what it shows changes ([method DeskMedium]'s rule: "the desk is drawn only
-## as it changes") - the radar's sweep and the scope's trace move every frame, the terminal only as a key is struck. The
-## medium hands each a state ([method show_terminal], [method show_radar], ...) and the set's glass shows its texture
-## through `shaders/dispatch_screen.gdshader`.
+## Each is a viewport of its own, drawn only as what it shows changes ([method DeskMedium]'s rule): the radar's sweep and
+## the scope's trace move every frame, the terminal only as a key is struck. The medium hands each a state ([method
+## show_terminal], [method show_radar], ...) and the set's glass shows its texture through `shaders/dispatch_screen.gdshader`.
 ##
-## REDACTED WORDS ON THE TERMINAL ([constant DispatchScript.REDACT]) are drawn as written: the glass shows them, and they
-## are hidden over the camera's finished picture ([DispatchCensor]), where [method redactions] says they lie.
+## Redacted words on the terminal ([constant DispatchScript.REDACT]) are drawn as written; [DispatchCensor] hides them over
+## the camera's finished picture, where [method redactions] says they lie.
 
 const TERM_SIZE := Vector2i(1120, 840)
 const RADAR_SIZE := Vector2i(512, 512)
 const SCOPE_SIZE := Vector2i(256, 200)
 const PHONE_SIZE := Vector2i(300, 368)
-## A PHONE'S KEYPAD, drawn once for every phone: its size (px).
+## A phone's keypad, drawn once for every phone: its size (px).
 const KEYPAD_SIZE := Vector2i(262, 400)
 const PAPER_SIZE := Vector2i(768, 3072)
 const GAIN_SIZE := Vector2i(256, 256)
@@ -27,13 +25,13 @@ const TAPE_CELL := Vector2i(256, 96)
 const TAPE_COLS := 4
 ## How many phone screens can be lit at once (the one in hand, the ones on the desk, one ringing or texting).
 const PHONE_FACES := 5
-## THE TERMINAL'S TYPE: its face, its size (px), its line (px), where its first line and first column are.
+## The terminal's type: its face, its size (px), its line (px), where its first line and first column are.
 const MONO := "res://fonts/cards/CourierPrime-Bold.ttf"
 const MARKER := "res://fonts/hands/PatrickHand-Regular.ttf"
 const TERM_FONT := 22
 const TERM_LINE := 33.0
 const TERM_MARGIN := Vector2(78.0, 70.0)
-## THE COLORS: the terminal's phosphor, its dark; the radar's green.
+## The colors: the terminal's phosphor, its dark; the radar's green.
 const PHOSPHOR := Color(0.62, 1.0, 0.68)
 const SCREEN_DARK := Color(0.008, 0.016, 0.01)
 const RADAR_GREEN := Color(0.32, 1.0, 0.42)
@@ -65,7 +63,7 @@ func _init() -> void:
 	_marker = load(MARKER)
 
 
-## BUILD THEM for the phones [param labels] (their tape) - the dynamic faces once, the labels drawn again for new labels.
+## Build them for the phones [param labels] (their tape): the dynamic faces once, the labels drawn again for new labels.
 func build(labels: PackedStringArray) -> void:
 	if terminal == null:
 		terminal = _vp(TERM_SIZE, true)
@@ -108,8 +106,8 @@ func build(labels: PackedStringArray) -> void:
 	tape.add_child(tf)
 
 
-## WHAT THE DESK'S BUILD IS HANDED of these ([method DispatchSet.build]): the tape, the chart, the spine, the dial, the gain
-## scale and the switch's words, by name - taken here on the main thread, so the build may run on a worker.
+## What the desk's build is handed of these ([method DispatchSet.build]): the tape, the chart, the spine, the dial, the gain
+## scale and the switch's words, by name - taken on the main thread, so the build may run on a worker.
 func textures() -> Dictionary:
 	return {"tape": tape.get_texture(), "chart": chart.get_texture(), "spine": spine.get_texture(), "dial": dial.get_texture(),
 		"keypad": keypad.get_texture(), "gain": gain.get_texture(),
@@ -146,15 +144,14 @@ func _vp(size: Vector2i, live: bool) -> SubViewport:
 
 # --- what the medium hands them ---------------------------------------------------------------------------------------
 
-## THE TERMINAL as [param st] has it: `{lines: PackedStringArray, asleep, cursor (bool), t}` - drawn again only when it
-## changed.
+## The terminal as [param st] has it: `{lines: PackedStringArray, asleep, cursor (bool), t}`; drawn again only when it changed.
 func show_terminal(st: Dictionary) -> void:
 	_show(terminal, _term, st)
 
 
-## WHERE THE REDACTED WORDS LIE on the terminal's [param lines] (its lines from the top, as [method show_terminal] is
-## handed them): `{rect, key}` for each run of them - its rect (px) from the run's first letter to past its last, a line
-## high about the letters' middle; its key, its words and column, the same however it scrolls.
+## Where the redacted words lie on the terminal's [param lines] (its lines from the top, as [method show_terminal] is
+## handed them): `{rect, key}` for each run - its rect (px) from the run's first letter to past its last, a line high about
+## the letters' middle; its key, its words and column, the same however it scrolls.
 func redactions(lines: PackedStringArray) -> Array:
 	var out: Array = []
 	for k in lines.size():
@@ -173,24 +170,24 @@ func _advance(text: String) -> float:
 	return _mono.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x if not text.is_empty() else 0.0
 
 
-## THE RADAR: `{t (the sweep's clock), blip: {at: Vector2, label, since}, trail: [{at, age}], ping (seconds into the last
+## The radar: `{t (the sweep's clock), blip: {at: Vector2, label, since}, trail: [{at, age}], ping (seconds into the last
 ## ping, or -1), planes: [{at, heading}], clutter: [{at, fade}]}`.
 func show_radar(st: Dictionary) -> void:
 	_show(radar, _radar, st)
 
 
-## THE SCOPE: `{t, level (0-1), storm}`.
+## The scope: `{t, level (0-1), storm}`.
 func show_scope(st: Dictionary) -> void:
 	_show(scope, _scope, st)
 
 
-## THE PAPER: `{lines: PackedStringArray (newest last), feed (0-1 of the line being fed), partial (characters of the line
+## The paper: `{lines: PackedStringArray (newest last), feed (0-1 of the line being fed), partial (characters of the line
 ## being printed)}`.
 func show_paper(st: Dictionary) -> void:
 	_show(paper, _paper, st)
 
 
-## PHONE SCREEN [param k]: `{mode: call | hold | calling | text | ring | idle, label, words, secs}`.
+## Phone screen [param k]: `{mode: call | hold | calling | text | ring | idle, label, words, secs}`.
 func show_phone(k: int, st: Dictionary) -> void:
 	_show(faces[k], _faces[k], st)
 
@@ -205,7 +202,7 @@ func _show(vp: SubViewport, f: Face, st: Dictionary) -> void:
 
 # --- the faces --------------------------------------------------------------------------------------------------------
 
-## ONE FACE, drawn by its kind.
+## One face, drawn by its kind.
 class Face extends Node2D:
 	var screens: DispatchScreens
 	var kind := ""
@@ -231,9 +228,8 @@ class Face extends Node2D:
 			"keypad": screens._draw_keypad(self)
 
 
-## THE TERMINAL: its lines from the top (redacted words as themselves, [DispatchCensor] hides them over the picture), a
-## block cursor after the last when it is on; asleep, dark (2026-11-06, the author: the cover's star "was in the source
-## image, but we do not need it in this one").
+## The terminal: its lines from the top (redacted words as themselves; [DispatchCensor] hides them over the picture), a
+## block cursor after the last when it is on; dark when asleep.
 func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(TERM_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), SCREEN_DARK)
@@ -252,10 +248,10 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 		c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(last.length()) + 2.0, cy - float(TERM_FONT) * 0.78, cw * 0.9, float(TERM_FONT) * 0.95), PHOSPHOR)
 
 
-## THE RADAR: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
+## The radar: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
 ## at its middle; the target's blip, lit as the sweep passes and fading after, its place written small beside it; the
 ## places before it fading out; a ping's ring opening out from the blip; an aircraft's small mark drifting across now
-## and then; and with the gain turned up, the clutter round him - smaller and dimmer than he is, and with no name.
+## and then; and with the gain turned up, clutter round him, smaller and dimmer, with no name.
 func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(RADAR_SIZE)
 	var mid := size * 0.5
@@ -264,7 +260,6 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 	c.draw_circle(mid, rad, Color(0.01, 0.05, 0.02))
 	var t := float(st.get("t", 0.0))
 	var sweep := fposmod(t / DispatchMedium.SWEEP, 1.0) * TAU - PI * 0.5
-	# the glow behind the sweep
 	for k in 48:
 		var a0 := sweep - float(k + 1) * 0.035
 		var a1 := sweep - float(k) * 0.035
@@ -279,7 +274,6 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 		var inner := 0.95 if k % 3 == 0 else 0.975
 		c.draw_line(mid + Vector2.from_angle(a) * rad * inner, mid + Vector2.from_angle(a) * rad, Color(RADAR_GREEN, 0.4), 1.4)
 	c.draw_line(mid, mid + Vector2.from_angle(sweep) * rad, Color(RADAR_GREEN, 0.95), 2.6, true)
-	# the desk, at its middle
 	c.draw_rect(Rect2(mid - Vector2(4, 4), Vector2(8, 8)), Color(RADAR_GREEN, 0.9))
 	for p in st.get("planes", []):
 		var pd: Dictionary = p
@@ -318,7 +312,6 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 				var uu := clampf(u - float(k) * 0.18, 0.0, 1.0)
 				if uu > 0.0:
 					c.draw_arc(at, 8.0 + uu * rad * 0.55, 0.0, TAU, 72, Color(RADAR_GREEN, 0.85 * (1.0 - uu)), 2.2, true)
-	# the glass's edge
 	c.draw_arc(mid, rad, 0.0, TAU, 128, Color(0.0, 0.0, 0.0), 8.0, true)
 
 
@@ -328,7 +321,7 @@ static func _lit(at: Vector2, sweep: float) -> float:
 	return exp(-behind / 1.6)
 
 
-## THE SCOPE: a dim grid, and the trace across it - a hum's slow sine at rest, the static's jumping noise in a storm.
+## The scope: a dim grid, and the trace across it - a hum's slow sine at rest, the static's jumping noise in a storm.
 func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(SCOPE_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.005, 0.02, 0.01))
@@ -358,14 +351,13 @@ func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	c.draw_polyline(pts, Color(RADAR_GREEN.lightened(0.2), 0.9), 2.0, true)
 
 
-## THE PAPER: continuous paper, its sprocket holes down both edges and a fold's perforation every eleven inches; the lines
-## printed, newest nearest the slot (its top), each older line further along it as the paper fed.
+## The paper: continuous paper, sprocket holes down both edges and a perforation every eleven inches; the lines printed,
+## newest nearest the slot (its top), each older line further along as the paper fed.
 func _draw_paper(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(PAPER_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.93, 0.92, 0.87))
 	var line_h := 15.0
 	var shift := float(st.get("feed", 0.0)) * line_h
-	# the margins' holes, moving with the paper
 	var hole := 21.0
 	var off := fposmod(shift, hole)
 	var y := off - hole
@@ -393,8 +385,8 @@ func _draw_paper(c: CanvasItem, st: Dictionary) -> void:
 		c.draw_string(_mono, Vector2(44, yy), String(lines[k]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, ink)
 
 
-## A PHONE'S SCREEN: amber-lit monochrome - the one in hand its caller's name and the call's clock, one on hold the same and
-## ON HOLD, one dialing CALLING; the little one outside a text's sender and words, or a ring's caller.
+## A phone's screen: amber-lit monochrome - the one in hand its caller's name and the call's clock, one on hold the same
+## and ON HOLD, one dialing CALLING; the little one outside a text's sender and words, or a ring's caller.
 func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(PHONE_SIZE)
 	var mode := String(st.get("mode", "idle"))
@@ -402,7 +394,6 @@ func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 	c.draw_rect(Rect2(Vector2.ZERO, size), lit)
 	if mode == "idle":
 		return
-	# drawn on a 200-wide screen's measures, scaled to this one's
 	var k := size.x / 200.0
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2(k, k))
 	var w := size.x / k
@@ -410,7 +401,6 @@ func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 	var label := String(st.get("label", ""))
 	var secs := int(float(st.get("secs", 0.0)))
 	var clock := "%02d:%02d" % [secs / 60, secs % 60]
-	# the bars and the battery along the top
 	for b in 4:
 		c.draw_rect(Rect2(10 + b * 9, 30 - b * 5, 6, 6 + b * 5), ink)
 	c.draw_rect(Rect2(w - 44, 14, 32, 16), ink, false, 2.0)
@@ -423,7 +413,6 @@ func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 			if mode == "hold":
 				c.draw_string(_mono, Vector2(0, 196), clock, HORIZONTAL_ALIGNMENT_CENTER, w, 22, ink)
 		"dial":
-			# SPEED DIAL: the digit held, and who it is
 			var digits := String(st.get("digits", ""))
 			c.draw_string(_mono, Vector2(0, 118), digits, HORIZONTAL_ALIGNMENT_CENTER, w, 64, ink)
 			if not digits.is_empty():
@@ -440,7 +429,7 @@ func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## A TEXT THREAD on a phone held up: who it is with across the top, then each message in turn - theirs at the left, the
+## A text thread on a phone held up: who it is with across the top, then each message in turn - theirs at the left, the
 ## answers at the right as they are typed, a cursor while one is, SENT under it once it goes - the newest at the bottom.
 func _draw_thread(c: CanvasItem, st: Dictionary, w: float, ink: Color) -> void:
 	var h := float(PHONE_SIZE.y) / (float(PHONE_SIZE.x) / 200.0)
@@ -492,16 +481,14 @@ func _wrap(text: String, width: float, px: int) -> PackedStringArray:
 	return out
 
 
-## A PHONE'S KEYPAD (2026-11-06, the author: "Ensure there are numbers, and probably a send/end button"): across the top
-## Send (green, a handset) and End (red, a handset hung up) either side of a round navigation key; under them the twelve
-## keys, 1 to 9, *, 0 and #, each its digit and the letters under it, on the dark of the phone.
+## A phone's keypad: across the top Send (green, a handset) and End (red, a handset hung up) either side of a round
+## navigation key; under them the twelve keys, 1 to 9, *, 0 and #, each its digit and the letters under it.
 func _draw_keypad(c: CanvasItem) -> void:
 	var size := Vector2(KEYPAD_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.05, 0.055))
 	var key := Color(0.62, 0.63, 0.65)
 	var ink := Color(0.08, 0.08, 0.09)
 	var top := size.y * 0.24
-	# Send and End, the navigation key between
 	var side := Vector2(size.x * 0.27, top * 0.62)
 	for pair in [[Vector2(size.x * 0.03, top * 0.2), Color(0.16, 0.62, 0.28), false], [Vector2(size.x * 0.70, top * 0.2), Color(0.78, 0.18, 0.15), true]]:
 		var at: Vector2 = pair[0]
@@ -514,7 +501,6 @@ func _draw_keypad(c: CanvasItem) -> void:
 		var d := Vector2.UP.rotated(float(a) * PI * 0.5)
 		var tip := mid + d * top * 0.34
 		c.draw_colored_polygon(PackedVector2Array([tip, tip - d * 8.0 + d.orthogonal() * 6.0, tip - d * 8.0 - d.orthogonal() * 6.0]), ink)
-	# the twelve keys
 	var keys := [["1", ""], ["2", "ABC"], ["3", "DEF"], ["4", "GHI"], ["5", "JKL"], ["6", "MNO"], ["7", "PQRS"], ["8", "TUV"],
 		["9", "WXYZ"], ["*", ""], ["0", "+"], ["#", ""]]
 	var cell := Vector2(size.x / 3.0, (size.y - top) / 4.0)
@@ -543,7 +529,7 @@ func _draw_handset(c: CanvasItem, at: Vector2, r: float, col: Color, down: bool)
 		c.draw_circle(at + Vector2(e * r * 0.82, r * 0.08).rotated(tilt), r * 0.24, col)
 
 
-## THE PHONES' TAPE: a strip of masking tape a cell, its name across it in black marker, a little crooked.
+## The phones' tape: a strip of masking tape a cell, its name across it in black marker, a little crooked.
 func _draw_tape(c: CanvasItem, st: Dictionary) -> void:
 	var labels: PackedStringArray = st.get("labels", PackedStringArray())
 	var cell := Vector2(TAPE_CELL)
@@ -552,7 +538,6 @@ func _draw_tape(c: CanvasItem, st: Dictionary) -> void:
 		var r := RandomNumberGenerator.new()
 		r.seed = hash(["tape", labels[i]])
 		c.draw_rect(Rect2(at, cell), Color(0.87, 0.81, 0.62).darkened(r.randf_range(0.0, 0.08)))
-		# the torn ends
 		for k in 6:
 			var y := cell.y * float(k) / 6.0
 			c.draw_rect(Rect2(at + Vector2(0, y), Vector2(r.randf_range(0, 7), cell.y / 6.0)), Color(0, 0, 0, 0.0))
@@ -574,7 +559,7 @@ func _draw_word(c: CanvasItem, st: Dictionary) -> void:
 		c.draw_string(_marker, Vector2((size.x - w) * 0.5 + dx, 78), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.05, 0.05, 0.06, 0.92))
 
 
-## THE CHART: the hobbyist's table printed out - dates and hours in three columns headed IO-A, IO-B and IO-C, some rows
+## The chart: the hobbyist's table printed out - dates and hours in three columns headed IO-A, IO-B and IO-C, some rows
 ## circled in pen.
 func _draw_chart(c: CanvasItem) -> void:
 	var size := Vector2(840, 600)
@@ -617,7 +602,7 @@ func _draw_spine(c: CanvasItem) -> void:
 	c.draw_string(_mono, Vector2((size.x - w) * 0.5, 90), "HANDBOOK", HORIZONTAL_ALIGNMENT_LEFT, -1, 54, Color(0.08, 0.08, 0.1))
 
 
-## THE RADAR'S GAIN SCALE, printed round its knob: a tick and a number for each step, one to ten, from the lower left round
+## The radar's gain scale, printed round its knob: a tick and a number for each step, one to ten, from the lower left round
 ## over the top to the lower right ([method DispatchSet.gain_angle]); clear between, so the face shows through.
 func _draw_gain(c: CanvasItem) -> void:
 	var size := Vector2(GAIN_SIZE)
@@ -633,7 +618,7 @@ func _draw_gain(c: CanvasItem) -> void:
 		c.draw_string(_mono, mid + d * (knob + 30.0) + Vector2(-w.x * 0.5, w.y * 0.3), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, ink)
 
 
-## THE RECEIVER'S DIAL: a lit face with the bands' numbers along it and the cursor at 20.1.
+## The receiver's dial: a lit face with the bands' numbers along it and the cursor at 20.1.
 func _draw_dial(c: CanvasItem) -> void:
 	var size := Vector2(512, 256)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.78, 0.66, 0.42))
@@ -645,7 +630,6 @@ func _draw_dial(c: CanvasItem) -> void:
 		var mhz := 18 + k
 		c.draw_string(_mono, Vector2(28.0 + float(k) * 108.0, 190), "%d" % mhz, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, ink)
 	c.draw_string(_mono, Vector2(40, 70), "MHz", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, ink)
-	# the cursor at 20.1
 	var x := 40.0 + (20.1 - 18.0) / 5.0 * 432.0
 	c.draw_line(Vector2(x, 90), Vector2(x, 230), Color(0.7, 0.05, 0.03), 4.0)
 	c.draw_string(_mono, Vector2(x - 40, 250), "20.1", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.7, 0.05, 0.03))

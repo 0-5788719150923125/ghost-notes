@@ -1,11 +1,10 @@
 extends RefCounted
 class_name ThingLibrary
 
-## ThingLibrary - THINGS KEPT TO BE PUT ON ANOTHER TABLE (next/editing.md step 8: "a library of things (a thing as `table.json`
-## holds one, with its materials - the brief's fixed block is that shape)"). A thing a set dresser made, or a person shaped, kept
+## ThingLibrary - things kept to be put on another table (next/editing.md step 8). A thing a set dresser made, or a person shaped, kept
 ## by its name in `user://library/things/` with the materials its parts are made of; put on another episode's table it is that
-## thing again, its name made its own there, and only the materials that table lacks are added - a table's own material of the
-## same name is its own.
+## thing again, its name made its own there, and only the materials that table lacks are added (a table's own material of the
+## same name wins).
 
 const DIR := "user://library/things"
 
@@ -13,7 +12,7 @@ const DIR := "user://library/things"
 static var root := DIR
 
 
-## THING [param thing] KEPT, with the materials of [param table] its parts use. "" kept, else why not.
+## Thing [param thing] kept, with the materials of [param table] its parts use. "" kept, else why not.
 static func keep(thing: Dictionary, table: Dictionary) -> String:
 	var name := String(thing.get("name", "")).strip_edges()
 	if name.is_empty():
@@ -63,7 +62,7 @@ static func read_file(path: String) -> Dictionary:
 	return d
 
 
-## [param table] WITH [param entry] ([method read]) PUT ON IT: the thing appended, named so no other thing on the table has its name,
+## [param table] with [param entry] ([method read]) put on it: the thing appended, named so no other thing on the table has its name,
 ## standing at [param at] (centimeters from the middle of the reading); the materials it uses that the table lacks added. A new
 ## table; the one handed is not changed.
 static func put_on(table: Dictionary, entry: Dictionary, at := Vector2.ZERO) -> Dictionary:

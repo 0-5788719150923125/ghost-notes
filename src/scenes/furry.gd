@@ -1,31 +1,21 @@
 extends GhostScene
 
-## Furry - dense, thick, long tufts of fur/hair, magnetized rather than random.
+## Furry - dense, long tufts of fur, magnetized rather than random.
 ##
-## Built on [Filament]'s new "fur" variant: long, mostly-unbranched strands whose
-## lean is dominated by a per-tuft BIAS direction (not the free-wandering flow_follow
-## root/tendril growth uses). That bias is computed per tuft from two procedural
-## point sets - a few bright spots (attractors) and a few dense patches of the
-## OPPOSING hue (repulsors, at fposmod(hue+0.5, 1.0) - ghost's standard complement
-## idiom) - so red fur visibly recoils from the densest dark blue and leans toward
-## the nearest light. No pixel readback: this codebase never samples its own
-## rendered canvas per frame (the two existing readback call sites are both
-## one-shot/throttled, not per-frame), so brightness/opposing-color are their own
-## small procedural point sets, audio-driven, EMA-tracked - the same substrate
-## every other weather/growth scene in the Layer registry uses, not something
-## sampled from pixels.
+## Built on [Filament]'s "fur" variant: long, mostly unbranched strands whose lean is dominated by a per-tuft
+## bias direction. The bias is computed per tuft from two procedural point sets: a few bright spots
+## (attractors) and a few dense patches of the opposing hue (repulsors, at fposmod(hue+0.5, 1.0)), so red
+## fur recoils from the densest dark blue and leans toward the nearest light. No pixel readback: the points
+## are their own small audio-driven, EMA-tracked sets.
 ##
-## Each tuft is grown ONCE, in LOCAL space (root at the origin), then swayed/leaned
-## at DRAW time via draw_set_transform - a rotation around its own root, not a
-## rebuild of the strand data. That's what lets 150+ long strands recompute their
-## lean every frame cheaply: only the transform changes, never the segment list.
+## Each tuft is grown once in local space (root at the origin), then swayed and leaned at draw time via
+## draw_set_transform (a rotation around its own root), so 150+ strands recompute their lean every frame
+## by changing only the transform, never the segment list.
 
 const Flow2D := preload("res://src/motion/flow.gd")
 
-# COATS. The scene grew one pelt forever - 160-230 strands, all 0.34-0.62 long -
-# so every seed was the same animal in a different color. A coat is a whole habit
-# of growth: how many strands, how long, how thick, and how many segments they bend
-# through (few long segments read as stiff spines, many short ones as soft hair).
+# Coats: a coat is a whole habit of growth - how many strands, how long, how thick, and how many segments
+# they bend through (few long segments read as stiff spines, many short ones as soft hair).
 const COATS := [
 	{"name": "shag", "tufts": [160, 230], "length": [0.34, 0.62], "width": [1.3, 3.0], "steps": [14, 22]},
 	{"name": "down", "tufts": [260, 360], "length": [0.13, 0.26], "width": [1.0, 2.2], "steps": [7, 12]},
@@ -49,17 +39,15 @@ var _sway_gain := 0.0     # EMA'd energy, widens the sway with the music
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	# Any mood: fur comes in every color there is, and the mood carries the coat's
-	# saturation and value too - a "bone" pelt is pale AND washed out, an "ember" one
-	# saturated AND bright, which a bare random hue could never say.
+	# Any mood: the mood carries the coat's saturation and value too (a "bone" pelt is pale and washed
+	# out, an "ember" one saturated and bright).
 	var sch := Scheme.pick(rng)
 	_hue = sch.hue
 	_accent = sch.accent
 	_sat = sch.sat
 	_val = sch.val
-	# The repulsors stay the true OPPOSING hue rather than the scheme's accent: the
-	# whole mechanism is fur recoiling from its own opposite, and a harmonious
-	# partner would not read as opposition.
+	# The repulsors stay the true opposing hue rather than the scheme's accent: the mechanism is fur
+	# recoiling from its own opposite.
 	_comp_hue = fposmod(_hue + 0.5, 1.0)
 	var coat: Dictionary = COATS[rng.randi() % COATS.size()]
 	_flow = Flow2D.new(rng.randi(), rng.randf_range(1.1, 2.0), 0.035)
@@ -97,10 +85,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	return {"hue": _hue, "mood": sch.name, "coat": String(coat["name"])}
 
 
-## Weighted pull toward every bright point plus weighted push away from every dark
-## (opposing-hue) point, both inverse-distance weighted so the NEAREST/strongest
-## source dominates a tuft's lean rather than every source pulling equally hard
-## regardless of how far away it is.
+## Weighted pull toward every bright point plus weighted push away from every dark (opposing-hue) point,
+## inverse-distance weighted so the nearest source dominates a tuft's lean.
 func _bias_dir(root: Vector2) -> float:
 	var acc := Vector2.ZERO
 	for b in _bright:
@@ -130,10 +116,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	for d in _dark:
 		d.pos = (d.pos as Vector2).rotated(-delta * 0.028 * (0.4 + float(bands[d.band])))
 
-	# EMA the lean toward the CURRENT bias (recomputed from the now-moved attractor/
-	# repulsor points) - attack a little faster than release, so a beat-driven
-	# lurch of a hotspot reads promptly but the fur settles back unhurried, the same
-	# attack/release asymmetry Nonlinear.flare formalizes elsewhere in this codebase.
+	# EMA the lean toward the current bias; attack a little faster than release, so a beat-driven lurch
+	# reads promptly and the fur settles back unhurried.
 	var k := 1.0 - exp(-(1.6 if f.beat > 0.3 else 0.8) * delta)
 	for tf in _tufts:
 		var target := _bias_dir(tf.root)
@@ -160,14 +144,11 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## Soft glows for the attractor/repulsor points themselves - not just an invisible
-## force, the dark patches the fur recoils from and the light it leans toward are
-## both actually ON SCREEN, so the lean reads as caused by something, not random.
+## Soft glows for the attractor/repulsor points themselves, so the lean reads as caused by something on screen.
 func _draw_hotspots(u: float) -> void:
 	for b in _bright:
 		var pulse := 0.55 + 0.45 * sin(_life * 0.6 + float(b.phase))
-		# The light is the scheme's accent, so the thing the fur leans toward belongs
-		# to the same palette as the fur itself.
+		# The light is the scheme's accent, in the same palette as the fur.
 		var c := Color.from_hsv(_accent, clampf(_sat * 0.45, 0.0, 1.0), 1.0, 0.10 * pulse)
 		Layer.puff(self, (b.pos as Vector2) * u, float(b.r) * u * 1.4, c)
 	for d in _dark:
@@ -176,14 +157,10 @@ func _draw_hotspots(u: float) -> void:
 		Layer.puff(self, (d.pos as Vector2) * u, float(d.r) * u * 1.3, c)
 
 
-## Root-to-tip gradient: darker/denser at the root (where it's rooted in shadow),
-## brightening toward the tip (catching the light it's leaning toward) - so the
-## "attracted to bright" read carries all the way into the strand's own shading,
-## not just its overall angle.
+## Root-to-tip gradient: darker at the root, brightening toward the tip (catching the light it leans toward).
 func _color_for(depth: int, along: float, tf: Dictionary) -> Color:
 	var h := fposmod(_hue + float(tf.hue_off) + 0.05 * along, 1.0)
-	# The mood's own value/saturation character scales the gradient, so a pale coat
-	# stays pale from root to tip instead of every pelt arriving at the same contrast.
+	# The mood's value/saturation scales the gradient, so a pale coat stays pale from root to tip.
 	var v := clampf(_val * (0.26 + 0.6 * along) + 0.30 * _f.bass + 0.25 * _sway_gain, 0.08, 1.0)
 	var sat := clampf(_sat * (1.05 - 0.3 * along), 0.05, 0.95)
 	return Color.from_hsv(h, sat, v, 0.9)

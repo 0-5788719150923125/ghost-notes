@@ -4,22 +4,18 @@ class_name Tonemaps
 ## Tonemaps - how a 3D set's light is brought down to what a screen can show: Filmic, AgX or ACES, each with a
 ## preset of its own and three adjustments kept for each (the Look card's Tonemapper rows).
 ##
-## A LOOK, NOT A QUALITY: it is the Director's, as the filters are (the Look card, a note's `look:` block, ghost.cfg so
-## an export render inherits it), and pushed down here ([method choose]) - every 3D set below the Director (the card
+## A look, not a quality: it is the Director's, as the filters are (the Look card, a note's `look:` block, ghost.cfg so
+## an export render inherits it), and pushed down here ([method choose]). Every 3D set below the Director (the card
 ## table, the desk, the dispatch desk, the book, the tablet) hands its environment in as it is made ([method dress]),
-## with the exposure it was tuned at under Filmic, and is dressed again whenever the choice changes. FILMIC STAYS THE
-## DEFAULT (the user, 2026-11-06, of three renders of a candlelit table: "the AgX example looks best. The darks are a
-## bit darker, which looks more realistic to me ... add tonemapper under the "Look" card for now, with presets and
-## adjustments made for each one, and just continue defaulting to filmic"): its preset is the picture as every set was
-## tuned, so nothing changes until a note picks another.
+## with the exposure it was tuned at under Filmic, and is dressed again whenever the choice changes. Filmic is the
+## default: its preset is the picture as every set was tuned, so nothing changes until a note picks another.
 ##
-## A PRESET is the tonemapper's own numbers - its white point, AgX's contrast - and a starting exposure, in stops, over
-## the set's own; AgX's and ACES' are the ones that were rendered for the user beside Filmic (true-tarot 279427). The
-## ADJUSTMENTS are a person's, laid over it and kept for each tonemapper apart, so trying AgX never moves Filmic's:
-## EXPOSURE in stops, then CONTRAST and SATURATION after the tonemapper (the environment's adjustments, which every set
-## has on for its fades - only its brightness is the set's).
-
-## THE TONEMAPPERS, each a row: `mode` (Godot's), the preset's `exposure` in stops, and its own numbers - `white`
+## A preset is the tonemapper's own numbers (its white point, AgX's contrast) and a starting exposure, in stops, over
+## the set's own. The adjustments are a person's, laid over it and kept for each tonemapper apart, so trying AgX never
+## moves Filmic's: exposure in stops, then contrast and saturation after the tonemapper (the environment's
+## adjustments, which every set has on for its fades; only its brightness is the set's).
+##
+## The tonemappers, each a row: `mode` (Godot's), the preset's `exposure` in stops, and its own numbers: `white`
 ## (Filmic's and ACES' white point) or `agx_white` and `agx_contrast`.
 const REGISTRY := {
 	"filmic": {"label": "Filmic",
@@ -34,7 +30,7 @@ const REGISTRY := {
 }
 const DEFAULT := "filmic"
 
-## THE ADJUSTMENTS, each a row: its range and what is neutral (`default`). Exposure is in stops over the preset's.
+## The adjustments, each a row: its range and what is neutral (`default`). Exposure is in stops over the preset's.
 const ADJUSTMENTS := {
 	"exposure": {"label": "Exposure", "blurb": "Brighter or darker, in stops: each one doubles or halves the light.",
 		"min": -2.0, "max": 2.0, "step": 0.05, "default": 0.0},
@@ -73,7 +69,7 @@ static func sanitize(adjust: Variant) -> Dictionary:
 	return out
 
 
-## THE CHOICE, from the Director: tonemapper [param key] with its adjustments [param adjust] - and every environment
+## The choice, from the Director: tonemapper [param key] with its adjustments [param adjust], and every environment
 ## handed in dressed again.
 static func choose(key: String, adjust: Dictionary) -> void:
 	_key = known(key)
@@ -92,7 +88,7 @@ static func chosen() -> String:
 	return _key
 
 
-## A SET'S ENVIRONMENT, handed as it is made with [param base_exposure], the exposure it was tuned at under Filmic:
+## A set's environment, handed as it is made with [param base_exposure], the exposure it was tuned at under Filmic:
 ## dressed as the choice has it, and again whenever the choice changes.
 static func dress(env: Environment, base_exposure: float) -> void:
 	env.set_meta(BASE_META, base_exposure)

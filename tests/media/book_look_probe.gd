@@ -1,19 +1,16 @@
 extends Node
 
-## NOT a gate. Drives a real book-medium session over a chapter with a SYNTHETIC word
-## timeline and writes PNGs, because "does this read as a novel" is answered by looking.
+## Not a gate: drives a real book-medium session over a chapter with a synthetic word timeline and writes PNGs.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/media/book_look_probe.gd 400 \
 ##       --out /tmp/book/b --doc <chapter.md> --times 2,20,60 --pages 0,1,2,3
 ##
-## `--times` are show seconds to photograph (the session is stepped there continuously, so the
-## camera and the leaf got there the way they would live); `--pages` also writes those flat
-## page textures, which is the typesetting on its own; `--wpm`-like pacing is `--word S`
-## seconds per word. `--camera X` sets Director.camera for the run (not saved). `--medium
-## notebook` drives the notebook instead (same machinery); `--sketch <png>` stands in for every
-## `<!-- sketch: -->` the way `--image` does for pictures.
+## `--times` are the show seconds to photograph (the session steps there continuously); `--pages` also writes the
+## flat page textures; `--word S` is seconds per word. `--camera X` sets Director.camera for the run (not saved).
+## `--medium notebook` drives the notebook instead; `--sketch <png>` stands in for every `<!-- sketch: -->` as
+## `--image` does for pictures.
 ##
-## It asserts only that a frame is not uniform - a book that failed to project comes out flat.
+## It asserts only that a frame is not uniform.
 
 const W := 1280
 const H := 720
@@ -105,8 +102,7 @@ func _run() -> void:
 			medium.advance(Spectrum.current, DT, 1.0)
 			await get_tree().process_frame
 			var bk := medium as BookMedium
-			# THE END OF A TURN, frame by frame: the last frames of the leaf and the first
-			# frames after it lies down - where a stale page texture would show as a flash.
+			# The end of a turn, frame by frame: the last frames of the leaf and the first after it lies down.
 			if _settle > 0 and bk._turn_t >= BookMedium.TURN_TIME - 3.0 * DT:
 				await get_tree().process_frame
 				stage.get_texture().get_image().save_png("%s_end_%02d.png" % [_out, _settle_i])

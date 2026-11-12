@@ -3,60 +3,40 @@ class_name PlateField
 
 ## PlateField - the standing-wave field of a driven plate, baked onto a grid.
 ##
-## The physical half of a Chladni figure. A plate driven at one of its resonances does
-## not move uniformly: it splits into cells that heave in opposite phase, separated by
-## NODAL LINES where the surface is still. Sand poured onto the plate is thrown off the
-## moving cells and accumulates on the still lines, so the sand ends up drawing the
-## mode's own geometry. This class owns the field w(x, y) whose zero set those lines
-## are, plus the gradient of |w| - which is the only thing a grain needs to know, since
-## it says which way "quieter" is.
+## The physical half of a Chladni figure. A plate driven at a resonance splits into cells that heave in opposite
+## phase, separated by nodal lines where the surface is still; sand is thrown off the moving cells and gathers on the
+## still lines. This class owns the field w(x, y) whose zero set those lines are, plus the gradient of |w|, the only
+## thing a grain needs (it says which way "quieter" is).
 ##
-## Plate coordinates are -1..1 on both axes, whatever the plate's outline; a caller
-## converts to pixels itself.
+## Plate coordinates are -1..1 on both axes, whatever the plate's outline; a caller converts to pixels itself.
 ##
-## WHY IT IS BAKED. A grain asks the field where to walk on every simulation step, and
-## there are thousands of grains. Evaluating the closed form per grain costs four cos()
-## calls for the gradient alone - around 160k trig calls a tick at 20k grains, which is
-## not a budget any scene has. So the field is evaluated ONCE onto a res x res grid
-## together with its gradient, and a grain step becomes one bilinear read: a dozen array
-## lookups and a handful of multiplies.
+## Baked, because thousands of grains ask the field where to walk every step and the closed form costs four cos()
+## calls per grain for the gradient alone: the field is evaluated once onto a res x res grid with its gradient, and a
+## grain step is one bilinear read.
 ##
-## WHY IT IS BAKED IN SLABS. One full bake of a 72x72 grid is roughly 130k interpreted
-## operations - about 10 ms, which would be a visible hitch every time the music changed
-## the mode. [method advance] therefore does a few ROWS per call and the previous figure
-## stays on screen until the new one is finished. Two grids are kept for exactly that
-## reason and [member blend] crossfades between them. Because differentiation is LINEAR,
-## lerping the two amplitude grids and lerping their two gradient grids gives exactly the
-## gradient of the lerped field - the crossfade is consistent, not an approximation. (The
-## same is emphatically not true of |w| itself, which is why the grids store |w| and its
-## gradient rather than signed w.)
+## Baked in slabs, because a full bake of a 72x72 grid (about 10 ms) would hitch whenever the music changed the mode:
+## [method advance] does a few rows per call, the previous figure stays on screen, and [member blend] crossfades
+## between two grids. Differentiation is linear, so lerping the two amplitude grids and the two gradient grids gives
+## exactly the gradient of the lerped field (which is why the grids store |w| and its gradient rather than signed w).
 ##
-## THE FAMILIES. Three plates, each with its own eigenfunctions, and a rim condition that
-## changes the figure completely rather than decorating it:
-##   square - the classic. Free rim: cos(m pi x)cos(n pi y) - cos(n pi x)cos(m pi y),
-##            Chladni's own plate, which is where the crosses, stars and grids come from.
-##            Clamped rim: the same antisymmetric pair built from sin, pinning the edge
-##            and pulling the structure inward. m must differ from n or the antisymmetric
-##            combination is identically zero - the caller guarantees that.
-##   circle - J_m(k r) cos(m theta). The rim condition picks the radial wavenumber from
-##            one of two zero tables: zeros of J_m for a clamped rim (the rim is itself a
-##            nodal circle) or zeros of J_m' for a free one (the rim is an antinode, so
-##            sand never rests there). A genuinely free circular plate also carries a
-##            modified-Bessel term this does not model; what is here is the right FAMILY
-##            of figures, not a plate solver.
-##   hex    - no closed-form eigenfunction exists, but three plane waves at 60 degrees
-##            summed IS an exact Helmholtz solution with sixfold symmetry, and a second
-##            triple rotated 30 degrees carries the other mode index. A quarter-period
-##            phase shift turns its honeycomb of nodes into the triangular lattice, which
-##            is what "clamped" means for this plate.
+## The families, each with a rim condition that changes the figure:
+##   square - free rim: cos(m pi x)cos(n pi y) - cos(n pi x)cos(m pi y) (Chladni's plate: crosses, stars, grids).
+##            Clamped rim: the same antisymmetric pair built from sin. m must differ from n or the combination is
+##            identically zero - the caller guarantees that.
+##   circle - J_m(k r) cos(m theta). The rim condition picks the radial wavenumber from one of two zero tables: zeros
+##            of J_m for a clamped rim (a nodal circle) or of J_m' for a free one (an antinode, so sand never rests
+##            there). A free circular plate also carries a modified-Bessel term this does not model: the right
+##            family of figures, not a plate solver.
+##   hex    - three plane waves at 60 degrees summed is an exact Helmholtz solution with sixfold symmetry, and a second
+##            triple rotated 30 degrees carries the other mode index. A quarter-period phase shift turns its
+##            honeycomb of nodes into the triangular lattice ("clamped").
 
 ## Highest angular order the circular zero tables carry.
 const MAX_ANG := 4
-## Radial samples in the circular plate's Bessel lookup. 192 is well past what a 72-cell
-## grid can resolve, and the table is built once per bake, so it is free accuracy.
+## Radial samples in the circular plate's Bessel lookup (well past what a 72-cell grid resolves; built once per bake).
 const RAD := 192
 
-## Zeros of J_m - the CLAMPED circular plate, whose held rim is a nodal circle.
+## Zeros of J_m - the clamped circular plate, whose held rim is a nodal circle.
 const J_ZEROS := [
 	[2.4048, 5.5201, 8.6537, 11.7915],
 	[3.8317, 7.0156, 10.1735, 13.3237],
@@ -64,7 +44,7 @@ const J_ZEROS := [
 	[6.3802, 9.7610, 13.0152, 16.2235],
 	[7.5883, 11.0647, 14.3725, 17.6160],
 ]
-## Zeros of J_m' - the FREE rim, an antinode instead: the sand is flung off the edge.
+## Zeros of J_m' - the free rim, an antinode: the sand is flung off the edge.
 const JP_ZEROS := [
 	[3.8317, 7.0156, 10.1735, 13.3237],
 	[1.8412, 5.3314, 8.5363, 11.7060],
@@ -79,8 +59,7 @@ var res := 72
 var shape := "square"
 ## "free" / "clamped".
 var boundary := "free"
-## 0 = the previous figure, 1 = the current one. Held at 0 while a bake is in progress,
-## so a half-written grid is never visible.
+## 0 = the previous figure, 1 = the current one. Held at 0 while a bake is in progress.
 var blend := 1.0
 
 var _shape_id := 0                   # 0 square, 1 circle, 2 hex - the hot-path form
@@ -140,9 +119,8 @@ func _init(shape_ := "square", boundary_ := "free", res_ := 72, base_angle := 0.
 	_build_geometry()
 
 
-# The per-cell quantities that do NOT depend on the mode: polar coordinates for the
-# circular plate, the six plane-wave projections for the hexagonal one. Paid once at
-# scene build so a bake is pure table lookup afterwards.
+# The per-cell quantities that do not depend on the mode: polar coordinates for the circular plate, the six
+# plane-wave projections for the hexagonal one. Paid once at scene build.
 func _build_geometry() -> void:
 	var inv := 2.0 / float(res - 1)
 	if _shape_id == 1:
@@ -157,8 +135,7 @@ func _build_geometry() -> void:
 				_th[o] = atan2(y, x) - _ang0
 	elif _shape_id == 2:
 		for k in 6:
-			# Two triples: 0/60/120 degrees, and the same rotated by 30. Between them
-			# they carry the plate's two mode indices.
+			# Two triples: 0/60/120 degrees, and the same rotated by 30; together they carry the two mode indices.
 			var a := _ang0 + (PI / 3.0) * float(k % 3) + (0.0 if k < 3 else PI / 6.0)
 			var d := Vector2(cos(a), sin(a))
 			var arr := PackedFloat32Array()
@@ -170,8 +147,7 @@ func _build_geometry() -> void:
 			_dots.append(arr)
 
 
-## Is this plate coordinate on the plate at all? The grain walk asks per step, so it is
-## an analytic test rather than a grid lookup.
+## Is this plate coordinate on the plate at all? Analytic, since the grain walk asks per step.
 func inside(x: float, y: float) -> bool:
 	if _shape_id == 1:
 		return x * x + y * y <= 1.0
@@ -203,9 +179,8 @@ func outline(steps := 64) -> PackedVector2Array:
 	return out
 
 
-## Start baking a new figure. The current grid is pushed back into the previous slot and
-## [member blend] resets to 0, so the figure on screen holds - untouched - while the new
-## one is written row by row into the slot nothing is reading yet.
+## Start baking a new figure. The current grid is pushed back into the previous slot and [member blend] resets to 0,
+## so the figure on screen holds while the new one is written row by row into the slot nothing is reading.
 func begin(m: int, n: int, m2: int, n2: int, second_weight: float) -> void:
 	_a0 = _a1.duplicate()
 	_gx0 = _gx1.duplicate()
@@ -243,9 +218,8 @@ func advance(rows: int) -> void:
 		todo -= 1
 
 
-## Finish the pending bake right now and make it the only figure - for the FIRST one,
-## where there is nothing to crossfade from and the opening frame must already be a
-## picture.
+## Finish the pending bake right now and make it the only figure (for the first one, which has nothing to crossfade
+## from).
 func complete() -> void:
 	while _phase != 0:
 		advance(res)
@@ -305,8 +279,7 @@ func _prepare() -> void:
 		_k4 = PI * float(maxi(1, _n2))
 
 
-# One axis of the square plate's separable eigenfunction. The whole reason a square bake
-# is cheap: 4 * res cos() calls stand in for 4 per cell.
+# One axis of the square plate's separable eigenfunction (4 * res cos() calls stand in for 4 per cell).
 func _wave_table(k: int, clamped: bool) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(res)
@@ -339,8 +312,7 @@ func _lookup(lut: PackedFloat32Array, r: float) -> float:
 	return a + (lut[s + 1] - a) * (x - float(s))
 
 
-# One row of |w|, un-normalized, plus a running maximum for the normalization the
-# gradient pass applies.
+# One row of |w|, un-normalized, plus a running maximum for the gradient pass's normalization.
 func _field_row(j: int) -> void:
 	var base := j * res
 	var wa := 1.0 - _w2
@@ -401,9 +373,8 @@ func _field_row(j: int) -> void:
 				_amax = a
 
 
-# One row of the finished grids: |w| normalized to 0..1 and its central-difference
-# gradient. Reads _raw (whole rows above and below), writes _a1 / _gx1 / _gy1, so the
-# two passes never tread on each other.
+# One row of the finished grids: |w| normalized to 0..1 and its central-difference gradient. Reads _raw (whole rows
+# above and below), writes _a1 / _gx1 / _gy1, so the two passes never tread on each other.
 func _grad_row(j: int) -> void:
 	var inv := 1.0 / maxf(_amax, 1e-6)
 	var h := 2.0 / float(res - 1)
@@ -423,10 +394,8 @@ func _grad_row(j: int) -> void:
 		_gy1[o] = (_raw[dn + i] - _raw[up + i]) * inv / dy
 
 
-## Bessel function of the first kind, order [param m], by its power series. Accurate well
-## past the largest argument the zero tables can ask for (about 17.6): the series peaks
-## near k = x/2 at roughly 1e7 there, which costs about eight of a double's sixteen
-## digits and leaves eight - far more than a display field needs.
+## Bessel function of the first kind, order [param m], by its power series. Accurate well past the largest argument
+## the zero tables ask for (about 17.6), where the series loses about eight of a double's sixteen digits.
 static func bessel_j(m: int, x: float) -> float:
 	var ax := absf(x)
 	var half := ax * 0.5

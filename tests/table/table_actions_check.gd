@@ -6,14 +6,14 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/table/table_actions_check.gd
 ##
-## THE RESTS ARE THE OLD SUMS, every case of them: the voice waits exactly as long as it did - the
+## The rests are the old sums, every case of them: the voice waits exactly as long as it did - the
 ## shuffle's lead, a first draw's push, a draw after a shown card's lay, a first jumper, a later one,
 ## the spread after a shown card and with none.
 ##
-## THE MOMENTS AGREE, both ways: every moment a verb makes is one the air knows
+## The moments agree, both ways: every moment a verb makes is one the air knows
 ## ([constant CardTable.MOMENTS]), and every moment the air knows is made by some verb.
 ##
-## THE MARKS ARE THE WRITTEN VERBS: each written verb parses as a mark, a verb performed between them
+## The marks are the written verbs: each written verb parses as a mark, a verb performed between them
 ## (the lay, the push) does not, and neither does a verb nobody registered.
 
 var _fails: Array = []
@@ -40,7 +40,7 @@ func _initialize() -> void:
 	print("-- the marks")
 	_ok(TableActions.written() == ["shuffle", "open", "begin", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip", "work", "roll", "move", "place", "fall", "rise", "remove", "map", "reveal"],
 		"the written verbs include searching, a silent hold, a card's work, a show with no cards and what happens at a game's table (%s)" % str(TableActions.written()))
-	# A GAME'S MARK NAMES WHAT HAPPENED, neither a card nor a beat (next/tabletop.md): and every one of them is a thing the ledger says a viewer sees
+	# A game's mark names what happened, neither a card nor a beat (next/tabletop.md): and every one of them is a thing the ledger says a viewer sees
 	for k in GameLedger.KINDS:
 		_ok(bool((GameLedger.KINDS[k] as Dictionary)["table"]) == TableActions.names_event(k), "the ledger and the table agree whether a viewer sees '%s'" % k)
 	_ok(not TableActions.names_event("draw") and not TableActions.names_event("work"), "the control: a card's and a beat's marks are no events")

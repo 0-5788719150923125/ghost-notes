@@ -1,6 +1,11 @@
 extends SceneTree
 
-## crosstalk_check - VOICES OVER EACH OTHER (next/tabletop.md; the user, 2026-11-04: "we might need the ability for voices to talk over each other (for example, if something happened and the entire table exclaimed to it in response)"). It holds the marks through the whole road: read out of a script, kept by a reading's own walk, carried by the plan, placed by the one join on a side track at the frame it says, its words on the same clock and in the sentence they overlap; and heard: both voices in the mix, each in the ear where it sits, the room hearing both. A live window holds a chunk until what overlaps it is here. Controls: a script with no mark reads as it always did, frame for frame, and a line over the opening of a take has nothing to come in over.
+## crosstalk_check - voices over each other (next/tabletop.md). Holds the marks through the whole road: read
+## out of a script, kept by a reading's own walk, carried by the plan, placed by the one join on a side track
+## at the frame it says, its words on the same clock and in the sentence they overlap; and heard: both voices
+## in the mix, each in its own ear, the room hearing both. A live window holds a chunk until what overlaps it
+## is here. Controls: a script with no mark reads as it always did, frame for frame, and a line over the
+## opening of a take has nothing to come in over.
 ##
 ##     godot --headless --path . --script tests/reading/crosstalk_check.gd
 
@@ -130,7 +135,7 @@ func _join() -> void:
 	_check(j3.side.is_empty() and total == j3.frames, "the control: no marks, no side track")
 
 
-## HEARD: run through the chain, a voice sits in its own ear, the room hears it, and it is really in the take.
+## Heard: run through the chain, a voice sits in its own ear, the room hears it, and it is really in the take.
 func _heard() -> void:
 	var seat_of := func(who: String) -> float: return -1.0 if who == "Bea" else 1.0
 	var j := ReadingJoin.new(SR, [])
@@ -185,7 +190,7 @@ func _silence(seconds: float) -> PackedFloat32Array:
 	return out
 
 
-## A TABLE'S READING KEEPS THEM, and a game's mark does not hand the voice back.
+## A table's reading keeps them, and a game's mark does not hand the voice back.
 func _card_reading() -> void:
 	var body := "<!-- table: begin -->\n\n<!-- speaker: Milo -->\nI kick it.\n\n<!-- table: roll 3 -->\n\nNineteen!\n\n<!-- speaker: Bea -->\n<!-- over: 0.4 -->\nOh no."
 	var p := CardReading.parse(body)
@@ -204,7 +209,7 @@ func _card_reading() -> void:
 	_check(found, "and the plan sees it, through the table's own reading")
 
 
-## A LIVE WINDOW HOLDS: a chunk does not go out while what overlaps it is not here.
+## A live window holds: a chunk does not go out while what overlaps it is not here.
 func _hold() -> void:
 	var chunks := _chunks()
 	_check(not ReadingJoin.overlaps_ready(chunks, 0, [{"index": 0}]), "the first line waits for what comes in over it")

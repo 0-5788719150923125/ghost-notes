@@ -3,27 +3,18 @@ class_name EyeBody
 
 ## EyeBody - a real-3D human eyeball, drawn through a [Lens3D] with a real light.
 ##
-## A genuine 3D sclera sphere carries a high-detail iris that is placed *by* the eye's
-## 3D orientation (so it foreshortens correctly as the eye turns) but drawn in 2D for
-## fidelity the flat-shaded mesh can't reach:
-##   sclera  - a glossy near-white SPHERE ([Mesh3D] icosphere, smooth-shaded), with a
-##             wet specular sheen and a soft limbal shadow where the iris is set in.
-##   iris    - a projected disc with procedural radial fibers (the vein-like detail), a
-##             dark limbal ring, a ciliary->collarette color gradient, and crypts.
-##   pupil   - a black disc with a soft inner shadow, dilating with the audio AND
-##             *accommodating* to focus depth (a near focus constricts it).
-##   cornea  - a wet catchlight (a real reflection point toward the light) plus a faint
-##             rim glaze on the light side.
+## A 3D sclera sphere carries a high-detail iris placed by the eye's 3D orientation (so it foreshortens as the eye turns) but
+## drawn in 2D:
+##   sclera - a glossy near-white sphere ([Mesh3D] icosphere, smooth-shaded) with a wet specular sheen and a soft limbal shadow.
+##   iris   - a projected disc with procedural radial fibers, a dark limbal ring, a ciliary->collarette color gradient, crypts.
+##   pupil  - a black disc with a soft inner shadow, dilating with the audio and accommodating to focus depth (near constricts).
+##   cornea - a wet catchlight plus a faint rim glaze on the light side.
 ##
-## Gaze: the eye looks at a 3D point. [method look_at_point] aims it from its own world
-## position, so two eyes sharing a focus *verge* - they toe in on a near point and run
-## parallel on a far one - rather than just rotating to the same direction. When no
-## owner drives it, it self-saccades (center-biased).
+## Gaze: the eye looks at a 3D point. [method look_at_point] aims it from its own world position, so two eyes sharing a focus
+## verge (toe in on a near point, run parallel on a far one). When no owner drives it, it self-saccades (center-biased).
 
-# Ocular motility limits: a real eyeball rotates only so far in its orbit before the
-# muscles stop it (roughly 35 deg). The gaze and its target are held inside this cone so
-# the eye can never roll its iris to the pole or turn fully away - the "spinning wildly"
-# failure - no matter what the focus geometry or the saccade spring asks for.
+# Ocular motility limits: the gaze and its target are held inside this cone (roughly 35 deg) so the eye never rolls its iris to
+# the pole or turns fully away.
 const YAW_LIMIT := 0.52        # ~30 deg, left/right
 const PITCH_LIMIT := 0.42      # ~24 deg, up/down
 const GAZE_VEL_MAX := 12.0     # rad/s ceiling: a frame hitch can't fling the eye
@@ -39,11 +30,9 @@ var focus_dist := 6.0          # world distance to the thing being looked at (ac
 var lid := 0.0                 # eyelid closure: 0 fully open .. 1 fully closed
 var dilate_bias := 0.0         # additive pupil openness on top of the light reflex (a verb's lever)
 var iris_fade := 1.0           # 0 = a BLANK wet ball (sclera + catchlight only), 1 = full iris.
-                               # The mitosis bud is born featureless and its eye surfaces after
-                               # it tears free - set by the split verb, latched back to 1.
+                                                              # The mitosis bud is born featureless; set by the split verb, latched back to 1.
 var droop := 0.0               # extra BODY pitch (radians, positive = down): the whole orbit tips,
-                               # past what the eye muscles could do - a fruit hanging on its stem
-                               # faces the ground. Separate from gaze; the sprout verb drives it.
+                                                              # past what the eye muscles could do. Separate from gaze; the sprout verb drives it.
 var _blink_t := -1.0           # progress clock of the current blink (<0 = none)
 var _blink_dur := 0.32
 var _sat := 0.65
@@ -66,8 +55,7 @@ func _init(seed_value := 0, hue_override := -1.0) -> void:
 	_dwell = _rng.randf_range(0.6, 1.5)
 	_sclera = Mesh3D.icosphere(3)            # finer -> rounder silhouette; smooth-shaded
 	_sclera.compute_normals()
-	# Radial vein fibers: many thin strands from the collarette out to the limbus, each
-	# at its own angle, length, curve, and shade (bright striae and dark furrows).
+	# Radial vein fibers: thin strands from the collarette to the limbus, each at its own angle, length, curve and shade.
 	var nf := _rng.randi_range(70, 110)
 	for i in nf:
 		_fibers.append({
@@ -86,9 +74,8 @@ func _init(seed_value := 0, hue_override := -1.0) -> void:
 			"wob": _rng.randf_range(-0.3, 0.3)})
 
 
-## Aim the eye from its own world position at a world focus point. Two eyes sharing one
-## focus will verge (converge on near points, run parallel on far ones); also records
-## the focus distance for pupil accommodation.
+## Aim the eye from its own world position at a world focus point. Two eyes sharing one focus verge; also records the focus
+## distance for pupil accommodation.
 func look_at_point(eye_pos: Vector3, focus: Vector3) -> void:
 	var d := focus - eye_pos
 	var dist := d.length()
@@ -100,21 +87,17 @@ func look_at_point(eye_pos: Vector3, focus: Vector3) -> void:
 
 
 func update(dt: float, energy: float) -> void:
-	# A gentle, slow drift of the ambient LIGHT falling on the eye, nudged a little by the music. This
-	# is the VISIBLE cause of the pupil's size: the catchlight (the reflected highlight) brightens and
-	# swells with it, and the pupil follows it INVERSELY - dim light OPENS the pupil, bright light CLOSES
-	# it (the pupillary light reflex). So a dilation always coincides with the light visibly dimming,
-	# instead of the pupil ballooning for no reason.
+	# A slow drift of the ambient light on the eye, nudged by the music. It is the visible cause of the pupil's size: the
+	# catchlight brightens and swells with it, and the pupil follows it inversely (the pupillary light reflex).
 	_t += dt
 	var light_t := clampf(0.58 + 0.30 * sin(_t * 0.33) + 0.16 * (energy - 0.35), 0.12, 1.0)
 	_light = lerpf(_light, light_t, 1.0 - exp(-2.2 * dt))
-	# Pupil = accommodation (near focus constricts) + the light reflex (dim -> dilate). The pupil eases
-	# faster than the light drifts, so it visibly tracks the light rather than leading it.
+	# Pupil = accommodation (near focus constricts) + the light reflex (dim -> dilate). The pupil eases faster than the light
+	# drifts, so it tracks the light rather than leading it.
 	var accom := clampf((focus_dist - 1.2) / 18.0, 0.0, 1.0)        # 0 near .. 1 far
 	var pupil_t := clampf(lerpf(0.17, 0.52, accom) + 0.42 * (1.0 - _light) + dilate_bias, 0.12, 0.80)
 	_dilate = lerpf(_dilate, pupil_t, 1.0 - exp(-4.0 * dt))
-	# Blink: a close -> hold -> open envelope on the lids (the close is quicker than the
-	# open, like a real blink). `lid` can also be set directly for a sustained squint.
+	# Blink: a close -> hold -> open envelope on the lids (the close quicker than the open). `lid` can also be set directly for a squint.
 	if _blink_t >= 0.0:
 		_blink_t += dt
 		var ph := _blink_t / _blink_dur
@@ -131,18 +114,15 @@ func update(dt: float, energy: float) -> void:
 		_dwell -= dt
 		if _dwell <= 0.0:
 			_saccade()
-	# When a new dart begins (the target jumps), roll THIS landing's damping. The nonlinear
-	# skew (randf^3) keeps MOST landings well-damped - a clean, subtle stop - and lets only
-	# the occasional one come in loose and bouncy. Variance, not a wobble on every move.
+	# When a new dart begins (the target jumps), roll this landing's damping. The skew (randf^3) keeps most landings well-damped
+	# and lets only the occasional one come in loose and bouncy.
 	if target.distance_to(_last_target) > 0.02:
 		_zeta = lerpf(0.97, 0.68, pow(_rng.randf(), 3.0))
 	_last_target = target
-	# Hold the aim point inside the motility cone before the spring chases it, so a hard
-	# vergence or a divergence nudge can never command an impossible rotation.
+	# Hold the aim point inside the motility cone before the spring chases it.
 	target.x = clampf(target.x, -YAW_LIMIT, YAW_LIMIT)
 	target.y = clampf(target.y, -PITCH_LIMIT, PITCH_LIMIT)
-	# Move the gaze with the spring: it carries momentum, and when _zeta is low it
-	# overshoots and re-fixates - a real saccade, not a smooth ramp into a hard stop.
+	# Move the gaze with the spring: it carries momentum, and when _zeta is low it overshoots and re-fixates.
 	var sdt := minf(dt, 0.04)                          # clamp so a frame hitch can't blow it up
 	var omega := 22.0                                  # natural frequency (a calmer saccade)
 	var accel := (target - gaze) * (omega * omega) - gaze_vel * (2.0 * _zeta * omega)
@@ -150,8 +130,7 @@ func update(dt: float, energy: float) -> void:
 	if gaze_vel.length() > GAZE_VEL_MAX:               # finite muscle: cap the angular speed
 		gaze_vel = gaze_vel.normalized() * GAZE_VEL_MAX
 	gaze += gaze_vel * sdt
-	# Stop at the orbit's edge: clamp into the cone and kill the velocity into the wall, so
-	# the eye settles against its limit instead of rolling past it (the spinning failure).
+	# Stop at the orbit's edge: clamp into the cone and kill the velocity into the wall.
 	if gaze.x < -YAW_LIMIT or gaze.x > YAW_LIMIT:
 		gaze_vel.x = 0.0
 	if gaze.y < -PITCH_LIMIT or gaze.y > PITCH_LIMIT:
@@ -160,15 +139,13 @@ func update(dt: float, energy: float) -> void:
 	gaze.y = clampf(gaze.y, -PITCH_LIMIT, PITCH_LIMIT)
 
 
-## Blink once: the lids close quickly, hold a beat, and open again over [param dur]
-## seconds. Safe to call mid-blink (it restarts the envelope).
+## Blink once: the lids close quickly, hold a beat, and open again over [param dur] seconds. Safe to call mid-blink (restarts the envelope).
 func blink(dur := 0.32) -> void:
 	_blink_dur = maxf(0.08, dur)
 	_blink_t = 0.0
 
 
-# A center-biased saccade target (radians). Static helper so a multi-eye owner can
-# reuse the same distribution to drive a SHARED gaze.
+# A center-biased saccade target (radians). Static so a multi-eye owner can reuse the distribution to drive a shared gaze.
 static func saccade_target(rng: RandomNumberGenerator) -> Vector2:
 	if rng.randf() < 0.4:
 		return Vector2.ZERO                             # prefer the neutral forward gaze
@@ -183,18 +160,16 @@ func _saccade() -> void:
 	_dwell = _rng.randf_range(0.35, 1.7)
 
 
-## Draw the eyeball at world [param pos], world radius [param radius], through the
-## [param lens]. [param fade] scales opacity (for the split morph's emergence).
+## Draw the eyeball at world [param pos], world radius [param radius], through the [param lens]. [param fade] scales opacity.
 func draw(ci: CanvasItem, lens: Lens3D, u: float, pos: Vector3, radius: float, fade := 1.0) -> void:
 	var eyeb := Basis.from_euler(Vector3(gaze.y + droop, gaze.x, 0.0))
 	var front: Vector3 = eyeb * Vector3(0, 0, 1)
 
-	# Sclera: glossy near-white sphere, SMOOTH-shaded, with a wet specular sheen.
+	# Sclera: glossy near-white sphere, smooth-shaded, with a wet specular sheen.
 	_sclera.draw_through(ci, lens, u, Basis.IDENTITY, pos, radius, 0.07, 0.05, 0, fade,
 		0.0, 0.0, 0.5, 0.14, Color(0, 0, 0, 0), true)
 
-	# The iris sits on the front of the eye; project it and build its on-screen ellipse
-	# basis, so all the 2D detail foreshortens exactly as the eyeball turns.
+	# The iris sits on the front of the eye; project it and build its on-screen ellipse basis, so the 2D detail foreshortens as the eyeball turns.
 	var iris_c3 := pos + front * radius * 0.80
 	var view := (lens.eye - iris_c3).normalized()
 	var facing := front.dot(view)
@@ -216,7 +191,7 @@ func draw(ci: CanvasItem, lens: Lens3D, u: float, pos: Vector3, radius: float, f
 
 	_draw_sclera_veins(ci, center, ua, va, fade * 0.5)
 	if a > 0.004:
-		# Soft limbal shadow: the sclera dips in around the iris - a dark ring just outside it.
+		# Soft limbal shadow: a dark ring just outside the iris.
 		_ring(ci, center, ua, va, 1.06, Color(0.04, 0.03, 0.04, 0.5 * a), 44)
 		_ring(ci, center, ua, va, 1.0, Color(0.05, 0.04, 0.05, 0.35 * a), 44)
 		_draw_iris(ci, center, ua, va, iris_px, a)
@@ -230,8 +205,7 @@ func draw(ci: CanvasItem, lens: Lens3D, u: float, pos: Vector3, radius: float, f
 	_draw_lids(ci, lens, u, pos, radius, fade)
 
 
-# Two curved lid shutters over the projected eyeball: the upper takes ~65% of the
-# travel and the lower ~35% (they meet a little below center, like real lids), each a
+# Two curved lid shutters over the projected eyeball: the upper takes ~65% of the travel and the lower ~35%, each a
 # spherical-cap polygon whose edge bows toward the pupil, with a soft lash line.
 func _draw_lids(ci: CanvasItem, lens: Lens3D, u: float, pos: Vector3, radius: float, fade: float) -> void:
 	if lid <= 0.005:
@@ -259,8 +233,7 @@ func _lid_shutter(ci: CanvasItem, c: Vector2, r: float, cover: float, upper: boo
 	var x_w := r * sqrt(maxf(0.0, 1.0 - s * s))       # half-width of the chord
 	var bow := -sgn * r * 0.10 * minf(cover * 2.0, 1.0)   # edge bows toward the pupil
 	var segs := 26
-	# Outer rim: the true circle arc from one chord crossing, around the lid's pole, to
-	# the other crossing - so past half-closure the side crescents are covered too.
+	# Outer rim: the circle arc from one chord crossing, around the lid's pole, to the other (past half-closure the side crescents are covered too).
 	var t1 := asin(s)
 	var ta := PI - t1 if upper else t1                # start angle (at a chord crossing)
 	var tb := TAU + t1 if upper else PI - t1          # end angle (the other crossing)
@@ -268,9 +241,8 @@ func _lid_shutter(ci: CanvasItem, c: Vector2, r: float, cover: float, upper: boo
 	for i in segs + 1:
 		var th := lerpf(ta, tb, float(i) / float(segs))
 		pts.append(c + Vector2(cos(th), sin(th)) * r)
-	# Closing edge: back across the chord from the rim's end to its start, bowed.
-	# (Endpoints coincide with the rim's - skip them, or the duplicated points break
-	# the polygon triangulation.)
+	# Closing edge: back across the chord from the rim's end to its start, bowed. Endpoints coincide with the rim's: skip them,
+	# or the duplicated points break the triangulation.
 	var x_end := cos(tb) * r
 	var x_start := cos(ta) * r
 	var edge := PackedVector2Array()
@@ -287,8 +259,7 @@ func _lid_shutter(ci: CanvasItem, c: Vector2, r: float, cover: float, upper: boo
 	ci.draw_polyline(edge, lash, maxf(1.0, r * 0.035), true)
 
 
-# The screen vector that the iris-plane unit axis `e` maps to (foreshortened by the
-# projection), measured from the iris center.
+# The screen vector that the iris-plane unit axis `e` maps to (foreshortened by the projection), measured from the iris center.
 func _axis(lens: Lens3D, u: float, c3: Vector3, e: Vector3, world_r: float, center: Vector2) -> Vector2:
 	var p := lens.project(c3 + e * world_r)
 	return Vector2(p.x, p.y) * u - center
@@ -309,8 +280,7 @@ func _ring(ci: CanvasItem, center: Vector2, ua: Vector2, va: Vector2, r: float, 
 	ci.draw_polyline(pts, col, maxf(1.0, (ua.length() + va.length()) * 0.5 * 0.04), true)
 
 
-# The iris body: a limbus->collarette color gradient (concentric discs), then the
-# radial vein fibers, crypts, and the collarette ridge.
+# The iris body: a limbus->collarette color gradient (concentric discs), then the radial vein fibers, crypts and the collarette ridge.
 func _draw_iris(ci: CanvasItem, center: Vector2, ua: Vector2, va: Vector2, iris_px: float, a: float) -> void:
 	var layers := 8
 	for i in layers:
@@ -321,7 +291,7 @@ func _draw_iris(ci: CanvasItem, center: Vector2, ua: Vector2, va: Vector2, iris_
 		var sat := clampf(_sat * lerpf(1.05, 0.82, t), 0.0, 1.0)
 		var hh := fposmod(hue + 0.03 * t, 1.0)
 		ci.draw_colored_polygon(_disc(center, ua, va, r, 44), Color.from_hsv(hh, sat, val, a))
-	# Radial fibers - the vein-like detail. A gently curved 3-point strand each.
+	# Radial fibers: a gently curved 3-point strand each.
 	var lw: float = maxf(0.8, iris_px * 0.014)
 	for f in _fibers:
 		var ca: float = cos(f.a)
@@ -366,8 +336,7 @@ func _draw_cornea(ci: CanvasItem, lens: Lens3D, u: float, pos: Vector3, radius: 
 	# A faint wet glaze across the cornea on the light side (a soft bright crescent).
 	var light := Mesh3D.LIGHT.normalized()
 	var lit := light - light.project(front)             # light direction in the iris plane
-	# The catchlight/glaze track the ambient light `_light` - they brighten and swell as it rises, dim
-	# and shrink as it falls - so the pupil's light reflex has a plainly visible source on the cornea.
+	# The catchlight and glaze track the ambient light `_light`: they brighten and swell as it rises, so the pupil's light reflex has a visible source.
 	var glow := 0.45 + 0.75 * _light         # highlight brightness follows the light
 	var swell := 0.68 + 0.5 * _light         # highlight size follows the light
 	if lit.length() > 1e-3:

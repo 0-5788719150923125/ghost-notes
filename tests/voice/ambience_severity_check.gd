@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Gate for the AMBIENCE DIAL AS SEVERITY: the bed plays at full level at any setting, and
+## Gate for the ambience dial as severity: the bed plays at full level at any setting, and
 ## the dial is how often a bass swell answers the reader's pitch moving.
 ##
 ## Asserted on what is PLAYED: the bottom of the dial is the bed ALONE (the chance is zero,

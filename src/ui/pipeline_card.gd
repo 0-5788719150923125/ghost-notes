@@ -1,27 +1,23 @@
 extends VBoxContainer
 class_name PipelineCard
 
-## PipelineCard - EVERYTHING AGENTS AND TOOLS MAKE FOR A NOTE, ONE LIST IN ONE PLACE (next/pipeline.md; the user,
-## 2026-11-02: "I would always be able to find that one, stable card, to regenerate various things").
+## PipelineCard - everything agents and tools make for a note, one list in one place (next/pipeline.md).
 ##
-## LAST IN THE DECK, ALWAYS ONE CLICK AWAY (2026-11-02, the user of it pinned under the scroll: "It's weird that there are now
-## two panels on the left ... They should all be scrollable"): it is a card like any other, its list scrolling with the
-## panel, and its title bar lies on the panel's bottom pile until it is scrolled to ([PanelDeck]). Generate, Stop and how far
-## along it is are on that bar, so they stay in sight wherever it lies. There is no component and no "+": it
-## stands while anything on the note has something to make.
+## Last in the deck, always one click away: a card like any other, its list scrolling with the panel,
+## and its title bar lies on the panel's bottom pile until it is scrolled to ([PanelDeck]). Generate,
+## Stop and how far along it is are on that bar. There is no component and no "+": it stands while
+## anything on the note has something to make.
 ##
-## ONE WAY IN: a card hands a [PipelineSection] ([method add]). The list is made of what those say ([PipelineRow]), and
-## nothing here knows what a card, a sketch or a tag is.
+## One way in: a card hands a [PipelineSection] ([method add]). The list is made of what those say
+## ([PipelineRow]); nothing here knows what a card, a sketch or a tag is.
 ##
-## ONE ⟳: a row's starts its one thing at once - unless that throws other finished work away, when it says so on hover and
-## asks once, a yes or a no, naming it ([member PipelineRow.asks]). Never a list. What a click will do is known before it
-## is made. EVERY ⟳ IS ONE COLOR (2026-11-07, the user: "it's not clear why some of the regenerate buttons are orange, while
-## others are white. I would be inclined to just make them all white"): the amber a ⟳ that asks once wore said nothing a
-## person could read, and the hover and the question say it in words.
+## One refresh button per row, all one color: it starts its one thing at once - unless that throws other
+## finished work away, when it says so on hover and asks once, a yes or a no, naming it
+## ([member PipelineRow.asks]). Never a list.
 ##
-## ONE GENERATE: every section's missing work, top to bottom, each waiting for the one before ([method generate]): the
-## words first, then what is made from them. The ▶ on a section's heading makes that section alone. While Generate walks,
-## every ⟳ waits.
+## One Generate: every section's missing work, top to bottom, each waiting for the one before
+## ([method generate]): the words first, then what is made from them. The play button on a section's
+## heading makes that section alone. While Generate walks, every refresh button waits.
 
 ## What the card is for, on its title bar and its chip ([member Card.blurb]).
 const BLURB := "Everything agents and tools make for this note, in one list. Generate makes what is missing, and a row's ⟳ makes that one thing again."
@@ -31,8 +27,7 @@ const NAME_MOST := 124.0
 const INDENT := 12.0
 ## Rows ask the disk what exists, so four times a second, as the cards' rows always did.
 const EVERY := 0.25
-## The [Settings] section its groups' folds are kept in: the viewer's, never the note's (every card's fold was kept there too,
-## until cards stopped folding on 2026-11-09).
+## The [Settings] section its groups' folds are kept in: the viewer's, never the note's.
 const FOLDS := "folds"
 
 ## The [Card] it is on, once [method put_on] a panel.
@@ -96,12 +91,11 @@ func _bar_button(text: String, tip: String) -> Button:
 	return b
 
 
-## ON [param panel], after the cards there, its Generate and Stop on the card's title bar so they stay wherever it lies. Hidden
-## until something on the note has something to make.
+## On [param panel], after the cards there, its Generate and Stop on the card's title bar so they stay
+## wherever it lies. Hidden until something on the note has something to make.
 ##
-## THE CARD AND ITS BAR COME FIRST, AND IT JOINS LAST: the app's panel is in the tree as it is built, so joining runs [method _ready]
-## there and then, and with no card yet that takes the bar into the list (as it did from the first build: every panel the gates
-## built was out of the tree, and the engine said so only in the log).
+## The card and its bar come first, and it joins last: the app's panel is in the tree as it is built, so
+## joining runs [method _ready] there and then, and with no card yet that takes the bar into the list.
 func put_on(panel: SidePanel) -> void:
 	var box := panel.add_card("pipeline", "Pipeline", &"producer", "", BLURB)
 	var node: Node = box.get_parent()
@@ -146,8 +140,8 @@ func _process(delta: float) -> void:
 	refresh()
 
 
-## A SECTION, UNDER THE ONES HANDED BEFORE IT - the order of the note's cards, so what writes the words stands above what
-## is made from them.
+## A section, under the ones handed before it - the order of the note's cards, so what writes the words
+## stands above what is made from them.
 func add(section: PipelineSection) -> void:
 	if section != null and not _sections.has(section):
 		_sections.append(section)
@@ -186,8 +180,8 @@ func missing() -> bool:
 	return false
 
 
-## GENERATE: every section's missing work, top to bottom, each started once the one before it is done ([method _walk]) -
-## asked at its turn, so a step made from the words answers once they are written.
+## Generate: every section's missing work, top to bottom, each started once the one before it is done
+## ([method _walk]), asked at its turn, so a step made from the words answers once they are written.
 func generate() -> void:
 	for s in sections():
 		(s as PipelineSection).told = ""
@@ -196,8 +190,8 @@ func generate() -> void:
 	refresh()
 
 
-## Walks as far as it can: a section is started once, and the walk waits while it is busy. One that fails is passed - what
-## comes after it may be made regardless, and if it needs what failed, it says so.
+## Walks as far as it can: a section is started once, and the walk waits while it is busy. One that
+## fails is passed; what comes after it is made regardless, and says so if it needs what failed.
 func _walk() -> void:
 	while not _queue.is_empty():
 		var s: PipelineSection = _queue[0]
@@ -215,7 +209,7 @@ func _walk() -> void:
 		_begun = false
 
 
-## STOP: all of it. What is finished is kept.
+## Stop: all of it. What is finished is kept.
 func stop() -> void:
 	_queue = []
 	_begun = false
@@ -224,8 +218,8 @@ func stop() -> void:
 	refresh()
 
 
-## THE EPISODE IN [param feed] IS BEING LEFT OR THROWN AWAY: what is being made of it stops, and - when it is the one shown
-## ([param shown]) - so does Generate's walk, which would go on into the next one's.
+## The episode in [param feed] is being left or thrown away: what is being made of it stops, and - when it
+## is the one shown ([param shown]) - so does Generate's walk, which would go on into the next one's.
 func episode_left(feed: EpisodeFeed, shown: EpisodeFeed = null) -> void:
 	if feed == null or shown == null or feed.folder() == shown.folder():
 		_queue = []
@@ -266,8 +260,8 @@ func group_names() -> Array:
 	return out
 
 
-## EACH REFRESH: what ended is landed, Generate walks on, and the list says where everything stands - built again only
-## when what it lists has changed, for a list built again under a press loses the press.
+## Each refresh: what ended is landed, Generate walks on, and the list says where everything stands -
+## built again only when what it lists has changed, since a rebuild under a press loses the press.
 func refresh() -> void:
 	var all := sections()
 	for s in all:
@@ -340,7 +334,7 @@ func _add_head(section: PipelineSection) -> void:
 	l.text = section.title
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.add_theme_font_size_override("font_size", 13)
-	# A HEADING, NOT A ROW: in the card's own hue, a little apart from the section above it
+	# A heading, not a row: in the card's own hue, a little apart from the section above it
 	l.add_theme_color_override("font_color", Card.family_color(&"producer").lightened(0.35))
 	if row.get_index() > 0:
 		var gap := Control.new()
@@ -403,7 +397,7 @@ func _group_of(section: PipelineSection, group: String) -> Dictionary:
 	return g
 
 
-## ONE LINE: its glyph, its name, what it says, and its ▶ and ⟳. Returns the name, for its column.
+## One line: its glyph, its name, what it says, and its ▶ and ⟳. Returns the name, for its column.
 func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
@@ -438,14 +432,14 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 		make = _small_button("▶", it.go)
 		make.pressed.connect(_press_make.bind(at))
 		row.add_child(make)
-	# A LOCK BESIDE ITS ⟳ ([member PipelineRow.locked]): locked, it is KEPT - Generate passes it by, stale or not
+	# A lock beside its refresh button ([member PipelineRow.locked]): locked, it is kept - Generate passes it by, stale or not
 	var lock_b: Button = null
 	if it.lockable:
 		lock_b = _small_button("", "")
 		lock_b.icon = _lock_icon(true)
 		lock_b.pressed.connect(_press_lock.bind(at))
 		row.add_child(lock_b)
-	# ✎ BESIDE THEM ([member PipelineRow.edit]): what it made, changed by hand
+	# An edit button beside them ([member PipelineRow.edit]): what it made, changed by hand
 	var edit_b: Button = null
 	if not it.edit_tip.is_empty():
 		edit_b = _small_button("✎", it.edit_tip)
@@ -453,7 +447,7 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 		row.add_child(edit_b)
 	var redo := _small_button("⟳", it.again)
 	redo.pressed.connect(_press_redo.bind(at))
-	# A ROW WITH NO ⟳ KEEPS ITS PLACE: the column stays straight down the list
+	# A row with no refresh button keeps its place: the column stays straight down the list
 	if it.again.is_empty():
 		redo.modulate.a = 0.0
 		redo.disabled = true
@@ -464,7 +458,7 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 	return name_l
 
 
-## WHERE EVERYTHING STANDS: read off what the sections said this refresh, on the list as it is built.
+## Where everything stands: read off what the sections said this refresh, on the list as it is built.
 func _show(shown: Array, of: Dictionary) -> void:
 	var walking_now := walking()
 	var made := 0
@@ -522,8 +516,7 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 	var text: Label = r["text"]
 	if text.text != it.said:
 		text.text = it.said
-	# WHAT IS BEING DONE COMES WHOLE (2026-10-26: an 18-minute run's status sat past the end of a clipped row, and read as
-	# stuck): a running row wraps to say all of it
+	# What is being done comes whole: a running row wraps to say all of it
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if it.wraps else TextServer.AUTOWRAP_OFF
 	text.clip_text = not it.wraps
 	text.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING if it.wraps else TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -551,10 +544,10 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 			else "Press to keep this: Generate passes a kept part by, even once what it was made from has changed.")
 
 
-## A PADLOCK, closed or open, drawn here (a glyph the theme's fonts lack is a font search at every layout - Boot.lend_symbol_fonts):
-## 14 by 12 pixels, the height of the glyphs beside it, its edges smoothed (each pixel covered as far as the shape reaches into it -
-## the hard-pixel lock read as jagged and too large, the user, 2026-11-11). Closed, its shackle stands over the body; open, it is
-## SWUNG TO THE LEFT, hooked in by its right leg alone - "move the curved top part to the other direction, so that it's more clear".
+## A padlock, closed or open, drawn here (a glyph the theme's fonts lack is a font search at every layout -
+## Boot.lend_symbol_fonts): 14 by 12 pixels, its edges smoothed (each pixel covered as far as the shape
+## reaches into it). Closed, its shackle stands over the body; open, it is swung to the left, hooked in
+## by its right leg alone.
 static func _lock_icon(closed: bool) -> ImageTexture:
 	var key := "closed" if closed else "open"
 	if _locks.has(key):
@@ -599,7 +592,7 @@ static func _to_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
 static var _locks := {}
 
 
-## A ROW'S ✎ PRESSED: what it made, opened to be changed by hand ([member PipelineRow.edit]).
+## A row's edit button pressed: what it made, opened to be changed by hand ([member PipelineRow.edit]).
 func _press_edit(at: String) -> void:
 	var r: Dictionary = _rows.get(at, {})
 	if r.is_empty():
@@ -609,7 +602,7 @@ func _press_edit(at: String) -> void:
 		it.edit.call()
 
 
-## A ROW'S LOCK PRESSED: locked becomes unlocked and back ([member PipelineRow.lock]), its ⟳'s words read again.
+## A row's lock pressed: locked becomes unlocked and back ([member PipelineRow.lock]), its refresh button's words read again.
 func _press_lock(at: String) -> void:
 	var r: Dictionary = _rows.get(at, {})
 	if r.is_empty():
@@ -668,8 +661,8 @@ func _apply_folds() -> void:
 		_show_group(at)
 
 
-## ⟳ PRESSED: what it says, at once - or, where it throws other finished work away, once that is answered. The row read
-## now, for it changes four times a second.
+## Refresh pressed: what it says, at once - or, where it throws other finished work away, once that is
+## answered. The row is read now, since it changes four times a second.
 func _press_redo(at: String) -> void:
 	var r: Dictionary = _rows.get(at, {})
 	if r.is_empty():
@@ -697,7 +690,7 @@ func _press_make(at: String) -> void:
 	refresh()
 
 
-## A YES OR A NO, NAMING WHAT IS THROWN AWAY - never a list of what else could be done.
+## A yes or a no, naming what is thrown away - never a list of what else could be done.
 func _ask(it: PipelineRow) -> void:
 	if asking != null and is_instance_valid(asking):
 		asking.queue_free()

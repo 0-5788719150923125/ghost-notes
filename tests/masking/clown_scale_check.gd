@@ -1,27 +1,15 @@
 extends SceneTree
 
-## Does turning Scale up GROW the clown's features, or does it MERGE them?
+## Does turning Scale up grow the clown's features, or merge them?
 ##   godot --path . --position -5000,-5000 --script res://tests/masking/clown_scale_check.gd
-## Needs a real renderer (the paint field is a ping-pong SubViewport pair, and the
-## dummy renderer hands back no image) - runs windowed, offscreen.
+## Needs a real renderer (the paint field is a ping-pong SubViewport pair, and the dummy renderer hands
+## back no image); runs windowed, offscreen.
 ##
-## Reported from a real session: past a certain Scale "the giant red nose and giant
-## red lips become one, huge red blob" and "the two black eyes smear all the way
-## across the face and forehead". Both are the same omission - Scale multiplied
-## each feature's radius independently and no feature knew the others existed, so
-## nothing stopped a window growing past the gap to its neighbor. That is not a
-## setting being too high; it is Scale having no model of the face it is painting.
-##
-## So the radii are now bounded by the anatomy's own spacing (see clown_paint's
-## deposit), and this measures the consequence at the top of the slider:
-##
-##   GAP     the midpoint between the nose and the mouth must not be claimed by
-##           both channels at once - that midpoint going solid red IS the blob.
-##   BROW    well above the eye line must stay clear of eye black, however wide
-##           the eye patches are told to be.
-##   GROWTH  and Scale must still visibly DO something, or this "fix" is just a
-##           cap dressed up as a feature. The eye patch has to be measurably
-##           bigger at 2.5 than at 0.5.
+## Scale multiplies each feature's radius, so the radii are bounded by the anatomy's own spacing (see
+## clown_paint's deposit). Measured at the top of the slider:
+## - Gap: the midpoint between the nose and the mouth must not be claimed by both channels at once.
+## - Brow: well above the eye line stays clear of eye black however wide the patches are told to be.
+## - Growth: Scale still does something; the eye patch is measurably bigger at 2.5 than at 0.5.
 
 const W := 256
 const H := 144
@@ -46,9 +34,8 @@ func _initialize() -> void:
 		print("  eye patch black       %.3f at the eye, %.3f out toward the temple"
 			% [r.eye, r.eye_out])
 		print("  paint ON the features nose %.3f  lips %.3f" % [r.nose, r.lip])
-		# The blob test: the gap between two DIFFERENT red features must not be
-		# owned by both. Either alone is fine - a tall lip or a low nose is a
-		# look - but both saturating there means they have met in the middle.
+		# The gap between two different red features must not be owned by both (either alone is a look; both
+		# saturating means they met in the middle).
 		_expect(minf(r.mid_lip, r.mid_nose) < 0.45,
 			"Scale %.1f: the nose and the lips have merged - the midpoint between "
 			% scale + "them carries lip %.2f AND nose %.2f" % [r.mid_lip, r.mid_nose])

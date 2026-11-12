@@ -1,45 +1,33 @@
 extends Node
 
-## THE TABLET'S CAMERA HOLDS WHILE THE PAGE MOVES: a drag that scrolls the reading must not send
-## the camera after the text.
+## The tablet's camera holds while the page moves: a drag that scrolls the reading must not send the camera after
+## the text.
 ##
 ##   tests/run_boot_probe.sh tests/media/tablet_camera_check.gd 240
 ##
-## THE SCROLL is held here too, since the camera's holding depends on it: a reader swipes a
-## paragraph up BEFORE reading it, so the reading stays inside the band and never runs to the
-## screen's foot; a page whose first paragraph is already in a good place is not swiped on
-## arrival (it hid the header); a picture a skim stops on is centered where the camera looks; and
-## a reading started mid-way (a scrub) opens with the page already where the reading is, nothing
-## being replayed. And THE INTRO IS A WAIT: the tablet lies dark through it, the hand starts when
-## it ends, and the first word comes after the whole opening run.
+## The scroll is held here too, since the camera's holding depends on it: a reader swipes a paragraph up before
+## reading it, so the reading stays inside the band; a page whose first paragraph is already well placed is not
+## swiped on arrival; a picture a skim stops on is centered where the camera looks; and a reading started mid-way
+## (a scrub) opens with the page already where the reading is. The intro is a wait: the tablet lies dark through it,
+## the hand starts when it ends, and the first word comes after the whole opening run.
 ##
-## Reported as "the page is swiped, and the zoomed-in camera has to pan much higher to compensate
-## and reorient itself". The camera leaned toward the line being read, and a drag moves that line
-## from the foot of the reading band to its head, so every drag was answered by the camera
-## swinging up the screen - measured on ch42, 108-152 px within 12 s of every drag.
-##
-## Two halves. GEOMETRY: at its closest, at every Camera setting and both ways round, the camera
-## sees the whole reading band ([constant TabletMedium.READ_BAND]) with room to spare - which is
-## what lets the camera look at the band's middle and never follow the line. MOTION: a long page
-## is read by a synthetic voice and [TabletAudit] follows every reading drag; the camera's aim
-## must stay within REDIRECT_MAX of where it was, and every spoken word on the viewport and in
-## frame. A page that never scrolls passes that trivially, so the run must also HAVE drags, made
-## while the camera was close in.
+## Two halves. Geometry: at its closest, at every Camera setting and both ways round, the camera sees the whole
+## reading band ([constant TabletMedium.READ_BAND]) with room to spare, so it can look at the band's middle and never
+## follow the line. Motion: a long page is read by a synthetic voice and [TabletAudit] follows every reading drag;
+## the camera's aim must stay within REDIRECT_MAX of where it was, and every spoken word on the viewport and in
+## frame. The run must also have drags, made while the camera was close in.
 
 const Audit := preload("res://tests/media/tablet_audit.gd")
 const W := 1280
 const H := 720
 const DT := 1.0 / 30.0
-## Real frames are awaited only every so many steps: the medium and the subtitles are stepped
-## by hand, and awaiting every step makes a long page take minutes.
+## Real frames are awaited only every so many steps: the medium and subtitles are stepped by hand.
 const FRAME_EVERY := 30
-## How far, in logical pixels, the aim may move after a reading drag: the twist and the lens
-## breathe on their own, a little.
+## How far, in logical pixels, the aim may move after a reading drag (the twist and the lens breathe a little).
 const REDIRECT_MAX := 20.0
 ## Of the camera's closest view above and below its aim, the share the band may fill.
 const VIEW_SHARE := 0.9
-## How far down the viewport a word may be read: a reader swipes before the text gets near the
-## foot of the screen. Absolute, not the band's own foot, so a band moved back down fails it.
+## How far down the viewport a word may be read. Absolute, not the band's own foot, so a band moved back down fails.
 const READ_FOOT_MAX := 0.75
 
 var _fail := 0
@@ -68,8 +56,7 @@ func _ok(cond: bool, what: String) -> void:
 		print("  ok: ", what)
 
 
-## A table column is never narrower than its widest word: a short column ("Open", "Filled")
-## under a long header ("Status") ran the header into the next one.
+## A table column is never narrower than its widest word.
 func _check_table_columns() -> void:
 	var src := "<!-- url: jobs.test -->\n\n## Open positions\n\n| Position | Status | Details |\n|---|---|---|\n" \
 		+ "| Architect | Filled | The successful candidate drew houses until they were no longer houses, and still does. |\n" \
@@ -95,8 +82,7 @@ func _check_table_columns() -> void:
 		_ok(clear, "%s: no table header runs into the next column" % ("portrait" if o == 0 else "landscape"))
 
 
-## A later page on a site that opens on the site's own name: the band already says it, so the
-## title is not set again - "Omnipedia" sat twice at the top of every article after the first.
+## A later page on a site that opens on the site's own name: the band already says it, so the title is not set again.
 func _check_site_name_once() -> void:
 	var src := "<!-- url: omni.test/a -->\n\n# Omnipedia\n\n# First article\n\nRead this. [Next](omni.test/b)\n\n" \
 		+ "<!-- url: omni.test/b -->\n\n# Omnipedia\n\n# Second article\n\nRead this too.\n"
@@ -182,8 +168,8 @@ func _read(body: String, from := "", intro := 1.0) -> RefCounted:
 func _check_motion() -> void:
 	var audit = await _read(_long_page())
 	print("tablet_camera_check: " + audit.summary())
-	# CLOSE IN for the whole watch: within a sixth of the way out from the closest distance - the
-	# page's arc moves the aim as it closes in and lets go, and that is not a drag being answered
+	# Close in for the whole watch (within a sixth of the way out from the closest distance); the page's arc moves
+	# the aim as it closes in and lets go, and that is not a drag being answered.
 	var near := TabletMedium.near_of(0.0, 1.0)
 	var close_d := near + (TabletMedium.wide_of(0.0) - near) / 6.0
 	var close := 0

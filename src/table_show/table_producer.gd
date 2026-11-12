@@ -3,9 +3,8 @@ class_name TableProducer
 
 ## TableProducer - makes whatever an episode is missing, in the order a reading happens.
 ##
-## THE LOOP. Every [method tick] looks at the episode's steps (see [TableEpisode]) and starts
-## each one whose inputs exist and whose own file does not; when a job ends, its output is
-## checked and written into the episode, which is what lets the steps after it start. So the
+## The loop: every [method tick] looks at the episode's steps (see [TableEpisode]) and starts each one whose inputs exist and whose
+## own file does not; when a job ends, its output is checked and written into the episode, which lets the steps after it start. The
 ## order is not a script anywhere - it falls out of what each step is made from:
 ##
 ##   plan       the producer plans the episode: title, angle, how many cards (the spread), the deck's whole look
@@ -18,42 +17,36 @@ class_name TableProducer
 ##              that takes tools, looking at what it builds as it builds it ([SetDresserTools])
 ##   say:intro  the reader opens the video, shuffling, knowing no card
 ##   say:K      the reader turns over card K - knowing cards 1..K and what it said before, and
-##              LOOKING AT card K's painting, so the words are about the picture on screen
+##              looking at card K's painting, so the words are about the picture on screen
 ##   say:close  the reader closes, with the whole spread on the table
-##   acts       the puppeteer blocks the WORK the plan has done at the table (next/table_work.md), on the
+##   acts       the puppeteer blocks the work the plan has done at the table (next/table_work.md), on the
 ##              set table with the cards as drawn - through [PuppeteerTools] when its writer takes tools
 ##   say:work:K the reader talks card K's work through as it is done, told its acts and no later beat's
 ##   script     the passages and the marks between them, ready for the voice
-##   solve      WORK A COMPUTER CHECKS, where the plan fixes a problem ([SolverTools]; Proof's solver until 2026-11-11, next/proof.md):
-##              the solver works it with a lab notebook, Lean checks and runs of code before the table is set, and the puppeteer
-##              and the reader are handed what it really found ([method _plan]'s `worked`)
+##   solve      work a computer checks, where the plan fixes a problem ([SolverTools], next/proof.md): the solver works it
+##              with a lab notebook, Lean checks and runs of code before the table is set, and the puppeteer and the reader
+##              are handed what it really found ([method _plan]'s `worked`)
 ##   ink        what the work writes that TeX lays out - a formula, a drawing, words with math - laid out once the acts are
 ##              blocked ([TableInk], here, no agent)
-##   prep       A GAME (next/tabletop.md): the game master prepares, in secret: the world, and every player's sheet and want
+##   prep       a game (next/tabletop.md): the game master prepares, in secret: the world, and every player's sheet and want
 ##   say:K      ...and in a game each is a stretch of the session, played live through [GameTools], the players asked as it goes, the words and the dice written as they happen
 ##   image:map:K, image:figure:K, image:reveal:K     ...painted after it is played: whatever it turned out to need
 ##
-## HOW MANY CARDS, AND WHETHER ANY, ARE THE PRODUCER'S (the user, 2026-10-26: "The 'draw' option is confusing
-## ... leave it up to the agents to calculate the number of cards to draw (if they are even using cards at all).
-## Then, in the markdown, we can specify a range"): the brief says in its own words what its episodes draw, and
-## the plan's spread is the draw - as many cards as it has positions, at most [constant SPREAD_MOST]. It had been
-## the seed's pick in a range on the Episode card, the producer told to plan exactly that many.
+## How many cards, and whether any, are the producer's: the brief says in its own words what its episodes draw, and the plan's
+## spread is the draw - as many cards as it has positions, at most [constant SPREAD_MOST].
 ##
-## A SHOW THAT DRAWS NO CARDS (its producer plans beats, [method TableEpisode.cardless]; the user, 2026-10-26: "we
-## should start with a mask every time - and just paint it while talking") is planned in BEATS: no deck, no design,
-## no card painted or checked - the plan, the cloth and the room, the table, the work, and a passage per beat
-## said while its work is done.
+## A show that draws no cards (its producer plans beats, [method TableEpisode.cardless]) is planned in beats: no deck, no design,
+## no card painted or checked - the plan, the cloth and the room, the table, the work, and a passage per beat said while its work
+## is done.
 ##
-## NO CHEATING. The reader's passages are made strictly in drawing order, each from the passages
-## before it and the cards drawn so far ([method _drawn] stops at K), so an early passage was
-## written, and is kept, before any later card was ever put in front of a writer. The painter and
-## the designer see the cards they make and nothing of the reading; the reader never sees their
-## prompts, only the booklet entry printed for a card that has been turned over.
+## No cheating: the reader's passages are made strictly in drawing order, each from the passages before it and the cards drawn so
+## far ([method _drawn] stops at K), so an early passage is written, and kept, before any later card is put in front of a writer.
+## The painter and the designer see the cards they make and nothing of the reading; the reader never sees their prompts, only the
+## booklet entry printed for a card that has been turned over.
 ##
-## Nothing runs on its own: [method start] is a person pressing Generate, because every step
-## spends the author's quota - and a person asking for ONE part ([param only]) gets that part:
-## what follows from it waits for Generate. Only the two steps that cost nothing and are a pure
-## function of what they follow - the shuffle and assembling the script - come along on their own.
+## Nothing runs on its own: [method start] is a person pressing Generate, because every step spends the author's quota, and a
+## person asking for one part ([param only]) gets that part - what follows from it waits for Generate. Only the two steps that
+## cost nothing and are a pure function of what they follow (the shuffle, assembling the script) come along on their own.
 
 signal changed
 
@@ -66,7 +59,7 @@ const SPREAD_MOST := 10
 ## How many times the art director may send one card's painting back ([method _land_check]): past
 ## that the last painting stands, and the reader is told what it gets wrong.
 const REPAINTS := 2
-## THE PICTURE PAINTED FIRST IS PAINTED AGAIN IN THIS MANY LAYERS at the least and the most ([method _land_layers]).
+## The picture painted first is painted again in this many layers at the least and the most ([method _land_layers]).
 const LAYERS_LEAST := 3
 const LAYERS_MOST := 16
 ## The most lines a written card's designer may write on it ([method _land_design]).
@@ -81,11 +74,10 @@ const JUMPER_CHANCE := 0.3
 const NOTATION := ["$", "\\", "^", "_", "{", "}"]
 ## The steps made here, with no agent and no quota - see the class note.
 const LOCAL := ["draw", "script", "ink", "direction"]
-## The solver, tried more: a safeguard sometimes stops a sound run part way (Proof's first real episode, 2026-10-15: its first try
-## stopped after one Lean check; its retry verified), and its run is the episode's work. It may work this long (seconds).
+## The solver, tried more: a safeguard sometimes stops a sound run part way, and its run is the episode's work. It may work this long (seconds).
 const SOLVE_RETRIES := 2
 const SOLVE_TIMEOUT := 3600
-## WHO MAKES EACH KIND OF STEP, as its record and its row name them (a step's first word -> its maker).
+## Who makes each kind of step, as its record and its row name them (a step's first word -> its maker).
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
 	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master",
 	"solve": "solver", "ink": "code", "direction": "author",
@@ -98,7 +90,7 @@ var spec: Dictionary = {}
 var running := false
 ## The steps this run was asked for; empty for the whole episode.
 var only: Array = []
-## THE STEPS MADE AGAIN THOUGH THEY ARE MADE (a row's ⟳, [method start]'s [param remake]): what stands plays until the new one lands
+## The steps made again though they are made (a row's ⟳, [method start]'s [param remake]): what stands plays until the new one lands
 ## over it, a version back ([method TableEpisode.keep_version]), and what was made from it goes stale - nothing is thrown away.
 var again: Array = []
 
@@ -109,9 +101,9 @@ var _tries := {}       # step -> runs started
 var _hosts := {}       # step -> the painter host making it: {pid, out, log} ([method _make_skin_host])
 var _waiting := {}     # step -> what it waits on being installed
 var _from := {}        # step -> what it was made from as its making began ([method TableEpisode.made_from])
-## ONE LAYER LAID AGAIN ([method lay_layer]; next/editing.md step 4): its index from 0, -1 for the whole painting.
+## One layer laid again ([method lay_layer]; next/editing.md step 4): its index from 0, -1 for the whole painting.
 var skin_layer := -1
-## STEPS ASKED AGAIN WITH A NOTE (next/editing.md step 9): step -> the author's note, appended to that step's prompt alone
+## Steps asked again with a note (next/editing.md step 9): step -> the author's note, appended to that step's prompt alone
 ## ([method _asked]) until it lands.
 var asked := {}
 
@@ -122,7 +114,7 @@ func _init(ep: TableEpisode, sp: Dictionary) -> void:
 
 
 ## Make what is missing: every step, or only [param steps] (and the free steps that follow them) - and, with [param remake], those
-## steps again though they are made (a row's ⟳). GENERATE ([param steps] empty) MAKES WHAT IS MISSING AND WHAT IS STALE, unless it
+## steps again though they are made (a row's ⟳). Generate ([param steps] empty) makes what is missing and what is stale, unless it
 ## is kept ([method owed]). A person pressing is what starts it, so here an episode made before records gains them ([method
 ## TableEpisode.adopt]).
 func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
@@ -142,7 +134,7 @@ func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
 	changed.emit()
 
 
-## AN EPISODE TAKES UP THE DIRECTION as its plan is first made ([Direction]): the Direction card's words, handed in the spec
+## An episode takes up the direction as its plan is first made ([Direction]): the Direction card's words, handed in the spec
 ## (`direction`), written into an episode that has no plan and no direction yet - its first step, recorded as the author's. A made
 ## episode keeps its own; taking the card up again into it is its row's ⟳ ([method _make]).
 func _take_direction() -> void:
@@ -156,7 +148,7 @@ func _take_direction() -> void:
 	_made("direction", "author")
 
 
-## [param system] (an agent's system prompt) with WHERE THE AUTHOR TOOK THIS EPISODE after it ([method TableEpisode.direction],
+## [param system] (an agent's system prompt) with where the author took this episode after it ([method TableEpisode.direction],
 ## rules/table/show.yaml `direction`) - every agent behind the episode told it, above the brief - or as it is, given none.
 func with_direction(system: String) -> String:
 	var d := episode.direction()
@@ -247,7 +239,7 @@ func tick() -> void:
 			continue
 		var h: Dictionary = _hosts[step]
 		_hosts.erase(step)
-		# ...TEX'S LAYOUT of what the work writes: ghost's own, no painter's
+		# ...tex's layout of what the work writes: ghost's own, no painter's
 		if String(step) == "ink":
 			var why := _land_ink(h)
 			if not why.is_empty():
@@ -272,7 +264,7 @@ func tick() -> void:
 			var s := String(step)
 			if (episode.has(s) and not owed(s)) or _jobs.has(s) or _hosts.has(s) or _errors.has(s) or passes_by(s):
 				continue
-			# ...ONCE WHAT IT IS MADE FROM IS MADE, AND NOT ABOUT TO BE MADE AGAIN: made now from what goes a version back, it
+			# ...once what it is made from is made, and not about to be made again: made now from what goes a version back, it
 			# would only go stale
 			var ready := true
 			for need in episode.needs(s):
@@ -292,7 +284,7 @@ func tick() -> void:
 
 # --- making one step ---------------------------------------------------------------------
 
-## WHETHER [param step], MADE, IS TO BE MADE AGAIN in this run: asked for again ([member again]), or stale and not kept ([method
+## Whether [param step], made, is to be made again in this run: asked for again ([member again]), or stale and not kept ([method
 ## TableEpisode.stale], [method TableEpisode.kept]) where Generate runs - or where it is a free step that follows what was asked.
 func owed(step: String) -> bool:
 	if again.has(step):
@@ -305,13 +297,13 @@ func _asked(step: String, prompt: String) -> String:
 	return prompt if not asked.has(step) else prompt + "\n\n" + Rules.say("table/show.asked", {"note": String(asked[step])})
 
 
-## WHETHER GENERATE PASSES [param step] BY, made or not: it is made by hand ([method TableEpisode.by_hand]) and nobody asked for
+## Whether Generate passes [param step] by, made or not: it is made by hand ([method TableEpisode.by_hand]) and nobody asked for
 ## it by name (a row's ⟳ hands it to its agent).
 func passes_by(step: String) -> bool:
 	return episode.by_hand(step) and not again.has(step) and not only.has(step)
 
 
-## [param step] LANDED, made by [param by]: recorded from what it was made from as its making began, and no longer owed.
+## [param step] landed, made by [param by]: recorded from what it was made from as its making began, and no longer owed.
 func _made(step: String, by: String) -> void:
 	var err := episode.note_made(step, by, _from.get(step, {}))
 	if not err.is_empty():
@@ -356,7 +348,7 @@ func _make(step: String) -> void:
 		"layers":
 			_make_layers()
 		"direction":
-			# ...TAKEN UP AGAIN from the card (its row's ⟳): what was made from the old words goes stale
+			# ...taken up again from the card (its row's ⟳): what was made from the old words goes stale
 			_finish(step, episode.write_text("direction", String(spec.get("direction", "")).strip_edges() + "\n"))
 		"solve":
 			_make_solve()
@@ -414,11 +406,11 @@ func _plan() -> Dictionary:
 	var p: Variant = episode.read_json("plan")
 	if not (p is Dictionary):
 		return {}
-	# ...WHAT IS BEING BUILT, for everyone after whoever designed it ([method TableEpisode.model_words])
+	# ...what is being built, for everyone after whoever designed it ([method TableEpisode.model_words])
 	var words := episode.model_words()
 	if not words.is_empty():
 		(p as Dictionary)["model_words"] = words
-	# ...THE SHOW'S FIXED THINGS, standing on every table as its brief writes them ([FixedTable])
+	# ...the show's fixed things, standing on every table as its brief writes them ([FixedTable])
 	var fixed: Dictionary = spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {}
 	if not (fixed.get("things", []) as Array).is_empty():
 		var said := PackedStringArray()
@@ -427,7 +419,7 @@ func _plan() -> Dictionary:
 				var at: Variant = (t as Dictionary).get("at", [0, 0])
 				said.append("\"%s\" at %s" % [String((t as Dictionary).get("name", "")), JSON.stringify(at)])
 		(p as Dictionary)["fixed_things"] = ", ".join(said)
-	# ...AND WHAT IS PAINTED, element by element, for whoever lays it on ([Skins])
+	# ...AND what is painted, element by element, for whoever lays it on ([Skins])
 	var doc: Variant = episode.read_json("skin") if episode.has("skin") else null
 	if doc is Dictionary:
 		var lines := PackedStringArray()
@@ -442,7 +434,7 @@ func _plan() -> Dictionary:
 			lines.append_array(Skins.summary(made, Vector2(float(fr[0]), float(fr[1]))))
 		if not lines.is_empty():
 			(p as Dictionary)["painted_design"] = "\n".join(lines)
-	# ...AND THE WORK REALLY DONE, where the plan fixed a problem and the solver worked it ([TablePrompts.worked_vars]): for the
+	# ...AND the work really done, where the plan fixed a problem and the solver worked it ([TablePrompts.worked_vars]): for the
 	# puppeteer, who writes it at the table, and the reader, who talks it through
 	if episode.wants_solve() and episode.has("solve"):
 		(p as Dictionary)["worked"] = {"problem": episode.problem(), "solve": episode.solved(), "notebook": episode.read_text("notebook"),
@@ -485,7 +477,7 @@ func _make_draw() -> String:
 	var n := ((plan.get("spread", {}) as Dictionary).get("positions", []) as Array).size()
 	if n <= 0:
 		return "the plan has no spread"
-	# the show's own deck, shuffled from the seed - and each card WRITTEN INTO the draw, so the
+	# the show's own deck, shuffled from the seed - and each card written into the draw, so the
 	# episode keeps the cards it drew whatever the show's deck becomes later
 	var deck := CardDeck.shuffled(_deck(), episode.seed, CardTable.reverses(plan))
 	if deck.size() < n:
@@ -497,12 +489,12 @@ func _make_draw() -> String:
 	for i in n:
 		var c: Dictionary = (deck[i] as Dictionary).duplicate()
 		c["jumper"] = jumper and i == 0
-		# A CARD THAT CAME OUT UPSIDE DOWN AND IS RIGHTED in the hand is read the right way up
+		# A card that came out upside down and is righted in the hand is read the right way up
 		if bool(c.get("reversed", false)) and not read:
 			c["reversed"] = false
 			c["righted"] = true
 		cards.append(c)
-	# ...and, of a box, THE CARDS IT LEFT IN: what the table prints the cards nobody drew as
+	# ...and, of a box, the cards it left in: what the table prints the cards nobody drew as
 	# (TableMedium._left_in). The table's alone - no writer is handed a card that was not drawn.
 	var left: Array = []
 	if String(CardTable.staging_of(plan)["source"]) == "box":
@@ -510,14 +502,14 @@ func _make_draw() -> String:
 			var card: Dictionary = c
 			left.append({"key": card.get("key", ""), "name": card.get("name", ""), "numeral": card.get("numeral", ""),
 				"group": card.get("group", ""), "series": card.get("series", ""), "meaning": card.get("meaning", "")})
-	# ...and HOW MANY CARDS THE DECK HELD: the table stands, shuffles and washes that many
+	# ...and how many cards the deck held: the table stands, shuffles and washes that many
 	# (TablePlan.deck_count)
 	return episode.write_json("draw", {"seed": episode.seed, "cards": cards, "left": left, "deck_n": deck.size()})
 
 
-## WHETHER A CARD JUMPS in episode [param seed], staged by [param plan]: the plan lets one fly
+## Whether a card jumps in episode [param seed], staged by [param plan]: the plan lets one fly
 ## (`staging.jumpers`, the producer's choice), and the seed says whether one does - how the reading
-## goes, never which card. A JUMPER flies out of a shuffle: never out of a box, and never into a card
+## goes, never which card. a jumper flies out of a shuffle: never out of a box, and never into a card
 ## not drawn by hand.
 static func jumps(seed: int, plan: Dictionary) -> bool:
 	var rng := RandomNumberGenerator.new()
@@ -552,7 +544,7 @@ func _card(k: int) -> Dictionary:
 	return card
 
 
-## THE CARDS THE READER MAY KNOW at a step: those turned over so far - 1..k for card k, none for
+## The cards the reader may know at a step: those turned over so far - 1..k for card k, none for
 ## the intro, all of them for the close. The only way a card reaches a reader prompt. (None at all in
 ## a show that draws none.)
 func _drawn(upto: int) -> Array:
@@ -562,9 +554,7 @@ func _drawn(upto: int) -> Array:
 	return out
 
 
-## CARD [param k]'s DESIGN, shown the pictures of the cards designed before it in this draw (the user,
-## 2026-10-17, of penalty-box: "players will be in very similar poses/positions" - seven of ten designs of
-## 901482 were two men nose to nose in the middle, each designer blind to the others).
+## Card [param k]'s design, shown the pictures of the cards designed before it in this draw (so the designs do not repeat each other's poses).
 func _make_design(k: int) -> void:
 	var card := _card(k)
 	var siblings: Array = []
@@ -591,7 +581,7 @@ func _make_image(step: String) -> void:
 		var design: Variant = episode.read_json("design:%d" % k)
 		var art := String((design as Dictionary).get("art", "")) if design is Dictionary else ""
 		var refs: Array = []
-		# IN ITS OWN PRINTING'S HAND: that printing's back, and the cards drawn before it in that printing
+		# In its own printing's hand: that printing's back, and the cards drawn before it in that printing
 		var key := episode.printing_of(k)
 		var back := "image:back" if key.is_empty() else "image:back:%s" % key
 		var has_back := episode.has(back)
@@ -604,7 +594,7 @@ func _make_image(step: String) -> void:
 		if chain.size() > CHAIN_MAX:
 			chain = [chain[0]] + chain.slice(chain.size() - (CHAIN_MAX - 1))
 		refs.append_array(chain)
-		# WHAT THE ART DIRECTOR SENT BACK of this card's earlier paintings, every fault once
+		# What the art director sent back of this card's earlier paintings, every fault once
 		var faults := PackedStringArray()
 		for round in episode.sent_back(k):
 			for f in DataPath.strings(round):
@@ -623,7 +613,7 @@ func _make_image(step: String) -> void:
 		_submit_image(step, TablePrompts.back_image(CardTable.look_of(look, {"series": name}), target,
 			CardTable.reads_reversed(_plan()), printed), [])
 		return
-	# WHAT THE SESSION ASKED TO HAVE PAINTED ([method TableEpisode.game]), the map's own in its look, a figure's on the card it stands on
+	# What the session asked to have painted ([method TableEpisode.game]), the map's own in its look, a figure's on the card it stands on
 	if parts.size() == 3 and TableEpisode.GAME_PICTURES.values().has(String(parts[1])):
 		var key := String(TableEpisode.GAME_PICTURES.find_key(String(parts[1])))
 		var list: Array = episode.game().get(key, [])
@@ -631,7 +621,7 @@ func _make_image(step: String) -> void:
 		var thing: Dictionary = list[k] if k >= 0 and k < list.size() and list[k] is Dictionary else {}
 		_submit_image(step, TablePrompts.game_image(look, String(parts[1]), thing, target), [])
 		return
-	# A LAYER OF THE PICTURE PAINTED FIRST: painted over the one before (the bare surface, for the first), the picture itself its guide
+	# A layer of the picture painted first: painted over the one before (the bare surface, for the first), the picture itself its guide
 	if parts.size() == 3 and String(parts[1]) == "layer":
 		_make_layer(step, int(parts[2]), look, target)
 		return
@@ -643,10 +633,10 @@ func _make_image(step: String) -> void:
 		"surface":
 			_submit_image(step, TablePrompts.surface_image(look, target), [])
 		"height":
-			# the painting's depth, redrawn FROM the painting - an edit of it, checked as it lands
+			# the painting's depth, redrawn from the painting - an edit of it, checked as it lands
 			_submit_image(step, TablePrompts.height_image(look, target), [episode.file_of("image:surface")])
 		"backdrop":
-			# THE VIEW IT IS ASKED FOR, kept beside it: the table projects a level picture from the
+			# The view it is asked for, kept beside it: the table projects a level picture from the
 			# camera's eye, and keeps a picture made before (none beside it) as it always stood
 			var view := episode.dir.path_join("backdrop.json")
 			var f := FileAccess.open(view + ".part", FileAccess.WRITE)
@@ -690,7 +680,7 @@ func _land_prep(text: String) -> String:
 	return episode.write_json("prep", got)
 
 
-## THE SHEETS AS THE PREPARATION WROTE THEM, by each person as the table spells them.
+## The sheets as the preparation wrote them, by each person as the table spells them.
 static func sheets_of(prep: Dictionary, people: PackedStringArray) -> Dictionary:
 	var out := {}
 	var all: Dictionary = prep.get("people", {}) if prep.get("people") is Dictionary else {}
@@ -701,7 +691,7 @@ static func sheets_of(prep: Dictionary, people: PackedStringArray) -> Dictionary
 	return out
 
 
-## ONE STRETCH OF THE SESSION: its tools hold the table as the last one left it, and the stretch is what they write. Once the game is over, a stretch is nothing: it was never played.
+## One stretch of the session: its tools hold the table as the last one left it, and the stretch is what they write. Once the game is over, a stretch is nothing: it was never played.
 func _make_scene(who: String) -> void:
 	var step := "say:" + who
 	_close_tools(step)
@@ -729,7 +719,7 @@ func _make_scene(who: String) -> void:
 	_submit_text(step, TablePrompts.game_master(title, String(spec.get("brief", "")), _plan(), people, who, episode.beat_count(), prep_d, ledger, before, toolset.words_aim), "best", {"tools_url": url})
 
 
-## WHAT WAS SAID TONIGHT, before [param step]: with names and rolls, as anyone at the table heard it.
+## What was said tonight, before [param step]: with names and rolls, as anyone at the table heard it.
 func _heard_so_far(step: String) -> String:
 	var out := PackedStringArray()
 	var order := ["say:intro"]
@@ -749,7 +739,7 @@ func _heard_file(say: String) -> String:
 	return episode.dir.path_join("heard_%s.txt" % say.trim_prefix("say:"))
 
 
-## A STRETCH HANDED IN: its events first, so words that are there have their events; what was heard, for those at the table next time; then its words.
+## A stretch handed in: its events first, so words that are there have their events; what was heard, for those at the table next time; then its words.
 func _land_scene(step: String, handed: String) -> String:
 	var got: Variant = JSON.parse_string(handed)
 	if not (got is Dictionary) or String((got as Dictionary).get("text", "")).strip_edges().is_empty():
@@ -768,7 +758,7 @@ func _land_scene(step: String, handed: String) -> String:
 	return episode.write_text(step, own_voices(String(d["text"]), _voices(), _reader_name()))
 
 
-## THE SESSION, gathered for the table and the painter (`game.json`): everything that happened, who sits where with which dice, and each thing it asked to be painted, once.
+## The session, gathered for the table and the painter (`game.json`): everything that happened, who sits where with which dice, and each thing it asked to be painted, once.
 func _write_game() -> String:
 	var people := _people()
 	var prep: Variant = episode.read_json("prep")
@@ -777,12 +767,9 @@ func _write_game() -> String:
 	return episode.write_json("game", game)
 
 
-## THE ART DIRECTOR looks at card [param k]'s painting before the reader does: shown the painting, the
-## description it was painted from, what is printed with it and the cards of this draw painted before
-## it, it keeps the painting or sends it back with what is wrong ([method _land_check]) - the user,
-## 2026-10-17: a reading said a player shook with his left hand, and the picture showed a right-handed
-## shake (penalty-box 290660); a rink bent into a triangle so a crowd would fit. A reversed card is shown
-## as it was painted, the right way up.
+## The art director looks at card [param k]'s painting before the reader does: shown the painting, the description it was painted
+## from, what is printed with it and the cards of this draw painted before it, it keeps the painting or sends it back with what is
+## wrong ([method _land_check]). A reversed card is shown as it was painted, the right way up.
 func _make_check(k: int) -> void:
 	var card := _card(k)
 	var images: Array = [{"path": episode.file_of("image:card:%d" % k),
@@ -797,11 +784,9 @@ func _make_check(k: int) -> void:
 	_submit_text("check:%d" % k, p, "best")
 
 
-## THE FACE PAINTED FIRST (feedback 0023; next/painted_surface.md - the user, of a face the decorator drew from nothing: "a rather
-## terrible and unimpressive mask ... It might even be worth generating reference artwork from the painter, which we could copy from"):
-## the table's first surface shown bare from its front ([method Skins.face_canvas], kept beside the episode with where it lies in it), and
-## the painter asked to paint the plan's `painted` onto that picture - so its features are the surface's own and every mark lands on them -
-## told what the art director sent back of its earlier paintings.
+## The face painted first (next/painted_surface.md): the table's first surface shown bare from its front ([method Skins.face_canvas],
+## kept beside the episode with where it lies in it), and the painter asked to paint the plan's `painted` onto that picture - so its
+## features are the surface's own and every mark lands on them - told what the art director sent back of its earlier paintings.
 func _make_face(step: String, look: Dictionary, target: String) -> void:
 	var surfaces := Skins.skins_of(episode.read_json("table"))
 	if surfaces.is_empty():
@@ -829,7 +814,7 @@ func _make_face(step: String, look: Dictionary, target: String) -> void:
 	_submit_image(step, TablePrompts.face_image(look, _plan(), skin, target, faults, Skins.table_paints(episode.read_json("table"))), [bare])
 
 
-## THE FACE PAINTED FIRST, KEPT ONLY IF IT LIES ON THE SURFACE ([method Skins.face_fit]) - then cut back to the surface's millimeters as it
+## The face painted first, kept only if it lies on the surface ([method Skins.face_fit]) - then cut back to the surface's millimeters as it
 ## wears it (`face_ref.png`, [method Skins.face_reference]), which the decorator copies; or removed, and why said - to the painter of the next too
 ## ([method TableEpisode.send_back]).
 func _land_face() -> String:
@@ -854,10 +839,9 @@ func _land_face() -> String:
 	return "" if ref.save_png(episode.dir.path_join("face_ref.png")) == OK else "could not write face_ref.png"
 
 
-## THE PAINTER AT THE TABLE, AS A HOST (next/face_layers.md; the user, 2026-11-09: "the old painter code is pointless, because it makes
-## a mess. I want to use the optimizer"): the episode's layers laid with real marks by hosts/paint/run.py - each layer's thin parts traced
-## on its own picture, its broad parts by strokes found by gradient descent - written as the show plays it (`paint/`): each element's
-## program and maps. Waits while its environment is installed; landed by [method _land_skin_host].
+## The painter at the table, as a host (next/face_layers.md): the episode's layers laid with real marks by hosts/paint/run.py - each
+## layer's thin parts traced on its own picture, its broad parts by strokes found by gradient descent - written as the show plays it
+## (`paint/`): each element's program and maps. Waits while its environment is installed; landed by [method _land_skin_host].
 func _make_skin_host() -> void:
 	_waiting.erase("skin")
 	if not Provision.ensure("paint_venv"):
@@ -884,7 +868,7 @@ func _make_skin_host() -> void:
 		images.append(ProjectSettings.globalize_path(episode.file_of("image:layer:%d" % k)))
 		var l: Dictionary = episode.layers()[k - 1]
 		layers.append({"name": String(l.get("name", "")), "soft": bool(l.get("soft", false))})
-	# ...INTO A FOLDER OF ITS OWN, so what stands plays on while it paints and is kept one back once it lands ([method swap_paint])
+	# ...into a folder of its own, so what stands plays on while it paints and is kept one back once it lands ([method swap_paint])
 	var out := ProjectSettings.globalize_path(episode.dir.path_join(PAINT_NEXT))
 	DirAccess.make_dir_recursive_absolute(out)
 	var m: Dictionary = meta
@@ -895,7 +879,7 @@ func _make_skin_host() -> void:
 	var fields := {"out": out, "bare_image": ProjectSettings.globalize_path(episode.dir.path_join("face_bare.png")),
 		"at": at, "size": size, "px": float(m.get("px", 3.0)), "bare": String((surfaces[0] as Dictionary).get("color", "#c89e80")),
 		"paints": paints, "layers": layers, "images": images}
-	# ...ONE LAYER ALONE ([method lay_layer]): over the canvas the layers before it leave, the rest kept as they stand
+	# ...one layer alone ([method lay_layer]): over the canvas the layers before it leave, the rest kept as they stand
 	if skin_layer >= 0:
 		fields["only"] = skin_layer
 		fields["keep"] = ProjectSettings.globalize_path(episode.dir.path_join("paint"))
@@ -911,7 +895,7 @@ func _make_skin_host() -> void:
 	_hosts["skin"] = {"pid": pid, "out": out, "log": log}
 
 
-## THE PAINTER'S WORK, KEPT AS THE DESIGN (`skin.json`): an element each run of one layer's marks with one tool in one paint, in order - its
+## The painter's work, kept as the design (`skin.json`): an element each run of one layer's marks with one tool in one paint, in order - its
 ## tool the table's nearest ([method _table_tool]), its pot its paint's, its beat where it begins in the painting's time ([method
 ## _element_beats]), and `plan.host` naming its program and maps in `paint/elements.json` (TablePaint._from_host). "" kept, else why not.
 func _land_skin_host(h: Dictionary) -> String:
@@ -948,14 +932,14 @@ func _land_skin_host(h: Dictionary) -> String:
 			"plan": {"thing": String(tool.get("thing", "")), "part": String(tool.get("part", "")), "how": String(ed["how"]),
 				"beat": String(beats[String(ed["id"])]), "seconds": float(ed["seconds"]), "pot": _pot_of_paint(String(ed["paint"]), scanned["paints"]),
 				"host": String(ed["id"])}})
-	# ...ONE LAYER LAID AGAIN ([method lay_layer]): the design as it stood for every other layer - a hand's edits to them kept -
+	# ...one layer laid again ([method lay_layer]): the design as it stood for every other layer - a hand's edits to them kept -
 	# and this layer's new elements in its place among them
 	if skin_layer >= 0 and episode.has("skin"):
 		elements = merged_layer(episode.read_json("skin"), elements, episode.layers(), skin_layer)
 	var design := {"thing": String(skin["thing"]), "part": String(skin["part"]), "frame": [(skin["frame"] as Vector2).x, (skin["frame"] as Vector2).y],
 		"outline": String(skin.get("outline", "")), "name": String(_plan().get("painted", "")).left(60), "elements": elements}
 	var wrote := episode.write_json("skin", {"designs": [design]})
-	# ...AND THE WORK THAT IS MADE FROM IT, where it stands and is not kept: it is the painting's own, made from it here in a moment,
+	# ...AND the work that is made from it, where it stands and is not kept: it is the painting's own, made from it here in a moment,
 	# and left it would block elements there are no longer. The words are left as they are: a cue names a layer, which a repaint
 	# keeps ([method TableWork.resolve_cues]), and one that names nothing now is a problem shown (next/editing.md step 2)
 	if wrote.is_empty() and episode.has("acts") and not episode.kept("acts"):
@@ -967,9 +951,8 @@ func _land_skin_host(h: Dictionary) -> String:
 	return wrote
 
 
-## LAYER [param k] (from 1) LAID AGAIN ON THE TABLE, ALONE (next/editing.md step 4: "The painter host solves one layer and replaces
-## only that layer's elements"): the host paints it over the canvas the layers before it leave and puts its new elements among the
-## rest, and the design is made again from them - minutes, where the whole painting is forty. "" started, else why not.
+## Layer [param k] (from 1) laid again on the table, alone (next/editing.md step 4): the host paints it over the canvas the layers
+## before it leave and puts its new elements among the rest, and the design is made again from them. "" started, else why not.
 func lay_layer(k: int) -> String:
 	if k < 1 or k > episode.layer_count():
 		return "there is no layer %d" % k
@@ -979,7 +962,7 @@ func lay_layer(k: int) -> String:
 	return ""
 
 
-## THE DESIGN'S ELEMENTS WITH ONE LAYER LAID AGAIN: [param old] (`skin.json` as it stands, a hand's edits and all) for every layer
+## The design's elements with one layer laid again: [param old] (`skin.json` as it stands, a hand's edits and all) for every layer
 ## but [param layer] (from 0, of [param layers] - an element's `stage` its layer's name), and [param fresh]'s elements of that layer
 ## in their place, the layers in their order. Pure: a gate holds it.
 static func merged_layer(old: Variant, fresh: Array, layers: Array, layer: int) -> Array:
@@ -1008,9 +991,9 @@ static func merged_layer(old: Variant, fresh: Array, layers: Array, layer: int) 
 const PAINT_NEXT := "paint_next"
 
 
-## THE HOST'S NEW MAPS PUT IN PLACE, THE OLD ONES KEPT ONE BACK (next/editing.md step 1: "one back for a host's maps" - half a
-## gigabyte each, so moved, never copied): `paint/` to `versions/_paint_prev/` (the one before that gone), [param fresh] to
-## `paint/`. "" done, else why not (and what stood stands).
+## The host's new maps put in place, the old ones kept one back (next/editing.md step 1; half a gigabyte each, so moved, never
+## copied): `paint/` to `versions/_paint_prev/` (the one before that gone), [param fresh] to `paint/`. "" done, else why not (and
+## what stood stands).
 func swap_paint(fresh: String) -> String:
 	var live := ProjectSettings.globalize_path(episode.dir.path_join("paint"))
 	if fresh == live:
@@ -1028,13 +1011,9 @@ func swap_paint(fresh: String) -> String:
 	return ""
 
 
-## EACH ELEMENT'S BEAT, by id: where its middle falls in the painting's time, each counted with the trips its run takes ([constant
-## RUN_TRIPS]), spread over the intro and the beats - the ground in the intro, the close left to its words. A layer to a beat, 327484's
-## crackle (a third of the time) had taken one beat and left three empty, and the close was given three layers. EACH BEAT ITS SHARE BY
-## HOW LONG ITS WORDS TAKE, where they are written ([method _beat_seconds]), else evenly - the reader then writes them to the work
-## (2026-11-10, the user: "Starting around 5:30, and continuing for at least 90 seconds... there is no animation at all"): 732687's
-## painting, made again under its kept words and shorter, had a ground more than an even sixth of it, so the intro was given the ground
-## alone - one sponge over seven minutes of words, put down long before the intro's last.
+## Each element's beat, by id: where its middle falls in the painting's time, each counted with the trips its run takes ([constant
+## RUN_TRIPS]), spread over the intro and the beats - the ground in the intro, the close left to its words. Each beat gets its share
+## by how long its words take, where they are written ([method _beat_seconds]), else evenly - the reader then writes them to the work.
 func _element_beats(els: Array) -> Dictionary:
 	var keys: Array = ["intro"]
 	for k in range(1, episode.beat_count() + 1):
@@ -1071,12 +1050,11 @@ func _element_beats(els: Array) -> Dictionary:
 	return out
 
 
-## What a run of one tool in one paint takes in the show beyond its strokes (seconds): fetched, loaded, rinsed, dried, moved and put back -
-## 732687's 37 runs, 678 s of it.
+## What a run of one tool in one paint takes in the show beyond its strokes (seconds): fetched, loaded, rinsed, dried, moved and put back.
 const RUN_TRIPS := 18.0
 
 
-## HOW LONG EACH BEAT'S WORDS TAKE, by beat ("intro", "1"...): its passage's words at the reader's pace ([method _said_word]) and its
+## How long each beat's words take, by beat ("intro", "1"...): its passage's words at the reader's pace ([method _said_word]) and its
 ## silences - empty where no passage is written yet.
 func _beat_seconds() -> Dictionary:
 	var bare := episode.cardless()
@@ -1097,10 +1075,9 @@ func _beat_seconds() -> Dictionary:
 	return out
 
 
-## The table's tool nearest the painter's: a sponge for a sponge, else the brush nearest its width - A COTTON SWAB FOR THE PAINTER'S SWAB
-## AND FOR NOTHING ELSE (feedback 0020, 2026-11-09: "we might be able to wipe it away with a cotton swab (if the mistake was small, or the
-## color was faint)"): its lifts go to a brush whose tip is a bud ([constant PainterTools.SWAB_TIP]) where the table has one, else to the
-## brush nearest its width, a clean brush lifting as well; and a swab, 5 mm across, is never the brush nearest a 6 mm round's.
+## The table's tool nearest the painter's: a sponge for a sponge, else the brush nearest its width - a cotton swab for the painter's
+## swab and for nothing else: its lifts go to a brush whose tip is a bud ([constant PainterTools.SWAB_TIP]) where the table has one,
+## else to the brush nearest its width, a clean brush lifting as well; a swab, 5 mm across, is never the brush nearest a 6 mm round's.
 static func _table_tool(name: String, tools: Array) -> Dictionary:
 	var want := {"sponge": 30.0, "round": 6.0, "flat": 10.0, "liner": 2.0, "blender": 16.0, "fan": 12.0, "handle": 1.6, "pencil": 0.8,
 		"lipstick": 4.0, "bud": 5.0, "finger": 12.0}
@@ -1126,10 +1103,8 @@ static func _table_tool(name: String, tools: Array) -> Dictionary:
 	return best
 
 
-## The pot a paint is taken from: its own; a mix's, the paint there is most of; none for a clean brush. A MIX OF A MIX TOO (feedback
-## 0006, 2026-11-09): "amber cream+olive cream+white paint 0.75 0.75" - each paint after the first mixed in at its share, so the white
-## here is three quarters of it - had been read as one mix of "amber cream" and "olive cream+white paint 0.75", no paint at all, and its
-## element named no pot.
+## The pot a paint is taken from: its own; a mix's, the paint there is most of; none for a clean brush. A mix of a mix too
+## ("amber cream+olive cream+white paint 0.75 0.75": each paint after the first mixed in at its share) is read paint by paint.
 static func _pot_of_paint(paint: String, paints: Array) -> String:
 	if paint.is_empty():
 		return ""
@@ -1165,9 +1140,8 @@ static func _pot_of_paint(paint: String, paints: Array) -> String:
 	return ""
 
 
-## THE ORDER THE PICTURE IS PAINTED IN (the user, 2026-11-09: "deconstructed the entire mask right from the start ... Split it into
-## layers/stages"; lab/paint/layers_gen.py): the art director, shown the picture passed and the bare surface it was painted on, writes
-## the layers a hand would lay it in, broad to fine, each in words a painter is told ([method _land_layers]).
+## The order the picture is painted in (lab/paint/layers_gen.py): the art director, shown the picture passed and the bare surface it
+## was painted on, writes the layers a hand would lay it in, broad to fine, each in words a painter is told ([method _land_layers]).
 func _make_layers() -> void:
 	var images: Array = [{"path": episode.file_of("image:face"), "label": "THE PICTURE, finished:", "flip": false},
 		{"path": episode.dir.path_join("face_bare.png"), "label": "The bare surface it was painted on:", "flip": false}]
@@ -1178,7 +1152,7 @@ func _make_layers() -> void:
 	_submit_text("layers", p, "best")
 
 
-## THE LAYERS, KEPT: `{"layers": [{name, add, soft}]}` - between [constant LAYERS_LEAST] and [constant LAYERS_MOST] of them, each named and
+## The layers, kept: `{"layers": [{name, add, soft}]}` - between [constant LAYERS_LEAST] and [constant LAYERS_MOST] of them, each named and
 ## said; "" written, else why not.
 func _land_layers(text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
@@ -1193,7 +1167,7 @@ func _land_layers(text: String) -> String:
 	return episode.write_json("layers", {"layers": out})
 
 
-## ONE LAYER PAINTED: the picture as painted so far (the bare surface, for the first layer) with layer [param k] laid on it, as it is in
+## One layer painted: the picture as painted so far (the bare surface, for the first layer) with layer [param k] laid on it, as it is in
 ## the finished picture - and nothing else.
 func _make_layer(step: String, k: int, look: Dictionary, target: String) -> void:
 	var list := episode.layers()
@@ -1205,7 +1179,7 @@ func _make_layer(step: String, k: int, look: Dictionary, target: String) -> void
 	_submit_image(step, TablePrompts.layer_image(look, String(l["add"]), target, k, list.size()), [before, episode.file_of("image:face")])
 
 
-## A LAYER, KEPT ONLY IF IT LIES ON THE SURFACE as the picture does ([method Skins.face_fit]); else removed, and why said.
+## A layer, kept only if it lies on the surface as the picture does ([method Skins.face_fit]); else removed, and why said.
 func _land_layer(step: String) -> String:
 	var painted := Image.load_from_file(episode.file_of(step))
 	var bare := Image.load_from_file(episode.dir.path_join("face_bare.png"))
@@ -1219,7 +1193,7 @@ func _land_layer(step: String) -> String:
 	return ""
 
 
-## THE ART DIRECTOR looks at the face painted first before anything is copied from it ([method _land_check]): shown it and the bare surface it
+## The art director looks at the face painted first before anything is copied from it ([method _land_check]): shown it and the bare surface it
 ## was painted on, it keeps it or sends it back with what is wrong.
 func _make_face_check() -> void:
 	var images: Array = [{"path": episode.file_of("image:face"), "label": "THE PAINTING to check:", "flip": false},
@@ -1231,9 +1205,9 @@ func _make_face_check() -> void:
 	_submit_text("check:face", p, "best")
 
 
-## THE SET DRESSER sets the table from the plan, looking at the cloth, told the things earlier
+## The set dresser sets the table from the plan, looking at the cloth, told the things earlier
 ## episodes' tables held so this one holds others. A writer that takes tools works with
-## [SetDresserTools]: it builds the table a few things at a time, LOOKS at what it built and at the
+## [SetDresserTools]: it builds the table a few things at a time, looks at what it built and at the
 ## table as the camera will film it, fixes what it sees, and hands the table in - see [method _land].
 ## One that cannot is asked for the table in one reply, as before.
 func _make_table() -> void:
@@ -1270,7 +1244,7 @@ func _make_table() -> void:
 	var images: Array = []
 	if cloth:
 		images.append({"path": episode.file_of("image:surface"), "label": "The painting of this episode's surface, seen from above:", "flip": false})
-	# THE ROOM, so the light agrees with it: where its windows are, which side its sun comes from
+	# The room, so the light agrees with it: where its windows are, which side its sun comes from
 	if room:
 		images.append({"path": episode.file_of("image:backdrop"), "label": "The painting of the room past the table, as the reader sees it (only its lower part shows, out of focus):", "flip": false})
 	if not images.is_empty():
@@ -1298,7 +1272,7 @@ func looks_of(step: String) -> Array:
 	return []
 
 
-## THE MODELER DESIGNS WHAT IS BUILT ([ModelTools], [AssemblyModel]; the user, 2026-11-03: "building to some kind of grand, planned vision"), told what the plan says it is and what earlier episodes built. Given a writer that takes tools, it writes shapes, is told what parts they come to, looks at them and fixes what it sees, and hands in only what holds together. One that cannot is asked for the model in one reply.
+## The modeler designs what is built ([ModelTools], [AssemblyModel]), told what the plan says it is and what earlier episodes built. Given a writer that takes tools, it writes shapes, is told what parts they come to, looks at them and fixes what it sees, and hands in only what holds together. One that cannot is asked for the model in one reply.
 func _make_model() -> void:
 	_close_tools("model")
 	DirAccess.remove_absolute(episode.job_dir("model").path_join(ModelTools.SUBMITTED))
@@ -1320,11 +1294,11 @@ func _make_model() -> void:
 	_submit_text("model", TablePrompts.modeler(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), episode.seed, earlier.slice(0, 16), looks), "best", extra)
 
 
-## THE DECORATOR DESIGNS WHAT IS PAINTED ([DecoratorTools], [Skins]; next/painted_surface.md), told what the plan says is painted, every
+## The decorator designs what is painted ([DecoratorTools], [Skins]; next/painted_surface.md), told what the plan says is painted, every
 ## surface the set table has to paint and what earlier episodes painted. Given a writer that takes tools, it writes elements, looks at them
 ## painted on the surface and fixes what it sees; one that cannot is asked for the design in one reply.
 func _make_skin() -> void:
-	# ...WHERE THE PICTURE WAS PAINTED AGAIN IN LAYERS, the painter at the table is the host that lays them (next/face_layers.md)
+	# ...where the picture was painted again in layers, the painter at the table is the host that lays them (next/face_layers.md)
 	if episode.layer_count() > 0:
 		_make_skin_host()
 		return
@@ -1341,13 +1315,12 @@ func _make_skin() -> void:
 			for g in (d as Dictionary).get("designs", []):
 				if g is Dictionary and not String((g as Dictionary).get("name", "")).is_empty():
 					earlier.append(String((g as Dictionary)["name"]))
-	# ...COPYING THE FACE PAINTED FIRST, where there is one: shown it as the surface wears it, told its colors
+	# ...copying the face painted first, where there is one: shown it as the surface wears it, told its colors
 	var face := episode.dir.path_join("face_ref.png")
 	var ref := Image.load_from_file(face) if FileAccess.file_exists(face) else null
 	var palette: Array = Skins.face_palette(ref) if ref != null and not ref.is_empty() else []
-	# ...PAINTED AGAIN AT THE TABLE, an operation at a time, by a painter that sees each land (PainterTools; the user, 2026-11-08: "an agent in
-	# the loop ... we can peak at each step, and make informed decisions about what to do next") - where there is a picture and a writer
-	# that takes tools; else traced as a design, as before
+		# painted again at the table, an operation at a time, by a painter that sees each land (PainterTools), where there is a picture and a
+		# writer that takes tools; else traced as a design
 	if not palette.is_empty() and TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
 		var tbl: Variant = episode.read_json("table")
 		var painter := PainterTools.new(episode.job_dir("skin"), tbl if tbl is Dictionary else {}, _plan(), face)
@@ -1379,7 +1352,7 @@ func _make_skin() -> void:
 	_submit_text("skin", p, "best", extra)
 
 
-## WHAT THE DECORATOR HANDED IN ([param text]: `{"designs": [...]}`, or one design for the table's first surface) made safe on the
+## What the decorator handed in ([param text]: `{"designs": [...]}`, or one design for the table's first surface) made safe on the
 ## surfaces the table has, and kept as `skin.json` - each design with where it goes, its frame and its outline.
 func _land_skin(text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
@@ -1409,7 +1382,7 @@ func _land_skin(text: String) -> String:
 	return episode.write_json("skin", {"designs": out})
 
 
-## THE PUPPETEER blocks the episode's work ([PuppeteerTools], next/table_work.md): told the plan's work beat
+## The puppeteer blocks the episode's work ([PuppeteerTools], next/table_work.md): told the plan's work beat
 ## by beat, the cards as they were drawn (the work is made of them) and what on the set table can be worked -
 ## and, given a writer that takes tools, writing acts, told what each does, watching them and handing them in.
 ## One that cannot is asked for the acts in one reply.
@@ -1443,11 +1416,10 @@ func _make_acts() -> void:
 const NOT_PAINTED := "-"
 
 
-## THE ACTS A PAINTER'S PAINTING MAKES (PainterTools; the user, 2026-11-08: "I would expect acts to be more fluid ... you still wouldn't
-## really restrict those acts to a single tool: you would restrict tools to the necessary job"): its operations beat by beat in the order
-## they were laid, each run of them with one tool and one way of laying an act - the hand putting one tool down and taking up the next as the
-## work asks, the beat's passage spoken over all of them - each told what its operations took ([method Skins.act_natural]). Written as
-## `acts.json`: "" done, else what was wrong; [constant NOT_PAINTED] for a design no painter laid (the puppeteer blocks it).
+## The acts a painter's painting makes (PainterTools): its operations beat by beat in the order they were laid, each run of them with
+## one tool and one way of laying an act - the hand putting one tool down and taking up the next as the work asks, the beat's passage
+## spoken over all of them - each told what its operations took ([method Skins.act_natural]). Written as `acts.json`: "" done, else
+## what was wrong; [constant NOT_PAINTED] for a design no painter laid (the puppeteer blocks it).
 func _acts_from_painting() -> String:
 	var got := acts_from_painting(episode.read_json("skin"), episode.read_json("table"), episode.beat_count())
 	if got.is_empty():
@@ -1559,7 +1531,7 @@ func _close_tools(step: String) -> void:
 	_tools.erase(step)
 
 
-## WHAT AN AGENT HANDED IN WITH A TOOL for [param step] (its job's `submitted.json`), or "" - an
+## What an agent handed in with a tool for [param step] (its job's `submitted.json`), or "" - an
 ## answer that does not depend on its last words, or on its run ending cleanly.
 func _handed_in(step: String) -> String:
 	var path := episode.job_dir(step).path_join(SetDresserTools.SUBMITTED)
@@ -1580,20 +1552,18 @@ func _make_say(who: String) -> void:
 	_submit_text("say:" + who, say_prompt(who), "best")
 
 
-## THE READER'S PROMPT for passage [param who] ("intro", "1".."N", "close"): the passages before it
-## and [method _drawn] up to its card - nothing else reaches it - and `images`, the PAINTINGS it
-## talks about: card K's own for card K when K is one it may stop on ([method TablePrompts.remarks]),
-## every card's for the close, none for the intro; and whether card K is one read with the cards
-## already down ([method TablePrompts.links]). A
-## reversed card is sent upside down, as the viewer sees it. Public so the gate can hold the
-## producer itself, not only the prompt builder, to all of that.
+## The reader's prompt for passage [param who] ("intro", "1".."N", "close"): the passages before it and [method _drawn] up to its
+## card - nothing else reaches it - and `images`, the paintings it talks about: card K's own for card K when K is one it may stop
+## on ([method TablePrompts.remarks]), every card's for the close, none for the intro; and whether card K is one read with the
+## cards already down ([method TablePrompts.links]). A reversed card is sent upside down, as the viewer sees it. Public so the
+## gate can hold the producer itself, not only the prompt builder, to all of that.
 func say_prompt(who: String) -> Dictionary:
 	var n := episode.card_count()
 	# the passages between the intro and the close: a card's each, or a beat's of a show that draws none
 	var beats := episode.beat_count()
 	var said: Array = []
 	var drawn: Array = []
-	# CARD K'S WORK PASSAGE (next/table_work.md): everything said through card K's own, the cards up to K
+	# Card k's work passage (next/table_work.md): everything said through card K's own, the cards up to K
 	var work_k := int(who.trim_prefix("work:")) if who.begins_with("work:") else 0
 	if who == "intro":
 		pass
@@ -1604,14 +1574,14 @@ func say_prompt(who: String) -> Dictionary:
 		said = _said(work_k, false)
 		drawn = _drawn(episode.reveal_of(work_k))
 	elif episode.cardless():
-		# A BEAT OF A SHOW WITH NO CARDS: everything said before it, and no card
+		# A beat of a show with no cards: everything said before it, and no card
 		said = _said(int(who) - 1)
 	else:
 		var k := int(who)
 		said = _said(k - 1)
-		# THE CARDS ON THE TABLE by now: up to this one - or, swept out in a waterfall, up to its last
+		# The cards on the table by now: up to this one - or, swept out in a waterfall, up to its last
 		drawn = _drawn(episode.reveal_of(k))
-	# THE PAINTINGS go with a passage only where the reader may stop on one ([method TablePrompts.remarks]):
+	# The paintings go with a passage only where the reader may stop on one ([method TablePrompts.remarks]):
 	# a card left out reaches it by name and meaning alone
 	var remark := true
 	# ...and a share of the cards is read with the cards already down ([method TablePrompts.links])
@@ -1640,7 +1610,7 @@ func say_prompt(who: String) -> Dictionary:
 	var names: Array = []
 	for c in _deck():
 		names.append(String((c as Dictionary).get("name", "")))
-	# ...and WHAT ITS PAINTING GETS WRONG, when the art director could not have it put right
+	# ...and what its painting gets wrong, when the art director could not have it put right
 	var misses: Array = []
 	if who.is_valid_int():
 		var check: Variant = episode.read_json("check:%s" % who)
@@ -1665,7 +1635,7 @@ func _said(upto: int, last_work := true) -> Array:
 	return out
 
 
-## THE BEAT a passage's work belongs to ("intro", "close", a card's place for its work passage), or "" - and,
+## The beat a passage's work belongs to ("intro", "close", a card's place for its work passage), or "" - and,
 ## in a show that draws no cards ([param bare]), a beat's own passage: it is said while its work is done.
 static func _beat_of(step: String, bare := false) -> String:
 	if step == "say:intro":
@@ -1679,13 +1649,13 @@ static func _beat_of(step: String, bare := false) -> String:
 	return ""
 
 
-## THE ACTS OF [param beat], as the puppeteer blocked them (`acts.json`, made safe) - none for a beat with no
-## work, or before they are blocked. A reader is handed its own beat's alone: NO CHEATING holds for the work.
+## The acts of [param beat], as the puppeteer blocked them (`acts.json`, made safe) - none for a beat with no
+## work, or before they are blocked. A reader is handed its own beat's alone: no cheating holds for the work.
 func _acts_of(beat: String) -> Array:
 	if beat.is_empty() or not episode.has("acts"):
 		return []
 	var acts: Array = Motions.of_beat(Motions.sanitize_acts(episode.read_json("acts"), episode.beat_count())["acts"], beat)
-	# ...WHAT IS PAINTED TAKES WHAT ITS STROKES TAKE ([Skins]): a reader is told it, and its words leave room for it
+	# ...what is painted takes what its strokes take ([Skins]): a reader is told it, and its words leave room for it
 	if episode.has("skin"):
 		var doc: Variant = episode.read_json("skin")
 		var all_acts: Variant = episode.read_json("acts")
@@ -1699,11 +1669,11 @@ func _acts_of(beat: String) -> Array:
 	return acts
 
 
-## THE SCRIPT EDITED WHOLE, WRITTEN BACK TO ITS PASSAGES (next/editing.md, design point 3): [param text] split where its marks
-## are ([method CardReading.split]) and each passage's words written to its step - a hand's version, kept ([method
-## TableEpisode.set_kept]) - then the script put together from them again, so neither is ever made over the other. ITS MARKS
-## ARE THE SHOW'S: the same moves in the same order ([method choreography]); only the words between them are the hand's. A
-## game's script is its play, as it was played. "" written, else why not (and nothing written).
+## The script edited whole, written back to its passages (next/editing.md, design point 3): [param text] split where its marks are
+## ([method CardReading.split]) and each passage's words written to its step - a hand's version, kept ([method
+## TableEpisode.set_kept]) - then the script put together from them again, so neither is ever made over the other. Its marks are
+## the show's: the same moves in the same order ([method choreography]); only the words between them are the hand's. A game's
+## script is its play, as it was played. "" written, else why not (and nothing written).
 func write_script(text: String) -> String:
 	if episode.wants_game():
 		return "a game's script is its play, written as it was played"
@@ -1746,20 +1716,19 @@ func _make_script() -> String:
 	for m in choreography(_plan(), _drawn(n)):
 		var mv: Dictionary = m
 		var text := episode.read_text(String(mv["say"])) if not String(mv.get("say", "")).is_empty() else ""
-		# (A STRETCH THE GAME ENDED BEFORE was never played: no mark, no chapter)
+		# (a stretch the game ended before was never played: no mark, no chapter)
 		if episode.wants_game() and text.is_empty() and String(mv["kind"]) == "work":
 			continue
 		passages.append({"kind": mv["kind"], "card": mv.get("card", 0), "last": mv.get("last", mv.get("card", 0)), "text": text})
 	return episode.write_text("script", CardReading.compose(passages))
 
 
-## THE MOVES OF AN EPISODE, in order, from its [param plan]'s staging and positions and its [param cards]
-## as drawn: `[{kind, card, last, say}]` - each a written verb ([TableActions]) and the passage read after
-## it (`say`, a step's name, or "" for a move with no words of its own). The opening (the shuffle, or the
-## box opened) and the intro; then each card as its position says it comes - drawn (a jumper when it flew
-## out), dealt, or swept out with the swept positions after it, each then shown - and the moves its
-## position makes after its passage (`then`: tap, untap); the spread and the close. A SHOW THAT DRAWS NO
-## CARDS begins, and each of its beats opens with its work (`work K`, K the beat), said in its own passage.
+## The moves of an episode, in order, from its [param plan]'s staging and positions and its [param cards] as drawn:
+## `[{kind, card, last, say}]` - each a written verb ([TableActions]) and the passage read after it (`say`, a step's name, or ""
+## for a move with no words of its own). The opening (the shuffle, or the box opened) and the intro; then each card as its position
+## says it comes - drawn (a jumper when it flew out), dealt, or swept out with the swept positions after it, each then shown - and
+## the moves its position makes after its passage (`then`: tap, untap); the spread and the close. A show that draws no cards begins,
+## and each of its beats opens with its work (`work K`, K the beat), said in its own passage.
 static func choreography(plan: Dictionary, cards: Array) -> Array:
 	var staging := CardTable.staging_of(plan)
 	var pos: Array = ((plan.get("spread", {}) as Dictionary).get("positions", [])) as Array if plan.get("spread") is Dictionary else []
@@ -1799,7 +1768,7 @@ static func choreography(plan: Dictionary, cards: Array) -> Array:
 	return out
 
 
-## THE WORK after card [param k]'s passage (next/table_work.md), where the plan has any: the card goes down and
+## The work after card [param k]'s passage (next/table_work.md), where the plan has any: the card goes down and
 ## its work begins, talked through in its own passage.
 static func _work_move(plan: Dictionary, k: int) -> Array:
 	return [{"kind": "work", "card": k, "say": "say:work:%d" % k}] if TableEpisode.work_of(plan).has(str(k)) else []
@@ -1820,7 +1789,7 @@ static func _then_moves(p: Dictionary, n: int) -> Array:
 # --- landing a job -------------------------------------------------------------------------
 
 func _land(step: String, res: Dictionary) -> void:
-	# THE SOLVER'S SESSION, ENDED: what it handed in, or an honest account of a run that handed in nothing ([method _land_solve])
+	# The solver's session, ended: what it handed in, or an honest account of a run that handed in nothing ([method _land_solve])
 	if step == "solve":
 		var t: Dictionary = _tools.get("solve", {})
 		var checks := int((t["set"] as SolverTools).checks) if not t.is_empty() and t["set"] is SolverTools else 0
@@ -1874,7 +1843,7 @@ func _land(step: String, res: Dictionary) -> void:
 				var cues: Array = beat_acts.map(func(a: Dictionary) -> String: return String(a["name"]))
 				var t := own_voices(clean_spoken(String(res.get("text", "")), cues), _voices(), _reader_name())
 				t = fit_silence(t, beat_acts, _said_word())
-				# ...AND NO NOTATION IN WHAT IS SAID (Proof's speech audit, now every reader's): a voice handed TeX reads its marks
+								# no notation in what is said: a voice handed TeX reads its marks
 				var notation := notation_in(t)
 				if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20):
 					err = "the reader wrote nothing speakable"
@@ -1916,7 +1885,7 @@ func _land(step: String, res: Dictionary) -> void:
 		_errors[step] = err
 
 
-## THE HEIGHT MAP, KEPT ONLY IF IT LIES UNDER THE PAINTING ([method Tables.height_fit]) - or is flat
+## The height map, kept only if it lies under the painting ([method Tables.height_fit]) - or is flat
 ## ([constant Tables.FLAT_SPAN]) or alike everywhere ([constant Tables.EVEN_SPREAD]), which lie under
 ## anything: its score and shift written beside it (`height.json`, which the table reads), or the map
 ## removed and why.
@@ -1951,15 +1920,15 @@ func _land_plan(text: String) -> String:
 	if not (d is Dictionary):
 		return "the plan was not JSON"
 	var plan: Dictionary = d
-	# A PLAN OF BEATS DRAWS NO CARDS: the producer's own choice, read off the brief. A GAME IS ONE THAT HAS NONE: it plans no beats, for nobody knows what they will be (next/tabletop.md)
+	# A plan of beats draws no cards: the producer's own choice, read off the brief. a game is one that has none: it plans no beats, for nobody knows what they will be (next/tabletop.md)
 	if plan.get("game") == true or (plan.get("beats") is Array and not (plan.get("beats") as Array).is_empty()):
 		return _land_beats(plan)
 	var spread: Dictionary = plan.get("spread", {}) if plan.get("spread") is Dictionary else {}
-	# EVERY FIELD IN THE SHAPE ITS READERS EXPECT: a position given as a bare name, tags as one
+	# Every field in the shape its readers expect: a position given as a bare name, tags as one
 	# string - a reply of the wrong shape is reshaped here, once, or it stalls the episode later
 	# inside a prompt builder, where it fails with nothing on screen
 	var pos: Array = []
-	# AS MANY CARDS AS THE SPREAD HAS POSITIONS, the producer's count - cut to the most it may draw
+	# As many cards as the spread has positions, the producer's count - cut to the most it may draw
 	var raw: Array = spread.get("positions", []) if spread.get("positions") is Array else []
 	raw = raw.filter(func(q: Variant) -> bool: return q is Dictionary or not _str(q).is_empty()).slice(0, _spread_most())
 	if raw.is_empty():
@@ -2034,13 +2003,13 @@ func _land_plan(text: String) -> String:
 	return episode.write_json("plan", plan)
 
 
-## THE PLAN OF A SHOW THAT DRAWS NO CARDS, as it lands: its BEATS (`beats`) kept as the spread's positions -
+## The plan of a show that draws no cards, as it lands: its beats (`beats`) kept as the spread's positions -
 ## each a name, what it does and its work - at least one and at most [constant BEATS_MOST]; its staging the
 ## one that draws none; no deck.
 func _land_beats(plan: Dictionary) -> String:
 	var raw: Variant = plan.get("beats")
 	var pos: Array = []
-	# A GAME'S SCENES ARE A CEILING, AND NOTHING MORE (next/tabletop.md): nobody knows what they will turn out to be, and a chapter is named as it is played
+	# A game's scenes are a ceiling, and nothing more (next/tabletop.md): nobody knows what they will turn out to be, and a chapter is named as it is played
 	if plan.get("game") == true:
 		raw = []
 		for k in clampi(int(plan.get("scenes", 6)), 1, BEATS_MOST):
@@ -2066,7 +2035,7 @@ func _land_beats(plan: Dictionary) -> String:
 	plan["game"] = plan.get("game") == true
 	plan["table_note"] = _str(plan.get("table_note", ""))
 	plan["beat_word"] = "Part" if plan["game"] else beat_word_of(plan.get("beat_word", ""))
-	# WHAT THE EPISODE IS MADE OF: built from many small parts ([Assembly]) or not, and how much of it nobody talks through
+	# What the episode is made of: built from many small parts ([Assembly]) or not, and how much of it nobody talks through
 	plan["assembly"] = plan.get("assembly") == true
 	plan["quiet"] = TablePrompts.quiet_of(plan)
 	for k in ["tags", "habits"]:
@@ -2083,7 +2052,7 @@ func _land_beats(plan: Dictionary) -> String:
 	return episode.write_json("plan", plan)
 
 
-## THE PROBLEM [param plan] FIXES, landed in place ([method SolverTools.land_problem]): kept in the shape the solver and everyone
+## The problem [param plan] fixes, landed in place ([method SolverTools.land_problem]): kept in the shape the solver and everyone
 ## after it read, or taken out where the plan has none - "" - or why the plan cannot stand.
 func _land_problem(plan: Dictionary) -> String:
 	var got := SolverTools.land_problem(plan.get("problem"), SolverTools.can_run())
@@ -2096,9 +2065,9 @@ func _land_problem(plan: Dictionary) -> String:
 	return ""
 
 
-## THE SOLVER, with its tools ([SolverTools]): waits while what it works with installs (Lean and Mathlib for a proof, the compute
+## The solver, with its tools ([SolverTools]): waits while what it works with installs (Lean and Mathlib for a proof, the compute
 ## environment for runs of code - all fetched by ghost itself), and fails, saying so, on a writer that takes no tools or a computation
-## where no sandbox can run it. A SOLVE BEGUN AFRESH begins from nothing - what an earlier one left goes a version back - and a retry
+## where no sandbox can run it. A solve begun afresh begins from nothing - what an earlier one left goes a version back - and a retry
 ## keeps what the first try saved.
 func _make_solve() -> void:
 	_close_tools("solve")
@@ -2137,7 +2106,7 @@ func _make_solve() -> void:
 		"best", {"tools_url": url, "timeout": SOLVE_TIMEOUT})
 
 
-## THE SOLVER'S SESSION, ENDED. A handed-in proof was VERIFIED when it was handed in, and a handed-in result names runs that ran to
+## The solver's session, ended. A handed-in proof was VERIFIED when it was handed in, and a handed-in result names runs that ran to
 ## their end (SolverTools accepts nothing else): `verified` or `computed`, with what checked it. With neither, the run is tried again;
 ## after that the episode goes on honestly unchecked, so long as there is a notebook to work from - and says so.
 func _land_solve(handed: String, res: Dictionary, checks: int) -> String:
@@ -2165,7 +2134,7 @@ func _land_solve(handed: String, res: Dictionary, checks: int) -> String:
 	return episode.write_json("solve", {"verified": false, "computed": false, "checks": checks, "runs": runs, "note": why})
 
 
-## THE INK: what the work writes that TeX lays out ([TableInk]: formulas, drawings, words with math), set by ghost's own TeX in one run
+## The ink: what the work writes that TeX lays out ([TableInk]: formulas, drawings, words with math), set by ghost's own TeX in one run
 ## (hosts/math/typeset.py) - waiting while TeX and the math environment install. Landed by [method _land_ink].
 func _make_ink() -> void:
 	_waiting.erase("ink")
@@ -2217,7 +2186,7 @@ func _land_ink(h: Dictionary) -> String:
 	return episode.write_json("ink", answer)
 
 
-## WHAT IN [param text] THE VOICE WOULD BE HANDED THAT IS NOTATION, never words: each line of it (marks aside) carrying a character of
+## What in [param text] the voice would be handed that is notation, never words: each line of it (marks aside) carrying a character of
 ## [constant NOTATION], cut short - none when there is none. Math is said in words; a letter that names something is `[x]`.
 static func notation_in(text: String) -> PackedStringArray:
 	var out := PackedStringArray()
@@ -2230,21 +2199,16 @@ static func notation_in(text: String) -> PackedStringArray:
 	return out
 
 
-## A CARD GOES BACK IN THE BOX ONLY WHEN IT WAS PASSED OVER - or when every card does. The user,
-## 2026-10-13, of an episode whose fourth card was given a story and then put back while two others
-## stayed out on a pile: "It makes no sense, why one card would go back in the box while others go on
-## the table ... Don't spend a full minute talking about the card, just to put it back." So in a spread
-## where some cards stay out, [param positions] are held to it, in place, for [param staging]:
+## A card goes back in the box only when it was passed over, or when every card does. In a spread where some cards stay out,
+## [param positions] are held to it, in place, for [param staging]:
 ##
-##   - a card with a `story` stays out, the way the others do (on the keep pile when the spread has
-##     one, else laid in its place) - the story is the reason to keep it;
-##   - a card put back with no length asked for is looked at briefly (`comment: "brief"`), which is
-##     what makes putting it back read as a choice - [method passed] tells its reader so;
+##   - a card with a `story` stays out, the way the others do (on the keep pile when the spread has one, else laid in its place);
+##   - a card put back with no length asked for is looked at briefly (`comment: "brief"`), so putting it back reads as a choice -
+##     [method passed] tells its reader so;
 ##   - a quick look, a silent one and an aside go back as planned.
 ##
-## A spread that puts EVERY card back is a pattern of its own and is left alone. No card goes back
-## into a box when the cards come from a deck, and none that was put straight down on the table (dealt,
-## swept) is in a hand to be put back.
+## A spread that puts every card back is left alone. No card goes back into a box when the cards come from a deck, and none that
+## was put straight down on the table (dealt, swept) is in a hand to be put back.
 static func back_only_passed(positions: Array, staging: Dictionary) -> void:
 	var boxed := String(staging.get("source", "deck")) == "box"
 	var kept := 0
@@ -2273,11 +2237,8 @@ static func back_only_passed(positions: Array, staging: Dictionary) -> void:
 					p["comment"] = "brief"
 
 
-## A WATERFALL IS A RUN, OF THREE OR MORE: [param positions] swept out with fewer next to them come out one
-## at a time, in place. The-shoebox 32533 swept out a pair from its box (the user, 2026-10-18: "two cards
-## are drawn simultaneously. One is put on the table, the other is read ... The two cards are eventually
-## stacked on top of each other"): two cards a waterfall's step apart lie half on each other, a pile of
-## two rather than a run the viewer sees at once.
+## A waterfall is a run, of three or more: [param positions] swept out with fewer next to them come out one at a time, in place
+## (two cards a waterfall's step apart lie half on each other, a pile of two rather than a run the viewer sees at once).
 const RUN_LEAST := 3
 
 
@@ -2293,7 +2254,7 @@ static func runs_of_three(positions: Array) -> void:
 		i = maxi(j, i + 1)
 
 
-## IS POSITION [param p] PASSED OVER in a plan of [param positions]: looked at, said a few words of and
+## Is position [param p] passed over in a plan of [param positions]: looked at, said a few words of and
 ## put back in its box, while other cards of the spread stay out ([method back_only_passed])? Its
 ## reader is told so, to say what makes it one to put back.
 static func passed(p: Dictionary, positions: Array) -> bool:
@@ -2303,7 +2264,7 @@ static func passed(p: Dictionary, positions: Array) -> bool:
 		return q is Dictionary and String((q as Dictionary).get("destination", "")) != "box")
 
 
-## A SPREAD POSITION AS IT LANDS: its name and question, and how its card comes and lies
+## A spread position as it lands: its name and question, and how its card comes and lies
 ## ([constant TablePositions.COMES]) - only what the table knows, and only where it can be: the first card
 ## stacks on nothing, and `then` turns only a card already on the table by then (one of 1..[param k], or
 ## of its waterfall's) among the reading's [param n].
@@ -2332,14 +2293,14 @@ func _land_position(q: Dictionary, k: int, n: int) -> Dictionary:
 			then.append("%s %d" % [parts[0], int(parts[1])])
 	if not then.is_empty():
 		out["then"] = then
-	# THE WORK done at the table after this card is shown (next/table_work.md), in the producer's words
+	# The work done at the table after this card is shown (next/table_work.md), in the producer's words
 	var work := _str(q.get("work", ""))
 	if not work.is_empty():
 		out["work"] = work.substr(0, 500)
 	return out
 
 
-## THE BOX A PRODUCER CHOSE, in the shape [method CardDeck.parse] gives a listed deck - `{key, name,
+## The box a producer chose, in the shape [method CardDeck.parse] gives a listed deck - `{key, name,
 ## numeral, group, meaning}`, keys unique - or empty when it holds fewer than the box's least
 ## ([method TablePrompts.box_range]): a box the size of the spread would be the producer's pick of the
 ## cards, not the seed's. More than the most are cut.
@@ -2367,7 +2328,7 @@ func _land_box(v: Variant, n: int) -> Array:
 	return out if out.size() >= int(r[0]) else []
 
 
-## THE ART DIRECTOR'S WORD on a card's painting ([param step] `check:K`; or `check:face`, the face painted first's): kept, or SENT BACK - its
+## The art director's word on a card's painting ([param step] `check:K`; or `check:face`, the face painted first's): kept, or sent back - its
 ## faults added to [method TableEpisode.send_back] for the painter of the next, and the painting deleted
 ## with what was made from it, so the producer paints it again and looks again - while it has been sent
 ## back fewer than [constant REPAINTS] times. Past that the last painting stands, and its faults are
@@ -2400,7 +2361,7 @@ func _land_check(step: String, text: String) -> String:
 func _land_design(step: String, text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
 	var k := int(step.get_slice(":", 1))
-	# A WRITTEN CARD'S WRITING ([constant CardTable.FRAMES] `written`): its title and its lines, kept as written -
+	# A written card's writing ([constant CardTable.FRAMES] `written`): its title and its lines, kept as written -
 	# and as its entry's text, a line to each, for every reader and the work that read a card's entry. It has no picture.
 	if d is Dictionary and CardTable.written(CardTable.look_of(_look(), _card(k))):
 		var w: Variant = (d as Dictionary).get("writing", {})
@@ -2423,7 +2384,7 @@ func _land_design(step: String, text: String) -> String:
 	return episode.write_json(step, {"art": _str((d as Dictionary)["art"]), "booklet": booklet})
 
 
-## THE WORK, kept as the puppeteer wrote it - made safe each time it is played ([method Motions.sanitize_acts]),
+## The work, kept as the puppeteer wrote it - made safe each time it is played ([method Motions.sanitize_acts]),
 ## so an edit by hand is read the same way - if any act in it can be kept.
 func _land_acts(text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
@@ -2436,13 +2397,13 @@ func _land_acts(text: String) -> String:
 		return "no act could be kept: %s" % "; ".join(made["notes"])
 	for n in made["notes"]:
 		print("ghost: table acts - %s" % String(n))
-	# ...AND THE MODEL STANDS BY THE END, whatever was written ([method Assembly.with_finish])
+	# ...AND the model stands by the end, whatever was written ([method Assembly.with_finish])
 	if episode.wants_model():
 		d = Assembly.with_finish(d as Dictionary, episode.model())
 	return episode.write_json("acts", d)
 
 
-## THE MODEL, as handed in by [ModelTools] (already made: `{raw, made}`), or as written in one reply and made here. Kept with its parts, so nothing need work them out again - if it comes to something.
+## The model, as handed in by [ModelTools] (already made: `{raw, made}`), or as written in one reply and made here. Kept with its parts, so nothing need work them out again - if it comes to something.
 func _land_model(text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
 	if not (d is Dictionary):
@@ -2454,18 +2415,18 @@ func _land_model(text: String) -> String:
 	return episode.write_json("model", {"raw": raw, "made": made})
 
 
-## THE TABLE, kept as the set dresser wrote it - it is made safe each time it is built
+## The table, kept as the set dresser wrote it - it is made safe each time it is built
 ## ([method CardTable.sanitize_table]), so an edit by hand is read the same way - if anything in
 ## it can be built.
 func _land_table(text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
 	if not (d is Dictionary):
 		return "the table was not JSON"
-	# ...THE SHOW'S FIXED THINGS STAND IN IT AS THE BRIEF WRITES THEM, whatever was handed in ([FixedTable])
+	# ...the show's fixed things stand in it as the brief writes them, whatever was handed in ([FixedTable])
 	d = FixedTable.merge(d as Dictionary, spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {})
 	if (CardTable.sanitize_table(d as Dictionary, _look())["things"] as Array).is_empty():
 		return "nothing on the table could be built"
-	# ...WHAT IS BUILT ON IT GOES WITH IT: every table anywhere is stood from this one file
+	# ...what is built on it goes with it: every table anywhere is stood from this one file
 	var designed := episode.model()
 	if not designed.is_empty():
 		if not ((d as Dictionary).get("assembly") is Dictionary):
@@ -2474,11 +2435,9 @@ func _land_table(text: String) -> String:
 	return episode.write_json("table", d)
 
 
-## A TITLE IS NEVER SHOUTED (the user, 2026-11-09: "the title of this episode is in ALL CAPS. We probably shouldn't allow for that, as a
-## rule"): one written with no small letter at all is set in sentence case - its first letter a capital, the rest small, "I" itself (a
-## brief had asked for "capitals", 732687's "THEY CALLED IT DRIFTING BECAUSE THEY COULDN'T SEE WHERE YOU WERE GOING"). Never a capital on
-## every word (2026-10-11, of one that had them): title case's small words want a list of words, and the writer is asked for title case
-## itself. One with any small letter is the writer's own casing, kept: an acronym in a title as written stays.
+## A title is never shouted: one written with no small letter at all is set in sentence case - its first letter a capital, the rest
+## small, "I" itself. Never a capital on every word: title case's small words want a list of words, and the writer is asked for
+## title case itself. One with any small letter is the writer's own casing, kept: an acronym in a title as written stays.
 static func not_shouted(title: String) -> String:
 	var letters := 0
 	for i in title.length():
@@ -2503,7 +2462,7 @@ static func not_shouted(title: String) -> String:
 
 
 ## A reply's field as text, whatever the writer made it (JSON numbers arrive as floats).
-## WHAT ONE BEAT IS CALLED (`beat_word`, the producer's from the brief - an Ingredient, a Card, a Coat; the
+## What one beat is called (`beat_word`, the producer's from the brief - an Ingredient, a Card, a Coat; the
 ## episode's rows are named by it, [method TableEpisode.beat_word]): its first word, letters only, at most 16 of
 ## them, capitalized - "" for none.
 static func beat_word_of(v: Variant) -> String:
@@ -2525,13 +2484,11 @@ static func _str(v: Variant) -> String:
 	return "" if v == null else str(v).strip_edges()
 
 
-## THE READER'S WORDS AS THE VOICE GETS THEM. The prompt asks for spoken words only; this is
-## what is left to do when a writer adds a little anyway - wrapping quotes, a heading, a
-## bracketed stage direction, a line that is nothing but an action in asterisks - and the em
-## dash, which the voice reads as a pause either way and the subtitles show as a plain dash.
-## The show's voices besides the reader's: the names its document gives them, in its order. The
-## reader is its FIRST voice, whatever the document calls it - a script cues it as
-## [constant Manuscript.NARRATOR] ([method ReadingCast.reader]).
+## The reader's words as the voice gets them. The prompt asks for spoken words only; this is what is left to do when a writer adds
+## a little anyway - wrapping quotes, a heading, a bracketed stage direction, a line that is nothing but an action in asterisks -
+## and the em dash, which the voice reads as a pause either way and the subtitles show as a plain dash.
+## The show's voices besides the reader's: the names its document gives them, in its order. The reader is its first voice,
+## whatever the document calls it - a script cues it as [constant Manuscript.NARRATOR] ([method ReadingCast.reader]).
 func _voices() -> Array:
 	var out: Array = []
 	var all: Array = spec.get("voices", [])
@@ -2552,20 +2509,18 @@ func _reader_name() -> String:
 	return String(all[0]) if not all.is_empty() else ""
 
 
-## [param text] with every change of speaker naming one of the show's own [param voices] (or the
-## reader), spelled as the show spells it; a cue naming anyone else is taken out, and its words
-## stay with whoever was speaking. A writer's "familiar" would otherwise be a new voice of its own,
-## a copy of the reader's, kept in the show's document from then on. A cue naming the reader by
-## the show's own name for it ([param reader]) hands the line back to the reader.
-## A READER WRITES WORDS AND THE VOICE'S MARKS - a delivery, a hesitation, a change of speaker - AND
-## NOTHING ELSE (next/notes.md step 9: "an unknown one is dropped"): every other comment in a reply
-## goes, a table mark above all. `<!-- table: draw 2 -->` in a reading's words would be parsed as an
-## action when the script is composed - [method CardReading.parse] reads every own-line mark - and
-## deal a card nobody drew; the table's actions are the producer's to write ([method CardReading.compose]).
+## [param text] with every change of speaker naming one of the show's own [param voices] (or the reader), spelled as the show
+## spells it; a cue naming anyone else is taken out, and its words stay with whoever was speaking (otherwise a writer's invented
+## name would become a new voice in the show's document). A cue naming the reader by the show's own name for it ([param reader])
+## hands the line back to the reader.
+## A reader writes words and the voice's marks - a delivery, a hesitation, a change of speaker - and nothing else (next/notes.md
+## step 9): every other comment in a reply goes, a table mark above all (`<!-- table: draw 2 -->` would be parsed as an action
+## when the script is composed - [method CardReading.parse] reads every own-line mark - and deal a card nobody drew; the table's
+## actions are the producer's to write, [method CardReading.compose]).
 ##
-## [param acts]: the names of the acts this passage may start at a word (`<!-- act: name -->`, [CardReading]) -
-## a cue naming any other is dropped as any mark is. A CHAPTER the reader names (`<!-- chapter: name -->`)
-## stays, its name one line: the export times it from the take ([method CardReading.chapters]).
+## [param acts]: the names of the acts this passage may start at a word (`<!-- act: name -->`, [CardReading]); a cue naming any
+## other is dropped as any mark is. A chapter the reader names (`<!-- chapter: name -->`) stays, its name one line: the export
+## times it from the take ([method CardReading.chapters]).
 static func voice_marks_only(text: String, acts: Array = []) -> String:
 	var keep := [Manuscript._rx(Manuscript.DELIVERY), Manuscript._rx(Manuscript.HESITATION),
 		Manuscript._rx(Manuscript.SPEAKER), Manuscript._rx(CardReading.QUIET_MARK)]
@@ -2593,7 +2548,7 @@ static func voice_marks_only(text: String, acts: Array = []) -> String:
 	return out + text.substr(at)
 
 
-## WHAT THE WORK TAKES, THE VOICE LEAVES ROOM FOR ([Assembly]; a reader is told how long its acts take, and words are only ever about
+## What the work takes, the voice leaves room for ([Assembly]; a reader is told how long its acts take, and words are only ever about
 ## that long): a passage whose words and silences come to less than the least its acts can be hurried to has the difference added as
 ## a silence before its last sentence - so the work never runs on past the talk, and the talk is never quickened. It adds nothing to
 ## a passage whose acts have no such floor, or that gives them room.

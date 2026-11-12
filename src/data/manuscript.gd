@@ -1,70 +1,57 @@
 extends RefCounted
 class_name Manuscript
 
-## Manuscript - what a chapter file SAYS about itself, beyond the words to be read.
+## Manuscript - what a chapter file says about itself, beyond the words to be read.
 ##
-## A chapter carries three kinds of authoring mark, all as HTML comments so the book build
-## never prints them:
+## A chapter carries authoring marks as HTML comments, so the book build never prints them:
 ##
 ##     <!-- speaker: Emily White -->     a line of its own; hands the text after it to a voice
 ##     <!-- hesitation -->               a longer rest here, for effect (anywhere, even mid-line)
 ##     <!-- hesitation: 2.5 -->          ...the same, for exactly this many seconds
 ##     <!-- image: a wolf in a coat -->  an illustration, described; placed where it sits
-##     <!-- sketch: a wiring diagram -->   a drawing made ON the page, in the writer's own ink
+##     <!-- sketch: a wiring diagram -->   a drawing made on the page, in the writer's own ink
 ##
-## ONE PARSER, SEVERAL READERS. The Generative panel asks it for the speakers (its tabs) and
-## the hesitations (its rests); the book medium asks it for the page blocks; the illustration
-## library asks it for the image prompts. Each used to be a regex in whichever file needed it,
-## and three copies of "what is a speaker cue" is how a cue gets read by one and missed by
-## another - a tab with no voice, or a voice with no tab.
-##
-## SPEAKERS ARE NAMES, NOT NUMBERS. `<!-- speaker: 2 -->` still parses - "2" is simply a name -
-## but a reader of the prose cannot tell who speaker 2 is, and the author writes the prose.
+## One parser, several readers: the Generative panel (speakers, hesitations), the book medium (page blocks) and
+## the illustration library (image prompts). Speakers are names, not numbers (`<!-- speaker: 2 -->` parses, but
+## "2" is just a name).
 
-## A cue owns its line, for the reason the Generative panel gives: prose that mentions a
-## speaker must never be mistaken for one, and the failure is silent.
+## A cue owns its line: prose that mentions a speaker must never be mistaken for one.
 const SPEAKER := "^\\s*(?:<!--\\s*speaker\\s*:\\s*(.+?)\\s*-->|\\[\\s*speaker\\s*:\\s*([^\\]]+?)\\s*\\])\\s*$"
 ## A hesitation may sit anywhere - "She comes all the way around, <!-- hesitation --> and stops".
 ## The optional number is seconds.
 const HESITATION := "<!--\\s*hesitation\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?)?\\s*-->|\\[\\s*hesitation\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?)?\\s*\\]"
-## An image. The optional `(full)`, `(inline)`, `(left)` or `(right)` pins its placement;
-## without one it is decided from where it sits (see [method _auto_placement]).
+## An image. The optional `(full)`, `(inline)`, `(left)` or `(right)` pins its placement; without one it is
+## decided from where it sits (see [method _auto_placement]).
 ##
-## A SKETCH is the same marker with `sketch` for `image`: not a picture put into the book but a
-## drawing made on the page - black ink on white, generated without the book's style or its
-## references, and drawn with the white taken out so it lies on the paper like the writing.
+## A sketch is the same marker with `sketch` for `image`: a drawing made on the page (black ink on white,
+## generated without the book's style or references, drawn with the white taken out so it lies on the paper).
 ## A sketch's pin may instead be a time, `(10s)`: how long a letter takes to draw it at the most ([method
-## LetterScript.drawn_in_of]) - a page leaves it be, and on an image it is no pin.
+## LetterScript.drawn_in_of]); a page leaves it be, and on an image it is no pin.
 ## Group 1 is which of the two, 2 the pin, 3 the description.
 const IMAGE := "<!--\\s*(image|sketch)\\s*(?:\\(\\s*(full|inline|left|right|screen|[0-9]*\\.?[0-9]+\\s*(?:s|secs?|seconds)?)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->"
-## A TIME THAT OPENS A PARAGRAPH - a log entry, "21:40 The subject has been moved..." - is
-## followed by a hesitation, as if the author had written `<!-- hesitation -->` after it: read
-## straight into the sentence, the time sounds like its first words rather than its heading.
-## Only at the start of a line (a time mid-sentence is part of the sentence), and never where
-## the author already put a hesitation of their own. The same forms the notebook sets in its
-## margin ([method NotebookLayout._margin_lead]).
+## A time that opens a paragraph (a log entry, "21:40 The subject has been moved...") is followed by a
+## hesitation, as if the author had written `<!-- hesitation -->` after it, so it does not sound like the
+## sentence's first words. Only at the start of a line, and never where the author put a hesitation of their
+## own. The same forms the notebook sets in its margin ([method NotebookLayout._margin_lead]).
 const TIMESTAMP_LEAD := "(?m)^([ \\t]*[\\[(]?\\d{1,2}[:.h]\\d{2}(?::\\d{2})?(?:[ \\t]*[aApP]\\.?[mM]\\.?)?[\\])]?[,:;.]?)(?=[ \\t]+\\S)(?![ \\t]*<!--\\s*hesitation)"
-## THE END STARTS HERE: from this point the reading fades out - voice and picture together, over
-## the Outro setting - and whatever text is left is cut. Own line or mid-sentence; the first one
-## counts. Without it the outro is silence after the last word, as always.
+## The end starts here: from this point the reading fades out (voice and picture, over the Outro setting) and
+## whatever text is left is cut. Own line or mid-sentence; the first one counts.
 const OUTRO := "<!--\\s*outro\\s*-->"
 ## Any other comment is an authoring note.
 const COMMENT := "<!--[\\s\\S]*?-->"
-## HOW A STRETCH IS SAID: `<!-- delivery: quicker, brighter -->` - a few words from a closed list
-## (Delivery.DELIVERY_WORDS), each a small step in pace, brightness or pauses - from here
-## to the end of its paragraph, eased in and out across sentences. A lean of the voice's own
-## delivery, never a different voice.
+## How a stretch is said: `<!-- delivery: quicker, brighter -->` - a few words from a closed list
+## (Delivery.DELIVERY_WORDS), each a small step in pace, brightness or pauses - from here to the end of its
+## paragraph, eased in and out across sentences. A lean of the voice's own delivery, never a different voice.
 const DELIVERY := "<!--\\s*delivery\\s*(?::\\s*([^>]*?))?\\s*-->"
 ## Text before the first cue belongs to this voice. A chapter that opens on a cue never has one.
 const NARRATOR := "Narrator"
-## VOICES OVER EACH OTHER (next/tabletop.md; the user, 2026-11-04: "we might need the ability for voices to talk over each other (for example, if something happened and the entire table exclaimed to it in response)"). `<!-- over -->`, at the top of a
-## speaker's turn: the turn comes in before the last one has ended, by [constant OVER_BARE] or the seconds given: group 1. `<!-- together -->`: it comes in just after the last one began, as a table reacts as one. [ReadingPlan], [ReadingJoin].
+## Voices over each other (next/tabletop.md): `<!-- over -->`, at the top of a speaker's turn: the turn comes in before the last one has ended, by [constant OVER_BARE] or the seconds given: group 1. `<!-- together -->`: it comes in just after the last one began, as a table reacts as one. [ReadingPlan], [ReadingJoin].
 const OVER := "<!--\\s*over\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?)?\\s*-->"
 const TOGETHER := "<!--\\s*together\\s*-->"
 const OVER_BARE := 0.35
-## A VOICE HEARD THROUGH SOMETHING (next/dispatch.md; the user's dispatch desk, 2026-11-06: every voice but the room's
-## "comes through a phone"). `<!-- heard: phone -->` at the top of a speaker's turn: the whole turn is heard through
-## that, a key of [constant VoiceFX.HEARD] - group 1. A turn with none is heard in the room. [ReadingPlan], [ReadingJoin].
+## A voice heard through something (next/dispatch.md): `<!-- heard: phone -->` at the top of a speaker's turn:
+## the whole turn is heard through that, a key of [constant VoiceFX.HEARD] - group 1. A turn with none is heard
+## in the room. [ReadingPlan], [ReadingJoin].
 const HEARD := "<!--\\s*heard\\s*:\\s*([A-Za-z_]+)\\s*-->"
 
 static var _re := {}
@@ -78,7 +65,7 @@ static func _rx(pattern: String) -> RegEx:
 	return _re[pattern]
 
 
-## A title as a key - a show's folder, a printing's file: lowercase words joined by dashes, nothing a path could trip on.
+## A title as a key (a show's folder, a printing's file): lowercase words joined by dashes.
 static func slug(title: String) -> String:
 	var s := _rx("[^a-z0-9]+").sub(title.to_lower(), "-", true).strip_edges()
 	while s.begins_with("-"):
@@ -88,11 +75,10 @@ static func slug(title: String) -> String:
 	return s if not s.is_empty() else "untitled"
 
 
-## THE SECTION of [param body] under the first heading [param heading] matches (a pattern whose
-## first group is the heading's `#`s): `{before, head, lines, after}`, or empty when there is
-## none. It runs to the next heading of its own level or above. Frontmatter is not part of it.
-## Its patterns are compiled per call, not through [method _rx]: that cache is one Dictionary for
-## every thread, and nothing has checked that only one thread reads a deck.
+## The section of [param body] under the first heading [param heading] matches (a pattern whose first group is
+## the heading's `#`s): `{before, head, lines, after}`, or empty when none. It runs to the next heading of its
+## own level or above; frontmatter is not part of it. Patterns are compiled per call, not through [method _rx],
+## whose cache is one Dictionary for every thread.
 static func section(body: String, heading: String) -> Dictionary:
 	var src := strip_frontmatter(body)
 	var lines := src.split("\n")
@@ -119,9 +105,9 @@ static func section(body: String, heading: String) -> Dictionary:
 		"after": ("\n" + "\n".join(lines.slice(end))) if end < lines.size() else ""}
 
 
-## WHERE THAT SECTION IS in [param body] (a body with no frontmatter, as an editor shows it): the
-## character span of its own lines, after its heading - what [ScriptHighlighter] colors a mark
-## `within` a section inside. (-1, -1) when there is no such section.
+## Where that section is in [param body] (a body with no frontmatter, as an editor shows it): the character span
+## of its own lines after its heading, which [ScriptHighlighter] colors a mark `within` a section inside.
+## (-1, -1) when there is no such section.
 static func section_span(body: String, heading: String) -> Vector2i:
 	var s := section(body, heading)
 	if s.is_empty():
@@ -130,9 +116,8 @@ static func section_span(body: String, heading: String) -> Vector2i:
 		body.length() - String(s["after"]).length())
 
 
-## The body without its YAML frontmatter. Only the FIRST block, and only at the very top
-## (blank lines before it allowed), so a `---` rule mid-chapter is left alone - the same rule
-## the Generative panel has always used.
+## The body without its YAML frontmatter: only the first block, and only at the very top (blank lines before it
+## allowed), so a `---` rule mid-chapter is left alone.
 static func strip_frontmatter(body: String) -> String:
 	var lines := body.split("\n")
 	var i := 0
@@ -146,10 +131,8 @@ static func strip_frontmatter(body: String) -> String:
 	return body          # unterminated: not frontmatter, the whole thing is text
 
 
-## [param text] with every HTML comment removed - for a reader that honors none of the marks
-## (the Synthesis panel). Without it a cue or a hesitation is READ: measured, "Hello there.
-## <!-- speaker: Emily --> And then." came out of [method Phonemes.parse] as "hello there
-## speaker emily and then".
+## [param text] with every HTML comment removed, for a reader that honors none of the marks (the Synthesis
+## panel); otherwise a cue or hesitation is read aloud.
 static func unspoken(text: String) -> String:
 	return _rx(COMMENT).sub(text, "", true)
 
@@ -163,9 +146,8 @@ static func speaker_of_line(line: String) -> String:
 	return name.strip_edges()
 
 
-## Every speaker the script uses, in order of first appearance. [constant NARRATOR] leads the
-## list when there is anything to read before the first cue - and only then, so a chapter that
-## opens on `<!-- speaker: Ryan -->` has no empty narrator tab.
+## Every speaker the script uses, in order of first appearance. [constant NARRATOR] leads the list only when
+## there is something to read before the first cue.
 static func speakers(body: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	var text_before := false
@@ -191,9 +173,9 @@ static func _is_blank_or_note(line: String) -> bool:
 	return _rx(COMMENT).sub(line, "", true).strip_edges().is_empty()
 
 
-## The script cut into passages by speaker: `[{speaker, text}]`, in order, with the cues
-## consumed. Text before the first cue is the narrator's. Comments are NOT stripped here -
-## a hesitation is a comment and its position matters to the caller.
+## The script cut into passages by speaker: `[{speaker, text}]`, in order, with the cues consumed. Text before
+## the first cue is the narrator's. Comments are not stripped here: a hesitation is a comment and its position
+## matters to the caller.
 static func passages(body: String) -> Array:
 	var out: Array = []
 	var who := NARRATOR
@@ -228,18 +210,17 @@ static func mark_timestamp_pauses(text: String) -> String:
 	return _rx(TIMESTAMP_LEAD).sub(text, "$1 <!-- hesitation -->", true)
 
 
-## A stable key for an image description: whitespace-folded and hashed, so re-wrapping a long
-## comment in an editor does not turn it into a different picture.
+## A stable key for an image description: whitespace-folded and hashed, so re-wrapping a comment does not turn
+## it into a different picture.
 static func image_key(prompt: String) -> String:
 	var folded := " ".join(prompt.strip_edges().split(" ", false)).replace("\n", " ")
 	folded = " ".join(folded.split(" ", false))
 	return folded.sha256_text().substr(0, 16)
 
 
-## Every image in the script, in reading order: `[{prompt, key, placement, side, ordinal}]`.
-## `placement` is "full" (a page of its own) or "inline" (text wraps around it); `side` is
-## "left" or "right" - for an inline picture the edge it floats against, for a full one the
-## page of the spread it would rather sit on.
+## Every image in the script, in reading order: `[{prompt, key, placement, side, ordinal}]`. `placement` is
+## "full" (a page of its own) or "inline" (text wraps around it); `side` is "left" or "right" - for an inline
+## picture the edge it floats against, for a full one the page of the spread it prefers.
 static func images(body: String) -> Array:
 	var out: Array = []
 	for b in blocks(body):
@@ -248,25 +229,24 @@ static func images(body: String) -> Array:
 	return out
 
 
-## The chapter as a sequence of page BLOCKS, for a medium that typesets it:
+## The chapter as a sequence of page blocks, for a medium that typesets it:
 ##
 ##     {kind: "heading", level, text}
-##     {kind: "para", text, speaker}      - inline markdown kept (*italic*, **bold**);
-##                                          hesitation marks kept (the page ignores them,
-##                                          they are here so offsets line up with speech)
+##     {kind: "para", text, speaker}      - inline markdown kept (*italic*, **bold**); hesitation marks kept
+##                                          (the page ignores them; they keep offsets lined up with speech)
 ##     {kind: "image", prompt, key, placement, side, ordinal}   - placement "full" or "inline"
 ##     {kind: "image", prompt, key, placement: "sketch", sketch: true, ordinal}
 ##     {kind: "rule"}
 ##
-## Speaker cues are consumed (the page does not print them) but every paragraph records whose
-## voice reads it. Authoring notes other than hesitations are removed.
+## Speaker cues are consumed but every paragraph records whose voice reads it. Authoring notes other than
+## hesitations are removed.
 static func blocks(body: String) -> Array:
 	var out: Array = []
 	var who := NARRATOR
 	var para: Array = []
 	var text := strip_frontmatter(body)
-	# Images first, as whole units: a description may run over several lines, and a line
-	# scanner would cut it in half. Each is replaced by a placeholder line of its own.
+	#Images first, as whole units (a description may run over several lines): each is replaced by a placeholder
+	#line of its own.
 	var imgs: Array = []
 	var img_re := _rx(IMAGE)
 	var cursor := 0
@@ -295,7 +275,7 @@ static func blocks(body: String) -> Array:
 				"key": image_key(String(im["prompt"])), "pin": String(im["pin"]),
 				"ordinal": n}
 			if bool(im["sketch"]):
-				# its own key, so a sketch and a picture with the same words are two files
+				#its own key, so a sketch and a picture with the same words are two files
 				blk["key"] = image_key("sketch: " + String(im["prompt"]))
 				blk["placement"] = "sketch"
 				blk["sketch"] = true
@@ -304,8 +284,8 @@ static func blocks(body: String) -> Array:
 		if s.is_empty():
 			_flush(out, para, who)          # a blank line ends a paragraph
 			continue
-		# Notes go; hesitations stay, so a paragraph's text still lines up with what is
-		# spoken. A line holding nothing but a note neither adds text nor ends a paragraph.
+		#Notes go; hesitations stay, so a paragraph's text lines up with what is spoken. A line holding only a note
+		#neither adds text nor ends a paragraph.
 		var kept := _strip_notes(line)
 		if kept.strip_edges().is_empty():
 			continue
@@ -327,8 +307,8 @@ static func blocks(body: String) -> Array:
 	return out
 
 
-## End the paragraph being gathered. A paragraph of nothing but a hesitation is a beat
-## between paragraphs - it is heard, and there is nothing on it to print.
+## End the paragraph being gathered. A paragraph of nothing but a hesitation is a beat between paragraphs: heard,
+## with nothing on it to print.
 static func _flush(out: Array, para: Array, who: String) -> void:
 	if para.is_empty():
 		return
@@ -350,16 +330,11 @@ static func _strip_notes(line: String) -> String:
 	return res + line.substr(at)
 
 
-## WHERE A PICTURE GOES, decided by where the author put it.
-##
-## FULL PAGE when it opens something: the chapter's first block, or an image followed (past
-## any other images) by a SCENE LINE - a short paragraph set entirely in italics, which is how
-## this manuscript announces a change of time or place ("*Nine-thirty. Orientation, session
-## four.*"). That is an establishing shot, and a book gives an establishing shot a page.
-## INLINE everywhere else: a picture in the middle of a scene belongs beside the lines it
-## illustrates, with the text wrapping round it. Inline pictures alternate edges, starting on
-## the right, so two in a row do not stack down one margin. A pin in the marker overrides all
-## of this.
+## Where a picture goes, decided by where the author put it. Full page when it opens something: the chapter's
+## first block, or an image followed (past other images) by a scene line (a short paragraph set entirely in
+## italics, announcing a change of time or place), which a book gives a page. Inline everywhere else, beside the
+## lines it illustrates; inline pictures alternate edges, starting on the right. A pin in the marker overrides
+## all of this.
 static func _place_images(blocks_out: Array) -> void:
 	var float_right := true
 	var full_right := true
@@ -378,7 +353,7 @@ static func _place_images(blocks_out: Array) -> void:
 		var pin := String(b.get("pin", ""))
 		if not pin.is_empty() and "0123456789.".contains(pin[0]):
 			pin = ""                         # a time is a sketch's, never an image's pin
-		# A PICTURE OVER THE WHOLE SCREEN, for a medium that shows one so (a letter's, LetterScript)
+			#A picture over the whole screen, for a medium that shows one so (a letter's, LetterScript)
 		if pin == "screen":
 			b["placement"] = "screen"
 			b.erase("pin")
@@ -426,7 +401,7 @@ static func is_scene_line(text: String) -> bool:
 	return single or under
 
 
-## THE FIRST WORDS OF [param plain], for a note's tile and a card's preview: its paragraphs one to a line, blank
+## The first words of [param plain], for a note's tile and a card's preview: its paragraphs one to a line, blank
 ## lines and runs of spaces closed up, cut at a word near [param most] characters.
 static func preview_of(plain: String, most := 600) -> String:
 	var lines: Array = []

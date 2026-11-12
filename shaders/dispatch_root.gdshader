@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode cull_back;
 
-// A ROOT IN THE HOLLOW (DispatchRoots): dark bark, its fibers running along it, a little damp. `growth` is how much of
+// A root in the hollow (DispatchRoots): dark bark, its fibers running along it, a little damp. `growth` is how much of
 // each root is grown (UV.x runs 0 at its base to 1 at its tip): past it the root is drawn in onto its own line (CUSTOM0,
 // the line's point), so it ends in a taper that moves on as it grows.
 

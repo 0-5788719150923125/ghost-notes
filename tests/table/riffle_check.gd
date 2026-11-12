@@ -1,20 +1,17 @@
 extends SceneTree
 
-## riffle_check - A RIFFLE'S CARDS FALL IN CLUMPS (the user, 2026-10-17: the deck of 78 riffled "left,
-## right, left, right, in perfect unison through the whole shuffle"; real cards stick together - "3 from
-## the left, 2 from the right, 1 from the left, 3 from the right, 5 from the left"). Over hundreds of
-## seeded riffles of a tarot's 78 ([method TableShuffle._riffle_plan]):
+## riffle_check - a riffle's cards fall in clumps, as real cards stick together. Over hundreds of seeded riffles of a full deck
+## ([method TableShuffle._riffle_plan]):
 ##
 ##   godot --headless --path . --script tests/table/riffle_check.gd
 ##
-##   - A RIFFLE IS A RIFFLE: every slot lands once, and each half keeps its own order;
-##   - THE CUT IS NEAR THE MIDDLE, NOT AT IT: it varies, and never lands past RIFFLE_CUT's reach;
-##   - THE CARDS FALL IN CLUMPS: runs from one half average two to four cards, under half of them are
-##     single cards, no run outgrows RIFFLE_CLUMP while the other half still holds cards, and one
-##     riffle is clumpier than the next. Two-sided: the old riffle (each half's cards in turn, kept here
-##     as the control) must fail the same measure;
-##   - A CLUMP FALLS AS ONE: its cards share their moment, the clumps fall in order, the first at the
-##     start of the drop and the last at its end;
+##   - A riffle is a riffle: every slot lands once, and each half keeps its own order;
+##   - the cut is near the middle, not at it: it varies, and never lands past RIFFLE_CUT's reach;
+##   - the cards fall in clumps: runs from one half average two to four cards, under half of them are single cards, no run outgrows
+##     RIFFLE_CLUMP while the other half still holds cards, and one riffle is clumpier than the next. Two-sided: a riffle taking
+##     each half's cards in turn (kept here as the control) must fail the same measure;
+##   - a clump falls as one: its cards share their moment, the clumps fall in order, the first at the start of the drop and the last
+##     at its end;
 ##   - and the same seed is the same riffle, for every size of deck down to none.
 
 const N := 78
@@ -94,7 +91,7 @@ func _riffles() -> void:
 		var at: PackedFloat32Array = plan["at"]
 		var nth: PackedInt32Array = plan["nth"]
 		var cut := int(plan["cut"])
-		# A RIFFLE IS A RIFFLE
+		# A riffle is a riffle
 		var seen := {}
 		for i in N:
 			seen[to[i]] = true
@@ -104,11 +101,11 @@ func _riffles() -> void:
 			if i != cut and to[i] <= to[i - 1]:
 				kept = false
 		_ok(kept, "riffle %d does not keep each half's order" % seed)
-		# THE CUT
+		# The cut
 		_ok(cut >= lo and cut <= hi, "riffle %d is cut at %d, past %d..%d" % [seed, cut, lo, hi])
 		cuts[cut] = true
 		cut_sum += cut
-		# THE CLUMPS
+		# The clumps
 		var runs := _runs(to, cut)
 		all_runs.append_array(runs)
 		var longest := 0
@@ -117,7 +114,7 @@ func _riffles() -> void:
 		_ok(longest <= TableShuffle.RIFFLE_CLUMP, "riffle %d lets go of %d cards at once while the other half still held some"
 			% [seed, longest])
 		means.append(float(N) / float(runs.size()))
-		# A CLUMP FALLS AS ONE
+		# A clump falls as one
 		var moments := 1
 		var in_order := is_zero_approx(at[0]) and is_equal_approx(at[N - 1], 1.0) and nth[0] == 0
 		for j in range(1, N):
@@ -137,7 +134,7 @@ func _riffles() -> void:
 	_ok(float(means[means.size() - 1]) - float(means[0]) > 0.5,
 		"every riffle is as clumpy as the next (runs average %.2f to %.2f)" % [means[0], means[means.size() - 1]])
 	print("  a riffle of %d lets go %.1f times on average; the cut spans %d places" % [N, float(moments_sum) / float(SEEDS), cuts.size()])
-	# TWO-SIDED: the riffle this replaced is a riffle, and the measure must call it unclumped
+	# Two-sided: the riffle this replaced is a riffle, and the measure must call it unclumped
 	var old := _alternating(N)
 	var old_seen := {}
 	for i in N:

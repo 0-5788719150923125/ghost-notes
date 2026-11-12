@@ -1,43 +1,38 @@
 extends SceneTree
 
-## The gate of [Rules] - what the agents are told, read from rules/ - and of the block scalars
-## [MiniYaml] reads them with. No renderer.
+## The gate of [Rules] - what the agents are told, read from rules/ - and of the block scalars [MiniYaml] reads
+## them with. No renderer.
 ##
 ##   godot --headless --path . --script res://tests/data/rules_check.gd
 ##
-## - EVERY RULES FILE PARSES, is a map of parts, and every item is a line, an empty line or a map of
-##   known keys (when, say, insert, include, each); every `include` names a part that exists - against a
-##   file naming one that does not, which the check finds.
-## - EVERY PROMPT RENDERS WHOLE: the producer, the designer, the set dresser (with tools and without), a
-##   reader's intro, card and close, every picture, what Grok is told beside them (a writer's
-##   pictures, the painter's system prompt and references) and an episode's YouTube tags and painted thumbnail (the
-##   writer's and the painter's), over a fixture plan, leave nothing unfilled
-##   ([member Rules.missing] empty, no `{{` left) - against a part asked for a name nobody gives, which is
-##   said.
-## - THE RULES ARE EVERY SHOW'S (the user, 2026-10-08: "there shouldn't be ANY tarot-gated rules or logic in
-##   the 'rules/' files"): no word of any rules file, a flag's name included, names a kind of card - tarot,
-##   its arcana, its suits - and no prompt rendered over a fixture that names none says one; what a show's
-##   cards are is its brief's. The control: a part that says "tarot" is found. NOR A KIND OF WORK
-##   (next/table_work.md; the user, 2026-10-25: "I don't want to implement a baking mode, or an alchemy mode"):
-##   no rules file says alchemy, a potion, baking or a jigsaw - the brief says what the work is. The control: a
-##   part that says "potion" is found. And the work's prompts - the producer told of work, the set dresser
-##   given the plan's work, the puppeteer with tools and without, a reader's work passage and an intro and a
-##   close with acts - render whole.
-## - THE WORDS' OWN MARKS: a value filled in, a section kept only when its flag holds and an inverted one
-##   only when it does not, a list of lines walked, a tag alone on its line taking its line with it, a
-##   flag on an item and its negation - each against the other side.
-## - BLOCK SCALARS: `>-` folds lines with spaces and keeps a blank line as a break, `|` keeps lines and one
-##   final break, a `#` inside one is text and `...` indented is text; `|+` is refused, and `...` at the
-##   start of a line is still a document's end - the controls.
+## - Every rules file parses, is a map of parts, and every item is a line, an empty line or a map of known keys
+##   (when, say, insert, include, each); every `include` names a part that exists (control: a file naming one
+##   that does not is found).
+## - Every prompt renders whole: the producer, the designer, the set dresser (with tools and without), a reader's
+##   intro, card and close, every picture, what Grok is told beside them, and an episode's YouTube tags and
+##   painted thumbnail, over a fixture plan, leave nothing unfilled ([member Rules.missing] empty, no `{{`
+##   left); control: a part asked for a name nobody gives is said.
+## - The rules are every show's: no word of any rules file, a flag's name included, names a kind of card
+##   (tarot, its arcana, its suits), a kind of work (alchemy, a potion, baking, a jigsaw), a game or a kind of
+##   painting, and no prompt rendered over a fixture that names none says one (controls: a part that says
+##   "tarot" or "potion" is found). The work's prompts (the producer told of work, the set dresser given the
+##   plan's work, the puppeteer with tools and without, a reader's work passage, an intro and a close with
+##   acts) render whole.
+## - The words' own marks: a value filled in, a section kept only when its flag holds and an inverted one only
+##   when it does not, a list of lines walked, a tag alone on its line taking its line with it, a flag on an
+##   item and its negation - each against the other side.
+## - Block scalars: `>-` folds lines with spaces and keeps a blank line as a break, `|` keeps lines and one final
+##   break, a `#` inside one is text and `...` indented is text; controls: `|+` is refused, and `...` at the
+##   start of a line is still a document's end.
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
 ## What only a kind of card's own show may say: the rules name none of them.
 const KINDS := ["tarot", "arcana", "rider-waite", "pentacle"]
 ## ...and what only a kind of work's own show may say (next/table_work.md).
 const WORKS := ["alchemy", "alchemist", "potion", "cauldron", "baking", "bakery", "jigsaw", "dragon", "brick", "lego",
-	# ...AND NO GAME (next/tabletop.md: "a generic system, such that other games could be supported"): a game is a brief's, never a rule's
+	#...and no game (next/tabletop.md): a game is a brief's, never a rule's
 	"dungeon", "goblin", "wizard", "warhammer", "pathfinder", "hit points", "armor class", "d20", "spell slot", "initiative",
-	# ...AND NO KIND OF PAINTING (next/painted_surface.md): what a surface is painted with is the brief's
+	#...and no kind of painting (next/painted_surface.md): what a surface is painted with is the brief's
 	"makeup", "make-up", "clown", "joker", "lipstick", "eyeliner", "greasepaint"]
 
 var _fails := 0
@@ -112,8 +107,8 @@ func _files() -> bool:
 	return true
 
 
-## THE RULES ARE EVERY SHOW'S: every word of every file, flags and comments' neighbors alike (a comment is
-## the reason, not a rule, and MiniYaml drops it).
+## The rules are every show's: every word of every file, flags and comments' neighbors alike (a comment is the
+## reason, not a rule, and MiniYaml drops it).
 func _every_show() -> bool:
 	for f in _rules_files("res://rules"):
 		var got := MiniYaml.parse(FileAccess.get_file_as_string(f))
@@ -122,7 +117,7 @@ func _every_show() -> bool:
 				_ok(false, "%s names a kind of card: %s" % [f.trim_prefix("res://rules/"), hit])
 	# the control: a part that says it, in a flag and in its words
 	_ok(_kinds_named({"p": ["a line", {"when": "!tarot", "say": "a Rider-Waite deck"}]}).size() == 2, "a part naming tarot was not found")
-	# NOR A KIND OF WORK: every word of every file
+	# NOR A kind of work: every word of every file
 	for f in _rules_files("res://rules"):
 		var got := MiniYaml.parse(FileAccess.get_file_as_string(f))
 		if bool(got["ok"]):
@@ -242,8 +237,8 @@ func _prompts() -> bool:
 		texts.append(TablePrompts.art_director("Show", "a brief", look, card, earlier, "back")["prompt"])
 	texts.append(TablePrompts.reader("Show", "a brief", plan, "2", ["hello"], [card, card], 3, true, [], [], ["Moth"], true, true,
 		["the wing is missing"])["prompt"])
-	# THE WORK AT THE TABLE (next/table_work.md): a plan with work, its set dresser, its puppeteer with tools and
-	# without, a work passage and an intro and a close done over acts
+	#The work at the table (next/table_work.md): a plan with work, its set dresser, its puppeteer with tools and
+	#without, a work passage and an intro and a close done over acts
 	var worked := plan.duplicate(true)
 	worked["work_intro"] = "the kettle is filled"
 	worked["work_close"] = "the cups are set out"
@@ -256,7 +251,7 @@ func _prompts() -> bool:
 		"the set dresser is told the plan's work (and, the control, not when there is none)")
 	for looks in [0, 30]:
 		texts.append(TablePrompts.puppeteer("Show", "a brief", worked, 7, [card, card, card], "- \"a cup\": stands at [0, 0] cm", looks)["prompt"])
-	# WHAT IS BUILT, DESIGNED FIRST ([AssemblyModel]): the modeler told how a model is written and what this one is; and whoever comes after told what it is
+	#What is built, designed first ([AssemblyModel]): the modeler told how a model is written and what this one is, and whoever comes after told what it is
 	var building := worked.duplicate(true)
 	building["assembly"] = true
 	building["build"] = "a tall thing with a door"
@@ -286,15 +281,14 @@ func _prompts() -> bool:
 		texts.append(TablePrompts.reader("Show", "a brief", worked, step, ["hello"], [card, card, card].slice(0, 0 if step == "intro" else 3), 3,
 			false, [], [], ["Moth"], true, false, [], acts)["prompt"])
 	texts.append(TablePrompts.back_image(look, "/x.png", true, true))
-	# a symmetric back is never made by blending the picture with its half turn (feedback 0012: every
-	# mark printed twice); the control is a back that is not asked to be symmetric
+	#a symmetric back is never made by blending the picture with its half turn; the control is a back that is not
+	#asked to be symmetric
 	var symmetric := TablePrompts.back_image(look, "/x.png", true)
 	_ok(symmetric.contains("EXACTLY SYMMETRIC") and symmetric.contains("NEVER make it symmetric by blending"),
 		"a back asked to be symmetric is told never to blend the picture with a rotated copy")
 	_ok(not TablePrompts.back_image(look, "/x.png", false).contains("blending"),
 		"control: a back not asked to be symmetric is not told about blending")
-	# a back cut to a shaped window is told to keep its marks off the edge (feedback 0015: an arch sliced the
-	# wings the painter ran to the border); the control is a plain rectangle
+	#a back cut to a shaped window is told to keep its marks off the edge; the control is a plain rectangle
 	var arched := look.duplicate(true)
 	arched["frame"] = {"window": "arch"}
 	var shaped_back := TablePrompts.back_image(arched, "/x.png", true)
@@ -302,9 +296,8 @@ func _prompts() -> bool:
 		"a back cut to an arch is told the window and to keep its marks inside it")
 	_ok(not TablePrompts.back_image(look, "/x.png", true).contains("outer sixth"),
 		"control: a back with a plain rectangle window is not told to keep clear of its edge")
-	# A BACK IS TOLD WHAT THE CARD'S SHAPE CUTS OFF IT (true-tarot 279427: a 2:3 back on a 70 x 120 card lost 64
-	# pixels a side, and with them its side borders and a slice of its corner discs). Numbers worked by hand from
-	# the card's size and window, so a change to how a back is drawn cannot carry the prompt along with it
+	#A back is told what the card's shape cuts off it. Numbers worked by hand from the card's size and window, so
+	#a change to how a back is drawn cannot carry the prompt along with it
 	var told := func(card_size: String, frame: Dictionary) -> String:
 		var cut_look := look.duplicate(true)
 		cut_look["card_size"] = card_size
@@ -345,7 +338,7 @@ func _prompts() -> bool:
 		PackedStringArray([shown]))
 	texts.append(String(thumb_prompt["system"]) + "\n" + String(thumb_prompt["prompt"]))
 	texts.append(Thumb.painting({"picture": "a lantern on a table", "words": "THE END", "after": [shown]}, false))
-	# A LIKENESS'S AGENT (rules/likeness/): the audit of a set, whole, over a made set
+	# A likeness's agent (rules/likeness/): the audit of a set, whole, over a made set
 	var a_set := {"id": "set-x", "minutes": 12.5, "shots": [{"vid": "v", "n": 0}, {"vid": "v", "n": 1}]}
 	for more in [false, true]:
 		var au := ActorPrompts.audit("An Actor", a_set, more)

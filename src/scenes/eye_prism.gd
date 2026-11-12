@@ -2,32 +2,27 @@ extends Scene3D
 
 ## Eye + prism - the right eye becomes its digital self (the-point, scenes 3-5).
 ##
-## The two eyes' composition continues, but the RIGHT eye dissolves and CRYSTALLIZES into
-## the glowing BLUE wireframe [PrismBody] while the LEFT human eye remains, watching. Then
-## the prism "looks around" the void on its own; and toward the end the remaining eye begins
-## to TREMBLE and vibrate, faster and faster, light building around it - the riser into the
-## drop. Arrives by morph from `two_eyes` (`morph_in = "eyes"`): it reuses the SAME two
-## EyeBody instances, so nothing jumps - the left eye simply keeps looking while the right
-## one turns to crystal in place. Hands off to `two_prisms` (`morph_out = "eye2prism"`): the
-## live blue PrismBody plus the trembling eye's slot, so the drop can burst a red prism there.
+## The two eyes' composition continues, but the right eye dissolves and crystallizes into the glowing
+## wireframe [PrismBody] while the left human eye remains, watching. The prism then looks around the void on
+## its own, and toward the end the remaining eye begins to tremble and vibrate, faster and faster, with
+## light building around it: the riser into the drop. Arrives by morph from `two_eyes` (`morph_in = "eyes"`),
+## reusing the same two EyeBody instances so nothing jumps. Hands off to `two_prisms`
+## (`morph_out = "eye2prism"`): the live prism plus the trembling eye's slot, so the drop can burst a red
+## prism there.
 ##
-## "Blue" is now a mood rather than a constant: the crystal takes a cool [Scheme] -
-## glacier, abyss, teal, violet, ash - carried on the [PrismBody] itself as a hue
-## offset from [constant HUE_BLUE], so `two_prisms` (which draws that same live body at
-## HUE_BLUE) inherits the color across the morph instead of popping back to blue. The
-## eyes take an iris mood, and the pair's composition a named spacing.
+## The crystal takes a cool [Scheme] (glacier, abyss, teal, violet, ash), carried on the [PrismBody] as a hue
+## offset from [constant HUE_BLUE], so `two_prisms` (which draws that body at HUE_BLUE) inherits the color
+## across the morph. The eyes take an iris mood and the pair's composition a named spacing.
 
-## Iris moods, matching `eye.gd` and `two_eyes.gd` - the same face arrives here.
+## Iris moods, matching `eye.gd` and `two_eyes.gd`.
 const IRIS_MOODS := ["dawn", "ember", "sodium", "brass", "bone", "verdant", "toxic",
 	"teal", "glacier", "abyss", "ash", "violet"]
 
-## What the eye crystallizes INTO. Cool and mineral only: the warm end belongs to the
-## red prism that bursts out of the other eye at the drop, and two warm prisms would
-## lose the opposition the whole sequence is built on.
+## What the eye crystallizes into: cool and mineral only, since the warm end belongs to the red prism that
+## bursts out of the other eye at the drop.
 const CRYSTAL_MOODS := ["glacier", "abyss", "teal", "violet", "ash", "toxic"]
 
-## The pair's placement, as [radius band, half-separation in EYE RADII] - the same
-## table `two_eyes` composes from, since this scene continues that shot.
+## The pair's placement, as [radius band, half-separation in eye radii]; the same table `two_eyes` composes from.
 const COMPOSITION := {
 	"crowded": {"rad": [0.26, 0.33], "gap": [1.5, 1.9]},
 	"human":   {"rad": [0.22, 0.30], "gap": [2.1, 2.7]},
@@ -52,8 +47,8 @@ var _glow := Color(0.7, 0.82, 1.0)   # the crystallization light, tinted by the 
 const HUE_BLUE := 0.6                # the base `two_prisms` draws the handed-over body at
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed.
 const FIELDS := {
 	"composition": {"label": "Composition", "type": "choice", "options": "COMPOSITION", "default": null,
 		"blurb": "How the pair of eyes is placed: crowded close together, at human spacing, or set wide apart."},
@@ -73,9 +68,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_eye.autonomous = false
 	_reye.autonomous = false
 	_blue = PrismBody.new(rng.randi())
-	# The crystal's color rides on the BODY as an offset from HUE_BLUE, because the
-	# body outlives this scene: two_prisms keeps drawing it at HUE_BLUE and gets this
-	# mood for free, with no jump at the hand-off.
+	# The crystal's color rides on the body as an offset from HUE_BLUE, because the body outlives this
+	# scene: two_prisms keeps drawing it at HUE_BLUE and inherits the mood with no jump.
 	var crystal := Scheme.among(CRYSTAL_MOODS, rng)
 	var chue := crystal.vary(rng)
 	_blue.hue_shift = wrapf(chue - HUE_BLUE, -0.5, 0.5)
@@ -96,8 +90,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"prism_form": _blue.form, "hue": h}
 
 
-# Arrived from two_eyes: keep BOTH live eyes (the left survives, the right crystallizes),
-# and continue their shared focus - so the swap is invisible and only the crystallize reads.
+# Arrived from two_eyes: keep both live eyes (the left survives, the right crystallizes) and continue their shared focus.
 func begin_morph(from: GhostScene) -> void:
 	var p := from.morph_payload()
 	if p.is_empty():
@@ -117,10 +110,8 @@ func begin_morph(from: GhostScene) -> void:
 	_tremble = 0.0
 
 
-# Hand the live blue prism and the trembling eye's slot to two_prisms, so the drop bursts a
-# red prism exactly where the eye was and the blue one simply keeps living. Slots are handed
-# over as SCREEN unit-fractions (the 2D space the prism scenes draw in), projected from the
-# 3D slots, so nothing shifts across the morph.
+# Hand the live prism and the trembling eye's slot to two_prisms, so the drop bursts a red prism where the
+# eye was. Slots are handed over as screen unit-fractions (the 2D space the prism scenes draw in), projected from the 3D slots.
 func morph_payload() -> Dictionary:
 	lens.prepare()
 	var bj := lens.project(Vector3(_off, 0, 0))
@@ -137,14 +128,12 @@ func update(f: AudioFeatures, delta: float) -> void:
 	drift_view(f, 0.004, 0.008)                 # nearly static, per the brief
 	_t += delta
 	var drive := clampf(f.energy * 0.7 + f.beat * 0.4, 0.0, 1.0)
-	# Keyframes are paced as fractions of the scene's hold (phase_span), so the crystallize and the
-	# riser always complete on screen however short the scene is; the ambient life (the eye's gaze,
-	# the prism's spin) runs on the raw delta below and is never sped up.
+	# Keyframes are paced as fractions of the scene's hold (phase_span), so the crystallize and riser
+	# complete on screen however short the scene is; ambient life (gaze, spin) runs on the raw delta.
 	var H := phase_span(7.0)
 	var frac := clampf(_t / H, 0.0, 1.0)
 
-	# 1) Crystallize the right eye into the blue prism over the first ~18% of the hold (a form-flash
-	#    at the hand-off point where the eye is half-gone and the wireframe half-there).
+	# 1) Crystallize the right eye into the prism over the first ~18% of the hold (a form-flash at the hand-off).
 	var pre := _crys
 	_crys = minf(1.0, _crys + delta / maxf(0.2, H * 0.18))
 	if pre < 0.5 and _crys >= 0.5:
@@ -157,19 +146,18 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_new_focus()
 	_eye.look_at_point(Vector3(-_off, 0, 0), _focus_target)
 
-	# 3) The riser: the eye trembles harder as the build rises. A slow floor over _t makes it
-	#    always crescendo, and the audio energy adds the live jitter on top; it will burst on
-	#    the drop (the storyboard cuts to two_prisms there).
+	# 3) The riser: the eye trembles harder as the build rises. A slow floor over _t makes it always
+	#    crescendo and audio energy adds live jitter; it bursts on the drop (the storyboard cuts to two_prisms).
 	var ramp := smoothstep(0.42, 1.0, frac)                  # riser builds over the back half of the hold
 	var tt := clampf(ramp * (0.55 + 0.6 * drive), 0.0, 1.0)
 	_tremble = lerpf(_tremble, tt, 1.0 - exp(-6.0 * delta))
 
-	# The eye's own dilation reacts to the whole drive plus the tremble (it widens as it strains).
+	# The eye's dilation reacts to the whole drive plus the tremble.
 	_eye.update(delta, clampf(drive + _tremble * 0.5, 0.0, 1.0))
 	if _crys < 1.0:
 		_reye.look_at_point(Vector3(_off, 0, 0), _focus_target)
 		_reye.update(delta, drive)
-	# The blue prism comes to life a touch stronger as it finishes forming.
+	# The prism comes to life a touch stronger as it finishes forming.
 	_blue.update(delta, clampf(drive * (0.4 + 0.6 * _crys), 0.0, 1.0))
 	queue_redraw()
 
@@ -195,13 +183,12 @@ func _draw() -> void:
 	lens.prepare()
 	var u := unit()
 
-	# The blue prism sits exactly where the right eye was: project the right slot to the screen.
+	# The prism sits where the right eye was: project the right slot to the screen.
 	var pj := lens.project(Vector3(_off, 0, 0))
 	var pc := Vector2(pj.x, pj.y) * u
 	var pscale := _eye_rad * lens._focal / maxf(0.1, pj.z) * u * 1.15   # ~eye footprint, a touch larger
 
-	# The surviving left eye, trembling. High-frequency vibration jitters its world position and
-	# its gaze; a soft light builds around it as the riser peaks.
+	# The surviving left eye, trembling: high-frequency jitter on its world position and gaze, with a soft light building as the riser peaks.
 	var epos := Vector3(-_off, 0, 0)
 	if _tremble > 0.001:
 		var jx := (sin(_t * 61.0) + 0.6 * sin(_t * 97.0 + 1.3)) * 0.5
@@ -220,7 +207,7 @@ func _draw() -> void:
 		draw_circle(pc, pscale * (0.3 + 0.6 * _flash), Color(1, 1, 1, 0.6 * _flash))
 
 
-# A soft radial glow gathering on the eye as it trembles - the "light building around it".
+# A soft radial glow gathering on the eye as it trembles.
 func _draw_eye_light(pj: Vector3, u: float, k: float) -> void:
 	if pj.z <= lens.near:
 		return

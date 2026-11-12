@@ -1,29 +1,25 @@
 extends Node
 
-## Gate for THE FRAME'S FOIL: it lies on the frame's lines, never along their edges.
+## Gate for the frame's foil: it lies on the frame's lines, never along their edges.
 ##
-## The foil shader ([constant TableMedium.FOIL_SHADER]) keys the frame's accent by its distance from
-## the face's texel, and the face is sampled LINEAR (`source_color`). The accent went over in sRGB, so
-## for the 1327 export's deck (accent #a8602a on #e6d9b4) a line's own color stood 0.40 from it - no
-## foil at all - while a texel blended ~60% toward the stock, the line's anti-aliased edge, stood 0.06
-## from it: full foil. Every bracket drew as a dark line with a bright, metallic, emissive fringe one
-## texel wide down each side, stair-stepped and crawling as the held card breathed - reported as bad
-## aliasing at the corners in the export (2026-10-09). The stock had the same fault and the same fix
-## (feedback 0005, [method TableMedium._foil_stock]).
+## The foil shader ([constant TableMedium.FOIL_SHADER]) keys the frame's accent by its distance from the face's texel, and the face
+## is sampled linear (`source_color`), so the accent must go over in linear light: in sRGB a line's own color stands far from it
+## (accent #a8602a on #e6d9b4: 0.40) while an anti-aliased edge texel stands near (0.06), giving a bright fringe down each side.
+## The stock has the same fix ([method TableMedium._foil_stock]).
 ##
 ## Held, for several decks' colors, with the shader's own thresholds read off its source:
 ##
-##   - THE LINE IS FOIL: the accent the material is handed is the line's color as the face samples
-##     it, and the stock it is handed is the stock's.
-##   - NO FRINGE: from the line's color out to the stock, through every blend its edge holds, the
-##     distance from the accent only grows - so the foil fades off the line and never peaks beside it.
-##   - ONE WAY IN: the table writes the accent through [method TableMedium._foil_accent] alone.
+##   - The line is foil: the accent the material is handed is the line's color as the face samples it, and the stock it is handed
+##     is the stock's.
+##   - No fringe: from the line's color out to the stock, through every blend its edge holds, the distance from the accent only
+##     grows, so the foil fades off the line and never peaks beside it.
+##   - One way in: the table writes the accent through [method TableMedium._foil_accent] alone.
 ##
 ## Two-sided: the sRGB accent, run through the same checks, misses the line and peaks on its edge.
 ##
 ##   tests/run_boot_probe.sh tests/table/card_foil_check.gd 60
 
-## Decks' frames: [accent, stock] - the 1327 export's, the default, and a dark and a pale accent.
+## Decks' frames: [accent, stock] - a real export's, the default, and a dark and a pale accent.
 const DECKS := [["#a8602a", "#e6d9b4"], ["#c9a227", "#efe6d2"], ["#5a1a1a", "#f4efe2"], ["#e0c070", "#2a2420"]]
 
 var _fails: Array = []
@@ -47,7 +43,7 @@ func _ready() -> void:
 			_ok(why.is_empty(), "%s on %s: %s" % [d[0], d[1], why])
 			var s := _sampled(Color.html(d[1]))
 			_ok(s.distance_to(stock) < 0.01, "%s: the stock the foil leaves alone is %s, the face samples %s" % [d[1], stock, s])
-		# the control: the accent as it went over before, in sRGB
+		# the control: the accent in sRGB
 		var a := Color.html(DECKS[0][0])
 		var raw := _keys_the_line(Vector3(a.r, a.g, a.b), DECKS[0][0], DECKS[0][1], inner)
 		_ok(not raw.is_empty(), "control: the sRGB accent passed - the checks cannot see the fringe")

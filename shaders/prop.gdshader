@@ -15,17 +15,16 @@ uniform float pattern : hint_range(0.0, 1.0) = 0.5;
 uniform float clarity : hint_range(0.0, 1.0) = 0.5;
 // a lit candle's wax: its flame's brightness now (0 unlit), which glows in the top of it
 uniform float flame = 0.0;
-// WORK AT THE TABLE (TableWork): light of a part's own, 0-1 (a brew lit from within), and the show's time
-// and how hard a liquid boils, for a liquid's surface - the time is handed in, never TIME, so a render and
-// a scrub agree
+// Work at the table (TableWork): light of a part's own, 0-1 (a brew lit from within), and the show's time and how hard a
+// liquid boils, for a liquid's surface - the time is handed in, never TIME, so a render and a scrub agree
 uniform float glow = 0.0;
 uniform float show_time = 0.0;
-// EACH COPY GLOWS ITS OWN WAY (Props.build sets it for a part with copies - a heap of coals): 0 the part as one
+// Each copy glows its own way (Props.build sets it for a part with copies - a heap of coals): 0 the part as one
 uniform float apart = 0.0;
 uniform float boil = 0.0;
-// THE PAINT ON A BRUSH'S TIP (TablePaint): its color, and how much of it there is (0 clean)
+// The paint on a brush's tip (TablePaint): its color, and how much of it there is (0 clean)
 uniform vec4 tip_paint : source_color = vec4(0.0);
-// A SURFACE PAINTED (TablePaint): its paint composed in 2D from its front - its color, and its finish (rough, metallic,
+// A surface painted (TablePaint): its paint composed in 2D from its front - its color, and its finish (rough, metallic,
 // glittering) - each premultiplied by how much paint there is
 uniform sampler2D skin_color : filter_linear, repeat_disable;
 uniform sampler2D skin_finish : filter_linear, repeat_disable;
@@ -51,8 +50,8 @@ void fragment() {
 	if (kind == 1) {
 		// METAL: tarnish and patina gather where the surface is worked and where noise says
 		metal = 1.0;
-		// its grain fades as it is polished past 0.7: a polished face has none, and on one 4 cm across (a steel tag,
-		// 2026-10-29) the grain's few broad patches clouded it
+		// its grain fades as it is polished past 0.7: a polished face has none (on a small one the grain's few broad
+		// patches would cloud it)
 		float worked = 1.0 - smoothstep(0.7, 0.95, polish);
 		albedo = color * (1.0 + 0.2 * (n1 - 0.5) * worked);
 		rough = clamp(rough + (n2 - 0.5) * 0.14 * worked, 0.04, 1.0);
@@ -72,8 +71,8 @@ void fragment() {
 		sss = 0.25 + 0.3 * clarity;
 		back = color * (0.04 + 0.1 * clarity);
 		spec = 0.35;
-		// THE TOP OF A BURNING CANDLE GLOWS: its flame's light caught in the wax under it (the flame's
-		// own light leaves its candle alone, or a low flame blew out what held it)
+		// The top of a burning candle glows: its flame's light caught in the wax under it (the flame's own light leaves
+		// its candle alone)
 		emit = color * flame * (0.08 + 0.3 * clarity) * smoothstep(0.55, 1.0, UV2.x);
 	} else if (kind == 4) {
 		// CRYSTAL: a milky inside, banding, and a glassy skin that catches the flames
@@ -133,15 +132,11 @@ void fragment() {
 		albedo = mix(albedo, color2, smoothstep(0.6, 0.9, n1) * wear);
 		rough = mix(0.78, 0.35, polish);
 	} else if (kind == 10) {
-		// FABRIC: a weave, and velvet's sheen at the edges - only there. Godot's rim light asks nothing
-		// of where the light is (no facing, no distance, no shadow), and at a fabric's roughness it
-		// spread over the whole face: a feather held up with the candles behind it glowed on the side
-		// they never reached, its weave drawn in a checker over it and its glitter (too smooth to take
-		// that glow) black holes in it (the-quiet-crucible 841899). The weave fades out as its repeat
-		// (1.1 mm across the diagonal) comes under six pixels and is gone at three: finer, it cannot be
-		// drawn, only aliased into a coarse checker over the cloth (the same feather at the table's
-		// distance). The branch is the material's, so every pixel of a part takes it and its derivatives
-		// are sound
+		// FABRIC: a weave, and velvet's sheen at the edges only. Godot's rim light ignores where the light is (no
+		// facing, distance or shadow) and at a fabric's roughness spreads over the whole face, so the sheen is built here.
+		// The weave fades out as its repeat (1.1 mm across the diagonal) comes under six pixels and is gone at three:
+		// finer, it only aliases into a coarse checker. The branch is the material's, so every pixel of a part takes it
+		// and its derivatives are sound
 		albedo = color * (0.88 + 0.18 * n1);
 		float cm_px = max(length(dFdx(cpos)), length(dFdy(cpos)));
 		relief += sin(cpos.x * 40.0) * sin(cpos.z * 40.0 + cpos.y * 40.0) * 0.00004 * (1.0 - smoothstep(0.019, 0.037, cm_px));
@@ -224,9 +219,8 @@ void fragment() {
 		rough = mix(0.85, 0.12, polish);
 		coat = polish * 0.6;
 	}
-	// LIGHT OF ITS OWN (TableWork's `glow`): the color itself, lit from inside - and a part's copies each their own
-	// share of it, hotter or cooler than the next and wandering on a slow clock of its own, never in step
-	// (the-quiet-crucible 181083's coals: "pulse with heat/color at exactly the same rate, across all coals")
+	// Light of its own (TableWork's `glow`): the color itself, lit from inside; a part's copies each get their own share,
+	// wandering on a slow clock of their own, never in step
 	float own = 1.0;
 	if (apart > 0.0) {
 		float wander = vnoise(vec3(show_time * 0.21 + tag * 37.0, tag * 53.0, 1.0)) * 0.65
@@ -234,9 +228,8 @@ void fragment() {
 		own = mix(1.0, (0.6 + 0.8 * fract(tag * 7.31)) * (0.55 + 0.9 * wander), apart);
 	}
 	emit += color * glow * 1.6 * own;
-	// THE PLAY OF LIGHT (Props.PLAYS). Where the flames are is the renderer's business, so what
-	// catches them is made of surface: a patch of layers or a flake is a small mirror facing its own
-	// way, colored as a metal is, which a flame or the room's reflection lights - or does not
+	// The play of light (Props.PLAYS). Where the flames are is the renderer's business, so what catches them is made of
+	// surface: a patch of layers or a flake is a small mirror facing its own way, colored as a metal is
 	vec3 nrm = NORMAL;
 	vec3 tilt = vec3(0.0);      // the mirrors' facing, a nudge to the normal (the thing's space)
 	float mirror = 0.0;         // how much of the surface here is one
@@ -275,12 +268,9 @@ void fragment() {
 		rough = mix(rough, 0.18, colored);
 		mirror = colored * 0.6;
 	} else if (play == 4) {
-		// GLITTER: tiny flat flakes of `color2` all through it, each facing its own way, so a few at
-		// a time catch a flame - and the rest still seen, flecks of their color: a flake is mostly its
-		// color, a little mirror. All mirror, one showed only the dim room it faced, a dark disc ringed
-		// by its soft edge - a phoenix feather read as full of holes (the-quiet-crucible 841899) and a
-		// lapis's pyrite as pits; at fire's 0.6 the feather held up with the candles behind it was
-		// still flecked with dull olive specks
+		// GLITTER: tiny flat flakes of `color2` all through it, each facing its own way, so a few at a time catch a
+		// flame; a flake is mostly its color and a little mirror (all mirror, it would show only the dim room it faces,
+		// a dark disc)
 		vec3 c = cellsid(cpos * 7.5 + vec3(seed * 3.0));
 		float flake = (1.0 - smoothstep(0.26, 0.36, c.x)) * step(0.45, c.z);
 		tilt = tipped(c.z, 0.65);
@@ -288,10 +278,8 @@ void fragment() {
 		rough = mix(rough, 0.07, flake);
 		mirror = flake * 0.3;
 	} else if (play == 5) {
-		// RAINBOW: a thin film over it, colored by its thickness and the angle it is seen at - in
-		// what it reflects, as a film colors light, so a black stone stays black but for its sheen;
-		// a pale body keeps its own light under it (a cream murex shell, as metal, reflected a dim
-		// room and read nearly black)
+		// RAINBOW: a thin film over it, colored by its thickness and the angle it is seen at, in what it reflects, so
+		// a black stone stays black but for its sheen; a pale body keeps its own light under it
 		float pale = smoothstep(0.25, 0.8, dot(color, vec3(0.299, 0.587, 0.114)));
 		albedo = mix(albedo, film(NORMAL, VIEW, color) * mix(0.6, 1.0, dot(color, vec3(0.333))), mix(0.8, 0.45, pale));
 		metal = max(metal, mix(0.85, 0.3, pale));
@@ -304,10 +292,8 @@ void fragment() {
 		albedo = mix(albedo, color2 * 1.15, g * 0.75);
 		sss = max(sss, 0.55);
 	}
-	// THE PAINT ON A BRUSH'S TIP, the end half of its hairs, wet and glossy - read over hair of any color as a sheen where its own color
-	// is near the hair's (2026-11-07, the user: "the bristle do not apparently pick up any color ... maybe a transparency overlay for
-	// color on the bristles, to show that they actually have some makeup on them"; a rust on a liner showed, a tan on a sable round
-	// brush did not: from 0.55 of the way up, rough 0.3)
+	// The paint on a brush's tip, the end half of its hairs (from 0.55 of the way up), wet and glossy (rough 0.3): read
+	// over hair of any color as a sheen where its own color is near the hair's
 	if (bristle_len > 0.0 && tip_paint.a > 0.0) {
 		// (thinner on the core, the hairs inside: they carry less of it than the hairs outside - Bristles.CORE_WET)
 		float wet = tip_paint.a * smoothstep(0.4, 0.85, UV2.x) * (UV.x > 1.5 ? BRISTLE_CORE_WET : 1.0);
@@ -321,9 +307,8 @@ void fragment() {
 	float glit = 0.0;
 	if (skinned) {
 		vec2 suv = skin_at.xy;
-		// (...AS MUCH OF IT AS THE PIXEL COVERS: four taps across the pixel's own footprint on the paint, its colors kept pre-multiplied -
-		// sampled once, a line under a pixel wide on a forehead lying back from the camera came and went along its length, specks where
-		// cracks were painted whole; feedback 0013, 2026-11-10)
+		// (...as much of it as the pixel covers: four taps across the pixel's own footprint on the paint, colors kept
+		// pre-multiplied; sampled once, a line under a pixel wide on a surface lying back from the camera comes and goes)
 		vec2 fx = dFdx(suv);
 		vec2 fy = dFdy(suv);
 		vec4 sc = vec4(0.0);
@@ -351,7 +336,7 @@ void fragment() {
 		relief += on * 0.00003;
 	}
 	if (glit > 0.0) {
-		// GLITTER IN THE PAINT: flakes of it, each its own little mirror
+		// Glitter in the paint: flakes of it, each its own little mirror
 		vec3 gc = cellsid(cpos * 14.0 + vec3(seed * 3.0));
 		float flake = (1.0 - smoothstep(0.22, 0.32, gc.x)) * step(0.4, gc.z) * glit;
 		tilt = tipped(gc.z, 0.7) * flake;
@@ -372,23 +357,21 @@ void fragment() {
 		metal = mix(metal, kind == 1 ? 0.3 : 0.0, m);
 		rough = mix(rough, 0.45, m);
 	}
-	// HOW SHUT IN THE SURFACE IS (a sculpt's UV2.y, Props._cavity; 0 on every other shape): a socket's
-	// depths, a groove, the hollow under an arch see less of the room, and gather the dust of years
+	// How shut in the surface is (a sculpt's UV2.y, Props._cavity; 0 on every other shape): a socket's depths, a groove,
+	// the hollow under an arch see less of the room
 	float cave = smoothstep(0.05, 0.75, UV2.y);
 	albedo *= 1.0 - 0.7 * cave;
 	AO = 1.0 - 0.9 * cave;
 	AO_LIGHT_AFFECT = 0.8;
-	// few real surfaces reflect more than this much of the light: a white wax at its full value
-	// blew out beside a flame
+	// few real surfaces reflect more than this much of the light (a white wax at its full value blows out beside a flame)
 	ALBEDO = albedo * 0.84;
 	METALLIC = metal;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
 	nrm = bump(nrm, VERTEX, relief);
 	NORMAL = nrm;
-	// THE FRAME THE LIGHT READS FIBERS IN: a silky stone's fibers spread its light ACROSS them - the
-	// flow turns the frame a quarter round, so the broad axis lies across the fibers (a plain
-	// surface's frame does not matter, but it must be a true one: the meshes carry no tangents)
+	// The frame the light reads fibers in: a silky stone's fibers spread its light across them - the flow turns the
+	// frame a quarter round, so the broad axis lies across the fibers (the meshes carry no tangents, so it is built here)
 	vec3 fv = mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * fibers());
 	vec3 tg = fv - nrm * dot(nrm, fv);
 	if (length(tg) < 1e-4) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """kokoro_train.py - Kokoro taught someone's voice, by a training loop of our own (next/voice_engines.md, "Training
-Kokoro"; the user, 2026-10-26: "our own custom training loop would probably be perfectly fine").
+Kokoro").
 
     <voice_train_venv python> kokoro_train.py --spec <spec.json> [--progress <file>]
 
@@ -15,7 +15,7 @@ DELIVERY - the prosody predictor (how long each sound is held, its pitch and ene
 base voice's unless the spec says `"predictor": "taught"`: on soft speech warped from another voice it was what cost
 the words (`keep_delivery`).
 
-`"predictor": "pitch"` IS STYLETTS 2'S SECOND STAGE, THE TIMING KEPT (2026-10-27, after kikiri-tts): the predictor's
+`"predictor": "pitch"` IS STYLETTS 2'S SECOND STAGE, THE TIMING KEPT: the predictor's
 pitch and energy (`shared`, `F0`, `N` and their projections) are taught on their curves, its timing held, and after
 CURVES_AFTER steps the decoder is taught from THE PREDICTOR'S curves along their alignment (`F0Ntrain`), the mel's
 gradient reaching the predictor through them - curves like the ones it will be played with, at their level. Kept, the
@@ -76,7 +76,7 @@ DUR_WEIGHT = 1.0
 F0_WEIGHT = 0.1
 N_WEIGHT = 1.0
 # StyleTTS 2 weighs its ear 1 against 5 x its own mel loss, about one to one on a taught voice; ours is 45 x a log-mel L1
-# that runs 18 times theirs on the same audio (2026-10-27, eight batches of hers through two taught decoders)
+# that runs 18 times theirs on the same audio
 EAR_WEIGHT = 18.0
 CURVES_AFTER = 1000
 LR = 1e-4
@@ -284,14 +284,14 @@ def hold(model, delivery: str) -> None:
     for part in (model.bert, model.bert_encoder, model.text_encoder):
         part.requires_grad_(False)
         part.eval()
-    # THE ADAIN NORMS' OWN SCALE AND SHIFT ARE HELD at 1 and 0: Kokoro never taught them (they are not in its checkpoint -
+    # The adain norms' own scale and shift are held at 1 and 0: Kokoro never taught them (they are not in its checkpoint -
     # an affine norm only for an old exporter's sake) and its graph folds them away, so a value taught there could
     # never reach the voice host
     for mod in model.modules():
         if isinstance(mod, torch.nn.InstanceNorm1d):
             mod.weight.requires_grad_(False)
             mod.bias.requires_grad_(False)
-    # KOKORO'S DELIVERY, KEPT unless `"predictor": "taught"` (2026-10-26, measured on an ASMR channel's soft speech; next/
+    # Kokoro's delivery, kept unless `"predictor": "taught"` (measured on an ASMR channel's soft speech; next/
     # voice_engines.md "Training Kokoro"): the prosody predictor and the half of the style it reads are held. Taught, its
     # timing was the noisiest thing in their data - warped from another voice onto soft speech - and its pitch and energy
     # threw the taught decoder: twenty unseen sentences were misheard 22-56% of their words; with Kokoro's delivery, 4.8%,

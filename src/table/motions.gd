@@ -1,33 +1,27 @@
 extends RefCounted
 class_name Motions
 
-## Motions - WORK AT THE TABLE as data (next/table_work.md): what a thing's parts can do, the LAWS that move
-## them, and the ACTS an episode's puppeteer writes out of them. The user, 2026-10-25: a set dresser's clock
-## "showed 3:00 precisely... but the hands never moved", and "I don't want to implement a baking mode, or
-## an alchemy mode: I want to build a system that is flexible enough to allow agents to do this for
-## themselves." So nothing here knows a clock, a pestle or a cauldron: a part can be JOINTED (a hinge, a
-## slide, or free to be picked up), can carry named POINTS, and can CHANGE (how full it is, how big, its
-## color, its glow, whether it is there); a LAW says how one of those goes over time; an ACT is a few laws
-## on a few parts, cued by the reading.
+## Motions - work at the table as data (next/table_work.md): what a thing's parts can do, the laws that move them, and the acts an
+## episode's puppeteer writes out of them. Nothing here knows a clock, a pestle or a cauldron: a part can be jointed (a hinge, a slide,
+## or free to be picked up), can carry named points, and can change (how full it is, how big, its color, its glow, whether it is there);
+## a law says how one of those goes over time; an act is a few laws on a few parts, cued by the reading.
 ##
-## THREE LAYERS, all written by agents, all read here ([method sanitize_work], [method sanitize_acts]):
-##   - the set dresser's: on a part, `name`, `joint`, `points`, `start` (a state it begins in), `runs` (a
-##     law it follows all the time, from the opening: a clock's hands, a pendulum, a candle burning down)
-##     and `emits` (smoke or steam rising from one of its points);
+## Three layers, all written by agents, all read here ([method sanitize_work], [method sanitize_acts]):
+##   - the set dresser's: on a part, `name`, `joint`, `points`, `start` (a state it begins in), `runs` (a law it follows all the time,
+##     from the opening: a clock's hands, a pendulum, a candle burning down) and `emits` (smoke or steam rising from one of its points);
 ##   - the laws ([constant LAWS]): each a row, its words what an agent reads ([method describe_laws]);
-##   - the puppeteer's acts (`acts.json` in the episode): each a beat's work - its tracks (a law on a
-##     thing's part), its cues (a burst at a moment of it), how long it takes - played by [TableWork].
+##   - the puppeteer's acts (`acts.json` in the episode): each a beat's work - its tracks (a law on a thing's part), its cues (a burst at
+##     a moment of it), how long it takes - played by [TableWork].
 ##
-## EVERY LAW IS A CLOSED FORM OF TIME: the same moment gives the same pose, so a render, a scrub and a
-## tool's picture agree. Any number a law takes may be a FORMULA instead ([Formula]): arithmetic of `t`
-## (seconds into the act, or the show for a law that runs), `u` (how far through the act, 0 to 1), `d` (the
-## act's length), `T` (show time) and `n` (whole periods done) - never code, which nothing here runs.
+## Every law is a closed form of time: the same moment gives the same pose, so a render, a scrub and a tool's picture agree. Any number a
+## law takes may be a formula instead ([Formula]): arithmetic of `t` (seconds into the act, or the show for a law that runs), `u` (how far
+## through the act, 0 to 1), `d` (the act's length), `T` (show time) and `n` (whole periods done) - never code, which nothing here runs.
 ##
-## UNITS ARE THE TABLE'S, as a set dresser writes them: centimeters and degrees, seconds; a place on the
-## table is [x, y, z] centimeters from the middle of the reading (x to the reader's right, y up from the top,
-## z toward the reader) or a thing's point by name, "mortar.floor".
+## Units are the table's, as a set dresser writes them: centimeters and degrees, seconds; a place on the table is [x, y, z] centimeters
+## from the middle of the reading (x to the reader's right, y up from the top, z toward the reader) or a thing's point by name,
+## "mortar.floor".
 
-## THE LAWS: what each does to what (`on`: the channels it can drive - `angle` a hinge's turn, `offset` a
+## The laws: what each does to what (`on`: the channels it can drive - `angle` a hinge's turn, `offset` a
 ## slide's travel, `pose` a free part's or a whole thing's place and turn, and the states), and its fields as
 ## an agent reads them.
 const LAWS := {
@@ -86,18 +80,17 @@ const LAWS := {
 			["material", "a material of the table's (its look, how heavy it is, whether it dissolves)"],
 			["grain", "a grain's size in centimeters (0.1 a powder, drawn as small clumps, to 1)"], ["amount", "how many grains fall (up to 120)"],
 			["spread", "how wide it falls, centimeters (left out: 1)"], ["between", "[u0, u1]: when they fall"]]},
-	# DRUNK FROM (the user: "pick up the mug, and bring it close (close enough to leave the camera's viewport), as if to take a drink. Then, when it returns, some of the liquid would be gone")
+		# drunk from: a hand brings a mug close to the camera as if to drink, and when it returns some of the liquid is gone
 	"drink": {"label": "Drink", "on": ["pose"],
 		"blurb": "a vessel taken up and drunk from, as a person at the table drinks: lifted toward the lens until it has left the picture by its foot, held there out of sight, and set back exactly where it stood with that much less in it - give it a stretch of at least six seconds, with the words stopped for it, as nobody talks while they drink",
 		"fields": [["sip", "the share of what is in it that is drunk (left out: 0.15)"], ["between", "[u0, u1]: the stretch of the act it goes on for - the first third to the mouth, the last third back"]]},
-	# A THING BUILT OF MANY SMALL PARTS (next/assembly.md): a law over no one part - the steps are [Assembly]'s, each a hand's pick, try
+	# A thing built of many small parts (next/assembly.md): a law over no one part - the steps are [Assembly]'s, each a hand's pick, try
 	# or press, and they say what they take. It runs "under" its words whatever it says: its length comes out of what its steps do
 	"assemble": {"label": "Assemble", "on": [],
 		"blurb": "the table's assembly worked, one step after another (ASSEMBLY, below, says what the steps are) - a thing built from many small parts, a part picked up, tried, pressed on or taken off. It takes as long as its steps take, its length worked out from them, and it stretches to fill what its words leave, by stopping between moves, never by slowing them",
 		"fields": [["ops", "the steps, in order: each {\"do\": a step's name, and its fields}"]]},
-	# WORDS ARE WRITTEN, NEVER LAID ON (the-quiet-crucible 707668: its brief puts a poison in as "its name on a slip of
-	# paper", and nothing on the table may carry words - the user, 2026-10-29, of the white square that went in: "a little
-	# white square kind of looks like nothing ... The slip should show writing, if the script says it should")
+		# words are written, never laid on: nothing on the table may carry words, so a slip of paper that holds a name shows writing
+		# when the script says it should
 	"write": {"label": "Write", "on": ["written"],
 		"blurb": "words, a formula or a drawing written onto a sheet (a part of the `sheet` shape) by an unseen pen, stroke by stroke, in a hand - a name on a slip, a label, a line on a page, an equation, a graph; several writes on one sheet go one under another from its head, as lines on a page do, so a page is filled a line at a time (when it is full, write on the next sheet); write only what the script or a card says is written there, or what the work really found",
 		"fields": [["text", "the words, a line or a few (\\n between lines); math inside them between $...$ in TeX"],
@@ -107,16 +100,14 @@ const LAWS := {
 			["hand", "neat, quick or print, for words with no math (left out: neat)"],
 			["with", "the pen that writes it, seen: a thing on the table (or \"thing/part\"), held by its point `tip` (its nib, else the end of its length) - it is picked up, writes each stroke as the ink goes down, lifts between them, and is held just over the page once the line is done (left out: the pen is unseen)"],
 			["ink", "\"#rrggbb\" (left out: a brown-black)"], ["between", "[u0, u1]: the stretch of the act the pen writes in (left out: all of it)"]]},
-	# POINTING AT WHAT IS SAID (Proof's desk, at the table since 2026-11-11 - next/proof.md; the user: "The pointing is a crucial tool
-	# here, because we need to direct the viewer's attention somehow"): the pen comes to something written on a page and stays by it
-	# while it is talked about ([method TableWork._point_nib])
+		# pointing at what is said (next/proof.md): the pen comes to something written on a page and stays by it while it is talked about
+		# ([method TableWork._point_nib])
 	"point": {"label": "Point", "on": ["pose"],
 		"blurb": "a pen (or any tool held by its tip) brought to something written or drawn on a sheet and held there, its nib just over the paper beside it - sweeping along under a wide formula or curve first - so the viewer sees what is being talked about; start it at the word that names the thing (<!-- act: name -->) and give it as long as the talk about it lasts",
 		"fields": [["on", "the sheet it points at, as a write names it (\"pad/page 1\")"],
 			["at", "what it points at: a part of a formula written as \\pin{name}{...}, an element of a drawing by its id=\"name\", or the name of the act that wrote the line"]]},
-	# A SURFACE PAINTED (next/painted_surface.md; the user, 2026-11-05: "The person slowly and meticulously applies a foundation, and details,
-	# and eye liner, and lipstick, and gently smears things with a sponge"): the agent says which elements of the design, with what and from
-	# where; the hand finds the way ([TablePaint])
+		# a surface painted (next/painted_surface.md): the agent says which elements of the design, with what and from where; the hand
+		# finds the way ([TablePaint])
 	"paint": {"label": "Paint", "on": ["pose"],
 		"blurb": "a tool lays elements of a design onto a painted surface, as a careful hand does: fetched from where it rests, loaded from its paint, pressed onto the surface and moved over each element in the way its kind asks - a line drawn along its path in slow strokes, a fill swept back and forth, a fill stippled from its middle out with a sponge, a powder patted on (a little cloud at each pat), dots dabbed, a smear dragged in one pressed stroke, a mist sprayed from a hand's length off, stones carried from their dish and pressed on - lifting between strokes, going back for more when it runs dry, rinsed and dried between colors and before it is put down where there is water for it, and back where it rests at the end. The FIRST act to paint an element lays it; any later one goes over it again with nothing on the tool, softening and smearing its edges (a powder's: sweeping its excess off). It takes as long as its strokes take at a hand's pace, its length worked out from them; slowed, it rests between elements",
 		"fields": [["on", "the thing whose surface is painted (\"mask\", or \"thing/part\")"], ["paint", "the elements of its design to lay, by id, in the order they go on: [\"base\"] or [\"brow left\", \"brow right\"]"],
@@ -129,7 +120,7 @@ const LAWS := {
 ## The hands a `write` may be in ([constant CardTable.HANDS], a typewriter's aside), and its ink unless it says.
 const WRITING_HANDS := ["neat", "quick", "print"]
 const WRITING_INK := "#241c16"
-## THE CHANNELS a state can be: what a part's `start` and a law's `state` may name, as an agent reads it.
+## The channels a state can be: what a part's `start` and a law's `state` may name, as an agent reads it.
 const STATES := {
 	"fill": "how full a liquid or a heap is, 0-1 of how it was built (it is lowered from the top)",
 	"grow": "how big it is, 0-2 of as built, about the middle of its base (0 is gone: a pinch dropped in, herbs ground away)",
@@ -140,12 +131,12 @@ const STATES := {
 	"boil": "how hard a liquid bubbles, 0 (still, only stirring) to 2 (a rolling boil)",
 	"written": "how much of the words a `write` puts on a sheet are written, 0-1",
 }
-## THE PLACES ON THE TABLE A LAW MAY NAME BY A WORD, beside a thing's points ([method _place]; [TableWork] finds
+## The places on the table a law may name by a word, beside a thing's points ([method _place]; [TableWork] finds
 ## them): where the work is done ([method TablePlan.work_spot]).
 const SPOTS := {
 	"work": "the work's spot: the middle of the picture, a little toward the reader, clear of what stands - where a thing is brought to be worked, seen large and whole. It is on the table's top: a thing carried there is set `down`",
 }
-## THE LAWS A PART MAY FOLLOW ALL THE TIME (its `runs`), as the set dresser is told them.
+## The laws a part may follow all the time (its `runs`), as the set dresser is told them.
 const RUNNING := ["clock", "turn", "swing", "to"]
 ## A clock's hands, each its degrees a second (the hour hand a turn in twelve hours) and the steps a turn ticks in.
 const HANDS := {"hour": {"rate": 1.0 / 120.0, "tick": 0}, "minute": {"rate": 0.1, "tick": 0}, "second": {"rate": 6.0, "tick": 60}}
@@ -162,20 +153,18 @@ const MAX_POINTS := 8
 const MAX_WORKS := 192
 ## How far a thing's work may reach (centimeters): a place past it is no place on this table.
 const REACH := 200.0
-## THE KINDS OF SMOKE a part may emit, and how each looks: color, puffs a second, how fast they rise
+## The kinds of smoke a part may emit, and how each looks: color, puffs a second, how fast they rise
 ## (m/s), how long they live (s), how big they are born (mm) and how much they grow.
 const EMITS := {
 	"steam": {"about": "white steam rising off something hot - a brew, a cup, a kettle's spout", "color": "#eef0f2", "rate": 7.0, "rise": 0.09, "life": 2.6, "size": 22.0, "grow": 2.6, "cools": true},
 	"smoke": {"about": "a thread of gray smoke - incense, a snuffed wick, smoldering herbs", "color": "#b9b4ad", "rate": 4.0, "rise": 0.05, "life": 4.2, "size": 9.0, "grow": 3.2},
 	"fumes": {"about": "a colored vapor curling off a brew or a flask", "color": "#9fe0b0", "rate": 5.0, "rise": 0.06, "life": 3.4, "size": 18.0, "grow": 2.4},
 }
-## WHAT STEAMS IS HOT, AND WHAT IS HOT COOLS (the user, of a coffee steaming through a two-hour build: "that steaming coffee is going to go cold ... implemented as temperature of the liquid, since that would
-## make sense: I think many hot liquids would produce steam, and all of them would cool down eventually"). Newton's cooling, a pure function of show time: what it starts at, the room it falls toward, and how
-## long a cup takes to lose all but a third of what it has over the room (34 minutes: coffee in a stoneware mug, 85 degrees C at the start, 41 at 40 minutes). A larger thing holds its heat for longer, as its
-## volume does against its surface, so by how far across it is. Its steam is thick down to one heat and gone at another - SEEN STEAM IS
-## A HOT DRINK'S (feedback 0045, of 520084's mug: "We are 12 minutes in, and the coffee at the top-left has not stopped steaming yet"):
-## thick to 72 C and gone at 44, a mug steamed for 35 minutes and still gave most of it at twelve; a cup's steam thins from 80 and is
-## gone by 58, about 18 minutes in.
+## What steams is hot, and what is hot cools. Newton's cooling, a pure function of show time: what it starts at, the room it falls
+## toward, and how long a cup takes to lose all but a third of what it has over the room (34 minutes: coffee in a stoneware mug, 85
+## degrees C at the start, 41 at 40 minutes). A larger thing holds its heat for longer, as its volume does against its surface, so by
+## how far across it is. Its steam is thick down to one heat and gone at another, and seen steam is a hot drink's: thick to 72 C and gone
+## at 44 (a mug steams for 35 minutes); a cup's steam thins from 80 and is gone by 58, about 18 minutes in.
 const HOT_AT := 85.0
 const ROOM_AT := 21.0
 const CUP_COOLS := 2040.0
@@ -189,18 +178,16 @@ const MAX_PUFFS := 64
 const TRAIL_THIN := 0.3
 
 
-## An EASE in and out over 0..1: slow to start, slow to end - a hand's move, as MINIMUM JERK has it ([method
-## Hands.smooth]). The cubic in and out it had been stepped its acceleration from +12 to -12 at the middle of every
-## move: a jolt half way, which the user saw as "somewhat jerky" (2026-10-28).
+## An ease in and out over 0..1: slow to start, slow to end - a hand's move, as minimum jerk has it ([method Hands.smooth]). (A cubic
+## in and out steps its acceleration from +12 to -12 at the middle of the move, a jolt half way.)
 static func eased(x: float) -> float:
 	return Hands.smooth(x)
 
 
-## THROUGH ITS PLACES, NEVER STOPPING AT ONE (the-quiet-crucible 181083: the snowmelt's vial, carried the low way out
-## of its rack, "started, and stopped, and started, and stopped ... about 4 times"): each place's slope, for values
-## [param v] at times [param at] - Steffen's monotone cubic: where a value goes on the same way it goes on through,
-## where it holds or turns back it stops there, and it never passes beyond a place (a move kept low never dips through
-## what it is kept above). [param m0] and [param m1]: the slopes at the first and the last (at rest, zero).
+## Through its places, never stopping at one: each place's slope, for values [param v] at times [param at] - Steffen's monotone cubic:
+## where a value goes on the same way it goes on through, where it holds or turns back it stops there, and it never passes beyond a
+## place (a move kept low never dips through what it is kept above). [param m0] and [param m1]: the slopes at the first and the last
+## (at rest, zero).
 static func slopes(at: PackedFloat32Array, v: PackedVector3Array, m0 := Vector3.ZERO, m1 := Vector3.ZERO) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	out.resize(v.size())
@@ -259,13 +246,13 @@ static func ease_by(x: float, kind: String) -> float:
 	return eased(u)
 
 
-## THE NAMES a formula in a law may use ([Formula]).
+## The names a formula in a law may use ([Formula]).
 const VARS := ["t", "u", "d", "T", "n"]
 
 
 # --- describing ---------------------------------------------------------------------------------
 
-## WHAT A PART CAN DO, as a set dresser reads it ([TablePrompts.set_dresser], beside [method Props.describe]).
+## What a part can do, as a set dresser reads it ([TablePrompts.set_dresser], beside [method Props.describe]).
 static func describe_parts() -> String:
 	var lines := PackedStringArray()
 	lines.append("WORKING PARTS. A part (or a group) can do more than stand: give it a `name` (unique in its thing) and what it can do -")
@@ -275,8 +262,7 @@ static func describe_parts() -> String:
 	for k in STATES:
 		lines.append("  - %s: %s" % [k, STATES[k]])
 	lines.append("- `runs`: a law it follows ALL THE TIME, from the start of the video - a clock's hands keeping the video's own time (`clock`, each hand jointed as a hinge), a pendulum swinging, a mobile turning, a brew's glow breathing (`swing` on `glow`), the sand of an hourglass running down `to` a lower `fill` over the episode's minutes (`between` is then in seconds of the video). Anything that moves in the world moves here: a clock that runs, never one stopped. Never on a lit candle's wax: its flame stays where it was lit.")
-	# THE LAWS A PART MAY RUN, in full: told only that `runs` takes "a law", the first real set dresser wrote
-	# {"clock": "hour"} on each hand and {"glow": {"every": 7, "swing": [0.5, 0.8]}} on its coals, and nothing ran
+		# the laws a part may run, in full: an agent told only that `runs` takes "a law" writes shapes that run nothing
 	lines.append("  A `runs` law is {\"law\": one of these, its fields} (on a state, name the state in `state`; a list runs several):")
 	for k in RUNNING:
 		var row: Dictionary = LAWS[k]
@@ -291,12 +277,12 @@ static func describe_parts() -> String:
 		lines.append("  - %s: %s" % [k, String((EMITS[k] as Dictionary)["about"])])
 	lines.append("- material \"liquid\": what is IN a vessel - a brew, ink, oil, wine, water - as its own part filling the vessel's inside from its floor to the liquid's surface (a hollow part: its profile comes back down inside it); give it a `name` so the work can tint and light it. It is REAL: its surface stays level however its vessel is turned, it slops when its vessel is carried and turns when it is stirred, it pours over the rim once it is tipped far enough, and things that fall into it ring it, splash it, sink in it or float on it. A vessel's inside is as deep as the vessel is: draw it full only as far as it is full. A stopper across its mouth (a part of the same thing there) keeps it in, until the work takes the stopper away (`shown` 0).")
 	lines.append("- WHAT IS IN A THING IS WHAT IT IS (next/table_physics.md): a liquid is a liquid part, loose stuff poured in quantity is a `grains` part in its vessel, a loose thing lying in or on something is `loose`; each falls, pours, tumbles and lands for real when what holds it tips.")
-	# A BLADE CUTS (the user, 2026-10-29: "a knife and a cutting board ... cut it into pieces ... with real cutting dynamics")
+		# a blade cuts: a knife on a board cuts a thing into pieces with real cutting dynamics
 	lines.append("- `edge`: true on a BLADE - a knife's, a cleaver's, the blade of a pair of shears - built thin (a `box` or a `sheet` a millimeter or two across its flat) and its tool free or a whole thing. Brought down through a `loose` thing of a soft material (%s) - a root, a carrot, a fruit, a candle, a sheet of paper - it CUTS it along the blade, and the pieces come apart, fall and lie for real. Lay what is to be cut on a board the blade comes down onto." % ", ".join(PackedStringArray(["plant", "wax", "paper", "leather", "fabric"])))
 	return "\n".join(lines)
 
 
-## THE LAWS, as a puppeteer reads them: each with what it drives and its fields.
+## The laws, as a puppeteer reads them: each with what it drives and its fields.
 static func describe_laws() -> String:
 	var lines := PackedStringArray()
 	lines.append("LAWS (a track's `law`), and what each can drive - `angle` (a hinge), `offset` (a slide), `pose` (a free part or a whole thing), or a state:")
@@ -313,7 +299,7 @@ static func describe_laws() -> String:
 	return "\n".join(lines)
 
 
-## THE TABLE'S WORKING PARTS IN WORDS, from [param things] as the table makes them safe
+## The table's working parts in words, from [param things] as the table makes them safe
 ## ([method CardTable.sanitize_table]): each thing, where it was written to stand, whether it holds a flame,
 ## and each named part with its joint, points and states - for a puppeteer told the table before it is stood
 ## ([TablePrompts.puppeteer]; its `parts` tool says where each point is once it is).
@@ -365,7 +351,7 @@ static func _parts_text(parts: Array, lines: PackedStringArray, pad: String) -> 
 
 # --- sanitizing: a part's work -----------------------------------------------------------------
 
-## A PART'S WORK made safe, from what an agent wrote on it ([param p]): `{name, joint, points, start, runs,
+## A part's work made safe, from what an agent wrote on it ([param p]): `{name, joint, points, start, runs,
 ## emits}` - only what it has, `{}` when it does none of it. Notes for the agent go in [param notes].
 static func sanitize_work(p: Dictionary, notes: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var out := {}
@@ -421,7 +407,7 @@ static func sanitize_work(p: Dictionary, notes: PackedStringArray = PackedString
 				out["emits"]["hot"] = Props._num(e.get("hot"), HOT_AT, ROOM_AT, 100.0)
 				if e.get("kept_hot") == true:
 					out["emits"]["kept_hot"] = true
-	# LOOSE ([Particles]): not fixed to its thing - it lies where it is, falls, slides and tumbles when nothing holds it,
+	# Loose ([Particles]): not fixed to its thing - it lies where it is, falls, slides and tumbles when nothing holds it,
 	# and is picked up as a free part is (a strand's own `loose` is a number, how unkempt it lies: [method Props._sanitize_part])
 	var lv: Variant = p.get("loose")
 	if (lv is bool and lv) or ((lv is float or lv is int) and float(lv) >= 1.0):
@@ -453,7 +439,7 @@ static func _states(v: Variant) -> Dictionary:
 
 # --- sanitizing: laws and acts --------------------------------------------------------------------
 
-## A NUMBER A LAW TAKES, made safe: the number in [lo, hi], or a formula ([Formula]) kept compiled
+## A number a law takes, made safe: the number in [lo, hi], or a formula ([Formula]) kept compiled
 ## (`{f: steps, lo, hi}`) and held to the range when it is worked; [param fallback] when neither will do.
 static func _num(v: Variant, fallback: float, lo: float, hi: float, notes: PackedStringArray, what: String) -> Variant:
 	if v is String:
@@ -482,7 +468,7 @@ static func _between(v: Variant) -> Vector2:
 	return Vector2(0.0, 1.0)
 
 
-## A PLACE A LAW NAMES: a thing's point by name ("mortar.floor"), kept as text for [TableWork] to find, or
+## A place a law names: a thing's point by name ("mortar.floor"), kept as text for [TableWork] to find, or
 ## [x, y, z] centimeters on the table; null for neither.
 static func _place(v: Variant) -> Variant:
 	if v is String and SPOTS.has(String(v).strip_edges().to_lower()):
@@ -494,14 +480,14 @@ static func _place(v: Variant) -> Variant:
 	return null
 
 
-## A LAW made safe ([constant LAWS]): `{law, ...its fields}`, `{}` for one with no law ghost knows. [param
+## A law made safe ([constant LAWS]): `{law, ...its fields}`, `{}` for one with no law ghost knows. [param
 ## running]: a part's `runs`, timed by the video, where `between` and `over` are seconds of it.
 static func sanitize_law(raw: Variant, notes: PackedStringArray, running := false) -> Dictionary:
 	if not (raw is Dictionary):
 		return {}
 	var d: Dictionary = raw
 	var law := String(d.get("law", "")).strip_edges().to_lower()
-	# a hand written as the clock it is ({"clock": "minute"}, as the first real set dresser wrote all three)
+		# a hand written as the clock it is ({"clock": "minute"})
 	if law.is_empty() and d.get("clock") is String:
 		d = d.duplicate()
 		d["hand"] = d["clock"]
@@ -531,7 +517,7 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 				notes.append("a clock is a hand's `runs`, kept all through the video - not an act's")
 				return {}
 			out["hand"] = hand
-			# THE HAND MOVED ON from what it shows as built to the time the video starts at (clockwise, the short
+			# The hand moved on from what it shows as built to the time the video starts at (clockwise, the short
 			# way or the long - a hand reads the same either way)
 			var shows := _hours(d.get("shows"))
 			var at := _hours(d.get("time"))
@@ -553,7 +539,7 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 					out["from"] = _num(d.get("from"), 0.0, -36000.0, 36000.0, notes, "to's from")
 			out["ease"] = String(d.get("ease", "both")).strip_edges().to_lower() if String(d.get("ease", "both")).strip_edges().to_lower() in ["both", "in", "out", "none"] else "both"
 			if running:
-				# A RUNNING `to` IS TIMED BY THE VIDEO: from the opening over its `between` seconds (a candle
+				# A running `to` is timed by the video: from the opening over its `between` seconds (a candle
 				# burning down over twenty minutes)
 				var w: Variant = d.get("between", d.get("over"))
 				var span := Vector2(0.0, 600.0)
@@ -587,7 +573,7 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 			if running:
 				notes.append("a write is an act's, never a part's `runs`")
 				return {}
-			# ...A FORMULA OR A DRAWING, laid out by TeX ([TableInk]): what it writes, as the ink step reads it
+			# ...a formula or a drawing, laid out by TeX ([TableInk]): what it writes, as the ink step reads it
 			if d.has("draw") and not String(d.get("draw", "")).strip_edges().begins_with("<svg"):
 				notes.append("a write's `draw` is an <svg> - nothing is drawn")
 				return {}
@@ -596,7 +582,7 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 				return {}
 			var wrote := TableInk.raw_write(d)
 			var text := String(wrote.get("text", ""))
-			# ...OR A LINE CROSSED OUT: an earlier write of this sheet, found by its act's name ([method TableWork._order_writing])
+			# ...or a line crossed out: an earlier write of this sheet, found by its act's name ([method TableWork._order_writing])
 			if d.get("strike") is String and not String(d["strike"]).strip_edges().is_empty():
 				out["strike"] = String(d["strike"]).strip_edges()
 				text = ""
@@ -607,7 +593,7 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 			for k in ["tex", "draw"]:
 				if wrote.has(k):
 					out[k] = wrote[k]
-			# ...BY A PEN SEEN, where it names one ([method TableWork._pen_nib])
+			# ...by a pen seen, where it names one ([method TableWork._pen_nib])
 			if d.get("with") is String and not String(d["with"]).strip_edges().is_empty():
 				out["with"] = String(d["with"]).strip_edges()
 			var hand := String(d.get("hand", "neat")).strip_edges().to_lower()
@@ -715,7 +701,7 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 	return out
 
 
-## A TIME OF DAY as a clock's face is read, "H:MM" or "H:MM:SS", in hours - NAN for none.
+## A time of day as a clock's face is read, "H:MM" or "H:MM:SS", in hours - NAN for none.
 static func _hours(v: Variant) -> float:
 	if not (v is String):
 		return NAN
@@ -736,7 +722,7 @@ static func hand_degrees(hand: String, hours: float) -> float:
 	return fposmod(hours * 3600.0, 60.0) * 6.0
 
 
-## HOW HOT WHAT [param e] (an `emits`) RISES FROM IS, [param across] meters across, [param t] seconds into the video (degrees C): as it was written while something keeps it so.
+## How hot what [param e] (an `emits`) rises from is, [param across] meters across, [param t] seconds into the video (degrees C): as it was written while something keeps it so.
 static func temperature(e: Dictionary, across: float, t: float) -> float:
 	var hot := float(e.get("hot", HOT_AT))
 	if bool(e.get("kept_hot", false)):
@@ -744,12 +730,12 @@ static func temperature(e: Dictionary, across: float, t: float) -> float:
 	return ROOM_AT + (hot - ROOM_AT) * exp(-maxf(t, 0.0) / (CUP_COOLS * maxf(across, 0.01) / CUP_ACROSS))
 
 
-## HOW MUCH STEAM A THING AT [param temp] GIVES, as a share of all it can: none under [constant STEAM_GONE].
+## How much steam a thing at [param temp] gives, as a share of all it can: none under [constant STEAM_GONE].
 static func steam_share(temp: float) -> float:
 	return smoothstep(STEAM_GONE, STEAM_FULL, temp)
 
 
-## HOW LONG INTO THE VIDEO WHAT [param e] RISES FROM STOPS STEAMING, left alone (seconds): INF for what never cools, or does not steam.
+## How long into the video what [param e] rises from stops steaming, left alone (seconds): INF for what never cools, or does not steam.
 static func steam_stops_at(e: Dictionary, across: float) -> float:
 	if not bool((EMITS.get(String(e.get("kind", "")), {}) as Dictionary).get("cools", false)) or bool(e.get("kept_hot", false)):
 		return INF
@@ -759,7 +745,7 @@ static func steam_stops_at(e: Dictionary, across: float) -> float:
 	return log((hot - ROOM_AT) / (STEAM_GONE - ROOM_AT)) * CUP_COOLS * maxf(across, 0.01) / CUP_ACROSS
 
 
-## THE WAY A POINT GOES ([param d], a circle's or an aim's end): `at` a fixed place, round `around`, or
+## The way a point goes ([param d], a circle's or an aim's end): `at` a fixed place, round `around`, or
 ## through a path's keys - its fields into [param out].
 static func _point_law(d: Dictionary, out: Dictionary, notes: PackedStringArray) -> void:
 	if d.has("around"):
@@ -800,7 +786,7 @@ static func _point_law(d: Dictionary, out: Dictionary, notes: PackedStringArray)
 		out["gap"] = Props._num(d.get("gap"), 0.15, 0.0, 5.0)
 
 
-## THE ACTS an episode's puppeteer wrote (`acts.json`), made safe: `{acts: [{name, about, beat, length,
+## The acts an episode's puppeteer wrote (`acts.json`), made safe: `{acts: [{name, about, beat, length,
 ## under, tracks, cues}], notes}` - each act's `beat` "intro", "close" or a beat's place (1..[param beats]:
 ## a card's, or in a show that draws none its own - [method CardTable.beats]); a track `{thing, part, state,
 ## ...its law}`; a cue `{at, every, where, burst}`. What cannot be kept is said in `notes`.
@@ -829,7 +815,7 @@ static func sanitize_acts(raw: Variant, beats: int) -> Dictionary:
 			notes.append("%s: its `beat` is \"intro\", \"close\" or a beat's place 1-%d - left out" % [nm, beats])
 			continue
 		var act := {"name": nm, "about": Props._text(d.get("about", ""), 300), "beat": b}
-		# THE LAYERS IT PAINTS, where it was made from a painting (TableProducer.acts_from_painting): a reader's cue names one, and it
+		# The layers it paints, where it was made from a painting (TableProducer.acts_from_painting): a reader's cue names one, and it
 		# survives the painting made again where the act's own name, its place in line, does not (next/editing.md step 2)
 		var layers: Array = []
 		for l in (d.get("layers", []) if d.get("layers") is Array else []):
@@ -879,7 +865,7 @@ static func sanitize_acts(raw: Variant, beats: int) -> Dictionary:
 				cue["at"] = clampf(float(Props._num(cd.get("at"), 0.0, 0.0, 1.0)), 0.0, 1.0)
 			cues.append(cue)
 		act["cues"] = cues
-		# WHAT IS BUILT TAKES WHAT ITS STEPS TAKE, whatever was written: under its words, never quickened past them ([Assembly])
+		# What is built takes what its steps take, whatever was written: under its words, never quickened past them ([Assembly])
 		var ops: Array = []
 		for tr in tracks:
 			if String((tr as Dictionary)["law"]) == "assemble":
@@ -902,7 +888,7 @@ static func of_beat(acts: Array, beat: String) -> Array:
 
 # --- the laws, worked ---------------------------------------------------------------------------------
 
-## A SCALAR CHANNEL under [param law] at [param t] seconds into an act of [param d] seconds, from [param
+## A scalar channel under [param law] at [param t] seconds into an act of [param d] seconds, from [param
 ## from] (where it was as the act began) - an angle, an offset or a state's number. [param T]: show time.
 static func scalar(law: Dictionary, from: float, t: float, d: float, T: float) -> float:
 	var u := clampf(t / maxf(d, 1e-6), 0.0, 1.0)
@@ -914,7 +900,7 @@ static func scalar(law: Dictionary, from: float, t: float, d: float, T: float) -
 			var deg := num(law["rate"], vars) * t
 			var tick := int(law.get("tick", 0))
 			if tick > 0:
-				# A TICK: a jump to the next step, a quick settle past it and back (a clock's second hand) - either way round
+				# A tick: a jump to the next step, a quick settle past it and back (a clock's second hand) - either way round
 				var step := 360.0 / float(tick)
 				var at := absf(deg) / step
 				var whole := floorf(at)
@@ -923,7 +909,7 @@ static func scalar(law: Dictionary, from: float, t: float, d: float, T: float) -
 				deg = signf(deg) * (whole * step + settle)
 			out = base + deg
 		"clock":
-			# CLOCKWISE seen from where the hinge's axis points: a turn the other way about it
+			# Clockwise seen from where the hinge's axis points: a turn the other way about it
 			var hand: Dictionary = HANDS[String(law["hand"])]
 			var deg := float(hand["rate"]) * t
 			var tick := int(hand["tick"])
@@ -974,7 +960,7 @@ static func _key_value(keys: Array, i: int, vars: Dictionary, from: float) -> fl
 	return num(k["value"], vars) if k.has("value") else from
 
 
-## A COLOR under a `to` law at [param t] of [param d]: from [param from] toward its value.
+## A color under a `to` law at [param t] of [param d]: from [param from] toward its value.
 static func tint(law: Dictionary, from: Color, t: float, d: float, T: float) -> Color:
 	var u := clampf(t / maxf(d, 1e-6), 0.0, 1.0)
 	var a := Color.html(String(law["from"])) if law.has("from") and law["from"] is String else from
@@ -989,7 +975,7 @@ static func tint(law: Dictionary, from: Color, t: float, d: float, T: float) -> 
 	return a.lerp(b, s)
 
 
-## WHERE A POINT IS under a point law ([method _point_law]'s fields in [param law]) at [param t] of [param
+## Where a point is under a point law ([method _point_law]'s fields in [param law]) at [param t] of [param
 ## d]: round its middle [param center] (meters, the table's space, already found), at its fixed place
 ## [param fixed], or along its keys from [param rest] - every place in meters.
 static func point_at(law: Dictionary, center: Vector3, fixed: Variant, rest: Vector3, t: float, d: float, T: float) -> Vector3:
@@ -1001,7 +987,7 @@ static func point_at(law: Dictionary, center: Vector3, fixed: Variant, rest: Vec
 		var r: Vector2 = law["radius"]
 		var a := deg_to_rad(float(law.get("start", 0.0))) + float(law.get("dir", 1.0)) * TAU * t / maxf(period, 1e-6)
 		var lift := num(law.get("lift", 0.0), vars)
-		# A ROUND IS NEVER THE SAME TWICE ([method Hands.round_of]): the hand's own pace, reach and middle, the same for
+		# A round is never the same twice ([method Hands.round_of]): the hand's own pace, reach and middle, the same for
 		# both ends of a tool so it goes round whole
 		if law.has("_hand"):
 			var h := Hands.round_of(t, period, int(law["_hand"]))
@@ -1023,7 +1009,7 @@ static func point_at(law: Dictionary, center: Vector3, fixed: Variant, rest: Vec
 	return rest
 
 
-## A HAND'S UNSTEADINESS on a pose, for a law's `jitter`: a small wander of place (meters) at [param t].
+## A hand's unsteadiness on a pose, for a law's `jitter`: a small wander of place (meters) at [param t].
 static func jitter_of(law: Dictionary, t: float) -> Vector3:
 	var j := float(law.get("jitter", 0.0)) * 0.01
 	if j <= 0.0:

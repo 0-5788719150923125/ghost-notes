@@ -1,19 +1,20 @@
 extends RefCounted
 class_name TableAssembly
 
-## TableAssembly - THE PARTS OF A THING BUILT ON THE TABLE, drawn: a part of [TableWork]. The table's `assembly` stands here over the things as
-## they stood - its plate, each stock's place found on the table and what it holds. Instanced by kind and size: a tub of a thousand costs what
-## one thing costs, and only what moved is written ([method tick]).
+## TableAssembly - the parts of a thing built on the table, drawn: a part of [TableWork]. The table's `assembly` stands
+## here over the things as they stood: its plate, each stock's place found on the table and what it holds. Instanced
+## by kind and size (a tub of a thousand costs what one thing costs), and only what moved is written ([method tick]).
 ##
-## WHAT THE BRICKS DO IS RECORDED, THEN PLAYED ([method behind]): real bodies in a second process ([AssemblyBake]), which starts when a show
-## first wants them and whose stretches land here as they are written ([AssemblyTrack]); a show waits only for what it has reached, as it waits
-## for what is in things. A record is named by everything it depends on and kept ([method _start_bake]), so a note opened again costs nothing,
-## a new act costs what comes after it, and a preview asks for none at all: it sees where things rest ([method Assembly.pose_of]).
+## What the bricks do is recorded, then played ([method behind]): real bodies in a second process ([AssemblyBake]),
+## which starts when a show first wants them and whose stretches land here as they are written ([AssemblyTrack]). A
+## show waits only for what it has reached. A record is named by everything it depends on and kept ([method
+## _start_bake]), so a note opened again costs nothing and a new act costs what comes after it. A preview asks for no
+## record: it sees where things rest ([method Assembly.pose_of]).
 ##
-## A STOCK IN A THING takes its inside from the thing itself, by rays straight down from over it: any open container the set dresser
-## built (a tub, a crate, a dish, a tray) holds bricks without being told how it is shaped, and they lie on what is really there. A
-## deep one is filled over a false floor, deep enough to be dug in ([constant Assembly.IN_DEEP]) - a tub a dozen layers deep would be most of its
-## pieces unseen, and every one of them a body.
+## A stock in a thing takes its inside from the thing itself, by rays straight down from over it: any open container
+## the set dresser built (a tub, a crate, a dish, a tray) holds bricks without being told its shape. A deep one is
+## filled over a false floor, deep enough to be dug in ([constant Assembly.IN_DEEP]), so the pieces never run to a
+## body each for a dozen unseen layers.
 
 ## The most a stock's inside looks like, in cells a side, and what a surface must be under its thing's rim to be inside it (meters).
 const INSIDE_MOST := 170
@@ -80,14 +81,14 @@ func _init(owner: TableWork, table_spec: Dictionary) -> void:
 	spec = table_spec.duplicate(true)
 
 
-## WHAT STANDS WHERE ON THE TABLE BY THE TABLE'S OWN WRITING, before anything is built: where nothing else may stand ([method
+## What stands where on the table by the table's own writing, before anything is built: where nothing else may stand ([method
 ## TableThings.off_limits]) - the plate and each pile on the table, on the table in meters.
 static func keep_out(table_spec: Dictionary, at_base: Vector2) -> Array:
 	var out: Array = []
 	if table_spec.is_empty():
 		return out
 	var size: Array = (table_spec["base"] as Dictionary)["size"]
-	# ...ALL THE WAY ROUND: a plate turned sweeps its diagonal, and what stands inside that gets a corner through it
+	# All the way round: a plate turned sweeps its diagonal, and what stands inside that gets a corner through it
 	var reach := Vector2(float(size[0]), float(size[1])).length() * Assembly.STUD * 0.5 + 0.02
 	var half := Vector2(reach, reach)
 	out.append(Rect2(at_base - half, half * 2.0))
@@ -115,7 +116,7 @@ static func base_center_under(table_spec: Dictionary, cam: Transform3D) -> Vecto
 	return Vector2(aim.x, aim.z + TablePlan.WORK_AHEAD)
 
 
-## HOW FAR THE TOP OF THE MODEL RISES PAST WHAT THE LENS SEES WHOLE, where the plate stands (meters; 0 or less: all of it is seen), part by part: a tower at the far end of a plate is cut where the same tower at its near end is not.
+## How far the top of the model rises past what the lens sees whole, where the plate stands (meters; 0 or less: all of it is seen), part by part: a tower at the far end of a plate is cut where the same tower at its near end is not.
 static func model_cut_by(table_spec: Dictionary, cam: Transform3D, fov: float) -> float:
 	var m: Dictionary = table_spec.get("model", {}) if table_spec.get("model") is Dictionary else {}
 	if m.is_empty():
@@ -133,7 +134,7 @@ static func model_cut_by(table_spec: Dictionary, cam: Transform3D, fov: float) -
 	return most
 
 
-## STOOD OVER THE THINGS AS THEY ARE: the plate, each stock's place. The pieces come with the acts ([method perform]).
+## Stood over the things as they are: the plate, each stock's place. The pieces come with the acts ([method perform]).
 func stand() -> void:
 	root = Node3D.new()
 	root.name = "Assembly"
@@ -229,7 +230,7 @@ func _heap_of(sd: Dictionary) -> AssemblyHeap:
 				low_at = j * cols + i
 	if low_at < 0 or rim_y - low < UNDER_RIM:
 		return null
-	# THE INSIDE: flooded from its lowest place through what lies under the rim - never what is round it, past its walls
+	# The inside: flooded from its lowest place through what lies under the rim, never what is round it past its walls
 	var seen := {}
 	var open: Array = [low_at]
 	seen[low_at] = true
@@ -259,7 +260,7 @@ func _heap_of(sd: Dictionary) -> AssemblyHeap:
 	for c in seen:
 		ground[int(c)] = heights[int(c)]
 		sum += heights[int(c)]
-	# A FALSE FLOOR, under the pieces as full as it was written: what is further down than anyone sees is not there
+	# A false floor under the pieces, as full as it was written: what is further down than anyone sees is not there
 	var floor_mean := sum / float(seen.size())
 	var fill := float(sd.get("fill", 0.85))
 	var reach_to := lerpf(floor_mean, rim_y, fill)
@@ -285,8 +286,8 @@ func _down_on(ti: int, p: Vector3) -> float:
 	return NAN if hit.is_empty() else float((hit["position"] as Vector3).y)
 
 
-## `aside`: a small pile on the table beside the plate, where the table is clear of what stands on it: on the reader's right, else their left, else nearer them. What
-## is put aside really falls and lies there, and against a tub written beside the plate it had leaned on the wall (a 563019 washtub).
+## `aside`: a small pile on the table beside the plate, where the table is clear of what stands on it: on the reader's
+## right, else their left, else nearer them. What is put aside really falls and lies there.
 func _aside_heap(at: Vector2, size: Array, yaw: float, obstacles: Array, heaps: Dictionary) -> AssemblyHeap:
 	var half := Vector2(float(size[0]), float(size[1])) * Assembly.STUD * 0.5
 	var across := absf(cos(yaw)) * half.x + absf(sin(yaw)) * half.y + ASIDE_R + 0.015
@@ -309,7 +310,7 @@ func _aside_heap(at: Vector2, size: Array, yaw: float, obstacles: Array, heaps: 
 	return AssemblyHeap.pile("aside", places[0], ASIDE_R)
 
 
-## THE FALSE FLOORS, drawn: a dark surface under the pieces, in what the pieces leave showing.
+## The false floors, drawn: a dark surface under the pieces, in what the pieces leave showing.
 func _beds(heaps: Dictionary) -> void:
 	for k in heaps:
 		var heap: AssemblyHeap = heaps[k]
@@ -366,7 +367,7 @@ func _mean_color() -> Color:
 	return Color(sum.r / float(maxi(n, 1)), sum.g / float(maxi(n, 1)), sum.b / float(maxi(n, 1)))
 
 
-## THE BUILD: acts [param acts] walked ([method Assembly.perform]) and every piece they come to drawn where it begins. Each act gets
+## The build: acts [param acts] walked ([method Assembly.perform]) and every piece they come to drawn where it begins. Each act gets
 ## what it was found to come to, so the schedule knows what it asks.
 func perform(acts: Array) -> void:
 	if log == null:
@@ -477,7 +478,7 @@ func _draw_pieces() -> void:
 	_built = true
 
 
-## THE ACTS PLACED IN TIME ([method Assembly.lay]), what is under way left alone.
+## The acts placed in time ([method Assembly.lay]), what is under way left alone.
 func lay(runs: Array, acts: Array, now: float) -> void:
 	if log == null:
 		return
@@ -489,7 +490,7 @@ func lay(runs: Array, acts: Array, now: float) -> void:
 
 # --- the record -----------------------------------------------------------------------------------------------------
 
-## WHETHER THE SHOW MUST WAIT FOR THE BRICKS at [param t]: asking starts the record. In a render it is waited for here, whole: a render's frames
+## Whether the show must wait for the bricks at [param t]: asking starts the record. In a render it is waited for here, whole: a render's frames
 ## must be the show's. Called only by a table on the stage, so a preview never starts one.
 func behind(t: float) -> bool:
 	if plan_only or log == null or not _built or log.pieces.is_empty():
@@ -525,7 +526,7 @@ func _sync() -> bool:
 	return work.medium == null or not work.medium.is_inside_tree() or TablePhysics.render_waits()
 
 
-## WHAT THE RECORD IS CALLED: everything it depends on, the table it stands on, the pieces it has, the seed - and what it does, the code.
+## What the record is called: everything it depends on, the table it stands on, the pieces it has, the seed - and what it does, the code.
 func _world_key() -> int:
 	var parts: Array = [BAKE_VERSION, log.seed_value, var_to_str(spec), var_to_str(log.world["base_at"]), var_to_str(log.world["yaw"]), var_to_str(log.world["lens"]), var_to_str(log.world["fov"])]
 	for path in ["res://src/table/assembly_bake.gd", "res://src/table/assembly_world.gd"]:
@@ -543,7 +544,7 @@ func _world_key() -> int:
 static func _root_of_bakes() -> String:
 	if not bake_root.is_empty():
 		return bake_root
-	# ...a test's own, as [method TablePhysics.render_waits] knows one, and named without the autoload a gate's first compile has not got yet
+	# A test's own, as [method TablePhysics.render_waits] knows one, named without the autoload a gate's first compile has not got yet
 	var probe := false
 	for a in OS.get_cmdline_args():
 		if a.trim_prefix("res://").begins_with("tests/"):
@@ -551,7 +552,7 @@ static func _root_of_bakes() -> String:
 	return ProjectSettings.globalize_path(PROBE_BAKES if probe else "user://assembly_bakes")
 
 
-## THE RECORD BEGUN, or gone on from: a process of its own, handed the table's shapes and every step. What is already there is simply read.
+## The record begun, or gone on from: a process of its own, handed the table's shapes and every step. What is already there is simply read.
 func _start_bake() -> void:
 	_bake_started = true
 	_bake_failed = false
@@ -607,7 +608,7 @@ static func _prune(root_dir: String) -> void:
 		DirAccess.remove_absolute(old)
 
 
-## WHAT THE RECORD NEEDS, all of it plain data: no node crosses to the other process. [param solids] each `{faces (meters), sound}`, what stands on the table.
+## What the record needs, all of it plain data: no node crosses to the other process. [param solids] each `{faces (meters), sound}`, what stands on the table.
 static func request_of(log: Assembly, table_spec: Dictionary, solids: Array, dir: String, names: PackedInt64Array) -> Dictionary:
 	var pieces: Array = []
 	var stock_of := PackedStringArray()
@@ -647,13 +648,13 @@ func _request() -> Dictionary:
 				faces[i] = faces[i] / TableWork.RAY_SCALE
 			solids.append({"faces": faces, "sound": _sound_of(ti), "thing": String((work.things[ti] as Dictionary)["name"])})
 	var out := request_of(log, spec, solids, _dir, _names)
-	# THE TABLE AS IT IS DRAWN: what goes past its edge falls off it
+	# The table as it is drawn: what goes past its edge falls off it
 	if work.medium != null and work.medium._top is Dictionary and not (work.medium._top as Dictionary).is_empty():
 		out["top"] = Tables.top_outline(work.medium._top)
 	return out
 
 
-## WHERE WHAT IS BUILT HERE EVER STANDS: the middle of the plate (x, z), how far round it the plate reaches however it is turned, and how high anything on it comes (meters). A thing an act moves is [TablePhysics]'s
+## Where what is built here ever stands: the middle of the plate (x, z), how far round it the plate reaches however it is turned, and how high anything on it comes (meters). A thing an act moves is [TablePhysics]'s
 ## and the bricks are not, so this is all such a thing can know of them.
 func built_reach() -> Dictionary:
 	var size: Array = (spec["base"] as Dictionary)["size"]
@@ -678,7 +679,7 @@ func _sound_of(ti: int) -> String:
 	return "painted"
 
 
-## THE NEXT STRETCH THERE IS, read and added: false when there is none. [param now]: on this thread, as a record is first opened and in a render;
+## The next stretch there is, read and added: false when there is none. [param now]: on this thread, as a record is first opened and in a render;
 ## otherwise on a worker ([method _pump]), and a frame only pays for adding it.
 func _land_next(now: bool) -> bool:
 	if not track.stock_ready:
@@ -732,7 +733,7 @@ func _after_landing() -> void:
 	_last_tau = NAN
 
 
-## WHAT HAS LANDED SINCE, read on a worker and added here. The app never waits on a disk.
+## What has landed since, read on a worker and added here. The app never waits on a disk.
 func _pump() -> void:
 	if not _bake_started or _bake_whole or _bake_failed or track == null:
 		return
@@ -772,7 +773,7 @@ func _read_stretch(path: String) -> void:
 	_mutex.unlock()
 
 
-## ALL OF IT, here and now: a render, and a gate.
+## All of it, here and now: a render, and a gate.
 func _wait_whole() -> void:
 	if _bake_whole or _bake_failed:
 		return
@@ -811,7 +812,7 @@ func clear() -> void:
 
 # --- a frame --------------------------------------------------------------------------------------------------------
 
-## THE FRAME AT [param t]: what the record has moved since the last frame, every piece after a jump in time, and while the plate turns, what is on it. With
+## The frame at [param t]: what the record has moved since the last frame, every piece after a jump in time, and while the plate turns, what is on it. With
 ## no record (a preview), where the plan has things at rest.
 func tick(t: float) -> void:
 	if log == null or not _built or log.steps.is_empty():
@@ -865,7 +866,7 @@ func _tick_recorded(t: float) -> void:
 	_last_tau = tau
 
 
-## WHAT IS IN HAND IS DONE SOMETHING WITH ([Fingers]), the record going or stopped: it is only the record that stops.
+## What is in hand is done something with ([Fingers]), the record going or stopped: it is only the record that stops.
 func _held_up(t: float, tau: float, plate: Transform3D) -> void:
 	var held := log.held_at(t)
 	var id := int(held.get("id", -1))
@@ -883,7 +884,7 @@ func _write(id: int, xf: Transform3D) -> void:
 
 # --- the words -------------------------------------------------------------------------------------
 
-## THE TABLE'S ASSEMBLY, as a puppeteer reads it: the plate, the stocks, and the model as it stands now.
+## The table's assembly, as a puppeteer reads it: the plate, the stocks, and the model as it stands now.
 func report() -> String:
 	if log == null:
 		return ""
@@ -905,7 +906,7 @@ func report() -> String:
 	return "\n".join(lines)
 
 
-## WHAT IS HEARD between [param t0] and [param t1]: what really happened then, on the record - `[{t, kind, against, at, size, strength, weight}]`. A stop has
+## What is heard between [param t0] and [param t1]: what really happened then, on the record - `[{t, kind, against, at, size, strength, weight}]`. A stop has
 ## no record, so a stop has no sound. The hardest few of a crowded moment: past that nobody hears another.
 func sounds_in(t0: float, t1: float) -> Array:
 	if log == null or not _built or track == null or not track.stock_ready:

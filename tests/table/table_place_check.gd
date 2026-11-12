@@ -1,52 +1,36 @@
 extends Node
 
-## WHERE THINGS STAND ON THE CARD TABLE, HOW BRIGHT ITS CANDLES MAY BE, HOW THEY FLICKER, AND THAT
-## THE CARDS GO ROUND WHAT STANDS. Reported 2026-10-04: "candles pushed all the way to the edge of
-## the table"; then a candle that ran out of room stood in FRONT of the cards, where it became the
-## key light and blew out the card held up to the lens; a key candle on pale boards flooded half the
-## frame through the bloom (the same light on felt reads as a candle); "the candles flicker at
-## exactly the same rate"; and, 2026-10-05, cards clipping through candles in the spread shuffle.
-## Over many seeds, on a fixture of its own:
-##
-##   - every candle a look asks for stands, up to the most a look may ask for; a set dresser's
-##     table stands nearly whole - on the cloth, off everywhere the cards go, nothing standing in
-##     another, no group in front of another in the picture;
-##   - no lit thing nearer the reader than the middle of the table, all wholly in the frame; any
-##     other thing never cut by the frame's top, mostly in it - and some cut by its side;
-##   - every thing throws a shadow from every light but its own (it floated, casting none), and a
-##     lit thing is ONE light however many wicks it has (every wick still burns);
-##   - candles standing together light the cloth no hotter than it takes, all at once - against
-##     each at its own limit as the control, which overheats it;
-##   - in a wash no card passes through anything standing, and every card still ends in the deck -
-##     against the same washes with the cards let through, which must cross;
-##   - no candle is brighter than the cloth by it allows ([constant TableMedium.HEAT]), the key
-##     is a candle only where its cloth can take [constant TableLight.KEY_MIN], and every candle
-##     and the lamp throw shadows. Two-sided: on a pale cloth the lamp must be the key, on a dark one a
-##     candle at [constant TableMedium.KEY_ENERGY] - and the retired rule (nearest the middle, at
-##     full light) must break the cap on this fixture, or the half-pale cloth tests nothing;
-##   - no two flames keep time: each its own tempo, its drafts its own - against the retired
-##     flicker (one tempo for all) as the control; and the room's out-of-shot candles are out of
-##     shot, throw no shadows, and flicker too;
-##   - the outro: lit while the voice speaks, fading to black after its last word and black as the
-##     outro runs out; opening on its title, the channel's name over the intro and never again (it
-##     came back at the end); the table thrown out of focus all the while the name is up, the title
-##     screen's moment included, the blur lifting as the focus pulls and off for the reading - a box's
-##     reading as a deck's, though a box is never shuffled (control: its shuffle time is none); and
-##     opening on nothing (a note's default, 2026-10-28), no name and the table sharp throughout.
+## The gate of where things stand on the card table, how bright its candles may be, how they flicker, and that cards go round what
+## stands. Over many seeds, on a fixture of its own:
 ##
 ##   tests/run_boot_probe.sh tests/table/table_place_check.gd 1800
 ##
-## (1800 s: it took 563-608 s alone on 2026-10-07, at HEAD as with that day's changes - 600 timed it out;
-## and on 2026-10-14 900 timed it out: every episode it loads plans its shuffle, and a wash is now of
-## the whole deck, 78 cards, some 2 s a plan.)
+## (1800 s: every episode it loads plans its shuffle, a wash of the whole 78-card deck, some 2 s a plan.) A boot probe (the medium
+## reaches the Director); no GPU needed - placement is projection arithmetic and the cloth's lightness is read from its file.
 ##
-## A BOOT probe (the medium reaches the Director); no GPU needed - placement is projection
-## arithmetic and the cloth's lightness is read from its file.
+##   - every candle a look asks for stands, up to the most a look may ask for; a set dresser's table stands nearly whole - on the
+##     cloth, off everywhere the cards go, nothing standing in another, no group in front of another in the picture;
+##   - no lit thing nearer the reader than the middle of the table, all wholly in the frame; any other thing never cut by the
+##     frame's top, mostly in it - and some cut by its side;
+##   - every thing throws a shadow from every light but its own, and a lit thing is one light however many wicks it has;
+##   - candles standing together light the cloth no hotter than it takes, all at once - against each at its own limit as the
+##     control, which overheats it;
+##   - in a wash no card passes through anything standing, and every card still ends in the deck - against the same washes with the
+##     cards let through, which must cross;
+##   - no candle is brighter than the cloth allows ([constant TableMedium.HEAT]), the key is a candle only where its cloth can take
+##     [constant TableLight.KEY_MIN], and every candle and the lamp throw shadows. Two-sided: on a pale cloth the lamp must be the
+##     key, on a dark one a candle at [constant TableMedium.KEY_ENERGY];
+##   - no two flames keep time: each its own tempo, its drafts its own (control: one tempo for all); the room's out-of-shot
+##     candles are out of shot, throw no shadows, and flicker too;
+##   - the outro: lit while the voice speaks, fading to black after its last word; opening on its title, the channel's name over
+##     the intro and never again; the table out of focus all the while the name is up, the blur lifting as the focus pulls and off
+##     for the reading - a box's reading as a deck's, though a box is never shuffled (control: its shuffle time is none); and
+##     opening on nothing (a note's default), no name and the table sharp throughout.
 
 const DIR := "user://table_place_check"
 const SEEDS := 40
 
-## A SET TABLE as a set dresser writes one: groups, lone things, two lit candles and a third in a
+## A set table as a set dresser writes one: groups, lone things, two lit candles and a third in a
 ## holder, things wide and low beside the cards (where a wash reaches them).
 const SET_TABLE := {"materials": {"brass": {"kind": "metal", "color": "#b48a43"}, "wax": {"kind": "wax", "color": "#e8dcc0"},
 	"quartz": {"kind": "crystal", "color": "#d8c8f0", "clarity": 0.5}, "clay": {"kind": "ceramic", "color": "#8a5a3a"},
@@ -71,7 +55,7 @@ const SET_TABLE := {"materials": {"brass": {"kind": "metal", "color": "#b48a43"}
 			{"shape": "lathe", "profile": [[0, 0], [1.2, 0], [1.2, 0.2], [0, 0.2]], "material": "brass",
 				"copies": {"scatter": {"count": 5, "radius": 4}}}]},
 	]}
-## THREE CANDLES IN ONE GROUP, where their pools overlap.
+## Three candles in one group, where their pools overlap.
 const TOGETHER := {"materials": {"wax": {"kind": "wax", "color": "#e8dcc0"}}, "things": [
 	{"name": "a tall pillar", "place": "back left", "group": "c", "parts": [{"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 9], [0, 9]], "material": "wax", "wick": true}]},
 	{"name": "a pillar", "place": "back left", "group": "c", "parts": [{"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 7], [0, 7]], "material": "wax", "wick": true}]},
@@ -133,7 +117,7 @@ func _run() -> void:
 	_ok(set["off_cloth"] == 0 and set["on_cards"] == 0, "all on the cloth, none where the cards go (%d off, %d on)" % [set["off_cloth"], set["on_cards"]])
 	_ok(set["touching"] == 0, "none standing in another (%d)" % set["touching"])
 	_ok(set["out"] == 0 and set["overlap"] == 0, "lit things wholly in the frame, the rest mostly, no group in front of another (%d, %d)" % [set["out"], set["overlap"]])
-	# two-sided: a table pushed out to its sides runs off the frame now and then (2026-10-08)
+	# two-sided: a table pushed out to its sides runs off the frame now and then
 	_ok(set["cut"] > 0, "some things run off the frame's side (%d)" % set["cut"])
 	_ok(set["front"] == 0, "no lit thing in front of the middle (%d)" % set["front"])
 	_ok(set["own_shadow"] == 0 and set["no_shadow"] == 0, "every thing in every flame's shadows but its own (%d own, %d left out)"
@@ -175,8 +159,7 @@ func _run() -> void:
 	_ok(st["over_cap"] == 0, "no candle brighter than the stripe allows (%d)" % st["over_cap"])
 	_ok(st["heat_at"] < st["heat_aim"] * 0.8 and SEEDS - st["lamp_keys"] >= int(SEEDS * 0.75), "candles keep off the stripe: the cloth by them %.2f, at their zones' middles %.2f (a candle the key %d/%d)"
 		% [st["heat_at"], st["heat_aim"], SEEDS - st["lamp_keys"], SEEDS])
-	# the measure itself, at the stripe's near edge: the cloth's AVERAGE round a candle there (the
-	# retired measure) let a key burn; its hottest spot does not
+	# the measure itself, at the stripe's near edge: the hottest spot of the cloth round a candle, not its average
 	var edge := Vector3(0.27, 0.0, (0.26 - 0.5) * TableShuffle.CLOTH.y + Tables.ORIGIN.y)
 	var old_cap := 0.27 / maxf(_mean_lum(edge, 0.1), 0.02)
 	var new_cap := TableMedium.HEAT / maxf(medium._light_part._heat(edge, 0.13), 0.05)
@@ -278,9 +261,8 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 			var aim := CardTable.zone_aim(String(t["place"]), medium._plan.deck_base)
 			n["heat_at"] += medium._light_part._heat(Vector3(p.x, 0.0, p.z), TableLight.HEAT_H)
 			n["heat_aim"] += medium._light_part._heat(Vector3(aim.x, 0.0, aim.y), TableLight.HEAT_H)
-		# THE CLOTH UNDER ALL THE FLAMES AT ONCE, cell by cell - and, as the control, under each alone at
-		# its own limit, the rule before candles stood together: the key (nearest the middle of those
-		# whose cloth can take it) at full light, the rest at the fill, each capped by its own cloth
+		# The cloth under all the flames at once, cell by cell - and, as the control, under each alone at its own limit: the key (nearest the
+		# middle of those whose cloth can take it) at full light, the rest at the fill, each capped by its own cloth
 		var total := {}
 		var alone := {}
 		var fields: Array = []
@@ -349,11 +331,9 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 	return n
 
 
-## NOTHING PASSES THROUGH WHAT STANDS ON THE TABLE. Washes planned over [constant SEEDS] tables of
-## [param table]'s things: every card at every sample, its real turned rectangle against every
-## thing's foot - none may cross one (a hair of tolerance), and every card still ends in the deck.
-## The control is the same washes with the cards let through: they must cross, or this fixture never
-## put a card near a thing and the check holds nothing.
+## Nothing passes through what stands on the table: washes planned over [constant SEEDS] tables of [param table]'s things - every card at
+## every sample, its real turned rectangle against every thing's foot - none may cross one (a hair of tolerance), and every card still ends
+## in the deck. The control is the same washes with the cards let through: they must cross, or the fixture holds nothing.
 func _cards_go_round(table: Dictionary) -> Dictionary:
 	var dir := DIR.path_join("dark")
 	var tf := dir.path_join("table.json")
@@ -416,10 +396,9 @@ func _sat_strict(a: PackedVector2Array, b: PackedVector2Array) -> bool:
 	return true
 
 
-## NO TWO FLAMES KEEP TIME. Over a minute at 30 frames a second, on [constant SEEDS] tables of
-## four candles: each flame's TEMPO (how often its brightness crosses its own mean) must differ
-## from the others', and their drafts must not come together more than chance would bring them.
-## The control is the retired flicker on the same flames - one tempo for all - which must not.
+## No two flames keep time: over a minute at 30 frames a second, on [constant SEEDS] tables of four candles, each flame's tempo (how often
+## its brightness crosses its own mean) must differ from the others', and their drafts must not come together more than chance would bring
+## them. The control is one tempo for all, which must fail.
 func _flicker() -> void:
 	var dir := DIR.path_join("dark")
 	var ratios := PackedFloat32Array()
@@ -512,12 +491,10 @@ func _mean_lum(at: Vector3, r: float) -> float:
 	return sum / maxf(1.0, float(n))
 
 
-## THE OUTRO, on a reading whose word times are known: the table's brightness from the end fade,
-## and the title's from its own curve, sampled across the whole reading.
-## THE ROOM IS SEEN FROM THE READER'S EYE: a picture asked for level (`backdrop.json` beside it)
-## stands on an upright plane straight ahead of the camera, its middle at the eye's height and as
-## wide as its lens saw - two-sided: with no view beside it, the picture made before keeps its old
-## place, square to the tilted camera.
+## The outro, on a reading whose word times are known: the table's brightness from the end fade, and the title's from its own curve, sampled
+## across the whole reading. The room is seen from the reader's eye: a picture asked for level (`backdrop.json` beside it) stands on an
+## upright plane straight ahead of the camera, its middle at the eye's height and as wide as its lens saw - two-sided: with no view beside
+## it, the picture keeps its place, square to the tilted camera.
 func _backdrop() -> void:
 	var dir := DIR.path_join("dark")
 	var vf := dir.path_join("backdrop.json")
@@ -586,8 +563,8 @@ func _outro() -> void:
 		shown += 1 if medium._title_alpha(t) > 0.001 else 0
 		t += 0.25
 	_ok(shown == 0, "and never again, the end included (%d moments)" % shown)
-	# THE INTRO IS A WASH OF COLOR all the while the name is up - the title screen's moment with it - and
-	# lifts as the focus pulls, never widening again, off for the whole reading
+	# The intro is a wash of color all the while the name is up - the title screen's moment with it - and lifts as the focus pulls, never
+	# widening again, off for the whole reading
 	var wide := CardTable.TITLE_BLUR
 	var full := 0
 	var moments := 0
@@ -612,9 +589,8 @@ func _outro() -> void:
 		was = sg
 		t1 += 0.05
 	_ok(widened == 0 and was == 0.0, "the blur lifts as the focus pulls, never widening (%d steps back; %.4f left)" % [widened, was])
-	# THE TABLE SEEN FIRST (2026-11-07, the user: "The speaking starts IMMEDIATELY after the title screen disappears"): the voice rests
-	# a settle after the intro, and the name is gone and the table sharp through it, before the shuffle and the first word - THE
-	# CONTROL: timed off the shuffle, as it had been, the name is still up 2.5 s before the first word
+	# The table seen first: the voice rests a settle after the intro, and the name is gone and the table sharp through it, before the shuffle
+	# and the first word - the control: timed off the shuffle, the name is still up 2.5 s before the first word
 	var first_w: float = medium._follow.st0[0]
 	var sharp_at := ie + TableMedium.FOCUS_PULL.y
 	_ok(String(CardReading.parse(_script)["speakable"]).begins_with("<!-- action-hold: %s -->" % String.num(Openings.SETTLE, 2)),
@@ -629,8 +605,7 @@ func _outro() -> void:
 		on += 1 if medium._blur.visible else 0
 		t1 += 0.5
 	_ok(on == 0, "and is off for the reading (%d moments on)" % on)
-	# A BOX OPENS, IT IS NOT SHUFFLED: the name and the blur were timed off the shuffle, and a box
-	# reading (The Shoebox, 2026-10-09) came up from black on a sharp table with no name at all
+	# A box opens, it is not shuffled: the name and the blur are timed off the opening, not a shuffle a box never has
 	var box := CardReading.compose([{"kind": "open", "card": 0, "text": "Open the box."},
 		{"kind": "draw", "card": 1, "text": "One."}, {"kind": "draw", "card": 2, "text": "Two."},
 		{"kind": "draw", "card": 3, "text": "Three."}, {"kind": "spread", "card": 0, "text": "Done."}])
@@ -650,7 +625,7 @@ func _outro() -> void:
 	medium._tick_focus(to + TableMedium.FOCUS_PULL.y + 0.1)
 	_ok(medium._title_alpha(to + 1.0) < 0.001 and not medium._blur.visible,
 		"and the name is gone and the table sharp once the box is open")
-	# OPENING ON NOTHING, a note's default: no name and no blur through the intro, the table sharp
+	# Opening on nothing, a note's default: no name and no blur through the intro, the table sharp
 	Director.opening = "none"
 	var bare := 0
 	t1 = 0.0
@@ -707,11 +682,9 @@ func _inside(r: Rect2) -> bool:
 	return r.position.x >= 0.0 and r.position.y >= 0.0 and r.end.x <= 1.0 and r.end.y <= 1.0
 
 
-## Four cloths - half felt and half pale boards (as the episode that found the flood), all pale,
-## all dark, and a near-black blanket with a cream stripe toward its far edge (as the one that blew
-## out behind its candles). Painted landscape, as the painters make a cloth now, and laid out in
-## the CLOTH's own fractions through [method CardTable.cloth_crop] - the stripe was once drawn in
-## the picture's top rows, which the cloth no longer shows since its pixels are kept square.
+## Four cloths: half felt and half pale boards, all pale, all dark, and a near-black blanket with a cream stripe toward its far edge.
+## Painted landscape, as the painters make a cloth now, and laid out in the cloth's own fractions through [method CardTable.cloth_crop] (the
+## picture's top rows are not shown, since its pixels are kept square).
 func _fixture() -> void:
 	_clear()
 	var felt := Color(0.36, 0.5, 0.14)     # the episode's felt: linear luminance 0.18

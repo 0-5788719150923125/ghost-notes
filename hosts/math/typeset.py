@@ -21,10 +21,10 @@ glyphs and rules in, one count over both - a fraction's bar comes between its nu
 denominator, which is the order a hand writes them in. A glyph is its font (`f`, a
 TFM name such as cmmi10), its code (`c`), its PostScript name (`n` - "alpha", "summationdisplay",
 "radicalbig"), its baseline origin (`x`, `y`), the size it was set at (`s`) and its box from the
-TFM (`w`, `ht`, `dp`). THE NAME IS WHAT A HAND READS: the desk's ink draws a pen stroke for the
+TFM (`w`, `ht`, `dp`). The name is what a hand reads: the desk's ink draws a pen stroke for the
 glyph TeX chose, in the box TeX gave it, so the structure is TeX's and the writing is the hand's.
 With "outlines": true the fonts' outline contours come back too (`fonts`), for a glyph no hand has.
-A PART THE PEN CAN POINT AT: `\\pin{name}{...}` around part of a formula sets the part as it would
+A part the pen can point at: `\\pin{name}{...}` around part of a formula sets the part as it would
 be set anyway and names it - the record's `anchors` is {name: [x0, y0, x1, y1]}, the box of every
 glyph and rule set inside it (a drawing's anchors are its elements' ids, figure.py's).
 A drawing's record has `figure: true` and its `paths` beside its labels' glyphs and rules:

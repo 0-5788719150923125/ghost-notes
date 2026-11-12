@@ -1,10 +1,10 @@
 extends VBoxContainer
 class_name PacingCard
 
-## PacingCard - THE PANEL'S PACING CARD: the numbers the note's show may be paced by, as rows ([TuneSection], handed by whatever reads
-## them), each a slider within its bounds and unset at its default. The card is shown only while some section offers a row, and hidden
-## otherwise: a show with nothing to pace has no Pacing card. Looked at again every second (what a section offers follows what is
-## being shown - an episode picked, acts made again), and drawn again only when that changed.
+## PacingCard - the panel's Pacing card: the numbers the note's show may be paced by, as rows ([TuneSection],
+## handed by whatever reads them), each a slider within its bounds and unset at its default. The card is shown
+## only while some section offers a row. Looked at again every second (what a section offers follows what is
+## being shown), and drawn again only when that changed.
 
 ## What the card is for, on its title bar and its chip ([member Card.blurb]).
 const BLURB := "The numbers this show can be paced by, each at its default until you move it. Shown while something on the note offers one."
@@ -43,7 +43,7 @@ func _process(_delta: float) -> void:
 		refresh()
 
 
-## WHAT IS OFFERED, LOOKED AT AGAIN: the card shown with rows and hidden without, the rows drawn again where they or their values
+## What is offered, looked at again: the card shown with rows and hidden without, the rows drawn again where they or their values
 ## changed ([param force]: drawn again regardless).
 func refresh(force := false) -> void:
 	var rows := {}

@@ -1,32 +1,23 @@
 extends Node
 
-## row_check - the bottom-right row (next/notes.md step 4): one container, one panel at a time.
+## row_check - the bottom-right row (next/notes.md): one container, one panel at a time.
 ##
 ##   tests/run_boot_probe.sh tests/app/row_check.gd 90
 ##
-## THE GEOMETRY, measured: the buttons stand in Shell.ROW_ORDER, left to right, NO HOLE where a
-## hidden one would be (each used to pin itself at a fixed offset, so a hidden ⤓ left a gap),
-## nothing over anything else, one bottom edge, the right end ROW_MARGIN from the corner - and a
-## claim on the bottom of the frame lifts the whole row as one.
-##
-## THE ROW CLEARS THE TRANSPORT'S RAIL: while the show is timed the row stands above the rail's
-## whole click zone (`Transport.room()`), not merely above its pixels - a click on a button's bottom
-## edge once seeked instead - and settles back when the show is untimed (a reported repeat,
-## 2026-10-09). The control: a row on the margin alone is inside that zone.
-##
-## ONE PANEL ABOVE THE ROW AT A TIME: the Environment, the Graphics, the console's log and the Assistant's panel,
-## each opened in turn by its own button, and every other one closed by it.
-##
-## THE STAGE ALONE WHILE IT PLAYS ([constant Shell.FADES]): a show playing with the side panel hidden and no hand on the
-## controls fades the row, the panel's corner and the transport to nothing after Shell.IDLE_AFTER, and the shell hides the
-## pointer - with the claim on the bottom edge kept, so nothing moves. The control is the user's condition: the same play
-## with the panel showing stays up. So do a pause, a show catching up, a panel above the row, and the pointer on the rail.
-## A move, a key or a click brings it back; a pointer drifting a pixel does not. Time is stepped by hand (`_watch`), never
-## waited for.
-##
-## `[deps] open`, READ BACK AFTER A RESTART: closing the Environment with its button is remembered
-## and a fresh Chrome comes up with it closed; opening it is remembered too. (A probe's Settings
-## never reach the disk; a fresh Chrome reads the same in-memory table the next launch would.)
+## - The geometry, measured: the buttons stand in Shell.ROW_ORDER, left to right, with no hole where a hidden
+##   one would be, nothing over anything else, one bottom edge, the right end ROW_MARGIN from the corner; a
+##   claim on the bottom of the frame lifts the whole row as one.
+## - The row clears the transport's rail: while the show is timed it stands above the rail's whole click zone
+##   (`Transport.room()`), and settles back when untimed. Control: a row on the margin alone is inside that zone.
+## - One panel above the row at a time: the Environment, Graphics, the console's log and the Assistant's panel,
+##   each opened in turn by its own button, every other one closed by it.
+## - The stage alone while it plays ([constant Shell.FADES]): a show playing with the side panel hidden and no
+##   hand on the controls fades the row, the panel's corner and the transport after Shell.IDLE_AFTER, and the
+##   shell hides the pointer, with the bottom claim kept so nothing moves. Control: the same play with the panel
+##   showing stays up. So do a pause, a show catching up, a panel above the row, and the pointer on the rail. A
+##   move, key or click brings it back; a pointer drifting a pixel does not. Time is stepped by hand (`_watch`).
+## - `[deps] open` read back after a restart: closing or opening the Environment is remembered and a fresh
+##   Chrome reads it (in-memory, never the disk).
 
 var _fails: Array = []
 
@@ -101,8 +92,8 @@ func _geometry(ch: Chrome) -> void:
 		last = i
 	_ok(order_ok and ch.row.get_child_count() >= 4,
 		"the buttons stand in ROW_ORDER (%s)" % str(ch._row_buttons.keys()))
-	# A HIDDEN BUTTON, on purpose: the ⤓ stays up (grayed) wherever an export is possible, and goes
-	# when a surface suppresses it - the home screen, Masking with its own.
+	#A hidden button, on purpose: the ⤓ stays up (grayed) wherever an export is possible, and goes when a
+	#surface suppresses it.
 	ch.suppress_export(&"row_check")
 	await _frames(3)
 	_ok(not ch.exporter._btn.visible, "a suppressed ⤓ is hidden")
@@ -233,7 +224,7 @@ func _alone(ch: Chrome) -> void:
 	Spectrum.conduct(self, {"playing": func() -> bool: return playing[0]})
 	await _frames(4)
 	var rest := (_shown(ch)[0] as Control).get_global_rect().end.y
-	# THE CONTROL, the user's condition: the panel showing, the show playing, nobody touching anything
+	# The control, the user's condition: the panel showing, the show playing, nobody touching anything
 	_step(ch, Shell.IDLE_AFTER + 1.0)
 	_ok(_alphas(ch, panel) == [1.0, 1.0, 1.0] and not ch._hid_pointer,
 		"control: with the side panel showing, a show playing alone keeps everything up (%s)" % str(_alphas(ch, panel)))
@@ -333,7 +324,7 @@ func _remembered(ch: Chrome) -> void:
 	await _frames(3)
 	var third := await _chrome()
 	_ok(third.environment.visible, "and the next start has it open")
-	# A PROBLEM OPENS IT WITHOUT WRITING: close it, then the probe reports a problem
+	# A problem opens it without writing: close it, then the probe reports a problem
 	(third._row_buttons[&"environment"] as Button).pressed.emit()
 	await _frames(2)
 	third.environment.problem_found.emit()

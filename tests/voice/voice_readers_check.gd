@@ -1,6 +1,6 @@
 extends SceneTree
 
-## WHO A SPEAKER NUMBER IS: the model config's reader ids joined to LibriTTS-P's annotations.
+## Who a speaker number is: the model config's reader ids joined to LibriTTS-P's annotations.
 ##
 ##   godot --headless --path . --script tests/voice/voice_readers_check.gd
 ##
@@ -24,7 +24,7 @@ func _initialize() -> void:
 		"the LibriTTS-P data file loads")
 	_ok(VoiceReaders.all("no-such-voice").is_empty() and VoiceReaders.describe("no-such-voice", 0).is_empty(),
 		"a voice with no config has no descriptions, and nothing breaks")
-	# READERS THE HOST SAYS (kokoro's voicepacks): described from what was offered, in speaker order
+	# Readers the host says (kokoro's voicepacks): described from what was offered, in speaker order
 	VoiceReaders.offer("kokoro-check", [{"reader": "af_heart", "g": "F", "d": "heart, American, grade A"},
 		{"reader": "am_puck", "g": "M", "d": "puck, American, grade C+"}], "Grades: the host's own.")
 	var puck := VoiceReaders.describe("kokoro-check", 1)

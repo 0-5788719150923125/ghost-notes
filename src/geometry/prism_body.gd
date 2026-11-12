@@ -3,14 +3,11 @@ class_name PrismBody
 
 ## PrismBody - the browser Prism, ported (praxis web, dark mode).
 ##
-## A see-through wireframe tetrahedron: only the four corner points and the thin
-## glowing edges are drawn - NO faces, NO fill. At the center floats a living core:
-## fine neural tendrils that flow and branch outward from the middle, staying inside
-## the shell, growing and fading, surging brighter with the audio. The shell's edges
-## light up where the tendrils approach them (so the wireframe flickers with the
-## core's activity), and the whole thing hovers and slowly rotates "looking around".
-## Reusable: the `prism` and `prism_split` scenes both draw these. Faithful to the
-## browser's geometry (same vertices) and projection (`2/(2 - z·0.3)`, y squashed).
+## A see-through wireframe tetrahedron: only the four corner points and the thin glowing edges are drawn, no faces. At the center
+## floats a living core: fine neural tendrils that flow and branch outward from the middle, staying inside the shell, growing and
+## fading, surging brighter with the audio. The shell's edges light up where the tendrils approach them, and the whole thing
+## hovers and slowly rotates. Used by the `prism` and `prism_split` scenes. Same vertices and projection as the browser
+## (`2/(2 - z·0.3)`, y squashed).
 
 const APEX := Vector3(0.0, -0.5, 0.0)
 const BACK := Vector3(0.0, 0.5, -0.577)
@@ -24,20 +21,11 @@ const EDGES := [
 
 const TENDRIL_MAX_LEN := 0.46     # keep tendrils inside the shell
 
-## The shell this body built. ALWAYS the browser tetra now, and kept as a field only so the
-## scenes that report it (prism, prism_split, eye_prism) keep their params key.
-##
-## A weighted roll over five shells used to sit here - tetra 0.30, spire 0.16, slab 0.16,
-## bipyramid 0.20, octa 0.18 - so seven prisms in ten were NOT a tetrahedron: two of them were
-## the tetra topology stretched on one axis, and nearly four in ten were a five-point bipyramid
-## or an octahedron, which are different solids wearing the prism's name. The tetrahedron is the
-## prism's identity, not one option among five, and the deviations were reported as simply not
-## looking good. The variety that stays is COLOR, which is orthogonal to this and unaffected.
+## The shell this body built: always the browser tetra, kept as a field so the scenes that report it (prism, prism_split,
+## eye_prism) keep their params key. The variety that remains is color.
 var form := "tetra"
-## Hue offset in turns, added to whatever hue a caller draws this body with. Small by
-## default (a "blue" prism stays blue, a "red" one red), but a scene may set it
-## outright - see `eye_prism`, which crystallizes its eye on a [Scheme] mood this way.
-## It rides on the INSTANCE so a body handed across a morph keeps its color.
+## Hue offset in turns, added to whatever hue a caller draws this body with. Small by default (a "blue" prism stays blue), but
+## a scene may set it outright (see `eye_prism`). It rides on the instance so a body handed across a morph keeps its color.
 var hue_shift := 0.0
 
 var rot := Vector3.ZERO
@@ -53,9 +41,8 @@ var _energy := 0.0
 var _breath := 0.0               # the shared LIGHT pulse - a multi-wave breathing (browser's spawn
                                  # intensity), amplified by energy; drives core, tendrils AND edges as one
 var _t := 0.0
-# The browser's rubber-band anchor: a lively core fires "engines" in the tendril-aggregate
-# direction, dislodging the focal point from its anchor; a spring always pulls it home. It strains
-# outward with energy but never escapes. `_disp` is the offset from the anchor in shell-radius units.
+# The browser's rubber-band anchor: a lively core fires "engines" in the tendril-aggregate direction, dislodging the focal point
+# from its anchor; a spring pulls it home. `_disp` is the offset from the anchor in shell-radius units.
 var _disp := Vector2.ZERO
 var _dvel := Vector2.ZERO
 const DISP_MAX := 0.42            # furthest the focal point can strain from its anchor
@@ -65,8 +52,7 @@ func _init(seed_value := 0) -> void:
 	_rng.seed = seed_value
 	_vel = Vector3(_rng.randf_range(0.18, 0.42), _rng.randf_range(0.28, 0.55), _rng.randf_range(0.08, 0.22))
 	rot = Vector3(_rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU)
-	# Reach and density were one number for every prism ghost has ever drawn: a sparse
-	# body now reads as a wire skeleton with a few long feelers, a dense one as a lit core.
+	# Reach and density vary per body: a sparse body reads as a wire skeleton with a few long feelers, a dense one as a lit core.
 	_max_len = _rng.randf_range(0.32, 0.50)
 	_dens_lo = _rng.randi_range(5, 16)
 	_dens_hi = _dens_lo + _rng.randi_range(16, 48)
@@ -89,8 +75,7 @@ func _new_tendril() -> Dictionary:
 	dir = dir.normalized()
 	return {
 		"dir": dir,
-		# Reach is scaled by how far the shell sits in THAT direction, which keeps a tendril
-		# inside the wireframe whichever way it points.
+		# Reach is scaled by how far the shell sits in that direction, which keeps a tendril inside the wireframe.
 		"len": _rng.randf_range(_max_len * 0.65, _max_len) * _shell_reach(dir),
 		"life": 0.0, "maxlife": _rng.randf_range(0.7, 1.6),
 		"op": 0.0, "grow": true, "prog": 0.0,
@@ -98,21 +83,18 @@ func _new_tendril() -> Dictionary:
 		"thick": _rng.randf_range(0.8, 2.0)}
 
 
-# How far the shell sits in a given direction, relative to the browser tetra's. The tetra IS
-# the only shell now, so this is 1.0 by definition; kept as a named call because the tendril
-# length reads through it and the intent ("reach, measured against the shell") is worth a name.
+# How far the shell sits in a given direction, relative to the browser tetra's: 1.0 by definition, kept as a named call because
+# the tendril length reads through it.
 func _shell_reach(_dir: Vector3) -> float:
 	return 1.0
 
 
-## Advance the core and rotation. `drive` (0..1) is the audio energy - it surges the
-## tendril count and brightens the core (the core "comes to life" on the music).
+## Advance the core and rotation. `drive` (0..1) is the audio energy: it surges the tendril count and brightens the core.
 func update(dt: float, drive: float) -> void:
 	_t += dt
 	_energy = lerpf(_energy, clampf(drive, 0.0, 1.0), 1.0 - exp(-5.0 * dt))
-	# The browser's breathing: three sines at different rates sum into a light pulse that never sits
-	# still (it swells and ebbs between beats), amplified by the audio energy. This ONE signal drives
-	# the core, the tendrils and the edges together - the whole thing breathes with the same light.
+	# The browser's breathing: three sines at different rates sum into a light pulse that never sits still, amplified by the audio
+	# energy. This one signal drives the core, the tendrils and the edges together.
 	var bw := (0.5 + 0.5 * sin(_t * 1.9)) * 0.5 \
 		+ (0.5 + 0.5 * sin(_t * 4.6 + 1.1)) * 0.3 \
 		+ (0.5 + 0.5 * sin(_t * 9.3 - 0.7)) * 0.2
@@ -139,10 +121,9 @@ func update(dt: float, drive: float) -> void:
 	_update_anchor(dt)
 
 
-# Rubber-band anchor / propulsion (ported from the browser): above a floor, energy fires the core's
-# "engines" in the aggregate tendril direction (polynomial power growth), accelerating the focal
-# displacement outward; a restoring spring pulls it back HARDER the further it strays (Hooke's law),
-# so it strains against the anchor and is always drawn home. Ramps entirely with energy.
+# Rubber-band anchor / propulsion (ported from the browser): above a floor, energy fires the core's "engines" in the aggregate
+# tendril direction (polynomial power growth), accelerating the focal displacement outward; a restoring spring pulls it back
+# harder the further it strays (Hooke's law).
 func _update_anchor(dt: float) -> void:
 	var thrust := Vector2.ZERO
 	for td in _tendrils:
@@ -161,9 +142,8 @@ func _update_anchor(dt: float) -> void:
 		_dvel *= 0.5
 
 
-# Phase-lock this body's POSE (orientation + focal strain) to another. Used while a clone is still
-# coupled to its original - a shade of the SAME prism, turning as one - so the pair spins in perfect
-# sync until the split "breaks" and this body diverges on its own rotation.
+# Phase-lock this body's pose (orientation + focal strain) to another: used while a clone is still coupled to its original, so
+# the pair spins in sync until the split breaks it.
 func lock_pose_to(src: PrismBody) -> void:
 	rot = src.rot
 	_disp = src._disp
@@ -176,8 +156,7 @@ func _project(p: Vector3, center: Vector2, scale: float) -> Vector2:
 	return center + Vector2(p.x * persp, p.y * persp * 0.8) * scale
 
 
-## Draw the prism at [param center], [param scale] px, in [param hue] (blue ≈ 0.6,
-## red ≈ 0.0). [param fade] (0..1) scales overall opacity for transitions.
+## Draw the prism at [param center], [param scale] px, in [param hue] (blue ≈ 0.6, red ≈ 0.0). [param fade] (0..1) scales overall opacity.
 func draw(ci: CanvasItem, center: Vector2, scale: float, hue: float, fade := 1.0) -> void:
 	hue = fposmod(hue + hue_shift, 1.0)         # the body's own cast, carried across morphs
 	var basis := Basis.from_euler(rot)
@@ -203,10 +182,8 @@ func draw(ci: CanvasItem, center: Vector2, scale: float, hue: float, fade := 1.0
 		var col := Color.from_hsv(hue, 0.35 if e[2] else 0.6, 1.0, illum * fade)
 		_glow_line(ci, pa, pb, col, (1.0 + illum * 2.0), es * fade)
 
-	# Tendrils: a wavy strand from the center outward, drawn as a GRADIENT (browser-faithful) - white
-	# hot at the base where it leaves the core, through the body hue, brightening again at the tip -
-	# and the whole strand breathes brighter with the shared pulse. The white-hot bases of all the
-	# tendrils pile up at the center, which is what makes the light gather and breathe "near the core".
+	# Tendrils: a wavy strand from the center outward, drawn as a gradient (white-hot at the base where it leaves the core, through
+	# the body hue, brightening again at the tip), breathing with the shared pulse.
 	var body := Color.from_hsv(hue, 0.55, 1.0)
 	var glow := 0.5 + 0.55 * clampf(_breath, 0.0, 1.0)
 	for td in _tendrils:
@@ -236,9 +213,7 @@ func draw(ci: CanvasItem, center: Vector2, scale: float, hue: float, fade := 1.0
 		if pr > 0.85:
 			ci.draw_circle(pts[pts.size() - 1], thick * 0.9, Color(1, 1, 1, clampf(op * 0.6, 0.0, 1.0)))
 
-	# The living nucleus: a soft radial gradient (white-hot center -> body hue -> faint rim) that
-	# BREATHES in both size and brightness with the shared pulse - a fast size shimmer plus the swell
-	# of the breath - so the core pulses like the browser's does, in step with the tendrils and edges.
+	# The living nucleus: a soft radial gradient (white-hot center -> body hue -> faint rim) that breathes in size and brightness with the shared pulse.
 	var breath := clampf(_breath, 0.0, 1.2)
 	var cr := scale * (0.05 + 0.03 * sin(_t * 2.0) + 0.11 * breath)
 	var cg := (0.4 + 0.6 * clampf(breath, 0.0, 1.0)) * fade

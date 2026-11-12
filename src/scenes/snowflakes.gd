@@ -2,15 +2,12 @@ extends GhostScene
 
 ## Snowflakes - a field of several dozen crystal dendrites, restored and multiplied.
 ##
-## The hero crystal scene (distinct from `snowfall`, the soft atmospheric one). The old
-## single hard-coded Koch flake is gone; this is the elegant-procedural answer: dozens
-## of six-fold dendrites, each generated with sampled branch geometry ([method
-## Layer.draw_flake]) so no two are alike, in varied sizes across a cool bed. Motion
-## follows the flat-subject discipline (in-plane spin + gentle sway, never fake depth):
-## every flake turns on its *own* signed angular velocity, varied in direction and
-## speed, so the field is organic rather than locked in lockstep. Mode (by seed) sets
-## only the translation - a stationary field (`drift`) or one carried on a curl-noise
-## breeze (`wind`). Color, not size, carries the audio: the crystals brighten with energy.
+## The hero crystal scene (distinct from `snowfall`, the soft atmospheric one): dozens of
+## six-fold dendrites, each generated with sampled branch geometry ([method Layer.draw_flake]) so
+## no two are alike, in varied sizes across a cool bed. Every flake tumbles on its own signed
+## angular velocity, so the field is organic rather than in lockstep. The seed's mode sets only
+## the translation: a stationary field (`drift`) or one carried on a curl-noise breeze (`wind`).
+## Color, not size, carries the audio: the crystals brighten with energy.
 
 const FlowField := preload("res://src/motion/flow.gd")
 
@@ -21,8 +18,8 @@ var _spin := 0.0
 var _f: AudioFeatures = AudioFeatures.new()
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed.
 const FIELDS := {
 	"flakes": {"label": "Flakes", "type": "num", "range": [26, 50], "default": null,
 		"blurb": "How many snowflakes tumble in the frame."},
@@ -33,18 +30,15 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
 	var hue: float = [0.58, 0.62, 0.55, 0.5][rng.randi() % 4]
-	# Mode is only about translation now: a stationary field, or one carried on the wind.
-	# Rotation is always per-flake (see below), never globally locked.
+	# Mode is only about translation: a stationary field, or one carried on the wind.
 	_mode = "wind" if rng.randf() < 0.4 else "drift"
 	add_layer("bed", rng, {"hue": hue, "sat": 0.4, "val": 0.18, "pools": 2})
 	_flow = FlowField.new(rng.randi(), 1.6, 0.05)
 	var n: int = number("flakes", rng)
 	for i in n:
 		var depth := rng.randf_range(0.35, 1.0)
-		# Each flake is a thin plate TUMBLING in 3D: a full starting orientation and a signed
-		# angular velocity on all THREE axes, so it turns in space and foreshortens as it goes
-		# (edge-on it thins to a line). A flat in-plane spin of a six-fold-symmetric flake barely
-		# reads; a 3D tumble unmistakably does.
+		# Each flake is a thin plate tumbling in 3D: a starting orientation and a signed angular
+		# velocity on all three axes, so it foreshortens as it goes (edge-on it thins to a line).
 		_flakes.append({
 			"pos": Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)),
 			"size": rng.randf_range(0.02, 0.07) * depth,
@@ -54,8 +48,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			"wx": rng.randf_range(0.35, 1.1) * (1.0 if rng.randf() < 0.5 else -1.0),
 			"wy": rng.randf_range(0.35, 1.1) * (1.0 if rng.randf() < 0.5 else -1.0),
 			"wz": rng.randf_range(0.35, 1.1) * (1.0 if rng.randf() < 0.5 else -1.0),
-			# Each flake tumbles faster to its OWN harmonic band (high / treble / mid / energy)
-			# with its own sensitivity, so the surges are independent, not one global wobble.
+			# Each flake tumbles faster to its own harmonic band (high / treble / mid / energy)
+			# with its own sensitivity, so the surges are independent.
 			"band": rng.randi() % 4,
 			"spin": rng.randf_range(0.9, 2.6),
 			"phase": rng.randf() * TAU,
@@ -71,9 +65,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	drift_view(f, 0.02, 0.03)
 	update_layers(f, delta)
 	_spin += delta * (0.15 + 0.3 * f.energy)
-	# Advance each flake's 3D tumble on all three axes: a steady signed base rate plus an
-	# independent surge keyed to that flake's own harmonic band, so they tumble independently
-	# rather than turning in one locked direction.
+	# Advance each flake's 3D tumble: a steady signed base rate plus an independent surge keyed
+	# to that flake's own harmonic band.
 	var bands := [f.high, f.treble, f.mid, f.energy]
 	for fl in _flakes:
 		var rate: float = 0.5 + float(bands[int(fl.band)]) * float(fl.spin)
@@ -102,8 +95,8 @@ func _draw() -> void:
 		var py: float = fl.pos.y * hy
 		var c := Vector2(px, py) * u
 		var r: float = fl.size * u
-		# The flake's local plane, tumbled in 3D and projected orthographically (drop z): the
-		# screen images of its local x / y axes foreshorten as it turns, so it reads as tumbling.
+		# The flake's local plane, tumbled in 3D and projected orthographically (drop z): its local
+		# x / y axes foreshorten as it turns.
 		var b := Basis.from_euler(Vector3(float(fl.ax), float(fl.ay), float(fl.az)))
 		var ex := Vector2(b.x.x, b.x.y) * r
 		var ey := Vector2(b.y.x, b.y.y) * r

@@ -5,43 +5,36 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/notes/components_check.gd
 ##
-## THE REGISTRY HOLDS TOGETHER: every component is of a known family, asks only for capabilities
-## the table has, brings only components that exist, names only slots and workspaces that exist,
-## and keeps a block no other component keeps.
+## The registry holds together: every component is of a known family, asks only for capabilities the table has,
+## brings only components that exist, names only slots and workspaces that exist, and keeps a block no other keeps.
 ##
-## A NOTE IS WHAT ITS COMPONENTS MAKE IT, with no list of kinds of note anywhere: there is no
-## template table to read. Which WORKSPACE runs a note is read off what is attached - its own
-## panel for its words or a song, a reading's for a voice, the lab's, a clip's - and a component
-## another BRINGS gives way to the one that brings it (Cards brings a Voice, and Cards' workspace
-## runs the show). Two-sided: the same voice without Cards is a reading.
+## A note is what its components make it, with no list of kinds of note. Which workspace runs a note is read off what
+## is attached, and a component another brings gives way to the one that brings it (Table brings a Voice, and its
+## workspace runs the show). Two-sided: the same voice without Table is a reading.
 ##
-## SLOTS: a note has one clock and one presentation. A second clock is refused with a sentence that
-## names the one in the way (a Voice on a note with a Song), and a Medium on a show of cards is
-## refused the same way - and lit again once what held the slot is gone.
+## Slots: a note has one clock and one presentation. A second clock is refused with a sentence naming the one in the
+## way (a Voice on a note with a Song), and a Medium on a table show is refused the same way - and lit again once what
+## held the slot is gone.
 ##
-## EVERYTHING ATTACHED COMES OFF: what "+" attaches, detach removes - the same blocks, and with a
-## Medium the illustrations that only come with it. Two refusals, each with its reason: the text
-## is the note, and a Voice stays while the Table that brings it does. The Letter and the Dispatch
-## desk are no components (the Medium's formats, 2026-11-09), and a note's old `picture:`, `letter:`
-## or `dispatch:` block moves into the one `medium:` where it stood (the controls: none of them, or
-## a `medium:` already, and the note is itself).
+## Everything attached comes off: what "+" attaches, detach removes - the same blocks, and with a Medium the
+## illustrations that only come with it. Two refusals, each with its reason: the text is the note, and a Voice stays
+## while the Table that brings it does. A note's old `picture:`, `letter:` or `dispatch:` block moves into the one
+## `medium:` where it stood (controls: none of them, or a `medium:` already, and the note is itself).
 ##
-## THE TABLE ANSWERS FOR THE PLATFORM, two-sided: on this desktop every capability but the agents'
-## is possible; asked as Android (`Deps.platform_override`), only the text is - every other
-## component is impossible, with a reason, "+" offers nothing, and Subprocess starts nothing.
+## The table answers for the platform, two-sided: on this desktop every capability but the agents' is possible; asked
+## as Android (`Deps.platform_override`), only the text is - every other component is impossible, with a reason, "+"
+## offers nothing, and Subprocess starts nothing.
 ##
-## "+" GRAYS WHAT IS NOT READY, WITH THE REASON: an agent made missing in `Deps._resolved` (the cache
-## a launch reads - never a seam) grays the Cards component and its tooltip says why; a component
-## already attached is not offered again. AND WHAT A NOTE CANNOT USE YET: a Look on a note with no
-## medium is grayed and says to attach a Medium first (two-sided: with a song and a Medium it is
-## lit); so is YouTube, which needs a picture and a sound to make a video of. What "+" offers is
-## derived: every component that is attached by itself, with no list per panel.
+## "+" grays what is not ready, with the reason: an agent made missing in `Deps._resolved` (the cache a launch reads,
+## never a seam) grays the Table component and its tooltip says why; a component already attached is not offered
+## again. A Look on a note with no medium is grayed and says to attach a Medium first (two-sided: with a song and a
+## Medium it is lit); so is YouTube, which needs a picture and a sound. What "+" offers is derived: every component
+## that is attached by itself.
 ##
-## A NOTE'S COMPONENTS ARE READ OFF ITS BLOCKS: a storyboard is there when the `scenes:` block
-## names a file or holds the note's own, an empty one included. A note with only a song is not
-## offered the media that show a reading (the novel, the notebook, the tablet, the letter, the
-## dispatch desk); a format's own rows are a card's script, and only the formats that cut scenes
-## use Scene hold and Flourishes (the control: never a tablet).
+## A note's components are read off its blocks: a storyboard is there when the `scenes:` block names a file or holds
+## the note's own, an empty one included. A note with only a song is not offered the media that show a reading; a
+## format's own rows are a card's script, and only the formats that cut scenes use Scene hold and Flourishes (the
+## control: never a tablet).
 
 ## The programs every agent resolves - the same list splash_agents_check hides.
 const AGENT_PROGRAMS := ["claude", "codex", "grok", "aws"]
@@ -53,9 +46,8 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 
-## DEFERRED, not in _initialize: the card scripts a row names (`script`) name autoloads, which
-## resolve only once the tree is up - loaded any earlier, each fails to compile, prints a SCRIPT
-## ERROR, and comes back as a script all the same (see compile_check).
+## Deferred, not in _initialize: the card scripts a row names (`script`) name autoloads, which resolve only once the
+## tree is up; loaded any earlier, each fails to compile.
 func _run() -> void:
 	await process_frame
 	_registry()
@@ -153,7 +145,7 @@ func _registry() -> void:
 	_ok(Medium.offered(["audio", "reading"]).has("tablet") and Medium.offered(["audio", "reading"]).has("letter")
 		and Medium.offered(["audio", "reading"]).has("dispatch") and not Medium.offered(["audio", "reading"]).has("table"),
 		"a reading is offered every pickable medium, the Letter and the Dispatch desk among them")
-	# A FORMAT'S OWN ROWS are a script the Medium card loads (by path), and a format's `uses` are the card's own groups
+	# A format's own rows are a script the Medium card loads (by path), and a format's `uses` are the card's own groups
 	for k in Medium.REGISTRY:
 		var own := String(Registry.field(Medium.REGISTRY, k, "card", ""))
 		_ok(own.is_empty() or (load(own) is GDScript and (load(own) as GDScript).get_script_method_list().any(
@@ -254,9 +246,9 @@ func _detach() -> void:
 	_ok(not Components.needs_note("look", ["text", "song", "look"]).is_empty(), "...which it does")
 
 
-## THE MEDIUM'S BLOCK, MOVED ONCE ([method Components.adopted_medium]): a Picture's, a Letter's and a Dispatch desk's block
-## each become the one `medium:` where the first stood, the format named; a note with none, or with `medium:` already, is
-## itself (the controls).
+## The Medium's block, moved once ([method Components.adopted_medium]): a Picture's, a Letter's and a Dispatch desk's
+## block each become the one `medium:` where the first stood, the format named; a note with none, or with `medium:`
+## already, is itself (the controls).
 func _adopted() -> void:
 	var pic := Components.adopted_medium({"voice": {"tab": "Narrator"}, "picture": {"medium": "tablet", "camera": 0.1}, "illustrations": {}})
 	_ok(pic.keys() == ["voice", "medium", "illustrations"] and pic["medium"] == {"format": "tablet", "camera": 0.1},
@@ -309,7 +301,7 @@ func _android() -> void:
 func _menu() -> void:
 	print("-- the \"+\" menu")
 	var menu := PopupMenu.new()
-	# AN AGENT MADE MISSING the way a launch would find it, as splash_agents_check does: every
+	# An agent made missing the way a launch would find it, as splash_agents_check does: every
 	# agent's program resolved to "" in the cache a launch reads.
 	var keep := Deps._resolved.duplicate()
 	for prog in AGENT_PROGRAMS:

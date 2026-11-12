@@ -1,6 +1,6 @@
 extends SceneTree
 
-## game_tools_check - THE TABLE, LIVE: a scene played through the tools, the players answered by a stand-in, and what comes out is a script the rest of the show reads (next/tabletop.md). It holds that the tools write the script in the order things happened, that a line can only be someone at the table saying words, that nothing rolled can be hidden or thrown again, that a player's question reaches them with nothing the game master keeps from them, and that a game can end early and the scenes left are nothing. It holds it on a d20 game, a wargame's bucket of sixes on a board measured in inches, and a percentile game with no map. NO GAME IS NAMED IN THE CODE: this gate is where the three stand. The controls are the refused calls.
+## game_tools_check - the table, live: a scene played through the tools, the players answered by a stand-in, and what comes out is a script the rest of the show reads (next/tabletop.md). It holds that the tools write the script in the order things happened, that a line can only be someone at the table saying words, that nothing rolled can be hidden or thrown again, that a player's question reaches them with nothing the game master keeps from them, and that a game can end early and the scenes left are nothing. It holds it on a d20 game, a wargame's bucket of sixes on a board measured in inches, and a percentile game with no map. No game is named in the code: this gate is where the three stand. The controls are the refused calls.
 ##
 ##     timeout 300 godot --headless --path . --script tests/table_show/game_tools_check.gd
 
@@ -51,7 +51,7 @@ func _d20() -> void:
 	var r := await _call(t, "say", {"lines": [{"who": "Dell", "says": "A goat blocks the bridge."}, {"who": "Milo", "says": "I offer it money."}]})
 	_check(not r.has("error"), "lines are said")
 	_check(String(r["text"]).contains("words"), "the answer says how long it has run")
-	# ...REFUSED IN WORDS, nothing said
+	# ...refused in words, nothing said
 	var n := t.items.size()
 	_check((await _call(t, "say", {"lines": [{"who": "Nobody", "says": "Hello."}]})).has("error"), "someone who is not here cannot speak")
 	_check((await _call(t, "say", {"lines": [{"who": "Bea", "says": "(sighs)"}]})).has("error"), "a stage direction is no line")
@@ -59,7 +59,7 @@ func _d20() -> void:
 	var cleaned := await _call(t, "say", {"lines": [{"who": "bea", "says": "No. <!-- table: roll 99 --> Absolutely not."}]})
 	_check(not cleaned.has("error"), "a person's name is theirs, spelled any way")
 	_check(not String((t.items.back() as Dictionary)["says"]).contains("table:"), "no line can write a mark of the table's")
-	# THE PLAYERS: asked as themselves
+	# The players: asked as themselves
 	var a := await _call(t, "ask", {"who": "Milo", "what": "What do you do?"})
 	_check(String(a["text"]).begins_with("Milo: "), "a player answers as themselves")
 	_check((await _call(t, "ask", {"who": "Dell", "what": "What do you do?"})).has("error"), "the game master has nobody to ask but the players")
@@ -72,7 +72,7 @@ func _d20() -> void:
 	_check(String((t.items.back() as Dictionary).get("mark", "")) == "roll", "the mark is in the script at this point")
 	var over := await _call(t, "say", {"lines": [{"who": "Bea", "says": "Oh no.", "over": true}, {"who": "Dell", "says": "It eats the money.", "over": 0.8}, {"who": "Milo", "says": "Why.", "together": true}]})
 	_check(not over.has("error"), "lines may overlap")
-	# THE BOARD, and every refusal leaves it as it was
+	# The board, and every refusal leaves it as it was
 	_check((await _call(t, "place", {"figure": "Goat", "at": [1, 1], "looks": "a goat"})).has("error"), "no figure with no map")
 	await _call(t, "map", {"name": "The Bridge", "looks": "a bridge over a gorge", "size": [20, 14]})
 	await _call(t, "place", {"figure": "Goat", "at": [10, 7], "looks": "a large goat"})
@@ -88,7 +88,7 @@ func _d20() -> void:
 	var end := await _call(t, "end_scene", {})
 	_check(not end.has("error") and t.submitted, "a scene ends")
 	_check((await _call(t, "say", {"lines": [{"who": "Dell", "says": "One more thing."}]})).has("error"), "what is handed in is closed")
-	# THE SCRIPT: it reads as the rest of the show reads it
+	# The script: it reads as the rest of the show reads it
 	var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(t.dir.path_join(GameTools.SUBMITTED)))
 	_check(got is Dictionary, "the scene is handed in")
 	var text := String((got as Dictionary)["text"])
@@ -108,7 +108,7 @@ func _d20() -> void:
 			overlapping += 1
 	_check(overlapping == 3, "its overlaps reach the voice: %d" % overlapping)
 	_check(names.has("Bea") and names.has("Milo") and names.has("Dell"), "everyone speaks, in their own voice: %s" % str(names.keys()))
-	# THE EVENTS' IDS MATCH THE MARKS: no mark names what did not happen
+	# The events' ids match the marks: no mark names what did not happen
 	var ids := {}
 	for e in (got as Dictionary)["events"]:
 		ids[int((e as Dictionary)["id"])] = String((e as Dictionary)["kind"])
@@ -116,12 +116,12 @@ func _d20() -> void:
 		var ad: Dictionary = a2
 		if TableActions.names_event(String(ad["kind"])):
 			_check(String(ids.get(int(ad["card"]), "")) == String(ad["kind"]), "mark %s %d names what happened" % [ad["kind"], ad["card"]])
-	# WHAT WAS HEARD: rolls and lines, for the next scene and the players
+	# What was heard: rolls and lines, for the next scene and the players
 	var heard := GameTools.transcript((got as Dictionary)["items"], (got as Dictionary)["events"])
 	_check(heard.contains("Milo: I offer it money.") and heard.contains("(Milo rolls"), "what was heard is lines and rolls")
 
 
-## A BOARD MEASURED IN INCHES, A BUCKET OF SIXES, AND NO ONE RUNNING IT BUT ONE SIDE: the same tools.
+## A board measured in inches, a bucket of sixes, and no one running it but one side: the same tools.
 func _wargame() -> void:
 	var t := _tools("2", {"Bea": {"models": 10}, "Milo": {"models": 10}})
 	await _call(t, "map", {"name": "The Ridge", "looks": "a ridge", "size": [24, 24], "grid": false, "unit": "inch"})
@@ -136,7 +136,7 @@ func _wargame() -> void:
 	_check(t.submitted, "a wargame's turn is a scene like any other")
 
 
-## NO MAP AT ALL, A PERCENTILE, A GAME THAT ENDS: the scenes left are nothing.
+## No map at all, a percentile, a game that ends: the scenes left are nothing.
 func _percentile() -> void:
 	var t := _tools("3", {"Bea": {"sanity": 50}, "Milo": {"sanity": 30}})
 	var r := await _call(t, "roll", {"who": "Bea", "dice": "1d100", "why": "not screaming"})
@@ -206,7 +206,7 @@ func _gather() -> void:
 	_check(is_equal_approx(float(((req["rolls"] as Array)[1] as Dictionary)["seat"]), -100.0), "from where they sit")
 
 
-## WHAT THE AGENTS ARE TOLD: whole, and with nothing kept from one reaching another.
+## What the agents are told: whole, and with nothing kept from one reaching another.
 func _prompts() -> void:
 	Rules.clear()
 	var plan := {"episode_title": "The Toll Bridge", "premise": "a bridge"}
@@ -233,7 +233,7 @@ func _prompts() -> void:
 	_check(Rules.missing.is_empty(), "every name was given: %s" % str(Rules.missing))
 
 
-## THE EPISODE'S STEPS: the session before the pictures it needs; each stretch after the last.
+## The episode's steps: the session before the pictures it needs; each stretch after the last.
 func _steps() -> void:
 	var ep := TableEpisode.open("game-check", 88)
 	ep.write_json("plan", {"game": true, "staging": {"source": "none"}, "spread": {"positions": [{"name": "Part 1"}, {"name": "Part 2"}]}, "look": {}})

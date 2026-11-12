@@ -2,71 +2,35 @@ extends GhostScene
 
 ## Glyphs - an invented script, written live, one stroke at a time.
 ##
-## A page of writing in a language that does not exist. The alphabet comes from
-## [GlyphSet]: a stroke grammar over a small lattice, rolled per session into twenty
-## to forty characters in one consistent hand - its own slant, weight, nib angle,
-## terminal style and taste in curves. This scene is the other half - the PEN and the
-## PAGE. Characters are not blitted: a nib crosses the paper, ink arrives behind it
-## stroke by stroke, words group, lines fill, the page scrolls, and when the music
-## goes quiet the pen simply stops where it is, mid-stroke, resting on the paper.
+## A page of writing in a language that does not exist. [GlyphSet] rolls the alphabet; this scene is the pen
+## and the page: a nib crosses the paper, ink arrives behind it stroke by stroke, words group, lines fill,
+## the page scrolls, and when the music goes quiet the pen stops mid-stroke.
 ##
-## It is the catalog's whole missing axis. Not one of the other scenes draws a
-## letter, numeral, rune or ideogram, and it is the first whose content has a READING
-## DIRECTION rather than being a physical process - a page has a beginning, an order,
-## and an accumulating history, which is a different kind of picture from fog or fire.
+## The music decides the text. The next character is the argmax of the twelve chroma channels of
+## [method Spectrum.harmonic_signature], crossed with the low/mid/high tilt, through a seeded permutation, so
+## a recurring chord in the same register writes the same character. Characters commit subdivided by a
+## sampled [1,4] beats each, and the reveal is paced across [member AudioFeatures.beat_period]. Word breaks
+## land where [member AudioFeatures.movement] crosses a sampled threshold. [member AudioFeatures.flux]
+## presses the nib (up to a sampled 35% extra weight, the only thing that tracks amplitude); tonality
+## (`chroma_hue().y`) raises ink saturation and warms the paper. Below [member Director.silence_floor]
+## (0.03) the reveal does not advance: the pen stops with the nib down.
 ##
-## THE MUSIC DECIDES THE TEXT. Which character comes next is the argmax of the twelve
-## chroma channels of [method Spectrum.harmonic_signature], crossed with the coarse
-## low/mid/high tilt that follows them, through a seeded permutation - so a chord
-## recurring in the same register writes the same character every time, and the page
-## becomes a transcription of the progression rather than a random spill of shapes.
-## Characters are COMMITTED on the beat, subdivided by a sampled [1,4] beats each, and
-## the reveal is paced across [member AudioFeatures.beat_period] so the pen's speed is
-## the track's tempo and not the frame rate. Word breaks land where
-## [member AudioFeatures.movement] crosses a sampled threshold, which puts them at
-## section changes; a hand with punctuation marks (see [GlyphSet]'s reserve) closes the
-## word with one. [member AudioFeatures.flux] presses the nib - up to a sampled 35% of
-## extra weight, and no more, because ink weight is the only thing here that may track
-## amplitude at all. Everything else the sound does, it does to color: tonality
-## (`chroma_hue().y`) raises the ink's saturation and warms the paper.
+## The seed decides, beyond the hand: the layout (page, column, a centered banner that recenters as each
+## line grows, or a spiral written outward and drawn back toward its center), margins, line height, beats per
+## character, word-break strength, ruled paper, how much is already written, and the ground.
 ##
-## SILENCE IS A STATE, NOT AN IDLE. Below [member Director.silence_floor] (0.03) the
-## reveal simply does not advance. The pen does not lift, does not idle-doodle, does
-## not fade - it stops with the nib down, which is what a hand does when the dictation
-## stops, and is far more alive than any animation would be.
+## Cost: one draw call. Each character's geometry is baked once in em space, so a frame is one native
+## `Transform2D * PackedVector2Array` per character plus three `append_array`s; stroke quads carry their
+## antialiasing in a 1-D alpha ramp texture. [constant MAX_GLYPHS] = 300 is the page budget (about 4.5k
+## quads); a finer hand on a wider frame is scaled up until it fits.
 ##
-## WHAT THE SEED DECIDES beyond the hand itself: the layout (a full page, a narrow
-## column, a centered banner that recenters itself as each line grows, or a spiral
-## written outward and drawn slowly back toward its own center), the margins, the line
-## height, beats per character, how strongly a section change breaks a word, whether
-## the paper is ruled and carries a margin line, how much of the page is already
-## written when we arrive, and the ground: high-key paper with dark ink, or bright ink
-## on a dark bed. Both grounds exist because a page is the one subject in this
-## catalog that genuinely reads either way.
-##
-## COST. The writing is ONE draw call however full the page. Every character's
-## geometry is baked once in em
-## space, so a frame is one native `Transform2D * PackedVector2Array` per character
-## plus three `append_array`s, and the stroke quads carry their own antialiasing in a
-## 1-D alpha ramp texture instead of [TriBatch]'s three-quads-per-line feather.
-## [constant MAX_GLYPHS] = 300 is the page budget: at roughly fifteen quads a
-## character that is about 4.5k quads (9k triangles) in one flush, and the finest hand
-## on the widest frame would otherwise ask for twice that - so rather than truncating
-## the page, the whole hand is scaled up until it fits.
-##
-## HONEST DETERMINISM CAVEAT. The alphabet, the hand, the layout and the pre-written
-## opening are all seed-derived and reproduce exactly. The written TEXT is not: the
-## live analyzer and the offline export bake do not produce identical feature streams,
-## so the sequence of characters in a render will differ from the preview, and the
-## layout also follows the frame's aspect. Acceptable for an unreadable script, but it
-## is a real difference and it is stated rather than hidden. No rng is ever drawn on
-## an audio-conditioned event, so nothing else can drift.
+## The alphabet, hand, layout and opening reproduce exactly; the written text does not (live and offline
+## feature streams differ). No rng is drawn on an audio-conditioned event.
 
-## Characters the page may hold at once - the flush budget (see COST above).
+## Characters the page may hold at once - the flush budget (see the header).
 const MAX_GLYPHS := 300
 
-## Layouts, weighted. A page is the honest default; the others are the same writing
-## in a different measure, and the spiral is the one that stops reading as paper.
+## Layouts, weighted: a page is the default, the others are the same writing in a different measure.
 const LAYOUTS := ["page", "page", "page", "column", "banner", "spiral"]
 
 var _gs: GlyphSet
@@ -88,8 +52,8 @@ var _pending_word := false
 var _cur_mark := false
 var _joined_now := false
 var _mv_prev := 0.0
-# The music's current 36-wide harmonic key (see GlyphSet.key), and how many characters have
-# been written under it. A held key walks the alphabet on rather than repeating one shape.
+# The music's current 36-wide harmonic key (see GlyphSet.key) and the characters written under it; a
+# held key walks the alphabet on rather than repeating one shape.
 var _key := -1
 var _run := 0
 
@@ -101,53 +65,30 @@ var _shifts: Dictionary = {}      # finished line -> its frozen centering shift
 var _shift_cur := 0.0
 var _scroll := 0.0
 var _scroll_to := 0.0
-## HOW HARD THE CAMERA IS DRAWN TOWARD THE PEN, and HOW FAST ITS OWN SPEED MAY CHANGE - the two
-## halves of the tracker's inertia. Together they are a damped spring: omega = sqrt(PULL * EASE)
-## and zeta = sqrt(EASE / (4 * PULL)), so 1.5 and 6.0 are critically damped at omega 3, which
-## settles a carriage return in about a second with no overshoot and no corner in the motion.
-##
-## The old rule was a position lerp at 0.7, switched to 9.0 whenever the nib left the frame.
-## That is faster on paper and it is what made the camera jerky: a lerp's speed IS its error, so
-## every commit and every switch was a step change in how fast the frame was traveling.
+## How hard the camera is drawn toward the pen, and how fast its own speed may change: a damped spring,
+## omega = sqrt(PULL * EASE) and zeta = sqrt(EASE / (4 * PULL)); 1.5 and 6.0 are critically damped at
+## omega 3, settling a carriage return in about a second with no overshoot.
 const CAM_PULL := 8.0
 const CAM_ACCEL := 16.0
 
-# THE CAMERA. The page used to be framed whole - a sheet of small sparse characters with
-# its margins showing - which reads as a screenshot of a document rather than as writing
-# happening. The view now sits IN the text: glyphs are large enough to overflow the frame,
-# and the camera follows the pen instead of the paper, with a slow independent downward
-# creep so the frame is never quite still even while a single character is being drawn.
+# The camera sits in the text: glyphs are large enough to overflow the frame and the camera follows the
+# pen, with a slow independent downward creep so the frame is never quite still.
 var _cam := Vector2.ZERO          # eased camera center, in the same unit space as _cx/_cy
 var _cam_vel := Vector2.ZERO      # its SPEED, which is what is eased now - see _track_pen
 var _cam_drift := 0.0             # seconds, for the bounded breath (see _track_pen)
 var _zoom_in := 2.6               # how far the framing is pushed past whole-page
 var _drift_rate := 0.006
 
-# The spiral's own cursor: arc length along the coil, and the scale the whole coil is
-# drawn at so that what has been written stays in frame.
-#
-# IT USED TO SLIDE THE PARAMETER INSTEAD, pulling every glyph back along the arc as the
-# coil filled, and that is a rotation of the entire picture. A glyph's angle is
-# `sqrt(2 s / coil)`, so subtracting from `s` turns all of them at once, and hardest at
-# the middle where the square root is steepest - measured about a radian per character
-# for the innermost turn, which at eight characters a second is more than a revolution
-# a second. Reported as "they remained rooted for ~30 seconds, and then the entire scene
-# full of them started rotating rapidly", and both halves of that are this one line: the
-# shift is zero while the coil is still filling, and the moment it fills it starts
-# advancing once per character.
-#
-# A written page does not move once it is written. This one does not either: what changes
-# is how far away it is being seen from.
+# The spiral's own cursor: arc length along the coil, and the scale the coil is drawn at so what has been
+# written stays in frame. Glyphs never move along the arc once written (shifting `s` would rotate the picture).
 var _s := 0.0
-# `_coil_fit`, not `_fit`: this scene already has a `_fit` and it is a different thing (the
-# HAND's scale, chosen once at layout so a dense page stays inside the glyph budget). This one
-# changes every frame and applies to the coil only.
+# `_coil_fit`, not `_fit`: `_fit` is the hand's scale, chosen once at layout; this one changes every
+# frame and applies to the coil only.
 var _coil_fit := 1.0
 var _coil_fit_to := 1.0
-## Turns of coil to keep. Not a look - a bound: the writing never stops, and without one
-## the glyph list and the zoom-out both grow for as long as the scene is on screen. Well
-## past what a scene's own lifetime reaches (measured about twelve turns in sixty seconds),
-## so in an ordinary shot nothing is ever retired.
+## Turns of coil to keep: a bound, not a look. The writing never stops, so without one the glyph list
+## and the zoom-out grow without limit. Well past what a scene's lifetime reaches (about twelve turns in
+## sixty seconds), so in an ordinary shot nothing is retired.
 const MAX_TURNS := 16.0
 var _coil := 0.02                 # r = coil * theta
 var _s_min := 0.0
@@ -196,14 +137,14 @@ var _paper_val := 0.92
 var _rule_col := Color(0, 0, 0, 0.12)
 var _nib_col := Color(0, 0, 0, 0.8)
 
-# Per-frame geometry scratch, kept as members: packed arrays are VALUE types in
-# GDScript, so a helper that appends to a parameter would append to a copy.
+# Per-frame geometry scratch kept as members: packed arrays are value types in GDScript, so a helper
+# that appends to a parameter would append to a copy.
 var _pts := PackedVector2Array()
 var _cols := PackedColorArray()
 var _uvs := PackedVector2Array()
 var _idx := PackedInt32Array()
 
-# _pose's outputs, likewise: a Dictionary per character per frame is 220 allocations.
+# _pose's outputs, likewise (a Dictionary per character per frame is 220 allocations).
 var _pxf := Transform2D.IDENTITY
 var _pfade := 1.0
 
@@ -212,8 +153,8 @@ var _tip_rot := 0.0
 var _tip_ok := false
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"layout": {"label": "Layout", "type": "choice", "options": "LAYOUTS", "default": null,
 		"blurb": "How the writing is laid out: a page, a column, a banner, or a spiral that stops reading as paper."},
@@ -235,8 +176,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"                     # a page is square-on; PLANE_BAG keeps it there
 	_prng.seed = rng.randi()
 	_gs = GlyphSet.new(rng)
-	# The hand's mean ink length, so a character's duration can be its OWN length against it
-	# (see _len_scale) without changing the page's average pace.
+	# The hand's mean ink length, so a character's duration can be its own length against it (see _len_scale).
 	_mean_ink = 0.0
 	for g in _gs.glyphs:
 		_mean_ink += (g as GlyphSet.Glyph).total
@@ -248,30 +188,21 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_col_frac = rng.randf_range(0.38, 0.60)
 	_line_h = number("line_spacing", rng)
 	_bpg = rng.randi_range(1, 4)
-	# 0.25 to 0.8 of a beat per character: at a 120 bpm estimate that is 2.5 to 8 a
-	# second, which spans a quick scribble and a deliberate hand.
+	# 0.25 to 0.8 of a beat per character: 2.5 to 8 a second at 120 bpm.
 	_char_beats = number("pace", rng)
-	# THE HAND RESTS, and not evenly. A pen lifts for a moment between characters, waits
-	# longer between words, and longest at the turn of a line - and that uneven rhythm is
-	# most of what separates writing from a teleprinter. Fractions of one nominal character's
-	# span, so they ride the tempo like everything else here.
+	# The hand rests unevenly: a short lift between characters, longer between words, longest at the turn
+	# of a line. Fractions of one nominal character's span, so they ride the tempo.
 	_rest_char = rng.randf_range(0.05, 0.22)
 	_rest_word = number("word_pause", rng)
 	_rest_line = rng.randf_range(0.70, 1.80)
-	# How far into the text the camera sits. At 1.0 the whole page is in frame, which is
-	# the old look; past 2 the writing runs off both edges and the eye has to follow it.
-	#
-	# A SPIRAL IS THE EXCEPTION and is framed whole. The zoom exists so the eye has lines to
-	# read along; a coil has none, its nib orbits rather than travels (see _pen_at), and at a
-	# page's zoom the frame lands inside the coil's own empty hub - the hole at the center is
-	# `_line_step` across, which at 2.1x to 3.4x is the size of the visible height. So the
-	# composition is shown as a composition, with just enough push to crop its outermost turn.
+	# How far into the text the camera sits: at 1.0 the whole page is in frame; past 2 the writing runs
+	# off both edges. A spiral is framed whole: its nib orbits rather than travels, and at a page's zoom
+	# the frame would land inside the coil's empty hub (`_line_step` across).
 	_zoom_in = rng.randf_range(1.02, 1.30) if _layout == "spiral" else rng.randf_range(2.1, 3.4)
-	# Slow enough to be felt rather than watched - a few percent of a line height a second.
+	# A few percent of a line height a second.
 	_drift_rate = rng.randf_range(0.004, 0.011)
-	# Movement is a 0..1 section-change score that spends most of a track low, so a
-	# threshold up near 0.5 gives long words broken only at real changes and one down
-	# at 0.2 gives short, choppy ones. Both read as a language; sample the whole range.
+	# Movement is a 0..1 section-change score that spends most of a track low: a threshold near 0.5
+	# breaks words only at real changes, near 0.2 gives short, choppy ones.
 	_break_thr = rng.randf_range(0.18, 0.52)
 	_ease = rng.randf_range(0.20, 1.0)
 	_prefill = number("prefill", rng)
@@ -280,8 +211,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_ruled = _paper and rng.randf() < 0.45
 	_margin_rule = _ruled and rng.randf() < 0.5
 	if _paper:
-		# High-key: the ground IS the subject, so it is flat and bright (paint_ground,
-		# not a bed) and the ink is the dark thing on it.
+		# High-key: the ground is flat and bright (paint_ground, not a bed) and the ink is dark.
 		_paper_hue = _sch.hue
 		_paper_sat = rng.randf_range(0.03, 0.12)
 		_paper_val = rng.randf_range(0.86, 0.96)
@@ -294,9 +224,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			rng.randf_range(0.10, 0.22))
 		_nib_col = Color.from_hsv(fposmod(_ink_hue, 1.0), _ink_sat * 0.7, _ink_val * 0.8, 0.85)
 	else:
-		# The dark ground is composed, not painted: the shared bed BEHIND the writing and a
-		# thin drift of dust IN FRONT of it, so the ink sits inside an atmosphere rather
-		# than on a flat field. (`z` defaults to "front" - the bed must ask for "back".)
+		# The dark ground is composed: the shared bed behind the writing and a thin dust in front. (`z`
+		# defaults to "front"; the bed must ask for "back".)
 		add_layer("bed", rng, {"z": "back", "hue": _sch.hue, "sat": _sch.sat * 0.7,
 			"val": rng.randf_range(0.10, 0.20), "pools": rng.randi_range(2, 4)})
 		add_layer("dust", rng, {"z": "front", "count": rng.randi_range(30, 70),
@@ -327,9 +256,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 func _ready() -> void:
 	super()
-	# A pressed nib samples the stroke ramp slightly past its ends (see
-	# GlyphSet.uv_pressure). Clamping is what makes that read as "past the end of the
-	# feather" instead of wrapping round into the opposite edge of the texture.
+	# A pressed nib samples the stroke ramp slightly past its ends (see GlyphSet.uv_pressure); clamping
+	# keeps that from wrapping into the opposite edge of the texture.
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
 
 
@@ -346,29 +274,16 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_open = true
 		_write_opening()
 		_shift_cur = _shift_target()     # arrive centered; the ease is for what happens after
-		# The page arrives already part written (see _write_opening), so it should arrive
-		# already FRAMED. Easing in from the center would have the opening seconds of every
-		# session drift across whatever the prefill happened to leave under the middle.
+		# The page arrives already part written (see _write_opening), so it arrives framed.
 		_cam = _clamp_cam(_pen_at())
 		_cam_vel = Vector2.ZERO
-	# AFTER _metrics and the opening, never before: the tracker reads `_left` / `_right` /
-	# `_bottom` / `_line_step` for its bound and the cursor for its target, and on the first
-	# frame none of those exist yet - it would aim at, and clamp against, the declared defaults.
+	# After _metrics and the opening: the tracker reads `_left` / `_right` / `_bottom` / `_line_step`
+	# for its bound and the cursor for its target, none of which exist on the first frame.
 	_track_pen(delta)
 	_ch = chroma_hue()
 	_sig = signature()
-	# A character is COMMITTED on the beat, every _bpg beats. Event, not integration -
-	# so it belongs here and not in the sim step (the Director may substep an identical
-	# frame several times, and one edge stays one edge).
-	# THE HAND DOES NOT WAIT FOR THE BAR LINE. A character used to be committed only on
-	# every _bpg'th beat, while the reveal finished in 0.82 of that interval - so the pen
-	# wrote, then sat on a finished character doing nothing for the remainder, every single
-	# time. With _bpg up to 4 that is a pause of over a second between characters, which is
-	# what "long pauses between each character being drawn" was.
-	#
-	# The tempo still sets the SPEED (see _span), which is the part worth keeping; it no
-	# longer gates the handover. A finished character commits immediately and the next one
-	# starts in the same frame, so the writing is continuous - which is what writing is.
+	# A character commits when the previous one has finished its reveal and the next starts in the same
+	# frame, so the writing is continuous. An event, not integration: it belongs here and not in the sim step.
 	if f.movement > _break_thr and _mv_prev <= _break_thr:
 		_pending_word = true
 	_mv_prev = f.movement
@@ -376,20 +291,17 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_step(_sim.dt)
 
 
-# The pen. Everything here integrates time, so it runs on the fixed clock: the
-# Director substeps, pre-warms twelve frames deep and lets Echo fast-forward, and a
-# reveal that advanced once per update() call would write a whole line in one frame.
+# The pen. Everything here integrates time, so it runs on the fixed clock (the Director substeps,
+# pre-warms and fast-forwards).
 func _step(dt: float) -> void:
-	# Nib pressure. Flux runs about 0.01 to 0.05 in practice, so it takes a gain near 20
-	# to reach a full press at all, and an asymmetric follower to keep the hand from
-	# strobing between hairline and heavy on consecutive frames.
+	# Nib pressure. Flux runs 0.01 to 0.05, so a gain near 20 reaches a full press; an asymmetric
+	# follower keeps the hand from strobing.
 	_press_lvl = Nonlinear.flare(_press_lvl, clampf(_f.flux * 20.0, 0.0, 1.0), dt, 6.0, 1.8)
 	if feed != null and _f.energy < feed.silence_floor:
 		return                          # silence: the nib rests where it is, mid-stroke
-	# Spend this substep across rests and characters in order, carrying the OVERSHOOT rather
-	# than discarding it, so a fast hand loses no fraction of a character's progress at a
-	# handover - which would put a small stutter back in place of the large one the beat gate
-	# used to cause. A loop, because one substep can span a rest and more than one character.
+	# Spend this substep across rests and characters in order, carrying the overshoot rather than
+	# discarding it, so a fast hand loses no progress at a handover. A loop, since one substep can span
+	# a rest and more than one character.
 	var left := dt
 	var guard := 0
 	while left > 0.0 and guard < 64:
@@ -412,31 +324,11 @@ func _step(dt: float) -> void:
 	_ease_shift(dt)
 
 
-# THE CENTERED LINE'S SHIFT, and why it is integrated here rather than computed at draw time.
-#
-# A banner recenters its live line, so every glyph on it is drawn at `p.x + _shift_cur`. That
-# shift used to be recomputed inside _ink() as `-(_cx + _adv + _left) * 0.5` - straight off the
-# page CURSOR, which advances by a whole character at a time in _advance(). So the entire row
-# stepped left by half an advance the instant each character was committed, and the row a reader
-# is trying to read was the one thing on the page that would not sit still. Reported as "the
-# entire row of glyphs kept shifting in hard, discrete jumps... you would expect the row of
-# glyphs to remain where they were written".
-#
-# Two changes, and both are needed:
-#
-#   THE TARGET MOVES WITH THE REVEAL. The line's visible extent is the committed cursor plus the
-#   fraction of the current character the nib has actually inked, so the target is continuous
-#   ACROSS a commit: `_cx` gains that character's width at the same moment `_reveal` drops from
-#   1 to 0, and the two cancel. Without this the ease would only smear the step over a fifth of a
-#   second instead of removing it.
-#
-#   AND IT IS EASED, on this fixed clock, because the residue is not zero: a word gap, a narrow
-#   punctuation mark and a carriage return all move the target by a real amount in one substep.
-#   Those become a glide.
-#
-# _pen_at reads the SAME eased value, so the camera and the row can never disagree about where
-# the line is - and _newline freezes it as the line's final shift, so a finished line stops
-# exactly where it was last drawn rather than at a recomputed value half an advance away.
+# The centered line's shift, integrated here rather than computed at draw time. A banner recenters its live
+# line, so every glyph on it is drawn at `p.x + _shift_cur`. The target moves with the reveal (the committed
+# cursor plus the fraction of the current character inked), so it is continuous across a commit, and it is
+# eased on this fixed clock because a word gap, a narrow mark and a carriage return still move it in one
+# substep. _pen_at reads the same value, and _newline freezes it as the line's final shift.
 func _ease_shift(dt: float) -> void:
 	if not _centered:
 		_shift_cur = 0.0
@@ -451,31 +343,22 @@ func _shift_target() -> float:
 	return -(_cx + w * clampf(_reveal, 0.0, 1.0) + _left) * 0.5
 
 
-# How long the character under the nib has to be written.
-#
-# A pen moves at a roughly constant NIB SPEED, so a character's duration is its own ink
-# length, not a fixed slice of the clock. Every character used to take exactly
-# `_char_beats * beat_period` however many strokes it had - and with `_char_beats` fixed per
-# session and `beat_period` near-constant over speech, that is ONE cadence for the whole
-# page, which is what "all of that writing was at a more or less constant speed" was. The
-# alphabet runs 2 to 7 strokes a character (GlyphSet.strokes_lo/hi), so ink lengths already
-# differ by more than a factor of two; dividing by the hand's own mean leaves the average
-# pace exactly where it was and only redistributes it.
+# How long the character under the nib has to be written. A pen moves at a roughly constant nib speed,
+# so a character's duration is its own ink length against the hand's mean (the alphabet runs 2 to 7
+# strokes a character, GlyphSet.strokes_lo/hi), which leaves the average pace where it was.
 func _span() -> float:
 	return maxf(0.05, _base_span() * _len_scale(int(_cur.get("g", -1))))
 
 
-# The tempo's share of one NOMINAL character, before that character's length and the hand's
-# rests are applied. Clamped so a missing or absurd tempo estimate cannot stall or sprint the
-# hand. A FRACTION of a beat, not a whole number of them: `_bpg` was an integer count because
-# a character was committed ON a beat, and with that gate gone the integer floor made the
-# slowest hands write at roughly one character a second. A real hand runs two to six.
+# The tempo's share of one nominal character, before that character's length and the hand's rests are
+# applied. Clamped so an absurd tempo estimate cannot stall or sprint the hand. A fraction of a beat, so
+# the slowest hands do not write at one character a second (a real hand runs two to six).
 func _base_span() -> float:
 	return _char_beats * clampf(_f.beat_period, 0.25, 1.6)
 
 
-# This character's ink length against the hand's mean. Bounded, so the shortest character is
-# still visibly drawn rather than flicked out, and the longest does not stall the page.
+# This character's ink length against the hand's mean, bounded so the shortest is still visibly drawn
+# and the longest does not stall the page.
 func _len_scale(gi: int) -> float:
 	if gi < 0 or _mean_ink <= 0.0 or _gs == null or gi >= _gs.glyphs.size():
 		return 1.0
@@ -497,8 +380,7 @@ func _metrics() -> void:
 		_bounds()
 		var cap := _capacity()
 		if cap > MAX_GLYPHS:
-			# Scale the whole hand rather than truncating the page: capacity falls with
-			# the square of the scale, so this lands exactly on the budget.
+			# Scale the whole hand rather than truncating the page: capacity falls with the square of the scale.
 			_fit = sqrt(float(cap) / float(MAX_GLYPHS))
 			_adv = _gs.advance * _fit
 			_em = _gs.em * _fit
@@ -518,9 +400,8 @@ func _bounds() -> void:
 		measure *= 0.86
 	_left = -measure * 0.5
 	_right = measure * 0.5
-	# The coil: one turn per line, so the spiral's rows sit exactly as far apart as a
-	# page's lines would. Arc length s of an Archimedean spiral is ~coil*theta^2/2,
-	# which is where both bounds come from.
+	# The coil: one turn per line, so rows sit as far apart as a page's lines. Arc length s of an
+	# Archimedean spiral is ~coil*theta^2/2, which is where both bounds come from.
 	_coil = maxf(0.000001, _line_step / TAU)
 	_s_min = _line_step * _line_step / (2.0 * _coil)
 	var rmax := _half.length() * 1.08
@@ -535,9 +416,8 @@ func _capacity() -> int:
 	return per_line * lines
 
 
-# The page is already part written when we arrive. A blank sheet filling at one
-# character a beat would take a whole scene to become a picture, and the subject here
-# is a PAGE, not a countdown. Seeded from the build rng, so it reproduces exactly.
+# The page is already part written when we arrive (a blank sheet would take a scene to become a
+# picture). Seeded from the build rng, so it reproduces exactly.
 func _write_opening() -> void:
 	_cx = _left
 	_cy = _top + _em
@@ -550,10 +430,8 @@ func _write_opening() -> void:
 		_cur = {}
 		if _prng.randf() < 0.16:
 			_pending_word = true
-		# The pre-write is instantaneous, so the centering is SNAPPED along with it - the ease is
-		# for a hand that is writing. It has to be kept up to date here even so, because
-		# _newline() freezes the live shift as each line's final one, and a run of opening lines
-		# frozen at a stale value would left-align the whole page above the pen.
+		# The pre-write is instantaneous, so the centering is snapped with it. It must still be kept up to
+		# date, because _newline() freezes the live shift as each line's final one.
 		_reveal = 1.0
 		_shift_cur = _shift_target()
 		_advance(_prng.randi() % maxi(1, _gs.count()))
@@ -572,9 +450,8 @@ func _commit() -> void:
 		_placed.remove_at(0)
 
 
-# Step the cursor past the character just finished and put the next one under the nib.
-# [param gi] < 0 means "ask the music"; the opening pass hands its own index instead,
-# because a signature is not available before the first audio frame.
+# Step the cursor past the character just finished and put the next one under the nib. [param gi] < 0
+# means "ask the music"; the opening pass hands its own index (no signature before the first audio frame).
 func _advance(gi: int) -> void:
 	var w := _adv * (0.62 if _cur_mark else 1.0)
 	var gap := 0.0
@@ -603,9 +480,9 @@ func _advance(gi: int) -> void:
 	elif idx < 0:
 		var k := _gs.key(_sig)
 		if k >= 0 and _ch.y > 0.0005:
-			# A NEW key opens a new word at that chord's own character; a HELD key walks the
-			# alphabet on instead of repeating. The signature is a 2.5 s EMA, so its argmax
-			# sits still for tens of characters - see GlyphSet.pick for the measurement.
+			# A new key opens a new word at that chord's own character; a held key walks the alphabet
+			# on instead of repeating. The signature is a 2.5 s EMA, so its argmax sits still for tens
+			# of characters - see GlyphSet.pick.
 			if k != _key:
 				_key = k
 				_run = 0
@@ -613,22 +490,12 @@ func _advance(gi: int) -> void:
 				_run += 1
 			idx = _gs.pick(_sig, _run)
 		else:
-			# No tonal content to read (a session booted with no audio at all): step the
-			# alphabet on the counters instead. Still a function of the feature stream,
-			# so it stays reproducible - an rng here would diverge in the export.
-			#
-			# `_written`, not the old `_beats`. That counter belonged to the beat gate and was
-			# left behind when the gate was removed, never incremented again, so the expression
-			# was frozen on `_words`. It is NOT what the repetition report was: this branch is
-			# very nearly unreachable, since `_sig.size()` is always 16 (HarmonicSignature.DIM)
-			# and reaching it needs `_ch.y <= 0.0005` while the energy is above the silence
-			# floor, which is the 12 chroma channels canceling to one part in three thousand.
-			# A latent bug found while reading, fixed while here - the repetition itself came
-			# from the tonal branch above.
+			# No tonal content to read (a session booted with no audio): step the alphabet on the
+			# counters. Still a function of the feature stream, so reproducible (an rng here would
+			# diverge in the export). Nearly unreachable: `_sig.size()` is always 16 (HarmonicSignature.DIM).
 			idx = (_written * 7 + _words * 5) % maxi(1, _gs.count())
 	_start(idx)
-	# The rest that FOLLOWS the character just finished, before the next is written. Set after
-	# _start, which clears it along with the reveal.
+	# The rest that follows the character just finished. Set after _start, which clears it with the reveal.
 	var rest := _rest_char
 	if gap > 0.0 or was_mark:
 		rest = _rest_word
@@ -639,20 +506,15 @@ func _advance(gi: int) -> void:
 
 func _newline() -> void:
 	if _centered:
-		# Freeze this line's centering the moment it is finished, at the value it was last DRAWN
-		# with rather than a recomputed one - a recomputed freeze differs from the live shift by
-		# the last character's half advance, which is one more jump at every carriage return.
-		# The live line goes on recentering itself as it grows (see _ease_shift).
+		# Freeze this line's centering at the value it was last drawn with; the live line goes on
+		# recentering as it grows (see _ease_shift).
 		_shifts[_line] = _shift_cur
 	_line += 1
 	_cx = _left
 	if _centered:
-		# A CARRIAGE RETURN IS A DISCONTINUITY, and easing it is wrong. The line just finished
-		# keeps the shift it was drawn with (frozen above), and the new line has nothing on it
-		# yet - so snapping its centering moves no ink at all, while easing it drags the first
-		# glyph of the new line across the page from wherever the old line ended. That is a
-		# 9-advance glide, measured, and far more visible than the per-character step this ease
-		# exists to remove.
+		# A carriage return is a discontinuity: the finished line keeps its frozen shift and the new line
+		# has no ink, so snapping its centering moves nothing, while easing would drag the first glyph
+		# across the page.
 		_shift_cur = _shift_target()
 	_cy += _line_step
 	_joined_now = false
@@ -671,23 +533,19 @@ func _drop_lines() -> void:
 			keep.append(e)
 			lowest = mini(lowest, int(e["line"]))
 	_placed = keep
-	# The centering table would otherwise grow one entry per line for the life of the
-	# session; nothing above the page can ever be asked for again.
+	# The centering table would otherwise grow one entry per line; nothing above the page is asked for again.
 	for k in _shifts.keys():
 		if int(k) < lowest:
 			_shifts.erase(k)
 
 
-## How far out the writing now reaches, and therefore how small the coil has to be drawn.
-##
-## Eased at the draw rate rather than applied here (see the `_fit` lerp), so a long word
-## landing on the frame edge is a glide and not a step.
+## How far out the writing now reaches, and therefore how small the coil has to be drawn. Eased at the
+## draw rate rather than applied here (see the `_fit` lerp), so a long word on the edge is a glide.
 func _refit() -> void:
 	var r_out := _coil * sqrt(2.0 * maxf(_s, _s_min) / maxf(0.000001, _coil))
 	var h := _half / maxf(0.001, _zoom_in)
 	_coil_fit_to = clampf(minf(h.x, h.y) * 0.98 / maxf(0.000001, r_out), 0.05, 1.0)
-	# ...and the safety valve. Retiring an inner turn moves NOTHING: every surviving glyph
-	# keeps the `s` it was written at, which is the whole point of this rewrite.
+	# ...and the safety valve. Retiring an inner turn moves nothing: every surviving glyph keeps the `s` it was written at.
 	var theta_out := sqrt(2.0 * maxf(_s, _s_min) / maxf(0.000001, _coil))
 	var theta_keep := theta_out - MAX_TURNS * TAU
 	if theta_keep <= TAU:
@@ -723,8 +581,7 @@ func _start(gi: int) -> void:
 func _draw() -> void:
 	begin_draw()
 	if _paper:
-		# Tonality warms the sheet instead of dimming it - a high-key ground that reacts
-		# by going dark just looks broken.
+		# Tonality warms the sheet instead of dimming it.
 		paint_ground(_paper_hue, _paper_sat, _paper_val, _ch.y * 0.6, _ch.x)
 	else:
 		draw_layers("back")
@@ -734,179 +591,90 @@ func _draw() -> void:
 	_frame(u)
 	_rules(u)
 	_ink(u)
-	# NO NIB. A wedge marking where the ink stops was drawn here, and it read as a
-	# cursor sitting on the page rather than as a pen: it has no hand, no shaft and no
-	# motion blur, so at any size it is a floating arrowhead. The ink arriving IS the
-	# indication that something is writing, and it is a better one.
+	# No nib is drawn at the ink's edge: the ink arriving is the indication that something is writing.
 	if not _paper:
-		# Back to the SCREEN's transform first. The dust is atmosphere in the room, not ink on
-		# the page: left under _frame's matrix it was magnified by _zoom_in (2.1x to 3.4x) and
-		# pinned to the paper, so it slid with the writing instead of hanging in front of it.
+		# Back to the screen's transform: the dust is atmosphere in the room, not ink on the page.
 		draw_set_transform_matrix(view.matrix(size))
 		draw_layers("front")
 
 
-## Push the view into the text: zoom past whole-page and center on the tracked pen.
-##
-## Composed onto the scene's view matrix rather than into [member view] itself, so it
-## replaces its own contribution every frame instead of accumulating one.
+## Push the view into the text: zoom past whole-page and center on the tracked pen. Composed onto the
+## scene's view matrix rather than into [member view] itself, so it replaces its own contribution every
+## frame instead of accumulating.
 func _frame(u: float) -> void:
 	var z := _zoom_in
 	draw_set_transform_matrix(view.matrix(size)
 		* Transform2D(0.0, Vector2(z, z), 0.0, -_cam * u * z))
 
 
-## Follow the pen, loosely - and at a speed that does not jump.
+## Follow the pen, loosely and at a speed that does not jump. Eased rather than locked to the nib, so the
+## character being written drifts across the frame and the camera catches up between words.
 ##
-## Eased rather than locked to the nib: a camera that pinned the pen would make the PAGE move
-## under a stationary point, which is the opposite of reading and is nauseating at this zoom.
-## Loose tracking lets the character being written drift across the frame and the camera catch
-## up between words, which is how an eye actually follows a hand.
-##
-## WHAT IS EASED IS THE SPEED, NOT THE POSITION, and that is the whole of a report: "the camera
-## can be rather jerky at times - because it is responding to new glyphs being drawn, which is
-## constant. It would be better if we could move the camera at a smooth, mostly-constant speed".
-## A position lerp has no inertia - its velocity is proportional to the error, so anything that
-## moves the target moves the camera's SPEED in the same instant. Measured over 60 seeds, 45 s
-## each, on the rule this replaces:
-##
-##   page    speed mean 0.231  p99 4.95   (x22 the mean)   worst acceleration 676
-##   column  speed mean 0.108  p99 2.24   (x18)                              315
-##   banner  speed mean 0.087  p99 1.50   (x17)                              222
-##
-## i.e. most frames barely moved and one frame in a hundred bolted. Two causes, both fixed:
-##
-##   THE TARGET STEPPED. `_pen_at` aimed at the COMMITTED cursor plus half an advance, so it
-##   jumped a whole character every time one was committed - eight times a second. It reads
-##   the reveal now, exactly as `_shift_target` does and for the same reason: `_cx` gains the
-##   character's width in the same instant `_reveal` drops from 1 to 0, and the two cancel.
-##
-##   THE GAIN SWITCHED. The rate was 0.7 while the nib was in shot and 9.0 while it was not -
-##   a thirteen-fold step in the camera's speed, applied at exactly the moment the eye was
-##   following something. It is one constant now, and the saccade falls out of the physics
-##   instead of being branched on: a nib far out of frame is a large error, a large error is
-##   a large target speed, and the speed ease turns that into an accelerate-and-settle rather
-##   than a snap. One rule, no threshold to chatter on, and nothing to keep in sync.
-##
-## The downward creep is independent of the writing and never stops, so a held character
-## or a silent passage still has motion in the frame - without it, "the pen rests where it
-## is" would freeze the entire scene.
+## What is eased is the speed, not the position (a position lerp's velocity is proportional to the error).
+## The target does not step (`_pen_at` reads the reveal, as `_shift_target` does) and the gain does not
+## switch: a nib far out of frame is a large error and so a large target speed, which the speed ease turns
+## into an accelerate-and-settle. The downward creep never stops, so a held character or a silent passage
+## still has motion in the frame.
 func _track_pen(delta: float) -> void:
-	# The downward travel comes from the WRITING - _cy steps down a line at a time as the
-	# hand fills the page, and the camera follows it. An accumulator was wrong here and
-	# would have been a slow catastrophe: it grows without bound, so after a few minutes
-	# the camera would be somewhere below the page with the text long out of frame.
-	#
-	# What the accumulator was reaching for - motion in the frame even while the pen is
-	# holding a character - is a bounded breath instead.
+	# The downward travel comes from the writing (_cy steps down a line at a time and the camera follows
+	# it); an accumulator would grow without bound. A bounded breath keeps the frame alive while the pen holds a character.
 	_cam_drift += delta
 	var breath := sin(_cam_drift * _drift_rate * TAU * 12.0) * _line_step * 0.18
-	# THE TARGET IS CLAMPED BEFORE IT IS CHASED, not only the camera after. Aiming somewhere the
-	# camera may not go winds the speed up against the bound and then spends it in a lurch the
-	# moment the bound releases; aiming at the nearest place it MAY go cannot.
+	# The target is clamped before it is chased: aiming somewhere the camera may not go winds the
+	# speed up against the bound and spends it in a lurch when the bound releases.
 	var target := _clamp_cam(_pen_at() + Vector2(0.0, breath))
-	# A position lerp's rate, read as the speed it is ASKING for rather than applied as a
-	# position - and then that speed is what gets eased. The camera therefore has inertia: it
-	# cannot change how fast it is moving faster than CAM_ACCEL allows, whatever the pen does.
+	# A position lerp's rate, read as the speed it asks for; that speed is what gets eased, so the camera
+	# cannot change how fast it moves faster than CAM_ACCEL allows.
 	var to := target - _cam
 	var dist := to.length()
-	# THE SPEED IT IS ALLOWED TO BE DOING, which is the smaller of two things: a settle
-	# (proportional to the error, so it eases in over the last of the distance) and a BRAKING
-	# limit, sqrt(2 a d) - the fastest it can be going and still stop by the time it arrives.
-	# The braking term is what wins on a carriage return, and it is why there is no overshoot
-	# and nothing for the page bound to stop dead: the camera is already slowing before it
-	# gets there. Without it the frame flew back across the line and hit the margin at speed,
-	# losing 1.2 unit/s in a single frame - an acceleration of 74 against a cap of 4.
+	# The speed allowed is the smaller of a settle (proportional to the error) and a braking limit,
+	# sqrt(2 a d), the fastest it can go and still stop on arrival. Braking is what wins on a carriage
+	# return, so there is no overshoot and nothing for the page bound to stop dead.
 	var cruise := minf(dist * CAM_PULL, sqrt(2.0 * CAM_ACCEL * dist))
 	var want := to.normalized() * cruise if dist > 0.000001 else Vector2.ZERO
-	# ...and it may not CHANGE speed faster than the cap. This is the whole of "a smooth,
-	# mostly-constant speed": whatever the pen does, the frame's velocity is Lipschitz.
+	# ...and it may not change speed faster than the cap, so the frame's velocity is Lipschitz.
 	var dv := want - _cam_vel
 	var lim := CAM_ACCEL * delta
 	_cam_vel += dv if dv.length() <= lim else dv.normalized() * lim
 	var was := _cam
 	_cam = _clamp_cam(_cam + _cam_vel * delta)
-	# ...and the speed is then taken from what ACTUALLY happened. The clamp above can refuse
-	# part of a step (the page edge, a coil smaller than the view), and a velocity that keeps
-	# integrating into a wall is stored-up motion that comes out all at once later.
+	# ...and the speed is then taken from what actually happened: the clamp can refuse part of a step,
+	# and a velocity that keeps integrating into a wall comes out all at once later.
 	if delta > 0.0:
 		_cam_vel = (_cam - was) / delta
-	# NOTE the camera is NOT written into `view`. Doing that compounds: `view.zoom` and
-	# `view.offset` are only re-set each frame by the assigned SHOT, and a scene running
-	# without one - the catalog smoke gate builds every scene shotless - multiplies its
-	# own zoom by _zoom_in every frame. Measured before it was caught: zoom reached 3.9e13
-	# after one second and inf within half a minute. The framing is applied as its own
-	# transform at draw time instead, which is idempotent by construction.
+	# The camera is not written into `view`: `view.zoom` and `view.offset` are only re-set by the
+	# assigned shot, so a shotless scene (the catalog smoke gate) would multiply its zoom by _zoom_in
+	# every frame. The framing is applied as its own transform at draw time, which is idempotent.
 
 
-## Where the nib actually IS on screen, in the unit-fraction space [member _cam] lives in.
-##
-## NOT `_cx` / `_cy`. Those are the page cursor, and only three of the six layouts write at it:
-##
-##   SPIRAL advances `_s` along its coil and never touches `_cx` / `_cy` at all, so they keep
-##   whatever _write_opening left them - the top-left corner of the page - for the entire hold.
-##   The camera therefore sat on that corner watching blank paper while the writing went round
-##   the middle of the frame.
-##
-##   BANNER recenters its live line, so a glyph is drawn at `p.x + _shift_cur` (see _pose and
-##   _ink). At the start of a line that shift is nearly half the measure - about 0.5 in unit
-##   fractions against a visible half-width of 0.26 to 0.42 at this zoom - so aiming at the raw
-##   cursor put the pen entirely outside the frame and only walked back into it as the line
-##   filled.
-##
-## `_cy` also needs its scroll taken off: it is an absolute coordinate on an endless page that
-## only ever increases, and when it passes `_bottom` the page scrolls (`_scroll_to +=
-## _line_step`) instead of resetting it, so every glyph is drawn at `p.y - _scroll`.
+## Where the nib actually is on screen, in the unit-fraction space [member _cam] lives in. Not `_cx` / `_cy`
+## (the page cursor): the spiral never touches them, and a banner draws at `p.x + _shift_cur` (see _pose and
+## _ink). `_cy` also needs its scroll taken off: it is absolute on an endless page, and when it passes
+## `_bottom` the page scrolls (`_scroll_to += _line_step`), so every glyph is drawn at `p.y - _scroll`.
 func _pen_at() -> Vector2:
 	if _layout == "spiral":
-		# A COIL IS NOT TRACKED, it is framed. The nib runs along the spiral, so its angle
-		# advances as `sqrt(s)` - measured on a mid-size coil, about 0.14 rad per character at
-		# eight characters a second, which is 0.44 unit-fractions a second of tangential travel.
-		# The tracker's own 1.4 s constant means a camera aimed at it lags by more than half a
-		# unit, i.e. further than the whole visible width, so it can only ever chase and never
-		# arrive: measured at 1.3% of frames with the nib in shot, which is WORSE than the old
-		# rule's parked corner. The coil is drawn to FIT instead (see `_refit`), so the
-		# composition is already where it needs to be and the frame simply holds still on it -
-		# which is why `_zoom_in` is sampled low for this layout in build_params, so the whole
-		# coil is in shot rather than its empty hub.
+		# A coil is framed, not tracked: its nib's angle advances as `sqrt(s)`, so a tracker lags by more than
+		# the visible width and only chases. The coil is drawn to fit (see `_refit`), with `_zoom_in` sampled low.
 		return Vector2.ZERO
-	# The SAME eased shift the glyphs are drawn with (see _ease_shift). Recomputing the raw
-	# target here would have the camera stepping while the row glides.
-	#
-	# AND THE SAME REVEAL, for the same reason `_shift_target` reads it: `_cx` is the COMMITTED
-	# cursor, so `_cx + _adv * 0.5` jumped a whole character every commit - eight times a second,
-	# straight into the camera's speed. Following the nib's actual position instead is continuous
-	# across the handover, because `_cx` gains the character's width at the same instant
-	# `_reveal` drops from 1 to 0.
+	# The same eased shift the glyphs are drawn with (see _ease_shift), and the same reveal, for the same
+	# reason `_shift_target` reads it: `_cx` is the committed cursor and steps a whole character per commit.
 	var w := _adv * (0.62 if _cur_mark else 1.0)
 	return Vector2(_cx + w * clampf(_reveal, 0.0, 1.0) + _shift_cur,
 		_cy - _scroll - _line_step * 0.25)
 
 
-## Keep the frame ON the writing.
-##
-## The tracking above is eased over about 1.4 s, which is what makes it read as an eye following
-## a hand rather than as a rig bolted to it - but a lag that long crosses a lot of blank paper
-## whenever the pen jumps, and a mis-aimed target (the two layouts above) parks there for good.
-## Bounding the camera is what turns "the writing should stay in frame" from a hope into a
-## property: the visible rectangle is held inside the region the writing occupies, so the frame
-## can neither sit on empty ground nor travel far enough to bring the sheet's own edge into view.
-##
-## The bound is exactly tight, not conservative - at the limit the pen sits ON the frame edge
-## rather than inside it - because pulling it in any further would stop the camera before the
-## end of a line and the hand would appear to write off the side of its own frame.
+## Keep the frame on the writing: the visible rectangle is held inside the region the writing occupies, so
+## it can neither sit on empty ground nor show the sheet's edge. The bound is exactly tight (the pen sits
+## on the frame edge at the limit) so the hand never writes off the side of its own frame.
 func _clamp_cam(c: Vector2) -> Vector2:
 	var h := _half / maxf(0.001, _zoom_in)          # visible half-extent, in unit fractions
 	if _layout == "spiral":
-		# A coil is written outward from its center, so the written DISC is the bound, and it
-		# grows with `_s` - which is also why the opening frame stays centered: at `_s_min` the
-		# whole coil is smaller than the view and there is nowhere to go.
-		# The coil is scaled to fit, so there is nowhere for the camera to go - and saying so
-		# here rather than trusting it keeps the bound true if the fit is ever floored.
+		# A coil is written outward from its center, so the written disc is the bound and grows with
+		# `_s`. The coil is scaled to fit, so there is nowhere for the camera to go; saying so here keeps
+		# the bound true if the fit is ever floored.
 		var r := _coil * sqrt(2.0 * maxf(_s, _s_min) / maxf(0.000001, _coil)) * _coil_fit
 		return c.limit_length(maxf(0.0, r - minf(h.x, h.y)))
-	# A page narrower or shorter than the view (a column, mostly) has no pan to do on that axis,
-	# so it centers instead of clamping to an inverted range.
+	# A page narrower or shorter than the view has no pan on that axis, so it centers.
 	var x1 := _right - h.x
 	var y1 := _bottom - h.y
 	return Vector2(
@@ -914,8 +682,7 @@ func _clamp_cam(c: Vector2) -> Vector2:
 		clampf(c.y, -y1, y1) if y1 > 0.0 else 0.0)
 
 
-# Faint ruling under the writing. Cheap (a dozen antialiased lines) and it is what
-# turns a bright ground into paper rather than a wall.
+# Faint ruling under the writing (a dozen antialiased lines): it turns a bright ground into paper.
 func _rules(u: float) -> void:
 	if not _ruled or _layout == "spiral" or _line_step < 0.005:
 		return
@@ -933,8 +700,7 @@ func _rules(u: float) -> void:
 		draw_line(Vector2(x, _top * u), Vector2(x, _bottom * u), _rule_col, 1.2, true)
 
 
-# The whole page in one triangle array. Per character: one native transform of its
-# baked vertices, three append_arrays, one color.
+# The whole page in one triangle array: per character one native transform of its baked vertices, three append_arrays, one color.
 func _ink(u: float) -> void:
 	_pts.clear()
 	_cols.clear()
@@ -962,8 +728,7 @@ func _ink(u: float) -> void:
 		prev_ok = true
 	if not _cur.is_empty() and _pose(_cur, u):
 		var gc: GlyphSet.Glyph = _gs.glyphs[int(_cur["g"])]
-		# The reveal is eased, so ink leaves the nib the way a hand moves - into a stroke
-		# and out of it - rather than at a constant machine rate.
+		# The reveal is eased, so ink leaves the nib into a stroke and out of it.
 		var p := lerpf(_reveal, Nonlinear.apply("smoothstep", _reveal), _ease)
 		var tr := _gs.trace(int(_cur["g"]), p)
 		var v: PackedVector2Array = tr["verts"]
@@ -993,8 +758,7 @@ func _emit(verts: PackedVector2Array, uvs: PackedVector2Array, col: Color) -> vo
 	_cols.append_array(c)
 
 
-# The cursive connector between two characters of the same word: one quad, the same
-# ramp texture, a third of the pen's weight.
+# The cursive connector between two characters of the same word: one quad, the same ramp texture, a third of the pen's weight.
 func _hairline(a: Vector2, b: Vector2, w: float, col: Color) -> void:
 	var d := b - a
 	if d.length_squared() < 0.01:
@@ -1025,9 +789,8 @@ func _flush() -> void:
 		PackedInt32Array(), PackedFloat32Array(), GlyphSet.ramp_texture().get_rid())
 
 
-# Indices depend only on a quad's ORDINAL, and the vertex buffer is built by
-# concatenation, so one template grown to the high-water mark serves every frame -
-# the alternative is six array appends per quad, thousands of times a frame.
+# Indices depend only on a quad's ordinal and the vertex buffer is built by concatenation, so one
+# template grown to the high-water mark serves every frame.
 func _ensure_idx(quads: int) -> void:
 	var have := _idx.size() / 6
 	if quads <= have:
@@ -1044,19 +807,16 @@ func _ensure_idx(quads: int) -> void:
 		_idx[o + 5] = b + 3
 
 
-# Where one character sits this frame, into _pxf / _pfade. Returns false for a
-# character that has scrolled off the page.
+# Where one character sits this frame, into _pxf / _pfade. Returns false for a character scrolled off the page.
 func _pose(e: Dictionary, u: float) -> bool:
-	# Deliberately audio-free: the sound presses the nib and moves the color, it never
-	# scales the writing. A page that breathed with the amplitude would read as a gif.
+	# Audio-free: the sound presses the nib and moves the color, it never scales the writing.
 	var sc := _em * u
 	if _layout == "spiral":
 		var s: float = float(e["s"])
 		if s < _s_min * 0.9:
 			return false
 		var theta := sqrt(2.0 * s / _coil)
-		# The coil is drawn smaller as it grows, and the glyphs with it - one scale for the
-		# whole picture, so nothing moves relative to anything else.
+		# The coil is drawn smaller as it grows, and the glyphs with it: one scale for the whole picture.
 		var r := _coil * theta * _coil_fit
 		_pfade = clampf((r - _line_step * _coil_fit)
 			/ maxf(0.001, _line_step * _coil_fit * 0.8), 0.0, 1.0)
@@ -1067,8 +827,7 @@ func _pose(e: Dictionary, u: float) -> bool:
 	var y := p.y - _scroll
 	if y < _top - 2.0 * _line_step:
 		return false
-	# A centered layout recenters the LIVE line as it grows and freezes the shift once the
-	# line is finished, so writing pushes the line left instead of everything jumping.
+	# A centered layout recenters the live line as it grows and freezes the shift once the line is finished.
 	var sh := _shift_cur
 	if _centered:
 		var ln := int(e["line"])
@@ -1079,9 +838,8 @@ func _pose(e: Dictionary, u: float) -> bool:
 	return true
 
 
-# Ink dries. Fresh ink is wetter, darker (or brighter, on a dark ground) and pulled
-# toward the scheme's accent; over `_dry` seconds it settles to the page's own color.
-# It is the scene's whole color dynamic, and it is free - age is a subtraction.
+# Ink dries. Fresh ink is wetter, darker (or brighter on a dark ground) and pulled toward the scheme's
+# accent; over `_dry` seconds it settles to the page's own color (age is a subtraction, so it is free).
 func _ink_color(age: float, fade: float) -> Color:
 	var wet := exp(-maxf(0.0, age) / _dry)
 	var h := _ink_hue
@@ -1092,8 +850,7 @@ func _ink_color(age: float, fade: float) -> Color:
 	return Color.from_hsv(h, s, clampf(v, 0.0, 1.0), clampf(_ink_alpha * fade, 0.0, 1.0))
 
 
-# The nib itself, resting on the paper where the ink stops. A small wedge, no more -
-# the hand and the pen holding it are implied by the shaft angle and the ink behind it.
+# The nib itself, resting on the paper where the ink stops: a small wedge; the shaft angle and the ink imply the hand.
 func _nib(u: float) -> void:
 	if not _tip_ok:
 		return

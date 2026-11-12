@@ -7,11 +7,10 @@ class_name Visemes
 ## for it ([method targets], from `visemes.json`), and the mouth at a moment is every nearby phone's
 ## shape, weighed by how much it dominates there ([method blend_at]).
 ##
-## COARTICULATION BY DOMINANCE FUNCTIONS (Cohen and Massaro, "Modeling coarticulation in synthetic
-## visual speech", 1993): each phone pulls the mouth toward its class's shape with a strength that
-## falls off on either side of its center, `strength * exp(-rate * |t - center|)`, and the mouth is
-## the pulls' weighted mean. A strong, quick class (the lips closing for P B M) wins its moment even
-## in fast speech; a weak one (T D N L, said with the tongue) takes the shape of the vowels round it.
+## Coarticulation by dominance functions (Cohen and Massaro, "Modeling coarticulation in synthetic visual speech", 1993):
+## each phone pulls the mouth toward its class's shape with a strength that falls off on either side of its center,
+## `strength * exp(-rate * |t - center|)`, and the mouth is the pulls' weighted mean. A strong, quick class (the lips closing
+## for P B M) wins its moment even in fast speech; a weak one (T D N L) takes the shape of the vowels round it.
 ##
 ##   label     its name
 ##   arpabet   its sounds as ghost's own phonemes spell them (the captions' words, [Phonemes])
@@ -112,7 +111,7 @@ static func ranges() -> Dictionary:
 	return out
 
 
-## THEIR SHAPE FOR EACH CLASS, from `visemes.json` ([param data]): `{class: PackedFloat32Array}` of the
+## Their shape for each class, from `visemes.json` ([param data]): `{class: PackedFloat32Array}` of the
 ## mouth blendshapes, in its `names`' order.
 static func targets(data: Variant) -> Dictionary:
 	var out := {}
@@ -124,13 +123,12 @@ static func targets(data: Variant) -> Dictionary:
 	return out
 
 
-## THE VOICE'S PHONES AS CLASSES, with a rest wherever the voice is silent: `[{c, t0, t1, mid}]`,
-## ascending - each phone's class and center, and the rests' [param phones] leave between them.
+## The voice's phones as classes, with a rest wherever the voice is silent: `[{c, t0, t1, mid}]`, ascending - each phone's
+## class and center, and the rests' [param phones] leave between them.
 ##
-## A PHONE HOLDS ITS MOUTH UNTIL THE NEXT ONE STARTS: the voice times each sound by its own frames
-## alone, and the plan's blanks between them are no one's - a P or an M came back 12 to 24 ms long,
-## under a frame, and the lips scarcely closed (2026-10-21, the first take read). Within a run of
-## speech each phone runs on to the next; a gap of [constant REST_GAP] or more is a rest.
+## A phone holds its mouth until the next one starts: the voice times each sound by its own frames alone, and the blanks
+## between them are no one's (a P or an M comes back 12 to 24 ms long, under a frame, and the lips would scarcely close).
+## Within a run of speech each phone runs on to the next; a gap of [constant REST_GAP] or more is a rest.
 static func timeline(phones: Array) -> Array:
 	var said: Array = []
 	for ph in phones:
@@ -157,11 +155,10 @@ static func timeline(phones: Array) -> Array:
 	return out
 
 
-## EVERY PULL ON THE MOUTH AT [param t]: each phone of [param line] ([method timeline]) within
-## [constant REACH], weighed by its dominance there - its class's `strength`, falling off at its `rate`
-## from the middle half of the phone - and the rest, always a little: `[[k, class, weight]]`, `k` the
-## phone's place in the line (-1 for the rest's floor). [param rows] are the classes' holds - the
-## registry's, unless a gate hands its own.
+## Every pull on the mouth at [param t]: each phone of [param line] ([method timeline]) within [constant REACH], weighed by
+## its dominance there - its class's `strength`, falling off at its `rate` from the middle half of the phone - and the rest,
+## always a little: `[[k, class, weight]]`, `k` the phone's place in the line (-1 for the rest's floor). [param rows] are the
+## classes' holds - the registry's, unless a gate hands its own.
 static func pulls(t: float, line: Array, from := 0, rows: Dictionary = REGISTRY) -> Array:
 	var out: Array = [[-1, "rest", REST_FLOOR]]
 	var i0 := clampi(from, 0, line.size())
@@ -185,9 +182,8 @@ static func pulls(t: float, line: Array, from := 0, rows: Dictionary = REGISTRY)
 	return out
 
 
-## THE MOUTH AT [param t]: every pull ([method pulls]) toward its class's shape in [param targets]
-## ([method targets]), the shapes mixed by the pulls' weights; [param n] the shapes' length. Before the
-## first phone and after the last, the rest.
+## The mouth at [param t]: every pull ([method pulls]) toward its class's shape in [param targets] ([method targets]), the
+## shapes mixed by the pulls' weights; [param n] the shapes' length. Before the first phone and after the last, the rest.
 static func blend_at(t: float, line: Array, targets: Dictionary, n: int, from := 0,
 		rows: Dictionary = REGISTRY) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
@@ -207,14 +203,11 @@ static func blend_at(t: float, line: Array, targets: Dictionary, n: int, from :=
 	return out
 
 
-## THE MOUTH AS A FACE THAT MIXES ANY NUMBER OF SHAPES TAKES IT (a head of splats: its faces are linear in the
-## scores): every pull ([method pulls]) as its share of them all - Cohen and Massaro's own weighted mean, so a
-## sound gives way to the next as their dominances cross - averaged over [constant SMOOTH_TAPS] moments a
-## Gaussian of [constant SMOOTH] seconds weighs: `{class: share}`, summing to 1, a pure function of [param t].
-## THE TWO STRONGEST ([method strongest]) ARE FOR TWO PICTURES: played on the splats (2026-10-24, the user:
-## "the face moves/morphs at EXACTLY the same time every phoneme changes"), each sound held its whole shape and
-## gave way to the next in some 15 ms - a jump within a frame, the mouth's largest 0.69 of a score from one
-## frame to the next on a real passage, its path twice this mix's.
+## The mouth as a face that mixes any number of shapes takes it (a head of splats: its faces are linear in the scores):
+## every pull ([method pulls]) as its share of them all - Cohen and Massaro's own weighted mean, so a sound gives way to the
+## next as their dominances cross - averaged over [constant SMOOTH_TAPS] moments a Gaussian of [constant SMOOTH] seconds
+## weighs: `{class: share}`, summing to 1, a pure function of [param t]. [method strongest] is for two pictures: on splats,
+## a sound held its whole shape and gave way in some 15 ms, a jump within a frame.
 static func mix(t: float, line: Array, from := 0, rows: Dictionary = REGISTRY) -> Dictionary:
 	var out := {}
 	var weighed := 0.0
@@ -236,12 +229,10 @@ static func mix(t: float, line: Array, from := 0, rows: Dictionary = REGISTRY) -
 	return out
 
 
-## THE TWO STRONGEST PULLS AT [param t], each less the third's and over the strongest's, what is left
-## the still's own mouth (the rest, -1): `[[k, class, weight]]`, the weights summing to 1. Taking the
-## third's weight off both is what keeps the mouth continuous - a pull falls to nothing at the very moment
-## another overtakes it - and measuring them against the strongest, not against each other, keeps it so
-## where three pull alike (their shares of each other swung wildly there). So two real mouths are mixed at
-## most, and none ever pops in or out.
+## The two strongest pulls at [param t], each less the third's and over the strongest's, what is left the still's own mouth
+## (the rest, -1): `[[k, class, weight]]`, the weights summing to 1. Taking the third's weight off both keeps the mouth
+## continuous (a pull falls to nothing at the very moment another overtakes it), and measuring them against the strongest,
+## not against each other, keeps it so where three pull alike. So two real mouths are mixed at most, and none pops in or out.
 static func strongest(t: float, line: Array, from := 0, rows: Dictionary = REGISTRY) -> Array:
 	var all := pulls(t, line, from, rows)
 	all.sort_custom(func(a: Array, b: Array) -> bool: return float(a[2]) > float(b[2]))

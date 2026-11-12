@@ -1,23 +1,22 @@
 extends RefCounted
 class_name Actors
 
-## Actors - the library of actors a Likeness plays: each a folder, `user://actors/<id>/`, shared by
-## every note that uses it, as [Illustrations] and [Films] are (next/likeness.md, "The library").
+## Actors - the library of actors a Likeness plays: each a folder, `user://actors/<id>/`, shared by every note that uses
+## it, as [Illustrations] and [Films] are (next/likeness.md, "The library").
 ##
-## A VOICE ALONE IS ONE TOO ([method ActorFolder.sound_only]): a person whose voice is all the Voice training card
+## A voice alone is one too ([method ActorFolder.sound_only]): a person whose voice is all the Voice training card
 ## learns of them, listed apart from the actors ([method list]).
 ##
-## AN ACTOR IS BUILT FROM THEIR OWN VIDEOS and is nothing but what was made from them, a file per step
-## ([ActorFolder], [ActorSteps]): the videos surveyed, cut into shots, the shots grouped into sets (one
-## camera placement and one look each); from every video, their range of mouth shapes and their head's
-## motion; and for the set in use, its stills, its rig and its library of their mouths and eyes. The
-## Actor card makes and manages one and puts them on the stage ([ActorCard], [LikenessMedium]).
+## An actor is built from their own videos and is nothing but what was made from them, a file per step ([ActorFolder],
+## [ActorSteps]): the videos surveyed, cut into shots, the shots grouped into sets (one camera placement and one look
+## each); from every video, their range of mouth shapes and their head's motion; and for the set in use, its stills, rig
+## and library of their mouths and eyes. The Actor card makes and manages one and puts them on the stage ([ActorCard],
+## [LikenessMedium]).
 ##
-## ITS RULES ARE THE ILLUSTRATION LIBRARY'S: nothing builds on its own (a button is the only caller,
-## since the survey costs hours of CPU and the audit quota); each step's output records what it
-## was made from, so a changed input marks it STALE - flagged, and still used until it is made again.
+## Nothing builds on its own (a button is the only caller, since the survey costs hours of CPU and the audit quota); each
+## step's output records what it was made from, so a changed input marks it stale - flagged, and still used until it is made again.
 ##
-## THE TEST SEAM: [method use_for_test] moves the root aside, so no gate writes the author's actors.
+## [method use_for_test] moves the root aside, so no gate writes the author's actors.
 
 const ROOT := "user://actors"
 

@@ -9,7 +9,7 @@ extends SceneTree
 ## through to letter rules and merely sounded a bit wrong. Neither would ever
 ## have failed a test that only checked "does it render".
 ##
-## THE THIRD DEFECT, reported from a chapter render, is why the WHITESPACE cases below exist:
+## The third defect, reported from a chapter render, is why the WHITESPACE cases below exist:
 ## `2009` vanished from "an opponent who left the building in 2009." - out of the audio and out of
 ## the subtitles both, with the sentence ending at "in". It was the last token of a paragraph, and
 ## `_expand_numbers` split its input on the SPACE CHARACTER, so the token arrived as `"2009.\n"`
@@ -18,7 +18,7 @@ extends SceneTree
 ## Every numeral case here is therefore run TWICE - as given, and again with a newline welded to
 ## its end - because the pass had a hole that only opened at the end of a line.
 ##
-## AND NOTHING MAY BE DROPPED IN SILENCE, which is the general form of all three: the no-drop
+## And nothing may be dropped in silence, which is the general form of all three: the no-drop
 ## block below requires every token of a paragraph to reach the parse output, and
 ## Phonemes._rescue_phones plus ReadingPlan.bridge_words make the two places that used to
 ## delete a word warn and keep it instead.
@@ -125,7 +125,7 @@ const MACRO_CASES := [
 	["a ${GONE:}placeholder.", "a placeholder", "GONE"],
 	# two in one sentence, and a bare $ that is NOT a macro must still be money
 	["cost $5 and ${A:1} plus ${B:2}.", "five dollars and one plus two", "${"],
-	# A DEFAULT MAY BE ANY LENGTH. There is nothing of this size in the book
+	# A default may be any length. There is nothing of this size in the book
 	# today and the author has said there will be, so it is held now rather than
 	# discovered in a render: several sentences, a line break inside the value,
 	# and a blank line - a whole paragraph break - inside it.
@@ -138,7 +138,7 @@ const MACRO_CASES := [
 	# left the entire macro to be read aloud - silently, and only in the one
 	# sentence that happened to contain a brace.
 	["A ${Q:set {a, b} of things} here.", "A set {a, b} of things here", "${"],
-	# A MACRO THAT NEVER CLOSES IS LEFT VERBATIM, not swallowed. Reading `${Q:`
+	# A macro that never closes is left verbatim, not swallowed. Reading `${Q:`
 	# aloud is loud and reported; taking the value to end of file would delete
 	# the rest of the chapter, which is the failure this project keeps un-fixing.
 	["A ${Q:runaway and the rest of it.", "and the rest of it", "!!never!!"],
@@ -185,7 +185,7 @@ func _init() -> void:
 			+ "would read 'ee sim' where 'eSIM' was written (spans: %s)" % str(spans))
 		fails += 1
 
-	# NO INITIALISM MAY BE SPELLED WITH `ay`. It phonemizes to ˈaɪ - the word "aye" - where the
+	# No initialism may be spelled with `ay`. It phonemizes to ˈaɪ - the word "aye" - where the
 	# letter A is ˈeɪ, and that one respelling is what turned the override for CIA into "see eye
 	# eye". The table is small and hand-written, so this is the check that keeps the next entry
 	# from repeating it.
@@ -196,7 +196,7 @@ func _init() -> void:
 				% [k, spelled] + "the word 'aye', not as the letter A (use `eigh`)")
 			fails += 1
 
-	# THE LETTER A, for the same reason one level down. It reaches every alphanumeric token:
+	# The letter a, for the same reason one level down. It reaches every alphanumeric token:
 	# "A4" would have read "aye four".
 	if String(TextNorm_.LETTER_NAMES["a"]) == "ay":
 		print("norm_check: FAIL  the letter A is spelled 'ay', which eSpeak reads as ˈaɪ")
@@ -211,7 +211,7 @@ func _init() -> void:
 		if not got.contains(String(c[1])):
 			print("norm_check: FAIL  %-34s -> %s   (wanted %s)" % [c[0], got, c[1]])
 			fails += 1
-		# ...AND AT THE END OF A LINE, which is where the pass used to give up. Run every case
+		# ...And at the end of a line, which is where the pass used to give up. Run every case
 		# again with a newline attached: the expansion must be identical and the newline must
 		# survive, because a paragraph break is a full stop to the sentence splitter.
 		var nl: String = TextNorm_.normalize(String(c[0]) + "\n")
@@ -283,7 +283,7 @@ func _init() -> void:
 		if not got_m.contains(String(c[1])):
 			print("norm_check: FAIL  %-52s -> %s   (wanted %s)" % [c[0], got_m, c[1]])
 			fails += 1
-		# THE HALF THAT MATTERS. Reading the macro's own text aloud is the defect;
+		# The half that matters. Reading the macro's own text aloud is the defect;
 		# a pass that only checked the default arrived would miss a substitution
 		# that appended rather than replaced.
 		if got_m.contains(String(c[2])):
@@ -315,7 +315,7 @@ func _init() -> void:
 		print("norm_check: FAIL  a paragraph-length default was reported as unusable")
 		fails += 1
 
-	# THE PAGE AND THE MOUTH SAY DIFFERENT THINGS, and both must survive.
+	# The page and the mouth say different things, and both must survive.
 	#
 	# Reported: a sentence ending "...who left the building in 2009." was
 	# SUBTITLED "...in two thousand nine." Normalization is for the phoneme
@@ -323,7 +323,7 @@ func _init() -> void:
 	# `display` since it was written - but `display` was read off the text AFTER
 	# this file had rewritten it, by which point the numeral existed nowhere.
 	# Every case here is a rewrite that must be HEARD one way and SHOWN another.
-	# THE ASSERTION IS EQUALITY, not "contains the numeral". A weaker test passes
+	# The assertion is equality, not "contains the numeral". A weaker test passes
 	# while a span measured on the wrong word leaves `cetera` behind it, which is
 	# how this very check first went green on a broken abbreviation span. What
 	# the reader sees must be the sentence they wrote, word for word.
@@ -351,7 +351,7 @@ func _init() -> void:
 			print("norm_check: FAIL  %-24s spoken as '%s' (wanted %s)" % [c[0], spoken, c[1]])
 			fails += 1
 
-	# THE RUN IS GROUPED, so a subtitle can hold the numeral up for as long as it
+	# The run is grouped, so a subtitle can hold the numeral up for as long as it
 	# takes to say - the words after the first carry the group and nothing to draw.
 	var grouped := 0
 	var blanks := 0

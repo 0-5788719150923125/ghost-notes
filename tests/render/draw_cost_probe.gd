@@ -1,24 +1,20 @@
 extends Node
 
-## draw_cost_probe - THE TWO NUMBERS THE AUDIT RESTS ON, measured rather than reasoned about.
-##
+## draw_cost_probe - two measured numbers: what one canvas draw call costs from GDScript, and whether a nested
+## SubViewport still renders when its parent is stopped.
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/render/draw_cost_probe.gd 300
 ##
-## (1) WHAT ONE CANVAS DRAW CALL COSTS FROM GDSCRIPT. The catalog sweep says a scene's frame
-## tracks its DRAW-CALL COUNT far better than its geometry (starfield/static: 3029 calls,
-## 194k prims, 56 ms; rocks: 3 calls, 19k prims, 24 ms). That is a claim about the per-call
-## GDScript -> RenderingServer round trip, and it is testable directly: draw the SAME triangles
-## as N separate calls and as one batched triangle array, on the same canvas, in the same frame.
+## (1) What one canvas draw call costs from GDScript: a scene's frame tracks its draw-call count far better than its
+## geometry (starfield/static: 3029 calls, 194k prims, 56 ms; rocks: 3 calls, 19k prims, 24 ms). Tested by drawing the
+## same triangles as N separate calls and as one batched triangle array, on the same canvas in the same frame.
 ##
-## (2) WHETHER A NESTED SubViewport STILL RENDERS WHEN ITS PARENT IS STOPPED. main.gd's stage
-## governor throttles by disabling the STAGE (process off, render target UPDATE_DISABLED). The
-## comic medium puts its live panels in SubViewports NESTED INSIDE that stage, each set to
-## UPDATE_ALWAYS. If a nested target ignores its parent's state, the governor cannot throttle
-## the comic at all - it is a real question about engine semantics and it decides whether the
-## governor is a fix or a placebo here.
+## (2) Whether a nested SubViewport still renders when its parent is stopped: main.gd's stage governor throttles by
+## disabling the stage (process off, render target UPDATE_DISABLED), and the comic medium puts its live panels in
+## SubViewports nested inside that stage, each set to UPDATE_ALWAYS. If a nested target ignores its parent's state,
+## the governor cannot throttle the comic.
 ##
-## Both are measured with the engine's own per-viewport render timers and the frame counters, on
-## the real GPU. Nothing here touches ghost's scenes; it is a control for them.
+## Both are measured with the engine's per-viewport render timers and the frame counters, on the real GPU. Nothing
+## here touches ghost's scenes.
 
 const REPS := 6
 const SHAPES := [200, 600, 1800]

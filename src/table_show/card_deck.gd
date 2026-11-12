@@ -3,8 +3,8 @@ class_name CardDeck
 
 ## CardDeck - the cards a show reads with, and how an episode's deck is shuffled.
 ##
-## THE DECK IS THE SHOW'S, and it is DATA: a `## Cards` section of the show's brief, one card per
-## list item, each with an optional numeral and its meaning -
+## The deck is data: a `## Cards` section of the show's brief, one card per list item, each with an
+## optional numeral and its meaning -
 ##
 ##     ## Cards
 ##
@@ -12,23 +12,16 @@ class_name CardDeck
 ##     - XVI. The Tower: sudden upheaval, a structure that was never sound. Reversed: ...
 ##     - 0. The Fool: ...
 ##
-## - so a show reads the tarot by listing its 78, or a deck of its own: an oracle of forty-four
-## cards, a deck of Mondays. A `###` heading inside the section names the group the cards under it
-## belong to (a suit, an arcana). Prose in the section is kept as instructions (what a suit stands
-## for, what a jumper means to the genre); only the list is the deck.
+## A `###` heading inside the section names the group the cards under it belong to (a suit, an
+## arcana). Prose in the section is kept as instructions; only the list is the deck. No deck is built
+## in. A brief that lists no card leaves the deck to each episode's producer ([method chooses]).
 ##
-## A brief that lists no card leaves the deck to each episode's producer ([method chooses]): the
-## brief says what kind of cards they are. No deck is built in (the user, 2026-10-08: "for anything
-## else that tarot might need - declare it in the markdown files"): the tarot's 78 are the tarot
-## show's own list.
-##
-## THE DRAW IS NEVER AN AGENT'S. The deck is defined before anyone writes a word, and an episode's
-## cards are a seeded shuffle of it ([method shuffled]) - the seed drawn from the operating
-## system's cryptographic randomness when the episode is made, and kept, so the episode can be
-## made again exactly. No agent picks a card, and none is shown the deck's order.
+## The draw is never an agent's: an episode's cards are a seeded shuffle of the deck
+## ([method shuffled]), the seed taken from the OS's cryptographic randomness when the episode is
+## made and kept so it can be made again. No agent picks a card or is shown the deck's order.
 
-## The heading that opens a show's deck: `## Cards` or `## The Cards`. Not "Deck": a brief
-## describing its deck's LOOK under that heading, in bullets, would become a deck of its bullets.
+## The heading that opens a show's deck: `## Cards` or `## The Cards`. Not "Deck", which a brief
+## could use for a description of its deck's look.
 const HEADING := ScriptMarks.DECK_HEADING
 const ITEM := "^\\s*(?:[-*+]|\\d+[.)])\\s+(.+)$"
 ## A card's own numeral, ahead of its name: `0.`, `XVI.`, `12)`.
@@ -76,7 +69,7 @@ static func parse(body: String) -> Array:
 		if nm != null:
 			num = nm.get_string(1)
 			text = nm.get_string(2)
-		# the name ends at the FIRST separator, whichever it is (a colon, or a spaced dash of any length)
+		# the name ends at the first separator, whichever it is (a colon, or a spaced dash of any length)
 		var name := text
 		var meaning := ""
 		var cut := -1
@@ -109,17 +102,15 @@ static func of(body: String) -> Array:
 	return parse(body)
 
 
-## THE PRODUCER CHOOSES THE CARDS: [param body] lists none - its brief says what kind of cards the
-## show shows (a collection shown off, a box of whatever the episode finds, a tarot deck it does not
-## write out). Each episode's producer makes its deck ([method TableProducer._land_plan]) and the seed
-## still decides which of them come out, so no agent picks a card here either.
+## True when [param body] lists no card: its brief says what kind of cards the show shows, each
+## episode's producer makes the deck ([method TableProducer._land_plan]), and the seed still decides
+## which come out.
 static func chooses(body: String) -> bool:
 	return parse(body).is_empty()
 
 
-## [param body] as the agents are handed it: the Cards section's LIST taken out (each card's
-## meaning reaches a writer only when that card is drawn), its prose kept, and a line saying how
-## many cards the deck has.
+## [param body] as the agents are handed it: the Cards list taken out (a card's meaning reaches a
+## writer only when it is drawn), its prose kept, and a line giving the card count.
 static func strip(body: String) -> String:
 	var span := _section(body)
 	if span.is_empty() or chooses(body):
@@ -155,9 +146,8 @@ static func _section(body: String) -> Dictionary:
 
 # --- the draw ---------------------------------------------------------------------------------
 
-## THE SHUFFLE: [param deck] in the order this [param seed] cuts it, each card with whether it
-## comes up reversed (only when [param reversals]; about a third do, as readers who use them
-## find). Returns copies of the cards, each with `reversed` added.
+## [param deck] in the order this [param seed] cuts it, each card with whether it comes up reversed
+## (only when [param reversals]; about a third do). Returns copies, each with `reversed` added.
 static func shuffled(deck: Array, seed: int, reversals: bool) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "tarot-shuffle"])

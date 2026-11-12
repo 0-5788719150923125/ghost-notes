@@ -1,30 +1,29 @@
 extends Node
 
-## frame_check - two frames, landscape and portrait (next/notes.md step 10): the exporter, the stage
-## and the subtitles, measured.
+## frame_check - two frames, landscape and portrait (next/notes.md): the exporter, the stage and the
+## subtitles, measured.
 ##
 ##   tests/run_boot_probe.sh tests/show/frame_check.gd 120
 ##
-## THE EXPORTER: a landscape override written byte for byte as it always was; a portrait one shapes
-## its window like the frame (270x480) and says `aspect="keep"` - the trap was a portrait render in a
-## landscape window, widened by the project's `expand` aspect; every preset's render size even
-## (yuv420p refuses odd); the portrait presets the landscape ones turned, with no 4K; the thumbnail
-## cut at the frame's shape.
+## The exporter: a landscape override written byte for byte as it always was; a portrait one shapes its
+## window like the frame (270x480) and says `aspect="keep"` (a portrait render in a landscape window is
+## widened by the project's `expand` aspect); every preset's render size even (yuv420p refuses odd); the
+## portrait presets the landscape ones turned, with no 4K; the thumbnail cut at the frame's shape.
 ##
-## THE FRAME: portrait only where the medium has one (full frame); a medium without one plays
-## landscape whatever was asked.
+## The frame: portrait only where the medium has one (full frame); a medium without one plays landscape
+## whatever was asked.
 ##
-## THE STAGE IS THE FRAME: through the real main scene, a song note's stage (a note of the gate's own,
-## with a Medium, opened from the list) is the frame's shape
-## (16:9, or 9:16 in portrait), as large as the window holds it, centered, black beside it; the filters
-## are sized to the stage; the subtitles told the frame. Measured against the window as it is - a 16:9
-## window holds a landscape stage whole, and headless Godot's window is 64x64, so its view is square
-## and the landscape stage sits between bars above and below. HOW MANY PIXELS THE STAGE HAS is the Graphics menu's
-## (its Resolution): a pixel to a unit of the window's canvas at 1080p, twice the lines at 4K, and only the stage changes.
+## The stage is the frame: through the real main scene, a song note's stage (a note of the gate's own,
+## with a Medium, opened from the list) is the frame's shape (16:9, or 9:16 in portrait), as large as the
+## window holds it, centered, black beside it; the filters are sized to the stage; the subtitles told the
+## frame. Measured against the window as it is (headless Godot's window is 64x64, so its view is square
+## and the landscape stage sits between bars). How many pixels the stage has is the Graphics menu's
+## Resolution: a pixel to a unit of the window's canvas at 1080p, twice the lines at 4K, and only the
+## stage changes.
 ##
-## THE SUBTITLES' SAFE AREA: a portrait frame's last line sits above its bottom 35% and its lines
-## keep off the right 17.8% (Google's safe zones for 1080x1920), type sized off the short side; a
-## landscape frame lays out exactly as before (92% of the width, 70 px up at 1080).
+## The subtitles' safe area: a portrait frame's last line sits above its bottom 35% and its lines keep
+## off the right 17.8% (Google's safe zones for 1080x1920), type sized off the short side; a landscape
+## frame lays out as before (92% of the width, 70 px up at 1080).
 
 const SONG_DIR := "user://frame_check"
 var _fails: Array = []
@@ -149,8 +148,8 @@ func _stage() -> void:
 	await get_tree().process_frame
 	var port := _fit(vis, Vector2(9, 16))
 	_ok(_near(sv.get_rect(), port), "portrait: the stage is 9:16, centered, black beside it (%s, want %s)" % [sv.get_rect(), port])
-	# HOW MANY PIXELS IT HAS IS THE GRAPHICS MENU'S (2026-11-11). From 1080p, whatever the author chose: a pixel to a unit of the
-	# window's canvas. At another resolution the stage alone changes - the view, the frame and the subtitles stay where they were
+	# How many pixels it has is the Graphics menu's: from 1080p, whatever the author chose, a pixel to a
+	# unit of the window's canvas. At another resolution the stage alone changes.
 	var authors: Variant = Settings.read(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
 	Settings.write(Graphics.SECTION, "live_resolution", Graphics.LINES_AS_DRAWN)
 	Graphics.apply()
@@ -178,8 +177,8 @@ func _stage() -> void:
 	DirAccess.remove_absolute(dir)
 
 
-## The fixture's silence, copied into a folder of the gate's own with a captions file beside it - the
-## fixture is shared, and a sidecar next to it would caption every other gate's song.
+## The fixture's silence, copied into a folder of the gate's own with a captions file beside it (the
+## fixture is shared, and a sidecar next to it would caption every other gate's song).
 func _captioned_song() -> String:
 	var dir := ProjectSettings.globalize_path(SONG_DIR)
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -193,8 +192,8 @@ func _captioned_song() -> String:
 	return song
 
 
-## The largest rect of [param shape]'s proportions that [param vis] holds, centered - worked out here,
-## not asked of main, so the gate does not grade main's sums with main's sums.
+## The largest rect of [param shape]'s proportions that [param vis] holds, centered; worked out here, not
+## asked of main, so the gate does not grade main's sums with main's sums.
 static func _fit(vis: Vector2, shape: Vector2) -> Rect2:
 	var wide := vis.x / vis.y > shape.x / shape.y      # the window is wider than the frame: bars beside it
 	var size := Vector2(vis.y * shape.x / shape.y, vis.y) if wide else Vector2(vis.x, vis.x * shape.y / shape.x)

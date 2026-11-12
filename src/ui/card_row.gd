@@ -1,9 +1,8 @@
 extends HFlowContainer
 class_name CardRow
 
-## CardRow - the chips under a panel's title, one per [Card] in its color (next/notes.md, "The
-## component row"). A click brings that card into view whole, as a press on its title bar does
-## ([method Card.reveal]); a card never folds (2026-11-09), so a chip has no open or folded to show.
+## CardRow - the chips under a panel's title, one per [Card] in its color (next/notes.md, "The component
+## row"). A click brings that card into view whole, as a press on its title bar does ([method Card.reveal]).
 
 var _cards: Array = []          # [Card]
 var _chips := {}                # Card -> Button
@@ -28,8 +27,8 @@ func track(card: Card) -> void:
 	_paint(card)
 
 
-## THE CHIPS FOLLOW THEIR CARDS BY LOOKING, every frame - a handful of booleans: a card its panel
-## hides (a Pipeline card with nothing to list) has no chip either.
+## The chips follow their cards by looking, every frame (a handful of booleans): a card its panel hides
+## (a Pipeline card with nothing to list) has no chip either.
 func _process(_delta: float) -> void:
 	follow()
 
@@ -45,8 +44,7 @@ func follow() -> void:
 			_paint(card)
 
 
-## A CHIP SAYS WHAT ITS CARD IS FOR (2026-11-11, the user: "If you mouse over the colored components near the + button, they
-## don't tell you anything useful"): the card's [member Card.blurb], then what a click does.
+## A chip says what its card is for: the card's [member Card.blurb], then what a click does.
 static func tip_of(card: Card) -> String:
 	var click := "Click to bring the %s card into view." % card.title
 	return click if card.blurb.is_empty() else card.blurb + "\n\n" + click

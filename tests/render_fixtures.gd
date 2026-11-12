@@ -3,7 +3,7 @@ extends SceneTree
 ## Render the intelligibility fixture set: text in, WAV + timing JSON out.
 ##
 ## This is deliberately dumb. It owns no metrics and makes no judgments - it
-## existed so the Python analyzer (measure_voice.py, removed 2026-10-06) had real
+## existed so the Python analyzer (measure_voice.py, removed) had real
 ## audio with a real alignment to measure, and nothing reads its output now. Every acoustic threshold lives there,
 ## where numpy can do FFTs and LPC; GDScript's job is to be the synthesizer.
 ##

@@ -1,16 +1,14 @@
 extends Node
 
-## NOT a gate - it asserts nothing. It renders the `vapors` scene and writes PNGs, because
-## this look cannot be reasoned about: three earlier visual fixes in this project were
-## argued from the shader source and were wrong about something a rendered frame would have
-## shown in a second (see clown_look_probe.gd, which exists for the same reason).
+## Not a gate (asserts nothing): renders the `vapors` scene and writes PNGs, since this look cannot be
+## reasoned about from the shader source (see clown_look_probe.gd).
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/vapor_look_probe.gd 300 \
 ##       --out /tmp/vapor --chars ink,nebula,gossamer,plasma --times 1,5,11
 ##
-## GHOST_PROBE_GPU is not optional: the scene reaches the Spectrum and Director autoloads
-## (so it needs a real boot) and this reads pixels back (so it needs a real renderer).
-## One PNG per character per time, plus the seed / mood / layout each one rolled.
+## GHOST_PROBE_GPU is required: the scene reaches the Spectrum and Director autoloads (a real boot) and
+## this reads pixels back (a real renderer). One PNG per character per time, plus the seed, mood and
+## layout each rolled.
 
 const W := 960
 const H := 540
@@ -20,11 +18,10 @@ var _out := "user://vapor"
 var _chars: Array = ["ink", "nebula", "gossamer", "plasma"]
 var _times: Array = [1.0, 5.0, 11.0]
 var _behavior := "static"
-## Shader-uniform overrides applied AFTER the layer seeded itself, so a look can be pushed
-## around without editing the scene's tables: --knob u_stretch=3.0,u_gain=1.6
+## Shader-uniform overrides applied after the layer seeded itself: --knob u_stretch=3.0,u_gain=1.6
 var _knobs: Dictionary = {}
-## One uniform swept over several values, each rendered from the same seed at the same
-## moment - the contact sheet, in ONE process (one boot, not five): --sweep u_stretch=2,6,14
+## One uniform swept over several values, each rendered from the same seed at the same moment, in one
+## process: --sweep u_stretch=2,6,14
 var _sweep_key := ""
 var _sweep_vals: Array = []
 var _wrote := 0
@@ -75,8 +72,8 @@ func _parse_args() -> void:
 					_times.append(float(s))
 
 
-# The character is rolled from the seed inside build_params, so finding one means hunting
-# for a seed that rolls it. Cheap: a vapors instance is a handful of dictionaries.
+# The character is rolled from the seed inside build_params, so finding one means hunting for a seed
+# that rolls it (cheap: a vapors instance is a handful of dictionaries).
 func _find_seed(want: String) -> int:
 	for k in 400:
 		var sv := 1 + k * 7
@@ -111,17 +108,17 @@ func _shoot(want: String, sv: int) -> void:
 		sc._vapor._mat.set_shader_parameter(String(k), float(_knobs[k]))
 	var t := 0.0
 	for target: float in _times:
-		# Advance the SIM without waiting on the engine (the field is a function of the
-		# uniforms the update pushes, so nothing needs a frame between steps) ...
+	# Advance the sim without waiting on the engine (the field is a function of the uniforms the
+	# update pushes) ...
 		while t < target:
 			sc.update(_features(t), DT)
 			t += DT
-		# ... then give it frames to actually draw. The shader quad is created inside the
-		# first _draw (deferred, see Layer.FieldQuad), so the first capture needs a few.
+	# ... then give it frames to draw: the shader quad is created inside the first _draw (deferred,
+	# see Layer.FieldQuad), so the first capture needs a few.
 		for _i in 4:
 			await get_tree().process_frame
-		# The sweep renders its variants at THIS moment, from this one instance - the field
-		# is a pure function of its uniforms, so nothing needs re-seeding between them.
+	# The sweep renders its variants at this moment from this one instance: the field is a pure
+	# function of its uniforms.
 		var vals: Array = _sweep_vals if not _sweep_key.is_empty() else [0.0]
 		for vi in vals.size():
 			var tag := "t%02d" % int(round(target))
@@ -139,8 +136,8 @@ func _shoot(want: String, sv: int) -> void:
 	await get_tree().process_frame
 
 
-# A synthetic track with structure: a swelling loudness, a spectrum whose peak travels, and
-# beats on a half-second grid - enough for every audio path in the scene to be exercised.
+# A synthetic track with structure: a swelling loudness, a spectrum whose peak travels and beats on a
+# half-second grid.
 func _features(t: float) -> AudioFeatures:
 	var f := AudioFeatures.new()
 	f.time = t

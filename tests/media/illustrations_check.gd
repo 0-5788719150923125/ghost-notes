@@ -4,12 +4,10 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/media/illustrations_check.gd
 ##
-## What fails SILENTLY here, and so is asserted: a prompt that drops the author's words or the
-## "references are style only" instruction (the model then paints the reference's subject); a
-## cache key that changes when a comment is re-wrapped (every picture repaints on the next
-## edit - quota spent for nothing); a reroll that REPLACES instead of adding a version; an
-## output resolver that picks up a png from a different run; and a read-only process (a
-## render, a probe) that starts jobs or writes the index.
+## Asserted because they fail silently: a prompt that drops the author's words or the "references are style only"
+## instruction; a cache key that changes when a comment is re-wrapped; a reroll that replaces instead of adding a
+## version; an output resolver that picks up a png from a different run; and a read-only process (a render, a
+## probe) that starts jobs or writes the index.
 
 var _fails := 0
 
@@ -118,7 +116,7 @@ func _init() -> void:
 	I.set_look({"references": [pics[2]]})
 	_check(I.references("image").size() == 1, "a bare reference list is not the pictures'")
 	I.set_look({})
-	# THE CHAIN: seven pictures and a sketch, the first six made.
+	# The chain: seven pictures and a sketch, the first six made.
 	var chap: Array = []
 	for n in 7:
 		chap.append({"key": "c%d" % n, "prompt": "p", "placement": "inline"})
@@ -138,7 +136,7 @@ func _init() -> void:
 	var bp: String = I.build_prompt("x", "inline", "", 3, "/t.png", 2)
 	_check(bp.contains("the first 3 attached images") and bp.contains("the last 2 attached images"),
 		"references and the chain together are not told apart by their place in the attachments")
-	# ONE AT A TIME for a self-referenced kind; a kind with its own references runs in parallel.
+	# One at a time for a self-referenced kind; a kind with its own references runs in parallel.
 	I._queue = [{"key": "c1", "placement": "inline"}, {"key": "c2", "placement": "inline"},
 		{"key": "s0", "placement": "sketch"}]
 	I._jobs = {"c0": {"placement": "inline"}}
@@ -258,8 +256,8 @@ func _init() -> void:
 	_check(I.revision > rv, "a delete did not tell the pages to redraw")
 	var land := {"key": dk, "gen": G.make("codex"), "target": files[0], "sig": "s",
 		"backend": "codex", "description": "d", "placement": "inline"}
-	# v001 goes too, leaving only v002 - which is exactly the name "the count plus one" gives the
-	# next picture. A job that lands now must not overwrite it.
+	# v001 goes too, leaving v002 - the name "count plus one" gives the next picture. A job landing now must not
+	# overwrite it.
 	I.delete_version(dk, 0)
 	var before := FileAccess.get_file_as_bytes(dfiles[1])
 	I._land(dk, land)

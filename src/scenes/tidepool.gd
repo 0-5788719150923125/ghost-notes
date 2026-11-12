@@ -2,102 +2,54 @@ extends GhostScene
 
 ## Tidepool - sunlight through a hand's depth of moving water.
 ##
-## Looking STRAIGHT DOWN into a clear pool over rounded stones, sand and weed, in full
-## daylight. It is the first overhead shot in the catalog and one of the first bright
-## grounds, where the pale bed IS the subject. The surface is a real wave field: a swell
-## arriving from one edge, finer chop crossing it, and ring waves spreading and dying where
-## drips land. What you watch is the CAUSTIC NET on the bed - a mesh of bright ribs that
-## slides and pinches as the surface curves, with the stones swimming slightly out from
-## under the crests because the image of the bed is refracted too.
+## Looking straight down into a clear pool over stones, sand and weed in full daylight. The
+## surface is a wave field (a swell from one edge, finer chop crossing it, ring waves where drips
+## land); what you watch is the caustic net on the bed, with the stones swimming slightly under
+## the crests because the bed's image is refracted too.
 ##
-## THE CAUSTICS ARE COMPUTED, NOT DRAWN, and that is the whole scene. At every node of a
-## grid the local surface normal comes from [WaveField]'s closed-form gradient, the sun
-## vector is refracted through it by Snell's law, the refracted ray is walked down to the
-## bed plane, and its energy is splatted bilinearly into an accumulation buffer. Bright
-## ribs are where many rays landed in the same place - the definition of a caustic - and
-## they pinch, fork and close exactly where the surface curvature says. A short separable
-## blur afterwards is the only cosmetic step, standing in for the sun's half-degree of
-## angular width, which is why a real caustic net has soft edges.
+## The caustics are computed, not drawn. At every grid node the surface normal comes from
+## [WaveField]'s closed-form gradient, the sun vector is refracted through it by Snell's law, the
+## ray is walked to the bed plane and its energy splatted bilinearly into an accumulation
+## buffer; bright ribs are where many rays land together. A short separable blur stands in for
+## the sun's angular width. The bed's image is refracted along the straight-down viewing ray.
 ##
-## The bed's own IMAGE is refracted separately, through the same normal but along the
-## viewing ray, which points straight down. That second refraction is small - the view is
-## near-normal, so the ray bends by a few degrees - and it is what makes the stones drift
-## out from under a passing crest rather than sitting still under a moving light show.
+## The seed decides the pool (span, depth 0.05-0.35, an optional dry shelf, turbidity, index of
+## refraction 1.30-1.36), the sun, the surface (6-14 Gerstner components around one swell
+## heading, one tempo scaling the dispersion), the bed (20-90 stones from an ocean or earth
+## [Palette]) and the light.
 ##
-## WHAT THE SEED DECIDES. The pool: span in world units, base depth (0.05 to 0.35, a
-## hand's depth), whether one corner rises into a dry shelf and along which diagonal, the
-## turbidity, and the index of refraction (1.30 to 1.36 - real seawater is 1.34, and the
-## range is wide enough that a caustic net visibly tightens across it). The sun: elevation
-## 35 to 88 degrees and a free azimuth, which decide how far the ribs are thrown sideways
-## from the crest that made them. The surface: 6 to 14 Gerstner components clustered around
-## one swell heading, their wavelengths, steepnesses, and one tempo scaling the dispersion
-## relation. The bed: a composition over cobble, sand, weed and shell, 20 to 90 stones from
-## an ocean or earth [Palette], the sand's grain, the weed's patchiness. The light: ambient
-## floor, caustic contrast, specular exponent, glare threshold and ground value.
+## Audio: each component owns a fixed band by wavelength rank (longest reads the lowest) through
+## a slow-attack envelope, so bass grows long swell and brightness grows fine chop. A drip ring
+## reads the water it crosses (see [method WaveField.sweep_rings]). Nothing scales with
+## loudness: a louder song is a rougher surface, not a bigger one. `f.movement` raises the global
+## Gerstner steepness (pinching ribs into knots). Rising edges of `f.beat` drop drips at
+## pre-rolled Halton positions (an index into a table, never an rng draw). `chroma_hue()` sets
+## the water's tint and the sky reflection's hue; `f.energy` moves only the glare threshold.
 ##
-## AUDIO. Every component owns a FIXED band assigned by wavelength rank - longest wave
-## reads the lowest band - and its amplitude is a slow-attack envelope on that band, so a
-## bass-heavy passage grows long swell while a bright passage grows fine chop and the two
-## move against each other instead of throbbing together. A DRIP RING reads the water it
-## spreads across: the swell carries its front forward over a crest and holds it back in a
-## trough, and chop damps it out (see [method WaveField.sweep_rings]). Nothing scales with
-## loudness - the wavelengths are fixed at build, so a louder song makes a rougher surface,
-## not a bigger one. `f.movement` raises the global Gerstner steepness, physically the
-## thing that pinches caustic ribs into bright knots, so a section change tightens the net
-## without moving anything. Rising edges of `f.beat` drop drips at pre-rolled Halton
-## positions - a table walked by an index, never an rng draw, because the live analyzer and
-## the offline bake do not produce identical feature streams. `chroma_hue()` sets the
-## water's tint and the sky reflection's hue. `f.energy` moves only the glare threshold.
+## Ranges: `f.energy` rarely passes 0.5 and one band through `f.sample()` sits under 0.3, so a
+## component's drive is `0.22 + 1.7 * level`. The amplitude-to-wavelength ratio is sampled in
+## 0.03-0.075, where caustics appear (below about a fortieth of a wavelength the bed gets a
+## mottle, not a net). `jz` is clamped off zero at 0.15: a negative Jacobian is a folded surface.
 ##
-## MEASURED CONSTANTS. `f.energy` is the mean over 64 bands and rarely passes 0.5, and a
-## single band through `f.sample()` spends most of its time under 0.3, so a component's
-## drive is `0.22 + 1.7 * level` rather than something assuming the band reaches 1. The
-## amplitude-to-wavelength ratio is sampled in 0.03 to 0.075 because that is where caustics
-## appear: focusing strength goes as depth * amplitude * wavenumber^2 * (1 - 1/ior), and
-## below roughly a fortieth of a wavelength that product stays under one and the bed gets a
-## gentle mottle instead of a net. `jz` is clamped off zero at 0.15 because a Gerstner
-## surface whose Jacobian goes negative has folded over itself - a breaking wave, on which
-## a normal is undefined.
+## Cost: the sweep, light cast, blur, shading and batching run in a [FrameForge] job (about 30
+## ms at 1920x1080), so the water is rebuilt at 20-30 Hz; that is affordable because the surface
+## is slow (the fastest period is 1.5-2.7 s). The grid is sized against [constant SWEEP_BUDGET].
+## The mesh is one vertex per node plus one per cell center with shared indices, so a frame
+## rewrites only colors. Arrays handed to the main thread are never written again.
 ##
-## COST, MEASURED. The sweep, light cast, blur, shading and batching all run inside a
-## [FrameForge] job; the scene ships a snapshot and submits a finished packet. A build
-## costs 29 to 36 ms at 1920x1080 idle and half again under load, so the water is rebuilt
-## at 20-30 Hz and the forge hands the drawn frame whatever is ready. That is flat in the
-## component count, which is what the budget is for. It is affordable only because the
-## surface is SLOW: the fastest component's period is 1.5-2.7 s, so a 25 Hz rebuild is
-## nowhere near its Nyquist limit.
-##
-## The grid is sized against [constant SWEEP_BUDGET], which counts the O(nodes) work as
-## well as the sweep. The mesh is one vertex per NODE plus one per cell center with shared
-## indices, so a frame rewrites only the colors. Cells are CROSS-SPLIT into four triangles
-## about that center rather than two about a diagonal, without which a 25-pixel cell reads
-## as a herringbone of creases rather than water. Arrays handed to the main thread are
-## never written again; a change allocates a new one, which is the only discipline that
-## makes a pipelined worker safe.
-##
-## The wave is analytic and needs no integration, but the drips and amplitude envelopes are
-## STATE, so they advance on a [SimClock]. Not optional: the Director sub-steps update() up
-## to fifteen times in one frame, pre-warms a new scene twelve times before it is drawn,
-## and an Echo re-localize can fast-forward hundreds of calls.
+## The drips and amplitude envelopes are state, so they advance on a [SimClock] (the Director
+## sub-steps update() up to fifteen times a frame and pre-warms a new scene twelve times).
 
-## How far the node grid runs past the frame. Refraction throws light sideways by up to
-## about 1.1 times the depth, so a pool with a hard edge exactly at the frame would show a
-## dim band there; the overdraw plus the wrapped accumulation buffer between them hide it.
+## How far the node grid runs past the frame: refraction throws light sideways by up to about
+## 1.1 times the depth, so a hard pool edge at the frame would show a dim band; the overdraw plus
+## the wrapped accumulation buffer hide it.
 const OVER := 1.18
 
-## Node-work per frame the build is allowed, in units of one Gerstner component evaluated at
-## one node. The grid is derived from this and the component count, so the two cannot multiply
-## into an unaffordable frame.
-##
-## It counts the O(nodes) work, not just `nodes * components`. Casting the light, blurring
-## the accumulator and shading each node are all O(nodes) with large constants, so budgeting
-## on the sweep alone rewards a SIX-component surface with the finest grid and makes it the
-## most expensive of all. Measured per build at 1920x1080 (tests/scenes/tidepool_cost_probe.gd): 7
-## components over 6588 nodes took 47-51 ms, 13 components over 3555 nodes took 34 ms.
-##
-## PER_NODE is the rest of the frame in the same unit, measured from those pairs: the fixed
-## work is worth about fourteen components. Budgeting `nodes * (components + PER_NODE)` makes
-## the cost flat in the component count.
+## Node-work per frame the build is allowed, in units of one Gerstner component at one node. The
+## grid is derived from this and the component count. It counts all O(nodes) work, not just
+## `nodes * components`, or a six-component surface would get the finest grid and cost the most
+## (tests/scenes/tidepool_cost_probe.gd). PER_NODE is the rest of the frame in the same unit
+## (about fourteen components), which makes the cost flat in the component count.
 const SWEEP_BUDGET := 100000
 const PER_NODE := 14.0
 
@@ -106,20 +58,18 @@ const PER_NODE := 14.0
 const NODES_MIN := 3400
 const NODES_MAX := 6800
 
-## Schlick's F0 for an air/water interface. (1-1.33)/(1+1.33) squared is about 0.02: only
-## two percent of light reflects off flat water, which is why a pool seen from directly
-## above is transparent and only the steep faces flash.
+## Schlick's F0 for an air/water interface, ((1-1.33)/(1+1.33))^2, about 0.02: flat water barely
+## reflects, so a pool seen from above is transparent and only steep faces flash.
 const F0 := 0.02
 
 ## Gerstner surfaces fold over past this Jacobian; clamping there caps how far a crest may
 ## tilt its own normal instead of letting it invert.
 const JZ_FLOOR := 0.15
 
-## At most this many drip rings at once. A fourth ring is already past what a hand-sized
-## pool would carry, and each one costs work proportional to its circumference.
+## At most this many drip rings at once; each costs work proportional to its circumference.
 const MAX_RINGS := 4
 
-## Pre-rolled drip slots. Walked by an index on a beat, never re-drawn (see the doc).
+## Pre-rolled drip slots, walked by an index on a beat, never re-drawn.
 const DRIP_SLOTS := 24
 
 var _sim: SimClock
@@ -178,8 +128,8 @@ var _glare_lo := 0.42
 var _glare_gain := 0.9
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed.
 const FIELDS := {
 	"wave_speed": {"label": "Wave speed", "type": "num", "range": [0.08, 0.17], "default": null,
 		"blurb": "How fast the waves move across the pool."},
@@ -198,8 +148,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
 
-	# Daylight over water: the cold, pale end of the mood table plus one warm dawn option,
-	# because a tidepool at the golden hour is the same scene with a different sun.
+	# Daylight over water: the cold, pale end of the mood table plus one warm dawn option.
 	var sch := Scheme.among(["glacier", "teal", "bone", "dawn"], rng)
 	_hue = sch.hue
 	_sky_hue = sch.accent
@@ -212,31 +161,21 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# --- the surface ------------------------------------------------------------------
 	var comps := rng.randi_range(6, 14)
 	var nodes := clampi(int(float(SWEEP_BUDGET) / (float(comps) + PER_NODE)), NODES_MIN, NODES_MAX)
-	# Nominal 16:9, because `size` is not known during build - the grid is mapped onto
-	# whatever frame it lands in with a uniform scale, so the waves never stretch.
+	# Nominal 16:9 (`size` is unknown during build); the grid maps onto the frame with a uniform
+	# scale, so the waves never stretch.
 	_gw = maxi(24, int(round(sqrt(float(nodes) * 16.0 / 9.0))))
 	_gh = maxi(16, int(round(float(nodes) / float(_gw))))
 	_span = rng.randf_range(0.7, 1.6)
 	_step = _span / float(_gw - 1)
 	_org = Vector2(-float(_gw - 1) * _step * 0.5, -float(_gh - 1) * _step * 0.5)
 
-	# THE WHOLE FIELD'S SPEED, and it was about three times too high. `tempo` scales the
-	# dispersion-derived frequency of every component at once (see WaveField.add), and measured
-	# at 0.24-0.52 the SHORTEST component came out with a period of 0.44 to 0.86 seconds - a one
-	# to two hertz wobble running for the whole hold, which is what "a constant wave effect,
-	# which is too fast" was. It also fought the build rate: a frame costs tens of milliseconds
-	# (tests/scenes/tidepool_cost_probe.gd), so the surface is rebuilt at 20-30 Hz, and a two hertz
-	# ripple sampled at 25 Hz strobes.
-	#
-	# 0.08-0.17 puts the fastest chop at 1.3-2.6 s and the longest swell at 3.5-7 s, which is
-	# both watchable and roughly what water of this apparent size does. The dispersion RELATION
-	# is untouched - long waves still outrun short ones by sqrt(g k) - because that relation is
-	# what makes a swell and a chop read as one body of water.
+	# The field's speed: `tempo` scales every component's dispersion-derived frequency. At
+	# 0.08-0.17 the fastest chop has a period of 1.3-2.6 s and the longest swell 3.5-7 s; faster,
+	# the surface strobes against the 20-30 Hz rebuild. The dispersion relation is untouched (long
+	# waves outrun short ones), which keeps swell and chop one body of water.
 	var tempo: float = number("wave_speed", rng)
 	# A few percent of detune per component, so the field does not return to the same
-	# configuration on a fixed cycle. With one shared tempo every frequency is an exact function
-	# of its wavenumber, and the surface has an audible period; a small spread breaks that
-	# without touching how the components rank against each other.
+	# configuration on a fixed cycle.
 	var detune := rng.randf_range(0.02, 0.09)
 	var swell := rng.randf() * TAU               # the heading the whole sea arrives on
 	var fan := rng.randf_range(0.35, 1.25)       # how far components fan off that heading
@@ -250,8 +189,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_wf = WaveField.new()
 	var lam: Array = []
 	for i in comps:
-		# Wavelengths spread geometrically from a long swell down to a fine chop, as a
-		# fraction of the pool: one number, sampled per component, spanning a factor of ten.
+		# Wavelengths spread geometrically from a long swell to a fine chop (a fraction of the
+		# pool, spanning a factor of ten).
 		var u := (float(i) + rng.randf_range(0.05, 0.95)) / float(comps)
 		lam.append(_span * (0.62 * pow(0.11, u)))
 	lam.sort()
@@ -262,9 +201,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		var q := rng.randf_range(q_lo, q_hi)
 		_wf.add(ang, wl, 0.0, q, rng.randf() * TAU, tempo * (1.0 + rng.randf_range(-detune, detune)))
 		_base.append(wl * ratio * rng.randf_range(0.7, 1.3))
-		# The band assignment IS the audio design: rank 0 (longest) reads the bottom of the
-		# spectrum, the last rank the top. Spread evenly and jittered so two components can
-		# never sit on the same band and pump as one.
+		# Band assignment is the audio design: rank 0 (longest) reads the bottom of the spectrum,
+		# the last the top, jittered so two components never share a band.
 		var bt := (float(i) + 0.5) / float(comps)
 		_bands.append(clampf(bt + rng.randf_range(-0.05, 0.05), 0.02, 0.97))
 		_drive.append(rng.randf_range(1.2, 2.2))
@@ -272,9 +210,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_amp.append(0.0)
 
 	# --- drips ---------------------------------------------------------------------------
-	# Halton (2, 3) rather than an rng: a low-discrepancy pair spreads successive drips
-	# across the pool instead of clustering them the way uniform draws do, and the sequence
-	# is an index, so a beat never has to touch a random source.
+	# Halton (2, 3) rather than an rng: successive drips spread across the pool, and the
+	# sequence is an index, so a beat never touches a random source.
 	var half_w := float(_gw - 1) * _step * 0.5
 	var half_h := float(_gh - 1) * _step * 0.5
 	var ring_speed_lo := rng.randf_range(0.05, 0.11)
@@ -296,9 +233,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			"life": rng.randf_range(2.2, 5.5),
 		})
 	_drip_gap = rng.randf_range(0.25, 0.9)
-	# How strongly a ring is carried and eaten by the water it crosses. Sampled rather than
-	# baked: some pools take a drip cleanly and some tear it apart, and that is a property of
-	# the pool, not a constant of the renderer.
+	# How strongly a ring is carried and eaten by the water it crosses: a property of the pool,
+	# so sampled.
 	_ring_warp = rng.randf_range(0.9, 2.6)
 	_ring_damp = rng.randf_range(0.25, 1.1)
 
@@ -319,28 +255,19 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_glare_gain = rng.randf_range(0.55, 1.25)
 	_amb = clampf(rng.randf_range(0.24, 0.48) + turbid * 0.18, 0.0, 0.8)
 	_contrast = rng.randf_range(1.15, 2.3) * (1.0 - 0.35 * turbid)
-	# SHARPENING IS THE WRONG KNOB HERE, and most of the way down. It squares the caustic's
-	# contrast about its own mean, which narrows every rib - and a rib is already only one or two
-	# NODES wide, i.e. 21-29 screen pixels at 1920x1080 (measured). Narrowing a feature that is
-	# already at the reconstruction's Nyquist limit does not sharpen it, it aliases it, which is
-	# the "super jagged... blocky, and angular" the light was reported to have. The net is now
-	# resolved rather than pinched, and what it loses in bite it gains in being a smooth surface
-	# of light instead of a lattice of wedges.
+	# No sharpening: it squares the caustic contrast, narrowing ribs that are already one or two
+	# nodes wide (21-29 screen pixels at 1920x1080), which aliases rather than sharpens.
 	_sharp = rng.randf_range(0.0, 0.18)
 	_exposure = rng.randf_range(0.94, 1.18)
 	_sun_col = Color(1.0, rng.randf_range(0.94, 1.0), rng.randf_range(0.86, 0.99))
 
-	# 20-30 sim ticks a second. The wave is analytic, so this clock exists for the ring
-	# lifecycles and the amplitude envelopes; those need consistency, not resolution.
+	# 20-30 sim ticks a second; the wave is analytic, so this clock serves the ring lifecycles and
+	# the amplitude envelopes.
 	_sim = SimClock.new(rng.randf_range(22.0, 32.0), 2)
 
-	# THE BED, at more than twice the resolution. 96-128 texels spanned the whole pool, so at
-	# 1920x1080 one texel covered 15 to 20 screen pixels - and the bed is not background, it is
-	# what the scene is looking AT through the water, and the dry shelf shows it with no water
-	# over it at all. That is the "sand rendered to the side or below the water has low fidelity"
-	# report. 200-272 puts a texel at 7 to 10 px, which is at the limit of what the refracted
-	# bilinear lookup can carry. The cost is build-time only - build_bed runs once per scene, not
-	# per frame - and is O(res^2), so this is about 4x of a number that was not in the frame.
+	# The bed is 200-272 texels (a texel 7-10 px at 1920x1080): it is what the scene looks at
+	# through the water, and the dry shelf shows it bare. Build-time only (build_bed runs once,
+	# O(res^2)).
 	var bed_res := rng.randi_range(200, 272)
 	var stones: int = number("stones", rng)
 	var ramp_name := "ocean" if rng.randf() < 0.55 else "earth"
@@ -358,30 +285,23 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_job.org = _org
 	_job.step = _step
 	_job.eta = 1.0 / ior
-	# Two to four [1 2 1] passes, up from one to two. The accumulation buffer is at NODE
-	# resolution, so a caustic rib is one or two cells wide - 18 to 28 screen pixels - and a
-	# single blur pass leaves its shoulder inside one cell, which is a hard-edged wedge however
-	# smoothly the surface underneath is moving. Widening the kernel spreads the shoulder across
-	# two or three cells, which is both what the report asked for and what the sun's half-degree
-	# of angular width actually does. Each pass is separable and O(nodes), the cheapest term in
-	# the frame by some way.
-	# Passes of the five-tap binomial in _blur, each worth two of the old three-tap ones. Two to
-	# three therefore smooths as four to six used to, at roughly half the cost.
+	# Two to four passes of the five-tap binomial in _blur. The accumulation buffer is at node
+	# resolution, so a rib is one or two cells wide and a single pass leaves a hard-edged wedge;
+	# widening spreads the shoulder across two or three cells, as the sun's angular width does.
 	_job.blur_n = rng.randi_range(2, 3)
 	_job.shine_sq = shine_sq
 	_job.wet_band = depth * rng.randf_range(0.10, 0.30)
 	_job.dry_lift = rng.randf_range(1.02, 1.14)
 	_job.sun = Vector3(cos(sun_el) * cos(sun_az), cos(sun_el) * sin(sun_az), sin(sun_el))
-	# Blinn half vector against a camera looking straight down, so the glint is a real
-	# specular lobe rather than a brightness added wherever the surface happens to tilt.
+	# Blinn half vector against a camera looking straight down: a real specular lobe.
 	_job.half_v = (_job.sun + Vector3(0.0, 0.0, 1.0)).normalized()
 	_job.alloc()
 	_job.build_depth(depth, shelf, shelf_ang, shelf_len, shelf_wob, turbid, rng.randi())
 	_job.build_bed(rng, bed_res, _span, ramp_name, stones, mix, sun_az, sun_el)
 
 	if rng.randf() < 0.5:
-		# Grit and pollen riding the film, seen from above: the shaft is off because there
-		# is no sideways light in an overhead shot to make one.
+		# Grit and pollen riding the film, seen from above; no shaft (an overhead shot has no
+		# sideways light).
 		add_layer("dust", rng, {"count": rng.randi_range(30, 80), "shaft": false,
 			"hue": sch.accent, "speed": 0.012, "jitter": 0.04})
 
@@ -403,9 +323,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 func update(f: AudioFeatures, delta: float) -> void:
 	tick(f, delta)
-	# A pool does not pan. The drift is barely there - just enough that the frame is not
-	# nailed down - because an overhead shot with a moving camera reads as a drone, not as
-	# someone standing over a rock.
+	# A pool does not pan: the drift is barely there, since an overhead shot with a moving camera
+	# reads as a drone.
 	drift_view(f, 0.012, 0.018)
 	update_layers(f, delta)
 
@@ -417,20 +336,14 @@ func update(f: AudioFeatures, delta: float) -> void:
 		return
 	_kicked = true
 
-	# The water's own color, dragged a little toward the music's tonal center - a wash,
-	# not a repaint, since a bright scene reacts by shifting temperature rather than by
-	# changing what it is.
-	# Blended on the wheel rather than along the shortest arc (GhostScene.blend_hue): the arc form
-	# flips sign at the antipode, which put a jump of 0.30 of a turn in the water and 0.45 in the
-	# sky between two consecutive frames whenever the tonal center drifted opposite this pool's
-	# own hue - the other half of the reported color flicker, and the half that easing alone
-	# cannot reach, since the jump is the same size however slowly the input crosses the boundary.
+	# The water's own color, pulled a little toward the music's tonal center (a wash). Blended on
+	# the wheel, not the shortest arc ([method GhostScene.blend_hue]): the arc form flips sign at
+	# the antipode and jumps the color between frames.
 	var wh := blend_hue(_hue, _ch.x, 0.3 * _ch.y)
 	var sh := blend_hue(_sky_hue, _ch.x, 0.45 * _ch.y)
-	# Glare threshold is the ONLY thing energy touches: a loud passage lowers the bar the
-	# specular lobe has to clear, so highlights bloom shut over the bed and open again. It reads
-	# the ENVELOPED energy (see _advance) rather than the raw frame value - the glare it gates
-	# lays the sky's whole color over the pool, and on a jumpy source that strobed.
+	# Glare threshold is the only thing energy touches: a loud passage lowers the bar the specular
+	# lobe must clear. It reads the enveloped energy (see _advance), since the glare lays the sky's
+	# color over the pool and would strobe on a jumpy source.
 	var thr := lerpf(_glare_hi, _glare_lo, _glare_e)
 
 	var rings: Array = []
@@ -438,11 +351,10 @@ func update(f: AudioFeatures, delta: float) -> void:
 		var r: Dictionary = entry
 		rings.append({"x": r["x"], "y": r["y"], "r": r["r"], "w": r["w"],
 			"a": r["a"], "k": r["k"], "phi": r["phi"], "ph": r["ph"], "q": r["q"],
-			# `warp` multiplies the LOCAL swell height, so it is already scaled by the water
-			# actually running right now - on a glassy passage there is nothing to ride and the
-			# ring stays round. `warp_max` is the largest displacement that can produce, which
-			# is what the row spans have to be widened by; it needs the live amplitude SUM, and
-			# folding that into `warp` itself would make the displacement quadratic in it.
+			# `warp` multiplies the local swell height, so it follows the water actually running.
+			# `warp_max` is the largest displacement it can produce (the row spans are widened by
+			# it); it needs the live amplitude sum, which folded into `warp` would make the
+			# displacement quadratic in it.
 			"warp": _ring_warp, "warp_max": _ring_warp * _swell_amp(), "damp": _ring_damp})
 
 	var cell := maxf(maxf(size.x, 1.0) * OVER / float(_gw - 1),
@@ -474,25 +386,20 @@ func _advance(dt: float, f: AudioFeatures) -> void:
 		var target: float = _base[i] * clampf(_floor[i] + _drive[i] * lvl, 0.0, 1.6)
 		_amp[i] = Nonlinear.flare(_amp[i], target, dt, _atk, _rel)
 
-	# Movement is a section change, and a section change roughens water. Steepness pinches
-	# the ribs; it moves nothing and resizes nothing.
+	# Movement is a section change, and a section change roughens water: steepness pinches the
+	# ribs and moves nothing.
 	_steep = Nonlinear.flare(_steep, 1.0 + _move_gain * f.movement, dt, 1.6, 0.7)
 
-	# THE TONAL CENTER, EASED IN CARTESIAN FORM. chroma_hue() hands back an ANGLE, and an angle is
-	# exactly the wrong quantity to use raw: when two tonal centers a tritone apart trade dominance
-	# the resultant passes near the origin and its angle flips half a turn between one frame and
-	# the next, so the water's tint and the ground's wash snapped between two hues and then settled
-	# on whichever won - "the color is unstable, and will often flicker between two colors at
-	# random, then stabilize upon ONE of those colors". Easing the VECTOR routes that flip through
-	# the middle instead: an ambiguous tonality reads as low STRENGTH and the tint simply fades
-	# out rather than choosing a side, and a genuine key change arrives as a gentle sweep. A 1.2 s
-	# constant, matched to the 2.5 s window the harmonic signature already integrates.
+	# The tonal center, eased in Cartesian form: chroma_hue() hands back an angle, which flips half
+	# a turn when two tonal centers a tritone apart trade dominance. Easing the vector routes that
+	# through the middle (an ambiguous tonality reads as low strength and the tint fades out). The
+	# 1.2 s constant matches the 2.5 s window the harmonic signature integrates.
 	var raw := chroma_hue()
 	var want := Vector2(cos(raw.x * TAU), sin(raw.x * TAU)) * raw.y
 	_ch_vec = _ch_vec.lerp(want, 1.0 - exp(-0.85 * dt))
 	_ch = Vector2(fposmod(_ch_vec.angle() / TAU, 1.0), clampf(_ch_vec.length(), 0.0, 1.0))
 
-	# Same discipline for the glare drive - fast to bloom, slow to fall, like the amplitudes.
+	# Same for the glare drive: fast to bloom, slow to fall.
 	_glare_e = Nonlinear.flare(_glare_e, clampf(f.energy * 2.0, 0.0, 1.0), dt, 3.5, 1.2)
 
 	_beat_arm += dt
@@ -521,9 +428,8 @@ func _advance(dt: float, f: AudioFeatures) -> void:
 	_rings = live
 
 
-## The swell's live amplitude, as the sum of what the components are actually carrying this
-## moment. The ring couplings scale by it so they answer the water in front of them rather than
-## a build-time guess at how rough the pool would get.
+## The swell's live amplitude: the sum of what the components are carrying now. The ring
+## couplings scale by it so they answer the water in front of them, not a build-time guess.
 func _swell_amp() -> float:
 	var a := 0.0
 	for v in _amp:
@@ -546,10 +452,8 @@ func _spawn_drip() -> void:
 
 func _draw() -> void:
 	begin_draw()
-	# Flat, bright and full bleed, first thing. The bed mesh covers the frame, so this is
-	# the safety net under a drifting camera - but it has to be the HIGH-KEY ground, since
-	# Layer's bed vignettes and tops out at a mid tone, which would put a dark corner on a
-	# scene whose whole point is daylight.
+	# Flat, bright and full bleed, first: the safety net under a drifting camera. It must be the
+	# high-key ground, since Layer's bed vignettes and tops out at a mid tone.
 	paint_ground(_hue, _ground_sat, _ground_val, _ch.y * 0.4, _ch.x)
 	draw_layers("back")
 	_forge.submit(self)
@@ -569,14 +473,9 @@ static func _halton(i: int, b: int) -> float:
 	return r
 
 
-## The off-thread build (the [FrameForge] job-object form). It owns the wave field, every
-## scratch buffer, the static depth and absorption maps and the baked bed texture; the
-## scene never reads any of them, which is what makes a Director cut mid-build harmless.
-##
-## The mesh is one vertex per NODE with a shared index buffer, so a frame writes colors
-## and nothing else. `pts` and `idx` are rebuilt (as NEW arrays, never in place) only when
-## the frame size changes, because an array already handed to the main thread must never
-## be written again.
+## The off-thread build (the [FrameForge] job-object form): owns the wave field, scratch buffers,
+## the static depth and absorption maps and the baked bed texture; the scene never reads them.
+## `pts` and `idx` are rebuilt (as new arrays) only when the frame size changes.
 class PoolJob:
 	extends RefCounted
 
@@ -629,9 +528,8 @@ class PoolJob:
 		att.resize(n)
 
 
-	## The pool's floor: a constant depth, optionally rising into a dry shelf along one
-	## diagonal with a wandering shoreline. Static for the life of the scene, so the
-	## absorption it implies is baked here too rather than recomputed 5000 times a frame.
+	## The pool's floor: a constant depth, optionally rising into a dry shelf along one diagonal
+	## with a wandering shoreline. Static, so the absorption it implies is baked here.
 	func build_depth(base: float, shelf: bool, ang: float, length: float, wob: float,
 			turbid: float, seed_value: int) -> void:
 		var edge := Field.make("fbm", seed_value, 2.6 / maxf(0.01, length), 3)
@@ -646,8 +544,8 @@ class PoolJob:
 				var p := org + Vector2(float(ix), float(iy)) * step
 				var d := base
 				if shelf:
-					# Distance along the diagonal from the shallow corner, wobbled by a
-					# field so the waterline is a shoreline rather than a ruled edge.
+					# Distance along the diagonal from the shallow corner, wobbled so the waterline
+					# is a shoreline.
 					var u := (p.dot(dir) + length * 0.5 + (edge.at(p) - 0.5) * 2.0 * wob) / length
 					d = base * smoothstep(0.0, 1.0, clampf(u, 0.0, 1.0))
 				dep[i] = d
@@ -658,12 +556,9 @@ class PoolJob:
 		wet_nodes = maxi(1, wet_nodes)
 
 
-	## Bake the bed: sand, stones, weed and shell, into a color texture the render pass
-	## samples bilinearly through the refracted view ray.
-	##
-	## The texture spans half again the pool so the refracted lookup never runs off it, and
-	## it is baked at roughly the node grid's own resolution - finer would be detail the
-	## grid cannot carry, coarser would show as texels through the water.
+	## Bake the bed (sand, stones, weed, shell) into a color texture sampled bilinearly through
+	## the refracted view ray. It spans half again the pool so the lookup never runs off it, at
+	## about the node grid's resolution.
 	func build_bed(rng: RandomNumberGenerator, res: int, span: float, ramp_name: String,
 			stones: int, mix: Dictionary, sun_az: float, sun_el: float) -> void:
 		bw = res
@@ -700,8 +595,7 @@ class PoolJob:
 				var p := bed_org + Vector2(float(ix), float(iy)) * bed_step
 				var rl := relief.at(p)
 				var mo := mottle.at(p)
-				# One cheap hash for the sand grain: a third noise field would double the
-				# bake for detail that only has to be uncorrelated, not smooth.
+				# One cheap hash for the sand grain: the detail only has to be uncorrelated.
 				var hsh := sin(float(ix) * 127.1 + float(iy) * 311.7 + hseed) * 43758.5453
 				hsh -= floor(hsh)
 				var v := clampf(sand_v * (0.82 + 0.30 * rl) + (hsh - 0.5) * grain, 0.0, 1.0)
@@ -716,9 +610,8 @@ class PoolJob:
 				bed_b[i] = col.b
 				i += 1
 
-		# Stones, rasterized over their own bounding boxes only. Each gets a dome normal so
-		# it is lit round rather than being a flat disc, and a contact shadow on the side
-		# away from the sun - the only reason a top-down cobble reads as a solid at all.
+		# Stones, rasterized over their own bounding boxes. Each gets a dome normal so it is lit
+		# round, and a contact shadow away from the sun: why a top-down cobble reads as solid.
 		var sx := cos(sun_az)
 		var sy := sin(sun_az)
 		var lam := cos(sun_el)
@@ -754,8 +647,7 @@ class PoolJob:
 					var d2 := lx * lx + ly * ly
 					if d2 >= 1.0:
 						continue
-					# A hemisphere's normal, so the shading is the stone's shape and not a
-					# radial gradient painted onto it.
+					# A hemisphere's normal, so the shading is the stone's shape.
 					var nz := sqrt(1.0 - d2)
 					var lit := clampf(0.42 + 0.58 * (lx * sx * lam + ly * sy * lam
 						+ nz * sin(sun_el)), 0.0, 1.35)
@@ -783,9 +675,8 @@ class PoolJob:
 		acc.fill(0.0)
 		var total := _cast()
 		_blur()
-		# Normalize so the average WET node receives 1.0. The net is then a contrast about
-		# that mean rather than an absolute brightness, which is what keeps a shallow pool
-		# and a deep one equally readable.
+		# Normalize so the average wet node receives 1.0: the net is a contrast about that mean,
+		# so a shallow pool and a deep one read equally.
 		var norm := float(wet_nodes) / maxf(0.0001, total)
 
 		var cell: float = s["cell"]
@@ -838,15 +729,12 @@ class PoolJob:
 				var fres := F0 + (1.0 - F0) * u2 * u2 * u
 				var wgt := cosi * (1.0 - fres)
 				var travel := (d + hh[i]) / -tz
-				# Where the refracted ray lands on the bed, in grid CELLS. The origin
-				# cancels against itself, so this is the launch cell plus the lateral
-				# travel measured in cells.
+				# Where the refracted ray lands on the bed, in grid cells: the launch cell plus
+				# the lateral travel measured in cells.
 				var fx := float(ix) + tx * travel / step
 				var fy := float(iy) + ty * travel / step
-				# WRAPPED, not clamped or dropped. Energy leaving one edge has to go
-				# somewhere: dropping it puts a dim band round the frame, piling it at the
-				# border puts a bright one, and wrapping lands it in a net that already
-				# looks like every other part of the net.
+				# Wrapped, not clamped or dropped: dropping energy leaves a dim band round the
+				# frame, piling it at the border a bright one.
 				var x0 := int(floor(fx))
 				var y0 := int(floor(fy))
 				var ax := fx - float(x0)
@@ -877,19 +765,9 @@ class PoolJob:
 		return total
 
 
-	## A separable [1 2 1] pass, wrapped to match the splat. This is not decoration: the
-	## sun has about half a degree of angular width, so a real caustic rib has a soft
-	## shoulder, and an unblurred accumulation buffer reads as speckle rather than as light.
-	## A separable binomial [1 4 6 4 1]/16 pass, wrapped to match the splat.
-	##
-	## FIVE TAPS, NOT THREE, and it is a straight saving. Smoothing is what makes the net read as
-	## light rather than as speckle, and the amount of it is the accumulated variance: a [1 2 1]
-	## pass carries 0.5 cells^2, this one carries 1.0, so one pass here is worth two of those.
-	## Measured before the change, a five-pass [1 2 1] blur cost 9-13 ms of a 50-76 ms build - the
-	## same smoothing now costs two or three passes, and the per-pass loop overhead is paid half
-	## as often. Wrapping rather than clamping is not decoration: _cast wraps its splat, so a rib
-	## leaving one edge is already accounted for on the other, and clamping here would pile a
-	## bright fringe against the border that the splat deliberately avoids making.
+	## A separable binomial [1 4 6 4 1]/16 pass, wrapped to match the splat (clamping would pile a
+	## bright fringe against the border). One pass carries 1.0 cells^2 of variance, twice a
+	## [1 2 1] pass, so the net reads as light rather than speckle in half as many passes.
 	func _blur() -> void:
 		for _p in blur_n:
 			for iy in gh:
@@ -955,8 +833,7 @@ class PoolJob:
 				var px := org.x + float(ix) * step
 				var d := dep[i]
 				if d <= 0.0005:
-					# The dry shelf: bare bed, no tint, no net, lifted a little because dry
-					# stone is paler than wet stone.
+					# The dry shelf: bare bed, no tint, no net, lifted a little (dry stone is paler).
 					var dc := _bed_rgb(px, py)
 					cols[i] = Color(clampf(dc.r * dry_lift, 0.0, 1.0),
 						clampf(dc.g * dry_lift, 0.0, 1.0),
@@ -971,17 +848,16 @@ class PoolJob:
 				ny *= inv
 				nz *= inv
 
-				# The VIEW ray, straight down, refracted through the same normal. This is
-				# what makes the stones swim: the bed we see is not the bed under us.
+				# The view ray, straight down, refracted through the same normal: the bed we see
+				# is not the bed under us, which makes the stones swim.
 				var k2 := 1.0 - eta * eta * (1.0 - nz * nz)
 				var fr := eta * nz - sqrt(maxf(k2, 0.0))
 				var vz := -eta + fr * nz
 				var travel := (d + hh[i]) / maxf(0.05, -vz)
 				var bc := _bed_rgb(px + fr * nx * travel, py + fr * ny * travel)
 
-				# The caustic, as a contrast about its own mean, optionally sharpened. A
-				# power would be the honest curve; squaring and blending is the same shape
-				# for a fifth of the cost, and this runs once per node per frame.
+				# The caustic, as a contrast about its own mean, optionally sharpened (squaring and
+				# blending has the shape of a power at a fifth of the cost).
 				var c := 1.0 + contrast * (acc[i] * norm - 1.0)
 				if c < 0.0:
 					c = 0.0
@@ -999,8 +875,8 @@ class PoolJob:
 				for _q in shine_sq:
 					sp = sp * sp
 				var glare := clampf((sp - thr) * inv_thr, 0.0, 1.0) * gg
-				# Fresnel on the view ray: near-normal it is two percent, and only a steep
-				# face lifts it, which is exactly when water flashes.
+				# Fresnel on the view ray: near-normal it is two percent, and only a steep face
+				# lifts it, which is when water flashes.
 				var uf := 1.0 - nz
 				var uf2 := uf * uf
 				var refl := F0 + (1.0 - F0) * uf2 * uf2 * uf + glare
@@ -1018,9 +894,8 @@ class PoolJob:
 				i += 1
 
 
-	## Bilinear read of the baked bed. Bilinear and not nearest because the refracted
-	## lookup moves by a fraction of a texel per frame, and nearest turns that into every
-	## stone twitching between texels.
+	## Bilinear read of the baked bed (nearest would make every stone twitch between texels as
+	## the refracted lookup moves by a fraction of a texel per frame).
 	func _bed_rgb(x: float, y: float) -> Color:
 		var fx := clampf((x - bed_org.x) / bed_step, 0.0, float(bw - 1) - 0.001)
 		var fy := clampf((y - bed_org.y) / bed_step, 0.0, float(bh - 1) - 0.001)
@@ -1039,30 +914,14 @@ class PoolJob:
 		return Color(r0 + (r1 - r0) * ay, g0 + (g1 - g0) * ay, b0 + (b1 - b0) * ay)
 
 
-	## Vertex positions and the index buffer for the node mesh. Built once per frame SIZE,
-	## never per frame, and always as new arrays - the previous ones may still be on the
-	## main thread inside a packet being drawn.
-	## CROSS-SPLIT, four triangles about a center vertex, not two about a diagonal.
+	## Vertex positions and the index buffer for the node mesh. Built once per frame size, as new
+	## arrays (the previous ones may still be on the main thread in a packet being drawn).
 	##
-	## This is the fix for "the waves are blocky and jagged... even though their behavior is
-	## smooth". A cell is 21 to 24 screen pixels across at 1920x1080 (the grid is
-	## SWEEP_BUDGET / (components + PER_NODE) nodes, clamped, so 80x45 at fourteen components
-	## and 94x53 at six - the figures here predated PER_NODE and were never restated), and
-	## splitting each one along a single diagonal makes the Gouraud interpolation directional:
-	## every cell shades along the SAME 45-degree line, so a smooth caustic rib comes out as a
-	## herringbone of straight creases all leaning one way. That reads as jagged even where
-	## nothing about the light is.
-	##
-	## Fanning from the center is symmetric, so the artifact has no direction left to have, and
-	## the center's color is the mean of the four corners - which is exactly the value bilinear
-	## interpolation gives there, i.e. the one point the two old triangles disagreed about most.
-	## Cost: one extra vertex and two extra triangles per cell, 12.6k triangles against 6.3k on
-	## the coarse grid, still one draw call - and the positions and indices are built once per
-	## frame SIZE, so a frame only pays for the extra colors (about 3.2k cheap averages).
-	##
-	## What it does NOT do is raise the sampling rate: the caustic buffer is still accumulated at
-	## node resolution, so a rib is still one to two cells wide. That is why the blur passes were
-	## widened alongside this - see blur_n.
+	## Cross-split: four triangles about a center vertex, not two about a diagonal, which shades
+	## along one line and turns a smooth caustic rib into a herringbone of creases. The center's
+	## color is the mean of the four corners, the value bilinear interpolation gives there. One
+	## extra vertex and two triangles per cell, still one draw call. The caustic buffer is still
+	## accumulated at node resolution, so a rib is one to two cells wide (see blur_n).
 	func _build_mesh(cell: float) -> void:
 		var cells := (gw - 1) * (gh - 1)
 		var p := PackedVector2Array()

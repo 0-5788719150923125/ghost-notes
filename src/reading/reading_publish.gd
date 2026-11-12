@@ -4,12 +4,11 @@ class_name ReadingPublish
 ## ReadingPublish - how a reading goes out: what its export is called, what is held while the take
 ## renders, and what an upload of it says.
 ##
-## HANDED, NOT OVERRIDDEN (next/structure.md, step 12). A [ReadingPanel] renders the take, writes
-## its sidecar and holds the YouTube card; the component whose show it is says the rest. This one
-## is a note read aloud: named after the note ([method ReadingPanel.export_name]), the note's title on the
-## upload, and the note as its own episode - its description and tags on the YouTube card ([NoteUpload]).
-## Cards hands an [EpisodePublish]: an episode's title for a name, the episode pinned through the
-## minutes of a render, upload notes and their chapters.
+## Handed, not overridden (next/structure.md, step 12). A [ReadingPanel] renders the take, writes its sidecar and
+## holds the YouTube card; the component whose show it is says the rest. This one is a note read aloud: named
+## after the note ([method ReadingPanel.export_name]), the note's title on the upload, and the note as its own
+## episode (its description and tags on the YouTube card, [NoteUpload]). A table show hands its own: an
+## episode's title for a name, the episode pinned through the minutes of a render, upload notes and chapters.
 
 
 ## What an export is called, without an extension; "" names it after the note when the note is its own episode
@@ -45,16 +44,15 @@ func upload_values() -> Dictionary:
 	return {}
 
 
-## THE EPISODE WHAT IS MADE FROM IT READS ([EpisodeFeed], [EpisodeSteps]): a show's picked one. Null hands it to the note,
-## which is then its own episode ([method ReadingPanel.episode_feed]).
+## The episode what is made from it reads ([EpisodeFeed], [EpisodeSteps]): a show's picked one. Null hands it to
+## the note, which is then its own episode ([method ReadingPanel.episode_feed]).
 func feed() -> EpisodeFeed:
 	return null
 
 
-## WHAT THE PICKED EPISODE IS CALLED, for a component that names its episodes (Cards' producer, Proof's
-## framer): what the Script card's Episode shows and edits ([method ScriptWriter.hand_field]) - null while
-## it has none to edit. A note that is its own episode ([method note_is_episode]) keeps its own Episode
-## (its `episode:` line), and this is never asked.
+## What the picked episode is called, for a component that names its episodes: what the Script card's Episode
+## shows and edits ([method ScriptWriter.hand_field]), null while it has none to edit. A note that is its own
+## episode ([method note_is_episode]) keeps its own Episode (its `episode:` line), and this is never asked.
 func episode_title() -> Variant:
 	return null
 
@@ -75,10 +73,9 @@ func youtube_built(_card: YouTubeCard) -> void:
 	pass
 
 
-## WHETHER THE NOTE IS ITS OWN EPISODE: read as it is written, it goes up with the description written
-## on its YouTube card and its own tags, and the steps the note's other cards add are made from its words
-## ([NoteUpload]). False for a
-## component that makes episodes and says what each goes up with.
+## Whether the note is its own episode: read as it is written, it goes up with the description written on its
+## YouTube card and its own tags, and the steps the note's other cards add are made from its words
+## ([NoteUpload]). False for a component that makes episodes and says what each goes up with.
 func note_is_episode() -> bool:
 	return true
 

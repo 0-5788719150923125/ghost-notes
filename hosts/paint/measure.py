@@ -1,9 +1,9 @@
 """The measures of the painting lab (TEST_PLAN.md, "Measures"), and the sheets to look at.
 
-A MEAN OVER THE FACE LIES: the replayed canvas measured 4.9 off the picture and looked wrong - the large plain areas swamp the eyes,
-lips and crackle. So beside the plain error: the error WEIGHTED BY THE PICTURE'S DETAIL (how sharply it changes round each point), the
-likeness of its light and dark at three scales (SSIM), how many of its lines are drawn and how many drawn lines are its (recall and
-precision), and the error inside crops of what matters.
+A mean over the face lies: large plain areas swamp the eyes, lips and crackle. So beside the plain error: the error weighted
+by the picture's detail (how sharply it changes round each point), the likeness of its light and dark at three scales
+(SSIM), how many of its lines are drawn and how many drawn lines are its (recall and precision), and the error inside
+crops of what matters.
 """
 import json
 

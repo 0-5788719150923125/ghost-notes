@@ -3,28 +3,15 @@ class_name Scheme
 
 ## Scheme - a scene's color identity, drawn from a named mood.
 ##
-## The companion to [Palette], and the distinction matters: a Palette is a RAMP
-## sampled by a scalar (elevation to color), while a Scheme is a small set of
-## RELATED HUES a scene builds its whole look from. Terrain needed the first;
-## everything else needed the second and did not have it.
+## The companion to [Palette]: a Palette is a ramp sampled by a scalar (elevation to color), while a Scheme is a
+## small set of related hues a scene builds its whole look from, so one scene can be seeded to different colors.
 ##
-## WHY. 42 of ghost's 45 scenes hardcoded their own hue, usually as a range a
-## few hundredths wide - `rng.randf_range(0.04, 0.10)` and the like - so a scene
-## was locked to one color forever however many times it was seeded. The
-## clouds were always the same dawn orange, the embers always the same red, the
-## metropolis always brass. Each was a reasonable choice made once and then
-## frozen, and there was no shared thing to choose differently WITH.
+## A mood carries a base hue, a related accent, how far individual elements may drift from the base, and the
+## saturation/value character that makes the mood read as itself ("ash" is desaturated, dark and narrow). Scenes
+## ask for a mood and then ask it for colors, so adding a mood varies every scene that uses one.
 ##
-## HOW. A mood carries a base hue, a related accent, how far individual elements
-## may drift from the base, and the saturation/value character that makes the
-## mood read as itself - "ash" is not just gray, it is desaturated AND dark AND
-## narrow. Scenes ask for a mood and then ask it for colors, so adding a mood
-## here varies every scene that uses one, and a new scene inherits the whole set
-## for free. That is the point: the flexibility lives in the primitive.
-##
-## Relationships are named rather than random, because random hue pairs clash.
-## `accent` is chosen per mood as a complement, a near-neighbor or a triad
-## partner, so a scene using base + accent is harmonious by construction.
+## Relationships are named rather than random, because random hue pairs clash: `accent` is chosen per mood as a
+## complement, a near-neighbor or a triad partner, so base + accent is harmonious by construction.
 
 # hue, accent, spread, sat, val
 const MOODS := {
@@ -52,11 +39,9 @@ var sat := 0.7
 var val := 0.9
 
 
-## EACH VOICE LIGHTS IN COLORS OF ITS OWN (the user, 2026-10-05: "the first can remain the rainbow
-## color, while the next could be a different spectrum"): the reading's first voice in the whole
-## rainbow, and every voice after it, in the order they first speak, in a band of hues - [from, to],
-## crossed the way listed: red through purple to blue, green to yellow, cyan to sea blue - swept
-## there and back by the same flowing phase. Past the last band they come round again.
+## Each voice lights in colors of its own: the reading's first voice in the whole rainbow, and every voice after
+## it, in the order they first speak, in a band of hues [from, to] (crossed the way listed, e.g. red through purple
+## to blue), swept there and back by the same flowing phase. Past the last band they come round again.
 const VOICE_BANDS := [[1.0, 0.62], [0.36, 0.14], [0.44, 0.58]]
 
 
@@ -70,15 +55,13 @@ static func voice_hue(phase: float, order: int) -> float:
 	return fposmod(lerpf(float(band[0]), float(band[1]), 0.5 - 0.5 * cos(TAU * phase)), 1.0)
 
 
-## Pick a mood at random. Deterministic for a given rng, like everything else in
-## a scene's build.
+## Pick a mood at random; deterministic for a given rng.
 static func pick(rng: RandomNumberGenerator) -> Scheme:
 	var keys := MOODS.keys()
 	return of(String(keys[rng.randi() % keys.size()]), rng)
 
 
-## Pick from a NAMED SUBSET, for scenes where only some moods make sense - fire
-## should not be glacier-blue. Falls back to the full set if none match.
+## Pick from a named subset, for scenes where only some moods make sense. Falls back to the full set if none match.
 static func among(names: Array, rng: RandomNumberGenerator) -> Scheme:
 	var valid: Array = []
 	for n in names:
@@ -102,14 +85,12 @@ static func of(mood: String, rng: RandomNumberGenerator) -> Scheme:
 	return s
 
 
-## The base hue, drifted by up to `spread` - for per-element variation within
-## one scene, so a hundred embers are a family rather than a hundred clones.
+## The base hue, drifted by up to `spread`: per-element variation within one scene.
 func vary(rng: RandomNumberGenerator, amount := 1.0) -> float:
 	return fposmod(hue + rng.randf_range(-spread, spread) * amount, 1.0)
 
 
-## A hue by index: 0 base, 1 accent, and beyond that evenly spaced between the
-## two. Lets a scene ask for "three related hues" without inventing a scheme.
+## A hue by index: 0 base, 1 accent, beyond that evenly spaced between the two.
 func hue_at(i: int, n := 2) -> float:
 	if i <= 0:
 		return hue
@@ -121,9 +102,7 @@ func hue_at(i: int, n := 2) -> float:
 	return fposmod(hue + d * float(i) / float(n - 1), 1.0)
 
 
-## A color on this scheme. `s_mul`/`v_mul` scale the mood's own character, so a
-## caller asks for "a bit darker" rather than restating absolute numbers - which
-## is what kept the moods from reading as themselves before.
+## A color on this scheme. `s_mul`/`v_mul` scale the mood's own saturation and value character.
 func color(h: float, s_mul := 1.0, v_mul := 1.0, a := 1.0) -> Color:
 	return Color.from_hsv(fposmod(h, 1.0), clampf(sat * s_mul, 0.0, 1.0),
 		clampf(val * v_mul, 0.0, 1.0), a)
@@ -138,21 +117,12 @@ func accent_color(s_mul := 1.0, v_mul := 1.0, a := 1.0) -> Color:
 	return color(accent, s_mul, v_mul, a)
 
 
-## A second hue guaranteed to READ as different from `lead`.
+## A second hue guaranteed to read as different from `lead`.
 ##
-## The accent alone is not enough for a scene that puts two colors side by side.
-## Several moods keep their accent within a few hundredths of the base (sodium's
-## sits 0.04 away), and `lead` is usually a DRIFTED base rather than the nominal
-## one, so the gap can close further. Two prisms measured 0.104 turns apart -
-## near enough to read as one color and lose the whole point of the pair.
-##
-## So: prefer the mood's own accent, because it was chosen to be harmonious, and
-## only push out to `min_sep` when it is too close - and push it along the
-## direction the mood already leans, so verdant still opens toward amber and
-## glacier toward violet rather than collapsing to a generic complement.
-##
-## Callers that stack further per-element variation on top should ask for more
-## separation than they need, since that cast eats into the gap.
+## The accent alone can be too close to the base (sodium's sits 0.04 away) and `lead` is usually a drifted base. The
+## mood's own accent is preferred and pushed out to `min_sep` only when too close, along the direction the mood
+## already leans (verdant opens toward amber, glacier toward violet). Callers that stack further per-element
+## variation on top should ask for more separation than they need.
 func opposed(lead: float, min_sep := 0.24) -> float:
 	var d := fposmod(accent - lead + 0.5, 1.0) - 0.5      # signed, shortest way round
 	if absf(d) >= min_sep:

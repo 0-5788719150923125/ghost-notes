@@ -13,24 +13,21 @@ What is held, each with an input that must fail where a pass could be an acciden
 - the origin is TeX's baseline (the `ghost:base` special), not the first glyph's: a radical hangs
   below the baseline, so an item that starts with one still has its "2" on y = 0;
 - glyphs carry their PostScript names (`summationdisplay`, `radical`), which the hand reads.
-- A DRAWING (figure.py): its labels set in the same run and placed where the SVG put them, the whole
-  measured down from a baseline at its foot; a label TeX refuses fails the drawing alone, with TeX's
-  words; a plot is computed (y = x squared through the right corner of its axes, 1/x broken at 0 and
-  cut at the range's edge); an outline the SVG left unfilled is NOT shaded (SVG's own default fill is
-  black - the control), a small filled circle is a dot and a big one hatched, a dot given a size is
-  filled out to its edge (the control, one with none, the pen's own); an arrow ends at its
-  line's end; and an expression that is not arithmetic in x is refused, names and calls alike.
-- A SERIES A RUN KEPT (hosts/compute/run.py's keep(), 2026-10-19): joined point to point and cut at
-  the box's edge, thinned when long, dotted (inside the box only), barred from the axis to its height;
-  a name no run kept is refused (the control), and so are too many dots; typeset hands it through.
-- MORE TO DRAW WITH (the user, 2026-10-19: "do the agents have the ability to draw charts, line
-  graphs, etc.? ... the ability to draw arbitrary pictures would be useful"): a curve of t is traced
-  whole inside its box (a unit circle closes on itself) and cut at the box's edges where it leaves it
-  (the control, a circle too big for the box); a polar curve is a radius at its angle; ticks written
-  with pi are numbered in pi (the control, the same ticks as a decimal, are not); a bar is hatched
-  from its foot to its height; an angle's arc runs between its two directions, a right angle is a
-  corner; a grid adds a faint line at each tick (the control, the same axes without it); and a range is a
-  constant, never a variable.
+- a drawing (figure.py): its labels set in the same run and placed where the SVG put them, the whole measured
+  down from a baseline at its foot; a label TeX refuses fails the drawing alone, with TeX's words; a plot is
+  computed (y = x squared through the right corner of its axes, 1/x broken at 0 and cut at the range's edge); an
+  outline the SVG left unfilled is not shaded (control: SVG's own default fill is black), a small filled circle
+  is a dot and a big one hatched, a dot given a size is filled out to its edge (control: one with none, the
+  pen's own); an arrow ends at its line's end; and an expression that is not arithmetic in x is refused, names
+  and calls alike.
+- a series a run kept (hosts/compute/run.py's keep()): joined point to point and cut at the box's edge, thinned
+  when long, dotted (inside the box only), barred from the axis to its height; a name no run kept is refused
+  (control), and so are too many dots; typeset hands it through.
+- more to draw with: a curve of t is traced whole inside its box (a unit circle closes on itself) and cut at the
+  box's edges where it leaves it (control: a circle too big for the box); a polar curve is a radius at its angle;
+  ticks written with pi are numbered in pi (control: the same ticks as a decimal are not); a bar is hatched from
+  its foot to its height; an angle's arc runs between its two directions, a right angle is a corner; a grid adds
+  a faint line at each tick (control: the same axes without it); and a range is a constant, never a variable.
 """
 import math
 import pathlib
@@ -122,7 +119,7 @@ def _figures():
     kinds = [p["kind"] for p in g["paths"]]
     check("dot" in kinds and "arrow" in kinds, "the axes have arrowheads and the point a dot (%s)" % ", ".join(sorted(set(kinds))))
 
-    # A PART THE PEN CAN POINT AT: an id names a drawing's part, \pin a formula's, each with its box
+    # A part the pen can point at: an id names a drawing's part, \pin a formula's, each with its box
     an = g.get("anchors", {})
     check(sorted(an) == ["P", "Plab", "curve", "mark"], "a drawing's named parts come back, axes' children and a group's too (%s)" % sorted(an))
     if "P" in an and "curve" in an and "Plab" in an:
@@ -164,8 +161,8 @@ def _figures():
     check(kinds[0] == "line" and kinds[1] == "line" and first_hatch == 2,
           "an outline the SVG left unfilled is not shaded, and a filled one is hatched (%s)" % ", ".join(kinds[:4]))
     check(kinds.count("dot") == 1, "a small filled circle is a dot")
-    # A SOLID DOT OF ITS OWN SIZE (a letter's sketch, 2026-10-26): filled by the pen going round it out to
-    # its edge - the control, a dot with no size, stays the pen's own small one
+    # A solid dot of its own size: filled by the pen going round it out to its edge (control: a dot with no
+    # size stays the pen's own small one)
     sized = figure.compile_figure('<svg viewBox="0 0 360 60"><dot x="300" y="30" r="8" id="d"/><dot x="40" y="30"/></svg>')
     big, small = sized["paths"][0], sized["paths"][1]
     def reach(p):

@@ -1,11 +1,11 @@
 extends RefCounted
 class_name DiceNotation
 
-## DiceNotation - WHAT A ROLL IS, as tabletop players write it, and rolling it (next/tabletop.md). A game's agents ask for dice in the
-## words every game's players already use, and what comes back was decided here, from the seed, never by them: an agent cannot fake a number
-## it did not roll, which is the whole honesty of a show of this kind (the work shown is the work done).
+## DiceNotation - what a roll is, as tabletop players write it, and rolling it (next/tabletop.md). A game's agents ask for dice in the
+## words every game's players already use, and what comes back is decided here, from the seed, never by them: an agent cannot fake a
+## number it did not roll (the work shown is the work done).
 ##
-## NO GAME IS NAMED HERE. It knows dice, and nothing of what any number means:
+## No game is named here. It knows dice, and nothing of what any number means:
 ##
 ##     1d20+5           a die and a modifier
 ##     2d20kh1+5        roll two, keep the highest (`kl` the lowest, `dh`/`dl` drop instead)
@@ -19,11 +19,11 @@ class_name DiceNotation
 ##
 ## and any number of those added and taken away: `2d6+1d4-1`.
 ##
-## A DIE ON THE TABLE IS A SOLID ([Dice]): what is rolled here says which solid and which of its faces (`thrown`), one entry a body, so what is
-## shown and what was rolled are one list. A rerolled or exploded die is thrown too: a viewer sees every die that counted.
+## A die on the table is a solid ([Dice]): what is rolled here says which solid and which of its faces (`thrown`), one entry a body, so
+## what is shown and what was rolled are one list. A rerolled or exploded die is thrown too.
 ##
-## A FUNCTION OF ITS SEED: the same notation and the same seed give the same dice, whoever asks and in what order, so a scene made again rolls
-## what it rolled. Gate: tests/table/dice_notation_check.gd.
+## A function of its seed: the same notation and the same seed give the same dice, whoever asks and in what order.
+## Gate: tests/table/dice_notation_check.gd.
 
 ## The sides a die can have, which are the solids a table has ([constant Dice.SHAPES]), and the ones played on another's body: a percentile is
 ## two tens, and a two and a three are sixes numbered over.
@@ -92,7 +92,7 @@ static func parse(text: String) -> Dictionary:
 	return {"ok": true, "terms": terms, "error": ""}
 
 
-## ROLL [param text] from [param seed]: `{ok, error, notation, groups, flat, total, successes, labels, natural, thrown, words}`:
+## Roll [param text] from [param seed]: `{ok, error, notation, groups, flat, total, successes, labels, natural, thrown, words}`:
 ##
 ## - `groups`: each dice term, `{count, sides, rolled, kept, sum, successes, labels}`; `rolled` every value in the order thrown, `kept` whether each one counted;
 ## - `flat`: the modifiers added up;
@@ -145,7 +145,7 @@ static func _roll_group(t: Dictionary, rng: RandomNumberGenerator, thrown: Array
 	while i < count + extra:
 		var v := rng.randi_range(1, sides)
 		_throw(thrown, sides, v, labels)
-		# ...A REROLL, once each: the first is thrown too, and does not count
+		# ...a reroll, once each: the first is thrown too, and does not count
 		if int(t["reroll"]) > 0 and v <= int(t["reroll"]) and labels.is_empty():
 			v = rng.randi_range(1, sides)
 			_throw(thrown, sides, v, labels)
@@ -206,7 +206,7 @@ static func _hits(v: int, cmp: String, target: int) -> bool:
 	return false
 
 
-## ONE VALUE, AS BODIES ON THE TABLE: a percentile is two tens, its tens die showing 00 to 90 and its units 0 to 9, 00 and 0 being 100.
+## One value, as bodies on the table: a percentile is two tens, its tens die showing 00 to 90 and its units 0 to 9, 00 and 0 being 100.
 static func _throw(thrown: Array, sides: int, v: int, labels: PackedStringArray) -> void:
 	if sides == 100:
 		var units := v % 10
@@ -217,7 +217,7 @@ static func _throw(thrown: Array, sides: int, v: int, labels: PackedStringArray)
 	var shape := int(STAND_INS.get(sides, sides))
 	# (a ten is printed 0 to 9, its ten shown as 0)
 	var face := v % 10 if sides == 10 else v - 1
-	# ...A TWO OR A THREE ON A SIX is numbered over: a face of that number, by the die's own value and how many faces carry it
+	# ...a two or a three on a six is numbered over: a face of that number, by the die's own value and how many faces carry it
 	if shape != sides:
 		var over := shape / sides
 		face = (v - 1) * over
@@ -228,7 +228,7 @@ static func _throw(thrown: Array, sides: int, v: int, labels: PackedStringArray)
 	thrown.append(body)
 
 
-## THE ROLL AS ONE LINE, as it is told to an agent: what came up and what it comes to. A die rolled and not counted is said as such.
+## The roll as one line, as it is told to an agent: what came up and what it comes to. A die rolled and not counted is said as such.
 static func words_of(r: Dictionary) -> String:
 	var parts := PackedStringArray()
 	for g in r["groups"]:

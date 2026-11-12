@@ -1,15 +1,14 @@
 extends SceneTree
 
-## timeline_lanes_check - A STAGE ENTRY'S SPANS ON MASKING'S CONTROLS ([TimelineLanes], [TrackLane], [FlagStrip]; Ctrl+wheel zooms
-## from any lane, a plain wheel left to the list of lanes;
-## next/editing.md, "The Timeline").
+## timeline_lanes_check - a stage entry's spans on Masking's controls ([TimelineLanes], [TrackLane],
+## [FlagStrip]; Ctrl+wheel zooms from any lane, a plain wheel left to the list of lanes; next/editing.md, "The Timeline").
 ##
 ##   godot --headless --path . --script res://tests/timeline/timeline_lanes_check.gd
 ##
 ## What it holds, on a made track (the showcase's own shape: a window for one actor, a moment for another):
 ##   - a window is a lane of its own and a moment a flag on the strip, all on one view;
-##   - ITS LEFT EDGE TRIMMED, its start moves and its end stays; ITS BODY MOVED, both move by as much - each one `retimed` as the
-##     gesture ends. THE CONTROL: a press with no drag (a pick) retimes nothing, and says `picked`;
+##   - its left edge trimmed, its start moves and its end stays; its body moved, both move by as much - each `retimed` as the
+##     gesture ends. Control: a press with no drag (a pick) retimes nothing, and says `picked`;
 ##   - a flag dragged is retimed to where it was let go, start and end the same;
 ##   - the strip scrubbed says the moment, and a double click on it asks for a new moment there;
 ##   - a span's window as written: a window's two ends, a moment's one twice.
@@ -37,7 +36,7 @@ func _initialize() -> void:
 	var lane: TrackLane = rows[0]["lane"]
 	var m: Dictionary = rows[0]["m"]
 
-	# THE CONTROL: a pick, no drag
+	# The control: a pick, no drag
 	lane.gui_input.emit(_press(true))
 	_ok(_retimed.is_empty() and _picked == [0], "a press with no drag retimes nothing, and picks the span")
 
@@ -74,7 +73,7 @@ func _initialize() -> void:
 		"a double click on the strip asks for a new moment there: %s" % str(asked))
 	_ok(TimelineLanes.window_of({"from": 1, "to": 2}) == [1.0, 2.0] and TimelineLanes.window_of({"at": 0.5}) == [0.5, 0.5],
 		"a span's window as written")
-	# THE TRACK'S KEYS ([StageKeys]): Masking's markers on the strip - a ramp's span before it, a damp's after - dragged to retime
+	# The track's keys ([StageKeys]): Masking's markers on the strip - a ramp's span before it, a damp's after - dragged to retime
 	var keyed: Array = []
 	lanes.key_retimed.connect(func(k: int, at: float) -> void: keyed.append([k, snappedf(at, 0.001)]))
 	lanes.set_keys([{"field": "camera.fov", "at": 2.0, "to": 30, "over": 0.5, "ease": "ramp"},
@@ -91,7 +90,7 @@ func _initialize() -> void:
 	fov["time"] = 2.6
 	lanes._strip.gui_input.emit(_press(false))
 	_ok(keyed == [[0, 2.6]] and _picked.size() == n_picked, "a key dragged is retimed by its own index, and picks no span: %s" % str(keyed))
-	# CTRL+WHEEL ZOOMS FROM ANY LANE (the user, 2026-11-11: only the bottom one did) - THE CONTROL a plain wheel over a lane leaves
+	# Ctrl+wheel zooms from any lane; control: a plain wheel over a lane leaves
 	# the zoom as it was, for the list of lanes to scroll
 	var a_lane: TrackLane = lanes._rows[0]["lane"]
 	var notch := InputEventMouseButton.new()

@@ -1,27 +1,23 @@
 extends PanelContainer
 class_name NoteTile
 
-## NoteTile - one note on the notes list, a square card (2026-10-31, the user: "something closer to what a
-## notes app should look like ... a Google Keep kind of look ... Literal square shapes, in different colors,
-## perhaps keyed to the underlying, dominant components"). Every tile is the same size ([method set_side]):
-## the note's title, the first of its words ([method Manuscript.preview_of]), a chip for each component on it
-## and when it last changed. A click opens it; on the desktop an × asks to delete it.
+## NoteTile - one note on the notes list, a square card. Every tile is the same size ([method set_side]):
+## the note's title, the first of its words ([method Manuscript.preview_of]), a chip for each component on
+## it and when it last changed. A click opens it; on the desktop an x asks to delete it.
 ##
-## DRAWN AS A [Card] IS ("let's emulate the card styling first, to see if we like that design"): flat, a
-## one-pixel border in the note's color, the title in a band tinted by it, the rest dark. Each chip is drawn
-## the same way in its component's FAMILY color, so the chips read as the cards inside the note do.
+## Drawn as a [Card] is: flat, a one-pixel border in the note's color, the title in a band tinted by it,
+## the rest dark. Each chip is drawn the same way in its component's family color.
 ##
-## THE NOTE'S COLOR IS ITS COMPONENTS', MIXED ("Synesthesia, but with components and color"):
-## [method color_of]. Each component has a hue of its own - its family's, nudged across [constant SPREAD] by
-## its place among its kin, so a Table and a Proof are both the producers' violet and still told apart - and
-## the note's hue is their mean on the color wheel, the one that shows the note (its `presentation` slot)
-## counting most, then the one that times it (`clock`), then the rest, each [constant PULL] of the one before.
-## So notes made of the same things are the same color, and notes made of similar things are near it. Drawn
-## at the cards' one saturation and value ([constant Card.SAT], [constant Card.VAL]); a note of words alone is
-## the paper's gray. Nothing in the note's file says its color: it changes as components come and go.
+## The note's color is its components', mixed ([method color_of]). Each component has a hue of its own -
+## its family's, nudged across [constant SPREAD] by its place among its kin - and the note's hue is their
+## mean on the color wheel, the one that shows the note (its `presentation` slot) counting most, then the
+## one that times it (`clock`), then the rest, each [constant PULL] of the one before. Notes made of the
+## same things are the same color. Drawn at the cards' one saturation and value ([constant Card.SAT],
+## [constant Card.VAL]); a note of words alone is the paper's gray. Nothing in the note's file says its
+## color: it changes as components come and go.
 ##
-## A TAP IS A PRESS AND A RELEASE IN PLACE ([constant TAP_SLOP]): the tile passes its presses on, so a finger
-## dragged across it scrolls the list on a phone instead of opening the note under it.
+## A tap is a press and a release in place ([constant TAP_SLOP]): the tile passes its presses on, so a
+## finger dragged across it scrolls the list on a phone instead of opening the note under it.
 
 signal opened(path: String)
 signal delete_asked(path: String)
@@ -123,7 +119,7 @@ func _init(p_path: String, summary: Dictionary, mtime: int, p_scale := 1.0, dele
 	_style()
 
 
-## EVERY TILE THIS SIZE: [param px] square, its title held to two lines.
+## Every tile this size: [param px] square, its title held to two lines.
 func set_side(px: float) -> void:
 	custom_minimum_size = Vector2(px, px)
 	var font := _title.get_theme_font("font")
@@ -153,7 +149,7 @@ func _gui_input(e: InputEvent) -> void:
 			opened.emit(path)
 
 
-## WHICH COMPONENTS A TILE NAMES: all but the words (every note has them), in the order their cards stand.
+## Which components a tile names: all but the words (every note has them), in the order their cards stand.
 static func chips_of(attached: Array) -> Array:
 	var order: Array = Components.FAMILIES.keys()
 	var keys: Array = Components.REGISTRY.keys()
@@ -166,7 +162,7 @@ static func chips_of(attached: Array) -> Array:
 	return out
 
 
-## A COMPONENT'S OWN HUE, in degrees: its family's, nudged by its place among the family's components
+## A component's own hue, in degrees: its family's, nudged by its place among the family's components
 ## across [constant SPREAD]; -1 for one with no hue (the words).
 static func hue_of(key: String) -> float:
 	var fam: StringName = Components.REGISTRY[key]["family"]
@@ -186,7 +182,7 @@ static func standing_of(key: String) -> int:
 	return 2 if slots.has("presentation") else (1 if slots.has("clock") else 0)
 
 
-## THE NOTE'S COLOR from the components on it ([param attached], [method Components.attached_of]).
+## The note's color from the components on it ([param attached], [method Components.attached_of]).
 static func color_of(attached: Array) -> Color:
 	var keys: Array = Components.REGISTRY.keys()
 	var hued := attached.filter(func(k: String) -> bool:

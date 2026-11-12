@@ -4,20 +4,16 @@ class_name EpisodeFeed
 ## EpisodeFeed - one episode a card makes, as the steps the note's other cards add to it read it
 ## ([EpisodeStep]).
 ##
-## WHERE THE CARDS ON A NOTE MEET (the user, 2026-10-18: "dependency inversion. It's okay to hook into
-## an interface that populates that list of steps, but it would not be okay to tightly-couple the two
-## cards"). A card that makes episodes - a table's [EpisodeCard] - says which it shows, and names
-## no card that makes a step from it; a card that makes one - the YouTube card's tags ([YouTubeTags]) - reads the
-## episode through this, and names no card that makes it. The panel puts the two together ([method
-## ReadingPanel.episode_feed]).
+## Where the cards on a note meet. A card that makes episodes (a table's [EpisodeCard]) says which it shows and names
+## no card that makes a step from it; a card that makes one (the YouTube card's tags, [YouTubeTags]) reads the episode
+## through this and names no card that makes it. The panel puts the two together ([method ReadingPanel.episode_feed]).
 ##
-## ONE EPISODE, not whichever is picked: a step started on one writes into it after another is picked.
-## A maker hands a feed of its own (`EpisodeCard.Feed`); these defaults are an
-## episode with nothing in it.
+## One episode, not whichever is picked: a step started on one writes into it after another is picked. A maker hands a
+## feed of its own (`EpisodeCard.Feed`); these defaults are an episode with nothing in it.
 
 
-## The folder the episode is kept in, absolute: a step keeps what it makes here, so deleting the episode
-## takes it along and another episode starts without it.
+## The folder the episode is kept in, absolute: a step keeps what it makes here, so deleting the episode takes it
+## along.
 func folder() -> String:
 	return ""
 
@@ -42,32 +38,32 @@ func tags() -> PackedStringArray:
 	return PackedStringArray()
 
 
-## THE NOTE'S TAGS ARE [param tags] FROM NOW ON: its `tags:` line - the one list its uploads take -
-## replaced whole ([YouTubeTags]). "" once written, else why not.
+## The note's tags are [param tags] from now on: its `tags:` line (the one list its uploads take) replaced whole
+## ([YouTubeTags]). "" once written, else why not.
 func replace_tags(_tags: PackedStringArray) -> String:
 	return "nothing keeps this episode's note's tags"
 
 
-## THE EPISODE'S WORDS, as the voice says them, the marks taken out - "" until they are written, which is
-## when a step made from them can be made.
+## The episode's words, as the voice says them, the marks taken out: "" until they are written, which is when a step
+## made from them can be made.
 func words() -> String:
 	return ""
 
 
-## WHAT MAKES WHAT IS MADE FROM ITS WORDS, as a row and the YouTube card say it ("Generate"; a note read as it is written,
-## "Generate, or an export that goes up").
+## What makes what is made from its words, as a row and the YouTube card say it ("Generate"; a note read as it is
+## written, "Generate, or an export that goes up").
 func made_by() -> String:
 	return "Generate"
 
 
-## THE EPISODE'S VOICE, KEPT WHOLE (next/editing.md step 3): its take's wav, absolute, where it was said from the episode's words as
-## they stand - "" for none, and then the reading is said live. Whether it was said in the voices as they stand is the reading's to
-## judge ([method ReadingPanel.kept_take]).
+## The episode's voice, kept whole (next/editing.md step 3): its take's wav, absolute, where it was said from the
+## episode's words as they stand - "" for none, and then the reading is said live. Whether it was said in the voices
+## as they stand is the reading's to judge ([method ReadingPanel.kept_take]).
 func take() -> String:
 	return ""
 
 
-## THE EPISODE'S STEPS AS THEY STOOD BEFORE, to be put back (the Body card's Restore, beside the note's own history): newest first,
+## The episode's steps as they stood before, to be put back (the Body card's Restore): newest first,
 ## `[{at (unix seconds), said, key}]` - none for an episode that keeps no versions.
 func versions() -> Array:
 	return []
@@ -78,22 +74,21 @@ func put_back(_key: Variant) -> String:
 	return "nothing here keeps versions"
 
 
-## THE EPISODE'S OWN PICTURES, absolute paths - a show's paintings - for a step that may be shown them;
-## none for an episode painted nothing.
+## The episode's own pictures, absolute paths (a show's paintings), for a step that may be shown them; none for an
+## episode painted nothing.
 func pictures() -> PackedStringArray:
 	return PackedStringArray()
 
 
-## THE PICTURES THE EPISODE'S AGENTS MADE, as a card shows them (the user, 2026-11-09: "the Godot app can generate a mask, but we
-## will never see the reference image in the UI ... whatever we do must be generic. Because there are other scenarios where agents may
-## generate pictures"): `[{path (absolute), label, row (the Pipeline row that makes it again, "" none), group}]`, in the order they
-## are made; none for an episode that painted nothing. Every maker says its own here - the Pictures card names none.
+## The pictures the episode's agents made, as a card shows them: `[{path (absolute), label, row (the Pipeline row that
+## makes it again, "" none), group}]`, in the order they are made; none for an episode that painted nothing. Every
+## maker says its own here - the Pictures card names none.
 func made_pictures() -> Array:
 	return []
 
 
-## Who writes for the episode, `{agent, model, effort}`: the maker's own writer, so a step's words are
-## written by whoever the show's are.
+## Who writes for the episode, `{agent, model, effort}`: the maker's own writer, so a step's words are written by
+## whoever the show's are.
 func writer() -> Dictionary:
 	return {"agent": "claude", "model": "", "effort": ""}
 

@@ -27,7 +27,7 @@ func _run() -> void:
 	for root in ROOTS:
 		for path in _scripts(root):
 			n += 1
-			# THROUGH THE CACHE: a script already loaded (an autoload, a dependency) compiled to
+			# Through the cache: a script already loaded (an autoload, a dependency) compiled to
 			# get there, and reloading one that is live - CACHE_MODE_IGNORE - trips an internal
 			# error in the engine and hangs it (measured on 4.7.2).
 			var s: Script = ResourceLoader.load(path, "Script")

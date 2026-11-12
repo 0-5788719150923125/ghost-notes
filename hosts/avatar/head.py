@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""head.py - ONE HEAD FOR EVERY SET: an actor's head of splats learned from moments of every video of theirs
+"""head.py - one head for every set: an actor's head of splats learned from moments of every video of theirs
 at once (next/likeness.md, "One head").
 
     <voice_train_venv python> head.py --spec <spec.json> [--progress <file>]
@@ -8,31 +8,25 @@ The spec: {"rig", "out", "steps", "preview", "videos"} - the actor's rig (rig.py
 folder: one neutral face, one basis, and which folder each frame is from), where the head goes, how many steps, a
 folder for pictures of it against held-out frames, and the videos it learns from (their ids; all, without it).
 
-WHY (the user, 2026-10-23: "It's pointless to build a gaussian splatting model if the scenes can only generate
-from a single set of images ... let us search for a kind of learned blend, which can inherit features from the
-actor across all sets"): a set's avatar had learned from one shot of one video, and knew only what it showed -
-the plaid set's ASMR video has 6 frames with the jaw past 0.45, the sweater set's 57. Every video shows the
-same face, its mouth, its turns; what differs is the light, the camera, and a little of them (the hair tied or
-loose, the beard's length).
+Why: a set's avatar learned from one shot of one video knows only what it showed (a video can have few frames
+with the jaw wide open). Every video shows the same face, its mouth, its turns; what differs is the light, the
+camera, and a little of them (the hair tied or loose, the beard's length).
 
-SO THE HEAD IS SHARED AND EACH VIDEO HAS A LOOK:
-- THE HEAD'S SPLATS (bound to the face's triangles and to the head, as train.py binds them) are learned from
+So the head is shared and each video has a look:
+- the head's splats (bound to the face's triangles and to the head, as train.py binds them) are learned from
   every video's moments, with their expression shifts (GaussianBlendshapes, as train.py's);
-- A VIDEO'S LOOK is a code of LOOKS numbers, its own, learned: every head splat shifts its place and colour by
+- a video's look is a code of LOOKS numbers, its own, learned: every head splat shifts its place and colour by
   the code (`look_place`, `look_colour` [N, LOOKS, 3] - the expression's mechanism, mixed by the video rather
   than the face), both pulled toward none (LOOK_PULL, CODE_PULL), so what all videos share stays in the splats;
   with the per-frame colour correction train.py has (the day's light);
-- EACH VIDEO HAS ITS OWN ROOM (train.room_of over its moments, learned only where seen) AND ITS OWN BODY: a few
-  splats on its bones (BODY_START, at most BODY_MOST), a group of their own with an optimizer of their own, there
-  so the head is never asked to paint a video's clothes - a set's body is fitted to its own still (bake.py, fit.py);
-- A VIDEO WITH TOO FEW MOMENTS OF THEIR FACE (LEAST: a timelapse, a video of ants) IS LEFT OUT - no room, no body,
-  and the others' mean look as its code;
-- ENOUGH OF EACH VIDEO (2026-10-24, the user: "because of the heavy blurring, the face is extremely unstable"): 60,000
-  steps over 63 videos was some 950 a video, three or four looks at each moment, and the head drew his eyes and nose
-  at 0.2 of the frame's sharpness (its mean |Laplacian| over the frame's); a head given 6,000 steps a video drew them
-  at 0.5 to 0.67, three videos together at 0.59 with the best PSNR on unseen moments (23.2 dB on one video against
-  22.5). So it learns from the videos the spec names (`videos`: the Actor card's Head videos, those with the most of
-  them facing the camera), each its Head steps - a video it does not learn from takes the mean look, as one left out.
+- each video has its own room (train.room_of over its moments, learned only where seen) and its own body: a few
+  splats on its bones (BODY_START, at most BODY_MOST), a group of their own with an optimizer of their own, so the
+  head is never asked to paint a video's clothes - a set's body is fitted to its own still (bake.py, fit.py);
+- a video with too few moments of their face (LEAST: a timelapse, a video of ants) is left out - no room, no
+  body, and the others' mean look as its code;
+- each video needs enough steps: spread over too many videos the head draws the eyes and nose blurred. So it
+  learns from the videos the spec names (`videos`: the Actor card's Head videos, those with the most moments
+  facing the camera), each its Head steps; a video it does not learn from takes the mean look, as one left out.
 
 Each step: a frame of any video, a window of it (FACE_WINDOWS round the face), the head as that video looks and
 that video's body, over its room; L1 and SSIM, the cover against the person, train.py's regularisers. A video's
@@ -58,14 +52,14 @@ sys.path.insert(0, HERE)
 import train  # noqa: E402
 
 # A video's look: how many numbers its code has, how far from none each code starts (the code and the shifts it
-# mixes both started at none, and neither was ever pulled: each one's pull is the other times the error), and the
-# pulls toward no shift and no code.
+# mixes both start at none, and neither would ever be pulled: each one's pull is the other times the error), and
+# the pulls toward no shift and no code.
 LOOKS = 8
 CODE_START = 0.3
 LOOK_PULL = 1e-3
 CODE_PULL = 1e-3
 # A video's body: the splats laid on its bones to start, and the most it may grow to - its share of BODIES_MOST
-# for them all (19 bodies of 40,000 held 888k splats and 12 GB of a 16 GB card with the head), at most BODY_MOST.
+# for them all (many bodies fill the card with the head), at most BODY_MOST.
 BODY_START = 8000
 BODY_MOST = 40000
 BODIES_MOST = 600000
@@ -78,9 +72,8 @@ FACE_WINDOWS = 0.8
 # Every n-th moment of each video is held out; this many are measured on, across the videos.
 HELD_OUT = 20
 MEASURED = 48
-# A video with fewer moments of theirs than this is left out (a timelapse showed their face in 1 of 47 looks, a
-# video of ants in none; the one held out, nothing was left to lay its body from): a handful teaches neither its
-# room nor its look - a video's share of the steps is its share of the moments - and its code is the others' mean.
+# A video with fewer moments of theirs than this is left out: a handful teaches neither its room nor its look,
+# and its code is the others' mean.
 LEAST = 20
 
 
@@ -234,10 +227,9 @@ class Rooms:
     """Every video's room - its plate, learned only as far as its moments show it - and each frame's gain and
     colour correction, as train.Scene has them for one set.
 
-    A ROOM IS KEPT SMALL (2026-10-24: 63 rooms as train.Scene keeps one, the plate, its seen and its move with the
-    move's optimizer in float, held 6.8 GB of a 16 GB card shared with another trainer): the plate and seen are
-    uint8 (the plate is the frames' median of uint8 pictures), and the move is learned at 1/ROOM_COARSE of the
-    frame's size, upsampled bilinearly - a correction to a plate that holds the room's own detail."""
+    A room is kept small: the plate and seen are uint8 (the plate is the frames' median of uint8 pictures), and
+    the move is learned at 1/ROOM_COARSE of the frame's size, upsampled bilinearly - a correction to a plate that
+    holds the room's own detail. Many rooms at full size would not fit the card."""
 
     def __init__(self, data: Footage, device, plates, seens):
         import torch

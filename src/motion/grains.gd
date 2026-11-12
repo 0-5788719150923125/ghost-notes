@@ -3,67 +3,32 @@ class_name Grains
 
 ## Grains - a cellular automaton of MATTER: one material per cell, moved by local rules.
 ##
-## Every other many-item primitive here carries a CONTINUOUS scalar. [Swarm] is a field
-## of floats that grows or diffuses; [Flow2D] is a velocity field; a [ParticleSystem] is
-## a list of bodies with no notion of occupancy. None of them can express the one thing a
-## pile of sand is about: a cell holds EXACTLY ONE thing, two grains cannot occupy it, and
-## the silhouette you end up looking at was produced by nothing but a few local rules
-## applied a few thousand times. Angle of repose, avalanche, buoyancy layering and drainage
-## collapse are then consequences rather than code paths - there is no "avalanche" branch
-## anywhere in this file.
+## A cell holds exactly one thing; angle of repose, avalanche, buoyancy layering and drainage are consequences of a few
+## local rules, not code paths. It is not a [Swarm] rule: Swarm updates every cell off the previous frame, which would
+## let two grains move into one cell. Matter needs an in-place sweep, bottom row first (a grain only falls into space
+## vacated earlier in the tick), with a per-row alternating left/right bias so the order bakes in no drift.
 ##
-## It also cannot be a Swarm rule, and not for want of trying: Swarm is DOUBLE-BUFFERED and
-## updates every cell simultaneously off the previous frame, which is exactly right for
-## diffusion and exactly wrong for matter - two grains both read "the cell below is empty"
-## and both move into it, and one of them is quietly deleted. Matter needs an IN-PLACE,
-## ORDERED sweep: bottom row first, so a grain only ever falls into space that was vacated
-## earlier in the same tick, and a per-row alternating left/right bias so the ordering does
-## not bake a permanent drift into one direction.
+## Rules:
+##   POWDER  falls straight down; if blocked, it may slide diagonally with probability `repose` (the angle of repose).
+##   LIQUID  falls, slides diagonally without a gate, then searches sideways up to `spread` cells for anywhere lower
+##           or emptier, so it finds its level.
+##   GAS     the same rules with gravity inverted.
+##   Density decides who displaces whom; the pass table (see [method finalize]) is one byte lookup per test.
+##   REACTIVE materials transmute: a decay probability turns a cell into something else, and an igniter converts
+##           flammable neighbors into what they burn to, while a boiling liquid neighbor quenches it.
+##   DRAFT   an exposed grain may hop one cell downwind unless sheltered: a cell just downwind of an obstruction
+##           neither erodes nor accepts a hop (the lee shadow).
 ##
-## THE RULES, all of them:
-##   POWDER  falls straight down; if blocked, it MAY slide diagonally, with probability
-##           [code]repose[/code]. That probability is the material's angle of repose - a
-##           grain that always slides spreads into a flat apron, one that never slides
-##           stacks into a vertical column, and everything in between is a cone with a
-##           characteristic flank angle. It is the single most important number here.
-##   LIQUID  falls, slides diagonally without a gate, then searches sideways up to
-##           [code]spread[/code] cells for anywhere lower or emptier - which is what makes
-##           it find its level rather than pile up.
-##   GAS     the same rules with gravity inverted, so it rises through anything denser.
-##   Density decides who displaces whom, so oil floats on water, sand sinks through both,
-##           and ash of the right density rafts on the surface. Nothing anywhere says
-##           "float"; the pass table (see [method finalize]) is a single byte lookup per
-##           test and buoyancy falls out of it.
-##   REACTIVE materials transmute: a decay probability turns a cell into something else
-##           (an ember cooling into ash), and an igniter converts flammable NEIGHBORS into
-##           whatever they burn to, while a liquid neighbor that boils quenches it.
-##   DRAFT   an exposed grain may hop one cell downwind, unless it is sheltered - the LEE
-##           SHADOW rule: a cell immediately downwind of an obstruction neither erodes nor
-##           accepts a hop. That one rule is the whole difference between a pile that looks
-##           dumped and a pile that looks wind-worked: windward faces get planed off and
-##           material accumulates behind whatever stands in the way.
+## Determinism: conditional draws from an [RandomNumberGenerator] would make the draw count depend on state, which
+## depends on audio (live analyzer and offline bake are not frame-identical, spectrum.gd:406-411). Instead a noise
+## table is filled once from the seeded rng and indexed by a pure hash of (cell, generation, seed), so an
+## audio-conditioned decision changes only that decision.
 ##
-## DETERMINISM. The automaton needs a random number several times per cell per tick, and
-## an [RandomNumberGenerator] cannot supply it: drawing conditionally (only when a grain is
-## actually blocked) makes the number of draws depend on the state, and the state depends
-## on the audio - and the live analyzer and the offline export bake do NOT produce
-## frame-identical features (spectrum.gd:406-411), so the exported video would desynchronize
-## from the preview and never resynchronize. Instead a NOISE TABLE is filled once from the
-## seeded rng and indexed by a pure hash of (cell, generation, seed). No draws are consumed
-## at all, every cell's randomness is a pure function of where and when it is, and an
-## audio-conditioned decision (an ignition chance riding on flux) can therefore only change
-## that one decision instead of shifting an entire stream.
-##
-## PERFORMANCE. The sweep is O(cells) and lives on a worker thread ([FrameForge]) in every
-## scene that uses it. Two things keep the constant small: a per-row activity mask, so the
-## settled interior of a deep pile is skipped entirely once it stops moving (with a full
-## sweep every [constant FULL_EVERY] ticks so a slow reaction buried inside it is never
-## lost), and the pass table above, which turns "may this material enter that one" into one
-## byte read instead of a function call - at four tests per cell and twenty thousand cells
-## a tick, that call overhead was the dominant cost.
+## Performance: the sweep is O(cells) on a worker thread ([FrameForge]). A per-row activity mask skips the settled
+## interior of a pile (with a full sweep every [constant FULL_EVERY] ticks), and the pass table avoids a call per test.
 
-## Movement classes. AIR is the empty cell itself - deliberately not SOLID, so the checks
-## that ask "is my neighbor a wall" answer no for open space.
+## Movement classes. AIR is the empty cell itself, deliberately not SOLID, so "is my neighbor a wall" answers no for
+## open space.
 const AIR := -1
 const SOLID := 0
 const POWDER := 1
@@ -76,18 +41,13 @@ const KINDS := {"solid": SOLID, "powder": POWDER, "liquid": LIQUID, "gas": GAS}
 const NOISE := 4096
 const NMASK := 4095
 
-## A full sweep is forced this often, whatever the activity mask says. The mask can only
-## be woken by a neighbor that moved, so a cell whose only future is a slow transmutation
-## (an ember buried in a settled pile) would otherwise sleep forever. Sixteen ticks is
-## about half a second - short enough that nothing visibly freezes, long enough that the
-## saving on a settled chamber is still most of the sweep.
+## A full sweep is forced this often whatever the activity mask says: the mask is woken only by a neighbor that
+## moved, so a slow transmutation buried in a settled pile would otherwise sleep forever. About half a second.
 const FULL_EVERY := 16
 
-## The matter table. Every entry is a RANGE, sampled per instance - two songs that both
-## roll sand do not get the same sand, they get sand of a different repose, density and
-## color. `hue` is a RELATIVE offset in turns from whatever base hue the scene hands the
-## renderer, so a chamber stays inside its [Scheme] while its materials still read apart
-## from each other (water is always most of a half-turn from sand, whatever color sand is).
+## The matter table. Every entry is a range, sampled per instance (two songs that roll sand get different repose,
+## density and color). `hue` is a relative offset in turns from the base hue the scene hands the renderer, so a
+## chamber stays inside its [Scheme] while its materials read apart.
 ##
 ##   dens   - who displaces whom. The only thing buoyancy is made of.
 ##   repose - probability a blocked grain tries a diagonal slide. Low = steep, high = flat.
@@ -129,20 +89,17 @@ const MATTER := {
 var w := 160
 var h := 96
 
-## Per-tick inputs the owner sets before [method step]. They are plain fields rather than
-## a snapshot dictionary because the step reads them once and the lookup would otherwise
-## sit inside the hot loop.
+## Per-tick inputs the owner sets before [method step]: plain fields, since the step reads them once in the hot loop.
 var tilt := 0.0          # gravity shear, -1..1: probability the "down" cell is offset sideways
 var wind := 0.0          # ambient draft strength, 0..1
 var wind_dir := 1        # +1 downwind to the right, -1 to the left
 var ignite := 0.0        # global scale on every igniter's per-neighbor chance
 var spill := false       # open-sided chamber: whatever reaches the edge columns leaves
 var wall_id := 0         # the material the chamber is built from (restored when a hatch shuts)
-## How many rows deep the floor is, so an open hatch cuts through ALL of it. A hatch that
-## only clears the bottom row of a four-row floor opens onto more floor and drains nothing.
+## How many rows deep the floor is, so an open hatch cuts through all of it.
 var floor_h := 1
-## Optional per-row colors for [member wall_id] - the chamber drawn as strata rather than
-## as one flat gray. Empty = the wall paints like any other material.
+## Optional per-row colors for [member wall_id]: the chamber drawn as strata. Empty = the wall paints like any other
+## material.
 var wall_band := PackedColorArray()
 
 var gen := 0
@@ -186,9 +143,8 @@ var _drain_x1 := -1
 func _init(w_: int, h_: int, seed_: int) -> void:
 	w = maxi(8, w_)
 	h = maxi(8, h_)
-	# Masked to 24 bits: the hash below multiplies the cell index and the generation by
-	# large constants and adds this, and a full 64-bit session seed would push the sum
-	# around the wrap point rather than acting as a small decorrelating offset.
+	# Masked to 24 bits: the hash multiplies the cell index and generation by large constants and adds this, and a
+	# full 64-bit seed would push the sum around the wrap point.
 	_salt = seed_ & 0xffffff
 	_cells.resize(w * h)
 	_moved.resize(w * h)
@@ -206,9 +162,8 @@ func _init(w_: int, h_: int, seed_: int) -> void:
 		{"burns": "", "becomes": "", "boil": "", "douse": ""}, "empty")
 
 
-## Add one material by name, SAMPLED from its row of [constant MATTER]. Returns its id
-## (0 if the name is unknown, which reads as "empty" and is harmless). Adding the same
-## name twice returns the first id, so a scene can declare a dependency without checking.
+## Add one material by name, sampled from its row of [constant MATTER]. Returns its id (0 if the name is unknown,
+## which reads as empty). Adding the same name twice returns the first id.
 func add(mname: String, rng: RandomNumberGenerator) -> int:
 	if _by_name.has(mname):
 		return int(_by_name[mname])
@@ -270,14 +225,12 @@ func name_of(id: int) -> String:
 	return String(_names[id]) if id >= 0 and id < _names.size() else "empty"
 
 
-## Resolve the name links and build the pass tables. Call once, after every material is
-## added and before the first [method step].
+## Resolve the name links and build the pass tables. Call once, after every material is added and before the first
+## [method step].
 ##
-## The pass table is the whole physics of displacement, precomputed: for each ordered pair
-## it stores whether m may enter t moving down (t is empty, or t is a fluid strictly less
-## dense) and whether it may moving up (t strictly MORE dense - the gas case). One byte
-## read replaces a comparison chain in the innermost loop, and buoyancy layering, sinking
-## and bubbling all become the same lookup.
+## The pass table precomputes, for each ordered pair, whether m may enter t moving down (t is empty, or a fluid
+## strictly less dense) and whether it may moving up (t strictly more dense - the gas case). One byte read replaces a
+## comparison chain in the innermost loop.
 func finalize() -> void:
 	for id in _mn:
 		var link: Dictionary = _link[id]
@@ -285,7 +238,7 @@ func finalize() -> void:
 		_bec[id] = int(_by_name.get(String(link["becomes"]), 0))
 		_boi[id] = int(_by_name.get(String(link["boil"]), 0))
 		_dou[id] = int(_by_name.get(String(link["douse"]), 0))
-		# A fuel with nothing to burn INTO cannot catch - the scene left the ember out.
+		# A fuel with nothing to burn into cannot catch.
 		if _brn[id] == 0:
 			_fue[id] = 0.0
 	_pdn.resize(_mn * _mn)
@@ -333,10 +286,9 @@ func fill_rect(x0: int, y0: int, x1: int, y1: int, m: int) -> void:
 		_touch(y)
 
 
-## Drop [param count] cells of [param m] into the span, at row [param y]. The placement is
-## a pure function of (generation, salt, ordinal) - never an rng draw - so a spout whose
-## RATE rides on the audio still places its grains identically in a live session and in an
-## export, and only the count differs.
+## Drop [param count] cells of [param m] into the span, at row [param y]. The placement is a pure function of
+## (generation, salt, ordinal), never an rng draw, so a spout whose rate rides on the audio places its grains
+## identically live and in an export; only the count differs.
 func emit(x0: int, x1: int, y: int, m: int, count: int, salt: int) -> void:
 	if m <= 0 or count <= 0 or y < 0 or y >= h:
 		return
@@ -356,29 +308,18 @@ func emit(x0: int, x1: int, y: int, m: int, count: int, salt: int) -> void:
 			_touch(y)
 
 
-## Deposit matter as though the chamber had already been pouring for a long time - piles
-## under the spouts, pools where a liquid runs, and a stream still in the air.
+## Deposit matter as though the chamber had already been pouring for a long time: piles under the spouts, pools where
+## a liquid runs, and a stream still in the air. It is one O(cells) pass instead of a pre-roll (a few hundred ticks
+## cost seconds of CPU, a stall on the main thread or a blank chamber on the worker); the automaton takes over from a
+## plausible state and the first second is it relaxing.
 ##
-## WHY IT IS NOT A PRE-ROLL. The obvious way to start a world in progress is to run it: build
-## the chamber, then step it a few hundred times before anyone sees it. Measured on the real
-## thing (280x161, three spouts) a tick costs 5-15 ms, and 200 ticks - seven seconds of world
-## time, barely enough to make a cone - is 1.4 SECONDS of CPU. On the main thread that is a
-## visible stall at every cut to this scene; on the worker it is over a second of empty
-## chamber before the first packet, which is the same blank slate arriving late. So the piles
-## are DEPOSITED instead, in one O(cells) pass, and the automaton takes over from there: what
-## it inherits is a plausible state rather than a settled one, and the first second of the
-## scene is it relaxing - which is exactly what "already in progress" looks like.
+## Each source contributes a cone whose flank slope is read off its own repose, the number that decides how the sim
+## piles it. A liquid contributes a level instead of a cone, since a pool that arrives as a triangle visibly
+## collapses.
 ##
-## THE SHAPE COMES FROM THE MATERIALS, not from a drawing. Each source contributes a cone
-## whose flank slope is read off its own repose - the same number that decides how the sim
-## will pile it - so a flat powder spreads a wide apron and a steep one stacks near its spout,
-## and the deposit already looks like something these rules would have made. A LIQUID
-## contributes a level instead of a cone, because a pool that arrives as a triangle spends its
-## first second visibly collapsing, which advertises the trick.
-##
-## `sources` is one dictionary per pour: `x` (the column it lands in), `mat`, and optionally
-## `live` (its stream is currently running) and `flow` (0..1, how solid that stream is).
-## `fill` is how deep the deepest pile stands, as a fraction of the chamber's free height.
+## `sources` is one dictionary per pour: `x` (the column it lands in), `mat`, and optionally `live` (its stream is
+## currently running) and `flow` (0..1, how solid that stream is). `fill` is how deep the deepest pile stands, as a
+## fraction of the chamber's free height.
 func prefill(sources: Array, fill: float, rng: RandomNumberGenerator) -> void:
 	if sources.is_empty():
 		return
@@ -386,8 +327,7 @@ func prefill(sources: Array, fill: float, rng: RandomNumberGenerator) -> void:
 	var peak := clampf(fill, 0.0, 0.95) * free_h
 	if peak < 1.0:
 		return
-	# A wobble along the whole chamber, so the piles are not four clean cones with flat ground
-	# between them - material has been avalanching and draining all along.
+	# A wobble along the whole chamber, so the piles are not clean cones with flat ground between them.
 	var wob_k := rng.randf_range(0.02, 0.06)
 	var wob_p := rng.randf() * TAU
 	var wob_a := peak * rng.randf_range(0.04, 0.12)
@@ -403,21 +343,18 @@ func prefill(sources: Array, fill: float, rng: RandomNumberGenerator) -> void:
 		for s in sources:
 			var d: Dictionary = s
 			var m := int(d.get("mat", 0))
-			# `pile: false` for a source whose material does not ACCUMULATE - an ignition
-			# spout drops embers that burn out into ash, and a chamber that opened with a
-			# heap of live coals under the torch would be a world with different rules.
+			# `pile: false` for a source whose material does not accumulate (an ignition spout drops embers that burn
+			# out into ash).
 			if m <= 0 or m >= _mn or not bool(d.get("pile", true)):
 				continue
 			var sx := float(d.get("x", 0))
 			var dist := absf(float(x) - sx)
 			var v := 0.0
 			if _knd[m] == LIQUID:
-				# A pool, not a heap: level everywhere it reaches, and shallower than a cone of
-				# the same fill because a liquid spends its depth on width.
+				# A pool, not a heap: level everywhere it reaches, and shallower than a cone of the same fill.
 				v = peak * LIQUID_SHARE
 			else:
-				# Slope straight off the repose the sim will use: a grain that always slides
-				# (repose 1) makes an apron, one that rarely does stacks steeply.
+				# Slope straight off the repose the sim will use (repose 1 makes an apron, a rare slide stacks steeply).
 				v = peak - dist * lerpf(SLOPE_STEEP, SLOPE_FLAT, clampf(_rep[m], 0.0, 1.0))
 			if v > best:
 				best = v
@@ -429,16 +366,9 @@ func prefill(sources: Array, fill: float, rng: RandomNumberGenerator) -> void:
 		prof[x] = maxi(0, int(round(best + rng.randf_range(-1.2, 1.2))))
 		pmat[x] = bmat
 
-	# THE DEPOSIT WALK. Bottom-up per column, filling air that RESTS on something - so a shelf
-	# carries its own pile, an overhang keeps its space, and the hourglass fills above its
-	# waist as well as below it, all without this knowing what shape the chamber is.
-	#
-	# EVERY SURFACE IS NOT A FLOOR, and the first cut treated them as one: the counter reset
-	# at each support, so a column crossing four shelves got the full pile depth four times
-	# over and a ledged chamber came out PACKED SOLID to the ceiling - the opposite failure to
-	# the blank slate. A shelf holds a thin run, because material that lands on a slope leaves
-	# at its edge; only the bottom of the chamber holds a deep one. The column budget is what
-	# enforces that whatever shape it is crossing.
+	# The deposit walk: bottom-up per column, filling air that rests on something, so a shelf carries its own pile and
+	# an overhang keeps its space. Every surface is not a floor: a shelf holds a thin run (material leaves at its
+	# edge), only the chamber's bottom a deep one, and the column budget enforces that.
 	for x in w:
 		var m := pmat[x]
 		if m <= 0:
@@ -465,8 +395,7 @@ func prefill(sources: Array, fill: float, rng: RandomNumberGenerator) -> void:
 			if placed >= here:
 				y -= 1
 				continue
-			# The top of a pile is never a ruled line - the last couple of cells are a
-			# scattering, which is what the automaton's own surface looks like.
+			# The top of a pile is a scattering over its last couple of cells, not a ruled line.
 			if here - placed > 2 or rng.randf() < 0.55:
 				_cells[i] = m
 				_touch(y)
@@ -474,9 +403,7 @@ func prefill(sources: Array, fill: float, rng: RandomNumberGenerator) -> void:
 			budget -= 1
 			y -= 1
 
-	# ...and the streams that are still falling. A spout that is pouring has a column of
-	# material in the air between its mouth and its pile; without it every session opens with
-	# the pours switching on at once, which is the other half of the blank slate.
+	# ...and the streams still falling: a pouring spout has a column of material in the air between mouth and pile.
 	for s in sources:
 		var d: Dictionary = s
 		if not bool(d.get("live", false)):
@@ -496,28 +423,23 @@ func prefill(sources: Array, fill: float, rng: RandomNumberGenerator) -> void:
 			emit(x0, x1, y, m, 1, sx * 31 + y)
 
 
-## How deep the ground lies where no cone reaches, as a share of the deepest pile. Not zero:
-## a chamber that has been running has material everywhere, avalanched out of the heaps and
-## walked along the floor by the draft.
+## How deep the ground lies where no cone reaches, as a share of the deepest pile (a running chamber has material
+## everywhere).
 const BASE_SHARE := 0.22
-## A pool's depth against a heap's peak. A liquid of the same volume lies far flatter, and a
-## deep pool would swallow the piles it is supposed to sit between.
+## A pool's depth against a heap's peak (a liquid of the same volume lies far flatter).
 const LIQUID_SHARE := 0.45
-## Flank slope, in cells of drop per cell of run, across the repose range. The steep end is
-## just over 45 degrees, which is about where a dry powder stands; the flat end is a beach.
+## Flank slope, in cells of drop per cell of run, across the repose range: the steep end is just over 45 degrees
+## (a dry powder), the flat end a beach.
 const SLOPE_STEEP := 1.1
 const SLOPE_FLAT := 0.16
-## What a SHELF holds against what the floor holds. Material that lands on a slope runs off
-## its edge, so a ledge carries a run rather than a heap.
+## What a shelf holds against what the floor holds (a ledge carries a run rather than a heap).
 const SHELF_SHARE := 0.30
-## ...and the ceiling on everything one column may carry, as a multiple of its own pile depth.
-## Without it a column crossing several shelves collects a full pile at each of them.
+## The ceiling on everything one column may carry, as a multiple of its own pile depth.
 const COLUMN_BUDGET := 1.35
 
 
-## Open a floor hatch across an inclusive column span (x1 < x0 shuts it). Shutting restores
-## the floor out of [member wall_id], so the chamber is whole again and the next pile builds
-## on it - the hatch is a door, not a permanent hole.
+## Open a floor hatch across an inclusive column span (x1 < x0 shuts it). Shutting restores the floor out of
+## [member wall_id], so the hatch is a door, not a permanent hole.
 func set_drain(x0: int, x1: int) -> void:
 	if x0 == _drain_x0 and x1 == _drain_x1:
 		return
@@ -561,8 +483,7 @@ func step() -> void:
 			var kind := int(_knd[m])
 			if kind == SOLID:
 				continue
-			# Three decorrelated randoms for this cell this tick, from a pure hash - see the
-			# determinism note at the top of the file. No rng draw is consumed anywhere here.
+			# Three decorrelated randoms for this cell this tick, from a pure hash (see the determinism note on top).
 			var hsh := i * 1103515245 + gen * 2654435761 + _salt
 			var r0 := _nz[hsh & NMASK]
 			var r1 := _nz[(hsh >> 12) & NMASK]
@@ -621,8 +542,7 @@ func step() -> void:
 					var sx := x + dd
 					if sx < 0 or sx >= w:
 						continue
-					# Never squeeze through the diagonal joint of a wall - without this,
-					# powder leaks through every corner of the chamber.
+					# Never squeeze through the diagonal joint of a wall, or powder leaks through every corner.
 					if int(_knd[int(_cells[i + dd])]) == SOLID:
 						continue
 					var di := i + vs + dd
@@ -634,24 +554,10 @@ func step() -> void:
 						break
 			# Sideways, for fluids only: the search that makes a liquid find its level.
 			#
-			# SYMMETRY-AWARE, and that is the whole of the "vibrating pixels" fix. The two
-			# directions used to be tried in the order `rb, -rb` - and `rb` flips with the
-			# generation, so a fluid cell with passable space on BOTH sides simply took the first
-			# option every tick and walked right, left, right, left for ever. Measured on a
-			# SETTLED chamber with nothing pouring into it (a probe since retired): a
-			# water-only pool had 40 cells changing occupancy 40 times in 40 ticks, every one a
-			# clean two-tick oscillation, while a powder-only chamber had exactly zero - powders
-			# have no `spread` and never enter this branch. Each of those swaps empties the cell
-			# it leaves, so what the eye gets is grains blinking between their color and the
-			# background: "almost every single grain is flickering between black and color, as if
-			# the pixels were vibrating".
-			#
-			# Both sides are measured now and the cell moves only toward a STRICTLY better one.
-			# A hole wins outright and is worth jumping to - that is a fluid pouring into a gap,
-			# and it should be quick. With no hole either way there is nothing to do but level,
-			# so it steps ONE cell and only when the two runs differ by more than one: the same
-			# commit-band idea as contour_map's _pick_index, for the same reason, that a choice
-			# made on a value sitting exactly on its boundary chatters across it for ever.
+			# Symmetry-aware: both sides are measured and the cell moves only toward a strictly better one, else
+			# a fluid with passable space on both sides would take the first option every tick and oscillate. A hole wins
+			# outright (a fluid pouring into a gap should be quick); with no hole either way it steps one cell, and only
+			# when the two runs differ by more than one - the same commit-band idea as contour_map's _pick_index.
 			if not moved_it and _spr[m] > 0:
 				var sp := int(_spr[m])
 				var run_l := 0
@@ -691,9 +597,8 @@ func step() -> void:
 						dd2 = -1
 						dist = hole_l
 					else:
-						# Two holes exactly as far off. Broken on the CELL, never on the parity of
-						# the generation - and it is safe to break at all, because the cell falls
-						# through whichever hole it took on the next tick and cannot come back.
+						# Two holes exactly as far off: broken on the cell, never on the generation's parity (safe, since the
+						# cell falls through whichever hole it took on the next tick).
 						dd2 = 1 if ((i * 2654435761 + _salt) & 1) == 0 else -1
 						dist = hole_r
 				elif run_r > run_l + 1:
@@ -707,8 +612,7 @@ func step() -> void:
 					_swap(i, li, m, int(_cells[li]))
 					_touch(y)
 					moved_it = true
-			# The ambient draft, with its lee shadow. Powder only, and only where the grain
-			# is actually exposed to the air - a buried grain feels no wind.
+			# The ambient draft, with its lee shadow: powder only, and only where the grain is exposed to the air.
 			if not moved_it and wnd > 0.001 and kind == POWDER and _lft[m] > 0.0 and up:
 				if int(_cells[i - w]) == 0:
 					var lx := x - wdir
@@ -721,8 +625,8 @@ func step() -> void:
 							if tm3 == 0 or _pdn[pt + tm3] != 0:
 								_swap(i, hi3, m, tm3)
 								_touch(y)
-	# The hatch: anything that has reached the floor inside an open span leaves the world.
-	# The floor material goes with it, which is what OPENS the hatch in the first place.
+	# The hatch: anything that has reached the floor inside an open span leaves the world, floor material included
+	# (which opens the hatch).
 	if _drain_x1 >= _drain_x0:
 		for y in range(maxi(0, h - maxi(1, floor_h)), h):
 			var by := y * w
@@ -746,8 +650,8 @@ func step() -> void:
 	_hot_next.fill(0)
 
 
-# Move m from i into j, carrying whatever was there back. Both ends are marked moved when
-# it is a genuine swap, so a pair of materials cannot thrash back and forth within one tick.
+# Move m from i into j, carrying whatever was there back. Both ends are marked moved on a genuine swap, so a pair
+# of materials cannot thrash within one tick.
 func _swap(i: int, j: int, m: int, tm: int) -> void:
 	_cells[j] = m
 	_cells[i] = tm
@@ -773,8 +677,8 @@ func _burn(n: int, p: float, r: float) -> bool:
 	return false
 
 
-# Wake a row and its two neighbors, for this tick AND the next. Writing both arrays is
-# what lets emissions and hatch changes made BETWEEN steps take effect immediately.
+# Wake a row and its two neighbors, for this tick and the next (writing both arrays lets emissions and hatch changes
+# made between steps take effect immediately).
 func _touch(y: int) -> void:
 	_hot[y] = 1
 	_hot_next[y] = 1
@@ -786,18 +690,10 @@ func _touch(y: int) -> void:
 		_hot_next[y + 1] = 1
 
 
-## Emit the grid into [param tb] as RUN-LENGTH quads: one quad per horizontal stretch of
-## identical material, capped at [param run_cap] cells.
-##
-## The cap is not a performance limit, it is the texture: an uncapped run paints a whole
-## settled layer in one flat color, and a pile of sand that is one flat color does not
-## read as sand. Capping the run gives every few cells their own value jitter while still
-## collapsing a full chamber from ~25000 cells to a few thousand quads - one draw call
-## either way, but the picture has grain in it.
-##
-## A run also breaks where the cell above changes between solid and empty, so the exposed
-## surface of a pile gets its own slightly brighter run - a lit crust along the silhouette,
-## which is what tells the eye where the top of the material is.
+## Emit the grid into [param tb] as run-length quads: one quad per horizontal stretch of identical material, capped at
+## [param run_cap] cells. The cap is the texture (an uncapped run paints a settled layer in one flat color), while a
+## full chamber still collapses from ~25000 cells to a few thousand quads in one draw call. A run also breaks where
+## the cell above changes between solid and empty, giving the exposed surface a brighter run (a lit crust).
 func paint(tb: TriBatch, org: Vector2, cell: float, run_cap: int, hue_rot: float,
 		glow: float, depth: float) -> void:
 	var cap := maxi(1, run_cap)
@@ -815,16 +711,8 @@ func paint(tb: TriBatch, org: Vector2, cell: float, run_cap: int, hue_rot: float
 				x += 1
 				continue
 			var exposed := 1 if (y == 0 or int(_cells[base + x - w]) == 0) else 0
-			# RUNS BREAK ON A FIXED LATTICE, and the jitter is keyed to the lattice block rather
-			# than to wherever the run happened to start. Both used to float with the content: a
-			# run began at the first occupied cell and ran up to `cap`, so ONE cell appearing or
-			# leaving at the left of a row re-partitioned every run behind it and re-rolled every
-			# one of their shades. That is why a single moving grain read as the whole row
-			# shimmering, and why the sim's two-tick oscillation (see step's fluid note) looked
-			# like "almost every single grain" rather than the few dozen cells it actually was.
-			# Anchoring to `cap`-wide blocks costs nothing - a solid stretch still collapses to
-			# one quad per block, the same count as before - and makes a settled pile's colors
-			# genuinely static.
+			# Runs break on a fixed lattice and the jitter is keyed to the lattice block, not to where a run starts, so
+			# one cell appearing or leaving does not re-partition and re-shade the row; a settled pile's colors are static.
 			var stop := mini(w, (x / cap + 1) * cap)
 			var run := 1
 			while x + run < stop:

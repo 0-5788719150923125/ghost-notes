@@ -5,7 +5,7 @@ extends HFlowContainer
 ## Enter, or leaving the box, or pasting "a, b, c") turns what was typed into chips. Backspace in
 ## the empty box removes the last chip. Loaded by path (no class_name), as youtube.gd is.
 ##
-## Two kinds of chip: the field's own, and FIXED ones shown first - tags that go up with these but
+## Two kinds of chip: the field's own, and fixed ones shown first - tags that go up with these but
 ## are kept elsewhere (a show's own tags), outlined, with no × because they are not this field's
 ## to remove. [method mark] dims a chip that will not go up and says why in its tooltip.
 

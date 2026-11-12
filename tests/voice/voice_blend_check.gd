@@ -4,7 +4,7 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/voice/voice_blend_check.gd
 ##
-## WHAT IT HOLDS:
+## What it holds:
 ## - the lines hosts/voice/test_kokoro.py holds blend.py to (`BLEND_LINES`) read the same here: the method, an
 ##   accent, each reader's weight and part, an unknown method a mix, an unknown accent unsaid, a weight clamped;
 ## - a line is written back as it was read: a weight of 1 unsaid (and every weight, where the method weighs nothing),

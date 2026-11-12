@@ -1,16 +1,15 @@
 extends SceneTree
 
-## NOT A GATE - it spends a little of the author's quota (one short run of the smallest model). It
-## checks that the installed Claude Code CLI, run exactly as [TextGen.Claude] runs a writer, reaches
-## ghost's own tools ([AgentTools]) and SEES the pictures they return: the toolset's one tool hands
-## back a swatch of a single color, and the model is asked to name it.
+## Not a gate: it spends a little of the author's quota (one short run of the smallest model). It checks
+## that the installed Claude Code CLI, run exactly as [TextGen.Claude] runs a writer, reaches ghost's own
+## tools ([AgentTools]) and sees the pictures they return: the toolset's one tool hands back a swatch of a
+## single color, and the model is asked to name it.
 ##
 ##   godot --headless --path . --script res://tests/agents/agent_tools_claude_probe.gd [-- --model haiku]
 ##
-## Worth running again after a Claude Code update: `--safe-mode`, `--tools ""` and MCP are separate
-## switches in the CLI, and this is the only check that they still combine the way ghost needs. It
-## also asks what else reached the model, and prints it: measured, nothing but the account's email
-## address, which the CLI attaches whatever settings are loaded (no CLAUDE.md, memory or skills).
+## Run it again after a Claude Code update: `--safe-mode`, `--tools ""` and MCP are separate switches, and
+## this is the only check that they still combine as ghost needs. It also prints what else reached the model
+## (only the account's email address, which the CLI attaches whatever settings are loaded).
 
 const DIR := "user://agent_tools_probe"
 const COLOR := Color(0.1, 0.75, 0.15)

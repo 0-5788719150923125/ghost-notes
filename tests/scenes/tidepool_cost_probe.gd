@@ -1,7 +1,7 @@
 extends Node
 
-# Throwaway probe: what does one tidepool frame actually COST to build, and how fast do its
-# waves actually move? Both numbers decide how much resolution the scene can buy.
+# Throwaway probe: what one tidepool frame costs to build, and how fast its waves move. Both numbers
+# decide how much resolution the scene can buy.
 # Run: tests/run_boot_probe.sh tests/scenes/tidepool_cost_probe.gd 240
 
 const W := 1920.0
@@ -51,7 +51,7 @@ func _ready() -> void:
 			"glare_thr": 0.6,
 			"glare_gain": sc._glare_gain,
 		}
-		# Amplitudes at a plausible mid drive, or the sweep skips every component as silent.
+	# Amplitudes at a plausible mid drive, or the sweep skips every component as silent.
 		for i in sc._amp.size():
 			sc._amp[i] = sc._base[i] * 0.6
 		snap["amps"] = sc._amp.duplicate()
@@ -62,8 +62,7 @@ func _ready() -> void:
 			sc._job.run(snap)
 		var ms := float(Time.get_ticks_usec() - t0) / 1000.0 / float(REPS)
 
-		# Per-stage, so the budget is spent on evidence rather than on a guess about which
-		# term dominates. Each stage is driven exactly as run() drives it.
+	# Per stage, each driven as run() drives it.
 		var job = sc._job
 		var nn := gw * gh
 		var t_sweep := 0.0

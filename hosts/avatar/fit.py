@@ -9,50 +9,33 @@ The spec: train.py's ({"frames", "rig", "front", "span"}) and {"poses", "avatar"
 the poses' stills), its picture with what stands before them filled from round it (`body_K.jpg`) and its matte,
 where the fitted avatar goes and how many steps.
 
-LEARNED FROM EVERY FRAME, THE BODY IS A BLUR (2026-10-23: the sweater's knit gone, the hands two smudges - and
-with three times the splats no sharper): nothing holds a sweater still from one frame to the next. On his frames
-the pose's torso jumped where he sat still (its width 3.5% and its place 20 px every half second at the median,
-11% and 48 px at the 90th percentile; the face's scale moves 1.6%), and held still instead - or carried by the
-head, or by the pose smoothed over seconds - the median of his chest kept under a tenth of one frame's detail:
-the knit stretches and folds as he breathes and moves his arms. But the body that is played is the still's,
-moved by its bones. So THE SPLATS BOUND TO A BONE ARE FITTED AGAIN TO THE STILL ALONE, the room held as learned:
-the sweater's knit, the hands as they rest. NOT WHERE THE HEAD IS SOLID (HEAD_COVER):
-splats bound to a bone fitted to one picture could paint its face there, and the torso would carry it; what lies
-behind it keeps what the frames taught (round the soft edge of the beard, it shows through). Under what stands before them (the microphone)
-their picture is the one filled from round it, and their outline there is not asked for. First THE HEAD'S
-SPLATS PAST ITS REACH are dropped (`train.astray`: on his avatar 505 large faint ones had painted a fifth of the
-frame, his chest, which would have turned with his head). The splats may grow where the still pulls at them (to
-FIT_MOST in all: the medium draws every one each frame), never into needles (FIT_LONG, a splat's longest side to
-its next: fitted beside the beard, they grew into its strands).
+Learned from every frame, the body is a blur: nothing holds a sweater still from one frame to the next (the
+pose's torso jumps where the person sat still, and the knit stretches and folds as they breathe). But the body
+that is played is the still's, moved by its bones. So the splats bound to a bone are fitted again to the still
+alone, the room held as learned: the sweater's knit, the hands as they rest. Not where the head is solid
+(HEAD_COVER): a bone's splats fitted to one picture could paint its face there, and the torso would carry it;
+what lies behind it keeps what the frames taught. Under what stands before them (the microphone) their picture
+is the one filled from round it, and their outline there is not asked for. First the head's splats past its
+reach are dropped (`train.astray`: large faint ones paint a fifth of the frame). The splats may grow where the
+still pulls at them (to FIT_MOST in all: the medium draws every one each frame), never into needles (FIT_LONG, a
+splat's longest side to its next).
 
-AND THE HEAD IS FITTED TO IT TOO (2026-10-25, the user: "around the edges of the face is heavy artifacting: at the
-neck, black splotches and hard lines, and around the head - heavy blurring, such that ears just look like smears"):
-the head is every video's, adapted to a set's moments, and held whole it painted the neck under the beard dark with
-a hard edge where the shared splats below the chin had been dropped, the hair and ears as a blur - 23.3 dB on the
-whole still. Fitted too, the still is 42 dB and the hair, beard and neck are the still's. BUT NOT WHERE THE FACE
-OPENS (`where_it_opens`): fitted there, splats round the lips took the still's closed mouth and the parted mouth
-showed them as coloured specks and streaks, and the shut lids the still's open eye. Held by their binding - the
-triangles on the lips and the eyes' rims, or every splat an expression moves - they still did, or left blurred patches
-beside sharp ones: what shows in the opening is whatever stands there, bound to anything. So a head splat is held by
-WHERE IT STANDS in the still: within the lips' outline or an eye's rim, wholly, and fitted more and more past them,
-wholly at MOUTH_EDGE and EYE_EDGE of the face's height; every splat keeps its expression shifts. (Before the moments
-held it - below - the beard under the lips was held too, as far as the lower lip goes, 0.15 of the face's height: a soft
-patch in a sharp beard, the played mouth with 40% of the still's fine detail there; held to the moments, it is fitted -
-47%, its openings as clean.) Body splats are fitted where the head is not solid, as
-before; none of them grows into a needle; a head splat under LEAST_COPY pixels is never copied (bake.py's specks).
+The head is fitted to it too: the head is every video's, adapted to a set's moments, and held whole it paints
+the neck under the beard dark with a hard edge, and the hair and ears as a blur. But not where the face opens
+(`where_it_opens`): fitted there, splats round the lips take the still's closed mouth and a parted mouth shows
+them as coloured specks, and shut lids the still's open eye. Binding does not hold them: what shows in the
+opening is whatever stands there, bound to anything. So a head splat is held by where it stands in the still:
+within the lips' outline or an eye's rim, wholly, and fitted more and more past them, wholly at MOUTH_EDGE and
+EYE_EDGE of the face's height; every splat keeps its expression shifts. Body splats are fitted where the head is
+not solid; none of them grows into a needle; a head splat under LEAST_COPY pixels is never copied (bake.py's
+specks).
 
-BUT THE MOMENTS KEEP IT WHOLE (2026-10-25, the user: "the whole scene has needle-like fractures throughout it,
-especially near the face, and especially noticeable when the face moves"): fitted to the still alone, the head's
-splats could stand in any layers that add up to that one picture - 41.4 dB on it, but 19.9 on the set's moments it
-never fitted, where the avatar it started from held 21.75 - and played (the mouth open, the head turned a few
-degrees, the face's own ways) the layers slid apart: a dark line from the mouth's corner across the cheek, needles
-through the beard, green and purple specks on the neck. The trainer drew the same from the very frames Godot wrote;
-the avatar before it, only where the mouth folded the face. So each step one of the set's own moments is drawn too
-(`moment_loss`: as tracked, in its own light, learned here) and asks the head for its picture in squares MOMENT_POOL
-pixels wide - what moves with the face holds together as it did in them, and the fine detail is the still's alone
-(squares of 8 held it as well, 21.25 dB). On his set: 38.0 dB on the still, 21.4 on those moments, and played, the
-beard and the cheek whole as the mouth opens. (Where the beard's edges still broke, the mouth had folded the face:
-the player's, `LikenessMedium.unfolded`.)
+The moments keep it whole: fitted to the still alone, the head's splats could stand in any layers that add up to
+that one picture and slide apart when played (mouth open, head turned: dark lines, needles through the beard,
+specks on the neck). So each step one of the set's own moments is drawn too (`moment_loss`: as tracked, in its
+own light, learned here) and asks the head for its picture in squares MOMENT_POOL pixels wide - what moves with
+the face holds together as it did in them, and the fine detail is the still's alone. (Where the beard's edges
+still break, the mouth has folded the face: the player's `LikenessMedium.unfolded`.)
 
 Writes <out> (fit.npz) as train.py writes an avatar, with what Godot reads beside it (.json - naming the still
 it was fitted to, `still` - .bin, .plate.png).
@@ -80,19 +63,19 @@ FIT_GROWS = 0.6
 FIT_LONG = 6.0
 # Where the head's splats cover this much is the head's: no body splat is fitted there.
 HEAD_COVER = 0.9
-# WHERE THE FACE OPENS, in the face's heights: how far past the lips' outline and past an eye's rim a head splat is
+# Where the face opens, in the face's heights: how far past the lips' outline and past an eye's rim a head splat is
 # held less and less.
 MOUTH_EDGE = 0.02
 EYE_EDGE = 0.04
 # No head splat under this many pixels is copied (bake.py's LEAST_COPY).
 LEAST_COPY = 1.0
-# THE MOMENTS KEEP IT WHOLE: each step one of the set's moments too, round the face, asked only for its means over
+# The moments keep it whole: each step one of the set's moments too, round the face, asked only for its means over
 # squares MOMENT_POOL pixels wide, at MOMENT_SHARE of the still's loss; each moment's light learned at LIGHT_RATES (its
 # colour correction, its gain).
 MOMENT_POOL = 4
 MOMENT_SHARE = 1.0
 LIGHT_RATES = (2e-3, 5e-3)
-# THE BEARD MOVES AS ONE ([method hang_beard]): how far below the lips' outline, in the face's heights, the beard under
+# The beard moves as one ([method hang_beard]): how far below the lips' outline, in the face's heights, the beard under
 # them begins.
 BEARD_UNDER = 0.02
 
@@ -171,15 +154,12 @@ def where_it_opens(splats, rig, data, i: int):
 
 
 def hang_beard(splats, rig, data, i: int):
-    """THE BEARD MOVES AS ONE (2026-10-25, the user: "transitions between frames, they morph in a fractured/spiky kind
-    of way"): with the jaw eased open, a beard splat parted from its 12 nearest by 0.44 px a step against the 0.96 it
-    moved - each on a triangle of its own that turned its own way (the jaw's edge, levers of up to 7 of its units), and
-    each with expression shifts of its own that had learned noise (alone they moved it 0.27 px a step, and parted it
-    from its neighbours by more). Hair has no shape to shift with the face. So, as it stands in the still (frame [param
-    i]): a splat on the face's triangles BELOW THE CHIN is hung from the head's own frame, as the hair is (its place,
-    size and turn in the head's terms, where it stood; the head's take no shifts), and one BELOW THE LIPS' OUTLINE
-    (BEARD_UNDER of the face's height past it) keeps its triangle, which the jaw carries, but takes no shifts: 0.12 px a
-    step. `(hung, under)`: how many of each."""
+    """The beard moves as one: a beard splat on a triangle of its own that turns its own way, with expression
+    shifts of its own (noise), parts from its neighbours as the jaw opens, and hair has no shape to shift with
+    the face. So, as it stands in the still (frame [param i]): a splat on the face's triangles below the chin is
+    hung from the head's own frame, as the hair is (its place, size and turn in the head's terms, where it stood;
+    the head's take no shifts), and one below the lips' outline (BEARD_UNDER of the face's height past it) keeps
+    its triangle, which the jaw carries, but takes no shifts. `(hung, under)`: how many of each."""
     import torch
     with torch.no_grad():
         T = rig.T
@@ -271,7 +251,7 @@ def main() -> int:
     still = picture(spec["picture"], "RGB")
     matte = picture(spec["matte"], "L")
 
-    # WHERE THE STILL IS FITTED: the body's splats not where the head is solid, the head's anywhere; their outline
+    # Where the still is fitted: the body's splats not where the head is solid, the head's anywhere; their outline
     # not under what stands before them
     with torch.no_grad():
         head = head_cover(splats, rig, data, i) > HEAD_COVER
@@ -368,7 +348,7 @@ def main() -> int:
         drawn = train.render(splats, rig, data, scene, i, 0, 0, data.W, data.H, tracked=False, learned=False)[0]
         after, after_body = error(drawn), error(drawn, keep)
         unseen_after = train.held_error(splats, rig, data, scene)["face"]
-    # THE BODY BENDS as it is played: each body splat's second influence, by where it rests in the still
+    # The body bends as it is played: each body splat's second influence, by where it rests in the still
     train.save(splats, rig, data, scene, spec["rig"], spec["out"], at=i, extra={"still": k},
                second=train.second_of(splats, rig, data, i))
     say("still %d fitted: %.2f dB on the still, from %.2f (%.2f where the body is, from %.2f); round the face on the "

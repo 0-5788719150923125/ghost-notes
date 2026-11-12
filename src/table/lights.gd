@@ -1,59 +1,36 @@
 extends RefCounted
 class_name Lights
 
-## Lights - what lights a scene, and how that light moves: the SKY that fills it, a SUN (or the moon)
-## that throws its shadows, what the sun falls THROUGH on its way (a window and its panes, blinds, a
-## pierced screen, leaves, fronds or bare branches overhead, a pergola's slats, an awning, a
-## parasol), the WEATHER between it and the table (clouds passing over it, birds crossing it), LAMPS
-## out of the shot (candles, a torch, a fire, a lantern, a lamp, fluorescent tubes, neon, a screen's
-## glow, a street lamp, passing headlights, a lighthouse's beam, lightning), and SHADOWS of things out
-## of the shot (a roof beam, a pillar, a rope swinging, a chandelier, laundry on a line). An agent
-## describes it as data - the registries' words are what it reads ([method describe]) - [method
-## sanitize] makes whatever it wrote buildable, and [method build] makes the nodes. Generic: a host
-## gives its STAGE ([method build]: its camera, the middle of its set, what stands there, what is in
-## the shot, its room's picture), and the card table is the first host ([TableMedium]); the set
-## dresser writes it as `light` (the user, 2026-10-07: "giving them a way to control both lighting
-## and shadow... I would want to give the agents proper tooling, to create these vibes on its own").
+## Lights - what lights a scene, and how that light moves: the sky, a sun (or the moon) that throws shadows, what the sun falls through
+## (a window, blinds, leaves, a pergola, an awning), the weather between it and the table (clouds, birds), lamps out of the shot (candles,
+## a fire, a lantern, tubes, neon, a screen's glow, headlights, lightning), and shadows of things out of the shot (a beam, a swinging rope,
+## a chandelier). An agent describes it as data (the registries' words, [method describe]); [method sanitize] makes it buildable and
+## [method build] makes the nodes. Generic: a host gives its stage ([method build]: camera, the middle of its set, what stands there, what
+## is in the shot, its room's picture); the card table is the first host ([TableMedium]); the set dresser writes it as `light`.
 ##
-## EVERYTHING IS A FUNCTION OF SHOW TIME ([method Rig.tick]): a cloud's passing, a bird's crossing, a
-## leaf's stir and a flame's flicker are computed from the time and the seed, never stepped - so a
-## render and a scrub see the same light.
+## Everything is a function of show time ([method Rig.tick]): a cloud's passing, a bird's crossing, a leaf's stir and a flame's flicker are
+## computed from the time and the seed, never stepped, so a render and a scrub see the same light.
 ##
-## HOW IT IS MADE (Godot 4.7, measured 2026-10-07). The sun is a DirectionalLight3D. What it falls
-## through is SHADOW-ONLY geometry standing up its ray from the table, on a render layer of its own
-## ([constant SCREEN_LAYER], which no other light casts with): a wall with its window cut out, a canopy
-## of leaves - holes cut by `discard` in a shader posed from show time (shaders/light_screen.gdshader),
-## so the shade falls on the table, on everything on it, and through any fog; a bird is one too
-## (shaders/light_bird.gdshader). Three things were tried first and dropped: a light's projector cannot
-## be a ViewportTexture (Godot refuses it), a DirectionalLight3D ignores a projector, and a cloud as a
-## DITHERED caster - partial shade from a shadow filter averaging holes - read as camouflage mottle at
-## every filter quality. So A CLOUD DIMS THE SUN over everything at once, which is what a real one
-## does at a table's scale: its edge is tens of meters wide and passes in seconds, the light sinking,
-## the shadows softening and fading, not a line sweeping the cloth. The room's picture dims with it.
+## How it is made (Godot 4.7). The sun is a DirectionalLight3D. What it falls through is shadow-only geometry standing up its ray from the
+## table, on a render layer of its own ([constant SCREEN_LAYER]): a wall with its window cut out, a canopy of leaves - holes cut by `discard`
+## in a shader posed from show time (shaders/light_screen.gdshader), so the shade falls on everything on the table and through any fog; a
+## bird is one too (shaders/light_bird.gdshader). A light's projector cannot be a ViewportTexture, a DirectionalLight3D ignores a projector,
+## and a dithered cloud caster reads as mottle, so a cloud dims the sun over everything at once, as a real one does at a table's scale
+## (its edge is tens of meters wide and passes in seconds). The room's picture dims with it.
 ##
-## SHADE OF TWO QUALITIES (the user, 2026-10-08: "most shadows more or less are of the same 'quality'"):
-## the sun's is crisp, a canopy's dapples SOFT - the sun cast [constant SOFT_SUNS] times from one place,
-## a soft screen's shade grown on one copy and shrunk on another, so its edge falls in steps blurred into
-## a gradient while every near thing's shadow stays sharp - and THE SKY'S OWN SHADOW is diffuse: a big
-## soft light (overcast, a big window) is the fill's ambient occlusion, dark at a thing's foot and
-## blurring away from it. THE WIND ([Winds], `wind`) stirs the screens harder in a gust, swings what
-## hangs, snaps what flutters and leans a lamp's open flame ([method flame_in_wind]) - the same wind that
-## carries the air's petals ([Effects]).
+## Shade of two qualities: the sun's is crisp, a canopy's dapples soft - the sun cast [constant SOFT_SUNS] times from one place, a soft
+## screen's shade grown on one copy and shrunk on another, so its edge falls in steps blurred into a gradient while every near thing's
+## shadow stays sharp. The sky's own shadow is diffuse: a big soft light is the fill's ambient occlusion, dark at a thing's foot. The wind
+## ([Winds], `wind`) stirs the screens, swings what hangs, snaps what flutters and leans a lamp's open flame ([method flame_in_wind]).
 ##
-## THE CPU KNOWS WHAT IS DRAWN: every screen's pattern is [method _pattern], line for line the
-## shader's, on noise both reckon alike ([method noise], shaders/light_noise.gdshaderinc) - so the
-## set dresser is told how much of the table, and of where the cards lie, the sun reaches.
+## The CPU knows what is drawn: every screen's pattern is [method _pattern], line for line the shader's, on noise both reckon alike
+## ([method noise], shaders/light_noise.gdshaderinc), so the set dresser is told how much of the table the sun reaches.
 ##
-## A SHADOW OUT OF THE SHOT (`shadows`, the user, 2026-10-07: "a beam or a pillar might cast a permanent
-## shadow over the table... a hanging rope might be gently swaying in the wind... a chandelier might cast
-## shadows") is a thing built of silhouettes ([constant CASTER_SHAPES]: blocks, posts, balls, hoops,
-## tubes, sheets, grilles, grouped and copied round or along), shadow-only on [constant CASTER_LAYER],
-## which every light that casts casts with - the sun, a lamp. It is aimed by where its shadow falls and
-## placed up its light's ray to throw it there ([method caster_place]), out of the shot and clear of the
-## table. It stands still, SWINGS (a pendulum pushed by gusts - the sine of its angle, not the angle,
-## pulls it back, so a big swing is slower than a small one: [method swing_at]), spins, or ripples
-## (shaders/light_caster.gdshader). Not [Props]: those are a thing's surfaces at most 60 cm across; these
-## are silhouettes that run to meters.
+## A shadow out of the shot (`shadows`) is built of silhouettes ([constant CASTER_SHAPES]: blocks, posts, balls, hoops, tubes, sheets,
+## grilles, grouped and copied round or along), shadow-only on [constant CASTER_LAYER], which every light that casts casts with. It is
+## aimed by where its shadow falls and placed up its light's ray to throw it there ([method caster_place]), out of the shot and clear of
+## the table. It stands still, swings (a pendulum pushed by gusts: [method swing_at]), spins, or ripples (shaders/light_caster.gdshader).
+## Not [Props]: those are a thing's surfaces at most 60 cm across; these are silhouettes that run to meters.
 
 const SCREEN_SHADER := preload("res://shaders/light_screen.gdshader")
 const BIRD_SHADER := preload("res://shaders/light_bird.gdshader")
@@ -62,41 +39,38 @@ const CASTER_SHADER := preload("res://shaders/light_caster.gdshader")
 ## The render layer the sun's screens and the birds are on: the sun casts with them, no other light
 ## does, and nothing draws them.
 const SCREEN_LAYER := 1 << 18
-## A SOFT SHADE: the sun is cast by [constant SOFT_SUNS] lights from the one place, each with a third of
-## its light and a layer of its own here (the first is [constant SCREEN_LAYER]); a soft screen is drawn
-## once on each, its shade grown by a step on one and shrunk by one on another ([method grow_of]) - so
-## where its edge falls the table gets none, a third, two thirds or all of the sun, blurred into a
-## gradient. A shadow-only caster can only hold the sun back or not (a dithered one mottles), and a
-## sun's PCSS loses a stone's shadow to a far caster; three shadow maps of one direction keep every
-## near thing's shadow crisp and still let a canopy's dapples go soft.
+## A soft shade: the sun is cast by [constant SOFT_SUNS] lights from the one place, each with a third of its light and a layer of its own
+## here (the first is [constant SCREEN_LAYER]); a soft screen is drawn once on each, its shade grown by a step on one and shrunk by one on
+## another ([method grow_of]) - so where its edge falls the table gets none, a third, two thirds or all of the sun, blurred into a
+## gradient. A shadow-only caster can only hold the sun back or not (a dithered one mottles), and a sun's PCSS loses a stone's shadow to
+## a far caster; three shadow maps of one direction keep every near thing's shadow crisp and still let a canopy's dapples go soft.
 const SCREEN_LAYERS := [1 << 18, 1 << 19, 1 << 16]
 const SCREEN_MASK := (1 << 18) | (1 << 19) | (1 << 16)
 const SOFT_SUNS := 3
 ## The render layer of the shadows out of the shot: every light that casts casts with them - the sun, a
 ## lamp of the light's own, the old lamp - and nothing draws them.
 const CASTER_LAYER := 1 << 17
-## HOW SOFT A CANDLE'S OR A LAMP'S SHADOW IS: its filter's radius in texels of its shadow map
-## ([ShadowFilter]), never a light's size - sized, a flame grazing the table printed rings round itself on
-## a card's back and drew a clock's rim on its face in stairs (feedback 0007). On the table's atlas (2048
-## texels a side for an omni light) 3 is about 3 mm at 1 m; wider, the normal bias it needs took the
-## clock's real shadow off its face - half of it at 4.5, nearly all at 6 (measured).
+## How soft a candle's or a lamp's shadow is: its filter's radius in texels of its shadow map ([ShadowFilter]), never a light's size (a
+## sized light grazing the table prints rings round itself on a card's back). On the table's atlas (2048 texels a side for an omni
+## light) 3 is about 3 mm at 1 m; wider, the normal bias it needs takes a real shadow off a card's face - half of it at 4.5, nearly all
+## at 6 (measured).
 const SHADOW_TEXELS := 3.0
 
-## WHERE A LIGHT COMES FROM, by name: degrees round the table seen from above, clockwise from the
+## Where a light comes from, by name: degrees round the table seen from above, clockwise from the
 ## reader's own side - 0 from behind the reader, over their shoulder; 90 from their right; 180 from
 ## across the table, toward the camera; 270 from their left. A number is taken as degrees.
 const FROM := {"front": 0.0, "front right": 45.0, "right": 90.0, "back right": 135.0, "back": 180.0,
 	"back left": 225.0, "left": 270.0, "front left": 315.0}
 
-## THE SUN, or the moon: its color and strength when none is given, and how soft its shadows are.
+## The sun, or the moon: its color and strength when none is given, and how soft its shadows are.
 const SUNS := {
 	"sun": {"about": "the sun - white at noon, golden and long-shadowed low in the sky", "color": "#fff1dc",
 		"strength": 0.8, "softness": 0.2},
 	"moon": {"about": "the moon - faint and cool", "color": "#b7c6ee", "strength": 0.3, "softness": 0.5},
 }
 
-## WHAT THE SUN FALLS THROUGH: in a WALL on the sun's side (its patch of sun lands where it is aimed,
-## the rest of the table in the room's shade) or OVERHEAD (a canopy or a shade over the table). `code`
+## What the sun falls through: in a wall on the sun's side (its patch of sun lands where it is aimed,
+## the rest of the table in the room's shade) or overhead (a canopy or a shade over the table). `code`
 ## is the shader's.
 const SCREENS := {
 	"window": {"about": "a window in the wall on the sun's side: the sun falls through it in a bright patch with the bars' shadows across it, the rest of the table in the room's shade", "wall": true, "code": 0},
@@ -110,7 +84,7 @@ const SCREENS := {
 	"parasol": {"about": "a parasol or a market umbrella over the table: a round shade", "wall": false, "code": 8},
 }
 
-## A LATTICE'S PATTERN, in the shader's order.
+## A lattice's pattern, in the shader's order.
 const LATTICES := {
 	"grid": "square openings - a trellis, a shoji's grid",
 	"diamonds": "squares turned as diamonds - a lattice window",
@@ -119,7 +93,7 @@ const LATTICES := {
 	"stars": "eight-pointed stars - a mashrabiya, a jali",
 }
 
-## A BIRD: its span (m), its real speed (m/s: an agent's `speed` 1, and 0 a third of it - at a real
+## A bird: its span (m), its real speed (m/s: an agent's `speed` 1, and 0 a third of it - at a real
 ## pigeon's speed its shadow is over the table for two frames), how often its wings beat (a second) and
 ## the share of the time it glides, its silhouette (the bird shader's `shape`), how many fly together,
 ## and how it flies - straight across, darting, fluttering, or circling high (its shadow wheeling back
@@ -143,17 +117,13 @@ const BIRDS := {
 		"beat": 6.0, "glide": 0.3, "shape": 0, "flock": [8, 16], "path": "straight"},
 }
 
-## A LAMP OUT OF THE SHOT: a point of light (`omni`) or one aimed at the table (`spot`), its color and
-## strength when none is given, how it flickers ([method flicker]), whether it casts by default (its
-## shadows as soft as a candle's, [constant SHADOW_TEXELS]), where it stands when not told (cm from the
-## table's middle, and above it), how often it comes when it comes and goes (`every`, seconds), and, for
-## an electric light, how it FAILS when the set dresser says it is failing (`fails` - [method _failing]).
+## A lamp out of the shot: a point of light (`omni`) or one aimed at the table (`spot`), its color and strength when none is given, how it
+## flickers ([method flicker]), whether it casts by default (its shadows as soft as a candle's, [constant SHADOW_TEXELS]), where it
+## stands when not told (cm from the table's middle, and above it), how often it comes when it comes and goes (`every`, seconds), and,
+## for an electric light, how it fails when the set dresser says it is failing (`fails` - [method _failing]).
 ##
-## AN ELECTRIC LIGHT IS STEADY (the user, 2026-10-19: the agents were "doing the "flickering lights" effect
-## very often, in nearly every episode ... it flickers "all the way" on and off (when typically flickering
-## would be more like a brown-out, with partial failure, not complete loss of light)"). A tube and a sign
-## had stuttered by their look alone - an 18 Hz blink down to 8%, every half minute or so - and of six
-## tables that flickered, one plan had asked for it. A light fails only when it is written `failing`.
+## An electric light is steady: a tube or a sign does not stutter by its look alone. A light fails only when it is written `failing`,
+## and then as a brown-out with partial failure, not a complete loss of light.
 const LAMPS := {
 	"candles": {"about": "a few candles burning somewhere in the room - a warm, gently shifting fill", "kind": "omni",
 		"color": "#ffb066", "strength": 0.25, "flicker": "candle", "shadows": false, "distance": 120.0, "height": 30.0},
@@ -184,13 +154,13 @@ const LAMPS := {
 		"height": 400.0, "every": 25.0},
 }
 
-## A LAMP'S FLAME IN THE WIND ([method flame_in_wind]), by how it flickers: how tall the flame is (meters
+## A lamp's flame in the wind ([method flame_in_wind]), by how it flickers: how tall the flame is (meters
 ## - what sets how hard a draft must blow to lean it, [method Winds.flame]) and the share of a draft that
-## reaches it (a lantern's glass keeps most of it off). A fire is FANNED by the wind - brighter, more
+## reaches it (a lantern's glass keeps most of it off). A fire is fanned by the wind - brighter, more
 ## ragged - where a candle gutters. Lamps with no flame feel no wind.
 const FLAMES := {"candle": [0.03, 1.0], "torch": [0.2, 1.0], "fire": [0.4, 1.0], "lantern": [0.03, 0.12]}
 
-## A SHADOW OUT OF THE SHOT is made of these silhouettes, in centimeters, up to [constant CASTER_SIZE]
+## A shadow out of the shot is made of these silhouettes, in centimeters, up to [constant CASTER_SIZE]
 ## (a roof beam runs six meters). A part's `at` is where its middle goes.
 const CASTER_SHAPES := {
 	"box": "a block {\"size\": [x, y, z]} - a beam, a plank, a sign, a shelf, a fan's blade",
@@ -201,7 +171,7 @@ const CASTER_SHAPES := {
 	"sheet": "a thin panel standing upright {\"size\": [width, height]} - laundry on a line, a flag, a banner, a sign (it can ripple)",
 	"grille": "a flat grid of bars standing upright {\"size\": [width, height], \"cell\", \"bars\"} - a cage's side, a gate, a rack, a lantern's pierced wall",
 }
-## HOW A SHADOW OUT OF THE SHOT MOVES.
+## How a shadow out of the shot moves.
 const CASTER_MOVES := {
 	"still": "it does not move - a beam, a pillar, a sign",
 	"swing": "it hangs from its top and swings in the wind as a pendulum does - a rope, a lantern or a chandelier on its chain, a hanging basket, a cage; `amount` from barely stirring (0.1) to swinging hard (1)",
@@ -222,7 +192,7 @@ const MAX_CASTER_PARTS := 24
 const MAX_CASTER_MESHES := 96
 const MAX_CASTER_COPIES := 16
 const CASTER_SIZE := 600.0
-## A SWING, simulated ([method swing_at]): its step (seconds), how often a step is kept, and how fast a
+## A swing, simulated ([method swing_at]): its step (seconds), how often a step is kept, and how fast a
 ## swing dies away (the share of critical damping: well under 1 so a gust still swings it, but high enough
 ## that a push leans it to one side and it settles there, instead of ringing back and forth for a minute).
 const SWING_STEP := 1.0 / 120.0
@@ -231,32 +201,28 @@ const SWING_DAMP := 0.55
 ## A sun through a wall stands no higher than this (degrees): a higher sun hardly reaches into a room,
 ## and its wall would stand over the table.
 const WALL_SUN := 65.0
-## HOW SOFT A SCREEN'S SHADE IS when none is said (`soft`, 0-1): a canopy high over the table throws
+## How soft a screen's shade is when none is said (`soft`, 0-1): a canopy high over the table throws
 ## soft dapples, a window's bars a meter off crisp ones. At `soft` 1 its shade grows and shrinks by
 ## [constant GROW]'s step - meters for an edge or a bar, noise levels for a canopy, the share of a gap
 ## for slats.
 const SOFT := {"leaves": 0.5, "fronds": 0.4, "branches": 0.35}
 const GROW := {"edge": 0.03, "noise": 0.07, "gap": 0.22}
-## THE SKY'S OWN SHADOW (`sky.shadows`): the diffuse shade of a big soft light - an overcast sky, a big
-## window on a gray day - is AMBIENT OCCLUSION: at full shadows only [constant SKY_TOP_SHADOWED] of the
-## sky falls from above, the rest fills from everywhere, and the stage's SSAO darkens that fill where a
-## thing meets the cloth and in its folds, reaching [constant SKY_REACH] meters out at its strongest
-## [constant SKY_AO] - dark in folds and at a thing's foot. Measured 2026-10-08: a PCSS
-## shadow from the light above (a source 28 degrees wide) left no pool round anything - a high light's
-## shade lies under the thing - and printed a faint moire across the cloth. The light from above comes
-## from [constant SKY_UP] degrees up when no side is said.
+## The sky's own shadow (`sky.shadows`): the diffuse shade of a big soft light - an overcast sky, a big window on a gray day - is
+## ambient occlusion: at full shadows only [constant SKY_TOP_SHADOWED] of the sky falls from above, the rest fills from everywhere, and
+## the stage's SSAO darkens that fill where a thing meets the cloth and in its folds, reaching [constant SKY_REACH] meters out at its
+## strongest [constant SKY_AO]. (A PCSS shadow from the light above, a source 28 degrees wide, leaves no pool round anything - a high
+## light's shade lies under the thing - and prints a faint moire across the cloth.) The light from above comes from [constant SKY_UP]
+## degrees up when no side is said.
 const SKY_UP := 80.0
 const SKY_TOP_SHADOWED := 0.15
 const SKY_REACH := 0.25
 const SKY_AO := 8.0
 
-## THE LIGHT'S STRENGTH, in the engine's terms (calibrated by eye on the card table, 2026-10-07): the
-## sun's energy at strength 1; the sky's at strength 1, and the share of it that comes from above (a
-## light with no shadow, so things are modeled from the top as an open sky models them) - a clear day's
-## sun lights a table four or five times as much as its sky; THE EXPOSURE: the most the palest thing in
-## the light may take, its lightness times the sun and the sky on it (as [constant TableMedium.HEAT]
-## holds a candle's pool) - both brought down together past it, so the day keeps its contrast; a lamp's
-## light at the table's middle at strength 1, and its cap.
+## The light's strength, in the engine's terms (calibrated by eye on the card table): the sun's energy at strength 1; the sky's at
+## strength 1, and the share of it that comes from above (a light with no shadow, so things are modeled from the top as an open sky
+## models them) - a clear day's sun lights a table four or five times as much as its sky; the exposure: the most the palest thing in the
+## light may take, its lightness times the sun and the sky on it (as [constant TableMedium.HEAT] holds a candle's pool) - both brought
+## down together past it, so the day keeps its contrast; a lamp's light at the table's middle at strength 1, and its cap.
 const SUN_MAX := 2.6
 const SKY_MAX := 0.6
 const SKY_TOP := 0.35
@@ -271,7 +237,7 @@ const LAMP_GLINT := 0.12
 const LEAD_MIN := 0.35
 ## How far ahead birds, cuts, stutters and flashes are planned (seconds): longer than any reading.
 const HORIZON := 7200.0
-## A CLOUD OVER THE SUN GLOWS: this share of the sunlight it holds back comes back as the sky's (a sunlit
+## A cloud over the sun glows: this share of the sunlight it holds back comes back as the sky's (a sunlit
 ## cloud is the brightest thing in the sky), so a thick one leaves the table about a stop darker, its
 ## shadows gone - not a dimmer turned down.
 const CLOUD_GLOW := 0.25
@@ -283,7 +249,7 @@ const OVERHEAD := 0.35
 const WALL_CLEAR := 0.25
 ## The shutter a bird's shadow is smeared over (seconds).
 const SHUTTER := 1.0 / 250.0
-## LIGHTNING ([method _strokes]): the share of flashes that follow the last within LIGHTNING_SOON seconds
+## Lightning ([method _strokes]): the share of flashes that follow the last within LIGHTNING_SOON seconds
 ## (the least, and the most often), and the share that are the cloud lit from within rather than a
 ## strike. A flash is taken as a camera takes it, its light over FLASH_SHUTTER (seconds); it is over in
 ## FLASH_LONGEST; each of its pulses is FLASH_STRIDE floats.
@@ -293,26 +259,25 @@ const LIGHTNING_SHEET := 0.3
 const FLASH_SHUTTER := 1.0 / 60.0
 const FLASH_LONGEST := 3.0
 const FLASH_STRIDE := 7
-## A FAILING LIGHT ([method _failing]): steady for minutes, then a BAD SPELL of a few seconds - about
-## `every` apart (FAIL_EVERY when none is written, and its least and most), each spell's length (seconds:
-## its median, how widely they vary, the least and the most) - in which the supply SAGS again and again,
-## unevenly: the waits between sags (seconds, median; their spread - wide, so they bunch), each sag's length
-## (median and spread, the least and the most), how deep it sags (the share of the voltage lost, least and
-## most - mostly shallow), and how often a spell holds one moment of the light all but out, and how long.
+## A failing light ([method _failing]): steady for minutes, then a bad spell of a few seconds - about `every` apart (FAIL_EVERY when none
+## is written, and its least and most), each spell's length (seconds: its median, how widely they vary, the least and the most) - in
+## which the supply sags again and again, unevenly: the waits between sags (seconds, median; their spread - wide, so they bunch), each
+## sag's length (median and spread, the least and the most), how deep it sags (the share of the voltage lost, least and most - mostly
+## shallow), and how often a spell holds one moment of the light all but out, and how long.
 const FAIL_EVERY := Vector3(240.0, 60.0, 900.0)
 const SPELL := Vector4(3.0, 0.5, 1.2, 10.0)
 const SAG_GAP := Vector2(0.22, 0.9)
 const SAG := Vector4(0.1, 0.6, 0.03, 0.6)
 const SAG_DEPTH := Vector2(0.08, 0.35)
 const DROPOUT := Vector3(0.1, 0.15, 0.8)
-## A BULB'S FILAMENT cannot go dark at once: it cools toward a sag over FILAMENT.x seconds and heats back
-## over FILAMENT.y (the cold filament draws a surge); its light goes as its temperature to the power of
+## A bulb's filament cannot go dark at once: it cools toward a sag over filament.x seconds and heats back
+## over filament.y (the cold filament draws a surge); its light goes as its temperature to the power of
 ## BULB_LIGHT and its color temperature to the BULB_WARM (light ~ V^3.4, color ~ V^0.42), so a sag is dimmer
 ## and warmer - orange - and never a blink.
 const FILAMENT := Vector2(0.1, 0.04)
 const BULB_LIGHT := 3.4
 const BULB_WARM := 0.42
-## A TUBE'S BANK and A SIGN'S SEGMENTS: how many (the least and the most) - one of them fails, the rest
+## A tube's bank and a sign's segments: how many (the least and the most) - one of them fails, the rest
 ## burn on - and how short a sign's sputters are beside a sag (the share).
 const TUBES := Vector2i(2, 4)
 const SEGMENTS := Vector2i(3, 6)
@@ -324,7 +289,7 @@ const CANOPY := 40.0
 
 # --- the vocabulary ---------------------------------------------------------------------------------
 
-## THE VOCABULARY, as an agent reads it.
+## The vocabulary, as an agent reads it.
 static func describe() -> String:
 	var lines := PackedStringArray()
 	lines.append("THE LIGHT (`light`): {\"why\", \"sky\", \"sun\", \"through\", \"clouds\", \"wind\", \"birds\", \"lamps\", \"shadows\"} - every part may be left out. Light never shows in the picture as a thing: only what it does to the table.")
@@ -361,7 +326,7 @@ static func describe() -> String:
 
 # --- made safe ----------------------------------------------------------------------------------------
 
-## WHATEVER AN AGENT WROTE as `light`, as something [method build] can make: known looks and kinds only,
+## Whatever an agent wrote as `light`, as something [method build] can make: known looks and kinds only,
 ## every number in range, every color a color, every direction in degrees ([constant FROM]), the caps
 ## kept (screens, lamps, lamps that cast, birds, shadows and their parts), every shadow given a light to
 ## throw it. Not written - or not an object - is `{}`: no light of its own (a host lights itself as it
@@ -548,7 +513,7 @@ static func _lamp(e: Dictionary, notes: PackedStringArray) -> Dictionary:
 		"shadows": Props._flag(e.get("shadows"), bool(base["shadows"]))}
 	if base.has("every"):
 		l["every"] = Props._num(e.get("every"), float(base["every"]), 3.0, 600.0)
-	# FAILING, only where written, and only an electric light
+	# Failing, only where written, and only an electric light
 	if Props._flag(e.get("failing")):
 		if base.has("fails"):
 			l["failing"] = true
@@ -560,7 +525,7 @@ static func _lamp(e: Dictionary, notes: PackedStringArray) -> Dictionary:
 	return l
 
 
-## A SHADOW OUT OF THE SHOT, made safe: its parts as silhouettes ([method _caster_parts]), where its
+## A shadow out of the shot, made safe: its parts as silhouettes ([method _caster_parts]), where its
 ## shadow is aimed and how high it hangs, how it moves - and the light that throws it: round a lamp, that
 ## lamp's (`around`); else the one named in `by` when it is a lamp that casts, else the sun, else the first
 ## lamp that casts. With none, it is left out. [param light] is the light made safe so far (its sun and lamps).
@@ -620,7 +585,7 @@ static func _lamp_named(light: Dictionary, v: Variant) -> Dictionary:
 	return {}
 
 
-## A SHADOW'S PARTS made safe: known shapes only, every size in range ([constant CASTER_SIZE]), groups two
+## A shadow's parts made safe: known shapes only, every size in range ([constant CASTER_SIZE]), groups two
 ## deep at most, and no more parts than [param budget] (one number in an array, spent as parts are kept).
 static func _caster_parts(raw: Variant, depth: int, budget: Array, name: String, notes: PackedStringArray) -> Array:
 	var out: Array = []
@@ -736,7 +701,7 @@ static func from_name(deg: float) -> String:
 	return best
 
 
-## THE LIGHT IN A LINE, as a report and an earlier episode's record say it.
+## The light in a line, as a report and an earlier episode's record say it.
 static func summary(light: Dictionary) -> String:
 	if light.is_empty():
 		return ""
@@ -779,7 +744,7 @@ static func summary(light: Dictionary) -> String:
 
 # --- where it is ---------------------------------------------------------------------------------------
 
-## THE SUN'S DIRECTION for [param sun] (made safe): a unit vector from the table toward it, in the
+## The sun's direction for [param sun] (made safe): a unit vector from the table toward it, in the
 ## table's space (x to the reader's right, y up, z toward the reader).
 static func sun_dir(sun: Dictionary) -> Vector3:
 	var a := deg_to_rad(float(sun.get("from", 270.0)))
@@ -787,7 +752,7 @@ static func sun_dir(sun: Dictionary) -> Vector3:
 	return Vector3(sin(a) * cos(e), sin(e), cos(a) * cos(e))
 
 
-## WHERE EACH SCREEN STANDS for a set whose top is at y = 0 and whose reading's middle is [param middle],
+## Where each screen stands for a set whose top is at y = 0 and whose reading's middle is [param middle],
 ## everything on it within [param bounds], the table the camera sees sampled at [param seen] (for an
 ## awning's edge): `[{screen, origin, bx, by, normal, u}]` - its plane, its own x and y axes, and `u`,
 ## what its shader is set to ([method _uniforms]). Every point of a screen lies up the sun's ray from the
@@ -833,7 +798,7 @@ static func screens_of(light: Dictionary, middle: Vector3, bounds: AABB, seen: P
 	return out
 
 
-## WHAT A SCREEN'S SHADER IS SET TO, from its description - and what [method _pattern] reads, so the two
+## What a screen's shader is set to, from its description - and what [method _pattern] reads, so the two
 ## reckon alike. Meters and radians.
 static func _uniforms(sc: Dictionary, salt: int) -> Dictionary:
 	var kind := String(sc["kind"])
@@ -869,9 +834,9 @@ static func _uniforms(sc: Dictionary, salt: int) -> Dictionary:
 	return u
 
 
-## A SOFT SCREEN'S COPY [param k] of [constant SOFT_SUNS]: how much its shade is grown ([constant
+## A soft screen's copy [param k] of [constant SOFT_SUNS]: how much its shade is grown ([constant
 ## SCREEN_LAYERS]) - not at all on the first, a step on the second, a step less on the third ([constant
-## GROW]'s, times the screen's `soft`). 0 on every copy of a crisp one.
+## Grow]'s, times the screen's `soft`). 0 on every copy of a crisp one.
 static func grow_of(sc: Dictionary, k: int) -> float:
 	var kind := String(sc["kind"])
 	var unit := "noise" if kind in ["leaves", "fronds", "branches"] else ("gap" if kind in ["blinds", "slats"] else "edge")
@@ -887,7 +852,7 @@ static func any_soft(geom: Array) -> bool:
 	return false
 
 
-## AN AWNING'S EDGE, along its own y: where it lies so that [param cover] of the table the camera sees
+## An awning's edge, along its own y: where it lies so that [param cover] of the table the camera sees
 ## ([param seen]) is in its shade.
 static func _awning_edge(g: Dictionary, s: Vector3, seen: PackedVector3Array, cover: float) -> float:
 	if seen.is_empty():
@@ -912,7 +877,7 @@ static func _plane_q(g: Dictionary, s: Vector3, p: Vector3) -> Vector2:
 	return Vector2(x.dot(g["bx"]), x.dot(g["by"]))
 
 
-## WHETHER THE SUN REACHES [param p] (on or over the table) at show time [param t] through every screen in
+## Whether the sun reaches [param p] (on or over the table) at show time [param t] through every screen in
 ## [param geom] ([method screens_of]) - the clouds and the birds aside.
 static func sunlit(geom: Array, s: Vector3, p: Vector3, t: float) -> bool:
 	for g in geom:
@@ -921,7 +886,7 @@ static func sunlit(geom: Array, s: Vector3, p: Vector3, t: float) -> bool:
 	return true
 
 
-## HOW MUCH OF THE SUN REACHES [param p] at [param t], 0-1: through crisp screens all or none
+## How much of the sun reaches [param p] at [param t], 0-1: through crisp screens all or none
 ## ([method sunlit]); where a soft one's edge falls, the share of its [constant SOFT_SUNS] copies that
 ## let it through.
 static func sun_share(geom: Array, s: Vector3, p: Vector3, t: float) -> float:
@@ -940,7 +905,7 @@ static func sun_share(geom: Array, s: Vector3, p: Vector3, t: float) -> float:
 	return float(n) / float(SOFT_SUNS)
 
 
-## THE SHARE OF [param points] the sun reaches at [param t] ([method sun_share]).
+## The share of [param points] the sun reaches at [param t] ([method sun_share]).
 static func coverage(geom: Array, s: Vector3, points: PackedVector3Array, t: float) -> float:
 	if points.is_empty():
 		return 1.0
@@ -950,7 +915,7 @@ static func coverage(geom: Array, s: Vector3, points: PackedVector3Array, t: flo
 	return n / float(points.size())
 
 
-## A SCREEN'S PATTERN at [param q] (its own coordinates, meters) and show time [param t]: true where it
+## A screen's pattern at [param q] (its own coordinates, meters) and show time [param t]: true where it
 ## holds the sun back. shaders/light_screen.gdshader's `shaded()`, line for line.
 static func _pattern(u: Dictionary, q: Vector2, t: float) -> bool:
 	var kind := int(u["kind"])
@@ -1092,7 +1057,7 @@ static var _quantiles := {}
 ## ...guarded: the set dresser's table is built on a worker thread while the show may build its own
 static var _quantiles_lock := Mutex.new()
 
-## THE NOISE LEVEL ABOVE WHICH [param cover] OF A CANOPY IS SHADE, for [param kind]'s pattern (leaves,
+## The noise level above which [param cover] of a canopy is shade, for [param kind]'s pattern (leaves,
 ## fronds, branches, or "clouds"): read off the pattern's own spread of values, sampled once.
 static func threshold(kind: String, cover: float) -> float:
 	if cover <= 0.001:
@@ -1133,7 +1098,7 @@ static func threshold(kind: String, cover: float) -> float:
 
 # --- shadows out of the shot ----------------------------------------------------------------------------
 
-## A SHADOW'S MESHES: every part of [param parts] placed, its groups opened and copied - `[{mesh, xform,
+## A shadow's meshes: every part of [param parts] placed, its groups opened and copied - `[{mesh, xform,
 ## sheet}]`, in meters, in the thing's own space (`sheet`: a sheet's height, for its ripple; 0 otherwise),
 ## at most [constant MAX_CASTER_MESHES].
 static func caster_meshes(parts: Array, base := Transform3D.IDENTITY, out: Array = []) -> Array:
@@ -1265,12 +1230,12 @@ static func meshes_box(meshes: Array) -> AABB:
 	return box
 
 
-## WHERE A SHADOW OUT OF THE SHOT HANGS: [param c] (made safe; built as [param meshes]) set so the light
+## Where a shadow out of the shot hangs: [param c] (made safe; built as [param meshes]) set so the light
 ## that throws it ([param light]: the sun's direction is [method sun_dir]; a lamp's place is in [param
 ## lamps_at], by name) throws its middle's shadow where it is aimed - up the sun's ray, or on the line from
 ## the aim to the lamp - at its height. Then, along that same ray (so its shadow stays where it was
 ## aimed), it is raised clear of everything on the table ([param stage] `bounds`) and out of the shot
-## (`in_shot`). ROUND ITS LAMP, its own origin - [0, 0, 0] of its parts - is the lamp's flame: a
+## (`in_shot`). round its lamp, its own origin - [0, 0, 0] of its parts - is the lamp's flame: a
 ## chandelier's hoop drawn round the origin has its candles' light at its heart, and its arms' shadows
 ## spread from there. `{xform (its own space to the world), middle, top, box, moved}` - `top` its highest
 ## point, what it hangs from.
@@ -1322,7 +1287,7 @@ static func _box_seen(box: AABB, in_shot: Callable) -> bool:
 	return false
 
 
-## THE OUTLINES OF A SHADOW on the table (x by z, meters): each placed part's box ([param meshes] under
+## The outlines of a shadow on the table (x by z, meters): each placed part's box ([param meshes] under
 ## [param xf]) thrown along its light - the sun's direction [param s], or from the lamp at [param from] -
 ## onto the table's top (y = [param floor_y]), the convex hull of where it lands; one outline a part, so
 ## two beams are two bars of shade with the sun between them. A part that falls nowhere on the table's
@@ -1334,7 +1299,7 @@ static func caster_outlines(meshes: Array, xf: Transform3D, s: Vector3, from: Va
 		var to_world: Transform3D = xf * ((m as Dictionary)["xform"] as Transform3D)
 		var boxes: Array = []
 		if mesh is TorusMesh:
-			# A HOOP IS HOLLOW: its outline is the segments round its circle, not the disc they enclose
+			# A hoop is hollow: its outline is the segments round its circle, not the disc they enclose
 			var tm := mesh as TorusMesh
 			var mid_r := (tm.inner_radius + tm.outer_radius) * 0.5
 			var half := (tm.outer_radius - tm.inner_radius) * 0.5
@@ -1376,7 +1341,7 @@ static func in_outlines(outlines: Array, p: Vector2) -> bool:
 	return false
 
 
-## A SWING, made ready: a pendulum [param length] meters from what it hangs from to its middle, pushed by a
+## A swing, made ready: a pendulum [param length] meters from what it hangs from to its middle, pushed by a
 ## wind of [param amount] (0-1) - the table's [param wind] ([method Winds.plan]) when it has one, else a
 ## wind of its own whose gusts come from [param salt]. [method swing_at] steps it on.
 static func swing_of(length: float, amount: float, salt: int, wind: Dictionary = {}) -> Dictionary:
@@ -1390,12 +1355,11 @@ static func swing_of(length: float, amount: float, salt: int, wind: Dictionary =
 		"theta": Vector2.ZERO, "omega": Vector2.ZERO, "t": 0.0, "steps": 0, "kept": PackedVector2Array([Vector2.ZERO])}
 
 
-## THE SWING'S ANGLES at show time [param t] (radians: toward +x, toward +z). A pendulum: the SINE of its
-## angle pulls it back, so a wide swing is slower than a narrow one - nonlinear, as a rope or a chandelier
-## really swings - lightly damped, and pushed by the wind's lean, its slow turns and its gusts, which
-## build the swing up and let it die back. STEPPED from show time 0 at a fixed step and kept every
-## [constant SWING_KEEP] steps, extended only as far as it has been asked: any time is the same swing,
-## whatever order the times are asked in - a render, a scrub and a picture see the same rope.
+## The swing's angles at show time [param t] (radians: toward +x, toward +z). A pendulum: the sine of its angle pulls it back, so a wide
+## swing is slower than a narrow one - nonlinear, as a rope or a chandelier really swings - lightly damped, and pushed by the wind's
+## lean, its slow turns and its gusts, which build the swing up and let it die back. Stepped from show time 0 at a fixed step and kept
+## every [constant SWING_KEEP] steps, extended only as far as it has been asked: any time is the same swing, whatever order the times
+## are asked in - a render, a scrub and a picture see the same rope.
 static func swing_at(sw: Dictionary, t: float) -> Vector2:
 	var kept: PackedVector2Array = sw["kept"]
 	var dt_keep := SWING_STEP * float(SWING_KEEP)
@@ -1435,7 +1399,7 @@ static func _wind(sw: Dictionary, t: float) -> Vector2:
 	var a := float(sw["amount"])
 	var w: Dictionary = sw.get("wind", {})
 	if not w.is_empty():
-		# THE TABLE'S WIND: its lean the way the air goes, as hard as it blows - a gust the gust
+		# The table's wind: its lean the way the air goes, as hard as it blows - a gust the gust
 		var wd: Vector2 = (w["dir"] as Vector2).rotated(0.25 * n.get_noise_1d(t * 0.013))
 		var turb_w := Vector2(n.get_noise_1d(t * 0.3 + 500.0), n.get_noise_1d(t * 0.37 + 700.0)) * 0.02
 		return (wd * (0.06 + 0.4 * Winds.strength_at(w, t)) + turb_w) * a
@@ -1448,10 +1412,9 @@ static func _wind(sw: Dictionary, t: float) -> Vector2:
 
 # --- the weather ---------------------------------------------------------------------------------------
 
-## THE CLOUDS made into numbers for [param clouds] (made safe) on [param seed]: the field's scale and
-## wind (noise units a second), the level above which it is cloud, how soft a cloud's edge is, and how
-## much of the sun a cloud holds back. Empty for a clear sky. The field is two octaves of the noise, not
-## four: the finer ones crossed the sun as flickers a second long, which no cloud is.
+## The clouds made into numbers for [param clouds] (made safe) on [param seed]: the field's scale and wind (noise units a second), the
+## level above which it is cloud, how soft a cloud's edge is, and how much of the sun a cloud holds back. Empty for a clear sky. The field
+## is two octaves of the noise, not four: finer ones cross the sun as flickers a second long, which no cloud is.
 static func cloud_field(clouds: Dictionary, seed: int) -> Dictionary:
 	if clouds.is_empty():
 		return {}
@@ -1467,7 +1430,7 @@ static func cloud_field(clouds: Dictionary, seed: int) -> Dictionary:
 		"thin": 1.0 - float(clouds["thickness"]), "salt": r.randi() & 0x7FFFFFFF}
 
 
-## HOW MUCH CLOUD IS OVER THE SUN at show time [param t] (0 clear, 1 in cloud) for [param field]
+## How much cloud is over the sun at show time [param t] (0 clear, 1 in cloud) for [param field]
 ## ([method cloud_field]). Pure.
 static func cloud_at(field: Dictionary, t: float) -> float:
 	if field.is_empty():
@@ -1488,7 +1451,7 @@ static func transmission(field: Dictionary, t: float) -> float:
 	return 1.0 - float(field["opacity"]) * m
 
 
-## THE BIRDS' CROSSINGS for [param birds] (made safe) on [param seed], over the whole [constant HORIZON]:
+## The birds' crossings for [param birds] (made safe) on [param seed], over the whole [constant HORIZON]:
 ## `[{t, dur, path, dir, at, speed, members: [{off: Vector2, phase, flap, glide}], radius, center}]` - each
 ## crossing's middle time and how long it is over the reach of the table, how it flies, the way it
 ## flies (2D: x across, y away from the reader), where its line crosses the table, and each bird's place
@@ -1507,7 +1470,7 @@ static func crossings(birds: Dictionary, seed: int) -> Array:
 	var path := String(look["path"])
 	while t < HORIZON:
 		var ang := deg_to_rad(from) + r.randf_range(-0.45, 0.45) if from >= 0.0 else r.randf() * TAU
-		# the way it FLIES is away from where it comes from
+		# the way it flies is away from where it comes from
 		var dir := -Vector2(sin(ang), -cos(ang)) if from >= 0.0 else Vector2(cos(ang), sin(ang))
 		var v := speed * r.randf_range(0.85, 1.15)
 		var c := {"t": t, "path": path, "dir": dir, "speed": v,
@@ -1535,7 +1498,7 @@ static func crossings(birds: Dictionary, seed: int) -> Array:
 	return out
 
 
-## WHERE EVERY BIRD IS at show time [param t], over [param crossings]: `[{at: Vector2 (its shadow's
+## Where every bird is at show time [param t], over [param crossings]: `[{at: Vector2 (its shadow's
 ## middle on the table, x across, z toward the reader), heading: Vector2, beat, span, shape, smear}]` -
 ## only those near enough the table that their shadow may fall on it. [param look] is the birds' look.
 static func birds_at(crossings_: Array, look: String, t: float) -> Array:
@@ -1601,7 +1564,7 @@ static func birds_at(crossings_: Array, look: String, t: float) -> Array:
 	return out
 
 
-## THE WEATHER IN NUMBERS over the first [param span] seconds, for a report: `{cloud: the share of the
+## The weather in numbers over the first [param span] seconds, for a report: `{cloud: the share of the
 ## time the sun is in cloud, passings: how many times a cloud comes over it, lasting: [shortest,
 ## longest] seconds in cloud, birds: crossings, over: about how long a bird's shadow is over the table}`.
 static func weather(light: Dictionary, seed: int, span := 600.0) -> Dictionary:
@@ -1641,7 +1604,7 @@ static func weather(light: Dictionary, seed: int, span := 600.0) -> Dictionary:
 
 # --- lamps ------------------------------------------------------------------------------------------
 
-## WHERE LAMP [param l] (made safe) STANDS for a set whose reading's middle is [param middle]: up and out
+## Where lamp [param l] (made safe) stands for a set whose reading's middle is [param middle]: up and out
 ## of the shot if [param in_shot] says it would be seen there. Its place, and whether it was moved.
 static func lamp_place(l: Dictionary, middle: Vector3, in_shot: Callable) -> Dictionary:
 	var a := deg_to_rad(float(l["from"]))
@@ -1658,7 +1621,7 @@ static func lamp_place(l: Dictionary, middle: Vector3, in_shot: Callable) -> Dic
 	return {"at": at, "moved": moved}
 
 
-## HOW LAMP [param look] BURNS at show time [param t]: `{bright, jitter: Vector3 (meters), tint: Color
+## How lamp [param look] burns at show time [param t]: `{bright, jitter: Vector3 (meters), tint: Color
 ## (multiplied in), sweep: float (-1..1, how far a passing light has gone; 0 at the table)}` - a function of
 ## the time and [param fk] ([method flicker_of]) alone.
 static func flicker(look: String, fk: Dictionary, t: float) -> Dictionary:
@@ -1703,7 +1666,7 @@ static func flicker(look: String, fk: Dictionary, t: float) -> Dictionary:
 	return out
 
 
-## LAMP [param look]'s FLAME, standing at [param at], in [param wind] at [param t] ([method Winds.flame]):
+## Lamp [param look]'s flame, standing at [param at], in [param wind] at [param t] ([method Winds.flame]):
 ## `{mid: Vector3 (how far its light has moved, leaning with the flame - so the shadows lean too), bright
 ## (its brightness against still air)}` - `{}` for a lamp with no flame. A fire fanned is brighter, a
 ## candle in a gust dimmer.
@@ -1745,7 +1708,7 @@ static func flicker_of(l: Dictionary, salt: int) -> Dictionary:
 				events.append(t)
 				t += every * exp(r.randfn(0.0, 0.5))
 		"lightning":
-			# A STORM COMES IN BURSTS: now and then a flash follows the last within seconds, and then a
+			# A storm comes in bursts: now and then a flash follows the last within seconds, and then a
 			# lull - about `every` apart on the whole
 			var burst := LIGHTNING_BURST
 			var lull := maxf(every - burst * LIGHTNING_SOON.y, every * 0.5) / (1.0 - burst)
@@ -1759,7 +1722,7 @@ static func flicker_of(l: Dictionary, salt: int) -> Dictionary:
 	var out := {"noise": n, "seed": r.randf() * 1000.0, "salt": salt & 0x7FFFFFFF, "every": every, "cuts": cuts, "events": events}
 	var fails := String((LAMPS[String(l["look"])] as Dictionary).get("fails", ""))
 	if bool(l.get("failing", false)) and not fails.is_empty():
-		# A FAILING LIGHT'S BAD SPELLS, on dice of their own: about `every` apart, a few seconds each
+		# A failing light's bad spells, on dice of their own: about `every` apart, a few seconds each
 		var f := RandomNumberGenerator.new()
 		f.seed = hash([salt, "failing"])
 		var spells := PackedFloat32Array()
@@ -1792,16 +1755,14 @@ static func _event(starts: PackedFloat32Array, t: float, dur: float) -> float:
 	return (t - starts[i]) / dur
 
 
-## A FAILING LIGHT at [param t] ([method flicker_of]'s `spells`): `Vector2(bright, warmth)` - 1 and 1 but in
-## a bad spell. In one the supply SAGS again and again ([method _sags]), and what that does is the light's:
-##   - A BULB's filament follows the voltage only as fast as it cools and heats ([constant FILAMENT]): a sag
-##     dims it over a tenth of a second and warms its color (`warmth`, the color temperature's share), and
-##     it comes back a little quicker - a brown-out, never a blink. Walked from the spell's start exactly,
-##     one exponential a step, so any time asked is the same light.
-##   - A TUBE's bank has one bad tube that drops out in a sag (and restrikes): the table loses its share of
-##     the bank; a SIGN, one stroke of its several, in short sputters ([constant SPUTTER]). These switch, so
-##     they are taken as a camera takes them - the share of the [constant FLASH_SHUTTER] before [param t]
-##     that was lit, as lightning is - and a frame never lands on a blink by chance.
+## A failing light at [param t] ([method flicker_of]'s `spells`): `Vector2(bright, warmth)` - 1 and 1 but in a bad spell. In one the
+## supply sags again and again ([method _sags]), and what that does is the light's:
+##   - A bulb's filament follows the voltage only as fast as it cools and heats ([constant FILAMENT]): a sag dims it over a tenth of a
+##     second and warms its color (`warmth`, the color temperature's share), and it comes back a little quicker - a brown-out, never a
+##     blink. Walked from the spell's start exactly, one exponential a step, so any time asked is the same light.
+##   - A tube's bank has one bad tube that drops out in a sag (and restrikes): the table loses its share of the bank; a sign, one stroke
+##     of its several, in short sputters ([constant SPUTTER]). These switch, so they are taken as a camera takes them - the share of the
+##     [constant FLASH_SHUTTER] before [param t] that was lit, as lightning is - and a frame never lands on a blink by chance.
 ##   - Very rarely ([constant DROPOUT]) one sag is the whole light all but out for a moment.
 static func _failing(fk: Dictionary, t: float) -> Vector2:
 	var starts: PackedFloat32Array = fk["spells"]
@@ -1851,7 +1812,7 @@ static func _toward(theta: float, v: float, dt: float) -> float:
 	return v + (theta - v) * exp(-dt / (FILAMENT.x if v < theta else FILAMENT.y))
 
 
-## BAD SPELL [param i]'s sags, on its own dice: `[[start, end, voltage]]` (seconds into the spell; the
+## Bad spell [param i]'s sags, on its own dice: `[[start, end, voltage]]` (seconds into the spell; the
 ## voltage left, 0 for the moment all but out). The waits between them are wide-spread (log-normal), so they
 ## bunch - two or three close, a pause, another - and most sags are shallow ([constant SAG_DEPTH]); a sign's
 ## are short sputters.
@@ -1880,7 +1841,7 @@ static func _warmer(share: float) -> Color:
 	return Color(1.0, pow(k, 0.9), pow(k, 2.2))
 
 
-## LIGHTNING at [param t]: dark, and at each flash ([method _strokes]) the light it throws into the room
+## Lightning at [param t]: dark, and at each flash ([method _strokes]) the light it throws into the room
 ## as a camera takes it - the mean over the [constant FLASH_SHUTTER] before [param t], taken whole
 ## ([method _flash_light]), so a stroke shorter than a frame lights the frame it falls in, as it would on
 ## film, rather than whichever frame the clock happens to sample.
@@ -1894,24 +1855,17 @@ static func _flash(fk: Dictionary, t: float) -> float:
 	return minf((_flash_light(pulses, u) - _flash_light(pulses, u - FLASH_SHUTTER)) / FLASH_SHUTTER, 1.25)
 
 
-## FLASH [param i] of a lamp salted [param salt], as pulses of light from its start: each `at`
-## (seconds in), `peak`, `rise` and `decay` (seconds), and a continuing glow under it - how long it
-## `holds` and at what share of its peak (`level`) - wavering by `wob` (FLASH_STRIDE floats a pulse).
+## Flash [param i] of a lamp salted [param salt], as pulses of light from its start: each `at` (seconds in), `peak`, `rise` and `decay`
+## (seconds), and a continuing glow under it - how long it `holds` and at what share of its peak (`level`) - wavering by `wob`
+## (FLASH_STRIDE floats a pulse). Lightning comes and goes, flickering with different levels of intensity and persistence, rather than
+## fading; as storms are seen from a room:
 ##
-## THE USER, 2026-10-15: the lightning was "usually just two flickers, which fade-in/fade-out slowly...
-## I don't think lightning would really fade at all: It would come and go, while flickering with
-## different levels of intensity and persistence" - every flash had been two to four pulses alike, each
-## dying over 60 ms (a slow tail to the eye). So, as storms are seen from a room:
-##
-##   A STRIKE (to the ground): one to seven strokes down the same channel, a few hundredths of a second
-##       apart (lognormal, about 60 ms), each a hard flash gone in a frame or two (8 to 25 ms, its light
-##       as the eye keeps it - a stroke itself is over in a millisecond) - the room dark between
-##       them - the first the brightest, the rest anywhere from a third of it to as bright; and in about a
-##       third of strikes one stroke HOLDS, its channel glowing on at a share of its peak for a tenth of
-##       a second to nearly half, wavering, before it goes out.
-##   A SHEET (the cloud lit from within): four to a dozen quick swells over a quarter of a second to a
-##       second and more, overlapping and uneven - a flickering glow, fainter - now and then with one
-##       sharp stroke inside it.
+##   A strike (to the ground): one to seven strokes down the same channel, a few hundredths of a second apart (lognormal, about 60 ms),
+##       each a hard flash gone in a frame or two (8 to 25 ms, its light as the eye keeps it) - the room dark between them - the first
+##       the brightest, the rest anywhere from a third of it to as bright; and in about a third of strikes one stroke holds, its channel
+##       glowing on at a share of its peak for a tenth of a second to nearly half, wavering, before it goes out.
+##   A sheet (the cloud lit from within): four to a dozen quick swells over a quarter of a second to a second and more, overlapping and
+##       uneven - a flickering glow, fainter - now and then with one sharp stroke inside it.
 ##
 ## Near or far: a strike's brightest stroke is 0.35 to 1 (a close one rare), a sheet's 0.2 to 0.6.
 static func _strokes(salt: int, i: int) -> PackedFloat32Array:
@@ -1947,7 +1901,7 @@ static func _strokes(salt: int, i: int) -> PackedFloat32Array:
 	return out
 
 
-## WHEN TO PHOTOGRAPH LIGHTNING ([param fk], [method flicker_of]): its first flash at or after [param
+## When to photograph lightning ([param fk], [method flicker_of]): its first flash at or after [param
 ## after] seconds - its start, and its two brightest flickers a tenth of a second or more apart, in
 ## order (frames at 60 a second: a stroke is over in a frame or two, so a moment picked by the clock
 ## falls in the dark between them) - or empty when it never flashes.
@@ -1972,11 +1926,11 @@ static func flash_moments(fk: Dictionary, after: float) -> Array:
 	return []
 
 
-## ALL THE LIGHT [param pulses] ([method _strokes]) throw from the start of their flash to [param u]
-## seconds into it: the integral of how bright they are, each pulse's in closed form. A STROKE is a
+## All the light [param pulses] ([method _strokes]) throw from the start of their flash to [param u]
+## seconds into it: the integral of how bright they are, each pulse's in closed form. a stroke is a
 ## flash dying over its decay, as bright as a frame it lights whole sees its peak - and, one that
 ## holds, a share of that (`level`) glowing on under it, wavering as current surges down the channel,
-## then dying too; A SWELL rises over its rise and dies over its decay, reaching its peak.
+## then dying too; a swell rises over its rise and dies over its decay, reaching its peak.
 static func _flash_light(pulses: PackedFloat32Array, u: float) -> float:
 	var x := 0.0
 	for k in range(0, pulses.size(), FLASH_STRIDE):
@@ -2012,7 +1966,7 @@ static func _flash_light(pulses: PackedFloat32Array, u: float) -> float:
 
 # --- built --------------------------------------------------------------------------------------------
 
-## BUILD [param light] (made safe) for a host whose [param stage] is `{camera: Transform3D, fov: float,
+## Build [param light] (made safe) for a host whose [param stage] is `{camera: Transform3D, fov: float,
 ## aspect: float, middle: Vector3 (the middle of the reading, on the top), bounds: AABB (the table and
 ## all that stands on it), seen: PackedVector3Array (the table the camera sees, sampled), env:
 ## Environment, room: ShaderMaterial or null (the room's picture: clouds dim it), in_shot: Callable(at)
@@ -2022,7 +1976,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 	var rig := Rig.new()
 	rig.light = light
 	rig.stage = stage
-	# THE WIND, when the light wrote one: the host's plan (shared with what drifts in its air), or its own
+	# The wind, when the light wrote one: the host's plan (shared with what drifts in its air), or its own
 	var written: Dictionary = light.get("wind", {})
 	if not written.is_empty():
 		rig.wind = stage["wind"] if stage.get("wind") is Dictionary and not (stage["wind"] as Dictionary).is_empty() \
@@ -2030,7 +1984,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 	rig.root = Node3D.new()
 	rig.root.name = "Light"
 	var middle: Vector3 = stage.get("middle", Vector3.ZERO)
-	# THE SKY: an ambient light, and the share of it that falls from above
+	# The sky: an ambient light, and the share of it that falls from above
 	var sky: Dictionary = light.get("sky", {"color": "#8f9bb0", "strength": 0.3})
 	rig.sky_color = Props._color(sky.get("color", ""), "#8f9bb0")
 	rig.sky_energy = SKY_MAX * float(sky.get("strength", 0.3))
@@ -2040,7 +1994,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 	rig.top.light_color = Color.html(rig.sky_color)
 	rig.top.rotation_degrees = Vector3(-80.0, 20.0, 0.0)
 	rig.top.light_specular = 0.2
-	# THE SKY'S DIFFUSE SHADOW: more of it fills from everywhere, and the fill is occluded where things
+	# The sky's diffuse shadow: more of it fills from everywhere, and the fill is occluded where things
 	# meet the cloth (SSAO, on the stage's environment until the rig is released)
 	var shade := float(sky.get("shadows", 0.0))
 	rig.sky_top = lerpf(SKY_TOP, SKY_TOP_SHADOWED, shade)
@@ -2060,12 +2014,12 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 		env.ssao_ao_channel_affect = 0.0
 		rig.occludes = true
 	rig.root.add_child(rig.top)
-	# THE SUN
+	# The sun
 	var sun: Dictionary = light.get("sun", {})
 	if not sun.is_empty():
 		var s := sun_dir(sun)
 		rig.sun_vec = s
-		# WHAT IT FALLS THROUGH - and whether any of it is soft, and so the sun cast three times
+		# What it falls through - and whether any of it is soft, and so the sun cast three times
 		var seen: PackedVector3Array = stage.get("seen", PackedVector3Array())
 		rig.geom = screens_of(light, middle, stage.get("bounds", AABB(middle - Vector3(1, 0, 1), Vector3(2, 0.4, 2))), seen, seed)
 		var n_suns := SOFT_SUNS if any_soft(rig.geom) else 1
@@ -2078,7 +2032,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 			sn.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 			sn.directional_shadow_max_distance = 2.0
 			sn.directional_shadow_fade_start = 0.95
-			# A TABLETOP'S BIASES (cards are 0.7 mm thick), and SOFTNESS BY THE FILTER, not by PCSS: a sun's
+			# A tabletop's biases (cards are 0.7 mm thick), and softness by the filter, not by PCSS: a sun's
 			# PCSS searches as far as its farthest caster (a wall a meter and more off), and the blocker search
 			# then misses a stone's small shadow
 			sn.shadow_bias = 0.015
@@ -2100,7 +2054,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 			var wall := bool((SCREENS[String((g["screen"] as Dictionary)["kind"])] as Dictionary)["wall"])
 			var moves := float((g["u"] as Dictionary)["sway"]) > 0.0 and int((g["u"] as Dictionary)["kind"]) != 0 \
 				and int((g["u"] as Dictionary)["kind"]) != 2 and int((g["u"] as Dictionary)["kind"]) != 6
-			# A CRISP SCREEN is one caster every sun casts with; a soft one a copy for each, grown or shrunk
+			# A crisp screen is one caster every sun casts with; a soft one a copy for each, grown or shrunk
 			var soft := n_suns > 1 and absf(float((g["grows"] as Array)[1])) > 1e-6
 			for k in (n_suns if soft else 1):
 				var mi := MeshInstance3D.new()
@@ -2118,12 +2072,12 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 				mi.transform = Transform3D(Basis(g["bx"], g["by"], (g["bx"] as Vector3).cross(g["by"])), g["origin"])
 				rig.root.add_child(mi)
 				rig.screens.append({"node": mi, "mat": mat, "moves": moves, "g": g})
-			# A CANVAS'S COLOR tints the light under it
+			# A canvas's color tints the light under it
 			var sc: Dictionary = g["screen"]
 			if sc.has("color") and String(sc["kind"]) in ["awning", "parasol"]:
 				rig.tint = Color.html(String(sc["color"]))
 				rig.tint_share = float(sc.get("cover", 0.6)) if String(sc["kind"]) == "awning" else 0.4
-		# THE WEATHER
+		# The weather
 		rig.field = cloud_field(light.get("clouds", {}), seed)
 		var birds: Dictionary = light.get("birds", {})
 		if not birds.is_empty():
@@ -2145,7 +2099,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 				rig.bird_nodes.append(b)
 	elif not (light.get("clouds", {}) as Dictionary).is_empty():
 		rig.field = cloud_field(light["clouds"], seed)
-	# THE LAMPS
+	# The lamps
 	var lamps: Array = light.get("lamps", [])
 	for i in lamps.size():
 		var l: Dictionary = lamps[i]
@@ -2179,23 +2133,21 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 		rig.root.add_child(node)
 		node.transform = Transform3D(Basis.looking_at(-to, Vector3.UP if absf(to.normalized().y) < 0.999 else Vector3.FORWARD)
 			if node is SpotLight3D else Basis.IDENTITY, at)
-		# AS BRIGHT AT THE TABLE'S MIDDLE AS ITS STRENGTH ASKS: an omni light falls off as 1/d (Godot's
+		# As bright at the table's middle as its strength asks: an omni light falls off as 1/d (Godot's
 		# own attenuation), and the cloth takes it at a slant
 		var energy := LAMP_IRR * float(l["strength"]) * dist / slant
 		if String(info["flicker"]) == "lightning":
 			# a flash lights the whole room: as bright as it is far
 			energy = LAMP_IRR * 2.5 * float(l["strength"]) * dist
-		# A FAR LAMP IS NEVER SEEN: its energy grows with its distance to light the cloth as asked, and a
-		# polished edge (a desk's rim) mirrors that energy as a hot spot that blooms - the lamp itself, in
-		# the picture. So what it gives the specular is what it takes to light the cloth, inversely.
-		# A LAMP MOVED OUT OF THE SHOT IS NOT WHERE ITS LIGHT COMES FROM, so it lights from about there and
-		# mirrors nothing: the-quiet-crucible 181083's "brazier's coals", written 4 cm up behind the cauldron and
-		# lifted to 14 cm, hung a hot spot in the middle of the brew that danced with the fire's flicker (the
-		# user: "it's revealing that the out-of-camera light source isn't a real thing").
+				# a far lamp is never seen: its energy grows with its distance to light the cloth as asked, and a polished edge (a desk's rim)
+				# mirrors that energy as a hot spot that blooms - the lamp itself, in the picture. So what it gives the specular is what it
+				# takes to light the cloth, inversely.
+				# A lamp moved out of the shot is not where its light comes from, so it lights from about there and mirrors nothing (else it
+				# hangs a hot spot in the middle of the scene that dances with the flicker).
 		node.light_specular = 0.0 if bool(place["moved"]) else clampf(LAMP_GLINT / maxf(energy, 0.01), 0.02, 0.5)
 		rig.lamps.append({"spec": l, "light": node, "base": at, "energy": energy, "asked": energy, "moved": place["moved"],
 			"fk": flicker_of(l, hash([seed, i, String(l["name"]), "lamp"])), "dist": dist, "slant": slant})
-	# THE SHADOWS OUT OF THE SHOT, set up their lights' rays
+	# The shadows out of the shot, set up their lights' rays
 	var lamps_at := {}
 	for l in rig.lamps:
 		lamps_at[String(((l as Dictionary)["spec"] as Dictionary)["name"])] = (l as Dictionary)["base"]
@@ -2247,7 +2199,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 	return rig
 
 
-## A LIGHT AS BUILT: its sky, sun, screens, birds and lamps, posed from show time ([method tick]).
+## A light as built: its sky, sun, screens, birds and lamps, posed from show time ([method tick]).
 class Rig:
 	extends RefCounted
 
@@ -2279,7 +2231,7 @@ class Rig:
 	var casters: Array = []             # the shadows out of the shot: [{spec, pivot, kind, mats, moved, swing, spin, turn, meshes, xform}]
 	var flash := 0.0                    # lightning, this frame
 
-	## THE SKY in the environment: its ambient, and the light from above - and, now, a flash of lightning
+	## The sky in the environment: its ambient, and the light from above - and, now, a flash of lightning
 	## ([param flash_now]) and a cloud's glow over the sun ([param glow]).
 	func apply_sky(flash_now := 0.0, glow := 0.0) -> void:
 		var env: Environment = stage.get("env")
@@ -2292,7 +2244,7 @@ class Rig:
 		top.light_color = c
 		top.light_energy = e * sky_top + flash_now * 0.4
 
-	## FITTED TO THE TABLE: [param hot] is the lightness (linear) of the palest thing the light falls on
+	## Fitted to the table: [param hot] is the lightness (linear) of the palest thing the light falls on
 	## where the camera looks - the cloth's hottest stretch, the card stock. The sun and the sky are
 	## brought down together until that takes no more than [constant Lights.SUN_HEAT] of them; a lamp is
 	## held to [constant Lights.LAMP_HEAT] where its light is strongest on the table.
@@ -2300,7 +2252,7 @@ class Rig:
 		var h := maxf(hot, 0.05)
 		var sky_asked := Lights.SKY_MAX * float((light.get("sky", {}) as Dictionary).get("strength", 0.3))
 		var direct := sun_asked * maxf(sin(deg_to_rad(sun_height)), 0.08) if sun != null else 0.0
-		# THE EXPOSURE: stopped down until the palest thing in the light takes no more than SUN_HEAT -
+		# The exposure: stopped down until the palest thing in the light takes no more than SUN_HEAT -
 		# the sun and the sky together, so the shade keeps its depth against the sun
 		var k := minf(1.0, Lights.SUN_HEAT / maxf((direct + sky_asked) * h, 1e-4))
 		sun_energy = sun_asked * k
@@ -2315,7 +2267,7 @@ class Rig:
 			d["energy"] = minf(float(d["asked"]), Lights.LAMP_HEAT * near / h)
 		apply_sky()
 
-	## Whether the sun or a lamp LEADS the light here - lighting the cards at least [constant
+	## Whether the sun or a lamp leads the light here - lighting the cards at least [constant
 	## Lights.LEAD_MIN] - so the candles on the table burn as fills.
 	func leads() -> bool:
 		return lead_level() >= Lights.LEAD_MIN
@@ -2368,7 +2320,7 @@ class Rig:
 			tt += 0.5
 		return t
 
-	## EVERYTHING AS IT IS at show time [param t].
+	## Everything as it is at show time [param t].
 	func tick(t: float) -> void:
 		var tau := transmission(t)
 		var glow := 0.0
@@ -2395,7 +2347,7 @@ class Rig:
 			var base: Vector3 = d["base"]
 			node.light_energy = float(d["energy"]) * float(f["bright"])
 			node.position = base + (f["jitter"] as Vector3)
-			# AN OPEN FLAME IN THE WIND leans, and its light with it
+			# An open flame in the wind leans, and its light with it
 			var fw := Lights.flame_in_wind(String(spec["look"]), wind, t, base)
 			if not fw.is_empty():
 				node.light_energy *= float(fw["bright"])
@@ -2417,7 +2369,7 @@ class Rig:
 			# table is - the sun's share dimmed, the cloud's glow added
 			room.set_shader_parameter("shade", lit_share(tau) * (1.0 + flash * 1.5))
 
-	## HOW LIT THE TABLE IS with [param tau] of the sun let through, against the sun out: the sun's share
+	## How lit the table is with [param tau] of the sun let through, against the sun out: the sun's share
 	## dimmed, the cloud's glow added to the sky's. 1 with no sun to dim.
 	func lit_share(tau: float) -> float:
 		if sun == null:

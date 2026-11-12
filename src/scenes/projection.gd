@@ -2,31 +2,25 @@ extends GhostScene
 
 ## Projection - a PCA-style density map of a latent geometry, eye-shaped.
 ##
-## A nod to the research paper's geometry figure and the dashboard's projection maps: a
-## 3D point cloud shaped like a CALM model's latent centers - an elongated blob with a
-## dense pupil nucleus and an iris ring, the "single eye" those gaussian-ish latents
-## settle into - projected through a slowly tumbling 3D pose down to 2D (the top-2
-## projection) and rendered as a **binned density grid with log color**, exactly the
-## figure's look. Audio drives DRAMATIC poses: the pupil dilates, the eye stretches, and
-## beats snap the projection to a new angle. Nonlinear activations shape the cloud and
-## the drive. One eye, varied by seed - its structure ([constant FORMS]: a plain iris,
-## two concentric bands, or an iris with a sparse corona), its elongation, where the
-## pupil sits (so it can look aside), how many latents there are and how coarsely they
-## bin ([constant BINS]) are all sampled, and the colormap is one [Scheme]'s ramp.
+## A 3D point cloud shaped like a CALM model's latent centers - an elongated blob with a dense
+## pupil nucleus and an iris ring - projected through a slowly tumbling pose down to 2D and
+## rendered as a binned density grid with log color. Audio drives dramatic poses: the pupil
+## dilates, the eye stretches, and beats snap the projection to a new angle. One eye, varied by
+## seed: its structure ([constant FORMS]: a plain iris, two concentric bands, or an iris with a
+## sparse corona), elongation, pupil offset (it can look aside), latent count and bin coarseness
+## ([constant BINS]) are sampled, and the colormap is one [Scheme]'s ramp.
 
-## How the binning reads. The paper bins to 64x64 and that was the only resolution
-## this scene ever used, so the map always had the same grain; coarse bins read as
-## blocky cells, fine ones as a smooth density cloud. The number is the count across
-## the SHORT screen axis; the long axis gets proportionally more of them (see _fit).
+## How the binning reads: coarse bins read as blocky cells, fine ones as a smooth density cloud.
+## The number is the count across the short screen axis; the long axis gets proportionally more
+## (see _fit).
 const BINS := {"coarse": 40, "paper": 64, "fine": 96}
 
-## Object half-extent mapped onto one bin-count's worth of grid. Fixed, not sampled:
-## it is the projection's scale contract, not a look tunable - the sampled geometry
-## (elongation, iris radius, pupil spread) is what varies the picture.
+## Object half-extent mapped onto one bin-count's worth of grid. Fixed: it is the projection's
+## scale contract, not a look tunable.
 const SPAN := 2.4
 
-## The latent's own structure. It is one eye every time - that is the scene - but a
-## latent geometry is not obliged to be a single iris ring around a single nucleus.
+## The latent's own structure: one eye every time, but not necessarily a single iris ring around
+## a single nucleus.
 const FORMS := ["plain", "banded", "haloed"]
 
 var _f: AudioFeatures = AudioFeatures.new()
@@ -47,8 +41,8 @@ var _hue := 0.0
 var _beat_prev := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"bins": {"label": "Bins", "type": "choice", "options": "BINS", "default": null,
 		"blurb": "How finely the map is binned: coarse blocky cells, the paper's 64, or fine bins that read as a smooth density cloud."},
@@ -71,14 +65,14 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
 	_rng.seed = rng.randi()
-	# A density map takes any palette - it is a colormap, not a thing with a nature.
+	# A density map takes any palette: it is a colormap.
 	_sch = Scheme.pick(rng)
 	_hue = _sch.hue
 	var bname := String(choice("bins", rng))
 	_g = int(BINS[bname])
 	_n = number("points", rng)
-	# A placeholder shape only: the frame's size is not known until the node is in the tree,
-	# so the real grid is sized on the first draw (see _fit).
+	# A placeholder: the frame's size is unknown until the node is in the tree, so the grid is
+	# sized on the first draw (see _fit).
 	_gx = _g
 	_gy = _g
 	_grid.resize(_g * _g)
@@ -153,19 +147,12 @@ func update(f: AudioFeatures, delta: float) -> void:
 	queue_redraw()
 
 
-## Size the density grid to the FRAME rather than to a square, and hand back the bin size
-## in pixels.
-##
-## THE 4:3 BUG. The grid was `_g` x `_g` bins drawn over a `unit() * 1.25` box, and unit() is
-## the SHORTER screen axis - so on the 2880x1620 export the map only ever covered a 2025 px
-## square in the middle of the frame and left 427 px of untouched ground down each side. Black
-## on black while the cloud was small, and a hard vertical cut straight through it the moment
-## the cloud was large: "the left and right sides were truncated by black... as if it were 4:3".
-## The covered region measured 2025x1620, which is 1.25:1 - a hair off 4:3 inside a 16:9 frame.
-##
-## The BIN keeps the size it had, so the paper's grain and the eye's size on screen are both
-## unchanged; the long axis simply gets more bins. The 1.25 overdraw is the original and stays:
-## the view drifts and zooms, so the map has to reach past every edge.
+## Size the density grid to the frame rather than to a square, and hand back the bin size in
+## pixels. The grid is `_g` x `_g` bins over a `unit() * 1.25` box and unit() is the shorter
+## screen axis, so a square grid would leave untouched ground at the sides of a wide frame. The
+## bin size is fixed (the paper's grain and the eye's on-screen size stay the same); the long
+## axis gets more bins. The 1.25 overdraw stays: the view drifts and zooms, so the map must
+## reach past every edge.
 func _fit() -> float:
 	var cell := maxf(1.0, minf(size.x, size.y)) * 1.25 / float(_g)
 	var gx := maxi(2, ceili(size.x * 1.25 / cell))
@@ -182,9 +169,8 @@ func _fit() -> float:
 func _draw() -> void:
 	begin_draw()
 	var cell := _fit()
-	# Clear only the window written last frame. The grid now spans the whole frame (16416 bins
-	# at 1920x1080 on the fine setting, against 9216 before), and clearing and re-scanning all
-	# of it every frame would cost more than the few thousand bins the cloud actually lands in.
+	# Clear only the window written last frame: clearing and re-scanning the whole grid every
+	# frame would cost more than the few thousand bins the cloud lands in.
 	for wy in range(_win.position.y, _win.end.y):
 		var row := wy * _gx
 		for wx in range(_win.position.x, _win.end.x):
@@ -203,8 +189,8 @@ func _draw() -> void:
 		var p: Vector3 = _pts[k]
 		var sp := Vector3(p.x * _stretch, p.y, p.z) * dscale
 		var r := basis * sp
-		# floori, not int(): int() truncates TOWARD ZERO, so a point just off the left or top
-		# edge landed on bin 0 instead of being rejected and drew a false bright rank there.
+		# floori, not int(): int() truncates toward zero, so a point just off the left or top edge
+		# would land on bin 0 instead of being rejected.
 		var gx := floori(r.x / per + hx)
 		var gy := floori(r.y / per + hy)
 		if gx < 0 or gx >= _gx or gy < 0 or gy >= _gy:
@@ -239,10 +225,8 @@ func _draw() -> void:
 			draw_rect(Rect2(pos, Vector2(cell, cell) * 1.04), _cmap(ti, glow))
 
 
-# Log-density colormap: low density = dark, saturated; high = bright, desaturating to
-# white. The RAMP is the scheme's own two hues - the sparse fringe sits on the accent
-# and the dense core on the base, so the map is a colormap of one mood rather than a
-# hue plus a fixed 0.55 leap that landed wherever it landed.
+# Log-density colormap: low density = dark, saturated; high = bright, desaturating to white. The
+# ramp is the scheme's own two hues: the sparse fringe on the accent, the dense core on the base.
 func _cmap(ti: float, glow: float) -> Color:
 	var d := fposmod(_sch.accent - _sch.hue + 0.5, 1.0) - 0.5
 	var h := fposmod(_sch.hue + d * (1.0 - ti), 1.0)

@@ -2,34 +2,22 @@ extends SceneTree
 
 ## Does each assistant backend launch the command it claims, and read its own stream?
 ##
-## Both halves fail SILENTLY. A command built wrong is a dispatch that exits at once and
-## shows as an error nobody connects to the argument list; a stream read with the wrong
-## backend's rules is a run with no progress line that never reports a result. So:
+## Both halves fail silently (a wrong command exits at once; a stream read with the wrong backend's rules
+## never reports a result), so:
 ##
-##   THE COMMAND - the argv for a fresh run and for a resume, per backend, with the prompt
-##   in none of them, and that Subprocess.start_redirected really delivers a hostile prompt
-##   on stdin byte for byte. That last one is RUN, not inspected: `cat` stands in for the
-##   CLI, and the captured output must be the prompt exactly. A `$(...)` that expanded would
-##   show. It launches detached, exactly as the dispatch does. An `env` given to the launcher
-##   reaches that child alone, its value byte for byte - against the same run without it.
-##
-##   THE MODEL AND THE LEVEL the picker holds reach each CLI in its own flags, and a CLI's "Default"
-##   is what its writer's picker says it is (Claude: Opus) - the control is the same run with them set.
-##   Grok, which reads no stdin, is handed its prompt FILE, and the id a fresh run is to take.
-##
-##   THE STREAM - recorded output (tests/fixtures/assistant/; the codex files are real
-##   `codex exec --json` runs from codex-cli 0.150.0, one a resume of the other and one a
-##   failed turn; grok_not_signed_in.jsonl a real grok 1.0.62 run on a machine not signed in,
-##   read as Claude's, for it is Claude Code's format) through progress, session id, final text and usage. Each backend's stream
-##   is also read with the OTHER backend's rules and must NOT come out as a clean result,
-##   which is the mix-up the registry exists to prevent.
-##
-##   THE TAIL - the Assistant reads a run's stream WHILE it is written, from a byte offset
-##   (lines_since). Two reads of one growing file, with text outside ASCII before the cut: the
-##   second must see the line finished since, and each offset must be a byte count. The old
-##   reader, get_as_text() after a seek, fails both: it reads the whole file whatever the seek,
-##   and took a String index for a byte offset. And a file shorter than the offset (a new run's
-##   stream where an old one was) is read from its start.
+## - The command: the argv for a fresh run and for a resume, per backend, with the prompt in none of them;
+##   and Subprocess.start_redirected really delivers a hostile prompt on stdin byte for byte (`cat` stands
+##   in for the CLI, launched detached as the dispatch does). An `env` given to the launcher reaches that
+##   child alone (control: the same run without it).
+## - The model and level the picker holds reach each CLI in its own flags, and a CLI's "Default" is what its
+##   writer's picker says (Claude: Opus); control: the same run with them set. Grok, which reads no stdin,
+##   is handed its prompt file and the id a fresh run takes.
+## - The stream: recorded output (tests/fixtures/assistant/) through progress, session id, final text and
+##   usage. Each backend's stream read with the other backend's rules must not come out as a clean result.
+## - The tail: the Assistant reads a run's stream while it is written, from a byte offset (lines_since).
+##   Two reads of one growing file, with non-ASCII text before the cut: the second sees the line finished
+##   since, and each offset is a byte count. A file shorter than the offset (a new run's stream) is read
+##   from its start.
 ##
 ##   godot --headless --path . --script tests/app/assistant_backend_check.gd
 
@@ -135,8 +123,8 @@ func _launcher() -> void:
 		and FileAccess.get_file_as_string(err_p) == "to-err\n", "stdout and stderr are separate")
 	_check(Subprocess.start_redirected("cat", [], {"out": out_p, "err": out_p}) <= 0,
 		"one file for both streams is refused, not silently interleaved")
-	# `env` reaches this child alone, value byte for byte (the Grok writer's switches): the control
-	# is the same run without it, and this process's own environment stays as it was.
+	#`env` reaches this child alone, value byte for byte; control: the same run without it. This process's
+	#own environment stays as it was.
 	var probe := "GHOST_ENV_PROBE"
 	var value := "a b=c 'd' \"e\" $(echo INJECTED)"
 	_run("sh", ["-c", "printf %s \"$" + probe + "\""], {"out": out_p, "err": err_p, "env": {probe: value}})
@@ -148,9 +136,8 @@ func _launcher() -> void:
 		DirAccess.remove_absolute(p)
 
 
-## Launch detached, exactly as the dispatch does, and wait for it. The exit code is not
-## observable from create_process, so this returns 0 once the child is gone and -1 if it
-## never started or overran - the checks read its output instead.
+## Launch detached, exactly as the dispatch does, and wait for it. Returns 0 once the child is gone and -1
+## if it never started or overran (the exit code is not observable); the checks read its output.
 func _run(prog: String, args: Array, io: Dictionary) -> int:
 	var pid := Subprocess.start_redirected(prog, PackedStringArray(args), io, "", true)
 	if pid < 0:
@@ -222,8 +209,7 @@ func _tail() -> void:
 	_check(int(two.offset) == FileAccess.get_file_as_bytes(path).size(), "and the offset is at the end")
 	_check((B.lines_since(path, int(two.offset)).lines as PackedStringArray).is_empty(),
 		"a third read with nothing new reads nothing")
-	# A FILE REPLACED under the reader (a new run's stream where an old one was): shorter than
-	# the offset, so it is read from its start rather than waited on past its end
+	#A file replaced under the reader (a new run's stream): shorter than the offset, so read from its start
 	f = FileAccess.open(path, FileAccess.WRITE)
 	f.store_string(lines[0] + "\n")
 	f.close()

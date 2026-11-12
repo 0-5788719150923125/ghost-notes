@@ -1,10 +1,10 @@
 extends RefCounted
 class_name StageKeys
 
-## StageKeys - A STAGE'S FLAGS: a value that changes at a moment, eased before or after it, and holds (next/editing.md step 10;
-## the user, 2026-11-11, of Masking's markers: "I like the little flag markers"). Masking's marker is the model, its RAMP and
-## DAMP the same two eases: a ramp arrives AT its moment, eased in over the seconds before it (anticipation); a damp begins at
-## it, eased out over the seconds after. Between keys a field holds what the last one left.
+## StageKeys - a stage's flags: a value that changes at a moment, eased before or after it, and holds
+## (next/editing.md). Masking's marker is the model, its ramp and damp the same two eases: a ramp arrives
+## at its moment, eased in over the seconds before it (anticipation); a damp begins at it, eased out over
+## the seconds after. Between keys a field holds what the last one left.
 ##
 ##   track:
 ##     nominal: 8
@@ -14,9 +14,9 @@ class_name StageKeys
 ##       - {field: actor.scale, actor: blue, at: 3.0, to: 0.6, over: 1.0, ease: ramp}
 ##       - {field: look, filter: pointillism, at: 4.0, to: 0.8, over: 2.0, ease: ramp}
 ##
-## Times are the track's nominal seconds, as its spans' are, scaling with the entry's hold. A PURE FUNCTION OF THE ENTRY'S
-## TIME (the Timeline's `time` engine): shown at any moment at once, the same every time - unlike a verb, which latches as it
-## plays. Which fields a key may name is [constant FIELDS].
+## Times are the track's nominal seconds, as its spans' are, scaling with the entry's hold. A pure function
+## of the entry's time (the Timeline's `time` engine): shown at any moment at once, the same every time,
+## unlike a verb, which latches as it plays. Which fields a key may name is [constant FIELDS].
 
 const FIELDS := {
 	"camera.fov": {"label": "Camera's field of view", "blurb": "How wide the lens sees, in degrees: smaller is closer.", "kind": "num"},
@@ -52,7 +52,7 @@ static func sanitize(raw: Variant) -> Dictionary:
 		if to == null:
 			notes.append("keys[%d]: %s's `to` is not a %s - left out" % [i, field, "number" if String(FIELDS[field]["kind"]) == "num" else "[x, y, z]"])
 			continue
-		# (WHO a key moves: an actor's, or the Look's filter - kept as the key's `actor`, what tells its values apart)
+	# (who a key moves: an actor's, or the Look's filter; kept as the key's `actor`, what tells its values apart)
 		var by := "filter" if field == "look" else "actor"
 		var who := String(d.get(by, "")) if d.get(by) is String else ""
 		if (field.begins_with("actor.") or field == "look") and who.is_empty():

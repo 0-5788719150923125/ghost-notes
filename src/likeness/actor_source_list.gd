@@ -1,19 +1,18 @@
 extends VBoxContainer
 class_name ActorSourceList
 
-## ActorSourceList - where a person's recordings come from, on a card that builds something of them (the Actor
-## card; the Voice training card, for a voice alone): their SOURCES - a folder read where it is, files picked one
-## by one, a link (a video, a playlist or a channel) listed and then fetched a video at a time, or for an actor a
-## link for captions only, matched to the folder's videos by title ([ActorSources]) - and their videos, a tick
-## each. Handed the folder and its builder ([method show_actor]); what it has to say goes out as [signal said].
+## ActorSourceList - where a person's recordings come from, on a card that builds something of them (the Actor card;
+## the Voice training card, for a voice alone): their sources - a folder read where it is, files picked one by one, a
+## link (a video, a playlist or a channel) listed and then fetched a video at a time, or for an actor a link for
+## captions only, matched to the folder's videos by title ([ActorSources]) - and their videos, a tick each. Handed the
+## folder and its builder ([method show_actor]); what it has to say goes out as [signal said].
 ##
-## A VIDEO TICKED REBUILDS NO ROW (2026-10-23: every tick held the app for seconds while all of them were made
-## again): the rows are made again only when a video is added, fetched or measured ([method refresh]). TICK ALL
-## AND UNTICK ALL take the whole list at once, and stand above it: the list is as long as they have videos, in the
-## panel's one scroll.
+## A video ticked rebuilds no row: the rows are made again only when a video is added, fetched or measured ([method
+## refresh]). Tick all and Untick all take the whole list at once and stand above it (the list is as long as they have
+## videos, in the panel's one scroll).
 ##
-## A VOICE ALONE ([method ActorFolder.sound_only]) is offered no captions-only link (Hear listens to all of it)
-## and no "head" pin, and its folders' sound files are listed beside their videos.
+## A voice alone ([method ActorFolder.sound_only]) is offered no captions-only link (Hear listens to all of it) and no
+## "head" pin, and its folders' sound files are listed beside their videos.
 
 signal said(text: String)
 
@@ -68,7 +67,7 @@ func _init() -> void:
 	_tips()
 
 
-## THE PERSON SHOWN: [param a] and the builder that fetches for it ([param b]), or nulls for none.
+## The person shown: [param a] and the builder that fetches for it ([param b]), or nulls for none.
 func show_actor(a: ActorFolder, b: ActorBuilder) -> void:
 	_actor = a
 	_builder = b
@@ -224,7 +223,7 @@ func _ask_link() -> void:
 	field.grab_focus()
 
 
-## LIST LINK [param i]: its videos come back as rows.
+## List link [param i]: its videos come back as rows.
 func list_link(i: int) -> void:
 	if _builder == null:
 		return
@@ -286,7 +285,7 @@ func refresh() -> void:
 		row.add_child(l)
 		if voice:
 			continue
-		# THE HEAD PINNED to a few alike videos (ActorFolder.head_videos): the rest stay ticked for everything else
+		# the head pinned to a few alike videos (ActorFolder.head_videos): the rest stay ticked for everything else
 		var pin := Button.new()
 		pin.toggle_mode = true
 		pin.flat = true
@@ -308,7 +307,7 @@ func refresh() -> void:
 		row.add_child(pin)
 
 
-## TICK ALL, OR UNTICK ALL: every video of theirs used, or none - one save, every box set.
+## Tick all, or untick all: every video of theirs used, or none - one save, every box set.
 func tick_all(on: bool) -> void:
 	if _actor == null:
 		return

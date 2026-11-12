@@ -1,31 +1,14 @@
-"""Piper voices, run as raw ONNX. No GPL code is imported, linked or shipped.
+"""Piper voices, run as raw ONNX through onnxruntime. No GPL code is imported, linked or shipped.
 
-THE LICENSING SITUATION, because it drives every design choice here
--------------------------------------------------------------------
-`rhasspy/piper` was archived 2025-10-06. Development moved to
-`OHF-Voice/piper1-gpl`, which relicensed to **GPL-3.0-or-later** in v1.3.0
-because the wheel vendors eSpeak-NG. So the obvious route - `pip install
-piper-tts` - would make a shipped game GPL.
+`pip install piper-tts` would pull in GPL-3.0 eSpeak-NG, so none of it is used: a Piper voice is an
+`.onnx` graph plus an `.onnx.json` config (with a `phoneme_id_map`) distributed as data, ghost's own
+G2P maps phonemes to ids, and onnxruntime (MIT) runs the graph.
 
-It is also unnecessary. A Piper voice is two files: an `.onnx` graph and an
-`.onnx.json` config, distributed from an MIT-tagged Hugging Face repository as
-DATA. The config carries a `phoneme_id_map`. ghost already has its own G2P, so
-we can map our phonemes to ids ourselves and call onnxruntime (MIT) directly.
-Nothing GPL is involved at inference or distribution time.
-
-THE PER-VOICE TRAP, which is worse than it looks
-------------------------------------------------
-Voice checkpoints are licensed individually AND the license is transitive
-through fine-tuning, which is not obvious and is not flagged anywhere machine
-readable. Piper's own default demo voice, `lessac`, is Blizzard 2013, which
-restricts use to research and explicitly excludes "the development, marketing,
-commercialization, sale or licencing of voice synthesis products". Voices
-fine-tuned FROM lessac inherit that: amy, joe, hfc_female, hfc_male, libritts_r.
-Separately ryan and the hfc pair are CC BY-NC-SA, and kathleen is CC0 data
-fine-tuned from ryan.
-
-So VOICES below is an allowlist, not a catalog, and every entry records its
-dataset AND its derivation chain. Adding a voice means reading its MODEL_CARD.
+Voice checkpoints are licensed individually and the license is transitive through fine-tuning.
+`lessac` (Blizzard 2013) restricts use to research, and voices fine-tuned from it inherit that: amy,
+joe, hfc_female, hfc_male, libritts_r. ryan and the hfc pair are CC BY-NC-SA; kathleen is CC0 data
+fine-tuned from ryan. VOICES is therefore an allowlist, not a catalog: each entry records its dataset
+and derivation chain, and adding one means reading its MODEL_CARD.
 """
 
 from __future__ import annotations
@@ -67,55 +50,30 @@ HOP_LENGTH = 256
 # split costs nothing and needs no text.
 SENTENCE_END = {".", "!", "?"}
 
-# PAUSE AFTER PUNCTUATION - EXTRA seconds of real silence at `pause_scale` = 1.0, on top of
-# whatever the model already does rather than instead of it.
-#
-# A VITS model gets punctuation as a phoneme id and decides for itself how long to dwell. The
-# model still SEES the mark, so its intonation is untouched; this only lengthens the rest.
-#
-# THE NUMBERS ARE MEASURED. Span of the token owning the mark, en_US-ljspeech-medium, same
-# sentence throughout:
-#   no mark 0.279 s | "," 0.430 (+0.151) | ";" 0.465 (+0.186) | ":" 0.580 (+0.301)
-# Piper is not skipping these, and the colon already rests twice as long as a comma. So this
-# table is seasoning, and it stays small deliberately: 0.26 s on a colon would make it a
-# ~0.58 s rest, longer than a full stop, inverting the punctuation hierarchy. The ordering
-# : > ; > , is preserved so the marks stay distinguishable.
-#
-# The three sentence-final marks are 0.32 because that is EXACTLY the `sentence_gap` default
-# this file ships: the table subsumes that parameter rather than stacking on it, so
-# `pause_scale` = 1.0 with no explicit `sentence_gap` reproduces the old behavior sample for
-# sample. A caller still sending `sentence_gap` still wins for . ! ? - same knob.
-#
-# Anyone wanting more reaches for the Pause slider, which runs to 10x (see
-# generative_editor.MAX_PAUSE_SCALE); the base stays calibrated to what the model does.
+# Extra seconds of silence after a mark at `pause_scale` = 1.0, on top of the model's own rest (the
+# model sees the mark, so its intonation is untouched).
+# The model already rests about 0.15 s at a comma, 0.19 at ";" and 0.30 at ":" (en_US-ljspeech-medium),
+# so the entries stay small: 0.26 s on a colon would out-rest a full stop and invert: > ; > ,.
+# The sentence-final marks are 0.32, the `sentence_gap` default: the table subsumes that parameter (a
+# caller's `sentence_gap` still wins for. ! ?). More pause comes from the Pause slider (see
+# generative_editor.MAX_PAUSE_SCALE).
 PAUSE_AFTER: dict[str, float] = {
     ",": 0.10,
     ";": 0.13,
     ":": 0.16,
-    # Sentence-final marks ARE the sentence gap - unified, never added to it (see _gap_for).
+    # Sentence-final marks are the sentence gap, never added to it (see _gap_for).
     ".": 0.32,
     "!": 0.32,
     "?": 0.32,
 }
 
-# WHAT THE MODEL ALREADY RESTS at each mark, in seconds, measured with its own noise switched
-# off so the number is the model's and not one sample of it. The comma, semicolon and colon
-# figures are the token-span increments recorded above; the sentence-final one is the trailing
-# silence of a rendered sentence (0.138-0.145 s here) plus the leading silence of the one
-# after it (0.044), because with one sentence per request those two sit either side of a seam.
-#
-# What a reader hears at a mark is the model's rest plus ours, so the dial has to scale both.
-# Scaling only our half lengthens the DIFFERENCES between marks rather than the rests
-# themselves - at 1.0 a full stop rests twice as long as a comma, and under a linear scale on
-# our half alone that ratio grows to 2.3x by 2.0 and 2.9x at the top of the dial.
-#
-# THESE FIGURES ARE AN ESTIMATE AND ONLY THE SEAM USES THEM. The dwell is a property of the
-# checkpoint, the pace and the sentence, and a table cannot be right about all three (this
-# comma entry says 0.15 s where en_US-john-medium rests 0.41 at the comma in "He waited, and
-# the tide came in."). Get it wrong and the dial scales the ERROR instead of the rest, so
-# `_splice_pauses` MEASURES it in the waveform and this table is used only where there is no
-# waveform: the seam between two separately rendered sentences, and the accounting. The seam
-# is the one dwell that does not vary much.
+# What the model already rests at each mark, in seconds, measured with its noise off: the token-span
+# increments for, ; :, and for a sentence end its trailing silence (0.14) plus the next sentence's
+# leading silence (0.044).
+# The dial scales the model's rest plus ours, so both are needed. These figures are an estimate (en_US-john-medium
+# rests 0.41 s at a comma where this says 0.15), so `_splice_pauses` measures the real rest in the
+# waveform and this table is used only where there is none: the seam between separately rendered
+# sentences, and the accounting.
 DWELL: dict[str, float] = {
     ",": 0.15,
     ";": 0.19,
@@ -125,18 +83,11 @@ DWELL: dict[str, float] = {
     "?": 0.18,
 }
 
-# THE PAUSE CURVE. The dial multiplies the WHOLE rest - the model's own plus ours - so every
-# mark keeps its share of the reading at every setting.
-#
-# A POWER LAW, not a saturating exponential: an exponential that reaches 3.2 at the top of
-# the dial reaches 3.28 at 20 and 3.29 at 100, so raising the dial's ceiling buys nothing.
-#
-# `d ** PAUSE_GAIN` is exactly 1.0 at 1.0 by construction (no normalizing constant, no
-# default to drift) and keeps climbing instead of flattening: 5.0x at the top of the dial,
-# where a full stop rests two and a half seconds. The exponent is the reach: log(5)/log(10).
-#
-# It is concave, so every unit of dial adds less than the one before it. Reach costs step
-# size: 5.0 to 6.0 moves a rest by 13% where a flatter curve moved it by 6%.
+# The pause curve: the dial multiplies the whole rest (the model's plus ours), so every mark keeps its
+# share at every setting.
+# A power law `d ** PAUSE_GAIN`: exactly 1.0 at 1.0 with no normalizing constant, and it keeps
+# climbing (5.0x at the top of the dial, exponent log(5)/log(10)) where a saturating exponential
+# plateaus. Concave: each unit of dial adds less than the last.
 PAUSE_GAIN = 0.69897
 
 
@@ -148,51 +99,23 @@ def _pause_multiplier(params: dict) -> float:
 def _rest_from(
     dwell: float, top_up: float, mult: float, have: float | None = None
 ) -> float:
-    """How much silence to ADD at a mark, given `have` seconds of it already there.
+    """Seconds of silence to add at a mark, given `have` seconds already there.
 
-    The whole pause rule, in two halves that must not be confused:
+    The target is `(dwell + top_up) * mult`: the rest a reader should hear, taken from the table so it is
+    the same at every comma and keeps its ratio to a full stop at every dial setting. `have` is measured
+    off the waveform by `_splice_pauses` and subtracted, since silence can only be added. The target must
+    not be built from `have`: a dwell is a draw from the stochastic duration predictor (0.0 to 0.4 s for
+    the same mark and voice), and multiplying it scales that scatter.
 
-      THE TARGET is `(dwell + top_up) * mult` - the rest a reader should hear at this
-      mark, which is the mark's natural rest at Pause 1.0 with the dial applied to the
-      whole of it. It comes from the TABLE, so it is the same at every comma in a chapter
-      and it keeps the same ratio to a full stop at every dial setting.
+    `have` defaults to `dwell` for callers with no waveform (the sentence seam and the accounting).
 
-      WHAT IS ALREADY THERE is `have`, measured off the waveform by `_splice_pauses`, and
-      it is subtracted, because we can only add.
-
-    THOSE TWO USED TO BE THE SAME NUMBER AND THAT WAS THE BUG. The target was
-    `(have + top_up) * mult`: the dial multiplied the dwell this particular comma happened
-    to get. But the dwell is not a property of the checkpoint, it is a draw from its
-    stochastic duration predictor - measured over four sentences of the reporter's chapter
-    at his own settings, the same mark in the same voice came back 0.000, 0.000, 0.023,
-    0.077, 0.320 and 0.401 seconds - so multiplying it by 3.62 turned a 0.4 s scatter into
-    a 1.45 s one. The commas in one reading came out 0.36, 0.44, 1.52 and 1.81 seconds,
-    against 1.77 for a full stop. Reported as "the pause after a comma feels twice as long
-    as a pause after a sentence... the comma-pauses feel far too slow", and both halves of
-    that are true of the same reading at different commas.
-
-    The measurement stays where it belongs. `have` is a fact about this render and it is
-    the only honest way to know how much of the target is already paid for - the table
-    cannot answer that, which is what `_splice_pauses` learned the hard way. What it may
-    not do is decide how long the rest should BE.
-
-    `have` defaults to `dwell` for the callers that have no waveform to measure - the
-    sentence seam and the accounting - where the two genuinely are the same number.
-
-    Floored at zero: below about 0.6 on the dial the model is resting longer than the dial
-    is asking for and there is nothing to take away. That is a real limit of splicing rather
-    than a choice - shortening a rest would mean re-synthesizing the sentence.
+    Floored at zero: below about 0.6 on the dial the model already rests longer than asked, and
+    shortening would mean re-synthesizing.
     """
-    # At 1.0, WHERE THERE IS NOTHING TO MEASURE, the answer IS the top-up, said exactly
-    # rather than computed round the houses: `(0.18 + 0.5) * 1.0 - 0.18` is
-    # 0.49999999999999994 in binary floating point, and the seam is the one figure here
-    # that has to be reproducible to the sample.
-    #
-    # IT IS NOT A SHORTCUT WHERE THERE IS. `have` is what this render actually rests, so
-    # `(dwell + top_up) * 1.0 - have` is a different number from `top_up` and returning
-    # the second would put a step in the dial AT ITS OWN DEFAULT - a comma of 0.10 s at
-    # 1.0 and 0.29 s at 1.2. The exactness argument only applies when the two are the same
-    # number, so that is exactly when it is taken.
+    # At 1.0 with nothing to measure the answer is the top-up, returned exactly (`(0.18 + 0.5) * 1.0 - 0.18`
+    # is 0.49999999999999994) so the seam is reproducible to the sample. Not taken where `have` was
+    # measured: there `(dwell + top_up) * 1.0 - have` differs from `top_up`, and returning `top_up`
+    # would put a step in the dial at its default.
     if mult == 1.0 and (have is None or have == dwell):
         return max(0.0, top_up)
     return max(0.0, (dwell + top_up) * mult - (dwell if have is None else have))
@@ -204,12 +127,7 @@ def _top_up(mark: str, params: dict, base: float | None = None) -> float:
 
 
 def _rest_for(mark: str, params: dict, base: float | None = None) -> float:
-    """`_rest_from` with the dwell taken from DWELL rather than from the audio.
-
-    For the two places that have no waveform to measure: the sentence seam, which the editor
-    inserts between two separate renders, and the accounting. `_splice_pauses` measures the
-    real thing - see the note there about why a table cannot do this job on its own.
-    """
+    """`_rest_from` with the dwell taken from DWELL, for callers with no waveform: the sentence seam and the accounting."""
     m = str(mark)
     return _rest_from(
         _dwell_for(m, base), _top_up(m, params, base), _pause_multiplier(params)
@@ -217,13 +135,8 @@ def _rest_for(mark: str, params: dict, base: float | None = None) -> float:
 
 
 def _dwell_for(mark: str, base: float | None = None) -> float:
-    """The mark's own natural rest at Pause 1.0 - what the target is built on.
-
-    `base` is the caller's `sentence_gap` overriding the top-up, and a caller who names
-    its own top-up for a mark the table does not carry still needs a dwell to go with it;
-    a full stop's is the honest default, since the only caller that does this is the
-    sentence seam.
-    """
+    """The mark's natural rest at Pause 1.0. `base` is the caller's `sentence_gap` overriding the top-up;
+    a top-up for a mark the table lacks takes a full stop's dwell (only the sentence seam does this)."""
     m = str(mark)
     if m in DWELL:
         return DWELL[m]
@@ -231,20 +144,14 @@ def _dwell_for(mark: str, base: float | None = None) -> float:
 
 
 def _rest_floor(mark: str, params: dict, share: float = 1.0) -> float:
-    """Seconds of rest the MODEL renders at a mid-sentence mark, before any splice; `share` the
-    part of its rest the mark gets (`_tail_share`).
+    """Seconds of rest the model renders at a mid-sentence mark, before any splice; `share` is the part
+    of its rest the mark gets (`_tail_share`).
 
-    en_US-libritts-high does not end a word at a comma: it lengthens the vowel through the
-    mark and runs on into the next word, so silence spliced there cuts the word off
-    mid-sound, heard as the word truncated early. Given frames on the word-space after the
-    mark (`_render_symbols`, through the input `_ensure_patched` adds to the graph), the
-    model renders a real rest, with its own release of the word before it and its own
-    onset of the word after, and `_splice_pauses` takes that silence to the target. The
-    word-space is the id that renders as silence; lengthening the mark or the blank after
-    it renders sustained voice. The mark's natural dwell is enough for the release (at the
-    comma's 13 frames, 52 of 54 measured cuts had under 2% of peak in the 30 ms before
-    them, against 17 of 54 with none), and a target shorter than the dwell is rendered
-    whole.
+    en_US-libritts-high runs on through a comma instead of ending the word, so spliced silence would cut
+    it off. Given frames on the word-space after the mark (`_render_symbols`, via the input
+    `_ensure_patched` adds), the model renders a real rest with its own release and onset, and
+    `_splice_pauses` takes that silence to the target. The mark's natural dwell suffices for the
+    release; a target shorter than the dwell is rendered whole.
     """
     m = str(mark)
     if m in SENTENCE_END or PAUSE_AFTER.get(m, 0.0) <= 0.0:
@@ -256,18 +163,11 @@ def _rest_floor(mark: str, params: dict, share: float = 1.0) -> float:
     )
 
 
-# A COMMA THAT LEAVES ITS SENTENCE A WORD OR TWO RESTS A THIRD AS LONG (2026-10-29, the user: sentences
-# ending ", too" "feel kind of awkward to hear ... with shorter ones like this (1 or 2 words after a comma),
-# it just feels really slow"). At the user's Pause of 7 a comma rests a second, half a full stop, and "This
-# letter is a copy, too." stopped for it before a word said in a breath. Such a tail ("too", "either", "of
-# course", "I think") is an afterthought said on the clause it follows, and a pause is shorter the shorter
-# the phrase beside it (Zvonik & Cummins 2003, Krivokapic 2007). So a comma whose tail runs to its
-# sentence's end in SHORT_TAIL words or fewer, with no mark and no rest between, gets SHORT_TAIL_REST of a
-# comma's whole rest - the dial still on all of it - and the word before it is held and trails off by what
-# that rest earns (`_trail_weight`). Its intonation is the model's, as at every comma. A colon or a
-# semicolon keeps its rest (what follows a colon is announced), and so does a comma whose tail ends at
-# another mark (an aside) - or whose own run is as short and follows one: a list's last item ("one, two,
-# three.") rests as its others do.
+# A comma that leaves its sentence SHORT_TAIL words or fewer ("..., too.") rests SHORT_TAIL_REST of a
+# comma's whole rest (dial still applied): a short tail is an afterthought, and pauses shrink with the
+# phrase beside them (Zvonik & Cummins 2003, Krivokapic 2007). The word before trails off by what that
+# rest earns (`_trail_weight`). A colon or semicolon keeps its rest, as does a comma whose tail ends at
+# another mark (an aside) or whose own run is as short and follows one (a list's last item).
 SHORT_TAIL = 2
 SHORT_TAIL_REST = 0.35
 
@@ -297,17 +197,12 @@ def _tail_share(group: list, ti: int) -> float:
     return 1.0
 
 
-# A REST THE CALLER SPLICES IN (a token's `rest_after`, in seconds): a hesitation, a tablet's
-# action, cut into the take after the word once it is made (ghost's `Splice.chunk`). Told nothing
-# of it, the model read on into the next word as if no rest were there (2026-10-25, the user, of
-# "it had moved on to <!-- hesitation --> Someone": the "to" "dropped to silent, and the pause was
-# much too long"): eSpeak read the "to" mid-sentence as /tə/, the model gave its schwa a frame or
-# two on its way into the /s/, and the 1.5 s cut in after it left a "t" and a hole. So the word
-# before such a rest is the word before a mark: read at the end of a phrase (`_in_sentence`, /tuː/),
-# held and trailing off by the weight its rest earns (`_trail_weight`), and floored by
-# REST_AFTER_FLOOR - the comma's dwell, enough for the model's own release of the word and onset of
-# the next (`_rest_floor`). Where no mark rests there, that rest is the caller's rest begun, never
-# added to it: the token's row says how much of it the model rendered (`rested`).
+# A rest the caller splices in (a token's `rest_after`, seconds: a hesitation, an action; ghost's
+# `Splice.chunk`). The word before it is treated as the word before a mark, so the model does not read
+# on into the next word: read at a phrase end (`_in_sentence`), held and trailed off by the weight its
+# rest earns (`_trail_weight`), and floored by REST_AFTER_FLOOR, the comma's dwell (`_rest_floor`).
+# Where no mark rests there, that rest is the caller's begun, never added to it: the token's row says
+# how much the model rendered (`rested`).
 REST_AFTER_FLOOR = DWELL[","]
 
 
@@ -337,26 +232,13 @@ REST_FLOOR_INPUT = "rest_floor"
 # the floor. How a word is leaned on (`EMPHASIS`).
 DUR_SCALE_INPUT = "dur_scale"
 
-# A WORD LEANED ON, by the level the script marks it with (`*italic*` 1, `**bold**` 2, both 3):
-# its stressed vowel held longer, through the duration plan, and the word a little louder. The
-# model renders the longer vowel itself, with its own transitions in and out; only the level
-# is a gain. Pitch, the third cue of stress, has no input in a VITS graph.
-#
-# TWO STEPS, AND BOTH HEARD (2026-10-12, the user: "*italics* should be rendered as italics, and
-# hit hard, while **bold** should be rendered in bold, and hit even harder than that"). They were
-# small on purpose (1.30 / 1.5 dB and 1.50 / 3 dB: contrastive stress lengthens a stressed vowel by
-# roughly a third in read English), which left an italic word hard to tell from an unmarked one.
-#
-# MEASURED, NOT HEARD YET: en_US-libritts-high, speaker 4, "never" and "must" mid-sentence, 14
-# renders a level (the model's own durations vary by 30 to 50 ms a render, so one render says
-# nothing). The word against the rest of its sentence, over the unmarked word:
-#   italic   16 to 20% longer,  5 to 6 dB up     (was about 8% and 1.5 to 6 dB)
-#   bold     29 to 38% longer,  7 to 9 dB up     (was about 15% and 5 to 8 dB)
-# The word grows by less than its multiplier because only the stressed vowel is held, and it
-# rises by more than its gain because the model renders a longer vowel louder by itself. Most of
-# bold's step over italic is LENGTH: the gain never clips the word (`EMPHASIS_CEILING`), and a
-# bold word reaches that ceiling - with 3 dB on italic there was no room left above it, and the
-# two came out equally loud.
+# A word leaned on, by the level the script marks it with (`*italic*` 1, `**bold**` 2, both 3): its
+# stressed vowel held longer through the duration plan and the word a little louder. Pitch, the third
+# cue of stress, has no input in a VITS graph.
+# Measured (en_US-libritts-high, 14 renders a level) against the unmarked word: italic 16-20% longer and
+# 5-6 dB up, bold 29-38% longer and 7-9 dB up. The word grows less than its multiplier because only the
+# stressed vowel is held. Most of bold's step over italic is length: the gain never clips the word
+# (`EMPHASIS_CEILING`), and bold reaches that ceiling.
 EMPHASIS: dict[int, tuple[float, float]] = {
     # level: (vowel duration multiplier, gain on the word in dB)
     1: (1.50, 2.5),
@@ -368,32 +250,22 @@ EMPHASIS_CEILING = 0.97
 # How quickly the emphasis gain comes and goes at the word's edges.
 EMPHASIS_RAMP = 0.030
 
-# THE OPENING WORD'S VOWEL, in seconds at the request's own length scale: the least it may be
-# rendered. en_US-libritts-high clips the first word of a sentence even with LEAD_IN_SPACES -
-# measured over the 40 opening sentences of a Cards reading, "A" came out 12 ms long and
-# "If", "It" and "The" 46 ms, where the same words mid-sentence run about twice that (also
-# reported upstream, rhasspy/piper#296). A floor rather than a stretch, so a first word the
-# model already gave its length is left exactly as it was.
+# The opening word's vowel: the least it may be rendered, in seconds at the request's own length scale.
+# en_US-libritts-high clips a sentence's first word even with LEAD_IN_SPACES ("A" 12 ms, "If"/"It"/"The"
+# 46 ms, about twice that mid-sentence; rhasspy/piper#296). A floor, not a stretch, so a word the model
+# already lengthened is untouched.
 OPENING_VOWEL = 0.05
 
-# THE WORD BEFORE A REST TRAILS OFF. A speaker who is about to pause on a comma holds the last
-# word a little, lets it fall away in level, and often lets the pitch sag at the very end. The
-# model ends every word at full level and then drops it: measured over 37 commas of a Cards
-# reading, the steepest 20 ms of a word's end is 15 dB before a comma, 17 before a full stop and
-# 17 mid-sentence. Mid-sentence the next word covers it and a full stop falls in pitch as well;
-# at a comma, with a rest of up to a second and a pitch that stays level, the cliff stands alone
-# and reads as the word cut off. Three small moves, scaled together by `_trail_weight`:
-#
-#   THE HOLD, through the duration plan: the word's final rime (its last vowel and what follows
-#   it) is rendered `1 + TRAIL_STRETCH` times longer, so the model draws the longer ending itself.
-#   THE FADE, on the waveform: for TRAIL_TIP seconds up to the voice's own end the level eases
-#   down (quadratic in dB, so it gathers speed toward the tip) to TRAIL_DB below, and stays there
-#   through the model's own rest until the next word is about to start - which also takes the
-#   word-final releases that stand in a long rest down with it.
-#   THE SAG, on the waveform: the last TRAIL_SAG_SPAN seconds are read slower, easing to
-#   TRAIL_SAG semitones lower, with the length kept (see `_glide`).
-#
-# Full sentence ends are left to the model's own finality and `_discourse_plan`.
+# The word before a rest trails off. The model ends every word at full level and drops it (the steepest
+# 20 ms is about 15 dB before a comma), which with a long rest and level pitch reads as the word cut off.
+# Three small moves, scaled together by `_trail_weight`:
+#   the hold, through the duration plan: the word's final rime renders `1 + TRAIL_STRETCH` times longer;
+#   the fade, on the waveform: for TRAIL_TIP seconds up to the voice's end the level eases down
+#   (quadratic in dB) to TRAIL_DB below and stays there through the rest until the next word is about
+#   to start, which takes word-final releases down with it;
+#   the sag, on the waveform: the last TRAIL_SAG_SPAN seconds are read slower, easing to TRAIL_SAG
+#   semitones lower, length kept (`_glide`).
+# Full sentence ends are left to the model's finality and `_discourse_plan`.
 TRAIL_STRETCH = 0.25
 TRAIL_TIP = 0.12
 TRAIL_DB = 16.0
@@ -402,15 +274,10 @@ TRAIL_SAG_SPAN = 0.09
 # A rest this long is a strong enough boundary for the whole trail; a shorter one gets a share of
 # it. Boundary strength is what pre-boundary lengthening follows, and the rest is the strength.
 TRAIL_REST_FULL = 0.5
-# A COLON IS NOT FADED (2026-10-28, the user: "colons almost always get munged, as if they are silenced/faded-out
-# too early. At 'Mine were: you do not ask' - the 'were' is almost completely deleted"). A colon announces what
-# follows, and the voice holds up into it; the fade is the voice falling away, and on the short word a colon so
-# often follows it took the word's end with it. Heard by Whisper (medium.en) over ten colons from North Star and
-# six commas, in the reading's own requests: in Kokoro's Puck the word before a colon was heard in 8 of 10 with
-# the trail ("Mine were" heard "Mind where", "It said" "It's that"), 10 of 10 without its fade (confidence 0.79
-# to 0.98) - the hold and the sag kept: without the hold 7 of 10; in libritts-high 7 of 10 to 10 of 10 (0.63 to
-# 0.98). The commas were heard 6 of 6 either way, and keep it. How much of the fade the word before a mark takes,
-# one not here taking all of it:
+# A colon is not faded: it announces what follows and the voice holds up into it, and the fade took the
+# end of the short word before it (heard by Whisper with Kokoro's Puck: the word before a colon came
+# through in 8 of 10 with the trail, 10 of 10 without its fade; commas 6 of 6 either way). How much of
+# the fade the word before a mark takes, where not all of it:
 TRAIL_FADE = {":": 0.0}
 # How far under the final rime's own peak the voice still counts as sounding (`_trail` looks for
 # its end in the waveform: the model keeps voicing through the mark, so the plan's last sound is
@@ -422,57 +289,35 @@ TRAIL_SAG_TAIL = 0.03
 # The sag's join back to the unmoved audio.
 TRAIL_JOIN = 0.002
 
-# A WORD'S OWN HISS IS NOT FADED. The fade is the VOICE falling away; a word that ends on
-# frication ("cards,", "house,", "gifts,") ends on a sound that is no voice, and the model
-# renders it small: a final /z/ is planned for one or two frames and comes out 30 to 60 ms long,
-# 25 to 35 dB under the take's peak - 12 to 25 under its own vowel. So the search for the voice's
-# end (TRAIL_VOICED_DB under the rime's peak) stopped before it, or part of the way into it, and
-# the fade's floor held the rest of it TRAIL_DB down, at the model's room tone: over 45 such
-# words before a comma, en_US-libritts-high, 33 lost more than 6 dB of it and 21 more than 12.
-# Reported as plurals heard as singulars.
-#
-# THE PLAN SAYS WHICH WORDS, THE WAVEFORM SAYS WHERE. A word whose last sounds - what follows
-# its last vowel - hold one of `_HISSES` is looked at for a hiss after its rime's loudest point
-# (`_hiss_tail`), and for as many runs of it as those sounds spell (`_hiss_codas`): one in
-# "cards" and "last", two in "asks" and "tests", where a stop's closure of up to TRAIL_HISS_GAP
-# parts them (70 ms measured in "asks,"). A run survives a dropout of TRAIL_HISS_DROP. The voice
-# then ends TRAIL_HISS_IN before the hiss, where the fade comes back up to nothing, and goes
-# down again over TRAIL_HISS_OUT once the hiss has ended - so the /t/ of "last," and every word
-# the plan does not name keep the floor through their last sounds, and a stop's release standing
-# in a long rest is still taken down. The plan's own end of the word is no help with the where:
-# such a hiss runs 40 to 170 ms past it.
-#
-# A WORD'S OWN HISS IS LOOKED FOR LOWER THAN A LEAD'S, above TRAIL_HISS_ABOVE: the /ʃ/ of
-# "hush,", "much," and "edge," has 94 to 100% of its energy above 2 kHz and 5 to 40% above 4, an
-# /f/ about 65% and 48%, and the brightest vowel (/iː/) 12% and 4% - so 4 kHz finds an /s/ and
-# a sliver of a /ʃ/, and the rest of that /ʃ/ went under the floor.
-#
-# THE VOICE FALLS NO FURTHER THAN ITS HISS. Before a final /z/ 20 dB under its vowel the fade
-# is the whole TRAIL_DB and the voice comes down to meet it; before a /ʃ/ as loud as the vowel
-# ("hush,": 4 dB under) a fade of 16 would dip the vowel under the sound it is running into, so
-# its depth is the vowel's level over the hiss's, and no more than TRAIL_DB.
+# A word's own hiss is not faded: the fade is the voice falling away, but a word ending on frication
+# ("cards,", "house,") ends on a small sound (a final /z/ is 25-35 dB under the take's peak and 30-60 ms
+# long), and a fade floor held through it made plurals sound like singulars.
+# The plan says which words, the waveform says where: a word whose last sounds hold one of `_HISSES` is
+# searched for a hiss after its rime's loudest point (`_hiss_tail`), for as many runs as those sounds
+# spell (`_hiss_codas`: one in "cards", two in "asks", parted by a stop's closure of up to
+# TRAIL_HISS_GAP; a run survives a dropout of TRAIL_HISS_DROP). The voice then ends TRAIL_HISS_IN before
+# the hiss, where the fade comes back up to nothing, and goes down again over TRAIL_HISS_OUT after it.
+# The plan's own word end cannot place it: such a hiss runs 40-170 ms past it.
+# A word's hiss is searched for lower than a lead's, above TRAIL_HISS_ABOVE: /ʃ/ has 94-100% of its
+# energy above 2 kHz but only 5-40% above 4, so 4 kHz finds an /s/ and a sliver of a /ʃ/.
+# The voice falls no further than its hiss: the fade's depth is the vowel's level over the hiss's, no
+# more than TRAIL_DB, so it never dips the vowel under the sound it runs into.
 _HISSES = frozenset("szʃʒfθ")
 TRAIL_HISS_ABOVE = 2000.0
 TRAIL_HISS_GAP = 0.12
 TRAIL_HISS_DROP = 0.015
 TRAIL_HISS_IN = 0.012
 TRAIL_HISS_OUT = 0.03
-# THE NEXT WORD CAN START BEFORE THE PLAN SAYS (by 10 to 30 ms, measured: "a horse, a voice",
-# "my loves, come closer"), and the fade's floor reached to the plan's figure: the word's first
-# 20 ms came back up out of it, and where the rest was short the search for the voice's end
-# found the next word instead. The far side of the rest is walked back from the plan's figure
-# while the audio is louder than TRAIL_SOUNDING of the take's peak, no further than TRAIL_EARLY.
+# The next word can start 10-30 ms before the plan says, so the far side of a rest is walked back from
+# the plan's figure while the audio is louder than TRAIL_SOUNDING of the take's peak, no further than
+# TRAIL_EARLY.
 TRAIL_SOUNDING = 0.01
 TRAIL_EARLY = 0.06
 
-# THE NEXT WORD'S HISS, LEAKED INTO A REST. The model starts a fricative early - an /s/ 40 to 75
-# ms before its word, which is its own coarticulation and sounds right - but the word-space the
-# rest floor lengthens takes the next word's sound with it, and before an /s/ the lead grew to
-# 165-195 ms of a 210-290 ms rest (median of five draws, en_US-libritts-high; 0-25 ms before a
-# vowel, a stop or most other fricatives). With the rest that full of hiss the splice had no
-# silence to cut in and cut through the hiss: a burst stayed on the word before ("the end, sweet
-# souls" heard as "ends ... ssweet"). `_quiet_lead` keeps LEAD_KEEP seconds of it before the next
-# word, coming in over LEAD_RAMP, and silences what is earlier. A frame is hiss when more than
+# The next word's hiss leaks into a rest: the model starts a fricative early (an /s/ 40-75 ms before
+# its word) and the lengthened word-space takes it along, so before an /s/ the lead fills 165-195 ms of
+# a 210-290 ms rest and the splice cuts through it. `_quiet_lead` keeps LEAD_KEEP seconds of it before
+# the next word, coming in over LEAD_RAMP, and silences what is earlier. A frame is hiss when more than
 # LEAD_HF of its energy is above LEAD_ABOVE and it is louder than LEAD_FLOOR (of the take's peak).
 LEAD_KEEP = 0.08
 LEAD_RAMP = 0.03
@@ -485,21 +330,17 @@ LEAD_FRAME = 0.005
 _VOWELS = frozenset("aeiouyæɑɐɒɔəɚɛɜɝɪʊʌʏɘɵɨʉøœɤɯᵻ")
 _VOWEL_MARKS = frozenset("ː")
 _STRESS = "ˈ"
-# NOT A SOUND OF ITS OWN, in the phones handed back: the stress marks; and the length mark, which is
+# Not a sound of its own, in the phones handed back: the stress marks; and the length mark, which is
 # the vowel's before it.
 _UNSAID = frozenset({"ˈ", "ˌ", " "})
 _LENGTHENS = frozenset({"ː", "ˑ"})
 
 
 def _trail_weight(mark: str, params: dict, after: float = 0.0, share: float = 1.0) -> float:
-    """How much of the trail the word before `mark` gets: 0 where it gets none.
-
-    None at a sentence end, and none where nothing rests - a mark with no rest, or any mark at
-    Pause 0, where it is no boundary at all - unless the caller splices `after` seconds in after
-    the word (`REST_AFTER_FLOOR`), which is rest too. Otherwise the share of TRAIL_REST_FULL the
-    word's rest reaches - the mark's own `share` of its rest (`_tail_share`) - times the request's
-    own `trail` (1 by default; 0 turns the whole thing off, 2 doubles it).
-    """
+    """How much of the trail the word before `mark` gets: None at a sentence end, 0 where nothing rests
+    (a mark with no rest, or any mark at Pause 0) unless the caller splices `after` seconds in
+    (`REST_AFTER_FLOOR`). Otherwise the share of TRAIL_REST_FULL the word's rest reaches (the mark's
+    `share`, `_tail_share`) times the request's `trail` (1 default, 0 off, 2 double)."""
     m = str(mark)
     if m in SENTENCE_END:
         return 0.0
@@ -516,14 +357,12 @@ def _trail_weight(mark: str, params: dict, after: float = 0.0, share: float = 1.
 
 
 def _nuclei(symbols: list) -> set:
-    """Positions in `symbols` that are each source's NUCLEUS: the run of vowels (and their
-    length marks) after the source's primary stress, or its first vowel run if it carries
-    none. A diphthong is one run, so both halves are held together.
+    """Positions in `symbols` that are each source's nucleus: the run of vowels (and length marks) after
+    its primary stress, or its first vowel run if none. A diphthong is one run.
 
-    The stress mark directly before the run belongs to it. Piper spreads a syllable's time
-    over every id that spells it - the mark, the vowel and the blanks between them - and the
-    vowel's own id is often a single frame (measured: "officially" ˈ:4 ·:2 ɪ:1 ·:2), so a
-    stretch that misses the mark and the blanks moves almost nothing."""
+    The stress mark directly before the run belongs to it: Piper spreads a syllable's time over the mark,
+    vowel and blanks between, and the vowel's id is often a single frame, so a stretch that misses them
+    moves almost nothing."""
     by_src: dict = {}
     for j, (sym, src) in enumerate(symbols):
         if src >= 0:
@@ -640,88 +479,44 @@ def _pause_scale(params: dict) -> float:
 
 
 def _pause_for(mark: str, params: dict) -> float:
-    """Extra silence after a MID-SENTENCE mark, in seconds.
+    """Extra silence after a mid-sentence mark, in seconds.
 
-    ONE MULTIPLIER ON THE WHOLE REST, for every mark - see DWELL and `_rest_for`. That is
-    what keeps the punctuation hierarchy upright, and it has now been got wrong twice in
-    opposite directions, which is worth recording because both were reported by ear and both
-    were real.
-
-    FIRST, as an inversion: this was uncapped while the sentence gap was pinned at an
-    absolute 1.2 s, so past 1.0 the commas overtook the full stops - "a large breath was
-    being taken after every single comma... NO breaths were being taken after punctuation".
-    Patched by giving each mark its own share of that same absolute ceiling.
-
-    SECOND, as a dead dial: shares of an absolute ceiling are still absolute, so every mark
-    hit its cap at the same 3.75x and the top 62% of a 10x slider did nothing whatever - "the
-    Pause option has no effect at all". Patched by scaling every mark linearly instead.
-
-    THIRD, and this is the one the two before it were hiding: scaling OUR silence linearly
-    does not scale the REST linearly, because the model is resting too and its share does not
-    move. So the dial stretched the gaps between the marks rather than the marks - the full
-    stop ran away from the comma, and no single setting could suit both. The multiplier now
-    applies to the total, so the ratios at 10x are the ratios at 1x, and the curve saturates
-    so the far end of the dial is long rather than broken.
+    One multiplier on the whole rest, for every mark (see DWELL and `_rest_for`): the model's own rest
+    does not scale with our silence, so scaling only ours would stretch the gaps between marks rather
+    than the marks. Applied to the total, the ratios at 10x are the ratios at 1x, and the curve
+    saturates so the far end is long rather than broken.
     """
     if PAUSE_AFTER.get(str(mark), 0.0) <= 0.0:
         return 0.0
     return _rest_for(mark, params)
 
 
-# The largest `dynamics` this file can be handed - generative_editor._open_up's value at
-# the top of the slider. Every timing coefficient below is written as the figure it should
-# deliver THERE, divided by this, so the numbers in the comments are the numbers a reader
-# gets at full travel. Kept here rather than imported because the editor is Godot and this
-# is Python; if that curve changes, this changes with it.
+# The largest `dynamics` this file is handed (generative_editor._open_up's value at the top of the
+# slider). Timing coefficients below are written as the figure they deliver there, divided by this.
+# Kept here because the editor is Godot and this is Python; the two change together.
 DEPTH_TOP = 2.5
 
 
 def _discourse_plan(groups: list, params: dict) -> list[dict]:
-    """Per-sentence rate and pitch from DISCOURSE STRUCTURE, not from a clock.
+    """Per-sentence rate and pitch from discourse structure, not from a clock.
 
-    Piper is a sentence-level model: it declines pitch across a phrase, lengthens
-    finally, and handles a question, all of it well. What it cannot know is that
-    this is the fourth sentence of a paragraph, because it never sees the
-    paragraph, so every sentence starts from the same register and a chapter is
-    several hundred identical arcs laid end to end.
+    Piper never sees the paragraph, so every sentence starts from the same register. The rules:
 
-    The rules here are the documented ones:
+      Paratone: F0 resets upward at the start of a discourse unit and declines across it, the reset
+      scaling with boundary depth (Lehiste 1975; 't Hart/Collier/Cohen 1990; Sluijter & Terken 1993;
+      Nakajima & Allen 1993). The wave is phase-locked to the text, not a fixed-period oscillator.
+      Final lengthening: material before a boundary is lengthened in proportion to its strength (Klatt
+      1975; Wightman et al. 1992).
+      Length-conditioned rate: the longer the utterance the shorter its segments (Lindblom).
+      Vocal effort, which is not volume: a louder voice has a flatter source spectrum, a quieter one a
+      steeper tilt, and effort declines across a paragraph like pitch, so it rides the same contour.
 
-      PARATONE (the intonational paragraph). Speakers reset F0 upward at the start
-      of a discourse unit and let it decline across it, the reset scaling with the
-      depth of the boundary. Lehiste (1975) named the intonational paragraph; 't
-      Hart/Collier/Cohen (1990) is the standard treatment of declination; Sluijter
-      & Terken (1993) and Nakajima & Allen (1993) tie reset size to boundary depth.
-      This is why the wave has to be phase-locked to the text rather than driven by
-      a fixed-period oscillator, which would drift against the prose and land its
-      peaks on whatever happens to be there.
+    `dynamics` (0..1) scales the whole timing half, `prosody_arc` is the paragraph pitch arc in
+    semitones peak-to-peak, `effort` scales the tilt/level contour. All default to 0.
 
-      FINAL LENGTHENING. Material before a prosodic boundary is lengthened, and the
-      amount indexes the strength of that boundary (Klatt 1975; Wightman,
-      Shattuck-Hufnagel, Ostendorf & Price 1992), so the slowing is progressive
-      into the end of the unit rather than a flat rate per sentence.
-
-      LENGTH-CONDITIONED RATE. The longer the utterance, the shorter its segments -
-      speakers compress long stretches and dwell on short ones (Lindblom's
-      anticipatory shortening). A one-clause sentence after a long one lands
-      harder, which is free emphasis from structure alone.
-
-      VOCAL EFFORT, which is not volume. A louder voice has a FLATTER source
-      spectrum - more high-frequency energy, because the glottal pulse is sharper -
-      and a quieter one a steeper tilt. That is why turning a level down reads as
-      "further away" rather than "speaking softly": distance is a filter, effort is
-      a different filter. Effort declines across a paragraph for the same reason
-      pitch does (both follow subglottal pressure), so it rides the same contour.
-
-    `dynamics` (0..1) scales the whole timing half, `prosody_arc` is the paragraph
-    pitch arc in SEMITONES peak-to-peak, and `effort` scales the tilt/level
-    contour. All default to 0.
-
-    THE LEAN. `lean_semis` and `lean_effort` move this sentence's register and effort by
-    a little, on top of everything above - the delivery a script marks for a stretch
-    (a reader brightening, or going grave), eased across sentences by the caller. The
-    pitch rides the same formant-locked path as the arc, so a brighter sentence is the
-    same person a touch higher, never a smaller one. Clamped small: a lean, not a voice.
+    `lean_semis` and `lean_effort` move this sentence's register and effort a little on top: the
+    delivery a script marks for a stretch, eased across sentences by the caller. The pitch rides the
+    formant-locked path as the arc does. Clamped small.
     """
     depth = max(0.0, float(params.get("dynamics", 0.0)))
     arc = max(0.0, float(params.get("prosody_arc", 0.0)))
@@ -731,7 +526,7 @@ def _discourse_plan(groups: list, params: dict) -> list[dict]:
     n = len(groups)
     lens = [max(1, len(g)) for g in groups]
     typical = sum(lens) / float(n) if n else 1.0
-    # THE CALLER'S PLACE IN THE READING, when it knows it. A request is one sentence
+    # The caller's place in the reading, when it knows it. A request is one sentence
     # (generative_editor.CHUNK_SENTENCES = 1), so deriving position from `groups` makes
     # every sentence the first and last of its own unit at once - u = 0 forever, no final
     # lengthening ever, and the arc flattened to a constant offset. Only the caller has
@@ -757,10 +552,10 @@ def _discourse_plan(groups: list, params: dict) -> list[dict]:
             + lean_semis
         )
         # Progressive final lengthening into the unit's boundary, strongest at the
-        # end. 18% AT THE TOP OF THE DIAL: a real pre-boundary rime lengthens far more
+        # end. 18% at the top of the dial: a real pre-boundary rime lengthens far more
         # than that, but this is applied to the WHOLE sentence, not just its last rime.
         #
-        # THE CEILING HAD TO BE DIVIDED BY `_open_up`'s AND THAT IS THE BUG THIS FIXES.
+        # The ceiling had to be divided by `_open_up`'s and that is the bug this fixes.
         # These coefficients were written against a `depth` of 0..1 and read as their own
         # ceilings - the comment above has said "18%" since the day it was written.
         # generative_editor._open_up later opened the delivery dials to 2.5x at the top of
@@ -857,18 +652,15 @@ def _effort(a, sr: int, tilt: float, gain_db: float):
     return np.clip(a, -1.0, 1.0).astype(np.float32)
 
 
-# The band-limited resampler's kernel: taps either side of the read position, and the Kaiser
-# window's shape. 16 a side with beta 8.6 puts the stopband near -80 dB, under the voice's own
-# noise floor, at a cost of 32 multiply-adds a sample.
+# The band-limited resampler's kernel: taps either side of the read position, and the Kaiser window's
+# shape. 16 a side with beta 8.6 puts the stopband near -80 dB at 32 multiply-adds a sample.
 RESAMPLE_TAPS = 16
 RESAMPLE_BETA = 8.6
 # The passband edge as a share of the lower Nyquist: what is above it is filtered out rather
 # than folded back. Speech at 22.05 kHz has little left up there to lose.
 RESAMPLE_CUTOFF = 0.94
-# Fractional read positions are rounded to this many steps between two samples. Measured on
-# pure tones at the Tone presets' ratios: 1024 left spurs at -68 dB by 8 kHz (the rounding is a
-# timing jitter, worse the higher the tone), 4096 holds every spur under -80 dB. 10 s of audio
-# resamples in 0.14 s.
+# Fractional read positions are rounded to this many steps between two samples: 1024 left spurs at
+# -68 dB by 8 kHz (the rounding is a timing jitter), 4096 holds every spur under -80 dB.
 RESAMPLE_PHASES = 4096
 
 
@@ -924,18 +716,16 @@ def _rms_envelope(a, n: int):
 def _glide(audio, a: int, b: int, c: int, fall: float, stop: int, sr: int) -> bool:
     """Lower the pitch of audio[a:b] in place by up to `fall` semitones, keeping the length.
 
-    The pitch is bought the way the arc's is, by reading slower: at rate 1 at `a`, easing
-    (smoothstep) to 2^(-fall/12) at `b`, and at that rate on to `c`. Reading slower is longer by
-    a few milliseconds, and the audio after it must not move - the plan's times, the splices and
-    the karaoke stand on it - so the glided read runs on over the samples it displaced, and
-    TRAIL_JOIN seconds of it are crossfaded back into the original. That is in a word's last
-    moments and the rest after it (`c` is inside the rest), where a join is silent. `stop` is the
-    first sample it may not write: the next word is never touched. Returns False, having touched
-    nothing, where it does not fit.
+    Bought as the arc's pitch is, by reading slower: rate 1 at `a`, easing (smoothstep) to 2^(-fall/12)
+    at `b`, and at that rate on to `c`. The slower read runs a few milliseconds long and the audio after
+    it must not move (the plan's times, the splices and the karaoke stand on it), so the glided read
+    runs on over the samples it displaced and TRAIL_JOIN seconds of it are crossfaded back into the
+    original, in a word's last moments and the rest after it (`c` is inside the rest), where a join is
+    silent. `stop` is the first sample it may not write: the next word is never touched. Returns False,
+    having touched nothing, where it does not fit.
 
-    The formants go down with the pitch (8% at 1.5 semitones) and `_restore_formants` is not
-    used: the move is made under the fade at the end of the word, where the vowel only darkens a
-    little as it falls, which a larynx does as well.
+    The formants go down with the pitch (8% at 1.5 semitones) and `_restore_formants` is not used:
+    under the end-of-word fade the vowel only darkens as it falls.
     """
     import numpy as np
 
@@ -1039,12 +829,10 @@ def _sound_from(audio, lo: int, hi: int, sr: int, peak: float) -> int:
 def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
     """The next word's hiss in a floored rest held to LEAD_KEEP seconds (see LEAD_KEEP).
 
-    Only where the rest was floored (`_floor_of`): that is what lengthens the lead, and an
-    unfloored boundary is the model's own. The lead is walked back from the next word's first
-    sound and never past the plan's end of this one. A word's own final hiss runs past that end
-    (see `_HISSES`) and is kept from it by the silence between the two: none of 100 such words
-    before a hiss-initial one was touched. Returns a copy, or `audio` itself where nothing is
-    changed.
+    Only where the rest was floored (`_floor_of`), which is what lengthens the lead; an unfloored
+    boundary is the model's own. The lead is walked back from the next word's first sound and never past
+    the plan's end of this one. A word's own final hiss runs past that end (see `_HISSES`) and is kept
+    from it by the silence between the two. Returns a copy, or `audio` itself where nothing is changed.
     """
     import numpy as np
 
@@ -1079,21 +867,19 @@ def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
 
 def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None,
            walk_back=None, through: bool = False):
-    """The fade and the sag of `TRAIL_*`, on each word that comes before a mid-sentence mark
-    or a rest the caller splices in (`REST_AFTER_FLOOR`).
+    """The fade and the sag of `TRAIL_*`, on each word that comes before a mid-sentence mark or a rest
+    the caller splices in (`REST_AFTER_FLOOR`).
 
-    `edges` is {token: (first sound, last sound)} in seconds. The voice's own end is looked for
-    in the waveform - the last point within TRAIL_VOICED_DB of the final rime's peak - because
-    the plan puts it 50 ms early to 80 ms late. The fade ends there, so the model's own drop
-    lands in the part of the word that is already down. `hisses` is {token: runs} for the
-    words that end on a hiss (`_hiss_codas`): theirs is found and left at the model's own level,
-    the voice ending before it (see `_HISSES`). Returns a copy with the words changed, or
-    `audio` itself where none is.
+    `edges` is {token: (first sound, last sound)} in seconds. The voice's own end is searched in the
+    waveform (the last point within TRAIL_VOICED_DB of the final rime's peak) because the plan puts it
+    50 ms early to 80 ms late; the fade ends there, so the model's own drop lands in the part already
+    down. `hisses` is {token: runs} for words that end on a hiss (`_hiss_codas`): theirs is found and
+    left at the model's level, the voice ending before it (see `_HISSES`). Returns a copy with the words
+    changed, or `audio` itself where none is.
 
     `walk_back` is how far the next word's start is walked back over sound (None: TRAIL_EARLY).
-    `through`: where the voice runs right up to the next word, the way back up (TRAIL_BACK) runs
-    on into it rather than shrinking to a one-sample step - 16 dB on sounding voice, heard as the
-    next word cut in (2026-10-26, Kokoro reading "haven't you, my love" straight through).
+    `through`: where the voice runs right up to the next word, the way back up (TRAIL_BACK) runs on into
+    it rather than shrinking to a one-sample step, which would cut the next word in.
     """
     import numpy as np
 
@@ -1114,9 +900,8 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None,
         first, last = (int(round(float(x) * sr)) for x in edges[ti])
         nxt = edges.get(ti + 1)
         limit = out.size if nxt is None else min(out.size, int(round(float(nxt[0]) * sr)))
-        # the next word starts where its lead hiss does (`_quiet_lead`), and where its own
-        # sound does when that is before the plan's figure: never faded, and never mistaken
-        # for this word's voice
+        # the next word starts where its lead hiss does (`_quiet_lead`), or where its own sound does if
+        # earlier: never faded, never taken for this word's voice
         limit = _hiss_from(audio, last, limit, sr, peak)
         early = max(last, limit - reach)
         limit = _sound_from(audio, early, limit, sr, peak)
@@ -1182,22 +967,17 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None,
 
 
 def _resample(a, ratio: float):
-    """Play `a` back `ratio` times faster - how both pitch moves are bought (the Tone and the arc).
+    """Play `a` back `ratio` times faster: how both pitch moves are bought (the Tone and the arc).
 
-    BAND-LIMITED, because linear interpolation was not enough. Linear is a triangle filter: it
-    lets the images of the spectrum through and droops the top end, by 1.8 dB at a quarter of
-    the sample rate and 4 dB at 8 kHz, and a playback faster than the source folds what lies
-    above the new Nyquist back down as alias. Every sentence went through it twice - the arc
-    here and the Tone in the editor - so the dulling compounded. The raw model, played with no
-    pitch move at all, was heard as the nicer-sounding of the two (2026-10-07).
+    Band-limited: linear interpolation lets spectral images through and droops the top end (1.8 dB at a
+    quarter of the sample rate, 4 dB at 8 kHz), and a faster playback folds what lies above the new
+    Nyquist back as alias; every sentence goes through twice (the arc here, the Tone in the editor), so
+    the dulling compounds. At +1.5 semitones linear left images at -27 dB by 4 kHz and -14 dB by 8 kHz;
+    this keeps every spur under -80 dB and the passband within about a dB to 8 kHz.
 
-    Measured at +1.5 semitones (Dreamy) on pure tones, linear left images at -27 dB by 4 kHz and
-    -14 dB by 8 kHz, with the 8 kHz tone itself 4.9 dB down; this keeps every spur under -80 dB
-    and the passband within about a dB to 8 kHz.
-
-    A Kaiser-windowed sinc, cut off at the lower of the two Nyquists, read at exactly the
-    positions the linear version read (the first sample to the last, `n` evenly spaced), so
-    every timing computed against the old one still lands.
+    A Kaiser-windowed sinc cut off at the lower of the two Nyquists, read at the positions linear
+    interpolation read (the first sample to the last, `n` evenly spaced), so timings computed against
+    it still land.
     """
     import numpy as np
 
@@ -1219,9 +999,8 @@ def _resample(a, ratio: float):
 
 @functools.lru_cache(maxsize=8)
 def _sinc_table(fc: float):
-    """The resampler's kernel, tabulated at RESAMPLE_PHASES fractional offsets (POLYPHASE: each
-    output sample reads the nearest row - computing the window per sample cost a quarter of a
-    second per second of audio, and every sentence goes through here twice)."""
+    """The resampler's kernel, tabulated at RESAMPLE_PHASES fractional offsets (polyphase: each output
+    sample reads the nearest row, as computing the window per sample is too slow)."""
     import numpy as np
 
     w = RESAMPLE_TAPS
@@ -1247,40 +1026,29 @@ def _read_at(src, pos, table):
     return np.einsum("ij,ij->i", taps, table[phase])
 
 
-# --- THE SOURCE AND THE FILTER, SEPARATED -----------------------------------
+# --- the source and the filter, separated -----------------------------------
 #
-# Two things this backend is asked for turn out to be one operation seen from two
-# sides. Speech is a SOURCE - the glottal buzz, which carries pitch - driven
-# through a FILTER, the vocal tract, whose resonances carry the words and the
-# identity of whoever is speaking. A whisper is that filter with the buzz taken
-# out and noise put in its place. A pitch move that keeps the speaker is the buzz
-# moved with the filter held still. Both need the same thing first: an estimate of
-# the filter, frame by frame, separated from whatever is driving it.
+# Speech is a source (the glottal buzz, which carries pitch) driven through a filter (the vocal tract,
+# whose resonances carry the words and the speaker). A whisper is that filter with noise in place of
+# the buzz; a pitch move that keeps the speaker is the buzz moved with the filter held still. Both
+# first need an estimate of the filter, frame by frame.
 #
-# LINEAR PREDICTION is that estimate, and it is the right one here for a reason
-# beyond convenience: the gate (test_source_filter.py) tracks this voice's formants with
-# the same autocorrelation-plus-Levinson method, so the gate and the effect agree
-# by construction about where a formant is. An LPC fit of order p is a smooth
-# spectral envelope through the harmonics rather than a curve over them - which is
-# exactly the split being asked for, because the harmonics ARE the source.
+# Linear prediction gives it: an LPC fit of order p is a smooth envelope through the harmonics, and
+# test_source_filter.py tracks formants with the same autocorrelation-plus-Levinson method, so gate and
+# effect agree on where a formant is.
 #
-# NUMPY ONLY. hosts/voice/requirements.txt is deliberately tiny and scipy is not in
-# it, which rules out lfilter and every IIR path. Nothing below needs one: both
-# effects are magnitude edits on a windowed FFT, overlap-added back, which numpy
-# does natively. The Levinson recursion is vectorized ACROSS frames - the loop
-# runs `order` times over a few hundred frames at once rather than a few hundred
-# times over one - so a sentence costs milliseconds rather than seconds.
+# Numpy only (hosts/voice/requirements.txt has no scipy, so no lfilter or IIR): both effects are
+# magnitude edits on a windowed FFT, overlap-added back. Levinson is vectorized across frames (the
+# loop runs `order` times over all frames at once).
 
 _LPC_FRAME = 0.032  # s: long enough for two pitch periods of a low male voice
 _LPC_HOP = 0.008  # s: 75% overlap, where a Hann window's square sums flat
-# The noise a whisper is made of. FIXED, because a re-render must be the same
-# performance - the same reason the duration-predictor jitter alternates by
-# sentence index instead of sampling (see `_discourse_plan`).
+# The whisper's noise is fixed so a re-render is the same performance (as the duration-predictor
+# jitter alternates by sentence index instead of sampling; see `_discourse_plan`).
 _WHISPER_SEED = 0x5EED
-# How much smoother than the data the whisper's envelope is asked to be. See
-# `_lpc_envelopes`; 0.98 is where the fundamental leaves without the vowel going
-# with it. The formant lock does NOT use this - it wants the sharpest envelope it
-# can get, and it is putting one real envelope back rather than inventing one.
+# How much smoother than the data the whisper's envelope is asked to be (see `_lpc_envelopes`): 0.98 is
+# where the fundamental leaves without the vowel. The formant lock does not use it: it wants the
+# sharpest envelope.
 _WHISPER_GAMMA = 0.98
 
 
@@ -1310,22 +1078,15 @@ def _framed(x, win: int, hop: int):
 def _lpc_envelopes(frames, order: int, nfft: int, gamma: float = 1.0):
     """The spectral envelope of every frame at once.
 
-    Levinson-Durbin, vectorized across frames: the recursion is over the ORDER,
-    and every quantity in it is a scalar per frame, so each of the `order` steps
-    is one vector operation over all of them. The autocorrelation comes from an
-    FFT for the same reason - one batched transform instead of a loop.
+    Levinson-Durbin vectorized across frames: the recursion is over the order and each quantity is a
+    scalar per frame, so each of the `order` steps is one vector operation. The autocorrelation comes
+    from one batched FFT.
 
-    `gamma` under 1 is BANDWIDTH EXPANSION, and the whisper needs it. An envelope
-    is supposed to pass over the harmonics rather than through them, but a fit of
-    this order has enough poles to start tracking individual ones at a low pitch,
-    and any harmonic ripple left in the envelope is printed straight back onto the
-    noise - a whisper with the voice faintly still in it. Scaling the coefficients
-    by gamma^k pulls every pole in off the unit circle, which widens all of them
-    at once and is the standard speech-coding way to say "be smoother than the
-    data". Measured on a synthetic 118 Hz vowel: harmonicity 0.24 at gamma 1,
-    0.06 at 0.98, and at 210 Hz 0.28 against 0.09. It costs a little formant
-    accuracy - F1 reads about 12% high at 0.98, F2 and F3 within 3% - and a
-    raised F1 is what whispered vowels do anyway.
+    `gamma` under 1 is bandwidth expansion: scaling the coefficients by gamma^k pulls every pole in off
+    the unit circle, so the envelope passes over harmonics instead of tracking them at a low pitch
+    (harmonic ripple would print onto the whisper's noise). Measured on a synthetic 118 Hz vowel:
+    harmonicity 0.24 at gamma 1, 0.06 at 0.98. Costs a little formant accuracy (F1 about 12% high at
+    0.98, F2 and F3 within 3%).
     """
     import numpy as np
 
@@ -1362,19 +1123,13 @@ def _lpc_envelopes(frames, order: int, nfft: int, gamma: float = 1.0):
 def _overlap_add(frames, hop: int, length: int, window, incoherent: bool = False):
     """Frames back to a signal, windowed again and normalized by what overlapped.
 
-    The second window is not decoration: a frame whose magnitude spectrum has been
-    edited is no longer confined to the frame it came from, and adding the raw
-    result back seams audibly. Dividing by the accumulated square of the window
-    makes the reconstruction exact where nothing was edited.
+    The second window is needed because a frame whose magnitude spectrum was edited is no longer
+    confined to its frame, and adding the raw result back seams audibly. Dividing by the accumulated
+    squared window makes the reconstruction exact where nothing was edited.
 
-    `incoherent` is for frames that are NOISE. Overlapping copies of a signal add
-    up; overlapping independent noise adds up in POWER, so the same division
-    leaves it 2.7 dB quiet - measured, and heard as the whisper being too far
-    away. The square root is the right normalizer there. (Making the noise
-    continuous instead, so that it adds coherently, is the obvious alternative and
-    is worse: the frames then agree with each other once per hop, which puts a
-    125 Hz buzz right in the middle of the pitch range a whisper is supposed to
-    have vacated. Measured at harmonicity 0.37 against 0.24.)
+    `incoherent` is for noise frames: overlapping independent noise adds in power, so the same division
+    leaves it 2.7 dB quiet; the square root is the right normalizer. (Continuous noise adding
+    coherently puts a 125 Hz buzz in the pitch range a whisper vacates: harmonicity 0.37 against 0.24.)
     """
     import numpy as np
 
@@ -1402,16 +1157,11 @@ def _rms_match(frames, target_frames):
 def _whisper(a, sr: int, amount: float):
     """Keep the vocal tract, replace the voice in it with breath.
 
-    A whisper is not a quiet voice and it is not a breathy one: the vocal folds
-    are not vibrating at all, so there is no fundamental and no harmonics, and the
-    words survive entirely in the resonances. That is why no inference parameter
-    can produce one - a VITS checkpoint trained on modal speech has no whispered
-    speech to sample - and why a filter can: rebuild each frame as NOISE shaped by
-    that frame's own spectral envelope and the tract is untouched while the source
-    is gone.
+    A whisper has no fundamental and no harmonics, and the words survive in the resonances. No inference
+    parameter produces one (a VITS checkpoint trained on modal speech has none to sample), but a filter
+    can: rebuild each frame as noise shaped by that frame's own spectral envelope.
 
-    `amount` blends against the original, which is a real setting rather than a
-    fader: half way is a stage whisper, a voice that has not quite left.
+    `amount` blends against the original: half way is a stage whisper, a voice that has not quite left.
     """
     import numpy as np
 
@@ -1421,29 +1171,23 @@ def _whisper(a, sr: int, amount: float):
     win, hop, nfft, window = _lpc_windows(sr)
     frames = _framed(a, win, hop) * window
     env = _lpc_envelopes(frames, _lpc_order(sr), nfft, _WHISPER_GAMMA)
-    # A FRESH DRAW PER FRAME, not one continuous noise - see `_overlap_add`.
+    # A fresh draw per frame, not one continuous noise - see `_overlap_add`.
     rng = np.random.default_rng(_WHISPER_SEED)
     noise = rng.standard_normal(frames.shape)
     spec = np.fft.rfft(noise * window, nfft, axis=1) * env
     built = np.fft.irfft(spec, nfft, axis=1)[:, :win]
     built = _rms_match(built, frames)
     wet = _overlap_add(built, hop, a.size, window, incoherent=True)
-    # ...and the level trimmed once at the end. The per-frame match and the
-    # incoherent normalizer between them still land about a decibel low, and a
-    # whisper that arrives quieter than it was asked to be is indistinguishable
-    # from the Presence dial having moved on its own.
+    # ...and the level trimmed once at the end: the per-frame match and the incoherent normalizer still
+    # land about a decibel low.
     dry = a.astype(np.float64)
     have = float(np.sqrt(np.mean(wet.astype(np.float64) ** 2)))
     want = float(np.sqrt(np.mean(dry * dry)))
     if have > 1e-9:
         wet = wet * (want / have)
-    # POWER-PRESERVING, because the two halves of this blend are UNCORRELATED. A whisper is
-    # noise through the vocal tract and the voice under it is periodic, so they do not add
-    # the way two takes of the same signal would - they add in POWER, and a straight
-    # `a*wet + (1-a)*dry` therefore lands at sqrt(a^2 + (1-a)^2) of the level. That is -2.95 dB
-    # at Hushed's 0.45 and nothing at all at either end, which is exactly how it was reported:
-    # "with hushed specifically, it is too quiet", while Whispered at full strength was fine.
-    # Measured against the prediction to 0.02 dB before it was touched.
+    # Power-preserving: the whisper (noise) and the voice under it are uncorrelated, so they add in
+    # power and a straight `a*wet + (1-a)*dry` lands at sqrt(a^2 + (1-a)^2) of the level (-2.95 dB at
+    # 0.45, nothing at either end). Matches the prediction to 0.02 dB.
     norm = math.sqrt(amount * amount + (1.0 - amount) ** 2)
     out = (amount * wet + (1.0 - amount) * dry) / max(norm, 1e-9)
     return np.clip(out, -1.0, 1.0).astype(np.float32)
@@ -1452,17 +1196,12 @@ def _whisper(a, sr: int, amount: float):
 def _muffle(a, sr: int, amount: float):
     """A voice coming through something: the high end taken off, and a little level with it.
 
-    Not the same thing as distance, which is what the panel's Presence dial does, and that
-    is the whole reason this exists rather than reusing it. Distance is a property of the
-    ROOM and belongs to whoever is directing the reading; a muffle is a property of the
-    VOICE - Gruff speaks through a mask - and belongs to the tone that asked for it. Wiring
-    a tone into the Presence dial made those two the same knob and cost the reader control
-    of both: "there is no way to correct that."
+    Not the Presence dial's distance: distance is a property of the room and belongs to whoever directs
+    the reading, a muffle a property of the voice (Gruff speaks through a mask) and belongs to the tone
+    that asked for it, so the two must not share a knob.
 
-    A one-pole low-pass, which is the right amount of crude. Something over the mouth is a
-    gentle, wide-band roll-off rather than a filter with a corner you can hear, and the
-    single pole is also the cheapest thing that cannot ring. The level trim goes with it
-    because a covered voice really is quieter - not by much, or it stops being a reading.
+    A one-pole low-pass: a gentle wide-band roll-off rather than a filter with an audible corner, and
+    the cheapest thing that cannot ring. The level trim goes with it because a covered voice is quieter.
     """
     import numpy as np
 
@@ -1472,9 +1211,8 @@ def _muffle(a, sr: int, amount: float):
     # 9 kHz wide open down to about 1.4 kHz at full - a mask, not a telephone.
     cut = 9000.0 * math.pow(0.155, amount)
     x = math.exp(-2.0 * math.pi * cut / float(sr))
-    # The pole written out as its impulse response rather than run as a recursion: a
-    # per-sample Python loop over a sentence is 200k iterations for a filter whose kernel
-    # is spent inside 40 taps (x^40 is 1e-7 at the widest setting here).
+    # The pole as its impulse response rather than a per-sample Python recursion: the kernel is spent
+    # inside 40 taps (x^40 is 1e-7 at the widest setting).
     taps = np.arange(40)
     kernel = (1.0 - x) * np.power(x, taps)
     out = np.convolve(a.astype(np.float64), kernel)[: a.size]
@@ -1489,19 +1227,12 @@ def _muffle(a, sr: int, amount: float):
 def _restore_formants(shifted, source, ratio: float, sr: int):
     """Put `source`'s formants back onto `shifted` after a resample.
 
-    THE BUG THIS ANSWERS. A resample moves the whole spectrum, so buying a pitch
-    move with one also moves the formants - and formants are how big a speaker is.
-    The paragraph arc is bought exactly that way, and at any real depth it did not
-    read as a reader settling across a paragraph, it read as a different, larger
-    person finishing it: "the voice becomes lower and lower and lower... it
-    completely transforms the voice into another voice by the end of the arc".
-
-    The fix is the same split as the whisper, used the other way round. The
-    resampled frame already has the pitch that was wanted. Divide its spectrum by
-    its OWN envelope and multiply by the envelope of the frame it came from, and
-    the harmonics stay where the resample put them while the resonances go back
-    where the speaker had them. Frame i of the output stands at `i * hop * ratio`
-    in the source, because that is what the resample did to the time axis.
+    A resample moves the whole spectrum, so buying a pitch move with one also moves the formants, which
+    carry the speaker's size: the paragraph arc made a different, larger person finish the paragraph.
+    The resampled frame already has the wanted pitch: divide its spectrum by its own envelope and
+    multiply by the envelope of the frame it came from, and the harmonics stay where the resample put
+    them while the resonances return to the speaker's. Frame i of the output stands at `i * hop * ratio`
+    in the source, as the resample did to the time axis.
     """
     import numpy as np
 
@@ -1540,40 +1271,24 @@ def _lpc_order(sr: int) -> int:
 
 
 def _nominal_seconds(frames, ratio: float, sr: int, floor=None) -> float:
-    """How long this sentence WOULD have run at `1/ratio` of the length scale it was given.
+    """How long this sentence would have run at `1/ratio` of the length scale it was given.
 
-    A per-sentence pitch move is bought by rendering `pr` times slower and playing
-    back `pr` times faster, and the two do not cancel in duration. The duration
-    predictor's output is CEILED to whole frames per phoneme id - pads and BOS/EOS
-    included, which is most of the ids - so a token already at its one-frame floor
-    cannot get shorter, and a sizeable part of every sentence does not respond to
-    length_scale at all. Measured across three voices, that fixed part is 13% to
-    46% of a sentence, varying with the voice and the sentence, so no constant can
-    stand in for it.
+    A per-sentence pitch move renders `pr` times slower and plays back `pr` times faster, and the two do
+    not cancel in duration: the duration predictor's output is ceiled to whole frames per phoneme id
+    (pads and BOS/EOS included), so an id at its one-frame floor cannot get shorter, and 13% to 46% of a
+    sentence (by voice and sentence) does not respond to length_scale. Uncorrected, the arc opens a unit
+    high (renders long, plays short) and closes it low, so the reading accelerates into every paragraph
+    and drags out of it (5.1% and 2.0% at the top of the Arc dial on a 3 s sentence).
 
-    Uncorrected, the paragraph arc opens a unit high (pr > 1, renders long, plays
-    back short) and closes it low, so the reading accelerates into every paragraph
-    and drags out of it - by 5.1% and 2.0% at the top of the Arc dial on a
-    3-second sentence, the tilt proportional to the arc.
+    The frames are the plan the synthesizer used: `frames_i = ceil(d_i * L)` says `d_i * L` fell in
+    `(m-1, m]`, so at the other scale it falls in `((m-1)/r, m/r]`, and averaging the ceiling over that
+    interval is the integral of a staircase, closed form. It is general in the width: a pull-down (ratio
+    under 1) widens the interval past a whole frame, and a two-term version reads 6% long there.
 
-    The frames are the plan the synthesizer actually used, so the answer is
-    computable: `frames_i = ceil(d_i * L)` bounds each `d_i` to within one frame,
-    its midpoint is the unbiased choice inside that bound, and rescaling that
-    midpoint gives what the other scale would have asked for.
+    Exact at ratio 1, so with no arc there is no correction.
 
-    THE EXPECTATION IS EXACT, not a half-frame rule of thumb. `frames_i = m` says
-    only that `d_i * L` fell in `(m-1, m]`, so at the other scale it falls in
-    `((m-1)/r, m/r]` - an interval one frame wide divided by the ratio. Averaging
-    the ceiling over it is the integral of a staircase, which is closed form, and
-    it has to be general in the width: a PULL-DOWN (ratio under 1) widens the
-    interval past a whole frame, and a two-term version assuming one straddle reads
-    6% long on exactly those, which is the end of every paragraph.
-
-    Exact at ratio 1 by construction, so with no arc there is no correction and the
-    render is what it always was, byte for byte.
-
-    `floor` is the per-id rest floor the render was given (`_rest_floor`), or None. An id
-    held at its floor is a fixed number of frames at any length scale.
+    `floor` is the per-id rest floor the render was given (`_rest_floor`), or None. An id held at its
+    floor is a fixed number of frames at any length scale.
     """
     import numpy as np
 
@@ -1590,13 +1305,10 @@ def _nominal_seconds(frames, ratio: float, sr: int, floor=None) -> float:
     hi = m / ratio
     width = np.maximum(hi - lo, 1e-12)
     exp = (area(hi) - area(lo)) / width
-    # AN ID AT THE FLOOR STAYS AT THE FLOOR, and this is the whole fixed fraction. A one-frame
-    # id is one frame because its predicted duration was UNDER a frame, and most of them are
-    # the pads between phonemes, whose duration is near zero rather than anywhere near uniform
-    # in the frame they were rounded up into. Averaging the ceiling over that frame credits
-    # them with half of one they never had, and then a pull-down (which widens the interval
-    # past a whole frame) turns that into a whole extra frame each: measured +6% of a
-    # sentence on all three voices at the bottom of the range, which is every paragraph end.
+    # An id at the floor stays at the floor, and this is the whole fixed fraction: a one-frame id's
+    # predicted duration was under a frame (most are the pads between phonemes, near zero), so averaging
+    # the ceiling over that frame would credit it half a frame it never had, and a pull-down turns that
+    # into a whole extra frame each (+6% of a sentence).
     exp = np.where(m <= 1.0, 1.0, exp)
     if floor is not None:
         f = np.asarray(floor, dtype=np.float64)
@@ -1604,10 +1316,9 @@ def _nominal_seconds(frames, ratio: float, sr: int, floor=None) -> float:
     return float(np.maximum(exp, 1.0).sum()) * HOP_LENGTH / float(sr)
 
 
-# A first guess at that fixed fraction, used to ASK for a length scale that will land near
-# the pitch move requested. It only has to be in the right neighborhood: whatever it gets
-# wrong, `_nominal_seconds` measures afterwards and the resample corrects, so the timing is
-# exact either way and only the delivered semitones drift a little with it.
+# A first guess at that fixed fraction, used to ask for a length scale that lands near the requested
+# pitch move. Only the neighborhood matters: `_nominal_seconds` measures afterwards and the resample
+# corrects, so timing is exact and only the delivered semitones drift.
 PACE_FIXED_GUESS = 0.30
 
 
@@ -1636,10 +1347,8 @@ def _gap_for(mark: str, params: dict) -> float:
             base = float(raw)
         except (TypeError, ValueError):
             base = PAUSE_AFTER["."]
-    # The same rule as every other mark, through the same function: the dial scales the whole
-    # rest and the model's own share is subtracted back off. A caller's `sentence_gap` still
-    # wins over the table - it is the same knob - but it is now a TOP-UP at 1.0 rather than
-    # the answer, exactly like the table entry it replaces.
+    # The same rule as every other mark: the dial scales the whole rest and the model's share is
+    # subtracted. A caller's `sentence_gap` still wins over the table, as a top-up at 1.0.
     return _rest_for(str(mark), params, base)
 
 
@@ -1741,28 +1450,22 @@ def _gap_window(edges: dict, ti, frame: float):
 
 
 def _splice_pauses(audio, points, sr: int, mult: float = 1.0):
-    """Insert real silence INTO an utterance without re-synthesizing it.
+    """Insert real silence into an utterance without re-synthesizing it.
 
-    `points` is [(t, top_up, limit, dwell, lo, hi)], ascending: `t` the nominal end of
-    the token or phone carrying the mark, `top_up` the mark's own share of the rest,
-    `limit` the next token's start, `dwell` the mark's table rest (see `_rest_from`) and
-    [lo, hi) the seconds the cut may go in (`_gap_window`). Shorter tuples have no window:
-    the cut may only move forward of `t`, by SPLICE_REACH_MS, and never past `limit`.
-    Returns `(audio, inserted)` with `inserted` [(time, seconds)] in the form `_shift`
-    takes; with nothing to insert the input array itself comes back.
+    `points` is [(t, top_up, limit, dwell, lo, hi)], ascending: `t` the nominal end of the token or phone
+    carrying the mark, `top_up` the mark's own share of the rest, `limit` the next token's start, `dwell`
+    the mark's table rest (see `_rest_from`) and [lo, hi) the seconds the cut may go in (`_gap_window`).
+    Shorter tuples have no window: the cut may only move forward of `t`, by SPLICE_REACH_MS, and never past
+    `limit`. Returns `(audio, inserted)` with `inserted` [(time, seconds)] in the form `_shift` takes; with
+    nothing to insert the input array itself comes back.
 
-    A sentence is synthesized whole and the silence spliced in afterwards, so a comma
-    keeps its continuation contour instead of a sentence-final fall. The voice often runs
-    straight through a comma, lengthening the vowel rather than pausing, so the window may
-    hold no silence at all: the cut goes where the voice is quietest (`_trough`), and each
-    edge is ramped for the level found there (`_edge_ramp`) - a release out of the word,
-    an onset back into the next.
-
-    The silence measured around the cut says how much of the rest is already paid for;
-    the target itself comes from the table (see `_rest_from`). Where the model rested
-    LONGER than the target - a floored mark (`_rest_floor`) on a voice that also pauses
-    there on its own - the excess comes out of the middle of that silence, a negative
-    entry in `inserted`.
+    A sentence is synthesized whole and the silence spliced in afterwards, so a comma keeps its continuation
+    contour. The voice often runs through a comma without pausing, so the window may hold no silence: the
+    cut goes where the voice is quietest (`_trough`), and each edge is ramped for the level found there
+    (`_edge_ramp`). The silence measured around the cut says how much of the rest is already paid for; the
+    target comes from the table (see `_rest_from`). Where the model rested longer than the target (a floored
+    mark, `_rest_floor`, on a voice that also pauses there) the excess comes out of the middle of that
+    silence, a negative entry in `inserted`.
     """
     import numpy as np
 
@@ -1828,11 +1531,9 @@ def _splice_pauses(audio, points, sr: int, mult: float = 1.0):
         _ramp(seg, n_in, out)
         pieces.append(seg)
         pieces.append(np.zeros(pad, dtype=audio.dtype))
-        # Reported at the mark, clamped into [t, limit]: the timings this shifts are token
-        # spans, and the pause belongs after the mark's token and before the next one
-        # wherever in the gap the samples went. Clamped at both ends because a sample index
-        # turned back into seconds can land a hair either side of the boundary it came
-        # from, and either hair flips a comparison in `_shift`.
+        # Reported at the mark, clamped into [t, limit]: the shifted timings are token spans, and the pause
+        # belongs after the mark's token and before the next. Clamped at both ends because a sample index
+        # turned back into seconds can land a hair either side, which flips a comparison in `_shift`.
         at = max(t, cut / float(sr))
         if limit > 0.0:
             at = min(at, limit)
@@ -1852,31 +1553,16 @@ def _splice_pauses(audio, points, sr: int, mult: float = 1.0):
 _warned_unaligned = False
 
 
-# THE CEILING ON A REST NOBODY ASKED FOR, as a multiple of the median rest between two
-# words in the SAME sentence, floored so a brisk sentence still has room for a real one.
-#
-# Relative rather than absolute because every one of pace, length_scale, the tone preset,
-# the Arc resample and the checkpoint itself moves the whole distribution together; a
-# figure in seconds would fire constantly at a slow pace and never at a quick one. The
-# sentence's own median is the only reference that tracks all of them at once.
-#
-# 3.0 IS WHERE THE HISTOGRAM IS EMPTY, and that is the whole argument for it. Every
-# unmarked boundary rest over its own sentence's median, 3036 of them across 16 sentences
-# of the reporter's chapter, four speakers and three paces:
-#
-#     x1.50-1.75  205 |  x2.25-2.50  22  |  x3.00-3.25   0  |  x4.00-5.00   0
-#     x1.75-2.00   76 |  x2.50-2.75  13  |  x3.25-3.50   2  |  x5.00-5.25   1
-#     x2.00-2.25   27 |  x2.75-3.00   5  |  x3.50-4.00   2  |  x5.25-5.50   1
-#
-# One continuous mass thinning out to nothing at 3.0, an empty bin, and then a handful
-# scattered out to 5.4x with nothing between. That is two distributions, not one tail, and
-# 0.16% of boundaries are in the second one. The cut brings those back to 3.0 rather than
-# to the median: the point is to make the rest indistinguishable from one the model meant,
-# not to flatten it.
-#
-# The floor is a safety net for a short sentence, where a median over four or five
-# boundaries is not a reliable estimate of anything. It binds at a brisk pace and nowhere
-# else - at the reporter's settings the median rest is 0.046 s, so the ratio decides.
+# The ceiling on an unplanned rest, as a multiple of the median rest between two words in the same sentence,
+# floored so a brisk sentence keeps room for a real one.
+# Relative because pace, length_scale, the tone preset, the Arc resample and the checkpoint all move the
+# whole distribution together; the sentence's own median tracks all of them.
+# 3.0 is where the histogram of unmarked boundary rests over their sentence's median is empty (3036
+# boundaries, 4 speakers, 3 paces): a mass thinning to nothing at 3.0, then 0.16% scattered out to 5.4x.
+# Those are a second distribution, not a tail; the cut brings them back to 3.0, not to the median, so the
+# rest stays indistinguishable from one the model meant.
+# The floor is a safety net where the median over four or five boundaries is unreliable; it binds only at a
+# brisk pace.
 REST_RATIO = 3.0
 REST_FLOOR = 0.12
 
@@ -1884,34 +1570,21 @@ REST_FLOOR = 0.12
 def _trim_rests(audio, rests, sr: int):
     """Cut the unplanned pause out of the middle of a clause.
 
-    Piper's duration predictor is stochastic - that is what `noise_w` is the noise
-    of - and what it predicts a duration for includes the blanks between the
-    phonemes. A blank is also where the model puts a pause, so a blank's duration
-    is bimodal: a few tens of milliseconds nearly always, and a quarter of a second
-    when the sample lands in the other mode. Draw enough of them and one lands
-    there mid-clause, with no punctuation near it.
+    Piper's duration predictor is stochastic and predicts durations for the blanks between phonemes too. A
+    blank is also where the model pauses, so its duration is bimodal: a few tens of milliseconds, or a
+    quarter second in the other mode, and enough draws land one mid-clause with no punctuation near it. It
+    is not fixable at the source: the plan and the waveform come from one ONNX call, and the only dial that
+    reaches it is `noise_w`, the rhythmic variety of the whole reading. Reading in the sentence rather than
+    word by word (see WORD_BREAK) shortens the tail but cannot remove the mode.
 
-    It is not fixable at the source. The duration plan and the waveform come out of
-    one ONNX call, so there is nothing to clamp before the audio exists, and the
-    only dial that reaches it is `noise_w` - the rhythmic variety of the whole
-    reading. Reading in the sentence rather than word by word (see WORD_BREAK)
-    shortens the tail (99th percentile of a boundary rest 0.120 -> 0.104) but
-    cannot remove the mode.
+    The plan says where, the waveform says how long. `rests` is [(t0, t1)] from the frame plan, for word
+    boundaries carrying no punctuation (a marked one is `_splice_pauses`'s). The audible gap runs past the
+    plan at both ends (a word tapers into a rest, and a phone beside the blank can render as silence), so
+    the real silence around each boundary is measured and the ceiling applies to that.
 
-    THE PLAN SAYS WHERE, THE WAVEFORM SAYS HOW LONG. `rests` is [(t0, t1)] from the
-    frame plan, for word boundaries carrying NO punctuation - a marked one is
-    `_splice_pauses`'s to own. But the plan is not the hole: a word tapers into a
-    rest and starts up out of it, and a phone beside the blank can render as
-    silence itself, so the audible gap runs past the plan at both ends (bringing
-    the PLAN back to the ceiling left one boundary with 0.264 s of silence still in
-    it). So the plan finds the boundary, the real silence around it is measured,
-    and the ceiling applies to that.
-
-    The excess comes out of the MIDDLE of the silence, so the ramp that keeps the
-    join from clicking has silence to land on at both ends rather than the last few
-    milliseconds of a word. Returns `(audio, removed)` with `removed` in the form
-    `_shift` takes, the seconds negative. With nothing to cut the input array is
-    returned untouched - byte-identical, not merely equal.
+    The excess comes out of the middle of the silence, so the ramp that prevents a click has silence to land
+    on at both ends. Returns `(audio, removed)` with `removed` in the form `_shift` takes, the seconds
+    negative. With nothing to cut the input array is returned untouched (byte-identical).
     """
     import numpy as np
 
@@ -1950,11 +1623,9 @@ def _trim_rests(audio, rests, sr: int):
 def _silent_span(audio, at: int, thresh: float, sr: int, reach: float = 0.5) -> tuple:
     """(first, last+1) of the contiguous near-silence containing sample `at`.
 
-    Walked outward from the point rather than measured between the token spans, because a
-    span is the aligner's opinion about where a word ends and this is a question about the
-    waveform. Bounded at `reach` seconds in each direction - half a second by default,
-    because past that a silence at a sentence's edge is not a dwell, it is the end of the
-    utterance. `(at, at)` - an empty span - if `at` is not in silence at all.
+    Walked outward from the point rather than measured between token spans (a span is the aligner's opinion,
+    this is about the waveform). Bounded at `reach` seconds each way, half a second by default: past that a
+    silence is the end of the utterance, not a dwell. `(at, at)`, an empty span, if `at` is not in silence.
     """
     import numpy as np
 
@@ -1988,10 +1659,8 @@ def _silence_around(
 def _warn_unaligned(marks) -> None:
     """Say so, once, when a mid-sentence pause was asked for and cannot be placed.
 
-    Splicing needs the duration predictor's spans to know WHERE the mark ends.
-    An unpatched voice has none - the same condition that costs the subtitles -
-    and the pause would otherwise just quietly not happen, which is exactly the
-    complaint this feature exists to answer.
+    Splicing needs the duration predictor's spans to know where the mark ends. An unpatched voice has none
+    (the same condition that costs the subtitles), and the pause would otherwise silently not happen.
     """
     global _warned_unaligned
     if _warned_unaligned or not marks:
@@ -2008,14 +1677,12 @@ def _warn_unaligned(marks) -> None:
 def _shift(t: float, inserted, inclusive: bool) -> float:
     """`t` moved later by every pause inserted before it.
 
-    A span's START is inclusive (a pause landing exactly on it happened first,
-    so the span begins after it) and its END is not (a pause landing exactly on
-    the end belongs after the span, which is what puts the mark's own token in
-    front of its own silence instead of underneath it).
+    A span's start is inclusive (a pause landing exactly on it happened first) and its end is not (a pause
+    landing exactly on the end belongs after the span, which puts the mark's own token in front of its own
+    silence).
 
-    A negative entry is silence taken OUT from `at` on: a time inside what was removed
-    lands where the removal starts, a time after it moves back by all of it, and one
-    exactly at `at` stays put either way.
+    A negative entry is silence taken out from `at` on: a time inside what was removed lands where the
+    removal starts, a time after it moves back by all of it, and one exactly at `at` stays put either way.
     """
     add = 0.0
     for at, dur in inserted:
@@ -2028,41 +1695,22 @@ def _shift(t: float, inserted, inclusive: bool) -> float:
 
 
 def _espeak_word(text: str) -> str:
-    """A token as eSpeak should SEE it: an internal hyphen is a word boundary.
+    """A token as eSpeak should see it: an internal hyphen is a word boundary.
 
-    A hyphen inside a word is not punctuation and it is not silent - it is the
-    boundary between two words spelled as one, and a reader says "ten-forty" the
-    way they say "ten forty". ghost keeps the hyphen all the way here on purpose
-    (the karaoke line shows the source spelling, so "twenty-five" must not become
-    "twenty five" on screen - see TextNorm._expand_core), which leaves this the one
-    place that turns the spelling back into a boundary.
+    A hyphen inside a word is the boundary between two words spelled as one ("ten-forty" is said "ten
+    forty"). ghost keeps the hyphen to here (the karaoke line shows the source spelling; see
+    TextNorm._expand_core), so this is the one place that turns the spelling back into a boundary.
 
-    eSpeak returns the SAME PHONES either way; only the word space differs:
+    eSpeak returns the same phones either way and only the word space differs ("ten-forty" -> tˈɛnfˈɔːɹɾi,
+    "ten forty" -> tˈɛn fˈɔːɹɾi), so no pronunciation changes. The model does not ignore the boundary: two
+    primary stresses welded together is a shape its training data lacks, and en_US-libritts-high opens a
+    hole in the middle of the word (longest near-silence inside "forty-second" 0.40 s glued, 0.07 s spaced;
+    "twenty-five" 0.25 -> 0.07). The other installed voices do not. A compound eSpeak already reads with one
+    primary ("re-enter") is unaffected.
 
-        ten-forty     -> tˈɛnfˈɔːɹɾi        ten forty     -> tˈɛn fˈɔːɹɾi
-        forty-second  -> fˈɔːɹɾisˈɛkənd     forty second  -> fˈɔːɹɾi sˈɛkənd
-        self-report   -> sˈɛlfɹᵻpˈɔːɹt      self report   -> sˈɛlf ɹᵻpˈɔːɹt
-
-    so this changes no pronunciation - it restores a boundary that was dropped. The
-    model does not ignore that boundary: two primary stresses welded together with
-    no space between them is a shape the training data does not contain, and
-    en_US-libritts-high answers it by opening a hole in the middle of the word.
-    Longest near-silence INSIDE the token, averaged over three renders, glued vs
-    spaced:
-
-        forty-second  0.40 s -> 0.07 s      x-ray        0.30 s -> 0.06 s
-        twenty-five   0.25 s -> 0.07 s      night-light  0.23 s -> 0.03 s
-
-    The other four installed voices never opened the hole. A compound eSpeak
-    already reads with ONE primary ("re-enter" -> ɹˌiːˈɛntɚ) is unaffected: same
-    phones, one more space.
-
-    Only the ASCII hyphen, because that is the only one that survives TextNorm - it
-    folds the typographic hyphens to it and an em dash to a comma. A token that is
-    nothing BUT dashes never arrives (phonemes.gd turns a spaced dash into
-    punctuation) but is returned untouched if one ever does, since handing the
-    phonemizer an empty string drops the item and takes the alignment of every
-    later word with it.
+    Only the ASCII hyphen, the only one that survives TextNorm (it folds typographic hyphens to it and an em
+    dash to a comma). A token of nothing but dashes is returned untouched, since handing the phonemizer an
+    empty string drops the item and misaligns every later word.
     """
     spoken = " ".join(text.replace("-", " ").split())
     return spoken or text.strip()
@@ -2076,61 +1724,31 @@ BOS, EOS, PAD = 1, 2, 0
 # the first real word. Two, by measurement - see the table in _symbols.
 LEAD_IN_SPACES = 2
 
-# THE WORD BREAK THAT COSTS NOTHING - U+200B ZERO WIDTH SPACE, written between the words
-# of a sentence before it is handed to eSpeak.
-#
-# eSpeak reads a SENTENCE, and reading a sentence is how it decides which words are
-# stressed. Handed one word at a time it can only give the citation form, and the
-# citation form of a function word carries a primary stress no reader would put there.
-# Measured over one chapter's 4148 words, with `_espeak_word` spellings:
-#
-#     a      ˈeɪ  alone      ɐ    in the sentence     46 times
-#     I      ˈaɪ             aɪ                       37
-#     in     ˈɪn             ɪn                       29
-#     to     tuː             tə                       24
-#     that   ðˈæt            ðæt                      22
-#     it     ɪt              ɪɾ                       12
-#
-# `a` is the one to look at twice: ˈeɪ is not a stressed schwa, it is the LETTER A. The
-# rest are a rhythm defect - a reading in which every preposition, article and modal is
-# stressed is an even one, and an even one is what a listener calls jerky.
-#
-# Phonemizing the whole sentence is not an option, because eSpeak WELDS across word
-# boundaries when it does - "not a" comes back nˌɑːɾə, "in the" as ɪnðə - and ghost cannot
-# use a reading it cannot cut into words: the karaoke line, the per-token timings and every
-# pause placement are keyed to which phones belong to which word. A plain join loses that
-# on 103 of 230 sentences.
-#
-# A zero-width space is the whole fix. It is a word boundary to eSpeak, so nothing welds
-# across it; it has no phones of its own, so nothing leaks into the transcription; and it
-# does not stop eSpeak analyzing the sentence, so the stresses stay the sentence's own.
-# Same chapter: 6 of 230 sentences still come back with a different number of pieces than
-# words (2.6%, and those fall back to the old path), and of the 127 a plain join DID align,
-# the zero-width version agrees on 124. A pipe behaves identically; a double bar disturbs
-# the stresses.
+# U+200B zero width space, written between the words of a sentence before it goes to eSpeak, so eSpeak reads
+# the sentence (which is how it decides stress) yet yields a reading that can be cut into words.
+# Word by word, eSpeak gives only citation forms, and a function word's carries a primary stress no reader
+# would put there ("a" ˈeɪ, the letter, for ɐ; "in" ˈɪn for ɪn; "to" tuː for tə): a reading with every
+# preposition stressed sounds jerky. Phonemizing the whole sentence welds words across boundaries ("not a"
+# -> nˌɑːɾə) and ghost needs the phones of each word (karaoke, per-token timings, pause placement); a plain
+# join loses that on 103 of 230 sentences.
+# A zero-width space is a word boundary to eSpeak, has no phones of its own, and does not stop it analyzing
+# the sentence. Still 6 of 230 sentences come back with a different piece count than words (2.6%) and fall
+# back to the word-by-word path. A pipe behaves the same; a double bar disturbs the stresses.
 WORD_BREAK = "\u200b"
 
-# U+0329 COMBINING VERTICAL LINE BELOW - the IPA "syllabic" mark. eSpeak puts it on a
-# consonant that is carrying a syllable on its own, which in American English is mostly
-# the glottalized -ten/-tain family: "written" comes back as /ɹˈɪʔn̩/, "certain" as
-# /sˈɜːʔn̩/, "gotten" as /ɡˈɑːʔn̩/.
-#
-# Not every voice can spell it. Measured across the five installed here, four carry
-# 157-symbol maps that include it and en_US-libritts-high carries a 130-symbol map that
-# does not - and on that voice the mark was simply dropped, leaving /ɹˈɪʔn/: a glottal
-# stop and a bare consonant with nothing to stand as the second syllable. Across
-# north-star that is 146 tokens of 19 word types, and they are not rare words - "written"
-# 51 times, "certain" 34, "gotten" 15.
-#
-# So substitute rather than drop. A syllabic consonant IS a schwa plus that consonant -
-# it is the same sound written more tightly, and eSpeak itself spells the un-glottalized
-# members of the family that way already ("prison" -> /pɹˈɪzən/, "sudden" -> /sˈʌdən/).
-# Inserting the schwa BEFORE the base gives /ɹˈɪʔən/, which every voice can say.
+# U+0329 combining vertical line below, the IPA "syllabic" mark eSpeak puts on a consonant carrying a
+# syllable alone (American -ten/-tain: "written" /ɹˈɪʔn̩/, "certain", "gotten").
+# Not every voice can spell it: four of the five installed carry 157-symbol maps that include it,
+# en_US-libritts-high a 130-symbol map that does not, and dropping the mark leaves a glottal stop and a bare
+# consonant with no second syllable (146 tokens across north-star).
+# So substitute: a syllabic consonant is a schwa plus that consonant (eSpeak spells the un-glottalized
+# members that way: "prison" /pɹˈɪzən/). Inserting the schwa before the base gives /ɹˈɪʔən/, which every
+# voice can say.
 SYLLABIC = "\u0329"
 SCHWA = "\u0259"
 
-# Commercially clean English voices only. Verified MODEL_CARD by MODEL_CARD,
-# 2026-08-09. Anything not on this list needs its card read before it is added.
+# Commercially clean English voices only, verified MODEL_CARD by MODEL_CARD. Anything not on this list needs
+# its card read before it is added.
 VOICES: dict[str, dict] = {
     "en_US-ljspeech-medium": {
         "path": "en/en_US/ljspeech/medium/en_US-ljspeech-medium",
@@ -2168,34 +1786,33 @@ VOICES: dict[str, dict] = {
     },
 }
 
-# VOICES TRAINED HERE (next/likeness.md, "Their own voice"): an actor's voice, fine-tuned on this
-# computer from a clean base on their own speech, published by the Actor card as `<id>.onnx`, its
-# config `<id>.onnx.json` and `<id>.voice.json` ({name, license, chain, actor}) in this folder under the
-# voices' root. Listed beside the allowlist, never fetched.
+# Voices trained here (next/likeness.md, "Their own voice"): an actor's voice fine-tuned on this computer
+# from a clean base, published by the Actor card as `<id>.onnx`, `<id>.onnx.json` and `<id>.voice.json`
+# ({name, license, chain, actor}) in this folder under the voices' root. Listed beside the allowlist, never
+# fetched.
 TRAINED = "trained"
 
 
 @register
 class PiperBackend(Backend):
     name = "piper"
-    # Samples a duration frame stands for. A model under this one with another frame (kokoro.py)
-    # says its own, and the token path reads the plan through it.
+    # Samples a duration frame stands for. A model with another frame (kokoro.py) says its own, and the
+    # token path reads the plan through it.
     hop = HOP_LENGTH
-    # The two shapings of a word's edge before a rest: the trail (the word before it let go of, its fade
-    # and sag) and the lead (the next word's hiss quieted in a floored rest - a floored rest is what made
-    # it long). A model that floors no rest (kokoro.py) makes no lead.
+    # The two shapings of a word's edge before a rest: the trail (the word before it let go of: fade and
+    # sag) and the lead (the next word's hiss quieted in a floored rest). A model that floors no rest
+    # (kokoro.py) makes no lead.
     trails = True
     quiets_lead = True
-    # How far the trail walks the next word's start back over sound (None: TRAIL_EARLY, read when it is
-    # made), and whether its way back up may run on into the next word. A model whose corrected plan says
-    # where the next word starts, and which holds a word straight into it at a comma (kokoro.py), walks
-    # back none and lets the return run on.
+    # How far the trail walks the next word's start back over sound (None: TRAIL_EARLY, read when made), and
+    # whether its way back up may run on into the next word. A model whose corrected plan says where the
+    # next word starts, and which holds a word into it at a comma (kokoro.py), walks back none and lets the
+    # return run on.
     trail_early = None
     trail_through = False
-    # WHAT THE NOISE ADDS TO ITS LEVEL (level.py, which measures a voice with the noise off so a level kept is the
-    # same wherever it is measured): VITS samples its sound on every render, and in use libritts-high speaks this
-    # much louder than with none - speaker 0 1.14 times, speaker 4 1.16, the means of twelve renders each. A model
-    # that samples nothing (kokoro.py) says 1.
+    # What the noise adds to its level (level.py measures a voice with the noise off, so a level kept is the
+    # same wherever measured): VITS samples on every render, and libritts-high speaks 1.14 times (speaker 0)
+    # to 1.16 (speaker 4) louder than with none. A model that samples nothing (kokoro.py) says 1.
     level_noise = 1.14
 
     @classmethod
@@ -2247,22 +1864,19 @@ class PiperBackend(Backend):
 
         self._sessions: dict[str, Any] = {}
         self._configs: dict[str, dict] = {}
-        # Homograph resolution phonemizes through this backend's OWN word-level
-        # call, so a carrier reading and a bare reading are always comparable.
-        # Constructed here rather than per request because its probe cache is the
-        # thing that makes it free after the first few sentences.
+        # Homograph resolution phonemizes through this backend's own word-level call, so a carrier reading
+        # and a bare reading are comparable. Constructed once because its probe cache makes it free after
+        # the first few sentences.
         self._homographs = homographs.Homographs(self._espeak)
         # A word eSpeak has to guess at (the reading marks it `rare`) is read as Wiktionary
         # has it, its full vowels stressed - see lexicon.py. Its cache sits beside the voices.
         self._lexicon = lexicon.Lexicon(self._espeak, self._root().parent / "lexicon")
-        # Whether a checkpoint says the vowel its phoneme string names. Constructed
-        # here for the same reason: the verdict is per voice and the probe RENDERS, so
-        # it is asked once and then remembered - in memory here,
-        # and on disk beside the weights so a restart does not pay for it again.
+        # Whether a checkpoint says the vowel its phoneme string names. The verdict is per voice and the
+        # probe renders, so it is asked once and remembered, in memory and on disk beside the weights.
         self._vowels = vowel_probe.VowelProbe(
             self._espeak, self._render_symbols, self._root()
         )
-        # EVERY VOICE AT ONE LEVEL: each voice and speaker measured once and played at one gain,
+        # Every voice at one level: each voice and speaker measured once and played at one gain,
         # kept beside its weights - see level.py.
         self._levels = level.Levels(self._root())
         # The frame plan of the most recent render - see `_render_symbols`.
@@ -2276,13 +1890,9 @@ class PiperBackend(Backend):
 
     @staticmethod
     def _root() -> Path:
-        # Weights never live in the repo. This mirrors user:// on the Godot side
-        # and is created on demand.
-        #
-        # PER-PLATFORM, and it has to agree with Deps.data_dir() on the Godot side -
-        # that is what the home screen's Environment panel counts .onnx files in, so
-        # a hard-coded ~/.local/share would have the panel reporting "no voices" on
-        # a Mac forever while the host quietly downloaded them somewhere else.
+        # Weights never live in the repo. This mirrors user:// on the Godot side and is created on demand.
+        # Per platform, and it must agree with Deps.data_dir() on the Godot side: the Environment panel
+        # counts .onnx files there.
         if sys.platform == "win32":
             base = Path(
                 os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
@@ -2390,16 +2000,12 @@ class PiperBackend(Backend):
         )
         self._sessions[voice] = sess
         self._configs[voice] = cfg
-        # ASK THIS CHECKPOINT WHETHER IT SAYS THE VOWEL ITS PHONEME STRING NAMES.
-        # en_US-libritts-high renders a word-initial `ɹˈiːd` with the vowel of `rid`,
-        # which is its training transcripts carrying the same homograph bug one level
-        # down - see vowel_probe.py. Here rather than in `_run` for two reasons: it is
-        # a property of the weights, so once per load is the right cadence and a check
-        # on every sentence is not; and it RENDERS, so it must not happen inside one.
-        # Being on the cold path only, it also never touches a session a caller
-        # supplied itself - the alignment tests seed `_sessions` with a stand-in whose
-        # phoneme map allocates ids on lookup, and probing that would silently move
-        # every id in the audio under test.
+        # Ask this checkpoint whether it says the vowel its phoneme string names (en_US-libritts-high
+        # renders a word-initial `ɹˈiːd` with the vowel of `rid`; see vowel_probe.py). Here rather than in
+        # `_run` because it is a property of the weights, so once per load, and it renders, so it must not
+        # happen inside a render. On the cold path only, it never touches a session a caller supplied: the
+        # alignment tests seed `_sessions` with a stand-in whose phoneme map allocates ids on lookup, and
+        # probing it would move every id under test.
         self._vowels.measure(
             voice, cfg, sess, str(cfg.get("espeak", {}).get("voice", "en-us"))
         )
@@ -2407,25 +2013,19 @@ class PiperBackend(Backend):
 
     @staticmethod
     def _ensure_patched(onnx: Path) -> None:
-        """Expose the duration plan and let it be floored, once, on first load of a voice.
+        """Expose the duration plan and let it be floored and scaled, once, on first load of a voice.
 
-        ALIGNMENT: stock Piper graphs return audio only. Without the duration tensor
-        there are no phoneme times, no word times, and therefore NO SUBTITLES. THE REST
-        FLOOR: an optional input, REST_FLOOR_INPUT (frames per id, default none), that the
-        plan may not fall below, between the duration predictor's ceiling and everything
-        that reads it - how a mark gets a rest the model renders itself (`_rest_floor`).
-        Without the input fed, the graph computes exactly what it did before. THE DURATION
-        SCALE: a second optional input, DUR_SCALE_INPUT (a multiplier per id, default 1), on
-        the planned frames after the Ceil and before the floor - how a word is leaned on
-        (`EMPHASIS`). Unfed, a multiply by one.
+        Stock Piper graphs return audio only; without the duration tensor there are no phoneme or word times
+        and no subtitles. Two optional inputs are added: REST_FLOOR_INPUT (frames per id, default none), a
+        floor the plan may not fall below, between the duration predictor's ceiling and everything that
+        reads it (how a mark gets a rest the model renders itself, `_rest_floor`); and DUR_SCALE_INPUT (a
+        multiplier per id, default 1) on the planned frames after the Ceil and before the floor (how a word
+        is leaned on, `EMPHASIS`). Unfed, the graph computes what it always did. Each is added on its own,
+        so a voice patched before one existed gets the missing one.
 
-        Each is added on its own, so a voice patched before one of them existed gets the
-        missing one and keeps the rest.
-
-        Patching belongs here, where a voice is first used, not in a script someone has to
-        remember to run. Idempotent and cheap: the check is one session open, and a graph
-        carrying both is left alone. The patched graph is opened before it replaces the
-        file, so one that will not load is never written.
+        Patching happens where a voice is first used. Idempotent and cheap (one session open; a graph
+        carrying both is left alone), and the patched graph is opened before it replaces the file, so one
+        that will not load is never written.
         """
         import onnxruntime as ort
 
@@ -2471,13 +2071,11 @@ class PiperBackend(Backend):
         ceil = graph.node[at[0]]
         tensor = ceil.output[0]
         if not scaled:
-            # A Mul AFTER the Ceil, taking the name the Ceil gave its output, so everything
-            # downstream - the floor's Max if there is one, the path, the alignment output -
-            # reads the scaled plan. After rather than before, because most of a syllable's
-            # ids are predicted under one frame and `ceil(d * 1.3)` lands back on the same
-            # whole frame: measured on en_US-libritts-high, a stretch before the Ceil moved a
-            # stressed word by 0 to 30 ms. The path is a mask against the plan's running sum,
-            # so fractional frames are taken as they are.
+            # A Mul after the Ceil, taking the name the Ceil gave its output, so everything downstream (the
+            # floor's Max, the path, the alignment output) reads the scaled plan. After rather than before
+            # because most of a syllable's ids are predicted under one frame and `ceil(d * 1.3)` lands on
+            # the same whole frame (a stretch before the Ceil moved a stressed word by 0 to 30 ms). The path
+            # is a mask against the plan's running sum, so fractional frames are taken as they are.
             out = ceil.output[0]
             ceil.output[0] = out + "_unscaled"
             graph.node.insert(
@@ -2502,10 +2100,9 @@ class PiperBackend(Backend):
                 helper.make_tensor_value_info(tensor, onnx_mod.TensorProto.FLOAT, None)
             )
         if not floored:
-            # Whatever now produces the plan (the Ceil, or the scale after it) is renamed and a
-            # Max takes its old name, so the graph's own consumers and the alignment output all
-            # read the floored plan. One-dimensional, so it broadcasts along the ids whatever
-            # rank the plan has.
+            # Whatever now produces the plan (the Ceil, or the scale after it) is renamed and a Max takes
+            # its old name, so the graph's consumers and the alignment output read the floored plan.
+            # One-dimensional, so it broadcasts along the ids whatever the plan's rank.
             planned = tensor + "_planned"
             k = next(i for i, n in enumerate(graph.node) if tensor in n.output)
             graph.node[k].output[0] = planned
@@ -2544,22 +2141,16 @@ class PiperBackend(Backend):
 
     @classmethod
     def _espeak(cls, words: list[str], voice: str = "en-us") -> list[str]:
-        """eSpeak's IPA for a list of words, in the voice's OWN eSpeak language.
+        """eSpeak's IPA for a list of words, in the voice's own eSpeak language.
 
-        Each item of the list is its own utterance, so what an item contains is
-        what eSpeak gets to read. `_in_sentence` hands it a whole sentence with
-        zero-width breaks between the words, which is the normal path; the
-        word-by-word batch below it is the fallback for a sentence eSpeak runs
-        together anyway, and `homographs.py` hands it carrier phrases.
+        Each item is its own utterance, so what an item contains is what eSpeak reads. `_in_sentence` hands
+        it a whole sentence with zero-width breaks (the normal path); the word-by-word batch is the fallback
+        for a sentence eSpeak runs together anyway, and `homographs.py` hands it carrier phrases.
 
-        THE LANGUAGE MUST COME FROM THE VOICE CONFIG, not from the voice's name.
-        en_US-ljspeech-medium declares `espeak.voice = "en"`, which eSpeak
-        resolves to BRITISH English - so the model was trained on RP symbols
-        despite the American name and audio. Hardcoding "en-us" fed it æ, ʌ, ɑː
-        and oʊ where it expected a, ɒ, ɒ and əʊ, and it rendered them as the
-        nearest thing it knew: "lamp" came out "lump", "not" came out "nart",
-        "was" came out "wars", "balanced" came out "bullenced". Every one of
-        those was this single line.
+        The language comes from the voice config, not the voice's name: en_US-ljspeech-medium declares
+        `espeak.voice = "en"`, which eSpeak resolves to British English, so the model was trained on RP
+        symbols despite its name. Hardcoding "en-us" feeds it æ, ʌ, ɑː and oʊ where it expects a, ɒ, ɒ and
+        əʊ ("lamp" comes out "lump").
         """
         if not cls._espeak_ready:
             try:
@@ -2577,18 +2168,14 @@ class PiperBackend(Backend):
         from phonemizer import phonemize
         from phonemizer.separator import Separator
 
-        # phonemizer validates against its own language list, which does not
-        # include eSpeak's bare "en" - and "en" IS British in eSpeak, which is
-        # the whole point of reading it from the config.
+        # phonemizer validates against its own language list, which lacks eSpeak's bare "en" (British in
+        # eSpeak, as read from the config).
         lang = {"en": "en-gb", "en-uk": "en-gb"}.get(voice, voice)
-        # EACH ITEM OF `words` IS ITS OWN UTTERANCE - a list is a batch, not a
-        # sentence. One word per item is therefore the ISOLATED reading by
-        # construction, and that reading costs both the homograph and the stress:
-        # eSpeak reads "live" as laɪv alone and lɪv in "where they live", and it
-        # stresses every function word it is shown on its own. The separator is
-        # what makes a MULTI-word item splittable again, which is how both
-        # `_in_sentence` and homographs.py get a reading back per word after
-        # asking the question with the syntax attached.
+        # Each item of `words` is its own utterance: a list is a batch, not a sentence. One word per item is
+        # the isolated reading, which loses the homograph and the stress (eSpeak reads "live" as laɪv alone
+        # and lɪv in "where they live", and stresses every function word shown alone). The separator makes a
+        # multi-word item splittable again, which is how both `_in_sentence` and homographs.py get a reading
+        # back per word with the syntax attached.
         out = phonemize(
             words,
             language=lang,
@@ -2603,28 +2190,21 @@ class PiperBackend(Backend):
     def _in_sentence(
         self, tokens: list, need: list, espeak_voice: str
     ) -> dict[int, str]:
-        """eSpeak's reading of each word AS IT SITS IN THIS SENTENCE.
+        """eSpeak's reading of each word as it sits in this sentence.
 
-        Returns {token index: IPA} for every index in `need`, or {} if the reading
-        could not be cut back into words - in which case the caller falls back to the
-        word-by-word batch, which is what this whole file did before. See WORD_BREAK
-        for what the sentence buys and why the words are separated the way they are.
+        Returns {token index: IPA} for every index in `need`, or {} if the reading could not be cut back
+        into words, in which case the caller falls back to the word-by-word batch. See WORD_BREAK.
 
-        EVERY token contributes its spelling to the sentence, including the ones that
-        are not in `need`: a word carrying an authored override or a homograph reading
-        still conditions the stress of its neighbors, and dropping it from the string
-        would be asking eSpeak about a sentence nobody wrote. Only the pieces for `need`
-        are read back out.
+        Every token contributes its spelling to the sentence, including those not in `need`: a word with an
+        authored override or a homograph reading still conditions its neighbors' stress. Only the pieces for
+        `need` are read back.
 
-        A token may be more than one eSpeak word - `_espeak_word` turns an internal
-        hyphen into a boundary, which is the whole point of that function - so the
-        pieces are taken by COUNT rather than one apiece, and rejoined with the space
-        that keeps the boundary the hyphen asked for.
+        A token may be more than one eSpeak word (`_espeak_word` turns an internal hyphen into a boundary),
+        so the pieces are taken by count and rejoined with the space the hyphen asked for.
 
-        A REST THE CALLER SPLICES IN ENDS A PHRASE (`REST_AFTER_FLOOR`): the sentence is read
-        in pieces broken after each word that has one, so that word is read as the end of
-        what is said - "to" before a hesitation is tuː, where running on into the next word
-        it is tə, a schwa the model gives a frame or two.
+        A rest the caller splices in ends a phrase (`REST_AFTER_FLOOR`): the sentence is read in pieces
+        broken after each word that has one, so that word is read as the end of what is said ("to" before a
+        hesitation is tuː, not tə).
         """
         spoken: list[str] = []
         counts: dict[int, tuple[int, int]] = {}
@@ -2666,11 +2246,9 @@ class PiperBackend(Backend):
             )
             return {}
         if len(got) != len(spoken):
-            # eSpeak still ran the words together somewhere, so there is no honest way
-            # to say which phones belong to which word. The isolated batch is wrong
-            # about stress but right about alignment, and alignment is the one this
-            # file cannot trade away - a mis-cut reading puts the karaoke line and
-            # every pause on the wrong word for the rest of the sentence.
+            # eSpeak still ran the words together somewhere, so there is no honest way to say which phones
+            # belong to which word. The isolated batch is wrong about stress but right about alignment,
+            # which this file cannot trade away.
             self._warn_welded()
             return {}
         out: dict[int, str] = {}
@@ -2725,15 +2303,10 @@ class PiperBackend(Backend):
         def written(ipa: str) -> str:
             return self._vowels.repair_for(voice, ipa) if voice else ipa
 
-        # A token whose text is only whitespace must never reach the batch, and the
-        # result must be checked rather than trusted. phonemizer DROPS an empty or
-        # whitespace-only input instead of returning "" for it - measured, [" ", "the"]
-        # comes back as ["ðə"], one item for two - and the zip below then pairs every
-        # remaining word with its NEIGHBOR'S phonemes and lets the last one fall
-        # through to ghost's ARPAbet. Silently. The whole tail of a sentence would be
-        # spoken one word out of step, and the one word that reached the fallback would
-        # take CMUdict's reading, which for a homograph is not the same reading eSpeak
-        # would have given.
+        # A whitespace-only token must never reach the batch, and the result is checked: phonemizer drops an
+        # empty or whitespace-only input instead of returning "" ([" ", "the"] comes back as ["ðə"]), and
+        # the zip below would then pair every remaining word with its neighbor's phonemes and let the last
+        # fall through to ghost's ARPAbet, a homograph included.
         need = [
             i
             for i, t in enumerate(tokens)
@@ -2746,10 +2319,8 @@ class PiperBackend(Backend):
             words = [_espeak_word(str(tokens[i]["text"])) for i in need]
             got = self._espeak(words, espeak_voice)
             if len(got) != len(words):
-                # Alignment is not recoverable from a short batch - there is no way to
-                # know WHICH one was dropped - so redo it one word at a time. Slower,
-                # and it happens on approximately no sentences, but a wrong-by-one
-                # sentence is not something to ship for the sake of one call.
+                # Alignment is not recoverable from a short batch (which one was dropped is unknown), so
+                # redo it one word at a time: slower, but a wrong-by-one sentence is not worth one call.
                 print(
                     "ghost/voice: phonemizer returned %d results for %d words; "
                     "re-running individually to keep alignment"
@@ -2759,30 +2330,11 @@ class PiperBackend(Backend):
                 got = [(self._espeak([w], espeak_voice) or [""])[0] for w in words]
             espoke = dict(zip(need, got))
 
-        # LEAD-IN. The model starts its utterance at the very first phoneme and its onset
-        # ramp lands ON that phoneme rather than before it, so the opening word comes out
-        # short and weak - weak enough to be heard as missing ("the voice starts at
-        # cartoon"; later, "The is skipped entirely"). Word-spaces ahead of the first
-        # token give the onset somewhere to happen that is not a word.
-        #
-        # HOW MANY was measured, against a criterion that does not depend on taste: the
-        # opening word should be no weaker than the SAME word later in the same sentence.
-        # Comparing token 0 against token 4 of "The spoon gone past the gills." - both
-        # "the" - over 8 runs each, which averages out the scatter of a stochastic
-        # duration predictor:
-        #
-        #   lead   initial "the"   duration vs mid   amplitude vs mid
-        #     0        76 ms            0.70              1.30
-        #     1        97 ms            0.91              0.67    <- was here
-        #     2       122 ms            1.06              0.95    <- parity on both axes
-        #     3       151 ms            1.28              1.18    <- overshoots, drawls
-        #
-        # One space fixed the DURATION and left the amplitude at two thirds, which is why
-        # the word kept being reported as dropped after the first attempt: it was the
-        # right diagnosis and half the dose. Two reaches parity on both axes. Three makes
-        # the opening word longer and louder than the same word mid-sentence, which reads
-        # as a drawl on the first syllable of every utterance. The cost is a few tens of
-        # ms of silence at the head, which the chunk seam was already providing anyway.
+        # Lead-in: the model's onset ramp lands on the first phoneme, so the opening word comes out short
+        # and weak. Word-spaces ahead of the first token give the onset somewhere to happen. Two reach
+        # parity with the same word mid-sentence on both axes (initial "the" over mid, at 0, 1, 2, 3 spaces:
+        # duration 0.70, 0.91, 1.06, 1.28; amplitude 1.30, 0.67, 0.95, 1.18); three overshoot and drawl.
+        # Cost: a few tens of ms of silence at the head, which the chunk seam provides anyway.
         out: list = [(" ", 0)] * LEAD_IN_SPACES
         for i, t in enumerate(tokens):
             if t.get("arpa"):
@@ -2820,14 +2372,11 @@ class PiperBackend(Backend):
         params: dict[str, Any],
         phonemes: Any = None,
     ) -> dict:
-        """Synthesize SENTENCE BY SENTENCE, joined with real silence.
+        """Synthesize sentence by sentence, joined with real silence.
 
-        A whole paragraph handed over as one utterance comes back rushed: the
-        model has no reason to breathe at a full stop it is in the middle of,
-        and the reported symptom was exactly that - "the sentences feel rushed,
-        like the model should have hesitated before starting a new one".
-        Splitting also keeps each inference short, which is what makes a
-        streaming path possible later.
+        A whole paragraph as one utterance comes back rushed: the model has no reason to breathe at a full
+        stop it is in the middle of. Splitting also keeps each inference short, which makes streaming
+        possible.
         """
         import numpy as np
 
@@ -2903,21 +2452,17 @@ class PiperBackend(Backend):
                 "them, which is what keeps eSpeak-NG (GPL) out of the build"
             )
 
-        # [BOS, PAD, id, PAD, ..., EOS]. Track which ids came from which input
-        # phoneme so the durations can be folded back into words later.
-        # ghost sends its own ARPAbet. Translating here rather than in Godot
-        # keeps the [K AE T] override working on this path and keeps eSpeak-NG
-        # out of the build entirely - see arpabet.py.
+        # [BOS, PAD, id, PAD, ..., EOS]. Track which ids came from which input phoneme so the durations can
+        # be folded back into words. ghost sends its own ARPAbet: translating here keeps the [K AE T]
+        # override working on this path and eSpeak-NG out of the build (see arpabet.py).
         import arpabet
 
         symbols = arpabet.to_symbols(list(phonemes))
 
-        # [BOS, PAD, id, PAD, id, PAD, ..., EOS] - the pad comes BEFORE each id
-        # and after the last one, per piper1-gpl docs/ALIGNMENTS.md. Emitting it
-        # AFTER instead drops the pad that follows BOS, which shifts the whole
-        # stream by one relative to what the model was trained on.
-        # (ghost's own ARPAbet carries no syllabic mark, so this is a no-op here -
-        # it runs for symmetry with the eSpeak path rather than because it fires.)
+        # [BOS, PAD, id, PAD, id, PAD, ..., EOS]: the pad comes before each id and after the last, per
+        # piper1-gpl docs/ALIGNMENTS.md (emitting it after drops the pad following BOS and shifts the stream
+        # by one). ghost's ARPAbet carries no syllabic mark, so this is a no-op here, kept for symmetry with
+        # the eSpeak path.
         symbols, _folded = self._fold_syllabic(symbols, pmap)
         ids: list[int] = [BOS]
         owner: list[int] = [-1]
@@ -2938,9 +2483,8 @@ class PiperBackend(Backend):
         owner.append(-1)
 
         if missing:
-            # Loud, not silent. A symbol absent from phoneme_id_map is dropped
-            # by the encoder without complaint, and that exact failure mode
-            # deleted every numeral from ghost's own front end for months.
+            # Loud, not silent: a symbol absent from phoneme_id_map is dropped by the encoder without
+            # complaint.
             raise BackendError(
                 "phonemes not in this voice's phoneme_id_map: "
                 + " ".join(sorted(set(missing))[:12])
@@ -2970,10 +2514,9 @@ class PiperBackend(Backend):
         if len(outputs) > 1:
             phone_times = self._durations(outputs[1], owner, phonemes, sample_rate)
 
-        # Mid-sentence marks arrive on this path as phones of their own (see
-        # arpabet.PUNCT_PASSTHROUGH), so each one already has a span to splice
-        # after. Needs the durations: without them there is no place to cut, and
-        # that is the same condition under which there are no subtitles either.
+        # Mid-sentence marks arrive on this path as phones of their own (see arpabet.PUNCT_PASSTHROUGH), so
+        # each has a span to splice after. Needs the durations; without them there is no place to cut, as
+        # there are no subtitles either.
         points, unplaceable = [], []
         for i, sym in enumerate(phonemes):
             mark = str(sym).strip()
@@ -3022,16 +2565,13 @@ class PiperBackend(Backend):
     ) -> dict:
         """Token path: sentence-split, phonemize, synthesize, join.
 
-        Tokens carry their own text, so the sentence split happens HERE on the
-        punctuation ghost already parsed, and the phonemizer sees whole words
-        with their boundaries intact.
+        Tokens carry their own text, so the sentence split happens here on the punctuation ghost already
+        parsed, and the phonemizer sees whole words with their boundaries intact.
 
-        TWO KINDS OF PAUSE, one table. A sentence-final mark ends a group and its
-        pause is the silence BETWEEN groups, exactly as before. Every other mark
-        (, ; :) stays inside its group - the sentence is synthesized whole and
-        the silence is spliced into the audio afterwards, so a comma never gets
-        the falling intonation of a sentence end. Both are `PAUSE_AFTER` seconds
-        times `pause_scale`.
+        Two kinds of pause, one table. A sentence-final mark ends a group and its pause is the silence
+        between groups. Every other mark (, ; :) stays inside its group: the sentence is synthesized whole
+        and the silence spliced in afterwards, so a comma never gets a sentence end's falling intonation.
+        Both are `PAUSE_AFTER` seconds times `pause_scale`.
         """
         import numpy as np
 
@@ -3049,18 +2589,17 @@ class PiperBackend(Backend):
         sr = int(cfg["audio"]["sample_rate"])
         chunks: list = []
         times: list = []
-        # EVERY SOUND WITH ITS TIME ({p, t0, t1, w}, `w` the token it is of): moved by everything the
-        # spans are moved by - the resample, the trimmed rests, the spliced pauses - so a mouth that
-        # follows them says what the take says.
+        # Every sound with its time ({p, t0, t1, w}, `w` the token it is of): moved by everything the spans
+        # are moved by (the resample, the trimmed rests, the spliced pauses), so a mouth that follows them
+        # says what the take says.
         phones: list = []
         cursor = 0.0
         base = 0
         plan = _discourse_plan(groups, params)
         for gi, group in enumerate(groups):
-            # THE SENTENCE'S OWN PROSODY. A pitch move is bought exactly the way the
-            # Tone shift buys one: render `pr` times slower, then play back `pr`
-            # times faster - so the sentence lands at its nominal duration and a
-            # higher register, and the two halves of the plan stay independent.
+            # The sentence's own prosody. A pitch move is bought as the Tone shift buys one: render `pr`
+            # times slower, play back `pr` times faster, so the sentence lands at its nominal duration and a
+            # higher register.
             step = plan[gi]
             pr = 2.0 ** (float(step["semis"]) / 12.0)
             gp = dict(params)
@@ -3090,12 +2629,10 @@ class PiperBackend(Backend):
             if self.trails:
                 audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses),
                                walk_back=self.trail_early, through=self.trail_through)
-            # SAY WHICH WORDS CAME BACK WITHOUT A SPAN. ghost keeps them in the karaoke line
-            # either way now (it interpolates their timing - see
-            # GenerativeEditor._bridge_words), but a token the aligner cannot place is a real
-            # fault: it means the phoneme stream carries nothing for that word, so it is very
-            # likely not being SPOKEN either. That is how a year went missing from a chapter
-            # render with nothing anywhere to show it.
+            # Say which words came back without a span. ghost keeps them in the karaoke line either way (it
+            # interpolates their timing; see GenerativeEditor._bridge_words), but a token the aligner cannot
+            # place means the phoneme stream carries nothing for that word, so it is likely not spoken
+            # either.
             unplaced = [
                 str(t.get("text", ""))
                 for ti, t in enumerate(group)
@@ -3108,19 +2645,16 @@ class PiperBackend(Backend):
                     file=sys.stderr,
                 )
             audio = _effort(audio, sr, float(step["tilt"]), float(step["gain_db"]))
-            # THE SOURCE, if this reading wants a different one. Before the pitch
-            # move rather than after, because a whisper has no pitch to move and
-            # doing it the other way round would spend the work twice.
+            # The source, if this reading wants a different one. Before the pitch move because a whisper has
+            # no pitch to move and the other order spends the work twice.
             audio = _whisper(audio, sr, float(params.get("whisper", 0.0)))
             audio = _muffle(audio, sr, float(params.get("muffle", 0.0)))
             if abs(pr - 1.0) > 1e-4:
-                # THE RATIO IS MEASURED, NOT ASSUMED. Playing back by exactly `pr` is what
-                # tilted the pace across every paragraph; playing back by the ratio between
-                # what this sentence actually rendered to and what it would have rendered to
-                # unshifted lands the timing exactly, whatever the voice did with the length
-                # scale. The pitch then moves by that same measured ratio rather than by the
-                # nominal one, which is a few percent either way of what was asked for and
-                # is the half of this trade nobody can hear.
+                # The ratio is measured, not assumed: playing back by exactly `pr` tilts the pace across a
+                # paragraph; playing back by the ratio between what this sentence rendered to and what it
+                # would have unshifted lands the timing exactly, whatever the voice did with the length
+                # scale. The pitch then moves by that measured ratio, a few percent off what was asked,
+                # which nobody can hear.
                 nominal = self._nominal(
                     self._last_frames, _pitch_length(pr), sr, self._last_floor
                 )
@@ -3128,17 +2662,14 @@ class PiperBackend(Backend):
                 ratio = pr
                 if nominal > 0.05 and played > 0.05:
                     ratio = played / nominal
-                    # A guard, not a tuning: a mis-shaped frame plan must not be able to
-                    # halve or double a sentence. Outside this the nominal figure is not
-                    # believable and the requested move is the better answer.
+                    # A guard, not a tuning: a mis-shaped frame plan must not halve or double a sentence.
                     if ratio < pr * 0.6 or ratio > pr * 1.6:
                         ratio = pr
                 pr = ratio
                 shifted = _resample(audio, pr)
-                # ...AND THE FILTER HELD STILL WHILE THE SOURCE MOVES. Default on:
-                # the arc is a change of REGISTER, and a register change that also
-                # changes how big the speaker is was the bug. `formant_lock` = 0
-                # restores the old behavior, which is what the gate A/Bs against.
+                # ...and the filter held still while the source moves (default on): the arc changes
+                # register, and a register change must not change how big the speaker is. `formant_lock` = 0
+                # disables it, for the gate's A/B.
                 if float(params.get("formant_lock", 1.0)) > 0.5:
                     shifted = _restore_formants(shifted, audio, pr, sr)
                 audio = shifted
@@ -3149,10 +2680,9 @@ class PiperBackend(Backend):
                 group_rests = [(a / pr, b / pr, w) for a, b, w in group_rests]
                 edges = {k: (a / pr, b / pr) for k, (a, b) in edges.items()}
                 frame /= pr
-            # A REST NOBODY ASKED FOR, shortened before the ones that were asked for are
-            # put in. Unmarked boundaries only: a mark's rest belongs to `_splice_pauses`
-            # and to the Pause dial, and this must never be caught arguing with either -
-            # and a rest the caller splices in after a word is asked for too.
+            # A rest nobody asked for, shortened before the ones that were asked for are put in. Unmarked
+            # boundaries only: a mark's rest belongs to `_splice_pauses` and the Pause dial, and so does a
+            # rest the caller splices in after a word.
             audio, cut = _trim_rests(
                 audio,
                 [
@@ -3188,10 +2718,9 @@ class PiperBackend(Backend):
                     continue  # . ! ? are the gap between groups, below
                 if ti in per_token:
                     nxt = per_token.get(ti + 1)
-                    # (mark's token end, top-up, next token start, the table's dwell): the
-                    # splicer measures what the model already rests there and tops it up to
-                    # the target - see `_rest_from`, the mark's share of it `_tail_share`'s.
-                    # The window is where the cut may go.
+                    # (mark's token end, top-up, next token start, the table's dwell): the splicer measures
+                    # what the model already rests there and tops it up to the target (see `_rest_from`; the
+                    # mark's share is `_tail_share`'s). The window is where the cut may go.
                     share = _tail_share(group, ti)
                     point = (
                         float(per_token[ti][1]),
@@ -3207,11 +2736,10 @@ class PiperBackend(Backend):
             audio, inserted = _splice_pauses(
                 audio, points, sr, _pause_multiplier(params)
             )
-            # WHERE A REST AFTER EACH WORD GOES - ghost splices its hesitations and action
-            # holds there (Splice.chunk). The same window as a mark's, searched in the
-            # finished audio, so after a mark or a floored rest (`REST_AFTER_FLOOR`) it is
-            # the middle of the silence already there - and where no mark rests, that
-            # silence is the caller's rest begun, said on the row as `rested`.
+            # Where a rest after each word goes: ghost splices its hesitations and action holds there
+            # (Splice.chunk). The same window as a mark's, searched in the finished audio: after a mark or a
+            # floored rest (`REST_AFTER_FLOOR`) it is the middle of the silence already there, and where no
+            # mark rests it is the caller's rest begun, said on the row as `rested`.
             rests, rested = {}, {}
             quiet = SPLICE_QUIET * float(np.max(np.abs(audio))) if audio.size else 0.0
             for ti in per_token:
@@ -3257,10 +2785,9 @@ class PiperBackend(Backend):
                     chunks.append(np.zeros(pad, dtype=np.float32))
                     cursor += pad / sr
         joined = np.concatenate(chunks) if chunks else np.zeros(1, dtype=np.float32)
-        # THE TONE, played back here rather than in the editor: the same render-slower,
-        # play-faster trade as the arc, through the same band-limited resampler (the editor's
-        # was linear, the arc's too - see `_resample`). Every time handed back is in the
-        # played audio's own seconds, so the editor has no ratio left to apply.
+        # The Tone, played back here rather than in the editor: the same render-slower, play-faster trade as
+        # the arc, through the same band-limited resampler (see `_resample`). Every time handed back is in
+        # the played audio's own seconds, so the editor has no ratio left to apply.
         played = float(params.get("play_ratio", 1.0) or 1.0)
         if abs(played - 1.0) > 1e-4 and joined.size > 1:
             joined = _resample(joined, played)
@@ -3302,21 +2829,16 @@ class PiperBackend(Backend):
     def _fold_syllabic(symbols: list, pmap: dict) -> tuple[list, bool]:
         """Rewrite syllabic consonants this voice cannot spell as schwa + consonant.
 
-        The mark FOLLOWS its base in the stream, so the schwa is inserted one place
-        back - `[.., ("n", i), ("\u0329", i)]` becomes `[.., ("\u0259", i), ("n", i)]`.
-        The inserted symbol keeps the base's source index, so per-token alignment (and
-        the karaoke timing built on it) is unaffected.
+        The mark follows its base in the stream, so the schwa is inserted one place back: `[.., ("n", i),
+        ("̩", i)]` becomes `[.., ("ə", i), ("n", i)]`. The inserted symbol keeps the base's source index, so
+        per-token alignment is unaffected.
 
-        A no-op on the four voices whose maps do carry U+0329, and on any voice that
-        somehow lacks a schwa there is nothing better to do than fall through to the
-        existing drop.
+        A no-op on voices whose maps carry U+0329, and on a voice that lacks a schwa (it falls through to
+        the existing drop).
         """
-        # LOOK AT THE STREAM BEFORE LOOKING AT THE MAP. Two reasons, and the second is
-        # the one that matters: most utterances contain no syllabic mark at all, so
-        # probing is wasted work - and a phoneme_id_map is not always an inert dict.
-        # The test harness's stand-in ALLOCATES AN ID on first lookup, so probing it for
-        # two symbols that never appear silently shifted every subsequent id by two and
-        # changed the synthesized audio. Cheap early-out, no side effects.
+        # Look at the stream before the map: most utterances contain no syllabic mark, so probing is wasted
+        # work, and a phoneme_id_map is not always an inert dict (the test harness's stand-in allocates an
+        # id on first lookup, which shifted every later id). Cheap early-out, no side effects.
         if not any(sym == SYLLABIC for sym, _ in symbols):
             return symbols, False
         # .get() rather than `in`: that same stand-in supports lookup but not membership.
@@ -3329,9 +2851,8 @@ class PiperBackend(Backend):
                 if out:
                     out.insert(len(out) - 1, (SCHWA, out[-1][1]))
                     folded = True
-                # A mark with nothing in front of it has no base to be syllabic ON, so
-                # it is discarded rather than turned into a stray leading schwa - which
-                # would be an invented vowel at the head of the utterance.
+                # A mark with nothing in front of it has no base to be syllabic on: discarded rather than
+                # turned into an invented leading schwa.
                 continue
             out.append((sym, src))
         return out, folded
@@ -3341,21 +2862,18 @@ class PiperBackend(Backend):
     ):
         """One sentence: symbols -> ids -> audio, plus per-token time spans."""
         espeak_voice = str(cfg.get("espeak", {}).get("voice", "en-us"))
-        # Word by word, a homograph has no syntax to be read by, so eSpeak gives
-        # its default reading every time - "he read the book" came out present
-        # tense. Ask it again in a frame that forces the part of speech, and only
-        # where the answer actually changes. See homographs.py; a no-op if nltk
-        # is not installed. English only, because the carrier frames and the
-        # tagger both are.
+        # Word by word a homograph has no syntax to be read by, so eSpeak gives its default reading every
+        # time. Ask again in a frame that forces the part of speech, only where the answer changes
+        # (homographs.py; a no-op if nltk is not installed). English only, as the carrier frames and the
+        # tagger are.
         if phonemizer == "espeak" and espeak_voice.split("-")[0] in ("en", ""):
             self._homographs.annotate(group, espeak_voice)
             # ...and a word eSpeak is only guessing at, read as a dictionary has it, its full
             # vowels stressed (lexicon.py; `lexicon` is the request's: fetch, cache or off)
             self._lexicon.annotate(group, espeak_voice, str(params.get("lexicon", "off")),
                                    cfg.get("phoneme_id_map", {}))
-        # The reading is then written in the spelling this checkpoint was measured
-        # to render correctly - see `_load`, which is where that measurement happens,
-        # and vowel_probe.py for what it is measuring.
+        # The reading is then written in the spelling this checkpoint was measured to render correctly (see
+        # `_load` and vowel_probe.py).
         symbols = self._symbols(group, phonemizer, espeak_voice, voice)
         floors = {ti: _floor_of(t, params, _tail_share(group, ti)) for ti, t in enumerate(group)}
         stretch = {
@@ -3386,20 +2904,17 @@ class PiperBackend(Backend):
     ):
         """(symbol, source) pairs -> audio, plus a time span per source.
 
-        Split out of `_run` so the vowel probe can render a phoneme string it built
-        itself and get spans back keyed to single SYMBOLS rather than to words - a
-        vowel is a symbol, and there is no other way to measure one. Nothing here
-        interprets the source index; it is carried through and handed back.
+        Split out of `_run` so the vowel probe can render a phoneme string it built itself and get spans
+        keyed to single symbols rather than words. Nothing here interprets the source index; it is carried
+        through and handed back.
 
-        `floors` is {source: seconds} of rest the model renders on the word-space that ends
-        that source (`_floor_of`), fed to the graph when it takes one.
-
-        `stretch` is {source: multiplier} on that source's stressed vowel (`EMPHASIS`), and
-        `opening` the seconds the first word's vowel may not fall below (`OPENING_VOWEL`),
-        at the request's length scale. `hold` is {source: multiplier} on that source's final
-        rime (`TRAIL_STRETCH`), multiplied with the stress where the two meet. All act on the
-        duration plan, through the graph's inputs; a graph without them renders as it always
-        did. The vowel probe passes none - it measures vowels, and must get the model's own.
+        `floors` is {source: seconds} of rest the model renders on the word-space that ends that source
+        (`_floor_of`), fed to the graph when it takes one. `stretch` is {source: multiplier} on that
+        source's stressed vowel (`EMPHASIS`), `opening` the seconds the first word's vowel may not fall
+        below (`OPENING_VOWEL`) at the request's length scale, and `hold` {source: multiplier} on that
+        source's final rime (`TRAIL_STRETCH`), multiplied with the stress where the two meet. All act on the
+        duration plan through the graph's inputs; a graph without them renders as before. The vowel probe
+        passes none: it must get the model's own vowels.
         """
         import numpy as np
 
@@ -3407,9 +2922,8 @@ class PiperBackend(Backend):
         frame_s = HOP_LENGTH / float(cfg["audio"]["sample_rate"])
         # eSpeak is where U+0329 comes from, so this is the call that matters.
         symbols, folded = self._fold_syllabic(symbols, pmap)
-        # THE NUCLEUS of each source: the vowel run after its primary stress, or its first
-        # vowel run where it has no stress mark. What a stretch lengthens and what the
-        # opening floor holds up.
+        # The nucleus of each source: the vowel run after its primary stress, or its first vowel run. What a
+        # stretch lengthens and the opening floor holds up.
         nucleus = _nuclei(symbols)
         rime = _final_rimes(symbols, set(hold)) if hold else set()
         first = next(
@@ -3428,22 +2942,19 @@ class PiperBackend(Backend):
         )
         ids: list[int] = [BOS]
         owner: list[int] = [-1]
-        # WHICH SYMBOL each id says, by its place in `symbols` (-1 for BOS, the pads and EOS): the
-        # phones handed back with their times (`_last_phones`), which a likeness's mouth follows
-        # (next/likeness.md, "The voice").
+        # Which symbol each id says, by its place in `symbols` (-1 for BOS, the pads and EOS): the phones
+        # handed back with their times (`_last_phones`), which a likeness's mouth follows (next/likeness.md,
+        # "The voice").
         said_by: list[int] = [-1]
         missing: list[str] = []
-        # Which ids are the REST between two words - the blanks and the word-space
-        # itself. `_trim_rests` needs to know where a boundary rest starts and stops,
-        # and the id stream is the only place that is written down: a token's span
-        # runs to the end of its own trailing space, so the rest is split between two
-        # spans and cannot be recovered from them afterwards. -1 = not a rest, else the
+        # Which ids are the rest between two words (the blanks and the word-space). `_trim_rests` needs
+        # where a boundary rest starts and stops, and only the id stream says: a token's span runs to the
+        # end of its own trailing space, so the rest is split between two spans. -1 = not a rest, else the
         # index of the token whose word-space this run carries.
         rest_of: list[int] = [-2]
-        # Which ids are a word's own SOUNDS, as opposed to blanks, word-spaces and
-        # punctuation: a pause is cut between the last of one word's and the first of the
-        # next's (`_gap_window`), because a token's span runs on through its mark and its
-        # space and the next span starts the moment it ends.
+        # Which ids are a word's own sounds, not blanks, word-spaces or punctuation: a pause is cut between
+        # the last of one word's and the first of the next's (`_gap_window`), since a token's span runs on
+        # through its mark and space.
         sound: list[bool] = [False]
         # Frames each id's duration may not fall below - nonzero only on the word-space
         # that ends a source with a floor (`_floor_of`: its mark's, or a rest the caller
@@ -3451,8 +2962,8 @@ class PiperBackend(Backend):
         floor: list[float] = [0.0]
         # The multiplier on each id's predicted duration - 1 everywhere but a leaned-on vowel.
         scale: list[float] = [1.0]
-        # THE WORD-SPACE THAT ENDS EACH SOURCE - its last symbol, after its mark if it has one, never
-        # a space inside it (a hyphen's) - is where its rest is floored
+        # The word-space that ends each source (its last symbol, after its mark if it has one, never a space
+        # inside it) is where its rest is floored.
         ends = {src: j for j, (_sym, src) in enumerate(symbols)}
         opened = False  # the opening floor goes on the first id of the first nucleus only
         for j, (sym, src) in enumerate(symbols):
@@ -3520,17 +3031,10 @@ class PiperBackend(Backend):
                 file=sys.stderr,
             )
         if missing:
-            # DROP, do not fail. eSpeak emits marks that a given voice's map may
-            # not carry, and raising costs the whole request - which is how a
-            # cosmetic gap once became "request failed" and stopped playback dead.
-            #
-            # The one that actually mattered, U+0329, is no longer dropped at all;
-            # it is rewritten above (see the SYLLABIC constant). Anything still
-            # landing here is genuinely unhandled, so say so plainly rather than
-            # describing it as a nuance.
-            #
-            # Reported once per symbol per process, to stderr, which ghost now
-            # echoes to the terminal - visible without being fatal.
+            # Drop, do not fail: eSpeak emits marks a voice's map may not carry, and raising costs the whole
+            # request. Anything landing here is genuinely unhandled (U+0329 is rewritten above; see
+            # SYLLABIC). Reported once per symbol per process, to stderr, which ghost echoes to the
+            # terminal.
             for sym in sorted(set(missing)):
                 if sym in self._warned_symbols:
                     continue
@@ -3567,10 +3071,9 @@ class PiperBackend(Backend):
         audio = np.asarray(out[0]).squeeze().astype(np.float32)
 
         spans: dict = {}
-        # THE DURATION PLAN, kept: `_nominal_seconds` needs it, and the floor it was given,
-        # to undo what a per-sentence length_scale does to the timing. Stashed rather than
-        # returned because the vowel probe renders through this same function and unpacks
-        # a pair.
+        # The duration plan, kept: `_nominal_seconds` needs it, and the floor it was given, to undo what a
+        # per-sentence length_scale does to the timing. Stashed rather than returned because the vowel probe
+        # renders through this function and unpacks a pair.
         self._last_frames = None
         self._last_floor = None
         # [(t0, t1, token index)] for every run of blanks carrying a word-space, in the
@@ -3608,10 +3111,8 @@ class PiperBackend(Backend):
                         e = said.get(by)
                         said[by] = (t if e is None else e[0], t + dur)
                     if rest == -2:
-                        # A rest is only a rest when speech stands on BOTH sides of it.
-                        # The lead-in (see LEAD_IN_SPACES) and the utterance's own tail
-                        # are neither, and shortening either would be undoing something
-                        # this file asked for on purpose.
+                        # A rest is only a rest when speech stands on both sides of it: the lead-in (see
+                        # LEAD_IN_SPACES) and the utterance's tail are neither.
                         if run_of >= 0 and spoke and who >= 0:
                             self._last_rests.append((run_at, t, run_of))
                         spoke = spoke or who >= 0
@@ -3642,14 +3143,10 @@ class PiperBackend(Backend):
     ) -> list[dict]:
         """Per-phoneme boundaries from the VITS duration predictor.
 
-        `w_ceil` is the ceiling of the stochastic duration predictor, one entry
-        per phoneme id including pads and BOS/EOS, in frames. Multiply by the
-        hop length for samples. This is the plan the synthesizer actually used,
-        so it is exact - strictly better than running a second forced-alignment
-        model, and free.
-
-        Only present when the voice's ONNX has been patched to expose it (see
-        patch_alignment.py). Absent is fine; timings are then unavailable.
+        `w_ceil` is the ceiling of the stochastic duration predictor, one entry per phoneme id including
+        pads and BOS/EOS, in frames; multiply by the hop length for samples. This is the plan the
+        synthesizer used, so it is exact. Only present when the voice's ONNX has been patched to expose it
+        (see patch_alignment.py); otherwise timings are unavailable.
         """
         import numpy as np
 

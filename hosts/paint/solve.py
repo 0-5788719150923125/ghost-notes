@@ -54,7 +54,7 @@ class Painter:
         labs = [oklab(dec(c)) for c in cols]
         for i in range(len(names)):
             for j in range(i + 1, len(names)):
-                # (...NEVER TWO COLORS FROM ACROSS THE WHEEL: a painter does not mix red into teal - it makes mud, and a teal picked as
+                # (...Never two colors from across the wheel: a painter does not mix red into teal - it makes mud, and a teal picked as
                 # the nearest to a dull teal had come out a grey-brown bruise)
                 ci, cj = np.hypot(*labs[i][1:]), np.hypot(*labs[j][1:])
                 if ci > 4.0 and cj > 4.0:
@@ -128,14 +128,14 @@ class Painter:
         """Mark `m` weighed against `target` and laid if it brings it at least `least` (mm^2 x OKLab) nearer; the hand's time spent."""
         if m is None:
             return False
-        # WHAT THE HAND KEEPS ITS MARKS OUT OF (`keep_out`, a mask of the canvas, while set): a careful edge, cut in - the mark's paint
-        # stops at it (feedback 0005: a spill's cleanup reached into the eye it spilled from and lightened its makeup)
+        # What the hand keeps its marks out of (`keep_out`, a mask of the canvas, while set): a careful edge, cut in - the mark's paint
+        # stops at it
         keep = getattr(self, "keep_out", None)
         if keep is not None and keep[m.sl].any():
             k = keep[m.sl]
             m.pre = np.where(k[..., None], self.cv.pre[m.sl], m.pre)
             m.alp = np.where(k, self.cv.alp[m.sl], m.alp)
-        # A MARK THAT CHANGES NOTHING IS NEVER MADE (feedback 0020: a fat brush's pulls run over the white, moving nothing - time spent and a
+        # A mark that changes nothing is never made (a fat brush's pulls run over the white, moving nothing - time spent and a
         # tool seen working for nothing)
         if np.abs(m.pre - self.cv.pre[m.sl]).max() < NOTHING and np.abs(m.alp - self.cv.alp[m.sl]).max() < NOTHING:
             return False
@@ -174,7 +174,7 @@ class Painter:
     def foundation(self):
         """THE GROUND: the paint nearest the whole picture, patted on row by row, then pressed again wherever it is still thin."""
         face = self.ref.face
-        # (...THE GROUND IS THE FACE'S LARGEST AREA'S PAINT, never the paint nearest it all on average: on a white face half rusted that
+        # (...The ground is the face's largest area's paint, never the paint nearest it all on average: on a white face half rusted that
         # had been the rust, the whole face brown)
         if not hasattr(self, "labels"):
             self.plan_regions()
@@ -535,7 +535,7 @@ class Painter:
                 M = comps[bx] == i + 1
                 if M.sum() < self.AREA_LEAST * PX * PX:
                     continue
-                # (...LAID UNDER WHAT IS DARKER INSIDE IT: an area takes in the darker areas it encloses, painted over it after - a
+                # (...Laid under what is darker inside it: an area takes in the darker areas it encloses, painted over it after - a
                 # gradient laid as a painter lays it, each darker tone over a smaller area, never as rings filled one by one)
                 inner = ndimage.binary_fill_holes(M) & ~M
                 lab_in = self.labels[bx]
@@ -600,7 +600,7 @@ class Painter:
         self.hand.take(tool)
         self.hand.need(name)
         oy, ox = bx[0].start, bx[1].start
-        # (...ALONG ITS CONTOURS, from just inside its edge inward, as a painter cuts in an edge and works in - one long axis had cut a
+        # (...Along its contours, from just inside its edge inward, as a painter cuts in an edge and works in - one long axis had cut a
         # ring or a band across into dashes; a blob's middle line branched out to its ragged edge)
         dtp = dt * PX
         first = min(hw * 0.85, thick * 0.5)

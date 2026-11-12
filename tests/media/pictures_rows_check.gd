@@ -5,12 +5,11 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/media/pictures_rows_check.gd
 ##
-## A ROW A PICTURE, ITS WORDS ITS NAME, not made until it is; with more than one, ALL OF THEM AGAIN IS A ROW OF ITS OWN and it asks
-## what it costs, where it had been a button of the panel's (THE CONTROL: a chapter of one picture has no such row). A row's ⟳
-## starts at once: its own earlier versions are kept, so it throws nothing away. LISTED WHILE THE PANEL IS SHOWN (a Picture
-## card shows it under the media that print a reading - THE CONTROL: hidden, no section) and its text calls for any. What it is
-## missing is what Generate makes; a page is captured, never painted, so a page alone is missing nothing Generate paints.
-## STOP STOPS THEM (the card's Stop says so): this chapter's out of the line, and no other's (THE CONTROL).
+## A row a picture, its words its name, not made until it is. With more than one picture, "all of them again" is a
+## row of its own and asks what it costs (control: a chapter of one picture has no such row). A row's ⟳ starts at
+## once, since its earlier versions are kept. Listed while the panel is shown (a Picture card shows it under the media
+## that print a reading; control: hidden, no section) and its text calls for any. What is missing is what Generate
+## makes; a page is captured, never painted. Stop stops them: this chapter's out of the line, and no other's (control).
 
 var _fails := 0
 
@@ -41,7 +40,7 @@ func _run() -> void:
 	_ok(rows[1].state == "missing" and rows[1].asks.is_empty() and rows[1].again == "Paint this picture." and rows[1].open,
 		"a picture not made: says so, and starts at once")
 	_ok(section.missing() and not section.busy(), "what is missing is what Generate makes")
-	# STOP STOPS THEM: the Pipeline card's Stop says it does
+	# Stop stops them: the Pipeline card's Stop says it does
 	var first_key: String = rows[1].key
 	var second_key: String = rows[2].key
 	lib._queue.append({"key": first_key, "prompt": "A harbor at dawn.", "placement": "inline"})

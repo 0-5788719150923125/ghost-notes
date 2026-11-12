@@ -1,22 +1,16 @@
 extends Node
 
-## settings_check - that a setting written through the app's own API is actually on disk,
-## including when the process is KILLED rather than quit.
+## settings_check - that a setting written through the app's own API is actually on disk, including when the
+## process is killed rather than quit.
 ##
 ## Run: tests/run_boot_probe.sh tests/platform/settings_check.gd 90
 ##
-## THE COMPLAINT: "Medium and some of the other options are not serializing correctly.
-## This happens a lot." Every previous mechanism here saved on a debounce and flushed at
-## exit, which covers a clean quit and nothing else - and the failure is silent, so the only
-## way it ever surfaced was someone noticing a setting had reverted.
-##
-## Three things are checked, and the third is the one that used to be untrue:
+## Checked:
 ##   1. a write reaches the file at all, through the ordinary debounce;
 ##   2. a value written and immediately re-read comes back, before any flush;
-##   3. a write survives with NO clean shutdown - Settings.MAX_DIRTY_MS bounds how long a
-##      change may sit unwritten, so a kill can cost seconds and not a session.
-## And that a render subprocess CANNOT write, which is the other half of settings going
-## missing: two ghosts against one file, last one out wins.
+##   3. a write survives with no clean shutdown - Settings.MAX_DIRTY_MS bounds how long a change may sit
+##      unwritten;
+## and that a render subprocess cannot write.
 
 var _fails: Array = []
 var _restore := {}
@@ -27,11 +21,10 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	# A probe is read-only by default (see Settings._ready) precisely so gates cannot edit
-	# the config of whoever runs them. This gate is the exception, because persistence is
-	# the thing under test - and it still puts back everything it touches.
+	# A probe is read-only by default (see Settings._ready); this gate is the exception because persistence is under
+	# test.
 	Settings.allow_writes_for_test()
-	# Everything this touches is put back at the end - it is the user's real config.
+	# Everything this touches is put back at the end (it is the user's real config).
 	for k in ["pacing", "flourish", "camera", "medium"]:
 		_restore[k] = Settings.read("director", k, null)
 
@@ -45,10 +38,7 @@ func _run() -> void:
 	if not is_equal_approx(_on_disk("pacing", 0.0), 3.14):
 		_fail("flush() did not reach the file")
 
-	# 3. THE KILL CASE. Write, never flush, and wait out MAX_DIRTY_MS: the periodic write
-	# must land on its own. Before Settings this was simply lost - every mechanism waited
-	# for quiet or for exit, and a drag that never goes quiet in a process that is killed
-	# reaches neither.
+	# 3. The kill case: write, never flush, and wait out MAX_DIRTY_MS; the periodic write must land on its own.
 	Settings.write("director", "flourish", 2.5)
 	var t0 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < Settings.MAX_DIRTY_MS + 600:
@@ -72,18 +62,9 @@ func _run() -> void:
 	if not is_equal_approx(_on_disk("camera", 0.0), 1.75):
 		_fail("Director.set_camera did not persist")
 
-	# 5. A CONTAINER SETTING IS NOT SHARED WITH THE CONFIG, in either direction.
-	#
-	# Reported as "I keep restarting and losing my settings. Sometimes filters are toggled off,
-	# sometimes their values are reset, it's not consistent between restarts" - and the
-	# inconsistency is the tell. A Dictionary is a REFERENCE in GDScript and ConfigFile keeps
-	# the reference it is given, so a live dictionary the app goes on mutating IS the config's
-	# copy; `write`'s no-op guard then compares it with itself, finds no change, and never marks
-	# the file dirty. The setting reaches the disk only when some OTHER write happens to carry
-	# the file there in the same breath, which is why it survived some restarts and not others.
-	#
-	# Everything below fails on that build and passes on this one, which is what makes it a
-	# check rather than a demonstration.
+	# 5. A container setting is not shared with the config, in either direction. A Dictionary is a reference and
+	# ConfigFile keeps the reference it is given, so `write`'s no-op guard would compare a live dictionary with
+	# itself and never mark the file dirty. Everything below must fail on an aliasing build.
 	_restore["filters"] = Settings.read("director", "filters", null)
 	var live := {"monochrome": 1.0}
 	Settings.write("director", "filters", live)
@@ -132,8 +113,7 @@ func _run() -> void:
 	var writers := _writers()
 	if writers > 0:
 		_fail("%d script(s) still open the config themselves" % writers)
-	# NOT VACUOUS: the scan must have read the source. After the move to ghost-notes it was still
-	# pointed at res://scripts, found no files, and passed.
+	# Not vacuous: the scan must have read the source (an empty file list would pass).
 	if _gd_files("res://src").size() < 50:
 		_fail("the writer scan read only %d scripts under res://src" % _gd_files("res://src").size())
 
@@ -161,8 +141,7 @@ func _on_disk_dict(key: String) -> Dictionary:
 	return v as Dictionary if v is Dictionary else {}
 
 
-## Read the file FRESH off the disk - never Settings' own copy, which would pass whether
-## anything was written or not.
+## Read the file fresh off the disk, never Settings' own copy, which would pass whether or not anything was written.
 func _on_disk(key: String, dflt: float) -> float:
 	var cfg := ConfigFile.new()
 	if cfg.load(Settings.PATH) != OK:
@@ -177,17 +156,14 @@ func _on_disk_str(key: String, dflt: String) -> String:
 	return String(cfg.get_value("director", key, dflt))
 
 
-## How many scripts still open the config themselves. The same rule docs.py enforces, kept
-## here too so a run of the gates catches it without regenerating the documentation.
+## How many scripts still open the config themselves (the rule docs.py enforces too).
 func _writers() -> int:
 	var n := 0
 	for f in _gd_files("res://src"):
 		if f.get_file() == "settings.gd" or f.get_file().contains("mask"):
 			continue
 		var t := FileAccess.get_file_as_string(f)
-		# The PATH must be matched as a string LITERAL, quotes and all - half these files
-		# name the file in a doc comment explaining who owns it, and a check that cannot
-		# tell prose from code fails on its own documentation.
+		# The PATH must be matched as a string literal, quotes and all: doc comments name the file too.
 		if t.contains("ConfigFile.new()") or t.contains("\"user://ghost.cfg\""):
 			print("settings_check:   direct writer: %s" % f)
 			n += 1

@@ -2,8 +2,6 @@ extends RefCounted
 class_name Geo
 
 ## Geo - small reusable polygon helpers (area, centroid, convex split, fracture, footprints).
-## Shared geometry, not a scene's private code - the fracture that shatters glass
-## can shatter anything.
 
 
 static func area(poly: PackedVector2Array) -> float:
@@ -79,8 +77,7 @@ static func fracture(base: PackedVector2Array, count: int, impact: Vector2, jitt
 	return shards
 
 
-# FOOTPRINTS: convex outlines on a plane (a thing's foot on a table, x by z), as the card table
-# stands its things and moves its cards round them.
+# Footprints: convex outlines on a plane (a thing's foot on a table, x by z), as the table stands its things and moves its cards round them.
 
 
 ## [param poly]'s bounding rectangle.

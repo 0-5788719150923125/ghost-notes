@@ -297,7 +297,7 @@ def test_emphasis_gain():
         True,
         "no mark: the same array back",
     )
-    # BOLD HITS HARDER THAN ITALIC, in level as in length
+    # Bold hits harder than italic, in level as in length
     bold = _emphasize(a, edges, [{"text": "a"}, {"text": "b", "emph": 2}], SR)
     ok(
         float(bold[int(0.5 * SR)]) > float(out[int(0.5 * SR)]) + 0.01
@@ -305,7 +305,7 @@ def test_emphasis_gain():
         "bold is lifted and held more than italic",
         "%.3f against %.3f" % (float(bold[int(0.5 * SR)]), float(out[int(0.5 * SR)])),
     )
-    # A LOUD WORD IS NOT SQUARED OFF: lifted by the room it has, never into the clip. The
+    # A loud word is not squared off: lifted by the room it has, never into the clip. The
     # control is the quiet word above, which got its whole lift.
     from backends.piper import EMPHASIS_CEILING
 

@@ -4,28 +4,22 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/reading/reader_browser_check.gd 120
 ##
-## WHAT IT HOLDS (2026-11-11, the user: "instead of selecting just a single model, we have boolean toggles for each
-## one. If we select 2 or more of the available models, then they will be blended"; "I hate having to close that
-## screen, to test voices"). A stand-in voice host lists a voice whose readers blend (Kokoro's) and one whose do not
-## (libritts), and the gate holds that:
+## Holds, with a stand-in voice host that lists a voice whose readers blend (Kokoro's) and one whose do not (libritts):
 ##
-## - on the blending voice every reader is a tick, what the tab reads in ticked; a second tick is a blend on the tab
-##   ([VoiceBlend]), its first reader the Speaker number, and every request the host is asked carries it - under a
-##   take key of its own;
-## - a weight, the method and the accent reach the line; Sound and delivery gives the first reader the sound and the
-##   rest the delivery, and a part is the reader's own;
-## - unticking back to one reader is that reader alone; the last tick comes off too (2026-11-11, the user: "it should
-##   be possible to select 0 options ... the current version requires backtracking"): nothing ticked, the tab reads on
-##   in what it had, Test waits for a tick, and the next tick is that reader alone;
+## - on the blending voice every reader is a tick, what the tab reads in ticked; a second tick is a blend on the
+##   tab ([VoiceBlend]), its first reader the Speaker number, and every request carries it under a take key of its own;
+## - a weight, the method and the accent reach the line; Sound and delivery gives the first reader the sound and
+##   the rest the delivery, and a part is the reader's own;
+## - unticking back to one reader is that reader alone; the last tick comes off too: nothing ticked, the tab reads
+##   on in what it had, Test waits for a tick, and the next tick is that reader alone;
 ## - the browser opened again shows the blend ticked, and the line under the Speaker row says it;
 ## - Test at the top asks the host for the passage in the blend, both Test buttons say so, a press while it plays
-##   ALWAYS stops it - a blend changed meanwhile too (2026-11-11, the user: "ensure that we always stop before we
-##   allow the Test button to be started for playback again") - and the next press reads the new blend;
+##   always stops it (a blend changed meanwhile too), and the next press reads the new blend;
 ## - stepping the Speaker number by hand, or picking another voice, ends the blend.
 ##
-## THE CONTROLS: nothing ticked never reaches the tab (its reader and blend stay as they were); on the voice whose
-## readers do not blend there are no ticks and a row picks; a blend left on a slot
-## whose voice does not blend is never sent; a request with no blend has no `blend` and keeps the key it had.
+## Controls: nothing ticked never reaches the tab (its reader and blend stay as they were); on the voice whose
+## readers do not blend there are no ticks and a row picks; a blend left on a slot whose voice does not blend is
+## never sent; a request with no blend has no `blend` and keeps the key it had.
 ##
 ## The panel is built by hand and never added to the tree (its `_ready` starts the python voice host); the popup is
 ## the panel's child, so it is out of the tree too - its controls are driven, never clicked.

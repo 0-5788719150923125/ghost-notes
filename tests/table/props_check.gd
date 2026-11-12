@@ -1,56 +1,35 @@
 extends SceneTree
 
-## props_check - THE SHAPES A THING IS BUILT FROM ([Props]): how a profile or a path is drawn, the
-## loft, the coil and the warp, held to what they say they make. Built headless (meshes only).
+## The gate of the shapes a thing is built from ([Props]): how a profile or a path is drawn, the loft, the coil and the warp, held
+## to what they say they make. Built headless (meshes only).
 ##
 ##   godot --headless --path . --script tests/table/props_check.gd
 ##
-## - A FLAT BASE AND A FLAT TOP STAY FLAT in a smooth profile: a set dresser's teapot, as written,
-##   neither sags below the cloth nor domes above its top - the control, the same points curved
-##   through with no corners kept, does both (the bulbous pot it was).
-## - A CORNER IS WHERE IT IS WRITTEN: [r, h, 0] is a crisp corner in a smooth profile, and the same
-##   point without its 0 is not.
-## - A ROUNDED ELBOW: a path point written with a rounding passes beside its corner, an arc away -
-##   the same point unrounded passes through it.
-## - A KINK KEEPS ITS WIDTH: every point of a rod bent square lies a radius from its path - the
-##   control, a ring laid square to the bend and not stretched, pinches to 0.71 of one inside it.
-## - A LOFT IS CLOSED, solid or hollow: every edge has a face on both sides - and the same mesh less
-##   one triangle does not (the measure can fail).
-## - A LOFT'S SECTIONS ARE WHERE THEY ARE SAID: round at its foot, the turned rectangle at its top -
-##   and unturned, the top is not the turned one.
-## - A BEND BENDS: a warped block's top comes round to where a bend that far puts it, and halfway up
-##   it lies on the curve, not on the straight line - the control, the same block built coarse and
-##   warped, has nothing halfway up to bend.
-## - NORMALS FOLLOW A WARP: a ball scaled into an ellipsoid shades as the ellipsoid - its unwarped
-##   normals do not.
-## - A WOBBLE OPENS NO SEAM: a wobbled vessel is as closed as it was, and the same seed wobbles it the
-##   same - the control, pushed out along its normals instead, splits at its crisp corners.
-## - WHATEVER IS WRITTEN IS BUILDABLE: junk sections, warps and roundings come out in range.
-## - A STRAND RESTS ON ITSELF (2026-10-07, ropes, vines and wires asked for): wherever a coil or a tangle
-##   crosses itself the crossing rides over, never through - no two points of it further apart along it
-##   than its width come closer than nine tenths of a width - and it never lies below the cloth or jumps
-##   up a step. Two-sided: the same tangle laid flat, every point on the cloth, passes through itself.
-## - A STRAND DRAPED over the table's edge hangs down past it as far as it ran past, to the floor at most,
-##   and never into the table: every point over the top lies on it. Two-sided: with no ground it lies flat.
-## - BONES AND SKULLS rest on the cloth, are the length asked, and a draped thing keeps only its strand.
-## - A SCULPT (2026-10-07: "grant the agents the ability to draw their own geometry") is one closed surface;
-##   a carve goes right through - a line through a ball carved by a rod meets no face, and through the same
-##   ball uncarved it does; mirrored, a stroke drawn on the right is on the left too, and unmirrored it is
-##   not; its hollows are shut in - a well carved into a ball is darker inside than its outside, and a ball's is open
-##   all round; a stroke finer than the sculpt is cut is found before it is built, and a thick one is not.
-##   And THE SKULLS ARE SCULPTS: a bird's orbits are open right through it, where a line through its
-##   braincase is not.
-## - A FACETED STONE HAS NO HOLES (feedback 0021, a lump of copper ore showed the cloth through three of its
-##   faces): every triangle of a faceted ball, over seeds and lumps, shows its front outward - a face turned
-##   inward is culled and the stone is open there. Two-sided: the control, triangles wound the other
-##   way are found.
-## - A HEAP OF COINS NEVER SHARES SPACE (feedback 0008, coins in a dish cut through each other): fourteen
-##   coins heaped on seven seeds lie flat, and no two discs overlap in plan and in height. Two-sided: two
-##   coins laid on the same spot are found overlapping.
-## - A COTTON SWAB'S TIP IS A TUFT (feedback 0020): a `bud` tuft builds short and rounded - wider in the middle of its length than at its
-##   root, its outer hairs shorter than its middle's - and barely bends: dragged and pressed alike, its tip goes a fifth as far aside as a
-##   round brush's of the same length. The control: the round brush's bends the whole way.
-## - THE SET DRESSER IS TOLD all of it.
+## Where a point says control or two-sided, a control must fail it.
+## - A flat base and a flat top stay flat in a smooth profile (control: the same points curved through with no corners kept sag and dome).
+## - A corner is where it is written: [r, h, 0] is a crisp corner in a smooth profile, the same point without its 0 is not.
+## - A rounded elbow: a path point written with a rounding passes beside its corner, an arc away; unrounded it passes through.
+## - A kink keeps its width: every point of a rod bent square lies a radius from its path (control: a ring square to the bend pinches).
+## - A loft is closed, solid or hollow: every edge has a face on both sides (control: the same mesh less one triangle).
+## - A loft's sections are where they are said: round at its foot, the turned rectangle at its top (control: unturned).
+## - A bend bends: a warped block's top comes round to where a bend that far puts it, and halfway up it lies on the curve (control:
+##   built coarse and warped, it has nothing halfway up to bend).
+## - Normals follow a warp: a ball scaled into an ellipsoid shades as the ellipsoid.
+## - A wobble opens no seam, and the same seed wobbles the same (control: pushed out along its normals, it splits at its corners).
+## - Whatever is written is buildable: junk sections, warps and roundings come out in range.
+## - A strand rests on itself: where a coil or a tangle crosses itself the crossing rides over, never through, and it never lies
+##   below the cloth or jumps up a step (two-sided: the same tangle laid flat passes through itself).
+## - A strand draped over the table's edge hangs down past it as far as it ran past, to the floor at most, and never into the table
+##   (two-sided: with no ground it lies flat).
+## - Bones and skulls rest on the cloth, are the length asked, and a draped thing keeps only its strand.
+## - A sculpt is one closed surface; a carve goes right through; a mirrored stroke is on both sides; its hollows are shut in; a
+##   stroke finer than the sculpt is cut is found before it is built; the skulls are sculpts (a bird's orbits are open right through).
+## - A faceted stone has no holes: every triangle of a faceted ball shows its front outward (two-sided: wound the other way, found).
+## - A heap of coins never shares space: fourteen coins on seven seeds lie flat and no two discs overlap (two-sided: two coins on
+##   the same spot are found).
+## - A cotton swab's tip is a tuft: short and rounded, wider in the middle than at its root, and barely bends - a fifth as far aside
+##   as a round brush's of the same length (control: the round brush bends the whole way).
+## - The set dresser is told all of it.
 
 var _fails: Array = []
 const PAL := ["#8a6a3a", "#c9b38a", "#3a3030"]
@@ -104,7 +83,7 @@ func _geo(p: Dictionary, seed := 1) -> Props.Tris:
 	return (geos[0] as Dictionary)["geo"]
 
 
-## A COTTON SWAB'S TIP: a bud tuft built short and rounded, and bending a little where a round brush's bends the whole way.
+## A cotton swab's tip: a bud tuft built short and rounded, and bending a little where a round brush's bends the whole way.
 func _bud() -> void:
 	var g := _geo({"shape": "tuft", "kind": "bud", "length": 0.9, "width": 0.5, "material": "cotton"})
 	var top := 0.0
@@ -149,7 +128,7 @@ func _open_edges(g: Props.Tris, skip := -1) -> int:
 
 
 func _flat_ends() -> void:
-	# a set dresser's purple clay teapot, its body as written (episode 882)
+	# a set dresser's purple clay teapot, its body as written
 	var prof := [[0.0, 0.0], [4.0, 0.0], [5.6, 2.0], [6.0, 4.0], [5.2, 6.4], [3.0, 7.3], [0.0, 7.3]]
 	var g := _geo({"shape": "lathe", "smooth": true, "profile": prof})
 	var lo := INF
@@ -224,8 +203,7 @@ func _kink() -> void:
 			continue
 		worst = maxf(worst, absf(_to_path(v, path) - 0.01))
 	_ok(worst < 0.0003, "a rod bent square is pinched or swollen at its bend: a point lies %.4f m off its radius" % worst)
-	# the control: a ring square to the bend's middle, not stretched - the old rod's corner, whose
-	# inside pinched to 0.71 of its radius
+	# the control: a ring square to the bend's middle, not stretched - its inside pinches to 0.71 of its radius
 	var inside := Vector3(0.06, 0.01, 0) + Vector3(-1, 1, 0).normalized() * 0.01
 	_ok(absf(_to_path(inside, path) - 0.01) > 0.002, "an unstretched ring at the bend lies a radius from the path: the kink check proves nothing")
 
@@ -399,7 +377,7 @@ func _strands() -> void:
 			_ok(_closest_apart(line, t * 2.0) >= t * 0.9, "a %s %s passes through itself (%.2f of its width)" % [lay, kind, _closest_apart(line, t * 2.0) / t])
 			_ok(low >= t * 0.5 - 1e-5, "a %s %s lies below the cloth" % [lay, kind])
 			_ok(step <= t * 0.5, "a %s %s jumps up a step of %.1f mm" % [lay, kind, step * 1000.0])
-	# TWO-SIDED: the same tangle on the cloth throughout passes through itself
+	# two-sided: the same tangle on the cloth throughout passes through itself
 	var p := _part({"shape": "strand", "kind": "cord", "lay": "heap", "length": 160, "thickness": 1.0, "loose": 0.6})
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11

@@ -2,27 +2,23 @@ extends GhostScene
 
 ## Strata - stacked waveform planes receding into depth.
 ##
-## Horizontal planes are stacked back-to-front; each is a waveform whose height
-## comes from a slice of the spectrum plus a traveling sine, and each is filled
-## down to the foot of the frame as a translucent sheet. Nearer planes sit over
-## farther ones, and the view's tilt skews the whole stack, so it reads as planes
-## of light lying in space. Far planes scroll slower than near ones - parallax.
+## Horizontal planes are stacked back-to-front; each is a waveform whose height comes from a
+## slice of the spectrum plus a traveling sine, filled down to the foot of the frame as a
+## translucent sheet. Nearer planes sit over farther ones and the view's tilt skews the stack, so
+## it reads as planes of light in space. Far planes scroll slower than near ones (parallax).
 ##
-## By seed the stack is a few big slabs or a deep receding pile ([constant STACKS]),
-## each plane's edge follows one of three laws ([constant PROFILES]) - swells,
-## ridgelines or stepped terraces - and the whole thing is colored from one
-## [Scheme], depth carrying the palette from its base hue to its accent.
+## By seed the stack is a few big slabs or a deep receding pile ([constant STACKS]), each
+## plane's edge follows one of three laws ([constant PROFILES]) - swells, ridgelines or stepped
+## terraces - and one [Scheme] colors it, depth carrying the palette from base hue to accent.
 
 const OVER := 1.4
 const COLS := 72       # samples across each plane
 
-## The law each plane's edge follows. Every stack used to be the same smooth sine
-## crest, so the silhouette never changed however the seed moved - this is the
-## choice that decides whether the stack reads as swells, ridges or terraces.
+## The law each plane's edge follows: it decides whether the stack reads as swells, ridges or
+## terraces.
 const PROFILES := ["smooth", "ridge", "terrace"]
 
-## How many planes, and how thick they sit. Few planes read as big slabs of light;
-## many read as a dense stack receding.
+## How many planes, and how thick they sit: few read as big slabs of light, many as a dense stack.
 const STACKS := {
 	"slabs": {"planes": [3, 5], "amp": [0.10, 0.22], "alpha": [0.30, 0.62]},
 	"stack": {"planes": [5, 9], "amp": [0.06, 0.13], "alpha": [0.35, 0.55]},
@@ -31,12 +27,12 @@ const STACKS := {
 
 var _f: AudioFeatures = AudioFeatures.new()
 var _t := 0.0
-## One batch for the band fills - see the note in _draw about why they are strips.
+## One batch for the band fills (see the note in _draw: they are strips).
 var _tb := TriBatch.new()
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"stack": {"label": "Stack", "type": "choice", "options": "STACKS", "default": null,
 		"blurb": "How many planes and how thick they sit: a few big slabs, a stack, or a deep stack receding."},
@@ -53,15 +49,14 @@ const FIELDS := {
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
-	# Planes of light are abstract: no mood is wrong, so take the whole set.
+	# Planes of light are abstract: take the whole mood set.
 	var sch := Scheme.pick(rng)
 	var kname := String(choice("stack", rng))
 	var st: Dictionary = STACKS[kname]
 	var pl: Array = st["planes"]
 	var am: Array = st["amp"]
 	var al: Array = st["alpha"]
-	# Depth carries the palette from the scheme's base to its accent, so the far
-	# planes end on a hue that belongs with the near ones.
+	# Depth carries the palette from the scheme's base to its accent.
 	var to_accent := fposmod(sch.accent - sch.hue + 0.5, 1.0) - 0.5
 	return {
 		"planes": rng.randi_range(int(pl[0]), int(pl[1])),
@@ -83,9 +78,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 func update(f: AudioFeatures, delta: float) -> void:
 	_f = f
 	tick(f, delta)
-	# Tilt-forward bias so the stack always reads as receding planes. This is an
-	# absolute skew *target* (the view eases toward it) - it must be set, not
-	# accumulated: `+=` ran the skew away every frame and sheared the whole stack.
+	# Tilt-forward bias so the stack reads as receding planes. An absolute skew target (the view
+	# eases toward it): set it, never accumulate with `+=`, which shears the whole stack.
 	drift_view(f, 0.03, 0.04, 0.04, 0.08)
 	view.skew = 0.18 + 0.05 * mod.value("tilt2")
 	_t += delta * float(params.scroll)
@@ -112,27 +106,17 @@ func _draw() -> void:
 		var h := fposmod(hue + hue_span * depth, 1.0)
 		var fill := Color.from_hsv(h, clampf(sat * 0.85, 0.0, 1.0),
 			clampf((0.25 + 0.6 * (0.3 + loud) * (0.4 + depth)) * val_mul, 0.0, 1.0), alpha)
-		# FILLED AS AN EXPLICIT STRIP, one quad per column, not as one closed polygon.
-		#
-		# A closed polygon has to be triangulated by the engine, and the engine cannot always
-		# do it. Reported from a live session:
-		#   ERROR: Invalid polygon data, triangulation failed. at: _draw (strata.gd:122)
-		# Godot ear-clips, and its snip test needs a strictly positive cross product, so a
-		# zero-area ear can never be clipped - while the `ridge` profile is made of STRAIGHT
-		# FLANKS, which is to say exactly-collinear runs of vertices, and the crest clamp lays
-		# flat plateaus on top of that. Brute-forced over the real parameter space: 2
-		# untriangulable bands in 36,443, both `ridge`, each with five or six exactly-collinear
-		# triples. When it happens the band does not glitch, it VANISHES for that frame - which
-		# is the visible half of the bug and the reason this is worth more than a guard.
-		#
-		# A band is x-monotone, so its triangulation is not a search at all: column c and c+1
-		# with their two feet make a quad, and the whole band goes down in one batched draw
-		# call ([TriBatch]). Exact, cheaper than ear clipping, and it cannot fail.
+		# Filled as an explicit strip, one quad per column, not as one closed polygon: the engine
+		# ear-clips a polygon and cannot triangulate zero-area ears, and the `ridge` profile
+		# produces exactly-collinear runs (straight flanks plus the crest clamp's plateaus), so
+		# a band could fail to triangulate and vanish for that frame. A band is x-monotone, so
+		# column c and c+1 with their two feet make a quad and the band goes down in one batched
+		# draw call ([TriBatch]).
 		for c in COLS - 1:
 			_tb.quad(tops[c], tops[c + 1],
 				Vector2(tops[c + 1].x, foot), Vector2(tops[c].x, foot), fill)
-		# Flushed PER BAND, because the crest line below has to land over its own fill and
-		# under the next plane's - the painter's order this scene reads by.
+		# Flushed per band: the crest line below must land over its own fill and under the next
+		# plane's (painter's order).
 		_tb.flush(self)
 
 		# A brighter crest line for definition.
@@ -141,14 +125,9 @@ func _draw() -> void:
 		draw_polyline(tops, lcol, 1.5 + 2.0 * depth, true)
 
 
-## The CREST of plane [param i]: the band's top edge, sampled across the frame in this scene's
-## own draw space, from the plane's spectrum slice and the scrolling profile.
-##
-## Split out of [method _draw] so a gate can ask for the geometry the scene ACTUALLY draws.
-## tests/scenes/strata_band_check.gd needs these exact points to show that the engine's triangulator
-## refuses them while the scene paints the band anyway, and a gate that rebuilt the profile
-## arithmetic for itself would quietly stop testing the thing it names the moment either copy
-## changed.
+## The crest of plane [param i]: the band's top edge, sampled across the frame in this scene's own
+## draw space, from the plane's spectrum slice and the scrolling profile. Split out of
+## [method _draw] so tests/scenes/strata_band_check.gd gets the geometry the scene actually draws.
 func band_points(i: int) -> PackedVector2Array:
 	var field := size * OVER
 	var planes := maxi(2, int(params.planes))
@@ -176,8 +155,8 @@ func band_points(i: int) -> PackedVector2Array:
 	return out
 
 
-## The same band as one CLOSED polygon - the shape the fill used to be handed to the engine as,
-## kept only so the gate can demonstrate what happens to it. Nothing draws this.
+## The same band as one closed polygon (the shape the engine's triangulator can refuse), kept so
+## the gate can demonstrate it. Nothing draws this.
 func band_polygon(i: int) -> PackedVector2Array:
 	var tops := band_points(i)
 	var foot := size.y * OVER * 0.5
@@ -187,9 +166,8 @@ func band_polygon(i: int) -> PackedVector2Array:
 	return out
 
 
-## The crest law, in [-1, 1], as a function of position along the plane (`s` is in
-## whole cycles). Only the SHAPE of the edge differs - the drive behind it, and how
-## it scrolls, are untouched.
+## The crest law, in [-1, 1], as a function of position along the plane (`s` is in whole cycles).
+## Only the shape of the edge differs.
 func _shape(profile: String, s: float, steps: int) -> float:
 	match profile:
 		"ridge":

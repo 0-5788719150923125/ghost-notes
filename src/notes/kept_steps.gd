@@ -1,22 +1,22 @@
 extends RefCounted
 class_name KeptSteps
 
-## KeptSteps - AN EPISODE'S STEPS, KEPT, NEVER DELETED (next/editing.md step 1; the user, 2026-11-10: "there is no easy way to fix
-## mistakes without regenerating steps"), for every show that makes episodes a step at a time ([TableEpisode]: step
-## 12, "the other shows take step 1"). Each step made is recorded in `steps.json` - who made it (a role, `code`, or a `hand`), when,
-## a digest of its file and of each file it was made from ([method made_from]) - and whatever replaces or throws away a step's file
-## first moves it a version back (`versions/<step>/vNNN/`, the newest [constant VERSIONS_KEPT]: [method keep_version], [method
-## restore]). So a step made from something changed since is STALE ([method stale]): it still plays, and Generate makes it again
-## unless it is KEPT ([method kept]) - its row's 🔒, or a file changed since it was made (a hand's edit). ⟳ makes one step again
-## and throws nothing away: what was made from it goes stale.
+## KeptSteps - an episode's steps, kept, never deleted (next/editing.md step 1), for every show that makes episodes a
+## step at a time ([TableEpisode]). Each step made is recorded in `steps.json` - who made it (a role, `code`, or a
+## `hand`), when, a digest of its file and of each file it was made from ([method made_from]) - and whatever replaces
+## or throws away a step's file first moves it a version back (`versions/<step>/vNNN/`, the newest [constant
+## VERSIONS_KEPT]: [method keep_version], [method restore]). A step made from something changed since is stale
+## ([method stale]): it still plays, and Generate makes it again unless it is kept ([method kept]) - its row's 🔒, or a
+## file changed since it was made (a hand's edit). ⟳ makes one step again and throws nothing away: what was made from
+## it goes stale.
 ##
-## AN EPISODE MADE BEFORE RECORDS has none until it is first worked on ([method adopt]): every made step is recorded as it stands,
-## and one whose file changed after its job ended is kept (732687's passages, edited by hand and re-cued on 11-09 and 11-10).
-## Nothing is written by reading: a probe or a render never writes here.
+## An episode made before records has none until it is first worked on ([method adopt]): every made step is recorded
+## as it stands, and one whose file changed after its job ended is kept. Nothing is written by reading: a probe or a
+## render never writes here.
 ##
-## WHAT AN EPISODE SAYS OF ITSELF, which a show's episode answers: its folder ([member dir]), its steps in order ([method steps]),
-## each one's file ([method file_of]) and the files that go with it ([method files_of]), what each is made from ([method needs],
-## [method made_from]) and where its agent's job ran ([method job_dir]).
+## What an episode says of itself, which a show's episode answers: its folder ([member dir]), its steps in order
+## ([method steps]), each one's file ([method file_of]) and the files that go with it ([method files_of]), what each
+## is made from ([method needs], [method made_from]) and where its agent's job ran ([method job_dir]).
 
 ## The episode's folder, absolute.
 var dir := ""
@@ -83,8 +83,8 @@ func _digest_of(p: String) -> String:
 	var mt := FileAccess.get_modified_time(p)
 	var size := FileAccess.get_size(p)
 	var c: Array = _digests.get(p, [])
-	# ...A FILE CHANGED IN THE LAST SECONDS IS READ AGAIN: a modified time is whole seconds, so an edit within the same second
-	# that keeps the size (a length 5.0 made 9.0) read as the same file - no Undo recorded, the step not kept (thing_inspector_check)
+	# ...A file changed in the last seconds is read again: a modified time is whole seconds, so an edit within the same
+	# second that keeps the size would read as the same file (thing_inspector_check).
 	if c.size() == 3 and int(c[0]) == mt and int(c[1]) == size and Time.get_unix_time_from_system() - float(mt) > FRESH_S:
 		return String(c[2])
 	var sha := FileAccess.get_sha256(p)
@@ -94,7 +94,7 @@ func _digest_of(p: String) -> String:
 
 
 
-## WHAT [param step] IS MADE FROM, AS IT STANDS: each made step it needs -> its digest.
+## What [param step] is made from, as it stands: each made step it needs -> its digest.
 func made_from(step: String) -> Dictionary:
 	var out := {}
 	for n in needs(step):
@@ -137,8 +137,8 @@ static func _put(p: String, text: String) -> String:
 	return "" if DirAccess.rename_absolute(p + ".part", p) == OK else "could not move %s into place" % p
 
 
-## RECORDS FOR AN EPISODE MADE BEFORE THEM: every made step as it stands, made from what stands now - kept where its file changed
-## after its job ended. Once: an episode with records keeps them. "" done, else why not.
+## Records for an episode made before them: every made step as it stands, made from what stands now - kept where its
+## file changed after its job ended. Once: an episode with records keeps them. "" done, else why not.
 func adopt() -> String:
 	if FileAccess.file_exists(dir.path_join(RECORD_FILE)) or not DirAccess.dir_exists_absolute(dir):
 		return ""
@@ -173,8 +173,8 @@ func note_made(step: String, by: String, from := {}) -> String:
 	return _write_records(all)
 
 
-## WHETHER [param step] IS MADE FROM SOMETHING THAT HAS CHANGED SINCE: a step it was made from stands now with another digest.
-## A step with no record, or a need thrown away, is not stale: nothing says what it was made from.
+## Whether [param step] is made from something that has changed since: a step it was made from stands now with another
+## digest. A step with no record, or a need thrown away, is not stale: nothing says what it was made from.
 func stale(step: String) -> bool:
 	if not has(step):
 		return false
@@ -187,7 +187,7 @@ func stale(step: String) -> bool:
 	return false
 
 
-## WHETHER GENERATE PASSES [param step] BY, stale or not: its 🔒 ([method set_kept]), or its file changed since it was made.
+## Whether Generate passes [param step] by, stale or not: its 🔒 ([method set_kept]), or its file changed since made.
 func kept(step: String) -> bool:
 	var r := record(step)
 	return bool(r.get("kept", false)) or changed_by_hand(step)
@@ -211,9 +211,9 @@ func set_kept(step: String, on: bool) -> String:
 	return _write_records(all)
 
 
-## WHETHER [param step] IS MADE BY HAND (next/editing.md step 8: "a step marked BY HAND, where Generate stops and says it waits"):
-## a person makes it, never an agent unasked - Generate passes it by, made or not, and its row says it waits. A ⟳ still hands it to
-## its agent, and what the agent makes is the agent's ([method note_made] drops the mark).
+## Whether [param step] is made by hand (next/editing.md step 8): a person makes it, never an agent unasked - Generate
+## passes it by, made or not, and its row says it waits. A ⟳ still hands it to its agent, and what the agent makes is
+## the agent's ([method note_made] drops the mark).
 func by_hand(step: String) -> bool:
 	return bool(record(step).get("hand", false))
 
@@ -228,8 +228,9 @@ func set_by_hand(step: String, on: bool) -> String:
 	return _write_records(all)
 
 
-## [param step]'S FILES A VERSION BACK, as they stand - copied, or moved with [param move] (what throws it away). The same as the
-## newest version already kept is not kept twice; past [constant VERSIONS_KEPT] the oldest goes. "" kept or nothing to keep.
+## [param step]'s files a version back, as they stand - copied, or moved with [param move] (what throws it away). The
+## same as the newest version already kept is not kept twice; past [constant VERSIONS_KEPT] the oldest goes. "" kept
+## or nothing to keep.
 func keep_version(step: String, move := false) -> String:
 	if not has(step):
 		return ""
@@ -273,8 +274,8 @@ func versions(step: String) -> Array:
 		return v is Dictionary and DirAccess.dir_exists_absolute(base.path_join(String((v as Dictionary).get("dir", "")))))
 
 
-## VERSION [param i] OF [param step] PUT BACK ([method versions]): what stands goes a version back first, and the one put back is
-## KEPT - a person chose it - made from what it was made from. "" done, else why not.
+## Version [param i] of [param step] put back ([method versions]): what stands goes a version back first, and the one
+## put back is kept (a person chose it), made from what it was made from. "" done, else why not.
 func restore(step: String, i: int) -> String:
 	var list := versions(step)
 	if i < 0 or i >= list.size():
@@ -296,8 +297,8 @@ func restore(step: String, i: int) -> String:
 	return _write_records(all)
 
 
-## EVERY STEP'S VERSIONS, NEWEST FIRST, for a list to put one back from: `[{at, said, key: [step, i]}]`, [param name_of]
-## (`(step) -> String`) naming a step as its card does.
+## Every step's versions, newest first, for a list to put one back from: `[{at, said, key: [step, i]}]`, [param
+## name_of] (`(step) -> String`) naming a step as its card does.
 func step_versions(name_of := Callable()) -> Array:
 	var out: Array = []
 	# (every step with a record - what keeps its versions - whether or not the plan lists it now)

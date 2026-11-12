@@ -1,29 +1,25 @@
 extends CanvasLayer
 class_name NotePanel
 
-## NotePanel - a note's own panel: where every new note opens, and what runs every note whose
-## components need no editor of their own ([method Components.workspace_of]) - a note that is its
-## words alone, and a note with a song.
+## NotePanel - a note's own panel: where every new note opens, and what runs every note whose components
+## need no editor of their own ([method Components.workspace_of]) - a note of words alone, and a note with
+## a song.
 ##
-## ITS CARDS ARE THE NOTE'S COMPONENTS, read off the note's blocks: the Script (the note's words,
-## always), the Song, and whatever else is attached, built the one way every panel builds them
-## ([method NoteCards.build]) - the Medium (with Auto first among its formats: the seeded show,
-## nothing to set), the Storyboard, the Look, the Intro & outro, YouTube. Each keeps its block in
-## the note through the autosave every panel's frontmatter goes through ([DocSource]); the song's
-## block is written only when another song is chosen.
+## Its cards are the note's components, read off the note's blocks: the Script (the words, always), the
+## Song, and whatever else is attached, built the one way every panel builds them ([method
+## NoteCards.build]). Each keeps its block in the note through the autosave every panel's frontmatter goes
+## through ([DocSource]); the song's block is written only when another song is chosen.
 ##
-## "+" OFFERS WHAT THE NOTE COULD HAVE NEXT ([method Components.attach_menu]): everything that can
-## be attached, each grayed with its reason when it cannot be had yet ("Needs a Medium - attach it
-## first", "This note's clock is its Song"). ATTACHING WRITES THE COMPONENT'S BLOCK into the note
-## and opens the note again, as whatever its blocks now say it is ([method NoteCards.attach]) - and
-## the × on a card takes it off the same way ([method NoteCards.detach]).
+## "+" offers what the note could have next ([method Components.attach_menu]), each grayed with its reason
+## when it cannot be had yet. Attaching writes the component's block into the note and opens the note again
+## as whatever its blocks now say ([method NoteCards.attach]); a card's × takes it off the same way
+## ([method NoteCards.detach]).
 ##
-## THE SONG IS THE NOTE'S CLOCK, and main runs it ([member begin_song]): loaded as the panel comes
-## up, after its cards have applied the note's medium, holds and look - and waiting at its start,
-## because a note opens stopped. With no Medium there is no stage; with one, the Director cuts its
-## scenes on the song in the format the Medium card names - the seed's choice, or the note's
-## Storyboard where one is written ([method show_plan]) - and a format picked while the note is up
-## is shown at once ([member restage]).
+## The song is the note's clock, and main runs it ([member begin_song]): loaded as the panel comes up,
+## after the cards have applied the note's medium, holds and look, and waiting at its start. With no Medium
+## there is no stage; with one, the Director cuts scenes on the song in the format the Medium card names
+## (the seed's choice, or the note's Storyboard - [method show_plan]), and a format picked while the note
+## is up is shown at once ([member restage]).
 
 ## The Settings section the script's source lives in (its remembered document).
 const SECTION := "note"
@@ -31,11 +27,11 @@ const SECTION := "note"
 ## Set by main: the note this panel shows, and how to open it again once a component is attached.
 var path := ""
 var reopen: Callable
-## Set by main: (from: String, to: String) -> String - the note was saved into another file (its
-## Script card's Save…), which is the note from here on; returns what became of the file it left.
+## Set by main: (from: String, to: String) -> String - the note was saved into another file (its Script
+## card's Save…); returns what became of the file it left.
 var note_moved: Callable
-## Set by main: (song: String, show: Dictionary) -> void - load the note's song, waiting at its
-## start, with the show [method show_plan] describes.
+## Set by main: (song: String, show: Dictionary) -> void - load the note's song, waiting at its start, with
+## the show [method show_plan] describes.
 var begin_song: Callable
 ## Set by main: (show: Dictionary) -> void - put the picture up again in the format chosen now.
 var restage: Callable
@@ -57,8 +53,8 @@ func _ready() -> void:
 	_blocks = NoteStore.blocks_of(path) if not path.is_empty() else {}
 	_attached = Components.attached_of(_blocks)
 	var has_song := _attached.has("song")
-	# NOTHING TO RENDER without a show: a plain note, or a song with no medium yet, has no ⤓
-	# (released on the way out, keyed - see Chrome._export_claims)
+	#Nothing to render without a show: a plain note, or a song with no medium yet, has no ⤓ (released on the
+	#way out, keyed - see Chrome._export_claims)
 	var ch := Chrome.of(self)
 	if ch != null and not _attached.has("medium"):
 		ch.suppress_export(&"note_panel")
@@ -73,7 +69,7 @@ func _ready() -> void:
 	_panel.add_component_row(func() -> Array: return _attached, _attach)
 	_panel.card_prefix = SECTION
 	var script_card: VBoxContainer = _panel.add_card("body", "Body", &"paper")
-	# THE NOTE'S OWN FILE, from the first frame: the source is pointed at it before it is bound
+	#The note's own file, from the first frame: the source is pointed at it before it is bound
 	Settings.write(SECTION, "doc_path", path)
 	Settings.write(SECTION, "sync", not path.is_empty())
 	_writer = preload("res://src/ui/script_writer.gd").new()
@@ -81,7 +77,7 @@ func _ready() -> void:
 	_writer.bind_note()
 	_writer.doc.moved.connect(_on_note_moved)
 	script_card.add_child(_writer)
-	# ...AND WHAT IS KEPT OF THE NOTE ([NoteKept]): its cache and every state to go back to
+	#...and what is kept of the note ([NoteKept]): its cache and every state to go back to
 	var kept := NoteKept.new()
 	kept.doc = _writer.doc
 	kept.cache_dir = func() -> String: return NoteUpload.folder_of(path)
@@ -94,7 +90,7 @@ func _ready() -> void:
 	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape,
 		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
 		"outro_tip": "Seconds held after the song ends, picture and sound fading out together."})
-	# ...THE TIMELINE OPEN, AS A LIST ([TimelineList]): a card shown only while a timeline editor is open
+	#...the timeline open, as a list ([TimelineList]): a card shown only while a timeline editor is open
 	_panel.add_card("timeline", "Timeline", &"picture", "", TimelineList.BLURB).add_child(TimelineList.new())
 	_medium = _cards.get("medium") as MediumCard
 	_story = _cards.get("scenes") as StoryboardCard
@@ -109,8 +105,8 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 11)
 	_status.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
 	box.add_child(_status)
-	# THE NOTE'S BLOCKS REACH THE CARDS as the source binds - the medium, the holds and the look are
-	# set before the song is loaded, because the lead-in is decided as playback starts
+	#The note's blocks reach the cards as the source binds: the medium, holds and look are set before the
+	#song is loaded, because the lead-in is decided as playback starts
 	_writer.doc.capture = _doc_capture
 	_writer.doc.apply = _doc_apply
 	_writer.doc.bind_text(_writer.text_edit)
@@ -135,7 +131,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _build_header(_box: VBoxContainer) -> void:
-	# pinned over the scrolling body, so "⋯" and "–" never scroll away - and naming nothing (SidePanel.pin_title_row)
+	#pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_title_row)
 	_panel.pin_title_row(self)
 
 
@@ -144,8 +140,8 @@ func _note(msg: String) -> void:
 		_status.text = msg
 
 
-## WHAT THE NOTE'S SHOW IS, for main ([method main._attach_show]): whether it has a Medium (`picture`: something to be
-## seen in), and the storyboard it walks - {} where the note has none, or has written nothing in it.
+## What the note's show is, for main ([method main._attach_show]): whether it has a Medium (`picture`) and
+## the storyboard it walks - {} where the note has none or has written nothing in it.
 func show_plan() -> Dictionary:
 	var plan := {"picture": _medium != null, "board": {}, "source": ""}
 	if _story != null:
@@ -175,8 +171,8 @@ func _doc_apply(blocks: Dictionary) -> void:
 			(_cards[key] as Object).call("apply", blocks[key] as Dictionary)
 
 
-## THE NOTE WAS SAVED INTO ANOTHER FILE ([signal DocSource.moved]): this panel is that file's now,
-## and main makes it the note everywhere else (see [method ReadingPanel._on_note_moved]).
+## The note was saved into another file ([signal DocSource.moved]): this panel is that file's now, and main
+## makes it the note everywhere else (see [method ReadingPanel._on_note_moved]).
 func _on_note_moved(from: String, to: String) -> void:
 	path = to
 	var said := String(note_moved.call(from, to)) if note_moved.is_valid() else ""
@@ -188,8 +184,7 @@ func _song_path() -> String:
 	return String((song as Dictionary).get("path", "")) if song is Dictionary else ""
 
 
-## The Medium's format changed: shown at once while a song is loaded (a reading's waits for the
-## next reading; a song's has nothing to wait for).
+## The Medium's format changed: shown at once while a song is loaded (a reading's waits for the next reading).
 func _on_medium() -> void:
 	if restage.is_valid():
 		restage.call(show_plan())
@@ -210,8 +205,8 @@ func upload_meta(take: String) -> Dictionary:
 	return _youtube.meta({"tags": []}, take) if _youtube != null else {}
 
 
-## WHAT THE CARDS HOLD, written into the note, and the note opened again around it: a format with rows of its own picked
-## on the Medium card, or one left ([member MediumCard._reshape]).
+## What the cards hold, written into the note, and the note opened again around it: a format with rows of its
+## own picked on the Medium card, or one left ([member MediumCard._reshape]).
 func _reshape() -> void:
 	_rewrite(func(held: Dictionary) -> String:
 		var ghost := NoteStore.blocks_of(path)
@@ -229,10 +224,10 @@ func _detach(key: String) -> void:
 	_rewrite(func(held: Dictionary) -> String: return NoteCards.detach(path, key, held))
 
 
-## CHANGE WHAT THE NOTE IS MADE OF, then open it again. The words and the settings waiting to be
-## saved go into the file first, [param write] - `(held) -> String`, handed what the cards hold now -
-## makes the change, and this panel stops saving before the next one is built: a write of its own
-## landing afterward would put back the very block that was just taken out.
+## Change what the note is made of, then open it again. The words and settings waiting to be saved go into
+## the file first; [param write] - `(held) -> String`, handed what the cards hold now - makes the change,
+## and this panel stops saving before the next one is built, since a write of its own would put back the
+## block just taken out.
 func _rewrite(write: Callable) -> void:
 	if path.is_empty() or not _writer.doc.settle():
 		return

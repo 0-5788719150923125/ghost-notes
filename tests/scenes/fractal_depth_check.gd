@@ -1,32 +1,24 @@
 extends Node
 
-## Gate for the one thing scenes/fractal_zoom.gd cannot be written without: that PERTURBATION
-## actually buys the depth it claims to.
+## Gate that perturbation in scenes/fractal_zoom.gd buys the depth it claims.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/fractal_depth_check.gd 240
 ##
-## GHOST_PROBE_GPU is not optional here - the whole claim lives in a fragment program, so the
-## only way to ask it is to render and read the pixels back.
+## GHOST_PROBE_GPU is required: the claim lives in a fragment program, so it is asked by rendering and
+## reading pixels back.
 ##
-## WHY IT NEEDS A GATE AT ALL. The failure is silent and it looks like a design choice. A fractal
-## zoom that has run out of float32 does not error, warn, or glitch: every pixel of the frame
-## computes the same complex number, so the frame comes out as ONE FLAT COLOR. On a scene whose
-## palette is sampled per session, a flat frame reads as "this seed rolled a boring one" - and
-## the scene would keep shipping that way. It already did once for a different reason: a stray
-## `set_shader_parameter("u_ref_len", 0)` written after the reference orbit had been uploaded
-## turned the perturbed path off completely, and three seeds in a row rendered flat washes that
-## looked exactly like an unlucky palette.
+## A zoom that has run out of float32 raises no error: every pixel computes the same complex number and
+## the frame is one flat color, which on a per-session palette reads as a boring seed. A stray
+## `set_shader_parameter("u_ref_len", 0)` after the reference orbit upload turns the perturbed path off
+## the same way.
 ##
-## THE CONTROL IS THE POINT. Structure in the perturbed render proves nothing on its own - it
-## would also appear at a scale float32 handles fine. So the same scene, at the same anchor, at
-## the same depth, is rendered TWICE with only `u_perturb` changed. Past float32's limit the
-## direct path must collapse to a flat frame and the perturbed one must not. If they ever both
-## pass, this gate is measuring nothing.
+## The control: the same scene, anchor and depth are rendered twice with only `u_perturb` changed. Past
+## float32's limit the direct path must collapse and the perturbed one must not; structure in the
+## perturbed render alone proves nothing, as it would also appear at a scale float32 handles.
 ##
-## It also holds two cheap properties of the CPU half, both of which decide whether there is
-## anything at the anchor to look at: that the anchor is ON the boundary (a long but FINITE
-## escape - the interior is a flat hole and the far outside is a flat wash), and that the zoom
-## stays inside the range its own path can resolve however long it runs.
+## Two cheap CPU properties are held too: the anchor is on the boundary (a long but finite escape; the
+## interior is a flat hole and the far outside a flat wash), and the zoom stays inside the range its own
+## path can resolve however long it runs.
 
 const SEEDS := [11, 23, 47]
 const W := 640
@@ -55,9 +47,8 @@ func _run() -> void:
 
 
 func _run_seed(sv: int) -> void:
-	# The scene is rolled until it lands on the quadratic Mandelbrot, because that is the only
-	# family perturbation is implemented for - and rolling for it is honest, where forcing the
-	# fields by hand would test a configuration the Director can never produce.
+	# The scene is rolled until it lands on the quadratic Mandelbrot, the only family perturbation is
+	# implemented for; forcing the fields by hand would test a configuration the Director cannot produce.
 	var vp := SubViewport.new()
 	vp.size = Vector2i(W, H)
 	vp.disable_3d = true
@@ -106,7 +97,7 @@ func _run_seed(sv: int) -> void:
 	_ok(hi <= sc._zl_max + 1e-6, "seed %d: the zoom reached %s, past its ceiling"
 		% [used, _sci(exp(hi))])
 
-	# --- THE CLAIM: at a depth float32 cannot hold, perturbation resolves and direct does not ---
+	# --- the claim: at a depth float32 cannot hold, perturbation resolves and direct does not ---
 	sc._zl = log(exp(sc._zl_min) * 6.0)   # a little above the floor, comfortably past float32
 	sc.update(_features(), 1.0 / 30.0)
 	for _i in 6:
@@ -142,16 +133,12 @@ func _run_seed(sv: int) -> void:
 	await get_tree().process_frame
 
 
-## THE MEASURE THAT ACTUALLY SEPARATES THEM, and it took a render to find. The obvious one -
-## how much of the frame differs from its neighborhood - does not work: a float32 render past
-## its limit is not FLAT, it is BLOCKY. The complex coordinate quantizes to a few dozen distinct
-## values across the frame, so the picture becomes big hard-edged rectangles of uniform color,
-## and every one of those edges reads as "structure". Measured 24-32% against the perturbed
-## render's 44-74% - a difference, but nowhere near a verdict.
-##
-## Blockiness is the verdict. Inside a quantized block EVERY adjacent pair of pixels is byte
-## identical; a resolved fractal changes from pixel to pixel almost everywhere it has detail.
-## So this counts the share of horizontally adjacent pairs that are exactly equal.
+## The measure that separates them is blockiness. A float32 render past its limit is not flat but
+## blocky: the complex coordinate quantizes to a few dozen values, giving hard-edged rectangles whose
+## edges read as structure (24-32% of the frame differs from its neighborhood, against 44-74% perturbed:
+## not a verdict). Inside a quantized block every adjacent pixel pair is byte-identical, while a
+## resolved fractal changes almost everywhere it has detail; this counts the share of horizontally
+## adjacent pairs that are exactly equal.
 func _blocky(img: Image) -> float:
 	var n := 0
 	var same := 0
@@ -163,8 +150,8 @@ func _blocky(img: Image) -> float:
 	return float(same) / float(maxi(1, n))
 
 
-## How much of a frame carries local contrast at all - the cheap "did anything render" read,
-## kept for the perturbed side where the question is only whether the frame is dead.
+## How much of a frame carries local contrast: the cheap "did anything render" read, for the perturbed
+## side, where the question is only whether the frame is dead.
 func _structure(img: Image) -> float:
 	var n := 0
 	var busy := 0

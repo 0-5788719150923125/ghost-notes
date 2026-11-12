@@ -54,7 +54,7 @@ void fog() {
 	n = n * 0.75 + 0.25 * fog_noise(q * 3.1 + vec3(t * 0.05, 0.0, 0.0));
 	float h = clamp((w.y - floor_y) / max(height, 0.01), 0.0, 2.0);
 	float layer = 1.0 - smoothstep(0.25, 1.0, h);
-	// SOFT AT ITS SIDES, never at its floor or its top: a layer lying on the cloth thickens toward the
+	// Soft at its sides, never at its floor or its top: a layer lying on the cloth thickens toward the
 	// cloth (the distance to the nearest face would thin it to nothing exactly there)
 	vec2 e = vec2(edge) / max(SIZE.xz, vec2(0.01));
 	float side = smoothstep(0.0, e.x, UVW.x) * smoothstep(0.0, e.x, 1.0 - UVW.x)

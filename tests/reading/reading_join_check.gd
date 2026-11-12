@@ -5,29 +5,24 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/reading/reading_join_check.gd
 ##
-## WHAT IT HOLDS (next/structure.md, step 18), on takes made here - a tone per chunk, the host's spans
-## written by hand - with no voice and no panel:
+## Holds, on takes made here (a tone per chunk, the host's spans written by hand), with no voice and no panel:
 ##
-## - THE SEAMS: nothing rests before the first chunk joined, whichever chunk it is (a reading started
-##   part way through); each later one rests the seam [method Delivery.gap_before] gives it, a
-##   handover the Turn rest on top;
-## - THE ROOM'S MARKS: the opening voice at frame 0 (a lead is heard in its room), a later voice at
-##   its own first frame, AFTER its seam, and a move nearer BEFORE the seam - and a handover written
-##   after the player consumed every mark so far still lands on its own frame, never at 0;
-## - THE WORDS, in the take's seconds: a chunk's word at its chunk's frame plus its span, a lead
-##   included, and a word after a hesitation moved by exactly the rest spliced in before it - less
-##   what the voice already rested there for it (the host's `rested`: told of the rest, the model
-##   ends the word and pauses itself), so a hesitation is its own length, never that and the voice's;
-## - THE FADE: it starts at the first fading chunk, and ending the take where it runs out drops what
-##   was joined past it and every word that starts there - or, when the text ran out first, says how
-##   much silence fills it out.
+## - the seams: nothing rests before the first chunk joined, whichever it is; each later one rests the seam
+##   [method Delivery.gap_before] gives it, a handover the Turn rest on top;
+## - the room's marks: the opening voice at frame 0 (a lead is heard in its room), a later voice at its own first
+##   frame after its seam, a move nearer before the seam; a handover written after the player consumed every mark
+##   so far still lands on its own frame, never at 0;
+## - the words, in the take's seconds: a chunk's word at its chunk's frame plus its span, a lead included; a word
+##   after a hesitation moves by exactly the rest spliced in before it, less what the voice already rested there
+##   (the host's `rested`), so a hesitation is its own length;
+## - the fade starts at the first fading chunk; ending the take where it runs out drops what was joined past it and
+##   every word that starts there, or, when the text ran out first, says how much silence fills it out.
 ##
-## THE CONTROLS, each the claim's other side: a chunk read with a different Turn rests differently, a
-## word before the hesitation does not move, a voice that rested the whole hesitation is cut nowhere,
-## and a word inside the take survives its end.
+## Controls: a chunk read with a different Turn rests differently, a word before the hesitation does not move, a
+## voice that rested the whole hesitation is cut nowhere, and a word inside the take survives its end.
 ##
-## Loaded by path after the tree is up: named here, the join would be compiled with this gate before
-## the autoloads its libraries read exist.
+## Loaded by path after the tree is up: named here, the join would compile with this gate before the autoloads
+## its libraries read exist.
 
 const SR := 1000
 
@@ -92,7 +87,7 @@ func _check_seams_and_marks() -> void:
 		"the second chunk rests %d frames, not the seam's %d" % [second.size() - 400, seam])
 	var moved: Array = j.marks.filter(func(m: Dictionary) -> bool: return m.has("near"))
 	_ok(moved.size() == 1 and int(moved[0]["at"]) == at1, "the reader moves at %s, not before the seam at %d" % [str(moved), at1])
-	# THE PLAYER CONSUMES THE MARKS as the push reaches them (ReadingStream._fx_admit)...
+	# the player consumes the marks as the push reaches them (ReadingStream._fx_admit)...
 	j.marks.clear()
 	var at2: int = j.frames
 	j.add(chunks, 2, _take(), _spans(), _slot, 1.0)

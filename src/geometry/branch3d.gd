@@ -1,67 +1,40 @@
 extends RefCounted
 class_name Branch3D
 
-## Branch3D - a bracketed L-system that emits segments in THREE dimensions, plus the
-## tapered-tube loft that turns them into drawable faces.
+## Branch3D - a bracketed L-system that emits segments in three dimensions, plus the tapered-tube loft that turns them into
+## drawable faces. The 3D form of [Filament]'s recursion, with two rules a plant needs:
 ##
-## [Filament] already grows probabilistic bracketed structures - its `_build` recursion
-## over (depth, ratio, spread, steps * ratio) IS an L-system, and a good one - but it is
-## strictly two-dimensional: the whole vocabulary is Vector2 unit-fractions, so a tree
-## could not be assembled from it as a parts list however many Filaments were stacked.
-## This is that same known shape lifted into 3D, with the two rules a plant needs that a
-## flat tendril does not:
+##   Multi-child whorls: a node throws 2-4 children at once from one point, deterministically, rather than forking by a coin
+##   per step (the difference between a vine and a crown).
 ##
-##   MULTI-CHILD WHORLS. A node throws 2-4 children at once from one point, deterministically,
-##   rather than flipping a coin per step to fork. That single change is the difference
-##   between a vine and a crown.
+##   A divergence roll: successive whorls are rotated about the parent's own axis by a fixed angle, so a branch system reads as
+##   a spiral staircase rather than a flat fan. [constant DIVERGENCE] holds the four angles botany uses, not a range.
 ##
-##   A DIVERGENCE ROLL. Successive whorls are rotated about the parent's own axis by a fixed
-##   angle. This is the reason a real branch system reads as a spiral staircase rather than
-##   as a flat fan, and it is why [constant DIVERGENCE] holds the four angles botany actually
-##   uses instead of a continuous range - sampling 137.5 vs 90 degrees produces two SPECIES,
-##   while sampling 131 vs 134 produces the same tree twice.
+## [method sample_species] rolls one dictionary that is the whole genome: fork angle and how it tightens with depth, the
+## divergence roll, length and width ratios between parent and child, child count, clear trunk below the crown, a leader
+## fraction (how nearly straight the continuing axis runs, which gives a tree a trunk), gravitropism, phototropism toward the
+## sun, droop on the outer orders, buttress flare at the base, and trunk lean.
 ##
-## WHAT THE RULE TABLE DECIDES. [method sample_species] rolls one dictionary that is the
-## whole genome: fork angle and how it tightens with depth, the divergence roll, the length
-## and width ratios between parent and child, how many children, how much clear trunk sits
-## below the crown, a leader fraction (how nearly straight the CONTINUING axis runs, which
-## is what gives a tree a trunk at all instead of a broccoli head), gravitropism toward
-## vertical, phototropism toward the sun, droop on the outer orders, buttress flare at the
-## base, and trunk lean.
+## The budget is part of the algorithm: axis count is children^depth. Growth proceeds level by level and a level is accepted
+## only if it fits whole (a half-expanded level looks broken, a level short is a younger tree); [method sample_species] also
+## trades depth against width.
 ##
-## THE BUDGET IS PART OF THE ALGORITHM, not a safety valve bolted on. Axis count is
-## children^depth, so a 4-child 6-deep tree is 5461 axes before a single face is drawn -
-## and sixty of those is not a scene, it is a hang. So growth proceeds LEVEL BY LEVEL and a
-## level is accepted only if it fits whole: a partially-expanded level looks broken (half the
-## crown missing on one side), while a level short is simply a younger tree. [method
-## sample_species] also trades depth against width for the same reason, because the two
-## together are what explodes.
+## Coordinates: everything grows in local space with the base at the origin and +y up, and the finished model is rescaled so its
+## real height is exactly the height asked for. A caller instances one model many times by scaling, yawing and bending it at
+## draw time.
 ##
-## COORDINATES. Everything grows in LOCAL space with the base at the origin and +y up, and
-## the finished model is rescaled so its real height is exactly the height asked for (the
-## crown adds length above the trunk axis, so the raw structure always overshoots). A caller
-## instances one model many times by scaling, yawing and BENDING it at draw time - the furry
-## trick, grow once in local space and re-lean per frame, lifted into 3D.
-##
-## The three emitters below all append the same face dictionaries the terrain merge path
-## uses ({d, poly, cols}, or {d, fan, fcols} for a soft billboard), so tree faces depth-sort
-## against terrain quads in one list and the hillside occludes what stands behind it.
+## The emitters append the same face dictionaries the terrain merge path uses ({d, poly, cols}, or {d, fan, fcols} for a soft
+## billboard), so tree faces depth-sort against terrain quads in one list.
 
 const UP := Vector3(0, 1, 0)
 
-## The divergence angles between successive whorls that plants actually use. 137.5 degrees is
-## the golden angle (spiral phyllotaxis, far and away the commonest); 90 is decussate (maple,
-## ash); 180 distichous (elm, hazel); 120 the three-ranked whorl of many conifers. Four
-## discrete choices rather than a range, because the angle is a species trait, not a tolerance.
+## The divergence angles between successive whorls that plants use: 137.5 degrees (golden angle, spiral phyllotaxis), 90
+## (decussate), 180 (distichous), 120 (three-ranked whorl). Four discrete choices: the angle is a species trait, not a tolerance.
 const DIVERGENCE := [137.5, 90.0, 180.0, 120.0]
 
 
-## Roll one species - the per-depth rule table, and every tunable of it sampled.
-##
-## Depth and children are NOT independent draws. Axis count is children^depth and the level
-## budget would simply discard the outer orders of a 4-child 6-deep tree, so a wide species
-## is capped shallow and only the narrow ones are allowed to reach - which is also true of
-## real crowns, where a tree that forks four ways does it fewer times.
+## Roll one species: the per-depth rule table, and every tunable of it sampled. Depth and children are not independent draws:
+## a wide species is capped shallow, because the level budget would discard the outer orders of a wide deep tree.
 static func sample_species(rng: RandomNumberGenerator) -> Dictionary:
 	var children := rng.randi_range(2, 4)
 	var depth := rng.randi_range(3, 6)
@@ -72,22 +45,19 @@ static func sample_species(rng: RandomNumberGenerator) -> Dictionary:
 	return {
 		"depth": depth,
 		"children": children,
-		# The fork angle off the parent axis. Narrow reads as a poplar, wide as an old oak.
+		# The fork angle off the parent axis: narrow reads as a poplar, wide as an old oak.
 		"angle": rng.randf_range(18.0, 55.0),
-		# How the fork angle scales per order - below 1 the twigs close up toward the light,
-		# above 1 they splay out at the ends.
+		# How the fork angle scales per order: below 1 the twigs close up toward the light, above 1 they splay out.
 		"angle_falloff": rng.randf_range(0.78, 1.12),
 		"roll": DIVERGENCE[rng.randi() % DIVERGENCE.size()],
 		"ratio": rng.randf_range(0.55, 0.82),
-		# The LEADER: child 0 of every whorl continues the parent's axis at this fraction of
-		# the fork angle and a little longer than its siblings. Without it there is no trunk.
+		# The leader: child 0 of every whorl continues the parent's axis at this fraction of the fork angle and a little longer than its siblings.
 		"leader": rng.randf_range(0.10, 0.45),
 		"leader_ratio": rng.randf_range(1.0, 1.35),
 		"taper": rng.randf_range(0.62, 0.78),
 		"internodes": rng.randi_range(2, 4),
 		"crown": rng.randf_range(0.25, 0.70),
-		# Gravitropism: how hard each internode re-aims toward vertical. Slightly negative is
-		# allowed - a weeping form that gives up on the sky.
+		# Gravitropism: how hard each internode re-aims toward vertical. Slightly negative is a weeping form.
 		"tropism": rng.randf_range(-0.05, 0.34),
 		"photo": rng.randf_range(0.0, 0.22),
 		"droop": rng.randf_range(0.0, 0.34),
@@ -96,21 +66,16 @@ static func sample_species(rng: RandomNumberGenerator) -> Dictionary:
 		"jitter": rng.randf_range(0.05, 0.22),
 		"leaf_size": rng.randf_range(0.030, 0.085),
 		"leaf_ragged": rng.randf_range(0.12, 0.38),
-		# How readily the TRUNK throws side branches between whorls, so the crown is not one
-		# ring of limbs stuck on the top of a pole.
+		# How readily the trunk throws side branches between whorls.
 		"lateral": rng.randf_range(0.35, 1.0),
 	}
 
 
-## Grow one model. Returns
-## `{segs, leaves, puffs, level_end, height, radius, depth, crown, crown_r}` in local space
-## (base at the origin, +y up, real height == [param height]).
+## Grow one model. Returns `{segs, leaves, puffs, level_end, height, radius, depth, crown, crown_r}` in local space (base at
+## the origin, +y up, real height == [param height]).
 ##
-## Each segment is `{a, b, w0, w1, depth, born0, born}`. `born0`/`born` are the segment's
-## start and end as a fraction of the longest path from the base, so a caller reveals the
-## structure with one scalar and the growth front sweeps outward from the trunk exactly the
-## way a season fills a tree in - and a segment straddling the front can be shortened rather
-## than popping.
+## Each segment is `{a, b, w0, w1, depth, born0, born}`: `born0`/`born` are its start and end as a fraction of the longest path
+## from the base, so one scalar reveals the structure with the growth front sweeping outward from the trunk.
 static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 		radius: float, sun: Vector3, budget := 200) -> Dictionary:
 	var depth_max: int = int(sp["depth"])
@@ -135,9 +100,8 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 	var want := UP.lerp(sun_dir, clampf(photo, 0.0, 1.0)).normalized()
 
 	var segs: Array = []
-	# The trunk axis is only the CLEAR part of the tree; the crown is built above it by the
-	# leader, so the axis is shortened by the crown fraction and the rescale at the end puts
-	# the finished silhouette back at the requested height.
+	# The trunk axis is only the clear part of the tree; the crown is built above it by the leader, so the axis is shortened by
+	# the crown fraction and the final rescale restores the requested height.
 	var level: Array = [{
 		"p": Vector3.ZERO, "dir": _jog(UP, float(sp["lean"]), rng),
 		"len": height * (1.0 - crown * 0.55), "w": radius,
@@ -148,7 +112,7 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 		var next: Array = []
 		for entry in level:
 			var ax: Dictionary = entry
-			# Finer wood is drawn with fewer internodes - it curves less and costs less.
+			# Finer wood is drawn with fewer internodes: it curves less and costs less.
 			var n := maxi(1, internodes - int(d / 2))
 			var alen: float = float(ax["len"])
 			var aw: float = float(ax["w"])
@@ -157,16 +121,14 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 			var path: float = float(ax["path"])
 			var roll: float = float(ax["roll"])
 			var seg_len := alen / float(n)
-			# Tropism is spent over the whole axis, so a 2-internode twig and a 4-internode
-			# trunk bend by the same total amount rather than by the same amount per step.
+			# Tropism is spent over the whole axis, so a twig and a trunk bend by the same total amount.
 			var pull := clampf(tropism - droop * float(d) / float(maxi(1, depth_max)),
 				-0.5, 0.8) / float(n)
 			for i in n:
 				dir = _jog(dir.lerp(want, pull).normalized(), jitter / float(n), rng)
 				var t0 := float(i) / float(n)
 				var t1 := float(i + 1) / float(n)
-				# The buttress: only the trunk flares, and only near the ground (cubed, so the
-				# swelling is confined to the base rather than fattening the whole shaft).
+				# The buttress: only the trunk flares, only near the ground (cubed, confining the swelling to the base).
 				var fl0 := 1.0
 				var fl1 := 1.0
 				if d == 0:
@@ -205,18 +167,15 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 					clen *= lead_ratio
 					cw = tip_w * 0.92
 				next.append(_child_at(pos, dir, phi, theta, clen, cw, roll + roll_step, path))
-		# THE LEVEL BUDGET. Accept the next order only if it fits whole - a level short is a
-		# younger tree, a level half-expanded is a broken one.
+		# The level budget: accept the next order only if it fits whole.
 		var est := next.size() * maxi(1, internodes - int((d + 1) / 2))
 		if segs.size() + est > budget:
 			next = []
 		level = next
 		d += 1
 
-	# Normalize the growth front and put the silhouette back at the requested height. Widths
-	# are deliberately NOT rescaled: the caller passes a radius as a fraction of the final
-	# height and gets exactly that, instead of a thickness that drifts with how tall the
-	# structure happened to grow.
+	# Normalize the growth front and put the silhouette back at the requested height. Widths are not rescaled: a radius passed as
+	# a fraction of the final height is exactly that.
 	var pmax := 0.001
 	var ymax := 0.001
 	for entry in segs:
@@ -233,11 +192,8 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 		sg["born0"] = clampf(float(sg["path0"]) / pmax, 0.0, 1.0)
 		sg["born"] = clampf(float(sg["path"]) / pmax, 0.0, 1.0)
 
-	# LEVEL INDEX. Segments are appended level by level, so the array is already ordered by
-	# depth and one integer per order is enough for a caller to stop early: `level_end[k]` is
-	# the index past the last segment of order k. That is what makes the silhouette LOD free -
-	# a distant tree walks four trunk segments instead of skipping two hundred it will not draw,
-	# and at a hundred trees a frame the skipping was the cost, not the drawing.
+	# Level index: segments are appended level by level, so `level_end[k]` is the index past the last segment of order k, and a
+	# caller stops early by depth (silhouette LOD costs nothing).
 	var level_end := PackedInt32Array()
 	level_end.resize(deepest + 1)
 	for si in segs.size():
@@ -246,8 +202,7 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 	for lk in range(1, level_end.size()):
 		level_end[lk] = maxi(level_end[lk], level_end[lk - 1])
 
-	# LEAF SITES: the outer two orders only, strided down to a cap. Every twig carrying its
-	# own cluster is both unaffordable and wrong - real foliage is held in masses.
+	# Leaf sites: the outer two orders only, strided down to a cap (foliage is held in masses).
 	var leaves: Array = []
 	var outer: Array = []
 	var leaf_order := maxi(0, deepest - 1)
@@ -255,17 +210,14 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 		var sg: Dictionary = entry
 		if int(sg["depth"]) >= leaf_order:
 			outer.append(sg)
-	# THE CAP IS THE FOLIAGE'S GRAIN. At 46 sites a crown has to be filled with clusters a third
-	# of its own radius across, and a hard-edged cluster that big is a plate of colored card -
-	# coarse at the wrong scale. Three times the sites lets each one be a third the size, which
-	# is grain rather than plating, and the near LOD band is capped at a dozen trees so the
-	# billboards this adds are bounded.
+	# The cap is the foliage's grain: at 46 sites the clusters are a third of the crown's radius across and read as colored
+	# card; three times the sites makes each a third the size. The near LOD band is capped at a dozen trees to bound the
+	# billboards.
 	var cap := 112
 	var stride := maxi(1, int(ceil(float(outer.size()) / float(cap))))
 	var lsize: float = float(sp["leaf_size"]) * height
-	# `along` is renormalized over the leaves' OWN range of born-fractions. Raw, they all sit
-	# near 1.0 (they are the tips, by construction), so a base-to-tip hue turn keyed to it
-	# would be a constant offset rather than a gradient across the crown.
+	# `along` is renormalized over the leaves' own range of born-fractions (raw, they all sit near 1.0, so a base-to-tip hue turn
+	# keyed to it would be a constant offset).
 	var blo := 1.0
 	var bhi := 0.0
 	for entry in outer:
@@ -288,9 +240,8 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 			"along": clampf((float(sg["born"]) - blo) / bspan, 0.0, 1.0),
 			"born": float(sg["born"])})
 
-	# The SILHOUETTE form: a handful of crown puffs a distant tree collapses to. Measured off
-	# the leaf mass rather than invented, so the far tree occupies the same space the near one
-	# would and a push-in does not make the wood change shape.
+	# The silhouette form: a handful of crown puffs a distant tree collapses to, measured off the leaf mass so the far tree
+	# occupies the same space as the near one.
 	var cen := Vector3.ZERO
 	var crad := height * 0.22
 	if not leaves.is_empty():
@@ -304,13 +255,8 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 			crad = maxf(crad, ((lf["p"] as Vector3) - cen).length())
 	else:
 		cen = Vector3(0.0, height * 0.72, 0.0)
-	# THE PUFF CLOUD MUST FIT INSIDE THE CROWN IT STANDS IN FOR. It did not: offsets reached
-	# 0.55 of the crown radius and each puff was up to 0.80 of it, so the silhouette spanned
-	# 1.35 crowns before the billboard's own raggedness widened it again - and a distant tree
-	# was visibly a third bigger than the near tree it was a copy of. Rendered and looked at:
-	# "their size seems too large relative to the terrain" is mostly this, because the far
-	# band is most of the wood. Offsets and radii now sum to 1.0, which is what "the same
-	# space the near one would occupy" means.
+	# The puff cloud must fit inside the crown it stands for: offsets and radii sum to 1.0, so the far tree is not bigger than
+	# the near one.
 	var puffs: Array = []
 	for _pi in rng.randi_range(4, 7):
 		var off := Vector3(rng.randf_range(-1.0, 1.0), rng.randf_range(-0.8, 0.8),
@@ -327,8 +273,7 @@ static func grow(sp: Dictionary, rng: RandomNumberGenerator, height: float,
 		"level_end": level_end}
 
 
-# One child axis: a heading built from the parent's own frame - `phi` around the parent axis
-# (the divergence roll), `theta` away from it (the fork angle).
+# One child axis: a heading built from the parent's own frame - `phi` around the parent axis (the divergence roll), `theta` away from it (the fork angle).
 static func _child_at(pos: Vector3, dir: Vector3, phi: float, theta: float,
 		clen: float, cw: float, roll: float, path: float) -> Dictionary:
 	var fx := dir.cross(UP)
@@ -340,8 +285,7 @@ static func _child_at(pos: Vector3, dir: Vector3, phi: float, theta: float,
 	return {"p": pos, "dir": cd, "len": clen, "w": cw, "roll": roll, "path": path}
 
 
-# A small random deflection of a heading. Every node in a plant is a little off its ideal
-# angle, and without this the whole structure reads as machined.
+# A small random deflection of a heading, so the structure does not read as machined.
 static func _jog(v: Vector3, amount: float, rng: RandomNumberGenerator) -> Vector3:
 	var n := v.normalized() if v.length() > 1e-6 else UP
 	if amount <= 0.0:
@@ -352,9 +296,8 @@ static func _jog(v: Vector3, amount: float, rng: RandomNumberGenerator) -> Vecto
 	return out.normalized() if out.length() > 1e-6 else n
 
 
-## The camera's screen-aligned right / up axes in world space, for billboards. Returns
-## `[right, up]`. [Lens3D] caches this internally but does not expose it, and a scene that
-## billboards thousands of things should not recompute it per item.
+## The camera's screen-aligned right / up axes in world space, for billboards. Returns `[right, up]`. [Lens3D] caches this
+## internally but does not expose it.
 static func cam_axes(lens: Lens3D) -> Array:
 	var fwd := lens.look - lens.eye
 	fwd = fwd.normalized() if fwd.length() > 1e-6 else Vector3(0, 0, -1)
@@ -363,17 +306,12 @@ static func cam_axes(lens: Lens3D) -> Array:
 	return [right, right.cross(fwd).normalized()]
 
 
-## THE TAPERED-TUBE LOFT, generalized out of spires' private one (which lofted SIDES x LEVELS
-## rings for a whole tower and could not be reused for anything else). One segment becomes a
-## closed `sides`-gon tube from radius [param w0] to [param w1], back-face culled - which
-## halves the face count for free, and is safe here precisely because the tube IS closed,
-## unlike a hollow spire shaft where the far wall has to fill the near one in.
+## The tapered-tube loft. One segment becomes a closed `sides`-gon tube from radius [param w0] to [param w1], back-face culled
+## (safe because the tube is closed).
 ##
-## Faces append as `{d, poly, cols}`, the same shape [method Terrain.collect_surface] returns,
-## so a caller merges wood and land into ONE depth-sorted list and the hill occludes the trunk
-## behind it. Shading is the key light's n.l over an [param ambient] floor, plus [param rim] -
-## a term that peaks where the surface turns away from the eye, which is the only channel the
-## audio glow drives on bark (sound moves the light, never the geometry).
+## Faces append as `{d, poly, cols}`, the shape [method Terrain.collect_surface] returns, so a caller merges wood and land into
+## one depth-sorted list. Shading is the key light's n.l over an [param ambient] floor, plus [param rim], a term that peaks where
+## the surface turns away from the eye, which is the only channel the audio glow drives on bark.
 static func loft_tube(faces: Array, lens: Lens3D, u: float, a: Vector3, b: Vector3,
 		w0: float, w1: float, sides: int, col: Color, ldir: Vector3,
 		ambient := 0.42, rim := 0.0) -> void:
@@ -420,13 +358,9 @@ static func loft_tube(faces: Array, lens: Lens3D, u: float, a: Vector3, b: Vecto
 			"cols": PackedColorArray([lo, lo, hi, hi])})
 
 
-## The LOD form of the same segment: one camera-facing tapered ribbon instead of a tube.
-##
-## Built in SCREEN space on purpose. A twig a few millimeters thick at eight world units
-## projects to well under a pixel, and a sub-pixel quad is either discarded by the area guard
-## or rasterized as nothing - so a lofted twig simply vanishes and the crown goes bald at
-## exactly the distance where it matters most. Widening to a floor of [param min_px] after
-## projection keeps every twig a visible hairline, which is what a real branch does to the eye.
+## The LOD form of the same segment: one camera-facing tapered ribbon instead of a tube. Built in screen space: a sub-pixel
+## twig is discarded or rasterized as nothing, so widening to a floor of [param min_px] after projection keeps every twig a
+## visible hairline.
 static func loft_ribbon(faces: Array, lens: Lens3D, u: float, a: Vector3, b: Vector3,
 		w0: float, w1: float, ca: Color, cb: Color, min_px := 0.55) -> void:
 	var axis := b - a
@@ -453,9 +387,7 @@ static func loft_ribbon(faces: Array, lens: Lens3D, u: float, a: Vector3, b: Vec
 		ea = (ea / la) * min_px if la > 1e-6 else Vector2(min_px, 0.0)
 	if lb < min_px:
 		eb = (eb / lb) * min_px if lb > 1e-6 else Vector2(min_px, 0.0)
-	# A point just past the near plane projects to coordinates in the millions, and a vertex
-	# buffer full of those is at best wasted triangles and at worst non-finite. The near-plane
-	# test above catches most of it; this catches the rest.
+	# A point just past the near plane projects to coordinates in the millions: the near-plane test above catches most, this the rest.
 	if not (is_finite(oa.x) and is_finite(oa.y) and is_finite(ob.x) and is_finite(ob.y)):
 		return
 	if maxf(absf(oa.x), absf(oa.y)) > 1.0e6 or maxf(absf(ob.x), absf(ob.y)) > 1.0e6:
@@ -465,28 +397,18 @@ static func loft_ribbon(faces: Array, lens: Lens3D, u: float, a: Vector3, b: Vec
 		"cols": PackedColorArray([ca, ca, cb, cb])})
 
 
-## A billboard cluster - one leaf mass, or one crown puff of a distant tree.
+## A billboard cluster: one leaf mass, or one crown puff of a distant tree.
 ##
-## A fan with an opaque core, a rim whose radius is modulated per vertex so the silhouette is
-## broken rather than a disc, and a rim ALPHA that decides whether the thing has an edge at all.
-## This is deliberately NOT a textured atlas quad: leaves interleave with terrain quads in the
-## merged depth sort, and a second texture in that list cuts the batch at every crossing between
-## land and foliage - the exact failure the water sheet cost 894 batch cuts a frame to prove. A
-## fan is five triangles in the run everything else is already in.
+## A fan with an opaque core, a rim whose radius is modulated per vertex so the silhouette is broken, and a rim alpha that decides
+## whether the thing has an edge at all. Not a textured quad: a second texture in the merged depth-sorted list cuts the batch at
+## every crossing between land and foliage.
 ##
-## [param hard] IS WHY FOLIAGE READS AS FOLIAGE. At 0 the rim is fully transparent and the
-## cluster is a soft radial gradient - which is a cloud puff, by construction, and forty of them
-## per crown is a cloud: reported as foliage that looks "a little too fluffy... proper foliage
-## would be more coarse, not like clouds". At 1 the rim carries the core's own alpha and the
-## cluster has a hard, jagged boundary. Between them is a leaf clump: mostly solid, with the
-## gradient compressed into a thin outer band.
+## [param hard]: at 0 the rim is fully transparent and the cluster is a soft radial gradient (a cloud puff); at 1 the rim carries
+## the core's own alpha and the boundary is hard and jagged; between them is a leaf clump, mostly solid with the gradient
+## compressed into a thin outer band.
 ##
-## THE SILHOUETTE takes two harmonics and a per-vertex hash rather than one sine. One sine at
-## three lobes is a smooth trefoil however far it is pushed - round, and it stays round. Real
-## foliage has a high-frequency broken outline, so: a slow lobe for the mass's overall shape, a
-## faster one for clumping, and a hashed jitter for the leaf-scale break. The hash is keyed on
-## `s % sides` so the closing vertex lands exactly on the opening one - keyed on `s` it leaves a
-## wedge-shaped hole in every cluster.
+## The silhouette takes two harmonics (a slow lobe for the mass's shape, a faster one for clumping) and a per-vertex hash for the
+## leaf-scale break. The hash is keyed on `s % sides` so the closing vertex lands on the opening one.
 ##
 ## Faces append as `{d, fan, fcols}`; the caller draws them with [method TriBatch.tri_colored].
 static func billboard_fan(faces: Array, lens: Lens3D, u: float, c: Vector3,
@@ -509,8 +431,7 @@ static func billboard_fan(faces: Array, lens: Lens3D, u: float, c: Vector3,
 	pts.append(o)
 	cols.append(core)
 	var k := clampf(hard, 0.0, 1.0)
-	# The rim keeps a share of the core's alpha, and darkens a little as it goes: a leaf clump is
-	# lit on top and shaded at its edge, where a cloud puff simply thins out.
+	# The rim keeps a share of the core's alpha and darkens a little as it goes: lit on top, shaded at its edge.
 	var dim := lerpf(1.0, 0.74, k)
 	var edge := Color(core.r * dim, core.g * dim, core.b * dim, core.a * k)
 	for s in sides + 1:
@@ -524,8 +445,7 @@ static func billboard_fan(faces: Array, lens: Lens3D, u: float, c: Vector3,
 	faces.append({"d": pc.z, "fan": pts, "fcols": cols})
 
 
-# A deterministic 0..1 per rim vertex. Keyed on the vertex INDEX and the cluster's phase, so one
-# cluster's outline is fixed for its lifetime (a rim that re-rolled per frame would boil) while
-# no two clusters share an outline.
+# A deterministic 0..1 per rim vertex, keyed on the vertex index and the cluster's phase, so a cluster's outline is fixed for its
+# lifetime and no two clusters share one.
 static func _rim_hash(i: int, phase: float) -> float:
 	return fposmod(sin(float(i) * 12.9898 + phase * 78.233) * 43758.5453, 1.0)

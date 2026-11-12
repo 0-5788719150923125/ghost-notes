@@ -4,46 +4,34 @@ extends SceneTree
 ##
 ##   timeout 600 godot --headless --path . --script res://tests/table/soundscape_check.gd
 ##
-## IT IS LONG, and says so in the line above (scripts/check.sh reads the timeout there): every
-## check renders seconds of a place, a sample at a time in script - two minutes on a CI runner, and
-## 344 s on a busy desk (2026-10-12), which is past the 300 s a gate gets when it asks for nothing.
-## It was killed there with nothing wrong.
+## It is long, and says so in the line above (scripts/check.sh reads the timeout there): every check renders seconds of a place, a
+## sample at a time in script - two minutes on a CI runner, past the 300 s a gate gets when it asks for nothing on a busy desk.
 ##
-## - MADE SAFE: nothing written is `{}`; a part that is not an object, an unknown part or kind is left
-##   out or falls back, with a note; a sound made safe reads the same made safe again (an opening's
-##   `from` and a wind of its own included).
-## - THE AGENT DECIDES: a table whose light has a wind and whose sound says nothing of it is silent;
-##   a sound's wind on such a table is planned exactly as [TableMedium] plans it - the same gusts.
-## - NEVER TO NOTHING: a light breeze through eaves (the episode reported going silent between gusts)
-##   ebbs and flows - its quietest half second within the floor of its loud ones - and still flows:
-##   its loud half seconds stand well above its quiet ones.
-## - NO CHURN: the breeze's loudness over 10 ms wobbles little round its own 0.6 s average - against the
-##   same breeze with its rumble made of the old near-subsonic brown noise, which churned (reported as
-##   "a dishwasher or a washing machine").
-## - A GUST COMES IN AS A FADE DOES: the place's loudness (over a second) never climbs faster than
-##   8 dB a second - against the plan's own gusts heard raw (their speed through the same loudness law),
-##   which climb far faster.
-## - A SPACE: a sound at one point (a fire's crackles) comes back from round about - its ears less
-##   alike, and its tail lasting past each crackle - against the same fire with no space, dry.
-## - IT FOLLOWS THE WIND: with every strong gust of the table's wind the trees' sound rises, from just
-##   before it starts to just after its height - against the same place heard on another seed's wind.
-## - WHERE IT IS HEARD: a wind from the right is louder in the right ear, from the left in the left;
-##   heard through an opening on the right it is louder on the right whichever way it blows - and in
-##   BOTH ears: no half second of a place set to one side is more than 8 dB from one ear to
-##   the other (nor less than 2 dB: it is still to one side).
-## - SLICED THE SAME: the samples are the same rendered at once, in odd slices, or ahead on a worker.
-## - THE DIAL: 0 is silence; louder as it rises; never past the ceiling alone; and its first step is
-##   far under its middle (18 dB or more: it was 14, and "even at a value of 0.05 (the lowest) ...
-##   really quite loud", the user, 2026-10-11) - against a third of the way up, which is not.
-## - IT STEPS BACK FOR THE VOICE: under speech the place is quieter than in the gaps - against the
-##   same place with no voice, which is not.
-## - CICADAS ARE A CHORUS: their loudness over 2 ms wobbles little round its 50 ms average while they
-##   sing (each of several cicadas pulsing at its own rate, shallow) - against the recipe that was "a
-##   horrible screeching sound throughout" (the user, 2026-10-09): one narrow band a group, chopped deep at
-##   one rate, which is rough.
-## - (NOTHING PULSES AT ONE RATE is a gate of its own, tests/table/soundscape_pulse_check.gd.)
-## - EVERY PART SOUNDS: each part and kind alone is heard at the dial's middle, in a sane range, and
-##   none is NaN.
+## - Made safe: nothing written is `{}`; a part that is not an object, an unknown part or kind is left out or falls back, with a
+##   note; a sound made safe reads the same made safe again (an opening's `from` and a wind of its own included).
+## - The agent decides: a table whose light has a wind and whose sound says nothing of it is silent; a sound's wind on such a table
+##   is planned exactly as [TableMedium] plans it - the same gusts.
+## - Never to nothing: a light breeze through eaves ebbs and flows - its quietest half second within the floor of its loud ones -
+##   and still flows: its loud half seconds stand well above its quiet ones.
+## - No churn: the breeze's loudness over 10 ms wobbles little round its own 0.6 s average (control: a rumble of near-subsonic
+##   brown noise churns).
+## - A gust comes in as a fade does: the place's loudness (over a second) never climbs faster than 8 dB a second (control: the
+##   plan's own gusts heard raw climb far faster).
+## - A space: a sound at one point (a fire's crackles) comes back from round about - its ears less alike, and its tail lasting past
+##   each crackle (control: the same fire with no space, dry).
+## - It follows the wind: with every strong gust of the table's wind the trees' sound rises, from just before it starts to just
+##   after its height (control: the same place heard on another seed's wind).
+## - Where it is heard: a wind from the right is louder in the right ear, from the left in the left; heard through an opening on the
+##   right it is louder on the right whichever way it blows - and in both ears: no half second of a place set to one side is more
+##   than 8 dB from one ear to the other (nor less than 2 dB).
+## - Sliced the same: the samples are the same rendered at once, in odd slices, or ahead on a worker.
+## - The dial: 0 is silence; louder as it rises; never past the ceiling alone; its first step is far under its middle (18 dB or
+##   more; control: a third of the way up is not).
+## - It steps back for the voice: under speech the place is quieter than in the gaps (control: the same place with no voice).
+## - Cicadas are a chorus: their loudness over 2 ms wobbles little round its 50 ms average while they sing (control: one narrow
+##   band a group, chopped deep at one rate, is rough).
+## - (Nothing pulses at one rate is a gate of its own, tests/table/soundscape_pulse_check.gd.)
+## - Every part sounds: each part and kind alone is heard at the dial's middle, in a sane range, and none is NaN.
 
 var _fails := 0
 const SR := 22050
@@ -143,7 +131,7 @@ func _table_wind() -> bool:
 
 
 func _floor() -> bool:
-	# the reported table: an autumn breeze outside a post office's glass door, through eaves
+	# an autumn breeze outside a post office's glass door, through eaves
 	var wind := {"every": 14.0, "from": "right", "gusts": 0.6, "strength": 0.3}
 	for d in [0.5, 1.0]:
 		var sc := _make({"wind": {"from": "right", "level": 0.3, "through": "eaves"}}, wind, 709583, d)
@@ -187,16 +175,14 @@ func _churn() -> bool:
 	var low: Soundscape.Band = old._w["low"]
 	low.leak = 0.997
 	low.leak_in = 0.06
-	# the old rumble, as loud beside the rush as it was
+	# the control rumble, as loud beside the rush as the near-subsonic one
 	var churned := _flutter(_louder_low(old).render(SR * 60))
 	_ok(calm < 2.5, "the breeze wobbles %.2f dB round its own average" % calm)
 	_ok(churned > calm + 1.0, "the control: the old rumble churns no more (%.2f dB against %.2f)" % [churned, calm])
 	return true
 
 
-## The old rumble's level: 3 times the new one (0.28 against 0.09), as it was when it churned.
-## HOW ROUGH A SOUND IS: its loudness over 2 ms, against its own 50 ms average, while it is sounding at
-## all (above a third of its loudest) - the rasp of a fast, deep pulse.
+## The control rumble's level: 3 times the new one (0.28 against 0.09).
 static func _rough(pcm: PackedVector2Array) -> float:
 	var w := SR / 500
 	var env := PackedFloat32Array()
@@ -224,7 +210,7 @@ static func _rough(pcm: PackedVector2Array) -> float:
 	return sqrt(dev / float(maxi(n, 1))) / maxf(mean / float(maxi(n, 1)), 1e-9)
 
 
-## The cicadas as they were: one narrow band a group, its pulse deep and at one rate.
+## The control cicadas: one narrow band a group, its pulse deep and at one rate.
 static func _one_whine(sc: Soundscape) -> Soundscape:
 	for g in sc._in["cicadas"]:
 		var voices: Array = (g as Dictionary)["voices"]
@@ -250,10 +236,9 @@ static func _louder_low(sc: Soundscape) -> Soundscape:
 	return sc
 
 
-## EVERY STRONG GUST IS HEARD AS IT IS SEEN: from just before it starts to just after its height, the
-## sound rises - the place holds a gust and lets it go slowly, so its loudness no longer tracks the
-## plan's speed sample for sample, but it comes up with every gust the leaves and petals show.
-## The steepest climb of [param db] (a loudness every 50 ms) once smoothed over a second, in dB/s.
+## Every strong gust is heard as it is seen: from just before it starts to just after its height, the sound rises - the place holds a gust
+## and lets it go slowly, so its loudness no longer tracks the plan's speed sample for sample, but it comes up with every gust the leaves
+## and petals show. The steepest climb of [param db] (a loudness every 50 ms) once smoothed over a second, in dB/s.
 static func _steepest(db: PackedFloat32Array) -> float:
 	var most := 0.0
 	var prev := INF
@@ -356,8 +341,8 @@ func _sides() -> bool:
 	var w := _rms(win.render(SR * 30))
 	_ok(linear_to_db(w.y) - linear_to_db(w.x) > 3.0, "heard through an opening on the right, it is %.1f dB right of left" %
 		(linear_to_db(w.y) - linear_to_db(w.x)))
-	# ...and in BOTH ears: no half second of a sound set wholly to one side, heard alone, leaves an ear far
-	# behind - each alone, since sounds on both sides together would balance and prove nothing
+	# ...and in both ears: no half second of a sound set wholly to one side, heard alone, leaves an ear far behind - each alone, since sounds
+	# on both sides together would balance and prove nothing
 	var wind := {"from": "right", "strength": 0.6, "gusts": 0.8, "every": 10}
 	for aside in [{"wind": {"through": "eaves", "from": "right"}}, {"water": {"kind": "hull", "from": "right"}},
 			{"fire": {"from": "left", "distance": 0.0}}, {"stream": {"from": "right"}}]:
@@ -414,7 +399,7 @@ func _dial() -> bool:
 		for v in pcm:
 			peak = maxf(peak, maxf(absf(v.x), absf(v.y)))
 		_ok(peak <= Soundscape.CEILING * 1.001, "at %.1f a place alone peaks at %.3f, past the ceiling" % [d, peak])
-	# THE BOTTOM IS FAR UNDER THE MIDDLE: the dial's first step, and the control a third of the way up
+	# The bottom is far under the middle: the dial's first step, and the control a third of the way up
 	var middle := linear_to_db(_rms(_make(place, {}, 3, 0.5).render(SR * 30)).length())
 	var first := middle - linear_to_db(_rms(_make(place, {}, 3, 0.05).render(SR * 30)).length())
 	var third := middle - linear_to_db(_rms(_make(place, {}, 3, 0.3).render(SR * 30)).length())

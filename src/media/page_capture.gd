@@ -1,21 +1,16 @@
 extends RefCounted
 class_name PageCapture
 
-## PageCapture - a REAL web page, captured as one tall picture, for the tablet medium.
+## PageCapture - a real web page captured as one tall picture, for the tablet medium.
 ##
-## A `<!-- url: -->` the chapter writes nothing under is the real page at that address. It is
-## shown as a capture of the page: taken ONCE, on request, and kept in the [Illustrations]
-## library as that page's picture - so a render shows exactly what the live session showed, the
-## versions/import/delete machinery applies to it, and a site that refuses a headless browser
-## can be replaced by a screenshot imported from disk.
+## A `<!-- url: -->` the chapter writes nothing under is the page at that address, captured once
+## on request and kept in the [Illustrations] library as that page's picture, so a render shows what
+## the live session showed and the versions/import/delete machinery applies (a site that refuses a
+## headless browser can be replaced by an imported screenshot).
 ##
-## The capture is Playwright's Chromium, driven by `hosts/capture/capture.py` in ghost's OWN
-## environment (`capture_venv`, see [Provision]: built by uv on ghost's own Python, with the browser
-## downloaded into Playwright's cache as its last step). Built the first time a page is captured;
-## a session that never captures installs nothing.
-##
-## SUCCESS IS THE ARTIFACT, never an exit code: a capture is judged by the PNG it left behind, and
-## one that produced no PNG reports its log's last lines.
+## Playwright's Chromium, driven by `hosts/capture/capture.py` in `capture_venv` (see [Provision]),
+## built the first time a page is captured. Success is the PNG left behind, never an exit code; a
+## capture with no PNG reports its log's last lines.
 
 const ENV := "capture_venv"
 const VENV := "user://capture_venv"

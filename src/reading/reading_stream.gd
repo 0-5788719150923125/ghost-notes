@@ -1,92 +1,66 @@
 extends RefCounted
 class_name ReadingStream
 
-## ReadingStream - the reading on the stream: THE SLIDING WINDOW. A chapter is far too long to
-## synthesize up front: at roughly 4x real time, twenty minutes of narration is five minutes of
-## silence before anything plays. So the text is planned into chunks at sentence boundaries
-## ([ReadingPlan]) and only [constant LOOKAHEAD] of them are ever in flight. The first chunk plays
-## while the second is still being made, and each finished one pulls the next one in. First audio
-## arrives in seconds however long the chapter is, and memory stays bounded.
+## ReadingStream - the reading on the stream: the sliding window. A chapter is too long to synthesize up front
+## (at roughly 4x real time, twenty minutes of narration is five minutes of silence), so the text is planned into
+## chunks at sentence boundaries ([ReadingPlan]) and only [constant LOOKAHEAD] of them are ever in flight. The
+## first chunk plays while the second is made and each finished one pulls the next in, so first audio arrives in
+## seconds and memory stays bounded.
 ##
-## A PART OF ITS PANEL (next/structure.md, step 20). It holds the reading on the stream - its plan,
-## the requests in flight and the takes come back, the one continuous stream and its ring, the take
-## being joined ([ReadingJoin]: the seams, the room's marks, the words, the outro mark's fade), the
-## live effects chain and the place under the voice - and asks the [ReadingPanel] it is part of for
-## the words, a voice's settings, the host and the requests. The panel asks it to play, stop,
-## re-pace and seek, and, for the transport, where it is.
+## A part of its panel (next/structure.md, step 20). It holds the reading on the stream - its plan, the requests in
+## flight and the takes come back, the one continuous stream and its ring, the take being joined ([ReadingJoin]),
+## the live effects chain and the place under the voice - and asks the [ReadingPanel] it is part of for the words,
+## a voice's settings, the host and the requests. The panel asks it to play, stop, re-pace and seek, and, for the
+## transport, where it is.
 
-## The [ReadingPanel] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [ReadingPanel] this is a part of: everything read through it is something this part is handed.
 var panel: ReadingPanel
 
 const LOOKAHEAD := 2           # chunks in flight; 1 would stall at every seam
-# ...and a bound on how much finished audio may sit AHEAD of the playhead.
-#
-# LOOKAHEAD alone throttles concurrency, not depth: chunks were requested as
-# fast as they arrived, so at ~4x real time the whole chapter ended up decoded
-# and queued within a minute. Nothing was wrong with the audio, but a tone or
-# pace change then had nothing left to affect - every remaining chunk was
-# already made - so the switch appeared to take "ages". Keeping only a few
-# seconds buffered is what makes the window actually slide.
-# Must comfortably EXCEED the generator's own ring (measured 131071 frames,
-# 5.94 s at 22050) - otherwise the ring drains while the next chunk is still
-# being synthesized and playback stalls, which is heard as a pause every few
-# chunks and seen as the visualizer freezing with it. 3.0 was below the ring and
-# did exactly that. The cost is switch latency, which is why chunks are single
-# sentences: small chunks keep the window shallow in TIME while still deep
-# enough in SECONDS to never starve.
+# ...and a bound on how much finished audio may sit ahead of the playhead. LOOKAHEAD throttles concurrency, not
+# depth: without this the whole chapter is decoded and queued within a minute, and a tone or pace change has
+# nothing left to affect. It must comfortably exceed the generator's own ring (131071 frames, 5.94 s at 22050),
+# or the ring drains while the next chunk is synthesized and playback stalls. The cost is switch latency, which is
+# why chunks are single sentences: shallow in time, deep enough in seconds to never starve.
 const LOOKAHEAD_SECONDS := 9.0
-## Seconds of audio that must be queued before the first sample is heard, when there is
-## no intro to serve as the lead. Chunks are one sentence, and a short opening sentence
-## (1.13 s, measured) cannot cover the synthesis of a long second one (14.49 s), so
-## playback starves without a floor here. It is a LOWER bound on latency-to-first-word,
-## which is why it is not larger.
+## Seconds of audio that must be queued before the first sample is heard, when there is no intro to serve as the
+## lead. A short opening sentence (1.13 s measured) cannot cover the synthesis of a long second one (14.49 s). It
+## is a lower bound on latency-to-first-word, so it is not larger.
 const LIVE_PREROLL := 2.5
-## THE WINDOW FOLLOWS THE HOST (2026-10-25, the user, reading a chapter in a Kokoro voice: "playback kept
-## freezing"). LOOKAHEAD_SECONDS was sized for Piper, which makes a take four to eleven times faster
-## than it is heard; Kokoro makes one two to three times faster, less on a busy machine, so a long
-## sentence could take longer to make than the audio ahead of it lasted, and the stream ran dry. So the
-## host's pace is MEASURED from what comes back ([method _measure]: the seconds it took per estimated
-## second of each chunk) and the window keeps DEPTH_SAFETY times what the next LOOKAHEAD chunks will
-## take to make ([method depth]) - never less than LOOKAHEAD_SECONDS, so a fast host reads as before,
-## and never more than DEPTH_MOST, the latency a pace or tone change may cost. The lead before the first
-## sample is as long as the next chunk will take to make ([method lead_for]): a host that slow would
-## have stopped there anyway, and a pause before the first word is better than one inside a sentence.
-## Replayed (tests/reading/stream_depth_check.gd): at 1.5x real time the old window ran dry twice in
-## fifteen sentences, this one never; at Piper's pace both start at the same moment.
+## The window follows the host. LOOKAHEAD_SECONDS is sized for Piper, which makes a take four to eleven times
+## faster than it is heard; Kokoro makes one two to three times faster, so a long sentence could take longer to
+## make than the audio ahead of it lasted. So the host's pace is measured from what comes back ([method _measure]:
+## seconds taken per estimated second of each chunk) and the window keeps DEPTH_SAFETY times what the next
+## LOOKAHEAD chunks will take to make ([method depth]), never less than LOOKAHEAD_SECONDS and never more than
+## DEPTH_MOST (the latency a pace or tone change may cost). The lead before the first sample is as long as the
+## next chunk will take to make ([method lead_for]). See tests/reading/stream_depth_check.gd.
 const DEPTH_SAFETY := 1.5
 const DEPTH_MOST := 45.0
-## How much voice a PAUSED reading makes ahead of the playhead (seconds, [method _depth_now]): the whole of any reading a show makes.
+## How much voice a paused reading makes ahead of the playhead (seconds, [method _depth_now]): the whole of any reading a show makes.
 const BUFFER_PAUSED := 900.0
 
-# THE PLAN on the stream ([ReadingPlan])
+# The plan on the stream ([ReadingPlan])
 var chunks: Array = []        # [{tokens, words, ...}] planned up front, cheap
-## THE TAKE KEPT, playing whole as the session's audio ([method _play_take]): its wav, "" while the reading is said live.
+## The take kept, playing whole as the session's audio ([method _play_take]): its wav, "" while the reading is said live.
 var take_path := ""
 ## ...and it has played to its end: the reading is over ([method ReadingPanel.take_ended]).
 var take_done := false
 ## The reading on the stream no longer matches the panel: the next Play reads it again.
 var stale := false
-## THE OUTRO MARK, live: how long the fade is (0 = no mark; where it starts is the join's,
-## [member ReadingJoin.fade_at]).
+## The outro mark, live: how long the fade is (0 = no mark; where it starts is the join's, [member ReadingJoin.fade_at]).
 var _fade_len := 0.0
-# THE PREDICTED TIMELINE. The scrub bar used to be scaled by how much audio had been
-# DECODED, which grows as the reading is synthesized - so the bar's own length changed
-# under the pointer and dragging to "near the end" meant near the end of the first thirty
-# seconds. A timeline has to know how long the thing is before it plays it.
+# The predicted timeline: a scrub bar scaled by how much audio has been decoded would change length under the
+# pointer as the reading is synthesized, so the bar is scaled by an estimate.
 var _chunk_t := PackedFloat32Array()     # chunk -> its estimated start along the reading, s (n + 1)
-## LIVE SCRUBBING, BY SENTENCE. A live reading is synthesized a sentence or two ahead, so there
-## is no audio behind or ahead of the playhead to seek within. The transport's rail (through the
-## panel's conductor hooks, [method ReadingPanel.transport_hooks]) therefore seeks by SENTENCE: its
-## positions are estimated sentence starts, and a seek is Stop + Play from that sentence - a fresh
-## reading that is only synthesized from there on. The media start in the state they would be in
-## at that point (book_document()["start_words"]). The in-place generator seek stays withdrawn
-## (see the note over the scrub); this never seeks a stream, it ends one and starts another, as
-## Stop then Play does.
+## Live scrubbing, by sentence. A live reading is synthesized a sentence or two ahead, so there is no audio to
+## seek within. The transport's rail (through the panel's conductor hooks, [method ReadingPanel.transport_hooks])
+## seeks by sentence: its positions are estimated sentence starts, and a seek is Stop + Play from that sentence, a
+## fresh reading synthesized from there on. The media start in the state they would be in at that point
+## (book_document()["start_words"]). This never seeks a stream; it ends one and starts another.
 var _start_chunk := 0
 var _seek_k := -1                        # a seek waiting for the bar to settle
 
-# THE WINDOW: what is asked of the host and what has come back
+# The window: what is asked of the host and what has come back
 var _ready_takes: Array = []   # [{wav, index, spans}] synthesized, awaiting the push
 var _next_to_request := 0
 var _next_to_play := 0
@@ -96,13 +70,11 @@ var _epoch := 0                # bumped on a pace change; stale replies are drop
 var _cost := 0.0               # the host's seconds per estimated second of a chunk, 0 unmeasured
 var _done_ms := 0              # when the host last handed something back (it makes one at a time)
 
-# THE ONE CONTINUOUS STREAM
+# The one continuous stream
 var playback: AudioStreamGeneratorPlayback
 var _stream_open := false      # explicit: a null playback must not retry forever
 var _pending := PackedFloat32Array()   # decoded samples not yet handed to the ring
-var _read := 0                 # cursor into _pending; slicing it per frame was
-                               # an O(n) copy of the whole queue 60 times a
-                               # second, which is its own source of hitching
+var _read := 0                 # cursor into _pending (slicing it per frame would copy the whole queue)
 var _pushed := 0               # frames handed to the ring, for the played-time clock
 var _ring_capacity := 0        # measured, never computed - see _drain_ready
 var _lead_in := 0.0            # the intro seeded into _pending by plan, in seconds
@@ -110,22 +82,20 @@ var _outro_queued := false     # the outro's silence is on the stream (see the d
 var _fade_done := false        # the outro mark's fade has run out: the reading is cut
 var _sub_words: Array = []     # shared BY REFERENCE with the Subtitles overlay
 var _sub_phones: Array = []    # ...and the phones, the same way (Subtitles.phones)
-## THE TAKE BEING JOINED ([ReadingJoin]): the frames queued on the stream from its first (the intro's
-## silence included), the room's marks - WHEN THE ROOM CHANGES, in those frames: the effects chain is
-## stateful across chunk boundaries, which is the whole reason it runs here rather than in the host,
-## so a second speaker gets the same chain re-dialed at the exact frame their first sample is heard,
-## which is what a live slider move already does, just scheduled ([method _fx_admit] consumes them) -
-## where each chunk starts and where the outro mark's fade does. A fresh one for every reading.
+## The take being joined ([ReadingJoin]): the frames queued on the stream from its first (the intro's silence
+## included), the room's marks - when the room changes, in those frames: the effects chain is stateful across chunk
+## boundaries, so a second speaker gets the same chain re-dialed at the frame their first sample is heard
+## ([method _fx_admit] consumes them) - where each chunk starts and where the outro mark's fade does. A fresh one
+## for every reading.
 var _join := ReadingJoin.new()
 
-# THE LIVE CHAIN: the voice's room, run here rather than in the host
+# The live chain: the voice's room, run here rather than in the host
 var fx := VoiceFX.new()
 var _fx_live_name := ""        # which voice the live chain is currently dialed to
 
-## THE PLACE UNDER THE VOICE (a [SoundBed]): the wind, the sea, the rain of where the reading is, mixed
-## in after the voice's own effects - live here, and into the exported take by
-## [method ReadingPanel.export_take]. A component that knows where its reading is says so through the
-## panel's [member ReadingPanel.bed]; null when none does.
+## The place under the voice (a [SoundBed]): the wind, the sea, the rain of where the reading is, mixed in after
+## the voice's own effects - live here, and into the exported take by [method ReadingPanel.export_take]. A
+## component that knows where its reading is says so through the panel's [member ReadingPanel.bed]; null when none does.
 var _env: SoundBed = null
 var _env_key := ""             # the place it was made from, to notice the place changing mid-reading
 var _env_poll := 0.0
@@ -137,17 +107,15 @@ func _init(owner: ReadingPanel) -> void:
 
 # --- playing, stopping, and reading from part way ---------------------------------------------
 
-## Play: read the script from the top - or, while a reading plays, pause it and carry on.
-## SPEAK IS A TOGGLE while a reading plays: Pause, then Resume, from where it was. It restarted
-## the reading from the top every time, and "there are times when I need to pause the
-## visualization and come back to it later". Reading again from the top is Stop, then Play.
+## Play: read the script from the top, or, while a reading plays, pause it and carry on. Speak is a toggle while
+## a reading plays: Pause, then Resume, from where it was. Reading again from the top is Stop, then Play.
 func play() -> void:
 	if live():
 		Spectrum.set_paused(not Spectrum.paused)
 		panel._set_status("Paused. Space or ▶ carries on; ■ ends the reading."
 			if Spectrum.paused else "Resumed.")
 		return
-	# A TAKE KEPT FOR THESE WORDS IN THESE VOICES plays as it is, the host asked for nothing
+		# A take kept for these words in these voices plays as it is, the host asked for nothing
 	var said := panel._reading_body().strip_edges()
 	if not said.is_empty():
 		panel._cast.refresh(said)
@@ -155,21 +123,18 @@ func play() -> void:
 			return
 	if panel._host == null or not panel._host.is_up() or panel._cast.voice_pick.selected < 0:
 		return
-	# THE REAL-TIME READ. In sync mode this is the file as it is on disk RIGHT NOW, not as
-	# it was when the document was opened - which is what lets the author keep writing in
-	# their own editor with ghost open beside it.
+		# The real-time read: in sync mode this is the file as it is on disk right now, so the author can keep writing
+		# in their own editor with ghost open beside it.
 	var body := panel._reading_body().strip_edges()
 	if body.is_empty():
 		panel._set_status("Nothing to read yet: write the words on the Script card, then press ▶.")
 		return
-	# The cast NOW, not at the next pause in typing: a name written a moment ago must read in
-	# its own voice from the first Play.
+		# The cast now, not at the next pause in typing: a name written a moment ago must read in its own voice.
 	panel._cast.refresh(body)
 	if panel._test_busy():
 		panel._stop_test()
-	# plan is a full teardown - stream closed, queues emptied, pending request
-	# ids dropped so replies for the OLD text are discarded on arrival rather
-	# than spliced into the new reading.
+		# plan is a full teardown: stream closed, queues emptied, pending request ids dropped so replies for the old
+		# text are discarded on arrival rather than spliced into the new reading.
 	plan(body)
 	if chunks.is_empty():
 		panel._set_status("Nothing speakable in that text.")
@@ -181,11 +146,10 @@ func play() -> void:
 	_pump()
 
 
-## THE TAKE KEPT AT [param path], PLAYED WHOLE (next/editing.md step 3: "the take itself played as the session's audio, so a seek
-## is a seek inside one file"): the file a render plays, through the session a render opens - its bookend and words its
-## sidecar's - so what is heard and seen is the export's, a seek lands at once, paused or not, and the voice host makes nothing.
-## (The note below on seeking a generator: "render the take, then open the rendered file" - this is that, on Play.) False for no
-## take, or one the owner could not play: then the reading is said live.
+## The take kept at [param path], played whole (next/editing.md step 3): the file a render plays, through the
+## session a render opens (its bookend and words its sidecar's), so what is heard and seen is the export's, a seek
+## lands at once, paused or not, and the voice host makes nothing. False for no take, or one the owner could not
+## play: then the reading is said live.
 func _play_take(path: String) -> bool:
 	if path.is_empty() or not panel.begin_take.is_valid():
 		return false
@@ -206,9 +170,8 @@ func has_reading() -> bool:
 	return not chunks.is_empty() or not take_path.is_empty()
 
 
-## Tear the stream down and read again from the top. plan clears the pending
-## request map, so replies still in flight for the old voice are dropped on
-## arrival rather than spliced in.
+## Tear the stream down and read again from the top. plan clears the pending request map, so replies still in
+## flight for the old voice are dropped on arrival.
 func restart() -> void:
 	var body := panel._reading_body().strip_edges()
 	if body.is_empty():
@@ -224,18 +187,9 @@ func restart() -> void:
 	_pump()
 
 
-## STOP: end the reading and hand the stage back.
-##
-## There was no way to do this. The Speak button's tooltip claimed "press again while it is
-## running to stop" and that was simply untrue - play re-plans and reads again from the
-## top, whatever is playing. Reported as: "it would be preferable to stop the real-time scene
-## before I do an export, and today I've just been restarting the program."
-##
-## Tearing down the STREAM is the half the editor cannot do alone: the playback, the Director's
-## attachment to the stage and the subtitle overlay all belong to the owner, which is why
-## `end_stream` exists and is wired beside `begin_stream` (see main._end_generative_stream).
-## The synth editor has had both since it was written; this path was given only the opening
-## half, so nothing was ever able to close it.
+## Stop: end the reading and hand the stage back. Tearing down the stream is the half the editor cannot do
+## alone: the playback, the Director's attachment to the stage and the subtitle overlay belong to the owner, so
+## `end_stream` is wired beside `begin_stream` (see main._end_generative_stream).
 func stop() -> void:
 	if not has_reading() and playback == null:
 		return
@@ -250,8 +204,7 @@ func stop() -> void:
 ## Plan a reading: tear the old one down, then cut the text into chunks.
 func plan(body: String) -> void:
 	_reset_playback()
-	# THE INTRO, seeded HERE rather than at the moment the stream opens - see the note in
-	# _reset_playback's lead-in block, which this replaces for a reading that is starting.
+		# The intro, seeded here rather than when the stream opens - see the note in _reset_playback's lead-in block.
 	_lead_in = maxf(0.0, Director.intro_hold)
 	if _lead_in > 0.0:
 		_pending.resize(int(_lead_in * float(panel._sr)))
@@ -264,13 +217,9 @@ func plan(body: String) -> void:
 	_chunk_t = ReadingPlan.timeline(chunks)
 
 
-## EVERY PIECE OF STATE A READING OWNS, put back. Split out of [method plan] so that
-## stopping and re-planning cannot drift apart: they were one block, and a Stop button that
-## reset "most of" it is the kind that leaves a stream half open.
-##
-## The pending request map is the important one. Replies for chunks already asked for are still
-## in flight on the host, and dropping their ids here is what makes them discarded on arrival
-## instead of spliced into a reading that no longer exists.
+## Every piece of state a reading owns, put back. Split out of [method plan] so that stopping and re-planning
+## cannot drift apart. The pending request map matters most: replies for chunks already asked for are still in
+## flight on the host, and dropping their ids here makes them discarded on arrival.
 func _reset_playback() -> void:
 	chunks = []
 	take_path = ""
@@ -289,12 +238,9 @@ func _reset_playback() -> void:
 	_pending = PackedFloat32Array()
 	_read = 0
 	_fx_live_name = ""
-	# The intro silence belongs to a reading that is STARTING, so it is seeded in plan and
-	# only cleared here. The join's frames are the clock every word span and every seam is
-	# measured against, so starting them at the end of that silence offsets the whole reading,
-	# subtitles included, with nothing else needing to know. Inserting it later would put it AFTER
-	# the first sentence - the audition spoke its opening line, went quiet for five seconds, then
-	# carried on.
+		# The intro silence belongs to a reading that is starting, so it is seeded in plan and only cleared here. The
+		# join's frames are the clock every word span and seam is measured against, so starting them at the end of that
+		# silence offsets the whole reading, subtitles included. Inserting it later would put it after the first sentence.
 	_lead_in = 0.0
 	_close_environment()
 	_outro_queued = false
@@ -306,16 +252,15 @@ func _reset_playback() -> void:
 	_join.phones = _sub_phones
 
 
-## Play and Stop, from one place. Two buttons whose enabled state is set at each of the
-## several points a reading starts or ends is two buttons that will eventually disagree.
+## Play and Stop, from one place: two buttons whose enabled state is set at several points would disagree.
 func _sync_speak_buttons() -> void:
 	if not has_reading():
 		stale = false
 
 
-## Read from sentence [param k]: Stop, then Play from there. The old stream is ENDED (the voice
-## stops at once and the stage is handed back), then a fresh reading is planned and requested
-## from [param k] on, with no intro. The media start where it starts ([method start_words]).
+## Read from sentence [param k]: Stop, then Play from there. The old stream is ended (the voice stops at once and
+## the stage is handed back), then a fresh reading is planned and requested from [param k] on, with no intro. The
+## media start where it starts ([method start_words]).
 func speak_from(k: int) -> void:
 	_seek_k = -1
 	if panel._host == null or not panel._host.is_up() or panel._cast.voice_pick.selected < 0:
@@ -376,9 +321,8 @@ func start_words() -> PackedStringArray:
 	return ReadingPlan.start_words(chunks, _start_chunk)
 
 
-## A reading that is still going: planned, and not yet played out to the end. A generated
-## stream never announces its end, so "every chunk played and the buffer drained" is the end -
-## and then Play reads again from the top rather than pausing silence.
+## A reading that is still going: planned, and not yet played out to the end. A generated stream never announces
+## its end, so "every chunk played and the buffer drained" is the end, and then Play reads again from the top.
 func live() -> bool:
 	if not take_path.is_empty():
 		return not take_done and Spectrum.has_audio()
@@ -398,20 +342,16 @@ func play_label() -> String:
 	return label + (" ●" if stale and has_reading() else "")
 
 
-## The reading on the stream no longer matches the panel. The same dot the text
-## box raises, and for the same reason: the cast changed under what is playing.
+## The reading on the stream no longer matches the panel: the same dot the text box raises, since the cast changed
+## under what is playing.
 func mark_stale() -> void:
 	if has_reading():
 		stale = true
 
 
-## Re-generate everything not yet committed to the stream, at the new pace.
-##
-## Audio already pushed - and audio decoded and waiting in _pending - is
-## finished business: its subtitles are placed and the join has moved past
-## it, so rewriting it would desync the overlay. Everything from the next
-## un-drained chunk onward is thrown away and re-requested, so the new pace
-## lands within a chunk or two rather than at the end of the chapter.
+## Re-generate everything not yet committed to the stream, at the new pace. Audio already pushed, and audio decoded
+## and waiting in _pending, is finished: its subtitles are placed and the join has moved past it. Everything from
+## the next un-drained chunk onward is thrown away and re-requested, so the new pace lands within a chunk or two.
 func repace() -> void:
 	if not take_path.is_empty():
 		stale = true                # a take kept is as it was said: Stop, then Play, says it live
@@ -420,8 +360,8 @@ func repace() -> void:
 		return
 	_epoch += 1                     # in-flight replies from the old pace are now stale
 	_ready_takes.clear()
-	# The host keeps computing what it was given (there is no cancel - see [method arrived]), so
-	# the accounting for it has to survive or the pump will pile more on top.
+		# The host keeps computing what it was given (there is no cancel - see [method arrived]), so the accounting for
+		# it has to survive or the pump will pile more on top.
 	_next_to_request = _next_to_play
 	panel._set_status("%s at pace %.2fx, pause %.2fx - regenerating from chunk %d…"
 		% [panel._cast.tab_name(), panel._cast._rate.value, clampf(panel._cast._pause.value, 0.0, Delivery.MAX_PAUSE_SCALE), _next_to_play + 1])
@@ -429,29 +369,12 @@ func repace() -> void:
 
 
 # --- the scrub --------------------------------------------------------------------------------
-# SEEKING A LIVE GENERATOR IS WITHDRAWN, and this note is the record of why.
-#
-# It was built, it worked in the sense that the playhead moved, and it was wrong in two
-# ways that only showed up in use. A generator's ring cannot be cleared while playback is
-# active, so every seek had to stop and restart the stream - and repeated restarts left
-# the session audibly wrong, the voice doubling and then trebling as more seeks were made,
-# with the Director's transitions stalling alongside it. Neither reproduced in a headless
-# measurement (a freshly synthesized take autocorrelates clean, with no delayed copy), and
-# guessing further at engine-side playback state without being able to run the UI is how
-# the first two attempts at this shipped.
-#
-# The deeper problem is that it could not have served its purpose anyway. The reason to
-# scrub is to check what a given moment WILL LOOK LIKE when exported - and a seek cannot
-# answer that here, because the Director is a simulation rather than a function of time:
-# its scene choice and hold schedule evolve from the events it has actually seen, so
-# seeking forward shows the scene that happens to be up rather than the one the export
-# will have. A control that answers a different question from the one being asked is worse
-# than no control.
-#
-# What DOES answer it: render the take, then open the rendered file. A file boot is
-# seekable for real (one operation, no restart - see Spectrum.seek) and replays the same
-# deterministic show from the same seed, so scrubbing it shows exactly what the export
-# will contain. `--scene <name>` remains the fastest way to inspect one scene.
+# Seeking a live generator is not offered. A generator's ring cannot be cleared while playback is active, so every
+# seek had to stop and restart the stream, and repeated restarts left the voice doubling; and the Director is a
+# simulation, not a function of time (its scene choice and hold schedule evolve from the events it has seen), so a
+# seek would show the scene that happens to be up rather than the one the export will have. To inspect a moment
+# of the export, render the take and open the file: a file boot is seekable for real (see Spectrum.seek) and
+# replays the same deterministic show from the same seed. `--scene <name>` inspects one scene.
 
 ## The scrub bar's length: the whole reading, estimated.
 func length() -> float:
@@ -460,8 +383,8 @@ func length() -> float:
 	return _chunk_t[_chunk_t.size() - 1] if not _chunk_t.is_empty() else 0.0
 
 
-## The scrub bar's position: where a waiting seek is going, else the sentence being heard and
-## how far through it, on the estimated scale.
+## The scrub bar's position: where a waiting seek is going, else the sentence being heard and how far through it,
+## on the estimated scale.
 func position() -> float:
 	if not take_path.is_empty():
 		return Spectrum.current.time
@@ -502,8 +425,8 @@ func seek(t: float) -> void:
 		panel._seek_timer.start()
 
 
-## The bar has settled: read from the sentence a seek waits on. A SEEK WHILE PAUSED STAYS PAUSED (next/editing.md step 3: "a
-## seek while paused lands and stays paused"): the voice is made from there while nobody listens, and plays on Play.
+## The bar has settled: read from the sentence a seek waits on. A seek while paused stays paused (next/editing.md
+## step 3): the voice is made from there while nobody listens, and plays on Play.
 func seek_now() -> void:
 	var k := _seek_k
 	if k >= 0:
@@ -515,8 +438,8 @@ func seek_now() -> void:
 
 # --- the window: what is asked of the host ----------------------------------------------------
 
-## HOW FAR AHEAD OF THE PLAYHEAD THE VOICE IS MADE (seconds): what is decoded and waiting, the ring's too - and, once the last
-## sentence is made, to the end ([method ReadingPanel.transport_hooks]'s `ahead`).
+## How far ahead of the playhead the voice is made (seconds): what is decoded and waiting, the ring's too - and,
+## once the last sentence is made, to the end ([method ReadingPanel.transport_hooks]'s `ahead`).
 func ahead() -> float:
 	if not take_path.is_empty():
 		return INF
@@ -525,8 +448,7 @@ func ahead() -> float:
 	return _buffered_seconds()
 
 
-## How much finished audio is waiting to be heard: decoded but not yet pushed,
-## plus whatever is still sitting in the ring.
+## How much finished audio is waiting to be heard: decoded but not yet pushed, plus whatever is in the ring.
 func _buffered_seconds() -> float:
 	var queued := 0
 	if playback != null and _ring_capacity > 0:
@@ -534,16 +456,13 @@ func _buffered_seconds() -> float:
 	return float(maxi(_pending.size() - _read, 0) + queued) / float(maxi(panel._sr, 1))
 
 
-## Keep LOOKAHEAD chunks in flight and start playback as soon as the chunk we
-## are waiting for exists.
+## Keep LOOKAHEAD chunks in flight and start playback as soon as the chunk we are waiting for exists.
 func _pump() -> void:
 	if panel._cast.voice_meta.is_empty():
 		return
-	# THE INTRO IS NOT LOOKAHEAD. It is seeded into the queue as silence before anything is
-	# requested, so counting it made an Intro of LOOKAHEAD_SECONDS or more look like a full
-	# buffer: nothing was ever requested, the stream never opened, and Play did nothing at
-	# all ("at 9 the video breaks, at 7 it works"). Only the SPEECH queued counts; the intro
-	# still to be pushed is taken off (an underestimate once it plays, so it stays safe).
+		# The intro is not lookahead: it is seeded as silence before anything is requested, so counting it would let an
+		# Intro of LOOKAHEAD_SECONDS or more look like a full buffer and nothing would be requested. Only the speech
+		# queued counts; the intro still to be pushed is taken off.
 	var intro_left := maxf(0.0, _lead_in - float(_pushed) / float(maxi(panel._sr, 1)))
 	var planned := false
 	var hits := 0             # sentences taken from the cache this pump: a window's worth at most, then drained
@@ -558,7 +477,7 @@ func _pump() -> void:
 		var s := panel._cast.cfg_of(String((chunks[idx] as Dictionary).get("speaker", "")))
 		var args: Dictionary = panel._request_args(s, chunks[idx])
 		var key: String = panel.take_key(s, args)
-		# A SENTENCE SAID BEFORE ([TakeCache]) is in the queue at once, as the host's reply would be - no host asked
+				# A sentence said before ([TakeCache]) is in the queue at once, as the host's reply would be - no host asked
 		var kept := TakeCache.find(key)
 		if not kept.is_empty():
 			var copy := TakeCache.copy_out(key, ReadingPanel.TAKE_DIR + "/chunk_%d_%d.wav" % [idx, _epoch])
@@ -576,11 +495,10 @@ func _pump() -> void:
 		_drain_ready()
 
 
-## How deep the window is now: [method depth] over the chunks the pump would ask for next - and, WHILE THE READING IS PAUSED,
-## [constant BUFFER_PAUSED]: the voice goes on being made while nobody listens, so what follows plays with the host idle beside it
-## and the transport shows it buffered (the user, 2026-11-01: "if we pause, the computations are able to continue rolling-ahead
-## ... such that I could watch the buffered part of the episode with better performance"). What is made stays made: playing on,
-## the window is as deep as it was, and the host is asked again only as the made voice runs down to it.
+## How deep the window is now: [method depth] over the chunks the pump would ask for next - and, while the reading
+## is paused, [constant BUFFER_PAUSED]: the voice goes on being made while nobody listens, so what follows plays with
+## the host idle and the transport shows it buffered. What is made stays made: playing on, the window is as deep as
+## it was, and the host is asked again only as the made voice runs down to it.
 func _depth_now() -> float:
 	if Spectrum.paused:
 		return BUFFER_PAUSED
@@ -590,9 +508,9 @@ func _depth_now() -> float:
 	return depth(_cost, up)
 
 
-## Seconds of audio the window keeps ahead of the playhead: DEPTH_SAFETY times what the chunks
-## [param upcoming] (their estimated seconds) will take to make at [param cost], held between
-## LOOKAHEAD_SECONDS and DEPTH_MOST. Unmeasured ([param cost] 0), the window it always was.
+## Seconds of audio the window keeps ahead of the playhead: DEPTH_SAFETY times what the chunks [param upcoming]
+## (their estimated seconds) will take to make at [param cost], held between LOOKAHEAD_SECONDS and DEPTH_MOST.
+## Unmeasured ([param cost] 0), LOOKAHEAD_SECONDS.
 static func depth(cost: float, upcoming: PackedFloat32Array) -> float:
 	var make := 0.0
 	for s in upcoming:
@@ -600,18 +518,17 @@ static func depth(cost: float, upcoming: PackedFloat32Array) -> float:
 	return clampf(DEPTH_SAFETY * cost * make, LOOKAHEAD_SECONDS, DEPTH_MOST)
 
 
-## The host's cost after one more chunk was seen to cost [param seen]: believed at once when it rises
-## (a machine gone busy starves the stream the first time), let go of slowly when it falls.
+## The host's cost after one more chunk was seen to cost [param seen]: believed at once when it rises (a busy
+## machine starves the stream the first time), let go of slowly when it falls.
 static func cost_after(cost: float, seen: float) -> float:
 	if cost <= 0.0:
 		return seen
 	return lerpf(cost, seen, 0.5 if seen > cost else 0.2)
 
 
-## A reply came back: what it cost the host, from when the host could start on it (when it was asked,
-## or when the reply before it came back, whichever is later - the host makes one at a time) to now,
-## per estimated second of its chunk. A reply from before a re-pace frees the host all the same, but
-## its chunk is not this plan's, so it says nothing about the cost.
+## A reply came back: what it cost the host, from when the host could start on it (when it was asked, or when the
+## reply before it came back, whichever is later - the host makes one at a time) to now, per estimated second of
+## its chunk. A reply from before a re-pace frees the host all the same, but says nothing about the cost.
 func _measure(meta: Dictionary) -> void:
 	var now := Time.get_ticks_msec()
 	var began := maxi(int(meta.get("sent", now)), _done_ms)
@@ -649,18 +566,13 @@ func arrived(id: int, result: Dictionary) -> void:
 	var meta: Dictionary = _req_chunk[id]
 	_req_chunk.erase(id)
 	_measure(meta)
-	# THE SLOT IS FREED WHETHER OR NOT THE RESULT IS WANTED, and this has to happen BEFORE
-	# the epoch check. It did not, and that is what made seeking slower than a cold start:
-	# an abandoned request still occupies the host - the stream does not cancel it (VoiceHost.cancel
-	# came later, for Test, whose Stop leaves a whole passage behind; this leaves two) - so a jump
-	# that zeroed the counter let _pump send a full lookahead on top of work already
-	# queued, and the chunk actually being waited for ended up third or fourth in line.
-	# Counting abandoned work as in-flight means the new request enters the queue exactly
-	# when a slot frees.
+		# The slot is freed whether or not the result is wanted, and this must happen before the epoch check: an
+		# abandoned request still occupies the host (the stream does not cancel it; VoiceHost.cancel is for Test), so
+		# a jump that zeroed the counter would let _pump send a full lookahead on top of queued work, and the chunk
+		# waited for would be third or fourth in line.
 	_in_flight = maxi(0, _in_flight - 1)
 	if int(meta["epoch"]) != _epoch:
-		# Superseded by a pace change or a jump. Nothing to keep, but the pump may now
-		# have room it did not have a moment ago.
+				# Superseded by a pace change or a jump. Nothing to keep, but the pump may now have room.
 		_pump()
 		return
 	var idx: int = int(meta["idx"])
@@ -686,8 +598,8 @@ func failed() -> void:
 
 # --- the take: joined in order ----------------------------------------------------------------
 
-## Append every chunk that is ready AND next in order to the one stream. Out of
-## order arrivals wait: audio has to go out in the order it was written.
+## Append every chunk that is ready and next in order to the one stream. Out-of-order arrivals wait: audio goes
+## out in the order it was written.
 func _drain_ready() -> void:
 	while true:
 		if _fade_done:
@@ -699,7 +611,7 @@ func _drain_ready() -> void:
 				break
 		if found < 0:
 			return
-		# ...AND WHATEVER COMES IN OVER IT IS IN HAND (next/tabletop.md): once a chunk is on the stream its frames are gone, and a voice arriving late for them has nowhere to go
+				# ...and whatever comes in over it is in hand (next/tabletop.md): once a chunk is on the stream its frames are gone, and a voice arriving late for them has nowhere to go
 		if not ReadingJoin.overlaps_ready(chunks, _next_to_play, _ready_takes):
 			return
 		var take: Dictionary = _ready_takes[found]
@@ -711,26 +623,22 @@ func _drain_ready() -> void:
 		if pcm.is_empty() or idx < 0 or idx >= chunks.size():
 			continue
 		var who := String((chunks[idx] as Dictionary).get("speaker", ""))
-		# ONE JOIN, THE EXPORT'S TOO ([ReadingJoin]): the seam, the hesitations spliced in, the words
-		# in stream time and where the fade starts. The room's marks are SCHEDULED, never dialed
-		# here: this runs when a chunk is DECODED, seconds ahead of when it is heard, so dialing the
-		# chain now would put the next speaker's room over the end of this one's last sentence - the
-		# marks carry their frames and [method tick] dials each as the push reaches it.
+				# One join, the export's too ([ReadingJoin]): the seam, the hesitations spliced in, the words in stream time
+				# and where the fade starts. The room's marks are scheduled, never dialed here: this runs when a chunk is
+				# decoded, seconds ahead of when it is heard, so the marks carry their frames and [method tick] dials each
+				# as the push reaches it.
 		_join.sr = panel._sr
 		_pending.append_array(_join.add(chunks, idx, pcm, take.get("spans", []), panel._cast.cfg_of(who), panel._cast.turn_scale(),
 			take.get("phones", [])))
-		# ...and the reading ENDS where the fade does: the rest of this chunk, and every
-		# chunk after it, is never heard
+				# ...and the reading ends where the fade does: the rest of this chunk, and every chunk after it, is never heard
 		var end := _join.fade_end(_fade_len)
 		if end >= 0 and _join.frames >= end:
 			_pending.resize(_pending.size() - _join.end_at(end))
 			_fade_done = true
 			_outro_queued = true
 			chunks = chunks.slice(0, _next_to_play)
-		# THE OUTRO, after the last chunk: silence on the stream, the way the intro is silence
-		# before the first and the export pads both ends. A stream that simply runs dry stops the
-		# session clock with it, so the show froze on the last word instead of playing out the
-		# outro ("it doesn't respect the 7.0 second outro I specified").
+				# The outro, after the last chunk: silence on the stream, as the intro is silence before the first. A stream
+				# that simply runs dry stops the session clock, so the show would freeze on the last word.
 		if _next_to_play >= chunks.size() and not _outro_queued:
 			var outro := int(maxf(0.0, Director.outro_hold) * float(panel._sr))
 			if end >= 0:
@@ -741,60 +649,44 @@ func _drain_ready() -> void:
 			_outro_queued = true
 		panel._set_status("Chunk %d of %d - %.0fs of audio ready."
 			% [_next_to_play, chunks.size(), float(_join.frames) / float(panel._sr)])
-		# HOLD THE FIRST SAMPLE UNTIL THERE IS A LEAD. Chunks are one sentence each
-		# (CHUNK_SENTENCES = 1), and sentence lengths are wildly uneven: measured on
-		# chapter 3, the opening sentence renders to 1.13 s and the next to 14.49 s. The
-		# stream used to open on whatever the first chunk happened to be, so playback
-		# drained that 1.13 s and then starved for as long as the 14.49 s sentence took
-		# to synthesize. Nothing was wrong with the audio - no chunk carries more than
-		# 0.27 s of internal silence - it simply ran out.
-		#
-		# So wait for a real lead before starting. The intro doubles as that lead, which
-		# is why this is one condition and not two, and the floor covers the case where
-		# the intro is turned off entirely. Once open it stays open: the drain is
-		# continuous from here and a mid-reading stall is the pump's business, not this.
+				# Hold the first sample until there is a lead. Chunks are one sentence each and sentence lengths are uneven
+				# (1.13 s then 14.49 s on one chapter), so a stream opened on the first chunk drains it and starves while the
+				# next is synthesized. The intro doubles as the lead (one condition, not two) and the floor covers an intro
+				# turned off. Once open it stays open: a mid-reading stall is the pump's business.
 		if not _stream_open:
 			var have := float(_pending.size() - _read) / float(panel._sr)
 			var lead := maxf(maxf(_lead_in, LIVE_PREROLL), _make_next())
 			if have < lead and _next_to_play < chunks.size():
 				continue          # keep accumulating; nothing is lost, it is all queued
-			# same text, same music: the pad's note choices are seeded
+						# same text, same music: the pad's note choices are seeded
 			fx.pad_seed = hash(panel._fingerprint_text())
 			fx.setup(panel._sr)
-			# every dial onto the fresh chain, in one call - the preset's own nudge
-			# to the bed included: a mood is carried by the room as much as by the
-			# reading. The opening voice's, not the tab on screen's.
+						# every dial onto the fresh chain, in one call, the preset's own nudge to the bed included. The opening
+						# voice's, not the tab on screen's.
 			_fx_live_name = String((_join.marks[0] as Dictionary).get("speaker", who)) \
 				if not _join.marks.is_empty() else who
 			Delivery.apply_fx(fx, panel._cast.cfg_of(_fx_live_name))
-			# the session opens on the FIRST chunk and never again - that is the
-			# whole point: one unbroken take, so the Director does not re-cut
-			# and the harmonic seed does not re-derive every few sentences
+						# the session opens on the first chunk and never again: one unbroken take, so the Director does not
+						# re-cut and the harmonic seed does not re-derive every few sentences
 			_stream_open = true
 			if panel.begin_stream.is_valid():
 				playback = panel.begin_stream.call(hash(panel._fingerprint_text()), panel._sr, _sub_words)
 				# the phones ride beside the words, by reference too
 				if panel.subtitles != null and is_instance_valid(panel.subtitles):
 					panel.subtitles.set("phones", _sub_phones)
-			# the place opens with the stream: its first sample is the stream's first, at the show
-			# time the stream's frame 0 is heard at
+						# the place opens with the stream: its first sample is the stream's first, at the show time the stream's
+						# frame 0 is heard at
 			_open_environment(Spectrum.stream_origin())
-			# NO SCRUB HOOKS HERE. Seeking a live generator was implemented and is
-			# WITHDRAWN - see the note over the scrub, below.
-			# MEASURE the ring, do not compute it. Godot sizes a generator's
-			# buffer to a power of two (131071 frames measured), not to
-			# STREAM_BUFFER * sample_rate (88200) - so the computed figure made
-			# `queued` NEGATIVE, `played` start ~1.9 s ahead, and the subtitles
-			# open in the middle of the text. An empty ring reports its whole
-			# capacity as available, and it is empty exactly here, before the
-			# first push.
+						# No scrub hooks here: seeking a live generator is not offered (see the note over the scrub, below).
+						# Measure the ring, do not compute it: Godot sizes a generator's buffer to a power of two (131071 frames),
+						# not STREAM_BUFFER * sample_rate, so a computed figure made `queued` negative. An empty ring reports its
+						# whole capacity as available, and it is empty exactly here, before the first push.
 			if playback != null:
 				_ring_capacity = int(playback.get_frames_available())
 
 
-## Chunk [param idx]'s words timed from the spans the host returned ([method ReadingPlan.words_for]),
-## in the take's own seconds. This is what restores the karaoke overlay: main._attach_subtitles picks
-## up any take that has a sidecar, so the neural path gets subtitles with no special casing anywhere.
+## Chunk [param idx]'s words timed from the spans the host returned ([method ReadingPlan.words_for]), in the take's
+## own seconds: the karaoke overlay (main._attach_subtitles picks up any take that has a sidecar).
 func words_for(idx: int, spans: Array) -> Array:
 	if idx < 0 or idx >= chunks.size():
 		return []
@@ -803,36 +695,27 @@ func words_for(idx: int, spans: Array) -> Array:
 
 # --- the ring: pushed a frame at a time, through the room -------------------------------------
 
-## FEED THE RING, every frame of a reading. The generator is the only thing keeping the session
-## alive, so this must never fall behind; it is a few array copies a frame.
+## Feed the ring, every frame of a reading. The generator is the only thing keeping the session alive, so this
+## must never fall behind; it is a few array copies a frame.
 func tick(delta: float) -> void:
 	if playback == null:
 		return
 	_tick_environment(delta)
-	# THE PICTURE FADES WITH THE VOICE: the gain of the sample being heard right now, so the
-	# outro mark's fade is one fade, in sound and picture, whatever the buffer holds ahead
+		# The picture fades with the voice: the gain of the sample being heard right now, so the outro mark's fade is one
+		# fade, in sound and picture, whatever the buffer holds ahead
 	if _join.fade_at >= 0 and _ring_capacity > 0:
 		var heard := _pushed - maxi(0, _ring_capacity - int(playback.get_frames_available()))
 		Director.live_fade = _fade_gain(heard)
 
-	# RE-BASE THE SUBTITLE CLOCK FIRST, and unconditionally.
-	#
-	# This used to sit at the BOTTOM of the push block, after an early return on
-	# an empty queue - so the moment synthesis got ahead of playback and there
-	# was nothing left to push, the re-base stopped running and time_base froze.
-	# Spectrum's clock kept advancing against a stale base, _now() ran past the
-	# last word, and the overlay drew nothing from then on. Reported as: the
-	# subtitles worked briefly, then disappeared and never came back.
-	#
-	# It belongs here because it describes PLAYBACK, which continues whether or
-	# not there is new audio to hand over.
+		# Re-base the subtitle clock first, and unconditionally: it describes playback, which continues whether or not
+		# there is new audio to hand over. Behind an early return on an empty queue, time_base would freeze once
+		# synthesis got ahead and the overlay would draw nothing from then on.
 	if panel.subtitles != null and is_instance_valid(panel.subtitles) and _ring_capacity > 0:
 		var queued := _ring_capacity - int(playback.get_frames_available())
 		var played := float(maxi(0, _pushed - maxi(queued, 0))) / float(panel._sr)
 		panel.subtitles.time_base = Spectrum.current.time - played
 
-	# The window has to be topped up as it drains. Requests used to be driven
-	# only by chunk ARRIVAL, which stops the moment the buffer bound is hit.
+		# The window has to be topped up as it drains, not only on chunk arrival (which stops at the buffer bound).
 	if not chunks.is_empty() and _next_to_request < chunks.size():
 		_pump()
 
@@ -843,18 +726,18 @@ func tick(delta: float) -> void:
 		return
 	var avail := _fx_admit(_pending.size() - _read)
 	var n := mini(room, avail)
-	# the place is rendered ahead on a worker ([method Soundscape.prefetch]); a frame takes at most half
-	# a second of it, so filling the ring at the start is spread over frames rather than one long one
+		# the place is rendered ahead on a worker ([method Soundscape.prefetch]); a frame takes at most half a second of
+		# it, so filling the ring at the start is spread over frames
 	if _env != null:
 		n = mini(n, panel._sr / 2)
 	if n <= 0:
 		return
-	# the ambience runs HERE rather than in the host: it is stateful across
-	# chunk boundaries, so a seam must not reset the echo tail or the ring
-	# ...the voices over this line, each where it sits ([ReadingJoin])
+		# the ambience runs here rather than in the host: it is stateful across chunk boundaries, so a seam must not
+		# reset the echo tail or the ring
+		# ...the voices over this line, each where it sits ([ReadingJoin])
 	fx.side = _join.side_between(_pushed, _pushed + n, panel._cast.pan_of)
 	var buf: PackedVector2Array = fx.process_stereo(_pending.slice(_read, _read + n))
-	# ...and the place after it, so the room and the bed are the voice's and the wind is not
+		# ...and the place after it, so the room and the bed are the voice's and the wind is not
 	if _env != null:
 		buf = _env.mix(buf)
 	if _join.fade_at >= 0:
@@ -863,25 +746,17 @@ func tick(delta: float) -> void:
 	playback.push_buffer(buf)
 	_pushed += n
 	_read += n
-	# compact only when the consumed head is worth reclaiming, not every frame
+		# compact only when the consumed head is worth reclaiming, not every frame
 	if _read > 0 and (_read == _pending.size() or _read > 4 * panel._sr):
 		_pending = _pending.slice(_read)
 		_read = 0
 
 
-## THE ROOM CHANGES AT A FRAME, not at a chunk. Dial in every scheduled change the
-## push has reached, and report how many frames may go out before the next one.
-##
-## The coordinate is ABSOLUTE FRAMES PUSHED, which is the only clock these marks
-## can use. It is not what is being heard - the ring runs seconds ahead - and it
-## does not need to be: the chain transforms the samples at exactly these
-## positions on their way out, so aligning to the push aligns to the audio. Cut
-## short at the next mark rather than crossing it, or a whole buffer of one
-## speaker is read in the other's room.
-##
-## Split out of [method tick] because it is the arithmetic here that can be
-## wrong by a buffer, and a room that arrives a moment early is audible without
-## being attributable.
+## The room changes at a frame, not at a chunk. Dial in every scheduled change the push has reached, and report
+## how many frames may go out before the next one. The coordinate is absolute frames pushed, the only clock these
+## marks can use: the ring runs seconds ahead of what is heard, but the chain transforms the samples at exactly
+## these positions on their way out. Cut short at the next mark rather than crossing it, or a buffer of one
+## speaker is read in the other's room. Split out of [method tick] because this arithmetic can be wrong by a buffer.
 func _fx_admit(avail: int) -> int:
 	var marks := _join.marks
 	while not marks.is_empty() and int((marks[0] as Dictionary)["at"]) <= _pushed:
@@ -907,11 +782,10 @@ func _fade_gain(sample: int) -> float:
 	return 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
 
 
-## A dial moved on the panel, applied to the LIVE chain - but only if the tab
-## being edited is the voice currently sounding. Turning up the reverb on a
-## character who has not spoken yet must not put the narrator in a cathedral;
-## the setting is stored either way, and arrives at that character's first word
-## through the join's marks ([member ReadingJoin.marks]).
+## A dial moved on the panel, applied to the live chain, but only if the tab being edited is the voice currently
+## sounding (reverb turned up on a character who has not spoken yet must not put the narrator in a cathedral). The
+## setting is stored either way and arrives at that character's first word through the join's marks
+## ([member ReadingJoin.marks]).
 func live_fx() -> void:
 	if not _fx_live_name.is_empty() and _fx_live_name != panel._cast.tab_name():
 		return
@@ -942,9 +816,9 @@ func _close_environment() -> void:
 	_env = null
 
 
-## Every frame of a reading: keep the place rendered ahead, follow the dial, and every couple of
-## seconds see whether the place itself changed (live, the set dresser can hand a table in mid-reading),
-## and if so carry on from here with the new one.
+## Every frame of a reading: keep the place rendered ahead, follow the dial, and every couple of seconds see
+## whether the place itself changed (live, the set dresser can hand a table in mid-reading) and, if so, carry on
+## from here with the new one.
 func _tick_environment(delta: float) -> void:
 	if _env != null:
 		_env.set_level(panel.bed.level())

@@ -1,15 +1,12 @@
 extends SceneTree
 
-## take_length_check - the exporter reads a take's length from the WAV itself, whatever its rate and
-## channels ([method Exporter._wav_seconds]): the render runs as long as the take.
+## take_length_check - the exporter reads a take's length from the WAV itself, whatever its rate and channels ([method
+## Exporter._wav_seconds]): the render runs as long as the take.
 ##
 ##   godot --headless --path . --script res://tests/export/take_length_check.gd
 ##
-## Reported 2026-10-16 (an overnight export of a Proof lesson): the take was stereo - a voice leans
-## ([VoiceFX]) - and the exporter, reading it as mono, said 1081.83 s of a 540.92 s take, so the render
-## would have run nine minutes past the show. The fixtures are made here: mono and stereo at Piper's
-## 22050, a stereo 44100 take with a chunk before its data, and a take still being written (its data
-## size 0). The control is the old reading (the file's size past a 44-byte header, mono), which must
+## Fixtures are made here: mono and stereo at Piper's 22050, a stereo 44100 take with a chunk before its data, and a take
+## still being written (data size 0). The control is a reading from the file's size past a 44-byte header as mono, which must
 ## read the stereo take at twice its length.
 
 const SECONDS := 1.5
@@ -79,7 +76,7 @@ func _run() -> void:
 		_ok(absf(got - SECONDS) < 0.001, "%s plays %.3f s (%.3f s)" % [c[1], SECONDS, got])
 	_ok(ex._wav_seconds(ProjectSettings.globalize_path("res://project.godot")) == 0.0,
 		"a file that is no WAV reads as 0")
-	# THE CONTROL: the old reading, mono past a 44-byte header
+	# control: the old reading, mono past a 44-byte header
 	var size := FileAccess.get_file_as_bytes(stereo).size()
 	var old := float(size - 44) / (2.0 * 22050.0)
 	_ok(absf(old - 2.0 * SECONDS) < 0.001, "the control: read as mono, the stereo take was twice as long (%.3f s)" % old)

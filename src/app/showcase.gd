@@ -2,70 +2,57 @@ extends Node
 class_name Showcase
 
 ## Showcase - the README's animation, recorded from the real app: a note with a song playing
-## `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one,
-## the pair lock, then take opposite highways), with the note's panel, the row and the transport
-## around it - the UI as a person sees it, not a picture of the stage alone. Praxis records its
-## README stills from its own frontend the same way (its `tools/render_web.py`).
+## `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair
+## lock, then take opposite highways), with the note's panel, the row and the transport around it.
 ##
-## ONLY WHEN IT WOULD CHANGE. The recording keeps a list of every file it LOADED - each script,
-## shader, scene and font Godot's resource cache holds while the show plays, the storyboard and
-## `project.godot` ([method loaded_files]) - and `docs/showcase.json` stamps a digest of their
-## contents with the engine's version. A launch hashes those same files again and records only when
-## the digest moved, so an edit to a scene the show never draws costs nothing, and an edit to the
-## prism, the panel or the transport records it again. The webp is written only when its bytes
-## differ, so a recording that comes out the same leaves git with nothing to show.
+## Only when it would change: the recording keeps a list of every file it loaded (each script, shader,
+## scene and font in Godot's resource cache while the show plays, the storyboard and `project.godot` -
+## [method loaded_files]) and `docs/showcase.json` stamps a digest of their contents with the engine's
+## version. A launch hashes the same files and records only when the digest moved. The webp is written only
+## when its bytes differ.
 ##
-## AT MOST ONCE A DAY (2026-11-07, the user: "Can we limit this showcase generation to just once per
-## day, at most? It runs on basically every startup now, which makes the whole app slow at
-## startup"). The digest covers nearly every script, so with several sessions editing at once
-## almost every launch found something changed, and the recording - a second ghost drawing beside
-## the first - slowed every start. A launch records only once [constant DAY] has passed since the
-## last recording BEGAN ([method next_due]: `dist/showcase/started`, this checkout's alone, never in
-## git), finished or not; `--showcase-now` records regardless. The day is read before the digest, so
-## a launch inside it hashes nothing.
+## At most once a day: a launch records only once [constant DAY] has passed since the last recording began
+## ([method next_due]: `dist/showcase/started`, this checkout's alone, never in git), finished or not;
+## `--showcase-now` records regardless. The day is read before the digest, so a launch inside it hashes
+## nothing.
 ##
-## ONLY IN DEVELOPMENT: the trigger runs where Godot's own `editor` feature is (the project run from
-## its source with the editor binary), never in an exported build ([method skip_reason]), and never
-## in a render, a probe, a headless run or the phone shell. It needs `xvfb-run` - the recording runs
-## on a virtual display, never as a window on the author's desktop - and FFmpeg for the webp; when
-## either is missing it says so once and records nothing.
+## Only in development: the trigger runs where Godot's `editor` feature is, never in an exported build
+## ([method skip_reason]), a render, a probe, a headless run or the phone shell. It needs `xvfb-run` (the
+## recording runs on a virtual display) and FFmpeg for the webp; when either is missing it says so once and
+## records nothing.
 ##
-## HOW IT IS MADE: a second ghost under Movie Maker (`--write-movie` to a PNG sequence, `--fixed-fps`,
-## so every frame is one fixed step of show time however slow the frame was to draw), started with
-## `--showcase <work>` ([ShowcaseRecorder]): read-only like an export, and on a user:// of its own
-## (`XDG_DATA_HOME` under the work folder) so the author's settings, folds and notes never reach the
-## picture. It makes the note, opens it the way the notes list does, presses Play, and quits after
-## [method frames] frames. This node then encodes the last of them to an animated webp.
+## How it is made: a second ghost under Movie Maker (`--write-movie` to a PNG sequence, `--fixed-fps`),
+## started with `--showcase <work>` ([ShowcaseRecorder]): read-only like an export, with a user:// of its
+## own (`XDG_DATA_HOME` under the work folder) so the author's settings and notes never reach the picture.
+## It makes the note, opens it the way the notes list does, presses Play and quits after [method frames]
+## frames. This node then encodes the last of them to an animated webp.
 ##
 ##   godot --headless --path . -- --showcase-now     records it now, stale or not, then quits
 
-## The webp's size, frame rate and quality (libwebp, 0-100). Movie Maker records at the project's
-## own size whatever the window ([method recorded_size]), and FFmpeg scales that down to this - the
-## UI as a 1280-pixel window would draw it, edges smoothed by the larger render.
+## The webp's size, frame rate and quality (libwebp, 0-100). Movie Maker records at the project's own size
+## whatever the window ([method recorded_size]), and FFmpeg scales that down to this.
 const SIZE := Vector2i(1280, 720)
 const FPS := 15
 const QUALITY := 72
 ## The storyboard it plays, and the song's length - the storyboard's holds, end to end.
 const STORYBOARD := "showcase"
 const SONG := 15.0
-## The note's bookends: the picture fades up from an empty void and back down to it, so the
-## animation loops on the void.
+## The note's bookends: the picture fades up from an empty void and back down to it, so the animation loops.
 const INTRO := 0.5
 const OUTRO := 1.0
 ## The note the recording makes. Its title is the header of the panel in the picture.
 const TITLE := "A prism divides"
 const BODY := "One blue prism, then two - a blue one and a red one.\n"
-## THE DEMO NOTE'S SONG ([method make_demo_note]): the recording's song, written once beside the author's things.
+## The demo note's song ([method make_demo_note]): written once beside the author's things.
 const DEMO_SONG := "user://demo/a_prism_divides.wav"
 
 ## What the README shows, and the stamp beside it.
 const OUT := "res://docs/showcase.webp"
 const STAMP := "res://docs/showcase.json"
-## The work folder, on the real disk (dist/ is git-ignored; /tmp is a RAM disk and the frames are
-## a few hundred MB).
+## The work folder, on the real disk (dist/ is git-ignored; /tmp is a RAM disk and the frames are a few
+## hundred MB).
 const WORK := "res://dist/showcase"
-## A recording claimed less than this long ago (seconds) is left to finish: two launches at once
-## record once.
+## A recording claimed less than this long ago (seconds) is left to finish: two launches at once record once.
 const CLAIM_S := 900
 ## The least time between two recordings a launch starts (seconds), and the file in the work folder
 ## that holds when the last one began (unix seconds).
@@ -85,9 +72,8 @@ var _quit_after := false
 var ended := ""
 
 
-## Why the trigger does nothing in this process ("" when it may record). A person's ordinary
-## launch prints nothing at all unless a recording is due. `--showcase-now` asks from a terminal,
-## so it may be headless: this process only starts the recording and encodes it.
+## Why the trigger does nothing in this process ("" when it may record). `--showcase-now` asks from a
+## terminal, so it may be headless: this process only starts the recording and encodes it.
 static func skip_reason() -> String:
 	if not OS.has_feature("editor"):
 		return "not a development build"
@@ -109,16 +95,16 @@ static func frames() -> int:
 	return int(round((INTRO + SONG + OUTRO) * FPS))
 
 
-## The size Movie Maker records at: the project's viewport, set before any script runs (measured:
-## `--resolution` changes the window and not the recording).
+## The size Movie Maker records at: the project's viewport, set before any script runs (`--resolution`
+## changes the window, not the recording).
 static func recorded_size() -> Vector2i:
 	return Vector2i(int(ProjectSettings.get_setting("display/window/size/viewport_width")),
 		int(ProjectSettings.get_setting("display/window/size/viewport_height")))
 
 
-## EVERY FILE THE SHOW HAS LOADED SO FAR, as res:// paths: the resource cache's view of
-## [constant SOURCE_DIRS], plus [constant ALWAYS]. Called during a recording; a resource freed
-## before the call is missed, so the recorder calls it as the show plays, not once at the end.
+## Every file the show has loaded so far, as res:// paths: the resource cache's view of [constant
+## SOURCE_DIRS], plus [constant ALWAYS]. A resource freed before the call is missed, so the recorder calls
+## it as the show plays, not once at the end.
 static func loaded_files() -> PackedStringArray:
 	var out := PackedStringArray(ALWAYS)
 	for d in SOURCE_DIRS:
@@ -141,8 +127,8 @@ static func _walk(dir: String, out: PackedStringArray) -> void:
 		_walk(dir.path_join(sub), out)
 
 
-## THE DIGEST of [param files]: each path and its content, in order, with the engine's version and
-## the recording's own shape. A file that is gone hashes as gone, so deleting one moves it too.
+## The digest of [param files]: each path and its content, in order, with the engine's version and the
+## recording's own shape. A file that is gone hashes as gone.
 static func digest(files: PackedStringArray) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
@@ -170,11 +156,10 @@ static func mark_started(work: String) -> void:
 		f.close()
 
 
-## THE DEMO NOTE (the user, 2026-11-11: "import that one into Ghost Notes by default (excluding mobile), because it already
-## ships with the app - and it would make for a good demo"): the note this recording plays, made in the notes folder with its
-## song ([constant DEMO_SONG] by default; a gate's seam) - and WITH ITS OWN COPY OF THE STORYBOARD, so the Timeline edits it.
-## The recording names the file instead and keeps it as it ships. A machine's first desktop launch makes it once
-## ([method main._seed_demo_note]). Returns the note's path, or "" with the reason pushed as a warning.
+## The demo note: the note this recording plays, made in the notes folder with its song ([constant
+## DEMO_SONG] by default; a gate's seam) and with its own copy of the storyboard, so the Timeline edits it.
+## The recording names the file instead and keeps it as it ships. A machine's first desktop launch makes it
+## once ([method main._seed_demo_note]). Returns the note's path, or "" with the reason pushed as a warning.
 static func make_demo_note(song_path := DEMO_SONG) -> String:
 	var song := ProjectSettings.globalize_path(song_path)
 	DirAccess.make_dir_recursive_absolute(song.get_base_dir())
@@ -234,8 +219,7 @@ func _ready() -> void:
 func _start(argv: PackedStringArray, claim: String) -> void:
 	var frames_dir := _work.path_join("frames")
 	DirAccess.make_dir_recursive_absolute(frames_dir)
-	# kept out of the editor's scan, or it imports every frame as a texture (the song loads from its
-	# path, never through the importer)
+	#kept out of the editor's scan, or it imports every frame as a texture
 	if not FileAccess.file_exists(_work.path_join(".gdignore")):
 		FileAccess.open(_work.path_join(".gdignore"), FileAccess.WRITE).close()
 	for f in DirAccess.get_files_at(frames_dir):
@@ -263,8 +247,8 @@ func _start(argv: PackedStringArray, claim: String) -> void:
 
 
 func _process(_dt: float) -> void:
-	# stopped by ghost closing, not ended: nothing to encode, and the claim goes, so the first launch
-	# a day after it began records it ([method Subprocess.closing], [method next_due])
+	#stopped by ghost closing, not ended: nothing to encode, and the claim goes ([method
+	#Subprocess.closing], [method next_due])
 	if Subprocess.closing():
 		_render_pid = -1
 		_encode_pid = -1

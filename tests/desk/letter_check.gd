@@ -1,205 +1,111 @@
 extends SceneTree
 
-## Does a letter hold together without a voice, an agent or a renderer: the hand, the format, the voice's
-## rests and the desk's clock ([LetterHand], [LetterScript], [LetterMedium]; next/letter.md)?
+## Does a letter hold together without a voice, an agent or a renderer: the hand, the format, the voice's rests and the
+## desk's clock ([LetterHand], [LetterScript], [LetterMedium]; next/letter.md)? Each item names its control, which must
+## fail the assertion.
 ##
-## - THE HAND IS THE JOURNAL'S, WRITTEN ([LetterHand], 2026-10-27): every hand has strokes for every letter,
-##   digit and mark a letter uses, and a nib; an i's dot is made after its stem, above it; NO LETTER IS LOST
-##   (the first look, 2026-10-26: "Dear Pen," came out "Dea Pe ," - a joined stroke appended to a copy of a
-##   packed array) - a word's ink is at least its letters' written alone, the control a word with one
-##   letter fewer; seeded, the same line is the same strokes and another seed's differ, and a word's WIDTH
-##   is the font's whatever the seed, so the pages never move with it - but another hand's is its own.
-## - THE FORMAT ([method LetterScript.parse]): a paragraph is written and said, NONE INDENTED and A RULE LEFT
-##   EMPTY BETWEEN TWO (the user: "the hanging indents look wrong ... there should probably be a newline
-##   between each paragraph") - the control, two lines of one paragraph a rule apart - every line on a
-##   rule; a thought is said and never written; a strike crosses out the paragraph last written and not the
-##   one before (the control), and THE WRITER DECIDES FIRST (the user: it "IMMEDIATELY scratches it out"):
-##   the voice rests the pause and the strike, a bare mark's pause [constant LetterScript.DECIDE] and
-##   `<!-- strike: 5 -->`'s five, a word there no number (the control); a picture's span is exactly its
-##   passage; A SKETCH IS DRAWN WHERE ITS MARK IS (the user: "there is no obvious reason why text written AFTER the
-##   sketch marker is read BEFORE the sketch ... we should just rely on markers"): the paragraph after it written and
-##   said after it, the voice waiting the drawing out, A RULE LEFT EMPTY UNDER THE DRAWING ("Both sketches are too
-##   squished") - the control, the first rule clear of it, where it had gone; a thought right after it thought while it
-##   is drawn, never written - one pointing at it waits for the drawing (the control) - and with no drawing yet nothing
-##   is drawn; a point goes to the part of
-##   the sketch it names, a point in a written paragraph is set aside and said so (the control: the pen
-##   is writing then), and a point at the camera is a span; a tap is the desk's; a still runs from its
-##   mark to the next written line; a new page turns one for an unspoken line; the voice reads every word
-##   once, the voice's own marks kept and no other mark, and waits for the unspoken line at the end.
-## - A PAGE TURNS MID-SENTENCE where the page runs out, AND THE VOICE READS ON THROUGH IT (the user, of "You do
-##   not" and a rest for the turn before "remember agreeing to them": "just keep speaking there, and to force
-##   the pen to catch up after the page turn"): no rest inside a paragraph a page turns in, where a turn between
-##   two paragraphs is still rested for (the control); the line on the turned page begun once the voice has
-##   read the page and the sheet is over, its first word said before it is written (the pen behind - the
-##   measure's own control), and the next paragraph's first word on the page before it is said (caught up);
-##   on a page it fits, no rest inside a paragraph of one sentence. A SKETCH STAYS WITH WHAT IS SAID ABOUT IT (the first look: the cross and the dot
-##   at a page's foot, the test and the point at it a page on): one pointed at two paragraphs later starts
-##   a page, so the point finds it - the control, the same sketch pointed at by nothing, stays at the foot.
-## - THE PAGE LIES BLANK FIRST (the user: "the writing begins IMMEDIATELY after the intro disappears"): the
-##   voice opens on a rest of [constant LetterScript.BLANK_PAGE], and nothing is written before it.
-## - THE PEN WRITES TWO WORDS AHEAD ([LetterScript]; the user: "A person wants to read what is being said ...
-##   maybe 2 words ahead of the speaking?"): ordinary sentences are not waited for, a sentence of far more ink
-##   than its words is (the control); a paragraph after a thought is waited for its first words, one of more
-##   ink longer (the control, one of less); its first line is marked to begin as the voice gets there; THE
-##   WRITER HESITATES TOO (the user: "after "Dear Pen," - why was there no hesitation at all?") - a hesitation
-##   on a line of its own or in a written line is a pause of the pen's, which takes up again just before the
-##   voice goes on, where with none there it runs on two words ahead (the control).
-## - THE CAMERA'S ARC ([method LetterMedium._arc]; the user: "The forward and backward zooming of the camera
-##   is nauseating"): its two framings under twice as far apart; wide as the intro ends and coming in over
-##   the blank page; close mid-page; let go before the page turns; and NOTHING ELSE MOVES IT IN OR OUT - a
-##   thought, a point at a sketch and a tap leave it where the arc has it, where a point at the camera
-##   stands it back (the control).
-## - THE DESK'S CLOCK ([LetterMedium], no stage): a line begins as the voice begins the word two before its
-##   first, no quicker than [constant LetterScript.QUICKEST] its ink's time, the pen on the paper; THE PEN IS AHEAD
-##   OF THE VOICE - a paragraph's first word on the page before it is said, most words written before they are
-##   said, none said long before - on a quicker voice too, where one far quicker than the pen can go leaves it
-##   behind (the control); the first line begins as the blank page ends,
-##   one after a thought once it is said, one a page turns for once the voice has read the page, one under a
-##   picture as it is said (the desk's dictation); the intro clears [constant LetterScript.BLANK_PAGE] before
-##   the first word; through a thought nothing is being written and the pen is up; a tap
-##   turns the pen over and brings its top down on its spot, by the line last written; a point at the
-##   camera holds the pen up with its top clear of the pad (the first pose put it 2 cm into it), the camera
-##   stood back; a picture is up over its passage and gone before and after, and the voice goes on only
-##   once it is gone; a strike begins the pause after both the line's last word and its ink, and is done
-##   before the voice goes on; a still frames the sketch with the camera's wander stopped, the pen off the pad;
-##   and the letter is not over - no fade - while the unspoken line after the last word is being written.
-## - A POINT LINGERS ([constant LetterScript.POINT_LINGER]; the user, of "That one's me." at the dot: "the camera moves
-##   there quickly, and the pen retreats immediately, and the camera moves again, and it feels jarring"): the voice
-##   rests after a point's sentence in a thought, the pen held on what it points at and the camera framed on it
-##   through the rest, not taken off to what comes next before it is done - where after a thought with no point the
-##   voice goes straight on (the control); a point at the camera holds the pen up through its rest, put back as it ends.
-## - PICTURES DISSOLVE INTO ONE ANOTHER ([method LetterMedium.pictures_at]; the user: "blend from one picture into a
-##   second one, or a third one, directly without ever seeing the page again ... each with different
-##   panning/zooming behavior"): an image mark before the last one's close, or straight after it, comes up over
-##   it - the voice reads on with no rest there, the one under held whole while the next comes in, so nothing of
-##   the page shows from the run's first picture being up to its last going - where a picture after a written
-##   line comes up from the desk, the voice resting for the page first (the control); the passage under a
-##   dissolve is captioned; every fade is [constant LetterScript.IMAGE_FADE] ("A 2 or 3 second fade might look
-##   better"); and no picture moves as the one before it did, nor drifts within a quarter turn of its way.
-## - A HESITATION BEFORE A PICTURE IS THE WRITER'S FIRST (2026-10-28, the user, of Secular Haze's `<!-- hesitation: 3 -->`
-##   before its first picture: "the picture that follows is immediately displayed - not waiting for the hesitation at
-##   all"): the desk is seen through it and the picture comes up as the pen is taken up again; a dissolve with one before
-##   the next picture holds the one before whole through it; a live reading not yet past it keeps the desk - with no
-##   hesitation mark and the same voice, the picture comes up in the pause each time (the control).
-##
-## - A DENSE SKETCH IS DASHED OFF ([method LetterScript.draw_pace]; the user, of the chapter's tree of dots: the text
-##   "sort of gets frozen for a few seconds ... with the pen not moving" - the voice had waited 7.5 s for it): a
-##   drawing of far more ink than its two words leave time for is done soon after them, the voice resting only that
-##   long - the control, the desk's quickest pen, would have rested it several times as long - and the pen goes
-##   from its last mark to the next line with no pause; one with room is drawn no quicker than before. DRAWN ALONE
-##   ([method LetterScript.drawn_alone]; 2026-10-29, the user, of the same tree drawn where its mark is: "a solid 30 or
-##   45 seconds to draw"), with no words over it, the voice waits [constant LetterScript.DRAW_ALONE] for it and the desk
-##   draws it in that - its ink at the hand's pace, the control, is several times as long - and the plan made again
-##   while it is under way keeps its pace (held to the desk's quickest, the control, it ends seconds later). TOLD ITS
-##   TIME ([method LetterScript.drawn_in_of]; 2026-10-31, the user, of the tree done in 5: "drawn too quickly"),
-##   `<!-- sketch (10s): ... -->` is drawn in 10 at the desk and the voice waits it out - alone, or past a thought said
-##   over it - where untimed (the control) it had been 5, or dashed off soon after the thought.
-## - THE PEN IS SET DOWN AGAIN ([method LetterMedium._set_down_pose]; 2026-10-30, the user: "can we set the pen down
-##   again, after writing the final line of text?"): it is in hand through the last stroke and until
-##   [constant LetterMedium.SET_DOWN_AFTER] past it - the control, that it has not lain down early - is then put down at
-##   its place a frame at a time, no further than a hand would move it and never into the desk or the pad, and lies there,
-##   exactly as it did before it was picked up, to the show's end.
-## - THE PEN IS PICKED UP FROM THE DESK ([method LetterMedium._pick_up_pose]; 2026-10-28, the user: "the pen starts
-##   floating in the air already ... started from a resting place upon the table, to the right of the paper, and ...
-##   gently picked it up at the beginning, after the intro-blur"): through the intro and its focus pull it lies level on
-##   the desk beside the pad's right edge, where it rests on its widest, its top toward the writer; it is picked up only once the intro's blur has
-##   lifted and the name is gone, and is over the first stroke as the line begins; on the way it moves on, a frame at a
-##   time, no further than a hand would - the control, the desk's own pen hovering over the first stroke, is a jump of
-##   many centimeters from where it lies - and never goes into the desk or the pad. AS IT WRITES IT LEANS TO THE RIGHT AND
-##   A LITTLE DOWN on the screen ([constant LetterMedium.LEAN]; the user: "it would be more common for the top of the pen
-##   to point to the bottom-right (though gently, trending closer to pure right ...)"), close and wide, whatever the
-##   hand's sway - the control, the Proof desk's lean, points to the top right. NOTHING ELSE LIES THERE ([method
-##   DeskLook.pen_rest]): a thing is never set down on the pen - the control, the same draws with its place not taken,
-##   lands on it.
-## - A PAGE IS TURNED WITH THE VOICE WAITING WHERE IT ENDS ON A MARK, AND A SENTENCE IT BREAKS IS FINISHED FIRST ([method
-##   LetterScript._voice_text]; 2026-10-28, the user: "if a page ended with punctuation, we can hold the voice until after
-##   the page turn. However if a sentence was broken by a page turn, we should just finish the thought/voice - and then we
-##   should wait for the pen to catch up, before proceeding with the next sentence"): over a letter of many sentences, a
-##   page turned inside a paragraph after a mark is rested for, at least the turn's own rest, and one that breaks a
-##   sentence is not (the two sides of one rule); the voice then waits at the next sentence, and its first word is on the
-##   page before it is said - the control, the same voice without that rest, says it with the pen behind.
-## - A LINE RUNS ON INTO THE VOICE'S PAUSE AFTER IT ([method LetterMedium._runs_on_to]; the user, of "my line of work. It
-##   is | called": "the pen just stops moving at "it is", for a second, before it moves to the new line"): read by a voice
-##   that pauses at each sentence's end, no line of a paragraph leaves the pen standing at its end - the control, each
-##   line ended as the voice ends the word two before its last, stands at several.
-## - THE CAMERA CATCHES ON A DRAWING ([method LetterMedium._caught]; 2026-10-29, the user: "it might work if the camera
-##   could sort of 'catch' on the sketch ... a bias to linger on doodles for a bit longer" - the cross and the dot, begun as
-##   their page came up, drawn with the camera wide and at the frame's edge): on a page that opens on a drawing the camera
-##   is close on it [constant LetterMedium.CATCH_IN] after the turn - the control, the page's own arc, still coming in -
-##   held at its middle high on the page - the control, the column's reach, lower; under it a line up to [constant
-##   LetterMedium.CATCH_LOW] below its middle is written with the camera still on it - the control, the line's own
-##   framing, lower - and past that it is let go to exactly the line's own framing, and kept there ("it never returns to
-##   its natural place", of a camera that followed the writing down with the drawing kept in), LETTING GO NO QUICKER THAN
-##   [constant LetterMedium.LET_GO] ("the return to normal position seems quite fast") - the control, the line's own
-##   framing, a step.
-## - THE CAMERA LETS GO BEFORE A TURN ONCE ([method LetterMedium._letting_go]; the user, of the end of Secular Haze's first
-##   page: "it bounces forward and back a couple times, right at the very last few sentences"): its words arriving a
-##   sentence at a time, past a hesitation and a picture's passage, the camera never comes back in once it has begun to
-##   let go before the turn - the control, the turn the arc had guessed at the desk's steady pace, comes back in.
-## - WHAT IS ON THE DESK AND ITS LIGHT ARE CHOSEN, THE SEED ONLY PLACING THEM ([method DeskLook.of]'s picks; 2026-10-29,
-##   the user: "when we change the seed - the only thing being changed would be the placement of objects, and
-##   textures"): chosen, every seed has the same things and light, each looking its own way - the control, nothing
-##   chosen, a different set on nearly every seed; ticking another leaves how the rest look as they were; a desk lit by
-##   candles and given none has a taper set down (one given its own keeps it, a lamplit desk none - the control); what
-##   lies flat and was chosen lies where the widest framing sees it ([constant DeskLook.SEEN]) - the control, the same
-##   things drawn by the seed, almost never.
-## - A CHOSEN DESK IS PACKED IN TO THE PAPER, THE CANDLES THE FIRST PUSHED OUT ([method DeskLook._pack]; 2026-10-29, the
-##   user: "almost all of the objects placed on the table are outside of the camera's view ... with just tea lights and
-##   the dog tags now... I still can't even see the dog tags"): with tea lights and a dog tag, the tag lies within 4 cm
-##   of the paper - where the camera sees it as the pen writes - and its bone wholly in the wide frame, on every desk - the
-##   control, a circle round it anywhere in the frame beside the pad, on few; a crowded desk keeps what lies flat in the
-##   frame and pushes the candles out first ("candles, which cast light regardless of where they exist"); its candles
-##   take their sides by turns ("The scenes look best when lighting comes from both directions"): one alone on either,
-##   two on both - and none in the pen's stretch beside the pad's right; ITS THINGS ON BOTH SIDES OF THE PAD (the user:
-##   "the pencil and dog tags and probably other objects as well are NEVER placed on the right ... the pencil could
-##   obviously be set alongside the pens on the right ... at the bottom corner, there is NEVER anything placed there"),
-##   each leaning to a side by the seed - the stretch beside the pad's right, where nothing had been let lie, in use -
-##   never in the lane where the pen taps the desk ([constant DeskLook.TAP_LANE]), never on a pen.
-## - A DOG TAG CUT AS A DOG'S BONE ([method DeskLook._dog_tag]; the user: "literally dog-bone shaped", then of the first
-##   one, by their picture: "The chain is connected to the center of the bone ... It has sort of a V-shaped thing
-##   attached to the middle of the bone ... true chain: like the necklace a girl would wear ... simple and flat ...
-##   much longer"): on every tag one flat bone, its halves each other's mirror and no rim round it, a V CAST WITH IT at
-##   the middle of its long edge ("the V-shape is not a separate thing ... The point of the V protrudes roughly as far
-##   outward as the curve of the bone-knobs do"), its point as far out as the knobs, A V, NOT A HOLE ("2 straight
-##   pieces of metal, which make a V ... The bottom of the triangle should be level with the center of the bone's inner
-##   side"): the triangle between its struts open from its apex on the axis down to the bar's edge, half again the
-##   round hole's size at least - the round hole it had, the control, has no such foot - the chain a chain of links through
-##   it, not on the metal; whole to its end, a necklace's length - the control,
-##   the 360 links a thick chain stops at, would have stopped every one part way; DROPPED, NOT LOOPED (the user: "a
-##   normal person doesn't loop their chain into neat little circles ... They just drop it there, chaotically"): off
-##   the bone on every tag - the control, a single drop, lies on it now and then - each heap its own size and shape. A
-##   NAME NOW AND THEN ([method DeskLook.tag_name]; the user: "must be a name that is generated by the hash function ...
-##   ~75% of the time - there should be no name"): desk 4230's tag engraved with the name the user chose for it, held
-##   here by its digest alone ([constant DESK_NAME] - never written out), drawn as every desk's is - the control, the
-##   generator's next salt, names it otherwise - a quarter of desks named, an unnamed desk's tag bare. A SMALL OUTLINE IS CUT AT ITS OWN SIZE
-##   ([method Props._extrude_face]): a notch in its edge left open - the control, cut in meters as it had been (the
-##   first tag's hole filled on 21 of 24), fills some.
-## - WORDS ON THE INDEX CARDS ([method DeskLook._write]; 2026-10-29, the user: "write something on the index cards ... we
-##   would not want to write it upside-down"; then, of a first pass that turned the card for it: "you broke the layout of
-##   my scene ... Just write the text in whatever orientation is closest to 'up'"): NOTHING ON THE DESK MOVES FOR THEM -
-##   every thing on every desk lies where it lay unwritten (the control, another desk, lies otherwise); the words on the
-##   top card or sticky note of every desk as written, turned the quarter turn nearest upright from the writer's seat,
-##   down a card lying along the pad and across the rest - the control, the writing square to its card, more than half a
-##   quarter turn off on some - inside its margin, as the pad is written (its hand, its rules, its size where there is
-##   room); words too many for it come smaller and still fit (the control, as the pad is written, overrun it).
-## - TICKED WHILE THE LETTER PLAYS, THE DESK IS DRESSED AGAIN ([method LetterMedium._set_desk]): a mounted letter's
-##   desk has the thing at once - and the cards' words - and another desk's number another desk (its own seed, the
-##   hand's kept), the letter as it was - the control, another hand, loads the letter again.
-## - THE FRAME IS CHEAP (2026-10-27, the user: "performance can be really quite laggy in the realtime viewer"), each
-##   held as a share of its control by this thread's own processor time ([WorkClock], the least of several runs - never
-##   the machine's speed): a line written long ago is asked whether it is written for a small share of the line being
-##   written (the elastic dictation word by word, every frame, for every line on the page); a plan made again as a live
-##   reading's words arrive, the past kept, for a share of the same plan with nothing kept; a finished line's ink asked
-##   again for a share of making it (a page's ink had been rebuilt point by point at every line's end).
+## - Hand: strokes for every letter, digit and mark; an i's dot after its stem; no letter lost (control: a word with one
+##   letter fewer); seeded strokes, but a word's width is the font's whatever the seed; another hand's width is its own.
+## - Format ([method LetterScript.parse]): paragraphs written and said, none indented, a rule left empty between two
+##   (control: two lines of one paragraph a rule apart); a thought is said and never written; a strike crosses out the
+##   paragraph last written (control: not the one before) after the writer's pause ([constant LetterScript.DECIDE], or the
+##   mark's number; control: a word there no number); a picture's span is exactly its passage; a sketch is drawn where its
+##   mark is, the voice waiting it out, a rule left empty under it (control: the first rule clear of it); a thought right
+##   after it is thought while it is drawn, one pointing at it waits for the drawing (control); a point goes to the part it
+##   names, a point in a written paragraph is set aside and said so (control: the pen is writing then), a point at the
+##   camera is a span; a tap is the desk's; a still runs from its mark to the next written line; the voice reads every
+##   word once and waits for the unspoken line at the end.
+## - A page turns mid-sentence and the voice reads on through it: no rest inside a paragraph a page turns in (control: a
+##   turn between two paragraphs is rested for); the turned page's first line begins once the voice has read the page, its
+##   first word said before it is written, the next paragraph's first word written before it is said. A sketch pointed at
+##   two paragraphs later starts a page (control: pointed at by nothing, it stays at the foot).
+## - The page lies blank first: the voice opens on a rest of [constant LetterScript.BLANK_PAGE], nothing written before it.
+## - The pen writes two words ahead: ordinary sentences are not waited for, a sentence of far more ink than words is
+##   (control); a paragraph after a thought is waited for when it has more ink (control: less); a hesitation, on its own
+##   line or in a written line, pauses the pen, which takes up again just before the voice goes on (control: none there).
+## - Camera arc ([method LetterMedium._arc]): framings under twice as far apart; wide as the intro ends, in over the blank
+##   page, close mid-page, let go before the turn; a thought, a point at a sketch and a tap do not move it in or out, a
+##   point at the camera stands it back (control).
+## - Desk clock ([LetterMedium], no stage): a line begins as the voice begins the word two before its first, no quicker than
+##   [constant LetterScript.QUICKEST] its ink's time; the pen is ahead of the voice, on a quicker voice too (control: one
+##   far quicker than the pen can go leaves it behind); first line, after-thought line, turned-page line and
+##   under-picture line begin when each says; through a thought the pen is up; a tap and a point at the camera pose the
+##   pen (top clear of the pad); a picture is up over its passage and the voice goes on once it is gone; a strike follows
+##   both the line's last word and its ink; a still stops the camera's wander and clears the pen; the letter is not over
+##   while the unspoken line is written.
+## - A point lingers ([constant LetterScript.POINT_LINGER]): the voice rests after a point's sentence in a thought, the pen
+##   held on its target and the camera framed on it (control: a thought with no point goes straight on); a point at the
+##   camera holds the pen up through its rest.
+## - Pictures dissolve into one another ([method LetterMedium.pictures_at]): a picture whose mark comes before the last one's
+##   close, or straight after it, comes up over it with no rest and no sight of the page (control: after a written line it
+##   comes up from the desk); the passage under a dissolve is captioned; every fade is [constant LetterScript.IMAGE_FADE];
+##   no picture moves as the one before it did.
+## - A hesitation before a picture is the writer's first: the picture comes up as the pen is taken up again; a dissolve with
+##   one before the next picture holds the one before whole through it; a live reading not yet past it keeps the desk
+##   (control: with no hesitation mark, the picture comes up in the pause).
+## - A dense sketch is dashed off ([method LetterScript.draw_pace]): done soon after its words, the voice resting only that
+##   long (control: the desk's quickest pen rests several times as long); one with room is drawn no quicker. Drawn alone
+##   ([method LetterScript.drawn_alone]) the voice waits [constant LetterScript.DRAW_ALONE] and the desk draws it in that
+##   (control: its ink at the hand's pace), keeping that pace through a plan made again (control: the desk's quickest).
+##   Told its time ([method LetterScript.drawn_in_of]) `<!-- sketch (10s): ... -->` is drawn in 10 (control: untimed).
+## - The pen is set down ([method LetterMedium._set_down_pose]): in hand until [constant LetterMedium.SET_DOWN_AFTER] past
+##   the last stroke (control: not lain down early), then put down a frame at a time, no further than a hand would move it,
+##   never into the desk or the pad, and lies as before it was picked up.
+## - The pen is picked up ([method LetterMedium._pick_up_pose]): it lies level beside the pad's right edge through the intro,
+##   is picked up once the blur has lifted and is over the first stroke as the line begins, moving a frame at a time, no
+##   further than a hand would (control: the desk's own pen hovering over the first stroke jumps), never into the desk or
+##   the pad. As it writes it leans right and a little down on screen ([constant LetterMedium.LEAN]), whatever the sway
+##   (control: the Proof desk's lean points up). Nothing lies where it rests ([method DeskLook.pen_rest]; control: with its
+##   place not taken, a thing lands on it).
+## - A page turned inside a paragraph after a mark is rested for, at least the turn's own rest; one that breaks a sentence
+##   is not, and the voice waits at the next sentence with its first word on the page before it is said ([method
+##   LetterScript._voice_text]; control: the same voice without that rest says it with the pen behind).
+## - A line runs on into the voice's pause after it ([method LetterMedium._runs_on_to]): no line leaves the pen standing at
+##   its end (control: each line ended as the voice ends the word two before its last stands at several).
+## - The camera catches on a drawing ([method LetterMedium._caught]): on a page that opens on one it is close on it
+##   [constant LetterMedium.CATCH_IN] after the turn (control: the page's own arc) held at its middle high on the page
+##   (control: the column's reach), keeps it while a line up to [constant LetterMedium.CATCH_LOW] below is written (control:
+##   the line's own framing), then lets go to the line's own framing, no quicker than [constant LetterMedium.LET_GO]
+##   (control: a step).
+## - The camera lets go before a turn once ([method LetterMedium._letting_go]): with words arriving a sentence at a time
+##   past a hesitation and a picture's passage it never comes back in (control: the arc's guess at the steady pace does).
+## - What is on the desk and its light are chosen, the seed only placing them ([method DeskLook.of]'s picks): every seed has
+##   the same things and light, each looking its own way (control: nothing chosen, a different set on nearly every seed);
+##   ticking another leaves how the rest look; a candlelit desk with none chosen has a taper (control: a lamplit desk none);
+##   what lies flat and was chosen lies where the widest framing sees it ([constant DeskLook.SEEN]; control: drawn by the
+##   seed, almost never).
+## - A chosen desk is packed in to the paper ([method DeskLook._pack]): with tea lights and a dog tag, the tag lies within
+##   4 cm of the paper and its bone wholly in the wide frame, on every desk (control: a circle round it anywhere in the
+##   frame, on few); a crowded desk keeps what lies flat in the frame and pushes the candles out first; candles take sides
+##   by turns (one alone on either, two on both), none in the pen's stretch beside the pad's right; things lie on both
+##   sides of the pad, never in the lane where the pen taps ([constant DeskLook.TAP_LANE]), never on a pen.
+## - A dog tag is cut as a dog's bone ([method DeskLook._dog_tag]): one flat bone, its halves each other's mirror, no rim, a
+##   V cast with it at the middle of its long edge, its point as far out as the knobs; the V's triangle open from its apex
+##   down to the bar's edge, half again the round hole's size at least (control: the round hole); the chain of links
+##   through it, whole to a necklace's length (control: the 360 links a thick chain stops at); dropped, off the bone on
+##   every tag (control: a single drop lies on it now and then). A name now and then ([method DeskLook.tag_name]): the
+##   named desk's tag is engraved with the name held here by its digest alone ([constant DESK_NAME]; control: the
+##   generator's next salt); a quarter of desks named. A small outline is cut at its own size ([method
+##   Props._extrude_face]): a notch in its edge stays open (control: cut in meters, it fills some).
+## - Words on the index cards ([method DeskLook._write]): nothing on the desk moves for them (control: another desk lies
+##   otherwise); the words on the top card of every desk turn the quarter turn nearest upright (control: square to the card,
+##   some are over half a quarter turn off), inside its margin, as the pad is written; too many words come smaller and
+##   still fit (control: as the pad is written, they overrun it).
+## - Ticked while the letter plays, the desk is dressed again ([method LetterMedium._set_desk]): a mounted letter's desk has
+##   the thing and the cards' words at once, and another desk's number another desk, the letter as it was (control:
+##   another hand loads the letter again).
+## - The frame is cheap, held as a share of its control by this thread's own processor time ([WorkClock], the least of
+##   several runs): asking whether a line written long ago is written; a plan made again with the past kept, against the
+##   same plan with nothing kept; a finished line's ink asked again, against making it.
 ##
 ##   godot --headless --path . --script tests/desk/letter_check.gd
 
 const WorkClock := preload("res://tests/work_clock.gd")
-## The desk the user chose for their first video, and the SHA-256 of the name its dog tag is to draw ([constant
-## DeskLook.TAG_NAME_SALT]) - the name itself never written in the code.
+## A desk number and the SHA-256 of the name its dog tag is to draw ([constant DeskLook.TAG_NAME_SALT]) - the name itself
+## is never written in the code.
 const NAMED_DESK := 4230
 const DESK_NAME := "d37f78ec86d14bfbc56637bf37e355cd34a98613a6e520dec285a6644163c9dc"
-## What the user first wrote on their desk's index cards.
+## Text written on the index cards.
 const CARD := "Send letters to:\nRyan Brooks\n1500 Southwest Chandler Avenue\nBend, OR 97702"
 
 const LETTER := """---
@@ -461,9 +367,8 @@ func _format() -> void:
 	var image: Dictionary = (d["spans"] as Array).filter(func(s: Dictionary) -> bool: return String(s["kind"]) == "image")[0]
 	_check(spoken[int(image["from"])] == "the" and spoken[int(image["to"]) - 1] == "left",
 		"a picture's span is exactly its passage")
-	# A SKETCH IS DRAWN WHERE ITS MARK IS (2026-10-29, the user: "there is no obvious reason why text written AFTER the
-	# sketch marker is read BEFORE the sketch"): the paragraph after it written and said after it, the voice waiting the
-	# drawing out - a rule left empty under it
+	# a sketch is drawn where its mark is: the paragraph after it written and said after it, the voice waiting the drawing
+	# out - a rule left empty under it
 	var draws := _of(d, "draw")
 	var acts: Array = d["actions"]
 	# (each wait against the same letter with no drawing yet, where the picture before it rests the voice as well)
@@ -480,7 +385,7 @@ func _format() -> void:
 		and is_equal_approx(after_y, was_y + DeskScript.RULE),
 		"a sketch is drawn where its mark is: the paragraph after it written and said after it, the voice waiting %.1f s more for the drawing, a rule left empty under it (the first rule clear of it, the control, %.0f px up)"
 		% [rest_before.call(d, "A cross") - no_wait, after_y - was_y])
-	# A THOUGHT RIGHT AFTER IT IS THOUGHT WHILE IT IS DRAWN, never written; one pointing at it waits for the drawing (the
+	# a thought right after it is thought while it is drawn, never written; one pointing at it waits for the drawing (the
 	# control), as the written paragraph does
 	var plain := "Dear Friend,\n\nI am writing.\n\n<!-- sketch: a cross and a dot on one line -->\n\n%s\n\nClose one eye.\n"
 	var mused := LetterScript.parse(plain % "*A cross, and a dot.*", 3, svgs)
@@ -563,7 +468,6 @@ func _turns() -> void:
 		and rest >= LetterScript.TURN_REST - 0.01,
 		"the voice reads on through a page turned inside a paragraph (%d), where it rests %.2f s for one turned between two (the control)"
 		% [mid.size(), rest])
-	# ...and the pen catches up after the turn
 	var feed := ShowFeed.new()
 	feed.outro_hold = 4.0
 	feed.intro_hold = 1.0
@@ -601,7 +505,7 @@ func _turns() -> void:
 	var short := LetterScript.parse(_filler(2))
 	_check(RegEx.create_from_string("\\S <!-- action-hold").search(_past_blank(String(short["speakable"]))) == null,
 		"and on a page it fits, none inside a paragraph of one sentence (the control)")
-	# A SKETCH STAYS WITH WHAT IS SAID ABOUT IT: one near a page's foot, pointed at two paragraphs on - the
+	# A sketch stays with what is said about it: one near a page's foot, pointed at two paragraphs on - the
 	# words before it as many as leave it room at the foot, whatever the hand
 	var svgs := {Manuscript.image_key("a cross and a dot on one line"): DOT_SVG}
 	var tail := "\n<!-- sketch: a cross and a dot on one line -->\n\nA cross, and a dot.\n\n" + _filler(2, 40)
@@ -660,7 +564,6 @@ func _lag() -> void:
 	var line: Dictionary = _of(gated, "pad-text")[0]
 	_check(String(line.get("gate", "")) == "voice" and absf(float(line.get("gate_rest", -1.0)) - short) < 0.01,
 		"and its first line is marked to begin as the voice gets there")
-	# THE WRITER HESITATES TOO
 	var own_line := LetterScript.parse("Dear Friend,\n\n<!-- hesitation -->\n\nIt is a fine day here, and I am well.\n")
 	var inline := LetterScript.parse("In both worlds, <!-- hesitation --> I was expelled.\n")
 	_check(Array(own_line["pauses"]) == [1] and Array(inline["pauses"]) == [2],
@@ -693,7 +596,7 @@ func _lag() -> void:
 		% [float(stopped[1]) - float(stopped[0]), float(ran_on[1]) - float(ran_on[0])])
 
 
-## THE PEN'S LEAD ON THE VOICE in [param m], heard as [param words] (by spoken index): `{first, worst, behind,
+## The pen's lead on the voice in [param m], heard as [param words] (by spoken index): `{first, worst, behind,
 ## n}` - the least a paragraph's first word is on the page before it is said, the most any word is said before
 ## it is written, and how many of the n words written ahead are said first. A word is written when the line's
 ## ink reaches its end ([method LetterMedium._share]).
@@ -750,7 +653,7 @@ static func _dot_record(id: String) -> Dictionary:
 		"anchors": {"the-dot": [199.0, -11.0, 205.0, -4.0]}}
 
 
-## THE CAMERA CATCHES ON A DRAWING ([method LetterMedium._caught]): see the header.
+## The camera catches on a drawing ([method LetterMedium._caught]): see the header.
 func _caught_camera() -> void:
 	print("-- the camera caught on a drawing")
 	var feed := ShowFeed.new()
@@ -759,7 +662,6 @@ func _caught_camera() -> void:
 	var svgs := {Manuscript.image_key("a cross and a dot on one line"): DOT_SVG}
 	var id := String(DeskScript.item("draw", DOT_SVG)["id"])
 	var records := {id: _dot_record(id)}
-	# a page that opens on the drawing, and enough written under it to go past its catch
 	var text := "Dear Friend,\n\n" + _filler(1, 30) + "\n<!-- new page -->\n\n<!-- sketch: a cross and a dot on one line -->\n\n" + _filler(6, 30)
 	var m := LetterMedium.new()
 	m.feed = feed
@@ -776,7 +678,7 @@ func _caught_camera() -> void:
 	var foot := (d["at"] as Vector2).y + float(d["d"])
 	var mid := ((d["at"] as Vector2).y - float(d["h"]) + foot) * 0.5
 	var aim := func() -> float: return float((m._framing()["line"] as Vector2).y) + 60.0
-	# AS IT IS DRAWN, on a page that opens on it: close, held on it, high on the page - the control, the page's own arc, still
+	# As it is drawn, on a page that opens on it: close, held on it, high on the page - the control, the page's own arc, still
 	# coming in, and the column's own reach, which would hold it lower
 	var opened := float(m._plan[di]["turn_at"]) + DeskScript.TURN
 	m._now = opened + LetterMedium.CATCH_IN
@@ -788,8 +690,8 @@ func _caught_camera() -> void:
 		and arc_k < 0.5 and mid < DeskScript.PH * 0.3,
 		"a drawing a page opens on: the camera close on it %.0f s after the turn (the page's own arc, the control, %.2f of the way in), held at its middle, %.0f px down the page (the column's reach, the control, %.0f)"
 		% [LetterMedium.CATCH_IN, arc_k, mid, DeskScript.PH * 0.3])
-	# THE WRITING UNDER IT: held on it while the line is within CATCH_LOW of it, then let go to exactly where the camera
-	# would be with no drawing - the line's own framing - and kept there (the user: "it never returns to its natural place")
+	# The writing under it: held on it while the line is within CATCH_LOW of it, then let go to exactly where the camera
+	# would be with no drawing - the line's own framing - and kept there
 	var near := -1
 	var past := -1
 	for i in range(di + 1, m._actions.size()):
@@ -806,7 +708,7 @@ func _caught_camera() -> void:
 	m._now = minf(float(m._plan[near]["start"]) + 0.2, from - 0.2)
 	var near_aim: float = aim.call()
 	var near_k := float(m._framing()["k"])
-	# LETTING GO, NO QUICKER THAN LET_GO (the user: "the return to normal position seems quite fast"): from LET_GO_LEAD
+	# Letting go, no quicker than LET_GO: from LET_GO_LEAD
 	# before the line past CATCH_LOW, its aim from the drawing to the writing at most that fast - the control, the line's
 	# own framing, a step - and then the line's own framing, kept
 	m._now = from - 0.2
@@ -883,7 +785,6 @@ func _clock() -> void:
 				return i
 		return -1
 	var t0 := func(i: int) -> float: return float((words[i] as Dictionary)["t0"])
-	# a line, written ahead
 	var li := -1
 	for i in m._actions.size():
 		if String((m._actions[i] as Dictionary).get("text", "")).begins_with("I am writing"):
@@ -903,7 +804,6 @@ func _clock() -> void:
 			var took := float(m._plan[i]["end"]) - float(m._plan[i]["start"])
 			paced = paced and took >= float(pa["write"]) / LetterScript.QUICKEST - 0.01
 	_check(paced, "no line is written quicker than %.1f times its ink's own time" % LetterScript.QUICKEST)
-	# THE PEN IS AHEAD OF THE VOICE
 	var along := _read_along(m, words)
 	var read_by := func(per: float) -> Dictionary:
 		var md := LetterMedium.new()
@@ -926,7 +826,6 @@ func _clock() -> void:
 		"and on a quicker voice too (%d of %d said first, none %.1f s after)" % [int(quicker["behind"]), int(quicker["n"]), float(quicker["worst"])])
 	_check(float(behind["worst"]) > LetterScript.OVERTAKE + 1.0,
 		"where a voice far quicker than the pen can go leaves it %.1f s behind (the control)" % float(behind["worst"]))
-	# where the pen waits for the voice
 	var first_line: Dictionary = m._actions[0]
 	var yours := -1
 	for i in m._actions.size():
@@ -943,7 +842,6 @@ func _clock() -> void:
 		"the first line begins as the blank page ends, one after a thought once it is said, one under a picture as it is said")
 	_check(absf(m._opening() - (float(m._plan[0]["start"]) - LetterScript.BLANK_PAGE)) < 0.05,
 		"the intro clears the blank page's rest before the pen first touches the page")
-	# a thought
 	var th: int = at.call("always")
 	m._now = t0.call(th) + 0.2
 	var writing := false
@@ -954,7 +852,6 @@ func _clock() -> void:
 	_check(not writing and float(m.pen_at()["lift"]) > DeskMedium.LIFT,
 		"through a thought nothing is written and the pen is up")
 	_check(is_equal_approx(float(m._framing()["k"]), m._arc()), "and the camera neither stands back nor comes in")
-	# the tap: the top comes down on its spot
 	var ti := -1
 	for i in m._actions.size():
 		if String((m._actions[i] as Dictionary)["kind"]) == "tap":
@@ -983,8 +880,8 @@ func _clock() -> void:
 	_check(e > s and full and closest < 0.002, "a tap turns the pen over and brings its top down on its spot (%.1f mm)" % (closest * 1000.0))
 	m._now = s - 0.1
 	_check(m._tap_pose(Transform3D.IDENTITY).is_empty(), "and before it the pen is the desk's own")
-	# THE PAGE IS DRAWN THROUGH A TAP AND A POINT (the first look's render: every frame after the first tap
-	# asked the tap for its ink by an `id` it did not have - a script error a frame, which this gate counts)
+	# the page is drawn through a tap and a point (every frame asked the tap for its ink by an `id`; this gate counts script
+	# errors)
 	var page_ok := true
 	for when in [s + 0.5, float(m._plan[ti]["end"]) + 0.5]:
 		m._now = when
@@ -1001,7 +898,7 @@ func _clock() -> void:
 	_check(not held.is_empty() and float(held["f"]) == 1.0 and hx.origin.y > 0.1 and top_y > 0.03
 		and float(m._framing()["k"]) <= LetterMedium.CAMERA_K,
 		"a point at the camera holds the pen up over the page, its top %.1f cm clear of the pad, the camera stood back" % (top_y * 100.0))
-	# A POINT LINGERS: the voice rests after its sentence, the pen held on the dot and the camera framed on it through
+	# A point lingers: the voice rests after its sentence, the pen held on the dot and the camera framed on it through
 	# the rest - where a thought with no point in it goes straight on (the control) - and a point at the camera holds
 	# the pen up through its rest too
 	var pi := -1
@@ -1027,7 +924,6 @@ func _clock() -> void:
 	m._now = cam_said + LetterScript.POINT_LINGER + 0.1
 	_check(not lingering.is_empty() and float(lingering["f"]) == 1.0 and m._camera_pose(Transform3D.IDENTITY).is_empty(),
 		"and a point at the camera holds the pen up through its rest, put back as it ends")
-	# THE CAMERA'S ARC
 	var ratio := float(LetterMedium.LETTER_WIDE["dist"]) / float(LetterMedium.LETTER_LOCAL["dist"])
 	m._now = feed.intro_hold
 	var k_open := m._arc()
@@ -1048,10 +944,10 @@ func _clock() -> void:
 	m._now = ta - LetterMedium.OUT_BEFORE + 0.01
 	var k_let_go := m._arc()
 	_check(ta < INF and k_before == 1.0 and k_let_go == 0.0, "and lets go before the page turns, done %.0f s ahead of it" % LetterMedium.OUT_BEFORE)
-	# nothing else moves it in or out: on the same letter with a long paragraph after its point at the
-	# camera, so its turn is well past the points and the tap, which here all fall where the arc lets go -
-	# and one between the tap and the point at the camera, which here comes up within the tap - and its picture's
-	# passage taken out, the rule left empty under the sketch takes
+	# nothing else moves it in or out: on the same letter with a long paragraph after its point at the camera, so its turn
+	# is well past the points and the tap, which here all fall where the arc lets go - and one between the tap and the point
+	# at the camera, which here comes up within the tap - and its picture's passage taken out, the rule left empty under the
+	# sketch takes
 	var long := LETTER.replace("*Not that.*", "*Not that.*\n\n" + _filler(1, 30)).replace("<!-- a note to myself -->",
 		_filler(1, 120)).replace("<!-- image (full): a quiet street at night, nobody on it -->\n\nThe street was empty when I came home. Nobody came, and nobody left.\n\n<!-- /image -->\n\n", "")
 	var m2 := LetterMedium.new()
@@ -1085,7 +981,6 @@ func _clock() -> void:
 			read_first = read_first and float(m2._plan[i]["turn_at"]) >= read - 0.05
 	_check(turned > 0 and read_first, "a page is turned for a line written ahead only once the voice has read it (%d turns)" % turned)
 	m2.free()
-	# the picture
 	var img := Image.create(4, 4, false, Image.FORMAT_RGB8)
 	var key := Manuscript.image_key("a quiet street at night, nobody on it")
 	m._pictures[key] = ImageTexture.create_from_image(img)
@@ -1102,7 +997,7 @@ func _clock() -> void:
 		and float(after["alpha"]) == 0.0, "a picture is up over its passage, and gone before and after it")
 	m._now = t0.call(pl + 1)
 	_check(float(m.picture_at()["alpha"]) == 0.0, "and the voice goes on only once it is gone")
-	# THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE
+	# The subtitles caption only what cannot be read on the page
 	var line_of := func(text: String) -> Dictionary:
 		for x in m._actions:
 			if String((x as Dictionary).get("text", "")).begins_with(text):
@@ -1127,7 +1022,6 @@ func _clock() -> void:
 	_check(under and not unpainted,
 		"the passage under a picture is captioned while the picture covers the screen, and not with no picture painted (the control)")
 
-	# the strike: decided on, then made, before the voice goes on
 	var si := -1
 	for i in m._actions.size():
 		if String((m._actions[i] as Dictionary)["kind"]) == "strike":
@@ -1139,7 +1033,6 @@ func _clock() -> void:
 	_check(waited >= LetterScript.DECIDE - 0.01 and waited < LetterScript.DECIDE + 1.0
 		and float(m._plan[si]["end"]) <= t0.call(int(m._actions[si]["after"])) + 0.05,
 		"a strike begins %.2f s after the line's last word and ink, and is done before the voice goes on" % waited)
-	# the still
 	var sf: int = at.call("cross", at.call("look"))
 	m._now = float((words[sf] as Dictionary)["t1"]) + 2.6
 	var f1: Dictionary = m._framing()
@@ -1161,7 +1054,7 @@ func _clock() -> void:
 		done = maxf(done, float((p as Dictionary)["end"]))
 	m._now = done + feed.outro_hold + 0.5
 	_check(m._ended() and m._end_fade() == 0.0, "and is, once it is written and the outro has run")
-	# A LIVE READING: words arriving a few at a time, the plan made again over what has begun - points, taps
+	# A live reading: words arriving a few at a time, the plan made again over what has begun - points, taps
 	# and strikes among them (each asked what of it is written)
 	var live := LetterMedium.new()
 	live.feed = feed
@@ -1212,7 +1105,6 @@ func _pictures() -> void:
 	for p in pics:
 		m._pictures[String(p["key"])] = ImageTexture.create_from_image(img)
 	var t_end := func(i: int) -> float: return float((words[i] as Dictionary)["t1"])
-	# the first dissolve, half way: the harbor whole under the wheat coming in
 	var into: float = t_end.call(int(pics[0]["to"]) - 1) + LetterScript.IMAGE_AFTER
 	m._now = into + LetterScript.IMAGE_FADE * 0.5
 	var mid := m.pictures_at()
@@ -1240,12 +1132,10 @@ func _pictures() -> void:
 		t += 0.05
 	_check(least > 0.999 and gap == 0.0,
 		"nothing of the page shows through a run of three pictures (at least %.4f covered), where it comes back before one after a written line (the control)" % least)
-	# a fade is the slow one asked for
 	m._now = t_end.call(int(pics[2]["to"]) - 1) + LetterScript.IMAGE_AFTER + 1.2
 	var slow := float(m.picture_at()["alpha"])
 	_check(LetterScript.IMAGE_FADE >= 2.0 and LetterScript.IMAGE_FADE <= 3.0 and slow > 0.2,
 		"every fade takes %.1f s: 1.2 s after a picture begins to go it is still at %.2f" % [LetterScript.IMAGE_FADE, slow])
-	# each picture moves its own way
 	var unlike := true
 	var kinds := {}
 	for sd in range(40):
@@ -1307,7 +1197,6 @@ func _hesitant_picture() -> void:
 		var m: LetterMedium = made.call(words)
 		var you := float((words[int(pics[0]["from"]) - 1] as Dictionary)["t1"])
 		var resumed := float((words[int(pics[0]["from"])] as Dictionary)["t0"]) - LetterMedium.RESUME_LEAD
-		# through the hesitation, the desk
 		var most := 0.0
 		var t := you
 		while t < resumed:
@@ -1357,7 +1246,7 @@ func _hesitant_picture() -> void:
 		% float(c["live"]))
 
 
-## THE PEN IS SET DOWN AGAIN once the letter is written, the pick-up's way back.
+## The pen is set down again once the letter is written, the pick-up's way back.
 func _set_down() -> void:
 	print("-- the pen set down")
 	var feed := ShowFeed.new()
@@ -1379,13 +1268,13 @@ func _set_down() -> void:
 	var hand := m._pen_in_hand()
 	_check(last >= 0 and w.x >= end + LetterMedium.SET_DOWN_AFTER - 0.001 and absf(w.y - w.x - LetterMedium.PICK_UP) < 0.001,
 		"the pen is set down %.1f s after its last stroke ends, over %.1f s" % [w.x - end, w.y - w.x])
-	# IN HAND until then (the control: it has not lain down early)
+	# In hand until then (the control: it has not lain down early)
 	var held := true
 	for t in [end - 0.05, end + 0.5, w.x - 0.02]:
 		m._now = t
 		held = held and m._pen_xf().origin.distance_to(m._lying(hand).origin) > 0.03
 	_check(held, "through the last stroke and the beat after it the pen is in hand, off the desk")
-	# THE WAY: on, a frame at a time, and never into the desk or the pad
+	# The way: on, a frame at a time, and never into the desk or the pad
 	var dt := 1.0 / 60.0
 	var worst := 0.0
 	var lowest := INF
@@ -1408,7 +1297,6 @@ func _set_down() -> void:
 		k += 1
 	_check(worst < 0.005, "on the way down it moves at most %.1f mm a frame" % (worst * 1000.0))
 	_check(lowest > -0.0002, "and it never goes into the desk or the pad (%.1f mm clear at the least)" % (lowest * 1000.0))
-	# LYING THERE to the end, as it lay before it was picked up
 	var lies := true
 	for u in [w.y + 0.01, w.y + 2.0, w.y + 60.0]:
 		m._now = u
@@ -1418,7 +1306,7 @@ func _set_down() -> void:
 		"and from then on it lies at its place, exactly as it lay before it was picked up")
 
 
-## THE PEN IS PICKED UP FROM THE DESK, and nothing else lies where it does.
+## The pen is picked up from the desk, and nothing else lies where it does.
 func _pick_up() -> void:
 	print("-- the pen picked up")
 	var feed := ShowFeed.new()
@@ -1440,7 +1328,6 @@ func _pick_up() -> void:
 	var start := float(m._plan[first]["start"])
 	var rest := DeskLook.pen_rest(m.look, LegalPad.DESK_Y)
 	var lies: Vector3 = (rest["nib"] as Vector3) + Vector3.UP * DeskMedium.PEN_R * 1.04
-	# LYING THERE through the intro and its focus pull
 	var lying := true
 	for t in [0.0, opening - 1.0, opening + ShowOpening.FOCUS_PULL.y * 0.5, w.x - 0.02]:
 		m._now = t
@@ -1453,7 +1340,7 @@ func _pick_up() -> void:
 		and ShowOpening.title_alpha("title", w.x, opening, true) == 0.0 and w.y < start and start - w.y < 0.5,
 		"it is picked up once a titled intro's blur has lifted and the name is gone (%.1f s after the opening), and is over the first stroke as the line begins (%.2f s before)"
 		% [w.x - opening, start - w.y])
-	# THE WAY: on, a frame at a time, and never into the desk or the pad
+	# The way: on, a frame at a time, and never into the desk or the pad
 	var dt := 1.0 / 60.0
 	var worst := 0.0
 	var lowest := INF
@@ -1468,7 +1355,6 @@ func _pick_up() -> void:
 			worst = maxf(worst, maxf(xf.origin.distance_to(prev.origin),
 				(xf.origin + xf.basis.y * LetterMedium.PEN_TOP).distance_to(prev.origin + prev.basis.y * LetterMedium.PEN_TOP)))
 		if t < start:
-			# its axis over what is under it: the nib clear of it, the body (2 cm up) by about its radius
 			for along in [0.0, 0.02, 0.06, 0.1, LetterMedium.PEN_TOP]:
 				var q: Vector3 = xf.origin + xf.basis.y * float(along)
 				var on_pad := absf(q.x) <= LegalPad.W * 0.5 + DeskMedium.PEN_R and absf(q.z) <= LegalPad.H * 0.5 + DeskMedium.PEN_R
@@ -1486,7 +1372,7 @@ func _pick_up() -> void:
 	m._now = start + 0.05
 	_check(m._pick_up_pose(Transform3D.IDENTITY).is_empty() and float(m.pen_at()["lift"]) <= DeskMedium.LIFT + 0.0001,
 		"and once the line begins the pen is the desk's own, on the paper")
-	# THE PEN LEANS TO THE RIGHT AND A LITTLE DOWN as the camera sees it, close and wide, all the while it writes
+	# The pen leans to the right and a little down as the camera sees it, close and wide, all the while it writes
 	var lo := INF
 	var hi := -INF
 	var sum := 0.0
@@ -1513,7 +1399,7 @@ func _pick_up() -> void:
 		"as it writes, the pen's top points right and a little down on the screen (%.0f degrees under the level, %.0f to %.0f with the hand's sway) - the control, the Proof desk's lean, %.0f degrees over it"
 		% [mean, lo, hi, -desk])
 	m.free()
-	# NOTHING ELSE LIES THERE
+	# Nothing else lies there
 	var on := 0
 	var ctl := 0
 	var placed := 0
@@ -1537,7 +1423,7 @@ func _pick_up() -> void:
 		"nothing is set down where the pen lies (%d placed; the control, its place not taken, %d on it)" % [placed, ctl])
 
 
-## A LETTER OF MANY SENTENCES: [param paras] paragraphs of sentences [param lengths] words long in turn, a comma in
+## A letter of many sentences: [param paras] paragraphs of sentences [param lengths] words long in turn, a comma in
 ## every third - where a page may turn after a mark or inside a sentence.
 static func _prose(paras: int, lengths: Array) -> String:
 	var vocab := ["the", "letter", "was", "written", "slowly", "by", "lamplight", "and", "nobody", "read", "it", "twice"]
@@ -1561,7 +1447,7 @@ static func _prose(paras: int, lengths: Array) -> String:
 	return "\n\n".join(out) + "\n"
 
 
-## A VOICE THAT PAUSES AS A REAL ONE DOES, for [param parsed]: [param word] a word, [param stop] more at a sentence's end
+## A voice that pauses as a real one does, for [param parsed]: [param word] a word, [param stop] more at a sentence's end
 ## and a third of it at a comma, the rests and hesitations the script writes, and each word's `sentence` - for words
 ## handed a sentence at a time, as a live reading's arrive.
 static func _voiced(parsed: Dictionary, word := LetterScript.READ_WORD, stop := 0.7, lead := 1.0) -> Array:
@@ -1595,7 +1481,7 @@ static func _voiced(parsed: Dictionary, word := LetterScript.READ_WORD, stop := 
 
 
 ## A letter's medium, off the stage, read by [param words] (all of them known, as an export's are).
-## WHAT IS ON THE DESK AND ITS LIGHT ARE CHOSEN, the seed only placing them and drawing how they look.
+## What is on the desk and its light are chosen, the seed only placing them and drawing how they look.
 func _chosen_desk() -> void:
 	print("-- what is on the desk, chosen")
 	var kinds := ["mug", "pencil", "dog_tag", "mat"]
@@ -1627,7 +1513,7 @@ func _chosen_desk() -> void:
 		"a desk lit by candles and given none has a taper set down - one given its own keeps it, and a lamplit desk has none (the control)")
 	_check(DeskLook.picks_of({"things": ["mug"], "mood": "dusk", "seed": 3}) == {"things": ["mug"], "mood": "dusk"}
 		and DeskLook.picks_of({"mood": "noon"}).is_empty(), "a document's letter hands its things and light, never a light there is not")
-	# WHERE THE FRAME SEES THEM: what lies flat and was chosen, beside the pad in the widest framing
+	# Where the frame sees them: what lies flat and was chosen, beside the pad in the widest framing
 	var flat := ["pencil", "eraser", "clips", "dog_tag"]
 	var seen := 0
 	var all := 0
@@ -1653,7 +1539,7 @@ func _chosen_desk() -> void:
 		% [seen, all, ctl_seen, ctl_all])
 
 
-## A CHOSEN DESK PACKED IN TO THE PAPER, the candles the first pushed out of the frame.
+## A chosen desk packed in to the paper, the candles the first pushed out of the frame.
 func _packed() -> void:
 	print("-- a chosen desk packed in to the paper")
 	var seen := PackedVector2Array(DeskLook.SEEN)
@@ -1670,7 +1556,6 @@ func _packed() -> void:
 				var foot: PackedVector2Array = c.get_meta("foot")
 				var near := DeskLook._gap(foot)
 				snug += int(near >= 0.0 and near <= 0.04)
-				# THE BONE ITSELF, as it lies: its outline through the thing's place on the desk
 				var halves: Array = Props.sanitize(DeskLook._thing("dog_tag", DeskLook._rng(seed, "chosen dog_tag")), ["#888888"])["things"][0]["parts"].slice(0, 2)
 				var bone_in := true
 				for plate in halves:
@@ -1679,7 +1564,7 @@ func _packed() -> void:
 						bone_in = bone_in and Geometry2D.is_point_in_polygon(Vector2(w.x, w.z), seen)
 				whole += int(bone_in)
 		(dressed["node"] as Node).free()
-		# THE CONTROL: placed as it had been, a circle round it anywhere in the frame beside the pad, the tea lights in
+		# The control: placed as it had been, a circle round it anywhere in the frame beside the pad, the tea lights in
 		# their band first
 		var r := DeskLook._rng(seed, "control")
 		var taken := DeskLook._pen_taken(l, LegalPad.DESK_Y)
@@ -1712,7 +1597,7 @@ func _packed() -> void:
 	_check(flat_all >= 55 and float(flat_in) >= 0.9 * float(flat_all) and float(lit_in) / float(lit_all) < float(flat_in) / float(flat_all) - 0.3,
 		"a crowded desk keeps what lies flat in the frame (%d of %d) and pushes the candles out first (%d of %d in it) - their light falls on the page from anywhere"
 		% [flat_in, flat_all, lit_in, lit_all])
-	# ITS THINGS ON BOTH SIDES OF THE PAD, each leaning to one: never in the lane where the pen taps the desk, never on a
+	# Its things on both sides of the pad, each leaning to one: never in the lane where the pen taps the desk, never on a
 	# pen - and where nothing had been let lie, the stretch beside the pad's right (the control: none there before)
 	var things := ["pencil", "dog_tag", "eraser", "cards", "tealights"]
 	var right := {}
@@ -1746,7 +1631,6 @@ func _packed() -> void:
 	_check(sided and stretch >= 10 and in_lane == 0 and on_pen == 0,
 		"a chosen desk's things lie on both sides of the pad (on the right of 24: %s), %d in the stretch beside its right where none had lain (the control, the rule before: none) - none in the pen's tap lane, none on a pen"
 		% [str(right), stretch])
-	# ITS CANDLES ON BOTH SIDES, by turns: one alone on either; two or more on each
 	var alone := Vector2i.ZERO
 	var lit_both := 0
 	var lit_desks := 0
@@ -1773,7 +1657,7 @@ func _packed() -> void:
 		% [alone.x, alone.y, lit_desks])
 
 
-## A DOG TAG CUT AS A DOG'S BONE: flat, hung by the V at the middle of its edge on a long fine chain, whole.
+## A dog tag cut as a dog's bone: flat, hung by the V at the middle of its edge on a long fine chain, whole.
 func _dog_tag() -> void:
 	print("-- a dog tag")
 	var n := 24
@@ -1791,7 +1675,7 @@ func _dog_tag() -> void:
 		var plate: Dictionary = parts[0]
 		var other: Dictionary = parts[1]
 		var chain: Dictionary = parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "strand")[0]
-		# THE BONE: one flat plate in two halves, each the other's mirror, and nothing laid round its edge (no rim)
+		# The bone: one flat plate in two halves, each the other's mirror, and nothing laid round its edge (no rim)
 		var pts: Array = plate["points"]
 		var mirrored := (other["points"] as Array).size() == pts.size()
 		for q in pts:
@@ -1801,8 +1685,8 @@ func _dog_tag() -> void:
 			mirrored = mirrored and twin
 		var tubes := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "tube").size()
 		var plate_at: Vector3 = plate["at"]
-		# THE V CAST WITH IT: out of the middle of the long edge, its point on the axis as far out as the knobs come - and A
-		# V, NOT A HOLE: the triangle between its struts open, its apex on the axis, its foot on the bar's edge from the
+		# The V cast with it: out of the middle of the long edge, its point on the axis as far out as the knobs come - and A
+		# V, not a hole: the triangle between its struts open, its apex on the axis, its foot on the bar's edge from the
 		# axis to short of the V's own, larger than the round hole it had been, and the chain's two runs through it
 		var point := Vector2(0.0, INF)           # the furthest out on the axis
 		var knobs := INF                         # how far out the lobes come
@@ -1844,7 +1728,7 @@ func _dog_tag() -> void:
 		var along := Props._lengths(Array(line))[-1]
 		longest = maxf(longest, along)
 		shortest = minf(shortest, along)
-		# THE CHAIN WHOLE: a link where its last run comes back to the ring, past where whole rings a link had stopped it
+		# The chain whole: a link where its last run comes back to the ring, past where whole rings a link had stopped it
 		var geo = Props._strand(chain, RandomNumberGenerator.new())[0]["geo"]
 		var t := float(chain["thickness"]) * 0.01
 		var late: Vector3 = line[int(line.size() * 0.97)]
@@ -1856,7 +1740,7 @@ func _dog_tag() -> void:
 		whole += int(found and geo.v.size() < 400000)
 		var pitch := (2.0 * t * 0.36 - t * 0.13) * 1.45
 		ctl_capped += int(along / pitch > 360.0)
-		# DROPPED, NOT LOOPED: off the bone - the control, the first drop alone, on it now and then - and each its own shape,
+		# Dropped, not looped: off the bone - the control, the first drop alone, on it now and then - and each its own shape,
 		# on both halves and the whole bone round them (for a drop of its own, the control)
 		# (the chain and the plate are laid about the same middle: each in the bone's own frame) - but for where it goes
 		# through the V and over its point, as it should
@@ -1883,8 +1767,8 @@ func _dog_tag() -> void:
 	_check(off_bone == n and ctl_over > 0 and shapes.size() == n,
 		"its chain is dropped, never looped: off the bone on all %d (the control, a single drop, on it %d times), each heap its own size and shape (%d of %d)"
 		% [n, ctl_over, shapes.size(), n])
-	# A NAME NOW AND THEN, made up ([method DeskLook.tag_name]): desk 4230's the user's, drawn as every desk's is - the
-	# control, the next salt, names it otherwise - and engraved on its tag; a quarter of desks named, each its own name
+	# a name now and then, made up ([method DeskLook.tag_name]): the named desk's, drawn as every desk's is - the control,
+	# the next salt, names it otherwise - and engraved on its tag; a quarter of desks named, each its own name
 	var named := 0
 	var names := {}
 	for seed in 4000:
@@ -1913,8 +1797,8 @@ func _dog_tag() -> void:
 		and next_name.sha256_text() != DESK_NAME and bare and named > 800 and named < 1200 and names.size() > named / 3,
 		"desk %d's tag is engraved with the name chosen for it, drawn as every desk's is (the control, the next salt: %s), %d of 4000 desks named, %d names among them, an unnamed desk's tag bare"
 		% [NAMED_DESK, "\"%s\"" % next_name if not next_name.is_empty() else "no name", named, names.size()])
-	# A SMALL OUTLINE CUT AT ITS OWN SIZE ([method Props._extrude_face]): a notch in its edge left open - the control, cut in
-	# meters as it had been, filled now and then (the first tag's hole had been)
+	# a small outline cut at its own size ([method Props._extrude_face]): a notch in its edge left open - the control, cut
+	# in meters, fills now and then
 	var notched := 0
 	var ctl_filled := 0
 	var tried := 0
@@ -1974,13 +1858,12 @@ func _fills(poly: PackedVector2Array, tris: Array, notch: Vector2, nr: float, fl
 	return false
 
 
-## TICKED WHILE THE LETTER PLAYS: the desk dressed again, the letter as it was.
-## WORDS ON THE INDEX CARDS ([method DeskLook._write]): see the header.
+## Ticked while the letter plays: the desk dressed again, the letter as it was.
+## Words on the index cards ([method DeskLook._write]): see the header.
 func _card_writing() -> void:
 	print("-- words on the index cards")
 	var things := ["pencil", "cards", "taper", "pillar", "tealights", "dog_tag"]
 	var pad_px := LegalPad.H / DeskScript.PH
-	# the most the writing may lie off upright: half a quarter turn, and its own hair
 	var off := PI * 0.25 + DeskLook.CARD_TILT + 1e-3
 	var m := DeskLook.CARD_MARGIN * 0.01
 	var n := 0
@@ -2001,7 +1884,7 @@ func _card_writing() -> void:
 			if String((t as Dictionary)["kind"]) == "cards":
 				size = ((t["thing"] as Dictionary)["parts"] as Array)[0]["size"]
 		var dressed := DeskLook.dress(l, seed, LegalPad.DESK_Y)
-		# NOTHING MOVES FOR IT: every thing where it lay unwritten, the same stack
+		# Nothing moves for it: every thing where it lay unwritten, the same stack
 		kept += int(_layout(dressed["node"]) == _layout(plain["node"]))
 		for c in (dressed["node"] as Node).get_children():
 			if not ((c as Node).has_meta("kind") and String(c.get_meta("kind")) == "cards"):
@@ -2018,7 +1901,7 @@ func _card_writing() -> void:
 			var xf := card.transform * on.transform * label.transform
 			var d := xf.basis.x
 			upright += int(absf(atan2(d.z, d.x)) <= off and xf.basis.z.normalized().y > 0.99)
-			# THE CONTROL: the writing square to its card, its quarter turns undone
+			# The control: the writing square to its card, its quarter turns undone
 			var square := Transform3D(on.transform.basis.rotated(Vector3.UP, -float(q) * PI * 0.5), on.position)
 			var ds := (card.transform * square * label.transform).basis.x
 			ctl_off += int(absf(atan2(ds.z, ds.x)) > off)
@@ -2043,7 +1926,7 @@ func _card_writing() -> void:
 		and fits == n and as_pad == n and at_pad > 0,
 		"the words on the top card of every desk (%d of %d), however it lies - %d of them sticky notes - the nearest way up to the writer's seat (%d), down %d cards lying along the pad, across the rest - the control, the writing square to its card, more than half a quarter turn off on %d - inside the margin (%d), in the pad's hand and rules (%d), at its size where the card has room (%d)"
 		% [written, n, sticky, upright, portrait, ctl_off, fits, as_pad, at_pad])
-	# MORE WORDS THAN THE PAD'S SIZE HOLDS ON A CARD come smaller, and still fit - the control, as the pad is written, overruns it
+	# More words than the pad's size holds on a card come smaller, and still fit - the control, as the pad is written, overruns it
 	var many := "\n".join([CARD, CARD, CARD])
 	var l := DeskLook.of(NAMED_DESK, {"things": ["cards"], "mood": "lamplight", "card_text": many, "hand": "kalam"})
 	var size: Vector3 = ((l["things"][0]["thing"] as Dictionary)["parts"] as Array)[0]["size"]
@@ -2100,7 +1983,6 @@ func _redressed() -> void:
 	for c in m._desk.get_children():
 		has_tag = has_tag or ((c as Node).has_meta("kind") and String(c.get_meta("kind")) == "dog_tag")
 	var redressed := m._desk != desk_before and has_tag and is_same(m._actions, actions)
-	# ...and words on its index cards
 	(subs.document["letter"] as Dictionary)["things"] = ["pencil", "cards", "dog_tag"]
 	(subs.document["letter"] as Dictionary)["card_text"] = "Back soon."
 	m._ensure_doc()
@@ -2110,7 +1992,6 @@ func _redressed() -> void:
 		if w != null:
 			wrote = w.text
 	redressed = redressed and wrote == "Back soon." and is_same(m._actions, actions)
-	# ANOTHER DESK: drawn again, every word as it was
 	var paper: Color = m.look["paper"]
 	var desk_mid: Node3D = m._desk
 	(subs.document["letter"] as Dictionary)["desk"] = 9
@@ -2143,7 +2024,7 @@ func _medium(text: String, words: Array) -> LetterMedium:
 	return m
 
 
-## A PAGE IS TURNED WITH THE VOICE WAITING WHERE IT ENDS ON A MARK, and a sentence it breaks is finished first.
+## A page is turned with the voice waiting where it ends on a mark, and a sentence it breaks is finished first.
 func _turn_waits() -> void:
 	print("-- a page turned on a mark, and one inside a sentence")
 	var marked := 0
@@ -2169,7 +2050,6 @@ func _turn_waits() -> void:
 				continue
 			broken += 1
 			rested_broken = maxf(rested_broken, rests[k0])
-			# the next sentence in the paragraph: the first word after a stop
 			var j := i
 			var ks := -1
 			while ks < 0 and j < acts.size() and String((acts[j] as Dictionary)["kind"]) == "pad-text" \
@@ -2227,7 +2107,7 @@ static func _late(m: LetterMedium, words: Array, k: int) -> float:
 	return INF
 
 
-## A LINE RUNS ON INTO THE VOICE'S PAUSE AFTER IT.
+## A line runs on into the voice's pause after it.
 func _line_breaks() -> void:
 	print("-- a line runs on into the voice's pause")
 	var text := _prose(12, [7, 11, 9, 13, 8, 10])
@@ -2255,7 +2135,7 @@ func _line_breaks() -> void:
 		% [worst, was])
 
 
-## THE CAMERA LETS GO BEFORE A TURN ONCE, its words arriving a sentence at a time.
+## The camera lets go before a turn once, its words arriving a sentence at a time.
 func _let_go() -> void:
 	print("-- the camera lets go before a turn once")
 	var text := "Dear Friend,\n\n" + _prose(2, [9, 7, 12]) + "\n<!-- hesitation: 1.5 -->\n\n<!-- image (full): an empty room at night -->\n\n" \
@@ -2341,8 +2221,8 @@ func _struck() -> void:
 	var long := LetterScript.parse("I wanted to say <!-- struck: that I was sorry about all of it, every single part of it --> nothing at all.\n", 3)
 	_check(_of(long, "strike").size() == 2 and int(_of(long, "strike")[0]["of"]) != int(_of(long, "strike")[1]["of"]),
 		"a struck run over two lines is crossed out on each")
-	# WRITTEN AND NEVER SAID (the user: "the second 'mourning' should not have been spoken"): the correction written
-	# beside the struck words and not said, the sentence's stop kept for the voice, which rests while it is written
+	# written and never said: the correction written beside the struck words and not said, the sentence's stop kept for the
+	# voice, which rests while it is written
 	var quiet := LetterScript.parse("It looks like <!-- struck: morning --> <!-- unspoken: mourning. -->\n\nYours.\n", 3)
 	var ql := _of(quiet, "pad-text")
 	var qsaid := String(quiet["speakable"])
@@ -2417,7 +2297,7 @@ func _pens() -> void:
 	_check(String(strike["ink"]) == "blue" and int(swaps[2]["i"]) == int(strike["i"]) + 1 and int(swaps[2]["pen"]) == 0
 		and String(lines.back()["ink"]) == "",
 		"words struck and then a change of ink: crossed out with the pen in hand, the correction in the other")
-	# A CHANGE INSIDE A WORD (the chapter's closing stop in red): the stop against the word, no space, said with it
+	# A change inside a word (the chapter's closing stop in red): the stop against the word, no space, said with it
 	var glued := LetterScript.parse("Godspeed to you, Pen<!-- color: red -->.<!-- color: default -->\n\nInk\n", 3)
 	var spaced := LetterScript.parse("Godspeed to you, Pen <!-- color: red --> . <!-- color: default -->\n\nInk\n", 3)
 	var gl := _of(glued, "pad-text")
@@ -2429,14 +2309,12 @@ func _pens() -> void:
 		and float(one_rest.get_string(1)) >= 2.0 * LetterScript.SWAP,
 		"a change of ink inside a word: the stop written in red against it (%.0f px on, %.0f with a space - the control), \"Pen.\" said whole and one rest after it"
 		% [float(gl[1]["cont_x"]), float(sl[1]["cont_x"])])
-	# on the desk
 	var feed := ShowFeed.new()
 	feed.outro_hold = 4.0
 	feed.intro_hold = 1.0
 	var m := LetterMedium.new()
 	m.feed = feed
 	m._pad = LegalPad.new()
-	# the desk's own pen, as mounting builds it, in the tree beside where the others are laid
 	var desk3 := Node3D.new()
 	root.add_child(desk3)
 	m._pen = Node3D.new()
@@ -2528,7 +2406,6 @@ func _frame_cost() -> void:
 			m._build_plan())
 	_check(whole_ms > 0.0 and kept_ms < whole_ms * 0.5,
 		"a plan made again three quarters through, the past kept, takes %.1f ms five times; with nothing kept, %.1f (the control)" % [kept_ms, whole_ms])
-	# a finished line's ink: made once
 	m._now = float(m._plan[old]["end"]) + 1.0
 	var made_ms := WorkClock.cost_ms(func() -> void:
 		for k in 20:
@@ -2567,7 +2444,6 @@ func _dense_sketch() -> void:
 		and is_equal_approx(LetterScript.draw_pace(ink, words), LetterScript.DRAW_QUICKEST),
 		"a sketch with room is drawn at the desk's quickest at most, as before; the dense one at %.0f times the hand's pace (the control)"
 		% LetterScript.DRAW_QUICKEST)
-	# at the desk: done soon after its words, and the pen straight on to the next line
 	var feed := ShowFeed.new()
 	feed.intro_hold = 1.0
 	var md := LetterMedium.new()
@@ -2593,7 +2469,7 @@ func _dense_sketch() -> void:
 		"at the desk it is drawn in %.1f s (at the desk's quickest, %.1f - the control), the pen on the next line %.2f s after its last mark"
 		% [done - begun, ink / DeskScript.MAX_PACE, gap])
 	md.free()
-	# DRAWN ALONE, no words over it: the voice waits DRAW_ALONE, not its ink at the hand's pace (the control)
+	# Drawn alone, no words over it: the voice waits DRAW_ALONE, not its ink at the hand's pace (the control)
 	var alone_text := text.replace("*One, two.*\n\n", "")
 	var alone := LetterScript.parse(alone_text, 3, {key: svg}, lengths, records)
 	var am := RegEx.create_from_string("action-hold: ([0-9.]+) -->\\s*And that").search(String(alone["speakable"]))
@@ -2615,7 +2491,6 @@ func _dense_sketch() -> void:
 		if String((ma._actions[i] as Dictionary)["kind"]) == "draw":
 			ai = i
 	var before_it := int((ma._actions[ai] as Dictionary)["after"])
-	# a live reading: the words up to the drawing first, the rest arriving while it is drawn
 	ma.take_words(heard_alone.slice(0, before_it))
 	var a_begun := float(ma._plan[ai]["start"])
 	var a_done := float(ma._plan[ai]["end"])
@@ -2629,8 +2504,8 @@ func _dense_sketch() -> void:
 		"at the desk it is drawn alone in %.1f s (its ink at the hand's pace, %.0f - the control); the plan made again a quarter of the way in, it ends %.2f s later (held to the desk's quickest, %.1f - the control)"
 		% [a_done - a_begun, ink, a_again - a_done, floor_was - a_done])
 	ma.free()
-	# TOLD ITS TIME (2026-10-31, the user, of the tree done in 5: "drawn too quickly"): `<!-- sketch (10s): ... -->` is
-	# drawn in that, the voice waiting it out - drawn alone, or over a thought, which then rests up to it
+	# told its time: `<!-- sketch (10s): ... -->` is drawn in that, the voice waiting it out - drawn alone, or over a thought,
+	# which then rests up to it
 	var told := 10.0
 	var timed_text := alone_text.replace("<!-- sketch:", "<!-- sketch (10s):")
 	var timed := LetterScript.parse(timed_text, 3, {key: svg}, lengths, records)

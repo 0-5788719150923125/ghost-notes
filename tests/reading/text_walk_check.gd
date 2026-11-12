@@ -4,17 +4,15 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/reading/text_walk_check.gd
 ##
-## A NOTE'S OWN WALK reads the note: its words pass through, its title is announced, and a tablet
-## chapter is read off its screen (no title, the marks out). CARDS' WALK reads the EPISODE, never
-## the brief: the words, the cast's text and the fingerprint are the episode's script, its table
-## marks are not spoken, no title is announced, and with no episode up there is nothing to read.
-## Two-sided: the brief is handed in every time and must never come back out of Cards' walk, and
-## the plain note must come back out of the note's walk unchanged - a walk that returned a constant
-## would pass neither.
+## A note's own walk reads the note: its words pass through, its title is announced, and a tablet chapter is read
+## off its screen (no title, the marks out). The table's walk reads the episode, never the brief: the words, the
+## cast's text and the fingerprint are the episode's script, its table marks are not spoken, no title is announced,
+## and with no episode up there is nothing to read. Two-sided: the brief is handed in every time and must never come
+## back out of the table's walk, and the plain note must come back out of the note's walk unchanged.
 ##
-## READ-ONLY: the episode lives under `TableEpisode.root` set to a folder of this gate's own, and is
-## thrown away through `TableEpisode.discard`. The walks are loaded by path after the tree is up:
-## named here, they would be compiled with this gate before the autoloads their scripts name exist.
+## Read-only: the episode lives under `TableEpisode.root` set to a folder of this gate's own and is thrown away
+## through `TableEpisode.discard`. The walks are loaded by path after the tree is up: named here, they would compile
+## with this gate before the autoloads their scripts name exist.
 
 var _fails: Array = []
 

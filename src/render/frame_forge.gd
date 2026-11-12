@@ -1,70 +1,44 @@
 extends RefCounted
 class_name FrameForge
 
-## FrameForge - scene geometry built OFF the main thread: the foundational
-## fix for UI lag, not another mitigation.
+## FrameForge - scene geometry built off the main thread, so a heavy scene frame never blocks the UI.
 ##
-## Why this exists: the engine runs ONE main loop - input, then every node's
-## _process/_draw, then present. The UI composites in that same loop, so a
-## scene that spends 300 ms of GDScript in a frame blocks clicks for 300 ms;
-## nothing can preempt a running script. Real engines never have such frames:
-## scene work lives on the GPU and worker threads, and the main thread only
-## SUBMITS. This is that architecture for ghost's scenes.
+## The engine runs one main loop (input, every node's _process/_draw, present), so GDScript spent in a frame blocks
+## clicks for as long. Scene work lives on a worker thread and the main thread only submits.
 ##
 ## The contract a scene opts into:
-##   - a STATIC, PURE builder function: takes one snapshot Dictionary of
-##     plain data (packed arrays, scalars, a fresh-per-frame AudioFeatures),
-##     touches NO nodes and NO drawing API, and returns packet chunks:
-##     [{pts, cols, idx[, uvs, tex]}] - typically built with a TriBatch.
-##   - update() calls kick(builder, snapshot, self) - if the worker is free,
-##     the snapshot ships to a WorkerThreadPool thread; when the packet
-##     lands, the scene is queue_redraw()n.
-##   - _draw() calls submit(self): a few RenderingServer calls, microseconds.
+##   - a static, pure builder function: takes one snapshot Dictionary of plain data (packed arrays, scalars, a
+##     fresh-per-frame AudioFeatures), touches no nodes and no drawing API, and returns packet chunks
+##     [{pts, cols, idx[, uvs, tex]}], typically built with a TriBatch.
+##   - update() calls kick(builder, snapshot, self); if the worker is free the snapshot ships to a
+##     WorkerThreadPool thread, and when the packet lands the scene is queue_redraw()n.
+##   - _draw() calls submit(self): a few RenderingServer calls.
 ##
-## Properties that follow from the contract:
-##   - A scene frame can NEVER block the UI again, however heavy its math
-##     gets - if the worker falls behind, the backdrop just updates less
-##     often; input never waits. This generalizes to ANY scene that adopts
-##     the contract, which is the point.
-##   - Snapshots must be safe: duplicate anything main mutates per frame
-##     (swarm fields, particle arrays); immutable-after-build arrays may
-##     pass by reference; AudioFeatures is fresh per frame upstream.
-##   - The builder being static + snapshot-only means a scene freed mid-job
-##     (a Director cut) is harmless: the weakref completion just drops.
-##   - EXPORTS STAY DETERMINISTIC: in --export mode kick() runs the builder
-##     SYNCHRONOUSLY, so a movie renders the same frames every run. Only
-##     live sessions pay the (harmless) async frame of latency.
+## Consequences:
+##   - A slow worker only makes the backdrop update less often; input never waits.
+##   - Snapshots must be safe: duplicate anything main mutates per frame; immutable-after-build arrays may pass by
+##     reference.
+##   - A scene freed mid-job (a Director cut) is harmless: the weakref completion just drops.
+##   - Exports stay deterministic: in --export mode kick() runs the builder synchronously.
 
 var _packet: Array = []
 var _busy := false
 var _pending_builder := Callable()
 var _pending_snapshot := {}
-var _has_pending := false            # explicit: a JOB-pattern snapshot is {}
-                                     # (state lives on the job object), so
-                                     # emptiness must never mean "no work"
-var _pending_retain: RefCounted = null   # a Callable holds only an object ID -
-                                         # it does NOT keep a RefCounted job
-                                         # alive (measured: null::run) - so the
-                                         # forge retains the job explicitly
-                                         # until its build has run
-## The job that built the packet now in `_packet`, swapped WITH it in the same
-## assignment - see [method packet_source].
+var _has_pending := false            # a job-pattern snapshot is {}, so emptiness never means "no work"
+var _pending_retain: RefCounted = null   # a Callable holds only an object ID and does not keep a RefCounted job alive, so the forge retains it until its build has run
+## The job that built the packet now in `_packet`, swapped with it in one assignment (see [method packet_source]).
 var _packet_src: RefCounted = null
 var _fails := 0                          # consecutive builds that returned no packet
 
-# resolved lazily on first kick (a static initializer proved unreliable for
-# this): exports MUST build synchronously or the movie records stale packets
+# resolved lazily on first kick; exports must build synchronously or the movie records stale packets
 static var _sync_known := false
 static var _sync := false
 
 
-## Register the newest frame inputs. CHEAP AND IDEMPOTENT by design: the
-## Director legitimately calls a scene's update() several times per frame
-## (music-clock debt substeps, the 12-step cut pre-warm), and the old
-## contract absorbed that because the expensive work lived in the ONCE-
-## deduped _draw. kick() therefore only stores the snapshot (newest wins);
-## the build itself runs at most once per drawn frame - in submit() when
-## synchronous, on the worker (pipelined, always the newest snapshot) live.
+## Register the newest frame inputs. Cheap and idempotent: the Director calls a scene's update() several times
+## per frame (music-clock debt substeps, the cut pre-warm), so kick() only stores the snapshot (newest wins). The
+## build runs at most once per drawn frame: in submit() when synchronous, on the worker (pipelined, newest snapshot) live.
 func kick(builder: Callable, snapshot: Dictionary, scene: CanvasItem,
 		retain: RefCounted = null) -> void:
 	if not _sync_known:
@@ -85,20 +59,15 @@ func _launch(scene: CanvasItem) -> void:
 	_busy = true
 	var builder := _pending_builder
 	var snapshot := _pending_snapshot
-	var retain := _pending_retain    # closure capture = a REAL reference: the
-	_pending_snapshot = {}           # job lives exactly as long as its build
+	var retain := _pending_retain    # a closure capture is a real reference: the job
+	_pending_snapshot = {}           # lives exactly as long as its build
 	_pending_retain = null
 	_has_pending = false
 	var wr: WeakRef = weakref(scene)
 	WorkerThreadPool.add_task(func() -> void:
-		# UNTYPED, then checked. A builder that aborts - any runtime error anywhere inside it -
-		# returns null, and `var out: Array = <null>` raises a SECOND error that kills this lambda
-		# before it can schedule `fin`. `_busy` would then stay true forever, kick() would never
-		# relaunch, and the scene would show its last packet for the rest of its life - or, for a
-		# scene whose _draw is only `begin_draw(); _forge.submit(self)` with no ground or layers of
-		# its own (metropolis, spires, terrain_city), NOTHING AT ALL. Silently, and for the whole
-		# hold. A latched failure has to degrade to a stale frame and a warning, never to a
-		# permanently black stage.
+		# Untyped, then checked: a builder that aborts returns null, and `var out: Array = <null>` raises a second
+		# error that kills this lambda before it can schedule `fin`, leaving `_busy` true forever. A failure must
+		# degrade to a stale frame and a warning, never to a permanently black stage.
 		var built: Variant = builder.call(snapshot)
 		if retain != null:
 			pass                     # (referenced so the capture is retained)
@@ -121,12 +90,8 @@ func _launch(scene: CanvasItem) -> void:
 		fin.call_deferred())
 
 
-## A build produced no packet - the builder aborted on a runtime error. SAY SO. The failure mode
-## this replaces was invisible: a scene that draws only what the forge gives it went black for its
-## whole hold with nothing in the log, which is precisely how a 29-second black stretch shipped in
-## a finished render and was found by measuring the video afterwards rather than by any gate. Loud
-## on the first failure and on every hundredth after, so a persistently broken builder is a line in
-## the log and not a mystery.
+## A build produced no packet (the builder aborted on a runtime error): say so, on the first failure and every
+## hundredth after, since a scene that draws only what the forge gives it goes black for its hold.
 func _note_failure() -> void:
 	_fails += 1
 	if _fails == 1 or _fails % 100 == 0:
@@ -134,20 +99,10 @@ func _note_failure() -> void:
 			+ "the scene is showing its last good frame; look above for the builder's own error")
 
 
-## The job object whose build produced the packet that is on screen RIGHT NOW.
-##
-## This exists because a scene that draws anything ALONGSIDE the packet has to place it
-## against the inputs the packet was built from, not against the inputs it has now - and it
-## cannot ask the job it last kicked, because most kicked jobs never run (kick() keeps only
-## the newest snapshot) and a build that did run lands a frame or more later.
-##
-## The failure it ends is specific and was visible: contour_map used to have each job write
-## its warp offset into a shared slot at the end of run(), which happens ON THE WORKER, while
-## the packet itself is swapped in a deferred call on the main thread. Any frame drawn in
-## between compensated the OLD sheet by the NEW offset - a whole extraction cadence of warp,
-## about 1.5% of the sheet's width - and then corrected itself on the next frame. One frame
-## out of place reads as a hard jump, and it happened on most re-prints. Here the source and
-## the packet are swapped in one assignment on one thread, so they cannot disagree.
+## The job object whose build produced the packet that is on screen now. A scene that draws anything alongside
+## the packet places it against the inputs the packet was built from, not the inputs it has now, and cannot ask
+## the job it last kicked (kick() keeps only the newest snapshot, and a build lands a frame or more later). The
+## source and the packet are swapped in one assignment on one thread, so they cannot disagree.
 ##
 ## Null until the first packet lands. Cast it to your own job class.
 func packet_source() -> RefCounted:
@@ -159,29 +114,14 @@ func packet_source() -> RefCounted:
 ## it directly only when you must READ the source before drawing (contour_map sets its
 ## transform from it, and in export mode the build happens right here).
 func flush() -> void:
-	# `not _busy` is load-bearing and was missing. The inline first build exists so a
-	# fresh cut never shows an empty backdrop, but without that guard it fires WHILE a
-	# worker build of the same job is already in flight - so the builder runs twice at
-	# once, on two threads.
-	#
-	# For a pure builder over a snapshot that is merely wasted work, which is why it went
-	# unnoticed. For a JOB OBJECT that carries state it is a data race: murmuration's job
-	# advances a shared Boids flock, whose packed arrays are copy-on-write, and two
-	# concurrent `step()` calls tore them mid-reallocation - the flock reported more birds
-	# than its position arrays held and indexing went out of bounds. It surfaced as three
-	# stray "Out of bounds get index" errors across two hundred scene builds, which is
-	# exactly the shape of a race and nothing like the shape of an indexing mistake.
-	#
-	# Skipping the inline build here costs at most one frame of empty backdrop, and only
-	# on the frame a worker is already busy producing the real thing.
+	# `not _busy` keeps the inline first build (so a fresh cut never shows an empty backdrop) from firing while a
+	# worker build of the same job is in flight: for a job object that carries state, two concurrent builds are a data
+	# race. Skipping it costs at most one frame of empty backdrop.
 	if _has_pending and (_sync or (_packet.is_empty() and not _busy)):
 		var t0 := Time.get_ticks_usec()
 		var built: Variant = _pending_builder.call(_pending_snapshot)
 		var src := _pending_retain
-		# Cleared BEFORE the check, so a builder that fails every frame does not also re-run every
-		# frame off a pending flag that never clears. In sync (export) mode this is the whole
-		# render path, and the old `_packet = <null>` assignment aborted submit() itself - past
-		# the point of no return, so not one canvas_item call below ever ran.
+		# Cleared before the check, so a builder that fails every frame does not also re-run off a pending flag that never clears.
 		_pending_snapshot = {}
 		_pending_retain = null
 		_has_pending = false

@@ -1,48 +1,31 @@
 extends SceneTree
 
-## forge_packet_check - that [method FrameForge.packet_source] names the job whose geometry is
-## ACTUALLY on screen, rather than the newest build to have finished.
+## forge_packet_check - [method FrameForge.packet_source] names the job whose geometry is actually on screen, not the
+## newest build to have finished.
 ##   godot --headless --path . --script res://tests/render/forge_packet_check.gd
 ##   godot --headless --path . --script res://tests/render/forge_packet_check.gd -- --race
 ##
-## WHY THIS IS A GATE. A scene that draws anything alongside its packet has to place it
-## against the inputs the packet was built from. contour_map does: the land is a sampling
-## window, so a sheet built at one warp offset can be shown at another by translating it, and
-## that translation is what turns a re-extraction from a jump into a refresh. It is exact -
-## but only if the offset it subtracts is the offset the packet on screen really carries.
+## A scene that draws anything alongside its packet places it against the inputs the packet was built from
+## (contour_map translates a sheet built at one warp offset to show at another). That is exact only if the offset it
+## subtracts is the offset the packet on screen carries: a job that publishes its offset at the end of run() (on the
+## worker) while its packet reaches the main thread later makes every frame in between compensate the old sheet by
+## the new offset.
 ##
-## THE BUG IT ENDS. That offset used to be published by the job itself, at the end of run() -
-## which happens ON THE WORKER THREAD, while the packet it belongs to only reaches the main
-## thread later, in a deferred call. Every frame drawn in that window compensated the OLD
-## sheet by the NEW build's offset. The error is a whole extraction cadence of warp drift,
-## about 1.5% of the sheet's width, and it lasted exactly one frame before correcting itself:
-## reported as "the whole scene jumps, then shifts back to where it should be, like a
-## correction", on most re-prints. One frame out of place is not a subtle artifact.
+## Asserted here is the synchronous path (the export's), which is deterministic and carries the same defect without
+## needing luck: the build happens inside the draw, so a scene that reads the source before flushing gets the
+## previous sheet's offset against this sheet's lines.
 ##
-## WHAT IS ASSERTED HERE is the SYNCHRONOUS path - the export's - because it is deterministic
-## and because it carries the same defect in a form that never needs luck: the build happens
-## inside the draw, so a scene that reads the source before flushing gets the PREVIOUS sheet's
-## offset against this sheet's lines, every single time.
-##
-## `-- --race` runs the threaded path instead, kicking real worker builds and comparing what
-## the packet says against both schemes each frame. It is a probe rather than an assertion:
-## the disagreement is a race, so a given run may not catch it. Measured here, three runs:
-##
-##   packet_source() disagreed on 0 frames of ~237, every run
-##   the old shared-slot mimic on 19-23 - about one frame per build
-##
-## That is the two-sided evidence, and it is why this mode is worth keeping even though it
-## cannot be an assertion. Note it exits dirty: any [WorkerThreadPool] task in a `--script`
-## process faults during Godot's own teardown (reproduced with a five-line probe that does
-## nothing but kick one build), so the verdict is printed BEFORE quitting and the exit code
-## from that mode means nothing.
+## `-- --race` runs the threaded path instead, kicking real worker builds and comparing what the packet says against
+## both schemes each frame. It is a probe, not an assertion, since the disagreement is a race: packet_source()
+## disagreed on 0 of ~237 frames, the old shared-slot mimic on 19-23. It exits dirty (any [WorkerThreadPool] task in a
+## `--script` process faults during Godot's teardown), so the verdict is printed before quitting and the exit code
+## means nothing.
 
-## Frames to run in --race mode, and how often a fresh job is kicked. The cadence is several
-## frames because that is the regime the scenes run in - most builds finish between kicks.
+## Frames to run in --race mode, and how often a fresh job is kicked: every few frames, since in the scenes' regime
+## most builds finish between kicks.
 const FRAMES := 240
 const KICK_EVERY := 6
-## Roughly how long a build should take. Long enough to straddle a frame: a build that returns
-## instantly never opens the window this is about.
+## Roughly how long a build should take: long enough to straddle a frame, since a build that returns instantly never opens the window.
 const WORK := 60000
 
 var _node: Node2D
@@ -87,9 +70,8 @@ func _process(_dt: float) -> bool:
 	return false
 
 
-## The export path, and the deterministic half of the defect. The build happens INSIDE the
-## draw, so the source a scene reads before drawing is the previous packet's unless flush()
-## has run first - which is exactly the ordering contour_map now depends on.
+## The export path, the deterministic half of the defect: the build happens inside the draw, so the source a scene
+## reads before drawing is the previous packet's unless flush() has run first (the ordering contour_map depends on).
 func _check_sync() -> void:
 	FrameForge._sync_known = true
 	FrameForge._sync = true
@@ -114,7 +96,7 @@ func _check_sync() -> void:
 	FrameForge._sync = false
 
 
-## Compare what the packet SAYS against what each bookkeeping scheme CLAIMS.
+## Compare what the packet says against what each bookkeeping scheme claims.
 func _observe() -> void:
 	var shown := _serial_of(_forge)
 	if shown <= 0:
@@ -127,8 +109,7 @@ func _observe() -> void:
 		_slot_bad += 1
 
 
-## The serial the geometry carries. The job encodes it in its VERTEX COUNT, so this reads the
-## packet itself rather than anything that traveled beside it.
+## The serial the geometry carries, encoded in its vertex count so this reads the packet itself.
 func _serial_of(forge: FrameForge) -> int:
 	var pk: Array = forge._packet
 	if pk.is_empty():
@@ -165,14 +146,13 @@ func _finish() -> void:
 	quit(1)
 
 
-## The old shape, kept alive purely as the thing being measured against.
+## The old shared-slot scheme, kept as the thing being measured against.
 class OldSlot:
 	extends RefCounted
 	var serial := 0
 
 
-## A build that says who it is. The serial goes into the VERTEX COUNT, so it travels inside
-## the packet and cannot be read from anywhere else by accident.
+## A build that says who it is: the serial goes into the vertex count, so it travels inside the packet.
 class StampJob:
 	extends RefCounted
 
@@ -198,8 +178,7 @@ class StampJob:
 			idx.append(b)
 			idx.append(b + 1)
 			idx.append(b + 2)
-		# ...and the old pattern, from the worker, one instruction before the packet starts its
-		# journey to the main thread. This is the line the jump came out of.
+		# ...and the old pattern, from the worker, one instruction before the packet starts its journey to the main thread.
 		if slot != null:
 			slot.serial = serial
 		return [{"pts": pts, "cols": cols, "idx": idx}]

@@ -76,7 +76,7 @@ def test_repair_leaves_everything_else() -> None:
     # ANOTHER VOWEL, however similar it looks.
     check("moving", vowel_probe.repair("mˈuːvɪŋ"), "mˈuːvɪŋ")
     check("rid", vowel_probe.repair("ɹˈɪd"), "ɹˈɪd")
-    # THE STRESS MARK HAS TO BE IN THIS WORD. A mark on the previous word does
+    # The stress mark has to be in this word. A mark on the previous word does
     # not reach across the space that separates them.
     check("across a space", vowel_probe.repair("hˈaʊs iːd"), "hˈaʊs iːd")
     # ...and the offglide is not written twice.

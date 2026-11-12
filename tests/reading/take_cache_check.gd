@@ -1,14 +1,14 @@
 extends SceneTree
 
-## take_cache_check - EVERY SENTENCE THE VOICE HAS SAID, KEPT, by what it said and how ([TakeCache]; next/editing.md step 3).
+## take_cache_check - every sentence the voice has said, kept, by what it said and how ([TakeCache]; next/editing.md step 3).
 ##
 ##   godot --headless --path . --script res://tests/reading/take_cache_check.gd
 ##
 ## On a cache of its own (never the author's):
-##   - the same voice, record and request give the same key; THE CONTROLS: another word, another delivery, the voice trained
+##   - the same voice, record and request give the same key; controls: another word, another delivery, the voice trained
 ##     again (its record changed), each another key;
 ##   - a reply kept is found again - its audio a copy, its timings as they came, its `wav` the kept file - and copied out for a
-##     user to remove as it removes the host's; THE CONTROL: a key never kept finds nothing.
+##     user to remove as it removes the host's; control: a key never kept finds nothing.
 
 const ROOT := "user://take_cache_check"
 

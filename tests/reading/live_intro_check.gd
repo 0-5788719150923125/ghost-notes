@@ -1,28 +1,15 @@
 extends SceneTree
 
-## Gate for the LIVE audition's intro and its pre-roll.
+## Gate for the live audition's intro and pre-roll.
 ##
-## Two bugs, one insertion point, and the first was reported as the second.
+## The intro must be in the streamed generator the editor auditions through, not only in the exported take's
+## PCM. The stream must not open on a lead shorter than it takes to make the next sentence: chunks are one
+## sentence each ([constant ReadingPlan.CHUNK_SENTENCES]) and lengths are uneven (a 1.13 s opening sentence
+## followed by a 14.49 s one drains, then sits silent).
 ##
-## THE INTRO WAS ONLY IN THE EXPORT. The bookend was written into the rendered take's
-## PCM, which is right for the video, but the generative editor auditions through a
-## streamed generator that never touches that path - so pressing play gave no intro at
-## all, and only the exported file had one.
-##
-## THE AUDITION STARVED. Chunks are one sentence each ([constant
-## ReadingPlan.CHUNK_SENTENCES] = 1) and sentence lengths are wildly uneven.
-## Measured on north-star chapter 3: the opening sentence renders to 1.13 s and the next
-## to 14.49 s. The stream opened on whatever the first chunk happened to be, so playback
-## drained 1.13 s of audio and then sat silent for as long as the next sentence took to
-## synthesize. Nothing was wrong with the audio - no chunk carries more than 0.27 s of
-## internal silence - it simply ran out. Heard as: it speaks one sentence, pauses for
-## about five seconds, then carries on, which is indistinguishable from an intro
-## inserted in the wrong place.
-##
-## The fix seeds the intro into the pending queue in `_plan` (so the take's join starts on it,
-## and every word span and seam is offset for free - see [ReadingJoin], whose own gate joins
-## real takes after a lead) and holds the stream shut until a real lead exists, with the intro
-## doubling as that lead. This checks both, on a model of the queue's arithmetic.
+## `_plan` seeds the intro into the pending queue (so the take's join starts on it and every word span and
+## seam is offset; see [ReadingJoin]) and holds the stream shut until a real lead exists, the intro doubling
+## as that lead. This checks both, on a model of the queue's arithmetic.
 ##
 ## Run: godot --headless --path . --script tests/reading/live_intro_check.gd
 
@@ -76,7 +63,7 @@ func _check_order() -> void:
 		"order: the intro window must be silent")
 	_ok(_rms(pending, int(intro * SR), int((intro + 1.0) * SR)) > 0.01,
 		"order: the first sentence must start the instant the intro ends")
-	# the gap the user actually heard would show up as silence right here
+	# a gap would show up as silence right here
 	var seam_a := int((intro + 1.13) * SR)
 	_ok(_rms(pending, seam_a, seam_a + int(1.0 * SR)) > 0.01,
 		"order: there must be NO silent gap between the first and second sentences - "

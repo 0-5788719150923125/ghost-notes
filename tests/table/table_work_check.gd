@@ -1,76 +1,17 @@
 extends SceneTree
 
-## The gate of WORK AT THE TABLE ([Motions], [TableWork], [Formula]; next/table_work.md), with no renderer.
+## The gate of work at the table ([Motions], [TableWork], [Formula]; next/table_work.md), with no renderer.
 ##
 ##   godot --headless --path . --script res://tests/table/table_work_check.gd
 ##
-## - A FORMULA IS ARITHMETIC AND NOTHING ELSE: it works its sums in order, gives 0 where the arithmetic
-##   gives none, and refuses every name it does not know - `instance_from_id`, `print`, `OS` (the control:
-##   Godot's own Expression runs `instance_from_id`, which is why it is not used).
-## - THE CLOCK RUNS (the user, 2026-10-25: "the clock showed 3:00 precisely... but the hands never moved"):
-##   a minute hand hinged at the dial's middle, running at a tenth of a degree a second, has turned 60
-##   degrees ten minutes in; the hour hand, from three o'clock, 5 more; a ticking second hand stands on its
-##   steps. The control: the same hands with no joint stand as built.
-## - A CLOCK KEEPS THE VIDEO'S TIME (2026-10-26: the first real set dresser wrote `{"clock": "hour"}` on each
-##   hand, which no law read, and its puppeteer turned them in every act, stopped between): `clock` runs each
-##   hand at its own rate, clockwise, the hour hand built at twelve standing at three as the video starts; a
-##   turn an act puts on a running hand is left out and said; a hand an act sets goes on running from there.
-##   The control: the same act on a hand that runs nothing holds where it set it.
-## - THE WORK IS DONE WHERE IT IS SEEN (2026-10-26: "the mortar and pestle was animated in the far left corner;
-##   we should have brought it front-and-center"): the work's spot is near the picture's middle and clear of
-##   what stands; a mortar carried to "work" stands there, and its own pestle ground round "mortar.floor"
-##   circles the bowl where it now stands, pressed onto its surface there, passing through nothing; left in
-##   the bowl, the pestle goes home with the mortar. The controls: the floor found where the mortar stood is
-##   far from the spot; a pestle laid on the table stays where it was laid.
-## - A PART THAT STARTS SEATED MAY COME OUT (the first real puppeteer was told its rack's vial passed through
-##   something "0.0 s in" on 12 acts of 69): a vial built standing in a solid rack lifts out and is put back,
-##   passing through nothing - the room it was built in is its own slot. The control: the same vial carried
-##   into a crate is caught going in.
-## - SET DOWN ON WHAT IS UNDER IT (carry's `down`): a lid laid on its side, a jar let down from too high and a jar
-##   set on a book each rest on what is under them, passing through nothing. The control: the lid laid by a
-##   guessed height goes into the table.
-## - A TOOL GRINDS IN ITS VESSEL: a pestle aimed by its tip, circling pressed onto the mortar's floor, has
-##   its tip on the bowl's surface at every moment and never passes through it ([method TableWork.check]);
-##   the herbs ground away are a fifth of their size when the act is done. The control: a pestle driven down
-##   through the bowl's wall is caught passing through it.
-## - WHAT AN ACT LEAVES STAYS: a jar carried to a place stands there after its act, until an act carries it
-##   back where it was built.
-## - THE READING CUES THE WORK: `work K` lays the card and begins card K's beat, an act cued at a word
-##   (`<!-- act: name -->`) starts as that word is said, an uncued one where the one before it ended, and
-##   an "under" one fills what its beat leaves. The control: the cued act moved off its word is not found
-##   there.
-## - A SILENCE IS FOR THE WORK (feedback 0013: "sitting here for at least 15 seconds, doing nothing"): an act cued at the word a
-##   silence comes before begins as the silence does, the hand free by then. The control: with no silence it waits for its word.
-## - AN ACT FILLS UP TO THE NEXT ONE'S WORD (2026-11-09: "30 seconds of speaking but no actions"): the next act's cue word, unheard, is
-##   guessed for the act before it to end by. The control: with no cue, it fills to the beat's end less the next act.
-## - THE TIME TO SPARE GOES TO THE WORK (2026-11-10: "at least 90 seconds... there is no animation at all"): acts sharing a beat longer
-##   than they take have their work slowed alike, their trips (`_fixed`) never. The control: shared by whole lengths, an act of trips
-##   has its few strokes slowed past what a hand allows.
-## - A PART'S COPIES ARE ONE PART (2026-10-26: a stack of slips' bottom slip lifted alone, into the four
-##   above it, and the puppeteer probed for a quarter of an hour): the stack named alone lifts as one and
-##   passes through nothing, every copy risen alike; its top copy by its number lifts alone; a glow on the
-##   part glows every copy; the parts report says how many and how each is named. The control: the bottom
-##   copy alone, lifted the same way, is caught passing into the ones above it.
-## - A MOVE GOES ON THROUGH ITS PLACES (181083: the snowmelt's vial "started, and stopped ... about 4 times"): a path
-##   through keys going on the same way, and carries one after another, do not stop between, and end where they end
-##   with nothing overshot. The controls: a key a path holds at, and carries a pause apart, stop.
-## - THE WORK AS A LIVE READING'S WORDS ARRIVE (181083, live: "absolute chaos"; scrubbed back, right): words arriving a
-##   sentence at a time ahead of a voice slower than the plan's estimate plan every act where the words known up front
-##   do, and nothing moved jumps in a frame (a pestle lying apart stays put while its mortar is carried). The control:
-##   the estimate taken for the words not yet heard begins acts before their words.
-## - A SCRUBBED READING'S CLOCK KEEPS THE READING'S TIME (181083: its chronometer began at 4:00 again): begun ten
-##   minutes in, a running hour hand stands as ten minutes in has it; the control, from the top, at its start.
-## - A POUR IS THE TIP'S: tests/table/physics_check.gd holds it (a vessel tipped until its liquid reaches its rim pours by
-##   itself, next/table_physics.md).
-## - MADE SAFE: an act with no beat, a law ghost does not know, a track naming nothing on the table are left
-##   out and said; a thing holding a flame is never moved whole.
-## - PUT BACK AS IT WAS (the-quiet-crucible 841899: a cork put back in its jar "sideways"; a lid set back on its crock "moving
-##   about wildly on top of the pot, never stopping"; a pestle put back in its mortar "clipping through the side of the
-##   mortar, completely"): a lid laid aside on its side and carried home goes back on upright, and rests there, never
-##   swaying; a pestle laid aside, its mortar carried 20 cm, and the pestle carried home goes into the mortar where it
-##   is; and a round mortar set down by a low tray that comes under its box's corner but not under its foot stands on the
-##   table. The controls: a lid carried to a place with no turn keeps its side; a lid left held over its crock sways; the
-##   mortar set down over the tray stands on it.
+## Each check's comment says what it asserts and its control. They cover: a formula is arithmetic and nothing else (it
+## refuses unknown names; the control is Godot's own Expression, which runs `instance_from_id`); the clock (hands run at their
+## rates, a scrubbed reading starts at its time, a hand an act sets goes on running); the work is done where it is seen; seated
+## parts come out, set down on what is under them, grinding in a vessel, copies of a part are one part; what an act leaves
+## stays; the reading cues the work (word cues, silences, filling to the next act's word, spare time shared by work not trips);
+## a live reading's words arrive without a jump; moves go on through their places; made safe (an act with no beat, an unknown
+## law, a track naming nothing are left out and said); put back as it was (lids, pestles, set down by a tray); written words;
+## held-up things are never still; a loose thing's size is its own. A pour is held by tests/table/physics_check.gd.
 
 var _fails := 0
 
@@ -130,7 +71,7 @@ func _formula() -> bool:
 	_ok(bool(z["ok"]) and Formula.run(z["code"], {"t": 2.0}) == 0.0, "a division by zero is not 0")
 	for bad in ["instance_from_id(1)", "print(1)", "OS.get_name()", "load(\"res://x\")", "t t", "sin(1, 2)", "(1", "Engine"]:
 		_ok(not bool(Formula.compile(bad, vars)["ok"]), "the formula \"%s\" was not refused" % bad)
-	# THE CONTROL: Godot's own Expression, with no object behind it, still reaches a live object
+	# the control: Godot's own Expression, with no object behind it, still reaches a live object
 	var e := Expression.new()
 	e.parse("instance_from_id(%d).get_class()" % root.get_instance_id())
 	_ok(str(e.execute([], null, false)) == "Window", "the control: Expression no longer reaches a live object (then it might be safe - look again)")
@@ -227,7 +168,7 @@ func _grind() -> bool:
 		return true
 	var times: Dictionary = m._work.rehearse(10.0)
 	var g: Array = times["grind"]
-	# THE TIP IS ON THE BOWL'S SURFACE, past the moment the hand brings it there - as the law puts it (`_planned`: the physics
+	# The tip is on the bowl's surface, past the moment the hand brings it there - as the law puts it (`_planned`: the physics
 	# then keeps the pestle's head out of the bowl's wall, physics_check's to hold)
 	var tm: TriangleMesh = m._work._mesh_of(m._work._thing_named("mortar"))
 	var pw: int = m._work._work_of(m._work._thing_named("pestle"), "pestle")
@@ -251,7 +192,7 @@ func _grind() -> bool:
 	var hw: int = m._work._work_of(m._work._thing_named("mortar"), "herbs")
 	var herbs: Node3D = (m._work.works[hw] as Dictionary)["node"]
 	_ok(absf(herbs.transform.basis.get_scale().x - 0.2) < 0.01, "the herbs ground away are %s of their size, not 0.2" % herbs.transform.basis.get_scale().x)
-	# THE CONTROL: the pestle driven down through the bowl's wall is caught
+	# The control: the pestle driven down through the bowl's wall is caught
 	var bad: Dictionary = m._work.check("smash")
 	_ok(int(bad["through"]) > 0, "a pestle driven through the bowl's wall was not caught:\n%s" % String(bad["text"]))
 	m._root3.free()
@@ -262,8 +203,7 @@ func _clock_law() -> bool:
 	var m := _medium()
 	var spec := _clock_spec(true)
 	var parts: Array = ((spec["things"] as Array)[0] as Dictionary)["parts"]
-	# written as the clock it is - the minute hand as the first real set dresser wrote it - the hour hand built at
-	# twelve and the video starting at three
+	# written as the clock it is, the hour hand built at twelve and the video starting at three
 	(parts[1] as Dictionary)["runs"] = {"clock": "minute"}
 	(parts[2] as Dictionary)["runs"] = {"law": "clock", "hand": "hour", "shows": "12:00", "time": "3:00"}
 	(parts[3] as Dictionary)["runs"] = {"law": "clock", "hand": "second"}
@@ -283,9 +223,8 @@ func _clock_law() -> bool:
 	_ok(absf(_turned(by["hour hand"]) - 95.0) < 0.05, "ten minutes in, the clock's hour hand stands at %s degrees, not 95" % _turned(by["hour hand"]))
 	m._work.tick(10.5)
 	_ok(absf(_turned(by["second hand"]) - 60.0) < 0.2, "the clock's second hand does not tick: %s degrees ten and a half seconds in" % _turned(by["second hand"]))
-	# A SCRUBBED READING'S CLOCK KEEPS THE READING'S TIME (181083: scrubbed back into the work, its chronometer began at
-	# 4:00 again while the voice said "four oh four"): begun ten minutes in, the hour hand stands where ten minutes into
-	# the video has it - the control, from the top, stands at three
+	# A scrubbed reading's clock keeps the reading's time: begun ten minutes in, the hour hand stands where ten minutes into the video has it -
+	# the control, from the top, stands at three
 	m._work.since = 600.0
 	m._work.tick(0.0)
 	var scrubbed := _turned(by["hour hand"])
@@ -293,7 +232,7 @@ func _clock_law() -> bool:
 	m._work.tick(0.0)
 	_ok(absf(scrubbed - 95.0) < 0.05, "a reading begun ten minutes in shows the hour hand at %s degrees, not 95: its clock began again" % scrubbed)
 	_ok(absf(_turned(by["hour hand"]) - 90.0) < 0.01, "the control: from the top, the hour hand is not at three: %s" % _turned(by["hour hand"]))
-	# A HAND SET BY AN ACT GOES ON RUNNING from where it was set: set to 30 past at 104 s, then 49.6 more by 600 s
+	# A hand set by an act goes on running from where it was set: set to 30 past at 104 s, then 49.6 more by 600 s
 	m._work.rehearse(100.0)
 	m._work.tick(104.0)
 	_ok(absf(_turned(by["minute hand"]) - 30.0) < 0.05, "the act did not set the minute hand to 30 degrees: %s" % _turned(by["minute hand"]))
@@ -349,8 +288,7 @@ func _bench(laid: bool) -> TableMedium:
 	return m
 
 
-## THE WORK IS DONE WHERE IT IS SEEN (2026-10-26: "the mortar and pestle was animated in the far left corner; we
-## should have brought it front-and-center").
+## The work is done where it is seen: the work's spot is near the picture's middle and clear of what stands.
 func _at_the_spot() -> bool:
 	var m := _bench(false)
 	_ok((m._work.acts as Array).size() == 3, "the work at the spot was not kept: %s" % "; ".join(m._work.notes))
@@ -369,13 +307,12 @@ func _at_the_spot() -> bool:
 	var mortar: Node3D = (m._work.things[0] as Dictionary)["node"]
 	m._work.tick(float((times["bring-mortar"] as Array)[1]) + 0.1)
 	_ok(Vector2(mortar.position.x - spot.x, mortar.position.z - spot.z).length() < 0.005, "the mortar carried to \"work\" stands %.1f cm from the spot" % (Vector2(mortar.position.x - spot.x, mortar.position.z - spot.z).length() * 100.0))
-	# GROUND WHERE IT NOW STANDS: the pestle's tip on the moved bowl's floor, pressed onto its surface there
+	# Ground where it now stands: the pestle's tip on the moved bowl's floor, pressed onto its surface there
 	var pw: int = m._work._work_of(0, "pestle")
 	var tip_at: Vector3 = ((m._work.works[pw] as Dictionary)["w"]["points"] as Dictionary)["tip"]
 	var g: Array = times["grind"]
 	var worst := 0.0
-	# ...THE MORTAR HOLDING STILL while it is ground in, never shoved about by its pestle or what it grinds (841899: the mortar
-	# slid across the table, "even when the video is paused")
+	# ...the mortar holding still while it is ground in, never shoved about by its pestle or what it grinds
 	var still_at := Vector3.INF
 	var slid := 0.0
 	for i in 10:
@@ -392,8 +329,8 @@ func _at_the_spot() -> bool:
 	_ok(slid < 0.001, "the mortar moves %.1f mm while it is ground in" % (slid * 1000.0))
 	var c: Dictionary = m._work.check("grind")
 	_ok(int(c["through"]) == 0, "grinding in the moved mortar passes through something:\n%s" % String(c["text"]))
-	# BROUGHT TO WHERE IT GRINDS WITHOUT A JUMP (181083: its pestle leapt 6 cm up in a frame as the grind began - the
-	# hand's lift switched on whole as the law's place moved 2 cm off): frame by frame through the blend
+	# Brought to where it grinds without a jump: the hand's lift never switches on whole as the law's place moves; frame by frame through the
+	# blend
 	var pnode: Node3D = (m._work.works[pw] as Dictionary)["node"]
 	var leap := 0.0
 	var was := Vector3.INF
@@ -416,7 +353,7 @@ func _at_the_spot() -> bool:
 	# the control: the mortar's floor found where it stood (as places were found) is far from where it is ground
 	var then: Vector3 = m._work.place_of("mortar.floor", Vector3.ZERO)
 	_ok(Vector2(then.x - spot.x, then.z - spot.z).length() > 0.1, "the control: the floor where the mortar stood is near the spot")
-	# A PESTLE LEFT IN ITS MORTAR GOES HOME WITH IT
+	# A pestle left in its mortar goes home with it
 	m._work.tick(float((times["mortar-home"] as Array)[1]) + 0.1)
 	var tip_home: Vector3 = m._work._world_of((m._work.works[pw] as Dictionary)["node"]) * tip_at
 	# (in its bowl, 5 cm across at its floor: let go after the grind, it leans in it, its tip 3 cm from the middle)
@@ -436,9 +373,8 @@ func _at_the_spot() -> bool:
 	return true
 
 
-## A PART THAT STARTS SEATED MAY COME OUT (the first real puppeteer was told its rack's vial passed through something
-## "0.0 s in" on 12 acts of 69): a vial built standing in a solid rack lifts out of it, and is put back, passing
-## through nothing. The control: the same vial carried into a crate beside it is caught going in.
+## A part that starts seated may come out: a vial built standing in a solid rack lifts out of it, and is put back, passing through nothing.
+## The control: the same vial carried into a crate beside it is caught going in.
 func _seated() -> bool:
 	var m := _medium()
 	var spec := {"things": [{"name": "rack", "parts": [
@@ -466,8 +402,8 @@ func _seated() -> bool:
 	return true
 
 
-## SET DOWN ON WHAT IS UNDER IT (carry's `down`; the first real puppeteer laid a stopper, a lid and a pestle down by
-## heights worked out by hand, and was told each passed through the table).
+## Set down on what is under it (carry's `down`): the stopper, lid and pestle rest on what is under them instead of at a height worked out
+## by hand.
 func _set_down() -> bool:
 	var m := _medium()
 	var spec := {"things": [
@@ -536,10 +472,9 @@ func _carry() -> bool:
 	return true
 
 
-## A MOVE GOES ON THROUGH ITS PLACES (the-quiet-crucible 181083: the snowmelt's vial, carried the low way, "started, and
-## stopped, and started, and stopped ... about 4 times"): a path through keys that go on the same way does not stop at
-## them, nor a run of carries at the places where one ends and the next begins. The controls: a key the path holds at
-## stops it there, and carries with a pause between them stop between.
+## A move goes on through its places: a path through keys that go on the same way does not stop at them, nor a run of carries at the places
+## where one ends and the next begins. The controls: a key the path holds at stops it there, and carries with a pause between them stop
+## between.
 func _through_keys() -> bool:
 	var m := _medium()
 	var spec := {"things": [{"name": "jar", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [0, 8]], "material": "glass"}]}],
@@ -648,13 +583,10 @@ func _reading_bench() -> TableMedium:
 	return m
 
 
-## THE WORK AS A LIVE READING'S WORDS ARRIVE (the-quiet-crucible 181083, live: "absolute chaos ... the green dish moved
-## on top of the crucible, then floated back to its position ... tipped-over"; scrubbed back and played again, it was
-## right): a reading's words arriving a sentence at a time, a few seconds before they are said, by a voice slower than
-## the plan's estimate, plan every act exactly where the same words known from the first frame (an export's) do, and
-## nothing the work moves jumps from one frame to the next - the pestle lying apart stays where it lies while its mortar
-## is carried, though the act that takes it is not yet placed. The control: the estimate taken for words not yet heard,
-## as the plan had taken it, begins acts before their words are said.
+## The work as a live reading's words arrive: words arriving a sentence at a time, a few seconds before they are said, by a voice slower
+## than the plan's estimate, plan every act exactly where the same words known from the first frame (an export's) do, and nothing the work
+## moves jumps from one frame to the next - the pestle lying apart stays where it lies while its mortar is carried, though the act that
+## takes it is not yet placed. The control: the estimate taken for words not yet heard begins acts before their words are said.
 func _live_words() -> bool:
 	var script := "\n\n".join(PackedStringArray([
 		"<!-- table: shuffle -->", "Welcome back to the bench tonight. It is late, and the house is quiet, and the kettle has gone cold.",
@@ -776,10 +708,9 @@ func _cue_order() -> bool:
 	return true
 
 
-## A SILENCE IS FOR THE WORK (feedback 0013, 2026-11-09: "we have been sitting here for at least 15 seconds, doing nothing"): an act
-## cued at the word a silence comes before begins as the silence does, the act before it done by then - never waiting the silence out
-## with nothing moving - and where the act before runs into the silence, as that one ends. The control: the same cue with no silence
-## before its word waits for its word.
+## A silence is for the work: an act cued at the word a silence comes before begins as the silence does, the act before it done by then -
+## and where the act before runs into the silence, as that one ends. The control: the same cue with no silence before its word waits for its
+## word.
 func _after_quiet() -> bool:
 	var m := _medium()
 	_stand(m, _mortar_spec(), "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y))
@@ -815,7 +746,7 @@ func _after_quiet() -> bool:
 	var quiet: Dictionary = placed.call([{"si": 2, "s": 10.0}])
 	_ok(quiet.has("pinch") and absf(float(quiet["pinch"]["t0"]) - 5.0) < 0.01,
 		"an act cued after a silence waited it out: it begins at %s, the act before ends at 5.0" % str(quiet.get("pinch", {}).get("t0", "-")))
-	# ...and a cue INSIDE the silence, at its end - the next passage's first act after a passage that ends on one
+	# ...and a cue inside the silence, at its end - the next passage's first act after a passage that ends on one
 	var inside: Dictionary = placed_in.call()
 	_ok(inside.has("pinch") and absf(float(inside["pinch"]["t0"]) - 5.0) < 0.01,
 		"an act cued inside a silence, at its end, begins as the silence does too: it begins at %s" % str(inside.get("pinch", {}).get("t0", "-")))
@@ -826,10 +757,9 @@ func _after_quiet() -> bool:
 	return true
 
 
-## AN ACT FILLS UP TO THE NEXT ONE'S WORD, GUESSED WHILE UNHEARD (2026-11-09, the user: "At 2:30, there is at least 30 seconds of speaking
-## but no actions being taken at all ... Around 3:15, a brush is picked up"): an act that fills its beat, the act after it cued at a word
-## not yet said, ends about when that word is guessed to come - never where the beat ends less the next act's own time. THE CONTROL: with
-## no word cueing the next act, it fills to the beat's end less what that act takes, as it did.
+## An act fills up to the next one's word, guessed while unheard: an act that fills its beat, the act after it cued at a word not yet said,
+## ends about when that word is guessed to come, never where the beat ends less the next act's own time. The control: with no word cueing
+## the next act, it fills to the beat's end less what that act takes.
 func _until_its_word() -> bool:
 	var m := _medium()
 	_stand(m, _mortar_spec(), "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y))
@@ -865,10 +795,10 @@ func _until_its_word() -> bool:
 	return true
 
 
-## THE TIME TO SPARE GOES TO THE WORK, NEVER TO ITS TRIPS (2026-11-10, the user: "Starting around 5:30, and continuing for at least 90
-## seconds... there is no animation at all"): two acts sharing a beat longer than they take, one mostly trips (`_fixed`) and one all work,
-## each have their work slowed alike - the first ends at its trips and its share of the spare by its work. THE CONTROL: with no `_fixed`,
-## the spare is shared by each whole length, and the act of trips has its little work slowed over seven times, the other under three.
+## The time to spare goes to the work, never to its trips: two acts sharing a beat longer than they take, one mostly trips (`_fixed`) and
+## one all work, each have their work slowed alike - the first ends at its trips and its share of the spare by its work. The control: with
+## no `_fixed`, the spare is shared by each whole length, and the act of trips has its little work slowed over seven times, the other under
+## three.
 func _spare_to_work() -> bool:
 	var m := _medium()
 	_stand(m, _mortar_spec(), "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y))
@@ -1026,7 +956,7 @@ func _safe() -> bool:
 	# a formula in a law is kept compiled, and held to the law's range
 	var amount: Variant = (((made["acts"] as Array)[0] as Dictionary)["tracks"][0] as Dictionary)["amount"]
 	_ok(amount is Dictionary and absf(Motions.num(amount, {"t": PI / 2.0}) - 10.0) < 1e-4, "a law's formula is not worked: %s" % str(amount))
-	# A THING HOLDING A FLAME IS NEVER MOVED WHOLE
+	# A thing holding a flame is never moved whole
 	var m := _medium()
 	var spec := {"things": [{"name": "candle", "parts": [{"shape": "lathe", "profile": [[0, 0], [1, 0], [1, 8], [0, 8]], "material": "wax", "wick": true}]}],
 		"materials": {"wax": {"kind": "wax", "color": "#eee6d0"}}}
@@ -1042,11 +972,9 @@ func _safe() -> bool:
 	return true
 
 
-## WORDS ARE WRITTEN, NEVER LAID ON (the-quiet-crucible 707668's poison "name on a slip", a blank white square - the user:
-## "The slip should show writing, if the script says it should"): a slip written "Mandrake" by an act is blank before
-## it, half way through has its first letters down and not its last, and after it is written whole - its words in ink, on
-## the slip's top. The controls: a `write` on a part that is no sheet is refused, and before the pen begins there are no
-## words at all.
+## Words are written, never laid on: a slip written "Mandrake" by an act is blank before it, half way through has its first letters down and
+## not its last, and after it is written whole - its words in ink, on the slip's top. The controls: a `write` on a part that is no sheet is
+## refused, and before the pen begins there are no words at all.
 func _write() -> bool:
 	var m := _medium()
 	var spec := {"things": [{"name": "dish", "parts": [
@@ -1102,11 +1030,9 @@ func _write() -> bool:
 	return true
 
 
-## A THING HELD UP BETWEEN MOVES IS NEVER STILL (the-quiet-crucible 119515: "when the actor is holding the pestle in the
-## air, it is perfectly still: but you would expect it to be gently bobbing/moving, since a hand cannot remain perfectly
-## still"): a jar carried up and left in the air for its next move a moment later sways as a hand holds it, a few millimeters from where
-## it was sent - in the bake too, now that a whole thing is a body ([method TablePhysics._held_aloft]; after its last move,
-## it is let go). The control: carried onto the table, it lies still.
+## A thing held up between moves is never still: a jar carried up and left in the air for its next move a moment later sways as a hand holds
+## it, a few millimeters from where it was sent - in the bake too ([method TablePhysics._held_aloft]; after its last move, it is let go).
+## The control: carried onto the table, it lies still.
 func _held_up() -> bool:
 	var out := {}
 	for where in ["air", "table"]:
@@ -1142,8 +1068,8 @@ func _held_up() -> bool:
 	return true
 
 
-## A LOOSE THING'S SIZE IS ITS OWN (119515: its dragon's blood "didn't crush: they just scaled down"): a `grow` on a loose
-## part is refused, the note saying how to grind it. The control: a `grow` on a part that is not loose is kept.
+## A loose thing's size is its own: a `grow` on a loose part is refused, the note saying how to grind it. The control: a `grow` on a part
+## that is not loose is kept.
 func _loose_size() -> bool:
 	var m := _medium()
 	var spec := {"things": [{"name": "dish", "parts": [
@@ -1178,7 +1104,7 @@ const BACK_SPEC := {"things": [
 
 
 func _put_back() -> bool:
-	# THE LID: laid aside on its side (2-4 s), carried home (6-8 s) - or, the controls, carried to its home point and left
+	# The lid: laid aside on its side (2-4 s), carried home (6-8 s) - or, the controls, carried to its home point and left
 	# held there over its crock
 	for how in ["home", "to", "held"]:
 		var m := _medium()
@@ -1215,7 +1141,7 @@ func _put_back() -> bool:
 			"held":
 				_ok(most > 1e-5, "the control: the lid held over its crock never sways")
 		m._root3.free()
-	# THE PESTLE: laid aside (2-4 s), its mortar carried 20 cm (5-7 s), the pestle carried home (8-10 s)
+	# The pestle: laid aside (2-4 s), its mortar carried 20 cm (5-7 s), the pestle carried home (8-10 s)
 	var p := _medium()
 	_stand(p, BACK_SPEC, "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y - 0.1))
 	p._work.build({"acts": [
@@ -1232,7 +1158,7 @@ func _put_back() -> bool:
 		"the pestle carried home stands %.1f cm from its place in its mortar (%.1f cm from where it was built), turned %.1f degrees off" % [
 		got.origin.distance_to(want.origin) * 100.0, got.origin.distance_to(built.origin) * 100.0, rad_to_deg(got.basis.y.angle_to(want.basis.y))])
 	p._root3.free()
-	# THE MORTAR SET DOWN by the tray, its box's corner over it - and, the control, over it
+	# The mortar set down by the tray, its box's corner over it - and, the control, over it
 	for over in [false, true]:
 		var q := _medium()
 		_stand(q, BACK_SPEC, "mortar", Vector3(Tables.ORIGIN.x - 0.3, 0.0, Tables.ORIGIN.y - 0.1))
@@ -1249,9 +1175,8 @@ func _put_back() -> bool:
 	return true
 
 
-## WHAT A MOVE LEAVES IN THE AIR IS SAID (2026-11-01, feedback 0001-0002: the ladle carried "over the cauldron" and the pestle lifted
-## "over the crushed tear", each left in the air for the words before its next act - a rehearsal plays acts back to back and never
-## showed it): a jar carried 8 cm up and left there, `act` says it ENDS IN THE AIR. The control: the same carry set `down` says not.
+## What a move leaves in the air is said: a jar carried 8 cm up and left there, `act` says it ends in the air. The control: the same carry
+## set `down` says not.
 func _aloft() -> bool:
 	var said := {}
 	for down in [false, true]:

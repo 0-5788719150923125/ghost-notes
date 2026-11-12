@@ -20,12 +20,12 @@ segmentation of the crop) and <out>/frames.npz:
 - still_points [S, 478, 3], still_blend [S, 52], still_pose [S, 132], still_found [S]: the same of each
   still, cropped alike.
 
-EACH FRAME IS A PICTURE OF ITS OWN (MediaPipe in IMAGE mode): frames half a second apart are not a video
-to track through, and one face's places must not be carried into the next.
+Each frame is a picture of its own (MediaPipe in IMAGE mode): frames half a second apart are not a video to
+track through, and one face's places must not be carried into the next.
 
-THE FACE IS READ CLOSE (spec "face_crop": [x, y, size], in the part read): MediaPipe's face model on a square
-round the head, its pose and person on the whole - in a whole 1920x1080 frame the face is small to it, and
-the rig's scores explained 48% of his face's movement read so, 56% read close.
+The face is read close (spec "face_crop": [x, y, size], in the part read): MediaPipe's face model on a square
+round the head, its pose and person on the whole - in a whole 1920x1080 frame the face is small to it, and the
+rig's scores explain more of the face's movement read close.
 """
 
 from __future__ import annotations

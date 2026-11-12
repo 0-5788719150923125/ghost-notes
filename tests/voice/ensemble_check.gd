@@ -140,7 +140,7 @@ func _check_no_collapse() -> int:
 	return 0 if ok else 1
 
 
-## THE POINT OF THE BANK: contributors must change WHERE a voice sings, not
+## The point of the bank: contributors must change WHERE a voice sings, not
 ## only how much. Two banks with the same total weight must hold a different
 ## SET of syllables - if adding a seed only scaled the drive, the held
 ## positions would be identical and the belt would just be a volume knob.
@@ -166,7 +166,7 @@ func _check_sustain_positions() -> int:
 	return 0 if ok else 1
 
 
-## WHO CONTRIBUTES IS THE LINEAGE'S: the members' order was the GLOBAL generator's
+## Who contributes is the lineage's: the members' order was the GLOBAL generator's
 ## shuffle, so the same lineage composed differently on every throw. The same seed
 ## under two different global states must make the same combination.
 func _check_order_is_the_lineage() -> int:

@@ -22,7 +22,7 @@
 # a probe. An argument is local to the process. Nothing global is touched now and
 # a probe runs perfectly happily alongside a render.
 #
-# EACH RUN BOOTS A SCENE OF ITS OWN, `tests/_probe_<pid>.tscn`, naming the probe
+# Each run boots a scene of its own, `tests/_probe_<pid>.tscn`, naming the probe
 # where it lies (a probe outside the project is copied to `tests/_probe_<pid>.gd`
 # first), and removes it on exit. It used to copy the probe over one shared
 # `boot_probe.gd` under tests/ and restore a stub afterwards - so two runs at once (two
@@ -47,7 +47,7 @@ if [[ -z "$PROBE_SRC" || ! -f "$PROBE_SRC" ]]; then
   exit 2
 fi
 
-# ARMED BEFORE ANYTHING IS WRITTEN, so an early exit can never leave a private scene
+# Armed before anything is written, so an early exit can never leave a private scene
 # (or a copied probe) behind in the project.
 SCENE="tests/_probe_$$.tscn"
 COPY=""
@@ -77,7 +77,7 @@ cat > "$SCENE" <<EOF
 script = ExtResource("1")
 EOF
 
-# THE RENDERER. A probe that needs autoloads AND REAL PIXELS has nowhere else to
+# THE RENDERER. A probe that needs autoloads and real pixels has nowhere else to
 # go: `--headless` is the dummy driver, whose viewport readback returns nothing
 # (run_quiet.sh's header spells that out), and `godot --script` has no autoloads at
 # all. GHOST_PROBE_GPU=1 boots this same probe scene on the real GPU inside a
@@ -89,9 +89,9 @@ RUNNER=("$GODOT" --headless)
 WRAP=()
 if [[ "${GHOST_PROBE_GPU:-0}" != "0" ]]; then
   if command -v xvfb-run >/dev/null 2>&1; then
-    # A DISPLAY OF ITS OWN. `xvfb-run -a` looks for a free display number and starts its server a
+    # A display of its own. `xvfb-run -a` looks for a free display number and starts its server a
     # moment LATER, so two started in the same instant both take :99: they share one server, and the
-    # first to finish kills it under the other ("X connection to :99 broken" - seen 2026-10-12, two
+    # first to finish kills it under the other ("X connection to :99 broken" - seen with two
     # GPU gates started together by `check.sh --gpu --jobs`). `-d` has the server choose its own
     # number, which cannot collide; an xvfb-run too old to have it starts looking from a number of
     # this process's own.
@@ -125,9 +125,9 @@ fi
 # Anything after the timeout is handed to the PROBE as user args (read them with
 # OS.get_cmdline_user_args), so a probe can take options the way clown_look_probe does.
 # Keep the runner in the terminal's process group so Ctrl+C reaches Godot too.
-# THE TIMEOUT IS INSIDE THE VIRTUAL DISPLAY, Godot its own child. Outside it, `timeout --foreground` ended `xvfb-run`
+# The timeout is inside the virtual display, Godot its own child. Outside it, `timeout --foreground` ended `xvfb-run`
 # alone, and a probe that never quit went on running with its Xvfb: on the graphics card and a core, beside whatever
-# was measured next (2026-11-11: three of them, one for 23 minutes, and fourteen older Xvfb found idle). Now Godot is
+# was measured next (three of them, one for 23 minutes, and fourteen older Xvfb found idle). Now Godot is
 # what is ended, and xvfb-run, seeing it go, takes its server down and hands back the 124.
 ${WRAP[@]+"${WRAP[@]}"} timeout --foreground "$TIMEOUT" "${RUNNER[@]}" --path . "res://$SCENE" -- "${@:3}" 2>&1
 status=$?

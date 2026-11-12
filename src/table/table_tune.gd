@@ -1,12 +1,12 @@
 extends RefCounted
 class_name TableTune
 
-## TableTune - THE NUMBERS A PERSON HAS JUDGED, AS ROWS (next/editing.md step 11; each names the laws whose motion it paces, so a show
-## is offered only the numbers its acts use): a constant a report made someone change, named
-## and bounded, with its default the value that proved right - told per show in its `table:` block (`tune: {slow_most: 3}`) and
-## read by the table as it is built ([TableWork], [TablePaint]), so a show tunes how a hand paces itself without a code change
-## and its gates. Never a free knob: a value outside a row's bounds is brought inside them and said ([method sanitize]); a key
-## with no row is said and left out.
+## TableTune - the numbers a person has judged, as rows (next/editing.md step 11): a constant named and
+## bounded, its default the value that proved right, told per show in its `table:` block
+## (`tune: {slow_most: 3}`) and read by the table as it is built ([TableWork], [TablePaint]). Each row
+## names the laws whose motion it paces, so a show is offered only the numbers its acts use. A value
+## outside a row's bounds is brought inside them and said ([method sanitize]); a key with no row is
+## said and left out.
 
 const ROWS := {
 	"slow_most": {"label": "Slowest stroke", "blurb": "How far an act's strokes may be slowed (a share of a hand's pace) before what is left is rests between them.",
@@ -20,8 +20,8 @@ const ROWS := {
 }
 
 
-## [param raw] (a show's `tune:` block) made safe: `{values: {key: number}, notes}` - each row's number within its bounds, a
-## key with no row left out; every change said.
+## [param raw] (a show's `tune:` block) made safe: `{values: {key: number}, notes}` - each row's number
+## within its bounds, a key with no row left out; every change said.
 static func sanitize(raw: Variant) -> Dictionary:
 	var values := {}
 	var notes := PackedStringArray()
@@ -43,9 +43,10 @@ static func sanitize(raw: Variant) -> Dictionary:
 	return {"values": values, "notes": notes}
 
 
-## THE ROWS AS A FORM'S FIELDS ([SchemaForm]): each a number within its bounds - a slider beside its box - labeled and explained as
-## its row is, with its unit. Given [param laws], only the rows that pace one of them (each row's `laws`): what an episode's acts
-## use decides which numbers it may be tuned by - a show that paints nothing is offered no brush's ([TuneSection]).
+## The rows as a form's fields ([SchemaForm]): each a number within its bounds - a slider beside its
+## box - labeled and explained as its row is, with its unit. Given [param laws], only the rows that
+## pace one of them (each row's `laws`), so a show that paints nothing is offered no brush's
+## ([TuneSection]).
 static func fields(laws: Variant = null) -> Dictionary:
 	var out := {}
 	for k in ROWS:

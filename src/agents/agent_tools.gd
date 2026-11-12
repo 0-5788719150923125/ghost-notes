@@ -3,44 +3,40 @@ class_name AgentTools
 
 ## AgentTools - the tools an agent can call while it works, served by ghost itself.
 ##
-## A writer run by [TextGen] used to be ONE prompt in and ONE reply out: it could not look at what
-## it made, check it, or change it. A job given a TOOLSET instead works in a loop - it calls a tool,
-## reads (or looks at) what comes back, and calls again - and ghost answers every call from inside
-## the running app, so a tool can do anything ghost can: build a thing, stand it on the table,
-## photograph it.
+## A job given a toolset works in a loop - it calls a tool, reads (or looks at) what comes back, and
+## calls again - and ghost answers every call from inside the running app, so a tool can do anything
+## ghost can: build a thing, stand it on the table, photograph it.
 ##
-## THE WIRE IS MCP over HTTP (the "streamable HTTP" transport, answered with plain JSON): a server on
+## The wire is MCP over HTTP (the "streamable HTTP" transport, answered with plain JSON): a server on
 ## 127.0.0.1 at a port the system picks, started the first time a job asks for tools, polled from
-## [method AgentJobs.pump] like everything else a job needs. Every agent CLI that speaks MCP can be
-## pointed at it with a URL, so the toolset is written once for all of them.
+## [method AgentJobs.pump]. Every agent CLI that speaks MCP can be pointed at it with a URL.
 ##
-## EACH JOB GETS ITS OWN URL, with a random token in its path ([method open]): the token says which
-## toolset answers, so a job can only ever reach its own tools, and what those tools let it see is
-## the toolset's decision (a reader's could stop at the cards drawn so far). The token may come the
-## standard way instead, as `Authorization: Bearer <token>` to the bare endpoint ([method endpoint],
-## [method token_of]): a client that reads it from an environment variable (Codex) keeps it out of
-## every argv. Requests carrying a browser's Origin are refused, as the protocol asks of a local server.
+## Each job gets its own URL with a random token in its path ([method open]): the token says which
+## toolset answers, so a job reaches only its own tools, and what they let it see is the toolset's
+## decision (a reader's could stop at the cards drawn so far). The token may instead come as
+## `Authorization: Bearer <token>` to the bare endpoint ([method endpoint], [method token_of]), so a
+## client reading it from an environment variable (Codex) keeps it out of every argv. Requests carrying
+## a browser's Origin are refused, as the protocol asks of a local server.
 ##
-## EVERY CALL IS KEPT in the job's folder beside its prompt and reply: `tools.jsonl`, one line per
-## call (the tool, what it was given, what it said), and each picture it returned as `look_NN.jpg`.
-## What an agent was shown while it worked is as plain on disk as what it was told.
+## Every call is kept in the job's folder beside its prompt and reply: `tools.jsonl` (one line per
+## call: the tool, what it was given, what it said) and each picture returned as `look_NN.jpg`.
 ##
-## A TOOLSET is any object with `list_tools() -> Array` (MCP tool descriptors: name, description,
-## inputSchema), `call_tool(name, args) -> Dictionary` (`{text, images: [Image], error}`, and it may
-## await - a picture can take frames) and, optionally, `instructions() -> String`.
+## A toolset is any object with `list_tools() -> Array` (MCP tool descriptors: name, description,
+## inputSchema), `call_tool(name, args) -> Dictionary` (`{text, images: [Image], error}`; it may await,
+## since a picture can take frames) and, optionally, `instructions() -> String`.
 
 ## Where the endpoint lives; a job's token follows it.
 const PATH := "/mcp/"
-## The protocol version answered when a client names none (otherwise its own is echoed: a toolset
-## server uses nothing that differs between versions).
+## The protocol version answered when a client names none (otherwise its own is echoed; nothing here
+## differs between versions).
 const PROTOCOL := "2025-06-18"
 ## The largest request read, and how long a half-sent one is waited for (ms).
 const MAX_REQUEST := 8 * 1024 * 1024
 const STALL_MS := 30000
 ## The most calls one job may make: a runaway loop ends here, not in the author's quota.
 const MAX_CALLS := 200
-## A picture goes over the wire as a JPEG of this quality: a fraction of a PNG's size, and the
-## model sees it the same.
+## A picture goes over the wire as a JPEG of this quality: a fraction of a PNG's size, and the model
+## sees it the same.
 const JPEG := 0.88
 
 static var _the: AgentTools = null
@@ -229,10 +225,9 @@ func _rpc(job: Dictionary, msg: Dictionary) -> Dictionary:
 ## A tool's outcome as MCP content - its words, then its pictures (as JPEGs) - logged as it goes.
 func _content(job: Dictionary, name: String, args: Dictionary, res: Dictionary) -> Dictionary:
 	var text := String(res.get("text", ""))
-	# AN ERROR IS ITS WORDS OR A FLAG: a toolset says why a call failed (`{"error": "no tool 'x'"}`),
-	# or only that it did (`true`) - and "" is none. `bool()` of a String is no constructor in
-	# GDScript: it threw here, and the agent was never answered (measured 2026-10-15, the Proof
-	# solver's notebook calls). The words reach the agent when there is no text to say instead.
+	#An error is its words or a flag: a toolset says why a call failed (`{"error": "no tool 'x'"}`) or only
+	#that it did (`true`), and "" is none. `bool()` of a String is no constructor in GDScript, so the words
+	#reach the agent when there is no text to say instead.
 	var said: Variant = res.get("error", false)
 	var error := (said is bool and bool(said)) or (said is String and not String(said).is_empty())
 	if error and said is String and text.is_empty():

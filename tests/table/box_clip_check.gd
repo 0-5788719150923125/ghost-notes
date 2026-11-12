@@ -1,48 +1,38 @@
 extends Node
 
-## NOTHING IN THE BOX PASSES THROUGH ANYTHING (the user, 2026-10-18, of the-shoebox 32533: a card put back
-## in the box lay "on the top of the pile", and "every future draw clips-through that card"; a search
-## pulled cards up "clipping through the card on top every single time", and "they never stop to even
-## look at the cards"):
+## Nothing in the box passes through anything:
 ##
-##   - FRAME BY FRAME through whole box shows - an open tin of loose cards, an open box of piles, a
-##     shoebox of loose cards, cards filed on edge in an open box and in a shoebox, and a tin with room
-##     for one pile - each with cards put back between later draws and a search, over several seeds:
-##     no card of the show, and no card a search looks at, passes through another card or lies in one,
-##     the box's own filed cards included. A card put back lies where no card still to be drawn waits
-##     under it ([method TableBox._pile_places]).
-##   - A TIN WITH ROOM FOR ONE PILE, whose reading puts a card back before another is drawn, files its
-##     cards on edge ([method TableBox.contents]), and the card put back goes back into its own place.
-##   - A SEARCH STOPS ON EACH CARD: its front is held to the eye for most of a second at least, lying or
-##     on edge ([constant TableActions.RUMMAGE], [method TableCardPose.searched_xf]).
+##   - Frame by frame through whole box shows (an open tin of loose cards, an open box of piles, a shoebox of loose cards, cards filed
+##     on edge in an open box and in a shoebox, and a tin with room for one pile), each with cards put back between later draws and a
+##     search, over several seeds: no card of the show, and no card a search looks at, passes through another card or lies in one, the
+##     box's own filed cards included. A card put back lies where no card still to be drawn waits under it ([method TableBox._pile_places]).
+##   - A tin with room for one pile, whose reading puts a card back before another is drawn, files its cards on edge
+##     ([method TableBox.contents]), and the card put back goes back into its own place.
+##   - A search stops on each card: its front is held to the eye for most of a second at least, lying or on edge
+##     ([constant TableActions.RUMMAGE], [method TableCardPose.searched_xf]).
 ##
-## WHAT COUNTS IS WHAT SHOWS: in a box of cards filed on edge, a crossing below the tops of the filed
-## cards is behind the cards in front of it. A card drawn part of the way up out of a file and leaned
-## back to the eye (the user, 2026-10-13) swings its foot into the cards in front of it there, as a real
-## card rocks in its file - unseen, and not counted.
+## What counts is what shows: in a box of cards filed on edge, a crossing below the tops of the filed cards is behind the cards in
+## front of it. A card drawn part of the way up out of a file and leaned back to the eye swings its foot into the cards in front of
+## it, as a real card rocks in its file - unseen, and not counted.
 ##
-## - A CARD FILED IN A BOX IS INSIDE ITS WALLS (the-quiet-crucible 181083, the user: "the cards are protruding
-##   from the front of the box, through the wall of the box itself"): a set dresser's chest with brass posts at
-##   its corners and a handle on its front, holding index cards on edge - no point of a filed card lies in its
-##   wood ([method TableBox.inside_of]: the box's inside from its own walls, never its bounds less a wall).
+## - A card filed in a box is inside its walls: a set dresser's chest with brass posts at its corners and a handle on its front,
+##   holding index cards on edge - no point of a filed card lies in its wood ([method TableBox.inside_of]: the box's inside from its
+##   own walls, never its bounds less a wall).
 ##
-## Two-sided: the card put back laid instead on the pile a later card is drawn from is passed through
-## by that draw, and the check says so; a look half as long holds a front up too briefly; a filed card
-## moved a centimeter toward the reader is in the chest's front wall.
+## Two-sided: the card put back laid instead on the pile a later card is drawn from is passed through by that draw; a look half as
+## long holds a front up too briefly; a filed card moved a centimeter toward the reader is in the chest's front wall.
 ##
 ##   tests/run_boot_probe.sh tests/table/box_clip_check.gd 300
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - poses are transforms.
+## A boot probe (the medium reaches the Director); no GPU - poses are transforms.
 
 const SEEDS := [32533, 41, 9907]
-## Where the fixture's table is written: the tin of the-shoebox 32533 (14 by 21 cm, 7 deep), which holds
-## two piles of its baseball cards - a box made by no set dresser is smaller, and holds one.
+## The fixture's table: a tin (14 by 21 cm, 7 deep) holding two piles of baseball cards - a box made by no set dresser is smaller, and holds one.
 const DIR := "user://box_clip_check"
 const TIN := {"things": [{"name": "the tin", "place": "by the deck", "holds_cards": true, "parts": [
 	{"shape": "extrude", "outline": "rect", "size": [14.0, 21.0], "height": 7.0, "wall": 0.25, "material": "tin"}]}],
 	"materials": {"tin": {"kind": "painted", "color": "#3f8a86", "color2": "#8a5434", "polish": 0.45, "wear": 0.35}}}
-## THE CHEST of the-quiet-crucible 181083, as its set dresser wrote it: 15 by 22 cm, 9 deep, walls of 1 cm, a
-## brass post at each corner and a handle on its front.
+## The chest, as a set dresser wrote it: 15 by 22 cm, 9 deep, walls of 1 cm, a brass post at each corner and a handle on its front.
 const CHEST := {"things": [{"name": "the surgeon's recipe chest", "group": "chest", "holds_cards": true, "parts": [
 	{"bevel": 0.2, "height": 9.0, "material": "mahogany", "outline": "rect", "shape": "extrude", "size": [15.0, 22.0], "wall": 1.0},
 	{"at": [-6.85, 0.0, -10.35], "copies": {"line": {"count": 2.0, "step": [13.7, 0.0, 0.0]}}, "material": "brass", "round": 0.2, "shape": "box", "size": [1.6, 9.2, 1.6]},
@@ -134,7 +124,7 @@ func _show(what: String, seed: int, staging: Dictionary, size: String, positions
 		_ok(least >= LOOK_LEAST, "each card a search looks at is held to the eye %.2f s at the least (%d looks)" % [least, looks.size()])
 
 
-## A TIN WITH ROOM FOR ONE PILE: filed on edge, and a card put back goes back into its own place.
+## A tin with room for one pile: filed on edge, and a card put back goes back into its own place.
 func _one_pile() -> void:
 	print("-- one pile's room")
 	var back := {"destination": "box", "comment": "brief"}
@@ -154,8 +144,8 @@ func _one_pile() -> void:
 	_ok(medium._box_part.contents() == "loose", "control: with nothing put back, the same tin keeps its cards loose")
 
 
-## THE CONTROL: an open tin's card put back, laid instead on top of the pile the last card is drawn from,
-## is passed through when that card is pulled out from under it.
+## The control: an open tin's card put back, laid instead on top of the pile the last card is drawn from, is passed through when
+## that card is pulled out from under it.
 func _control() -> void:
 	print("-- control")
 	var back := {"destination": "box", "comment": "brief"}
@@ -283,7 +273,7 @@ func _looks(tm: Dictionary, scale := 1.0) -> Array:
 	return out
 
 
-## How squarely [param xf]'s card shows the camera its FACE (1) or its back (-1).
+## How squarely [param xf]'s card shows the camera its face (1) or its back (-1).
 func _faces_camera(xf: Transform3D) -> float:
 	return -xf.basis.y.normalized().dot((medium._plan.cam_base.origin - xf.origin).normalized())
 
@@ -330,7 +320,7 @@ func _load(seed: int, positions: Array, plan: Dictionary, tin := false, table :=
 	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
 
 
-## A CARD FILED IN A BOX IS INSIDE ITS WALLS: the chest of 181083, index cards filed on edge.
+## A card filed in a box is inside its walls: the chest, index cards filed on edge.
 func _chest() -> void:
 	print("-- a chest with a handle on its front, of index cards on edge")
 	_load(181083, [{}], {"look": {"candles": 0, "card_size": "index", "frame": {"style": "written"}},

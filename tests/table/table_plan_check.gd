@@ -1,28 +1,23 @@
 extends Node
 
-## table_plan_check - THE TABLE'S PLAN IS A FUNCTION OF THE EPISODE ([TablePlan], next/structure.md
-## step 24), on fixture episodes of its own: a deck's reading, a jumper's, a long spread that crowds the
-## deck, a box's and a shoebox's, a spread whose places are given, and a set dresser's table with
-## things written where they stand.
+## The table's plan is a function of the episode ([TablePlan], next/structure.md step 24), on fixture episodes of its own: a deck's
+## reading, a jumper's, a long spread that crowds the deck, a box's and a shoebox's, a spread whose places are given, and a set
+## dresser's table with things written where they stand.
 ##
 ##   tests/run_boot_probe.sh tests/table/table_plan_check.gd 600
 ##
-##   - PURE: [method TablePlan.make] on the same (document, table, intro hold) twice gives the same plan,
-##     field for field - and on another seed another one, or the comparison sees nothing (the control);
-##   - ITS INPUTS ARE ALL IT READS: the intro hold moves the reckoned time of every word (the past a
-##     mid-way start is replayed in) and nothing the plan decides - a jumper's held wash is reckoned from
-##     the first word, so the hold cancels out of it; and the same episode in another folder with the
-##     same table is the same plan, the folder aside;
-##   - THE MEDIUM DECIDES NOTHING OF ITS OWN: the plan [method TableMedium._ensure_doc] makes is
-##     [method TablePlan.make]'s for the document it was handed, and its camera and the deck's place
-##     are the plan's;
-##   - PLAYING NEVER WRITES IT: the table posed across the whole show (the shuffle, every draw and lay,
-##     the spread) leaves the plan as it was - against the control, one field written, which the
-##     comparison must see.
+##   - Pure: [method TablePlan.make] on the same (document, table, intro hold) twice gives the same plan, field for field - and on
+##     another seed another one, or the comparison sees nothing (the control);
+##   - its inputs are all it reads: the intro hold moves the reckoned time of every word (the past a mid-way start is replayed in) and
+##     nothing the plan decides - a jumper's held wash is reckoned from the first word, so the hold cancels out of it; and the same
+##     episode in another folder with the same table is the same plan, the folder aside;
+##   - the medium decides nothing of its own: the plan [method TableMedium._ensure_doc] makes is [method TablePlan.make]'s for the
+##     document it was handed, and its camera and the deck's place are the plan's;
+##   - playing never writes it: the table posed across the whole show (the shuffle, every draw and lay, the spread) leaves the plan
+##     as it was - against the control, one field written, which the comparison must see.
 ##
-## The plan's draws keeping their order (every episode already made plays the show it played) was
-## checked when the plan moved out of the medium, by dumping both over 84 episodes; a salt renamed or
-## a draw moved re-rolls them, and no gate can tell that from an intended change.
+## The plan's draws keep their order (every episode already made plays the show it played): a salt renamed or a draw moved re-rolls
+## them, and no gate can tell that from an intended change.
 
 const DIR := "user://table_plan_check"
 const SEEDS := 8

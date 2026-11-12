@@ -4,38 +4,28 @@ class_name ActorBuilder
 ## ActorBuilder - makes whatever an actor is missing, in the order [ActorSteps] gives, the way
 ## [TableProducer] makes a table episode's (next/likeness.md, "The runner").
 ##
-## THE ORDER IS NOT A SCRIPT: every [method tick] lands what ended and starts each step whose inputs
-## exist and whose own output is missing - or stale, when that was asked for - over every video, the
-## actor or the chosen set ([method ActorFolder.scopes_of]). Nothing runs on its own: [method start] is a
-## person pressing Generate or a step's ▶, since the steps cost hours of CPU and the agents quota.
+## Each [method tick] lands what ended and starts every step whose inputs exist and whose own output is
+## missing (or stale, when asked) over every video, the actor or the chosen set ([method ActorFolder.scopes_of]).
+## Nothing runs on its own: [method start] is Generate or a step's ▶, since steps cost hours of CPU and agent quota.
 ##
-## WHAT RUNS AT ONCE, by lane: one step that takes the processor (MediaPipe takes every core it is
-## given), one download (the network, beside it), one quick step, one agent job, and one step on the
-## graphics card (their voice's training, for an hour or more).
+## Lanes, one step each at a time: the processor, a download, a quick step, an agent job, the graphics card.
 ##
-## THEIR OWN VOICE (next/likeness.md, "Their own voice"): Hear, Utterances and Voice teach a Piper voice
-## their speech, and a voice made is PUBLISHED where the voice host finds voices trained here
-## ([method publish_voice]), named after them, and [signal voice_published] tells the card (the reading
-## it is on lists it and reads in it). A VOICE ALONE ([method ActorFolder.sound_only], the Voice training card)
-## is KOKORO's (2026-10-26): its own Utterances and Voice (hosts/voice_train/kokoro_voice.py: Kokoro taught their
-## sentences by a loop of ours, written into the host's graph) and what they read, nothing else - whatever a run
-## asks - its links fetched as their sound, and the voice published where the host lists Kokoro voices taught here
-## ([method publish_kokoro]). Each kind runs its own steps ([method ActorSteps.of_kind]).
+## Their own voice (next/likeness.md, "Their own voice"): Hear, Utterances and Voice train a Piper voice, published
+## where the voice host finds trained voices ([method publish_voice]); [signal voice_published] tells the card.
+## A voice alone ([method ActorFolder.sound_only], the Voice training card) is Kokoro's: its own Utterances and Voice
+## (hosts/voice_train/kokoro_voice.py) and its links fetched as sound, published by [method publish_kokoro].
+## Each kind runs its own steps ([method ActorSteps.of_kind]).
 ##
-## TWO RENDERERS ([member renderer], [constant ActorSteps.RENDERERS]): a run makes the steps the note's
-## renderer plays from and those both do - the 2D's library, or a head of splats (Frames, Face rig and
-## Avatar: hosts/avatar/, next/likeness.md "A head of splats"). On a machine that cannot train ([method
-## cannot_train]) the steps taught on the graphics card, and those made only for them, are left alone and
-## their rows say why.
+## Two renderers ([member renderer], [constant ActorSteps.RENDERERS]): the 2D library, or a head of splats (Frames,
+## Face rig and Avatar: hosts/avatar/, next/likeness.md "A head of splats"). Where training is impossible ([method
+## cannot_train]) the steps trained on the graphics card, and those made only for them, are left alone and their rows say why.
 ##
-## A STEP IS FILES: a program's step writes its output under a temporary name and renames it into
-## place, so a step whose output is newer than its start succeeded - whatever its exit said - and a
-## stopped one left nothing half made. A stopped survey loses at most the video in hand. A step whose
-## environment is installing is not failed: it waits, and [member waiting] says for what.
+## A program's step writes its output under a temporary name and renames it into place, so a step whose output is
+## newer than its start succeeded whatever its exit said, and a stopped one leaves nothing half made. A step whose
+## environment is installing waits; [member waiting] says for what.
 ##
-## WHAT IS THE ACTOR'S IS MADE FROM EVERY VIDEO (the second build, 2026-10-21): their range of mouth
-## shapes and their head's motion read every steady set's usable shots ([method shots_of]); a set's
-## still, rig and library are the set's own, its library's mouths and eyes from any video.
+## What is the actor's is made from every video: their mouth shapes and head motion read every steady set's usable
+## shots ([method shots_of]); a set's still, rig and library are the set's own, its library's mouths and eyes from any video.
 
 signal changed
 ## Their own voice was published, under the voice id [param voice] ([method voice_id]).
@@ -47,13 +37,11 @@ const LANES := {"download": "net", "probe": "quick", "local": "quick", "python":
 const RETRIES := 1
 ## A set is audited when it has at least this many usable minutes; a smaller one is kept as it is.
 const AUDIT_LEAST := 2.0
-## A DOWNLOAD THAT SAYS NOTHING FOR THIS LONG IS STUCK (2026-10-21: an old yt-dlp sat at "Downloading
-## webpage" for good, and the download lane with it): stopped, and tried once more.
+## A download silent for this many seconds is stuck: stopped, and tried once more.
 const STALL_S := 300
 ## The most contact sheets one audit job is shown.
 const AUDIT_SHEETS := 14
-## THE FILE A PROGRAM'S STEP IS JUDGED BY: written last, so newer than the run's start only when the
-## step finished.
+## The file a program's step is judged by: written last, so newer than the run's start only when the step finished.
 const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json", "transcribe": "transcript.json",
 	"visemes": "visemes.json", "learn": "mouth_model.json",
 	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json",
@@ -61,35 +49,31 @@ const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json
 	"frames": "avatar/frames.npz", "face": "avatar/rig.npz", "avatar": "avatar/avatar.json", "fit": "avatar/fit.json",
 	"hear": "speech.json", "utterances": "utterances.json", "voice": "voice/voice.onnx",
 	"kokoro_utterances": "kokoro/sentences.json", "kokoro_voice": "kokoro/voice/voice.json"}
-## THE WORD A STEP'S PROGRAM SAYS ITS LAST LINE WITH (`actor: <word>: ...`), where it is not the step's own name.
+## The word a step's program says its last line with (`actor: <word>: ...`), where it is not the step's own name.
 const SAYS := {"head_frames": "head frames", "frames": "head frames", "head_rig": "face", "avatar": "bake",
 	"kokoro_utterances": "utterances", "kokoro_voice": "voice"}
-## Candidate stills a set keeps (enough that some show them at rest: on his footage two of six did, the
-## fourth pass); prototype mouths per sound and eyes per state its library keeps.
+## Candidate stills a set keeps; prototype mouths per sound and eyes per state its library keeps.
 const STILLS := 12
 const VARIANTS := 3
 const EYE_VARIANTS := 2
 ## The most minutes of their head's motion kept.
 const MOTION_MINUTES := 60.0
-## WHAT HEAR TELLS WHISPER CAME BEFORE: it writes the ums and uhs it would otherwise leave out, and a
-## sentence whose text lacks a sound it holds teaches their voice to say what nobody asked for.
+## Whisper's prompt for Hear: it makes Whisper write the ums and uhs, so a sentence's text matches what the voice is taught.
 const HEAR_PROMPT := "Umm, let me think, like, hmm... Okay, uh, here is what I am, like, thinking."
 ## The eSpeak voice their speech is read in (the voice host reads a voice's own from its config).
 const VOICE_ESPEAK := "en-us"
-## Sentences a training batch holds: an hour of speech in about 0.8 s a step on a 16 GB card.
+## Sentences a training batch holds (a 16 GB card).
 const VOICE_BATCH := 16
-## WHERE THE VOICE HOST FETCHES KOKORO'S GRAPH (hosts/voice/backends/kokoro.py, FAMILIES "kokoro" `base`): a voice
-## taught here is written into a copy of it, fetched from here where the host never has.
+## Where the voice host fetches Kokoro's graph (hosts/voice/backends/kokoro.py, FAMILIES "kokoro" `base`): a voice
+## taught here is written into a copy of it.
 const KOKORO_GRAPH := "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/dd4401a9add81ac692d20e240d22ec9dda82cc29"
-## Their stretches a Kokoro lesson holds, and how long each is: eight of 1.5 s were 8.6 GB until the discriminators
-## joined, then 11.5 and out of memory on a 16 GB card shared with the app; six fit.
+## Stretches a Kokoro lesson holds, and each one's length: eight of 1.5 s run a 16 GB card shared with the app out of memory.
 const KOKORO_BATCH := 6
 const KOKORO_SECONDS := 1.5
-## Steps the body's splats are fitted to the still in (two minutes on a 16 GB card).
+## Steps the body's splats are fitted to the still in.
 const FIT_STEPS := 3000
-## ONE HEAD FOR EVERY SET (next/likeness.md, "One head"): the moments of each video their head is learned from
-## (hosts/avatar/head_frames.py), the moments of a set its room and body are fitted to, and the steps a set's
-## look, room and body are fitted in (hosts/avatar/bake.py, a minute or two).
+## One head for every set (next/likeness.md, "One head"): moments of each video the head is learned from
+## (hosts/avatar/head_frames.py), moments of a set its room and body are fitted to, steps a set is fitted in (hosts/avatar/bake.py).
 const HEAD_FRAMES := 300
 const SET_FRAMES := 160
 const BAKE_STEPS := 4000
@@ -106,14 +90,13 @@ var waiting := ""
 var only: Array = []
 ## Remake what is stale as well as what is missing.
 var refresh := true
-## WHO LABELS: `{agent, model, effort}`, the card's [AgentPick].
+## Who labels: `{agent, model, effort}`, the card's [AgentPick].
 var writer := {"agent": "claude", "model": "", "effort": ""}
-## A GATE'S SEAM: when set, a step is made by calling it - `(step, scope) -> String`, "" once its
-## outputs are written - instead of running its program or its agent, and stamped as made. The order,
-## the waiting and the staleness are the real ones (tests/likeness/actors_check.gd).
+## A gate's seam: when set, a step is made by calling it - `(step, scope) -> String`, "" once its outputs are
+## written - instead of running its program or agent, and stamped as made. Order, waiting and staleness stay real.
 var make_with: Callable
 
-## A COMMAND-LINE TOOL'S SEAM ([method allow_for_tool]): outside the app no Provisioner runs, so an
+## A command-line tool's seam ([method allow_for_tool]): outside the app no Provisioner runs, so an
 ## environment whose Python is there is taken as it is.
 static var _tool := false
 
@@ -134,7 +117,7 @@ static func allow_for_tool() -> void:
 
 # --- what is asked ---------------------------------------------------------------------------------
 
-## GENERATE ([param steps] empty) or ▶ (a step and what it needs): make what is missing and stale.
+## Generate ([param steps] empty) or a step's ▶: make what is missing and stale.
 func start(steps: Array = []) -> void:
 	only = steps.duplicate()
 	refresh = true
@@ -144,8 +127,8 @@ func start(steps: Array = []) -> void:
 	changed.emit()
 
 
-## ⟳: [param step]'s outputs moved one back over every scope ([method ActorFolder.drop]; [method put_back] brings them back), and
-## made again; what is made from it is stale once it is.
+## ⟳: [param step]'s outputs moved one back over every scope ([method ActorFolder.drop]; [method put_back] brings them
+## back) and made again; what is made from it is stale once it is.
 func redo(step: String) -> void:
 	for sc in actor.scopes_of(step):
 		if not _runs.has(_key(step, String(sc))):
@@ -155,8 +138,8 @@ func redo(step: String) -> void:
 	start([step])
 
 
-## WHAT [param step] MADE BEFORE ITS LAST ⟳ PUT BACK over every scope that kept one ([method ActorFolder.put_back]); what is made
-## from it is stale where it was made from what stood. "" done, else why not.
+## Puts back what [param step] made before its last ⟳ over every scope that kept one ([method ActorFolder.put_back]);
+## what is made from it is stale where it was made from what stood. "" done, else why not.
 func put_back(step: String) -> String:
 	if not _runs.is_empty():
 		return "wait for what is being made to end"
@@ -180,7 +163,7 @@ func kept_back(step: String) -> bool:
 	return false
 
 
-## STOP: every run ends now; what each finished is kept.
+## Stop: every run ends now; what each finished is kept.
 func stop() -> void:
 	running = false
 	waiting = ""
@@ -221,10 +204,9 @@ func errors() -> Dictionary:
 	return _errors
 
 
-## EVERY STEP OVER ITS SCOPES AS [param folder] HOLDS IT, read from its files alone - no run, no error: `{step:
-## {scopes, states: {scope: state}, moot: {scope: true}, summary}}`, what [method row_of] is made of but the runs. A
-## WORKER WORKS IT OUT on a folder of its own (the Actor card: 2026-10-23, every tick of a video held the main
-## thread for seconds while it was worked out there), and [method row_of] lays the runs over it.
+## Every step over its scopes as [param folder] holds it, read from its files alone - no run, no error: `{step:
+## {scopes, states: {scope: state}, moot: {scope: true}, summary}}`, what [method row_of] is made of but the runs.
+## Safe to work out on a worker with a folder of its own; [method row_of] lays the runs over it.
 static func states_of(folder: ActorFolder) -> Dictionary:
 	var out := {}
 	for step in ActorSteps.ORDER:
@@ -273,7 +255,7 @@ func row_of(step: String, held := {}) -> Dictionary:
 			out["said"] = String(run.get("said", ""))
 		if st == "failed" and String(out["error"]).is_empty():
 			out["error"] = error_of(step, String(sc))
-	# NOTHING TO DO FOR ANY OF THEM: a folder's videos are not fetched, and need no captions link
+		# nothing to do for any of them: a folder's videos are not fetched, and need no captions link
 	if moot == scopes.size():
 		out["state"] = "moot"
 		return out
@@ -376,9 +358,8 @@ func _needs_ready(step: String, scope: String) -> bool:
 			var key := _key(String(need), String(sc))
 			if _runs.has(key):
 				return false
-			# CAPTIONS THAT COULD NOT BE FETCHED are no captions: the words go on without them (and are
-			# stale once a later fetch brings some); A VIDEO WHOSE MOMENTS COULD NOT BE READ is left out of their
-			# head (its file gone, no face found): the others' make it
+				# captions that could not be fetched are no captions, and a video whose moments could not be read is left
+				# out of their head: the words and the other videos go on without them
 			if (String(need) == "captions" or String(need) == "head_frames") and _errors.has(key):
 				continue
 			if actor.moot(String(need), String(sc)):
@@ -623,7 +604,7 @@ func _phase(run: Dictionary) -> String:
 				args.append_array(["--frames", actor.video_dir(String(v)).path_join("head")])
 			var dir := out.path_join("head")
 			DirAccess.make_dir_recursive_absolute(dir)
-			# the order the rig holds them in: a set finds its video's look by it (bake.py's `video`)
+				# the order the rig holds them in: a set finds its video's look by it (bake.py's `video`)
 			var e := ActorFolder.write_file(dir.path_join("videos.json"), JSON.stringify(vids))
 			if not e.is_empty():
 				return e
@@ -632,7 +613,7 @@ func _phase(run: Dictionary) -> String:
 		"head":
 			var dir := out.path_join("head")
 			var spec := dir.path_join("head.spec.json")
-			# THE HEAD VIDEOS, each its Head steps (head.py, "ENOUGH OF EACH VIDEO"); none chosen (no audit), all of them
+				# the head's videos, each its Head steps (head.py); all of them when none is chosen (no audit)
 			var vids := actor.head_videos(int(actor.settings()["head_videos"]))
 			var many := vids.size() if not vids.is_empty() else actor.ticked().size()
 			var e := ActorFolder.write_file(spec, JSON.stringify({"rig": dir.path_join("rig.npz"),
@@ -680,8 +661,7 @@ func _phase(run: Dictionary) -> String:
 			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/bake.py", ["--spec", spec],
 				"making the set's avatar from their head")
 		"fit":
-			# the body fitted to the still they are played from: its picture filled where something stands before
-			# them, its matte, and what stands there (hosts/avatar/fit.py)
+				# the body fitted to the still they are played from: its picture, matte and what stands before them (hosts/avatar/fit.py)
 			var dir := out.path_join("avatar")
 			var still := actor.still_of(sid)
 			var st := out.path_join("stills")
@@ -850,8 +830,7 @@ static func _tail(log: String) -> String:
 
 # --- the stills at rest ------------------------------------------------------------------------------
 
-## WHICH OF SET [param sid]'S STILLS SHOW THEM AT REST: the writer shown their sheet - or, once its answer
-## is kept, made.
+## Which of set [param sid]'s stills show them at rest: the writer shown their sheet, or, once its answer is kept, made.
 func _rest(run: Dictionary, sid: String, out: String) -> String:
 	var count := actor.stills_of(sid).size()
 	if bool(run["state"].get("landed", false)):
@@ -862,7 +841,7 @@ func _rest(run: Dictionary, sid: String, out: String) -> String:
 	var sheet := out.path_join("stills").path_join("sheet.jpg")
 	if count == 0 or not FileAccess.file_exists(sheet):
 		return "the stills have no sheet: Generate makes them again"
-	# their hands, closer, numbered alike (the Stills step's `hands.jpg`: on the sheet a hand is some 40 pixels)
+	# their hands, closer, numbered alike (the Stills step's `hands.jpg`)
 	var hands := out.path_join("stills").path_join("hands.jpg")
 	var has_hands := FileAccess.file_exists(hands)
 	var p := ActorPrompts.rest(actor.name(), count, has_hands)
@@ -889,10 +868,9 @@ func _land_rest(run: Dictionary, text: String) -> String:
 	return ""
 
 
-## KOKORO'S UTTERANCES, IN THREE PHASES (2026-10-26): their sentences cut as an actor's are (utterances.py, in Kokoro's
-## rate and ids); EACH HEARD AGAIN, ALONE, by Whisper medium.en (hosts/speech/agree.py), and cut to the words its sound
-## says - only 85 of 192 had said exactly their text, and Kokoro taught on the rest mumbled; the agreed cuts written
-## as the sentences it is taught on (utterances.py's `agreed`), their ids made again.
+## Kokoro's utterances, in three phases: their sentences cut as an actor's are (utterances.py, in Kokoro's rate and ids);
+## each heard again alone by Whisper medium.en (hosts/speech/agree.py) and cut to the words its sound says; the agreed
+## cuts written as the sentences it is taught on (utterances.py's `agreed`), their ids made again.
 func _kokoro_utterances(run: Dictionary, ff: String) -> String:
 	var kdir := actor.dir.path_join("kokoro")
 	DirAccess.make_dir_recursive_absolute(kdir)
@@ -945,7 +923,7 @@ func _land_process(run: Dictionary) -> String:
 			var info := probe_of(d as Dictionary)
 			if float(info["duration"]) <= 0.0:
 				return "ffprobe found no video in it"
-			# CAPTIONS BESIDE A FOLDER VIDEO (`<name>.en*.json3`) are its own
+			# captions beside a folder video (`<name>.en*.json3`) are its own
 			var path := actor.video_path(vid)
 			var v := actor.video(vid)
 			if String(v.get("captions", "")).is_empty():
@@ -959,12 +937,12 @@ func _land_process(run: Dictionary) -> String:
 				return e
 			v["duration"] = info["duration"]
 			actor.save()
-			# A RECORDING WITH NO PICTURE (a voice alone's sound file) has no frame rate to name
+			# a recording with no picture (a voice alone's sound file) has no frame rate to name
 			actor.put_stamp(step, scope, ("%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
 				if int(info["width"]) > 0 else "%s, sound" % Clock.text(float(info["duration"])))
 			return "done"
 		"kokoro_utterances":
-			# ITS FIRST TWO PHASES' FILES, each judged as a step's main file is, then the next phase
+			# the first two phases' files, each judged as a step's main file is, then the next phase
 			var made: String = ["utterances.json", "agreed.json", "sentences.json"][int(run["phase"])]
 			if not _made_by(actor.dir.path_join("kokoro").path_join(made), run):
 				return _tail(String(run["log"]))
@@ -974,8 +952,7 @@ func _land_process(run: Dictionary) -> String:
 			actor.put_stamp(step, scope, _said_by(String(run["log"]), step))
 			return "done"
 		_:
-			# EVERY STEP A PROGRAM MAKES IS JUDGED BY ITS MAIN FILE AND STAMPED (2026-10-23: a step left out of a list
-			# here was "done" with no stamp, so missing, so started again - a video's moments read over and over)
+			# every step a program makes is judged by its main file and stamped
 			if not MAIN.has(step):
 				return "done"
 			if not _made_by(out.path_join(String(MAIN[step])), run):
@@ -1054,11 +1031,10 @@ func _land_fetch(run: Dictionary, vid: String, captions_only: bool) -> String:
 	var v := actor.video(vid)
 	var entry := String(v.get("captions_id" if captions_only else "entry", ""))
 	var got := ActorSources.fetched(actor.footage_dir(), entry)
-	# A VIDEO WITH NO CAPTIONS ON THE SITE IS NOT A FAILED FETCH: its details came, and its words are
-	# none - a step waiting on them would stop the set for good
+	# a video with no captions on the site is not a failed fetch: its details came, and its words are none
 	var ok := not String(got["info"]).is_empty() if captions_only else not String(got["video"]).is_empty()
 	if not ok:
-		# YouTube breaking an old yt-dlp is the usual failure: update it once, and go again
+		# an old yt-dlp broken by YouTube is the usual failure: update it once, and go again
 		if int(run["tries"]) == 0:
 			run["tries"] = 1
 			Provision.update("ytdlp_venv")
@@ -1079,7 +1055,7 @@ func _land_fetch(run: Dictionary, vid: String, captions_only: bool) -> String:
 	return "done"
 
 
-## LIST A LINK: its entries come back as JSON (a video, a playlist, a channel), and land as rows.
+## List a link: its entries come back as JSON (a video, a playlist, a channel), and land as rows.
 func list_link(source: int) -> String:
 	if _listings.has(source):
 		return ""
@@ -1124,7 +1100,7 @@ func _poll_listing(source: int) -> bool:
 
 # --- words, from captions ----------------------------------------------------------------------------
 
-## A VIDEO'S WORDS: its captions', or, where it has none, what Transcribe heard.
+## A video's words: its captions', or, where it has none, what Transcribe heard.
 func _make_words(vid: String) -> String:
 	var cap := String(actor.video(vid).get("captions", ""))
 	var words: Array = []
@@ -1222,7 +1198,7 @@ func _land_audit_part(set_d: Dictionary, text: String) -> String:
 	return ActorFolder.write_file(_audit_parts().path_join(String(set_d["id"]) + ".json"), JSON.stringify(got))
 
 
-## THE AUDIT, whole: every set with its look, a set split where shots of another look were found,
+## The audit, whole: every set with its look, a set split where shots of another look were found,
 ## the unusable shots out of its usable minutes.
 func _land_audit(all: Array) -> String:
 	var sets: Array = []
@@ -1246,8 +1222,8 @@ func _land_audit(all: Array) -> String:
 
 # --- their own voice ---------------------------------------------------------------------------------
 
-## WHY THIS MACHINE CANNOT TRAIN - their voice, a head of splats - "" when it can: the training environment
-## has no build here, or there is no NVIDIA graphics card (its driver, or the card the app draws on).
+## Why this machine cannot train their voice or a head of splats, "" when it can: the training environment
+## has no build here, or there is no NVIDIA graphics card.
 static func cannot_train() -> String:
 	var why := Provision.unsupported("voice_train_venv")
 	if not why.is_empty():
@@ -1258,8 +1234,7 @@ static func cannot_train() -> String:
 	return ""
 
 
-## The voice host's id for [param a]'s voice: one a person, and the same each time it is trained - a voice alone's
-## Kokoro's, an actor's Piper's.
+## The voice host's id for [param a]'s voice: stable across trainings - a voice alone's Kokoro's, an actor's Piper's.
 static func voice_id(a: ActorFolder) -> String:
 	return ("kokoro-" if a.sound_only() else "actor-") + a.id
 
@@ -1274,10 +1249,9 @@ static func trained_voices_dir() -> String:
 	return Deps.data_dir().path_join("voices").path_join("piper").path_join("trained")
 
 
-## THEIR VOICE, PUBLISHED: the Voice step's voice and its config copied (each under another name, then
-## renamed into place) to where the voice host lists voices trained here, a description beside them - their
-## name and what it was fine-tuned from - and `voice.json` in the actor's folder. A
-## voice trained again replaces it, and the vowel probe the host kept of the old one goes with it.
+## Publishes their voice: the Voice step's voice and config copied (each under another name, then renamed into place)
+## to where the voice host lists trained voices, a description beside them, and `voice.json` in the actor's folder.
+## A voice trained again replaces it, and the vowel probe the host kept of the old one goes with it.
 static func publish_voice(a: ActorFolder) -> String:
 	var src := a.dir.path_join("voice").path_join("voice.onnx")
 	var dest := trained_voices_dir()
@@ -1306,9 +1280,9 @@ static func trained_kokoro_dir() -> String:
 	return Deps.data_dir().path_join("voices").path_join("kokoro").path_join("trained")
 
 
-## A VOICE ALONE, PUBLISHED: the Voice step's voice folder (its graph, tokenizer, pack and description) MOVED where the
-## voice host lists Kokoro voices taught here, whole - the old one gone first, the new one renamed into place - and
-## `kokoro/published.json` in their folder, the step's own record. A graph is 325 MB: it is moved, never copied twice.
+## Publishes a voice alone: the Voice step's voice folder (graph, tokenizer, pack, description) moved whole to where the
+## voice host lists Kokoro voices, the old one removed first, and `kokoro/published.json` written in their folder.
+## The graph is 325 MB: it is moved, never copied.
 static func publish_kokoro(a: ActorFolder) -> String:
 	var src := a.dir.path_join("kokoro").path_join("voice")
 	if not FileAccess.file_exists(src.path_join("model.onnx")):
@@ -1325,7 +1299,7 @@ static func publish_kokoro(a: ActorFolder) -> String:
 
 # --- what is made from what ------------------------------------------------------------------------
 
-## EVERY TICKED VIDEO'S FILE, SURVEY AND SIZE, as actor.py reads them: `{vid: {path, survey, size}}`.
+## Every ticked video's file, survey and size, as actor.py reads them: `{vid: {path, survey, size}}`.
 func videos_spec() -> Dictionary:
 	var out := {}
 	for v in actor.ticked():
@@ -1340,9 +1314,8 @@ func videos_spec() -> Dictionary:
 	return out
 
 
-## THE LAYERS OF SET [param sid]'S STILL [param k] the trainers read, as `stills.json` names them: what stands before
-## them (`front`, "" when nothing does - the Stills step writes no front then, 2026-10-25: `actor.outlined`) and their
-## picture under it (`picture`: filled from round the front, else the still itself).
+## The layers of set [param sid]'s still [param k] the trainers read, as `stills.json` names them: what stands before
+## them (`front`, "" when nothing does) and their picture under it (`picture`: filled from round the front, else the still itself).
 static func still_layers(a: ActorFolder, sid: String, k: int) -> Dictionary:
 	var st := a.set_dir(sid).path_join("stills")
 	var all := a.stills_of(sid)
@@ -1351,8 +1324,8 @@ static func still_layers(a: ActorFolder, sid: String, k: int) -> Dictionary:
 		"picture": st.path_join(String(row.get("body", row.get("file", "still_%d.jpg" % k))))}
 
 
-## THE VIDEO SET [param sid] IS READ FROM, as their splats: the ticked video it holds most of, and its usable shots
-## there - one camera placement, the set's room learned whole. `{vid, shots: [[start, end], ...]}`, {} for none.
+## The video set [param sid] is read from, as their splats: the ticked video it holds most of, and its usable shots
+## there (one camera placement, the set's room learned whole). `{vid, shots: [[start, end], ...]}`, {} for none.
 static func set_video(a: ActorFolder, sid: String) -> Dictionary:
 	var by := {}
 	for s in a.sets():
@@ -1375,7 +1348,7 @@ static func set_video(a: ActorFolder, sid: String) -> Dictionary:
 	return {} if best.is_empty() else {"vid": best["vid"], "shots": best["shots"]}
 
 
-## THE VIDEOS THEIR HEAD IS LEARNED FROM: every ticked one whose moments are read (its Head frames made, not moot),
+## The videos their head is learned from: every ticked one whose moments are read (its Head frames made, not moot),
 ## in the order the actor holds them.
 func head_videos() -> Array:
 	var out: Array = []
@@ -1386,8 +1359,8 @@ func head_videos() -> Array:
 	return out
 
 
-## THE USABLE SHOTS of set [param sid], or with none of every steady set (a handheld one moves with
-## the camera, not with them): `[{vid, start, end, set}]`, of ticked videos only.
+## The usable shots of set [param sid], or with none of every steady set (a handheld one moves with the camera, not
+## with them): `[{vid, start, end, set}]`, of ticked videos only.
 static func shots_of(a: ActorFolder, sid := "") -> Array:
 	var ticked := a.ticked()
 	var out: Array = []
@@ -1403,9 +1376,8 @@ static func shots_of(a: ActorFolder, sid := "") -> Array:
 	return out
 
 
-## THE PHONES THEY SAID in [param shots], from their videos' caption words: each word's sounds
-## ([Phonemes]), its time shared among them by how long each kind of sound usually lasts.
-## `[{vid, p, t0, t1, class}]`.
+## The phones they said in [param shots], from their videos' caption words: each word's sounds ([Phonemes]), its time
+## shared among them by how long each kind of sound usually lasts. `[{vid, p, t0, t1, class}]`.
 static func phones_of(a: ActorFolder, shots: Array) -> Array:
 	var spans := {}
 	for s in shots:

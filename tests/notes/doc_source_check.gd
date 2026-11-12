@@ -2,19 +2,13 @@ extends SceneTree
 
 ## doc_source_check - the gate for [FrontMatter] and the YAML emitter it writes through.
 ##
-## WHY THIS FILE IS SHARP. Every other gate in this directory protects a picture or a sound;
-## this one protects THE AUTHOR'S MANUSCRIPT. Sync mode points ghost at a real file and the
-## autosave writes into it, so the failure mode is not "the reading sounds wrong", it is a
-## chapter with a paragraph missing and no way to tell which one. Nothing about that is
-## visible from inside ghost, and a document is usually only read again days later.
-##
-## So every claim here is two-sided, and the second side is not a formality: a check that
-## only shows the good case passing cannot distinguish a careful write from one that
-## rewrites the whole file and happens to produce something parseable. Each destructive
-## edit is CONSTRUCTED and handed to the verifier, which must refuse it.
+## This protects the author's manuscript: sync mode points ghost at a real file and the autosave writes into it, so
+## the failure is a chapter with a paragraph missing and no way to tell which. Every claim is two-sided: a check that
+## only shows the good case cannot tell a careful write from one that rewrites the whole file and happens to parse.
+## Each destructive edit is constructed and handed to the verifier, which must refuse it.
 ##
 ## Four groups:
-##   1. THE ROUND TRIP. Everything [MiniYaml.emit] writes, [MiniYaml.parse] reads back
+##   1. The round trip. Everything [MiniYaml.emit] writes, [MiniYaml.parse] reads back
 ##      equal - including the cases that are only equal by care: a float on a whole number
 ##      (which would come back an int without the forced decimal point), a string that
 ##      looks like a number or a boolean, an empty collection, a key with a colon in it.
@@ -81,9 +75,8 @@ func _round_trip() -> void:
 		]},
 		{"lineage": [1, 7, 12], "traits": {"grit": 0.0, "air": 1.0, "breath": 0.125},
 			"genome": {}, "reception": {"prox": 0.0, "freq": 400.0}},
-		# THE SCALARS THAT BITE. A bare `1.0` parses back as an int without the forced
-		# decimal; `"true"`, `"7"` and `"~"` come back as a bool, an int and a null
-		# without quotes; an empty string vanishes; `a: b` inside a value ends the scalar.
+		# The scalars that bite: a bare `1.0` parses back as an int without the forced decimal; `"true"`, `"7"` and `"~"`
+		# come back as a bool, an int and a null without quotes; an empty string vanishes; `a: b` ends the scalar.
 		{"whole": 1.0, "zero": 0.0, "neg": -2.5, "tiny": 1e-07, "int": 7,
 			"yes": true, "no": false, "nothing": null, "empty_s": "",
 			"looks_bool": "true", "looks_int": "7", "looks_null": "~",
@@ -153,8 +146,7 @@ func _split() -> void:
 	_ok(String(p.body) == "\n# Chapter One\n\nThe rain.\n",
 		"the body after frontmatter is wrong: %s" % p.body)
 
-	# A HORIZONTAL RULE IS NOT A FENCE. The loose "find a --- anywhere" rule eats the
-	# prose above one, which on a Markdown document is most of a section.
+	# A horizontal rule is not a fence: a loose "find a --- anywhere" rule eats the prose above one.
 	var rule := "Some prose.\n\n---\n\nMore prose.\n"
 	p = FrontMatter_.split(rule)
 	_ok(not p.has, "a horizontal rule mid-document was read as frontmatter")
@@ -187,10 +179,9 @@ func _split() -> void:
 # --- 3. the surgery -----------------------------------------------------------
 
 
-## The document every "nothing else moved" check is made against. Deliberately awkward:
-## a comment, a blank line between keys, a single-quoted value, a nested list and A BLOCK
-## SCALAR, which MiniYaml refuses outright - so any implementation that re-serializes the
-## frontmatter rather than editing its lines destroys this file.
+## The document every "nothing else moved" check is made against. Deliberately awkward: a comment, a blank line
+## between keys, a single-quoted value, a nested list and a block scalar, which MiniYaml refuses outright, so any
+## implementation that re-serializes the frontmatter rather than editing its lines destroys this file.
 const AWKWARD := """---
 # the author's own note, which must survive
 title: 'Chapter One'
@@ -244,13 +235,11 @@ func _surgery() -> void:
 	_ok(_count_lines(changed, "ghost:") == 1,
 		"there are %d `ghost:` keys after a replace" % _count_lines(changed, "ghost:"))
 
-	# THE BLANK LINE BETWEEN KEYS. A span that swallowed the blank before the next key
-	# would eat one line of the author's layout at every save, silently, forever.
+	# The blank line between keys: a span that swallowed it would eat a line of the author's layout at every save.
 	_ok(_count_lines(changed, "") == _count_lines(once, ""),
 		"a save changed how many blank lines the frontmatter has")
 
-	# A SECOND PANEL'S VOICE IS NOT THE FIRST'S BUSINESS. Both blocks live under the one
-	# `ghost:` key, so writing one must carry the other through.
+	# A second panel's voice is not the first's business: both blocks live under the one `ghost:` key.
 	var both := FrontMatter_.put_block(once, {"generative": {"turn": 3.0},
 		"synthesis": {"lineage": [1, 4]}})
 	var read := FrontMatter_.read_block(both)
@@ -258,7 +247,7 @@ func _surgery() -> void:
 	_ok((read.data as Dictionary).has("generative") and (read.data as Dictionary).has("synthesis"),
 		"a document lost one of its two voices")
 
-	# A DOCUMENT WITH NO FRONTMATTER gets one, and keeps every byte of what it had.
+	# A document with no frontmatter gets one, and keeps every byte of what it had.
 	var bare := "# Chapter One\n\nThe rain.\n"
 	var fresh := FrontMatter_.put_block(bare, block)
 	_ok(fresh.begins_with("---\n"), "a fresh frontmatter did not open the document")
@@ -266,16 +255,15 @@ func _surgery() -> void:
 	_ok(String(FrontMatter_.split(fresh).body).strip_edges() == bare.strip_edges(),
 		"a fresh frontmatter changed the body")
 
-	# READ IT BACK, which is the only check that the two halves agree.
+	# Read it back, which is the only check that the two halves agree.
 	var back := FrontMatter_.read_block(once)
 	_ok(back.ok, "a written block could not be read back: %s" % back.error)
 	_ok(_same((back.data as Dictionary).get("generative", {}), block["generative"]),
 		"a written block read back different: %s" % str(back.data))
 
-	# A KEY MINIYAML CANNOT PARSE IS NOT OUR PROBLEM. AWKWARD carries `summary: |`, which is
-	# ordinary frontmatter and outside MiniYaml's subset - and reading the whole head would
-	# mean a voice could never be restored from a perfectly normal Markdown document. The
-	# control is the same document with the block scalar taken out: both must read.
+	# A key MiniYaml cannot parse is not our problem: AWKWARD carries `summary: |`, outside MiniYaml's subset, and
+	# reading the whole head would mean a voice could never be restored from ordinary Markdown. The control is the same
+	# document with the block scalar taken out: both must read.
 	_ok(back.ok, "a block scalar elsewhere in the frontmatter blocked the voice")
 	_ok(not String(FrontMatter_.split(AWKWARD).body).is_empty(),
 		"an unparseable frontmatter cost the document its body")
@@ -288,9 +276,8 @@ func _surgery() -> void:
 	_refusals(once)
 
 
-## THE SECOND SIDE. Each of these is a destructive edit the verifier MUST refuse - and the
-## control is `once` itself, which it must accept (asserted above). A gate with only the
-## good cases would pass on a `_verify` that returns "" unconditionally.
+## The second side: each of these is a destructive edit the verifier must refuse. The control is `once` itself, which
+## it must accept (asserted above).
 func _refusals(good: String) -> void:
 	var lines := good.split("\n")
 	var cases := {}
@@ -363,8 +350,7 @@ func _disk() -> void:
 	_ok(after.contains("turn: 1.5"), "the block did not reach the file")
 	_ok(after.contains("summary: |"), "writing to a real file destroyed a block scalar")
 
-	# NO TEMP FILE LEFT BEHIND. An interrupted write is the reason it exists; a successful
-	# one that leaves it is litter in the author's own directory.
+	# No temp file left behind: an interrupted write is the reason it exists.
 	_ok(not FileAccess.file_exists(path + FrontMatter_.TEMP_SUFFIX),
 		"the temporary file was left beside the document")
 
@@ -378,8 +364,7 @@ func _disk() -> void:
 	_ok(read.ok and _same(read.data, voice),
 		"a voice did not survive the disk: %s" % str(read.data))
 
-	# A MISSING FILE IS REFUSED, not created. Sync mode remembers a path across sessions
-	# and the document may have been moved since.
+	# A missing file is refused, not created (sync mode remembers a path across sessions).
 	err = FrontMatter_.write_block(DIR + "/gone.md", {"generative": {}})
 	_ok(not err.is_empty(), "writing to a missing file was allowed")
 	_ok(not FileAccess.file_exists(DIR + "/gone.md"),
@@ -397,8 +382,7 @@ func _body() -> void:
 	const NEW := "\n# Chapter One\n\nThe rain had stopped.\n"
 	var old_body := String(FrontMatter_.split(AWKWARD).body)
 
-	# THE HEAD IS UNTOUCHED: comments, blank lines, a block scalar, the fences - every byte
-	# ahead of the body - and the body is exactly the new one.
+	# The head is untouched: comments, blank lines, a block scalar, the fences - every byte ahead of the body.
 	var out := FrontMatter_.put_body(AWKWARD, NEW)
 	_ok(out.begins_with(AWKWARD.substr(0, AWKWARD.length() - old_body.length())),
 		"replacing the body changed the frontmatter ahead of it")
@@ -413,7 +397,7 @@ func _body() -> void:
 	_ok(not FrontMatter_._verify_body(AWKWARD, unfenced).is_empty(),
 		"a body write that rewrote a block scalar was allowed")
 
-	# CRLF AND A BOM SURVIVE. The editor holds LF; the file keeps its own line endings.
+	# Crlf and a bom survive. The editor holds LF; the file keeps its own line endings.
 	var crlf := "\ufeff---\r\ntitle: x\r\n---\r\nOld.\r\n"
 	var c2 := FrontMatter_.put_body(crlf, "New line one.\nTwo.\n")
 	_ok(c2 == "\ufeff---\r\ntitle: x\r\n---\r\nNew line one.\r\nTwo.\r\n",
@@ -434,8 +418,8 @@ func _body() -> void:
 	_ok(_read(path) == out, "the file is not the document put_body describes")
 	_ok(not FileAccess.file_exists(path + FrontMatter_.TEMP_SUFFIX),
 		"the body write left its temporary file behind")
-	# THE FILE MOVED: someone edited it elsewhere since ghost read `old_body`. Refused, marked
-	# as a conflict, and the file left exactly as the other editor wrote it.
+	# The file moved: edited elsewhere since ghost read `old_body`. Refused, marked as a conflict, and the file left as
+	# the other editor wrote it.
 	var theirs := out.replace("had stopped", "had never stopped")
 	_write(path, theirs)
 	err = FrontMatter_.write_body(path, "Mine.\n", NEW)

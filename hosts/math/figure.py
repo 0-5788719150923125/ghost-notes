@@ -3,28 +3,24 @@
     compile_figure(svg_text, data=None) -> {"paths": [...], "labels": [...]}     (raises FigureError)
     assemble(fig, label_records) -> one typeset record, as typeset.py answers for a formula
 
-THE TEACHER DRAWS IN SVG, a language it writes fluently, and the desk's pen draws it by hand: every
-line, curve, circle and polygon becomes a stroke (curves and arcs flattened along their length), in
-the order the SVG lists them; every `<text>` becomes a label TeX sets (math in `$...$`), which the
-hand writes as it writes a formula. svgelements (MIT) reads the SVG - paths, arcs, transforms and
-styles - so nothing here re-implements the standard.
+The teacher draws in SVG and the desk's pen draws it by hand: every line, curve, circle and polygon becomes a
+stroke (curves and arcs flattened along their length), in the order the SVG lists them; every `<text>` becomes a
+label TeX sets (math in `$...$`), which the hand writes as it writes a formula. svgelements (MIT) reads the SVG -
+paths, arcs, transforms and styles.
 
-UNITS. The pad's column is COLUMN units wide: a figure whose viewBox is COLUMN wide spans it, one half
-as wide takes half the column. Nothing is taller than MAX_H points - a tall figure is shrunk to fit.
+Units: the pad's column is COLUMN units wide; a figure whose viewBox is COLUMN wide spans it, one half as wide
+takes half the column. Nothing is taller than MAX_H points - a tall figure is shrunk to fit.
 
-A HAND DOES NOT FILL. A shape filled small (a dot, a bead) is drawn as a dot; a bigger one is hatched
-- the way a person shades a region on paper. Only a fill the SVG asks for: SVG's own default fill is
-black, and an outline drawn without `fill="none"` is still an outline here.
+A hand does not fill: a shape filled small (a dot, a bead) is drawn as a dot; a bigger one is hatched, the way a
+person shades a region on paper. Only a fill the SVG asks for: SVG's own default fill is black, and an outline
+drawn without `fill="none"` is still an outline here.
 
-WHAT THE SVG MAY ADD, beyond the standard (each one a thing a math teacher draws, which plain SVG says
-badly or not at all):
+What the SVG may add, beyond the standard:
 
     arrow="end" | "start" | "both"   on a line, polyline or path: an arrowhead drawn by hand
                                      (marker-end and marker-start are read the same way)
     <dot x="" y=""/>                 a dot, the size a pen makes one; with r="" a solid dot that big, the
-                                     pen going round and round it until it is filled with ink (a letter's
-                                     "solid round dot ... about the size of a fingernail" - hatched, as a
-                                     filled circle is, it read as a circle struck through)
+                                     pen going round and round it until it is filled with ink
     <angle x="" y="" r="" from="" to=""/>
                                      an angle marked at (x, y): an arc of radius r from one direction
                                      to another, in degrees counterclockwise from pointing right as
@@ -48,14 +44,14 @@ badly or not at all):
                                      <bars data="" width=""/> a bar standing on the x axis at each x,
                                      as tall as its y (BARS_MOST at most).
 
-A PART THE PEN CAN POINT AT: an `id` on any element (or on a group, for all of it - inside <axes>
-too) names it, and the record's `anchors` is {id: [x0, y0, x1, y1]}, the box of everything drawn
-under that name - the desk points the pen there when the lesson says so (DeskScript's `point`).
+A part the pen can point at: an `id` on any element (or on a group, for all of it - inside <axes> too) names
+it, and the record's `anchors` is {id: [x0, y0, x1, y1]}, the box of everything drawn under that name - the desk
+points the pen there when the lesson says so (DeskScript's `point`).
 
-THE WORK SHOWN IS THE WORK DONE (next/proof.md): a plot is computed here, from its expression, never
-drawn from points an agent guessed. The expression is arithmetic only (+ - * / ^, parentheses, x, pi,
-e and the usual functions), read by a parser that allows nothing else. Computed numbers come in only as
-a series a run kept, by name - a name no run kept is refused.
+The work shown is the work done (next/proof.md): a plot is computed here, from its expression, never drawn from
+points an agent guessed. The expression is arithmetic only (+ - * / ^, parentheses, x, pi, e and the usual
+functions), read by a parser that allows nothing else. Computed numbers come in only as a series a run kept, by
+name - a name no run kept is refused.
 
 What comes back is in POINTS, y down, from the figure's top left; [assemble] moves it to a record's
 convention (y down from a baseline at the figure's foot) once TeX has set the labels.
@@ -348,8 +344,8 @@ def _axes(el, data=None):
     ax_y = 0.0 if y0 <= 0.0 <= y1 else y0          # where the x axis crosses
     ax_x = 0.0 if x0 <= 0.0 <= x1 else x0          # where the y axis crosses
     tick = 0.025 * min(bw, bh) + 2.0
-    # THE GRID, drawn first, under everything: faint lines across the box at every tick (`grid` paths,
-    # which the hand draws fine and light - dashed, a grid was hundreds of strokes)
+    # The grid, drawn first, under everything: faint lines across the box at every tick (`grid` paths, which
+    # the hand draws fine, light and dashed)
     if (el.get("grid") or "").strip().lower() in ("true", "1", "yes", "both", "x", "y"):
         which = (el.get("grid") or "").strip().lower()
         if which != "y" and tx > 0:

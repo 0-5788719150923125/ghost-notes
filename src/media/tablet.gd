@@ -3,25 +3,21 @@ class_name TabletMedium
 
 ## TabletMedium - the reading as somebody browsing on a tablet lying on a desk.
 ##
-## The chapter is a [TabletScript]: web pages written as markdown, and a few marks for what the
-## hand does between them (open a url, search, a new tab, turn to landscape, skip the rest of a
-## paragraph). The voice reads what is on the page; the hand acts in the rests the voice leaves
-## for it (`<!-- action-hold -->`, sized by the same [method TabletScript.phases] this medium
-## schedules from), so nothing has to be timed by the author.
+## The chapter is a [TabletScript]: web pages written as markdown, and marks for what the hand does
+## between them (open a url, search, a new tab, turn to landscape, skip the rest of a paragraph). The
+## voice reads what is on the page; the hand acts in the rests the voice leaves for it (`<!-- action-hold
+## -->`, sized by the same [method TabletScript.phases] this medium schedules from).
 ##
-## EVERYTHING ON THE SCREEN IS A FUNCTION OF SHOW TIME, like the book's leaf: actions are
-## placed in the gaps between the spoken words that bracket them ([method _build_schedule]),
-## and the screen is REPLAYED from them every frame ([method _state_at]), scroll included
-## ([method _build_flings]) - so an export draws exactly what the live reading drew, and a
-## reading that restarts lands on the right page without having to have watched the last one.
+## Everything on the screen is a function of show time: actions are placed in the gaps between the
+## spoken words that bracket them ([method _build_schedule]) and the screen is replayed from them every
+## frame ([method _state_at]), scroll included ([method _build_flings]), so an export draws what the live
+## reading drew and a reading that restarts lands on the right page.
 ##
-## THE TABLET NEVER MOVES; THE CAMERA DOES. Turning to landscape swings the camera a quarter
-## turn round the slab, and the screen's content counter-rotates against the same curve, so
-## it stays upright in the picture while the device turns beneath it - shrinking to fit as an
-## iPad's does, and re-laid out for the new shape at the half-way point, where the old and new
-## pictures are the same size.
+## The tablet never moves; the camera does. Turning to landscape swings the camera a quarter turn round
+## the slab, and the screen's content counter-rotates against the same curve so it stays upright while
+## the device turns beneath it, shrinking to fit and re-laid out for the new shape at the half-way point.
 ##
-## Reuses the book's desk, lamp and springs ([BookMedium]); nothing about pages or leaves.
+## Reuses the book's desk, lamp and springs ([BookMedium]).
 
 ## Physical screen, in texture pixels (portrait, 3:4) and in world units.
 const SW := 1200.0
@@ -36,18 +32,14 @@ const STATUS := 40.0
 const TABS := 62.0
 const BAR := 86.0
 const TOP := STATUS + TABS + BAR
-## How a group of actions sits in the gap the voice left for it: a beat after the last word,
-## and a beat before the next.
+## How a group of actions sits in the gap the voice left for it: a beat after the last word and a beat
+## before the next.
 const LEAD := 0.35
 const TAIL := 0.3
-## The earliest the tablet starts to wake, in show seconds. THE INTRO IS A WAIT: the tablet lies
-## dark on the desk through it, and the hand's opening run starts when it ends - "I would
-## expect it to delay all of the startup motions: screen-on and browser-click". The first cut
-## ran the wake under the intro, which a run longer than the intro swallowed whole, so the
-## setting did nothing anyone could see.
+## The earliest the tablet starts to wake, in show seconds. The intro is a wait: the tablet lies dark
+## through it and the hand's opening run starts when it ends.
 const WAKE_AT := 0.4
-## A tap: the finger coming down, then the press and its ripple; and how long a pressed link
-## stays shaded.
+## A tap: the finger coming down, then the press and its ripple; and how long a pressed link stays shaded.
 const TOUCH_IN := 0.22
 const TOUCH_OUT := 0.6
 const PRESS_HOLD := 0.7
@@ -70,37 +62,28 @@ const LINE_TAU := 3.0
 const ARC_IN := 0.15
 const ARC_OUT := 0.15
 const ARC_WORDS := 40.0
-## THE WIDE VIEW OUTLASTS AN ARRIVAL. The camera is wide while the hand works, so every new
-## page comes up wide; closing in at once undid that the moment it was made - "we pull the
-## camera all the way out, click the link, and immediately begin zooming in again". A page
-## that has just come up keeps the wide view for ARRIVE_WIDE seconds, then the arc eases in
-## over ARRIVE_EASE.
+## The wide view outlasts an arrival: the camera is wide while the hand works, so a page that has just
+## come up keeps the wide view for ARRIVE_WIDE seconds, then the arc eases in over ARRIVE_EASE.
 const ARRIVE_WIDE := 14.0
 const ARRIVE_EASE := 5.0
-## THE READING BAND, as shares of the page's viewport: the line being read is kept between
-## these, and when it passes the foot a drag brings it to the head - so a drag spans the band.
-## The camera looks at the band's middle and NEVER follows the line: at its closest, at every
-## Camera setting, it sees the whole band (gated in tablet_check), so the page moves and the
-## camera holds. A camera that leaned toward the line swung back up after every drag, when the
-## line jumped from the foot to the head - "the zoomed-in camera has to pan much higher to
-## compensate".
+## The reading band, as shares of the page's viewport: the line being read is kept between these, and
+## when it passes the foot a drag brings it to the head. The camera looks at the band's middle and never
+## follows the line: at its closest, at every Camera setting, it sees the whole band (gated in
+## tablet_check), so the page moves and the camera holds.
 const READ_BAND := Vector2(0.25, 0.7)
-## A READER SWIPES BEFORE THEY GET THERE: a paragraph is checked before its first word, in the
-## rest after the one before (PARA_LEAD seconds ahead, when the rest is that long), and one that
-## would run past the band's foot is swiped up to its head first - so the reading never runs on
-## toward the bottom edge ("a normal person will not read text right to the edge of the tablet").
-## A swipe that would move the page less than MIN_SWIPE of the viewport is not made at all: text
-## already in a good place stays where it is ("the first paragraph was ALREADY in a good place...
-## the swiping was pointless and weird, because it hides the header").
+## A reader swipes before they get there: a paragraph is checked before its first word, in the rest after
+## the one before (PARA_LEAD seconds ahead, when the rest is that long), and one that would run past the
+## band's foot is swiped up to its head first. A swipe that would move the page less than MIN_SWIPE of
+## the viewport is not made: text already in a good place stays where it is.
 const PARA_LEAD := 1.8
 const MIN_SWIPE := 0.15
-## A link this close to the top or bottom of the screen (share of its height) is scrolled into
-## view before it is tapped; anywhere else on screen it is tapped where it is.
+## A link this close to the top or bottom of the screen (share of its height) is scrolled into view
+## before it is tapped; anywhere else on screen it is tapped where it is.
 const LINK_MARGIN := 0.06
 ## How far into its arc the camera comes for a real page, which is looked at, not read.
 const REAL_LOOK := 0.5
-## Each page's set-up, degrees: an offset per page plus a slow wander. Small on purpose - a
-## tablet turned much off square reads as wrong.
+## Each page's set-up, degrees: an offset per page plus a slow wander. Small, since a tablet turned much
+## off square reads as wrong.
 const YAW_SPREAD := 2.2
 const YAW_WANDER := 0.9
 const ROLL_SPREAD := 0.8
@@ -192,22 +175,19 @@ var _spans := {}                 # "page|orient|block" -> Vector2(top, bottom), 
 var _block_words := {}           # "page|block" -> Array of the words in it
 var _start_si := -1              # a mid-way start: the spoken index the reading begins at
 var _intro := 0.0                # the intro this reading started with (see _reset_reading)
-## THE CHAPTER'S OWN CLOCK: when each spoken word falls, estimated as a voice reads it (the
-## intro, EST_WORD a word, each run of actions its own rest) - the same with or without a scrub.
-## The past of a mid-way start is replayed on it, and the status bar's time and battery are read
-## off it at the word being read, so they say where the reading IS, not how it got there: run on
-## the session's clock, both started over at every scrub ("the battery calculations make no
-## sense").
+## The chapter's own clock: when each spoken word falls, estimated as a voice reads it (the intro,
+## EST_WORD a word, each run of actions its own rest), the same with or without a scrub. The past of a
+## mid-way start is replayed on it, and the status bar's time and battery are read off it at the word
+## being read, so they say where the reading is, not how it got there.
 var _est_t := PackedFloat32Array()
 const EST_WORD := 0.4
-## The battery runs down a percent every this many seconds of chapter: 10% an hour, a tablet
-## left on reading.
+## The battery runs down a percent every this many seconds of chapter: 10% an hour.
 const BATTERY_PCT_S := 360.0
-## Where the words before a mid-way start are placed in time: long past, so all of it has
-## happened before the first frame.
+## Where the words before a mid-way start are placed in time: long past, so all of it has happened
+## before the first frame.
 const START_PAST := -100000.0
-## A spoken word whose time is not known yet. NOT "any negative time": the words before a mid-way
-## start are known, and long past.
+## A spoken word whose time is not known yet (not "any negative time": words before a mid-way start are
+## known, and long past).
 const NO_TIME := -1.0
              # page -> Vector2i(first, last) spoken index on it
 
@@ -245,7 +225,7 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = Color(0.55, 0.5, 0.45)
 	_env.ambient_light_energy = 0.3
-	# THE TONEMAPPER, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
+	# The tonemapper, as the Look has it ([Tonemaps]): Filmic unless a note picks another.
 	Tonemaps.dress(_env, 1.0)
 	_env.adjustment_enabled = true
 	_cam = Camera3D.new()
@@ -312,7 +292,7 @@ func _build_world() -> void:
 	screen.position = Vector3(0.0, SLAB_T * 0.5 + 0.0008, 0.0)
 	_root3.add_child(screen)
 
-	# THE SCREEN LIGHTS THE DESK a little, as a lit tablet in a dark room does
+	# The screen lights the desk a little, as a lit tablet in a dark room does
 	_glow = OmniLight3D.new()
 	_glow.light_color = Color(0.8, 0.88, 1.0)
 	_glow.omni_range = 1.6
@@ -365,8 +345,7 @@ func release() -> void:
 
 
 func _reset_reading() -> void:
-	# the intro this reading was started with: the voice's lead-in is fixed at Play, so a slider
-	# moved during the reading must not move the opening run away from it
+	# the intro this reading was started with: the voice's lead-in is fixed at Play
 	_intro = maxf(0.0, feed.intro_hold)
 	_map = []
 	_map_j = 0
@@ -379,11 +358,9 @@ func _reset_reading() -> void:
 	_built_n = -1
 	_sched = []
 	_flings = {}
-	# A READING STARTED MID-WAY (a scrub): everything before its first word was "read" long ago,
-	# so every tap, page, scroll and turn up to there has happened before the first frame and the
-	# screen opens where the reading is - the voice's words then match on from that point. The
-	# past is spaced as a voice would have read it, each run of actions given its own rest, so it
-	# replays as it was rather than squeezed together.
+	# A reading started mid-way (a scrub): everything before its first word was read long ago, so every
+	# tap, page, scroll and turn up to there has happened before the first frame. The past is spaced as a
+	# voice would have read it, each run of actions given its own rest.
 	var rests := {}
 	for a in _doc.get("actions", []):
 		var k := int((a as Dictionary)["after"])
@@ -422,8 +399,7 @@ func bind_captions(subs) -> bool:
 	_subs = subs
 	_source = ""
 	_doc = {}
-	# the old screen goes with the old document: a frame drawn before the next advance would
-	# otherwise draw a page of a chapter that is no longer loaded
+	# the old screen goes with the old document
 	_st = {}
 	_lays = {}
 	_spans = {}
@@ -440,8 +416,7 @@ func advance(_features, delta: float, bookend: float) -> void:
 	_env.adjustment_brightness = clampf(b * feed.live_fade, 0.0, 1.0)
 	_ensure_doc()
 	_now = _subs.now() if _subs != null and is_instance_valid(_subs) else t
-	# A SEEK (the scrubber, in a file session) is a cut, not a move: the camera lands at once
-	# rather than gliding across the desk from where the old moment had it
+	# A seek (the scrubber, in a file session) is a cut, not a move: the camera lands at once.
 	if absf(_now - _last_now) > 1.0:
 		_snap = true
 	_last_now = _now
@@ -521,8 +496,8 @@ func layout(p: int, o: int) -> TabletPage:
 	return _lays[k]
 
 
-## WHAT THIS MEDIUM SHOWS AS PICTURES ([method Medium.pictures_of], the note's Pictures card): the chapter's pictures,
-## then its REAL pages, captured from the web and never painted (a row with a `url`).
+## What this medium shows as pictures ([method Medium.pictures_of], the note's Pictures card): the
+## chapter's pictures, then its real pages, captured from the web and never painted (a row with a `url`).
 static func pictures_in(body: String) -> Array:
 	return Manuscript.images(body) + TabletScript.snapshots(body)
 
@@ -543,9 +518,8 @@ func _texture_for(key: String) -> Texture2D:
 
 # --- the words -------------------------------------------------------------------------
 
-## Map the spoken words onto the chapter's, as far as they have arrived - the book's
-## sequential match with a resync window, against SPOKEN words only, so a skipped run of any
-## length never pulls the pointer off.
+## Map the spoken words onto the chapter's, as far as they have arrived: the book's sequential match with
+## a resync window, against spoken words only.
 func _extend_map() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return
@@ -601,11 +575,9 @@ func _reading() -> Dictionary:
 
 # --- the schedule ----------------------------------------------------------------------
 
-## Place every action group in the gap the voice left for it. A group runs at its own pace and
-## FINISHES a beat before the next words, so any slack in the gap is spent before it starts -
-## the hand rests, then acts, then the voice goes on. A gap shorter than the group (a dial set
-## the rests short) squeezes it to fit rather than talking over it. A group whose words have
-## not arrived yet is left for later.
+## Place every action group in the gap the voice left for it. A group runs at its own pace and finishes
+## a beat before the next words, so slack in the gap is spent before it starts. A gap shorter than the
+## group squeezes it to fit. A group whose words have not arrived is left for later.
 func _build_schedule() -> void:
 	_sched = []
 	var actions: Array = _doc["actions"]
@@ -623,8 +595,8 @@ func _build_schedule() -> void:
 			i += 1
 		if n > 0 and known < 0 or n - 1 > known:
 			break
-		# before the first word: the end of the intro - or, for a mid-way start, the long past the
-		# opening run happened in too (left at 0, it held back everything placed before it)
+		# before the first word: the end of the intro, or for a mid-way start the long past the opening
+		# run happened in too
 		var prev := START_PAST if _start_si > 0 else maxf(_intro, WAKE_AT) - LEAD
 		for k in range(mini(n - 1, nS - 1), -1, -1):
 			if _st1[k] != NO_TIME:
@@ -666,7 +638,7 @@ func _rotations(t: float) -> Array:
 	return out
 
 
-## How far the CAMERA has turned toward landscape at [param t]: 0..1, eased.
+## How far the camera has turned toward landscape at [param t]: 0..1, eased.
 func _turn_at(t: float) -> float:
 	var v := 0.0
 	for r in _rotations(t):
@@ -729,11 +701,11 @@ static func _vh(o: int) -> float:
 	return logical(o).y - TOP
 
 
-## THE SCROLL, per page, as a list of moves in time order. Two kinds of move, as a hand makes
-## them: a FLICK (fast at once, then gliding to rest) to reach a link about to be tapped, and a
-## DRAG (eased in and out) for everything a reader does - keeping the line being read in view,
-## and a skim, which drags down to each picture it passes, rests on it, and drags on to the next
-## words read. A turn re-states the place as the same share of the new layout's length.
+## The scroll, per page, as a list of moves in time order. Two kinds of move, as a hand makes them: a
+## flick (fast at once, then gliding to rest) to reach a link about to be tapped, and a drag (eased in
+## and out) for everything else - keeping the line being read in view, and a skim, which drags down to
+## each picture it passes, rests on it, and drags on to the next words read. A turn re-states the place
+## as the same share of the new layout's length.
 func _build_flings() -> void:
 	_flings = {}
 	var pages: Array = _doc["pages"]
@@ -805,8 +777,8 @@ func _build_flings() -> void:
 						list.append({"t": t, "from": from, "to": cur, "dur": dur, "drag": true, "o": o})
 						busy_until = t + dur
 				"skim":
-					# stops: each picture centered where the camera looks, then the next words placed
-					# as a paragraph is - and a stop already as good as made is not made
+					# stops: each picture centered where the camera looks, then the next words placed as a
+					# paragraph is - and a stop already as good as made is not made
 					var stops: Array = []
 					var at := cur
 					var mid := (READ_BAND.x + READ_BAND.y) * 0.5
@@ -820,12 +792,11 @@ func _build_flings() -> void:
 						var w0: Dictionary = dw[int(x["wi"])]
 						stops.append(_place(_block_span(p, o, int(w0["block"])), at, vh, mx))
 					else:
-						# a glance before leaving: some way further down, wherever that is - a
-						# screen for an unread page, a third of one on a real page, whose top is
-						# the part worth looking at
+						# a glance before leaving: some way further down (a screen for an unread page, a
+						# third of one on a real page, whose top is the part worth looking at)
 						stops.append(clampf(_eval(list, t) + vh * float(x["depth"]), 0.0, mx))
-					# each picture: dragged to, then held still for a real look; the last stop (the
-					# next words) takes whatever of the window is left
+					# each picture: dragged to, then held still for a real look; the last stop (the next
+					# words) takes whatever of the window is left
 					var win := float(x["w"])
 					var tk := t
 					for k in stops.size():
@@ -839,8 +810,7 @@ func _build_flings() -> void:
 					busy_until = t + win
 				"link":
 					var from := _eval(list, t)
-					# A LINK ON SCREEN IS TAPPED WHERE IT IS. Scrolling it to the middle first was a
-					# move no reader makes; only a link off screen (or at its very edge) is fetched
+					# A link on screen is tapped where it is; only one off screen (or at its edge) is fetched
 					if r.position.y >= from + vh * LINK_MARGIN and r.end.y <= from + vh * (1.0 - LINK_MARGIN):
 						continue
 					var want := clampf(r.position.y - vh * 0.45, 0.0, mx)
@@ -858,10 +828,9 @@ func _build_flings() -> void:
 		_flings[p] = list
 
 
-## Where to scroll for a paragraph spanning [param span] (top, bottom on its page) about to be
-## read, from scroll [param at]: where it is, if it fits inside the reading band; else its top
-## to the band's head - unless that moves the page by less than MIN_SWIPE and the paragraph is
-## on screen, which is not worth a swipe (the line rule takes it later if it must).
+## Where to scroll for a paragraph spanning [param span] (top, bottom on its page) about to be read, from
+## scroll [param at]: where it is, if it fits inside the reading band; else its top to the band's head,
+## unless that moves the page by less than MIN_SWIPE and the paragraph is on screen.
 static func _place(span: Vector2, at: float, vh: float, mx: float) -> float:
 	if span.y <= span.x:
 		return at
@@ -874,8 +843,8 @@ static func _place(span: Vector2, at: float, vh: float, mx: float) -> float:
 	return to
 
 
-## The extent of block [param bi] of page [param p] in the layout for [param o], top to bottom,
-## from its words' rects - a heading together with what follows it, so the two come up together.
+## The extent of block [param bi] of page [param p] in the layout for [param o], top to bottom, from its
+## words' rects - a heading together with what follows it.
 func _block_span(p: int, o: int, bi: int) -> Vector2:
 	var key := "%d|%d|%d" % [p, o, bi]
 	if _spans.has(key):
@@ -929,9 +898,8 @@ static func _eval(list: Array, t: float) -> float:
 	return pos
 
 
-## Page [param p]'s scroll at [param t], in the layout for orientation [param o] - during a
-## dissolve both layouts are on screen, and the one not yet (or no longer) the page's own is
-## given the same share of its length.
+## Page [param p]'s scroll at [param t], in the layout for orientation [param o]: during a dissolve both
+## layouts are on screen, and the one not the page's own is given the same share of its length.
 func scroll_of(p: int, t: float, o := -1) -> float:
 	var list: Array = _flings.get(p, [])
 	var pos := _eval(list, t)
@@ -951,9 +919,9 @@ func scroll_of(p: int, t: float, o := -1) -> float:
 
 # --- the screen, replayed ----------------------------------------------------------------
 
-## The whole screen at [param t], from the start: which app, which tab, what the address bar
-## says, the keyboard, the finger. Cheap - a chapter has tens of actions - and it means the
-## screen never depends on what the last frame happened to show.
+## The whole screen at [param t], from the start: which app, which tab, what the address bar says, the
+## keyboard, the finger. Cheap (a chapter has tens of actions), and the screen never depends on what the
+## last frame showed.
 func _state_at(t: float) -> Dictionary:
 	var st := {"on": 0.0, "app": "home", "open": 0.0, "tabs": [], "tab": 0, "bar": "",
 		"editing": "", "typed": "", "kb": 0.0, "key": "", "key_k": 0.0, "touch": Vector2(-1, -1),
@@ -972,8 +940,8 @@ func _state_at(t: float) -> Dictionary:
 		var ph := _ph(a)
 		var u := (t - t0) / float(e["s"])
 		if u < float(ph["end"]):
-			# a skim is reading, not handling: the camera stays on the page for it - and so does
-			# the thinking before a new tab, which is the page still being looked at
+			# a skim is reading, not handling: the camera stays on the page, and so for the thinking
+			# before a new tab
 			if kind == "skim" or u < float(ph.get("think", -1.0)):
 				st["skim"] = true
 			else:
@@ -1084,11 +1052,9 @@ func _note_at(st: Dictionary, t: float) -> void:
 			st["note_u"] = u
 
 
-## A REDIRECT under way: from `hops0` to `show`, the hop the page is being sent through, in the
-## address bar, with the load bar starting over for each one. THE PAGE IS MOSTLY WHITE: a hop
-## shows anything at all only now and then (`TabletScript.hop_shows`), and only between going
-## white and being left - so a chain is whiteness with the addresses changing over it, broken
-## now and then by a glimpse of a page.
+## A redirect under way: from `hops0` to `show`, the hop the page is being sent through, in the address
+## bar, with the load bar starting over for each. The page is mostly white: a hop shows anything only now
+## and then (`TabletScript.hop_shows`), and only between going white and being left.
 func _hop(st: Dictionary, u: float, ph: Dictionary, a: Dictionary) -> void:
 	var hops: Array = a.get("hops", [])
 	if hops.is_empty() or u < float(ph["hops0"]) or u >= float(ph["show"]):
@@ -1157,10 +1123,9 @@ func _icon_rect(o: int, i: int, dock: bool) -> Rect2:
 	return Rect2(gx + col * (s + gx), 130.0 + row * (s + 90.0), s, s)
 
 
-## Logical canvas -> screen texture for a layout in orientation [param o]: portrait as it is,
-## landscape a quarter turn round, upright to a camera stood at the slab's side. ALWAYS FULL
-## SCREEN: the content never turns or shrinks on the glass - a first cut counter-rotated it
-## against the camera, and it read as the screen coming off the tablet and going back on.
+## Logical canvas -> screen texture for a layout in orientation [param o]: portrait as it is, landscape a
+## quarter turn round, upright to a camera stood at the slab's side. Always full screen: the content never
+## turns or shrinks on the glass.
 static func content_xf(o: int) -> Transform2D:
 	if o == 0:
 		return Transform2D.IDENTITY
@@ -1179,24 +1144,20 @@ func _sev() -> float:
 	return clampf(feed.camera, ShowFeed.CAMERA_MIN, ShowFeed.CAMERA_MAX)
 
 
-## THE JOURNAL'S CAMERA, NOT A SWITCH. Each page has an ARC: it opens wide on the whole slab,
-## closes in on the reading as the reading gets under way, and lets go - back to wide - over
-## the last of the page's words, before the hand does the next thing ([method _arc]). A page
-## with little on it to read barely closes in. Every channel is a slow critically damped
-## spring, so a change of target is a pressure that builds and eases, never a move; the first
-## cut toggled close/wide on every tap and every pause and read as "floaty... bouncy".
+## The journal's camera. Each page has an arc: it opens wide on the whole slab, closes in on the reading
+## as the reading gets under way, and lets go (back to wide) over the last of the page's words
+## ([method _arc]); a page with little to read barely closes in. Every channel is a slow critically
+## damped spring, so a change of target is a pressure that builds and eases, never a move.
 ##
-## THE SLAB IS NEVER SQUARE TO THE FRAME. Each page sets its own small twist (yaw and roll) and
-## tilt, reached through springs several times slower still, with a wander of minutes on top -
-## all far smaller than the book's, because a tablet turned much reads as wrong. Tilt is paid for
-## in DISTANCE: the slab foreshortens by the sine of the pitch, so the camera stands closer by
-## the same factor and the slab keeps its size in the frame.
+## The slab is never square to the frame: each page sets its own small twist (yaw and roll) and tilt,
+## through springs several times slower, with a wander of minutes on top - far smaller than the book's.
+## Tilt is paid for in distance: the slab foreshortens by the sine of the pitch, so the camera stands
+## closer by the same factor and the slab keeps its size in the frame.
 ##
-## FAST ONLY ON A CONTEXT SWITCH - a new page, a new tab, the app opening, a turn - where the
-## springs quicken for a few seconds and relax again ([member _quick]).
+## Fast only on a context switch (a new page, a new tab, the app opening, a turn), where the springs
+## quicken for a few seconds and relax again ([member _quick]).
 ##
-## The quarter turn itself is the schedule's eased curve, unsprung: it is a move the hand
-## makes, and has its own duration.
+## The quarter turn itself is the schedule's eased curve, unsprung: a move the hand makes.
 func _tick_camera(delta: float) -> void:
 	var t := _now
 	var sev := _sev()
@@ -1211,17 +1172,16 @@ func _tick_camera(delta: float) -> void:
 		_quick = 1.0
 	_quick = maxf(0.0, _quick - delta / QUICK_TIME)
 	var k := 0.0 if busy or page < 0 else _arc(page)
-	# a REAL page is not read, it is looked at: part way in, on its upper half, for as long as
-	# the hand lingers there
+	# a real page is not read, it is looked at: part way in, on its upper half, for as long as the hand lingers
 	var real := page >= 0 and bool((_doc["pages"][page] as Dictionary).get("real", false))
 	if real and not busy:
 		k = REAL_LOOK
 	if page >= 0:
 		var since := t - _arrived_at(page, t)
 		k *= smoothstep(ARRIVE_WIDE, ARRIVE_WIDE + ARRIVE_EASE, since)
-	# THE EYES STAY PUT, THE PAGE MOVES: the camera looks at the middle of the reading band
-	# (READ_BAND), never at the line - the drags keep the line in the band, under the camera.
-	# Low-passed, for the changes of layout (a turn, a real page) that move the band itself.
+	# The eyes stay put, the page moves: the camera looks at the middle of the reading band (READ_BAND),
+	# never at the line; the drags keep the line in the band. Low-passed, for the changes of layout (a
+	# turn, a real page) that move the band itself.
 	var L := logical(o)
 	var line := TOP + _vh(o) * (READ_BAND.x + READ_BAND.y) * 0.5
 	if real:
@@ -1288,10 +1248,9 @@ static func near_of(turn: float, sev: float) -> float:
 	return lerpf(wide_of(turn), lerpf(NEAR.x, NEAR.y, turn), clampf(0.55 + 0.3 * sev, 0.0, 1.0))
 
 
-## What the camera sees of the screen at its closest, in logical pixels above and below where
-## it looks: `Vector2(above, below)`. The screen lies oblique to the view, so the far side (the
-## top of the page) shows more than the near side; tilt does not change it, since tilt is paid
-## for in distance.
+## What the camera sees of the screen at its closest, in logical pixels above and below where it looks:
+## `Vector2(above, below)`. The screen lies oblique to the view, so the far side (the top of the page)
+## shows more; tilt does not change it, since tilt is paid for in distance.
 static func close_view(o: int, sev: float) -> Vector2:
 	var d := near_of(float(o), sev) * (1.0 - 0.012 * sev)
 	var h := deg_to_rad(VFOV * 0.5)
@@ -1300,9 +1259,8 @@ static func close_view(o: int, sev: float) -> Vector2:
 	return Vector2(d * sin(h) / sin(p - h), d * sin(h) / sin(p + h)) * px
 
 
-## How far into page [param page]'s arc the reading is: 0 wide, 1 close. A pure function of how
-## much of the page's text has been read, like the book's spread arc, scaled down for a page
-## with little to read - a results page is glanced at, not settled into.
+## How far into page [param page]'s arc the reading is: 0 wide, 1 close. A pure function of how much of
+## the page's text has been read, scaled down for a page with little to read.
 func _arc(page: int) -> float:
 	var span: Vector2i = _page_span.get(page, Vector2i(-1, -1))
 	if span.x < 0:
@@ -1332,8 +1290,8 @@ func _current_page() -> int:
 
 # --- drawing the screen ---------------------------------------------------------------------
 
-## Draw the screen. [param layer] 0 is the screen as it is; 1 is the INCOMING layout of a turn,
-## drawn on a second canvas faded in over the first - a dissolve, so the glass is always full.
+## Draw the screen. [param layer] 0 is the screen as it is; 1 is the incoming layout of a turn, drawn on a
+## second canvas faded in over the first, so the glass is always full.
 func draw_screen(ci: CanvasItem, layer := 0) -> void:
 	if _doc.is_empty():
 		ci.draw_rect(Rect2(0.0, 0.0, SW, SH), Color.BLACK)
@@ -1373,9 +1331,8 @@ func draw_screen(ci: CanvasItem, layer := 0) -> void:
 		ci.draw_rect(Rect2(0.0, 0.0, SW, SH), Color(0, 0, 0, 1.0 - on))
 
 
-## THE TAP, made to read on a white page: a dark press that grows as the finger comes down, and
-## on the press a ring of the system blue that spreads and fades - the first cut was a pale gray
-## dot that vanished against every page it was used on.
+## The tap, made to read on a white page: a dark press that grows as the finger comes down, and on the
+## press a ring of the system blue that spreads and fades.
 func _draw_touch(ci: CanvasItem, at: Vector2, dt: float) -> void:
 	var blue := Color(0.16, 0.42, 1.0)
 	if dt < 0.0:
@@ -1416,8 +1373,7 @@ func _chapter_t() -> float:
 	return _est_t[int(r["si"])] + EST_WORD * float(r["frac"])
 
 
-## A 0..1 the CHAPTER fixes, not the session: the session seed of a live reading is a hash of
-## its text, so every edit re-rolled the status bar's battery and time.
+## A 0..1 the chapter fixes, not the session: the session seed of a live reading is a hash of its text.
 func _stable01(salt: String) -> float:
 	var first := String((_doc["pages"][0] as Dictionary).get("url", "")) if not _doc.is_empty() \
 		and not (_doc["pages"] as Array).is_empty() else ""
@@ -1461,8 +1417,8 @@ func _app_name(i: int) -> String:
 	return made_up(r)
 
 
-## A MADE-UP NAME from [param r]: two or three syllables, each a consonant and a vowel, capitalized - an app's on the
-## tablet, a dog's on its tag ([method DeskLook.tag_name]).
+## A made-up name from [param r]: two or three syllables, each a consonant and a vowel, capitalized - an
+## app's on the tablet, a dog's on its tag ([method DeskLook.tag_name]).
 static func made_up(r: RandomNumberGenerator) -> String:
 	var cons := "bcdfghklmnprstvz"
 	var vow := "aeiou"
@@ -1662,9 +1618,8 @@ func _shown_url(p: int) -> String:
 	return TabletScript.host_of(String((_doc["pages"][p] as Dictionary)["url"]))
 
 
-## A NOTIFICATION BANNER, over everything: it slides down from above the screen, holds, and
-## slides back up - the app's icon, its name and "now", the sender, the subject, a line of the
-## message.
+## A notification banner, over everything: it slides down from above the screen, holds, and slides back up
+## - the app's icon, its name and "now", the sender, the subject, a line of the message.
 func _draw_note(ci: CanvasItem, o: int, n: Dictionary, u: float) -> void:
 	var L := logical(o)
 	var sl := TabletScript.NOTE_SLIDE
@@ -1706,8 +1661,8 @@ func _draw_note(ci: CanvasItem, o: int, n: Dictionary, u: float) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 22, gray)
 
 
-## A page passed through on a redirect: white - and, when it [param shows] anything, a spinner
-## and where it is being sent.
+## A page passed through on a redirect: white, and when it [param shows] anything, a spinner and where it
+## is being sent.
 func _draw_hop(ci: CanvasItem, o: int, url: String, shows: bool) -> void:
 	var L := logical(o)
 	ci.draw_rect(Rect2(0.0, TOP, L.x, L.y - TOP), Color.WHITE)
@@ -1739,10 +1694,9 @@ func _draw_start(ci: CanvasItem, o: int) -> void:
 			Color(0.5, 0.5, 0.55), hash([_seed, "fv", i]))
 
 
-## THE BOOK'S HIGHLIGHT, letter by letter: what [method TabletPage.draw] needs to color the
-## words of [param page] as the voice reaches them - the word being said and how far through
-## it, and when each word on the page already said was spoken, so its color can cool.
-## Words long cooled are left out; they are ink again.
+## The book's highlight, letter by letter: what [method TabletPage.draw] needs to color the words of
+## [param page] as the voice reaches them - the word being said and how far through it, and when each word
+## already said was spoken, so its color can cool. Words long cooled are left out (ink again).
 func _lit(page: int) -> Dictionary:
 	var r := _reading()
 	if r.is_empty():

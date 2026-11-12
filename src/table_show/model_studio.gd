@@ -1,8 +1,8 @@
 extends RefCounted
 class_name ModelStudio
 
-## ModelStudio - A MODEL SEEN BEFORE ANY TABLE STANDS ([AssemblyModel], [ModelTools]): its real parts on its plate, from four sides and from above by a plain, even light, so a designer can
-## judge the shape it has made, and what a viewer will see of it. Off screen: a [SubViewport] of its own, drawn for the picture and then gone. A process with no renderer takes no pictures.
+## ModelStudio - a model seen before any table stands ([AssemblyModel], [ModelTools]): its real parts on its plate, from four sides and from above by a plain, even light, so a designer can
+## judge the shape. Off screen: a [SubViewport] of its own, drawn for the picture and then gone. A process with no renderer takes no pictures.
 
 const SHEET := Vector2i(1280, 720)
 const FRAMES := 4
@@ -12,7 +12,7 @@ const FOV := 32.0
 const GROUND := Color(0.62, 0.6, 0.57)
 
 
-## THE MODEL [param m] AS FAR AS [param upto] parts (-1: all of it), from four sides: `{image}` or `{error}`.
+## The model [param m] as far as [param upto] parts (-1: all of it), from four sides: `{image}` or `{error}`.
 static func views(m: Dictionary, upto := -1) -> Dictionary:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null or DisplayServer.get_name() == "headless":
@@ -39,7 +39,7 @@ static func views(m: Dictionary, upto := -1) -> Dictionary:
 	for i in 4:
 		var dir := (Basis(Vector3.UP, TAU * float(i) / 4.0 + deg_to_rad(25.0)) * Vector3(0.0, 0.55, 0.83)).normalized()
 		cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), aim + dir * far)
-		# ...AS EVERY PICTURE AN AGENT TAKES IS TAKEN: a window that is minimized draws nothing by itself
+		# rendered through TablePreview._render like every agent picture: a minimized window draws nothing by itself
 		var img: Image = await TablePreview._render(vp, FRAMES)
 		if img == null or img.is_empty():
 			vp.queue_free()

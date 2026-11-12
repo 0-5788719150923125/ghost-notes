@@ -1,5 +1,5 @@
 shader_type spatial;
-// WORDS WRITTEN ON A SHEET (src/table/sheet_writing.gd): `words` holds in R how much ink a point has and in G when in the
+// Words written on a sheet (src/table/sheet_writing.gd): `words` holds in R how much ink a point has and in G when in the
 // writing it is put down (0 the first, 0.98 the last: line by line, left to right); `written` is how far the unseen pen
 // has got, 0 to 1. Lit as the sheet is, laid just over it.
 render_mode blend_mix, depth_draw_never, cull_disabled;

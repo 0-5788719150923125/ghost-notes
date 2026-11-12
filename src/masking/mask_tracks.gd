@@ -1,58 +1,40 @@
 extends RefCounted
 class_name MaskTracks
 
-## MaskTracks - THE CLIP'S TRACKS: the trim lanes under the marker strip, a second clip imported onto
-## the timeline, and every track kept in step with the master clock. A part of [MaskEditor]
-## (next/structure.md, step 25).
+## MaskTracks - the clip's tracks: the trim lanes under the marker strip, a second clip imported onto the timeline, and
+## every track kept in step with the master clock. A part of [MaskEditor] (next/structure.md).
 ##
-## The main clip's own lane and one per `session.tracks` entry, all on the editor's one
-## [TimelineView]; a track imported is a lane first and a transcode second ([method finish_import]);
-## a track's sound is a sidecar `.ogg` demuxed in the background ([method poll_audio]); split and
-## delete edit `session.tracks`; and each frame [method sync] decides which track is playing - a
-## continuation that owns the main view, or a picture-in-picture over it - and keeps its player on the
-## master's time.
+## The main clip's own lane and one per `session.tracks` entry, all on the editor's one [TimelineView]. An imported
+## track is a lane first and a transcode second ([method finish_import]); its sound is a sidecar `.ogg` demuxed in the
+## background ([method poll_audio]); each frame [method sync] decides which track is playing (a continuation that owns
+## the main view, or a picture-in-picture over it) and keeps its player on the master's time.
 ##
-## IT HOLDS ITS OWN STATE (each track's players and views, the background jobs, the import in
-## flight) and reads the rest through [member editor]: the session, the master player, the lanes'
-## column and the video's area, the undo stack, the status line.
+## It holds its own state (each track's players and views, the background jobs, the import in flight) and reads the
+## rest through [member editor]: the session, the master player, the lanes' column and the video's area, the undo
+## stack, the status line.
 
-## The [MaskEditor] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [MaskEditor] this is a part of: everything read through it is something this part is handed.
 var editor: MaskEditor
 
 var audio_jobs: Array = []  # background sidecar-.ogg extractions, {pid, index, ogg}
-## Runtime state per session.tracks[i] - NOT persisted (session.tracks holds only
-## the data; players/views are rebuilt from it every _ready_with_session). Each:
-## {player: VideoStreamPlayer, view: TextureRect, active: bool}. `active` tracks
-## whether the track is CURRENTLY the one playing (see sync) so entering/
-## leaving its window on the master timeline only seeks+starts/pauses it once,
-## not every frame.
+## Runtime state per session.tracks[i], not persisted (rebuilt from the data every _ready_with_session):
+## {player: VideoStreamPlayer, view: TextureRect, active: bool}. `active` is whether the track is currently the one
+## playing (see sync), so entering or leaving its window seeks and starts or pauses it once, not every frame.
 var runtime: Array = []
 var _import_dialog: FileDialog
 var import_pid := -1
 var _import_pending := {}   # {source, video, index} - the lane is added up front, this tracks its transcode
-# Per-lane reserved height. MUST cover a TrackLane's own minimum (26px, see
-# track_lane.gd) PLUS the _lanes_col VBox's inter-lane separation (2px), or the
-# lane stack overflows its allocated rect and - drawing above the marker strip it
-# abuts - spills over the timeline's top edge, clipping the marker flags and the
-# playhead timestamp tag (worsening with each imported track). 26 + 2 = 28.
+# Per-lane reserved height: a TrackLane's own minimum (26px, see track_lane.gd) plus the _lanes_col VBox's
+# inter-lane separation (2px); less and the stack overflows onto the marker strip's flags and playhead tag.
 const _LANE_H := 28.0
-# The volume knob every lane gets (see _volume_knob) is anchored top-left, offset_right
-# 34 - a lane's own label must start past that plus a small gap, or the two draw on top
-# of each other whenever the lane's own left edge sits near local x0 (the primary lane's
-# offset is always 0, so this bites it every time - see feedback/0009).
+# A lane's label starts past the volume knob (anchored top-left, offset_right 34) plus a small gap.
 const _LANE_LABEL_LEFT := 38.0
 
 # --- tracks: trim lanes, import, playback sync ------------------------------------------------
 
-## A secondary track's own composited view: a raw (unshaded - the masking
-## effects system keys off ONE frame's colors via the primary's shader chain,
-## not built for a second independent source yet) picture-in-picture box. It
-## takes over the SAME inset slot _mask_wrap occupies (bottom-right) rather
-## than getting its own corner - there is only ever one PiP box on screen at
-## a time; see sync, which hides _mask_wrap for as long as a track's
-## own box is showing (feedback/0056: a stray, always-empty second box used
-## to sit at a separate default corner on top of the real one).
+## A secondary track's own composited view: a raw (unshaded) picture-in-picture box, since the masking effects key
+## off one frame's colors through the primary's shader chain. It takes the same inset slot _mask_wrap occupies
+## (bottom-right): only one PiP box is on screen at a time, and sync hides _mask_wrap while a track's box shows.
 func build_view(i: int) -> void:
 	var track: Dictionary = editor.session.tracks[i]
 	var player := VideoStreamPlayer.new()
@@ -83,11 +65,9 @@ func build_view(i: int) -> void:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wrap.add_child(panel)
 
-	# The track's audio plays through a real AudioStreamPlayer (the SAME proven path as
-	# the main clip) - VideoStreamPlayer's own embedded audio does NOT play when the
-	# video is driven by manual seeking, which is why the track was silent. We demux the
-	# track .ogv's Vorbis into a sidecar .ogg once (fast stream-copy, cached), and mute
-	# the video player's audio so nothing double-plays.
+	# The track's audio plays through a real AudioStreamPlayer (the main clip's path): VideoStreamPlayer's embedded
+	# audio does not play when the video is driven by manual seeking. The track .ogv's Vorbis is demuxed into a cached
+	# sidecar .ogg, and the video player is muted so nothing double-plays.
 	player.volume = 0.0
 
 	while runtime.size() <= i:
@@ -98,16 +78,10 @@ func build_view(i: int) -> void:
 	_ensure_track_audio(i)   # attaches .audio now (cached sidecar) or when ffmpeg finishes
 
 
-## Give track `i` its AudioStreamPlayer, from a sidecar .ogg demuxed from the track's
-## .ogv. If the sidecar already exists we attach immediately; otherwise ffmpeg runs in
-## the BACKGROUND (was OS.execute - a synchronous main-thread stall that could hang the
-## whole editor while audio kept playing) and poll_audio attaches it on finish.
-## The sidecar lives beside the .ogv (same basename, .ogg). If it exists, attach it.
-## Otherwise extract it - preferring the ORIGINAL SOURCE, which always has the audio:
-## the old -an transcode stripped it from the .ogv, so demuxing the .ogv gave nothing.
-## Re-encode to Vorbis (the source is usually aac/mp3, not copyable to ogg). Background
-## + quiet; if even the source has no audio, poll_audio records no_audio so we
-## don't retry forever. Once a sidecar exists it's cached and this is a no-op.
+## Give track `i` its AudioStreamPlayer, from a sidecar .ogg beside the track's .ogv (same basename). If it exists,
+## attach it; otherwise extract it in the background (never a synchronous main-thread stall) and poll_audio attaches
+## it on finish. The original source is preferred (the .ogv may lack audio), re-encoded to Vorbis; if even the source
+## has no audio, poll_audio records no_audio so it is not retried.
 func _ensure_track_audio(i: int) -> void:
 	if i < 0 or i >= editor.session.tracks.size():
 		return
@@ -121,8 +95,7 @@ func _ensure_track_audio(i: int) -> void:
 		return
 	if bool(track.get("no_audio", false)):
 		return   # already learned there's no audio anywhere for this track
-	# Prefer the original import (has audio); fall back to the .ogv (only new imports
-	# embed audio) when the source is gone or was never recorded.
+	# Prefer the original import; fall back to the .ogv (only new imports embed audio) when the source is gone.
 	var src := String(track.get("source_path", ""))
 	var abs_src := ProjectSettings.globalize_path(src) if src.begins_with("res://") else src
 	if src.is_empty() or not FileAccess.file_exists(abs_src):
@@ -157,8 +130,7 @@ func poll_audio() -> void:
 			if FileAccess.file_exists(String(job.ogg)):
 				_attach_track_audio(idx, String(job.ogg))
 			elif idx >= 0 and idx < editor.session.tracks.size():
-				# ffmpeg produced nothing - this track has no audio stream. Record it so
-				# we don't re-run (and re-fail) the extraction on every future load.
+				# ffmpeg produced nothing: the track has no audio stream. Recorded so extraction is not retried.
 				editor.session.tracks[idx]["no_audio"] = true
 				editor._mark_dirty()
 			audio_jobs.remove_at(j)
@@ -172,18 +144,15 @@ func _track_setter(i: int, field: String) -> Callable:
 	return func(v): editor.session.tracks[i][field] = v
 
 
-## Rebuild every trim/track lane from session state (the primary clip's own trim
-## block, plus one per session.tracks entry) and recompute the shared
-## TimelineView's cached extent. Called after any STRUCTURAL change (import,
-## delete, undo/redo) - never mid-drag; see TrackLane.drag_ended and
-## TimelineView.refresh's own doc for why that distinction matters here.
+## Rebuild every trim/track lane from session state (the primary clip's trim block plus one per session.tracks entry)
+## and recompute the shared TimelineView's cached extent. Called after a structural change (import, delete,
+## undo/redo), never mid-drag; see TrackLane.drag_ended and TimelineView.refresh.
 func refresh_lanes() -> void:
 	if editor._lanes_col == null:
 		return
 	for c in editor._lanes_col.get_children():
-		# OUT OF THE COLUMN AT ONCE, not only freed at the frame's end: an old lane's getters name
-		# the track by the index it was built for, and after a delete that index ran past the end
-		# of the list for the rest of the frame (out-of-bounds errors in the log, one per lane)
+		# Out of the column at once, not only freed at frame's end: an old lane's getters name its track by the index it
+		# was built for, which can run past the list after a delete.
 		editor._lanes_col.remove_child(c)
 		c.queue_free()
 
@@ -213,10 +182,8 @@ func refresh_lanes() -> void:
 		func(): return float(editor.session.main_volume),
 		func(v): editor.session.main_volume = v,
 		Color(0.55, 0.75, 1.0), true))
-	# Split, same corner/behavior as a secondary track's - the main clip is otherwise
-	# just track -1 (see _snap_targets_for), so it gets the same cut at the playhead
-	# (see _split_main). No delete button here: unlike an imported track, the primary
-	# clip is never optional - there's always exactly one.
+	# Split, as on a secondary track: the main clip is track -1 (see _snap_targets_for) and is cut at the playhead
+	# (see _split_main). No delete: there is always exactly one primary clip.
 	var main_split := Button.new()
 	main_split.text = "✂"
 	main_split.custom_minimum_size = Vector2(20, 18)
@@ -254,11 +221,8 @@ func refresh_lanes() -> void:
 		lane.drag_ended.connect(_refresh_ruler)
 		lane.changed.connect(editor._mark_dirty)
 		editor._lanes_col.add_child(lane)
-		# The delete button OVERLAYS the lane's own top-right corner rather than
-		# sitting beside it in an HBoxContainer - an inline sibling would shrink
-		# the lane's own width below the primary lane's/_timeline's, and every
-		# lane's x_of() must span the exact same pixel width or their blocks
-		# stop lining up against a shared second.
+		# The delete button overlays the lane's top-right corner instead of sitting beside it: an inline sibling would
+		# shrink the lane's width, and every lane's x_of() must span the same pixel width to line up.
 		var del := Button.new()
 		del.text = "✕"
 		del.custom_minimum_size = Vector2(20, 18)
@@ -272,10 +236,7 @@ func refresh_lanes() -> void:
 		var idx := i
 		del.pressed.connect(func(): _delete_track(idx))
 		lane.add_child(del)
-		# Split, just left of delete - cuts this track in two at the playhead (see
-		# _split_track). Same overlay approach as delete, for the same reason: an
-		# inline sibling would shrink the lane's own width out from under the
-		# shared timeline's pixel mapping.
+		# Split, left of delete: cuts this track at the playhead (see _split_track); overlaid for the same reason.
 		var split := Button.new()
 		split.text = "✂"
 		split.custom_minimum_size = Vector2(20, 18)
@@ -288,63 +249,41 @@ func refresh_lanes() -> void:
 		split.tooltip_text = "Split this track at the playhead"
 		split.pressed.connect(func(): _split_track(idx))
 		lane.add_child(split)
-		# Pull-rope volume knob, on the LEFT of the lane so it never sits under the floating
-		# assistant chat button (bottom-right, where the old right-side controls landed).
-		# The track's own AudioStreamPlayer mixes with the main clip; sync reads
+		# Pull-rope volume knob on the left of the lane, clear of the assistant chat button (bottom-right). sync reads
 		# `volume` every frame, so pulling it changes the level live.
 		lane.add_child(_volume_knob(
 			func(): return float(editor.session.tracks[idx].get("volume", 1.0)),
 			func(v): editor.session.tracks[idx]["volume"] = v,
 			Color(0.6, 0.95, 0.7)))
 
-	# The lane stack sits directly above the marker strip, and the video's own
-	# letterboxed slot (see _build_editor_ui) has to shrink to match - otherwise
-	# an imported track (or several) grows this stack tall enough to push its
-	# lanes/delete-buttons over the bottom of the video instead of the reserved
-	# strip below it.
+	# The lane stack sits above the marker strip, and the video's letterboxed slot (see _build_editor_ui) shrinks to
+	# match so lanes never spill over the video.
 	reserve_lanes(1 + editor.session.tracks.size())
 	_refresh_ruler()
 
 
-## The ruler's length, taken again from the session. Called when a gesture ENDS, never during
-## one ([TimelineView]: a ruler that rescales under the handle being dragged).
+## The ruler's length, taken again from the session. Called when a gesture ends, never during one ([TimelineView]).
 func _refresh_ruler() -> void:
 	if editor.session != null:
 		editor._tview.refresh(editor.session.timeline_extent())
 
 
-## Collapse the lane stack (and expand the video letterbox into the space that
-## frees up) to fit exactly `count` rows. Called with the full track count
-## right after any structural change (above), and every frame with however
-## many lanes are actually on screen right now - once TrackLane starts hiding
-## itself for clips scrolled entirely out of the current zoom/pan window, the
-## fixed-for-the-whole-track-count reservation left a dead black band where
-## those rows used to be instead of actually collapsing - see feedback/0023.
+## Collapse the lane stack (and expand the video letterbox into the freed space) to fit exactly `count` rows. Called
+## with the full track count after a structural change and every frame with the number of lanes on screen, since
+## TrackLane hides itself for clips scrolled out of the zoom/pan window.
 func reserve_lanes(count: int) -> void:
 	var reserved := 90.0 + float(count) * _LANE_H + editor.bottom_lift()
 	editor._lanes_col.offset_top = -reserved
 	editor._lanes_col.offset_bottom = -90 - editor.bottom_lift()
 	if editor._video_area != null:
 		editor._video_area.offset_bottom = -reserved
-	# THE EXPORT BUTTON RIDES ABOVE THE BOTTOM CHROME. Its offsets are the ones
-	# every mode uses (-68/-28 from the bottom edge, matching assistant.gd's
-	# toggle row), and in every other mode the bottom of the frame is empty - but
-	# here it is the marker strip and the lane stack, so the button sat ON the
-	# timeline. `reserved` is exactly the height of that furniture, so anchoring to
-	# it keeps the button clear however many tracks are open.
-	# THE WHOLE BOTTOM-RIGHT ROW RIDES ABOVE THE BOTTOM CHROME - this editor's own
-	# export button AND the shared furniture (⤓ / 💬 / >_), all off ONE number, and
-	# all with the SAME arithmetic. They were laid out two different ways at first,
-	# which is why the row came out staggered rather than in a line: the shared
-	# buttons sit at -28..-68 from the bottom edge, so anything joining that row has
-	# to be -28 - inset .. -68 - inset and not "inset plus a margin".
-	#
-	# `reserved` is exactly what the marker strip and the trim/track lanes occupy, over
-	# the shared transport's rail ([method MaskEditor.bottom_lift]), and it is what the
-	# video area is inset by, so the row stays clear however many tracks are open.
+	# The editor's export button and the shared bottom-right row (⤓ / 💬 / >_) ride above the bottom chrome off one
+	# number and one piece of arithmetic: the shared buttons sit at -28..-68 from the bottom edge, so anything joining
+	# the row is -28 - inset .. -68 - inset. `reserved` is what the marker strip and the trim/track lanes occupy, over
+	# the shared transport's rail ([method MaskEditor.bottom_lift]); the video area is inset by it too.
 	var inset := reserved - 14.0
-	# IN THE ROW once there is one (Chrome.row_button, the slot the shared ⤓ leaves while it is
-	# suppressed); the row is lifted by the claim below. Placed by hand only without a Chrome.
+	# In the row once there is one (Chrome.row_button, the slot the shared ⤓ leaves while suppressed), lifted by the
+	# claim below; placed by hand only without a Chrome.
 	var ch_r := editor._export.chrome()
 	if ch_r != null and editor._export_btn != null and editor._export_btn.get_parent() == editor:
 		ch_r.row_button(&"mask_export", editor._export_btn)
@@ -352,16 +291,12 @@ func reserve_lanes(count: int) -> void:
 		editor._export_btn.offset_bottom = -28.0 - inset
 		editor._export_btn.offset_top = -68.0 - inset
 	if editor._status != null:
-		# ITS OWN LINE, ABOVE THE BUTTON ROW - see Exporter.set_bottom_inset for
-		# why. The face-track line and the export progress both live here and both
-		# outgrow the space beside four buttons.
+		# Its own line above the button row (see Exporter.set_bottom_inset): the face-track line and the export
+		# progress outgrow the space beside four buttons.
 		editor._status.offset_bottom = -74.0 - inset
 		editor._status.offset_top = -110.0 - inset
 		editor._status.offset_right = -28.0
-	# SET EVERY FRAME, not once at build time. The suppression used to be done in
-	# _build_export_ui, which runs before the chrome has joined its group in some
-	# boot orders - so it silently found nothing, the shared button stayed live on
-	# its higher CanvasLayer, and it went on covering this one and eating the click.
+	# Set every frame, not once at build time: the chrome may join its group after this editor builds.
 	var ch_i := editor._export.chrome()
 	if ch_i != null:
 		ch_i.claim_bottom(&"mask", inset)
@@ -386,20 +321,11 @@ func _delete_track(i: int) -> void:
 	editor._mark_dirty()
 
 
-## Cut track `i` into two independent lanes at the playhead, both still pointing
-## at the SAME source video/audio (video_path is shared - _ensure_track_audio's
-## sidecar .ogg is keyed off that path, so the new half finds the existing
-## extraction and attaches instantly, no re-demux). The left half keeps this
-## track's own identity and index (just trims its clip_out); the right half is
-## a full duplicate of the fields - same clip_in..clip_out span, same volume -
-## then re-pointed to start exactly at the split: its clip_in advances to the
-## split's LOCAL position in the source, and its offset (where that lands on
-## the MASTER timeline) is set to the playhead itself, so the two blocks sit
-## edge-to-edge with no gap or overlap. From there each is an ordinary lane -
-## TrackLane's own drag handles already shift/resize them independently.
-## Appended at the END of session.tracks (never inserted at i+1): background
-## sidecar-audio jobs (audio_jobs) and runtime are index-keyed,
-## and an insert would silently misalign any in-flight job for a LATER track.
+## Cut track `i` into two lanes at the playhead, both pointing at the same source video/audio (video_path is shared,
+## so the new half finds the existing sidecar .ogg). The left half keeps this track's identity and index (clip_out
+## trimmed); the right half duplicates the fields, with clip_in advanced to the split's local source position and
+## offset set to the playhead, so the blocks sit edge to edge. It is appended at the end of session.tracks, never
+## inserted at i+1: audio_jobs and runtime are index-keyed.
 func _split_track(i: int) -> void:
 	if i < 0 or i >= editor.session.tracks.size():
 		return
@@ -425,18 +351,10 @@ func _split_track(i: int) -> void:
 	editor._mark_dirty()
 
 
-## Cut the MAIN clip in two at the playhead, same as _split_track but for the
-## primary lane: the main clip has no `offset` of its own (master time and its
-## source time are the same clock - see TrackLane._bounds), so the playhead
-## position IS the split point directly, no offset arithmetic needed. The left
-## half stays the main clip (just trims clip_out, same as dragging its own out
-## handle inward). The right half can't stay "main" - there's only ever one -
-## so it's appended to session.tracks as an ordinary track pointing at the same
-## video_path/source_path, picking up at the split with its own offset. From
-## there it's indistinguishable from any imported track: draggable, deletable,
-## splittable again - the main clip is really just track -1 (see
-## _snap_targets_for), and after a split its tail end is a track in fact, not
-## just in spirit.
+## Cut the main clip in two at the playhead, as _split_track does for the primary lane. The main clip has no offset
+## (master time and source time are one clock, see TrackLane._bounds), so the playhead is the split point. The left
+## half stays the main clip (clip_out trimmed); the right half is appended to session.tracks as an ordinary track on
+## the same video_path/source_path with its own offset.
 func _split_main() -> void:
 	if editor._player == null:
 		return
@@ -467,25 +385,20 @@ func _split_main() -> void:
 
 
 func prompt_import() -> void:
-	# Already open (double-tap of T) - just bring it forward, don't stack a
-	# second dialog behind the first.
+	# Already open (double-tap of T): bring it forward.
 	if _import_dialog != null and is_instance_valid(_import_dialog):
 		_import_dialog.popup_centered()
 		return
-	# An import is already transcoding - don't let a second one clobber the
-	# first's pending state mid-flight (they share import_pid/_import_pending).
+	# An import is already transcoding: a second would clobber the pending state (they share import_pid/_import_pending).
 	if import_pid > 0:
 		editor._set_status("⏳  A track is still importing - one at a time")
 		return
-	# Immediate feedback that T registered, BEFORE the dialog - if the dialog
-	# itself somehow fails to show, at least the keypress isn't silent.
+	# Immediate feedback that T registered, before the dialog.
 	editor._set_status("📁  Choose a video to import as a second track…")
 	_import_dialog = FileDialog.new()
 	_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	# In-window dialog, NOT native. The native (portal) dialog silently shows
-	# nothing on a Linux box without xdg-desktop-portal - the exact "I press T
-	# and nothing happens" report. Godot's own dialog always renders in-window.
+	# In-window dialog, not native: the native (portal) dialog shows nothing without xdg-desktop-portal.
 	_import_dialog.use_native_dialog = false
 	_import_dialog.title = "Import a second track (picture-in-picture)"
 	_import_dialog.filters = PackedStringArray(["*.mp4, *.mov, *.mkv, *.webm, *.ogv ; Video"])
@@ -494,10 +407,8 @@ func prompt_import() -> void:
 		_import_dialog.current_dir = downloads
 	_import_dialog.size = Vector2i(820, 560)
 	_import_dialog.file_selected.connect(_start_track_import)
-	# Free the dialog whichever way it closes (pick or cancel), so the next T
-	# opens a fresh one and the is_instance_valid guard above reads false
-	# again. _start_track_import is connected first, so it runs before the
-	# close on a pick.
+	# Free the dialog however it closes, so the next T opens a fresh one. _start_track_import is connected first, so it
+	# runs before the close on a pick.
 	_import_dialog.file_selected.connect(func(_p): _close_import_dialog())
 	_import_dialog.canceled.connect(_close_import_dialog)
 	editor.add_child(_import_dialog)
@@ -510,25 +421,17 @@ func _close_import_dialog() -> void:
 	_import_dialog = null
 
 
-## Same one-time ffmpeg->theora transcode _prep() does for the primary clip,
-## minus the audio extraction step (v1 tracks are silent - see the class doc's
-## scope note) - PID-polled in _process(), never blocking, matching the
-## project's one established pattern for external subprocesses.
-## Add the track's LANE first, transcode second. The lane is pure metadata
-## (duration/offset/trim) - it doesn't need the transcoded video at all - so it
-## appears the instant you pick a file, independent of the background ffmpeg run.
-## The old order (transcode -> probe -> only THEN add the lane) meant any hiccup in
-## that async tail left the timeline looking like nothing happened. The PiP VIDEO
-## still needs the .ogv, so build_view is deferred to finish_import;
-## until then sync just skips this index (no "player" in its runtime slot).
+## The one-time ffmpeg->theora transcode _prep() does for the primary clip, PID-polled in _process(), never blocking.
+## The track's lane is added first, transcode second: the lane is pure metadata (duration/offset/trim) and appears the
+## instant a file is picked. The PiP video needs the .ogv, so build_view is deferred to finish_import; until then sync
+## skips this index (no "player" in its runtime slot).
 func _start_track_import(source: String) -> void:
 	var slug := MaskEditor._slugify(source)
 	var dir := editor._session_path.get_base_dir()
 	var idx := editor.session.tracks.size()
 	var video := dir + "/track_%s_%d.ogv" % [slug, idx]
-	# The SOURCE file has reliable duration metadata (unlike our libtheora output),
-	# so the lane gets its real length up front; the transcoded .ogv re-confirms it
-	# in finish_import. Floor keeps the lane a visible width if a probe fails.
+	# The source has reliable duration metadata (our libtheora output does not), so the lane gets its real length up
+	# front; finish_import re-confirms it from the .ogv. The floor keeps the lane visible if a probe fails.
 	var dur := editor._source_prep.probe_duration(source)
 	if dur <= 0.0:
 		dur = maxf(editor.session.duration, 1.0)
@@ -545,10 +448,9 @@ func _start_track_import(source: String) -> void:
 	editor._mark_dirty()
 	_import_pending = {"source": source, "video": video, "index": idx}
 	editor._set_status("⏳  Track added - transcoding its video in the background…")
-	# Keep the audio this time (was -an): the track's own VideoStreamPlayer plays the
-	# embedded Vorbis, mixed alongside the main clip, with per-track mute/volume (see
-	# sync). A source with no audio just yields a silent stream - no failure.
-	# .part + promote, same as the main prep - see _promote_part's doc.
+	# Audio is kept: the track's VideoStreamPlayer plays the embedded Vorbis alongside the main clip, with per-track
+	# volume (see sync); a source with no audio yields a silent stream. .part + promote, as in the main prep (see
+	# _promote_part).
 	var args := PackedStringArray([
 		"-y", "-loglevel", "error", "-i", source,
 		"-c:v", "libtheora", "-q:v", "6", "-g", "25",
@@ -560,9 +462,8 @@ func _start_track_import(source: String) -> void:
 		editor._set_status("⚠  Could not start ffmpeg for track import")
 
 
-## Roll back the placeholder lane _start_track_import added (ffmpeg failed to start,
-## or the transcode produced nothing usable). The pending track is always the last
-## one (imports are serialized - see prompt_import's guard).
+## Roll back the placeholder lane _start_track_import added (ffmpeg failed to start, or the transcode produced
+## nothing usable). The pending track is always the last one (imports are serialized, see prompt_import's guard).
 func _cancel_pending_track() -> void:
 	if _import_pending.has("index"):
 		var idx := int(_import_pending.index)
@@ -585,8 +486,7 @@ func finish_import() -> void:
 	var abs_video := ProjectSettings.globalize_path(String(_import_pending.video))
 	var dur := editor._source_prep.probe_duration(abs_video)
 	if dur <= 0.0 or idx < 0 or idx >= editor.session.tracks.size():
-		# The lane is already on screen; the transcode still failed, so take it back
-		# out rather than leave a lane whose PiP video would never load.
+		# The transcode failed: take the lane back out rather than leave one whose PiP video never loads.
 		_cancel_pending_track()
 		editor._set_status("⚠  Track import failed (transcode produced no usable video)")
 		return
@@ -604,16 +504,10 @@ func finish_import() -> void:
 		editor._status.visible = false
 
 
-## Each imported track is driven off the PRIMARY player's own clock (never its
-## own independent playback state) - the same discipline the audio sync already
-## follows (see _play's class doc), so live preview and an export relaunch trace
-## the identical picture. A track that isn't currently inside its
-## [offset, offset+span) window on the master timeline is paused and hidden;
-## entering it seeks the track's own player to the matching local position and
-## lets it run from there, only re-seeking again if it drifts (video seeks are
-## heavy - constant tiny re-seeks would stutter, same reasoning as the 0.15s
-## audio tolerance, just a bit wider since a video seek is coarser than an
-## audio one).
+## Each imported track is driven off the primary player's clock (as the audio sync is, see _play's class doc), so
+## live preview and an export relaunch trace the same picture. A track outside its [offset, offset+span) window on the
+## master timeline is paused and hidden; entering it seeks its player to the matching local position and lets it run,
+## re-seeking only on drift (video seeks are heavy and coarser than audio's 0.15s tolerance).
 func sync() -> void:
 	if editor._player == null:
 		return
@@ -633,12 +527,10 @@ func sync() -> void:
 		var tplayer: VideoStreamPlayer = rt.player
 		var wrap: Control = rt.wrap
 		var taudio: AudioStreamPlayer = rt.get("audio")   # may be null (silent track)
-		# This track owns the PiP only when V has selected it (pip_track == i+1). The
-		# box is still gated by inset_show so track modes fade like the main PiP does.
+		# This track owns the PiP only when V has selected it (pip_track == i+1); the box is still gated by inset_show.
 		var selected := editor._pip_track == i + 1
-		# The clip's fade envelope: audio AND video ramp together (coupled) over the
-		# fade_in seconds after the clip's start and the fade_out seconds before its end.
-		# g is 0 at a faded edge, 1 across the middle; see _clip_fade_gain / _track_level_db.
+		# The clip's fade envelope: audio and video ramp together over fade_in seconds after the clip's start and
+		# fade_out seconds before its end; g is 0 at a faded edge, 1 across the middle (see _clip_fade_gain / _track_level_db).
 		var g := editor._clip_fade_gain(master_t - offset, cout - cin,
 			float(track.get("fade_in", 0.0)), float(track.get("fade_out", 0.0)))
 		if inside:
@@ -668,29 +560,23 @@ func sync() -> void:
 			rt.active = false
 			if taudio != null and taudio.playing:
 				taudio.stop()        # ...and no sound; re-entry restarts it clean
-	# The main clip's PiP shows only when it is the selected source (pip_track == 0);
-	# a selected track replaces it. _apply_frame_state set _mask_wrap by inset_show
-	# alone, so correct it here now that we know which source V picked.
+	# The main clip's PiP shows only when it is the selected source (pip_track == 0); _apply_frame_state set
+	# _mask_wrap by inset_show alone, so correct it here.
 	if editor._pip_track != 0:
 		editor._mask_wrap.visible = false
 
 
-## A left-anchored pull-rope volume knob for a lane (see VolumeKnob): hold and drag
-## away to set a continuous 0..1 level with an asymptotic ceiling. `getter` reads the
-## stored volume, `setter` writes it - the same widget drives a track's `volume` and
-## the main clip's `main_volume`. Left side deliberately: the right corner sits under
-## the floating assistant chat button. `icon` shows the one-time speaker-glyph hint -
-## reserved for the main clip's own knob only (see VolumeKnob.show_icon).
+## A left-anchored pull-rope volume knob for a lane (see VolumeKnob): hold and drag to set a continuous 0..1 level
+## with an asymptotic ceiling. `getter` reads the stored volume and `setter` writes it (a track's `volume` or the main
+## clip's `main_volume`). Left side because the right corner sits under the assistant chat button. `icon` shows the
+## one-time speaker-glyph hint, for the main clip's knob only (see VolumeKnob.show_icon).
 func _volume_knob(getter: Callable, setter: Callable, accent: Color, icon: bool = false) -> VolumeKnob:
 	var k := VolumeKnob.new()
 	k.accent = accent
 	k.show_icon = icon
 	k.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	# offset_left starts past TrackLane._EDGE_W (8px): the primary lane's own trim/fade
-	# "in" handles sit at local x0 = 0 (its offset is always 0, and the default view
-	# starts at t=0 too), so a knob planted right at the corner silently ate every click
-	# meant for that edge - "drag the left edge" looked broken specifically on the main
-	# track, since only ITS x0 is pinned to 0 - see feedback/0017.
+	# offset_left clears TrackLane._EDGE_W (8px): the primary lane's trim/fade "in" handles sit at local x0 = 0, and a
+	# knob at the corner would eat clicks meant for that edge.
 	k.offset_left = 12
 	k.offset_top = 2
 	k.offset_right = 34

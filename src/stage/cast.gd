@@ -3,21 +3,18 @@ class_name Cast
 
 ## Cast - the actor registry for data-driven scenes (see scenes/stage.gd).
 ##
-## The registry sibling of [Primitives] (forces), [Layer] (visuals) and [Shots]
-## (framing), for *performers*: an **actor** wraps a live body ([EyeBody],
-## [PrismBody], ...) with the state a storyboard's verbs steer - slot position,
-## scale, hue, visibility, tempo - so choreography lives in the data (the track's
-## action spans) instead of bespoke scene code. Every numeric config value accepts a
-## `[lo, hi]` range, sampled once per instance ("cattle, not pets").
+## The registry sibling of [Primitives] (forces), [Layer] (visuals) and [Shots] (framing), for performers:
+## an actor wraps a live body ([EyeBody], [PrismBody], ...) with the state a storyboard's verbs steer (slot
+## position, scale, hue, visibility, tempo), so choreography lives in the data (the track's action spans).
+## Every numeric config value accepts a `[lo, hi]` range, sampled once per instance ("cattle, not pets").
 ##
-## An actor is a RefCounted, so a stage hands its LIVE actors to the next stage
-## through the morph payload and a body literally continues across a cut.
+## An actor is a RefCounted, so a stage hands its live actors to the next stage through the morph payload
+## and a body continues across a cut.
 ##
-## Verbs communicate with actors through `state` (a plain Dictionary): e.g.
-## `state.tremble` (0..1 riser vibration), `state.lock_to` (pose-lock source id),
-## `state.still` (spin damping), `state.pulse` ({amp, rate} scale breathing),
-## `state.focus` (a world point the eye looks at). Kind classes read what they
-## understand; unknown keys are inert - a misspelled verb can't crash a show.
+## Verbs communicate with actors through `state` (a plain Dictionary): `state.tremble` (0..1 riser
+## vibration), `state.lock_to` (pose-lock source id), `state.still` (spin damping), `state.pulse` ({amp,
+## rate} scale breathing), `state.focus` (a world point the eye looks at). Kind classes read what they
+## understand; unknown keys are inert, so a misspelled verb cannot crash a show.
 
 const REGISTRY := {
 	"eye": "eye",
@@ -25,9 +22,9 @@ const REGISTRY := {
 	"swarm": "swarm",
 }
 
-## WHAT EACH KIND CAN BE TOLD, AS DATA: its own settings in a storyboard's cast, beside the ones
-## every actor has ([constant Storyboard.ACTOR]) - the rows an editor builds for it ([SchemaForm]).
-## A `num` takes a number or a sampled `[lo, hi]` range; a default of null is "drawn from the seed".
+## What each kind can be told, as data: its own settings in a storyboard's cast, beside the ones every
+## actor has ([constant Storyboard.ACTOR]); the rows an editor builds for it ([SchemaForm]). A `num` takes a
+## number or a sampled `[lo, hi]` range; a default of null is "drawn from the seed".
 const PARAMS := {
 	"eye": {
 		"radius": {"label": "Size", "type": "num", "default": null,
@@ -139,8 +136,8 @@ class Actor extends RefCounted:
 	func draw_pos() -> Vector3:
 		return pos
 
-	## Generic parameter access for the set/ramp verbs. Unknown names land in
-	## `state` so kind classes can expose their own levers.
+## Generic parameter access for the set/ramp verbs. Unknown names land in `state` so kind classes can
+## expose their own levers.
 	func set_param(name: String, v: float) -> void:
 		match name:
 			"scale": scale = v
@@ -160,9 +157,9 @@ class Actor extends RefCounted:
 			_: return float(state.get(name, 0.0))
 
 
-## A human eye ([EyeBody]) on a slot. Gaze is driven by a look verb feeding
-## `state.focus` (shared focus = real vergence); when no verb has fed it for a
-## moment it falls back to the body's own center-biased self-saccades.
+## A human eye ([EyeBody]) on a slot. Gaze is driven by a look verb feeding `state.focus` (shared focus =
+## real vergence); when no verb has fed it for a moment it falls back to the body's own center-biased
+## self-saccades.
 class EyeActor extends Actor:
 	func setup(seed_value: int, cfg: Dictionary, rng: RandomNumberGenerator) -> void:
 		scale = float(cfg.get("radius", cfg.get("scale", rng.randf_range(0.24, 0.34))))
@@ -203,8 +200,7 @@ class EyeActor extends Actor:
 		eye.update(dt * time_scale, drive)
 
 	func draw_items(stage, lens: Lens3D, u: float) -> Array:
-		# The sprout VINE draws even while the eye itself is still unfruited (fade 0):
-		# the plant precedes the fruit.
+	# The sprout vine draws even while the eye is still unfruited (fade 0): the plant precedes the fruit.
 		var pre := []
 		var vine: Variant = state.get("vine")
 		if typeof(vine) == TYPE_DICTIONARY:
@@ -217,8 +213,7 @@ class EyeActor extends Actor:
 		var tr := float(state.get("tremble", 0.0))
 		var items := []
 		if tr > 0.001:
-			# High-frequency vibration (the riser): jitter the world slot, and gather
-			# a soft light around the eye as it builds. (From eye_prism, now a verb.)
+	# High-frequency vibration (the riser): jitter the world slot and gather a soft light around the eye.
 			var jx := (sin(_t * 61.0) + 0.6 * sin(_t * 97.0 + 1.3)) * 0.5
 			var jy := (sin(_t * 71.0 + 0.7) + 0.6 * sin(_t * 113.0)) * 0.5
 			p += Vector3(jx, jy, 0.0) * (0.05 * tr)
@@ -234,9 +229,9 @@ class EyeActor extends Actor:
 		var a := fade
 		items.append({"d": lens.depth(p), "call": func() -> void:
 			eye.draw(stage, lens, u, at, r, a)})
-		# The mitosis MEMBRANE: while the split verb stashes `state.mit`, a stretchy
-		# tissue bridge connects this eye to its budding twin - drawn just behind both
-		# eyeballs so the spheres cap its ends and only the strained middle shows.
+	# The mitosis membrane: while the split verb stashes `state.mit`, a stretchy tissue bridge connects
+	# this eye to its budding twin, drawn just behind both eyeballs so the spheres cap its ends and only
+	# the strained middle shows.
 		var mit: Variant = state.get("mit")
 		if typeof(mit) == TYPE_DICTIONARY:
 			var other = stage.actor(String((mit as Dictionary).get("to", "")))
@@ -244,8 +239,8 @@ class EyeActor extends Actor:
 				var m: Dictionary = mit
 				items.append({"d": lens.depth(p) + 0.08, "call": func() -> void:
 					_draw_membrane(stage, lens, u, m, other)})
-		# The crystallization CAGE: while the crystallize verb stashes `state.crys`,
-		# frost-like crystal edges creep across the ball - drawn just in front of it.
+	# The crystallization cage: while the crystallize verb stashes `state.crys`, frost-like crystal edges
+	# creep across the ball, drawn just in front of it.
 		var crys: Variant = state.get("crys")
 		if typeof(crys) == TYPE_DICTIONARY and fade > 0.003:
 			var cr: Dictionary = crys
@@ -253,9 +248,9 @@ class EyeActor extends Actor:
 				_draw_crystal_cage(stage, lens, u, cr)})
 		return items
 
-	# Frost taking the eyeball: seeded chord edges that each GROW outward from their
-	# midpoint in a staggered wave (creeping ice), brightening and pulling tight as
-	# the faceting sets in, with vertex glints where edges complete and a cold rim.
+	# Frost taking the eyeball: seeded chord edges that each grow outward from their midpoint in a staggered
+	# wave, brightening and pulling tight as the faceting sets in, with vertex glints where edges complete
+	# and a cold rim.
 	func _draw_crystal_cage(stage, lens: Lens3D, u: float, cr: Dictionary) -> void:
 		var pj := lens.project(draw_pos())
 		if pj.z <= lens.near:
@@ -305,11 +300,10 @@ class EyeActor extends Actor:
 				pts.append(c + Vector2(cos(th), sin(th)) * (r * 1.015))
 			stage.draw_polyline(pts, Color(ice.r, ice.g, ice.b, 0.28 * facet * fade), lw * 0.8, true)
 
-	# The stretchy connective tissue of the split: a metaball-style neck between the
-	# two projected eyeballs, drooping under its own weight, veined and wet-lit, that
-	# thins to slimy strands and - after the snap - leaves retracting nubs and a pair
-	# of dangling remnants. All geometry + layered fills; shapes derive from `m.seed`
-	# so the same show tears the same way.
+	# The stretchy connective tissue of the split: a metaball-style neck between the two projected eyeballs,
+	# drooping under its own weight, veined and wet-lit, thinning to slimy strands and, after the snap,
+	# leaving retracting nubs and a pair of dangling remnants. Shapes derive from `m.seed`, so the same show
+	# tears the same way.
 	func _draw_membrane(stage, lens: Lens3D, u: float, m: Dictionary, other) -> void:
 		var p1 := lens.project(draw_pos())
 		var p2 := lens.project(other.draw_pos())
@@ -383,8 +377,8 @@ class EyeActor extends Actor:
 				var sa := clampf((0.42 - waist) / 0.42, 0.0, 1.0) * 0.8 * alpha
 				stage.draw_polyline(strand, Color(0.80, 0.69, 0.69, sa), maxf(1.4, minf(r1, r2) * 0.045), true)
 
-	# After the snap: the neck is gone - each eye keeps a small retracting NUB where it
-	# tore, and a slack remnant strand swings from each side before wicking away.
+	# After the snap: the neck is gone; each eye keeps a small retracting nub where it tore, and a slack
+	# remnant strand swings from each side before wicking away.
 	func _draw_membrane_torn(stage, c1: Vector2, c2: Vector2, dir: Vector2, n: Vector2,
 			r1: float, r2: float, snap_t: float, seed: int, alpha: float) -> void:
 		var g := clampf(1.0 - snap_t / 0.75, 0.0, 1.0)
@@ -415,10 +409,9 @@ class EyeActor extends Actor:
 				rem.append(base + toward * (len * t * (0.4 + sway * t)) - n * (len * t * t * (1.1 - absf(sway))))
 			stage.draw_polyline(rem, Color(0.75, 0.63, 0.63, 0.55 * g * alpha), maxf(1.0, r * 0.045 * g), true)
 
-	# The sprout's plant-arm: a tapered ribbon along a cubic crook (base -> c1 -> c2 ->
-	# hanging tip), revealed to fraction `g` of its length - growth extends it, the
-	# post-detach retreat slides it back down. A dark fleshy-green stem with a brighter
-	# spine, a wet edge highlight, and a couple of seeded leaf nubs.
+	# The sprout's plant-arm: a tapered ribbon along a cubic crook (base -> c1 -> c2 -> hanging tip), revealed
+	# to fraction `g` of its length (growth extends it, the post-detach retreat slides it back). A dark
+	# fleshy-green stem with a brighter spine, a wet edge highlight and a couple of seeded leaf nubs.
 	func _draw_vine(stage, lens: Lens3D, u: float, v: Dictionary) -> void:
 		# Shed petals first - they keep falling even as the stem retreats away.
 		for pt in v.get("petals", []):
@@ -463,9 +456,9 @@ class EyeActor extends Actor:
 			if tan.length() < 0.001:
 				tan = Vector2(0, -1)
 			nrm.append(Vector2(-tan.y, tan.x).normalized())
-		# The stem body: thick line segments with joint-fill discs - NO polygons, so
-		# the tight crook (where ribbon quads twist into bowties) can never fail to
-		# triangulate. The width tapers stepwise along the 24 segments.
+	# The stem body: thick line segments with joint-fill discs, no polygons, so the tight crook (where
+	# ribbon quads twist into bowties) cannot fail to triangulate. The width tapers stepwise along the
+	# 24 segments.
 		var flesh := Color.from_hsv(hue, 0.50, 0.27)
 		for i in segs:
 			if mid[i].distance_to(mid[i + 1]) < 0.5:
@@ -521,9 +514,8 @@ class EyeActor extends Actor:
 			stage.draw_circle(c, rr, Color(0.7, 0.82, 1.0, clampf(0.05 * k * (1.0 - 0.85 * fr), 0.0, 0.3)))
 
 
-## A living wireframe prism ([PrismBody]) on a slot, drawn through the projected-slot
-## bridge (world slot -> screen center + perspective scale) so it lines up exactly
-## with 3D bodies sharing the lens.
+## A living wireframe prism ([PrismBody]) on a slot, drawn through the projected-slot bridge (world slot ->
+## screen center + perspective scale) so it lines up with 3D bodies sharing the lens.
 class PrismActor extends Actor:
 	var _spin := 1.0                  # eases toward 0 while state.still holds the body
 
@@ -559,14 +551,12 @@ class PrismActor extends Actor:
 			prism.draw(stage, center, px, h, a)}]
 
 
-## A formation of prisms streaming along an invisible track into the void - a GROUP
-## actor (many bodies, one performer), because the swarm's coordinated strand math is
-## one thing, not N independent choreographies. Ported from prism_swarm.gd. Verbs
-## steer it through state: `gather` (members ease in one at a time), `travel` (flown
-## distance - the fly verb), `split_k` (the track opens into a double helix; the red
-## strand fades in on the OTHER winding), `lane` (the bank-and-jump to the far
-## strand). config: count / count_red / spacing / head / size / helix / r_min /
-## r_max / hue (blue strand) / hue_red / bank ("left" / "right"; by seed otherwise) /
+## A formation of prisms streaming along an invisible track into the void: a group actor (many bodies, one
+## performer), as the swarm's coordinated strand math is one thing, not N choreographies. Ported from
+## prism_swarm.gd. Verbs steer it through state: `gather` (members ease in one at a time), `travel` (flown
+## distance, the fly verb), `split_k` (the track opens into a double helix; the red strand fades in on the
+## other winding), `lane` (the bank-and-jump to the far strand). config: count / count_red / spacing / head /
+## size / helix / r_min / r_max / hue (blue strand) / hue_red / bank ("left" / "right"; by seed otherwise) /
 ## lead (an actor id whose live prism becomes member 0 across a carry).
 class SwarmActor extends Actor:
 	var _blue: Array = []             # PrismBody per blue member (0 = the lead)
@@ -622,9 +612,8 @@ class SwarmActor extends Actor:
 			_blue[0] = old.body
 			_entry[0] = entry_frac
 
-	## Continue a carried prism as the RED strand's lead: its live body becomes red
-	## member 0, dormant until the helix opens - the ouroboros closing its loop (the
-	## red that drove off down the opposite highway comes back as the counter-strand).
+## Continue a carried prism as the red strand's lead: its live body becomes red member 0, dormant until
+## the helix opens (the red that drove off down the opposite highway comes back as the counter-strand).
 	func adopt_lead_red(old: Actor) -> void:
 		if old.body is PrismBody and not _red.is_empty():
 			_red[0] = old.body
@@ -696,11 +685,10 @@ class SwarmActor extends Actor:
 		return items
 
 
-## The deduplicated focus-tier gaze sampler (it was baked, differently tuned, into
-## eye.gd, two_eyes.gd AND eye_prism.gd). A data table of depth tiers - probability,
-## distance range, dwell range - plus a lateral excursion range and a rare one-eye
-## stray. Ranges are re-drawn per refixation from the OWNING verb's seeded rng, so a
-## look is deterministic per show yet never twice the same fixation.
+## The focus-tier gaze sampler shared by the eye scenes. A data table of depth tiers (probability, distance
+## range, dwell range) plus a lateral excursion range and a rare one-eye stray. Ranges are re-drawn per
+## refixation from the owning verb's seeded rng, so a look is deterministic per show yet never twice the
+## same fixation.
 class FocusSampler extends RefCounted:
 	const DEFAULT_TIERS := [
 		{"p": 0.32, "dist": [2.2, 4.0], "dwell": [3.0, 5.5]},     # near - linger, eyes verge

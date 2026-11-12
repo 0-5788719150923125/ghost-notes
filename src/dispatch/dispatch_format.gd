@@ -1,24 +1,20 @@
 extends VBoxContainer
 class_name DispatchFormat
 
-## DispatchFormat - the Dispatch desk's own rows on the Medium card: the note played at a desk late at night, seen from
-## the chair - a terminal that types, a dozen labeled phones that ring and are held to the ear, a radar, a receiver, a
-## printer, small screens, roots growing across the desk ([DispatchMedium], next/dispatch.md). The Dispatch desk was a
-## component of its own, with a card that pinned its medium, until it became one of the Medium card's formats
-## (2026-11-09, [MediumCard]).
+## DispatchFormat - the Dispatch desk's rows on the Medium card: the note played at a desk late at night, seen from the
+## chair - a typing terminal, labeled phones that ring, a radar, a receiver, a printer, small screens, roots across the
+## desk ([DispatchMedium], next/dispatch.md). A format of [MediumCard], not a component.
 ##
-## THE NOTE IS THE SCRIPT, word for word. Its `desk:` block (the author's, beside ghost's own) names the phones' labels in
-## order; everything else on the desk is built by code. The pictures the script's image marks describe - on the desk's
-## screens or over the whole frame - are the note's Pictures card's ([PicturesCard]: which marks they are is this
-## medium's to say, [method DispatchMedium.pictures_in]); a picture not painted leaves its screen as it was.
+## The note is the script, word for word. Its `desk:` block names the phones' labels in order; everything else is built
+## by code. The pictures the script's image marks describe are the note's Pictures card's ([PicturesCard]; which marks
+## they are is [method DispatchMedium.pictures_in]'s to say); an unpainted picture leaves its screen as it was.
 ##
-## ROWS ON THE READING'S MEDIUM CARD, as the Letter's are: built by [MediumCard] from the `dispatch` row's `card` while
-## the Dispatch desk is the format, they HAND the reading what is read ([DispatchWalk]: the script with the desk's rests
-## in it, every voice through a phone marked) and how it goes out ([DispatchFormat.Publish]: the document a render draws
-## the desk from). What they keep (`seed`) is part of the Medium's one block.
+## [MediumCard] builds the rows from the `dispatch` row's `card` while this is the format. They hand the reading what is
+## read ([DispatchWalk]) and how it goes out ([DispatchFormat.Publish]: the document a render draws the desk from).
+## `seed` is kept in the Medium's one block.
 ##
-## THE DESK'S NUMBER is the note's own file's unless the rows are given one ([method desk_seed]): it places the things
-## that can wander, grows the roots, and draws the radar's aircraft - never what the script does.
+## The desk's number is the note's own file's unless the rows give one ([method desk_seed]): it places the things that
+## can wander, grows the roots and draws the radar's aircraft - never what the script does.
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "dispatch"
@@ -48,8 +44,7 @@ static func for_note(ctx: Dictionary) -> DispatchFormat:
 	return card
 
 
-## The script read again once its words have rested this long (seconds): a parse of a long note is a few tens of
-## milliseconds, never to be paid a keystroke.
+## The script is read again once its words have rested this long (seconds); a long note parses in tens of milliseconds.
 const SETTLE := 1.0
 
 
@@ -84,7 +79,7 @@ func apply(cfg: Dictionary) -> void:
 
 # --- what it hands the reading -----------------------------------------------------------------------------------------
 
-## HOW IT GOES OUT: the document a render draws the desk from carries what these rows made.
+## How it goes out: the document a render draws the desk from carries what these rows made.
 class Publish extends ReadingPublish:
 	var card: DispatchFormat
 
@@ -96,7 +91,7 @@ class Publish extends ReadingPublish:
 		return d
 
 
-## THE DESK'S SEED: the rows', or the note's own file's (a draft with no file, the first).
+## The rows' seed, or the note's own file's (a draft with no file: the first).
 func desk_seed() -> int:
 	if int(_knobs["seed"]) > 0:
 		return int(_knobs["seed"])
@@ -105,7 +100,7 @@ func desk_seed() -> int:
 	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
 
 
-## THE DOCUMENT'S `dispatch`: the desk's seed and each picture's file - what [DispatchMedium] reads.
+## The document's `dispatch`: the desk's seed and each picture's file - what [DispatchMedium] reads.
 func document() -> Dictionary:
 	var pictures := {}
 	for im in DispatchMedium.pictures_in(_body()):
@@ -158,7 +153,7 @@ func _build() -> void:
 	_show_knobs()
 
 
-## WHAT THE SCRIPT ASKS OF THE DESK, in a line: its phones, its voices through them, and anything it gets wrong.
+## What the script asks of the desk: its phones, its voices through them, and anything it gets wrong.
 func _say_about(body: String) -> void:
 	if _about == null:
 		return

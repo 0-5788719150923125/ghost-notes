@@ -1,46 +1,35 @@
 extends Node
 
-## Gate for the ONE thing that can make a strata band disappear: the engine refusing to
-## triangulate it.
+## Gate that a strata band cannot disappear because the engine refuses to triangulate it.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/strata_band_check.gd 240
 ##
-## Needs a real renderer, and that is exactly why this shipped broken - a dummy driver never
-## triangulates anything, so `run_scene_smoke` rendered these bands hundreds of times and could
-## not have seen it. It surfaced in a live session instead:
-##   ERROR: Invalid polygon data, triangulation failed. at: _draw (strata.gd:122)
+## Needs a real renderer: a dummy driver never triangulates, so `run_scene_smoke` could not see it.
+## Godot ear-clips a closed polygon and its snip test needs a strictly positive cross product, so a
+## zero-area ear can never be clipped (`ERROR: Invalid polygon data, triangulation failed`). The `ridge`
+## profile has straight flanks (exactly collinear vertex runs) and the crest clamp lays flat plateaus
+## on top: about one band in twenty thousand, always `ridge`, and the band vanishes for that frame.
 ##
-## WHY IT HAPPENS. Godot ear-clips a closed polygon and its snip test needs a strictly positive
-## cross product, so a zero-area ear can never be clipped. The `ridge` profile is straight flanks
-## - exactly collinear runs of vertices - and the crest clamp lays flat plateaus on top of that.
-## Measured below: it is about one band in twenty thousand, always `ridge`, and when it lands the
-## band does not glitch, it VANISHES for that frame.
+## The scene fills a band (x-monotone) as an explicit strip of quads in one batched call ([TriBatch]),
+## never asking the triangulator. Two claims; the first has to search.
 ##
-## The fix is to stop asking: a band is x-monotone, so the scene fills it as an explicit strip of
-## quads in one batched call ([TriBatch]). Two claims, and the first one has to SEARCH.
+##   Found state: the condition is a knife edge (a state captured from arithmetic that differs in the
+##   fifth decimal triangulates fine), so the gate sweeps real scene states, asking [method
+##   Strata.band_polygon] until the engine refuses one, then renders that state through the scene and
+##   through the old closed-polygon path over the scene's own points, and requires the pictures to
+##   differ far more than in a state the engine handles. The comparison is relative: bands are
+##   translucent and fill down to the frame's foot, so a vanished band mostly reveals the band behind;
+##   "fraction of the frame painted" moves 0.4% while "fraction of pixels that changed" is the size of
+##   the missing band.
 ##
-##   FOUND STATE. A captured fixture is no good here: the condition is a knife edge, and a state
-##   captured from arithmetic that differs in the fifth decimal (a probe's own copy of the
-##   formula, say) triangulates perfectly well through the scene. So the gate sweeps real scene
-##   states, asking [method Strata.band_polygon] until the engine refuses one - then renders that
-##   state twice, through the scene and through the OLD closed-polygon path over the scene's own
-##   points, and requires the two pictures to DIFFER far more than they do in a state the engine
-##   handles. That comparison is relative for a reason: the bands are translucent and each fills
-##   down to the foot of the frame, so a vanished band mostly reveals the band behind it. Measured
-##   as "fraction of the frame painted at all" it moves by four tenths of a percent and proves
-##   nothing; measured as "fraction of pixels that changed" it is the size of the missing band.
-##
-##   EQUIVALENCE. The strip must be the same SHAPE as the polygon it replaced, or this is a
-##   redesign rather than a fill. Asserted as an area identity (the strip's trapezoids against
-##   the closed polygon's shoelace area) over every state swept, which is exact and needs no
-##   pixels - so the crest lines and the rasterizer stay out of it.
+##   Equivalence: the strip must be the same shape as the polygon it replaced, asserted as an area
+##   identity (the strip's trapezoids against the closed polygon's shoelace area) over every state
+##   swept; exact, with no pixels.
 
 const COLS := 72          # matches Strata.COLS; the gate reads the scene's points, not its math
-## Bands to sweep looking for a refusal. About one in twenty thousand is refused, so this is
-## sized to expect several: at 120k the chance of finding none is under a percent, and if it ever
-## does find none it says so and passes rather than crying wolf. The sweep is RIDGE-weighted
-## because every refusal ever measured here has been that profile - straight flanks are what
-## produce the exactly-collinear triples the ear clipper cannot snip.
+## Bands to sweep looking for a refusal. About one in twenty thousand is refused, so 120k expects several
+## (the chance of none is under a percent; if it finds none it says so and passes). Ridge-weighted, as
+## every refusal measured has been that profile.
 const SEARCH := 120000
 
 var _fails: Array = []
@@ -85,11 +74,11 @@ func _run() -> void:
 		_apply(st)
 		for i in int(st["planes"]):
 			tested += 1
-			# One call, not two: band_polygon IS band_points plus the two feet, so the strip's
-			# points are the polygon minus its last pair.
+	# One call: band_polygon is band_points plus the two feet, so the strip's points are the
+	# polygon minus its last pair.
 			var poly: PackedVector2Array = _sc.band_polygon(i)
 			var tops := poly.slice(0, poly.size() - 2)
-			# EQUIVALENCE, on every band swept: same shape, to float precision.
+	# equivalence, on every band swept: same shape, to float precision
 			worst_area = maxf(worst_area, _area_gap(tops, poly))
 			if Geometry2D.triangulate_polygon(poly).size() < 3:
 				refused += 1
@@ -114,9 +103,8 @@ func _run() -> void:
 			+ "t %.6f beat %.0f spec %.3f" % [float(found["t"]), float(found["beat"]),
 				float(found["spec"])])
 		var d_bad := await _two_paths(found)
-		# The same state at a phase the engine is happy with, as the baseline: whatever the two
-		# paths differ by when nothing is dropped (the crest lines the control does not draw, and
-		# rasterizer edges) is the floor this measurement sits on.
+	# The same state at a phase the engine handles, as the baseline: what the two paths differ by when
+	# nothing is dropped (the crest lines the control does not draw, rasterizer edges) is the floor.
 		var okst := found.duplicate()
 		var moved := false
 		for k in 400:
@@ -131,12 +119,9 @@ func _run() -> void:
 		if d_ok < 0.0:
 			_fails.append("baseline: could not find a nearby state the engine accepts")
 		else:
-			# The paths must agree pixel for pixel where the engine copes - the strip is a fill,
-			# not a redesign - and disagree materially where it does not, because there the old
-			# path is missing a whole band. The bands are translucent and each reaches the foot of
-			# the frame, so a dropped band changes the composite over its entire footprint even
-			# when nearer planes lie over it; that is why this reads clearly whichever plane the
-			# refusal lands on.
+	# The paths must agree pixel for pixel where the engine copes (the strip is a fill, not a
+	# redesign) and disagree materially where it does not, since the old path is missing a whole
+	# band whose translucent footprint reaches the foot of the frame.
 			if d_ok > 0.005:
 				_fails.append("equivalence: %.4f of pixels differ between the strip and the "
 					% d_ok + "polygon path in a state the engine handles - the strip is not "
@@ -168,9 +153,8 @@ func _apply(st: Dictionary) -> void:
 	_sc.queue_redraw()
 
 
-## |strip area - polygon area| / polygon area. The strip is one trapezoid per column down to the
-## foot; the polygon is the same outline closed. They are the same region, so this is 0 up to
-## float error - and if the strip ever stops being that region, this is what says so.
+## |strip area - polygon area| / polygon area. The strip is one trapezoid per column down to the foot and
+## the polygon is the same outline closed, so this is 0 up to float error.
 func _area_gap(tops: PackedVector2Array, poly: PackedVector2Array) -> float:
 	var foot: float = poly[poly.size() - 1].y
 	var strip := 0.0
@@ -186,8 +170,8 @@ func _area_gap(tops: PackedVector2Array, poly: PackedVector2Array) -> float:
 	return absf(absf(strip) - sh) / maxf(sh, 1.0)
 
 
-## The OLD fill path, faithfully: every band as one closed polygon through the engine's
-## triangulator, over the scene's OWN points, so the difference isolates the change.
+## The old fill path: every band as one closed polygon through the engine's triangulator, over the
+## scene's own points, so the difference isolates the change.
 class OldPath:
 	extends Node2D
 	var scene = null
@@ -207,10 +191,9 @@ class OldPath:
 					* float(scene.params["val"]), 0.0, 1.0), float(scene.params["alpha"]))
 			var poly: PackedVector2Array = scene.band_polygon(i)
 			draw_colored_polygon(poly, fill)
-			# The crest line too, so the only difference between this render and the scene's is
-			# the FILL PATH. The two color formulas are copied here and could drift from the
-			# scene's - which is precisely what the "accepted state" comparison below would
-			# report, since it requires the two pictures to agree pixel for pixel.
+	# The crest line too, so the only difference from the scene's render is the fill path. The two
+	# color formulas are copied here and could drift; the accepted-state comparison below would
+	# report it, as it requires the pictures to agree.
 			var lcol := Color.from_hsv(h, clampf(float(scene.params["sat"]) * 0.55, 0.0, 1.0),
 				clampf((0.7 + 0.3 * loud) * float(scene.params["val"]), 0.0, 1.0), 0.7)
 			draw_polyline(poly.slice(0, poly.size() - 2), lcol, 1.5 + 2.0 * depth, true)
@@ -235,8 +218,8 @@ func _grab() -> Image:
 	return _vp.get_texture().get_image()
 
 
-## Render `st` through the scene and through the old closed-polygon path, and return the fraction
-## of pixels that differ.
+## Render `st` through the scene and through the old closed-polygon path; returns the fraction of pixels
+## that differ.
 func _two_paths(st: Dictionary) -> float:
 	_apply(st)
 	var strip := await _grab()

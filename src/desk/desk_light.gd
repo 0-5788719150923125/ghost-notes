@@ -1,39 +1,33 @@
 extends RefCounted
 class_name DeskLight
 
-## DeskLight - the desk's light beyond its lamp (2026-10-27, the user: "some nice ambient lighting, maybe some
-## open-flame light sources, which cast nice shadows, etc. ... leverage the Table primitives from the other cards
-## mode"): THE ROOM'S, a [Lights] rig built from the light the desk's look writes ([method DeskLook.of]'s `light`:
-## the sky's fill, the sun or the moon through a window, lamps out of the shot - as the set dresser writes a
-## table's, and fitted as the table's is to the palest thing it falls on, here the page); and THE CANDLES burning
-## on the desk, each flame the card table's ([TableLight]: a quad on its wick, flickering in its own time, its wax
-## glowing with it) and each candle's one light throwing shadows soft by a filter, never by its size ([method
-## TableLight.candle_shadow]) - the pen's among them. Where the desk's mood says the candles light the page
-## ([constant DeskLook.MOODS] `leads`), the one that lights it most is the KEY; any other burns as a fill.
+## DeskLight - the desk's light beyond its lamp: the room's, a [Lights] rig built from the light the desk's look writes
+## ([method DeskLook.of]'s `light`: the sky's fill, the sun or moon through a window, lamps out of the shot), fitted to the
+## palest thing it falls on (the page); and the candles burning on the desk, each flame the card table's ([TableLight]: a
+## quad on its wick, flickering in its own time) with one light throwing shadows soft by a filter, never by its size
+## ([method TableLight.candle_shadow]). Where the desk's mood says the candles light the page ([constant DeskLook.MOODS]
+## `leads`), the one that lights it most is the key; any other burns as a fill.
 ##
-## NO PAGE BURNS OUT ([constant PAGE_HEAT]): a candle is held to what the paper can take where its light falls
-## hardest, the table's rule for its cloth ([constant TableMedium.HEAT]) - a key beside the pad lights it as the lamp
-## does, never whiter.
+## A candle is held to what the paper can take where its light falls hardest ([constant PAGE_HEAT], as the table's rule
+## for its cloth, [constant TableMedium.HEAT]), so no page burns out.
 ##
-## A FLAME SEEN FROM ABOVE: the desk's camera looks nearly straight down, where the table's flame - a quad standing
-## upright, turned to the camera across - is seen edge on. Here it faces the camera, foreshortened only so far
-## ([constant FLAME_SQUAT]).
+## The desk's camera looks nearly straight down, where a standing flame quad would be seen edge on; here it faces the
+## camera, foreshortened only to [constant FLAME_SQUAT].
 ##
-## A PART OF THE DESK ([DeskMedium]): it reads the scene, the camera and the environment through [member medium].
-## Like everything at the desk it is a function of show time ([method tick]).
+## A part of the desk ([DeskMedium]): reads the scene, camera and environment through [member medium]; a function of
+## show time ([method tick]).
 
 ## The [DeskMedium] this is a part of.
 var medium: DeskMedium
 
-## The candles' light: a key's and a fill's energy at the most, and the most a page may be lit (the paper's
-## linear lightness times the light on it - the lamp's is about 1).
+## The candles' light: a key's and a fill's energy at most, and the most a page may be lit (the paper's linear
+## lightness times the light on it; the lamp's is about 1).
 const KEY_ENERGY := 1.5
 const FILL_ENERGY := 0.2
 const PAGE_HEAT := 1.15
-## A flame's quad stands this much of its height at the least, however steeply it is looked down on.
+## A flame's quad stands at least this much of its height, however steeply it is looked down on.
 const FLAME_SQUAT := 0.65
-## THE BLOOM a flame bleeds through, the card table's ([TableMedium]), while candles burn: only what is brighter
-## than this glows - past a page in any light here (the lamp's about 1, a candle's [constant PAGE_HEAT]).
+## The flames' bloom (the card table's, [TableMedium]): only what is brighter than this glows - past a page in any light here.
 const GLOW_THRESHOLD := 1.6
 
 var _rig = null                       # the room's light (Lights.Rig), or null
@@ -42,8 +36,8 @@ var _root: Node3D = null
 var _noise := FastNoiseLite.new()
 
 
-## THE DESK'S LIGHT for [param look] ([method DeskLook.of]) and the things of it that burn ([param lit], [method
-## DeskLook.dress]'s), on the desk of [param seed]: what was built before taken down.
+## The desk's light for [param look] ([method DeskLook.of]) and the things of it that burn ([param lit], [method
+## DeskLook.dress]'s), on the desk of [param seed]; what was built before is taken down.
 func build(look: Dictionary, lit: Array, seed: int) -> void:
 	release()
 	_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
@@ -103,8 +97,8 @@ func build(look: Dictionary, lit: Array, seed: int) -> void:
 		(_candles[i] as Dictionary)["energy"] = minf(most, PAGE_HEAT / maxf(paper * float((fields[i] as Vector2).y), 1e-4))
 
 
-## THE LIGHT AT SHOW TIME [param t]: the room's, and each candle's flames - flickering each in its own time, facing
-## the camera - with its light as bright as they are together.
+## The light at show time [param t]: the room's, and each candle's flames, flickering in their own time and facing the
+## camera, with its light as bright as they are together.
 func tick(t: float) -> void:
 	if _rig != null:
 		_rig.tick(t)
@@ -135,7 +129,7 @@ func tick(t: float) -> void:
 		((c as Dictionary)["light"] as OmniLight3D).light_energy = float((c as Dictionary)["energy"]) * bright / n
 
 
-## Whether the room's light or a candle is up: the desk's own fill, the old flat one, stands down for them.
+## Whether the room's light or a candle is up; the desk's own flat fill stands down for them.
 func lights_room() -> bool:
 	return _rig != null
 
@@ -191,8 +185,8 @@ static func paper_lum(look: Dictionary) -> float:
 	return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
 
 
-## HOW A LIGHT AT [param at] FALLS ON THE PAGE at energy 1, over the pad's face: (its mean, its most) - the
-## light on a point being its slant over its distance squared (an omni light's 1/d, [method TableLight.light_the_table]).
+## How a light at [param at] falls on the page at energy 1, over the pad's face: (its mean, its most). The light on a
+## point is its slant over its distance squared ([method TableLight.light_the_table]).
 static func page_field(at: Vector3) -> Vector2:
 	var sum := 0.0
 	var most := 0.0
@@ -209,9 +203,8 @@ static func page_field(at: Vector3) -> Vector2:
 	return Vector2(sum / float(n), most)
 
 
-## WHERE THE LIGHT STANDS ([method Lights.build]): the desk's widest framing (the camera that sees most, so a lamp
-## out of the shot is out of every shot), the page's middle on the desk's top, the desk and what stands on it, the
-## desk the camera sees, the environment; no room picture.
+## Where the light stands ([method Lights.build]): the desk's widest framing (so a lamp out of the shot is out of every
+## shot), the page's middle on the desk's top, the desk and what stands on it, the environment; no room picture.
 func _stage() -> Dictionary:
 	var middle := Vector3(0.0, LegalPad.DESK_Y, 0.0)
 	var p := deg_to_rad(float(DeskMedium.WIDE["pitch"]))

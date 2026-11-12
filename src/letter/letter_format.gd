@@ -1,51 +1,40 @@
 extends VBoxContainer
 class_name LetterFormat
 
-## LetterFormat - the Letter's own rows on the Medium card: the note read as a letter, written by hand at a desk while
-## the voice reads it (next/letter.md, [LetterMedium]). The Letter was a component of its own, with a card that pinned
-## its medium, until it became one of the Medium card's formats (2026-11-09, [MediumCard]).
+## LetterFormat - the Letter's own rows on the Medium card: the note read as a letter, written by hand at a desk while the voice
+## reads it (next/letter.md, [LetterMedium]). The Letter is one of the Medium card's formats ([MediumCard]).
 ##
-## THE NOTE IS THE LETTER, word for word: nothing writes it but its author. What these rows make is what
-## the words only describe - each SKETCH, drawn as SVG by an agent and laid out by ghost's own TeX
-## ([LetterSketches]), so the pen draws it. Each PICTURE a passage is read over is the note's Pictures card's
-## ([PicturesCard]: the letter's pictures and never its sketches, [method LetterMedium.pictures_in]). A letter plays
-## without either: a sketch not drawn yet is not drawn, the words round it as they are, a picture not painted leaves
+## The note is the letter, word for word: nothing writes it but its author. What these rows make is what the words only describe:
+## each sketch, drawn as SVG by an agent and laid out by ghost's own TeX ([LetterSketches]), so the pen draws it. Each picture a
+## passage is read over is the note's Pictures card's ([PicturesCard]: the letter's pictures, never its sketches, [method
+## LetterMedium.pictures_in]). A letter plays without either: a sketch not drawn yet is not drawn, a picture not painted leaves
 ## its passage over the desk.
 ##
-## ROWS ON THE READING'S MEDIUM CARD: built by [MediumCard] from the `letter` row's `card` while the Letter is the
-## format, they HAND the reading what is read ([LetterWalk]: the letter as the voice says it, the pen's rests in it, no
-## title announced) and how it goes out ([LetterFormat.Publish]: the document a render draws the letter from). What they
-## keep is part of the Medium's one block.
+## Rows on the reading's Medium card: built by [MediumCard] from the `letter` row's `card` while the Letter is the format, they
+## hand the reading what is read ([LetterWalk]: the letter as the voice says it, the pen's rests in it, no title announced) and how
+## it goes out ([LetterFormat.Publish]: the document a render draws the letter from). What they keep is part of the Medium's one block.
 ##
-## THE DESK AND THE HAND ARE THE NOTE'S: the desk's seed is the note's own file's unless the rows are given
-## one ([method desk_seed]); how each word wavers - and so where the lines break and the rests the voice takes - is
-## always the note's own ([method hand_seed]), so the same letter is written the same way every time, whatever desk it
-## is written at; the hand is one of the journal's ([LetterHand], the Notebook's): the Medium card's Handwriting, shared
-## with the Notebook ([method hand]).
+## The desk and the hand are the note's: the desk's seed is the note's own file's unless the rows are given one ([method
+## desk_seed]); how each word wavers (and so where the lines break and the rests the voice takes) is always the note's own
+## ([method hand_seed]), so the same letter is written the same way at any desk; the hand is one of the journal's ([LetterHand],
+## the Notebook's): the Medium card's Handwriting ([method hand]).
 ##
-## WHAT IS ON THE DESK AND HOW IT IS LIT ARE CHOSEN HERE (2026-10-29, the user: "It's really hard to find a good seed,
-## because generating the scenes is kind of slow (startup is like 20 seconds) ... provide a multi-select bank of the
-## standard objects we already implement ... Then, when we change the seed - the only thing being changed would be the
-## placement of objects, and textures"): a tick a [constant DeskLook.THINGS] row (the block's `things`) and the Light
-## (`mood`, [constant DeskLook.MOODS]); the number only places them and draws how they look - the paper, the ink, the
-## top - and never how a word is written ([method hand_seed]). Until either is chosen they are what the number drew,
-## and the first change of anything on the desk - the number among them - keeps them ([method _hold_desk]). Changed
-## while the letter plays (paused or not), the desk is dressed again at once ([method _redress_live]): the number is no
-## longer a new take and a Play to see; the hand still waits for the next Play, for it changes how every word is
-## written.
+## What is on the desk and how it is lit are chosen here: a tick per [constant DeskLook.THINGS] row (the block's `things`) and the
+## Light (`mood`, [constant DeskLook.MOODS]); the number only places them and draws how they look (paper, ink, top), never how a
+## word is written. Until either is chosen they are what the number drew, and the first change of anything on the desk, the number
+## included, keeps them ([method _hold_desk]). Changed while the letter plays, the desk is dressed again at once ([method
+## _redress_live]); the hand waits for the next Play, since it changes how every word is written.
 ##
-## GENERATION IS EXPLICIT, AND ON THE NOTE'S PIPELINE CARD ([Section]; next/pipeline.md): Generate draws the sketches not
-## drawn, then lays them out; a sketch's ⟳ draws it again. Nothing runs on open.
+## Generation is explicit, on the note's Pipeline card ([Section]; next/pipeline.md): Generate draws the sketches not drawn, then
+## lays them out; a sketch's ⟳ draws it again. Nothing runs on open.
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "letter"
-## Its keys in the Medium's block: the desk's seed (0: the note's own), its light ("": the seed's), who draws the
-## sketches and what is written on the index cards (`card_text`, [method DeskLook.picks_of]) - and, once chosen,
-## `things` (what is on the desk, [constant DeskLook.THINGS] keys; none written: the seed's). The hand is the Medium
-## card's own row (`hand`).
+## Its keys in the Medium's block: the desk's seed (0: the note's own), its light ("": the seed's), who draws the sketches and what
+## is written on the index cards (`card_text`, [method DeskLook.picks_of]), and, once chosen, `things` (what is on the desk,
+## [constant DeskLook.THINGS] keys; none written: the seed's). The hand is the Medium card's own row (`hand`).
 const KNOBS := {"seed": 0, "mood": "", "writer": "claude", "writer_model": "", "writer_effort": "", "card_text": ""}
-## How long the index cards' words rest unchanged before a playing letter's desk is dressed again with them (seconds):
-## a desk is not built again a keystroke.
+## How long the index cards' words rest unchanged before a playing letter's desk is dressed again with them (seconds).
 const CARD_SETTLE := 0.6
 
 signal noted(text: String)
@@ -60,7 +49,7 @@ var _listed: Array = []          # ...and its sketches ([method LetterScript.ske
 var _asked := false              # Generate or a ⟳ asked: the ink is laid out once the drawings are in
 var _ink_tried := ""             # the drawings the ink step last failed on, not tried again unasked
 var _installing := ""            # what the ink step waits to be installed, "" for nothing
-## WHAT IT HANDS THE NOTE'S PIPELINE CARD ([method pipeline]).
+## What it hands the note's pipeline card ([method pipeline]).
 var _section: Section = null
 
 var _seed_box: SpinBox
@@ -136,7 +125,7 @@ func apply(cfg: Dictionary) -> void:
 
 # --- what it hands the reading -------------------------------------------------------------------
 
-## HOW IT GOES OUT: the document a render draws the letter from carries what these rows made.
+## How it goes out: the document a render draws the letter from carries what these rows made.
 class Publish extends ReadingPublish:
 	var card: LetterFormat
 
@@ -148,21 +137,21 @@ class Publish extends ReadingPublish:
 		return d
 
 
-## THE DESK'S SEED: the rows', or the note's own ([method hand_seed]).
+## The desk's seed: the rows', or the note's own ([method hand_seed]).
 func desk_seed() -> int:
 	return int(_knobs["seed"]) if int(_knobs["seed"]) > 0 else hand_seed()
 
 
-## THE HAND'S SEED, how each word wavers and where the lines break: the note's own file's (a draft with no file, the
-## first), whatever the desk's number.
+## The hand's seed, how each word wavers and where the lines break: the note's own file's (a draft with no file, the first),
+## whatever the desk's number.
 func hand_seed() -> int:
 	var doc := _panel.doc_source() if _panel != null else null
 	var path := doc.doc_path() if doc != null else ""
 	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
 
 
-## THE HAND IT IS WRITTEN IN: the Medium card's Handwriting ([member Director.hand], the Notebook's hands) - Random drawn
-## from the note's own number ([method hand_seed]), so the same letter is written the same way every time.
+## The hand it is written in: the Medium card's Handwriting ([member Director.hand], the Notebook's hands); Random is drawn from the
+## note's own number ([method hand_seed]).
 func hand() -> String:
 	var h := String(Director.hand)
 	if h == "random":
@@ -172,9 +161,9 @@ func hand() -> String:
 	return LetterHand.of(h)
 
 
-## THE DOCUMENT'S `letter`: the hand's seed (`seed`) and the desk's (`desk`), the hand, each sketch's drawing that is
-## laid out, the ink, each picture's file, and what is on the desk, its light and what is written on its index cards -
-## what [LetterMedium] and [LetterWalk] read, so the voice's rests and the pen are sized alike.
+## The document's `letter`: the hand's seed (`seed`) and the desk's (`desk`), the hand, each sketch's laid-out drawing, the ink,
+## each picture's file, and what is on the desk, its light and the index cards' words; what [LetterMedium] and [LetterWalk] read, so
+## the voice's rests and the pen are sized alike.
 func document() -> Dictionary:
 	var body := _body()
 	var ink := _sketches.ink()
@@ -193,21 +182,20 @@ func document() -> Dictionary:
 		"ink": ink, "pictures": pictures, "things": desk_things(), "mood": desk_mood(), "card_text": String(_knobs["card_text"])}
 
 
-## WHAT IS ON THE DESK ([constant DeskLook.THINGS] keys, in its order): what was ticked, or what the number drew.
+## What is on the desk ([constant DeskLook.THINGS] keys, in its order): what was ticked, or what the number drew.
 func desk_things() -> Array:
 	if _knobs.get("things") is Array:
 		return (_knobs["things"] as Array).duplicate()
 	return DeskLook.kinds(DeskLook.of(desk_seed()))
 
 
-## THE DESK'S LIGHT ([constant DeskLook.MOODS]): the one chosen, or the number's.
+## The desk's light ([constant DeskLook.MOODS]): the one chosen, or the number's.
 func desk_mood() -> String:
 	var mood := String(_knobs["mood"])
 	return mood if DeskLook.MOODS.has(mood) else String(DeskLook.of(desk_seed())["mood"])
 
 
-## WHAT IS ON THE DESK AND ITS LIGHT KEPT as they are now, before anything on the desk changes: the number moves them,
-## it never chooses them.
+## What is on the desk and its light kept as they are now, before anything on the desk changes: the number moves them, never chooses them.
 func _hold_desk() -> void:
 	if not (_knobs.get("things") is Array):
 		_knobs["things"] = desk_things()
@@ -215,8 +203,8 @@ func _hold_desk() -> void:
 		_knobs["mood"] = desk_mood()
 
 
-## THE DESK DRESSED AGAIN WHILE THE LETTER PLAYS: its number, what is on it, its light and the cards' words, handed to the reading's
-## live document ([LetterMedium] dresses the desk again when they change, the letter as it is).
+## The desk dressed again while the letter plays: its number, what is on it, its light and the cards' words, handed to the reading's
+## live document ([LetterMedium] dresses the desk again when they change).
 func _redress_live() -> void:
 	var subs: Node = _panel.subtitles if _panel != null and is_instance_valid(_panel) else null
 	if subs == null or not is_instance_valid(subs):
@@ -241,7 +229,7 @@ func _body() -> String:
 func _generate() -> void:
 	var sketches := LetterScript.sketches(_body())
 	_sketches.writer = _writer.choice()
-	# A DRAWING THE INK STEP REFUSED is drawn again, told why
+	# A drawing the ink step refused is drawn again, told why
 	var refused := _sketches.refused()
 	var all := _sketches.svgs(sketches)
 	for s in sketches:
@@ -270,7 +258,7 @@ func _stop() -> void:
 
 # --- on the Pipeline card ------------------------------------------------------------------------
 
-## WHAT THESE ROWS MAKE, on the note's one list ([PipelineCard]): a row a sketch, and their ink.
+## What these rows make, on the note's one list ([PipelineCard]): a row a sketch, and their ink.
 class Section extends PipelineSection:
 	var card: LetterFormat
 
@@ -315,8 +303,8 @@ func _to_draw() -> bool:
 	return _sketches.ink_state(items) != "ready"
 
 
-## ONCE THE DRAWINGS ARE IN, THE INK: laid out by TeX when they are not the ones it was laid out from -
-## after Generate or a ⟳, never on open, and not again on drawings it just failed on.
+## Once the drawings are in, the ink: laid out by TeX when they are not the ones it was laid out from, after Generate or a ⟳, never
+## on open, and not again on drawings it just failed on.
 func _lay_out_when_drawn() -> void:
 	if not _asked or _sketches.busy():
 		return
@@ -383,8 +371,7 @@ func _build() -> void:
 	again.pressed.connect(func() -> void: _seed_box.value = randi_range(1, 99999))
 	srow.add_child(again)
 
-	# THE LIGHT, chosen (2026-10-27, the user, of the mood shown beside the number: "It's not clear to me what the
-	# 'Desk' value ... is doing. Is that just a random seed?")
+	# The light, chosen
 	var lrow := HBoxContainer.new()
 	lrow.add_theme_constant_override("separation", 6)
 	add_child(lrow)
@@ -410,7 +397,7 @@ func _build() -> void:
 		_redress_live())
 	lrow.add_child(_light_pick)
 
-	# WHAT IS ON THE DESK, a tick each
+	# What is on the desk, a tick each
 	var dl := Label.new()
 	dl.text = "On the desk"
 	dl.add_theme_font_size_override("font_size", 12)
@@ -430,8 +417,7 @@ func _build() -> void:
 		bank.add_child(box)
 		_bank[kind] = box
 
-	# WHAT IS WRITTEN ON THE INDEX CARDS (2026-10-29, the user: "an input box - which only appears if we've selected the
-	# index cards"), the right way up from the writer's seat ([method DeskLook._write])
+	# What is written on the index cards (shown while they are on the desk), the right way up from the writer's seat ([method DeskLook._write])
 	_card_box = TextField.new("On the index cards", "Nothing - the cards are blank",
 		"Written on the top index card or sticky note in the letter's hand and the desk's ink, line "
 		+ "for line as typed here - smaller where it needs the room, wrapped to the card's width. Nothing on the desk moves "
@@ -529,8 +515,8 @@ func _touch() -> void:
 		_panel.touch()
 
 
-## A ROW A SKETCH, its words its name, and the ink they are laid out in, which is the tools' and has no ⟳: it follows the
-## drawings ([method _lay_out_when_drawn]).
+## A row a sketch, its words its name, and the ink they are laid out in, which is the tools' and has no ⟳: it follows the drawings
+## ([method _lay_out_when_drawn]).
 func _step_rows() -> Array:
 	var out: Array = []
 	if _listed.is_empty():

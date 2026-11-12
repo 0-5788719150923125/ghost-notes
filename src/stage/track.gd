@@ -3,12 +3,11 @@ class_name Track
 
 ## Track - the timeline runner for data-driven scenes (see scenes/stage.gd).
 ##
-## A track is a list of SPANS, each applying one [Actions] verb to named actors over
-## a time window. Times are authored in seconds of the track's NOMINAL design length;
-## at runtime they scale by `phase_span(nominal) / nominal`, so a storyboard's `hold`
-## and `sensitivity` compress the whole timeline proportionally and every event still
-## lands - the FL_* fraction idiom the bespoke scenes used, made data. (Only the
-## keyframe clock scales; the actors' ambient life runs on the raw delta.)
+## A track is a list of spans, each applying one [Actions] verb to named actors over a time window. Times
+## are authored in seconds of the track's nominal design length; at runtime they scale by
+## `phase_span(nominal) / nominal`, so a storyboard's `hold` and `sensitivity` compress the whole timeline
+## proportionally and every event still lands. Only the keyframe clock scales; the actors' ambient life
+## runs on the raw delta.
 ##
 ## Span fields (storyboard data):
 ##   at            - a point event, or `from` / `to` for a window (nominal seconds)
@@ -16,17 +15,14 @@ class_name Track
 ##   target        - actor id, list of ids, or "all" (the default)
 ##   args          - the verb's config (ranges welcome)
 ##   ease          - linear / smooth / in / out / spike (window fraction shaping)
-##   on            - optional musical cue gate: beat / movement / lull. The span ARMS
-##                   at its start time and fires on the cue's next rising edge, so an
-##                   event lands ON the music (the drop's burst on the actual beat)
-##   by            - cue backstop, seconds after arming (default 1.5): if the cue
-##                   never comes, fire anyway - a tightly-timed piece can't stall
-##   sustain       - true = after the window closes, keep applying at k = 1 for the
-##                   rest of the scene instead of finishing. For motion that must
-##                   never park (the finale keeps FLYING while the end card holds)
+##   on            - optional musical cue gate: beat / movement / lull. The span arms at its start time
+##                   and fires on the cue's next rising edge, so an event lands on the music
+##   by            - cue backstop, seconds after arming (default 1.5): if the cue never comes, fire anyway
+##   sustain       - true = after the window closes, keep applying at k = 1 for the rest of the scene
+##                   instead of finishing (motion that must never park, e.g. a finale that keeps flying)
 ##
-## All range sampling draws from per-span rngs seeded off the scene rng in
-## declaration order: same seed, same show, cue jitter aside.
+## All range sampling draws from per-span rngs seeded off the scene rng in declaration order: same seed,
+## same show, cue jitter aside.
 
 const MOVEMENT_THRESHOLD := 0.6      # the Director's defaults for the same cues
 const LULL_THRESHOLD := 0.12
@@ -62,9 +58,8 @@ func _init(data: Dictionary, rng: RandomNumberGenerator) -> void:
 			spans.append(span)
 
 
-## Advance the timeline to scene-time [param t] (seconds since the scene began),
-## with [param span_h] = the scene's phase_span(nominal) - the real-seconds window
-## the nominal timeline is scaled into.
+## Advance the timeline to scene-time [param t] (seconds since the scene began), with [param span_h] = the
+## scene's phase_span(nominal): the real-seconds window the nominal timeline is scaled into.
 func advance(t: float, span_h: float, stage, f: AudioFeatures, dt: float) -> void:
 	var sc := span_h / nominal
 	for span in spans:

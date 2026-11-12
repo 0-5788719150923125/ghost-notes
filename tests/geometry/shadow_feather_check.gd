@@ -1,25 +1,17 @@
 extends SceneTree
 
-## The landscape scenes' cast shadows: are their EDGES resolvable, or do they land in one step?
+## The landscape scenes' cast shadows: are their edges resolvable, or do they land in one step? Two independent places, each
+## measured on its own:
 ##
-## Written for a report that the shadows over landscape geometry "are blocky". They were, in two
-## independent places, and each needs its own measurement because each fails differently:
+##   Terrain (Terrain._cast): a per-vertex ray march drawn Gouraud across quads. A shadow edge that changes by its whole range
+##   between two adjacent vertices is a staircase one quad wide, so no single lattice step may carry a large fraction of the
+##   map's whole lit-to-shadowed range.
 ##
-##   TERRAIN (Terrain._cast) - a per-vertex ray march over the heightfield, drawn Gouraud across
-##   quads. A shadow edge that changes by its whole range between two adjacent vertices cannot be
-##   drawn as anything but a staircase whose step is one quad, and at this map's scale a near quad
-##   is tens of pixels. So the claim under test is a SPATIAL one about the map itself: no single
-##   lattice step may carry a large fraction of the map's whole lit-to-shadowed range.
+##   Props (ShadowField): a light-space grid. The silhouette's coverage must give a transition several texels wide (measured
+##   along a line crossing it), and a round occluder must cast a round shadow rather than its bounding square.
 ##
-##   PROPS (ShadowField) - a light-space grid. The rasterizer used to snap an occluder's silhouette
-##   to whole cells, so the edge was hard however smoothly `factor()` then interpolated: four cells
-##   that are each fully lit or fully shadowed can only ever produce a one-cell ramp. The claim is
-##   therefore about the WIDTH of the lit-to-shadowed transition, measured in texels along a line
-##   crossing it, and about a round occluder casting a round shadow rather than its bounding square.
-##
-## Every check is TWO-SIDED: a shadow that has been feathered into nothing would pass a softness
-## test trivially, so each one is paired with an assertion that the shadow is still there and still
-## dark where it should be.
+## Every check is two-sided: a shadow feathered into nothing would pass a softness test, so each is paired with an assertion that
+## the shadow is still there and still dark where it should be.
 ##   godot --headless --path . --script tests/geometry/shadow_feather_check.gd
 
 var _fails: Array = []
@@ -63,8 +55,7 @@ func _terrain_edges() -> void:
 		lo = minf(lo, v)
 		hi = maxf(hi, v)
 	var span := hi - lo
-	# The biggest jump between neighboring vertices, as a fraction of the whole range. This is
-	# exactly "how much of the edge lands in one quad".
+	# The biggest jump between neighboring vertices, as a fraction of the whole range (how much of the edge lands in one quad).
 	var worst := 0.0
 	var steep := 0
 	for gy in res:
@@ -84,7 +75,7 @@ func _terrain_edges() -> void:
 		% [lo, hi, span, worst, frac * 100.0] + "%d steps over 25%% of it" % steep)
 	_check(frac < 0.42, "no single lattice step carries most of the edge (%.0f%% < 42%%)" % (frac * 100.0))
 	_check(steep < 60, "few near-vertical steps across the whole map (%d < 60)" % steep)
-	# ...and the shadows are still SHADOWS: a low sun over relief must darken a real share of the map.
+	# ...and the shadows are still shadows: a low sun over relief must darken a real share of the map.
 	var dark := 0
 	for v in cast:
 		if v < 1.0 - 0.25 * (1.0 - Terrain.SHADOW_MIN):
@@ -107,8 +98,7 @@ func _field_edges() -> void:
 	sf.add_box(Vector3.ZERO, Vector3.UP, Vector3.RIGHT, Vector3.BACK, 0.42, 0.9)
 	var texel := 2.0 * ((Vector3(half, relief + 1.4, half) - Vector3(-half, -relief, -half)).length()
 		* 0.5 + 0.5) / 128.0
-	# FIND the shadow first - where it lands depends on the sun's azimuth and elevation - then
-	# walk a line out of it and measure the 10%-90% transition width.
+	# Find the shadow first (where it lands depends on the sun's azimuth and elevation), then walk a line out of it and measure the 10%-90% transition width.
 	var lit := 1.0
 	var dark := ShadowField.SHADOW_MIN
 	var best := Vector3.ZERO
@@ -143,8 +133,7 @@ func _round_silhouette() -> void:
 	print("ROUND silhouette (a crown is a ball; its bounding box is a square)")
 	var half := 4.25
 	var relief := 1.5
-	# Sun straight overhead, so the silhouette lands directly under the occluder and its corners
-	# are where the square would show.
+	# Sun straight overhead, so the silhouette lands directly under the occluder and its corners are where the square would show.
 	var l := Vector3(0.02, 1.0, 0.02).normalized()
 	var r := 0.6
 	var res := []

@@ -4,21 +4,21 @@
     run.py <spec.json>                      the host: runs the code, writes the answer to spec["out"]
     run.py --inner <code.py> <kept.json>    inside the sandbox: runs the code, with keep()
 
-THE WORK SHOWN IS THE WORK DONE (next/proof.md): a claim about a model, a simulation or data is
-settled by code that really ran, and a drawing on the pad plots the numbers that code kept - never
-numbers an agent typed. A table show's solver hands its code to the `run` tool (SolverTools); this runs it.
+The work shown is the work done (next/proof.md): a claim about a model, a simulation or data is settled by code
+that really ran, and a drawing on the pad plots the numbers that code kept, never numbers an agent typed. A table
+show's solver hands its code to the `run` tool (SolverTools); this runs it.
 
 The spec is JSON - never argv: {"code", "out", "work", "io", "seconds", "memory_mb", "work_mb",
 "bwrap"} (`work_mb` may only lower the folder's cap).
 `work` is the code's folder, kept across one solver's runs (a run may save a file the next one
 loads); `io` is this run's own folder, outside `work`: the code, and what it printed.
 
-THE CODE RUNS IN A SANDBOX. bubblewrap (`bwrap`, Linux) gives it a filesystem of its own: the
-system's programs and libraries and this Python, read-only; `work`, the one place it may write; a
-fresh /tmp; no home folder and nothing else of the author's. It has no network, sees no other
-process, and holds no privileges. The host caps its memory (`memory_mb`, its address space), its
-processor time, the size of any file it writes and of its folder, and kills it at `seconds` of wall
-time. Without bwrap nothing runs (SolverTools.can_run does not offer the tool).
+The code runs in a sandbox. bubblewrap (`bwrap`, Linux) gives it a filesystem of its own: the system's
+programs and libraries and this Python, read-only; `work`, the one place it may write; a fresh /tmp; no home
+folder and nothing else of the author's. It has no network, sees no other process, and holds no privileges.
+The host caps its memory (`memory_mb`, its address space), its processor time, the size of any file it writes
+and of its folder, and kills it at `seconds` of wall time. Without bwrap nothing runs (SolverTools.can_run
+does not offer the tool).
 
 keep(name, y) or keep(name, x, y), inside the code: a named series - y against x, or against 0, 1,
 2, ... - kept for the lesson's drawings (figure.py's <plot data>, <dots data>, <bars data>), with an

@@ -3,20 +3,16 @@ class_name ModBank
 
 ## ModBank - the organic-motion engine.
 ##
-## The same idea as the evolutionary agents' voter pool: a scene's motion should
-## not come from one clock but from a pool of slow oscillators blended into named
-## continuous channels. Each channel is a seeded weighted sum of sines at
-## incommensurate (rarely-aligning) frequencies, so the combined signal drifts
-## for a very long time before it repeats - motion that feels alive, not looped.
+## A scene's motion comes not from one clock but from a pool of slow oscillators blended into named continuous
+## channels. Each channel is a seeded weighted sum of sines at incommensurate frequencies, so the signal drifts for a
+## very long time before it repeats.
 ##
-## A scene asks for channels by name - mod.value("sway"), mod.value("breathe") -
-## and a stable channel is minted on first use from the bank seed XOR the name.
-## So any scene can invent any channel; same seed always yields the same drift.
+## A scene asks for channels by name - mod.value("sway") - and a stable channel is minted on first use from the bank
+## seed XOR the name; the same seed always yields the same drift.
 
 ## Oscillators per channel. More -> longer recurrence, smoother wander.
 const OSC := 5
-## Slow band, in Hz. Whole-screen motion wants tens-of-seconds periods - kept
-## deliberately low so the drift reads as breathing, not spinning.
+## Slow band, in Hz: whole-screen motion wants tens-of-seconds periods, so the drift reads as breathing.
 const FREQ_MIN := 0.010
 const FREQ_MAX := 0.085
 

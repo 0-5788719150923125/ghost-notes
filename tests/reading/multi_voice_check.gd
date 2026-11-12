@@ -1,17 +1,10 @@
 extends Node
 
-## Gate for SPEAKING IN MORE THAN ONE VOICE - the Generative panel's tabs, and the
-## speaker cues in the script that hand a passage to one of them.
+## Gate for speaking in more than one voice: the Generative panel's tabs and the speaker cues that
+## hand a passage to one of them. Each claim fails silently if it breaks (an unrecognized cue reads
+## on in the narrator's voice; a per-tab setting that never reaches the request changes nothing).
 ##
-## Every claim here fails SILENTLY if it breaks, which is the only reason this file
-## exists. A cue that is not recognized does not error; it reads the second half of
-## the chapter in the narrator's voice, and the first person to notice is whoever
-## listens to forty minutes of it. A cue recognized where none was meant does the
-## same thing in reverse. And a per-tab setting that never reaches the request is a
-## dial that appears to work - it moves, it saves, it reloads - and changes nothing.
-##
-## Needs a real boot: [Phonemes] and the panel's own Director-backed sliders are
-## autoload-bound.
+## Needs a real boot: [Phonemes] and the panel's Director-backed sliders are autoload-bound.
 ##   tests/run_boot_probe.sh tests/reading/multi_voice_check.gd 120
 
 var _fails: Array = []
@@ -23,17 +16,12 @@ func _ready() -> void:
 	# host, and nothing here needs a python process.
 	_ed = ReadingPanel.new()
 	_ed._build_panel()
-	# SYNCED TO NOTHING, which every check here is written against: the settings are the
-	# author's own, and synced, the open chapter's title would be read before every test script.
+	# Synced to nothing: the settings are the author's own.
 	if _ed._doc != null:
 		_ed._doc._sync = false
-	# THE PANEL CONDUCTS the clock from its _ready (the transport, next/notes.md step 3), which
-	# this gate does not run - so it registers it here, as _ready would.
+	# The panel conducts the clock from its _ready (next/notes.md step 3), which this gate skips.
 	Spectrum.conduct(_ed, _ed.transport_hooks())
-	# THE PANEL, HOWEVER, MUST BE IN THE TREE. Range only emits value_changed for
-	# an owner that is inside one (Range::Shared::emit_value_changed skips the
-	# rest), so a panel built outside it has every slider callback silently dead -
-	# and a gate written against that would pass whatever the callbacks did.
+	# The panel must be in the tree: Range emits value_changed only for an owner inside one, so outside it every slider callback is dead.
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)
 	_ed.remove_child(_ed._cast._repace_timer)
@@ -116,9 +104,7 @@ func _rests(segs: Array) -> Array:
 	return out
 
 
-## THE CUES. Both halves matter and the second one more: the HOLDS are lines that
-## look like a cue and are prose, and every one of them would be swallowed whole
-## and read in the wrong voice from there to the end of the chapter.
+## The cues. Lines that look like a cue but are prose must not be swallowed and read in the wrong voice.
 func _check_cues() -> void:
 	_slots(3)
 	var segs: Array = _ed._split_speakers(
@@ -158,10 +144,7 @@ func _check_cues() -> void:
 		"a chapter opening on a cue grew an empty narrator tab")
 
 
-## NOTHING IN <!-- --> IS SPOKEN. The cues are comments, so the format invites
-## authoring notes beside them, and the failure is that the reader says them.
-## THE OUTRO MARK: what follows it fades, only as much of it as the fade can carry is ever
-## synthesized, the mark is never spoken, and a chapter without one is untouched.
+## The outro mark: what follows it fades, only as much as the fade can carry is synthesized, the mark is never spoken, and a chapter without one is untouched.
 func _check_outro_mark() -> void:
 	_slots(1)
 	var tail := ""
@@ -186,7 +169,7 @@ func _check_outro_mark() -> void:
 	_ok(not said.contains("Zebedee"), "text past the fade was synthesized anyway")
 	_ok(is_equal_approx(float(plan["fade"]), maxf(0.5, Director.outro_hold)), "the fade is the Outro's length")
 	_ok(float(_ed._plan_of("One. Two. Three.")["fade"]) == 0.0, "a chapter with no mark has no fade")
-	# THE PLAN IS ITS OWN: one made for an export while a reading fades leaves the reading's fade alone
+	# the plan is its own: planning for an export leaves a live reading's fade alone
 	_ed._stream._fade_len = 2.0
 	_ed._build_chunks("One. Two. Three.")
 	_ok(_ed._stream._fade_len == 2.0, "planning another reading changed the live reading's fade")
@@ -200,9 +183,9 @@ func _check_outro_mark() -> void:
 	_ed._stream._fade_len = 0.0
 
 
-## LIVE SCRUBBING, BY SENTENCE: a planned reading lays the bar out over its sentences, a seek
-## settles on the sentence under it, and a reading started there plays from it with no intro and
-## tells the media where it starts. Play from the top hands them nothing.
+## Live scrubbing by sentence: a planned reading lays the bar over its sentences, a seek settles on the
+## sentence under it, and a reading started there plays from it with no intro and tells the media where
+## it starts. Play from the top hands them nothing.
 func _check_scrub() -> void:
 	_slots(1)
 	var text := ""
@@ -228,9 +211,8 @@ func _check_scrub() -> void:
 	_ok(_ed.book_document(text)["start_words"] == sw, "...through the document they read")
 	_ed._stream.plan(text)
 	_ok(_ed._stream.start_words().is_empty(), "Play from the top hands them nothing")
-	# EVERY SENTENCE A SCRUB CAN LAND ON IS FOUND BY THE TABLET, from the words the panel hands
-	# it - links with a comma or period after them included, which the page sets as words of
-	# their own with no letters. One unfound start restarts the screen from the chapter's top.
+	# The tablet must find every sentence a scrub can land on from the words the panel hands it, including
+	# links followed by punctuation (set as letterless words); one miss restarts the screen from the top.
 	var tab := "<!-- url: a.test -->\n\n# Site\n\nOur host is [Dionysus](a.test/d), the god of wine. " \
 		+ "He asks one thing.\n\nFrom the [wiki](a.test/w). This is about a cat.\n\n" \
 		+ "She's a [cat](a.test/c). Not every stack is a cat.\n\n| Plan | What |\n|---|---|\n" \
@@ -251,6 +233,7 @@ func _check_scrub() -> void:
 	_ok(not Spectrum.seekable(), "a stopped reading is no longer scrubbable")
 
 
+## Nothing in <!-- --> is spoken: authoring notes beside the cues are not read.
 func _check_comments_never_spoken() -> void:
 	_slots(2)
 	var chunks: Array = _ed._build_chunks(
@@ -264,9 +247,7 @@ func _check_comments_never_spoken() -> void:
 	_ok(said.to_lower().contains("diddy"), "the text after a note went missing: %s" % said)
 
 
-## Every chunk knows whose it is, and the sentence numbering does NOT restart at a
-## speaker change - [Subtitles] windows the overlay by that index, so two voices
-## sharing sentence 0 puts both lines on screen at once.
+## Every chunk knows its voice, and sentence numbering does not restart at a speaker change ([Subtitles] windows the overlay by that index).
 func _check_chunks_carry_their_voice() -> void:
 	_slots(2)
 	var chunks: Array = _ed._build_chunks(
@@ -283,8 +264,7 @@ func _check_chunks_carry_their_voice() -> void:
 	_ok(nums == [0, 1, 2, 3], "sentence numbering restarted at the change: %s" % [nums])
 
 
-## THE DIALS ACTUALLY REACH THE HOST. A tab whose settings never leave the panel
-## is the failure that looks most like success.
+## The dials reach the host: a tab's settings show up in the request.
 func _check_settings_reach_the_request() -> void:
 	_slots(2)
 	_ed._cast._slots[0]["pace"] = 1.0
@@ -308,9 +288,7 @@ func _check_settings_reach_the_request() -> void:
 	_ok(absf(Delivery.pitch_ratio_of(_ed._cast.slot_cfg(1)) - 1.0) > 0.05
 		and absf(Delivery.pitch_ratio_of(_ed._cast.slot_cfg(0)) - 1.0) < 0.001,
 		"the tone's pitch shift did not follow the tab")
-	# THE HOST PLAYS THE TONE BACK (piper.py `_resample`, band-limited), so the request has to
-	# carry the ratio: without it the pitch move is silently lost, the model having been asked
-	# to speak r times slower for nothing.
+	# The host plays the tone back (piper.py `_resample`, band-limited), so the request must carry the ratio.
 	_ok(absf(float(b.get("play_ratio", 0.0)) - Delivery.pitch_ratio_of(_ed._cast.slot_cfg(1))) < 1e-6
 		and absf(float(a.get("play_ratio", 0.0)) - 1.0) < 1e-6,
 		"the tone's playback ratio did not reach the request: %s / %s"
@@ -320,9 +298,7 @@ func _check_settings_reach_the_request() -> void:
 		"the seam did not follow the tab")
 
 
-## The room is per voice too, and it is applied by DIALING one shared chain
-## rather than by building a second - so the check is that the same chain answers
-## two slots differently.
+## The room is per voice, applied by dialing one shared chain: the same chain must answer two slots differently.
 func _check_room_is_per_voice() -> void:
 	_slots(2)
 	_ed._cast._slots[0]["echo"] = 0.0
@@ -348,9 +324,8 @@ func _check_room_is_per_voice() -> void:
 		"the lean did not follow the voice (%.2f, then %.2f)" % [leaning, fx.lean])
 
 
-## NEAR IS PLANNED PER SENTENCE AND REACHES THE REQUEST: a voice at Near 0 never moves, and
-## the one that comes in asks the host for its softer voice on exactly the sentences the plan
-## hushed - and on no others - and never for a whisper the Tone did not ask for.
+## Near is planned per sentence and reaches the request: a voice at Near 0 never moves; the one that
+## comes in asks for its softer voice on exactly the sentences the plan hushed, never for an unrequested whisper.
 func _check_near_reaches_the_request() -> void:
 	_slots(2)
 	_ed._cast._slots[1]["near"] = 0.8
@@ -387,8 +362,7 @@ func _check_near_reaches_the_request() -> void:
 	_ok(float((chunks[51] as Dictionary)["near"]["c"]) == 0.0, "re-planning did not take the new dial")
 
 
-## THE TAKE IS STEREO WHEN SOMEBODY LEANS, and the same mono file it always was when
-## nobody does. Read back by the loader the render uses, not by our own header code.
+## The take is stereo when somebody leans and mono otherwise, read back by the loader the render uses.
 func _check_take_channels() -> void:
 	var frames := PackedVector2Array()
 	frames.resize(_ed._sr)
@@ -407,10 +381,8 @@ func _check_take_channels() -> void:
 				"a %d-channel take is %.2f s long, not 1" % [ch, wav.get_length()])
 
 
-## THE HANDOVER LANDS ON A FRAME. The marks are scheduled seconds before the
-## audio they describe is pushed, in absolute frames, and the failure mode is a
-## whole buffer of one speaker read in the other's room - audible, and almost
-## impossible to attribute after the fact.
+## The handover lands on a frame: marks are scheduled in absolute frames ahead of the audio, so a buffer
+## of one speaker must not be read in the other's room.
 func _check_handover_is_sample_accurate() -> void:
 	_slots(2)
 	_ed._cast._slots[1]["echo"] = 0.9
@@ -434,10 +406,8 @@ func _check_handover_is_sample_accurate() -> void:
 		"the second voice's room did not arrive at its own frame")
 
 
-## THE TABS ARE THE SCRIPT'S SPEAKERS. They appear as names are cued, in order of first
-## appearance; a new one starts as a copy of the first voice; switching away and back
-## returns exactly what was left there; and a name that leaves the script keeps its
-## settings for when it returns.
+## The tabs are the script's speakers: they appear in order of first cue, a new one copies the first voice,
+## switching away and back returns what was left, and a name that leaves keeps its settings.
 func _check_tabs() -> void:
 	_cast([Manuscript.NARRATOR])
 	_ed._cast._rebuild_tabs()
@@ -467,8 +437,7 @@ func _check_tabs() -> void:
 	_ok(absf(_ed._cast._arc.value - 0.90) < 0.001, "Emily came back holding %.2f" % _ed._cast._arc.value)
 	_ok(int(_ed._cast._speaker.value) == 5, "Emily came back holding reader %d" % _ed._cast._speaker.value)
 
-	# switching tabs must not throw the reading away - that is a repace, and it
-	# would fire on every glance at another voice's settings
+	# switching tabs must not repace the reading
 	_ed._stream.chunks = [{"tokens": [], "words": []}]
 	_ed._stream._epoch = 0
 	_ed._cast._on_tab_selected(0)
@@ -476,7 +445,7 @@ func _check_tabs() -> void:
 	_ok(_ed._stream._epoch == 0, "looking at another tab regenerated the reading")
 	_ed._stream.chunks = []
 
-	# A NAME THAT LEAVES KEEPS ITS VOICE. Rewrite Emily out, then back in.
+	# A name that leaves keeps its voice. Rewrite Emily out, then back in.
 	_ed._cast.refresh("Opening.\n\n<!-- speaker: Judge -->\n\nOverruled.")
 	_ok(_ed._cast._names == PackedStringArray(["Narrator", "Judge"]),
 		"a name no longer cued is still a tab: %s" % [_ed._cast._names])
@@ -492,11 +461,9 @@ func _check_tabs() -> void:
 		"the saved cast dropped a voice the script no longer shows")
 
 
-## THE READER IS THE FIRST VOICE LISTED, WHATEVER ITS NAME (2026-10-15: a show whose one voice was
-## "Ryan" had a copy of it written in as "Narrator" at any change of a setting, and its `tab` put back
-## to "Narrator"). The words before the first cue, and a cue naming the reader as a Cards reading
-## does, are its; nothing is written in beside it, and which voice is on screen is not written at
-## all. Two-sided: a cast that lists Narrator first keeps it as the reader, and a Ryan as Ryan.
+## The reader is the first voice listed, whatever its name: the words before the first cue, and a cue
+## naming the reader, are its; nothing is written in beside it and the voice on screen is not written.
+## Control: a cast that lists Narrator first keeps it as the reader, and a Ryan as Ryan.
 func _check_reader_is_first() -> void:
 	_ed._text.text = "Just prose, no cues at all."
 	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}}})
@@ -505,10 +472,10 @@ func _check_reader_is_first() -> void:
 	_ok((cast["voices"] as Dictionary).keys() == ["Ryan"], "a voice was written in beside the reader: %s" % [(cast["voices"] as Dictionary).keys()])
 	_ok(not cast.has("tab"), "the voice on screen was written into the document (tab: %s)" % [cast.get("tab")])
 	_ok(absf(float(_ed._cast.cfg_of(Manuscript.NARRATOR)["pace"]) - 0.6) < 0.001, "a cue for the reader did not reach Ryan's voice")
-	# a cast left with the copy the panel used to write: the copy goes, the reader stays first
+	# a cast with the old Narrator copy: the copy goes, the reader stays first
 	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}, "Narrator": {"pace": 1.4}}})
 	_ok(_ed._cast.cast_dict().keys() == ["Ryan"], "the reader's old copy stayed in the cast: %s" % [_ed._cast.cast_dict().keys()])
-	# a Cards reading: a familiar's line, then the reader cued back by the reader's cue
+	# a table reading: a familiar's line, then the reader cued back by the reader's cue
 	_ed._text.text = "Opening.\n\n<!-- speaker: Mo -->\n\nBoo.\n\n<!-- speaker: Narrator -->\n\nBack."
 	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}, "Mo": {"pace": 1.2}}})
 	_ok(_ed._cast._names == PackedStringArray(["Ryan", "Mo"]), "the reader's cue is not the first voice's tab: %s" % [_ed._cast._names])
@@ -522,9 +489,8 @@ func _check_reader_is_first() -> void:
 	_ok(_ed._cast._names == PackedStringArray(["Narrator", "Ryan"]) and absf(float(_ed._cast.cfg_of("Ryan")["pace"]) - 0.6) < 0.001
 			and absf(float(_ed._cast.cfg_of(Manuscript.NARRATOR)["pace"]) - 0.9) < 0.001,
 		"control: a cast that lists Narrator first did not keep it as its reader: %s" % [_ed._cast._names])
-	# NOTHING WRITTEN YET IS NOT A CAST OF ONE (2026-10-25: a Cards note's new episode, not yet made, showed
-	# its reader alone and its familiar out of reach): an empty script keeps every voice the note has as a
-	# tab - where words with no cue ("Just prose, no cues at all." above) are the reader's alone
+	# nothing written yet is not a cast of one: an empty script keeps every voice the note has as a tab,
+	# where words with no cue are the reader's alone
 	_ed._text.text = ""
 	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}, "Mo": {"pace": 1.2}}})
 	_ok(_ed._cast._names == PackedStringArray(["Ryan", "Mo"]), "an empty script hid a voice the note keeps: %s" % [_ed._cast._names])
@@ -534,10 +500,8 @@ func _check_reader_is_first() -> void:
 	_ed._text.text = ""
 
 
-## The saved shape survives a ConfigFile round trip. It stores every number as a
-## float, so a tone index and a reader id come back as 3.0 - and a float where the
-## host wants an int is a request the backend refuses. And the numbered tabs this
-## replaced are MIGRATED, not lost: row N was cued `N`, row 1 was also the narrator.
+## The saved shape survives a ConfigFile round trip (numbers come back as floats, so ints must be
+## restored for the host), and the old numbered tabs migrate to names: row N was cued N, row 1 was also the narrator.
 func _check_saved_shape() -> void:
 	_cast(["Narrator", "Emily White"])
 	_ed._cast._slots[1]["tone"] = 3
@@ -575,10 +539,7 @@ func _check_saved_shape() -> void:
 	_ok(solo.keys() == ["Narrator"], "an uncued chapter grew a phantom voice: %s" % [solo.keys()])
 
 
-## A DIAL MOVED ON A SILENT TAB STAYS SILENT. The panel shows one voice's
-## settings while another may be on air, so the live chain follows the voice
-## being HEARD - otherwise opening the reverb on a character who has not spoken
-## yet puts the narrator in a cathedral mid-sentence.
+## A dial moved on a silent tab stays silent: the live chain follows the voice being heard, not the tab on screen.
 func _check_silent_tabs_stay_silent() -> void:
 	_slots(2)
 	_ed._cast._slots[0]["echo"] = 0.3
@@ -595,10 +556,8 @@ func _check_silent_tabs_stay_silent() -> void:
 		"the speaking tab's own dial did not apply (echo %.2f)" % _ed._stream.fx.echo_wet)
 
 
-## THE HANDOVER RESTS LONGER THAN A SENTENCE END. Run together, two readers
-## sound like one person changing their mind mid-paragraph - so the seam before a
-## chunk whose predecessor belonged to somebody else takes the Turn rest on top.
-## Global, not per tab: it is the boundary's rest, not either voice's.
+## The handover rests longer than a sentence end: the seam before a chunk whose predecessor was another
+## voice takes the Turn rest on top. Global, not per tab.
 func _check_turn_rest() -> void:
 	_slots(2)
 	var chunks: Array = [{"speaker": "A"}, {"speaker": "A"}, {"speaker": "B"}, {"speaker": "B"}]
@@ -622,11 +581,9 @@ func _check_turn_rest() -> void:
 	_ed._cast._turn.value = 1.0
 
 
-## A CARD READING IN TWO VOICES - the reader, and a familiar on their shoulder with a quip now
-## and then: the script the Cards panel hands this voice ([method CardReading.speakable]) splits at
-## the familiar's lines, the card after a quip opens in the reader's voice again, and every rest
-## the table moves in (the shuffle, each draw, the spread) survives the split as a hold. A rest
-## left alone on a passage with no words is dropped, and the cards would move while the voice ran on.
+## A card reading in two voices: the script from [method CardReading.speakable] splits at the familiar's
+## lines, the card after a quip opens in the reader's voice, and every rest the table moves in survives the
+## split as a hold (a rest left alone on a passage with no words is dropped).
 func _check_cards_familiar() -> void:
 	_cast([Manuscript.NARRATOR, "Familiar"])
 	var script := CardReading.compose([
@@ -645,12 +602,9 @@ func _check_cards_familiar() -> void:
 	_ok(_rests(segs).size() == 5, "%d of the table's 5 rests (its settle and 4 actions) survived the voices" % _rests(segs).size())
 
 
-## EACH VOICE IN COLORS OF ITS OWN (2026-10-05: "the first can remain the rainbow color, while
-## the next could be a different spectrum like red through purple to blue, the third could be green
-## to yellow"): a word carries who says it to the subtitles, the voices take their places by when
-## each first speaks, the first lights across the whole rainbow, and each after it stays inside a
-## band of its own, sweeping it without a jump. Two-sided: the rule it replaced - the whole wheel
-## for every voice - leaves the second voice's band.
+## Each voice in colors of its own: a word carries who says it to the subtitles, voices take places by when
+## each first speaks, the first lights across the whole rainbow, and each after it sweeps a band of its own
+## without a jump. Control: the whole wheel for every voice leaves the second voice's band.
 func _check_voice_colors() -> void:
 	_cast([Manuscript.NARRATOR, "Familiar"])
 	var was: Array = _ed._stream.chunks
@@ -702,9 +656,8 @@ func _check_voice_colors() -> void:
 	_ok(old_outside > 100, "control: the whole wheel stays in the second voice's band (%d out)" % old_outside)
 
 
-## A CHAPTER FILE OPENS WITH ITS OWN METADATA, and the reader must not announce
-## it. The cue syntax is a chapter file's, so chapter files are what gets pasted
-## in - `title: ...` between two `---` rules, read aloud before the first word.
+## A chapter file opens with its own metadata, which must not be announced: `title:` between two `---`
+## rules is not read aloud, though its value is, once, before the chapter.
 func _check_frontmatter() -> void:
 	_slots(2)
 	var chunks: Array = _ed._build_chunks(
@@ -715,7 +668,7 @@ func _check_frontmatter() -> void:
 		for w in (c as Dictionary)["words"]:
 			said += String((w as Dictionary)["text"]) + " "
 	_ok(not said.to_lower().contains("title"), "the frontmatter was read aloud: %s" % said)
-	# ...but the title's VALUE is, once, before the chapter - a reader announces a chapter
+	# ...but the title's value is, once, before the chapter
 	_ok(said.to_lower().begins_with("charlotte's web of lies") and said.to_lower().count("charlotte") == 1,
 		"the title was not read once, first: %s" % said)
 	_ok(said.to_lower().contains("report") and said.to_lower().contains("spider"),
@@ -737,11 +690,8 @@ func _check_frontmatter() -> void:
 		"a horizontal rule mid-text swallowed what followed it")
 
 
-## A TEMPLATE MACRO READS ITS DEFAULT, NEVER ITS OWN TEXT. The manuscript writes
-## `${CHAPTERS_BEFORE_IN_WORDS:twenty-one}` because only its build knows the real
-## figure and ghost is not the build; the rule is enforced in [TextNorm] and
-## checked there, so what this asks is the editor-level half - that it survives
-## the speaker split and that the panel says which macros have no default.
+## A template macro reads its default, never its own text (the rule is in [TextNorm]); this holds the
+## editor's half: it survives the speaker split and the panel names macros with no default.
 func _check_macros() -> void:
 	_slots(2)
 	var chunks: Array = _ed._build_chunks(
@@ -758,10 +708,7 @@ func _check_macros() -> void:
 	_ok(_ed._plan_note.contains("WORD_COUNT_IN_WORDS"),
 		"the plan did not name the macro with no default: %s" % _ed._plan_note)
 
-	# A PARAGRAPH-LENGTH DEFAULT survives the speaker split and the paragraph
-	# placement, both of which read the RAW passage text - before TextNorm has
-	# expanded anything. Nothing in the book is this size today; the author has
-	# said there will be, so it is held here rather than found in a render.
+	# A paragraph-length default survives the speaker split and paragraph placement, which read the raw passage text before TextNorm expands it.
 	_slots(1)
 	var long_chunks: Array = _ed._build_chunks(
 		"Before it.\n\n${BODY:First line of it.\n\nA whole second paragraph, at length.}\n\nAfter it.")
@@ -779,21 +726,14 @@ func _check_macros() -> void:
 		var u := float((c as Dictionary).get("plan_u", -1.0))
 		_ok(u >= 0.0 and u <= 1.0, "paragraph placement came out %.2f on a long default" % u)
 
-	# A macro inside an authoring note is not a macro missing from the reading -
-	# the note was never going to be read either way. This also checks the note
-	# is REBUILT rather than appended to: a warning that outlives the text it was
-	# about is worse than none, because it is read as current.
+	# A macro inside an authoring note is not missing from the reading, and the plan note is rebuilt, not appended to.
 	_ed._build_chunks("Plain text. <!-- todo: ${WORD_COUNT_IN_WORDS} -->")
 	_ok(_ed._plan_note.is_empty(),
 		"the note survived the text being fixed: %s" % _ed._plan_note)
 
 
-## THE PAGE SHOWS WHAT THE PAGE SAID. `2009` is spoken "two thousand nine" and
-## must still be SHOWN as `2009` - reported as a subtitle reading "...who left
-## the building in two thousand nine." The rule itself lives in [TextNorm] and
-## [Phonemes] and is checked in norm_check; what this holds is the editor's half,
-## which is that one source run becomes ONE subtitle card covering the whole run
-## rather than three cards, or one card over the first syllable.
+## The page shows what the page said: `2009` is spoken "two thousand nine" but shown as `2009`. The rule is
+## in [TextNorm] and [Phonemes] (norm_check); this holds that one source run becomes one subtitle card covering the whole run.
 func _check_subtitles_show_the_source() -> void:
 	_slots(1)
 	var chunks: Array = _ed._build_chunks(
@@ -816,10 +756,7 @@ func _check_subtitles_show_the_source() -> void:
 		"the spoken expansion reached the subtitle: %s" % shown)
 	_ok(spoken.contains("two thousand nine") and spoken.contains("five dollars"),
 		"the voice stopped saying the number: %s" % spoken)
-	# A CARD REACHES AS FAR AS ITS RUN IS SPOKEN. `2009` is three spoken words
-	# and `$5` is two, so each card must cover that many or the numeral flashes
-	# for one syllable of the several it takes to say. `1st` is one word and is
-	# the control: a rewrite is not automatically a span.
+	# A card reaches as far as its run is spoken: `2009` is three spoken words and `$5` two; `1st` is one (the control).
 	_ok(int(reach.get("2009.", 0)) == 3, "the 2009 card covers %s spoken word(s), wanted 3"
 		% [reach.get("2009.", 0)])
 	_ok(int(reach.get("$5", 0)) == 2, "the $5 card covers %s spoken word(s), wanted 2"
@@ -834,10 +771,8 @@ func _check_subtitles_show_the_source() -> void:
 				"an empty subtitle card was emitted")
 
 
-## HESITATIONS. A `<!-- hesitation -->` is a rest AT THAT POINT and never a word: it must not
-## be spoken, it must land on the right word boundary (mid-sentence included), a marker that
-## names its length keeps it, and switching the feature off removes them all. Every one of
-## these fails silently - a rest in the wrong place just sounds like a slow reader.
+## Hesitations: a `<!-- hesitation -->` is a rest at that point and never a word: not spoken, on the right
+## word boundary (mid-sentence included), keeping a named length, and removed when the feature is off.
 func _check_hesitations() -> void:
 	_slots(2)
 	_ed._cast._hesitate_on.button_pressed = true
@@ -931,8 +866,7 @@ func _check_hesitation_splice() -> void:
 	var r4: Dictionary = Splice.chunk(pcm, [{"tok": 0, "sec": 1.0, "before": false}], spans, 2.0, _ed._sr)
 	_ok(is_equal_approx(Splice.shifted(0.4, r4["cuts"], 2.0, true), 1.2),
 		"the splice ignored the resample ratio")
-	# THE HOST'S REST WINS over the midpoint of two spans: word spans touch, and the host knows
-	# where the quiet is between them
+	# the host's rest wins over the midpoint of two spans (spans touch; the host knows where the quiet is)
 	var placed: Array = spans.duplicate(true)
 	(placed[0] as Dictionary)["rest"] = 0.37
 	(placed[1] as Dictionary)["rest"] = 0.66
@@ -942,10 +876,8 @@ func _check_hesitation_splice() -> void:
 	_ok(c5.size() == 2 and is_equal_approx(float(c5[0]["t"]), 0.37)
 			and is_equal_approx(float(c5[1]["t"]), 0.66),
 		"a rest ignored the host's rest point: %s" % [c5])
-	# THE EDGES RAMP FOR WHAT IS SOUNDING. Into a voice still at full level the release runs tens
-	# of milliseconds - 20 ms before the silence the word is still well up, 10 ms before it is
-	# falling, 3 ms before it is nearly gone (a 2 ms ramp would leave all three at full level) -
-	# where an edge already in silence keeps a 2 ms ramp that touches nothing else.
+	# The edges ramp for what is sounding: into a voice at full level the release runs tens of ms (20 ms
+	# before the silence it is still well up, 3 ms before nearly gone); an edge already in silence keeps a 2 ms ramp.
 	var at := int(0.35 * sr)
 	var at20 := absf(out[at - int(0.020 * sr)])
 	var at10 := absf(out[at - int(0.010 * sr)])
@@ -963,10 +895,8 @@ func _check_hesitation_splice() -> void:
 		"a cut in silence reached into the word before it")
 
 
-## A HUM IS HELD. "Hmm." renders at ~0.2 s and reads as a clipped grunt; it is lengthened to
-## a thinking hum by cycling its own pitch periods. Held here: the hum reaches its target
-## length, the word after it moves by exactly what was added, and the stretch is STEADY - no
-## dips, which is what cycling the dip between two m's produced.
+## A hum is held: "Hmm." renders at ~0.2 s and is lengthened by cycling its own pitch periods. The hum
+## reaches its target length, the next word moves by what was added, and the stretch is steady (no dips).
 func _check_hum_is_held() -> void:
 	var chunks: Array = _ed._build_chunks("Hmm. Who looks like they want to speak?")
 	var h: Array = (chunks[0] as Dictionary).get("holds", []) if chunks.size() > 0 else []
@@ -1003,10 +933,8 @@ func _check_hum_is_held() -> void:
 	_check_hum_is_smooth()
 
 
-## THE HUM FALLS. A thinking "hmm" settles and drops; held flat it reads as a sustained note -
-## "a hmm would typically have a downward inflection; the speaker would not just hold a
-## constant note straight through". Held: the end of the fill is at least two semitones under
-## its start, and it has died away rather than stopping at full strength.
+## The hum falls: a thinking "hmm" drops in pitch and dies away. The end of the fill is at least two
+## semitones under its start and has decayed rather than stopping at full strength.
 func _check_hum_falls(fill: PackedFloat32Array, sr: int) -> void:
 	var n := int(0.02 * sr)
 	var p0: Vector3 = Splice.period_of(fill, 0, n, _ed._sr)
@@ -1024,12 +952,8 @@ func _check_hum_falls(fill: PackedFloat32Array, sr: int) -> void:
 	_ok(tail < 0.15 * head, "the held hum stops at %.2f of its level instead of dying away" % (tail / maxf(head, 1e-9)))
 
 
-## A HELD HUM IS SMOOTH on a hum shaped like a rendered one, which a pure sine is not: its
-## pitch glides, it has harmonics, and its loudest stretch is FRY (period-doubled, an octave
-## down). Butting copied periods end to end buzzed on exactly this - every join a step, since
-## no whole number of samples is the period - and anchoring on the loudest stretch held the
-## fry as a creak. Held here: no step in the fill larger than the hum's own, no loudness
-## flutter, and the fill at the hum's pitch rather than the fry's.
+## A held hum is smooth on a hum shaped like a rendered one (gliding pitch, harmonics, a loud fry stretch
+## an octave down): no step in the fill larger than the hum's own, no loudness flutter, and the fill at the hum's pitch rather than the fry's.
 func _check_hum_is_smooth() -> void:
 	var sr := 22050
 	_ed._sr = sr
@@ -1088,11 +1012,9 @@ func _check_hum_is_smooth() -> void:
 		"the hum was held in its fry (%.0f Hz)" % (float(sr) / maxf(pc.x, 1.0)))
 
 
-## A TIME THAT OPENS A PARAGRAPH IS FOLLOWED BY A REST, as if the author had marked one - read
-## straight on, "21:40 The subject..." ran the time into the sentence. Held: the paragraph-
-## opening times each get the bare hesitation, welded after the time; a time mid-sentence gets
-## none; an author's own hesitation after a time is not doubled; and Hesitate off removes the
-## automatic ones with the rest.
+## A time that opens a paragraph is followed by a rest as if the author had marked one: paragraph-opening
+## times get the bare hesitation welded after the time; a mid-sentence time gets none; an author's own
+## hesitation is not doubled; Hesitate off removes the automatic ones.
 func _check_timestamp_pauses() -> void:
 	var body := "21:40 The subject has moved.\n\nWe met at 12:30 today.\n\n09:40 <!-- hesitation: 2 --> Arrived early.\n\n7:15 pm Dinner, alone."
 	var was: bool = _ed._cast._hesitate_on.button_pressed
@@ -1109,8 +1031,7 @@ func _check_timestamp_pauses() -> void:
 	_ok(text.contains("21:40" + TextNorm.HOLD_MARK) and text.contains("pm" + TextNorm.HOLD_MARK),
 		"the rest is not welded right after the time (and its am/pm)")
 	_ok(not text.contains("12:30" + TextNorm.HOLD_MARK), "a time mid-sentence got a rest")
-	# a hesitation standing alone above a heading, at the start of a passage: the rest goes
-	# AFTER the `#`s, or "##" stops being markup and is read as a word
+	# a hesitation alone above a heading goes after the `#`s, or "##" is read as a word
 	var head: Array = _ed._split_speakers("<!-- speaker: A -->\n<!-- hesitation: 2 -->\n\n## October 13, 2026\n\nText.")
 	var ht := String(head[0]["text"]) if not head.is_empty() else ""
 	_ok(ht.begins_with("## " + TextNorm.HOLD_MARK), "the rest landed before the heading's #s: %s" % JSON.stringify(ht))
@@ -1124,10 +1045,8 @@ func _check_timestamp_pauses() -> void:
 	_ed._cast._hesitate_on.button_pressed = was
 
 
-## A VOICE'S INK is a setting like any other on it: it survives the panel capturing the slot
-## (which rebuilds the slot from the controls - a key the controls do not carry is erased on
-## the next autosave), a hex color the Ink list does not offer is kept rather than replaced,
-## and it reaches the page beside the text as the document's `inks`.
+## A voice's ink survives the panel capturing the slot (a key the controls do not carry is erased on
+## autosave), a hex color not on the Ink list is kept, and it reaches the page as the document's `inks`.
 func _check_ink_travels() -> void:
 	_ok(String(_ed._cast._merge({"ink": "blue"})["ink"]) == "blue", "the slot schema drops `ink`")
 	_ok(String(_ed._cast._merge({})["ink"]) == "", "a voice with no ink is not the default black")
@@ -1148,16 +1067,9 @@ func _check_ink_travels() -> void:
 	_ed._cast._apply_slot(i)
 
 
-## A DELIVERY MARK leans the voice, a step at a time, and EASES: the first marked sentence goes
-## part of the way, the next further, and after its paragraph the voice comes back the same way -
-## never a hard change from one sentence to the next, which is what made a marked stretch sound
-## like somebody else. Two-sided throughout: the leaned sentence is quicker, higher on the
-## formant-locked path and less paused than the plain one - by a LITTLE (a lean, not a voice);
-## an unknown word is nothing; and the voice's own pitch ratio, its size, is never touched.
-## A WORD LEANED ON IS SENT LEANED ON: `*never*` reaches the host as `emph` on that token, and
-## `**must**` as the stronger level - while an italic run longer than a stress (a paragraph in
-## italics, a title) is typography and is sent plain. The control is the plain sentence, whose
-## tokens must carry no `emph` at all (an unmarked request stays the request it always was).
+## A word leaned on is sent leaned on: `*never*` reaches the host as `emph` on that token, `**must**` as
+## the stronger level; an italic run longer than a stress is typography and is sent plain. The control is
+## the plain sentence, whose tokens carry no `emph`.
 func _check_stress_reaches_the_voice() -> void:
 	_slots(1)
 	var emph := func(text: String) -> Dictionary:
@@ -1178,6 +1090,8 @@ func _check_stress_reaches_the_voice() -> void:
 		"a long italic run was sent as stress, or the short one after it was not: %s" % [long])
 
 
+## A delivery mark leans the voice a step at a time and eases in and out: the leaned sentence is quicker,
+## higher and less paused than the plain one by a little; an unknown word is nothing; the voice's own pitch ratio is never touched.
 func _check_delivery_marks() -> void:
 	_slots(1)
 	_ed._cast._slots[0]["pace"] = 1.0
@@ -1205,9 +1119,8 @@ func _check_delivery_marks() -> void:
 		"a delivery moved the voice by more than a lean: %s against %s" % [str(lit), str(calm)])
 	_ok(Delivery.lean_of("nonsense words") == Vector4.ZERO and Delivery.lean_of("quicker quicker quicker") == Vector4(2, 0, 0, 0),
 		"an unknown word moved the voice, or three steps went past two")
-	# A PASSAGE THAT OPENS ON SOMETHING STRIPPED (an authoring note and its blank line): a mark is
-	# noted where it falls BEFORE the passage's leading whitespace goes, and applied to the text
-	# after it has gone - two characters out, and a mark on its own line started a sentence late.
+	# A passage that opens on something stripped (an authoring note): a mark is noted before the leading
+	# whitespace goes and applied after, so the offsets must match or a mark starts a sentence late.
 	var led: Array = _ed._build_chunks("<!-- a note -->\n\nCalm start here.\n\n<!-- delivery: excited -->\nOh wow. This is big.")
 	var led_pace: Array = []
 	for c in led:

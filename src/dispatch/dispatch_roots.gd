@@ -1,23 +1,19 @@
 extends RefCounted
 class_name DispatchRoots
 
-## DispatchRoots - THE ROOTS OF THE HOLLOW (next/dispatch.md; the user: "large roots crawling downward from the ceiling,
-## as if we are underground. Some of the roots should extend past/below the table, while others should reach ON to the
-## table, and grow across it toward us, the camera/actor. Just simple roots, chaotically growing, a bit like neurons").
+## DispatchRoots - the roots of the hollow (next/dispatch.md): large roots crawling down from the ceiling like neurons,
+## some past the desk, some onto it and across it toward the chair.
 ##
-## GROWN, from the seed: each root a walk from the ceiling, drawn down and wandering as it goes, splitting now and then into
-## thinner roots (a swelling where it splits, as a neuron's body), thinning to its tip; at the floor it crawls a little way
-## along it and ends. THE HANGING ONES stand behind the desk and at its ends, never over it and never in front of the
-## terminal; some come down past its edge to the floor behind it. AND ALL ROUND IT (2026-11-06, feedback 0033: "off to the far
-## left ... and the far right, you can see the illusion: there are no roots to the left or right ... As if the entire office
-## were under a tree, consumed from every direction by the roots"): systems of their own beside the desk on both sides, out
-## past its ends, coming down to the floor and crawling a long way along it; and at each end one that clings under the desk's
-## edge, runs down its front corner and out across the floor toward the chair. THE ONES ON THE DESK come down behind it, over its far
-## edge or its ends where there is a gap, and crawl across its top toward the chair between the things standing on it
-## ([member DispatchSet.footprints]) - and they grow through the night: how much of each is grown is a pure function of
-## show time ([method grow]), its tip a taper moving on along it.
+## Grown from the seed: each root is a walk from the ceiling, drawn down and wandering, splitting now and then into
+## thinner roots (a swelling at each split), thinning to its tip; at the floor it crawls a little way and ends. The
+## hanging ones stand behind the desk and at its ends, never over it or in front of the terminal; some come down past its
+## edge to the floor. Systems of their own stand beside the desk on both sides, coming down to the floor and crawling a
+## long way along it; at each end one clings under the desk's edge, runs down its front corner and out across the floor
+## toward the chair. The ones on the desk come down behind it, over its far edge or its ends where there is a gap, and
+## crawl across its top toward the chair between the things standing on it ([member DispatchSet.footprints]); how much of
+## each is grown is a pure function of show time ([method grow]), its tip a taper moving on along it.
 
-## HOW MANY: hanging systems, and roots on the desk; systems beside the desk on each side, and how far out from the middle
+## How many: hanging systems, and roots on the desk; systems beside the desk on each side, and how far out from the middle
 ## they keep (m: never in front of what the chair sees at the desk's ends); roots along under each end.
 const HANGING := 24
 const ON_DESK := 4
@@ -37,10 +33,10 @@ const DESK_THICK := Vector2(0.018, 0.03)
 const CELL := 0.02
 ## Sides round a root (more for a thick one).
 const SIDES := 9
-## THE DESK'S ROOTS GROW: grown this share at the start of the night, all of it after this many seconds.
+## The desk's roots are grown this share at the start of the night, all of it after [constant GROWN_BY] seconds.
 const GROWN_AT_START := 0.62
 const GROWN_BY := 1500.0
-## WHERE NO HANGING ROOT GOES: over the desk and in front of it (the chair's), and the column before the terminal.
+## Where no hanging root goes: over the desk and in front of it (the chair's), and the column before the terminal.
 const KEEP_OUT_DESK := Rect2(-1.32, -0.62, 2.64, 2.6)
 const KEEP_OUT_TERMINAL := Rect2(-0.55, -1.25, 1.1, 0.7)
 
@@ -48,15 +44,15 @@ var _seed := 1
 var _desk_mat: ShaderMaterial
 var _feet: Array = []
 var _held := Rect2()
-## THE ROOTS ON THE DESK as made: each `{from, to}` (x, z, m) - where it came onto the desk and where its tip is grown to.
+## The roots on the desk as made: each `{from, to}` (x, z, m) - where it came onto the desk and where its tip is grown to.
 var on_desk: Array = []
-## WHAT LIES ON THE DESK'S TOP, every root and tendril there: `{points, radii, from}` - its points from `from` on are on
-## the top (a gate's, to hold that nothing goes through what stands there).
+## What lies on the desk's top, every root and tendril there: `{points, radii, from}` - its points from `from` on are on
+## the top (a gate holds that nothing goes through what stands there).
 var lying: Array = []
 
 
 ## Build them for [param seed], keeping clear of [param footprints] on the desk (Rect2s in x, z) and of [param held], where a
-## phone laid open lies ([method DispatchSet.held_rect]) - as of anything standing, its way, its tendrils and its wander.
+## phone laid open lies ([method DispatchSet.held_rect]): its way, its tendrils and its wander all avoid them.
 func build(seed: int, footprints: Array, held := Rect2()) -> Node3D:
 	_seed = seed
 	_feet = footprints + ([held] if held.has_area() else [])
@@ -71,7 +67,6 @@ func build(seed: int, footprints: Array, held := Rect2()) -> Node3D:
 	var tries := 0
 	while paths.size() < HANGING * 3 and tries < HANGING * 6:
 		tries += 1
-		# most just behind the desk, where the chair sees them over it; some further back and at its ends
 		var near := r.randf() < 0.6
 		var at := Vector3(r.randf_range(-2.4, 2.4), DispatchSet.CEILING, r.randf_range(-1.5, -0.62) if near else r.randf_range(-2.4, 0.6))
 		if _kept_out(at):
@@ -82,7 +77,6 @@ func build(seed: int, footprints: Array, held := Rect2()) -> Node3D:
 		paths.append_array(made)
 		if paths.size() >= HANGING * 3:
 			break
-	# BESIDE THE DESK, on both sides: down to the floor, and a long way along it
 	for side in [-1.0, 1.0]:
 		var n := 0
 		var tries_side := 0
@@ -114,7 +108,7 @@ func build(seed: int, footprints: Array, held := Rect2()) -> Node3D:
 	return root
 
 
-## HOW MUCH OF THE DESK'S ROOTS IS GROWN at show time [param t]: from [constant GROWN_AT_START] at the start to all of it
+## How much of the desk's roots is grown at show time [param t]: from [constant GROWN_AT_START] at the start to all of it
 ## at [constant GROWN_BY] seconds, easing out.
 static func grown(t: float) -> float:
 	var u := clampf(t / GROWN_BY, 0.0, 1.0)
@@ -140,7 +134,7 @@ static func _kept_out(p: Vector3) -> bool:
 	return KEEP_OUT_DESK.has_point(xz) or (KEEP_OUT_TERMINAL.has_point(xz) and p.y > 0.3)
 
 
-## ONE ROOT'S WALK from [param at] going [param dir], [param r0] thick, [param budget] meters long at most: a path
+## One root's walk from [param at] going [param dir], [param r0] thick, [param budget] meters long at most: a path
 ## `{points, radii}` into [param out], and the roots it splits into after it (at most [param depth] 3 deep). At the floor it
 ## crawls [param crawl] of its length at most; with [param outer] it keeps at least that far out to its side (x, signed).
 func _walk(r: RandomNumberGenerator, at: Vector3, dir: Vector3, r0: float, budget: float, depth: int, out: Array, crawl := 0.25,
@@ -154,19 +148,16 @@ func _walk(r: RandomNumberGenerator, at: Vector3, dir: Vector3, r0: float, budge
 	while gone < budget:
 		d = (d + Vector3(r.randf_range(-1, 1), r.randf_range(-0.6, 0.6), r.randf_range(-1, 1)) * WANDER + Vector3.DOWN * DOWN).normalized()
 		var next := p + d * STEP
-		# kept out of the desk's column and the terminal's: turned away along the wall it met
 		if _kept_out(next):
 			var away := _away(next)
 			d = (d + away * 1.4).normalized()
 			next = p + d * STEP
 			if _kept_out(next):
 				next = p + away * STEP
-		# out to its side, and the room's walls
 		if outer != 0.0:
 			next.x = signf(outer) * maxf(absf(next.x), absf(outer))
 		next.x = clampf(next.x, -DispatchSet.ROOM.x + 0.1, DispatchSet.ROOM.x - 0.1)
 		next.z = clampf(next.z, -0.6 - DispatchSet.ROOM.z + 0.1, 0.9)
-		# at the floor it crawls along it a little, then ends
 		var thick := _radius(r0, gone / budget)
 		if next.y < thick:
 			next.y = thick
@@ -178,7 +169,6 @@ func _walk(r: RandomNumberGenerator, at: Vector3, dir: Vector3, r0: float, budge
 		gone += STEP
 		pts.append(p)
 		rad.append(_radius(r0, gone / budget))
-		# a split: a swelling here, and a thinner root off it
 		if depth < 3 and r.randf() < SPLIT and rad[rad.size() - 1] > 0.012 and gone > 0.4:
 			rad[rad.size() - 1] *= 1.35
 			var axis := d.cross(Vector3(r.randf(), r.randf(), r.randf()).normalized()).normalized()
@@ -206,9 +196,9 @@ static func _away(p: Vector3) -> Vector3:
 	return Vector3.FORWARD
 
 
-## A ROOT UNDER THE DESK'S END at [param side] (-1 left, 1 right) - "finding their way along the bottom of the desk": down
-## from the ceiling beside the end, along under its edge toward the chair, down its front corner to the floor and out across
-## it a way. Just outside the top's own edge, so it clings to the desk and never goes into it.
+## A root under the desk's end at [param side] (-1 left, 1 right): down from the ceiling beside the end, along under its
+## edge toward the chair, down its front corner to the floor and out across it a way. Just outside the top's own edge, so
+## it clings to the desk and never goes into it.
 func _under_root(r: RandomNumberGenerator, side: float, out: Array) -> void:
 	var y := DispatchSet.DESK_Y
 	var x := side * (DispatchSet.DESK_W * 0.5 + 0.035)
@@ -248,11 +238,10 @@ func _under_root(r: RandomNumberGenerator, side: float, out: Array) -> void:
 	out.append({"points": pts, "radii": rad})
 
 
-## A ROOT ON THE DESK, the [param k]th: down from the ceiling behind the desk to its far edge (or an end) at a gap between
+## The [param k]th root on the desk: down from the ceiling behind the desk to its far edge (or an end) at a gap between
 ## the things standing there, over the edge, and across the top toward the chair by the free way round what stands there
-## (Godot's own [AStarGrid2D] over the desk's top, a cell [constant CELL] across, what stands there and a margin solid),
-## wandering a little off it - and now and then a fine tendril off its side, as a neuron's. Into [param out]: the root,
-## then its tendrils.
+## (Godot's [AStarGrid2D] over the desk's top, a cell [constant CELL] across, what stands there and a margin solid),
+## wandering a little off it, with now and then a fine tendril off its side. Into [param out]: the root, then its tendrils.
 func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array, used: Array) -> void:
 	var gaps := _gaps()
 	if gaps.is_empty():
@@ -276,7 +265,6 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 	var y := DispatchSet.DESK_Y
 	var r0 := r.randf_range(DESK_THICK.x, DESK_THICK.y)
 	var pts := PackedVector3Array()
-	# from the ceiling, down behind the edge where it comes over
 	var behind := entry + (Vector2(0, -0.08) if absf(entry.y - DispatchSet.FAR) < 0.03 else Vector2(signf(entry.x) * 0.08, 0))
 	var top := Vector3(behind.x + r.randf_range(-0.5, 0.5), DispatchSet.CEILING, behind.y - r.randf_range(0.2, 0.6))
 	var drop := Vector3(behind.x, y + 0.03, behind.y)
@@ -287,7 +275,6 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 		p.z += sin(u * PI) * -0.12
 		pts.append(p)
 	var edge := pts.size()
-	# across the top toward the chair, by the free way
 	var flat := _wander(r, way, 0.012)
 	for q in flat:
 		pts.append(Vector3(q.x, y + r0 * 0.85, q.y))
@@ -299,7 +286,7 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 	out.append({"points": pts, "radii": rad, "grow_at": edge})
 	lying.append({"points": pts, "radii": rad, "from": edge})
 	on_desk.append({"from": entry, "to": flat[flat.size() - 1]})
-	# TENDRILS: fine roots off its side on the desk, each short and wandering until something stands in its way
+	# Tendrils: fine roots off its side on the desk, each short and wandering until something stands in its way
 	for t in r.randi_range(1, 3):
 		var at := r.randi_range(int(flat.size() * 0.25), maxi(int(flat.size() * 0.8), int(flat.size() * 0.25) + 1))
 		at = clampi(at, 1, flat.size() - 2)
@@ -322,7 +309,7 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 			lying.append({"points": tp, "radii": trad, "from": 0})
 
 
-## THE DESK'S TOP AS A GRID for the roots' way across it: a cell [constant CELL] across, solid where something stands (and
+## The desk's top as a grid for the roots' way across it: a cell [constant CELL] across, solid where something stands (and
 ## a margin round it), and where a phone laid open will lie.
 func _desk_grid() -> AStarGrid2D:
 	var g := AStarGrid2D.new()
@@ -342,9 +329,8 @@ func _desk_grid() -> AStarGrid2D:
 	return g
 
 
-## WHERE A ROOT FROM [param entry] HEADS: of every free cell it can reach (a flood over the grid), the one nearest the chair's
-## middle - they reach for whoever sits there - a little at random, and apart from where the roots before it went
-## ([member on_desk]).
+## Where a root from [param entry] heads: of every free cell it can reach (a flood over the grid), the one nearest the
+## chair's middle, a little at random, and apart from where the roots before it went ([member on_desk]).
 func _target(r: RandomNumberGenerator, entry: Vector2, grid: AStarGrid2D) -> Vector2:
 	var start := _cell(entry)
 	if not grid.is_in_boundsv(start) or grid.is_point_solid(start):
@@ -385,7 +371,6 @@ func _wander(r: RandomNumberGenerator, way: PackedVector2Array, amount: float) -
 	var pts := PackedVector2Array()
 	for c in way:
 		pts.append(_point(Vector2i(int(c.x), int(c.y))))
-	# smoothed twice (Chaikin), then a slow wander across it
 	for _k in 2:
 		var sm := PackedVector2Array([pts[0]])
 		for i in pts.size() - 1:
@@ -445,7 +430,7 @@ func _push(p: Vector2, margin: float) -> Vector2:
 	return out
 
 
-## THE ROOTS' MESH: a tube along each path, its radius as the path says; UV.x is how far along its root (0-1), UV2 meters
+## The roots' mesh: a tube along each path, its radius as the path says; UV.x is how far along its root (0-1), UV2 meters
 ## along and round it, CUSTOM0 the point of its line it is drawn in onto past the growth.
 func _mesh(paths: Array) -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -467,7 +452,7 @@ func _mesh(paths: Array) -> ArrayMesh:
 		var lens := PackedFloat32Array([0.0])
 		for i in range(1, n):
 			lens.append(lens[i - 1] + sm[i].distance_to(sm[i - 1]))
-		# HOW FAR ALONG IT HAS GROWN is measured from where it begins to grow (a root on the desk: its edge)
+		# How far along it has grown is measured from where it begins to grow (a root on the desk: its edge)
 		var g0 := lens[clampi(int(pa.get("grow_at", 0)), 0, n - 1)]
 		var total := maxf(lens[n - 1] - g0, 1e-4)
 		var sides := SIDES if rad[0] > 0.03 else 6
@@ -484,7 +469,6 @@ func _mesh(paths: Array) -> ArrayMesh:
 			for k in sides + 1:
 				var a := TAU * float(k) / float(sides)
 				var dd := bx * cos(a) + by * sin(a)
-				# a little lumpy, as roots are
 				var lump := 1.0 + 0.12 * sin(lens[i] * 23.0 + float(k) * 1.7) * sin(lens[i] * 7.0)
 				ring.append([sm[i] + dd * rad[i] * lump, dd, float(k) / float(sides)])
 			rings.append(ring)

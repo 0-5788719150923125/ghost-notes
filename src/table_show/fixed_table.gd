@@ -1,15 +1,14 @@
 extends RefCounted
 class_name FixedTable
 
-## FixedTable - A SHOW'S FIXED THINGS (next/painted_surface.md; next/table_work.md section 11, "A SHOW'S FIXED THINGS"): what a brief
-## says stands on every episode's table exactly as written - a mask on its stand, an artist's station - which every set dresser
-## would otherwise build anew, and differently, each episode. The user of Joker Motivation: "Every episode begins with the same
-## mask. It is the show's signature, and it never changes".
+## FixedTable - a show's fixed things (next/painted_surface.md; next/table_work.md section 11): what a brief says stands on every
+## episode's table exactly as written (a mask on its stand, an artist's station), which every set dresser would otherwise build
+## anew each episode.
 ##
-## A FENCED JSON BLOCK under a heading of the brief's ([constant HEADING]): `{things, materials, light, sound}` written as a set
+## A fenced JSON block under a heading of the brief's ([constant HEADING]): `{things, materials, light, sound}` written as a set
 ## dresser writes a table's. The set dresser starts with them standing ([SetDresserTools]), builds round them and can neither move
-## nor take them away; the table it hands in is given them, whatever it wrote ([method merge]); and no agent reads the JSON itself
-## - the brief they are told says in a line what stands there ([method strip]).
+## nor take them away; the table it hands in is given them, whatever it wrote ([method merge]); no agent reads the JSON itself -
+## the brief they are told says in a line what stands there ([method strip]).
 
 ## The heading the block is under (a Markdown heading of any level).
 const HEADING := "^(#{1,6})\\s+(?i:the fixed table|fixed things)\\s*$"
@@ -17,8 +16,8 @@ const HEADING := "^(#{1,6})\\s+(?i:the fixed table|fixed things)\\s*$"
 const FIXES := ["things", "materials", "light", "sound"]
 
 
-## THE FIXED THINGS OF BRIEF [param body] (with or without its frontmatter): `{things, materials, light, sound}` as written - `{}` when it
-## has none, or its block is not JSON.
+## The fixed things of brief [param body] (with or without its frontmatter): `{things, materials, light, sound}` as written, `{}`
+## when it has none or its block is not JSON.
 static func parse(body: String) -> Dictionary:
 	var sec := Manuscript.section(body, HEADING)
 	if sec.is_empty():
@@ -48,7 +47,7 @@ static func _block(text: String) -> String:
 	return m.get_string(1) if m != null else ""
 
 
-## BRIEF [param body] AS THE AGENTS READ IT: the fixed table's JSON taken out and said in a line - what stands there by name.
+## Brief [param body] as the agents read it: the fixed table's JSON taken out and said in a line - what stands there by name.
 static func strip(body: String) -> String:
 	var sec := Manuscript.section(body, HEADING)
 	if sec.is_empty():
@@ -66,7 +65,7 @@ static func strip(body: String) -> String:
 	return String(sec["before"]) + String(sec["head"]) + "\n" + text + String(sec["after"])
 
 
-## THE NAMES of the things [param fixed] stands, lower-cased.
+## The names of the things [param fixed] stands, lower-cased.
 static func names(fixed: Dictionary) -> Array:
 	var out: Array = []
 	for t in fixed.get("things", []):
@@ -75,8 +74,8 @@ static func names(fixed: Dictionary) -> Array:
 	return out
 
 
-## TABLE [param table] (a set dresser's, as written) WITH THE FIXED THINGS [param fixed] standing in it as written: each fixed thing in
-## place of one of its name, or added; their materials over any of the same name; the light and the sound the brief fixes, if it does.
+## [param table] (a set dresser's, as written) with the fixed things [param fixed] standing in it: each in place of one of its name,
+## or added; their materials over any of the same name; the light and sound the brief fixes, if it does.
 static func merge(table: Dictionary, fixed: Dictionary) -> Dictionary:
 	if fixed.is_empty():
 		return table

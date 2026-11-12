@@ -1,20 +1,18 @@
 extends Node
 
-## THE PUPPETEER'S CALLS REPLAYED (next/framework_audit.md): an episode's `jobs/acts/tools.jsonl` - every `parts`, `act`,
-## `remove` (and with `--watch`, `watch`) its puppeteer made - played again, in order, through the real [PuppeteerTools] on a
-## COPY of the episode's folder, each call timed and the bake's restart said: how long a call took, where its bake began again
-## and how far it baked. What a puppeteer waits on, measured on the run it waited through - the benchmark for a tool's speed.
+## The puppeteer's calls replayed (next/framework_audit.md): plays an episode's `jobs/acts/tools.jsonl` (every `parts`, `act`,
+## `remove`, and with `--watch` `watch`) in order through the real [PuppeteerTools] on a copy of the episode's folder, timing
+## each call and reporting where the bake restarted and how far it baked. The benchmark for a tool's speed.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/act_calls_probe.gd 7200 --show=the-quiet-crucible --seed=841899 \
 ##       [--calls=<a tools.jsonl>] [--first=N] [--last=N] [--watch] [--copy=<dir>] [--full]
 ##
-## `--calls` defaults to the episode's own `jobs/acts/tools.jsonl`; `--first`/`--last` replay a stretch of them (the calls
-## before `--first` replayed too, untimed, so the draft is the one the puppeteer had). It needs a renderer, as the tools do.
-## `--full` prints every reply whole, as the puppeteer would read it now, where the default prints only what went wrong. What a
-## `watch` shows is saved beside the copy's job (`look_NN.jpg`, NN the call's number).
+## `--calls` defaults to the episode's own `jobs/acts/tools.jsonl`; `--first`/`--last` replay a stretch (earlier calls replay
+## untimed so the draft matches). Needs a renderer, as the tools do. `--full` prints every reply whole; the default prints only
+## what went wrong. A `watch` image is saved beside the copy's job (`look_NN.jpg`, NN the call's number).
 ##
-## READ-ONLY: the episode is copied to `--copy` (by default the project's `dist/act_calls_probe/`, a real disk Godot never
-## imports) and the copy's folder is the episodes' root for the run; nothing of the author's is written.
+## Read-only: the episode is copied to `--copy` (default `dist/act_calls_probe/`, a real disk Godot never imports) and the copy
+## is the episodes' root for the run.
 
 func _ready() -> void:
 	_run.call_deferred()

@@ -1,6 +1,6 @@
 extends SceneTree
 
-## THE TABLET'S SCRIPT: what the hand does is inferred right, and the voice and the screen agree
+## The tablet's script: what the hand does is inferred right, and the voice and the screen agree
 ## about which words are read.
 ##
 ##   godot --headless --path . --script tests/media/tablet_check.gd
@@ -115,7 +115,7 @@ func _check_inference() -> void:
 		if b["kind"] == "heading" and bool(b.get("stub", false)):
 			stubs.append(b["raw"])
 	_ok(stubs == ["Nobody wrote this one"], "a heading with nothing under it is a stub, a skipped body is not: %s" % str(stubs))
-	# NOTHING IS READ OFF THE SCREEN: the narration before the first url is not a word at all
+	# Nothing is read off the screen: the narration before the first url is not a word at all
 	_ok(int(acts[0]["after"]) == 0 and int(acts[1]["after"]) == 0, "nothing is read before the browser opens")
 	_ok(String(acts[1]["kind"]) == "open" and int(acts[1]["page"]) == -1 and String(acts[2]["kind"]) == "type"
 		and String(acts[2]["text"]) == "news.test", "the browser opens on a blank tab and the first address is typed")

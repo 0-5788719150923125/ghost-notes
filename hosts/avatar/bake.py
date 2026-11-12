@@ -8,43 +8,37 @@ set's rig, posed against the actor's) and {"head", "video", "out", "steps", "pre
 (head.py), which of its videos the set is of (its code; -1 for none: the mean of them all), where the avatar goes,
 how many steps the set is fitted in and a folder for a picture of it.
 
-THE HEAD IS THE ONE LEARNED FROM EVERY VIDEO, ADAPTED TO THE SET: its expression shifts and their components
-held (the set's frames are read with the head's, `expr`) - how their face moves is every video's - and its splats'
-own place, size, turn, colour and cover fitted to the set's moments, each pulled toward the head's (ADAPT_PULL):
-held whole, the head drew every video at once - softer than one set's own, and below the beard an average of every
-collar he wore (2026-10-23: a smear over the plaid shirt's). THE FACE IS EVERY VIDEO'S, WHAT IS ROUND IT THE SET'S:
-a splat on the face's surface is pulled in full; one far from its triangle (the beard's length, what lies under the
-jaw) or on the head (the hair, which he wears every way) takes FREE_PULL of it, fading as train.py's expression
-shifts fade (SHIFT_NEAR to SHIFT_FAR); a colour, everywhere (the set's light and its detail are its own). AND BELOW
-THE CHIN THE HEAD IS THE SET'S OWN: drawn alone, the head had painted the neck, the collar and the shoulders - an
-average of every collar he wore - and the body had a hole there; pulled toward clear, 21k of its 50k splats there went
-and the rest still painted it. So its splats below the chin (but the face's surface) are dropped, and laid again from
-the set's moments as train.py lays a set's (`train.initial`'s splats round the face: the beard bound to the jaw's edge,
-which carries it), free, and grown here with the set's body - laid below the chin up to the face itself
-(`up_to_face`), so the collar is the body's, fitted to the still after. What is every video's is the face itself:
-its surface and how it moves. THE MOUTH IS THE SET'S TOO (2026-10-25, the user: "the mouth is quite blurry still"): Fit
-holds the lips as the moments taught them, so the played mouth is the bake's - and pulled in full toward the head's, it
-was every video's lips averaged (on the set's open mouths it learned from, 14% of the frames' fine detail; a head of 3
-videos, 28%). Its splats (`mouth_of`: on the lips', the corners' and the inside's triangles) take FREE_PULL of the pull,
-as the hair does, and grow: 22%, as near the frames (24.2 dB). How it moves stays every video's: its shifts are held.
-WHAT IS THE SET'S IS FITTED TO ITS OWN MOMENTS, in STEPS:
-- ITS LOOK: the code its video learned (or the mean, for a video the head never saw), moved to the set's light;
-- ITS ROOM: train.room_of over its moments, learned where seen, with a gain and colour correction per moment;
-- ITS BODY: train.initial's, laid on its bones, learned and grown here - and fitted to the still after (fit.py).
+The head is the one learned from every video, adapted to the set: its expression shifts and their components are
+held (the set's frames are read with the head's, `expr`), so how their face moves is every video's; its splats'
+own place, size, turn, colour and cover are fitted to the set's moments, each pulled toward the head's
+(ADAPT_PULL). Held whole, the head would draw every video at once: softer than one set's own, and below the beard
+an average of every collar.
+
+The face is every video's, what is round it the set's. A splat on the face's surface is pulled in full; one far
+from its triangle (the beard's length, what lies under the jaw) or on the head (the hair) takes FREE_PULL of it,
+fading as train.py's expression shifts fade (SHIFT_NEAR to SHIFT_FAR); a colour is pulled everywhere (the set's
+light and detail are its own). Below the chin the head is the set's own: its splats there (but the face's
+surface) are dropped and laid again from the set's moments as train.py lays a set's (`train.initial`'s splats
+round the face, the beard bound to the jaw's edge), free, and grown here with the set's body - laid below the
+chin up to the face itself (`up_to_face`), so the collar is the body's, fitted to the still after. The mouth is
+the set's too: its splats (`mouth_of`: on the lips', the corners' and the inside's triangles) take FREE_PULL of
+the pull, as the hair does, and grow, since pulled in full they were every video's lips averaged. How it moves
+stays every video's: its shifts are held.
+
+What is the set's is fitted to its own moments, in STEPS:
+- its look: the code its video learned (or the mean, for a video the head never saw), moved to the set's light;
+- its room: train.room_of over its moments, learned where seen, with a gain and colour correction per moment;
+- its body: train.initial's, laid on its bones, learned and grown here, then fitted to the still (fit.py).
 Then the head is baked as the set's video looks (`HeadSplats.baked`), and the whole of them is written as
 train.py writes an avatar: what fit.py fits, and what Godot reads.
 
-NO SPECKS (2026-10-24, the user: "heavy black dots speckled throughout the actor's beard. They move and shift in a
-very much 3D manner"): grown freely on a set's 146 moments - glasses in 11, a globe, bottles, boxes and a broom held
-before the face in some 25, the black collar between the beard's strands - the head went from 55k splats to 346k, 13k
-of them under half a pixel, wholly opaque and dark, each drawn as a dot (the shared head held one), bound to the head
-and face so they turned with it; grown or not, the face held the same 21.6 dB on the moments it never saw. So the
-head grows to at most HEAD_GROWTH of its own, never copies a splat already under LEAST_COPY pixels, and before it is
-baked a splat under SPECK_SIZE pixels darker than SPECK_DARK of the face drawn round it (without such splats) in most of
-SPECK_MOMENTS moments is dropped (`specks`) - relative, so dark hair keeps its splats. (The moments with glasses or
-something held before the face are still learned from: the warm head draws them worst, but left out - the 13 of 146
-drawn more than two spreads past the median - the set's face came out no better, 21.50 dB on the moments it never saw
-against 21.67, with more specks.)
+No specks: grown freely on a set's moments (glasses, a globe, objects held before the face, the black collar
+between the beard's strands), the head grew many sub-pixel, opaque, dark splats, each drawn as a dot, bound to
+the head and face so they turned with it; the face held the same dB either way. So the head grows to at most
+HEAD_GROWTH of its own, never copies a splat already under LEAST_COPY pixels, and before it is baked a splat
+under SPECK_SIZE pixels darker than SPECK_DARK of the face drawn round it (without such splats) in most of
+SPECK_MOMENTS moments is dropped (`specks`) - relative, so dark hair keeps its splats. The moments with glasses
+or something held before the face are still learned from: leaving them out made the set's face no better.
 """
 
 from __future__ import annotations
@@ -238,15 +232,15 @@ def main() -> int:
     start = codes[v] if 0 <= v < codes.shape[0] else codes.mean(0)
     code = torch.nn.Parameter(torch.tensor(start, device=dev, dtype=torch.float32))
     s = train.initial(rig, data, dev, up_to_face=True)
-    # BELOW THE CHIN, THE SET'S OWN: the head's splats there (but the face's surface) dropped, and laid again from the
-    # set's moments - initial's splats round the face, those below the chin - free
+    # Below the chin, the set's own: the head's splats there (but the face's surface) dropped, and laid again
+    # from the set's moments - initial's splats round the face, those below the chin - free
     with torch.no_grad():
         at = int(data.measured[0])
         origin, axes, unit, verts = rig.frames(data, at)
         chin = float(verts[152, 1])
         means, _s, _t = head.world(origin, axes, unit, data.expr[at], code)
-        # all of them: the chin (MediaPipe's 152) is the face's lowest point, and the neck's splats, bound to the jaw's
-        # edge, stand near it (kept "on the face", 45k of 50k still painted the collar)
+        # all of them: the chin (MediaPipe's 152) is the face's lowest point, and the neck's splats, bound to the
+        # jaw's edge, stand near it
         under = means[:, 1] > chin
         head._replace(~under, {})
         free = mouth_of(rig)[head.bind.clamp(max=rig.T - 1)] & (head.bind < rig.T)

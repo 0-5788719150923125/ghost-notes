@@ -1,26 +1,21 @@
 extends SceneTree
 
-## Does the desk's hand write what TeX laid out - every glyph, in a hand's order, in its box, and as
-## a function of time?
+## Does the desk's hand write what TeX laid out - every glyph, in a hand's order, in its box, and as a function of time?
 ##
-## The fixture, tests/table/ink_layout.json, is TeX's own answer (hosts/math/typeset.py, run on
-## ghost's TinyTeX) for nine items: a superscript sum, a radical and a fraction, a sum with limits,
-## a two-line align*, the logic symbols, calligraphic and blackboard letters with the drawn-by-recipe
-## glyphs, big delimiters and a matrix, a paragraph with inline math, and a contour integral - the
-## one glyph no stroke font has, kept with its outline, so the fallback is held too. Committed
-## rather than made here because a gate cannot assume TeX; regenerate it with typeset.py when the
-## host changes (the spec is in its header's form: id, tex, mode).
+## The fixture, tests/table/ink_layout.json, is TeX's own answer (hosts/math/typeset.py, run on ghost's TinyTeX) for nine items: a
+## superscript sum, a radical and a fraction, a sum with limits, a two-line align*, the logic symbols, calligraphic and blackboard
+## letters with the drawn-by-recipe glyphs, big delimiters and a matrix, a paragraph with inline math, and a contour integral (the
+## one glyph no stroke font has, kept with its outline, so the fallback is held too). It is committed because a gate cannot assume
+## TeX; regenerate it with typeset.py when the host changes (the spec is in its header's form: id, tex, mode).
 ##
-## Two-sided where a pass could come from a broken instrument: the contour integral must NOT be
-## covered and must still be drawn (traced, and named in `missing`); a name nothing knows must be
-## named and drawn as nothing; a ligature TeX sets as one glyph ("ff") is written as its letters, never
-## traced; TeX's own order must have the sum's upper limit first, so the hand's
-## moving the sign ahead of it is seen to happen; a different seed must give a different hand.
+## Two-sided where a pass could come from a broken instrument: the contour integral must not be covered and must still be drawn
+## (traced, and named in `missing`); a name nothing knows must be named and drawn as nothing; a ligature TeX sets as one glyph
+## ("ff") is written as its letters, never traced; TeX's own order must have the sum's upper limit first, so the hand's moving the
+## sign ahead of it is seen to happen; a different seed must give a different hand.
 ##
-## A DRAWING (hosts/math/figure.py's record: `paths` beside its labels' glyphs) is drawn by the same
-## hand, in one order over both: a line drawn a little uneven but ending exactly where it was laid out
-## (lines that meet still meet), never ruler-straight (the control), and faster than writing - a
-## line drawn at the writing pace is the control that must take longer.
+## A drawing (hosts/math/figure.py's record: `paths` beside its labels' glyphs) is drawn by the same hand, in one order over both: a
+## line drawn a little uneven but ending exactly where it was laid out (lines that meet still meet), never ruler-straight (the
+## control), and faster than writing - a line drawn at the writing pace is the control that must take longer.
 ##
 ##   godot --headless --path . --script tests/table/ink_check.gd
 
@@ -100,7 +95,7 @@ func _coverage(items: Dictionary, outlines: Dictionary) -> void:
 	var got := Ink.strokes_of(made_up, 7)
 	_check((got["missing"] as PackedStringArray).has("cmsy10:nosuchglyph") and
 		(got["strokes"] as Array).is_empty(), "a glyph nothing can draw is named, and drawn as nothing")
-	# A LIGATURE: cmr's "ff" (code 11) is one glyph to TeX and two letters to a hand
+	# a ligature: cmr's "ff" (code 11) is one glyph to TeX and two letters to a hand
 	var lig := {"id": "lig", "glyphs": [{"k": 1, "f": "cmr12", "c": 11, "n": "ff", "x": 0.0, "y": 0.0,
 		"s": 12.0, "w": 7.0, "ht": 8.3, "dp": 0.0}], "rules": []}
 	var one := {"id": "lig", "glyphs": [{"k": 1, "f": "cmr12", "c": 102, "n": "f", "x": 0.0, "y": 0.0,
@@ -198,9 +193,8 @@ func _boxes(items: Dictionary, outlines: Dictionary) -> void:
 			var size := float(g["s"])
 			var w := float(g["w"])
 			var name := String(g["n"])
-			# Overflow allowed is a hand's, not a stretch: a glyph is never wider than its box by
-			# more than a third of its size (stretched to fit, the spike's superscripts ran into
-			# their bases), and its middle is inside the box.
+			# Overflow allowed is a hand's, not a stretch: a glyph is never wider than its box by more than a third of its size, and its
+			# middle is inside the box.
 			if r.size.x > w + 0.34 * size and not String(g["f"]).begins_with("cmex"):
 				wide.append("%s %s (%.1f in %.1f)" % [id, name, r.size.x, w])
 			var cx := r.get_center().x
@@ -212,18 +206,14 @@ func _boxes(items: Dictionary, outlines: Dictionary) -> void:
 
 # --- its own proportions --------------------------------------------------------------
 
-## A glyph is drawn at the shape its font gives it. The hand once measured x by each glyph's own
-## advance and y by the cap height: a comma (8 units wide) came out 2.6 times too wide and read as
-## "›", and every glyph's shape followed its advance. Each of these, set alone in a box wide enough
-## not to shrink it, must keep the font's width-to-height within a quarter (the hand's own jitter -
-## a uniform scale and a few degrees' turn - stays well inside that).
+## A glyph is drawn at the shape its font gives it: each of these, set alone in a box wide enough not to shrink it, must keep the
+## font's width-to-height within a quarter (the hand's own jitter - a uniform scale and a few degrees' turn - stays well inside that).
 func _proportions() -> void:
 	print("-- a glyph keeps its own proportions")
 	var bad := PackedStringArray()
 	for pair in [["comma", ","], ["period", "."], ["colon", ":"], ["m", "m"], ["w", "w"], ["x", "x"]]:
 		var name := String(pair[0])
-		# The font's own points, in its own units - never through the hand's code, or a bug there
-		# would bend the reference the same way (it did: this check passed on the bug at first).
+		# The font's own points, in its own units - never through the hand's code, or a bug there would bend the reference the same way.
 		var glyph: Array = Ink._hershey("futural", String(pair[1]))
 		var raw := _extent(glyph[2])
 		var item := {"id": "p_" + name, "rules": [], "glyphs": [{"k": 1, "f": "cmr12", "c": 0,

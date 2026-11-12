@@ -7,22 +7,22 @@ extends RefCounted
 ##   var ms := WorkClock.cost_ms(func() -> void: medium._shuffles._wash_plan(7777, 30.0))
 ##   _ok(ms < 700.0, "a plan is cheap enough (%.0f ms)" % ms)
 ##
-## THE WALL CLOCK TIMES THE MACHINE, NOT THE CODE. table_wash_check held a step of rest to 25 ms by
+## The wall clock times the machine, not the code. table_wash_check held a step of rest to 25 ms by
 ## the wall clock and failed with no code changed the day three gates ran beside it and an encode:
-## 59.6 ms, most of it spent waiting for a core (2026-10-12). CI runs four gates at once on four
+## 59.6 ms, most of it spent waiting for a core. CI runs four gates at once on four
 ## cores, which is the same thing.
 ##
-## SO THE CLOCK IS THE THREAD'S OWN: the time this thread has had a processor
+## So the clock is the thread's own: the time this thread has had a processor
 ## (`/proc/thread-self/schedstat` on Linux), which does not run while it waits for one. Where there
 ## is no such clock (Windows, macOS) it is the wall clock, and the rest below still holds.
 ##
-## AND THE COST IS THE LEAST OF SEVERAL TIMINGS: what else a machine is doing only ever ADDS to a
+## And the cost is the least of several timings: what else a machine is doing only ever ADDS to a
 ## timing - a core shared with its twin, a cache emptied by a neighbor - so the least is the nearest
 ## to the work itself, and a burst that lands on one timing does not land on all of them. Code that
 ## keeps what it made (a cache) is handed a `reset` to run before each timing, or the second timing
 ## measures the keeping.
 ##
-## WHAT IT DOES NOT DO, measured before it was left out: count the cost in units of a reference
+## What it does not do, measured before it was left out: count the cost in units of a reference
 ## piece of work timed beside it. The same work costed ten times on a loaded desk spread 63% by the
 ## wall clock, 55% as a ratio to the reference, 35% as that ratio in processor time - and 28% in
 ## processor time alone. The reference and the work slow down by different amounts, so dividing
@@ -30,7 +30,7 @@ extends RefCounted
 ## real room over the cost it holds (twice is enough; a third more is not), and
 ## [method cost_ms] is what tells a gate how much room it has.
 ##
-## THE CONTROL IS THE CALLER'S: a budget is worth having only if more work breaks it, so a gate
+## The control is the caller's: a budget is worth having only if more work breaks it, so a gate
 ## costs the same work done twice over and holds that to be about twice as much.
 
 ## How many timings a cost is the least of.

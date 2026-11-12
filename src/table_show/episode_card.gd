@@ -1,49 +1,42 @@
 extends VBoxContainer
 class_name EpisodeCard
 
-## EpisodeCard - the Table component's card (Cards until 2026-10-26): a show at a table nobody writes by
-## hand - cards read, things made, or both. What it does there, and what the show is, are the brief's to say.
+## EpisodeCard - the Table component's card: a show at a table nobody writes by hand - cards read, things made, or both. What it
+## does there, and what the show is, are the brief's to say.
 ##
-## A SHOW is a document: its title is the channel, its body is the BRIEF - what the show is,
-## its voice, its rules - and its `ghost: table:` block holds the knobs and the reader's voice.
-## An EPISODE is one seed of the show, produced by agents ([TableProducer]) step by step and
-## kept on disk ([TableEpisode]): planned, shuffled, designed, painted, and read aloud one card
-## at a time, in drawing order. What they write is then read by the note's voice, at the card
-## table ([TableMedium]), which this card pins as the medium.
+## A show is a document: its title is the channel, its body is the brief - what the show is, its voice, its rules - and its
+## `ghost: table:` block holds the knobs and the reader's voice. An episode is one seed of the show, produced by agents
+## ([TableProducer]) step by step and kept on disk ([TableEpisode]): planned, shuffled, designed, painted, and read aloud one card
+## at a time, in drawing order. What they write is then read by the note's voice, at the card table ([TableMedium]), which this
+## card pins as the medium.
 ##
-## A CARD ON THE READING, NOT A MODE OF IT (next/structure.md, step 12). This was `CardsEditor`, a
-## [ReadingPanel] that overrode 25 of the panel's methods. It is a component card now, built by
-## [NoteCards] from the `table` row as the Look's is, and it HANDS the reading what a show of cards
-## changes: what is read ([EpisodeWalk]: the episode's script, never the brief), where it is heard
-## ([EpisodeCard.Bed]: the episode's table, its sound and wind) and how it goes out
-## ([EpisodeCard.Publish]: the episode's title, the episode held through a render, upload notes and its
-## chapters). The panel is the one a chapter is read in, and knows nothing of cards.
+## A card on the reading, not a mode of it (next/structure.md, step 12): a component card built by [NoteCards] from the `table`
+## row as the Look's is, and it hands the reading what a show of cards changes: what is read ([EpisodeWalk]: the episode's
+## script, never the brief), where it is heard ([EpisodeCard.Bed]: the episode's table, its sound and wind) and how it goes out
+## ([EpisodeCard.Publish]: the episode's title, the episode held through a render, upload notes and its chapters). The panel is
+## the one a chapter is read in, and knows nothing of cards.
 ##
-## GENERATION IS EXPLICIT, as with every picture in ghost, and ON THE NOTE'S PIPELINE CARD ([Section]; next/pipeline.md):
-## Generate makes what the episode is missing, New episode (here) makes a new seed, and a row's ⟳ deletes that step (and
-## what was made from it, asking first when that is anything) and makes it again. Nothing runs on open - it spends the
-## author's quota. EACH THING THAT CAN BE MADE AGAIN IS A ROW OF ITS OWN (the user, 2026-11-02: "I don't think we should
-## bury options under that button"; a menu of four under every card's ⟳ until then).
+## Generation is explicit, as with every picture in ghost, and on the note's Pipeline card ([Section]; next/pipeline.md):
+## Generate makes what the episode is missing, New episode (here) makes a new seed, and a row's redo deletes that step (and what
+## was made from it, asking first when that is anything) and makes it again. Nothing runs on open - it spends the author's
+## quota. Each thing that can be made again is a row of its own.
 
 const YouTube := preload("res://src/export/youtube.gd")
 const TagField := preload("res://src/ui/tag_field.gd")
 
 ## The block it keeps under the document's `ghost:` key.
 const KEY := "table"
-## The knobs a show keeps beside its voice. Also the schema: a stored value of the wrong shape
-## falls back to these. NO DRAW (the user, 2026-10-26: "The 'draw' option is confusing ... leave it up to
-## the agents to calculate the number of cards to draw (if they are even using cards at all)"): the brief
-## says what its episodes draw and the producer plans that many, or none ([method TableProducer._land_plan]).
+## The knobs a show keeps beside its voice. Also the schema: a stored value of the wrong shape falls back to these. There is no
+## draw knob: the brief says what its episodes draw and the producer plans that many, or none ([method TableProducer._land_plan]).
 const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
 	"painter_effort": "", "players": "", "players_model": "", "players_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
 const MAKERS := TableProducer.MAKERS
-## EVERY STEP AS ITS ROW SAYS IT, "K" each card or beat: what it is called, and what its ⟳ does ("" for a step with no ⟳ of
+## Every step as its row says it, "K" each card or beat: what it is called, and what its redo does ("" for a step with no redo of
 ## its own - the draw is a function of the seed, so dealing again deals the same cards, and a different deal is a different
-## episode; a check and the depth come with their painting; the script with its readings). A ROW IS WHAT THE EPISODE HAS
-## (2026-10-26, the user of an alchemy show: "Shuffle" and "Card" "no longer appropriate names"): the draw only where cards
-## are drawn, the work only where the plan has work, and each beat called what the producer calls one ([method
+## episode; a check and the depth come with their painting; the script with its readings). A row is what the episode has: the draw
+## only where cards are drawn, the work only where the plan has work, and each beat called what the producer calls one ([method
 ## TableEpisode.beat_word] - an ingredient, a card, a coat of paint), with its own name beside it.
 const STEPS := {
 	"direction": {"label": "Direction", "again": "Take up the Direction card's words again: what was made from the old ones goes stale"},
@@ -80,10 +73,9 @@ const STEPS := {
 }
 ## How much of what a ⟳ would throw away it names, before "and 12 more".
 const NAMED_MOST := 6
-## WHAT A REDO MAKES ALONG WITH ITS STEP: what is made from it and nothing else, so no choice is left
-## (the user, 2026-10-17: "if you're changing the first, then by definition you'll need the other
-## automatically"). The cloth's depth is painted from the cloth: a new cloth is a new depth, where
-## the table wants one (TableEpisode.wants_height), and never a cloth with no depth until Generate.
+## What a redo makes along with its step: what is made from it and nothing else, so no choice is left. The cloth's depth is
+## painted from the cloth: a new cloth is a new depth, where the table wants one (TableEpisode.wants_height), and never a cloth
+## with no depth until Generate.
 const TOGETHER := {"image:surface": ["image:height"]}
 
 var _knobs := KNOBS.duplicate(true)
@@ -105,9 +97,9 @@ var _painter: AgentPick
 var _players: AgentPick
 var _environment_dial: HSlider
 var _row_t := 0.0
-## WHAT IT HANDS THE NOTE'S PIPELINE CARD ([method pipeline]).
+## What it hands the note's pipeline card ([method pipeline]).
 var _section: Section = null
-## WHAT THE ROWS ARE DRAWN FROM, read again only when the episode's files change ([method _facts]): they refresh four
+## What the rows are drawn from, read again only when the episode's files change ([method _facts]): they refresh four
 ## times a second, and an episode's steps are a JSON parse each.
 var _facts_of := []
 var _facts_kept := {}
@@ -116,14 +108,14 @@ var _deck_note: Label
 var _deck_seen := -1
 var _table_seen := {}
 var _tools_log := {}            # step -> {mt, path, said}: its agent's last tool call
-## THE EPISODE AN EXPORT IS OF, held from the moment it is asked for: synthesis takes minutes,
+## The episode an export is of, held from the moment it is asked for: synthesis takes minutes,
 ## and an episode picked meanwhile must not lend the take its cards or its upload notes.
 ## {episode, body, doc, title}, or empty.
 var _export_pin := {}
 ## The take the last export rendered and the episode it is of: the upload describes them (see
 ## [method upload_base]) after the pin is let go. {take, episode}, or empty.
 var _taken := {}
-## THE YOUTUBE FIELDS: the show's description and tags (on the YouTube card - null without one). The
+## The youtube fields: the show's description and tags (on the YouTube card - null without one). The
 ## picked episode's title is the Script card's Episode ([method episode_title], edited in its plan).
 ## The picked episode, as what other cards make from it reads it ([method ReadingPanel.episode_feed]).
 var _feed: Feed = null
@@ -132,13 +124,13 @@ var _yt_tags: TagField
 var _yt_note: Label
 var _yt_dirty := 0.0       # seconds until the description's edit is kept; 0 = nothing waiting
 var _yt_seen := {}         # {path, mt, ups}: the plan the fields were last filled for, and its uploads
-## THE SHOW'S YOUTUBE DESCRIPTION, kept in its document's block - global, the same for every episode,
+## The show's youtube description, kept in its document's block - global, the same for every episode,
 ## never a record per episode (see [method capture]).
 var _cur_desc := ""
 
 
 
-## THE READING THIS CARD SERVES ([method serve]): it asks the panel a few things by name - its
+## The reading this card serves ([method serve]): it asks the panel a few things by name - its
 ## document, its script box, the cast's names, the status line - and hands it a walk, a bed and a
 ## publish. Null for a card nobody handed a reading (it is then inert).
 var reading: ReadingPanel
@@ -155,7 +147,7 @@ static func for_note(ctx: Dictionary) -> EpisodeCard:
 	return card
 
 
-## SERVE [param panel]: hand it the episode's walk, bed and publish, and build the card. The episode
+## Serve [param panel]: hand it the episode's walk, bed and publish, and build the card. The episode
 ## opens once the panel has read its document ([method _on_reading_ready]) - opening it before would
 ## open the last show's.
 func serve(panel: ReadingPanel) -> void:
@@ -187,7 +179,7 @@ func _on_reading_ready() -> void:
 	_open_episode()
 
 
-## THE TABLE IS THE MEDIUM, pinned while the card is up - and BEFORE ANYTHING ATTACHES: the stage
+## The table is the medium, pinned while the card is up - and before anything attaches: the stage
 ## is built on the first reading, with whatever medium resolves then (see Director.medium_override).
 ## Pinned on entering the tree, not on being built, so a panel built by hand and freed (a gate)
 ## leaves no pin behind.
@@ -252,7 +244,7 @@ func _live_episode_dir() -> String:
 
 # --- what it hands the reading -------------------------------------------------------------------
 
-## WHERE THE READING IS: the episode's table (`table.json`), heard - its `sound` and its light's wind,
+## Where the reading is: the episode's table (`table.json`), heard - its `sound` and its light's wind,
 ## on the episode's seed as the table plans it ([method Soundscape.of_table]). An export's is the
 ## episode pinned for it.
 class Bed extends ReadingBed:
@@ -269,7 +261,7 @@ class Bed extends ReadingBed:
 		return float(card._knobs["environment"])
 
 
-## WHAT THE EPISODE IS PACED BY ([TuneSection], on the panel's Pacing card): the numbers that pace the laws its acts use
+## What the episode is paced by ([TuneSection], on the panel's Pacing card): the numbers that pace the laws its acts use
 ## ([method TableTune.fields]: a show that paints nothing is offered no brush's), told in the show's block (`tune:`). Read again only
 ## when the acts change.
 class Pacing extends TuneSection:
@@ -308,7 +300,7 @@ func laws_used() -> Array:
 	return out
 
 
-## HOW AN EPISODE GOES OUT: named after itself, pinned through the minutes of its render, and
+## How an episode goes out: named after itself, pinned through the minutes of its render, and
 ## followed by upload notes (see [method EpisodeCard.before_take]).
 class Publish extends ReadingPublish:
 	var card: EpisodeCard
@@ -351,7 +343,7 @@ class Publish extends ReadingPublish:
 		return card._feed
 
 
-## THE EPISODE AS THE STEPS OTHER CARDS ADD TO IT READ IT ([EpisodeFeed]): its folder, the show's name,
+## The episode as the steps other cards add to it read it ([EpisodeFeed]): its folder, the show's name,
 ## the episode's title and description, the show's tags (and a step's to write over them), its reading
 ## with the marks taken out, and the show's writer.
 class Feed extends EpisodeFeed:
@@ -408,7 +400,7 @@ class Feed extends EpisodeFeed:
 				out.append(ProjectSettings.globalize_path(episode.file_of("image:card:%d" % k)))
 		return out
 
-	# EVERY PICTURE ITS PAINTER MADE, in the order the episode makes them, each by its row's own name: the picture painted first that
+	# Every picture its painter made, in the order the episode makes them, each by its row's own name: the picture painted first that
 	# a surface copies, its layers, the cloth, the room, the depth, the backs, the cards' paintings, a game's pictures
 	func made_pictures() -> Array:
 		var out: Array = []
@@ -477,10 +469,10 @@ func book(d: Dictionary, body: String) -> Dictionary:
 ## its plan) - the table stands and washes as many cards as the deck held, never a number of its own.
 func _table_doc(ep: TableEpisode) -> Dictionary:
 	var doc := ep.document()
-	# ...THE TAKE KEPT, where it was said from the script as it stands: the table plans on its words' times (TablePlan.take_times)
+	# ...the take kept, where it was said from the script as it stands: the table plans on its words' times (TablePlan.take_times)
 	if ep.take_matches(_voice_sig()):
 		doc["take"] = ep.take_file()
-	# ...AND HOW THE SHOW TUNES ITS HANDS ([TableTune]): the block's `tune:`, for the table live and in a render alike
+	# ...and how the show tunes its hands ([TableTune]): the block's `tune:`, for the table live and in a render alike
 	if not _tune.is_empty():
 		doc["tune"] = _tune.duplicate(true)
 	if int(doc.get("deck_n", 0)) <= 0 and _text != null:
@@ -488,7 +480,7 @@ func _table_doc(ep: TableEpisode) -> Dictionary:
 	return doc
 
 
-## AN EXPORT IS NAMED AFTER ITS EPISODE: the title the producer gave it (made safe for a file name
+## An export is named after its episode: the title the producer gave it (made safe for a file name
 ## by the exporter), or the show and seed while it has none - a folder of `ghost_1080p.mp4`s
 ## says nothing about which reading is which.
 func export_name() -> String:
@@ -499,12 +491,11 @@ func export_name() -> String:
 	return t if not t.is_empty() else "%s %d" % [_show_title(), _episode.seed]
 
 
-## THE EXPORT: the take is rendered as any reading's is, then the episode's folder gets `upload.md`
-## - the title, the description and tags the producer wrote, and the chapters its readers named timed
-## from the take itself ([method TableEpisode.upload_notes]). One show makes many videos; each should arrive ready to post.
+## The export: the take is rendered as any reading's is, then the episode's folder gets `upload.md` - the title, the description
+## and tags the producer wrote, and the chapters its readers named timed from the take itself ([method TableEpisode.upload_notes]).
 ##
-## THE EPISODE IS PINNED BEFORE THE FIRST AWAIT: the take is minutes of synthesis, and the panel
-## stays live through it. False with no episode: nothing renders.
+## The episode is pinned before the first await: the take is minutes of synthesis, and the panel stays live through it. False with
+## no episode: nothing renders.
 func before_take() -> bool:
 	_doc.pull()          # a change in the show's file lands now, not part way through
 	_flush_upload_fields()
@@ -532,13 +523,11 @@ func after_take(path: String) -> String:
 		else "Rendered the take; the upload notes failed: " + err)
 
 
-## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility, playlist and thumbnail (see
-## [member Exporter.upload_provider]): the episode's description and its chapters timed from
-## [param take] (apart, so the playlist goes between them - [method YouTube.description_of]), the
-## SHOW'S tags (its document's `tags:` line, the one list - a step that writes an episode's writes over
-## it), the episode's folder (where the steps other cards add keep what they made of it), the file its
-## uploads are recorded in, and the show's and the episode's titles for the card's `%title%` and
-## `%episode%`. For the take an export just rendered it describes THAT episode, whichever is picked now;
+## What an upload says, under the YouTube card's title, visibility, playlist and thumbnail (see [member Exporter.upload_provider]):
+## the episode's description and its chapters timed from [param take] (apart, so the playlist goes between them - [method
+## YouTube.description_of]), the show's tags (its document's `tags:` line, the one list), the episode's folder (where the steps
+## other cards add keep what they made of it), the file its uploads are recorded in, and the show's and the episode's titles for
+## the card's `%title%` and `%episode%`. For the take an export just rendered it describes that episode, whichever is picked now;
 ## with no take, the picked one. {} while the episode has no plan.
 func upload_base(take: String) -> Dictionary:
 	var ep: TableEpisode = _episode
@@ -563,7 +552,7 @@ func upload_values() -> Dictionary:
 		"seed": str(_episode.seed) if _episode != null else ""}
 
 
-## THE PICKED EPISODE'S TITLE, as its plan has it: the Script card's Episode (handed it by the panel -
+## The picked episode's title, as its plan has it: the Script card's Episode (handed it by the panel -
 ## [method ReadingPublish.episode_title]), the export's name, the picker's entry and `upload.md`. Null
 ## before it has a plan: Generate names it.
 func episode_title() -> Variant:
@@ -572,7 +561,7 @@ func episode_title() -> Variant:
 	return String(_episode.upload_notes()["title"])
 
 
-## [param title] NAMES THE PICKED EPISODE from now on: written into its plan, the rest of it kept, so the
+## [param title] names the picked episode from now on: written into its plan, the rest of it kept, so the
 ## export's file name, the episode picker and `upload.md` follow. "" once written, else why not - an
 ## emptied title is not written (a video needs one).
 func name_episode(title: String) -> String:
@@ -592,10 +581,9 @@ func name_episode(title: String) -> String:
 	return ""
 
 
-## THE UPLOAD'S TITLE as the YouTube card's default template makes it: the show's name, then the
-## episode's - "Truthful Tarot: My Episode Name" (the user, 2026-10-06) - unless the episode's
-## already begins with the name, or the show has none. YouTube's 100 characters are cut from the end
-## ([method YouTube.fit_title]), so the name stands.
+## The upload's title as the YouTube card's default template makes it: the show's name, then the episode's ("Truthful Tarot: My
+## Episode Name") unless the episode's already begins with the name, or the show has none. YouTube's 100 characters are cut from
+## the end ([method YouTube.fit_title]), so the name stands.
 static func upload_title(show: String, episode: String) -> String:
 	var name := show.strip_edges()
 	var t := episode.strip_edges()
@@ -604,7 +592,7 @@ static func upload_title(show: String, episode: String) -> String:
 	return "%s: %s" % [name, t] if not t.is_empty() else name
 
 
-## THE LINE THE NEXT EPISODE'S TITLE GOES UP IN, which its producer is shown before it writes one
+## The line the next episode's title goes up in, which its producer is shown before it writes one
 ## ([method YouTube.title_shape], the `episode_title` rule in rules/table/producer.yaml): the YouTube
 ## card's template - with no card, the default one, which is what [method upload_title] makes - with
 ## the show's name in it and [constant TablePrompts.TITLE_MARK] where the episode's title will stand.
@@ -614,7 +602,7 @@ func _uploads_as() -> String:
 		"seed": str(_episode.seed) if _episode != null else ""}, TablePrompts.TITLE_MARK)
 
 
-## THE SHOW'S TAGS: its document's own `tags:` line, as North Star's chapters keep theirs
+## The show's tags: its document's own `tags:` line, as North Star's chapters keep theirs
 ## (`tags: a, b, c`) - every episode goes up with them.
 func _show_tags() -> PackedStringArray:
 	return YouTube.split_tags(_doc.field("tags")) if _doc != null else PackedStringArray()
@@ -632,12 +620,11 @@ func _show_title() -> String:
 	return t if not t.is_empty() else "Untitled show"
 
 
-## What the producer works from, read fresh: the title and byline, the line an episode's title goes
-## up in ([method _uploads_as]), the brief (as the agents get it: its card LIST taken out, its
-## macros read, its notes to self gone - see [method TablePrompts.brief]), the deck the brief lists (or none, when the producer chooses each
-## episode's - `chooses`), the show's voices
-## (every one its document names - the reader's and any other, a familiar's - for the reader to
-## hand lines to), how long a word takes its reader to say (what its passages are written to), and the knobs.
+## What the producer works from, read fresh: the title and byline, the line an episode's title goes up in ([method _uploads_as]),
+## the brief (as the agents get it: its card list taken out, its macros read, its notes to self gone - see [method
+## TablePrompts.brief]), the deck the brief lists (or none, when the producer chooses each episode's - `chooses`), the show's
+## voices (every one its document names - the reader's and any other, a familiar's - for the reader to hand lines to), how long
+## a word takes its reader to say (what its passages are written to), and the knobs.
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
@@ -646,7 +633,7 @@ func _spec() -> Dictionary:
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
 		"players": _knobs["players"] if not String(_knobs["players"]).is_empty() else _knobs["writer"], "players_model": _knobs["players_model"], "players_effort": _knobs["players_effort"],
-		# ...AND WHERE TO TAKE THE NEXT EPISODE, as the Direction card says it now ([Direction]): an episode takes it up as its plan is made
+		# ...and where to take the next episode, as the Direction card says it now ([Direction]): an episode takes it up as its plan is made
 		"direction": Direction.text_of(reading.block_now(Direction.KEY)) if reading != null else ""}
 
 
@@ -658,7 +645,7 @@ func capture() -> Dictionary:
 		if String(k).begins_with("players") and String(_knobs[k]).is_empty():
 			continue
 		t[k] = _knobs[k]
-	# THE SHOW'S YOUTUBE DESCRIPTION: a global value (each episode's title is its plan's)
+	# The show's youtube description: a global value (each episode's title is its plan's)
 	if not _cur_desc.is_empty():
 		t["description"] = _cur_desc
 	# ...and its tuning, only where it tells some: every other show's block stays as it was
@@ -667,17 +654,14 @@ func capture() -> Dictionary:
 	return t
 
 
-## The document's block arrives at every read of it - on open, and at every Play and export
-## (see [method DocSource.pull]) - so the episode is reopened only when the block names a
-## DIFFERENT one. Reopening on every read stopped a generation in progress, and reopening reads the
-## document again, which used to recurse.
+## The document's block arrives at every read of it - on open, and at every Play and export (see [method DocSource.pull]) - so the
+## episode is reopened only when the block names a different one: reopening on every read would stop a generation in progress, and
+## reopening reads the document again, which recurses.
 ##
-## THE KNOBS ARE THE DOCUMENT'S, EXACTLY: the block is laid over the defaults, never over the
-## knobs the panel held - those belong to whatever show was open before, and a show whose block
-## does not name its `show` key would otherwise make its episodes in the last show's folder,
-## with the last show's history handed to its producer as its own. A document with no `table:`
-## block at all (a chapter, opened here for its voice) is never applied: it opens as a new show,
-## from the defaults ([method _on_show_opened]).
+## The knobs are the document's, exactly: the block is laid over the defaults, never over the knobs the panel held - those belong
+## to whatever show was open before, and a show whose block does not name its `show` key would otherwise make its episodes in the
+## last show's folder, with the last show's history handed to its producer. A document with no `table:` block at all (a chapter,
+## opened here for its voice) is never applied: it opens as a new show, from the defaults ([method _on_show_opened]).
 func apply(cfg: Dictionary) -> void:
 	var was := "%s#%d" % [String(_knobs["show"]), int(_knobs["seed"])]
 	_knobs = KNOBS.duplicate(true)
@@ -763,7 +747,7 @@ func _build() -> void:
 	box.add_child(erow)
 	_episode_pick = OptionButton.new()
 	_episode_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# SIZED BY THE ROW, NOT BY ITS ITEMS: an OptionButton is as wide as its longest item unless
+	# Sized by the row, not by its items: an OptionButton is as wide as its longest item unless
 	# told otherwise (clip_text alone does not do it), and an episode's title is a writer's - one
 	# long title pushed the whole panel out to 1080 px
 	_episode_pick.fit_to_longest_item = false
@@ -778,8 +762,7 @@ func _build() -> void:
 		_touch()
 		_open_episode())
 	erow.add_child(_episode_pick)
-	# ...ITS NAME GIVEN THE WHOLE ROW, what is done to an episode beneath it (the user, 2026-11-11: "so that the buttons are near
-	# each other, and so that the episode names get the full row")
+		# its name has the whole row, what is done to an episode beneath it
 	var arow := HBoxContainer.new()
 	arow.add_theme_constant_override("separation", 6)
 	box.add_child(arow)
@@ -789,7 +772,7 @@ func _build() -> void:
 		+ "Generate, or a part at a time with ⟳, on the Pipeline card.")
 	_new_btn.pressed.connect(_new_episode)
 	arow.add_child(_new_btn)
-	# ...OR ONE BEGUN BY HAND (next/editing.md step 8): no agent asked, every row waiting for its ✎
+	# ...or one begun by hand (next/editing.md step 8): no agent asked, every row waiting for its ✎
 	var hand := Button.new()
 	hand.text = "By hand"
 	hand.tooltip_text = ("A fresh episode no agent makes: a plan of one beat, the table with the brief's fixed things, empty words - "
@@ -804,10 +787,9 @@ func _build() -> void:
 	_del_btn.pressed.connect(_ask_delete)
 	arow.add_child(_del_btn)
 
-	# NO DRAW, REVERSALS OR JUMPERS (the user, 2026-10-25: "options that should be set by the agents during
-	# preparation for an episode"; and 2026-10-26, of the draw): the producer chooses them from the brief - how
-	# many cards in the plan's spread, the rest in its staging ([constant CardTable.REVERSALS], `jumpers`)
-	# THE PLACE, HEARD: what the set dresser wrote as the table's `sound`, and its wind ([Soundscape])
+		# no draw, reversals or jumpers knobs: the producer chooses them from the brief - how many cards in the plan's spread, the rest in its
+		# staging ([constant CardTable.REVERSALS], `jumpers`)
+	# The place, heard: what the set dresser wrote as the table's `sound`, and its wind ([Soundscape])
 	_environment_dial = Card.slider_row(box, "Environment", 0.0, 1.0, 0.05, float(_knobs["environment"]),
 		("The place the reading is in, heard under the voice: the wind, the sea, rain, a fire - whatever "
 		+ "the set dresser gave the episode's table, and its wind whenever the table has one, every gust "
@@ -823,7 +805,7 @@ func _build() -> void:
 			_touch())
 
 
-	# WHO WRITES AND WHO PAINTS: an agent CLI each, from the registries - the plan, the booklet and
+	# Who writes and who paints: an agent CLI each, from the registries - the plan, the booklet and
 	# the reading are words, the deck and the table are pictures. One row each, built the way every
 	# card that runs agents builds them ([AgentPick])
 	_writer = AgentPick.writer("Who writes the plan, the booklet and the reading. Takes effect at the next Generate.",
@@ -840,7 +822,7 @@ func _build() -> void:
 		+ "low for Codex (its job is to call one tool); Bedrock's painter takes no setting."))
 	_painter.changed.connect(_agents_chosen.bind(_painter, "painter"))
 	box.add_child(_painter)
-	# ...AND WHO PLAYS THE PLAYERS, in a game (next/tabletop.md): seen only where the episode is one
+	# ...and who plays the players, in a game (next/tabletop.md): seen only where the episode is one
 	_players = AgentPick.players("Who plays the players at the table: each is asked what they do as the game is played, knowing only what they know. Takes effect at the next Generate.",
 		"The model that plays them. Default is the writer's own, on its quicker tier: they are asked a hundred questions a night.",
 		"How hard a player thinks before they answer. Default is what the CLI does unasked: a player is not meant to think long.")
@@ -848,7 +830,7 @@ func _build() -> void:
 	_players.visible = false
 	box.add_child(_players)
 
-	# ...AND ITS TIMELINE (next/editing.md, "The Timeline"): its beats, acts and cues docked under the show, read from its files
+	# ...and its timeline (next/editing.md, "The Timeline"): its beats, acts and cues docked under the show, read from its files
 	var tl := Button.new()
 	tl.text = "Timeline…"
 	tl.toggle_mode = true
@@ -861,7 +843,7 @@ func _build() -> void:
 		else:
 			close_dock())
 	_tl_btn = tl
-	# ...OPENED FROM BESIDE PLAY, as every note's timeline is ([method Transport.offer_timeline]): no button of its own here
+	# ...opened from beside play, as every note's timeline is ([method Transport.offer_timeline]): no button of its own here
 	tl.visible = false
 	tree_entered.connect(func() -> void:
 		Transport.offer_timeline(self, 3, func() -> void:
@@ -911,7 +893,7 @@ func _show_knobs() -> void:
 	_syncing = false
 
 
-## The show's key: the title's, until the first episode is made - then FIXED in the document
+## The show's key: the title's, until the first episode is made - then fixed in the document
 ## (see [method _generate]), because an episode's files are found by it and renaming the channel
 ## must not lose them. Not fixed earlier, or a new show would be keyed by the title it had at boot.
 func _show_key() -> String:
@@ -930,7 +912,7 @@ func _open_episode() -> void:
 	_flush_upload_fields()      # an edit still waiting belongs to the episode being left
 	var seed := int(_knobs["seed"])
 	_episode = TableEpisode.open(_show_key(), seed)
-	# AN EPISODE MADE BEFORE RECORDS gains them as it is opened here (TableEpisode.adopt), so its rows show at once what is kept -
+	# An episode made before records gains them as it is opened here (TableEpisode.adopt), so its rows show at once what is kept -
 	# never in a process that may not write the author's things
 	if not Settings.is_read_only():
 		_episode.adopt()
@@ -948,7 +930,7 @@ func _refill_episodes() -> void:
 	_syncing = true
 	_episode_pick.clear()
 	_episode_seeds = []
-	# NEWEST FIRST: seeds are random now, so their order says nothing; when an episode was made does
+	# Newest first: seeds are random now, so their order says nothing; when an episode was made does
 	var seen := {}
 	var seeds: Array = []
 	var cur := int(_knobs["seed"])
@@ -971,7 +953,7 @@ static func _episode_label(seed: int, title: String) -> String:
 	return "#%d  %s" % [seed, title if not title.is_empty() else "(not made yet)"]
 
 
-## A NEW EPISODE IS A NEW SEED, drawn from the operating system's cryptographic randomness (see
+## A new episode is a new seed, drawn from the operating system's cryptographic randomness (see
 ## [method CardDeck.true_seed]): the cards it deals are nobody's choice, and the seed is kept, so
 ## the episode can be made again exactly.
 func _new_episode() -> void:
@@ -986,7 +968,7 @@ func _new_episode() -> void:
 	_open_episode()
 
 
-## A NEW EPISODE BEGUN BY HAND ([method TableEpisode.begin_by_hand]): a fresh seed, written at once, nothing asked of an agent.
+## A new episode begun by hand ([method TableEpisode.begin_by_hand]): a fresh seed, written at once, nothing asked of an agent.
 func new_by_hand() -> void:
 	if Settings.is_read_only():
 		_set_status("This session is read-only (a render or a probe) - nothing is written here.")
@@ -1014,7 +996,7 @@ func _run(steps: Array, remake := false, note := "") -> void:
 		_knobs["show"] = _show_key()
 		_touch()
 		_open_episode()
-	# the spec as it is NOW: the brief may have been edited since the episode was opened
+	# the spec as it is now: the brief may have been edited since the episode was opened
 	_producer.spec = _spec()
 	_brief_changed = false
 	_producer.start(steps, remake, note)
@@ -1045,7 +1027,7 @@ func _ask_delete() -> void:
 	ask.popup_centered(Vector2i(520, 0))
 
 
-## DELETE [param ep]: whatever is making it stops, a reading of it stops (the table is showing its
+## Delete [param ep]: whatever is making it stops, a reading of it stops (the table is showing its
 ## pictures), its folder goes to the trash, and the panel moves to the newest episode left - or to
 ## a fresh seed, not made yet, when none is.
 func _delete_episode(ep: TableEpisode) -> void:
@@ -1083,7 +1065,7 @@ func _redo(step: String) -> void:
 		return
 	if _producer.running:
 		_producer.stop()
-	# MADE AGAIN, NOTHING THROWN AWAY (next/editing.md step 1): what stands plays until the new one lands over it, a version back,
+	# Made again, nothing thrown away (next/editing.md step 1): what stands plays until the new one lands over it, a version back,
 	# and what was made from it goes stale ([member TableProducer.again])
 	print("ghost: table make %s again - what stands goes a version back" % step)
 	_mark_stale()
@@ -1092,7 +1074,7 @@ func _redo(step: String) -> void:
 
 # --- on the Pipeline card ------------------------------------------------------------------------
 
-## WHAT THIS CARD MAKES, on the note's one list ([PipelineCard]).
+## What this card makes, on the note's one list ([PipelineCard]).
 class Section extends PipelineSection:
 	var card: EpisodeCard
 
@@ -1145,7 +1127,7 @@ func _making() -> bool:
 	return _producer != null and (_producer.running or _producer.busy())
 
 
-## WHAT THE ROWS READ, ONCE PER CHANGE OF THE EPISODE'S FILES: a step made or thrown away changes the listing, and the
+## What the rows read, once per change of the episode's files: a step made or thrown away changes the listing, and the
 ## plan's own edits (the Episode's title) its time. What is worked out row by row is kept here too (`asks`, `ready`, `said`).
 func _facts() -> Dictionary:
 	var dir := _episode.dir
@@ -1168,14 +1150,14 @@ func _facts() -> Dictionary:
 	return _facts_kept
 
 
-## THE EPISODE'S ROWS, each thing that can be made again a row of its own.
+## The episode's rows, each thing that can be made again a row of its own.
 func _step_rows() -> Array:
 	if _episode == null or _producer == null:
 		return []
 	var f := _facts()
 	var has: Array = f["steps"]
 	var busy := _making()
-	# ...THE DIRECTION IT WAS MADE FROM, where it was given one ([Direction]): first, as the plan is made from it
+	# ...the direction it was made from, where it was given one ([Direction]): first, as the plan is made from it
 	var out: Array = ([_row_of("direction", "direction", "", busy, f)] if has.has("direction") else []) + [_row_of("plan", "plan", "", busy, f)]
 	if not bool(f["cardless"]):
 		out.append(_row_of("draw", "draw", "", busy, f))
@@ -1183,7 +1165,7 @@ func _step_rows() -> Array:
 		_players.visible = has.has("prep")
 	if has.has("prep"):
 		out.append(_row_of("prep", "prep", "", busy, f))
-	# THE TABLE: a back only where cards are drawn, and a back per printing the drawn cards are in (TableEpisode.printings)
+	# The table: a back only where cards are drawn, and a back per printing the drawn cards are in (TableEpisode.printings)
 	if has.has("image:back"):
 		out.append(_row_of("image:back", "image:back", "Table", busy, f))
 	for key in f["printings"]:
@@ -1191,18 +1173,18 @@ func _step_rows() -> Array:
 			out.append(_row_of("image:back:%s" % key, "image:back:", "Table", busy, f, "Back: %s" % key))
 	if has.has("model"):
 		out.append(_row_of("model", "model", "", busy, f))
-	# ...THE PROBLEM WORKED, where the plan fixed one ([SolverTools]): before the table is set
+	# ...the problem worked, where the plan fixed one ([SolverTools]): before the table is set
 	if has.has("solve"):
 		out.append(_row_of("solve", "solve", "", busy, f))
 	for st in ["image:surface", "image:backdrop", "table"]:
 		out.append(_row_of(st, st, "Table", busy, f))
 	if bool(f["depth"]):
 		out.append(_row_of("image:height", "image:height", "Table", busy, f))
-	# ...WHAT IS PAINTED, painted first as a picture and looked at, then copied (TableEpisode.wants_face)
+	# ...what is painted, painted first as a picture and looked at, then copied (TableEpisode.wants_face)
 	for st in ["image:face", "check:face"]:
 		if has.has(st):
 			out.append(_row_of(st, st, "", busy, f))
-	# ...AND AGAIN IN LAYERS, the order written then each layer painted over the one before (TableEpisode._layer_steps)
+	# ...and again in layers, the order written then each layer painted over the one before (TableEpisode._layer_steps)
 	if has.has("layers"):
 		out.append(_row_of("layers", "layers", "Layers", busy, f))
 		var layers := _episode.layers()
@@ -1210,7 +1192,7 @@ func _step_rows() -> Array:
 			var st := "image:layer:%d" % k
 			if has.has(st):
 				var lr := _row_of(st, "image:layer:K", "Layers", busy, f, "%d. %s" % [k, String((layers[k - 1] as Dictionary).get("name", "Layer"))])
-				# ...ITS ▶: THIS LAYER LAID AGAIN ON THE TABLE, ALONE (TableProducer.lay_layer) - where the painting is laid already
+				# ...ITS ▶: this layer laid again on the table, alone (TableProducer.lay_layer) - where the painting is laid already
 				if has.has("skin") and FileAccess.file_exists(_episode.dir.path_join("paint").path_join("elements.json")):
 					lr.go = "Lay this layer again on the table: the painter paints it alone, over the layers before it, and the rest stay as they are."
 					lr.go_open = not busy
@@ -1238,7 +1220,7 @@ func _step_rows() -> Array:
 	out.append(_row_of("say:close", "say:close", "", busy, f))
 	out.append(_row_of("script", "script", "", busy, f))
 	out.append(_take_row(busy))
-	# ...WHAT THE SESSION TURNED OUT TO NEED, each named, painted after it was played (next/tabletop.md)
+	# ...what the session turned out to need, each named, painted after it was played (next/tabletop.md)
 	var played: Dictionary = _episode.game()
 	for key in TableEpisode.GAME_PICTURES:
 		var word2 := String(TableEpisode.GAME_PICTURES[key])
@@ -1250,7 +1232,7 @@ func _step_rows() -> Array:
 	return out
 
 
-## THE SHOW'S [param key] TUNED to [param value] ([TableTune]; null unsets it, back to its row's default): made safe, kept in the
+## The show's [param key] tuned to [param value] ([TableTune]; null unsets it, back to its row's default): made safe, kept in the
 ## show's block, and the rows shown again as they now stand.
 func set_tune(key: String, value: Variant) -> void:
 	if value == null:
@@ -1264,7 +1246,7 @@ func set_tune(key: String, value: Variant) -> void:
 	_set_status("Paced for this show: the table is set with it the next time it stands.")
 
 
-## THE VOICE'S TAKE AS A ROW (next/editing.md step 3): made, stale (the script changed since it was said) or not made, with its
+## The voice's take as a row (next/editing.md step 3): made, stale (the script changed since it was said) or not made, with its
 ## length; its ⟳ says the whole script once, every sentence said before coming from the cache, and keeps it with the episode.
 func _take_row(busy: bool) -> PipelineRow:
 	var r := PipelineRow.new("take", "Voice")
@@ -1286,7 +1268,7 @@ func _voice_sig() -> String:
 	return reading.take_sig() if reading != null else ""
 
 
-## THE TAKE MADE AND KEPT: the reading's whole take, rendered as an export renders it, kept with the episode.
+## The take made and kept: the reading's whole take, rendered as an export renders it, kept with the episode.
 func _make_take() -> void:
 	if reading == null or _episode == null or _taking:
 		return
@@ -1302,7 +1284,7 @@ func _make_take() -> void:
 	_mark_stale()
 
 
-## THE ROW KIND OF STEP [param step], as [constant STEPS] names it: a card's or a beat's number, a game picture's, a printing's key
+## The row kind of step [param step], as [constant STEPS] names it: a card's or a beat's number, a game picture's, a printing's key
 ## made the kind's own ("image:card:3" -> "image:card:K", "image:back:gilt" -> "image:back:").
 static func kind_of(step: String) -> String:
 	if STEPS.has(step):
@@ -1324,24 +1306,23 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 	var r := PipelineRow.new(step, named if not named.is_empty() else String(info["label"]), group)
 	var st := _producer.state_of(step)
 	r.state = String({"ready": "made", "running": "running", "queued": "queued", "failed": "failed"}.get(st, "missing"))
-	# STALE: made from something that has changed since - it still plays (TableEpisode.stale)
+	# Stale: made from something that has changed since - it still plays (TableEpisode.stale)
 	if st == "ready" and _episode.stale(step):
 		r.state = "stale"
 	r.said = _said_of(step, f)
-	# WHAT ITS AGENT IS DOING, while it is made: who, doing what, for how long (TableProducer.activity_of) - a step of many
-	# minutes showed only its glyph, and could not be told from one stuck. WHAT IS BEING DONE COMES FIRST, AND WHOLE
-	# (2026-10-26: an 18-minute run's status sat past the end of a clipped row, behind what was already made)
+		# what its agent is doing, while it is made: who, doing what, for how long (TableProducer.activity_of). It comes first, and whole,
+		# so a clipped row still shows it
 	var doing := _doing_of(step)
 	if not doing.is_empty():
 		r.said = doing + (" - " + r.said if not r.said.is_empty() else "")
 		r.wraps = true
 	if st == "failed":
 		r.said = _producer.error_of(step)
-	# A DEPTH NOT MADE YET HOLDS NOTHING BACK ([method TableEpisode.complete]): it comes with the cloth, where the table wants one
+	# A depth not made yet holds nothing back ([method TableEpisode.complete]): it comes with the cloth, where the table wants one
 	if step == "image:height" and st == "missing":
 		r.state = "none"
 		r.said = "comes with the cloth"
-	# BY HAND, NOT MADE YET (TableEpisode.by_hand): Generate passes it by, and it waits for its ✎
+	# By hand, not made yet (TableEpisode.by_hand): Generate passes it by, and it waits for its ✎
 	if st == "missing" and _episode.by_hand(step):
 		r.said = "by hand - waits for you"
 	if step == "table" and st == "ready" and not _table_things().is_empty():
@@ -1350,13 +1331,13 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 	if r.again.is_empty():
 		_edit_of(r, step)
 		return r
-	# ⟳ ONLY WHAT CAN START: a step whose inputs are not made was passed by without a word (TableProducer.tick)
+	# ⟳ only what can start: a step whose inputs are not made was passed by without a word (TableProducer.tick)
 	var ready := _ready_to_make(step, f)
 	r.open = ready and not busy
 	if not ready:
 		r.again += " - once what it is made from is made"
 	r.asks = _asks_of(step, f)
-	# A LOCK BESIDE ITS ⟳ ON WHAT IS MADE (TableEpisode.kept): locked, it is KEPT - Generate passes it by, stale or not; a step changed
+	# A lock beside its ⟳ on what is made (TableEpisode.kept): locked, it is KEPT - Generate passes it by, stale or not; a step changed
 	# by hand is kept until it is unlocked
 	r.lockable = _episode.has(step)
 	r.locked = _episode.kept(step)
@@ -1370,8 +1351,8 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 	return r
 
 
-## THE EPISODE'S TIMELINE, DOCKED UNDER THE SHOW (its "Timeline…"; next/editing.md, "The Timeline" and step 6): its beats along the
-## top, the one picked below, and ONE INSPECTOR at the right for what is picked there or on the stage ([method _inspect]). Worked
+## The episode's timeline, docked under the show (its "Timeline…"; next/editing.md, "The Timeline" and step 6): its beats along the
+## top, the one picked below, and one inspector at the right for what is picked there or on the stage ([method _inspect]). Worked
 ## there - an act's block stretched, a cue's flag moved, a field of an act or a thing set, a thing dragged on the plan - each a
 ## hand's version of its step, kept, and taken back by its Undo ([method _take_back]). The dock, null without an episode.
 func open_dock() -> TimelineDock:
@@ -1395,7 +1376,7 @@ func open_dock() -> TimelineDock:
 		return err
 	_dock.inspector = _inspect
 	_dock.undo = _take_back
-	# THE SHOW'S TIME ON THE EPISODE'S CLOCK: a kept take carries its intro as held silence, the timeline begins at the first word
+	# The show's time on the episode's clock: a kept take carries its intro as held silence, the timeline begins at the first word
 	_dock.clock = func() -> float:
 		if not Spectrum.timed():
 			return -1.0
@@ -1420,7 +1401,7 @@ func close_dock() -> void:
 		_tl_btn.set_pressed_no_signal(false)
 
 
-## A HAND'S EDIT OF [param step]: [param write] (`() -> String`, "" written) run, and the step as it stood remembered for Undo and
+## A hand's edit of [param step]: [param write] (`() -> String`, "" written) run, and the step as it stood remembered for Undo and
 ## the step kept. "" done, else why not.
 func _hand_write(step: String, write: Callable) -> String:
 	if _episode == null:
@@ -1433,7 +1414,7 @@ func _hand_write(step: String, write: Callable) -> String:
 		_undo.append({"episode": _episode.dir, "step": step, "digest": before})
 		while _undo.size() > 50:
 			_undo.pop_front()
-	# ...RECORDED AS THE HAND'S, so Restore says "yours" of it once it stands a version back
+	# ...recorded as the hand's, so Restore says "yours" of it once it stands a version back
 	var noted := _episode.note_made(step, "hand")
 	return noted if not noted.is_empty() else _episode.set_kept(step, true)
 
@@ -1476,7 +1457,7 @@ func _take_back() -> String:
 
 # --- the inspector ------------------------------------------------------------------------------------
 
-## WHAT IS PICKED, SHOWN TO BE CHANGED ([member TimelineDock.inspector]): an act as its rows ([constant TableRows.ACT]), a cue and
+## What is picked, shown to be changed ([member TimelineDock.inspector]): an act as its rows ([constant TableRows.ACT]), a cue and
 ## the words it stands in, a thing on the table ([method _inspect_thing]).
 func _inspect(what: Dictionary, box: VBoxContainer) -> void:
 	if _episode == null:
@@ -1518,7 +1499,7 @@ func _inspect_act(i: int, box: VBoxContainer) -> void:
 	form.edited.connect(func(key: String, value: Variant) -> void:
 		_after_hand("acts", _hand_write("acts", func() -> String: return set_act_field(i, key, value))))
 	box.add_child(form)
-	# ...ITS TRACKS, each a press: its law's rows
+	# ...its tracks, each a press: its law's rows
 	var tracks: Array = act.get("tracks", []) if act.get("tracks") is Array else []
 	if not tracks.is_empty():
 		_line_to(box, "Its tracks:")
@@ -1539,7 +1520,7 @@ func _inspect_act(i: int, box: VBoxContainer) -> void:
 	_ask_row(box, "acts", "the act \"%s\"" % String(act.get("name", "")))
 
 
-## TRACK [param j] OF ACT [param i] AS ITS LAW'S ROWS ([method TableRows.law_fields]); a field set is the act's tracks written again,
+## Track [param j] of act [param i] as its law's rows ([method TableRows.law_fields]); a field set is the act's tracks written again,
 ## refused as any act's field is ([method set_act_field]).
 func _inspect_track(i: int, j: int, item: Dictionary, box: VBoxContainer) -> void:
 	var acts := _acts_list()
@@ -1561,7 +1542,7 @@ func _inspect_track(i: int, j: int, item: Dictionary, box: VBoxContainer) -> voi
 	_button_to(box, "← The act", func() -> void: _dock.inspect({"item": item}))
 
 
-## TRACK [param j] OF ACT [param i]: its [param key] set to [param value] (null unsets it), written as the act's tracks. "" written.
+## Track [param j] of act [param i]: its [param key] set to [param value] (null unsets it), written as the act's tracks. "" written.
 func set_track_field(i: int, j: int, key: String, value: Variant) -> String:
 	var acts := _acts_list()
 	if i < 0 or i >= acts.size() or not (acts[i] is Dictionary):
@@ -1576,7 +1557,7 @@ func set_track_field(i: int, j: int, key: String, value: Variant) -> String:
 	return set_act_field(i, "tracks", tracks)
 
 
-## ACT [param i]'S [param key] SET TO [param value] (null unsets it) in `acts.json`: refused when the acts would be read otherwise
+## ACT [param i]'S [param key] set to [param value] (null unsets it) in `acts.json`: refused when the acts would be read otherwise
 ## than written - a note of their sanitizer's the edit brings ([method Motions.sanitize_acts]). "" written, else why not.
 func set_act_field(i: int, key: String, value: Variant) -> String:
 	var raw: Variant = _episode.read_json("acts")
@@ -1588,7 +1569,7 @@ func set_act_field(i: int, key: String, value: Variant) -> String:
 		(acts[i] as Dictionary).erase(key)
 	else:
 		(acts[i] as Dictionary)[key] = value
-	# ...REFUSED WHERE IT WOULD BE READ OTHERWISE THAN WRITTEN: a note the acts' sanitizer did not have before it, said
+	# ...refused where it would be read otherwise than written: a note the acts' sanitizer did not have before it, said
 	var was := PackedStringArray(Motions.sanitize_acts({"acts": _acts_list()}, _episode.beat_count())["notes"])
 	var safe := Motions.sanitize_acts({"acts": acts}, _episode.beat_count())
 	var fresh := PackedStringArray()
@@ -1604,7 +1585,7 @@ func set_act_field(i: int, key: String, value: Variant) -> String:
 	return _episode.write_json("acts", {"acts": acts})
 
 
-## A THING ON THE TABLE, SHOWN TO BE CHANGED (next/editing.md step 7: "one thing picked, one inspector"): the table from above to move
+## A thing on the table, shown to be changed (next/editing.md step 7: "one thing picked, one inspector"): the table from above to move
 ## it on ([TablePlanView], where the episode stands on the table now), its rows ([constant TableRows.THING]), each of its parts a press
 ## and the part picked as its rows ([method TableRows.part_fields]); kept in the library, put on from it, taken off the table.
 func _inspect_thing(name: String, what: Dictionary, box: VBoxContainer) -> void:
@@ -1645,7 +1626,7 @@ func _inspect_thing(name: String, what: Dictionary, box: VBoxContainer) -> void:
 	form.edited.connect(func(key: String, value: Variant) -> void:
 		_after_hand("table", _hand_write("table", func() -> String: return set_thing_field(name, [], key, value))))
 	box.add_child(form)
-	# EACH PART A PRESS, the one picked as its rows
+	# Each part a press, the one picked as its rows
 	var parts := _part_list(thing, [], 0)
 	if not parts.is_empty():
 		_line_to(box, "Its parts:")
@@ -1660,7 +1641,7 @@ func _inspect_thing(name: String, what: Dictionary, box: VBoxContainer) -> void:
 			b.focus_mode = Control.FOCUS_NONE
 			b.pressed.connect(func() -> void: _dock.inspect({"thing": name, "path": pp}))
 			flow.add_child(b)
-	# ...AND ONE MORE, from the shapes there are ([constant Props.SHAPES]): a part of its own size, of the table's first material
+	# ...and one more, from the shapes there are ([constant Props.SHAPES]): a part of its own size, of the table's first material
 	var add := MenuButton.new()
 	add.text = "+ Part ▾"
 	add.flat = false
@@ -1709,7 +1690,7 @@ func _inspect_thing(name: String, what: Dictionary, box: VBoxContainer) -> void:
 	_library_row(box, td)
 
 
-## AN AGENT ASKED ABOUT WHAT IS PICKED (next/editing.md step 9: "'Ask…' opens the step's role ... on the document as it stands,
+## An agent asked about what is picked (next/editing.md step 9: "'Ask…' opens the step's role ... on the document as it stands,
 ## only what is picked open to change, the person's note as its brief"): [param step]'s maker made it again with the note, which
 ## names [param about] and asks for nothing else changed - what stands plays until the new one lands, and Undo can put it back.
 func _ask_row(box: Container, step: String, about: String) -> void:
@@ -1735,7 +1716,7 @@ func _ask_row(box: Container, step: String, about: String) -> void:
 	row.add_child(go)
 
 
-## [param step]'S MAKER ASKED AGAIN about [param about] with [param note] ([method _ask_row]). "" asked, else why not.
+## [param step]'S maker asked again about [param about] with [param note] ([method _ask_row]). "" asked, else why not.
 func ask_about(step: String, about: String, note: String) -> String:
 	if note.strip_edges().is_empty():
 		return "write what should change first"
@@ -1822,7 +1803,7 @@ func _part_list(node: Dictionary, path: Array, depth: int) -> Array:
 	return out
 
 
-## THING [param name]'S [param key] (at [param path] inside it: [] for the thing, a part's path for a part) SET TO [param value] in
+## Thing [param name]'S [param key] (at [param path] inside it: [] for the thing, a part's path for a part) set to [param value] in
 ## `table.json` - null unsets it. "" written, else why not.
 func set_thing_field(name: String, path: Array, key: String, value: Variant) -> String:
 	var raw: Variant = _episode.read_json("table")
@@ -1842,7 +1823,7 @@ func set_thing_field(name: String, path: Array, key: String, value: Variant) -> 
 	return _episode.write_json("table", table)
 
 
-## THING [param name] TAKEN OFF THE TABLE (the table's data without it; the version with it kept a version back). "" written.
+## Thing [param name] taken off the table (the table's data without it; the version with it kept a version back). "" written.
 func take_thing_off(name: String) -> String:
 	var raw: Variant = _episode.read_json("table")
 	if not (raw is Dictionary):
@@ -1880,10 +1861,10 @@ func _button_to(box: Container, text: String, action: Callable) -> void:
 	box.add_child(b)
 
 
-## A CLICK ON THE TABLE NAMES WHAT IS THERE (next/editing.md step 7: "a click on the stage names a thing and its part"): said, and
+## A click on the table names what is there (next/editing.md step 7: "a click on the stage names a thing and its part"): said, and
 ## shown in the timeline's inspector to be changed ([method pick_thing]). A click that names nothing goes on to what else wants it.
 func _unhandled_input(event: InputEvent) -> void:
-	# A FREE LOOK, while one is on: a right-drag turns about the table, the wheel draws in or out
+	# A free look, while one is on: a right-drag turns about the table, the wheel draws in or out
 	var med := Director.shown_medium() as TableMedium
 	if med != null and med.looking_freely():
 		var drag := event as InputEventMouseMotion
@@ -1907,7 +1888,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	pick_thing(String(hit["thing"]), String(hit.get("part", "")))
 
 
-## [param thing] (and its [param part]) PICKED ON THE TABLE: named on the status line, and shown in the timeline's inspector - the
+## [param thing] (and its [param part]) picked on the table: named on the status line, and shown in the timeline's inspector - the
 ## table from above, its rows and its parts ([method _inspect_thing]). "" shown, else why not.
 func pick_thing(thing: String, part := "") -> String:
 	_set_status("On the table: %s%s." % [thing, " - its %s" % part if not part.is_empty() and part != thing else ""])
@@ -1918,11 +1899,11 @@ func pick_thing(thing: String, part := "") -> String:
 	return ""
 
 
-## THE DATA A HAND MAY EDIT AS JSON (next/editing.md step 4), each step taken back only as a map.
+## The data a hand may edit as JSON (next/editing.md step 4), each step taken back only as a map.
 const EDITABLE_DATA := ["plan", "table", "acts", "skin", "layers", "model"]
 
 
-## ✎ ON [param r], where what [param step] made can be changed by hand: the script whole, a passage alone, the data as JSON, a
+## ✎ on [param r], where what [param step] made can be changed by hand: the script whole, a passage alone, the data as JSON, a
 ## picture by one's own - each written as a hand's version, kept (TableEpisode.set_kept), what stood a version back.
 func _edit_of(r: PipelineRow, step: String) -> void:
 	if not _episode.has(step) and not _episode.by_hand(step):
@@ -1946,7 +1927,7 @@ func _edit_step(step: String) -> void:
 	if step.begins_with("image:"):
 		_import_picture(step)
 		return
-	# A PAINTED DESIGN, ELEMENT BY ELEMENT ([DesignWindow]): where its elements carry their plans (a painter laid them)
+	# A painted design, element by element ([DesignWindow]): where its elements carry their plans (a painter laid them)
 	if step == "skin" and _design_planned():
 		_edit_design()
 		return
@@ -1954,7 +1935,7 @@ func _edit_step(step: String) -> void:
 		_source_window = SourceWindow.new()
 	var w := _source_window
 	w.notes = Callable()
-	# ...WITH ITS VERSIONS, any of them put back (TableEpisode.versions, restore): nothing a ⟳ or a hand replaced is out of reach
+	# ...with its versions, any of them put back (TableEpisode.versions, restore): nothing a ⟳ or a hand replaced is out of reach
 	w.versions = func() -> PackedStringArray:
 		var out := PackedStringArray()
 		for v in _episode.versions(step):
@@ -1969,7 +1950,7 @@ func _edit_step(step: String) -> void:
 			_run(["script"], true)
 		_mark_stale()
 		return err
-	# ...AND ITS MAKER ASKED AGAIN WITH A NOTE (next/editing.md step 9), where an agent made it: what stands plays until the new one lands
+	# ...and its maker asked again with a note (next/editing.md step 9), where an agent made it: what stands plays until the new one lands
 	var maker := String(MAKERS.get(step.get_slice(":", 0), ""))
 	w.ask = Callable() if maker.is_empty() or step == "script" else func(note: String) -> String:
 		if _producer.running:
@@ -2014,7 +1995,7 @@ func _edit_step(step: String) -> void:
 		w.open_on(_step_name(step, _facts()), JSON.stringify(_episode.read_json(step), "\t"), self)
 
 
-## LAYER [param k] LAID AGAIN ON THE TABLE, ALONE ([method TableProducer.lay_layer]).
+## Layer [param k] laid again on the table, alone ([method TableProducer.lay_layer]).
 func _lay_layer(k: int) -> void:
 	if _episode == null or Settings.is_read_only():
 		return
@@ -2036,7 +2017,7 @@ func _design_planned() -> bool:
 	return false
 
 
-## THE DESIGN'S ELEMENTS AS ROWS ([DesignWindow]): written back as a hand's version, kept, and the work made again from it at once -
+## The design's elements as rows ([DesignWindow]): written back as a hand's version, kept, and the work made again from it at once -
 ## computed from the painting, it costs no agent (unless the work is kept, when it stays as it is).
 func _edit_design() -> void:
 	if _design_window == null or not is_instance_valid(_design_window):
@@ -2056,7 +2037,7 @@ func _edit_design() -> void:
 	_design_window.open_on(_episode.read_json("skin"), beats, self)
 
 
-## A PICTURE OF ONE'S OWN for [param step]: picked from disk, written over its picture as a PNG (what stood a version back), kept.
+## A picture of one's own for [param step]: picked from disk, written over its picture as a PNG (what stood a version back), kept.
 func _import_picture(step: String) -> void:
 	var fd := FileDialog.new()
 	fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -2135,7 +2116,7 @@ func _doing_of(step: String) -> String:
 	var piece := "%s %s" % [String(MAKERS.get(step.get_slice(":", 0), "agent")), a]
 	var calls := _tools_progress(step) if step in ["model", "skin", "table", "acts", "prep", "solve"] or (step.begins_with("say:") and _episode.wants_game()) else ""
 	if not calls.is_empty():
-		# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
+		# The budget in view: a run with no clock ends at its last picture, and the row says how near that is
 		var looked: Array = _producer.looks_of(step)
 		piece += " - %s%s" % ["%d of %d looks - " % looked if looked.size() == 2 else "", calls]
 	return piece
@@ -2152,8 +2133,8 @@ func _ready_to_make(step: String, f: Dictionary) -> bool:
 	return bool(kept[step])
 
 
-## WHAT [param step]'S ⟳ THROWS AWAY besides what it remakes: "" for nothing, and it starts at once; otherwise the row goes
-## amber and asks (the menu had been all that stood between a stray click on Plan and every painting and reading).
+## What [param step]'s redo throws away besides what it remakes: "" for nothing, and it starts at once; otherwise the row goes
+## amber and asks.
 func _asks_of(step: String, f: Dictionary) -> String:
 	var kept: Dictionary = f["asks"]
 	if kept.has(step):
@@ -2187,7 +2168,7 @@ func _step_name(step: String, f: Dictionary) -> String:
 	return "%s %s %s" % [word, k, String(Registry.field(STEPS, kind, "label", step))]
 
 
-## WHAT A CARD'S GROUP SAYS: the card, under its beat's name, as the plan gives it.
+## What a card's group says: the card, under its beat's name, as the plan gives it.
 func _group_said(group: String) -> String:
 	var at := group.rsplit(" ", true, 1)
 	if at.size() != 2 or not String(at[1]).is_valid_int() or _episode == null:
@@ -2238,7 +2219,7 @@ func _table_things() -> PackedStringArray:
 	return _table_seen["names"]
 
 
-## WHAT AN AGENT WITH TOOLS IS DOING while it makes [param step] - the set dresser setting the table, the
+## What an agent with tools is doing while it makes [param step] - the set dresser setting the table, the
 ## puppeteer blocking the work: its last call, from the job's `tools.jsonl` (read again only when that file
 ## changes) - a run of many minutes otherwise shows nothing but its glyph. "" before its first call, or for
 ## an agent with no tools.
@@ -2266,12 +2247,12 @@ static func _beat_name(plan: Variant, k: int) -> String:
 	return String((b as Dictionary).get("name", "")) if b is Dictionary else ""
 
 
-## EACH REFRESH, WHAT THE CARD ITSELF SHOWS: the picked episode's entry, the deck, Delete, and the upload's fields.
+## Each refresh, what the card itself shows: the picked episode's entry, the deck, Delete, and the upload's fields.
 func _refresh_card() -> void:
 	if _episode == null or _episode_pick == null:
 		return
 	var plan: Variant = _facts()["plan"]
-	# THE PICKER FOLLOWS THE EPISODE: its entries are written when the list is filled, so an episode
+	# The picker follows the episode: its entries are written when the list is filled, so an episode
 	# made while it was open went on saying "(not made yet)" until another was picked and back
 	var at := _episode_seeds.find(int(_knobs["seed"]))
 	if at >= 0:
@@ -2291,15 +2272,11 @@ func _refresh_card() -> void:
 
 # --- the YouTube fields ------------------------------------------------------------------------
 
-## WHAT THE EPISODE GOES UP TO YOUTUBE AS. The title is the episode's - its plan's, the Script card's
-## Episode (2026-10-25: it had been a box on this card, and %episode% no other note's), written straight
-## back into the plan ([method name_episode]), so the export's file name, the episode picker,
-## `upload.md` and the YouTube card's `%episode%` all say what the panel says. The description and THE
-## TAGS ARE THE SHOW'S, on the YouTube card when the note has one (2026-10-07): the description in the
-## show's block, the tags its document's own `tags:` line, the way North Star's chapters keep theirs,
-## edited as chips and going up with every episode. Nothing of any one episode is kept in the document
-## (the user, 2026-10-06: "I just don't want to store a bunch of episode-specific logic in the
-## frontmatter of a markdown file").
+## What the episode goes up to YouTube as. The title is the episode's - its plan's, the Script card's Episode, written straight
+## back into the plan ([method name_episode]), so the export's file name, the episode picker, `upload.md` and the YouTube card's
+## `%episode%` all say what the panel says. The description and the tags are the show's, on the YouTube card when the note has one:
+## the description in the show's block, the tags its document's own `tags:` line, edited as chips and going up with every episode.
+## Nothing of any one episode is kept in the document's frontmatter.
 ##
 ## The show's description and tags, on the YouTube card ([member YouTubeCard.extra]).
 func youtube_built(card: YouTubeCard) -> void:
@@ -2343,11 +2320,9 @@ static func _mtime(path: String) -> int:
 	return FileAccess.get_modified_time(path) if not path.is_empty() and FileAccess.file_exists(path) else -1
 
 
-## THE FIELDS SHOW THE SHOW'S GLOBAL VALUES from its document at once - on open, on New episode, on
-## any pick (the user: "it should have been grabbed immediately, since that stuff is global"): the
-## description and the tags as the show keeps them. Refilled when another episode is picked or its plan
-## changes on disk, unless the description is being typed in, or at once with [param force]. A new
-## upload refreshes the note.
+## The fields show the show's global values from its document at once - on open, on New episode, on any pick: the description and
+## the tags as the show keeps them. Refilled when another episode is picked or its plan changes on disk, unless the description is
+## being typed in, or at once with [param force]. A new upload refreshes the note.
 func _fill_upload_fields(force := false) -> void:
 	if _yt_desc == null:
 		return
@@ -2377,11 +2352,9 @@ func _refresh_show_fields() -> void:
 	_refresh_upload_note()
 
 
-## A SHOW THAT HAS NO DESCRIPTION OR TAGS YET TAKES THE PICKED EPISODE'S, once, so the section is
-## never empty for want of a first one: the producer writes both with every plan. After that they
-## are the show's, edited here. Run from the frame loop, not on open, so the document's autosave
-## sees the change (the snapshot a just-opened document is compared with is taken after it opens);
-## never in a process that may not write (a probe).
+## A show that has no description or tags yet takes the picked episode's, once, so the section is never empty for want of a first
+## one: the producer writes both with every plan. After that they are the show's, edited here. Run from the frame loop, not on
+## open, so the document's autosave sees the change; never in a process that may not write (a probe).
 func _seed_globals() -> void:
 	if not Settings.is_read_only():
 		_seed_from_plan()

@@ -1,33 +1,27 @@
 extends SceneTree
 
-## tables_check - THE TABLE ITSELF ([Tables]): its top and the layers laid on it, as a set dresser
-## writes them, made safe and built.
+## The table itself ([Tables]): its top and the layers laid on it, as a set dresser writes them, made safe and built.
 ##
 ##   godot --headless --path . --script tests/table/tables_check.gd
 ##
-## - THE VOCABULARY IS THE REGISTRIES: every shape, edge, fabric, pattern and relief is in what the
-##   set dresser reads, and its prompt carries it.
-## - WHATEVER IS WRITTEN IS BUILDABLE: junk comes out as the defaults, numbers in range, names it
-##   knows - each change said; no `top` and no `layers` is the old table (190 x 85 boards, the
-##   painting as a 120 x 72 cloth), `layers: []` a bare top.
-## - THE TOP HOLDS THE CARDS: every preset spread, the deck and the shuffle of a thousand seeded
-##   layouts lie inside [constant Tables.HOLDS] (or a top that holds it could still drop a card); a
-##   top too small for it is grown until it holds it - two-sided: the same top ungrown does not.
-## - THE OUTLINE IS ONE THING: each shape's edge points lie on its distance field's zero, inside is
-##   inside; a card off a round top is refused by [method TablePositions.given] and the same card
-##   kept with no top (two-sided).
-## - A LAYER HANGS OVER THE EDGE: every point of a cloth past the top's edge is below the top and
-##   outside its outline; every point on the top lies flat at its layer's height - and a layer
-##   wholly on the top hangs nowhere (the control). Layers stack upward, all under where a card rests.
-## - A PAINTED HEIGHT MAP IS USED ONLY WHERE IT LIES UNDER THE PAINTING: a map of the painting's own
-##   structure is accepted - shifted (and the shift found), or drawn the other way round (white low) -
-##   and an unrelated picture refused (two-sided); a flat map, or one whose relief is alike everywhere
-##   (a nap under a dyed stripe the painter rightly left out), fits nothing and is kept all the same,
-##   unmoved - against boards drawn somewhere else, which are taken away; the episode lists the step
-##   only once the table lays the painting where its depth is read, a new cloth clears it and a new
-##   table does not.
-## - THE LIGHT READS WHAT LIES UPPERMOST: a pale runner over a dark cloth is pale under the runner and
-##   dark beside it; past the top, the floor.
+## - The vocabulary is the registries: every shape, edge, fabric, pattern and relief is in what the set dresser reads, and its
+##   prompt carries it.
+## - Whatever is written is buildable: junk comes out as the defaults, numbers in range, names it knows - each change said; no `top`
+##   and no `layers` is the default table (190 x 85 boards, the painting as a 120 x 72 cloth), `layers: []` a bare top.
+## - The top holds the cards: every preset spread, the deck and the shuffle of a thousand seeded layouts lie inside
+##   [constant Tables.HOLDS]; a top too small for it is grown until it holds it (two-sided: the same top ungrown does not).
+## - The outline is one thing: each shape's edge points lie on its distance field's zero, inside is inside; a card off a round top
+##   is refused by [method TablePositions.given] and the same card kept with no top (two-sided).
+## - A layer hangs over the edge: every point of a cloth past the top's edge is below the top and outside its outline; every point
+##   on the top lies flat at its layer's height; a layer wholly on the top hangs nowhere (control). Layers stack upward, all under
+##   where a card rests.
+## - A painted height map is used only where it lies under the painting: a map of the painting's own structure is accepted -
+##   shifted (and the shift found), or drawn the other way round - and an unrelated picture refused (two-sided); a flat map, or one
+##   whose relief is alike everywhere, fits nothing and is kept all the same, unmoved - against boards drawn somewhere else, which
+##   are taken away; the episode lists the step only once the table lays the painting where its depth is read, a new cloth clears
+##   it and a new table does not.
+## - The light reads what lies uppermost: a pale runner over a dark cloth is pale under the runner and dark beside it; past the
+##   top, the floor.
 
 var _fails: Array = []
 
@@ -65,10 +59,8 @@ func _vocabulary() -> void:
 			if not d.contains("- %s:" % k) and not d.contains("  - %s:" % k):
 				missing.append(String(k))
 	_ok(missing.is_empty(), "every registry word is described (missing: %s)" % ", ".join(missing))
-	# A MAT UNDER THE CARDS HOLDS THEM (penalty-box 21439: a 52 cm square laid as a diamond under nine
-	# cards): the set dresser is told the top's own stretch, and a diamond's side that covers it - a
-	# square turned 45 degrees covers a w x h stretch when its half diagonal reaches (w + h) / 2. The
-	# control: a side 5% shorter does not.
+	# A mat under the cards holds them: the set dresser is told the top's own stretch, and a diamond's side that covers it - a square turned 45
+	# degrees covers a w x h stretch when its half diagonal reaches (w + h) / 2. The control: a side 5% shorter does not.
 	var under := RegEx.create_from_string("UNDER THE CARDS: .* about (\\d+) x (\\d+) cm in the middle .* sides of about (\\d+) cm").search(d)
 	_ok(under != null and d.contains("stretch about %s x %s cm in the middle" % [under.get_string(1), under.get_string(2)]),
 		"the set dresser is not told that a mat under the cards holds the top's own stretch")
@@ -113,7 +105,7 @@ func _made_safe() -> void:
 	_ok(notes.size() >= 4, "every change is said (%d notes: %s)" % [notes.size(), "; ".join(notes)])
 	var deep := Tables.sanitize(null, [{"relief": {"kind": "quilted", "depth": 99}}], {}, [])
 	_ok(float(((deep["layers"] as Array)[0]["relief"] as Dictionary)["depth"]) == Tables.RELIEF_MOST, "a relief is no deeper than %d mm" % int(Tables.RELIEF_MOST))
-	# THE OLD TABLE when the set dresser wrote neither
+	# the default table when the set dresser wrote neither
 	var old := CardTable.sanitize_table({"things": []}, {})
 	var ot: Dictionary = old["top"]
 	_ok(ot["shape"] == "rect" and ot["size"] == [190.0, 85.0], "no top is the old 190 x 85 table (%s)" % str(ot["size"]))
@@ -129,8 +121,8 @@ func _made_safe() -> void:
 		and String(((painted["top"] as Dictionary)["relief"] as Dictionary)["kind"]) == "painting", "the painting can be the top, its detail its relief")
 
 
-## THE TOP HOLDS THE CARDS: everywhere the cards go, over a thousand layouts, lies in HOLDS - and a
-## top too small for HOLDS is grown until it holds it.
+## The top holds the cards: everywhere the cards go, over a thousand layouts, lies in HOLDS - and a top too small for HOLDS is grown until
+## it holds it.
 func _holds_cards() -> void:
 	print("-- the top holds the cards")
 	var holds := Rect2(Tables.ORIGIN + Tables.HOLDS.position, Tables.HOLDS.size)
@@ -150,7 +142,7 @@ func _holds_cards() -> void:
 		for c in [deck.position, deck.end]:
 			if not holds.grow(0.001).has_point(c):
 				out += 1
-		# THE SHUFFLE AND THE WASH: an ellipse round the middle, a card's half-diagonal past it
+		# the shuffle and the wash: an ellipse round the middle, a card's half-diagonal past it
 		var mid: Vector3 = lay["mid"]
 		var reach := Vector2(0.29, 0.15) + Vector2.ONE * Vector2(0.035, 0.06).length()
 		for c in [Vector2(mid.x - reach.x, mid.z - 0.01), Vector2(mid.x + reach.x, mid.z - 0.01), Vector2(mid.x, mid.z - 0.01 - reach.y),
@@ -185,7 +177,7 @@ func _outlines() -> void:
 		var c: Vector2 = o["center"]
 		_ok(worst < 0.0005 and Tables.inside(top, c, 0.1) and not Tables.inside(top, c + Vector2(3.0, 0.0)),
 			"a %s's edge lies on its outline (%.5f m off at worst), its middle inside, far off outside" % [String(top["shape"]), worst])
-	# A CARD OFF A ROUND TOP is refused once the top is known, and kept without it
+	# a card off a round top is refused once the top is known, and kept without it
 	var round := Tables._sanitize_top({"shape": "round", "size": [10]}, {}, [], PackedStringArray())
 	var seed := 11
 	var lay := CardTable.layout_of(seed)
@@ -323,8 +315,8 @@ func _height_map() -> void:
 		"its own height map, moved, is accepted (%.2f) and the move found (%s against %s)" % [float(same["score"]), str(same["shift"]), str(want)])
 	_ok(float(flipped["score"]) >= Tables.FIT_LEAST, "drawn the other way round it is accepted too (%.2f)" % float(flipped["score"]))
 	_ok(float(other["score"]) < Tables.FIT_LEAST, "an unrelated picture is refused (%.2f)" % float(other["score"]))
-	# A FLAT MAP (a cutting mat's: one gray and a few faint scratches) is the right answer for a surface
-	# with no relief - it correlates with nothing, and is kept by its span; a real map is not flat
+	# a flat map (a cutting mat's: one gray and a few faint scratches) is the right answer for a surface with no relief - it correlates with
+	# nothing, and is kept by its span; a real map is not flat
 	var mat := Image.create(768, 512, false, Image.FORMAT_RGB8)
 	mat.fill(Color(0.5, 0.5, 0.5))
 	for k in 6:
@@ -335,9 +327,8 @@ func _height_map() -> void:
 		"a flat map fits nothing (%.2f) and is known flat (%.3f)" % [float(mat_fit["score"]), Tables.height_span(mat)])
 	_ok(Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)) > Tables.FLAT_SPAN * 2.0,
 		"control: a real height map is not flat (%.3f)" % Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)))
-	# AN EVEN MAP (a felted nap under a dyed stripe: the stripe is not drawn) fits nothing either, and
-	# is known by its relief being alike everywhere; boards are not - their seams, one to a block, are
-	# even by blocks and caught by rows
+	# an even map (a felted nap under a dyed stripe: the stripe is not drawn) fits nothing either, and is known by its relief being alike
+	# everywhere; boards are not - their seams, one to a block, are even by blocks and caught by rows
 	var nap := _nap(5, 768, 512)
 	var striped := _gray_of(nap, Vector2i.ZERO, false)
 	striped.fill_rect(Rect2i(0, 200, 768, 90), Color(0.08, 0.08, 0.12))
@@ -349,7 +340,7 @@ func _height_map() -> void:
 	var seams := _gray_of(_boards(91, 768, 512), Vector2i(5, 9), false)
 	_ok(Tables.relief_spread(seams) > Tables.EVEN_SPREAD,
 		"control: a map of boards is not even (%.2f)" % Tables.relief_spread(seams))
-	# THE STEP, on an episode of the gate's own
+	# the step, on an episode of the gate's own
 	TableEpisode.root = "user://tables_check"
 	var ep := TableEpisode.open("tables-check", 7)
 	DirAccess.make_dir_recursive_absolute(ep.dir)
@@ -369,7 +360,7 @@ func _height_map() -> void:
 	ep.write_json("table", {"things": [], "top": {"material": "painting"}, "layers": []})
 	ep.invalidate("image:surface")
 	_ok(not ep.has("image:height") and not FileAccess.file_exists(ep.dir.path_join("height.json")), "a new cloth clears it and its fit")
-	# LANDING IT: the even map is kept under the striped painting, unmoved; the boards' is taken away
+	# landing it: the even map is kept under the striped painting, unmoved; the boards' is taken away
 	var prod := TableProducer.new(ep, {"title": "T", "brief": "B"})
 	striped.save_png(ep.file_of("image:surface"))
 	nap.save_png(ep.file_of("image:height"))

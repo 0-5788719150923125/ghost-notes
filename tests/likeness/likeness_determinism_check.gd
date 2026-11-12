@@ -1,20 +1,18 @@
 extends SceneTree
 
-## likeness_determinism_check - a Likeness is a pure function of the show's time (next/likeness.md,
-## "Determinism"; the second build): the same moment drawn twice, with other moments drawn between, is
-## the same picture, and the head, the eyes and the mouth chosen for it are the same.
+## likeness_determinism_check - a Likeness is a pure function of the show's time (next/likeness.md, "Determinism"): the same
+## moment drawn twice, with other moments drawn between, is the same picture, and the head, eyes and mouth chosen for it are
+## the same.
 ##
 ##   tests/run_quiet.sh likeness_determinism_check
 ##
-## NOT `--headless`: every claim is a rendered frame read back.
+## Not `--headless`: every claim is a rendered frame read back.
 ##
-## THE SET IS MADE, NOT FOUND: a made still (noise, and a face on it: points on an ellipse and inside it,
-## with depth), its rig (its body's skin and skeleton too) and masks, a library of made mouths and eyes,
-## and made motion with a posture and their face's own ways of moving - written into a
-## folder of the gate's own, drawn through the real medium ([LikenessMedium]) with its own plan and face.
-## Two moments apart are two pictures (the head moves, the mouth speaks).
+## The set is made, not found: a made still (noise, and a face on it), its rig (body skin and skeleton too) and masks, a
+## library of made mouths and eyes, and made motion with a posture and their face's own ways of moving - written into a folder
+## of the gate's own, drawn through the real medium ([LikenessMedium]). Two moments apart are two pictures.
 ##
-## THE CONTROL: another seed - another performance - draws another picture at the same moment.
+## Control: another seed - another performance - draws another picture at the same moment.
 
 const ROOT := "user://likeness_determinism_check"
 const W := 320
@@ -59,7 +57,7 @@ func _run() -> void:
 	var b := await _medium(dir, 1, phones)
 	var fresh := await _draw(b, at)
 	_ok(fresh[0] == first[0], "a medium made again drew the moment differently")
-	# THE CONTROL: another performance draws another picture at the same moment
+	# control: another performance draws another picture at the same moment
 	var c := await _medium(dir, 7, phones)
 	var other := await _draw(c, at)
 	_ok(other[0] != first[0], "another seed drew the same picture - the check cannot fail")
@@ -150,8 +148,7 @@ func _make_set(dir: String, sd: String) -> void:
 	for t in range(0, idx.size(), 3):
 		tris.append([idx[t], idx[t + 1], idx[t + 2]])
 	var box := [c.x - 45.0, c.y - 60.0, c.x + 45.0, c.y + 60.0]
-	# ITS BODY: the far ring on the torso (the head's half of it), the frame's edge the room's; arms that go
-	# with the shoulders
+	# its body: the far ring on the torso (the head's half of it), the frame's edge the room's; arms that go with the shoulders
 	var skin := {}
 	for b in LikenessFace.BONES:
 		var col: Array = []

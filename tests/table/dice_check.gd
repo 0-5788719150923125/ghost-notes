@@ -1,6 +1,9 @@
 extends SceneTree
 
-## dice_check - A DIE IS A TRUE SOLID, AND IT CAN SHOW ANY NUMBER HONESTLY (next/tabletop.md): every shape has its right faces, its opposite numbers add up as real dice do, and for ANY two faces there is a rotation of the solid onto itself taking one to the other: checked here by the vertices, not trusted. So a die thrown by real physics can have its printing turned to show what was rolled, and no body changes. Controls: a turn that is not a symmetry is told apart, and a body turned at random reads back the face it shows.
+## dice_check - a die is a true solid, and it can show any number honestly (next/tabletop.md): every shape has its right faces, its
+## opposite numbers add up as real dice do, and for any two faces there is a rotation of the solid onto itself taking one to the other,
+## checked here by the vertices. So a die thrown by real physics can have its printing turned to show what was rolled, and no body
+## changes. Controls: a turn that is not a symmetry is told apart, and a body turned at random reads back the face it shows.
 ##
 ##     godot --headless --path . --script tests/table/dice_check.gd
 
@@ -53,7 +56,7 @@ func _printing() -> void:
 			_check(a.dot(b) < -0.999, "on a %d, %d and %d are opposite" % [shape, k + 1, shape - k])
 
 
-## FOR ANY TWO FACES, ON EVERY SHAPE: a real rotation, turning the die onto itself, and landing the one face on the other.
+## For any two faces, on every shape: a real rotation, turning the die onto itself, and landing the one face on the other.
 func _rotations() -> void:
 	for shape: int in Dice.SHAPES:
 		var sd := Dice.solid(shape)
@@ -70,7 +73,7 @@ func _rotations() -> void:
 	_check(not Dice._is_symmetry(Dice.solid(20)["verts"], Basis(Vector3.UP, 0.3)), "a turn that is not one is not called one")
 
 
-## THE NUMBER ROLLED IS WHAT SHOWS: a body lies with some face up, the printing is turned, and the face up now carries the number.
+## The number rolled is what shows: a body lies with some face up, the printing is turned, and the face up now carries the number.
 func _reading() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
@@ -115,7 +118,7 @@ func _labels() -> void:
 				_check(labels[int(d["face"])] == String(d["label"]) or (int(d["sides"]) == 10 and labels[int(d["face"])] == "0" and String(d["label"]) == "10"), "%s: its face reads what was rolled, %s and %s" % [notation, labels[int(d["face"])], d["label"]])
 
 
-## A MESH: its body and, where the machine shapes text, its print. Every shape, built from its own faces.
+## A mesh: its body and, where the machine shapes text, its print. Every shape, built from its own faces.
 func _meshes() -> void:
 	for shape: int in Dice.SHAPES:
 		var r := Dice.radius_of(shape)

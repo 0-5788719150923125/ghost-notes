@@ -1,39 +1,17 @@
 extends SceneTree
 
-## Three things the Masking editor is supposed to REMEMBER, each reported broken
-## and each failing silently.
+## Three things the Masking editor must remember.
 ##   godot --headless --path . --script res://tests/masking/mask_state_check.gd
 ## No renderer needed - none of this draws anything.
 ##
-##   FOLLOW    the "Follow" switch beside the marker list (does playback drag the
-##             selection along) did not survive a restart. It is a preference
-##             about how the EDITOR behaves rather than a property of the session
-##             being edited - the same reason it sits by the list header and not
-##             in the options panel - so it belongs in user://ghost.cfg beside the
-##             other per-user settings. ONE cfg serves the whole app, so the write
-##             has to be a READ-MODIFY-WRITE of just the [mask] section; a fresh
-##             ConfigFile.save() would silently wipe splash's remembered song and
-##             clip, [director]'s pacing and [synth]'s state. That is the half of
-##             this a human would not notice for weeks, so it is asserted here.
-##
-##   KEY SWATCH  the key color "is not persisted... the UI never reads that color
-##             from state, so you never actually know what color is being keyed
-##             to". The keying itself was fine: the key IS a hue and hue_a carried
-##             it. The picker stored only `.h` and rebuilt the swatch as
-##             from_hsv(hue_a, 0.85, 0.9), so a color picked off the footage came
-##             back a DIFFERENT color - pick a pale yellow off a wall, reopen, get
-##             a saturated one. key_sat/key_val carry the rest of the pick.
-##
-##   ONE DRAG, ONE UNDO  "if I click on an option and hold, and drag back and forth
-##             to see how the adjustments look, every single place where I stop
-##             will be added to the command history". Undo coalescing was on a 0.9s
-##             TIMER, so any pause longer than that opened a fresh entry - and, the
-##             other way round, two SEPARATE adjustments made inside the window
-##             folded into one, so Ctrl+Z "often reverts several changes at once".
-##             Both are the timer; it is gone. The boundary is the mouse button:
-##             while it is down, one entry, and everything else is its own step. The VALUE must still change on every step - the live preview is
-##             the point of dragging - so this checks both halves, or "fixed" could
-##             mean the drag stopped previewing.
+## - Follow: the "Follow" switch beside the marker list is a per-user editor preference, so it lives in
+##   user://ghost.cfg. One cfg serves the whole app, so the write must be a read-modify-write of just the
+##   [mask] section (a fresh ConfigFile.save() would wipe the other sections).
+## - Key swatch: the picker stores key_sat/key_val beside hue_a, so a color picked off the footage comes
+##   back as the same color after a save and load.
+## - One drag, one undo: undo coalescing is bounded by the mouse button (while it is down, one entry;
+##   everything else is its own step), and the value must still change on every step so the live preview
+##   keeps working.
 
 const CFG := "user://ghost.cfg"
 
@@ -67,17 +45,12 @@ func _expect(ok: bool, msg: String) -> void:
 
 func _check_follow() -> void:
 	var ed = load("res://src/masking/mask_editor.gd").new()
-	# A neighboring section, planted first: the read-modify-write is what has to
-	# preserve it, and a fresh ConfigFile.save() is the mistake being guarded
-	# against. splash's remembered clip lives exactly like this.
+	# A neighboring section, planted first: the read-modify-write must preserve it.
 	var seed_cfg := ConfigFile.new()
 	seed_cfg.load(CFG)
 	seed_cfg.set_value("splash", "_state_check_witness", "keep me")
-	# CLEAR THE REAL PREFERENCE FIRST. The default is only a default when nothing is
-	# stored, and this reads the author's own ghost.cfg - so with Follow legitimately
-	# switched off in their editor, asserting the default against it failed for a
-	# reason that had nothing to do with the code. The file is restored on the way
-	# out either way (see _restore_cfg).
+	# Clear the real preference first: the default only applies when nothing is stored, and this reads the
+	# author's own ghost.cfg. The file is restored on the way out (see _restore_cfg).
 	if seed_cfg.has_section_key("mask", "follow_playhead"):
 		seed_cfg.erase_section_key("mask", "follow_playhead")
 	seed_cfg.save(CFG)
@@ -105,8 +78,7 @@ func _check_follow() -> void:
 
 
 func _check_key_swatch() -> void:
-	# A color a person would actually pick off footage: a pale, unsaturated
-	# yellow wall. The old round trip returned it at s=0.85, v=0.9 whatever it was.
+	# A color a person would pick off footage: a pale, unsaturated yellow.
 	var picked := Color(0.90, 0.86, 0.42)
 	var m := {}
 	for k in MaskSession.VECTOR_FIELDS:
@@ -115,8 +87,7 @@ func _check_key_swatch() -> void:
 	m["hue_a"] = picked.h
 	m["key_sat"] = picked.s
 	m["key_val"] = picked.v
-	# ...through a full save/load of the session, which is where "after a restart"
-	# actually happens.
+	# ...through a full save/load of the session...
 	var s := MaskSession.new()
 	s.markers.append(m)
 	var round_trip := MaskSession.from_vector(s.to_vector(s.markers[0]))
@@ -141,14 +112,12 @@ func _check_key_swatch() -> void:
 
 func _check_drag_undo() -> void:
 	var ed = load("res://src/masking/mask_editor.gd").new()
-	# _snapshot() reads the session, so give it one; nothing below touches the
-	# video or the panel.
+	# _snapshot() reads the session, so give it one.
 	ed.session = MaskSession.new()
 	root.add_child(ed)
 	var key := "marker:1:fx_scale"
 
-	# WITH THE BUTTON DOWN: one boundary, however many changes and however long the
-	# pauses between them.
+	# With the button down: one boundary, however many changes and however long the pauses.
 	_hold(true)
 	await process_frame
 	for i in 6:
@@ -161,7 +130,7 @@ func _check_drag_undo() -> void:
 		"a single drag left %d entries in the history - every place the pointer "
 		% during + "paused opened another one, which is the report")
 
-	# ...and the next drag is its own step, or undo would swallow unrelated work.
+	# ...and the next drag is its own step.
 	_hold(true)
 	await process_frame
 	ed._undo.push(key, "adjusted Scale")
@@ -174,19 +143,14 @@ func _check_drag_undo() -> void:
 		"a second, separate drag did not open its own history entry (%d total) - "
 		% total + "one undo would now revert two adjustments")
 
-	# THE PREVIEW MUST STILL MOVE. "Do not record the drag" is satisfied trivially
-	# by not applying it either, and that would be a worse bug than the one being
-	# fixed, so the value's own path is checked to still write on every step.
+	# The preview must still move: the value's own path must write on every step.
 	var m2 := {}
 	for k in MaskSession.VECTOR_FIELDS:
 		m2[k] = MaskSession.DEFAULTS.get(k, 0.0)
 	ed.session.markers.append(m2)
 	ed._selected = m2
-	# The three pieces of chrome _edit touches AFTER writing the value - the
-	# timeline strip and the marker label/list it refreshes. Without them the write
-	# still happens and the assertion below still holds, but every step prints a
-	# null-access error, and an expected error in the output is where a real one
-	# hides.
+	# The chrome _edit touches after writing the value (timeline strip, marker label and list); without
+	# them every step prints a null-access error, which would hide a real one.
 	ed._timeline = MaskTimeline.new()
 	root.add_child(ed._timeline)
 	ed._marker_label = Label.new()
@@ -208,9 +172,8 @@ func _check_drag_undo() -> void:
 	ed.free()
 
 
-## Hold or release the left mouse button, as the editor sees it. _push_undo reads
-## the button rather than a per-widget drag signal so that one rule covers sliders,
-## the color wheel and the region box.
+## Hold or release the left mouse button, as the editor sees it. _push_undo reads the button rather than a
+## per-widget drag signal, so one rule covers sliders, the color wheel and the region box.
 func _hold(down: bool) -> void:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_LEFT
@@ -226,7 +189,7 @@ func _backup_cfg() -> void:
 		f.close()
 
 
-## The author's own settings live in this file. Put it back exactly as it was.
+## The author's own settings live in this file; put it back exactly as it was.
 func _restore_cfg() -> void:
 	if _cfg_existed:
 		var f := FileAccess.open(CFG, FileAccess.WRITE)

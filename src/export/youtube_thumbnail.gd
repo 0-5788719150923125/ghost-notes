@@ -1,49 +1,37 @@
 extends EpisodeStep
 class_name YouTubeThumbnail
 
-## YouTubeThumbnail - a thumbnail painted for each episode (the user, 2026-10-28: "an agentic workflow
-## (supporting all agents, models, and reasoning modes), which would ask an agent to produce a compelling
-## and relevant thumbnail. This flow might benefit from both the writer and the painter").
+## YouTubeThumbnail - a thumbnail painted for each episode.
 ##
-## A STEP OF THE EPISODE ([EpisodeStep]), offered by the YouTube card while its Thumbnail is Painted
-## ([constant YouTube.THUMBNAILS]): the note's Pipeline card lists it, Generate makes it once the words are
-## written and its ⟳ paints it again - a note read as it is written, by an export that goes up too ([NoteUpload]). TWO AGENTS, EACH PICKED ON THE CARD: the writer reads the episode - its words, title
-## and description, and its own pictures where it has any ([method EpisodeFeed.pictures], a show's
-## paintings) - and writes what the painter paints, the words on it and which of those pictures the
-## painter follows (rules/youtube/thumbnail.yaml); the painter paints it ([method _after]); the code cuts
-## it to YouTube's shape ([method fit]).
+## A step of the episode ([EpisodeStep]), offered by the YouTube card while its Thumbnail is Painted ([constant
+## YouTube.THUMBNAILS]): the note's Pipeline card lists it, Generate makes it once the words are written and its ⟳ paints it
+## again; a note read as it is written is made by an export that goes up too ([NoteUpload]). Two agents, each picked on the
+## card: the writer reads the episode (words, title, description, and its own pictures where it has any, [method
+## EpisodeFeed.pictures]) and writes what the painter paints, the words on it and which pictures the painter follows
+## (rules/youtube/thumbnail.yaml); the painter paints it ([method _after]); the code cuts it to YouTube's shape ([method fit]).
 ##
-## KEPT IN THE EPISODE'S FOLDER, EVERY ONE PAINTED (the user, 2026-10-30: "there is no way to cycle
-## backward/forward through generated thumbnails, as the generated in-episode pictures can be cycled
-## through"): `youtube_thumbnail.json` holds the versions, oldest first - each the writer's answer, the
-## fingerprint of the words it was written from and its thumbnail - and the one CHOSEN ([method choose]),
-## what goes up ([method image_in]) and what the step says is made ([method made]), so an earlier one
-## chosen from words since rewritten shows as stale - AND STILL GOES UP: NOTHING PAINTS OVER A CHOICE (2026-10-31, the
-## user, of an export that painted again: "That definitely shouldn't happen. I already had painted one."). Generate
-## and an export that goes up paint one only for an episode with none ([method owed]); another is the ⟳'s. A version's painting whole is `youtube_thumbnail_N.png`
-## and the thumbnail cut from it `youtube_thumbnail_N.jpg` (a record kept before there were versions is one,
-## its files named in it). The YouTube card steps between them and deletes one ([method delete]). Deleting
-## the episode takes them along, and another episode starts without one.
+## Kept in the episode's folder, every one painted: `youtube_thumbnail.json` holds the versions, oldest first (each the
+## writer's answer, the fingerprint of the words it was written from and its thumbnail) and the one chosen ([method choose]),
+## which goes up ([method image_in]) and which the step says is made ([method made]). A chosen version from words since
+## rewritten shows as stale and still goes up: nothing paints over a choice. Generate and an export that goes up paint one
+## only for an episode with none ([method owed]); another is the ⟳'s. A version's painting is `youtube_thumbnail_N.png` and
+## the thumbnail cut from it `youtube_thumbnail_N.jpg` (a record from before versions is one, its files named in it). The
+## YouTube card steps between them and deletes one ([method delete]); deleting the episode takes them along.
 ##
-## IN THE VIDEO'S OWN LOOK (the user, 2026-10-30: "a feature akin to the full-screen images' 'match earlier'
-## option, to allow the thumbnail to mimic the style of the pictures in the video. Right now, the thumbnails
-## generated are just random weird pictures, completely different from the video"): with the card's "Match
-## the video's pictures" ticked ([method matching]), the writer is shown the episode's own pictures and told
-## to design one of their world, and the painter is ALWAYS handed some of them - those the writer named, or,
-## naming none, [constant REFS_MOST] spread through them ([method spread]) - and told to paint one more of
-## them. Unticked, it is designed and painted free of them. (A note read as it is written had handed the
-## step no pictures at all: its own are its painted ones now - [method NoteUpload.pictures].)
+## In the video's own look: with the card's "Match the video's pictures" ticked ([method matching]), the writer is shown the
+## episode's own pictures and told to design one of their world, and the painter is always handed some of them (those the
+## writer named, or, naming none, [constant REFS_MOST] spread through them, [method spread]) and told to paint one more of
+## them. Unticked, it is designed and painted free of them. A note read as it is written has its painted pictures
+## ([method NoteUpload.pictures]).
 ##
-## ANOTHER IS ANOTHER (the user, 2026-10-30: "twice now, the thumbnail generated has essentially been exactly
-## the same thing, right down to the exact same text"): the writer had been sent the same prompt every time
-## and came back with the same design - the same subject and the same four words. Now it is shown the
-## versions kept for the episode ([constant EARLIER_MOST] of them) and told to make one unlike them.
+## Another is another: the writer is shown the versions kept for the episode ([constant EARLIER_MOST] of them) and told to
+## make one unlike them.
 
 const YouTube := preload("res://src/export/youtube.gd")
 ## The most of an episode's own pictures the writer is shown, spread through the video in its order.
 const PICTURES_MOST := 8
-## The most of them the painter is handed to paint after, as a book's picture is handed the ones before it
-## ([constant Illustrations.CHAIN_MAX]).
+## The most of them the painter is handed to paint after, as a book's picture is handed the ones before it ([constant
+## Illustrations.CHAIN_MAX]).
 const REFS_MOST := 4
 ## Version N's files in the episode's folder: the painting (`.png`) and the thumbnail cut from it (`.jpg`).
 const FILES := "youtube_thumbnail_%d"
@@ -58,9 +46,9 @@ var _painter_of: Callable
 var _match_by: Callable
 
 
-## [param wanted_by]: () -> bool, the card's Thumbnail being Painted; [param writer_by] and
-## [param painter_by]: () -> Dictionary, the card's picks, `{agent, model, effort}`; [param match_by]:
-## () -> bool, its "Match the video's pictures" (ticked when not handed).
+## [param wanted_by]: () -> bool, the card's Thumbnail being Painted; [param writer_by] and [param painter_by]: () ->
+## Dictionary, the card's picks, `{agent, model, effort}`; [param match_by]: () -> bool, its "Match the video's pictures"
+## (ticked when not handed).
 func _init(wanted_by := Callable(), writer_by := Callable(), painter_by := Callable(), match_by := Callable()) -> void:
 	key = "youtube_thumbnail"
 	label = "Thumbnail"
@@ -83,7 +71,7 @@ func matching() -> bool:
 	return not _match_by.is_valid() or bool(_match_by.call())
 
 
-## THE THUMBNAIL CHOSEN FOR THE EPISODE IN [param folder] (absolute), "" for none: what an upload takes.
+## The thumbnail chosen for the episode in [param folder] (absolute), "" for none: what an upload takes.
 static func image_in(folder: String) -> String:
 	var path := folder.path_join("youtube_thumbnail.json") if not folder.is_empty() else ""
 	if path.is_empty() or not FileAccess.file_exists(path):
@@ -121,15 +109,15 @@ static func chosen_of(d: Variant) -> int:
 	return -1 if n == 0 else clampi(int((d as Dictionary).get("current", n - 1)), 0, n - 1)
 
 
-## WHAT IS MADE IS THE VERSION CHOSEN, as kept: what was painted, its words, its thumbnail and the
-## fingerprint of the words it was painted from.
+## What is made is the version chosen, as kept: what was painted, its words, its thumbnail and the fingerprint of the words
+## it was painted from.
 func made(feed: EpisodeFeed) -> Dictionary:
 	var d := super.made(feed)
 	var vs := versions_of(d)
 	return vs[chosen_of(d)] if not vs.is_empty() else {}
 
 
-## OWED ONLY WHILE NONE IS PAINTED: words written since leave the one chosen going up, said older than them.
+## Owed only while none is painted: words written since leave the one chosen going up, said older than them.
 func owed(feed: EpisodeFeed) -> bool:
 	return made(feed).is_empty()
 
@@ -144,7 +132,7 @@ func chosen(feed: EpisodeFeed) -> int:
 	return chosen_of(super.made(feed))
 
 
-## VERSION [param i] GOES UP with [param feed]'s episode from now on. "" once kept, else why not.
+## Version [param i] goes up with [param feed]'s episode from now on. "" once kept, else why not.
 func choose(feed: EpisodeFeed, i: int) -> String:
 	var vs := versions(feed)
 	if i < 0 or i >= vs.size():
@@ -152,8 +140,8 @@ func choose(feed: EpisodeFeed, i: int) -> String:
 	return _write(feed, {"versions": vs.duplicate(true), "current": i})
 
 
-## VERSION [param i] DELETED, its painting and its thumbnail with it, and the one before it chosen (the
-## next, when it was the first); with none left the episode has no thumbnail. "" once done, else why not.
+## Version [param i] deleted, its painting and thumbnail with it, and the one before it chosen (the next, when it was the
+## first); with none left the episode has no thumbnail. "" once done, else why not.
 func delete(feed: EpisodeFeed, i: int) -> String:
 	var vs := versions(feed).duplicate(true)
 	if i < 0 or i >= vs.size():
@@ -173,7 +161,7 @@ func delete(feed: EpisodeFeed, i: int) -> String:
 	return _write(feed, {"versions": vs, "current": maxi(at - 1, 0) if at >= i else at})
 
 
-## A PAINTING LANDED IS A NEW VERSION, chosen: the ones before it are kept, to step back to.
+## A painting landed is a new version, chosen: the ones before it are kept, to step back to.
 func _keep(feed: EpisodeFeed, got: Dictionary, stamp: String) -> String:
 	var v := got.duplicate(true)
 	v["from"] = stamp
@@ -217,10 +205,9 @@ static func spread(pictures: PackedStringArray, n: int) -> Array:
 	return out
 
 
-## What the writer is told, from the show's name, the episode's [param title] and [param description], its
-## [param words], its own [param pictures] (absolute paths, numbered from 1 as it is shown them) and the
-## thumbnails already kept for it ([param earlier], versions as kept: it makes one unlike them). Static and
-## pure for the gate.
+## What the writer is told, from the show's name, the episode's [param title] and [param description], its [param words],
+## its own [param pictures] (absolute paths, numbered from 1 as it is shown them) and the thumbnails already kept for it
+## ([param earlier], versions as kept: it makes one unlike them). Static and pure for the gate.
 static func prompt(show: String, title: String, description: String, words: String,
 		pictures: PackedStringArray, earlier: Array = []) -> Dictionary:
 	var images: Array = []
@@ -261,9 +248,8 @@ static func land(d: Variant, pictures: PackedStringArray) -> Variant:
 	return {"picture": pic, "words": words, "after": after}
 
 
-## THE PAINTER'S JOB: the card's painter, painting what the writer wrote ([method painting]) into the
-## episode's folder - after the pictures it named, or, matching and naming none, a few spread through the
-## episode's own.
+## The painter's job: the card's painter, painting what the writer wrote ([method painting]) into the episode's folder, after
+## the pictures it named or, matching and naming none, a few spread through the episode's own.
 func _after(got: Dictionary, feed: EpisodeFeed) -> Dictionary:
 	var p: Variant = _painter_of.call() if _painter_of.is_valid() else {}
 	var pick: Dictionary = p if p is Dictionary else {}
@@ -304,9 +290,9 @@ static func _portrait() -> bool:
 	return Director.resolved_frame() == "portrait"
 
 
-## THE PAINTING CUT TO A THUMBNAIL: [param src] cropped about its middle to YouTube's shape and scaled to
-## [constant YouTube.THUMBNAIL_SIZE] (turned for [param portrait]), written as a JPEG at [param dst] - by
-## rename, so it is there whole or not at all. "" once written, else why not.
+## The painting cut to a thumbnail: [param src] cropped about its middle to YouTube's shape and scaled to [constant
+## YouTube.THUMBNAIL_SIZE] (turned for [param portrait]), written as a JPEG at [param dst] by rename, so it is there whole or
+## not at all. "" once written, else why not.
 static func fit(src: String, dst: String, portrait := false) -> String:
 	if not FileAccess.file_exists(src):
 		return "the painting is missing"

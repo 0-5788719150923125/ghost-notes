@@ -1,34 +1,30 @@
 extends RefCounted
 class_name Tables
 
-## Tables - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an
-## oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is
-## cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone,
-## metal, lacquer, leather, tiles, a baize, or the episode's own painting - with a pattern inlaid in
-## it and a band along its edge if it has them. Over it, its LAYERS from the bottom up: a tablecloth,
-## a runner, a square laid as a diamond, a mat under the cards - each a FABRIC woven in a PATTERN
-## (stripes, checks, a plaid, diamonds, dots, a medallion, dyed clouds, ikat, or the painting), with
-## a border along its hem and a fringe on its ends if it has them. Every surface has a RELIEF - its
-## threads or grain, its figures raised or sunk, quilting, tufting, the painting's own detail - a
-## height field the shaders see by slope, parallax and shade (`shaders/table_common.gdshaderinc`).
+## Tables - the table itself, built from a description. Its top: an outline (a rectangle, round, an
+## oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut
+## to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal,
+## lacquer, leather, tiles, a baize, or the episode's own painting - with a pattern inlaid in it and a
+## band along its edge if it has them. Over it, its layers from the bottom up: a tablecloth, a runner, a
+## square laid as a diamond, a mat under the cards - each a fabric woven in a pattern (stripes, checks, a
+## plaid, diamonds, dots, a medallion, dyed clouds, ikat, or the painting), with a border along its hem
+## and a fringe on its ends if it has them. Every surface has a relief - its threads or grain, its
+## figures raised or sunk, quilting, tufting, the painting's own detail - a height field the shaders see
+## by slope, parallax and shade (`shaders/table_common.gdshaderinc`).
 ##
-## Built 2026-10-06 (the user: "right now, the table is just a flat rectangular surface, with a
-## texture crudely drawn onto it... give the agents the proper tools and instructions to construct
-## their own table, with optional tapestries, tablecloths, runners"; and "the table would really
-## benefit from some depth mapping"). As [Props] and [Effects] are: registries whose words are what
-## the agent reads ([method describe]), [method sanitize] (whatever it wrote, buildable) and
-## [method build]. The set dresser writes `top` and `layers` beside its things in `table.json`; a
-## table with neither is the table every episode had before - a 190 x 85 cm board table, the painting
-## laid on it as a 120 x 72 cm cloth ([constant DEFAULT_TOP], [method default_layers]).
+## Like [Props] and [Effects], a registry whose words are what the agent reads ([method describe]),
+## with [method sanitize] (whatever it wrote, buildable) and [method build]. The set dresser writes `top`
+## and `layers` beside its things in `table.json`; a table with neither is a 190 x 85 cm board table,
+## the painting laid on it as a 120 x 72 cm cloth ([constant DEFAULT_TOP], [method default_layers]).
 ##
-## THE TOP HOLDS THE CARDS: the deck, the spread, the shuffle and the wash all lie within [constant
+## The top holds the cards: the deck, the spread, the shuffle and the wash all lie within [constant
 ## HOLDS], and a top that would not hold it [constant EDGE] in from its edge is made larger, its
 ## proportions kept - a round table is at least ~1.2 m across. Things stand on the top [constant
-## THING_EDGE] in from its edge ([method inside]). A layer that runs past the edge HANGS OVER IT as
-## cloth does - rolled over the edge, straight down, its hem in folds ([method _drape]) - real
-## geometry; the relief is not (lifting the surface would lift the cards off it, or sink them in).
+## THING_EDGE] in from its edge ([method inside]). A layer that runs past the edge hangs over it as cloth
+## does - rolled over the edge, straight down, its hem in folds ([method _drape]) - real geometry; the
+## relief is not (lifting the surface would lift the cards off it, or sink them in).
 ##
-## SPACE: a description is in centimeters, x to the reader's right and z toward the reader, from the
+## Space: a description is in centimeters, x to the reader's right and z toward the reader, from the
 ## middle of the reading - where the cards are dealt, [constant ORIGIN] on the table; the top's own
 ## middle is [constant TOP_AT] from it. Built in meters, in the table medium's own space.
 
@@ -41,8 +37,8 @@ const TOP_AT := Vector2(0.0, 0.04)
 const HOLDS := Rect2(-0.42, -0.33, 0.84, 0.58)
 ## How far inside the top's edge the cards stay, and the things (meters).
 const EDGE := 0.02
-## (3.5 cm: on the old table that leaves things exactly the stretch of the old cloth they had - at 4 cm
-## its back edge came 0.6 mm forward, and every placement drawn after it moved)
+## 3.5 cm keeps things within the stretch of the default cloth (at 4 cm its back edge moves 0.6 mm
+## forward, and every placement drawn after it moves)
 const THING_EDGE := 0.035
 ## The sizes a top may be, centimeters (width, depth), and its thickness.
 const TOP_MIN := Vector2(60.0, 50.0)
@@ -71,7 +67,7 @@ const SHAPES := {
 	"polygon": "a regular polygon of `sides` 5-12 (8 is an octagon) in `size` [width, depth], a flat side toward the reader",
 }
 
-## THE PROFILE A TOP'S EDGE IS CUT TO - the edge is all of the table's side the camera sees: it looks
+## The profile a top's edge is cut to - the edge is all of the table's side the camera sees: it looks
 ## down across the top, and its far edge stands against the room.
 const EDGES := {
 	"square": "cut straight down, its corner barely eased",
@@ -82,7 +78,7 @@ const EDGES := {
 	"bead": "a small round bead along the top, stepped in below it",
 }
 
-## THE FABRICS a layer is woven in, with their shader codes and their threads' depth (mm).
+## The fabrics a layer is woven in, with their shader codes and their threads' depth (mm).
 const FABRICS := {
 	"linen": {"code": 1, "depth": 0.25, "about": "linen: a little uneven, matte"},
 	"cotton": {"code": 2, "depth": 0.15, "about": "cotton: fine and plain"},
@@ -95,7 +91,7 @@ const FABRICS := {
 	"burlap": {"code": 9, "depth": 0.8, "about": "burlap or jute: coarse, open, rough"},
 }
 
-## THE PATTERNS a layer is woven in, or a top inlaid with, with their shader codes.
+## The patterns a layer is woven in, or a top inlaid with, with their shader codes.
 const PATTERNS := {
 	"plain": {"code": 0, "about": "one color, the first of `colors`"},
 	"stripes": {"code": 1, "about": "bands `scale` cm wide, each of `colors` in turn"},
@@ -109,7 +105,7 @@ const PATTERNS := {
 	"painting": {"code": 9, "about": "THE PAINTING (attached): the episode's own surface, laid over the whole of it"},
 }
 
-## THE RELIEF a surface has - its depth, which the low light rakes - with the shader's codes.
+## The relief a surface has - its depth, which the low light rakes - with the shader's codes.
 const RELIEFS := {
 	"none": {"code": 0, "about": "flat"},
 	"natural": {"code": 1, "about": "the material's own alone - a weave's threads, a wood's grain, a leather's pebble, the seams between boards and tiles; `depth` sets how deep (every surface has it unless none)"},
@@ -126,7 +122,7 @@ const TOP_KINDS := {"wood": 7, "stone": 6, "crystal": 6, "metal": 1, "ceramic": 
 const TOP_DEPTH := {"wood": 0.35, "stone": 0.3, "crystal": 0.2, "metal": 0.25, "ceramic": 0.05, "leather": 0.3,
 	"fabric": 0.3, "painted": 0.1, "painting": 0.0}
 
-## THE TABLE EVERY EPISODE HAD BEFORE: boards of a dark wood, its painting laid on it as a cloth.
+## The default table: boards of a dark wood, its painting laid on it as a cloth.
 const DEFAULT_TOP := {"shape": "rect", "size": [190.0, 85.0], "thickness": 5.0, "edge": "eased", "material": "the table's wood",
 	"boards": {"width": 18.0, "turn": 0.0}}
 const DEFAULT_WOOD := {"kind": "wood", "color": "#5c3821", "color2": "#3a2213", "polish": 0.45, "pattern": 0.55, "grain": 1.4}
@@ -135,7 +131,7 @@ const _TOP_SHADER := preload("res://shaders/table_top.gdshader")
 const _TEXTILE_SHADER := preload("res://shaders/table_textile.gdshader")
 
 
-## THE VOCABULARY, as the set dresser reads it.
+## The vocabulary, as the set dresser reads it.
 static func describe() -> String:
 	var lines := PackedStringArray()
 	lines.append("THE TOP (`top`): {\"shape\", \"size\", \"corner\", \"sides\", \"scallops\", \"thickness\", \"edge\", \"material\", \"boards\", \"tiles\", \"pattern\", \"inlay\", \"relief\", \"why\"} - centimeters.")
@@ -156,8 +152,8 @@ static func describe() -> String:
 	lines.append("THE LAYERS (`layers`, from the bottom up, at most %d - or none: a bare top): each {\"name\", \"what\", \"outline\", \"size\", \"sides\", \"drop\", \"at\", \"turn\", \"fabric\", \"pattern\", \"border\", \"fringe\", \"relief\", \"sheen\"}." % MAX_LAYERS)
 	lines.append("- what: a few words - a tablecloth, a runner, an altar cloth laid as a diamond, a reading mat, a tapestry. outline: rect, round, oval or polygon (with `sides`) at `size` [width, depth] - width side to side and depth front to back, before it is turned - or \"top\": the top's own outline, hanging `drop` cm over its edge all round - a tablecloth.")
 	lines.append("- at [x, z]: its middle, from the middle of the reading (where the cards are dealt). turn: degrees - 0 square to the table, 45 a square laid as a diamond, 90 a runner of [200, 40] laid front to back instead of side to side. Wherever a layer runs past the top's edge it hangs over it, in folds.")
-	# A MAT UNDER THE CARDS HOLDS THEM (the user, 2026-10-17: penalty-box 21439's knitted square, 52 cm laid
-	# as a diamond under nine cards - "much too small for the scene"): the stretch the top is sized for
+	# A mat under the cards holds them: a layer the cards are read on covers the whole stretch the top is
+	# sized for
 	var hold := Vector2i(roundi(HOLDS.size.x * 100.0) + 4, roundi(HOLDS.size.y * 100.0) + 4)
 	lines.append("- UNDER THE CARDS: a layer the cards are read on covers the whole stretch they need, about %d x %d cm in the middle - laid as a diamond, a square needs sides of about %d cm to cover it. A smaller mat, square or doily lies off to a side or under a thing, never in the middle, where the cards would spill off its edges." % [
 		hold.x, hold.y, roundi((hold.x + hold.y) * 0.5 * sqrt(2.0))])
@@ -186,7 +182,7 @@ static func _least_round() -> float:
 
 # --- made safe ------------------------------------------------------------------------------------
 
-## THE TABLE MADE SAFE: [param top] and [param layers] as the set dresser wrote them (either may be
+## The table made safe: [param top] and [param layers] as the set dresser wrote them (either may be
 ## missing: no `top` is [constant DEFAULT_TOP]; no `layers` is [method default_layers], `[]` a bare
 ## top), every key the builder reads present, every number in range, every name one it knows, and the
 ## top grown to hold the cards. [param materials] are the table's materials, made safe by [Props]
@@ -213,7 +209,7 @@ static func sanitize(top: Variant, layers: Variant, materials: Dictionary, palet
 	return {"top": t, "layers": ls}
 
 
-## The cloth every table had before: the painting, 120 x 72 cm, under the reading.
+## The default cloth: the painting, 120 x 72 cm, under the reading.
 static func default_layers() -> Array:
 	return [_sanitize_layer({"name": "the cloth", "what": "the reading cloth", "outline": "rect", "size": [120.0, 72.0],
 		"fabric": "cotton", "pattern": {"kind": "painting"}}, 0, [], PackedStringArray())]
@@ -242,7 +238,7 @@ static func _sanitize_top(t: Dictionary, materials: Dictionary, pal: Array, note
 		"edge": _key(t.get("edge"), EDGES, "eased"), "why": Props._text(t.get("why", ""), 200)}
 	if int(out["scallops"]) > 0 and int(out["scallops"]) < 12:
 		out["scallops"] = 12
-	# THE MATERIAL: one of the table's, by name - or the painting
+	# The material: one of the table's, by name - or the painting
 	var mname := Props._text(t.get("material", ""), 80)
 	if mname.to_lower() == "painting" or mname.to_lower() == "the painting":
 		out["material"] = "painting"
@@ -272,7 +268,7 @@ static func _sanitize_top(t: Dictionary, materials: Dictionary, pal: Array, note
 	if float((out["boards"] as Dictionary)["width"]) > 0.0 or float((out["tiles"] as Dictionary)["size"]) > 0.0:
 		natural += 0.6
 	out["relief"] = _sanitize_relief(t.get("relief"), "painting" if out["material"] == "painting" else "natural", natural)
-	# THE TOP HOLDS THE CARDS: grown, its proportions kept, until every corner of where they go lies
+	# The top holds the cards: grown, its proportions kept, until every corner of where they go lies
 	# EDGE inside it
 	var k := 1.0
 	while not holds_cards(out) and k < 4.0:
@@ -363,7 +359,7 @@ static func _size2(v: Variant, fallback: Vector2) -> Vector2:
 
 # --- outlines --------------------------------------------------------------------------------------
 
-## A TOP'S OUTLINE as the builder and the checks read it: its shape, half its size, corner and
+## A top's outline as the builder and the checks read it: its shape, half its size, corner and
 ## scallops in meters, its middle on the table (x, z).
 static func top_outline(top: Dictionary) -> Dictionary:
 	var size: Array = top.get("size", [190.0, 85.0])
@@ -374,7 +370,7 @@ static func top_outline(top: Dictionary) -> Dictionary:
 		"center": ORIGIN + TOP_AT, "turn": 0.0, "grow": 0.0}
 
 
-## A LAYER'S OWN OUTLINE, laid flat, on the table: "top" is the top's grown by its drop.
+## A layer's own outline, laid flat, on the table: "top" is the top's grown by its drop.
 static func layer_outline(layer: Dictionary, top: Dictionary) -> Dictionary:
 	var at: Array = layer.get("at", [0.0, 0.0])
 	var center := ORIGIN + Vector2(float(at[0]), float(at[1])) * 0.01
@@ -406,7 +402,7 @@ static func _turn2(p: Vector2, a: float) -> Vector2:
 	return Vector2(p.x * c + p.y * s, -p.x * s + p.y * c)
 
 
-## HOW FAR [param p] (on the table, x z) IS OUTSIDE outline [param o] (meters; negative inside).
+## How far [param p] (on the table, x z) is outside outline [param o] (meters; negative inside).
 static func sdf(o: Dictionary, p: Vector2) -> float:
 	return sdf_local(o, to_local(o, p))
 
@@ -463,7 +459,7 @@ static func _grad_local(o: Dictionary, l: Vector2) -> Vector2:
 	return g.normalized() if g.length() > 1e-9 else (l.normalized() if l.length() > 1e-9 else Vector2(0.0, 1.0))
 
 
-## THE OUTLINE'S EDGE as points (local, meters), going round: found along rays from its middle (every
+## The outline's edge as points (local, meters), going round: found along rays from its middle (every
 ## outline here is seen whole from its middle), with a ray at every corner so none is cut off.
 static func edge_points(o: Dictionary, rays := RAYS) -> PackedVector2Array:
 	var angles: Array = []
@@ -540,7 +536,7 @@ const _PROFILE_T := [0.0, 0.02, 0.05, 0.1, 0.16, 0.24, 0.32, 0.4, 0.45, 0.5, 0.6
 
 # --- built --------------------------------------------------------------------------------------------
 
-## THE TABLE, BUILT from [param spec] (`{top, layers}` made safe): `node` (the top and every layer, in
+## The table, built from [param spec] (`{top, layers}` made safe): `node` (the top and every layer, in
 ## the table medium's space - the top's face at y = 0), `top_mat`, `layer_mats`, `painted` (every
 ## material the painting is laid on, with the size it spans: [method apply_painting]) and `bounds`.
 ## [param seed] varies the grain, the folds, the patterns' noise.
@@ -584,11 +580,11 @@ static func build(spec: Dictionary, seed: int) -> Dictionary:
 	return {"node": root, "top_mat": top_mat, "layer_mats": layer_mats, "painted": painted, "bounds": bounds}
 
 
-## THE PAINTING laid on every surface that takes it - its pixels square there, the part of it that
-## fits ([method CardTable.cloth_crop]) - or taken off ([param tex] null: the surface's own color).
-## [param height]: the painting's HEIGHT MAP, when the painter made one that lines up with it
-## ([method height_fit]) - the depth under the painting, shifted by [param shift] (UV) onto it - or null:
-## the painting's own detail stands in.
+## The painting laid on every surface that takes it - its pixels square there, the part of it that fits
+## ([method CardTable.cloth_crop]) - or taken off ([param tex] null: the surface's own color).
+## [param height]: the painting's height map, when the painter made one that lines up with it ([method
+## height_fit]) - the depth under the painting, shifted by [param shift] (UV) onto it - or null: the
+## painting's own detail stands in.
 static func apply_painting(built: Dictionary, tex: Texture2D, height: Texture2D = null, shift := Vector2.ZERO) -> void:
 	for p in built.get("painted", []):
 		var mat: ShaderMaterial = (p as Dictionary)["mat"]
@@ -604,33 +600,30 @@ static func apply_painting(built: Dictionary, tex: Texture2D, height: Texture2D 
 
 # --- the painter's height map -----------------------------------------------------------------------
 
-## THE PAINTING'S DEPTH, PAINTED (2026-10-07; the user: "the painter-made height map, especially, sounds
-## like a novel idea - if you think it can truly work"). The painter is handed the painting and asked
-## for the same surface as a gray height map (`image:height`); an image model may move, zoom or invent
-## what it redraws, and a relief that does not lie under its picture is worse than none - so the map
-## is MEASURED against the painting before it is used: the two images' STRUCTURE (where each changes,
-## its gradient's size - blind to which way round the gray runs) at [constant FIT_W] across,
-## correlated at every shift up to [constant FIT_SHIFT] pixels either way. The best is its score (1 the
-## same structure, about 0 unrelated) and its shift; under [constant FIT_LEAST] it is refused - unless
-## it has nothing to misplace: a flat map ([constant FLAT_SPAN]) or an even one ([constant EVEN_SPREAD]).
+## The painting's depth, painted: the painter is handed the painting and asked for the same surface as a
+## gray height map (`image:height`). An image model may move, zoom or invent what it redraws, and a
+## relief that does not lie under its picture is worse than none, so the map is measured against the
+## painting before it is used: the two images' structure (where each changes, its gradient's size -
+## blind to which way round the gray runs) at [constant FIT_W] across, correlated at every shift up to
+## [constant FIT_SHIFT] pixels either way. The best is its score (1 the same structure, about 0
+## unrelated) and its shift; under [constant FIT_LEAST] it is refused - unless it has nothing to
+## misplace: a flat map ([constant FLAT_SPAN]) or an even one ([constant EVEN_SPREAD]).
 const FIT_W := 96
 const FIT_SHIFT := 4
 const FIT_LEAST := 0.35
-## A FLAT MAP lies under anything: a surface with no relief - a cutting mat, its grid printed on
-## smooth vinyl - comes back nearly one gray, as the painter is told to draw a flat print, and its
-## faint scratches correlate with nothing (0.03, measured 2026-10-08, refused and asked for again).
-## A map whose lightness spans less than this (2nd to 98th percentile, at [constant FIT_W] across) is
-## that answer, kept as it is: the surface lies smooth, its print not raised. The maps that lined up
-## spanned 0.043 to 0.24; that cutting mat's, 0.015.
+## A flat map lies under anything: a surface with no relief (a cutting mat, its grid printed on smooth
+## vinyl) comes back nearly one gray, and its faint scratches correlate with nothing (0.03). A map whose
+## lightness spans less than this (2nd to 98th percentile, at [constant FIT_W] across) is kept as it is:
+## the surface lies smooth, its print not raised. Maps that lined up spanned 0.043 to 0.24; a flat one,
+## 0.015.
 const FLAT_SPAN := 0.025
-## AN EVEN MAP lies under anything too: relief that is alike everywhere - a felted nap, a pebbled
-## finish, the crazing of an old oilcloth - has no place of its own, so no move of it shows. And it
-## is what the painter is asked for where the painting's own pattern is print or dye: the check or the
-## stripe is not drawn, the map shares nothing with the picture, and three right answers were refused
-## for it (0.03, 0.09 and 0.24; the user, 2026-10-11) - leaving the table to raise the print itself.
-## A map that fits nothing is kept, unmoved, when its relief's spread ([method relief_spread]) is under
-## this. Those three spread 0.11 to 0.17; the maps that drew boards, seams and weaves, 0.21 to 0.58 -
-## a narrow gap, and only where the fit has already failed.
+## An even map lies under anything too: relief that is alike everywhere - a felted nap, a pebbled
+## finish, the crazing of an old oilcloth - has no place of its own, so no move of it shows. It is also
+## what the painter is asked for where the painting's own pattern is print or dye (the check or the
+## stripe is not drawn, so the map shares nothing with the picture; such maps scored 0.03 to 0.24),
+## leaving the table to raise the print itself. A map that fits nothing is kept, unmoved, when its
+## relief's spread ([method relief_spread]) is under this. Those spread 0.11 to 0.17; maps that drew
+## boards, seams and weaves, 0.21 to 0.58 - a narrow gap, and only where the fit has already failed.
 const EVEN_SPREAD := 0.19
 const EVEN_BLOCK := 8
 
@@ -649,7 +642,7 @@ static func wants_height(spec: Dictionary) -> bool:
 	return false
 
 
-## HOW WELL [param height] LIES UNDER [param painting]: `{score, shift}` - the best correlation of
+## How well [param height] LIES UNDER [param painting]: `{score, shift}` - the best correlation of
 ## their structure over the shifts tried, and the shift that gave it (UV: where in the map a point of
 ## the painting is found, less where it is in the painting).
 static func height_fit(painting: Image, height: Image) -> Dictionary:
@@ -680,7 +673,7 @@ static func height_fit(painting: Image, height: Image) -> Dictionary:
 	return {"score": best, "shift": Vector2(float(at.x) / float(w), float(at.y) / float(h))}
 
 
-## HOW MUCH [param height] RISES AND FALLS: its lightness's spread, 2nd to 98th percentile, at
+## How much [param height] rises and falls: its lightness's spread, 2nd to 98th percentile, at
 ## [constant FIT_W] across (see [constant FLAT_SPAN]).
 static func height_span(height: Image) -> float:
 	var im := height.duplicate() as Image
@@ -698,7 +691,7 @@ static func height_span(height: Image) -> float:
 	return v[int(v.size() * 0.98)] - v[int(v.size() * 0.02)]
 
 
-## HOW UNEVENLY [param height]'s RELIEF IS SPREAD (see [constant EVEN_SPREAD]): the size of its
+## How unevenly [param height]'s relief is spread (see [constant EVEN_SPREAD]): the size of its
 ## gradient at [constant FIT_W] across, averaged over each block [constant EVEN_BLOCK] pixels square,
 ## each row and each column - the spread of those means over their mean, the largest of the three. Near
 ## 0 where every part of the map is as rough as every other. Rows and columns are for straight things:
@@ -793,7 +786,7 @@ static func _top_mesh(o: Dictionary, edge: String, th: float) -> ArrayMesh:
 	for q in pts:
 		normals.append(_grad_local(o, q))
 	var in0 := profile_inset(edge, 0.0, th)
-	# THE FACE: the outline drawn in by the profile's start, and a grid inside it
+	# The face: the outline drawn in by the profile's start, and a grid inside it
 	var ring0 := PackedVector2Array()
 	for i in pts.size():
 		ring0.append(pts[i] - normals[i] * in0)
@@ -807,7 +800,7 @@ static func _top_mesh(o: Dictionary, edge: String, th: float) -> ArrayMesh:
 		var c := vs[idx[k + 2]]
 		g.tri(Vector3(a.x, 0.0, a.y), Vector3(b.x, 0.0, b.y), Vector3(c.x, 0.0, c.y), up, up, up, a * 100.0, b * 100.0, c * 100.0,
 			Vector2(-sdf_local(o, a) * 100.0, 0.0), Vector2(-sdf_local(o, b) * 100.0, 0.0), Vector2(-sdf_local(o, c) * 100.0, 0.0))
-	# THE EDGE, ring under ring down the profile
+	# The edge, ring under ring down the profile
 	var rings: Array = []
 	var norms: Array = []
 	for t in _PROFILE_T:
@@ -837,7 +830,7 @@ static func _top_mesh(o: Dictionary, edge: String, th: float) -> ArrayMesh:
 	return g.mesh()
 
 
-## A FLAT SHEET over the outline [param ring] (local points, going round), whose inside is where
+## A flat sheet over the outline [param ring] (local points, going round), whose inside is where
 ## [param dist] is negative: the ring and a grid [param step] apart inside it, cut into triangles.
 ## `{points: PackedVector2Array, tris: PackedInt32Array}`.
 static func _sheet(ring: PackedVector2Array, dist: Callable, step: float, extra := PackedVector2Array()) -> Dictionary:
@@ -872,13 +865,13 @@ static func _sheet(ring: PackedVector2Array, dist: Callable, step: float, extra 
 	return {"points": pts, "tris": keep}
 
 
-## ONE LAYER: its flat sheet - and its fringe - laid on the table at [param y], every point past the
-## top's edge HUNG OVER IT ([method _drape]). UV is the layer's own flat space, centimeters from its
+## One layer: its flat sheet - and its fringe - laid on the table at [param y], every point past the
+## top's edge hung over it ([method _drape]). UV is the layer's own flat space, centimeters from its
 ## middle; UV2 is (how far in from its hem, cm; how far out along its fringe, cm). `{mesh, bounds}`.
 static func _layer_mesh(l: Dictionary, lo: Dictionary, top_o: Dictionary, bend: float, y: float, index: int, seed: int) -> Dictionary:
 	var ring := edge_points(lo)
 	var gap := 0.0015 + 0.0015 * float(index)
-	# WHERE IT ROLLS OVER THE EDGE it is cut finer: rows of points along the top's outline, from where
+	# Where it rolls over the edge it is cut finer: rows of points along the top's outline, from where
 	# its face ends round the roll and a little way down - the grid alone, coarser than the roll,
 	# drew the edge in steps
 	var rr := maxf(0.006, bend) + gap
@@ -908,7 +901,7 @@ static func _layer_mesh(l: Dictionary, lo: Dictionary, top_o: Dictionary, bend: 
 	for q in flat:
 		hem.append(maxf(-sdf_local(lo, q), 0.0) * 100.0)
 		out.append(0.0)
-	# THE FRINGE: a strip past each end, its threads drawn by the shader
+	# The fringe: a strip past each end, its threads drawn by the shader
 	var fringe := float(l.get("fringe", 0.0)) * 0.01
 	if fringe > 0.0 and String(l.get("outline", "rect")) == "rect":
 		var h: Vector2 = lo["half"]
@@ -972,9 +965,9 @@ static func _layer_mesh(l: Dictionary, lo: Dictionary, top_o: Dictionary, bend: 
 	return {"mesh": mesh, "bounds": box}
 
 
-## A POINT OF A LAYER, [param p] on the table, as the cloth lies there: flat at [param y] on the top,
+## A point of a layer, [param p] on the table, as the cloth lies there: flat at [param y] on the top,
 ## and past where the top's face ends ([param bend] in from its outline: the edge's profile) ROLLED
-## OVER THE EDGE and hanging straight down, [param gap] out from it, in folds that deepen as it falls.
+## Over the edge and hanging straight down, [param gap] out from it, in folds that deepen as it falls.
 static func _drape(p: Vector2, top_o: Dictionary, bend: float, gap: float, y: float, phase: float) -> Vector3:
 	var l := to_local(top_o, p)
 	var d := sdf_local(top_o, l) + bend
@@ -1046,7 +1039,7 @@ static func _surface(mat: ShaderMaterial, pattern: Dictionary, band: Dictionary,
 	var cols: Array = pattern.get("colors", [])
 	var arr := PackedVector3Array()
 	for i in 6:
-		# IN LINEAR LIGHT: an array uniform takes its numbers as they are (no source_color conversion),
+		# In linear light: an array uniform takes its numbers as they are (no source_color conversion),
 		# and sRGB numbers drawn as linear washed every pattern out to pastel
 		var c := (Color.html(String(cols[i % cols.size()])) if not cols.is_empty() else Color(0.5, 0.5, 0.5)).srgb_to_linear()
 		arr.append(Vector3(c.r, c.g, c.b))
@@ -1071,7 +1064,7 @@ static func _surface(mat: ShaderMaterial, pattern: Dictionary, band: Dictionary,
 
 # --- what it is to the light ----------------------------------------------------------------------
 
-## HOW LIGHT THE TABLE IS where a candle could stand: the linear luminance of whatever lies uppermost
+## How light the table is where a candle could stand: the linear luminance of whatever lies uppermost
 ## at the middle of each cell of [param grid] over [param rect] (on the table, x z) - a layer's
 ## pattern (its colors' mean; the painting's own pixels, from [param painting], a small copy of it in
 ## linear light), else the top's - and the dark floor past the top. Row by row. [param fallback] is a
@@ -1136,7 +1129,7 @@ static func _lin(c: Color) -> float:
 
 # --- in words -------------------------------------------------------------------------------------
 
-## THE TABLE IN A LINE, for the set dresser's answers and a later episode's history: "a round walnut
+## The table in a line, for the set dresser's answers and a later episode's history: "a round walnut
 ## top 120 cm across, bullnose edge; a linen tablecloth in checks; a velvet square as a diamond".
 static func summary(spec: Dictionary) -> String:
 	var top: Dictionary = spec.get("top", {})

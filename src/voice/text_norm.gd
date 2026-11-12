@@ -3,34 +3,15 @@ class_name TextNorm
 
 ## TextNorm - turn written English into speakable words, before anything else.
 ##
-## This stage did not exist, and its absence was silent rather than noisy, which
-## is why it survived so long. Two independent defects, measured on manuscript
-## prose (see next/voice_intelligibility.md):
-##
-##   NUMERALS VANISHED. [Phonemes.word_to_phones] walks a word character by
-##   character looking each up in DIGRAPHS/SINGLES, which contain only letters,
-##   and the loop has no else branch - an unmatched character is skipped. A
-##   purely numeric token therefore returns an EMPTY phone array and the word is
-##   dropped from the utterance entirely. Not mispronounced: gone, with nothing
-##   in the audio or the subtitles to show it. 2.2% of tokens on ordinary prose.
-##
-##   TYPOGRAPHIC PUNCTUATION BROKE LOOKUP. The punctuation set was the ASCII
-##   literal ".,!?;:" and the wrapper sets were ASCII, so U+2018/2019 (curly
-##   quotes), U+201C/201D, U+2013/2014 (dashes) and U+2026 (ellipsis) matched
-##   nothing, survived into the dictionary key, and turned every quoted or
-##   contracted word into a miss that fell through to letter-to-sound rules.
-##   Dictionary coverage measured 88.3% on typographic text against 92.7% for
-##   the same text in ASCII, with 10.4% of tokens damaged in total.
-##
-## The fix is ordered: fold characters first, then expand numbers, then hand
-## clean ASCII to the tokenizer. Everything here is deterministic and has no
-## opinion about voice - it is a text transform, and it is equally required by
-## a procedural synthesizer and by any neural backend (see VOICE_PLAN.md P0).
+## A deterministic text transform with no opinion about voice, required by any backend: fold characters
+## first (typographic quotes, dashes and the ellipsis to ASCII, so dictionary lookup does not miss),
+## then expand numbers (a purely numeric token would otherwise yield an empty phone array in
+## [Phonemes.word_to_phones] and vanish from the audio and the subtitles), then hand clean ASCII to the
+## tokenizer. See next/voice_intelligibility.md.
 
 # --- character folding ------------------------------------------------------
-# Typographic punctuation folded to the ASCII the rest of the front end already
-# understands. The dashes become a comma because that is what an em dash does
-# prosodically: it is a break, not a word.
+# Typographic punctuation folded to the ASCII the rest of the front end understands. The dashes become
+# a comma: an em dash is a break, not a word.
 const FOLD := {
 	"‘": "'", "’": "'", "‚": ",", "‛": "'",   # single quotes
 	"“": "\"", "”": "\"", "„": "\"", "‟": "\"", # double quotes
@@ -47,32 +28,23 @@ const FOLD := {
 
 # --- emphasis sentinels ------------------------------------------------------
 #
-# Markdown's emphasis markers are TYPOGRAPHY: the mouth must not speak them and
-# the page must not lose them. Dropping them outright satisfied only the first
-# half - the subtitle under `*I will never hurt you*` read as flat prose, with
-# nothing anywhere to say the line had been emphasized at all.
+# Markdown's emphasis markers are typography: the mouth must not speak them and the page must not lose
+# them. A matched pair becomes a sentinel, a private-use character that survives every pass below (it is
+# in no fold table and is not whitespace, so it stays welded to its word) and is peeled off by
+# [Phonemes.parse], which records the level on the word for the subtitle renderer. They toggle, so a run
+# spanning several words needs only its two ends marked.
 #
-# So a matched pair does not vanish, it becomes a SENTINEL: a private-use
-# character that survives every pass below (it is in no fold table, it is not
-# whitespace, so it stays welded to its word through the split/join passes) and
-# is peeled off by [Phonemes.parse], which records the level on the word and
-# hands it to the subtitle renderer. They toggle, so a run spanning several
-# words needs only its two ends marked.
-#
-# NOTHING DOWNSTREAM OF THE PHONEMIZER EVER SEES ONE. [method normalize] - the
-# entry point for every caller that wants speakable text and nothing else -
-# strips them on the way out; only [method normalize_marked] keeps them, and it
-# has exactly one caller.
+# Nothing downstream of the phonemizer sees one: [method normalize] strips them on the way out; only
+# [method normalize_marked] keeps them, and it has one caller.
 const EMPH_ITALIC := "\uE001"
 const EMPH_BOLD := "\uE002"
 const EMPH_MARKS := EMPH_ITALIC + EMPH_BOLD
-## A HESITATION: a longer rest the author asked for (`<!-- hesitation -->`). The Generative
-## panel welds one to the word it follows (or leads, when nothing comes before it), and it
-## rides the pipeline exactly as the emphasis sentinels do - [Phonemes.parse] peels it into
-## `hold` / `hold_before` on the word, and the panel splices the silence into the take there.
+## A hesitation: a longer rest the author asked for (`<!-- hesitation -->`). The Generative panel welds
+## one to the word it follows (or leads, when nothing comes before it), and it rides the pipeline as the
+## emphasis sentinels do: [Phonemes.parse] peels it into `hold` / `hold_before` on the word, and the
+## panel splices the silence into the take there.
 const HOLD_MARK := "\uE003"
-## Every sentinel, for the passes that must treat one as a WRAPPER (like a quote) rather than
-## as part of the word.
+## Every sentinel, for the passes that treat one as a wrapper (like a quote) rather than part of the word.
 const SENTINELS := EMPH_ITALIC + EMPH_BOLD + HOLD_MARK
 ## Level bits carried on a word: 1 italic, 2 bold, 3 both.
 const EMPH_I := 1
@@ -96,9 +68,8 @@ const ORDINAL := {
 	"eight": "eighth", "nine": "ninth", "twelve": "twelfth",
 }
 
-# Abbreviations whose trailing period is NOT a sentence boundary. Expanded to
-# their spoken form, which also removes the period and the false full stop with
-# it - a chapter of dialogue was measuring 7 false sentence stops in 42.
+# Abbreviations whose trailing period is not a sentence boundary. Expanded to their spoken form, which
+# also removes the period and the false full stop with it.
 const ABBREV := {
 	"mr": "mister", "mrs": "missus", "ms": "miz", "dr": "doctor",
 	"st": "saint", "mt": "mount", "prof": "professor", "rev": "reverend",
@@ -107,19 +78,14 @@ const ABBREV := {
 	"fig": "figure", "no": "number", "vol": "volume", "ch": "chapter",
 }
 
-## LETTER NAMES, for the letter runs inside an alphanumeric token - "H8" is a board square and
-## reads "aitch eight", "v2" reads "vee two". This is the alphabet, not a word list: it is closed,
-## it does not change, and there is no corpus to source it from - the same standing the digit
-## vocabulary above has, which is why it lives beside it.
+## Letter names, for the letter runs inside an alphanumeric token: "H8" reads "aitch eight", "v2" reads
+## "vee two". A closed alphabet, not a word list.
 ##
-## IT IS NEVER APPLIED TO A WORD ON ITS OWN. `a`, `I` and `O` are real English words, and putting
-## letter names in the lexicon would have read every article as "ay". Only a single-letter run
-## INSIDE a token that also contains a digit is a letter being named - or a letter the script names
+## Never applied to a word on its own: `a`, `I` and `O` are real English words. Only a single-letter run
+## inside a token that also contains a digit is a letter being named - or a letter the script names
 ## outright, `[a]` ([method _expand_core]): "let [a] be two" is the letter, shown as `a`.
-## `a` is `eigh` and not `ay`, which is not a typo. Asked of eSpeak, `ay` comes back ˈaɪ - the
-## word "aye" - while the letter A is ˈeɪ, and `eigh` is the spelling that gets there. Every
-## other entry below was put to the same test against the letter's own reading and agreed with
-## it; this was the only one that did not.
+## `a` is `eigh` and not `ay` on purpose: asked of eSpeak, `ay` is ˈaɪ (the word "aye") while the letter
+## A is ˈeɪ. Every other entry agrees with the letter's own reading.
 const LETTER_NAMES := {
 	"a": "eigh", "b": "bee", "c": "see", "d": "dee", "e": "ee", "f": "ef", "g": "gee",
 	"h": "aitch", "i": "eye", "j": "jay", "k": "kay", "l": "el", "m": "em", "n": "en",
@@ -128,47 +94,21 @@ const LETTER_NAMES := {
 }
 
 
-## INITIALISMS eSPEAK GETS WRONG. Respelled, so they are said the way they are read.
+## Initialisms eSpeak gets wrong, respelled so they are said the way they are read.
 ##
-## THE PHONEMES WERE NEVER THE PROBLEM - THE DURATIONS WERE, and this table exists for that.
-## It took three passes to find, and the two wrong answers are worth keeping because both were
-## reasonable:
+## The phonemes are right and the durations are not: en_US-libritts-high reads a short token as a fast
+## function word, so `IT` as ˌaɪtˈiː lasts 0.21 s (a blip) where `eye tee` lasts 0.59 s, and `CIA` 0.46 s
+## against `see eye eigh` 0.73 s. Giving each letter its own word gives the duration predictor a word to
+## time. So these are spelled out for pacing, and the respellings must phonemize to the letter's own
+## reading (`eigh`, not `ay`; the gate checks it against eSpeak).
 ##
-##   PASS 1 assumed eSpeak was misreading the spellings and respelled all three. One of the
-##   respellings was wrong - `ay` phonemizes to ˈaɪ, the word "aye", where the letter A is ˈeɪ -
-##   and the report came back "CIA is still being pronounced as see eye eye".
+## Matched on the exact spelling, case and all: `IT` is the field and `it` the pronoun; `eSIM` and
+## `esim` differ to eSpeak. A sentence set entirely in capitals is the one reading this gets wrong; an
+## inline `[IH1 T]` overrides it.
 ##
-##   PASS 2 asked eSpeak, found it already returns sˌiːˌaɪˈeɪ for `CIA` and ˌaɪtˈiː for `IT`,
-##   concluded the overrides were pure harm and removed them. The phonemes really are correct.
-##   The report came back that all three were still wrong.
-##
-##   PASS 3 rendered them through the checkpoint and measured the audio, which is the only
-##   thing that could have settled it:
-##
-##       IT    ˌaɪtˈiː        0.21 s      eye tee        ˈaɪ tˈiː      0.59 s
-##       CIA   sˌiːˌaɪˈeɪ     0.46 s      see eye eigh   sˈiː ˈaɪ ˈeɪ  0.73 s
-##
-##   Two letter names in a fifth of a second is a blip, not a word. en_US-libritts-high reads
-##   a SHORT TOKEN as a fast function word, which is what `it` is in every sentence it was
-##   trained on, and no amount of correct phonemes changes that. Giving each letter its own
-##   word gives the duration predictor a word to time.
-##
-## So these are spelled out for PACING, not for pronunciation, and the respellings must
-## phonemize to the letter's own reading - `eigh` and not `ay`, asked of eSpeak and checked by
-## the gate.
-##
-## MATCHED ON THE EXACT SPELLING, CASE AND ALL. `IT` is the field and `it` is the pronoun and
-## they are the same letters; `eSIM` and `esim` are different words to eSpeak (ˈiː sˈɪm against
-## ˈɛsɪm). The case is the only evidence there is, so nothing but the case may decide. A
-## sentence set entirely in capitals is the one reading this gets wrong; an inline `[IH1 T]`
-## overrides it.
-##
-## KEPT SHORT AND HAND-WRITTEN ON PURPOSE, which is the opposite of the rule this project
-## usually follows. There is no corpus of "initialisms this backend says wrong" to source it
-## from - it is a property of the voice, not of English. It is not a general abbreviation
-## dictionary and must not grow into one: anything a rule can settle belongs in a rule,
-## anything one-off belongs inline in the script as `[IY1 S IH1 M]`, and anything already
-## correct belongs NOWHERE.
+## Kept short and hand-written: it is a property of the voice, not of English. It is not a general
+## abbreviation dictionary and must not grow into one: what a rule can settle belongs in a rule, a
+## one-off belongs inline in the script as `[IY1 S IH1 M]`, and anything already correct belongs nowhere.
 const INITIALISMS := {
 	"CIA": "see eye eigh",
 	"eSIM": "ee sim",
@@ -176,8 +116,8 @@ const INITIALISMS := {
 }
 
 
-## Abbreviations that are ALSO ordinary English words, and so need evidence before being
-## treated as abbreviations at all. See [method _abbrev_fits].
+## Abbreviations that are also ordinary English words, and so need evidence before being treated as
+## abbreviations. See [method _abbrev_fits].
 ##   NEEDS_NUMBER - a reference mark, followed by the number it refers to
 ##   NEEDS_NAME   - a title, followed by the name it titles
 const NEEDS_NUMBER := ["no", "fig", "vol", "ch"]
@@ -185,37 +125,22 @@ const NEEDS_NAME := ["mr", "mrs", "ms", "dr", "st", "mt", "prof", "rev", "sr", "
 
 const CURRENCY := {"$": "dollars", "£": "pounds", "€": "euros", "¥": "yen"}
 
-## TEMPLATE MACROS, and their DEFAULTS.
+## Template macros and their defaults.
 ##
 ##     ${CHAPTERS_BEFORE_IN_WORDS:25}   ->  25
 ##     ${TITLE:Charlotte's Web of Lies} ->  Charlotte's Web of Lies
 ##     ${WORD_COUNT_IN_WORDS}           ->  (nothing, and a warning)
 ##
-## A manuscript can carry facts about itself that only its BUILD knows - how many
-## chapters precede this one in this edition, how many words the finished book
-## runs to. Prose that states such a number goes stale the moment a chapter is
-## inserted ahead of it, so the source writes the placeholder instead and the
-## build resolves it (rift's `build.py`, where the word-count ones are a
-## fixed point: the rendered number changes the count it describes).
+## A manuscript can carry facts about itself that only its build knows (chapters before this one, the
+## finished word count); the source writes the placeholder and the build resolves it (rift's
+## `build.py`). Ghost is handed one chapter with no book around it, so it reads the default: the value
+## to read when the resolver is absent. It never works out the real figure.
 ##
-## Ghost is not the build. It is handed one chapter in a text box with no book
-## around it, so it cannot compute any of those - which is what the DEFAULT is
-## for: the value to read when the resolver is not present. Nothing here ever
-## tries to work the real figure out; it reads what the source said to read.
+## The macro text is never spoken, so this runs at the very top of [method normalize]: a macro is one
+## whitespace-delimited token and every later pass would treat it as a word.
 ##
-## THE MACRO TEXT IS NEVER SPOKEN. That is the whole requirement, and the reason
-## this sits at the very top of [method normalize] rather than anywhere later:
-## `${CHAPTERS_BEFORE_IN_WORDS:25}` is one whitespace-delimited token, so every
-## pass below would treat it as a word - and it was read aloud, dollar sign,
-## underscores and all.
-##
-## A DEFAULT MAY BE ANY LENGTH: a word, a phrase, several sentences, whole
-## paragraphs with blank lines in them. That is why this is a scanner rather
-## than the regex it started as - a pattern has to say what a value may contain,
-## and `[^{}]*` said "no braces", which silently refused to match
-## `${Q:the set {a, b}}` and left the entire macro to be read aloud. Depth
-## counting takes the value to its MATCHING brace instead, so the value's
-## content is not the parser's business.
+## A default may be any length, including paragraphs with blank lines. So this is a scanner, not a
+## regex: depth counting takes the value to its matching brace (`${Q:the set {a, b}}`).
 const NAME_HEAD := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 ## A letter named in brackets, `[a]`, as a reader is shown it: the letter.
 static var _NAMED_LETTER := RegEx.create_from_string("\\[([A-Za-z])\\]")
@@ -224,45 +149,28 @@ const NAME_TAIL := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456
 
 ## The entry point. Strip markup, fold, expand, and hand back plain ASCII words.
 ##
-## ABBREVIATIONS ARE RESOLVED BEFORE NUMERALS, and the order is load-bearing rather than
-## incidental. The abbreviations that are also ordinary words - `no` above all - can only
-## be told apart by what FOLLOWS them: "No. 5" is a number, "the answer was no." is not.
-## Run the numeral expansion first and that evidence is gone, because by then the 5 has
-## become the word "five" and nothing distinguishes the two cases at all.
+## Abbreviations are resolved before numerals: the ones that are also ordinary words (`no` above all)
+## are told apart by what follows ("No. 5" is a number, "the answer was no." is not), and that evidence
+## is gone once the 5 has become "five".
 static func normalize(text: String) -> String:
-	# The sentinels are for the ONE caller that carries emphasis onto the page.
-	# Everyone else asked for speakable words. See the note above [constant EMPH_ITALIC].
+	# the sentinels are for the one caller that carries emphasis onto the page (see the note above
+	# [constant EMPH_ITALIC])
 	return strip_emphasis(String(normalize_marked(text)["text"]))
 
 
-## The same normalization, plus WHAT EACH REWRITTEN RUN WAS WRITTEN AS.
+## The same normalization, plus what each rewritten run was written as.
 ##
-## Returns {"text": String, "spans": [{at, len, src}]}, where each span covers a
-## run of the returned text that does NOT read the way the source spelled it -
-## `two thousand nine` for a source of `2009`, `five dollars` for `$5`, `doctor`
-## for `Dr.`. Runs that were not rewritten get no span, because for those the
-## text already is the source.
+## Returns {"text": String, "spans": [{at, len, src}]}: each span covers a run of the returned text that
+## does not read the way the source spelled it (`two thousand nine` for `2009`, `five dollars` for `$5`,
+## `doctor` for `Dr.`). Runs that were not rewritten get no span.
 ##
-## WHY THIS EXISTS. Normalization is for the phoneme lookup and never for the
-## reader's eyes - [Phonemes.parse] has said exactly that beside `display` since
-## it was written - but `display` was taken from the text AFTER this stage, by
-## which point the source spelling no longer existed anywhere. So the subtitle
-## under a sentence ending "...who left the building in 2009." read "...in two
-## thousand nine.", which is not what the page says. The voice must say the
-## number and the screen must show the numeral, and that needs both spellings to
-## survive the pipeline together rather than one replacing the other.
-##
-## [method normalize] is this function with the spans thrown away, rather than a
-## second copy of the chain, because two paths through the same five passes is
-## how the audio and the subtitles start disagreeing about what was said.
+## The voice says the number and the screen shows the numeral, so both spellings must survive the
+## pipeline together ([Phonemes.parse] takes its `display` from here). [method normalize] is this
+## function with the spans dropped, so the audio and the subtitles cannot disagree about what was said.
 static func normalize_marked(text: String) -> Dictionary:
-	# MACROS FIRST, before markup or folding. A macro is a token to the passes
-	# below, and its default has to travel the whole pipeline afterwards - a
-	# default of `25` is only heard as "twenty five" because _expand_numbers
-	# still gets to see it. It is also why no span is recorded for one: the
-	# default IS the source as far as a reader is concerned, and showing
-	# `${CHAPTERS_BEFORE_IN_WORDS:25}` in a subtitle would be the original bug
-	# with a longer token.
+	# Macros first, before markup or folding: a macro's default has to travel the whole pipeline (a
+	# default of `25` is heard as "twenty five" because _expand_numbers still sees it). No span is
+	# recorded for one: the default is the source as far as a reader is concerned.
 	var s := _expand_macros(text)
 	s = _strip_markdown(s)
 	s = _fold(s)
@@ -273,43 +181,22 @@ static func normalize_marked(text: String) -> Dictionary:
 	return {"text": s, "spans": spans}
 
 
-## Remove Markdown's own punctuation, which is TYPOGRAPHY and must never be spoken -
-## and, where it marks EMPHASIS, replace it with a sentinel rather than deleting it.
+## Remove Markdown's own punctuation, which is typography and must not be spoken, and where it marks
+## emphasis replace it with a sentinel rather than deleting it.
 ##
-## Found by auditing a real manuscript: scripts arrive as `.md` files, and an emphasis
-## marker is not silent to a phonemizer - it is a WORD. Measured, eSpeak returns
-##   "*I will never hurt you*"  ->  "ASTERISK I will never hurt you ASTERISK"
-##   "**bold** word"            ->  "asteriskasterisk bold asteriskasterisk word"
-## which is not a mispronunciation but a whole extra spoken word at each end of every
-## emphasized phrase, and there were three chapters full of them. Nothing anywhere
-## warned about it; it would simply have been read aloud that way.
+## eSpeak speaks an emphasis marker as a word ("*I will never hurt you*" -> "ASTERISK I will never hurt
+## you ASTERISK"). It drops `_like this_` word by word, but the subtitle is taken from this text, so
+## underscore markers must go too. Deleting a pair would leave the subtitle flat, so a matched pair
+## becomes [constant EMPH_ITALIC] / [constant EMPH_BOLD], which [Phonemes.parse] peels into a level on
+## the word and the overlay draws slanted or emboldened. Everything unmatched is dropped, so the spoken
+## text is unchanged either way.
 ##
-## UNDERSCORE EMPHASIS IS A NARROWER CASE and used to be left alone entirely, on the
-## grounds that eSpeak already drops `_like this_` and that stripping underscores would
-## damage identifiers a technical book legitimately quotes. The first half is true - it
-## drops them even word by word, which is how this phonemizes (measured: `_the` -> ðə) -
-## but the second half missed that the page sees them too. Nothing was spoken, and the
-## SUBTITLE read `_no one_` with the markers on it, because `display` is taken from this
-## text and there is no earlier copy of it to fall back to.
-##
-## AND THEN THE OPPOSITE DEFECT, which is what the sentinels are for. Deleting the pair
-## fixed the reading and broke the page a second way: the subtitle under an emphasized
-## line read as flat prose, with no trace that the writing had leaned on those words at
-## all. A marker is not noise to be removed, it is a spelling of something the reader is
-## meant to see - the same argument `display` already makes about `2009`. So a MATCHED
-## pair becomes [constant EMPH_ITALIC] / [constant EMPH_BOLD], which [Phonemes.parse]
-## peels off into a level on the word, and the overlay draws in a slanted or emboldened
-## face. Everything unmatched is dropped exactly as before, so the spoken text is
-## unchanged in every case.
-##
-## The pairing is markdown's own flanking rule: an opener is preceded by whitespace or an
-## opening bracket and followed by a non-space, a closer is preceded by a non-space and
-## followed by whitespace or punctuation, and BOTH must be present, in the same
-## PARAGRAPH, before either is touched. `snake_case` is untouched because neither
-## underscore flanks anything; `_private` alone is untouched because nothing closes it;
-## `* item` is not emphasis because a space follows it; and a RUN of underscores is never
-## emphasis here, which keeps `__init__` whole. That last exclusion costs `__bold__` and
-## is the right trade: prose writes bold as `**bold**`, and a dunder is unambiguous.
+## The pairing is markdown's flanking rule: an opener is preceded by whitespace or an opening bracket and
+## followed by a non-space, a closer is preceded by a non-space and followed by whitespace or
+## punctuation, and both must be present in the same paragraph before either is touched. `snake_case` is
+## untouched (neither underscore flanks anything), `_private` alone is untouched (nothing closes it),
+## `* item` is not emphasis (a space follows), and a run of underscores is never emphasis, which keeps
+## `__init__` whole at the cost of `__bold__`.
 static func _strip_markdown(text: String) -> String:
 	var marks := _emphasis_marks(text)
 	var out := ""
@@ -329,19 +216,16 @@ static func _strip_markdown(text: String) -> String:
 			out += c
 			i += 1
 			continue
-		# Heading hashes and blockquote arrows, but only where they are structural -
-		# at the head of a line. A `#` inside a sentence usually means "number", and a
-		# `>` usually means "greater than"; neither should be touched there.
+		# heading hashes and blockquote arrows, only at the head of a line: elsewhere `#` usually means
+		# "number" and `>` "greater than"
 		if at_line_start and (c == "#" or c == ">"):
 			while i < text.length() and (text[i] == "#" or text[i] == ">" or text[i] == " "):
 				i += 1
 			continue
 		if c != " " and c != "\t":
 			at_line_start = false
-		# Unmatched emphasis, strikethrough and inline code. Dropped outright rather than
-		# folded to a break: they mark a span, they do not mark a pause, and turning them
-		# into commas would put rests where the writing has none. An underscore that
-		# paired nothing is left alone - see above, `snake_case`.
+		# unmatched emphasis, strikethrough and inline code: dropped, not folded to a break (they mark a
+		# span, not a pause). An underscore that paired nothing is left alone (`snake_case`).
 		if c == "*" or c == "`" or c == "~":
 			i += 1
 			continue
@@ -350,8 +234,8 @@ static func _strip_markdown(text: String) -> String:
 	return out
 
 
-## Strip every sentinel from `text` - emphasis and hesitation alike. For callers who want
-## speakable words and nothing else - which is everyone except [Phonemes.parse].
+## Strip every sentinel from `text` - emphasis and hesitation alike - for callers who want speakable
+## words and nothing else (everyone except [Phonemes.parse]).
 static func strip_emphasis(text: String) -> String:
 	if not (text.contains(EMPH_ITALIC) or text.contains(EMPH_BOLD) or text.contains(HOLD_MARK)):
 		return text
@@ -363,18 +247,15 @@ static func strip_emphasis(text: String) -> String:
 	return out
 
 
-## Which marker RUNS in `text` are a matched emphasis pair: `{start index -> {len, put}}`,
-## where `len` is the run's length in characters and `put` the sentinel(s) that replace it.
+## Which marker runs in `text` are a matched emphasis pair: `{start index -> {len, put}}`, where `len` is
+## the run's length in characters and `put` the sentinel(s) that replace it.
 ##
-## Separate from the strip itself because it has to look FORWARD: a marker is only a
-## marker if its partner exists, and that cannot be decided by a scanner that has read one
-## character. The open runs are a STACK, so nesting works - `**bold with *italic* in
-## it**` closes the inner pair against the inner opener and the outer against the outer,
-## and the sentinels being toggles means the words between carry both levels.
+## Separate from the strip because it looks forward: a marker is only a marker if its partner exists.
+## The open runs are a stack, so nesting works (`**bold with *italic* in it**`), and the sentinels being
+## toggles means the words between carry both levels.
 ##
-## Same-paragraph only: an unmatched opener that could reach the end of a chapter would
-## take every marker after it with it, and emphasis does not span a blank line in
-## markdown either.
+## Same paragraph only: an unmatched opener must not take every later marker with it, and emphasis does
+## not span a blank line in markdown either.
 static func _emphasis_marks(text: String) -> Dictionary:
 	var marks := {}
 	var open: Array = []                 # [{at, run, ch}], innermost last
@@ -389,8 +270,7 @@ static func _emphasis_marks(text: String) -> Dictionary:
 		while run < n and text[run] == c:
 			run += 1
 		var width := run - i
-		# `__` and longer are never emphasis here (see the note above `_strip_markdown`),
-		# and `****` is not a level anyone writes.
+		# `__` and longer are never emphasis here (see `_strip_markdown`), and `****` is not a level
 		if width > 3 or (c == "_" and width != 1):
 			i = run
 			continue
@@ -398,9 +278,8 @@ static func _emphasis_marks(text: String) -> Dictionary:
 		var after := text[run] if run < n else " "
 		var can_open := OPEN_BEFORE.contains(before) and not SPACE.contains(after)
 		var can_close := not SPACE.contains(before) and CLOSE_AFTER.contains(after)
-		# A CLOSER WINS over opening a new run, and closes the innermost match - otherwise
-		# the second `*` of a pair reads as another opener whenever it is followed by a
-		# space, which is every closing marker at the end of a sentence.
+		# a closer wins over opening a new run, and closes the innermost match (else the second `*` of
+		# a pair followed by a space reads as another opener)
 		if can_close:
 			var k := open.size() - 1
 			while k >= 0:
@@ -446,15 +325,12 @@ static func _blank_line_between(text: String, a: int, b: int) -> bool:
 
 ## Every `${...}` in `text`, as [{at, end, name, has_default, value, broken}].
 ##
-## ONE definition, because [method _expand_macros] and [method unresolved_macros]
-## must agree exactly about what a macro is - the first decides what is read and
-## the second decides what is reported, and a panel that reports a different set
-## from the one that was dropped is worse than a panel that reports nothing.
+## One definition, because [method _expand_macros] (what is read) and [method unresolved_macros] (what is
+## reported) must agree about what a macro is.
 ##
-## `broken` marks a `${` that never closed, or one whose name is not a name.
-## Those are left in the text VERBATIM rather than guessed at, so they are read
-## aloud - which is the loudest possible signal and is reported as such. The
-## alternative, swallowing to end of file, would delete the rest of a chapter.
+## `broken` marks a `${` that never closed, or one whose name is not a name. Those are left in the text
+## verbatim, so they are read aloud and reported; swallowing to end of file would delete the rest of a
+## chapter.
 static func _scan_macros(text: String) -> Array:
 	var out: Array = []
 	var i := text.find("${")
@@ -475,9 +351,8 @@ static func _scan_macros(text: String) -> Array:
 			row = {"at": i, "end": k + 1, "name": name, "has_default": false,
 				"value": "", "broken": false}
 		elif not name.is_empty() and k < text.length() and text[k] == ":":
-			# TO THE MATCHING BRACE. The value is taken verbatim from here, so it
-			# may be a word, a paragraph, or several with blank lines between
-			# them - and a brace inside it nests rather than ending it.
+			# to the matching brace: the value is taken verbatim (a word, a paragraph, several with
+			# blank lines), and a brace inside it nests rather than ending it
 			var depth := 1
 			var v0 := k + 1
 			var e := v0
@@ -497,8 +372,7 @@ static func _scan_macros(text: String) -> Array:
 	return out
 
 
-## How one unusable macro is named to a human. One definition, so the log and the
-## panel say the same thing about the same macro.
+## How one unusable macro is named to a human, so the log and the panel say the same thing.
 static func _macro_label(m: Dictionary) -> String:
 	if not bool(m["broken"]):
 		return String(m["name"])
@@ -509,12 +383,8 @@ static func _macro_label(m: Dictionary) -> String:
 
 ## Replace every `${NAME:default}` with its default.
 ##
-## A macro with NO default expands to nothing, and warns with its name. Both
-## halves matter: reading the placeholder aloud is the failure being fixed, and
-## deleting it in silence is the failure this project keeps having to un-fix -
-## so it goes, and it says so, exactly like an unaligned word in a take.
-## `${NAME:}` is an explicitly empty default and is silent, because writing it is
-## a deliberate way to delete a placeholder from the reading.
+## A macro with no default expands to nothing and warns with its name (reading the placeholder aloud is
+## wrong, and deleting it in silence is too). `${NAME:}` is an explicitly empty default and is silent.
 static func _expand_macros(text: String) -> String:
 	if not text.contains("${"):
 		return text                 # the overwhelmingly common case, at no cost
@@ -539,10 +409,8 @@ static func _expand_macros(text: String) -> String:
 	return out
 
 
-## The macros in `text` that will not be read as intended - no default, or
-## malformed. Same scan and same rule as [method _expand_macros]; this is only
-## the question asked without the answer, so a panel can say so before forty
-## minutes of narration is made.
+## The macros in `text` that will not be read as intended - no default, or malformed. Same scan and rule
+## as [method _expand_macros], asked without the answer, so a panel can say so before narration is made.
 static func unresolved_macros(text: String) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	if not text.contains("${"):
@@ -601,16 +469,14 @@ static func ordinal(n: int) -> String:
 	return head + tail + "th"
 
 
-## A four-digit year reads as two pairs - "nineteen eighty five", not "one
-## thousand nine hundred and eighty five". 2000-2009 are the exception that
-## every rule-based normalizer gets wrong; they read as full cardinals.
+## A four-digit year reads as two pairs - "nineteen eighty five", not "one thousand nine hundred and
+## eighty five". 2000-2009 read as full cardinals.
 static func year(n: int) -> String:
 	if n < 1100 or n > 2999:
 		return cardinal(n)
 	var hi := n / 100
 	var lo := n % 100
-	# THE 2000s FIRST. `lo == 0` used to win, so 2000 read as "twenty hundred" - a reading no
-	# one uses, and the one four-digit year most likely to appear in a manuscript after 1999.
+	# the 2000s first, or 2000 reads as "twenty hundred"
 	if n >= 2000 and n <= 2009:
 		return cardinal(n)
 	if lo == 0:
@@ -629,34 +495,19 @@ static func _is_digits(s: String) -> bool:
 	return true
 
 
-## Runs on FOLDED text, so it only ever sees ASCII.
-## Walk the text token by token, replacing anything numeric with words.
+## Runs on folded text, so it only ever sees ASCII. Walk the text token by token, replacing anything
+## numeric with words.
 ##
-## SPLIT ON ALL WHITESPACE, AND PUT IT BACK EXACTLY. This ran on `text.split(" ", false)`,
-## which is a split on the SPACE CHARACTER - so a token at the end of a line arrived as
-## `"2009.\n"`, with the newline welded on. `_expand_token` peels trailing punctuation from a
-## set that does not contain `\n`, so it stopped at the first character, the digits never
-## reached `_expand_core`, and the numeral survived the pass untouched. Downstream,
-## [method Phonemes.word_to_phones] found no letters in it, returned an empty phone array, and
-## the word was dropped from the utterance - which is the exact defect this whole file was
-## written to fix, still live for any number that happened to end a paragraph.
+## Splits on all whitespace and puts it back exactly: `_expand_token` peels trailing punctuation from a
+## set that does not contain `\n`, so a token split on the space character alone (`"2009.\n"`) would
+## keep its numeral, and [method Phonemes.word_to_phones] would drop the word. The whitespace is emitted
+## verbatim because it is structure: paragraph breaks reach the sentence splitter, and `\n` is a full
+## stop to it.
 ##
-## Reported from a chapter render: `2009` gone from "an opponent who left the building in
-## 2009." - absent from the audio AND from the subtitles, with the sentence simply ending at
-## "in". Measured in the take's own sidecar: the gap after "in" is 1.28 s, the ordinary
-## inter-sentence gap, so nothing was spoken there either.
-##
-## The whitespace is emitted verbatim rather than rejoined with a single space, because it is
-## STRUCTURE: paragraph breaks reach the sentence splitter, and `\n` is a full stop to it.
-## `marks_in` are the spans [method _expand_abbrev] recorded over THIS text, and
-## `marks_out` collects the spans over the RETURNED text - both what this pass
-## rewrites and whatever came in, moved to where it now sits. The two are merged
-## here rather than composed afterwards because this is the pass that knows both
-## offsets: it walks the input and builds the output in one go, so at every token
-## boundary it holds the input cursor and the output length at the same moment.
-##
-## The two rewrites cannot overlap: nothing in ABBREV expands to digits, so a
-## token is at most one of them.
+## `marks_in` are the spans [method _expand_abbrev] recorded over this text, and `marks_out` collects the
+## spans over the returned text - what this pass rewrites and whatever came in, moved to where it now
+## sits. This pass knows both offsets (input cursor and output length at every token boundary), so it
+## merges them. The two rewrites cannot overlap: nothing in ABBREV expands to digits.
 static func _expand_numbers(text: String, marks_in: Array = [],
 		marks_out: Array = []) -> String:
 	var out := ""
@@ -668,11 +519,9 @@ static func _expand_numbers(text: String, marks_in: Array = [],
 		var c := text[i]
 		if c == " " or c == "\t" or c == "\n" or c == "\r":
 			out += c
-			# A LINE BREAK STARTS A SENTENCE, so a numeral after one keeps its capital. The
-			# tokenizer already treats `\n` as a full stop (Phonemes.parse reads it as a "stop"
-			# pause), and the capital is not cosmetic: the sentence splitter reads a lower-case
-			# word after a stop as a continuation, so "2009 opened it." at the head of a
-			# paragraph would have been welded onto the end of the paragraph before it.
+			# a line break starts a sentence, so a numeral after one keeps its capital: the tokenizer
+			# treats `\n` as a full stop, and the sentence splitter reads a lower-case word after a stop
+			# as a continuation
 			if c == "\n":
 				starts = true
 			i += 1
@@ -684,16 +533,13 @@ static func _expand_numbers(text: String, marks_in: Array = [],
 		var was := i                    # this token's offset in the INPUT
 		i = j
 		var done := _expand_token(tok)
-		# A NUMERAL OPENING A SENTENCE KEEPS ITS CAPITAL. "5 was missing." expands to
-		# "five was missing", which is wrong on its own terms - a sentence starts with a
-		# capital - and it also destroys the one signal the sentence splitter has: a
-		# lower-case word after a full stop is read as a continuation (a dialogue tag),
-		# so the expansion silently welded two sentences into one subtitle card.
+		# a numeral opening a sentence keeps its capital ("5 was missing." expands to "Five was
+		# missing"): a lower-case word after a full stop is read by the sentence splitter as a
+		# continuation (a dialogue tag)
 		if starts and done != tok and done.length() > 0:
 			done = done.substr(0, 1).to_upper() + done.substr(1)
-		# What a reader should see here: whatever the SOURCE said. An incoming
-		# mark means an earlier pass already replaced this token, so its `src` is
-		# the original and beats the token in hand, which is that pass's output.
+		# what a reader should see: whatever the source said. An incoming mark means an earlier pass
+		# already replaced this token, so its `src` is the original.
 		var src := strip_emphasis(tok)     # shown to a reader; see _expand_abbrev
 		if src.contains("["):
 			src = _NAMED_LETTER.sub(src, "$1", true)   # `[a]` is shown as the letter it names
@@ -704,20 +550,16 @@ static func _expand_numbers(text: String, marks_in: Array = [],
 		if mi < marks_in.size() and int((marks_in[mi] as Dictionary)["at"]) == was:
 			var m: Dictionary = marks_in[mi]
 			src = String(m["src"])
-			# ITS length, not this token's. An abbreviation can expand to more
-			# than one word - `etc.` becomes `et cetera` - and this pass sees
-			# only the first of them, so measuring the span here would cover
-			# `et` and leave `cetera` reading as itself. Nothing in ABBREV
-			# expands to digits, so the run cannot also have been rewritten
-			# here and its length is still the one the earlier pass recorded.
+			# the mark's length, not this token's: an abbreviation can expand to more than one word
+			# (`etc.` -> `et cetera`) and this pass sees only the first of them
 			span = int(m["len"])
 			rewritten = true
 			mi += 1
 		if rewritten:
 			marks_out.append({"at": out.length(), "len": span, "src": src})
 		out += done
-		# The next token starts a sentence if this one ended one. Closing wrappers are
-		# stripped first so `it."` counts.
+		# the next token starts a sentence if this one ended one; closing wrappers are stripped first
+		# so `it."` counts
 		var tail := tok.rstrip("\"')]" + SENTINELS)
 		starts = tail.length() > 0 and tail[tail.length() - 1] in ".!?"
 	return out
@@ -741,10 +583,9 @@ static func _expand_token(tok: String) -> String:
 
 
 static func _expand_core(tok: String) -> String:
-	# A LETTER NAMED (2026-10-16: a lesson's "take a equal to root two" was read with the article,
-	# "uh"): `[a]` is the letter, said by its name and shown as the letter ([method _expand_numbers]
-	# keeps the source). A lone consonant in brackets was an ARPAbet word of one phoneme, which no
-	# script says.
+	# a letter named: `[a]` is the letter, said by its name and shown as the letter ([method
+	# _expand_numbers] keeps the source). A lone consonant in brackets would be a one-phoneme ARPAbet
+	# word, which no script means.
 	if tok.length() == 3 and tok[0] == "[" and tok[2] == "]" and LETTER_NAMES.has(tok[1].to_lower()):
 		return String(LETTER_NAMES[tok[1].to_lower()])
 	# currency: $5, £1.50
@@ -780,13 +621,9 @@ static func _expand_core(tok: String) -> String:
 	# thousands separators: 1,200
 	if tok.contains(",") and _is_digits(tok.replace(",", "")):
 		return cardinal(int(tok.replace(",", "")))
-	# NUMERIC ranges only: 1939-1945, 3-4. The split used to run on ANY hyphenated token,
-	# which quietly deleted the hyphen from every compound in the text - "twenty-five"
-	# reached the subtitles as "twenty five", and so did "self-report", "hundred-year"
-	# and "off-by-one". A hyphen is part of how the word is spelled, and the karaoke line
-	# shows the source spelling, so removing it is a visible error even where the sound is
-	# unaffected. Split only where a number is genuinely involved; everything else is a
-	# word and stays whole, which the tokenizer and both phonemizers already handle.
+	# numeric ranges only (1939-1945, 3-4): a hyphen is part of how a compound is spelled ("twenty-five",
+	# "self-report") and the karaoke line shows the source spelling, so only a hyphen where a number is
+	# involved is split
 	if tok.contains("-") and tok.length() > 1:
 		var pieces := tok.split("-", false)
 		var numeric := false
@@ -805,13 +642,10 @@ static func _expand_core(tok: String) -> String:
 		if tok.length() == 4 and n >= 1100 and n <= 2999:
 			return year(n)
 		return cardinal(n)
-	# LETTERS AND DIGITS WELDED TOGETHER - "H8", "v2", "3D", "A4". Everything above has had its
-	# chance, so what is left is an identifier, and it is read as its parts. This is the last of
-	# the silent-loss family: nothing dropped the token, but [method Phonemes.word_to_phones]
-	# walks LETTERS, so "H8" came back as a single phone and "H88" the same - audible as a
-	# mumble, and measured on the manuscript at fifteen tokens (a chess chapter's board squares
-	# and three version numbers). A digit run reads as a number, a lone letter as its name, and a
-	# real word inside the token is left alone.
+	# letters and digits welded together ("H8", "v2", "3D", "A4"): everything above has had its chance,
+	# so what is left is an identifier, read as its parts (a digit run as a number, a lone letter as its
+	# name, a real word inside the token left alone). [method Phonemes.word_to_phones] walks letters, so
+	# "H8" would otherwise come back as a single phone.
 	var has_alpha := false
 	var has_digit := false
 	for i in tok.length():
@@ -850,12 +684,11 @@ static func _run_words(run: String, digits: bool) -> String:
 	return run
 
 
-## Dotted abbreviations, expanded so their period stops being read as the end of
-## a sentence. Case-insensitive on the abbreviation, and only when the period is
-## actually present - "no" the word must not become "number".
-## `marks` collects {at, len, src} over the RETURNED text for every token this
-## rewrites, so [method normalize_marked] can tell a reader that `doctor` was
-## written `Dr.`. Left empty by every other caller; the pass is unchanged.
+## Dotted abbreviations, expanded so their period stops being read as the end of a sentence.
+## Case-insensitive on the abbreviation, and only when the period is present ("no" the word must not
+## become "number"). `marks` collects {at, len, src} over the returned text for every token this
+## rewrites, so [method normalize_marked] can tell a reader that `doctor` was written `Dr.`; empty for
+## every other caller.
 static func _expand_abbrev(text: String, marks: Array = []) -> String:
 	var out: Array = []
 	var at := 0                       # output offset of the token about to be written
@@ -863,15 +696,11 @@ static func _expand_abbrev(text: String, marks: Array = []) -> String:
 	for i in words.size():
 		var raw := words[i]
 		var tok := String(raw)
-		# A WRAPPER MUST NOT HIDE THE ABBREVIATION. The match was against the whole token, so
-		# `"Mr.` never equaled `mr.`: the period survived as a period and the sentence broke
-		# inside the name. That was invisible while punctuation only shaped intonation, but it
-		# is a real silence now that a full stop carries a measured pause - a rest dropped in
-		# the middle of `"Mr. Smith,"`. Strip the wrappers, match, put them back.
+		# a wrapper must not hide the abbreviation: matching the whole token, `"Mr.` never equals `mr.`
+		# and the sentence would break inside the name. Strip the wrappers, match, put them back.
 		var head := ""
 		var body := tok
-		# The emphasis sentinels count as wrappers here for the same reason a quote does:
-		# `*Mr. Smith*` must still find `mr.` in the table.
+		# the emphasis sentinels count as wrappers here as a quote does: `*Mr. Smith*` must find `mr.`
 		while body.length() > 0 and body[0] in "\"'(" + SENTINELS:
 			head += body[0]
 			body = body.substr(1)
@@ -879,9 +708,9 @@ static func _expand_abbrev(text: String, marks: Array = []) -> String:
 		while body.length() > 0 and body[body.length() - 1] in "\"')" + SENTINELS:
 			tail = body[body.length() - 1] + tail
 			body = body.substr(0, body.length() - 1)
-		# INITIALISMS FIRST, and against `body` rather than `lower`: the case IS the match.
-		# Trailing sentence punctuation is moved into the tail so `CIA.` still finds `CIA`,
-		# and a possessive or plural `s` is carried onto the last spoken word.
+		# initialisms first, against `body` rather than `lower` (the case is the match). Trailing
+		# sentence punctuation moves into the tail so `CIA.` finds `CIA`, and a possessive or plural `s`
+		# is carried onto the last spoken word.
 		var mark := ""
 		var stem := body
 		while stem.length() > 0 and stem[stem.length() - 1] in ".,;:!?":
@@ -907,8 +736,7 @@ static func _expand_abbrev(text: String, marks: Array = []) -> String:
 		for key in ABBREV:
 			if lower == key + "." and _abbrev_fits(key, words, i):
 				var said := head + String(ABBREV[key]) + tail
-				# `src` is what the READER is shown, so the sentinels come off it - they
-				# stay in `said`, which is the spoken text still carrying its emphasis.
+				# `src` is what the reader is shown, so the sentinels come off it; they stay in `said`
 				marks.append({"at": at, "len": said.length(), "src": strip_emphasis(tok)})
 				out.append(said)
 				at += said.length() + 1        # the joining space
@@ -920,20 +748,15 @@ static func _expand_abbrev(text: String, marks: Array = []) -> String:
 	return " ".join(out)
 
 
-## Is this really the abbreviation, or the ordinary word spelled the same way that
-## happens to end a sentence?
+## Is this really the abbreviation, or the ordinary word spelled the same way that happens to end a
+## sentence?
 ##
-## The distinction the table could not make. `no` -> `number` fired on any token ending
-## in a period, and a sentence-final "no" ALWAYS ends in a period - so "The answer was
-## no." was spoken, and subtitled, as "The answer was number". The guard the original
-## comment claimed ("only when the period is actually present") is no guard at all,
-## because the period is exactly what a sentence-final word has.
-##
-## What separates them is what comes NEXT:
+## A sentence-final "no" always ends in a period, so the period is no evidence. What separates them is
+## what comes next:
 ##   a reference abbreviation is followed by its number  - "No. 5", "fig. 3", "ch. 12"
 ##   a title is followed by the name it titles           - "Mr. Smith", "St. Paul"
-## Everything else in the table ("etc.", "vs.", "approx.") is never an ordinary English
-## word, so it needs no evidence and keeps expanding unconditionally.
+## Everything else in the table ("etc.", "vs.", "approx.") is never an ordinary English word, so it
+## needs no evidence and expands unconditionally.
 static func _abbrev_fits(key: String, words: PackedStringArray, at: int) -> bool:
 	var needs_number := NEEDS_NUMBER.has(key)
 	var needs_name := NEEDS_NAME.has(key)

@@ -8,10 +8,8 @@ class_name MaskTimeline
 var session: MaskSession = null
 var player: VideoStreamPlayer = null
 var waveform_texture: Texture2D = null   # set by MaskEditor once generated; null draws nothing
-# Hi-res waveform slice for the zoomed-in view (see MaskWaveform.poll_hi):
-# same recipe as the base strip, rendered over just wavehi_span seconds, drawn
-# OVER the base wherever it applies. Progressive - stale/absent just means the
-# (soft) base shows.
+# Hi-res waveform slice for the zoomed-in view (see MaskWaveform.poll_hi): the base strip's recipe over just
+# wavehi_span seconds, drawn over the base where it applies; a stale or absent slice leaves the soft base showing.
 var wavehi_texture: Texture2D = null
 var wavehi_span := Vector2.ZERO
 
@@ -24,8 +22,7 @@ func _span_of(m: Dictionary) -> Vector2:
 	return session.marker_span(m)
 
 
-## Keeping the array sorted (the interpolation in MaskSession.at_time assumes sorted order) - re-sorting every motion
-## event is trivial at marker-list sizes, no need to defer it to release.
+## Keeps the array sorted (MaskSession.at_time interpolates over sorted order).
 func _move(m: Dictionary, t: float) -> void:
 	m.time = t
 	session.markers.sort_custom(func(a, b): return a.time < b.time)
@@ -39,8 +36,7 @@ func _playhead() -> float:
 	return player.stream_position if player != null else 0.0
 
 
-## Distinct from "session is null" (no clip picked at all) so a clip that IS loaded but came back with a bad/zero probe
-## reads as its own state, not the same blank message as never having opened anything.
+## "No clip" and "clip loaded with a zero probe" read as different states.
 func _empty_text() -> String:
 	if session == null:
 		return "no clip loaded"
@@ -50,11 +46,9 @@ func _empty_text() -> String:
 
 
 func _draw_under() -> void:
-	# The amplitude waveform (rendered once via ffmpeg's showwavespic, cached next to
-	# the clip - see MaskWaveform.ensure). Drawn across wherever the clip's
-	# OWN span [0, duration] currently maps to on screen - not the full widget width -
-	# so it stays correctly placed once the ruler can extend past a single clip
-	# (secondary tracks, the overflow margin) instead of always filling edge to edge.
+	# The amplitude waveform (ffmpeg showwavespic, cached next to the clip - see MaskWaveform.ensure), drawn over
+	# the clip's own span [0, duration] on screen rather than the full width, so it stays placed when the ruler
+	# extends past a clip (secondary tracks, the overflow margin).
 	if waveform_texture != null:
 		var wx0 := tview.x_of(0.0)
 		var wx1 := tview.x_of(session.duration)
@@ -63,10 +57,8 @@ func _draw_under() -> void:
 			var th := float(waveform_texture.get_height())
 			draw_texture_rect_region(waveform_texture, Rect2(wx0, 4, wx1 - wx0, size.y - 20),
 				Rect2(0, 0, tw, th), Color(0.55, 0.68, 0.85, 0.85))
-		# The crisp zoom slice, over the base for exactly its own span. The
-		# backing rect re-lays the strip background first - the two textures
-		# are both translucent, and hi-over-base without it doubled up into a
-		# brighter band that read as a selection.
+		# The zoom slice over the base for its own span; the backing rect re-lays the strip background because both
+		# textures are translucent and would double into a brighter band.
 		if wavehi_texture != null and wavehi_span.y > wavehi_span.x:
 			var hx0 := maxf(tview.x_of(wavehi_span.x), wx0)
 			var hx1 := minf(tview.x_of(wavehi_span.y), wx1)

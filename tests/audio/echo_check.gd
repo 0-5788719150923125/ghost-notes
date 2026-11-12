@@ -2,10 +2,9 @@ extends SceneTree
 
 ## One-shot Echo (content re-localization) self-check (run headless):
 ##   godot --path . --headless --script res://tests/audio/echo_check.gd
-## Feeds synthetic harmonic-signature streams through the map/localize loop and
-## checks the properties the Director depends on: a looped song is recognized from
-## the tail, a perturbed replay still matches, novel audio never fires, a repeated
-## section that the cursor already explains stays put, and corrections cool down.
+## Feeds synthetic signature streams through the map/localize loop: a looped song is recognized from the
+## tail, a perturbed replay still matches, novel audio never fires, a repeated section the cursor already
+## explains stays put, and corrections cool down.
 
 var fails := 0
 
@@ -18,11 +17,9 @@ func check(name: String, ok: bool, detail := "") -> void:
 		print("FAIL  " + name + ("  -- " + detail if detail != "" else ""))
 
 
-# A smooth, non-negative, music-like 16-dim signature trajectory; `piece` switches
-# to unrelated content (different per-dim FREQUENCIES, not just phases - two pieces
-# must be different processes, or a time-shift alignment between them exists and
-# "recognizing" it is correct behavior, not a false positive). Squared so cells
-# differ enough to discriminate.
+# A smooth, non-negative, music-like 16-dim signature trajectory; `piece` switches to unrelated content
+# (different per-dim frequencies, not just phases: two pieces must be different processes, or a time-shift
+# alignment between them exists and recognizing it is correct). Squared so cells differ enough to discriminate.
 func sig_at(t: float, piece := 0) -> PackedFloat32Array:
 	var v := PackedFloat32Array()
 	v.resize(16)
@@ -37,8 +34,7 @@ func sig_at(t: float, piece := 0) -> PackedFloat32Array:
 func _initialize() -> void:
 	var dt := 0.05
 
-	# --- A. a looping song: pass 1 maps the schedule, then the audio restarts while
-	# the cursor sits in the tail (beyond the map). ------------------------------
+	#--- A. a looping song: pass 1 maps the schedule, then the audio restarts while the cursor sits in the tail.
 	var e := Echo.new()
 	var heard := 0.0
 	var false_fire := -1.0
@@ -76,7 +72,7 @@ func _initialize() -> void:
 		heard += dt
 	check("a corrected cursor is left alone", refire < 0.0, str(refire))
 
-	# --- B. a PERTURBED replay (noise on every dim) still re-localizes. ---------
+	#--- B. a perturbed replay (noise on every dim) still re-localizes.
 	var e2 := Echo.new()
 	heard = 0.0
 	t = 0.0
@@ -100,7 +96,7 @@ func _initialize() -> void:
 		heard += dt
 	check("a perturbed replay still re-localizes", fired2 >= 0.0 and fired2 < 3.5, str(fired2))
 
-	# --- C. NOVEL audio never fires (coherence + floor hold the line). ----------
+	#--- C. novel audio never fires.
 	var e3 := Echo.new()
 	heard = 0.0
 	t = 0.0
@@ -119,9 +115,8 @@ func _initialize() -> void:
 		heard += dt
 	check("novel audio never fires a correction", fired3 < 0.0, str(fired3))
 
-	# --- D. a repeated section the cursor already EXPLAINS stays put: the map holds
-	# two identical passes; the cursor walks the second while hearing music that
-	# matches the first equally well. ---------------------------------------------
+	#--- D. a repeated section the cursor already explains stays put: the map holds two identical passes; the
+	#cursor walks the second while hearing music that matches the first equally well.
 	var e4 := Echo.new()
 	heard = 0.0
 	t = 0.0
@@ -138,7 +133,7 @@ func _initialize() -> void:
 		heard += dt
 	check("an explained repeat (chorus) never moves the cursor", fired4 < 0.0, str(fired4))
 
-	# --- E. degenerate input is safe. -------------------------------------------
+	#--- E. degenerate input is safe.
 	var e5 := Echo.new()
 	e5.record(0.0, PackedFloat32Array())
 	var r5 := e5.listen(0.0, 0.0, PackedFloat32Array(), dt)

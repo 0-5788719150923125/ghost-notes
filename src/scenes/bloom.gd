@@ -1,24 +1,18 @@
 extends GhostScene
 
-## Bloom - elegant procedural rosette curves (the koch replacement).
+## Bloom - elegant procedural rosette curves.
 ##
-## The old snowflake hard-coded a star and stepped its recursion depth in integer
-## jumps (which popped). This draws the shape from a *formula* instead: the
-## superformula, whose symmetry and pinch are a handful of numbers, traces a single
-## smooth closed contour that can be a star, a flower, a gear, or a soft polygon -
-## and morphs continuously between them. A few are layered concentrically with a
-## hue gradient and a gentle sway; the audio sharpens and brightens them (through a
-## nonlinear curve) without ever stepping. Classy, fluid, different every seed.
+## The shape comes from the superformula, whose symmetry and pinch are a handful of numbers: it traces one
+## smooth closed contour that can be a star, a flower, a gear or a soft polygon, and morphs continuously
+## between them. A few are layered concentrically with a hue gradient and a gentle sway; the audio sharpens
+## and brightens them through a nonlinear curve without stepping.
 
-## The contour's ARCHETYPE. One formula spans star, flower, cog and soft polygon, but only
-## in specific corners of its parameter space, so the seed picks a FAMILY first and samples
-## inside it - which is why two seeds now differ in silhouette rather than in the third
-## decimal of the same shape.
+## The contour's archetype. One formula spans star, flower, cog and soft polygon, but only in specific
+## corners of its parameter space, so the seed picks a family first and samples inside it.
 ##
-## The two facts that decide a family: small n1 with small n2/n3 drives the radius to
-## collapse between lobes (a star), while n1 = n2 = n3 well above 1 is a SUPERELLIPSE -
-## flat sides, sharp corners, a polygon. `tie` marks the second case, because sampling the
-## three apart lands near n2 = n3 = 2, which is a circle exactly, whatever n1 does.
+## Small n1 with small n2/n3 collapses the radius between lobes (a star); n1 = n2 = n3 well above 1 is a
+## superellipse (flat sides, sharp corners). `tie` marks the second case, since sampling the three apart
+## lands near n2 = n3 = 2, a circle whatever n1 does.
 const FORMS := {
 	"star":    {"m": [5, 12],  "n1": [0.16, 0.38], "n2": [0.35, 0.85], "n3": [0.35, 0.85]},
 	"flower":  {"m": [4, 9],   "n1": [0.45, 0.95], "n2": [0.30, 1.10], "n3": [0.30, 1.10]},
@@ -34,8 +28,8 @@ var _morph := 0.0
 var _sharp := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "The contour's family of shape: a star, a flower, a ripple, a cog or a soft polygon."},
@@ -52,8 +46,7 @@ const FIELDS := {
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"
-	# Nothing about a rosette says what color it is, so any mood is fair - it was a bare
-	# random hue before, which varied but never related to itself.
+	# Nothing about a rosette says what color it is, so any mood is fair.
 	_sch = Scheme.pick(rng)
 	var form := String(choice("form", rng))
 	var fm: Dictionary = FORMS[form]
@@ -75,8 +68,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		n2 = rng.randf_range(float(n2_r[0]), float(n2_r[1]))
 		n3 = rng.randf_range(float(n3_r[0]), float(n3_r[1]))
 	var layers: int = number("rings", rng)
-	# Either the stack sweeps base -> accent (a two-tone rosette) or it stays one color
-	# with each ring drifted slightly off it. Two quite different objects.
+	# Either the stack sweeps base -> accent (a two-tone rosette) or stays one color with each ring drifted slightly.
 	var gradient := rng.randf() < 0.55
 	var hues: Array = []
 	for i in layers:
@@ -96,8 +88,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"width": number("line_width", rng),
 		"spin_rate": number("spin", rng),
 		"m_step": rng.randf() < 0.5,                 # neighboring layers shift symmetry
-		# Enough samples to keep a high-lobe contour smooth - a 26-fold ripple traced at a
-		# fixed 260 points showed its faceting.
+		# Enough samples to keep a high-lobe contour smooth (a 26-fold ripple at 260 points facets).
 		"samples": clampi(int(m) * 26, 240, 600),
 	}
 

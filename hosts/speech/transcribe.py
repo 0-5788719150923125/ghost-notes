@@ -12,8 +12,7 @@ PIECE seconds and transcribed with each word's time (Whisper's cross-attention, 
 it), the voice-activity filter skipping silence; the words land in the video's own seconds:
 `{"words": [{"text", "t0", "t1", "p"}], "seconds": heard}`.
 
-It is the captions a video without them never had (2026-10-22, the user: "Is there a simple and
-effective way we might be able to extract subtitles from video, and sync them with timestamps?"), and
+It is the captions a video without them never had, and
 written as the captions' words are, so the steps after it read either.
 
 WRITTEN UNDER A TEMPORARY NAME AND RENAMED INTO PLACE, as every step of actor.py's.

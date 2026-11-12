@@ -1,11 +1,11 @@
 extends SceneTree
 
-## design_window_check - A PAINTED DESIGN'S ELEMENTS AS ROWS ([DesignWindow]; next/editing.md step 4).
+## design_window_check - a painted design's elements as rows ([DesignWindow]; next/editing.md step 4).
 ##
 ##   godot --headless --path . --script res://tests/table_show/design_window_check.gd
 ##
 ## On a made design of three elements: an element moved to another beat and re-timed, one removed, one moved up - and the
-## design handed back is exactly that, every other key of every element as it was. THE CONTROL: opened and applied with no
+## design handed back is exactly that, every other key of every element as it was. The control: opened and applied with no
 ## change, the design handed back is the one given.
 
 var _fails := 0

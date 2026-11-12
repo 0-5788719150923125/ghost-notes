@@ -40,7 +40,7 @@ MADE TO RUN OVERNIGHT AND AGAIN:
 ITS OWN yt-dlp, KEPT CURRENT: an environment of its own (`~/.cache/fetch_channel/venv`, made with the Python
 that runs this the first time), brought to the newest yt-dlp (with curl_cffi) and deno at the start of every run - YouTube
 changes how it hands out video, and an older yt-dlp meets it as "HTTP Error 403: Forbidden" on every
-download (2026-10-23, yt-dlp 2026.07.04). --no-upgrade skips that; --python names another Python with
+download. --no-upgrade skips that; --python names another Python with
 yt_dlp in it. yt-dlp is given a JavaScript runtime for YouTube's challenges: the environment's deno, else deno
 or node on the PATH. Standard library only.
 """

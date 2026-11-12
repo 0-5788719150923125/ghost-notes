@@ -1,26 +1,22 @@
 extends VBoxContainer
 class_name VoiceTrainingCard
 
-## VoiceTrainingCard - the Voice training component's card: teaches a voice to speak as someone does, from their
-## own recordings, and the note reads in it (next/likeness.md, "A voice alone"). The user, 2026-10-26: "a new
-## component/card, which we could attach to a note that already has the "Voice" component, to fine-tune a new
-## voice for that component ... importing a video from file, or by pointing to a YouTube URL or playlist URL."
+## VoiceTrainingCard - the Voice training component's card: teaches a voice to speak as someone does, from their own
+## recordings, and the note reads in it (next/likeness.md, "A voice alone").
 ##
-## A PERSON OF THE [Actors] LIBRARY WHOSE VOICE IS ALL THAT IS LEARNED OF THEM (A VOICE ALONE, [method
-## ActorFolder.sound_only]) - their recordings (a folder, files, or links to videos, playlists or a channel, fetched as
-## their sound) and the voice's steps over them ([method ActorSteps.voice_chain]: Fetch, Probe, Hear, Utterances,
-## Voice), run by the Actor card's [ActorBuilder] and shown by its parts ([ActorSourceList], [ActorPipeline] on the note's
-## Pipeline card).
-## KOKORO IS TAUGHT THEM (2026-10-26, the user: "I likely won't use Piper models for anything other than testing now,
-## given that Kokoro is so much better-sounding ... our own custom training loop would probably be perfectly fine"):
-## its decoder and prosody predictor, on their sentences, on the graphics card (hosts/voice_train/kokoro_voice.py),
-## and the voice written into Kokoro's own graph is published where the voice host lists Kokoro voices taught here:
-## THE NOTE READS IN IT AS IT LANDS ([method ReadingPanel.voice_made]), Read in it picks it again later, and every
-## Voice card lists it as "<name> (their own voice)".
+## A person of the [Actors] library whose voice is all that is learned of them ([method ActorFolder.sound_only]): their
+## recordings (a folder, files, or links to videos, playlists or a channel, fetched as their sound) and the voice's steps
+## over them ([method ActorSteps.voice_chain]: Fetch, Probe, Hear, Utterances, Voice), run by the Actor card's
+## [ActorBuilder] and shown by its parts ([ActorSourceList], [ActorPipeline] on the note's Pipeline card).
 ##
-## GENERATION IS EXPLICIT: nothing runs on open (Hear takes about a seventh of the recordings' length on the
-## processor, the Voice about an hour on the graphics card). Stop keeps what is learned, and ▶ goes on from it. A
-## machine that cannot train ([method ActorBuilder.cannot_train]) says why on the rows.
+## Kokoro is taught them: its decoder and prosody predictor, on their sentences, on the graphics card
+## (hosts/voice_train/kokoro_voice.py); the voice written into Kokoro's own graph is published where the voice host lists
+## Kokoro voices taught here. The note reads in it as it lands ([method ReadingPanel.voice_made]), Read in it picks it again
+## later, and every Voice card lists it as "<name> (their own voice)".
+##
+## Generation is explicit: nothing runs on open (Hear takes about a seventh of the recordings' length on the processor, the
+## Voice about an hour on the graphics card). Stop keeps what is learned, and ▶ goes on from it. A machine that cannot train
+## ([method ActorBuilder.cannot_train]) says why on the rows.
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "voice_training"
@@ -181,8 +177,7 @@ func _show_voice() -> void:
 	_syncing = false
 
 
-## THEIR VOICE HAS LANDED: the reading this card is on asks for its voices again and reads in it
-## ([method ReadingPanel.voice_made]) - the list was asked for when the note opened, an hour or more before.
+## Their voice has landed: the reading this card is on asks for its voices again and reads in it ([method ReadingPanel.voice_made]).
 func _voice_made(voice: String) -> void:
 	if _panel != null and is_instance_valid(_panel):
 		_panel.voice_made(voice)
@@ -202,7 +197,7 @@ func _say(text: String) -> void:
 
 # --- the steps ----------------------------------------------------------------------------------
 
-## GENERATE: their voice and what it is made from, where missing or stale - never anything of a picture.
+## Generate: their voice and what it is made from, where missing or stale - never anything of a picture.
 func _generate() -> void:
 	if _builder == null:
 		return
@@ -221,7 +216,7 @@ func _refresh() -> void:
 	_read_btn.disabled = not made() or _panel == null
 
 
-## WHAT THIS CARD MAKES, on the note's one list ([PipelineCard]): the voice's steps.
+## What this card makes, on the note's one list ([PipelineCard]): the voice's steps.
 func pipeline() -> PipelineSection:
 	return _steps
 

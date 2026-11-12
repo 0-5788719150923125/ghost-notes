@@ -1,18 +1,14 @@
 extends RefCounted
 class_name NoteStore
 
-## NoteStore - where notes live (next/notes.md step 8, "Where do notes live?"): a DEFAULT FOLDER,
-## and every other folder or file the user points Ghost Notes at - "it's not realistic to prevent
-## people from sourcing their own content from other projects, git repos, etc." One small interface
-## (list, create, add, and a stamp for outside edits), so a database can arrive later - as an index
-## rebuilt from the files, which stay the source of truth - without touching a component.
+## NoteStore - where notes live (next/notes.md step 8): a default folder, and every other folder or file the user
+## points Ghost Notes at. One small interface (list, create, add, and a stamp for outside edits), so a database can
+## arrive later as an index rebuilt from the files, which stay the source of truth.
 ##
-## A NOTE IS A MARKDOWN FILE, as a rift chapter already is: frontmatter, then a body, and its
-## components are the blocks under `ghost:` ([method Components.attached_of]). A new note has
-## none. Attaching a component writes only the block that says it is there
-## ([method Components.attach_blocks]) and leaves every setting to its card, which writes one the
-## first time it is changed: an empty block is not "the defaults" to every card (an empty
-## `illustrations:` would wipe the pictures' look), and a block nobody set is no block.
+## A note is a markdown file, as a rift chapter already is: frontmatter, then a body, and its components are the blocks
+## under `ghost:` ([method Components.attached_of]). A new note has none. Attaching a component writes only the block
+## that says it is there ([method Components.attach_blocks]) and leaves every setting to its card, which writes one the
+## first time it is changed (an empty `illustrations:` block would wipe the pictures' look).
 
 ## The default folder.
 const DEFAULT := "user://notes"
@@ -65,8 +61,8 @@ static func remove(path: String) -> void:
 		Settings.write(SECTION, "sources", Array(list))
 
 
-## EVERY NOTE, newest first: `{path, title, mtime}` - the default folder and every source, each file
-## once. The title is the frontmatter's `title:` (read textually, one line), else the file's name.
+## Every note, newest first: `{path, title, mtime}` - the default folder and every source, each file once. The title
+## is the frontmatter's `title:` (read textually, one line), else the file's name.
 static func list() -> Array:
 	var seen := {}
 	var out: Array = []
@@ -103,11 +99,10 @@ static func blocks_of(path: String) -> Dictionary:
 	return res.data if res.ok and res.data is Dictionary else {}
 
 
-## WHAT THE NOTES LIST SHOWS OF A NOTE, from one read of its file: `title` ([method title_of]),
-## `preview` (its words as a reader sees them, [method Manuscript.preview_of] - less a first line that only says the
-## title again, as a chapter's heading does), `attached` (its components,
-## [method Components.attached_of]) and `words`, everything a search looks through - the title, the
-## words, the components' names and the Medium's format, lower-cased.
+## What the notes list shows of a note, from one read of its file: `title` ([method title_of]), `preview` (its words as
+## a reader sees them, [method Manuscript.preview_of], less a first line that only says the title again),
+## `attached` (its components, [method Components.attached_of]) and `words`, everything a search looks through: the
+## title, the words, the components' names and the Medium's format, lower-cased.
 static func summary_of(path: String) -> Dictionary:
 	var raw := FileAccess.get_file_as_string(path)
 	var t := FrontMatter.field_of(raw, "title").strip_edges()
@@ -154,10 +149,8 @@ const PLAIN := [
 ]
 
 
-## A NEW NOTE in the default folder: its `title:`, [param body] and nothing attached - or
-## [param blocks], for one made with components already on it (a recording, a gate). There is one
-## kind of new note; "+" makes it what it becomes ([Components]). Returns its path, or "" with the
-## reason pushed as a warning.
+## A new note in the default folder: its `title:`, [param body] and nothing attached - or [param blocks], for one made
+## with components already on it (a recording, a gate). Returns its path, or "" with the reason pushed as a warning.
 static func create(title := "", body := "", blocks := {}) -> String:
 	var name := title.strip_edges()
 	if name.is_empty():
@@ -172,18 +165,13 @@ static func create(title := "", body := "", blocks := {}) -> String:
 	return path
 
 
-## A NOTE'S FILE IS NAMED AFTER ITS TITLE, AND STAYS SO (2026-10-31, the user: "a new note will get a filename
-## like 'Untitled 2.md'. Can we setup a system that will name those files after the title ... and prevent
-## collisions by adding a number only when two files match?"): retitled, a note whose file's name FOLLOWS its
-## title is renamed to the new one's ([method retitle]).
+## A note's file is named after its title and stays so: retitled, a note whose file's name follows its title is
+## renamed to the new one's ([method retitle]).
 ##
-## WHETHER IT FOLLOWS IS READ OFF THE NAME, NEVER KEPT ("we probably need a flag and a handler, for instances
-## the user clicked on 'Save', and saved the file under a different name ... The same should be supported on
-## import"): a file follows its title while its name IS the title's ([method name_of]), or that and a number
-## another note made it take. Saved… under a name of the author's own, a file brought in under one (a chapter
-## `43-secular-hazing.md` titled "Secular Hazing"), or renamed by hand outside the app, its name says something
-## else, so it is left as it is - and stays so until its title is made to match it again. A flag kept in the
-## note or in the settings would be one more thing to fall out of step with the file it describes.
+## Whether it follows is read off the name, never kept: a file follows its title while its name is the title's
+## ([method name_of]), or that and a number another note made it take. A file saved under a name of the author's own,
+## brought in under one, or renamed by hand has a name that says something else, so it is left as it is until its
+## title is made to match again. A kept flag would be one more thing to fall out of step with the file.
 
 ## Does [param path]'s name follow the title [param title] (its own, read from the file, when empty)?
 static func follows(path: String, title := "") -> bool:
@@ -201,8 +189,8 @@ static func name_of(title: String) -> String:
 	return _safe(title)
 
 
-## WHERE A NOTE TITLED [param title] IS KEPT, beside [param path]: its title's name, with " 2", " 3"... only
-## when another file has it - [param path] itself is never in its own way.
+## Where a note titled [param title] is kept, beside [param path]: its title's name, with " 2", " 3"... only when
+## another file has it ([param path] itself is never in its own way).
 static func path_for(path: String, title: String) -> String:
 	var dir := path.get_base_dir()
 	var ext := path.get_extension() if not path.get_extension().is_empty() else "md"
@@ -216,9 +204,9 @@ static func path_for(path: String, title: String) -> String:
 	return path
 
 
-## RETITLE THE NOTE AT [param path]: its `title:` line written ([param title]; empty removes it, and the note
-## is then named by its file), and the file renamed after the new title when its name followed the old one
-## ([method follows]). Returns where the note is now.
+## Retitle the note at [param path]: its `title:` line written ([param title]; empty removes it, and the note is then
+## named by its file), and the file renamed after the new title when its name followed the old one ([method follows]).
+## Returns where the note is now.
 static func retitle(path: String, title: String) -> String:
 	var t := title.strip_edges()
 	var raw := FileAccess.get_file_as_string(path)
@@ -234,9 +222,9 @@ static func retitle(path: String, title: String) -> String:
 	return rename(path, path_for(path, t))
 
 
-## THE NOTE AT [param from] MOVED TO [param to] on the disk - a rename, nothing copied - and the list told: a
-## file added by hand is listed by its new path. Returns where the note is now ([param from] when it could not
-## move, with the reason pushed as a warning).
+## The note at [param from] moved to [param to] on the disk - a rename, nothing copied - and the list told: a file
+## added by hand is listed by its new path. Returns where the note is now ([param from] when it could not move, with
+## the reason pushed as a warning).
 static func rename(from: String, to: String) -> String:
 	if to.simplify_path() == from.simplify_path():
 		return from
@@ -253,9 +241,9 @@ static func rename(from: String, to: String) -> String:
 	return to
 
 
-## A NOTE MADE A MOMENT AGO AND LEFT EMPTY GOES, outright (Keep's way): New pressed and nothing written leaves no
-## "Untitled 3.md" behind. Only one of Ghost Notes' own, with no words and nothing attached; the caller says it
-## is new. Returns whether it went.
+## A note made a moment ago and left empty goes, outright (Keep's way): New pressed and nothing written leaves no
+## "Untitled 3.md" behind. Only one of Ghost Notes' own, with no words and nothing attached; the caller says it is
+## new. Returns whether it went.
 static func discard_if_empty(path: String) -> bool:
 	if not is_own(path) or not FileAccess.file_exists(path):
 		return false
@@ -300,8 +288,8 @@ static func _safe(name: String) -> String:
 	return s if not s.is_empty() else "Untitled"
 
 
-## DELETE A NOTE (2026-10-06): to the system's trash - a mistaken yes is a trip to the trash, not a
-## loss - and out of the sources if it was added by hand. Returns "" once it is gone, or why not.
+## Delete a note: to the system's trash (a mistaken yes is a trip to the trash, not a loss), and out of the sources if
+## it was added by hand. Returns "" once it is gone, or why not.
 static func trash(path: String) -> String:
 	var p := path.simplify_path()
 	if not FileAccess.file_exists(p):

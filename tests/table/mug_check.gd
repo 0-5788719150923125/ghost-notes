@@ -1,14 +1,16 @@
 extends SceneTree
 
-## mug_check: WHAT STEAMS COOLS AND WHAT IS DRUNK FROM GOES DOWN ([Motions], [TableWork]; next/table_work.md "Heat and a drink"). The user, of a coffee steaming through a two-hour episode: "in a 2-hour episode, that
-## steaming coffee is going to go cold ... implemented as temperature of the liquid"; and "pick up the mug, and bring it close (close enough to leave the camera's viewport), as if to take a drink. Then, when it
-## returns, some of the liquid would be gone".
+## mug_check: what steams cools, and what is drunk from goes down ([Motions], [TableWork]; next/table_work.md "Heat and a drink").
 ##
-## - HEAT: a mug starts at 85 C and is near 41 C at 40 minutes, as real coffee in a mug is; what is larger holds it longer; its steam is whole when hot, gone by the time it stops - within 15 to 25 minutes (feedback
-##   0045: "We are 12 minutes in, and the coffee ... has not stopped steaming yet"; it had steamed for 35). The controls: what is kept hot, and smoke, which is not heat, go on as they are.
-## - THE PLUME SAYS SO: a real mug's plume is whole at the start, thin and short-lived at ten minutes, and at twenty-five nothing is born. The controls: the same mug `kept_hot`, and one that boils, steam at two hours.
-## - A DRINK: at the mouth every corner of the mug is out of the frame by its foot; it comes back to within a hair of where it stood; the liquid has lost what the sip says and nothing else, none of it spilled; a
-##   second drink takes its share of what is left. Its steam does not cross the picture. The controls: at rest it is in the frame, and a carry takes nothing from it; a thing with no liquid is drunk from, and said.
+## - Heat: a mug starts at 85 C and is near 41 C at 40 minutes, as real coffee in a mug is; what is larger holds it longer; its steam
+##   is whole when hot, gone by the time it stops - within 15 to 25 minutes. Controls: what is kept hot, and smoke, which is not heat,
+##   go on as they are.
+## - The plume says so: a real mug's plume is whole at the start, thin and short-lived at ten minutes, and at twenty-five nothing is
+##   born. Controls: the same mug `kept_hot`, and one that boils, steam at two hours.
+## - A drink: at the mouth every corner of the mug is out of the frame by its foot; it comes back to within a hair of where it stood;
+##   the liquid has lost what the sip says and nothing else, none of it spilled; a second drink takes its share of what is left. Its
+##   steam does not cross the picture. Controls: at rest it is in the frame, and a carry takes nothing from it; a thing with no liquid
+##   is drunk from, and said.
 ##
 ## Run: godot --headless --path . --script tests/table/mug_check.gd
 
@@ -217,8 +219,9 @@ func _drink() -> void:
 	_ok(absf(float(c["v1"]) / float(c["v0"]) - 1.0) < 0.01, "the control: a carry takes nothing from it: %.3f" % (float(c["v1"]) / float(c["v0"])))
 
 
-## OVER WHAT IS BUILT ([method TableWork.lift_over]; the bricks are in another world from what an act moves): the way a drink would go comes over a finished tower, and the lift found clears it. The control: a hand's own
-## lift would have gone through it, and a way that never comes near it needs none.
+## Over what is built ([method TableWork.lift_over]; the bricks are in another world from what an act moves): the way a drink would go
+## comes over a finished tower, and the lift found clears it. Control: a hand's own lift would have gone through it, and a way that never
+## comes near it needs none.
 func _over_the_build() -> void:
 	var a := Vector3(-0.29, 0.05, -0.21)
 	var b := Vector3(0.0, 0.33, 0.61)
@@ -237,7 +240,7 @@ func _over_the_build() -> void:
 	_ok(TableWork.lift_over(a, b, 7, off_to_one_side, 0.05) == 0.0, "the control: a way that never comes over it needs nothing")
 
 
-## WHAT THE PUPPETEER IS TOLD OF ONE: that it was done, with nothing passing through anything, and never that it ends in the air.
+## What the puppeteer is told of one: that it was done, with nothing passing through anything, and never that it ends in the air.
 func _told() -> void:
 	var m := _medium()
 	_stand(m, "mug", Vector3(-0.2, 0.0, -0.1))

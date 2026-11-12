@@ -1,14 +1,13 @@
 extends VBoxContainer
 class_name SongCard
 
-## SongCard - the note's song (2026-10-06): which file it is, and a way to choose one. Importing a
-## song is a component of a note, not a button on the notes list - "if we want to import an audio
-## file or a video file - then we should add those relevant components/attachments to the note".
+## SongCard - the note's song: which file it is, and a way to choose one. Importing a song is a
+## component of a note, not a button on the notes list.
 ##
-## THE SONG IS THE NOTE'S CLOCK. main loads it as the note opens, waiting at its start - a note opens
-## stopped - and the transport plays it; with no Medium attached it plays to an empty frame. So
-## choosing another song is choosing another session: the card says which file was picked
-## ([signal chosen]) and the panel writes the note's `song:` block and opens the note again.
+## The song is the note's clock. main loads it as the note opens, waiting at its start, and the transport
+## plays it; with no Medium attached it plays to an empty frame. Choosing another song is choosing
+## another session: the card says which file was picked ([signal chosen]) and the panel writes the note's
+## `song:` block and opens the note again.
 
 const AUDIO_EXTS := ["wav", "mp3", "ogg", "oga", "flac"]
 
@@ -81,8 +80,7 @@ func _open_dialog() -> void:
 	_dialog = FileDialog.new()
 	_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	# In-window, never native: the portal dialog shows nothing at all on a Linux box without
-	# xdg-desktop-portal.
+	# In-window, never native: the portal dialog shows nothing on a Linux box without xdg-desktop-portal.
 	_dialog.use_native_dialog = false
 	_dialog.title = "Choose a song for this note"
 	_dialog.filters = PackedStringArray(["*.wav, *.mp3, *.ogg, *.oga, *.flac ; Songs", "* ; Every file"])

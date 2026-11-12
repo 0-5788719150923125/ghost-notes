@@ -3,15 +3,13 @@ class_name ScriptHighlighter
 
 ## ScriptHighlighter - colors a script by the marks the panel reading it understands.
 ##
-## Driven by [ScriptMarks] patterns rather than rules of its own, so what is colored and
-## what the palette offers are the same list. Only the marks of one MODE are colored: in
-## the Synthesis panel a `<!-- hesitation -->` is just a note, and is shown as one.
+## Driven by [ScriptMarks] patterns rather than rules of its own, so what is colored and what the palette
+## offers are the same list. Only the marks of one mode are colored: in the Synthesis panel a
+## `<!-- hesitation -->` is just a note, and is shown as one.
 ##
-## THE WHOLE TEXT IS SCANNED, NOT EACH LINE. Picture descriptions run over several lines and
-## a speaker cue is only a cue on a line of its own, neither of which a line can see from
-## inside itself. The scan is redone when the text's version moves, and every line's cached
-## colors are thrown away with it - [SyntaxHighlighter] only forgets the lines that were
-## edited, which leaves the rest of an opened or closed comment showing its old color.
+## The whole text is scanned, not each line: picture descriptions run over several lines and a speaker cue
+## is only a cue on a line of its own. The scan is redone when the text's version moves, and every line's
+## cached colors are thrown away with it ([SyntaxHighlighter] only forgets the edited lines).
 
 var mode := "generative"
 

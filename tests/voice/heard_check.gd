@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Gate for A VOICE HEARD THROUGH SOMETHING ([constant Manuscript.HEARD], [constant VoiceFX.HEARD]; next/dispatch.md,
+## Gate for A voice heard through something ([constant Manuscript.HEARD], [constant VoiceFX.HEARD]; next/dispatch.md,
 ## the user's dispatch desk: every voice but the room's "comes through a phone"):
 ##
 ## - THE BAND: through a phone a 100 Hz tone (a man's fundamental) is taken far down and a 1 kHz tone passes; a phone
@@ -9,7 +9,7 @@ extends SceneTree
 ## - THE PLAN: a turn marked `<!-- heard: phone -->` has every chunk heard through it, the turn before it none, and a
 ##   key nobody knows is a note and nothing more; the mark is never said;
 ## - THE JOIN: a voice heard through one thing, then another, is a change of room each time - a mark where it changes;
-## - THE STATIC RIDES THE VOICE: over a radio, static is heard in the gap between two words and not before the voice
+## - the static rides the voice: over a radio, static is heard in the gap between two words and not before the voice
 ##   begins, the squelch's tail is heard as the channel closes, and the rest after it is clean (THE CONTROL: heard through
 ##   nothing, the gap is silent); a phone's line hisses there too, far under a radio's; the same take is the same
 ##   static, sample for sample.

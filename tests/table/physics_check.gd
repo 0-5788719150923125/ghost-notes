@@ -1,132 +1,15 @@
 extends SceneTree
 
-## The gate of WHAT IS IN THINGS ([ShapeField], [Vessel], [Particles], [TablePhysics]; next/table_physics.md), with no
-## renderer. The user, 2026-10-28, of the first alchemy episode: "The liquids are not liquids"; the snow "should be
-## particles ... With physics and collision"; the shell's crystals "do not move and tumble, and they do not fall into
-## the cauldron"; and "I would have expected the grinding to destroy those things".
+## The gate of what is in things ([ShapeField], [Vessel], [Particles], [TablePhysics]; next/table_physics.md), with no
+## renderer.
 ##
 ##   godot --headless --path . --script res://tests/table/physics_check.gd [-- --only=_jars_apart,_sheet_lies]
 ##
-## - A SOLID'S FIELD IS ITS SHAPE: a cup's lathe is less inside its wall, more in its hollow and beyond it, and as far
-##   from its wall as a point is; its way out points out. The control: a solid lathe (a pestle) has no hollow.
-## - A VESSEL'S INSIDE KEEPS ITS VOLUME: a straight cup's inside is the cylinder its profile draws; its level upright is
-##   where that share of it stands; tipped, the volume under its level - counted afresh, cell by cell - is the share
-##   asked; it pours over its rim only once its liquid reaches it. The controls: upright and a little tipped, nothing
-##   flows; a solid lathe has no inside.
-## - A POUR IS THE TIP'S: a flask of ink carried over a bowl and tipped across the view pours by itself - the flask
-##   empties, the bowl's water rises by what fell into it, a stream falls between them while it flows, and the act's
-##   check says how much went where. The control: the flask tipped a little pours nothing, and the check says how far it
-##   would have to go.
-## - GRAINS ARE REAL: a jar of snow stood still keeps every grain where it lies; tipped over a bowl it spills them out of
-##   its mouth and most land in the bowl. The control: carried upright over the bowl, none leaves the jar.
-## - LOOSE THINGS TUMBLE: a dish's heap of stones (loose without being told) tipped over a cauldron falls out of it and
-##   lands in the cauldron's brew. The control: the dish carried level, its stones stay in it.
-## - A PESTLE GRINDS: a crystal lying loose in a mortar, the pestle pressed into the bowl going round over it, breaks
-##   into pieces, and the act says nothing passes through anything. The controls: the pestle held still above it, the
-##   crystal stays whole; going round too wide for the bowl, its head driven into the wall, it is said to pass through it.
-## - THE SAME BAKE TWICE: the jar tipped on two tables built alike leaves every grain in the same place - and A FRAME IS ITS
-##   OWN MOMENT: baked on to the end, the frame of a moment before the tip still has every grain in the jar (a frame had held
-##   the solver's own arrays, and every frame was the latest).
-## - A PINCH FALLS WHERE IT IS LET FALL: grains sprinkled from over a bowl land in it, drawn as they fall. The control:
-##   before the act, none has fallen.
-## - THE BAKE'S OWN THREAD BAKES WHAT THE CALLER'S DOES: the jar tipped with the bake on a thread of its own, the picture
-##   asking as the app's does, comes to every grain where the bake on the caller's thread puts it.
-## - A TABLE LET GO IS GONE: a table freed frees its work and the work's physics, every frame baked with them (each had held
-##   the other, and every table a preview stood was kept). The control: a work and a physics made to hold each other
-##   outlive their last holder.
-## - A BAKE GOES ON TO THE NEXT TABLE (the puppeteer's `act` had baked from the start every call, 2026-10-28): the snow
-##   tipped into the bowl, then the bowl nudged - a table built alike with the nudge written otherwise, handed the first
-##   one's bake, takes it up at the checkpoint before the nudge and comes to every grain where a bake of its own plan from
-##   the start puts it; with the tip written otherwise, it is taken up before the jar turns - in the middle of its carry -
-##   and comes to the same. The controls: the nudge changes the grains (it was baked), the jar stood elsewhere takes
-##   nothing, and a bake halted bakes no further.
-## - A HEAP AT REST SLEEPS WHOLE (the-quiet-crucible 707668, 2026-10-29: a jar of iron filings set back on the bench
-##   trembled awake for the rest of the show, and the bake ran at half the show's pace): the filings tipped a little and
-##   stood back are all asleep 1.9 s later. The control: while the jar turns, they are awake.
-## - A SPLASH IS ONE THING'S (707668: "the splash was far too intense: it splattered everywhere"): the filings tipped into
-##   water ring it and throw no drop; a heavy stone dropped from 15 cm splashes once, no higher than its speed sends the
-##   drops. The control: the stone let go 1 cm over the water splashes nothing.
-## - A DIP FILLS (707668's ladle came up empty): a cup dipped under the water and drawn up level holds it, the bowl the
-##   less by it, and tipped pours it out. The control: dipped short of the surface, it comes up empty.
-## - A SUNK VESSEL IS THE LIQUID IT IS IN (841899's ladle, stirring its brew, poured sixty parcels a second out of its lip
-##   under the brew, drawn falling through the cauldron's floor): a ladle stirred round a pot of water fills and pours
-##   nothing while its rim is under the surface. The control: lifted out and tipped, it pours.
-## - A THING LET GO FALLS, AND WHERE THE BAKE HAS NOT GOT TO, THE WORK PLACES WHAT IT HOLDS (707668's slip "poofed" back
-##   to where the bake had last set it down): the stone let go over the water lies in the bowl, and with the bake short of
-##   its carry it is the work's to place. The controls: at a moment baked, and past the bake before the work holds it, it
-##   is the bake's.
-## - A BLADE CUTS (the user, 2026-10-29: "cut it into pieces (Fruit Ninja style, which is to say - with real cutting
-##   dynamics)"): a knife brought down twice through a carrot on a board cuts it into three pieces, each drawn as the
-##   carrot's mesh kept behind its cuts and faced over them, lying apart, the middle one as long as between the strokes;
-##   the act says so. The controls: the knife stopped short cuts nothing, and nor does it cut a stone.
-## - WHAT THE HAND HOLDS MEETS WHAT IT IS CARRIED INTO (the-quiet-crucible 119515: a dragon's scale "clips, because it is
-##   larger than the vial ... have proper collision handle how it falls, where it settles"): a scale wider than a vial's
-##   mouth, lowered into it, stays out of it. The control: a bead that fits goes in and lies on the vial's floor.
-## - WHAT FALLS ON A SLOPE GOES DOWN IT, AND NOTHING FLINGS IT (841899: a resin tear "lands ON TOP of the pestle, and just
-##   sits there"; wedged between the pestle and its mortar's wall, a tear had been slid 8 cm up and out in a frame): a tear
-##   dropped on a bronze pestle lying across its mortar, at five places along it, comes to rest on the mortar's floor every
-##   time. The control: a flat chip dropped on a wooden board tilted 12 degrees stays where it fell on it.
-## - WHAT IS IN A THING GOES WITH IT, AND RESTS ON WHAT IS UNDER IT (841899: crushed frankincense "left behind" as its
-##   mortar was lifted, sulfur that "clips through" its jar as the jar was moved and "remains on the table", and a lump of
-##   sulfur that "just floats above" a balance's thin pan): a jar's lumps, asleep on one another after a first carry, go
-##   with it on a second, every one; a lump let fall on a pan 1.5 mm thick lies on it. The control: the jar went 25 cm. And
-##   AT REST THEY GIVE THEIR SPHERES BACK (841899 replayed: every body had stayed one, and the solver was full by the show's
-##   middle): between the carries the lumps hold no particle; the control, carried, they do.
-## - A LIQUID'S SURFACE IS MOVED BY WHAT CROSSES IT (the-quiet-crucible 841899, the ladle going round in its cauldron: "I am
-##   not seeing any water physics, surface tension, or any of that ... better liquid physics, which would react to
-##   ANYTHING we put into them"): a spoon stirring a pot of water ripples it, millimeters high, the ripples running out
-##   across most of it, and turns it, its middle dipping; let be, it goes still. The control: the spoon going round just
-##   over the water leaves it at rest.
-## - A BALANCE WEIGHS (841899: the beam tipped by the puppeteer while the lump on its pan "never settles into the bowl ...
-##   just floats above the scale" - "the weight never transfers to the scale"): a balance's beam on its hinge, its pans
-##   hung from its ends, stands level empty; a lump carried onto one pan tips it down to its stop, the lump riding the pan
-##   down, the pan still level; the lump taken off, it swings back level. The control: no act turns it - the beam empty
-##   at the start is level, and so its pans.
-## - WHAT THE HAND HOLDS MEETS WHAT IT IS MOVED INTO, AND LET GO IT FALLS TO REST (841899: a pestle put back "clipping
-##   through the side of the mortar, completely"; the user: "physics everywhere"): a rod a path drives 5 cm into a block
-##   stops at the block's face; a rod lifted and let go 6 cm over the table falls and lies on the table, asleep. The
-##   controls: the work's own poses are 5 cm in the block and 6 cm in the air.
-## - A MOVE UNDER WAY GOES ON THROUGH A NEW PLAN (841899 played live: a plan made again as a sentence's words came began the
-##   ladle's move to the pot again from where the ladle was by then - over the pot, upside-down and past it): a rod lifted,
-##   carried and turned, a new plan handed over half way that moves only a later act, ends where its move says. The control:
-##   begun again from where it was then, it ends centimeters off.
-## - WHAT A BODY IS NOT LOOKED AT AGAINST IS STILL THERE (841899: clear of the table by 18.5 cm and of nothing else looked at,
-##   the ladle let go in its pot fell through its floor): a rod carried high over a cup on a stand, stood upright, lowered
-##   into it and let go lies on the cup's floor, in nothing. The control: let go there with no cup, it falls to the table.
-## - HELD UP BETWEEN ITS MOVES (841899: the ladle stood down into its pot was let go a quarter second after its move, the
-##   words before the stir longer than the puppeteer's rehearsal): a rod lifted 6 cm and taken up again 3 s later is held
-##   where its move left it until then. The control: set down on the table, it is let go between its moves.
-## - A WHOLE THING MEETS WHAT IT IS MOVED INTO (841899's mortar went through the cauldron's rim): a crate a path drives 5 cm
-##   into a block stops at its face, and the act's report says the block held it back. The control: the work's own crate is
-##   in the block.
-## - A THIN WALL AT REST IS NEVER CROSSED (841899: stirring pressed crushed resin through the cauldron's 3 mm copper floor, and
-##   the ladle let go in its pot sank through it): a brass ladle stirred over powder on a 3 mm floor presses none through it,
-##   and let go in the pot lies on the floor. The control: stirred, the powder moves.
-## - WHAT LIVE DIFFERS FROM AN EXPORT BY (841899 played live): what was baked past a new plan's change is dropped (the control:
-##   a plan changing nothing keeps it); a part is held for a later act not yet placed (the control: with none, let go); a live
-##   show waits for a bake behind it until the bake is 3 s ahead (the control: a bake on the caller's thread never waits); a
-##   new plan is baked again from its first change - a rod going round whose act ends later keeps its bake (the control: a
-##   path, whose places stretch with its act, is baked again from its start).
-## - A LOOSE THING IS A BODY ONCE ANYTHING COMES TO IT (119515: of its table's 125 loose things, 114 had been left rigid -
-##   the solver held no more - and its dragon's blood "didn't crush ... they don't rest on the bottom of the mortar"): set,
-##   a dish's heap of forty beads nothing touches costs no particle, before the work comes to it and after. The control:
-##   what the work carries is a body.
-## - THE HAND PLANS, THE PHYSICS SETTLES (the-quiet-crucible 841899 exported, 2026-10-31; next/table_physics.md "A step back"):
-##   A PART IN ITS SEAT GOES WITH IT - a stopper fetched with its jar on keys of its own, half a centimeter off, keeps to its
-##   seat within half a millimeter, and set down is still; the jar goes where it was sent (the control: drawn up out of the
-##   neck by its own move, it leaves it); A HAND LETS GO OF WHAT STANDS IN A VESSEL - a ladle left tipped in a pot until its
-##   next move leans there, in nothing, still (the control: left over the rim, it is held); TOUCHING IS NOT RESTING - a rod
-##   with only its end on a block is held (the control: its middle over the block, let go); WHAT STANDS IN A LIQUID IS UNDER
-##   ITS SURFACE - a ladle filling in a pot leaves the water no lower, lifted out with its fill it is lower, and under the
-##   water its own surface is not drawn (the controls: the water's own volume alone falls; lifted out, the ladle's surface is
-##   drawn); WHAT FLOATS STAYS IN, AND IS MET ACROSS ITS FACE - a leaf swept by a paddle into the pot's wall never goes
-##   through it (the control: the paddle moved it); A CARRY CLEARS WHAT IS IN ITS WAY - a crate carried over a 9 cm block
-##   with a 2 cm lift is never held back (the control: with nothing in the way, no lift is added); A POUR IS A HAND'S - a jug
-##   `pour`ed into a cup empties into it, its lip a few centimeters up (the control: tipped by hand about its middle, 10 cm
-##   up, it spills); WHAT STRIKES A VESSEL'S INSIDE RUNS DOWN INTO IT - a parcel thrown at a pot's inner wall ends in its water
-##   (the control: thrown out over the rim, spilled); A DIP IS A HAND'S - 841899's straight-handled ladle `dip`ped into a deep pot
-##   comes up half full or more, nothing outside the pot, never held back (the control: lowered level by hand, its handle meets
-##   the rim and it comes up empty).
+## Each check's doc comment says what it asserts and the control that must not behave that way. They cover: shape fields and
+## vessels (volume, level, overflow); pours, dips and liquid conservation; grains, loose things and sheets (tumbling, resting,
+## bending, floating); grinding, cutting and splashes; sleep and wake; what a hand holds, lets go and carries (seats, clearance,
+## contact with rims and walls); the bake itself (identical twice, threaded, carried to the next table, kept across plans,
+## waiting live, dropped past a change); and the table's world (every free part a body as built).
 
 var _fails := 0
 
@@ -232,7 +115,7 @@ func _vessel() -> bool:
 	_ok(absf(v.volume - want) / want < 0.06, "a cup's inside holds %.1f ml, not the %.1f its profile draws" % [v.volume * 1e6, want * 1e6])
 	var half := v.level(Vector3.UP, 0.5)
 	_ok(absf(half - (0.004 + 0.038)) < 0.002, "half full and upright its level is %.1f cm high, not 4.2" % (half * 100.0))
-	# TIPPED, its level keeps the volume: the cylinder under the plane counted afresh, cell by cell
+	# Tipped, its level keeps the volume: the cylinder under the plane counted afresh, cell by cell
 	for deg in [30.0, 55.0, 80.0]:
 		var th := deg_to_rad(deg)
 		var up := Vector3(sin(th), cos(th), 0.0)
@@ -533,9 +416,8 @@ func _grind() -> bool:
 			pieces += 1
 	_ok(not ph.whole(wi, 16.0) and pieces >= 4, "ground for 14 seconds, the crystal is %s (%d pieces)" % ["whole" if ph.whole(wi, 16.0) else "broken", pieces])
 	m._root3.free()
-	# A TOOL PRESSED ONTO WHAT IT WORKS IN MEETS IT (119515's puppeteer, told its pestle passed through the mortar, lifted it
-	# clear of what it ground): the act says nothing passes through - and, the control, its head driven into the bowl's wall by
-	# a round too wide for it, it does
+	# A tool pressed onto what it works in meets it: the act says nothing passes through; the control, its head driven into the bowl's wall by
+	# a round too wide for it, does.
 	var seated := _mortar_bench(true, 1.0, true)
 	var said: Dictionary = seated._work.check("grind")
 	_ok(int(said["through"]) == 0, "a pestle pressed onto its mortar's floor is said to pass through it:\n%s" % String(said["text"]))
@@ -766,7 +648,7 @@ func _filings_bench(deg: float, drop: float, dip: float, pour := 0.0) -> TableMe
 		{"thing": "jar", "law": "carry", "lift": 4, "between": [0.86, 1.0]}]},
 		{"name": "drop-stone", "beat": 1, "length": 3, "tracks": [
 			{"thing": "dish", "part": "stone", "law": "carry", "to": [-5, 3.5 + drop, -10], "lift": 4, "between": [0.0, 0.6]}]},
-		# ...over the bowl's rim and straight down into it, as a hand dips a cup: carried in an arc, its side went through the rim
+		# ...over the bowl's rim and straight down into it, as a hand dips a cup (carried in an arc, its side would go through the rim)
 		{"name": "dip-cup", "beat": 1, "length": 6, "tracks": [
 			{"thing": "cup", "law": "carry", "to": [-2, 9, -10], "lift": 4, "between": [0.0, 0.3]},
 			{"thing": "cup", "law": "carry", "to": [-2, dip, -10], "lift": 0, "between": [0.3, 0.5]},
@@ -787,9 +669,8 @@ func _awake(ph: TablePhysics) -> int:
 	return n
 
 
-## A HEAP AT REST SLEEPS WHOLE: the jar of filings tipped a little (they slide, none leaves it) and stood back - they come
-## to rest and every one sleeps, where a few trembling ones had kept the rest awake for the whole show. The control: while
-## the jar is still moving, they are awake.
+## A heap at rest sleeps whole: the jar of filings tipped a little (they slide, none leaves it) and stood back come to rest and every one
+## sleeps. The control: while the jar is still moving, they are awake.
 func _heap_sleeps() -> bool:
 	var m := _filings_bench(40.0, 15.0, 6.0)
 	var ph: TablePhysics = m._work.physics
@@ -803,8 +684,8 @@ func _heap_sleeps() -> bool:
 	return true
 
 
-## A SPLASH IS ONE THING'S: the filings tipped into the water ring it and throw no drop; the heavy stone dropped into it
-## from 15 cm throws a few, no higher than its own speed sends them. The control: the stone dropped from 1 cm throws none.
+## A splash is one thing's: the filings tipped into the water ring it and throw no drop; the heavy stone dropped into it from 15 cm throws a
+## few, no higher than its own speed sends them. The control: the stone dropped from 1 cm throws none.
 func _splash() -> bool:
 	var m := _filings_bench(130.0, 15.0, 6.0)
 	var ph: TablePhysics = m._work.physics
@@ -845,8 +726,8 @@ func _splash() -> bool:
 	return true
 
 
-## A DIP FILLS: the cup dipped under the water's surface and drawn up level holds water, and the bowl the less by it; tipped,
-## it pours it out. The control: dipped short of the surface, it comes up empty.
+## A dip fills: the cup dipped under the water's surface and drawn up level holds water, and the bowl the less by it; tipped, it pours it
+## out. The control: dipped short of the surface, it comes up empty.
 func _dip() -> bool:
 	var m := _filings_bench(0.0, 1.0, 0.7, 110.0)
 	var cup := _liquid(m, "cup")
@@ -862,8 +743,7 @@ func _dip() -> bool:
 	var full := float((m._work.physics.liquids[cup] as Dictionary)["full_v"])
 	_ok(held > full * 0.6, "dipped and drawn up, the cup holds %.1f of its %.1f ml" % [held * 1e6, full * 1e6])
 	_ok(absf((bowl0 - _volume(m, water, 24.5)) - held) < full * 0.2, "the bowl gave %.1f ml for the cup's %.1f" % [(bowl0 - _volume(m, water, 24.5)) * 1e6, held * 1e6])
-	# ...ITS INSIDE DRAWN IN IT: made as it first filled, away from where the cup was built (841899's ladle, first filled in its
-	# pot: its inside had been built and drawn that whole way off, a ghost of its bowl going round with every stir)
+	# ...its inside is drawn in it: made as it first filled, in the cup, not away from where the cup was built
 	var L: Dictionary = m._work.physics.liquids[cup]
 	var sd: Dictionary = m._work.physics.solids[int(L["solid"])]
 	var off := INF
@@ -898,10 +778,8 @@ const LADLE_SPEC := {"things": [
 	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"}}}
 
 
-## A SUNK VESSEL IS THE LIQUID IT IS IN: a ladle stood in a pot of water and stirred round it (2 s to 10 s) fills, and pours
-## nothing out while its rim is under the surface - 841899's ladle, stirring its brew, had poured sixty parcels a second out
-## of its lip under the brew, each drawn falling through the cauldron's floor toward the brazier under it. The control: lifted
-## out (11 s) and tipped (from 12 s), it pours.
+## A sunk vessel is the liquid it is in: a ladle stood in a pot of water and stirred round it (2 s to 10 s) fills, and pours nothing out
+## while its rim is under the surface. The control: lifted out (11 s) and tipped (from 12 s), it pours.
 func _sunk() -> bool:
 	var m := _medium()
 	_stand(m, LADLE_SPEC, "pot", _at(Vector3(0, 0, -8)))
@@ -945,9 +823,8 @@ func _sunk() -> bool:
 	return true
 
 
-## A THING LET GO FALLS, AND IS SEEN WHERE THE WORK HOLDS IT WHILE THE BAKE HAS NOT GOT THERE: the stone carried over the
-## water and let go lies in the bowl after; and with the bake only as far as the carry's start, the stone, held after it,
-## is the work's to place (707668's slip "poofed" back to where the bake had last set it down). The controls: the stone at
+## A thing let go falls, and is seen where the work holds it while the bake has not got there: the stone carried over the water and let go
+## lies in the bowl after; with the bake only as far as the carry's start, the held stone is the work's to place. The controls: the stone at
 ## a moment the bake has reached, and past it before the work holds it, is the bake's.
 func _let_fall() -> bool:
 	var m := _filings_bench(0.0, 8.0, 6.0)
@@ -1002,10 +879,9 @@ func _pieces_of(ph: TablePhysics, t: float) -> Array:
 	return out
 
 
-## A BLADE CUTS (the user, 2026-10-29: "cut it into pieces (Fruit Ninja style, which is to say - with real cutting
-## dynamics)"): a knife brought down twice through a carrot on a board cuts it into three pieces, each piece's mesh on
-## its own side of its cuts with a face over them, lying apart along the board, the middle one as long as between the
-## strokes - and the act says so. The controls: the knife stopped short of the carrot cuts nothing, and nor does it a stone.
+## A blade cuts: a knife brought down twice through a carrot on a board cuts it into three pieces, each piece's mesh on its own side of its
+## cuts with a face over them, lying apart along the board, the middle one as long as between the strokes - and the act says so. The
+## controls: the knife stopped short of the carrot cuts nothing, and nor does it a stone.
 func _cut() -> bool:
 	var m := _cut_bench("carrot", 5.0)
 	var ph: TablePhysics = m._work.physics
@@ -1457,7 +1333,7 @@ func _tool_meets() -> bool:
 	_ok(kdeep < -0.015, "the control: the aim drives the rod only %.1f mm into the block" % (-kdeep * 1000.0))
 	_ok(held != null and deep > -0.001, "the rod driven into the block goes %.1f mm into it - it does not stop at its face" % (-deep * 1000.0))
 	m._root3.free()
-	# ...AND A PATH THERE IS THE HAND'S: lifted over the block and set beside it where there is room ([method TableWork._path_clearance],
+	# ...and a path there is the hand's: lifted over the block and set beside it where there is room ([method TableWork._path_clearance],
 	# [method TableWork._room]) - its own way is in nothing, and nothing holds it back
 	var pm := _tool_bench(keys, 3.0)
 	var said := ""
@@ -1537,11 +1413,9 @@ func _rod_points(m: TableMedium, x: Transform3D) -> PackedVector3Array:
 	return out
 
 
-## A MOVE UNDER WAY GOES ON THROUGH A NEW PLAN: the rod lifted, carried 10 cm and turned a quarter turn (2 s to 6 s), a new
-## plan handed over at 4 s that moves only a later act (10 s to 11 s), ends within millimeters of where its move says - a live
-## reading hands one over with each sentence's words, and each had begun every held move again from where the bake had it by
-## then (841899: the ladle's way to the pot taken twice, its turn too). The control: the move begun again then, as each new
-## plan had done, ends centimeters off.
+## A move under way goes on through a new plan: the rod lifted, carried 10 cm and turned a quarter turn (2 s to 6 s), a new plan handed over
+## at 4 s that moves only a later act (10 s to 11 s), ends within millimeters of where its move says (a live reading hands one over with
+## each sentence's words). The control: the move begun again then ends centimeters off.
 func _moved_on() -> bool:
 	var keys := [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [-10, 6, 0], "turn": [0, 90, 0]}]
 	var later := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, 5]}]
@@ -1565,12 +1439,10 @@ func _moved_on() -> bool:
 	return true
 
 
-## WHAT A BODY IS NOT LOOKED AT AGAINST IS STILL THERE: the rod lifted 24 cm, carried over a cup on a stand and stood upright
-## (clear of the table by 20 cm and of nothing else near it), lowered into the cup and let go 2 cm over its floor, lies on the
-## floor - its lowest point at the floor's 7 cm, none of it in the cup or its stand past the 2 mm a let-go body may stand in
-## what holds it (841899: the ladle let go standing in its
-## pot fell through the pot's floor and the brazier to the table). The control: let go there with the cup elsewhere, it falls
-## to the table.
+## What a body is not looked at against is still there: the rod lifted 24 cm, carried over a cup on a stand and stood upright (clear of the
+## table by 20 cm and of nothing else near it), lowered into the cup and let go 2 cm over its floor, lies on the floor - its lowest point at
+## the floor's 7 cm, none of it in the cup or its stand past the 2 mm a let-go body may stand in what holds it. The control: let go there
+## with the cup elsewhere, it falls to the table.
 func _let_go_in() -> bool:
 	var keys := [{"at": 0.0}, {"at": 0.3, "by": [0, 24, 0]}, {"at": 0.6, "by": [25, 24, 0], "turn": [0, 0, 90]},
 		{"at": 1.0, "by": [25, 12, 0], "turn": [0, 0, 90]}]
@@ -1597,10 +1469,8 @@ func _let_go_in() -> bool:
 	return true
 
 
-## HELD UP BETWEEN ITS MOVES: the rod lifted 6 cm and carried 9 (2 s to 4 s), taken up again at 7 s, is held where its move left
-## it at 5.5 s, swaying as a hand holds it (841899: the ladle stood down into its pot was let go a quarter second after its
-## move and fell into it - the words before the stir longer than the puppeteer's rehearsal, where the work, the act's check and
-## the rehearsal all had the hand holding it). The control: set down on the table instead, it is let go between its moves.
+## Held up between its moves: the rod lifted 6 cm and carried 9 (2 s to 4 s), taken up again at 7 s, is held where its move left it at 5.5
+## s, swaying as a hand holds it. The control: set down on the table instead, it is let go between its moves.
 func _held_between() -> bool:
 	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}]
 	var down := [{"at": 0.0}, {"at": 0.3, "by": [0, 4, 0]}, {"at": 0.8, "by": [0, 4, 9]}, {"at": 1.0, "by": [0, -1, 9]}]
@@ -1636,12 +1506,9 @@ const STOPPERED_SPEC := {"things": [
 	"materials": {"glass": {"kind": "glass", "color": "#a0c0c0"}, "cork": {"kind": "wood", "color": "#a07850"}}}
 
 
-## WHAT ONE ACT MOVES TOGETHER, ONE HAND CARRIES (841899: the frankincense jar and its cork fetched by one path, each swayed
-## its own way, the cork wandered through the jar's neck - two held bodies passed through each other - and let go it fell in,
-## and let go seated it still fell through, its cap's lip finer than the solver's points):
-## a jar and its stopper carried 30 cm by the same path keep the stopper where it sits in the jar within half a millimeter all
-## the way, and set down, the stopper is still in the neck. The control: without its physical seat, identical paths alone
-## do not bind the two objects together.
+## What one act moves together, one hand carries: a jar and its stopper carried 30 cm by the same path keep the stopper where it sits in the
+## jar within half a millimeter all the way, and set down, the stopper is still in the neck. The control: without its physical seat,
+## identical paths alone do not bind the two objects together.
 func _carried_with() -> bool:
 	var keys := [{"at": 0.0}, {"at": 0.25, "by": [0, 8, 0]}, {"at": 0.75, "by": [30, 8, 0]}, {"at": 1.0, "by": [30, 0, 0]}]
 	var res: Array = []
@@ -1682,10 +1549,9 @@ func _carried_with() -> bool:
 	return true
 
 
-## PUT BACK IN ITS SEAT, IT SITS THERE (841899: the brimstone's cork, put back by a hand a few millimeters off, went into its jar
-## sideways and stuck; the frankincense cork, held back by the neck's rim, fell in tipped): a stopper drawn out of its jar and held
-## aside, then carried home, is let go seated in the neck as it was built, within a millimeter and upright. The control: the jar
-## slid 2.5 cm first, the stopper's home is off its seat, and it is not drawn in.
+## Put back in its seat, it sits there: a stopper drawn out of its jar and held aside, then carried home, is let go seated in the neck as it
+## was built, within a millimeter and upright. The control: the jar slid 2.5 cm first, the stopper's home is off its seat, and it is not
+## drawn in.
 func _put_back_in() -> bool:
 	var res: Array = []
 	for slid in [false, true]:
@@ -1733,14 +1599,13 @@ const CRATE_SPEC := {"things": [
 	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}, "brass": {"kind": "metal", "color": "#b8924c"}}}
 
 
-## A WHOLE THING MEETS WHAT IT IS MOVED INTO (841899's mortar, carried over the cauldron and tipped, went through its rim - a
-## whole thing had gone where its act said, and the act's check never saw the rim): a crate an aim drives 5 cm into a block
-## stops at the block's face, and the act's report says what held it back. The control: the work's own crate is in the block.
+## A whole thing meets what it is moved into: a crate an aim drives 5 cm into a block stops at the block's face, and the act's report says
+## what held it back. The control: the work's own crate is in the block.
 func _thing_meets() -> bool:
 	var m := _medium()
 	_stand(m, CRATE_SPEC, "crate", _at(Vector3(-15, 0, -8)))
 	_stand(m, CRATE_SPEC, "block", _at(Vector3(0, 0, -8)))
-	# ...AIMED there, both its ends: a law the hand never plans round (a path is lifted over the block, [method _tool_meets])
+	# ...aimed there, both its ends: a law the hand never plans round (a path is lifted over the block, [method _tool_meets])
 	var ends := [{"at": 0.0, "by": [0, 0, 0]}, {"at": 0.2, "by": [0, 2, 0]}, {"at": 1.0, "by": [17, 2, 0]}]
 	m._work.build({"acts": [{"name": "push", "beat": 1, "length": 3.0, "tracks": [{"thing": "crate", "law": "aim",
 		"tip": {"point": "tip", "keys": ends}, "grip": {"point": "grip", "keys": ends}}]}]}, 1)
@@ -1778,9 +1643,8 @@ func _thing_meets() -> bool:
 	return true
 
 
-## ONLY WHAT IS UNDER A BODY HOLDS IT UP (841899 played live: the ladle lifted past a cork pushed it from the side, the cork took
-## the ladle for what held it up, slept on it and went round with every stir): a crate in the air pressed 3 mm into a block's side
-## does not take the block for its holder, the thing it sleeps on and rides. The control: set 3 mm into the block's top, it does.
+## Only what is under a body holds it up: a crate in the air pressed 3 mm into a block's side does not take the block for its holder, the
+## thing it sleeps on and rides. The control: set 3 mm into the block's top, it does.
 func _held_up_from_below() -> bool:
 	var m := _medium()
 	_stand(m, CRATE_SPEC, "crate", _at(Vector3(-15, 0, -8)))
@@ -1828,12 +1692,9 @@ const THIN_POT_SPEC := {"things": [
 		"brass": {"kind": "metal", "color": "#b8924c"}, "powder": {"kind": "powder", "color": "#e8e0c8"}}}
 
 
-## A THIN WALL AT REST IS NEVER CROSSED: a brass ladle stirred round a pot whose floor is 3 mm thick, its bowl half a
-## centimeter over the floor through the powder on it (2 s to 10 s), presses none of the powder through the floor; and let go
-## in the pot, it lies on the floor, leaning on the rim, and never sinks through it (841899: stirring pressed crushed
-## frankincense through the cauldron's copper floor into the brazier, and the ladle let go in its pot stood 2 mm in the floor
-## and sank through it, 2 cm in half a second - past a thin wall's middle, its own way out is through its far side). The
-## control: stirred, the powder moves.
+## A thin wall at rest is never crossed: a brass ladle stirred round a pot whose floor is 3 mm thick, its bowl half a centimeter over the
+## floor through the powder on it (2 s to 10 s), presses none of the powder through the floor; and let go in the pot, it lies on the floor,
+## leaning on the rim, and never sinks through it. The control: stirred, the powder moves.
 func _thin_walls() -> bool:
 	var m := _medium()
 	_stand(m, THIN_POT_SPEC, "pot", _at(Vector3(0, 0, -8)))
@@ -1883,10 +1744,8 @@ func _thin_walls() -> bool:
 
 
 
-## WHAT WAS BAKED PAST A NEW PLAN'S CHANGE IS GONE: the rod's two moves baked to 12 s, a plan that moves its second (8 s to
-## 9 s) leaves nothing baked from 8 s on - kept, the live viewer drew the last plan's frames there and called itself caught
-## up (841899 played live: the brew in the brazier, the feather under the cauldron, none of it in a bake of one plan). The
-## control: a plan that changes nothing keeps all 12 s.
+## What was baked past a new plan's change is gone: the rod's two moves baked to 12 s, a plan that moves its second (8 s to 9 s) leaves
+## nothing baked from 8 s on. The control: a plan that changes nothing keeps all 12 s.
 func _plan_drops_stale() -> bool:
 	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}]
 	var again := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, -9]}]
@@ -1911,11 +1770,9 @@ const POT_RIM_SPEC := {"things": [
 	"materials": {"iron": {"kind": "metal", "color": "#2c2a28"}, "stone": {"kind": "stone", "color": "#8a8580"}}}
 
 
-## A HAND NEVER LETS GO WHERE WHAT IT HOLDS WOULD COME DOWN BADLY ([method TablePhysics._lands_ill]; 2026-11-01, feedback 0004-0007: the
-## mortar, level over the cauldron after its pour, its next act past the pause, let go: over the rim and onto the table, tipped 112
-## degrees, trembling until its way home hauled it up): a mortar brought level over a pot's rim. Its next act 5 s on, it is held there.
-## Its next act 20 s on, or none, or one written but not placed, it is put back where it last rested, upright and at rest. The control:
-## the same move over the bare table is let go, and lands where it is.
+## A hand never lets go where what it holds would come down badly ([method TablePhysics._lands_ill]): a mortar brought level over a pot's
+## rim. Its next act 5 s on, it is held there. Its next act 20 s on, or none, or one written but not placed, it is put back where it last
+## rested, upright and at rest. The control: the same move over the bare table is let go, and lands where it is.
 func _not_dropped_on_a_rim() -> bool:
 	var over := [{"at": 0.0}, {"at": 0.5, "by": [0, 20, 0]}, {"at": 0.9, "by": [BY_RIM, 20, 0]}, {"at": 1.0, "by": [BY_RIM, 13, 0]}]
 	var clear := [{"at": 0.0}, {"at": 0.5, "by": [0, 20, 0]}, {"at": 0.9, "by": [-14, 20, 0]}, {"at": 1.0, "by": [-14, 13, 0]}]
@@ -1968,12 +1825,10 @@ func _not_dropped_on_a_rim() -> bool:
 const BY_RIM := 18.0
 
 
-## A PART SET ASIDE STAYS WHERE IT IS DRAWN WHEN ITS THING GOES (2026-11-01, feedback 0004-0007: "the pestle disappeared, and then
-## reappeared", "moving in-sync, as if they are stuck together", "clipped through the table"): a free part's node hangs from its
-## thing's, and a frame poses it again only where it can have changed ([method TableWork._settled]) - which asked of the moves written
-## on the thing, while its body also moves outside them. The rod laid aside and its stand lifted, then let go to fall, played frame by
-## frame as a live show draws it: the rod is drawn where the bake has it at every frame, through the lift and the fall. The
-## control: the stand does fall, outside any move written on it.
+## A part set aside stays where it is drawn when its thing goes: a free part's node hangs from its thing's, and a frame poses it again only
+## where it can have changed ([method TableWork._settled]), which asks the moves written on the thing, while its body also moves outside
+## them. The rod laid aside and its stand lifted, then let go to fall, played frame by frame as a live show draws it: the rod is drawn where
+## the bake has it at every frame. The control: the stand does fall, outside any move written on it.
 func _part_stays_when_thing_goes() -> bool:
 	var m := _medium()
 	_stand(m, TOOL_SPEC, "tools", _at(Vector3(-15, 0, -8)))
@@ -2012,10 +1867,8 @@ func _part_stays_when_thing_goes() -> bool:
 	return true
 
 
-## WHAT A PLAN FOUND IS KEPT FOR THE NEXT (2026-11-01, played live: every plan a live reading made - one a sentence - worked out
-## again, twice and on the app's thread, where every move so far comes to rest; by 841899's second stir 2.8-3.5 s of every sentence,
-## the picture frozen while the voice went on): the rod's two moves planned again with nothing changed find no room again, and the
-## second ends where it did. The control: the first move written a second later, both are found again.
+## What a plan found is kept for the next: the rod's two moves planned again with nothing changed find no room again, and the second ends
+## where it did. The control: the first move written a second later, both are found again.
 func _kept_across_plans() -> bool:
 	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}]
 	var again := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, -9]}]
@@ -2044,10 +1897,9 @@ func _kept_across_plans() -> bool:
 	return true
 
 
-## WHAT A DRIP IS DRAWN WITH IS MADE AS THE TABLE STANDS (2026-11-01: as the ladle first came out of the brew the picture froze 3.4 s,
-## the GPU building the shaders of the stream and the drops, made only then): before anything has poured, the drops and a stream's
-## node stand, and a copy of each IN THE SAME MATERIAL is drawn at nothing's size for the table's first frames, then let go - what
-## the GPU builds for the copies is what the real ones need. The control: nothing drawn yet, the copies are there.
+## What a drip is drawn with is made as the table stands: before anything has poured, the drops and a stream's node stand, and a copy of
+## each in the same material is drawn at nothing's size for the table's first frames, then let go (the GPU builds the shaders early). The
+## control: nothing drawn yet, the copies are there.
 func _warmed_first() -> bool:
 	var m := _rod_bench([[[{"at": 0.0}, {"at": 1.0, "by": [0, 6, 0]}], 2.0, 4.0]], 45.0)
 	var ph: TablePhysics = m._work.physics
@@ -2067,10 +1919,9 @@ func _warmed_first() -> bool:
 	return true
 
 
-## A FRAME NAMES ITS OWN BODIES (2026-11-01): the rod woken by its move (2-4 s) and its frame at 5 s kept as a new plan takes the bake
-## back to its first checkpoint - which puts every body woken since back to sleep ([method TablePhysics._restore]) - the frame still
-## poses the rod where it was baked, never where it was built: the picture's thread reads a frame, never what the bake keeps changing.
-## The control: its frame at 1 s, before it woke, poses it where it was built.
+## A frame names its own bodies: the rod woken by its move (2-4 s) and its frame at 5 s kept as a new plan takes the bake back to its first
+## checkpoint (which puts every body woken since back to sleep, [method TablePhysics._restore]) - the frame still poses the rod where it was
+## baked, never where it was built. The control: its frame at 1 s, before it woke, poses it where it was built.
 func _frame_names_bodies() -> bool:
 	var m := _rod_bench([[[{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}], 2.0, 4.0]], 45.0)
 	var ph: TablePhysics = m._work.physics
@@ -2088,16 +1939,12 @@ func _frame_names_bodies() -> bool:
 	return true
 
 
-## LIVE AS EXPORTED, NOTHING HANGS IN THE AIR FOR A LATER ACT (2026-11-01, feedback 0001-0002: the ladle over the cauldron and the
-## pestle over its mortar, held for the words before their next acts) - AND NOTHING IS DROPPED FOR ONE NOT YET HEARD (feedback 0004:
-## the mortar, its pour ended a second before the word its way home is cued at, let go tipped over the cauldron): the rod lifted 6 cm
-## (2 s to 4 s) with no later act is set down where it is; with its next act written but not yet placed - a live reading places one
-## only once its word is heard - it is held across a pause, as an export holding it for an act that soon would, and set down after
-## one; with its next act 5 s on it is set down at once. Placed later within the pause, nothing before that act is baked again (the
-## hold already stood in for it); an act placed 5 s on afterwards leaves the bake as it was (what it held a moment is a moment's
-## hover - going back for it had the show wait); and AN ACT MOVED INTO THE PAUSE after the bake let the rod go takes the bake back
-## to the move's end, and it is held there, as an export holds it. The control: its next act placed half a second on, it is held
-## across the pause.
+## Live as exported, nothing hangs in the air for a later act, and nothing is dropped for one not yet heard: the rod lifted 6 cm (2 s to 4
+## s) with no later act is set down where it is; with its next act written but not yet placed (a live reading places one only once its word
+## is heard) it is held across a pause, as an export holds it, and set down after one; with its next act 5 s on it is set down at once.
+## Placed later within the pause, nothing before that act is baked again; an act placed 5 s on afterwards leaves the bake as it was; an act
+## moved into the pause after the bake let the rod go takes the bake back to the move's end, and it is held there. The control: its next act
+## placed half a second on, it is held across the pause.
 func _held_till_placed() -> bool:
 	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 1.0, "by": [0, 6, 9]}]
 	var again := [{"at": 0.0}, {"at": 1.0, "by": [0, 0, -9]}]
@@ -2145,10 +1992,9 @@ func _held_till_placed() -> bool:
 
 
 
-## A LIVE SHOW WAITS FOR THE BAKE ([method TablePhysics.behind]): with the bake on a thread of its own (as in the app), a show
-## less than [constant TablePhysics.WAIT_UNDER] behind it waits, goes on waiting while the bake is 1 s ahead, and is let go once it
-## is [constant TablePhysics.WAIT_AHEAD] ahead - drawn behind its bake, 841899's live viewer showed what an export never would. The
-## control: a bake on the caller's thread (a render, a preview, a gate) never waits.
+## A live show waits for the bake ([method TablePhysics.behind]): with the bake on a thread of its own (as in the app), a show less than
+## [constant TablePhysics.WAIT_UNDER] behind it waits, goes on waiting while the bake is 1 s ahead, and is let go once it is [constant
+## TablePhysics.WAIT_AHEAD] ahead. The control: a bake on the caller's thread (a render, a preview, a gate) never waits.
 func _waits_for_bake() -> bool:
 	var m := _rod_bench([[[{"at": 0.0}, {"at": 1.0, "by": [0, 6, 0]}], 2.0, 4.0]], 45.0)
 	var ph: TablePhysics = m._work.physics
@@ -2171,10 +2017,9 @@ func _waits_for_bake() -> bool:
 	return true
 
 
-## A NEW PLAN IS BAKED AGAIN FROM ITS FIRST CHANGE, never from where a moved act began (841899 live: a stir runs as long as its
-## words leave it, and each sentence gave it a new end - baked again from its start every time, the live show waited 37 s at a
-## time): a rod going round by its period (2 s to 10 s) whose act ends at 12 s instead keeps all it had baked, to 9 s. The
-## control: a path, whose places go by its act's length, ending later is baked again from its start.
+## A new plan is baked again from its first change, never from where a moved act began: a rod going round by its period (2 s to 10 s) whose
+## act ends at 12 s instead keeps all it had baked, to 9 s. The control: a path, whose places go by its act's length, ending later is baked
+## again from its start.
 func _replan_from_change() -> bool:
 	var to := {}
 	for law in ["circle", "path"]:
@@ -2211,20 +2056,16 @@ func _work_of_name(m: TableMedium, name: String) -> int:
 	return -1
 
 
-## A PART IN ITS SEAT GOES WITH ITS SEAT (the-quiet-crucible 841899: the sulfur cork's keys ended half a centimeter above its
-## jar's, so it had a hand of its own and wandered through the neck; and let go seated, each cork was woken by its jar settling
-## and trembled 3 mm about the neck for seconds): a jar fetched 70 cm with its stopper, the stopper's keys a hand of its own and
-## half a centimeter off at the end (841899's sulfur-fetch's, each hand bowing its own way), keeps the stopper within half a
-## millimeter of its seat all the way and after it is set
-## down, still - and the jar goes where it was sent (seated on each other, a jar and its cork had been welded where they stood).
-## The control: the stopper's own move drawing it 5 cm up out of the neck takes it out.
+## A part in its seat goes with its seat: a jar fetched 70 cm with its stopper, the stopper's keys a hand of its own and half a centimeter
+## off at the end, keeps the stopper within half a millimeter of its seat all the way and, set down, still - and the jar goes where it was
+## sent. The control: the stopper's own move drawing it 5 cm up out of the neck takes it out.
 func _seat_rides() -> bool:
 	var keys := [{"at": 0.0}, {"at": 0.2, "by": [0, 9, 3]}, {"at": 0.55, "by": [-38, 10, 22]}, {"at": 0.85, "by": [-62, 6, 27]}, {"at": 1.0, "by": [-64.8, 0, 27]}]
 	var off := [{"at": 0.0}, {"at": 0.2, "by": [0, 9, 3]}, {"at": 0.55, "by": [-38, 10, 22]}, {"at": 0.85, "by": [-62, 6, 27]}, {"at": 1.0, "by": [-64.8, 0.5, 27]}]
 	var res: Array = []
 	for out in [false, true]:
 		var m := _medium()
-		# ...each hand seeded as that episode's were: its seed and the act's name
+		# ...each hand seeded by its seed and the act's name
 		m._plan.seed_value = 841899
 		_stand(m, STOPPERED_SPEC, "jar", _at(Vector3(45, 0, -8)))
 		var tracks: Array = [{"thing": "jar", "part": "jar", "law": "path", "keys": keys}, {"thing": "jar", "part": "stopper", "law": "path", "keys": off}]
@@ -2260,11 +2101,9 @@ func _seat_rides() -> bool:
 	return true
 
 
-## A HAND LETS GO OF WHAT RESTS OR STANDS IN A VESSEL, AND HOLDS WHAT WOULD FALL (841899: the ladle brought upright into the brew
-## was held there 14 s, swaying, "wiggling unstably", where a person leans it on the rim; and held over the pot after its dip it
-## was let go because it grazed the rim, and fell in): a ladle brought into a pot of water, tipped 30 degrees, and taken up again
-## 6 s later is let go between the moves, leans in the pot - none of it in the pot's wall - and lies still. The control: left
-## 3 cm over the pot's rim, it is held.
+## A hand lets go of what rests or stands in a vessel, and holds what would fall: a ladle brought into a pot of water, tipped 30 degrees,
+## and taken up again 6 s later is let go between the moves, leans in the pot - none of it in the pot's wall - and lies still. The control:
+## left 3 cm over the pot's rim, it is held.
 func _leans_in() -> bool:
 	var res: Array = []
 	for over in [false, true]:
@@ -2303,8 +2142,8 @@ func _leans_in() -> bool:
 	return true
 
 
-## ...AND IT IS NOT DROPPED IN FOR A MOMENT (841899, ladle-in-1 and its stir 1.6 s apart: let go 15 cm up, it fell against the wall, lay down, and was hauled upright again):
-## a ladle brought into a pot of water, its next move 1.5 s on, stays as it was brought. The control: its next move 8 s on, it is let go and leans.
+## ...and it is not dropped in for a moment: a ladle brought into a pot of water, its next move 1.5 s on, stays as it was brought. The
+## control: its next move 8 s on, it is let go and leans.
 func _stands_held_for_a_moment() -> bool:
 	var res := {}
 	for gap in [1.5, 8.0]:
@@ -2328,9 +2167,8 @@ func _stands_held_for_a_moment() -> bool:
 	return true
 
 
-## TOUCHING IS NOT RESTING (841899: the ladle held over the vial after its pour grazed it, was let go and fell to the table): a rod
-## lowered with one end on a block's top and its middle past the block's edge, taken up again half a second later, is held across
-## the pause. The control: lowered with its middle over the block, it rests there and is let go.
+## Touching is not resting: a rod lowered with one end on a block's top and its middle past the block's edge, taken up again half a second
+## later, is held across the pause. The control: lowered with its middle over the block, it rests there and is let go.
 func _held_unless_resting() -> bool:
 	var res: Array = []
 	for over_middle in [false, true]:
@@ -2370,10 +2208,9 @@ func _held_unless_resting() -> bool:
 	return true
 
 
-## WHAT STANDS IN A LIQUID IS UNDER ITS SURFACE (841899, the user: "the ladle is placed into the liquid - and this causes the amount
-## of liquid to DECREASE. That is backwards"): a ladle stood in a pot of water fills, and the water stands no lower for it; lifted
-## out with what it holds, the water is lower; under the water the ladle's own surface is not drawn, and lifted out it is. The
-## control: the water's level reckoned from its own volume alone falls as the ladle fills.
+## What stands in a liquid is under its surface: a ladle stood in a pot of water fills, and the water stands no lower for it; lifted out
+## with what it holds, the water is lower; under the water the ladle's own surface is not drawn, and lifted out it is. The control: the
+## water's level reckoned from its own volume alone falls as the ladle fills.
 func _level_counts() -> bool:
 	var m := _medium()
 	_stand(m, LADLE_SPEC, "pot", _at(Vector3(0, 0, -8)))
@@ -2433,11 +2270,9 @@ const LEAF_SPEC := {"things": [
 		"wood": {"kind": "wood", "color": "#5a3a22"}, "leaf": {"kind": "fabric", "color": "#c8401a"}}}
 
 
-## WHAT FLOATS STAYS IN WHAT IT FLOATS IN, AND IS MET ACROSS ITS FACE (841899: the phoenix feather, afloat and pushed about by the
-## stirring ladle, stood on edge against the cauldron's wall and went through it, and lay outside in the coals - a sheet had been a
-## line of spheres down its middle, its width met by nothing): a leaf 12 cm by 3 afloat in a pot 13 cm across, swept by a paddle
-## into the pot's wall and pressed there, is never out of the pot's inside, and is made of spheres across its width. The control:
-## the paddle moved it.
+## What floats stays in what it floats in, and is met across its face: a leaf 12 cm by 3 afloat in a pot 13 cm across, swept by a paddle
+## into the pot's wall and pressed there, is never out of the pot's inside, and is made of spheres across its width. The control: the paddle
+## moved it.
 func _floats_in() -> bool:
 	var m := _medium()
 	_stand(m, LEAF_SPEC, "pot", _at(Vector3(0, 0, -8)))
@@ -2468,8 +2303,8 @@ func _floats_in() -> bool:
 		var x: PackedVector3Array = f["x"]
 		var owner: PackedInt32Array = f["body"]
 		for i in x.size():
-			# ...THROUGH ITS WALL: out of the clay and out of the inside, under the rim (pressed into the wall, a sphere's middle may
-			# reach it; squeezed up, it may go over the rim)
+			# ...through its wall: out of the clay and out of the inside, under the rim (pressed into the wall, a sphere's middle may reach it;
+			# squeezed up, it may go over the rim)
 			if i < owner.size() and owner[i] == b and x[i].y < rim and not vs.contains(inv * x[i]) \
 					and (pot["field"] as ShapeField).sample(inv * x[i]).x > 0.001:
 				out += 1
@@ -2499,10 +2334,8 @@ const WAY_SPEC := {"things": [
 	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}}}
 
 
-## A CARRY CLEARS WHAT STANDS IN ITS WAY (841899: the ladle carried home with a 6 cm lift went into the 8.5 cm recipe tin between it
-## and its rest, was held back on it and lay on it to the end of the show): a crate carried 30 cm with a lift of 2 cm over a block
-## 9 cm tall goes over it, never held back, and is set down where it was sent. The control: the same carry with the block out of
-## its way is lifted only as written.
+## A carry clears what stands in its way: a crate carried 30 cm with a lift of 2 cm over a block 9 cm tall goes over it, never held back,
+## and is set down where it was sent. The control: the same carry with the block out of its way is lifted only as written.
 func _clears_way() -> bool:
 	var res: Array = []
 	for in_way in [true, false]:
@@ -2543,10 +2376,9 @@ const JUG_SPEC := {"things": [
 	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#e8e4d8"}}}
 
 
-## A POUR IS A HAND'S (841899, the user: the ladle "dumps liquid into a vial in a strange way, both missing the vial AND pouring from
-## much too high in the air. Not carefully"): a jug poured `into` a cup 4 cm across, 25 cm away, empties into it - most of what
-## left the jug in the cup, its lip held a couple of centimeters over the cup's rim while it flows. The control: the same jug
-## tipped by hand about its middle, held 10 cm over the cup, spills much of it.
+## A pour is a hand's: a jug poured `into` a cup 4 cm across, 25 cm away, empties into it - most of what left the jug in the cup, its lip
+## held a couple of centimeters over the cup's rim while it flows. The control: the same jug tipped by hand about its middle, held 10 cm
+## over the cup, spills much of it.
 func _pours_into() -> bool:
 	var res: Array = []
 	for by_hand in [false, true]:
@@ -2600,11 +2432,9 @@ const CORKED_SPEC := {"things": [
 	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#e8e4d8"}, "cork": {"kind": "wood", "color": "#b08a5a"}}}
 
 
-## WHAT NO ACT HAS BROUGHT YET IS NOT THERE, HEARD OF OR NOT (841899, feedback 0013: "When the ladle poured into the vial here, nothing happened"; a
-## vial's cork, `shown` 0 until the act after the pour, stood unseen in its neck whenever that act's words had not reached a live plan, and the 27 ml
-## stopped on it; a bake of the whole plan had always filled the vial, so no gate saw it): a jug poured into a cup whose cork comes later fills the cup
-## alike with that act placed and with it not yet heard - and the words that place it, heard after the bake, change nothing before it. The control:
-## the cork brought before the pour stops the stream.
+## What no act has brought yet is not there, heard of or not: a jug poured into a cup whose cork comes later fills the cup alike with that
+## act placed and with it not yet heard - and the words that place it, heard after the bake, change nothing before it. The control: the cork
+## brought before the pour stops the stream.
 func _unbrought_not_there() -> bool:
 	var got := {}
 	for case in ["placed", "unheard", "heard after", "brought first"]:
@@ -2637,10 +2467,8 @@ func _unbrought_not_there() -> bool:
 	return true
 
 
-## WHAT STRIKES A VESSEL'S INSIDE RUNS DOWN INTO IT (841899's dip: the ladle drawn up tilted out of its pot spilled over the pot's
-## inner wall, and that was counted gone - 8.5 ml "SPILLED" of a pot it never left): a milliliter thrown from the ladle at the
-## pot's inner wall from above its water ends in the water, and the water holds a milliliter more. The control: thrown outward over the rim, it is
-## spilled.
+## What strikes a vessel's inside runs down into it: a milliliter thrown from the ladle at the pot's inner wall from above its water ends in
+## the water, and the water holds a milliliter more. The control: thrown outward over the rim, it is spilled.
 func _runs_down() -> bool:
 	var res: Array = []
 	for out in [false, true]:
@@ -2670,7 +2498,7 @@ func _runs_down() -> bool:
 	return true
 
 
-## 841899's own ladle - a bowl with a straight handle at its rim's height - on its rest, and a deep pot of water.
+## A ladle (a bowl with a straight handle at its rim's height) on its rest, and a deep pot of water.
 const DIP_SPEC := {"things": [
 	{"name": "ladle rest", "parts": [{"material": "oak", "round": 0.4, "shape": "box", "size": [24.0, 1.2, 7.0]},
 		{"joint": {"kind": "free"}, "name": "ladle", "parts": [
@@ -2684,10 +2512,9 @@ const DIP_SPEC := {"things": [
 		"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"}}}
 
 
-## A DIP IS A HAND'S (841899: its ladle, dipped by an aim's keys, came up full and tipped beside the rim, and 10 ml went over the
-## rim - "the spoon spills liquid in a strange way when lifting from the cauldron"): the episode's ladle `dip`ped into a deep pot of
-## water comes up holding at least half its bowl, nothing it spilled lands outside the pot, and nothing holds it back on the way.
-## The control: lowered level into the pot by hand, its straight handle meets the rim, it is held back, and it comes up empty.
+## A dip is a hand's: a ladle `dip`ped into a deep pot of water comes up holding at least half its bowl, nothing it spilled lands outside
+## the pot, and nothing holds it back on the way. The control: lowered level into the pot by hand, its straight handle meets the rim, it is
+## held back, and it comes up empty.
 func _dips_full() -> bool:
 	var res: Array = []
 	for by_hand in [false, true]:
@@ -2744,10 +2571,9 @@ const JARS_SPEC := {"things": [
 	"materials": {"glass": {"kind": "glass", "color": "#a0c0b0"}, "oak": {"kind": "wood", "color": "#6b4a2b"}}}
 
 
-## A THING IS ONE ONLY AS FAR AS SOMETHING HOLDS IT TOGETHER (the-quiet-crucible 841899, 2026-10-31: "All 4 jars of ingredients are
-## stuck together, and moved together here"): three jars side by side with nothing under them, carried 25 cm whole, are carried
-## one at a time, in the order they were built, keeping the original duration per jar - each to its own place, upright and as far apart as they
-## stood, each a body of its own. The control: two jars on a tray carried whole ride it together, both on their way at once.
+## A thing is one only as far as something holds it together: three jars side by side with nothing under them, carried 25 cm whole, are
+## carried one at a time, in the order they were built, keeping the original duration per jar - each to its own place, upright and as far
+## apart as they stood, each a body of its own. The control: two jars on a tray carried whole ride it together, both on their way at once.
 func _jars_apart() -> bool:
 	var res := {}
 	for name in ["jars", "tray"]:
@@ -2853,10 +2679,9 @@ const REST_SPEC := {"things": [
 	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}, "brass": {"kind": "metal", "color": "#b8924c"}}}
 
 
-## A HAND LETS GO OF WHAT, LET GO, COMES TO REST WHERE IT IS (the-quiet-crucible 841899, 2026-10-31: "this ladle will not settle,
-## it's moving around on its block" - put back on its rest, it was read as not held up, and held there swaying for two and a half
-## minutes): 841899's own ladle, lifted 6 cm off its rest by its two ends and put back as it was built, taken up again 6 s later,
-## is let go between its moves and lies still on its rest. The control: put back only to 8 cm over its rest, it is held there.
+## A hand lets go of what, let go, comes to rest where it is: a ladle lifted 6 cm off its rest by its two ends and put back as it was built,
+## taken up again 6 s later, is let go between its moves and lies still on its rest. The control: put back only to 8 cm over its rest, it is
+## held there.
 func _rests_let_go() -> bool:
 	var res: Array = []
 	for end_y in [0.0, 8.0]:
@@ -2910,11 +2735,9 @@ func _drawn_low(m: TableMedium, wi: int, t: float) -> float:
 	return low
 
 
-## A SHEET RESTS AT ITS OWN THICKNESS, AND IS HELD UP AS ANYTHING IS (the-quiet-crucible 841899, 2026-10-31: the phoenix feather
-## "appears to be floating above the table ... casting too much of a shadow" - its spheres, 3.3 mm, held a feather 0.8 mm thick that
-## far up; and, fetched to be held up, it had been dropped on the table as its fetch ended): a feather lifted 6 cm off its board and
-## let go comes to rest with its drawn underside within a millimeter of the board; lifted 10 cm and taken up again half a second
-## later, it is held up across the pause. The controls: resting on its spheres' own radius it lies more than 2 mm up; with no later move it is let fall.
+## A sheet rests at its own thickness, and is held up as anything is: a feather lifted 6 cm off its board and let go comes to rest with its
+## drawn underside within a millimeter of the board; lifted 10 cm and taken up again half a second later, it is held up across the pause.
+## The controls: resting on its spheres' own radius it lies more than 2 mm up; with no later move it is let fall.
 func _sheet_lies() -> bool:
 	var res := {}
 	for kind in ["lies", "spheres", "held", "dropped"]:
@@ -2951,9 +2774,9 @@ const SHEET_POT_SPEC := {"things": [
 	"materials": {"iron": {"kind": "metal", "color": "#2c2a28"}, "plume": {"kind": "fabric", "color": "#e0501a"}}}
 
 
-## A SHEET'S WHOLE OUTLINE MEETS THE WORLD ([method Particles.fill_shape], feedback 0010: the feather's tip "clipping through the pot ... a little red
-## triangle poking out"): what meets the world is a point at the sheet's own thickness, and past its last point it meets nothing. Its points reach within
-## a centimeter of all of it, and let fall into a round pot nothing of it as drawn stands out of the far side of the pot's wall. The control: its grid alone.
+## A sheet's whole outline meets the world ([method Particles.fill_shape]): what meets the world is a point at the sheet's own thickness,
+## and past its last point it meets nothing. Its points reach within a centimeter of all of it, and let fall into a round pot nothing of it
+## as drawn stands out of the far side of the pot's wall. The control: its grid alone.
 func _sheet_tip_in_pot() -> bool:
 	var res := {}
 	var gap := {}
@@ -3048,11 +2871,10 @@ const BREW_SPEC := {"things": [
 	"materials": {"oak": {"kind": "wood", "color": "#6b4a2b"}, "iron": {"kind": "metal", "color": "#6a4a30"}, "brew": {"kind": "liquid", "color": "#b8964a"}}}
 
 
-## LIQUID IS NEVER LOST ([method TablePhysics._dips], feedback 0009, 0011: "Every time I've seen the ladle go into the pot, the liquid level decreases ... The
-## amount of liquid never recovers"): 841899's own ladle and cauldron, with the show's own act - lowered in, tipped, let go to lean on the wall, drawn out and laid
-## back on its rest. A vessel partly under a liquid has that liquid's surface: it stands as high inside as out, and neither sloshes nor pours. Through all of it the
-## brew and the ladle together hold what the brew began with, the surface never falls for what goes in, nothing is spilled, and the ladle gone, the brew is back
-## where it began.
+## Liquid is never lost ([method TablePhysics._dips]): a ladle and cauldron with the show's own act - lowered in, tipped, let go to lean on
+## the wall, drawn out and laid back on its rest. A vessel partly under a liquid has that liquid's surface: it stands as high inside as out,
+## and neither sloshes nor pours. Through all of it the brew and the ladle together hold what the brew began with, the surface never falls
+## for what goes in, nothing is spilled, and the ladle gone, the brew is back where it began.
 func _brew_kept() -> bool:
 	var m := _medium()
 	_stand(m, BREW_SPEC, "the ladle on its rest", _at(Vector3(-25, 0, -8)))
@@ -3105,7 +2927,8 @@ func _brew_kept() -> bool:
 	_ok(spilled < 0.01 * start, "%.1f ml of %.1f was spilled from a ladle lifted out of its pot" % [spilled * 1e6, start * 1e6])
 	_ok(fell < 0.0005, "as the ladle went in and leaned there, the brew's surface fell %.1f mm" % (fell * 1000.0))
 	_ok(surface_out < 0.003, "the ladle out with what it held, the brew's surface fell %.1f mm for the %.1f ml gone" % [surface_out * 1000.0, (start - end) * 1e6])
-	# THE LEVEL HAS NO STAIRS: the cauldron's cells are about a centimeter tall, and no percent of it moves the surface more than a percent should
+	# The level has no stairs: the cauldron's cells are about a centimeter tall, and no percent of it moves the surface more than a percent
+	# should
 	var vs: Vessel = (ph.liquids[brew] as Dictionary)["vessel"]
 	var stair := 0.0
 	var bare := 0.0
@@ -3121,7 +2944,7 @@ func _brew_kept() -> bool:
 	_ok(bare > 0.005, "the control: the bare grid's level moves %.1f mm in a percent" % (bare * 1000.0))
 	_ok(stair < 0.0025, "a percent of the brew moves its surface %.1f mm at most (no stairs)" % (stair * 1000.0))
 	m._root3.free()
-	# ...AND WHAT TRULY MISSES IS COUNTED, the sum still holding: the control - the pot itself turned over above the bare table
+	# ...and what truly misses is counted, the sum still holding: the control - the pot itself turned over above the bare table
 	var c := _medium()
 	_stand(c, BREW_SPEC, "pot", _at(Vector3(15, 0, -8)))
 	c._work.build({"acts": [{"name": "over", "beat": 1, "length": 3.0, "tracks": [{"thing": "pot", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.4, "by": [0, 20, 0]}, {"at": 1.0, "by": [0, 20, 0], "turn": [0, 0, 110]}]}]}]}, 1)
@@ -3193,11 +3016,10 @@ func _rod_through(m: TableMedium, wi: int, ph: TablePhysics, rod_key: int, momen
 	return count
 
 
-## A SHEET BENDS ROUND WHAT MEETS IT, GENTLY ([method Particles.make_soft], [SheetBend]; 841899, feedback 0012: "The phoenix feather is clipping through the ladle ... The feather should
-## probably be more deformable, so that it's able to wrap and contort around the ladle ... gently enough that it doesn't create a whiplash effect and spring the feather out of the liquid"):
-## a feather afloat, a 7 mm rod brought down across its middle and swept through it: the rod hardly ever stands through what is drawn; what is drawn bends, the points about the
-## rod off their own shape by millimeters and the mesh with them; nothing is thrown out of the liquid; and left alone again, it lies back. The controls: met only at its points' own
-## thickness, as it had been, a rod fits between them; and the rod did move it.
+## A sheet bends round what meets it, gently ([method Particles.make_soft], [SheetBend]): a feather afloat, a 7 mm rod brought down across
+## its middle and swept through it: the rod hardly ever stands through what is drawn; what is drawn bends, the points about the rod off
+## their own shape by millimeters and the mesh with them; nothing is thrown out of the liquid; and left alone again, it lies back. The
+## controls: met only at its points' own thickness, a rod fits between them; and the rod did move it.
 func _sheet_bends_round() -> bool:
 	var m := _medium()
 	_stand(m, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
@@ -3221,7 +3043,8 @@ func _sheet_bends_round() -> bool:
 			rod_thin = rod_thin or bool((sd as Dictionary)["thin"])
 		_ok(not (bool((sd as Dictionary)["thin"]) and String((m._work.things[int((sd as Dictionary)["thing"])] as Dictionary)["name"]) == "pot"), "a pot is no thin tool")
 	_ok(rod_thin, "a rod is a thin tool")
-	# ...THE ROD CANNOT STAND BETWEEN ITS POINTS: every part of it nearer a point than the rod's radius and the point's whole. The control: at the point's own thickness, as it had been, it can.
+	# ...the rod cannot stand between its points: every part of it nearer a point than the rod's radius and the point's whole. The control: at
+	# the point's own thickness, it can.
 	var pts: PackedVector3Array = ph.sheet_points(wi)
 	var far := _farthest_from(m, wi, pts)
 	var L: Dictionary = ph.loose[int(ph._loose_of[wi])]
@@ -3266,9 +3089,9 @@ func _sheet_bends_round() -> bool:
 	return true
 
 
-## A FLOATING THING IS NEVER STILL ([method Particles.current], [method Particles.swell]; 841899, feedback 0012: "it floats perfectly stable on top of the liquid ... it should be gently moving,
-## according to the movement of the liquid and the weight of the object ... sometimes bob ... maybe spin a bit"): a feather afloat in a simmering pot, nothing near it, for half a minute:
-## it drifts, turns and bobs, never fast, never out of the pot, never asleep - and the same moment of the same bake is the same pose. The control: a stone on the same pot's floor lies still.
+## A floating thing is never still ([method Particles.current], [method Particles.swell]): a feather afloat in a simmering pot, nothing near
+## it, for half a minute drifts, turns and bobs, never fast, never out of the pot, never asleep - and the same moment of the same bake is
+## the same pose. The control: a stone on the same pot's floor lies still.
 func _floater_lives() -> bool:
 	var m := _medium()
 	_stand(m, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
@@ -3324,8 +3147,8 @@ func _floater_lives() -> bool:
 	return true
 
 
-## A VESSEL DOES NOT TAKE PART OF A SHEET WITH IT (841899: part of the feather in the ladle's bowl rode off with the ladle, the rest left in the pot, stretched 23 cm): a feather afloat, the
-## ladle lowered through where it is, tipped, and drawn away over the rim: it stays one sheet, and in the pot. The control: the ladle met it.
+## A vessel does not take part of a sheet with it: a feather afloat, the ladle lowered through where it is, tipped, and drawn away over the
+## rim: it stays one sheet, and in the pot. The control: the ladle met it.
 func _sheet_stays_whole() -> bool:
 	# ...where the feather has drifted to by the time the ladle comes, the same bake without it
 	var feather_in := {"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 22, 0]}, {"at": 0.75, "by": [40, 22, 0]}, {"at": 1.0, "by": [40, 13, 0]}]}]}
@@ -3382,11 +3205,10 @@ func _sheet_middle(ph: TablePhysics, wi: int) -> Vector3:
 	return c / float(pts.size())
 
 
-## THE PAST IS BAKED (the-quiet-crucible 841899, 2026-10-31, scrubbed to the feather: "it totally breaks physics, every time ...
-## there is a piece of some ingredient sitting on top of the recipe card"): a reading started mid-way places its earlier words
-## just before 0, spaced as estimated ([member ReadingFollower.near_past]), and a stone an act carried into a bowl before then
-## lies in the bowl on the first frame - the bake begun before the act ([member TablePhysics._t0]). The controls: a follower that
-## keeps its past long ago places it 100000 s back; and the same act after 0 has not yet moved the stone.
+## The past is baked: a reading started mid-way places its earlier words just before 0, spaced as estimated ([member
+## ReadingFollower.near_past]), and a stone an act carried into a bowl before then lies in the bowl on the first frame - the bake begun
+## before the act ([member TablePhysics._t0]). The controls: a follower that keeps its past long ago places it 100000 s back; and the same
+## act after 0 has not yet moved the stone.
 func _past_baked() -> bool:
 	var f := ReadingFollower.new()
 	f.near_past = true
@@ -3431,12 +3253,10 @@ const RIM_SPEC := {"things": [
 	"materials": {"copper": {"kind": "metal", "color": "#b06a3a"}}}
 
 
-## WHAT RESTS TOUCHES WHAT IT RESTS ON, AS DRAWN (the user, 2026-10-31: the ladle "doesn't seem to rest upon the cauldron's lip
-## correctly. It floats above the lip, and you can tell because it casts a shadow" - met at 120 points of its own and 200 of the
-## pot's, a handle crossing the rim between them stood 2.2 mm into it as drawn while its points said 0.4, [method RigidParts._refined]):
-## 841899's own ladle, brought into 841899's own cauldron by its two ends and left there till a later act, leans on the rim with
-## its drawn surface within 0.8 mm of the pot's, neither floating nor sunk. The control: the same ladle drawn 3 mm lower reads
-## sunk - the measure can tell.
+## What rests touches what it rests on, as drawn ([method RigidParts._refined]): a ladle brought into a cauldron by its two ends and left
+## there till a later act leans on the rim with its drawn surface within 0.8 mm of the pot's, neither floating nor sunk (met only at points,
+## a handle crossing the rim can stand 2 mm into it as drawn). The control: the same ladle drawn 3 mm lower reads sunk - the measure can
+## tell.
 func _rests_on_rim() -> bool:
 	var m := _medium()
 	_stand(m, RIM_SPEC, "cauldron", _at(Vector3(20, 0, -8)))
@@ -3481,11 +3301,9 @@ func _rests_on_rim() -> bool:
 	return true
 
 
-## A POUR POURS WHAT DOES NOT FLOW (2026-11-01, 841899: a mortar of ground frankincense `pour`ed into the brew stopped at the tip an
-## empty liquid's brink ends at, 62 degrees, and poured nothing - its puppeteer then tipped it by hand and threw it into the brazier's
-## pan, and `act` said it went "in the copper cauldron on its brazier"): a dish with a stone in it, `pour`ed into a bowl, turns on past
-## its brink to its `tip` and the stone falls into the bowl - and `act` says so, by what it went into. The controls: held to a 30 degree
-## tip, nothing leaves it and `act` says so; the same pour judged as meant for the cup, `act` says it MISSED, and where it went.
+## A pour pours what does not flow: a dish with a stone in it, `pour`ed into a bowl, turns on past its brink to its `tip` and the stone
+## falls into the bowl - and `act` says so, by what it went into. The controls: held to a 30 degree tip, nothing leaves it and `act` says
+## so; the same pour judged as meant for the cup, `act` says it MISSED, and where it went.
 func _pours_loose() -> bool:
 	var res := {}
 	for case in ["bowl", "short"]:
@@ -3520,11 +3338,10 @@ func _pours_loose() -> bool:
 	return true
 
 
-## THE WORLD IS THE TABLE'S (next/framework_audit.md): every free part and every thing that may be moved is a body as built, whatever
-## the acts are - DORMANT until a hand takes it up or what holds it moves, exactly the solid it was before it was a body - so a new act
-## that moves something new is baked from where it begins, never from the show's start (841899's puppeteer: each `act` that fetched a
-## jar or a feather nothing had moved baked the whole show again, 95 and 126 s a call). The control: the first act moved bakes again
-## from its own start.
+## The world is the table's (next/framework_audit.md): every free part and every thing that may be moved is a body as built, whatever the
+## acts are - dormant until a hand takes it up or what holds it moves, exactly the solid it was before it was a body - so a new act that
+## moves something new is baked from where it begins, never from the show's start. The control: the first act moved bakes again from its own
+## start.
 func _world_from_table() -> bool:
 	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 4, 0]}, {"at": 1.0, "by": [0, 0, 6]}]
 	var m := _rod_bench([[up, 2.0, 4.0]], 45.0)

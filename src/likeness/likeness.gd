@@ -1,31 +1,24 @@
 extends Medium
 class_name LikenessMedium
 
-## LikenessMedium - an actor reads the note, in their own room (next/likeness.md, "The second build"):
-## ONE STILL OF THEM and a model of how they move - their head's own motion, their blinks, their mouths
-## for the voice's sounds ([LikenessPlan]). Every pixel of them is a real pixel of theirs, bent; no footage
-## plays, so no hand, prop or jump cut is ever seen (2026-10-21, the user on the first build: "the random
-## gestures and the globe and such, which are cropped by the jump-cuts").
+## LikenessMedium - an actor reads the note, in their own room (next/likeness.md, "The second build"): one still of them
+## and a model of how they move - their head's own motion, blinks, and mouths for the voice's sounds ([LikenessPlan]).
+## Every pixel of them is a real pixel of theirs, bent; no footage plays, so no hand, prop or jump cut is seen.
 ##
-## WHAT IT DRAWS FROM: the reading's document (`_subs.document`) carries `likeness` - the actor's folder,
-## the set, the still, the seed - which the Actor card hands the reading ([ActorCard.Publish]); the words
-## and the phones come from the voice as they are said (`_subs.words`, `_subs.phones`). The set's files
-## and the actor's motion are the Actor's ([ActorFolder], [ActorSteps]).
+## Draws from the reading's document (`_subs.document`), whose `likeness` - the actor's folder, set, still and seed - the
+## Actor card hands the reading ([ActorCard.Publish]); the words and phones come from the voice as they are said
+## (`_subs.words`, `_subs.phones`). The set's files and the actor's motion are the Actor's ([ActorFolder], [ActorSteps]).
 ##
-## THEM OVER THEIR ROOM (the third pass, 2026-10-22: "The region around the head smears quite a lot ... on
-## the wall, and on the picture on the wall especially"): the room drawn first, still - the still's own
-## room, and behind them the room the set's frames showed ([member _room]) - and them over it, cut out by
-## their matte, through ONE MESH WITH ONE CANVAS SHADER ([LikenessFace], likeness_warp.gdshader): the head
-## turned on the neck, the body carrying it, the lips and lids bent to the mouths and eyes drawn in where
-## their own were. What their moving uncovers is the room, never the wall stretched.
+## Them over their room: the room is drawn first, still (the still's own, and behind them the room the set's frames
+## showed, [member _room]), and them over it, cut out by their matte, through one mesh with one canvas shader
+## ([LikenessFace], likeness_warp.gdshader): the head turned on the neck, the body carrying it, the lips and lids bent to
+## the mouths and eyes drawn in. What their moving uncovers is the room, never the wall stretched.
 ##
-## WHAT STANDS BEFORE THEM IS DRAWN OVER THEM, still (the fourth pass, 2026-10-22: their bones bend them,
-## and a microphone left in their matte bent with them): the still's `front_K.png` - the things that never
-## move and hide them - over everything, and under it their picture filled from round it (`body_K.jpg`), so
-## they move behind it.
+## What stands before them is drawn over them, still: the still's `front_K.png` (things that never move and hide them)
+## goes over everything, and under it their picture filled from round it (`body_K.jpg`), so they move behind it.
 ##
-## A PURE FUNCTION OF THE SHOW'S TIME: what is drawn at a moment depends on the plan and the phones, never
-## on what was drawn before - so a seek lands where it should and an export draws what was heard.
+## A pure function of the show's time: what is drawn at a moment depends on the plan and the phones, never on what was
+## drawn before, so a seek lands where it should and an export draws what was heard.
 
 const SHADER := preload("res://src/likeness/likeness_warp.gdshader")
 
@@ -54,15 +47,13 @@ var _library_task := -1
 var _library_box: Array = []
 var _mask_mouth: ImageTexture = null
 var _mask_eyes: ImageTexture = null
-## THE SET AND STILL LOADED, kept from one Play to the next: the library is a texture of tens of images
-## and the still a full frame, both decoded once. Its files' times are in it, so a set made again is
-## loaded again.
+## The set and still loaded, kept from one Play to the next: the library is a texture of tens of images and the still a
+## full frame, both decoded once. Its files' times are in it, so a set made again is loaded again.
 var _loaded := ""
 var _placeholder: GhostScene
-## THEM AS SPLATS (the note's renderer "gaussian": [SplatHead], next/likeness.md "A head of splats", "The whole of
-## them", "The body as the still holds it"): their head and body over the avatar's own learned room, under what
-## stands before them - the avatar as the Fit step left it (`fit`), its body fitted to one still, which is the
-## one played; the still's 2D layer is not drawn.
+## Them as splats (the note's renderer "gaussian": [SplatHead], next/likeness.md "A head of splats"): their head and body
+## over the avatar's own learned room, under what stands before them - the avatar as the Fit step left it (`fit`), its
+## body fitted to one still, which is the one played; the still's 2D layer is not drawn.
 var _renderer := "2d"
 var _splat_layer: Node2D
 var _splat: SplatHead = null
@@ -92,13 +83,12 @@ var _still_expr := PackedFloat32Array()
 var _class_exprs := {}
 var _shut_expr := PackedFloat32Array()
 var _look_exprs := {}
-## THEIR FACE'S OWN WAYS OF MOVING as the splats take them ([method LikenessPlan.face]): each way's face and
+## Their face's own ways of moving as the splats take them ([method LikenessPlan.face]): each way's face and
 ## expression less the still's, made once a load.
 var _way_faces: Array = []
 var _way_exprs: Array = []
-## How far past their own each sound's mouth is played (their mouth scarcely moves while they talk: a
-## still's mouth shapes read as nothing): the actor's Articulation setting, as the 2D library's - never past how far
-## their own lips part, nor a score past [constant TOP] of their own range (`visemes.json`'s `range`).
+## How far past their own each sound's mouth is played: the actor's Articulation setting, as the 2D library's - never past
+## how far their own lips part, nor a score past [constant TOP] of their own range (`visemes.json`'s `range`).
 var _push := 2.0
 const TOP := "99"
 ## The most a sound's mouth may turn any of the face's triangles from the face at rest, in degrees ([method unfolded]).
@@ -120,7 +110,7 @@ class Warp extends Node2D:
 			PackedInt32Array(), PackedFloat32Array(), tex.get_rid())
 
 
-## THE ROOM, behind them: a picture of the frame's size, drawn where the layer is.
+## The room, behind them: a picture of the frame's size, drawn where the layer is.
 class Room extends Node2D:
 	var tex: ImageTexture = null
 
@@ -221,7 +211,7 @@ func advance(_features, _delta: float, _bookend: float) -> void:
 	_now = _subs.now() if _subs != null and is_instance_valid(_subs) else t
 	_note.visible = not _ready_set
 	if not _ready_set:
-		# AN ACTOR STILL BEING MADE is tried again every few seconds: its set may be ready now
+		# an actor still being made is tried again every few seconds: its set may be ready now
 		if Time.get_ticks_msec() - _tried_ms > 3000:
 			_tried_ms = Time.get_ticks_msec()
 			_doc_key = ""
@@ -236,10 +226,8 @@ func advance(_features, _delta: float, _bookend: float) -> void:
 	draw_at(_now)
 
 
-## UP FROM BLACK ACROSS THE INTRO, arriving as the held silence ends, as every picture's does ([method
-## Director._bookend_fade]; 2026-10-22, the user: "The fade-in/fade-out from the 'intro & outro' component
-## does not appear to work here" - it rose in its first second, then sat through the rest), and down to
-## it after the last word, black as the outro runs out.
+## Up from black across the intro, arriving as the held silence ends, as every picture's does ([method
+## Director._bookend_fade]), and down to black after the last word as the outro runs out.
 func _brightness(t: float) -> float:
 	return clampf(clampf(t / maxf(1.0, feed.lead()), 0.0, 1.0)
 		* ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail()) * feed.live_fade, 0.0, 1.0)
@@ -271,8 +259,8 @@ func _ensure_doc() -> void:
 	load_text(src, start, int(d.get("start_index", -1)))
 
 
-## LOAD THE SET [param sid] of the actor in [param dir], drawn on its still [param still] by [param renderer]: ""
-## when it can be played, else why not. Public for a probe, which hands it one by hand.
+## Loads the set [param sid] of the actor in [param dir], drawn on its still [param still] by [param renderer]: "" when it
+## can be played, else why not. Public for a probe, which hands it one by hand.
 func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2d") -> String:
 	if dir.is_empty() or sid.is_empty():
 		return "This Likeness has no actor to play yet: build one on the Actor card."
@@ -284,7 +272,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 	if stills.is_empty() or not FileAccess.file_exists(avatar + ".json" if splats else sd.path_join("library.json")):
 		return "The actor's set in use is not built yet: Generate on the Pipeline card builds it."
 	var k := clampi(still, 0, stills.size() - 1)
-	# A BODY FITTED TO ONE STILL is played on that still, until the one picked is fitted too (Generate)
+	# a body fitted to one still is played on that still, until the one picked is fitted too (Generate)
 	var fitted: Variant = ActorFolder.read_json(avatar + ".json") if splats else null
 	if fitted is Dictionary and (fitted as Dictionary).has("still"):
 		k = clampi(int((fitted as Dictionary)["still"]), 0, stills.size() - 1)
@@ -299,7 +287,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 			return "The actor is not ready: %s. Generate on the Pipeline card builds it." % err
 		_face.set_still(stills[k], k)
 		var st_k: Dictionary = stills[k]
-		# THEIR PICTURE: the still, filled from round what stands before them where something does
+		# their picture: the still, filled from round what stands before them where something does
 		var body := sd.path_join("stills").path_join(String(st_k.get("body", "")))
 		var img := Image.load_from_file(body) if st_k.has("body") and FileAccess.file_exists(body) else null
 		if img == null:
@@ -308,7 +296,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 			return "The actor's still could not be read: Generate on the Pipeline card makes it again."
 		img.convert(Image.FORMAT_RGBA8)
 		_still_tex = ImageTexture.create_from_image(img)
-		# THEIR ROOM AND MATTE (a still from before the third pass has neither: drawn whole, as it was)
+		# their room and matte (a still without them is drawn whole)
 		_room.tex = _picture(sd.path_join("stills").path_join(String(st_k.get("room", ""))))
 		_matte_tex = _mask(sd.path_join("stills").path_join(String(st_k.get("matte", ""))))
 		if _room.tex == null:
@@ -341,8 +329,8 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 	return ""
 
 
-## THEM AS SPLATS from set folder [param sd], played from still [param k]: the avatar and its room, the still's
-## pose, scores and bones, their eyes' shut score, glances and own mouth for each sound (the Face rig's `poses.json`;
+## Them as splats from set folder [param sd], played from still [param k]: the avatar and its room, the still's pose,
+## scores and bones, their eyes' shut score, glances and own mouth for each sound (the Face rig's `poses.json`;
 ## [method own_mouths], with `visemes.json` of the actor in [param dir]).
 func _load_splat(sd: String, dir: String, k: int) -> String:
 	if _splat == null:
@@ -413,8 +401,8 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 	return ""
 
 
-## THE STILL'S SCORES WITH THEIR MOUTH AT REST: the mouth's scores of [param visemes] (`visemes.json`) at its "rest"
-## sound's - where every sound's mouth moves from ([method own_mouths]), and silence.
+## The still's scores with their mouth at rest: the mouth's scores of [param visemes] (`visemes.json`) at its "rest" sound's -
+## where every sound's mouth moves from ([method own_mouths]), and silence.
 static func rest_mouth(still: PackedFloat32Array, visemes: Dictionary) -> PackedFloat32Array:
 	var out := still.duplicate()
 	var names: Array = visemes.get("names", [])
@@ -426,7 +414,7 @@ static func rest_mouth(still: PackedFloat32Array, visemes: Dictionary) -> Packed
 	return out
 
 
-## THE MOST EACH SCORE MAY BE PUSHED TO: their own [constant TOP] percentile of each of the mouth's scores in
+## The most each score may be pushed to: their own [constant TOP] percentile of each of the mouth's scores in
 ## [param visemes] (`range`), by its place among the 52.
 static func top_of(visemes: Dictionary) -> Dictionary:
 	var out := {}
@@ -440,15 +428,12 @@ static func top_of(visemes: Dictionary) -> Dictionary:
 	return out
 
 
-## THEIR OWN MOUTH FOR EACH SOUND (the Face rig's `mouths`, hosts/avatar/rig.py; 2026-10-25, the user: "The mouth
-## shape barely moves" - played from each sound's scores through the basis, his lips parted 0.044 to 0.062 of his
-## face's height while it spoke, his own 0.013 to 0.11): the face [param base] (the still's scores, its mouth at
-## rest: [method rest_mouth]) moved by the sound's own move as their face made it - its points and its scores less
-## their rest's - pushed [param push] times (Articulation), NEVER PAST HOW FAR THEIR OWN LIPS PART (`gap`, the 1st
-## and 99th percentiles of the inner lips' parting over the face's height: a sound that opens stops at the most, one
-## that closes at the least), its scores never past their own [param top] ([method top_of]), NOR FOLDING THE FACE
-## ([method unfolded]). The expression is the pushed scores', as the face's.
-## `{faces: {sound: face}, exprs: {sound: expression}, pushed: {sound: times}}`.
+## Their own mouth for each sound (the Face rig's `mouths`, hosts/avatar/rig.py): the face [param base] (the still's
+## scores, its mouth at rest: [method rest_mouth]) moved by the sound's own move as their face made it (its points and
+## scores less their rest's), pushed [param push] times (Articulation) but never past how far their own lips part (`gap`,
+## the 1st and 99th percentiles of the inner lips' parting over the face's height), its scores never past their own
+## [param top] ([method top_of]), nor folding the face ([method unfolded]). The expression is the pushed scores', as
+## the face's. `{faces: {sound: face}, exprs: {sound: expression}, pushed: {sound: times}}`.
 static func own_mouths(splat: SplatHead, base: PackedFloat32Array, mouths: Dictionary, push: float,
 		top: Dictionary) -> Dictionary:
 	var face := splat.face_of(base)
@@ -486,14 +471,10 @@ static func own_mouths(splat: SplatHead, base: PackedFloat32Array, mouths: Dicti
 	return out
 
 
-## A SOUND'S MOUTH NEVER FOLDS THE FACE (2026-10-25, the user: "needle-like fractures throughout it, especially near
-## the face, and especially noticeable when the face moves"): how far [param move] may push [param face] - at most
-## [param k] times - before any of its triangles ([param tris]) turns past FOLD_MOST from the face's. A sound's own
-## move is the median of their tracked points, and Articulation pushes all of it: on his set, their own mouths turn a
-## triangle at most 27 degrees, and pushed three times the corners of the mouth crossed over themselves - P B M 118, F V
-## 85, "open" 62 - and the splats bound there swung edge-on, streaks and specks along the beard's edges. Held to 40,
-## "open" still parts the lips 0.105 of the face's height (their own 95th percentile, 0.11); P B M and F V stop near
-## their own shape, pushed further only 2 to 3 pixels nearer closed. The most k within it, to 1/256 of it.
+## How far [param move] may push [param face] - at most [param k] times - before any of its triangles ([param tris]) turns
+## past FOLD_MOST from the face's: a sound's own move is the median of their tracked points and Articulation pushes all of
+## it, so unbounded the mouth's corners cross over themselves and the splats bound there swing edge-on. Held to 40
+## degrees the sounds still part the lips nearly as far as their own 95th percentile. The most k within it, to 1/256 of it.
 static func unfolded(tris: PackedInt32Array, face: PackedFloat32Array, move: PackedFloat32Array, k: float) -> float:
 	var near: PackedInt32Array = []
 	for t in tris.size() / 3:
@@ -538,8 +519,8 @@ static func lips_parted(v: PackedFloat32Array) -> float:
 	return (p.call(13) - p.call(14)).length() / maxf((p.call(10) - p.call(152)).length(), 1e-6)
 
 
-## Each of their face's own ways of moving ([member LikenessPlan.face_basis]) as a face and an expression less the
-## still's - the rig and the expressions are linear in the scores, so a moment mixes them by how far along each.
+## Each of their face's own ways of moving ([member LikenessPlan.face_basis]) as a face and an expression less the still's -
+## the rig and the expressions are linear in the scores, so a moment mixes them by how far along each.
 func _take_face_ways() -> void:
 	_way_faces = []
 	_way_exprs = []
@@ -569,12 +550,12 @@ func _drop_splat() -> String:
 	return ""
 
 
-## THEM AS SPLATS AT [param t]: their face - the still's own, moved toward each sound shaping the mouth by its
-## share ([method LikenessPlan.mouth_mix]: every pull, smoothed; its face made once, their own mouth for it pushed
-## past their own by Articulation, silence their mouth at rest), moved its own ways as their face moved ([method LikenessPlan.face]), toward the lids shut
-## as far as the blink, toward a glance - the head as the still holds it, turned by their motion [param moved] about
-## the neck and carried by the torso; and their body's bones as the still holds them, each moved as the 2D body's
-## bone is ([param moves]: [method LikenessFace.bones]).
+## Them as splats at [param t]: their face - the still's own, moved toward each sound shaping the mouth by its share
+## ([method LikenessPlan.mouth_mix]; each sound's face made once, its mouth pushed past their own by Articulation,
+## silence their mouth at rest), moved its own ways as their face moved ([method LikenessPlan.face]), toward the lids shut
+## as far as the blink, toward a glance - the head as the still holds it, turned by their motion [param moved] about the
+## neck and carried by the torso; and their body's bones as the still holds them, each moved as the 2D body's bone is
+## ([param moves]: [method LikenessFace.bones]).
 func _pose_splat(t: float, moved: PackedFloat32Array, moves: Array) -> void:
 	var v := _still_face.duplicate()
 	var e := _still_expr.duplicate()
@@ -584,7 +565,7 @@ func _pose_splat(t: float, moved: PackedFloat32Array, moves: Array) -> void:
 		if w > 1e-3 and _class_faces.has(c):
 			_toward(v, _class_faces[c], _still_face, w)
 			_toward(e, _class_exprs[c], _still_expr, w)
-	# THEIR FACE'S OWN MOTION: brows, lids, cheeks and the mouth's corners as they moved with the head's piece
+	# their face's own motion: brows, lids, cheeks and the mouth's corners as they moved with the head's piece
 	var ways := _plan.face(t)
 	for k in mini(ways.size(), _way_faces.size()):
 		if absf(ways[k]) > 1e-4:
@@ -594,7 +575,7 @@ func _pose_splat(t: float, moved: PackedFloat32Array, moves: Array) -> void:
 	if b > 1e-4:
 		_toward(v, _shut_face, _still_face, b)
 		_toward(e, _shut_expr, _still_expr, b)
-	# A GLANCE: toward the face looking that way, as far as the glance has gone
+	# a glance: toward the face looking that way, as far as the glance has gone
 	var g := _plan.glance(t)
 	var gw := float(g[1]) if g.size() > 1 else 0.0
 	if gw > 1e-4 and _look_faces.has(String(g[0])):
@@ -641,8 +622,8 @@ static func _picture(path: String) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
-## THE LIBRARY'S IMAGES as one texture array, decoded on a worker: the mouth and eyes are drawn once it
-## is in (an export decodes them in step).
+## The library's images as one texture array, decoded on a worker: the mouth and eyes are drawn once it is in (an export
+## decodes them in step).
 func _load_library() -> void:
 	_library_tex = null
 	var files := _face.files.duplicate()
@@ -683,7 +664,7 @@ func _land_library() -> void:
 	_library_box = []
 
 
-## THE TEXT'S SPOKEN WORDS, for the follower that times the end's fade. Public for a probe.
+## The text's spoken words, for the follower that times the end's fade. Public for a probe.
 func load_text(source: String, start := PackedStringArray(), near := -1) -> void:
 	var spoken := PackedStringArray()
 	for w in Manuscript.unspoken(Manuscript.strip_frontmatter(source)).split(" ", false):
@@ -697,7 +678,7 @@ func load_text(source: String, start := PackedStringArray(), near := -1) -> void
 	_built_n = -1
 
 
-## THE VOICE SO FAR: its words to the follower, its phones to the plan when more have come.
+## The voice so far: its words to the follower, its phones to the plan when more have come.
 func _take_voice() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return
@@ -713,8 +694,8 @@ func _take_voice() -> void:
 
 # --- drawing --------------------------------------------------------------------------------------
 
-## DRAW SHOW TIME [param t]: them, their body posed on its bones and their head turned on it, their lips and
-## lids bent to the mouth and eyes the plan says there, those drawn in - over the room. Public for a probe.
+## Draw show time [param t]: them, their body posed on its bones and their head turned on it, their lips and lids bent to
+## the mouth and eyes the plan says there, those drawn in - over the room. Public for a probe.
 func draw_at(t: float) -> void:
 	if _still_tex == null:
 		return

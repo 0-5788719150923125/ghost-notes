@@ -2,15 +2,11 @@ extends GhostScene
 
 ## Fog bank - rolling colored fog, light glowing from within.
 ##
-## The explicit "rolling fog with colors underneath / inside" idea: a rich color bed
-## with slow pools breathing on the spectrum, then several fog layers of different tint
-## and speed rolling over and through it, so the color bleeds up through the cloud. The
-## bank lurches on the beat and coasts down (velocity + decay, not a uniform drift).
-## `bed` + stacked `fog` layers - atmosphere from pure composition.
+## A rich color bed with slow pools breathing on the spectrum, under several fog layers of different tint
+## and speed rolling over it, so the color bleeds up through the cloud. The bank lurches on the beat and
+## coasts down (velocity + decay). `bed` + stacked `fog` layers.
 
-# How heavy the bank is. A thin one barely veils the color and a deep one buries it in
-# sheets, which is the difference between a glow with mist over it and weather - so the
-# sheet count, their opacity and the bed's brightness all move together.
+# How heavy the bank is: sheet count, opacity and the bed's brightness move together.
 const BANKS := {
 	"thin":    {"sheets": [1, 1], "alpha": [0.020, 0.035], "count": [4, 6],  "val": [0.46, 0.60]},
 	"rolling": {"sheets": [2, 3], "alpha": [0.030, 0.050], "count": [5, 8],  "val": [0.38, 0.54]},
@@ -18,8 +14,8 @@ const BANKS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"bank": {"label": "Bank", "type": "choice", "options": "BANKS", "default": null,
 		"blurb": "How heavy the fog bank is: a thin veil, a rolling bank, or a deep one that buries the color in sheets."},
@@ -48,8 +44,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	})
 	var sheets := rng.randi_range(int(sheet_r[0]), int(sheet_r[1]))
 	for i in sheets:
-		# The stack walks from the base hue toward the accent, so a pile of sheets is one
-		# family of tints rather than an arbitrary offset invented per sheet.
+		# The stack walks from the base hue toward the accent, so the sheets are one family of tints.
 		var tint: float = sch.hue_at(i + 1, sheets + 1)
 		add_layer("fog", rng, {
 			"hue": tint,

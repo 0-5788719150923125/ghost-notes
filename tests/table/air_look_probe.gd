@@ -1,9 +1,8 @@
 extends Node
 
-## NOT a gate. The table's AIR ([Effects]) over a real episode, photographed: a COPY of the episode
-## (the author's own is never touched) with effects laid into its table, read with a synthetic voice
-## (table_look_probe's), and frames written at the times asked for - or around every moment a burst
-## can mark, with `--moments 1`.
+## NOT a gate. The table's air ([Effects]) over a real episode, photographed: a copy of the episode (the author's is never
+## touched) with effects laid into its table, read with a synthetic voice (table_look_probe's), and frames written at the
+## times asked for, or around every moment a burst can mark with `--moments 1`.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/air_look_probe.gd 400 \
 ##       --show truthful-tarot --seed 352029 --spec <effects.json> [--times 12,30] [--moments 1] [--out /tmp/air/a]

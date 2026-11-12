@@ -3,23 +3,20 @@ class_name CardFaces
 
 ## CardFaces - a card's face, its back and its booklet page, composed in 2D for the table.
 ##
-## THE PAINTER PAINTS PICTURES; THE DECK PRINTS CARDS. A generated picture is the card's
-## illustration and nothing else (see [TablePrompts.card_image]) - the stock, the frame, the
-## numeral and the name are printed around it here, from the episode's look, so every card of a
-## deck shares one frame exactly and every name is spelled right. The back is the same: the
-## painted design inside the deck's frame.
+## The painter paints pictures; the deck prints cards. A generated picture is the card's illustration and nothing else (see
+## [TablePrompts.card_image]); the stock, the frame, the numeral and the name are printed around it here from the episode's look, so every
+## card of a deck shares one frame and every name is spelled right. The back is the same: the painted design inside the deck's frame.
 ##
-## EACH IS A STOPPED SUBVIEWPORT, the comic's trick: drawn once (UPDATE_ONCE), then held as a
-## texture in VRAM at no further cost, and drawn again only when something it shows changes - a
-## picture landing mid-reading. Never read back to the CPU.
+## Each is a stopped subviewport, the comic's trick: drawn once (UPDATE_ONCE), then held as a texture in VRAM, and drawn again only when
+## something it shows changes (a picture landing mid-reading). Never read back to the CPU.
 
 ## A tarot card's proportions: 70 x 120 mm.
 const ASPECT := 70.0 / 120.0
 const FACE_PX := Vector2i(560, 960)
-## The canvas a card's picture and back are painted on (rules/table/painter.yaml's FORMAT): 2:3, which no card is.
+## The canvas a card's picture and back are painted on (rules/table/painter.yaml's format): 2:3, which no card is.
 const PAINTED := Vector2i(1024, 1536)
 
-## A face's pixels: its SHORT side [constant FACE_PX]'s width - a card held sideways as sharp across its height as a
+## A face's pixels: its short side [constant FACE_PX]'s width - a card held sideways as sharp across its height as a
 ## tall one across its width - or, for a written card's lines of writing, [constant WRITTEN_PX].
 static func face_px(look: Dictionary) -> Vector2i:
 	var size := CardTable.card_size(look)
@@ -82,7 +79,7 @@ static func _cover_src(ts: Vector2, dst: Vector2) -> Rect2:
 	return src
 
 
-## WHAT A BACK'S WINDOW CUTS OFF ITS CANVAS, in the canvas's pixels: x off each side, y off each end, one of them
+## What a back's window cuts off its canvas, in the canvas's pixels: x off each side, y off each end, one of them
 ## nothing. Worked out as the back is drawn ([method _cover_src], [method window]), so the painter is told what is
 ## really cut ([method TablePrompts.back_image]).
 static func back_cut(look: Dictionary) -> Vector2i:
@@ -125,12 +122,11 @@ const STAND_IN_SHARE := Vector2(0.34, 0.5)
 const STAND_IN_TINT := 0.22
 
 
-## A PAINTING NOBODY PAINTED, for a card nobody drew ([member Face.part]): a PART of one of the deck's
-## own paintings - `{crop, mirror, tint}`, [constant STAND_IN_SHARE] of it somewhere in it, mirrored or
-## not, tinted toward one of [param palette]'s colors - seeded by [param seed], so the card always shows
-## the same one. Painting a card costs a painter's run, and a card that is only glanced at in its box is
-## never painted: enlarged, mirrored and tinted, a corner of another card's picture is the deck's
-## hand and colors and no picture the viewer has seen.
+## A painting nobody painted, for a card nobody drew ([member Face.part]): a part of one of the deck's own paintings - `{crop, mirror,
+## tint}`, [constant STAND_IN_SHARE] of it somewhere in it, mirrored or not, tinted toward one of [param palette]'s colors - seeded by
+## [param seed], so the card always shows the same one. Painting a card costs a painter's run, and a card only glanced at in its box is
+## never painted: enlarged, mirrored and tinted, a corner of another card's picture is the deck's hand and colors and no picture the
+## viewer has seen.
 static func stand_in(palette: Array, seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -150,9 +146,8 @@ static func _placeholder(ci: CanvasItem, r: Rect2, palette: Array, seed: int, ho
 		ci.draw_colored_polygon(piece[0], piece[1])
 
 
-## [method _placeholder]'s field as `[[polygon, color], ...]`: the window filled, then soft discs cut to
-## it. Only what can be drawn: a disc grazing a curved window (an oval) leaves a sliver of three points
-## all but in a line, which the renderer cannot triangulate ("Invalid polygon data", 2026-10-08).
+## [method _placeholder]'s field as `[[polygon, color], ...]`: the window filled, then soft discs cut to it. Only what can be drawn: a
+## disc grazing a curved window (an oval) leaves a sliver of three points all but in a line, which the renderer cannot triangulate.
 static func placeholder_pieces(r: Rect2, palette: Array, seed: int, hole := PackedVector2Array()) -> Array:
 	if palette.is_empty():
 		palette = CardTable.FALLBACK_PALETTE
@@ -182,7 +177,7 @@ static func drawable(poly: PackedVector2Array) -> bool:
 	return poly.size() >= 3 and not Geometry2D.triangulate_polygon(poly).is_empty()
 
 
-## THE ORNAMENT ROUND THE CARD'S EDGE ([constant CardTable.ORNAMENTS]), along [method edge_path] - in the
+## The ornament round the card's edge ([constant CardTable.ORNAMENTS]), along [method edge_path] - in the
 ## frame's ink and accent, on face and back alike.
 static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color) -> void:
 	var kind := ornament_of(look)
@@ -223,7 +218,7 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 						curl.append(c0 + ((at[1] as Vector2) * cos(a) - (at[2] as Vector2) * side * sin(a)) * rr)
 					ci.draw_polyline(curl, ink, 1.0 * u, true)
 		"serpent":
-			# THE BODY: a strip along the path, broadest behind the head and tapering to the tail, which ends in
+			# The body: a strip along the path, broadest behind the head and tapering to the tail, which ends in
 			# its mouth; its markings along it, then the head - at the top, in the middle
 			var head := 30.0 * u
 			w["start"] = _nearest(w, Vector2(sz.x * 0.5, 0.0))
@@ -337,11 +332,11 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 				ci.draw_circle(a[0], 1.0 * u, ink)
 
 
-## WHERE THE PICTURE GOES on a card face (pixels, [constant FACE_PX]): inside a border of stock, with
+## Where the picture goes on a card face (pixels, [constant FACE_PX]): inside a border of stock, with
 ## a band above it for the numeral and below it for the name - a back has no bands. A card printed with an
 ## ornament round its edge ([constant CardTable.ORNAMENTS]) keeps a wider border for it: the ornament's
 ## line, its own width, then the frame's outermost rule ([method frame_reach]) - so the rules never crowd it.
-## A BORDERLESS card's picture is the whole card, face and back: its type is set over it ([method type_boxes]).
+## A borderless card's picture is the whole card, face and back: its type is set over it ([method type_boxes]).
 static func window(back := false, look: Dictionary = {}) -> Rect2:
 	var sz := Vector2(face_px(look))
 	if borderless(look) or CardTable.written(look):
@@ -354,13 +349,11 @@ static func window(back := false, look: Dictionary = {}) -> Rect2:
 	return Rect2(Vector2(m, m + top), Vector2(sz.x - 2.0 * m, sz.y - 2.0 * m - top - bottom))
 
 
-## THE ARCH ROUND A BACK'S DESIGN (feedback 0006: "that border should be shifted upward on the card, so that it's
-## around the rectangular part"). A back's painting runs to the edges and keeps its own marks inside the middle
-## four sixths ([code]cards/painter.back[/code]), its ornate rectangle among them, so the arch is fitted to
-## that: its foot stands [constant BACK_PAD] under the painting's last sixth, and its springing line
-## [constant BACK_PAD] above the first, the dome a shallower arch between there and [param win]'s top rather than a
-## half circle that would cut the rectangle's corners. The painting keeps the scale it has in [param win] - only
-## the frame and the cut move. Returns `{win, dome}`: the arch's box, and its dome's height for [method outline].
+## The arch round a back's design. A back's painting runs to the edges and keeps its own marks inside the middle four sixths
+## ([code]cards/painter.back[/code]), its ornate rectangle among them, so the arch is fitted to that: its foot stands [constant BACK_PAD]
+## under the painting's last sixth, and its springing line [constant BACK_PAD] above the first, the dome a shallower arch between there and
+## [param win]'s top rather than a half circle that would cut the rectangle's corners. The painting keeps the scale it has in [param win]
+## - only the frame and the cut move. Returns `{win, dome}`: the arch's box, and its dome's height for [method outline].
 static func back_arch(look: Dictionary, win: Rect2) -> Dictionary:
 	var sz := Vector2(face_px(look))
 	var pad := sz.x * BACK_PAD
@@ -391,7 +384,7 @@ const WRITTEN_MARGIN := 0.06
 const PITCH := Vector2(0.115, 0.05)
 
 
-## A WRITTEN CARD'S WRITING LAID OUT ([member Face.writing]): its title [param title] on the head line, and
+## A written card's writing laid out ([member Face.writing]): its title [param title] on the head line, and
 ## [param lines] each on a rule of its own, wrapped onto the next one, indented, where it runs long, across the whole
 ## card (it has no picture: [constant CardTable.FRAMES] `written`). As large as fits every line, from [constant PITCH]'s largest down; past its
 ## smallest, what does not fit is left off with an ellipsis. `{pitch, size, head, rules: [y], title: {at, size},
@@ -474,12 +467,10 @@ const VEIL_FADE := 0.07
 const KEYLINE := 0.1
 
 
-## A BORDERLESS CARD'S TYPE, set on its painting (pixels): `numeral`, a band at the top; `name`, a band at
-## the foot; `panel`, its details over the lower half when the front prints them. Under each, a VEIL of
-## the stock ([method CardTable.veil_alpha]) runs from the card's nearer edge to [constant VEIL_PAD] past
-## the type at full strength, then fades into the painting over [constant VEIL_FADE] - the painting's own
-## foot gone pale or dark, never a plate - and the type is fit to the width the veil runs (the old `bleed`
-## fit its name wider than its plate, [constant CardTable.FRAMES]).
+## A borderless card's type, set on its painting (pixels): `numeral`, a band at the top; `name`, a band at the foot; `panel`, its details
+## over the lower half when the front prints them. Under each, a veil of the stock ([method CardTable.veil_alpha]) runs from the card's
+## nearer edge to [constant VEIL_PAD] past the type at full strength, then fades into the painting over [constant VEIL_FADE] - the
+## painting's own foot gone pale or dark, never a plate - and the type is fit to the width the veil runs.
 static func type_boxes(look: Dictionary) -> Dictionary:
 	var sz := Vector2(face_px(look))
 	var x := sz.x * TYPE_INSET
@@ -508,10 +499,9 @@ static func keyline(size: int) -> int:
 	return maxi(2, roundi(float(size) * KEYLINE))
 
 
-## THE PAINTING NO TYPE IS SET OVER (pixels): where the foil may key its highlights - the window, or on a
-## borderless card what lies clear of its veils at their full strength ([method type_boxes]): a light
-## ink's letters, keyed with the painting's highlights, glowed. [param numbered]: a numeral is printed;
-## [param named]: a name is.
+## The painting no type is set over (pixels): where the foil may key its highlights - the window, or on a borderless card what lies clear
+## of its veils at their full strength ([method type_boxes]); a light ink's letters keyed with the painting's highlights would glow.
+## [param numbered]: a numeral is printed; [param named]: a name is.
 static func bare(look: Dictionary, details := false, numbered := false, named := true) -> Rect2:
 	var win := front_window(look, details)
 	if not borderless(look):
@@ -554,7 +544,7 @@ static func window_of(look: Dictionary) -> String:
 	return String(f.get("window", "rect"))
 
 
-## THE WINDOW'S OUTLINE ([constant CardTable.WINDOWS]) round the picture's box [param r], grown outward by
+## The window's outline ([constant CardTable.WINDOWS]) round the picture's box [param r], grown outward by
 ## [param g] pixels - every rule of the frame is the same shape a little further out, so a grown outline is
 ## an offset of it, not the shape scaled. Closed, clockwise on screen, the first point not repeated.
 ## [param dome] is how tall an arch's dome stands, as a share of a half circle's height ([method back_arch]).
@@ -638,7 +628,7 @@ static func closed(pts: PackedVector2Array) -> PackedVector2Array:
 	return out
 
 
-## THE CARD'S OWN EDGE, [param inset] pixels in: a rectangle rounded as the card is cut ([method
+## The card's own edge, [param inset] pixels in: a rectangle rounded as the card is cut ([method
 ## CardTable.corner_radius]) - the line an ornament runs along.
 static func edge_path(look: Dictionary, inset: float) -> PackedVector2Array:
 	var sz := Vector2(face_px(look))
@@ -652,7 +642,7 @@ static func edge_path(look: Dictionary, inset: float) -> PackedVector2Array:
 	return pts
 
 
-## A CLOSED PATH WALKED BY LENGTH: `{pts, at}` - its points (closed) and the length along it to each.
+## A closed path walked by length: `{pts, at}` - its points (closed) and the length along it to each.
 static func walk(pts: PackedVector2Array) -> Dictionary:
 	var c := closed(pts)
 	var at := PackedFloat32Array([0.0])
@@ -731,7 +721,7 @@ static func _fit(font: Font, text: String, size: int, width: float) -> int:
 	return s
 
 
-## THE PRINTED CARD - face or back. Everything it draws comes from the episode's look and the
+## The printed card - face or back. Everything it draws comes from the episode's look and the
 ## card; the picture is optional (a placeholder until it lands).
 class Face:
 	extends Node2D
@@ -741,15 +731,15 @@ class Face:
 	var art: Texture2D = null
 	var back := false
 	var details := false
-	## A BACK WITH THE CARD'S TEXT ON IT ([constant CardTable.TEXTS] `back`): [member card]'s booklet
+	## A back with the card's text on it ([constant CardTable.TEXTS] `back`): [member card]'s booklet
 	## printed in a panel over the printing's back, as a baseball card's stats are.
 	var printed := false
-	## A CARD NOBODY WROTE, printed as the others are ([member printed]): the panel's type ruled where a
+	## A card nobody wrote, printed as the others are ([member printed]): the panel's type ruled where a
 	## name, a few facts and a paragraph would be set - the unseen cards in a box, whose backs have to be
 	## the drawn cards' kind of back. [member card] carries only a `key`, which seeds the lines. On a
-	## FRONT it is a card with no name to print: its band is left bare, its details ruled.
+	## Front it is a card with no name to print: its band is left bare, its details ruled.
 	var anonymous := false
-	## THE PART OF [member art] THIS FACE SHOWS ([method CardFaces.stand_in]) when the picture is
+	## The part of [member art] this face shows ([method CardFaces.stand_in]) when the picture is
 	## another card's, standing in for one nobody painted - all of it when empty, as a drawn card's is.
 	var part := {}
 	var seed := 0
@@ -763,7 +753,7 @@ class Face:
 		var accent := CardTable.color(String(frame.get("accent", "#c9a227")))
 		# the whole face is stock: the card's slab is cut to its corners ([method CardTable.corner_radius])
 		draw_rect(Rect2(Vector2.ZERO, sz), stock)
-		# A WRITTEN CARD is ruled first, its picture laid on the stock, its writing over the rules
+		# A written card is ruled first, its picture laid on the stock, its writing over the rules
 		var written := CardTable.written(look) and not back
 		var layout := {}
 		if written:
@@ -784,7 +774,7 @@ class Face:
 			# ...nothing painted on it: its writing is all a written card's face is
 			pass
 		elif art != null:
-			# a reversed card is printed the right way up: the TABLE turns it over
+			# a reversed card is printed the right way up: the table turns it over
 			CardFaces._cover_shape(self, art, win, hole, part)
 		else:
 			CardFaces._placeholder(self, win, look.get("palette", []),
@@ -807,7 +797,7 @@ class Face:
 		elif printed:
 			_printed_back(win, stock, ink, accent)
 
-	## WHAT A WRITTEN CARD SAYS: its designer's `writing` - its title and its lines - else its name, and its entry's
+	## What a written card says: its designer's `writing` - its title and its lines - else its name, and its entry's
 	## text a line to each line written.
 	func _writing_of() -> Dictionary:
 		var w: Dictionary = card.get("writing", {}) if card.get("writing") is Dictionary else {}
@@ -824,7 +814,7 @@ class Face:
 	func _hand() -> Font:
 		return CardTable.font(String(_hand_row()["file"]))
 
-	## A WRITTEN CARD'S STOCK, ruled ([constant CardTable.RULINGS]) to [param layout]'s pitch ([method
+	## A written card's stock, ruled ([constant CardTable.RULINGS]) to [param layout]'s pitch ([method
 	## CardFaces.written_layout]): faint blue lines from edge to edge under a line of [param accent] below the title, or
 	## graph paper's squares - or nothing, on plain stock.
 	func _ruling(layout: Dictionary, sz: Vector2, accent: Color) -> void:
@@ -853,7 +843,7 @@ class Face:
 	## An index card's blue.
 	const RULE_BLUE := Color(0.42, 0.58, 0.82, 0.55)
 
-	## A WRITTEN CARD'S WRITING, as [param layout] sets it, in [param ink] - or, on a card nobody wrote (one of a box's
+	## A written card's writing, as [param layout] sets it, in [param ink] - or, on a card nobody wrote (one of a box's
 	## own, [member anonymous]), ink scribbled where a title and a few lines would be.
 	func _writing(layout: Dictionary, ink: Color, sz: Vector2) -> void:
 		var hand := _hand()
@@ -878,7 +868,7 @@ class Face:
 		for r in layout["rows"]:
 			draw_string(hand, (r as Dictionary)["at"], String((r as Dictionary)["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, int(layout["size"]), ink)
 
-	## THE PAINTING NO TYPE IS SET OVER on this front ([method CardFaces.bare]) - where foil may key it.
+	## The painting no type is set over on this front ([method CardFaces.bare]) - where foil may key it.
 	func bare() -> Rect2:
 		return CardFaces.bare(look, details, not anonymous and not String(card.get("numeral", "")).is_empty(), not anonymous)
 
@@ -910,7 +900,7 @@ class Face:
 				num_size, text_ink)
 		_details(panel, text_ink, accent)
 
-	## THE CARD'S FACTS in [param panel]: its name, a rule, its keywords and its text, as large as fits.
+	## The card's facts in [param panel]: its name, a rule, its keywords and its text, as large as fits.
 	func _details(panel: Rect2, text_ink: Color, accent: Color) -> void:
 		var face := CardTable.font(String(look.get("title_face", "roman")))
 		var book := CardTable.font(CardTable.BOOK_FACE)
@@ -946,13 +936,12 @@ class Face:
 		draw_multiline_string(book, Vector2(x, y + book.get_ascent(size)), body,
 			HORIZONTAL_ALIGNMENT_LEFT, w, size, -1, text_ink)
 
-	## THE CARD'S TEXT ON ITS BACK: a panel of the card's stock over the back's design - its name, its
+	## The card's text on its back: a panel of the card's stock over the back's design - its name, its
 	## facts (the booklet's keywords) and its text, set to fill the panel.
 	func _printed_back(win: Rect2, stock: Color, ink: Color, accent: Color) -> void:
 		var panel := win.grow(-win.size.x * 0.07)
-		# The reverse's printing replaces its artwork with paper. Keeping the dark
-		# design under a translucent panel made long entries almost invisible in
-		# candlelight, especially on dark stock.
+				# The reverse's printing replaces its artwork with paper: a dark design under a translucent panel makes long entries
+				# nearly invisible in candlelight, especially on dark stock.
 		var paper := stock.lightened(0.8)
 		CardFaces._box(self, panel, paper, win.size.x * 0.03)
 		CardFaces._box(self, panel.grow(-6.0), accent, win.size.x * 0.025, false, 3.0)
@@ -996,7 +985,7 @@ class Face:
 		draw_multiline_string(book, Vector2(x, y + book.get_ascent(size)), text, HORIZONTAL_ALIGNMENT_LEFT, w,
 			size, -1, text_ink)
 
-	## TYPE NOBODY WROTE, in [param room]: ruled word by word where a printed back sets it - a centered
+	## Type nobody wrote, in [param room]: ruled word by word where a printed back sets it - a centered
 	## name, a few facts between the accent's rules, a paragraph ending on a short line.
 	func _ruled_type(room: Rect2, ink: Color, accent: Color) -> void:
 		var rng := RandomNumberGenerator.new()
@@ -1026,7 +1015,7 @@ class Face:
 			words.call(x, x + w * (rng.randf_range(0.3, 0.8) if i == lines - 1 else 1.0), y, 10.0)
 			y += 28.0
 
-	## THE RULES ROUND THE PICTURE, in the window's own shape ([method CardFaces.outline]).
+	## The rules round the picture, in the window's own shape ([method CardFaces.outline]).
 	func _frame(style: String, shape: String, win: Rect2, ink: Color, accent: Color, sz: Vector2, dome := 1.0) -> void:
 		var r := sz.x * 0.02
 		var line := func(g: float, col: Color, w: float) -> void:
@@ -1040,7 +1029,7 @@ class Face:
 				var L := sz.x * 0.11
 				var off := sz.x * 0.022
 				var w := sz.x * 0.012
-				# a bracket at every corner the outline turns OUT at, sharply - a rectangle's four, an arch's
+				# a bracket at every corner the outline turns out at, sharply - a rectangle's four, an arch's
 				# foot and shoulders - never on a curve or where it turns in
 				var o := CardFaces.outline(shape, win, off, dome)
 				var n := o.size()
@@ -1096,7 +1085,7 @@ class Face:
 			draw_string(face, Vector2(band_top.position.x, ny), num, HORIZONTAL_ALIGNMENT_CENTER,
 				band_top.size.x, ns, ink)
 
-	## A BORDERLESS CARD'S NAME AND NUMERAL, set on its painting ([method CardFaces.type_boxes]), each on a
+	## A borderless card's name and numeral, set on its painting ([method CardFaces.type_boxes]), each on a
 	## veil of the stock planned for it ([method CardTable.veil_of]).
 	func _painted_lettering(ink: Color, stock: Color, sz: Vector2) -> void:
 		var face := CardTable.font(String(look.get("title_face", "roman")))
@@ -1112,7 +1101,7 @@ class Face:
 			_painted_line(CardTable.font(String(look.get("title_face", "roman"))), num, CardFaces.type_boxes(look)["numeral"],
 				int(float(CardFaces.face_px(look).y) * 0.045), ink, stock)
 
-	## ONE LINE OF TYPE ON THE PAINTING, centered in [param band] as large as fits up to [param cap]: its
+	## One line of type on the painting, centered in [param band] as large as fits up to [param cap]: its
 	## veil, then the keyline round its letters in the veil's color ([constant CardFaces.KEYLINE]), then the
 	## letters - at [constant CardTable.TEXT_CONTRAST] against whatever the painting under them is.
 	func _painted_line(face: Font, text: String, band: Rect2, cap: int, ink: Color, stock: Color) -> void:
@@ -1123,7 +1112,7 @@ class Face:
 		draw_string_outline(face, at, text, HORIZONTAL_ALIGNMENT_CENTER, band.size.x, size, CardFaces.keyline(size), v["veil"])
 		draw_string(face, at, text, HORIZONTAL_ALIGNMENT_CENTER, band.size.x, size, v["ink"])
 
-	## THE VEIL under [param band]: [param color] at [param alpha], across the whole card, from the card's
+	## The veil under [param band]: [param color] at [param alpha], across the whole card, from the card's
 	## nearer edge to [constant CardFaces.VEIL_PAD] past the band - then eased out to nothing over
 	## [constant CardFaces.VEIL_FADE], in strips whose edges carry a smoothstep's values.
 	func _veil(band: Rect2, color: Color, alpha: float) -> void:
@@ -1144,7 +1133,7 @@ class Face:
 				PackedColorArray([c0, c0, c1, c1]))
 
 
-## THE BOOKLET'S COLORS are the card's: its stock for the paper, its ink and accent for the type,
+## The booklet's colors are the card's: its stock for the paper, its ink and accent for the type,
 ## each kept readable on that paper (the running text at [constant CardTable.TEXT_CONTRAST]).
 ## [param shade] (0..1) takes a page a hair darker, so two pages are not one sheet.
 static func page_colors(look: Dictionary, shade: float) -> Dictionary:
@@ -1157,7 +1146,7 @@ static func page_colors(look: Dictionary, shade: float) -> Dictionary:
 		"accent": CardTable.legible_ink(CardTable.color(String(frame.get("accent", "#7a2e3a"))), paper)}
 
 
-## THE BOOKLET PAGE beside a drawn card: its entry in the deck's little booklet, printed in the
+## The booklet page beside a drawn card: its entry in the deck's little booklet, printed in the
 ## card's colors ([method page_colors]). Shown, never read aloud.
 class Page:
 	extends Node2D
@@ -1201,7 +1190,7 @@ class Page:
 			_:
 				_classic(f)
 
-	## THE PAGE AS IT ALWAYS WAS: everything centered, the text justified.
+	## The page as it always was: everything centered, the text justified.
 	func _classic(f: Dictionary) -> void:
 		var sz: Vector2 = f["sz"]
 		var m := float(f["m"])
@@ -1257,7 +1246,7 @@ class Page:
 			hi = maxf(hi, p.y)
 		return Vector2(-lo, hi) / 100.0
 
-	## A HEADING TO THE LEFT over a rule, the text opening on a drop capital, the keywords at the foot.
+	## A heading to the left over a rule, the text opening on a drop capital, the keywords at the foot.
 	func _drop(f: Dictionary) -> void:
 		var sz: Vector2 = f["sz"]
 		var m := float(f["m"])
@@ -1305,7 +1294,7 @@ class Page:
 			if hh <= foot - y:
 				break
 			size -= 1
-		# THE CAPITAL stands as tall as the three lines beside it
+		# The capital stands as tall as the three lines beside it
 		var cs := int(book.get_height(size) * 3.3)
 		var base := y + book.get_height(size) * 2.0 + book.get_ascent(size)
 		# A capital that hangs below its baseline (J, Q) must not reach the fourth line: it is raised
@@ -1336,7 +1325,7 @@ class Page:
 		if not tail.is_empty():
 			draw_multiline_string(book, Vector2(x, yy), tail, HORIZONTAL_ALIGNMENT_LEFT, w, size, -1, ink)
 
-	## THE NAME OUT OF A BAND of the accent across the top, the keywords under it, the text centered.
+	## The name out of a band of the accent across the top, the keywords under it, the text centered.
 	func _banner(f: Dictionary) -> void:
 		var sz: Vector2 = f["sz"]
 		var m := float(f["m"])
@@ -1372,7 +1361,7 @@ class Page:
 		y += 32.0
 		_text(f, x, y, w, sz.y - m * 1.1, HORIZONTAL_ALIGNMENT_CENTER)
 
-	## THE NAME AND NUMERAL ON ONE LINE over a heavy rule, the keywords listed, then the text, ragged.
+	## The name and numeral on one line over a heavy rule, the keywords listed, then the text, ragged.
 	func _ledger(f: Dictionary) -> void:
 		var sz: Vector2 = f["sz"]
 		var m := float(f["m"])
@@ -1420,7 +1409,7 @@ class Page:
 		y += 18.0
 		_text(f, x, y, w, sz.y - m * 0.9, HORIZONTAL_ALIGNMENT_LEFT)
 
-	## THE ENTRY'S TEXT from [param top] down to [param bottom], as large as fits.
+	## The entry's text from [param top] down to [param bottom], as large as fits.
 	func _text(f: Dictionary, x: float, top: float, w: float, bottom: float, align: HorizontalAlignment) -> void:
 		var book: Font = f["book"]
 		var text := String(f["text"])

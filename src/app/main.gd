@@ -10,8 +10,7 @@ extends Node2D
 
 const Bake := preload("res://src/audio/bake.gd")
 
-## How long the show clock may stand still in a render before it is reported, in seconds of
-## render time. Comfortably above a single slow frame and well under the shortest stall seen.
+## How long the show clock may stand still in a render before it is reported, in seconds of render time.
 const CLOCK_STALL_WARN := 0.5
 
 var _list: Node = null               # the notes list, while no note is open (step 8)
@@ -27,61 +26,44 @@ var _stream: Node = null             # the live VoiceStream feeding the session
 var _subtitles: Node = null          # karaoke overlay, present when the audio has a sidecar
 var _status_t := 0.0     # throttle for writing render progress (export mode)
 
-# THE STAGE (2026-07-27): scenes no longer render in the root viewport. They
-# live inside a SubViewport presented through a TextureRect UNDER the UI, so
-# a heavy scene's cost can be governed independently: while a scene is heavy
-# on this thread the governor runs the STAGE every 2nd, 3rd or 6th frame and
-# the UI keeps compositing at full rate. The scenes get slower; the
-# instrument stays playable. Export mode bypasses the governor entirely.
-# HOW MANY PIXELS IT HAS is the Graphics menu's (its Resolution row, see
-# _sync_stage_size): the frame in the window's canvas units unless chosen,
-# 1920 x 1080 at any window, since the window stretches its canvas.
+# The stage: scenes render in a SubViewport shown through a TextureRect under the UI, so the governor
+# can run the stage every 2nd, 3rd or 6th frame while the UI composites at full rate. Export mode
+# bypasses the governor. Its pixel size is the Graphics menu's Resolution row (_sync_stage_size): the
+# frame in canvas units unless chosen, 1920 x 1080 at any window.
 var _stage: SubViewport = null
 var _stage_view: TextureRect = null
-# WHAT THE SHOW IS CARRIED ON (see medium.gd). Built with the stage and mounted inside
-# it, so the governor above owns it too: stopping the stage stops the medium and every
-# panel viewport nested under it, together. Persists across a note's takes - in the
-# synthesis modes attach/detach run again on every take, and rebuilding the page (and its
-# render targets) per take would throw away the comic on every settings change - and goes
-# with the note (_clear_stage), so the next one starts on an empty stage.
+# What the show is carried on (medium.gd). Mounted inside the stage, so the governor stops the medium
+# and every panel viewport nested under it together. Persists across a note's takes (rebuilding it per
+# take would discard the page and its render targets); `_clear_stage` removes it with the note.
 var _medium: Medium = null
-# THE GOVERNOR (stage_governor.gd has the why, and what was tried). What it reads is THIS
-# THREAD'S OWN TIME on a frame the stage ran in - from the frame's first `_process`
-# (_frame_begins) to the moment it is handed to the renderer (_frame_handed) - never the
-# whole frame's, which is also the graphics card's and the display's.
+# The governor (stage_governor.gd) reads this thread's own time on a frame the stage ran in, from the
+# frame's first `_process` (_frame_begins) to the moment it is handed to the renderer (_frame_handed),
+# never the whole frame's time (which includes the graphics card and the display).
 var _governor := StageGovernor.new()
 var _frame_began := 0                # ticks (usec) as this frame's processing began
 var _frame_own_ms := 0.0             # what the last frame cost this thread, until the renderer took it
 var _slow_said := false              # slow frames this thread is not behind: said once a scene
 var _slow_t := -1.0                  # seconds the stage's time on the card has been measured for that, -1 when not
 
-# Export render mode: this instance was relaunched by the exporter in Movie Maker
-# mode (--export). It runs the session clean (no overlays) and quits when the song
-# ends, so the recorded movie starts and stops with the music.
+# Export render mode: the exporter relaunched this instance in Movie Maker mode (--export). It runs
+# the session with no overlays and quits when the song ends.
 var _export_mode := false
 var _filter_said := ""               # last look printed, so a resize does not repeat it
 ## --until <seconds>: stop there. 0 means "the whole thing".
 var _until := 0.0
-## Whether to report a stalled show clock. On for every render, and available to a PLAIN
-## session with `--clock-watch` - which is the cheap way to ask the question, because it needs
-## no encoder and runs at the speed of the audio rather than the speed of the renderer.
+## Whether to report a stalled show clock. On for every render; a plain session can ask with `--clock-watch`
+## (needs no encoder and runs at the speed of the audio).
 var _clock_watch := false
-# THE RENDER CLOCK WATCH. The show's picture - every scene and the karaoke line - is driven by
-# `Spectrum.current.time`, and a render writes one video frame per engine iteration. So if that
-# clock stops advancing while iterations continue, the OUTPUT holds a still while the audio
-# track plays on, which is exactly what was reported: a subtitle card sitting nineteen seconds
-# past the end of its own sentence with the karaoke fill frozen mid-word.
-#
-# Six hours of render is too expensive to bisect by watching, and the render's own log rotates
-# away, so the render says so itself. Export only: a live session drops frames for a hundred
-# ordinary reasons and this would be noise there.
+# The render clock watch. Every scene and the karaoke line are driven by `Spectrum.current.time` while a
+# render writes one video frame per engine iteration; if that clock stops while iterations continue, the
+# output holds a still while the audio plays on. Export only: a live session drops frames for ordinary
+# reasons and would only produce noise.
 var _clock_t := -1.0
 var _clock_stuck := 0.0
 var _clock_frames := 0
 
 func _ready() -> void:
-	# window-close is handled by _shutdown (see _notification): the WM close
-	# button must run our teardown, not the engine's default instant quit
+	#window-close runs _shutdown (see _notification): the WM close button must run our teardown
 	get_tree().set_auto_accept_quit(false)
 	var args := OS.get_cmdline_user_args()
 	if args.has("--apply-update"):
@@ -95,8 +77,8 @@ func _ready() -> void:
 		print(JSON.stringify(AppUpdate.build_info()))
 		get_tree().quit()
 		return
-	# Export templates ignore --script. The exported app enters its offline analyzer
-	# through the main scene instead; the editor keeps using bake_runner.gd.
+	#Export templates ignore --script, so the exported app enters its offline analyzer through the main
+	#scene; the editor uses bake_runner.gd.
 	if args.has("--bake-song"):
 		get_tree().quit(SpectrumBake.run_cli(args))
 		return
@@ -140,23 +122,20 @@ func _ready() -> void:
 		print("ghost/export-smoke: PASS")
 		get_tree().quit(0)
 		return
-	# `--deps` before everything: it is the thing you run when nothing else works,
-	# so it must not depend on a mode, a window or an audio device coming up. Pairs
-	# with `--headless`, and exits non-zero when something a feature needs is
-	# missing, so it can gate an install script.
+	#`--deps` is handled before everything else so it needs no mode, window or audio device. Pairs with
+	#`--headless`; exits non-zero when something a feature needs is missing.
 	if args.has("--deps"):
 		var rows := Deps.report()
 		print(Deps.format_report(rows))
 		get_tree().quit(0 if Deps.verdict(rows).is_empty() else 1)
 		return
-	# `--provision [all|update]`: install ghost's own dependencies now, printing each step -
-	# the same jobs an ordinary launch runs in the background, for a terminal, a setup script
-	# or a first run on a new machine. Exits non-zero if anything asked for could not be had.
+	#`--provision [all|update]`: install ghost's own dependencies now, printing each step (the jobs an
+	#ordinary launch runs in the background). Exits non-zero if anything asked for could not be had.
 	if args.has("--provision"):
 		_provision(_arg_value(args, "--provision"))
 		return
-	# `--episode-check <dir>`: what is wrong with an episode as it stands, printed, then exit - for an edit made in a terminal
-	# (next/editing.md step 4). Non-zero when anything is.
+	#`--episode-check <dir>`: print what is wrong with an episode as it stands, then exit; non-zero when
+	#anything is (next/editing.md).
 	if args.has("--episode-check"):
 		var said := TableEpisode.at_dir(_arg_value(args, "--episode-check")).problems()
 		for p in said:
@@ -164,20 +143,17 @@ func _ready() -> void:
 		print("ghost: episode - %s" % ("nothing wrong" if said.is_empty() else "%d problem(s)" % said.size()))
 		get_tree().quit(0 if said.is_empty() else 1)
 		return
-	# `--showcase-now`: record the README's animation now and quit (see showcase.gd) - from a
-	# terminal, so it needs nothing else to come up
 	if args.has("--showcase-now"):
 		add_child(Showcase.new())
 		return
-	# THE PHONE SHELL (next/notes.md step 11): on a phone - or --handheld - Ghost Notes is a notes app
-	# and nothing more: the list and the editor, no stage, no transport, no furniture, no agent
+	#The phone shell (next/notes.md): on a phone, or with --handheld, only the notes list and editor - no
+	#stage, transport, furniture or agent.
 	if Boot.handheld():
 		add_child(preload("res://src/app/phone_shell.gd").new())
 		return
-	# Mask mode is a standalone authoring tool (see mask_editor.gd) - tied to one
-	# specific external clip, not the audio-reactive show - so it does not touch the
-	# Director (a live editor conducts only the transport) and is checked before
-	# everything else.
+	#Mask mode is a standalone authoring tool (see mask_editor.gd) tied to one clip, not the audio-reactive
+	#show: it does not touch the Director (a live editor conducts only the transport) and is checked
+	#before everything else.
 	if args.has("--mask-render"):
 		_begin_mask_render(_arg_value(args, "--mask-render"))
 		return
@@ -186,74 +162,52 @@ func _ready() -> void:
 		_until = float(_arg_value(args, "--until"))
 	_clock_watch = _export_mode or args.has("--clock-watch")
 	if _export_mode:
-		# Background render: Boot (first autoload) already hid the window as early as
-		# possible, and the exporter's override.cfg has set the output resolution + stretch
-		# mode at engine startup (Movie Maker locks resolution before any script runs, so
-		# it cannot be set from here). Run clean and quit when the song ends.
+		#Boot (first autoload) already hid the window, and the exporter's override.cfg set the output
+		#resolution and stretch mode at engine startup (Movie Maker locks resolution before any script
+		#runs). Run clean and quit when the song ends.
 		Spectrum.song_finished.connect(func(): get_tree().quit())
 		_begin_session()
-		# `--from <seconds>`: only a stretch is rendered, from there (Stitch puts it back into the earlier export)
+		#`--from <seconds>`: render only a stretch from there (Stitch puts it back into the earlier export)
 		var from := float(_arg_value(args, "--from")) if not _arg_value(args, "--from").is_empty() else 0.0
 		if from > 0.0 and Spectrum.has_audio():
 			Spectrum.render_from(from)
 			Director.seek_show(from)
 			print("ghost export: rendering from %.2fs" % from)
-		# A render with no audio has NO END: song_finished never fires, so Movie
-		# Maker records silence until something kills it (one such run reached
-		# 5.7 GB). An export is defined by its audio - if it didn't load, say so
-		# loudly and exit non-zero so the exporter reports a failure instead of
-		# leaving the user watching 0% forever.
+		#A render with no audio has no end (song_finished never fires), so report a failure and exit
+		#non-zero instead of recording silence forever.
 		if not Spectrum.has_audio():
 			printerr("ghost: EXPORT ABORTED - the audio did not load (%s)" %
 				_arg_value(args, "--audio"))
 			get_tree().quit(1)
 			return
-		# "Automate the Synthesis game (record the UI)": the render otherwise runs
-		# clean, but with this flag the Synthesis panel opens over the take and
-		# plays itself (see synth_editor.gd's autopilot), so the UI is IN the
-		# video. It generates no audio - the take is the audio - and persists
-		# nothing, so a render never touches the player's real save.
+		#With this flag the Synthesis panel opens over the take and plays itself (see synth_editor.gd's
+			#autopilot), so the UI is in the video. It generates no audio and persists nothing.
 		if args.has("--synth-autopilot"):
 			_open_synth_autopilot()
 		return
-	# The live window stretches in "canvas_items" mode (set in project.godot): 2D is
-	# rasterized at the window's native pixel resolution - so fullscreen is crisp, not an
-	# upscale of the 1080p base - while the coordinate system scales *proportionally*, so
-	# UI and scene content keep their relative size and snap back exactly when the window
-	# returns to its original size. (Export overrides this; see _apply_export_resolution.)
-	# The CHROME is the shared session furniture - exporter, assistant, and the
-	# per-session ` feedback console - created ONCE here for every interactive
-	# mode, so a mode can never again ship without them (see chrome.gd for the
-	# lesson that forced this). Persistent across sessions by design: an
-	# in-flight export and a queued assistant dispatch must survive session
-	# churn and the return to the home screen.
+	#The live window stretches in "canvas_items" mode (project.godot): 2D rasterizes at the window's
+	#native resolution while the coordinate system scales proportionally. (Export overrides this; see
+	#_apply_export_resolution.)
+	#The chrome is the shared session furniture (exporter, assistant, feedback console), created once
+	#here for every interactive mode; it persists across sessions so an in-flight export and a queued
+	#assistant dispatch survive the return to the home screen.
 	_chrome = preload("res://src/app/chrome.gd").new()
 	add_child(_chrome)
-	# something docked under the show took, or gave back, part of the frame: the stage refits
+	#something docked under the show took, or gave back, part of the frame: the stage refits
 	_chrome.stage_room_changed.connect(_sync_stage_size)
-	# THE README'S RECORDING: this process is the second ghost Showcase started, so it plays the
-	# showcase note under Movie Maker and quits (showcase_recorder.gd)
 	if args.has("--showcase"):
 		var rec := ShowcaseRecorder.new()
 		rec.main = self
 		rec.work = _arg_value(args, "--showcase")
 		add_child(rec)
 		return
-	# ...and in a development launch, the README's animation recorded again when what it shows
-	# has changed (it decides for itself, and does nothing in an exported build)
 	add_child(Showcase.new())
-	# When the current song finishes: an AUTO session returns to the home screen;
-	# MANUAL and SYNTH sessions are endless - handled inside _on_song_finished.
 	Spectrum.song_finished.connect(_on_song_finished)
-	# the episodes' folder, moved once since Cards became Table - before any way in that may open a show
 	_adopt_old_episodes()
-	# ...and each note's medium, moved once into its `medium:` block since the Medium card took the Picture's place
+	#each note's medium, moved once into its `medium:` block
 	_adopt_old_media()
-	# ...and the demo note, made once on a machine (the phone shell returned above, so never on a phone)
+	#the demo note, made once on a machine (the phone shell returned above, so never on a phone)
 	_seed_demo_note()
-	# THE COMMAND LINE'S WORKSPACES, through the one path a note takes - BELOW the chrome,
-	# deliberately: every interactive mode gets the full furniture. `--mask-edit` used to be read
-	# before Chrome existed, so a command-line Masking session had none of it (step 7).
 	if args.has("--mask-edit"):
 		start_workspace("clip", _arg_value(args, "--mask-edit"))
 		return
@@ -274,16 +228,13 @@ func _ready() -> void:
 		_show_list()
 
 
-# A CLI flag means "I know what I want" (authoring, automation, headless): boot
-# straight into a song session, past the list, so the existing --audio/--scene/--storyboard flows
-# and the headless tests are unchanged. (`--no-splash` went with the home screen, step 8.)
+# A CLI flag means "I know what I want" (authoring, automation, headless): boot straight into a song
+# session, past the list, so the --audio/--scene/--storyboard flows and headless tests are unchanged.
 func _wants_direct_boot() -> bool:
 	var args := OS.get_cmdline_user_args()
 	return args.has("--audio") or args.has("--scene") or args.has("--storyboard")
 
 
-## THE NOTES LIST, where Ghost Notes opens and where every note returns (step 8): it replaced the
-## home screen. The ⌂ hides while it is up - there is nothing to leave.
 func _show_list() -> void:
 	var list := preload("res://src/app/notes_list.gd").new()
 	list.open_note = open_note
@@ -295,11 +246,9 @@ func _show_list() -> void:
 		_chrome.set_note("")
 
 
-## THE EPISODES MOVE ONCE (2026-10-26, when Cards became Table - the user: "make those more generalized"):
-## they were kept under `user://cards/`, and the first launch after the rename moves that folder to
-## [constant TableEpisode.ROOT] - a rename in place, nothing copied (the Tarot folder moved the same way,
-## 2026-10-06). Never in a process that may not write the author's things, and never over a folder already
-## there. Remove once it has run.
+## Moves the episodes' folder from `user://cards/` to [constant TableEpisode.ROOT] once (a rename in
+## place, nothing copied). Never in a process that may not write the author's things, and never over a
+## folder already there. Remove once it has run.
 func _adopt_old_episodes() -> void:
 	var old := ProjectSettings.globalize_path("user://cards")
 	var now := ProjectSettings.globalize_path(TableEpisode.ROOT)
@@ -312,11 +261,10 @@ func _adopt_old_episodes() -> void:
 	print("ghost: the episodes moved to %s" % now)
 
 
-## THE MEDIUM'S BLOCK, MOVED ONCE (2026-11-09, when the Picture card became the Medium card and the Letter and the
-## Dispatch desk its formats): each note in the list keeping a `picture:`, `letter:` or `dispatch:` block has it written
-## as the one `medium:` block ([method Components.adopted_medium]). Never in a process that may not write the author's
-## things, and once per machine (`[notes] media_moved`; a note that would not write is tried again next launch). Remove
-## once it has run.
+## Writes each note's `picture:`, `letter:` or `dispatch:` block as the one `medium:` block
+## ([method Components.adopted_medium]). Never in a process that may not write the author's things;
+## once per machine (`[notes] media_moved`; a note that would not write is tried again next launch).
+## Remove once it has run.
 func _adopt_old_media() -> void:
 	if Settings.is_read_only() or NoteStore.root != NoteStore.DEFAULT \
 			or bool(Settings.read(NoteStore.SECTION, "media_moved", false)):
@@ -338,9 +286,9 @@ func _adopt_old_media() -> void:
 		print("ghost: %d note(s) keep their medium in a `medium:` block now" % moved)
 
 
-## THE DEMO NOTE, MADE ONCE ([method Showcase.make_demo_note]: the README's prism, its storyboard the note's own to edit):
-## once per machine (`[notes] demo_made`), so a deleted demo stays deleted; never in a process that may not write the
-## author's things, nor under a notes folder moved aside. One that could not be made is tried again next launch.
+## Makes the demo note once ([method Showcase.make_demo_note]: the README's prism, its storyboard the
+## note's own to edit): once per machine (`[notes] demo_made`), so a deleted demo stays deleted; never
+## in a process that may not write the author's things, nor under a notes folder moved aside.
 func _seed_demo_note() -> void:
 	if Settings.is_read_only() or NoteStore.root != NoteStore.DEFAULT \
 			or bool(Settings.read(NoteStore.SECTION, "demo_made", false)):
@@ -352,18 +300,15 @@ func _seed_demo_note() -> void:
 	print("ghost: the demo note \"%s\" is in the notes list (%s)" % [Showcase.TITLE, path])
 
 
-## OPEN A NOTE: every note opens the same way. What it has attached is read off its blocks
+## Open a note: every note opens the same way. What it has attached is read off its blocks
 ## ([method Components.attached_of]), and the workspace those components name runs it
 ## ([method Components.workspace_of]) - its own panel, unless something attached is an editor of
 ## its own (a voice's reading, a show of cards, the voice lab, a clip). A workspace that reads the
-## note's text is pointed at the note before it is built, so it opens synced to it; a clip is the
-## note's own block's path.
+## note's text is pointed at the note before it is built; a clip is the note's own block's path.
 ##
-## EVERY NOTE STARTS FROM NOTHING (2026-10-06, the user: "every time we enter a note, we should wipe
-## the scene and start fresh with whatever that new note is trying to do... start from the baseline
-## of off, not played yet, not paused"): the last note's stage went with it ([method _clear_stage]),
-## the picture settings go back to their defaults here ([method Director.reset_show]) for the note's
-## blocks to set, and nothing plays until Play.
+## Every note starts from nothing: the last note's stage went with it ([method _clear_stage]), the
+## picture settings go back to their defaults ([method Director.reset_show]) for the note's blocks to
+## set, and nothing plays until Play.
 func open_note(path: String) -> void:
 	if path.is_empty() or not FileAccess.file_exists(path):
 		push_warning("ghost: there is no note at '%s'" % path)
@@ -387,19 +332,15 @@ func open_note(path: String) -> void:
 			start_workspace(ws, "", path)
 
 
-## The note again, as whatever its blocks now say it is - a component was attached to it, or
-## taken off.
 func reopen_note(path: String) -> void:
 	_end_session(false)
 	open_note(path)
 
 
-## OPEN A FILE FROM DISK AS THE NOTE, from inside a note (its Script card's Open…, 2026-10-12, the
-## user: "I need to load a file from disk, and there's no way to do that currently. The 'Save'
-## button would just overwrite the file on disk"). What the list's "Existing note…" does, without
-## the trip to the list: the file joins the list and opens through the one session path, as what
-## its own blocks say it is. Nothing is written into it, and the note left behind is left as it is
-## (its panel wrote what it held first). Returns "" once it is open, or why it could not be.
+## Open a file from disk as the note, from inside a note (its Script card's Open...). Like the list's
+## "Existing note...": the file joins the list and opens through the one session path. Nothing is
+## written into it, and the note left behind is left as it is. Returns "" once it is open, or why it
+## could not be.
 func open_file(path: String) -> String:
 	var why := leave_blocker()
 	if not why.is_empty():
@@ -411,17 +352,13 @@ func open_file(path: String) -> String:
 	return ""
 
 
-## THE NOTE OPEN NOW WAS SAVED INTO ANOTHER FILE (its Script card's Save…, 2026-10-12): [param to] is
-## the note from here on - what "⋯" deletes, what the list shows and what opens next time. The panel
-## has moved already ([signal DocSource.moved]); without this the note was still [param from], so
-## opening it again read the old file and the edits made since were in one nothing read (the user:
-## "That selection keeps getting reverted back to the untitled cards label, and I am unsure if my
-## edits are even being used"). ONE NOTE, ONE FILE: a note Ghost Notes was keeping in its own folder
-## goes to the trash once the new file is written (two rows of one note is how the wrong one gets
-## opened), a file added by hand leaves the list, and both of those - like a file in an added
-## folder, which stays listed with its folder - are the author's files, left exactly as they were. What
-## was made for it, kept in folders named by its path (a letter's sketches, its steps' work), is moved
-## to the new path's. Returns what became of [param from], as a sentence for the panel to say.
+## The note open now was saved into another file (its Script card's Save...): [param to] is the note
+## from here on - what "⋯" deletes, what the list shows and what opens next time. The panel has moved
+## already ([signal DocSource.moved]). One note, one file: a note Ghost Notes kept in its own folder
+## goes to the trash once the new file is written, a file added by hand leaves the list, and a file
+## in an added folder stays listed with its folder; all of those are the author's files, left as they
+## were. What was made for it, in folders named by its path (a letter's sketches, its steps' work), is
+## moved to the new path's. Returns what became of [param from], as a sentence for the panel to say.
 func note_moved(from: String, to: String) -> String:
 	if _note.is_empty() or from.simplify_path() != _note.simplify_path() \
 			or to.simplify_path() == from.simplify_path() or not FileAccess.file_exists(to):
@@ -430,16 +367,12 @@ func note_moved(from: String, to: String) -> String:
 	NoteStore.add(to)
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_note(_note, delete_note, open_file)
-	# WHAT WAS MADE FOR IT GOES WITH IT: each folder kept by the note's path, renamed to the new path's (2026-10-29: a
-	# chapter saved under another name drew none of its sketches - "that workflow should definitely rename the
-	# underlying generated files path as well")
 	var kept := ""
 	var may := not Settings.is_read_only()
 	for why in [LetterSketches.carry(from, to, may), NoteUpload.carry(from, to, may)]:
 		if not String(why).is_empty():
 			push_warning("ghost: " + String(why))
 			kept += " " + String(why)
-	# RENAMED, NOT COPIED (a note following its title, [method DocSource.rename_to]): nothing is left behind
 	if not FileAccess.file_exists(from):
 		return kept.strip_edges()
 	if NoteStore.is_own(from):
@@ -454,9 +387,9 @@ func note_moved(from: String, to: String) -> String:
 	return "%s is left as it was.%s" % [from.get_file(), kept]
 
 
-## DELETE THE NOTE OPEN NOW (its panel's "⋯", once asked - see [DeleteDialog]): it is left the way the
-## ⌂ leaves it - its panel writing what it holds as it goes - and only then thrown away ([param
-## answer] "trash"), or let go of the list with its file kept ("forget"). The list comes back without it.
+## Delete the note open now (its panel's "⋯", once asked - see [DeleteDialog]): it is left as the ⌂
+## leaves it, its panel writing what it holds, then thrown away ([param answer] "trash") or let go of
+## the list with its file kept ("forget"). The list comes back without it.
 func delete_note(path: String, answer: String) -> void:
 	if not leave_blocker().is_empty():
 		return
@@ -471,12 +404,11 @@ func delete_note(path: String, answer: String) -> void:
 	_show_list()
 
 
-## START A WORKSPACE - a key of [constant Components.WORKSPACES] - through one path: every note
-## opened, and the command line's `--synth`, `--table` and `--mask-edit`. [param source] is the
-## clip (the `clip` workspace); [param note] the note it runs, "" from the command line. What is
-## built: the note's own panel (its words, a song and its show), a panel that reads the text, or
-## Masking's editor (which never touches the Director or Spectrum - just the editor on whatever
-## clip, or none, it was handed).
+## Start a workspace - a key of [constant Components.WORKSPACES] - through one path: every note
+## opened, and the command line's `--synth`, `--table` and `--mask-edit`. [param source] is the clip
+## (the `clip` workspace); [param note] the note it runs, "" from the command line. Builds the note's
+## own panel, a panel that reads the text, or Masking's editor (which never touches the Director or
+## Spectrum).
 func start_workspace(key: String, source := "", note := "") -> void:
 	match key:
 		"note":
@@ -494,8 +426,6 @@ func start_workspace(key: String, source := "", note := "") -> void:
 			push_warning("ghost: there is no workspace '%s'" % key)
 
 
-## A NOTE'S OWN PANEL ([NotePanel]): a plain note, or a note with a song - which the panel asks for
-## once its cards have applied the note's picture, holds and look ([method _begin_song]).
 func _open_note_panel(path: String) -> void:
 	var panel: Node = preload("res://src/app/note_panel.gd").new()
 	panel.path = path
@@ -513,9 +443,9 @@ func _open_note_panel(path: String) -> void:
 	_entered_mode()
 
 
-## A NOTE'S SONG, loaded and WAITING AT ITS START - a note opens stopped, and the transport plays it.
-## [param show] is what the note's cards say of its picture ([method _attach_show]); without a
-## Medium the song plays to an empty frame.
+## A note's song, loaded and waiting at its start (a note opens stopped; the transport plays it).
+## [param show] is what the note's cards say of its picture ([method _attach_show]); without a Medium
+## the song plays to an empty frame.
 func _begin_song(path: String, show: Dictionary) -> void:
 	Spectrum.lead_in = Director.intro_hold
 	Spectrum.tail = Director.outro_hold
@@ -527,11 +457,11 @@ func _begin_song(path: String, show: Dictionary) -> void:
 	_attach_subtitles()
 
 
-## PUT A NOTE'S SHOW UP, as its components describe it - one path for a song's and a reading's.
-## [param show]: `picture` (the note has one: the Director cuts scenes on the sound; without it
-## there is no stage), `board` (the storyboard it walks, in its loaded form - {} where nothing is
-## written, and the seed chooses) and `source` (the file a render can load that board from, "" for
-## one the note keeps itself).
+## Put a note's show up as its components describe it - one path for a song's and a reading's.
+## [param show]: `picture` (the note has one: the Director cuts scenes on the sound; without it there
+## is no stage), `board` (the storyboard it walks, in its loaded form; {} where nothing is written and
+## the seed chooses) and `source` (the file a render can load that board from, "" for one the note
+## keeps itself).
 func _attach_show(show: Dictionary) -> void:
 	if not bool(show.get("picture", false)):
 		return
@@ -541,8 +471,6 @@ func _attach_show(show: Dictionary) -> void:
 	Director.attach(_stage_host(), _medium)
 
 
-## THE NOTE'S PICTURE IN ANOTHER MEDIUM, shown at once: the show is set up again on the same song,
-## which carries on where it is. Nothing to do while no show is up (no song chosen yet).
 func _restage(show: Dictionary) -> void:
 	if not Director.is_attached():
 		return
@@ -551,19 +479,18 @@ func _restage(show: Dictionary) -> void:
 
 
 func _begin_session(audio_path := "") -> void:
-	# THE BOOKEND, decided before the first sample - Spectrum.begin starts playback, so
-	# it cannot be set afterwards. Whether the silence is HELD here or already baked into
-	# the audio is resolved inside begin(), which is the only place that knows which file
-	# actually got loaded.
+	#The bookend is decided before the first sample, since Spectrum.begin starts playback. Whether the
+	#silence is held here or already baked into the audio is resolved inside begin(), which knows which
+	#file got loaded.
 	Spectrum.lead_in = Director.intro_hold
 	Spectrum.tail = Director.outro_hold
 	Spectrum.begin(audio_path)
 	Director.attach(_stage_host(), _medium)
 	_attach_subtitles()
 	if _export_mode:
-		# THE VIEW THE SHOW IS LAID OUT IN, said once for the render's log: Movie Maker records a
-		# picture of the viewport's size, and where the window's shape differs from it, only the
-		# middle of a wider view (next/notes.md, "the trap"). portrait_render_check reads it.
+		#The view the show is laid out in, said once for the render's log: Movie Maker records a picture of
+		#the viewport's size, so where the window's shape differs only the middle of a wider view is kept
+		#(next/notes.md, "the trap"). portrait_render_check reads it.
 		var view := get_viewport().get_visible_rect().size
 		print("ghost export: view %dx%d, frame %s" % [view.x, view.y, Director.resolved_frame()])
 		return                         # render clean: no overlays (the Director fades the video ends)
@@ -571,19 +498,16 @@ func _begin_session(audio_path := "") -> void:
 	_entered_mode()
 
 
-# The song ended. Manual mode loops: restart the audio in place and keep the show
-# running - the Director's walk, the storyboard's tail, and the dial's deposited
-# modulations all carry across the loop untouched. (Whether the SEQUENCE replays is the
-# board's own `loop` field; the-point's `loop: false` keeps streaming its tail.) Auto
-# stops at the end and stays in its note.
+# The song ended. Manual mode loops: restart the audio in place and keep the show running (the
+# Director's walk, the storyboard's tail and the dial's modulations carry across). Whether the sequence
+# replays is the board's own `loop` field. Auto stops at the end and stays in its note.
 func _on_song_finished() -> void:
-	# A synth take is endless like a manual session: loop the narration in place
-	# so the show stays up while the user iterates in the editor.
+	#A synth take is endless like a manual session: loop the narration in place.
 	if _synth_active:
 		Spectrum.replay()
 		print("ghost: take looped (synthesis session continues)")
 		return
-	# A READING'S TAKE KEPT ENDS AS A READING DOES: over, the stage left as it is, Play from the top
+	#A reading's kept take ends as a reading does: over, the stage left as it is, Play from the top
 	if _generative != null and is_instance_valid(_generative) and _generative.has_method("take_playing") \
 			and _generative.take_playing():
 		_generative.take_ended()
@@ -592,13 +516,10 @@ func _on_song_finished() -> void:
 		Spectrum.replay()
 		print("ghost: song looped (manual session continues)")
 		return
-	# A SONG THAT ENDS NO LONGER RETURNS ANYWHERE (step 8): it went home because the home screen was
-	# the only way out; now the ⌂ is, so the note stays open and the transport waits at the start.
+	#A song that ends leaves the note open and the transport waiting at the start.
 	Spectrum.transport_stop()
 
 
-## LEAVE WHATEVER MODE IS UP and return to the home screen - Chrome's ⌂ (next/notes.md step 6).
-## Returns "" once it has left, or why it could not ([method leave_blocker]).
 func leave_mode() -> String:
 	var why := leave_blocker()
 	if not why.is_empty():
@@ -607,9 +528,9 @@ func leave_mode() -> String:
 	return ""
 
 
-## Why the mode up now cannot be left this moment, or "" when it can: an export making its take
-## from this mode (the take is a coroutine on the mode's panel, and the export would wait on a
-## freed panel forever), or the mode's own say (`leave_blocker()`: Masking while it exports).
+## Why the mode up now cannot be left this moment, or "" when it can: an export making its take from
+## this mode (the take is a coroutine on the mode's panel; the export would wait on a freed panel
+## forever), or the mode's own say (`leave_blocker()`: Masking while it exports).
 func leave_blocker() -> String:
 	if _chrome != null and is_instance_valid(_chrome) and _chrome.exporter != null \
 			and _chrome.exporter.preparing():
@@ -622,8 +543,6 @@ func leave_blocker() -> String:
 	return ""
 
 
-## A mode is up: the ⌂ in Chrome's row leaves it, and a note's "⋯" deletes it. (A Masking session from
-## --mask-edit has no Chrome.)
 func _entered_mode() -> void:
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_home(leave_mode, leave_blocker)
@@ -631,19 +550,17 @@ func _entered_mode() -> void:
 			open_file if not _note.is_empty() else Callable())
 
 
-## Tear the session down and return to the notes list - THE ONE TEARDOWN, for every mode (step 6):
-## the ⌂, and a note reopened as what a component attached to it made it ([param home] false). Every
-## mode's nodes are freed (their `_exit_tree` saves and lets go of what they hold: the transport's
-## conductor, Chrome's claims, the Cards panel's pinned medium, the voice host), the streams end,
-## the Director is detached (which drops a storyboard), Spectrum stops and the stage is wiped.
-## The persistent exporter is intentionally NOT freed - a render in progress and its status carry
-## across to the home screen - but what it was asking of the mode is cleared.
+## Tear the session down and return to the notes list - the one teardown for every mode: the ⌂, and a
+## note reopened as what a component attached to it made it ([param home] false). Every mode's nodes
+## are freed (their `_exit_tree` saves and lets go of what they hold), the streams end, the Director is
+## detached (which drops a storyboard), Spectrum stops and the stage is wiped. The persistent exporter
+## is not freed (a render in progress and its status carry across), but what it asked of the mode is
+## cleared.
 func _end_session(home := true) -> void:
-	# Never yank the feedback console out from under the user. If the song ends while
-	# they have it open and are typing, defer the whole teardown until they submit or
-	# cancel - the held scene stays frozen behind the modal until then.
-	# THE SHELL'S console, whoever asked for it: Masking attaches it itself ([method
-	# Shell.attach_feedback]), so the handle kept here is not the only way one comes to be open.
+	#If the song ends while the feedback console is open and being typed in, defer the whole teardown
+	#until they submit or cancel; the held scene stays frozen behind the modal.
+	#The shell's console, whoever asked for it: Masking attaches it itself ([method
+	#Shell.attach_feedback]), so the handle kept here is not the only way one comes to be open.
 	var fb: Node = _chrome.feedback if _chrome != null and is_instance_valid(_chrome) else _feedback
 	if fb != null and is_instance_valid(fb) and fb.is_open():
 		if not fb.closed.is_connected(_end_session):
@@ -672,10 +589,8 @@ func _end_session(home := true) -> void:
 		_show_list()
 
 
-## WIPE THE STAGE (2026-10-06): the medium a note was shown in goes with the note, and the stage is
-## hidden until a show attaches again. The medium used to stay mounted for the next session - so a
-## tablet chapter's desk showed under a new plain note's panel, around Masking's video, and as the
-## "scene" of a song opened after it, until a Play drew over it.
+## Wipe the stage: the medium a note was shown in goes with the note, and the stage is hidden until a
+## show attaches again.
 func _clear_stage() -> void:
 	Director.medium_override = ""
 	if _medium != null and is_instance_valid(_medium):
@@ -706,10 +621,9 @@ func _release_exporter() -> void:
 	ex.automation_available = false
 
 
-## The stage the Director attaches scenes to (created on first session). A
-## SubViewport with its own 3D world, shown through a TextureRect at child
-## index 0 - everything UI stacks above it in the ROOT viewport, which is
-## what keeps the instrument responsive when a scene gets heavy.
+## The stage the Director attaches scenes to (created on first session): a SubViewport with its own 3D
+## world, shown through a TextureRect at child index 0, with all UI above it in the root viewport so
+## the instrument stays responsive when a scene gets heavy.
 func _stage_host() -> Node:
 	if _stage != null:
 		_sync_medium()
@@ -720,36 +634,34 @@ func _stage_host() -> Node:
 	_stage.transparent_bg = false
 	_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_stage)
-	# HOW FINELY IT IS DRAWN (see graphics.gd), the live viewer's choice or an export's - before a medium is mounted
-	# on it, since a light made then takes its shadow's width from the filter's quality
+	#How finely it is drawn (see graphics.gd), the live viewer's choice or an export's - set before a
+	#medium is mounted, since a light takes its shadow's width from the filter's quality
 	Graphics.bind_stage(_stage, _sync_stage_size)
 	_stage_view = TextureRect.new()
 	_stage_view.texture = _stage.get_texture()
 	_stage_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_stage_view.stretch_mode = TextureRect.STRETCH_SCALE
-	# the backdrop must never eat input: a fullscreen Control's default
-	# MOUSE_FILTER_STOP swallows every click that misses a panel
+	#the backdrop must never eat input: a fullscreen Control's default MOUSE_FILTER_STOP swallows clicks
+	#that miss a panel
 	_stage_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_stage_view)
 	move_child(_stage_view, 0)       # the stage is the backdrop, always
-	# THE LOOK (see filters.gd). The stage view is the one place the whole show exists as a
-	# single picture, so a material here is a post-process over every scene at once - and
-	# over nothing else, which is what leaves the panels and the karaoke line unfiltered.
+	#The look (see filters.gd). The stage view is the one place the whole show is a single picture, so a
+	#material here is a post-process over every scene at once and over nothing else (panels and the
+	#karaoke line stay unfiltered).
 	Director.filters_changed.connect(_sync_filters)
 	get_viewport().size_changed.connect(_sync_stage_size)
-	# ...and when the show's frame changes (a portrait note, a medium without one): the stage refits
+	#...and when the show's frame changes (a portrait note, a medium without one): the stage refits
 	Director.frame_changed.connect(_sync_stage_size)
 	_sync_medium()
-	# every scene gets a FRESH measurement: without this, a light scene that
-	# follows a heavy one stays imprisoned at the old level for the ~15 s the
-	# sparse active samples need to forgive (measured, and it read as broken)
+	#every scene gets a fresh measurement, so a light scene after a heavy one is not held at the old
+	#level while the sparse active samples forgive (~15 s)
 	Director.scene_cut.connect(func():
 		_slow_said = false
 		if _governor.cut():
 			_stage.process_mode = Node.PROCESS_MODE_INHERIT
 			_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 			print("ghost: stage governor -> level 0 (scene cut)"))
-	# what a frame costs this thread, for the governor: stamped as its processing begins and as the renderer takes it
 	get_tree().process_frame.connect(_frame_begins)
 	RenderingServer.frame_pre_draw.connect(_frame_handed)
 	_sync_stage_size()
@@ -765,29 +677,26 @@ func _frame_handed() -> void:
 	_frame_own_ms = float(Time.get_ticks_usec() - _frame_began) / 1000.0
 
 
-## Hand the Director's look to the stage view. Called when a filter changes, when the frame
-## is resized, and once as the stage is built - including in an export render, which boots
-## this same code against the same settings file and so inherits the look with no flag.
+## Hand the Director's look to the stage view. Called when a filter changes, when the frame is
+## resized, and once as the stage is built (an export render inherits the look through the same
+## settings file).
 func _sync_filters() -> void:
 	if _stage_view == null or not is_instance_valid(_stage_view):
 		return
 	var look := Director.resolved_filters()
 	Filters.apply(_stage_view, look, _stage_view.size)
-	# Said once per CHANGE, not per call - this is also reached by every window resize and
-	# every frame of a dial being dragged. It is the line that tells a render's log what look
-	# it inherited, which is otherwise invisible in a process nobody is watching.
+	#Said once per change, not per call (this is reached by every window resize and every frame of a
+	#dial being dragged): it tells a render's log what look it inherited.
 	var said := Filters.describe(Director.resolved_filters(false))
 	if said != _filter_said:
 		_filter_said = said
 		print("ghost: look %s" % said)
 
 
-## Say so when the show's clock stops while the render keeps writing frames.
-##
-## Reports the FIRST frame of a stall and again when it ends, with what the audio player was
-## doing at the time - because `Spectrum` takes the clock from `get_playback_position()` and
-## the two possible faults look identical in the finished video: a player that stopped, and a
-## player that is playing but reporting a position that does not move.
+## Say so when the show's clock stops while the render keeps writing frames. Reports the first frame
+## of a stall and again when it ends, with what the audio player was doing: `Spectrum` takes the clock
+## from `get_playback_position()`, and a stopped player and one reporting a position that does not
+## move look identical in the video.
 func _watch_render_clock(delta: float) -> void:
 	var t := Spectrum.current.time
 	_clock_frames += 1
@@ -800,7 +709,7 @@ func _watch_render_clock(delta: float) -> void:
 		_clock_frames = 0
 		return
 	_clock_stuck += delta
-	# Once per stall, on the frame it crosses the threshold - not every frame of it.
+	#Once per stall, on the frame it crosses the threshold.
 	if _clock_stuck >= CLOCK_STALL_WARN and _clock_stuck - delta < CLOCK_STALL_WARN:
 		var pos := -1.0
 		var playing := false
@@ -811,10 +720,9 @@ func _watch_render_clock(delta: float) -> void:
 			% [_clock_t, _clock_frames, str(playing), pos])
 
 
-## Rebuild the medium if the setting changed since the last session. Director.set_medium
-## says the change lands on the NEXT session, and this is where "next session" happens - the
-## stage is built once and reused for every take, so without this the picker would write the
-## config, persist it, survive a restart, and appear to do nothing all afternoon.
+## Rebuild the medium if the setting changed since the last session. Director.set_medium says the
+## change lands on the next session, and this is where that happens: the stage is built once and
+## reused for every take.
 func _sync_medium() -> void:
 	var want := Director.resolved_medium()
 	if _medium != null and is_instance_valid(_medium):
@@ -832,15 +740,12 @@ func _sync_stage_size() -> void:
 	if _stage == null:
 		return
 	var r := _frame_rect()
-	# HOW MANY PIXELS IT IS DRAWN AT is the Graphics menu's (its Resolution row): the frame's own canvas units unless
-	# chosen - 1920 x 1080 at any window, as it always drew - and the view scales that to the frame. What is on the
-	# stage is told the stage's size, what lies over it the frame's.
+	#The stage is drawn at the Graphics menu's Resolution row: the frame's own canvas units unless
+	#chosen. What is on the stage is told the stage's size, what lies over it the frame's.
 	_stage.size = Graphics.stage_size(r.size)
 	_stage_view.position = r.position
 	_stage_view.size = r.size
 	Director.frame_rect = r
-	# The dot lattice and the grain are sized in pixels, so the look has to be told when the
-	# frame changes size - otherwise a resized window renders a different picture.
 	_sync_filters()
 	if _medium != null and is_instance_valid(_medium):
 		_medium.on_stage_resized(Vector2(_stage.size))
@@ -848,15 +753,13 @@ func _sync_stage_size() -> void:
 		_subtitles.frame_rect = r
 
 
-## THE PREVIEW IS THE FRAME (next/notes.md step 10): the stage is the show's frame - 16:9, or 9:16
-## for a portrait show - as large as the window holds it, centered, black beside it, so what is seen
-## is what an export renders. It took the window's shape before, so an ultrawide window previewed
-## wider than any export. In an export the window IS the frame (the override shapes it), and this is
-## the whole of it.
+## The preview is the frame (next/notes.md): the stage is the show's frame - 16:9, or 9:16 for a
+## portrait show - as large as the window holds it, centered, black beside it, so what is seen is what
+## an export renders. In an export the window is the frame, and this is the whole of it.
 ##
-## WHAT IS DOCKED UNDER THE SHOW TAKES ITS ROOM FROM IT ([member Chrome.stage_bottom]): with the
-## storyboard's editor open the frame is fitted above it, so the picture being worked on is seen
-## whole. Nothing claims any otherwise, and the fit is the window's.
+## What is docked under the show takes its room from it ([member Chrome.stage_bottom]): with the
+## storyboard's editor open the frame is fitted above it. Nothing claims any otherwise, and the fit is
+## the window's.
 func _frame_rect() -> Rect2:
 	var vis := get_viewport().get_visible_rect().size
 	if _chrome != null and is_instance_valid(_chrome) and _chrome.stage_bottom > 0.0:
@@ -868,21 +771,13 @@ func _frame_rect() -> Rect2:
 
 
 func _process(delta: float) -> void:
-	# WINDOW CUTS ARE NOTICED HERE, before anything else can return early. A film window is
-	# an ffmpeg subprocess, and somebody with a frame has to see it exit and promote its
-	# output - and this is the only `_process` that is always running. It used to be polled
-	# by the live film panel and the Generative panel instead, which are exactly the two
-	# things that are usually absent: a window finished cutting, was never promoted, and
-	# stayed a `.part` forever. The visible symptom was footage appearing on ONE page of a
-	# session and never again, with the dial at maximum.
+	#Window cuts are noticed here, before anything else can return early: a film window is an ffmpeg
+	#subprocess, and something has to see it exit and promote its output. This is the only `_process`
+	#that is always running.
 	Films.pump()
-	# The same argument for a picture being painted: the job is a subprocess, and the panel
-	# that started it may have been closed or scrolled away long before it finishes.
 	Illustrations.pump()
 	# ...and every other agent's writing and painting (the Table mode's episodes).
 	AgentJobs.pump()
-	# The background render reports its progress (playback position / length) so the
-	# live app's exporter can show a percentage in the status notification.
 	if _clock_watch:
 		_watch_render_clock(delta)
 	if _until > 0.0 and Spectrum.current.time >= _until:
@@ -897,14 +792,10 @@ func _process(delta: float) -> void:
 			if length > 0.0:
 				Bake.write_progress(Spectrum.current.time / length)
 		return
-	# ---- the stage governor: sacrifice SCENE rate, never UI rate ----------
-	# A heavy scene's frame blocks the whole main loop for its full cost - Godot cannot
-	# paint UI mid-frame - so the only lever short of rewriting the scene is SPACING those
-	# frames out (stage_governor.gd). What it is handed is what the frame before cost THIS
-	# THREAD: a frame that is slow for the graphics card's sake is not spaced out, and is said.
-	# NOT WHILE MOVIE MAKER RECORDS: every frame is one fixed step of show time however long it
-	# took to draw, so a slow frame costs nothing in the film, and a skipped stage frame the
-	# film would hold as a still
+	#The stage governor spaces out the stage's frames, never the UI's: a heavy scene blocks the whole main
+	#loop for its full cost (stage_governor.gd). It is handed what the frame before cost this thread; a
+	#frame that is slow for the graphics card's sake is not spaced out, and is said. Not while Movie Maker
+	#records: every frame is one fixed step of show time, and a skipped stage frame would be held as a still.
 	if _stage == null or not Engine.get_write_movie_path().is_empty():
 		return
 	if _governor.step(_frame_own_ms, delta):
@@ -921,10 +812,8 @@ func _process(delta: float) -> void:
 	_say_slow_frames(delta)
 
 
-## SAID ONCE A SCENE: frames are slow and this thread is not why, so the governor spaces nothing out - with what the
-## stage took of the graphics card's time, measured for a second first. (A table's frames were 25 ms apart with this
-## thread busy for 5 of them, 2026-11-10; the governor throttled it on and off for a whole session, and nothing in the
-## log said what the frames waited for.)
+## Said once a scene: frames are slow and this thread is not why, so the governor spaces nothing out.
+## Reports what the stage took of the graphics card's time, measured for a second first.
 func _say_slow_frames(delta: float) -> void:
 	if _slow_said:
 		return
@@ -949,47 +838,33 @@ func _say_slow_frames(delta: float) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		# DEFERRED: this notification is still propagating through the tree,
-		# so the children are LOCKED ("calling or emitting") - freeing them
-		# here errors out. One idle frame later they are free to free.
+		#Deferred: this notification is still propagating, so the children are locked ("calling or
+		#emitting") and freeing them here errors. One idle frame later they are free to free.
 		call_deferred("_shutdown")
 
 
-## WORKAROUND (2026-07-27): with audio input enabled (the voice sampler's
-## microphone; project.godot driver/enable_input), the engine's audio-driver
-## teardown aborts in glibc on this system ("double free" / "corrupted size
-## vs. prev_size" - PipeWire input stream finalization; appeared the day
-## enable_input landed and reproduces without ever recording). Every piece
-## of app state persists on change, and the stateful editors save in
-## _exit_tree - so: free main's children (their save hooks run), then leave
-## without the driver teardown. GHOST_CLEAN_EXIT=1 restores the normal quit
-## path for debugging; remove this whole workaround when upstream is fixed.
+## Workaround: with audio input enabled (the voice sampler's microphone; project.godot
+## driver/enable_input) the engine's audio-driver teardown aborts in glibc on this system (PipeWire
+## input stream finalization). App state persists on change and the stateful editors save in
+## _exit_tree, so: free main's children (their save hooks run), then leave without the driver teardown.
+## GHOST_CLEAN_EXIT=1 restores the normal quit path for debugging; remove when upstream is fixed.
 func _shutdown() -> void:
 	if not OS.get_environment("GHOST_CLEAN_EXIT").is_empty():
 		get_tree().quit()
 		return
-	# queue_free, never free(): something in the tree is reliably mid-call at
-	# close time (even from a deferred hook) and free() errors on locked
-	# objects; the engine's own end-of-frame free handles that correctly and
-	# still runs every _exit_tree save hook (mask playhead etc.)
+	#queue_free, never free(): something in the tree is mid-call at close time and free() errors on
+	#locked objects; the end-of-frame free still runs every _exit_tree save hook.
 	for child in get_children():
 		child.queue_free()
 	await get_tree().process_frame
-	# THE HARD EXIT BELOW IS WHY THIS LINE IS HERE. `OS.kill(OS.get_process_id())` is a
-	# SIGKILL on ourselves, so nothing after it runs: no autoload `_exit_tree`, and none of
-	# the engine's own child reaping. Every background program ghost started - the export's
-	# bake / Movie Maker render / `ffmpeg` transcode, the mask editor's prep passes, the
-	# voice host - would simply be inherited by init and carry on. That is the reported
-	# bug: both windows shut and ffmpeg still writing to the file, with no "godot" in `ps`.
-	#
-	# It has to be HERE and not only in `Boot`, because this function is the single funnel
-	# for BOTH ways out (the window's close request and Escape), and the Escape path never
-	# raises WM_CLOSE_REQUEST at all. `Subprocess` also binds each child to this process in
-	# the kernel, which covers a ghost that is killed from outside; this covers the ghost
-	# that kills itself.
+	#Must be here, before the hard exit: `OS.kill(OS.get_process_id())` is a SIGKILL on ourselves, so no
+	#autoload `_exit_tree` and no engine child reaping runs, and every background program ghost started
+	#(bake, Movie Maker render, ffmpeg, mask prep, voice host) would be inherited by init and carry on.
+	#This function is the single funnel for both ways out (the close request and Escape, which raises no
+	#WM_CLOSE_REQUEST). `Subprocess` also binds each child to this process in the kernel, which covers a
+	#ghost killed from outside.
 	Subprocess.reap_all()
-	# The same goes for the --live-tap recording: Spectrum writes it in _exit_tree, which the
-	# hard exit never reaches - an armed tap was recorded all session and lost on quit.
+	#Likewise the --live-tap recording: Spectrum writes it in _exit_tree, which the hard exit never reaches.
 	Spectrum._write_tap()
 	print("ghost: bye (hard exit - audio-input teardown workaround, see main._shutdown)")
 	OS.kill(OS.get_process_id())
@@ -1001,9 +876,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F11:
 				_toggle_fullscreen()
 			KEY_N:
-				# SKIP A SCENE. It was Space, which meant play/pause in the voice modes and a skip
-				# everywhere else; Space is the transport's now, everywhere (transport.gd). Mask
-				# mode never attaches the Director, so a skip there would be meaningless.
+				#Skip a scene. Space is the transport's everywhere (transport.gd). Mask mode never attaches the
+				#Director, so a skip there would be meaningless.
 				if _mask_editor == null or not is_instance_valid(_mask_editor):
 					Director.next()
 			KEY_ESCAPE:
@@ -1011,8 +885,6 @@ func _unhandled_input(event: InputEvent) -> void:
 											 # (children are locked during it)
 
 
-## The value following `flag` in the cmdline args, or "" if the flag is bare/absent
-## (mask mode's two entry points both take an optional path this way).
 func _provision(scope: String) -> void:
 	if not scope in ["all", "update"] and Deps.entry(scope).is_empty():
 		scope = ""
@@ -1032,13 +904,9 @@ func _arg_value(args: PackedStringArray, flag: String) -> String:
 	return ""
 
 
-## --synth: the voice-synthesis editor. Each reading renders a WAV take and plays it
-## as a fresh session (new fingerprint, new show); the take loops when it ends,
-## like a manual session, so the show stays up while the user iterates.
+## --synth: the voice-synthesis editor. Each reading renders a WAV take and plays it as a fresh
+## session; the take loops when it ends, like a manual session.
 func _open_synth_editor() -> void:
-	# No furniture wiring here: the chrome (exporter + assistant, created in
-	# _ready for every interactive mode) already covers it - a synth take
-	# exports exactly like a song, and ` feedback works over the running show.
 	var editor := preload("res://src/reading/synth_editor.gd").new()
 	editor.note_path = _note
 	editor.note_moved = note_moved
@@ -1047,8 +915,6 @@ func _open_synth_editor() -> void:
 	editor.end_stream = _end_synth_stream
 	_synth_editor = editor
 	add_child(editor)
-	# exports are ready from the very first moment: the exporter can ask the
-	# editor to render the current text into a take on demand
 	if _chrome.exporter != null:
 		_chrome.exporter.take_provider = editor.export_take
 		_chrome.exporter.take_ready = editor.can_export_take
@@ -1059,15 +925,13 @@ func _open_synth_editor() -> void:
 	_entered_mode()
 
 
-## The generative path: a small local neural voice, run by the voice host
-## subprocess. Deliberately a SEPARATE editor rather than a backend swap inside
-## synth_editor - the fishing game's economy is defined over the procedural
-## engine's 25-dimensional genome and a neural backend exposes a speaker id and
-## three scalars, so one UI cannot serve both. See VOICE_PLAN.md section 6.
+## The generative path: a small local neural voice run by the voice host subprocess. A separate editor
+## from synth_editor, not a backend swap: the fishing game's economy is defined over the procedural
+## engine's 25-dimensional genome, while a neural backend exposes a speaker id and three scalars.
 ##
-## [param workspace] is which one the panel runs: a note read aloud, or a show of cards, whose
-## reading is written by agents (its episode is a card on the same panel) - the same stream, export
-## and subtitles.
+## [param workspace] is which one the panel runs: a note read aloud, or a show of cards, whose reading
+## is written by agents (its episode is a card on the same panel) - the same stream, export and
+## subtitles.
 func _open_reading(workspace := "reading") -> void:
 	var editor := ReadingPanel.new()
 	editor.workspace = workspace
@@ -1080,9 +944,6 @@ func _open_reading(workspace := "reading") -> void:
 	_synth_editor = editor
 	_generative = editor
 	add_child(editor)
-	# Export was left wired to the fishing game's rules, so the button stayed
-	# grayed with "catch a seed first" - a gate that has no meaning on this path.
-	# Here the requirement is simply text and a loaded voice.
 	if _chrome.exporter != null:
 		_chrome.exporter.take_provider = editor.export_take
 		_chrome.exporter.take_first = true
@@ -1096,18 +957,12 @@ func _open_reading(workspace := "reading") -> void:
 	_entered_mode()
 
 
-## ONE session for the whole chapter. The generative path used to start a fresh
-## session per chunk, which meant the Director re-cut and the harmonic seed
-## re-derived every few sentences - reported as "the scene is changing too
-## often". A generator playback instead lets the editor push each chunk's PCM
-## into a single continuous stream, so the show sees one unbroken take however
-## many chunks it was made from. Subtitles ride the same array, which
-## Subtitles.words explicitly allows to keep growing.
-## The closing half of _begin_generative_stream. Everything that function attaches, this one
-## lets go of - the stage, the audio stream and the subtitle overlay - so the editor's Stop can
-## actually end a reading. It was missing entirely: the generative path was wired `begin_stream`
-## and nothing else, so a reading could be started and restarted but never stopped, and the only
-## way out was to quit ghost.
+## One session for the whole chapter: a generator playback lets the editor push each chunk's PCM into a
+## single continuous stream, so the show sees one unbroken take however many chunks it was made from
+## (the Director does not re-cut, nor the harmonic seed re-derive, per chunk). Subtitles ride the same
+## array, which Subtitles.words allows to keep growing.
+## The closing half of _begin_generative_stream: lets go of everything it attaches - the stage, the
+## audio stream and the subtitle overlay - so the editor's Stop can end a reading.
 func _end_generative_stream() -> void:
 	Director.detach()
 	Spectrum.stop()
@@ -1120,19 +975,16 @@ func _end_generative_stream() -> void:
 
 
 func _begin_generative_stream(fp: int, sr: int, words: Array) -> AudioStreamGeneratorPlayback:
-	# TEAR DOWN FIRST. This is called again every time the reading restarts - a
-	# new text, a voice change, a tone change - and it used to attach a fresh
-	# Director stage on top of the previous one without detaching. The old scene
-	# stayed in the tree with nothing driving it, so it sat frozen behind the
-	# new one and they piled up as settings were changed.
-	# ...AND A PAUSE STAYS: a reading sought to while paused begins again paused (ReadingStream.seek_now)
+	#Tear down first: this is called again every time the reading restarts (new text, voice or tone), and
+	#a fresh Director stage must not be attached on top of the previous one.
+	#A pause stays: a reading sought to while paused begins again paused (ReadingStream.seek_now)
 	var held := Spectrum.paused
 	Director.detach()
 	Spectrum.stop()
 	Spectrum.set_paused(held)
 	var pb: AudioStreamGeneratorPlayback = Spectrum.begin_stream(fp, sr)
-	# THE READING'S SHOW IS THE NOTE'S: a Medium attached puts the stage up, a Storyboard is what
-	# it walks - and a voice alone is heard, with its words over an empty frame
+	#The reading's show is the note's: a Medium attached puts the stage up, a Storyboard is what it
+	#walks - and a voice alone is heard, with its words over an empty frame
 	_attach_show(_generative.show_plan() if _generative != null and is_instance_valid(_generative)
 		else {"picture": true})
 	if _subtitles != null and is_instance_valid(_subtitles):
@@ -1149,9 +1001,10 @@ func _begin_generative_stream(fp: int, sr: int, words: Array) -> AudioStreamGene
 	return pb
 
 
-## THE READING'S TAKE KEPT, PLAYED WHOLE ([method ReadingStream.play]; next/editing.md step 3): the file at [param path] opened as
-## a render opens it ([method _begin_session]'s steps) - its bookend and words its sidecar's, the show the reading's - so a seek is
-## a seek inside one file and the live show is the export's. False when it would not load (nothing is left playing).
+## The reading's kept take, played whole ([method ReadingStream.play]; next/editing.md): the file at
+## [param path] opened as a render opens it ([method _begin_session]'s steps) - its bookend and words
+## its sidecar's, the show the reading's - so a seek is a seek inside one file and the live show is the
+## export's. False when it would not load (nothing is left playing).
 func _begin_generative_take(path: String) -> bool:
 	Director.detach()
 	Spectrum.stop()
@@ -1169,21 +1022,19 @@ func _begin_generative_take(path: String) -> bool:
 	return true
 
 
-## Export autopilot: the Synthesis panel, playing itself over the take being
-## rendered. Deliberately NOT wired to begin_stream/end_stream - the editor must
-## not synthesize live audio (the export's --audio take IS the audio); it only
-## drives the panel, HUD, and Director scene jumps. The editor self-activates
-## its autopilot from the --synth-autopilot flag in its own _ready.
+## Export autopilot: the Synthesis panel, playing itself over the take being rendered. Not wired to
+## begin_stream/end_stream - the editor must not synthesize live audio (the export's --audio take is
+## the audio); it only drives the panel, HUD and Director scene jumps. The editor self-activates its
+## autopilot from the --synth-autopilot flag in its own _ready.
 func _open_synth_autopilot() -> void:
 	var editor := preload("res://src/reading/synth_editor.gd").new()
 	_synth_editor = editor
 	add_child(editor)
 
 
-## Start (or restart) the session on a live VoiceStream: audio begins the same
-## frame Play was clicked - the stream synthesizes ahead of the playhead and
-## the analyzer bus hears it like a song. Streamed takes loop endlessly inside
-## the stream itself (song_finished never fires for a generator).
+## Start (or restart) the session on a live VoiceStream: audio begins the same frame Play is clicked
+## (the stream synthesizes ahead of the playhead and the analyzer bus hears it like a song). Streamed
+## takes loop inside the stream itself (song_finished never fires for a generator).
 func _begin_synth_stream(stream: Node) -> void:
 	if _synth_active:
 		Director.detach()
@@ -1195,8 +1046,7 @@ func _begin_synth_stream(stream: Node) -> void:
 	var pb: AudioStreamGeneratorPlayback = Spectrum.begin_stream(stream.fingerprint(), Voice.SR)
 	stream.attach_playback(pb)
 	Director.attach(_stage_host(), _medium)
-	# synthesis is GAME PACED: the fishing owns the cuts - a scene changes when
-	# a catch jumps it, so each new scene reads as a reward, not weather
+	#synthesis is game paced: the fishing owns the cuts - a scene changes when a catch jumps it
 	Director.set_game_paced(true)
 	_attach_live_subtitles(stream)
 	stream.completed.connect(_on_stream_completed)
@@ -1204,10 +1054,8 @@ func _begin_synth_stream(stream: Node) -> void:
 	_synth_active = true
 
 
-## Release the line: tear the synthesis session back down to the state the
-## editor boots in - no voice, no show, no Director - while the editor itself
-## stays open. The mirror of _begin_synth_stream; the next throw rebuilds
-## everything from scratch.
+## Release the line: tear the synthesis session back down to the state the editor boots in (no voice,
+## no show, no Director) while the editor stays open. The mirror of _begin_synth_stream.
 func _end_synth_stream() -> void:
 	if not _synth_active:
 		return
@@ -1225,8 +1073,8 @@ func _end_synth_stream() -> void:
 	_synth_active = false
 
 
-## Subtitles for a live stream: share the stream's growing word array directly;
-## the sidecar file doesn't exist yet (the take is still being synthesized).
+## Subtitles for a live stream: share the stream's growing word array directly (the sidecar file
+## doesn't exist yet; the take is still being synthesized).
 func _attach_live_subtitles(stream: Node) -> void:
 	if _subtitles != null and is_instance_valid(_subtitles):
 		_subtitles.queue_free()
@@ -1244,19 +1092,17 @@ func _on_stream_completed(dur: float, wav_path: String) -> void:
 	print("ghost: take complete (%.1fs) -> %s" % [dur, wav_path])
 
 
-## The stream replaced its content in place (an implicit re-speak): rebase the
-## karaoke clock and forget the previous take's loop length until the new take
-## finishes.
+## The stream replaced its content in place (an implicit re-speak): rebase the karaoke clock and forget
+## the previous take's loop length until the new take finishes.
 func _on_stream_restarted(base: float) -> void:
 	if _subtitles != null and is_instance_valid(_subtitles):
 		_subtitles.time_base = base
 		_subtitles.loop_length = 0.0
 
 
-## Karaoke subtitles are session content, not editor chrome: whenever the
-## session's audio has a sidecar timing map (a synth take), attach the overlay -
-## live sessions, reopened takes, and export renders alike. Music without a
-## sidecar gets nothing.
+## Karaoke subtitles are session content, not editor chrome: whenever the session's audio has a sidecar
+## timing map (a synth take), attach the overlay - live sessions, reopened takes and export renders.
+## Music without a sidecar gets nothing.
 func _attach_subtitles() -> void:
 	if _subtitles != null and is_instance_valid(_subtitles):
 		_subtitles.queue_free()
@@ -1272,18 +1118,17 @@ func _attach_subtitles() -> void:
 		print("ghost: subtitles attached (%d words)" % (subs.words as Array).size())
 
 
-## Hand a fresh caption source to the medium. One that prints the words itself (the book)
-## answers true, and the overlay then stops drawing - its clock and cursor keep running,
-## because that medium reads them.
+## Hand a fresh caption source to the medium. One that prints the words itself (the book) answers
+## true, and the overlay then stops drawing; its clock and cursor keep running, because that medium
+## reads them.
 func _bind_captions(subs: Node) -> void:
 	subs.frame_rect = _frame_rect()      # the subtitles lay out in the frame, not the window
 	if _medium != null and is_instance_valid(_medium) and _medium.bind_captions(subs):
 		subs.overlay_hidden = true
 
 
-## --mask-render <session.json>: the export relaunch. No notes list, no Director - just
-## the clip + shader + audio, autoplaying, quitting when the audio ends (mirrors
-## _export_mode's Spectrum.song_finished -> quit, one layer down).
+## --mask-render <session.json>: the export relaunch. No notes list, no Director - just the clip,
+## shader and audio, autoplaying, quitting when the audio ends (mirrors _export_mode, one layer down).
 func _begin_mask_render(session_path: String) -> void:
 	var editor := preload("res://src/masking/mask_editor.gd").new()
 	editor.render_mode = true
@@ -1291,9 +1136,9 @@ func _begin_mask_render(session_path: String) -> void:
 	editor.open_source(session_path)
 
 
-## --mask-edit [path]: the interactive editor. `path` is a session .json, a raw
-## source video (transcoded once and cached), or empty (its panel asks for one). [param note] is
-## the note it is, where a clip chosen in the editor is written.
+## --mask-edit [path]: the interactive editor. `path` is a session .json, a raw source video
+## (transcoded once and cached), or empty (its panel asks for one). [param note] is the note it is,
+## where a clip chosen in the editor is written.
 func _open_mask_editor(path: String, note := "") -> void:
 	var editor := preload("res://src/masking/mask_editor.gd").new()
 	editor.note_path = note

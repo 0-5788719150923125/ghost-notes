@@ -1,30 +1,20 @@
 extends RefCounted
 class_name MaskUrlImport
 
-## MaskUrlImport - a link where a file path is expected: Masking's YouTube (or any http) import,
-## a part of [MaskEditor]. [method download] downloads the link with yt-dlp, polled and never
-## blocking, and hands the file it made back to [method MaskEditor.open_source].
+## MaskUrlImport - a link where a file path is expected: Masking's YouTube (or any http) import, a part of
+## [MaskEditor]. [method download] downloads the link with yt-dlp, polled and never blocking, and hands the file it
+## made back to [method MaskEditor.open_source], which routes any http(s) source here.
 ##
-## WHAT IT IS HANDED is written out: every `editor.` below is something it reads of the editor
-## (the import's state, which the editor's frame loop polls, the status line, where masks live).
-##
-## open_source() routes any http(s) source here. yt-dlp lives in ghost's own
-## environment (`ytdlp_venv`, see [Provision]), with Deno beside it for YouTube's
-## download challenges; the first import waits while it is built, then
+## yt-dlp lives in ghost's own environment (`ytdlp_venv`, see [Provision]) with Deno beside it for YouTube's download
+## challenges; the first import waits while it is built, then
 ##   <env python> -u -m yt_dlp <url>  ->  masks/_downloads/<title>_<id>.<ext>
-## is polled like prep (never blocking), and the downloaded file re-enters
-## open_source() so the normal ffmpeg->theora prep takes over unchanged. YouTube
-## breaking old yt-dlp versions is the norm, not the exception: the environment is
-## updated with the rest of ghost's dependencies, and a failed download updates it
-## once more and retries.
+## is polled like prep, and the file re-enters open_source() so the normal ffmpeg->theora prep takes over. The
+## environment updates with ghost's other dependencies; a failed download updates it once more and retries.
 
-## The [MaskEditor] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [MaskEditor] this is a part of: everything read through it is something this part is handed.
 var editor: MaskEditor
 
-## Ghost's OWN python venv - yt-dlp lives here, never the repo's venvs or the
-## system site-packages. user:// keeps it out of res:// (the editor's file
-## scanner must never crawl a venv) and out of git entirely.
+## Ghost's own python venv holding yt-dlp. In user:// so the editor's file scanner never crawls it and git never sees it.
 const YT_VENV_DIR := "user://ytdlp_venv"
 const YT_DL_DIR := MaskEditor.MASKS_DIR + "/_downloads"   # inside /masks/ = already gitignored
 var _yt_url := ""
@@ -83,8 +73,7 @@ func download(url: String) -> void:
 	print("ghost yt: import requested - ", url)
 	var cached := _yt_find_download()
 	if not cached.is_empty():
-		# Says so in the log too - otherwise a cache hit runs NO python at all
-		# and an empty console reads as "capture is broken", not "nothing ran".
+		# Logged too: a cache hit runs no python, and an empty console would read as a broken capture.
 		print("ghost yt: using cached download - ", cached)
 		editor._set_status("✓  Already downloaded - opening the cached copy")
 		editor.open_source(cached)
@@ -116,14 +105,9 @@ func wait_for_env() -> void:
 func _yt_download() -> void:
 	_yt_started = Time.get_unix_time_from_system()
 	editor._yt_step_started = _yt_started
-	# No codec constraints in the format pick - the prep transcodes to theora
-	# regardless, so "best up to 1080p" is all that matters. --restrict-filenames
-	# keeps the output shell-and-slug-safe; the title lands in the session slug.
-	# Runs as `python -u -m yt_dlp`, NOT the yt-dlp entry script: with stdout
-	# going to a file, python block-buffers it and the "[download] 42%" lines
-	# only landed in the log kilobytes at a time - the progress readout below
-	# read an empty file for minutes (the "black screen" report). -u makes the
-	# log stream line-by-line, same reason exporter's ffmpeg uses -progress.
+	# No codec constraints in the format pick (the prep transcodes to theora anyway); --restrict-filenames keeps the
+	# output slug-safe. Runs as `python -u -m yt_dlp`, not the entry script: with stdout in a file python
+	# block-buffers it and the "[download] 42%" lines arrive kilobytes at a time. -u streams line by line.
 	var args := PackedStringArray([
 		"-u", "-m", "yt_dlp",
 		"-f", "bv*[height<=1080]+ba/b[height<=1080]",
@@ -131,12 +115,9 @@ func _yt_download() -> void:
 		# Under 100K/s yt-dlp assumes YouTube's anti-bot throttle and re-extracts
 		# instead of crawling for an hour; fragmented formats also parallelize.
 		"--throttled-rate", "100K", "--concurrent-fragments", "4"])
-	# YouTube's nsig/PO-token challenges need a JavaScript runtime, and with NONE
-	# the download still "works", just at the punitive fallback throttle (~40KB/s:
-	# the "0% to 1% took three minutes" report). The environment carries Deno for
-	# exactly this; on a machine with no Deno build, whatever runtime the machine
-	# has stands in. By explicit path - a GUI-launched Godot's PATH is not a
-	# shell's, so auto-detection can't be trusted either.
+	# YouTube's nsig/PO-token challenges need a JavaScript runtime; without one the download falls to the punitive
+	# throttle (~40KB/s). The environment carries Deno; failing that, whatever runtime the machine has, by explicit
+	# path (a GUI-launched Godot's PATH is not a shell's).
 	var deno := _yt_bin("deno")
 	if FileAccess.file_exists(deno):
 		args.append_array(PackedStringArray(["--js-runtimes", "deno:" + deno]))
@@ -149,32 +130,25 @@ func _yt_download() -> void:
 	args.append_array(PackedStringArray([
 		"-o", _yt_dl_dir().path_join("%(title).40s_%(id)s.%(ext)s"),
 		_yt_url]))
-	# The exact command, in the log: whether --js-runtimes was engaged is the
-	# first thing to check when a download crawls (no runtime = YouTube's
-	# ~40KB/s anti-bot throttle).
+	# The exact command goes in the log: whether --js-runtimes was engaged is the first thing to check when a download crawls.
 	print("ghost yt: exec ", _yt_bin("python"), " ", " ".join(args))
 	Provision.hold(MaskEditor.YT_ENV, "clip download")
 	editor._yt_pid = _yt_spawn_logged(_yt_bin("python"), args)
 	editor._yt_state = "downloading" if editor._yt_pid > 0 else "idle"
-	# Status lands IMMEDIATELY, success or not - the first cut only reported
-	# failure here, so a clean start showed nothing until the download finished.
+	# Status lands immediately, success or not.
 	editor._set_status("⏳  Downloading…  connecting" if editor._yt_pid > 0
 		else "⚠  Could not start yt-dlp")
 
 
-## OS.create_process can't redirect output, and both the progress readout and any
-## failure diagnosis live in it - so stdout+stderr go to a log file this instance
-## then tails ([method Subprocess.start_logged], no shell on any platform).
+## OS.create_process cannot redirect output, and the progress readout and failure diagnosis live in it: stdout and
+## stderr go to a log file this instance tails ([method Subprocess.start_logged], no shell on any platform).
 func _yt_spawn_logged(cmd: String, args: PackedStringArray) -> int:
 	_yt_log = _yt_dl_dir().path_join(".yt.log")
 	return Subprocess.start_logged(cmd, args, _yt_log, "clip download")
 
 
-## The log's last 4KB. This is polled EVERY FRAME while a download runs (the
-## same cadence _read_prep_pct polls ffmpeg's progress file), and a long
-## --newline download writes tens of thousands of lines - reading the whole
-## file each frame would grow linearly with the download. The freshest
-## progress line always lives in the tail window.
+## The log's last 4KB: polled every frame while a download runs, and a long --newline download writes tens of
+## thousands of lines. The freshest progress line is always in the tail.
 func tail_window() -> String:
 	if _yt_log.is_empty() or not FileAccess.file_exists(_yt_log):
 		return ""
@@ -227,11 +201,8 @@ func _yt_find_download() -> String:
 	return best
 
 
-## Everything a finished step logged - minus the [download] progress spam -
-## echoes into godot's own log via print(), which is what the in-app console
-## (chrome's >_ toggle) tails. yt-dlp's diagnostics (throttling, missing JS
-## runtime, geo blocks, format errors) otherwise die unseen in
-## masks/_downloads/.yt.log, unreadable from a compiled app.
+## Everything a finished step logged, minus the [download] progress lines, echoed via print() into godot's own log,
+## which the in-app console tails (yt-dlp's diagnostics would otherwise stay in masks/_downloads/.yt.log).
 func _yt_echo_log(label: String) -> void:
 	if _yt_log.is_empty() or not FileAccess.file_exists(_yt_log):
 		return
@@ -246,9 +217,8 @@ func _yt_echo_log(label: String) -> void:
 		print("ghost yt [", label, "]:\n  ", "\n  ".join(kept))
 
 
-## The download just exited (see _process) - advance the machine. Success is
-## judged by what it was supposed to produce (the file) - the same evidence-over-
-## status-code stance as _finish_session's duration check.
+## The download just exited (see _process): advance the machine. Success is judged by the file it should have
+## produced, not the exit status (as in _finish_session's duration check).
 func step_done() -> void:
 	var state := editor._yt_state
 	editor._yt_state = "idle"
@@ -259,8 +229,7 @@ func step_done() -> void:
 		editor._set_status("✓  Downloaded " + file.get_file())
 		editor.open_source(file)
 	elif not _yt_retried:
-		# The single most common failure mode is a stale yt-dlp (YouTube changed,
-		# old extractor broke) - update the environment once, then retry.
+		# A stale yt-dlp (YouTube changed, the old extractor broke) is the common failure: update once, then retry.
 		_yt_retried = true
 		editor._set_status("⚠  Download failed - updating yt-dlp and retrying…")
 		Provision.update(MaskEditor.YT_ENV)

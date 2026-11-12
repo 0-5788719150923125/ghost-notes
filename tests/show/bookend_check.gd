@@ -1,15 +1,13 @@
 extends Node
 
-## Gate for the BOOKEND - the held silence before and after the content.
+## Gate for the bookend: the held silence before and after the content.
 ##
-## The mechanism is small but everything downstream reads its clock: the whole-show fade
-## ([method Director._bookend_fade]), the karaoke time base, Echo's cursor, and the
-## exporter's progress. The failure this exercise exists to catch is not "the intro is
-## the wrong length" - that is visible - but the clock being DISCONTINUOUS across the
-## hold / play / tail boundaries, which shows up as the picture fading twice, or going
-## black before the tail, and is very hard to attribute after the fact.
+## Everything downstream reads its clock: the whole-show fade ([method Director._bookend_fade]), the
+## karaoke time base, Echo's cursor and the exporter's progress. What it catches is the clock being
+## discontinuous across the hold / play / tail boundaries (the picture fading twice, or going black
+## before the tail), not a wrong intro length.
 ##
-## Runs off the real autoloads (it must - Spectrum owns the player and the clock):
+## Runs off the real autoloads (Spectrum owns the player and the clock):
 ##   tests/run_boot_probe.sh tests/show/bookend_check.gd 90
 
 const LEAD := 5.0
@@ -39,9 +37,8 @@ func _ok(cond: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-## The clock must be monotonic and continuous across all three regimes. Checked
-## arithmetically rather than by playing audio, because a real file would make this a
-## thirty-second test that still could not assert the boundary to better than a frame.
+## The clock must be monotonic and continuous across all three regimes. Checked arithmetically, since a
+## real file would make this a thirty-second test that still could not assert the boundary to a frame.
 func _check_clock() -> void:
 	# hold: 0 -> LEAD
 	_ok(_t_at(0.0, "hold") == 0.0, "clock: hold starts at 0")
@@ -56,9 +53,8 @@ func _check_clock() -> void:
 	_ok(is_equal_approx(_t_at(TAIL, "tail"), LEAD + LEN + TAIL), "clock: tail ends at the total")
 
 
-## The model of the clock this test asserts against - deliberately written out rather
-## than reaching into Spectrum's privates, so it states the CONTRACT and would catch an
-## implementation that quietly changed regime.
+## The model of the clock this test asserts against, written out rather than reaching into Spectrum's
+## privates, so it states the contract and would catch an implementation that changed regime.
 func _t_at(local: float, regime: String) -> float:
 	match regime:
 		"hold": return local
@@ -67,9 +63,8 @@ func _t_at(local: float, regime: String) -> float:
 	return -1.0
 
 
-## The fade must reach full brightness exactly when the silence ends, and start dropping
-## exactly when the tail begins. Off-by-one here is the original complaint (the picture
-## fading up over the opening words).
+## The fade must reach full brightness exactly when the silence ends and start dropping exactly when the
+## tail begins (an off-by-one fades the picture up over the opening words).
 func _check_fade_windows() -> void:
 	var total := LEAD + LEN + TAIL
 	_ok(_fade(0.0, total) <= 0.001, "fade: black at t=0")
@@ -90,9 +85,8 @@ func _fade(t: float, total: float) -> float:
 	return minf(a_in, a_out)
 
 
-## The real thing, against a real loaded file - the fixture is exactly 10.000 s of silence
-## (tests/fixture_audio.gd), which is why it is the fixture. Asserting the arithmetic against itself would prove nothing;
-## this calls Spectrum.song_length() and checks what it actually returns.
+## The real thing, against a real loaded file: the fixture is exactly 10.000 s of silence
+## (tests/fixture_audio.gd). Calls Spectrum.song_length() and checks what it returns.
 func _check_song_length() -> void:
 	var content := 10.0
 	var wav: String = preload("res://tests/fixture_audio.gd").silence(content)
@@ -108,9 +102,8 @@ func _check_song_length() -> void:
 	_ok(absf(bare - content) < 0.05,
 		"length: bare file should read %.2fs, got %.3fs" % [content, bare])
 
-	# 2. HELD bookend: the clock spans the silence, so the length must too. If it does
-	#    not, the fade reaches black before the tail has played and the exporter's
-	#    percentage passes 100 while frames are still being written.
+	# 2. Held bookend: the clock spans the silence, so the length must too, or the fade reaches black
+	#    before the tail has played and the exporter's percentage passes 100 while frames are written.
 	Spectrum.stop()
 	Spectrum.lead_in = LEAD
 	Spectrum.tail = TAIL
@@ -121,8 +114,7 @@ func _check_song_length() -> void:
 	_ok(not Spectrum.bookend_baked,
 		"length: a plain wav with no sidecar must not be treated as pre-padded")
 
-	# 3. BAKED bookend: the file already contains the silence, so adding it again would
-	#    double-count and the picture would still be fading in when the voice arrived.
+	# 3. Baked bookend: the file already contains the silence, so adding it again would double-count.
 	Spectrum.stop()
 	Spectrum.lead_in = LEAD
 	Spectrum.tail = TAIL
@@ -143,9 +135,8 @@ func _check_song_length() -> void:
 		% AudioServer.get_bus_volume_db(0))
 
 
-## A synthesis take reports its length once and then loops inside the generator without
-## restarting the player, so the playback position runs on past that length forever. The
-## old fade held at 0 from then on and the stage went permanently black.
+## A synthesis take reports its length once and then loops inside the generator without restarting the
+## player, so the playback position runs on past that length; the fade must not hold at 0 from then on.
 func _check_overrun() -> void:
 	var slen := 10.0
 	var t := 45.0                       # well past the reported end

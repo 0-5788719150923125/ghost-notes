@@ -3,12 +3,8 @@ class_name Swarm
 
 ## Swarm - a scalar field over a grid that evolves by *local* rules.
 ##
-## The transferable mechanism behind many-item scenes. Instead of scripting each of
-## thousands of items, you seed a field and let it spread: development creeps
-## outward from a few origins (a city growing over a countryside), or injected
-## pulses diffuse across the lattice (color rippling through the blocks). Cellular,
-## seeded, cheap - and the same field drives any abstract grid of many items.
-## (Pheromone trails / ant-colony rules are a natural next rule to add here.)
+## The transferable mechanism behind many-item scenes: seed a field and let it spread - development creeps outward
+## from a few origins, or injected pulses diffuse across the lattice. Cellular, seeded, cheap.
 
 const GROW := 0   # development spreads from seeds via logistic neighbor growth, and stays
 const WAVE := 1   # injected pulses diffuse outward and decay (color fronts)

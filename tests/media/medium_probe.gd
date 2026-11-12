@@ -1,27 +1,19 @@
 extends Node
 
-## Phase 0 for the comic medium (next/media.md): the two engine assumptions the
-## whole design rests on, measured rather than assumed.
+## Phase 0 for the comic medium (next/media.md): the two engine assumptions the design rests on, measured.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/media/medium_probe.gd 90
 ##
-## GHOST_PROBE_GPU is not optional - this reads pixels back, and --headless is the
-## dummy driver whose readback returns nothing (see run_quiet.sh's header).
+## GHOST_PROBE_GPU is required: this reads pixels back, and --headless is the dummy driver (see run_quiet.sh's header).
 ##
-## ASSUMPTION 1 - A FROZEN PANEL KEEPS ITS PICTURE.
-## The comic holds every filled panel by stopping its SubViewport and freeing the
-## scene inside it. That is only free if the render target survives BOTH: the update
-## mode going to DISABLED, and its last child being freed. If it does not, the whole
-## design falls back to a synchronous get_image() per cut - the exact readback stall
-## that cost Masking its frame rate - and would have to be rethought.
+## Assumption 1 - a frozen panel keeps its picture. The comic holds every filled panel by stopping its SubViewport and
+## freeing the scene inside it; that is free only if the render target survives both the update mode going to
+## DISABLED and its last child being freed (otherwise it needs a synchronous get_image() per cut).
 ##
-## ASSUMPTION 2 - A VIEWPORT TEXTURE DRAWS THROUGH A PROJECTED GRID.
-## A panel is a subdivided grid of textured triangles submitted with the panel
-## viewport's texture RID, its corners projected through a Lens3D. Two things are
-## checked: that the texture arrives at all (a wrong RID draws flat white, which is
-## easy to mistake for "working" at a glance), and that subdivision actually buys
-## perspective correctness - the 1x1 case is affine and WRONG on a tilted quad, and
-## the measurement here is how much the seam between its two triangles moves.
+## Assumption 2 - a viewport texture draws through a projected grid. A panel is a subdivided grid of textured
+## triangles submitted with the panel viewport's texture RID, its corners projected through a Lens3D. Checked: the
+## texture arrives at all (a wrong RID draws flat white), and subdivision buys perspective correctness (the 1x1 case
+## is affine and wrong on a tilted quad; measured as how much the seam between its two triangles moves).
 
 const PANEL := Vector2i(256, 256)
 const OUT := Vector2i(512, 512)
@@ -63,9 +55,8 @@ func _check_freeze() -> bool:
 	var before := _sample(vp)
 	var want: Color = painter.col     # read BEFORE the free; the node is gone below
 
-	# THE FREEZE, in the order the medium will do it: stop the viewport FIRST, then
-	# let the scene go. Reversed, the target repaints itself empty on the frame
-	# between the free and the stop.
+	# The freeze, in the medium's order: stop the viewport first, then let the scene go; reversed, the target
+	# repaints itself empty between the free and the stop.
 	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	vp.process_mode = Node.PROCESS_MODE_DISABLED
 	painter.queue_free()

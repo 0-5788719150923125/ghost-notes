@@ -1,30 +1,21 @@
 extends EpisodeStep
 class_name YouTubeTags
 
-## YouTubeTags - each episode's tags, written from what it says (the user, 2026-10-18: "I want to be
-## able to enable/disable the management of tags applied to the video, based upon the script/content of
-## the video. Today, we have just a static list. I would like to allow the 'Generate' button to
-## override/rewrite those tags, to be something more appropriate to the upload").
+## YouTubeTags - each episode's tags, written from what it says.
 ##
-## A STEP OF THE EPISODE ([EpisodeStep]), offered by the YouTube card while its "Write each episode's
-## tags" box is ticked: the note's Pipeline card lists it, Generate writes it once the words are written and
-## its ⟳ writes it again. The writer is the show's own; it reads the episode - its words,
-## title and description - and the note's tags, keeps those that fit and leaves out the rest
-## (rules/youtube/tags.yaml).
+## A step of the episode ([EpisodeStep]), offered by the YouTube card while its "Write each episode's tags" box is ticked:
+## the note's Pipeline card lists it, Generate writes it once the words are written and its ⟳ writes it again. The writer is
+## the show's own; it reads the episode (words, title, description) and the note's tags, keeps those that fit and leaves out
+## the rest (rules/youtube/tags.yaml).
 ##
-## NOTHING THE TITLE OR DESCRIPTION SAYS ALREADY (the user, 2026-10-30: "The tag-writer keeps choosing
-## keywords that already exist in the title and description ... YouTube tags are for relevant, similar
-## themes and ideas, or things that might be in the video but not in text/metadata"): the show's name, the
-## title and the description go up with the video and are searched already, so the writer is told to leave
-## their words out, and a tag whose every word is in them is dropped as it lands ([method land]) - said on
-## its row ([method summary]). Its own words, in another order or with one more, are a tag still.
+## Nothing the title or description already says: the show's name, title and description go up with the video and are
+## searched already, so the writer is told to leave their words out, and a tag whose every word is in them is dropped as it
+## lands ([method land]), said on its row ([method summary]). Its own words in another order or with one more are a tag.
 ##
-## THE ANSWER REPLACES THE NOTE'S TAGS (the user, 2026-10-19: "it's confusing, because I never know which
-## tags are truly going to be applied ... I'd prefer to see just one, unified list"): written over the
-## note's `tags:` line as it lands ([method EpisodeFeed.replace_tags]), the one list the YouTube card
-## shows and every upload takes - edited there by hand like any other. What landed is also kept in the
-## episode's folder (`youtube_tags.json`) with the fingerprint of the words it was written from, which is
-## all that says the step is made: words written again make it stale, and Generate writes new ones.
+## The answer replaces the note's tags: written over the note's `tags:` line as it lands ([method EpisodeFeed.replace_tags]),
+## the one list the YouTube card shows and every upload takes, editable by hand. What landed is also kept in the episode's
+## folder (`youtube_tags.json`) with the fingerprint of the words it was written from, which is all that says the step is
+## made: words written again make it stale, and Generate writes new ones.
 
 const YouTube := preload("res://src/export/youtube.gd")
 ## The fewest usable tags an answer must hold to be kept.
@@ -53,9 +44,8 @@ func _prompt(feed: EpisodeFeed) -> Dictionary:
 	return prompt(feed.show_title(), feed.episode_title(), feed.description(), feed.tags(), feed.words())
 
 
-## What the writer is told, from the show's name, the episode's [param title] and [param description],
-## the tags the note gives every video ([param given]) and the episode's [param words]. Static and pure
-## for the gate.
+## What the writer is told, from the show's name, the episode's [param title] and [param description], the tags the note
+## gives every video ([param given]) and the episode's [param words]. Static and pure for the gate.
 static func prompt(show: String, title: String, description: String, given: PackedStringArray,
 		words: String) -> Dictionary:
 	return {"system": Rules.say("youtube/tags.system", {}),
@@ -74,9 +64,9 @@ func _land(text: String, feed: EpisodeFeed) -> Variant:
 	return got
 
 
-## The writer's answer [param d] as kept: `{tags, said}`, each tag cleaned (a hashtag sign dropped), each
-## once, and none whose every word is in [param already] (the show's name, the title and the description:
-## those left out are `said`) - or why it cannot be kept. Static and pure for the gate.
+## The writer's answer [param d] as kept: `{tags, said}`, each tag cleaned (a hashtag sign dropped), each once, and none
+## whose every word is in [param already] (the show's name, title and description; those left out are `said`), or why it
+## cannot be kept. Static and pure for the gate.
 static func land(d: Variant, already := "") -> Variant:
 	var raw: Variant = (d as Dictionary).get("tags") if d is Dictionary else d
 	if not (raw is Array):

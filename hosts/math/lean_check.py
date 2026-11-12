@@ -18,7 +18,7 @@ forbidden fact is Mathlib's own copy of the theorem being proved, caught through
 each tactic used), and - when `theorem` is named - that theorem exists. Exit 0 with the file
 written whatever the verdict; anything else is a failure, with the reason on stderr.
 
-Measured (2026-10-15, Mathlib v4.35.0): a check costs 12-40 s, nearly all of it `import Mathlib`.
+A check costs 12-40 s with Mathlib, nearly all of it `import Mathlib`.
 """
 
 import json

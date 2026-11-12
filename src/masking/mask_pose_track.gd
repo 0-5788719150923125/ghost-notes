@@ -1,67 +1,38 @@
 extends RefCounted
 class_name MaskPoseTrack
 
-## MaskPoseTrack - her silhouette and her skeleton, read by time: Masking's pose track, a part of
-## [MaskEditor]. It bootstraps the offline pre-pass (`hosts/face/pose_track.py`), runs it one
-## window at a time, and answers what the track says at a moment: where a joint is
-## ([method point]), whether it is seen ([method vis_at]), which uploaded window holds it
-## ([method slot_at]), and the mask texture for the shader ([method upload_mask]).
+## MaskPoseTrack - the subject's silhouette and skeleton, read by time: Masking's pose track, a part of [MaskEditor].
+## It bootstraps the offline pre-pass (`hosts/face/pose_track.py`, which has the file format), runs it one window at a
+## time, and answers what the track says at a moment: where a joint is ([method point]), whether it is seen
+## ([method vis_at]), which loaded window holds it ([method slot_at]), and the mask texture for the shader
+## ([method upload_mask]). The umbra's whole shape comes from it.
 ##
-## WHAT IT IS HANDED is written out: every `editor.` below is something it reads of the editor
-## (the session, the player, the shared state of the install, the status line).
+## It shares the clown's venv (the mediapipe package is the same; only the model file differs).
 ##
-## What the umbra's whole shape comes from. See hosts/face/pose_track.py for the
-## pre-pass and the file format; this half bootstraps it, runs it, and reads it.
+## The pre-pass is offline so the track can look ahead: a ghost that moves a beat before the subject reads as a
+## puppeteer, one that follows as a shadow, and no live tracker has the frame it would need.
 ##
-## It shares the CLOWN'S VENV rather than building a second one: mediapipe is the
-## same package and it is 100 MB. Only the model file differs, so a session that has
-## already tracked a face pays nothing but the 9 MB pose bundle.
+## Chunked: the pre-pass runs at about real time, so the clip is cut into POSE_CHUNK_SECS windows on one global sample
+## grid (pose_track.py writes each chunk's starting index in its header, so chunks from separate runs butt together).
+## The editor asks only for the window the playhead is in and the next, and evicts windows it has left.
 ##
-## The look-ahead is the reason this is offline and not a live detector. A ghost that
-## moves a beat BEFORE she does reads as a puppeteer; one that follows reads as a
-## shadow. No live tracker can supply the first, at any amount of smoothing, because
-## the frame it would need has not been decoded yet.
-##
-## WHY IT IS CHUNKED. The pre-pass runs at about real time, so reading a ten-minute
-## clip up front is ten minutes of an effect that draws nothing - which is what the
-## author saw, and it is the wrong shape for a tool you place a marker in and expect
-## to see. The clip is cut into POSE_CHUNK_SECS windows on ONE GLOBAL SAMPLE GRID
-## (pose_track.py writes each chunk's starting index into its header, so two chunks
-## written by two runs butt together exactly), the editor asks only for the window
-## the playhead is in and the one after it, and it evicts windows it has walked
-## away from. So an umbra layer starts drawing about twenty seconds after it is
-## placed, wherever in the clip that is, and scrubbing somewhere new costs the same
-## twenty seconds rather than a re-read of everything before it.
-##
-## Two independent state machines, deliberately separated. `_pt_state` is about the
-## VENV AND THE MODEL - a one-off install that either works or does not - and it
-## runs the `_ft_*` half's shape because it is the same problem. The WINDOWS are a
-## pump: the playhead names which ones are wanted, and one child at a time reads
-## them, so nothing here is ever "waiting for the clip to finish".
+## Two state machines: `_pt_state` is the one-off install of the venv and model (shaped like the `_ft_*` half); the
+## windows are a pump - the playhead names the wanted ones and one child at a time reads them.
 
-## The [MaskEditor] this is a part of: everything read through it is something this part
-## is handed, and the list of them is what it depends on.
+## The [MaskEditor] this is a part of: everything read through it is something this part is handed.
 var editor: MaskEditor
 
 const POSE_TRACK_DIR := "user://pose_tracks"
 const POSE_TRACK_RATE := 12.0    # samples/sec - must match what pose_track.py wrote
 const POSE_TRACK_POINTS := 33
-## 4 magic + u32 version + f32 rate + u32 count + u32 points + u32 mask_w + u32 mask_h
-## + u32 start + f32 dir_x + f32 dir_y + f32 conf. The face track's own header was
-## read four bytes short once and every sample after it returned plausible, entirely
-## wrong numbers - hence tests/masking/pose_track_check.gd, which reads a hand-built file
-## through this reader.
+## 4 magic + u32 version + f32 rate + u32 count + u32 points + u32 mask_w + u32 mask_h + u32 start + f32 dir_x +
+## f32 dir_y + f32 conf. tests/masking/pose_track_check.gd reads a hand-built file through this reader.
 const POSE_TRACK_HEADER := 44
-## How much clip one window covers. TWENTY SECONDS IS THE CAST DIRECTION'S FLOOR,
-## not a guess at a pleasant latency: the throw is measured from how the background
-## VARIES as she moves, and measured on the reference clip that reads conf 0.97 over
-## the whole ten minutes, 0.45 over twenty seconds and 0.06 over six - which is
-## below the floor at which the editor will believe it at all. A shorter window
-## would start faster and know nothing about the light.
+## How much clip one window covers. 20 s is the cast direction's floor: the throw is measured from how the background
+## varies as the subject moves, and on the reference clip confidence is 0.97 over ten minutes, 0.45 over 20 s and 0.06
+## over 6 s (below what the editor will believe).
 const POSE_CHUNK_SECS := 20.0
-## How many windows stay in memory. Each is ~1.3 MB at 96x54, and the reason to
-## bound it at all is a long clip scrubbed end to end: without eviction every window
-## ever visited stays resident.
+## How many windows stay in memory (~1.3 MB each at 96x54); bounds a long clip scrubbed end to end.
 const POSE_CHUNK_KEEP := 4
 var _pt_log := ""
 var _pt_rate := POSE_TRACK_RATE
@@ -71,28 +42,21 @@ var _pt_mh := 54
 var _pt_dir_acc := Vector2.ZERO
 var _pt_dir_w := 0.0
 var _pt_conf := 0.0
-## Loaded windows, keyed by index: {count, found, xy, vis, mask}. Sample numbering is
-## GLOBAL - window k holds samples [k * _pt_chunk_n, ...) - so a sample index means
-## the same thing whichever window produced it.
+## Loaded windows by index: {count, found, xy, vis, mask}. Sample numbering is global (window k holds samples
+## [k * _pt_chunk_n, ...)).
 var _pt_chunks := {}
 var _pt_chunk_n := int(POSE_CHUNK_SECS * POSE_TRACK_RATE)
-## The window being read right now, and the ones already known to be missing so the
-## per-frame pump does not stat the same absent file every frame.
+## The window being read, and the ones known to be missing (so the pump does not stat an absent file every frame).
 var _pt_job := -1          # chunk index, or -1
 var _pt_job_pid := -1
 var _pt_progress_ms := 0
 var _pt_missing := {}
-## How many windows the clip has at all - so the pump never asks for one past the
-## end and then waits forever for a file that cannot exist.
+## How many windows the clip has, so the pump never waits for a file that cannot exist.
 var _pt_chunk_total := 0
 var _pt_img: Image = null
 var _pt_bytes := PackedByteArray()
-## The silhouette grid. 160x90 rather than 96x54: a cell is 12 px of a 1080p
-## frame instead of 20, which is what lets the shader's grid-dissolving jitter
-## come down from +-34 px (a visibly crawling outline) to +-10. It costs 2.8x the
-## cache - 3.5 MB a twenty-second window - and the grid is in the window
-## FILENAME, so raising it does not read stale coarse windows, it asks for finer
-## ones and the old files are simply never opened again.
+## The silhouette grid: a cell is 12 px of a 1080p frame, which brings the shader's grid-dissolving jitter to +-10 px
+## (96x54 gave +-34). A 20 s window is 3.5 MB. The grid is in the window filename, so a change asks for new windows.
 const _UMB_W := 160
 const _UMB_H := 90
 
@@ -106,23 +70,20 @@ func _pt_dir_path() -> String:
 	return ProjectSettings.globalize_path(POSE_TRACK_DIR)
 
 
-## Where window `k` of THIS clip lives. Keyed by the clip and by the sample grid,
-## so changing the rate or the grid cannot silently read windows written under the
-## old one.
+## Where window `k` of this clip lives, keyed by the clip and the sample grid so a changed rate or grid never reads
+## old windows.
 func _pt_chunk_path(k: int) -> String:
 	return _pt_dir_path().path_join("%d_%dx%d_%02d.bin"
 		% [hash(editor.session.video_path), _UMB_W, _UMB_H, k])
 
 
-## Called every frame while an umbra layer is live. Bootstraps once, then pumps
-## the window the playhead needs. Every branch is a cheap no-op in the steady
-## state.
+## Called every frame while an umbra layer is live: bootstraps once, then pumps the window the playhead needs; a
+## cheap no-op in the steady state.
 func ensure() -> void:
 	if editor._pt_state == "failed" or editor.session == null or editor.session.video_path.is_empty():
 		return
 	if editor._pt_state != "ready":
-		# Before ANY step, not just the windows: the tracker logs here, and an empty path
-		# makes its redirect fail so the step never runs at all.
+		# Before any step: the tracker logs here, and an empty path makes its redirect fail.
 		DirAccess.make_dir_recursive_absolute(_pt_dir_path())
 		_pt_log = _pt_dir_path().path_join("last_run.log")
 		var why := Provision.unsupported(MaskEditor.FACE_ENV)
@@ -147,40 +108,27 @@ func ensure() -> void:
 func _pt_fail(why: String) -> void:
 	editor._pt_state = "failed"
 	push_warning("ghost pose: " + why)
-	# SAY SO rather than drawing nothing and letting the author wonder. The umbra
-	# has no fallback at all - its whole shape is the track - so silence here is
-	# indistinguishable from the effect being switched off.
+	# Say so: the umbra has no fallback (its shape is the track), so silence reads as the effect being off.
 	editor._set_status("⚠  The umbra can't see the body - " + why)
 
 
-## stdout+stderr to one file, like [method _ft_spawn_logged].
-##
-## THE WINDOWS RUN AT THE LOWEST PRIORITY THE OS HANDS OUT, and pose_track.py lowers itself
-## (`--background`: nice 19, or IDLE_PRIORITY_CLASS on Windows) before it loads anything.
-## WHY, and it is not tidiness: mediapipe saturates every core it is given, and
-## ghost's video decode and the editor's own frame both run on this machine's
-## other ones. Starve the decode and `_player.stream_position` stops advancing;
-## the A/V rule in `_process` then sees audio ahead of video, HOLDS the audio
-## (see the long note there), and the hold cannot release while the starvation
-## continues. Reported as "the sound no longer works in masking mode... it's
-## breaking the audio at launch" - and nothing had touched the audio at all. A
-## background job that can stall the foreground is a background job in name only.
+## stdout+stderr to one file, like [method _ft_spawn_logged]. The windows run at the lowest priority the OS has, and
+## pose_track.py lowers itself (`--background`: nice 19, IDLE_PRIORITY_CLASS on Windows) before loading anything:
+## mediapipe saturates every core it is given, and starving the video decode stops `_player.stream_position`, so the
+## A/V rule in `_process` holds the audio and cannot release.
 func _pt_spawn_logged(exe: String, args: PackedStringArray) -> int:
 	return Subprocess.start_logged(exe, args, _pt_log, "pose track")
 
 
-## THE PUMP. Which windows are wanted is a pure function of the playhead: the one
-## it is in, and the one after it (playback walks forward, and Lead already reads
-## past the current frame). Anything already on disk is loaded; the nearest thing
-## missing is read; everything far away is dropped.
+## The pump. The wanted windows are a pure function of the playhead: the one it is in and the next. Anything on disk
+## is loaded; the nearest missing one is read; everything far away is dropped.
 func _pt_pump() -> void:
 	if editor._player == null:
 		return
 	var t := editor._player.stream_position + clampf(editor._umb_lead, 0.0, 2.0)
 	var here := clampi(int(floor(t / POSE_CHUNK_SECS)), 0, maxi(0, _pt_chunk_total - 1))
 	var want: Array[int] = [here]
-	# The guard reads the playhead itself, which is a different window from the
-	# lead's whenever the playhead sits within Lead of a boundary.
+	# The guard reads the playhead itself, a different window from the lead's near a boundary.
 	var guard_k := clampi(int(floor(editor._player.stream_position / POSE_CHUNK_SECS)),
 		0, maxi(0, _pt_chunk_total - 1))
 	if guard_k != here:
@@ -200,8 +148,7 @@ func _pt_pump() -> void:
 			_pt_start_chunk(k)
 			break   # one child at a time: two of these compete for the same cores
 
-	# EVICT WHAT WE HAVE WALKED AWAY FROM. Each window is ~1.3 MB and a long clip
-	# scrubbed end to end would otherwise keep every one ever visited.
+	# Evict windows walked away from.
 	if _pt_chunks.size() > POSE_CHUNK_KEEP:
 		var far := -1
 		var far_d := -1
@@ -214,16 +161,12 @@ func _pt_pump() -> void:
 			_pt_chunks.erase(far)
 
 
-## Progress for the window being read, reported as the window's own progress -
-## "34% of the whole clip" was the old message and it was true and useless, because
-## the thing the author is waiting for is twenty seconds of it.
+## Progress for the window being read, reported as the window's own progress.
 func _pt_poll_job(here: int) -> void:
 	if _pt_job < 0:
 		return
 	if Subprocess.alive(_pt_job_pid):
-		# Four times a second, not sixty. The child writes this once a second, so a
-		# read per frame is fifteen file opens for every value that changes - on
-		# the main thread, in a loop this file has already had to make quiet once.
+		# Four times a second: the child writes once a second, and this is the main thread.
 		var now := Time.get_ticks_msec()
 		if now - _pt_progress_ms < 250:
 			return
@@ -242,18 +185,14 @@ func _pt_poll_job(here: int) -> void:
 	_pt_job = -1
 	var path := _pt_chunk_path(done)
 	if FileAccess.file_exists(path):
-		# NOT if it is already resident. The pump's own "is it on disk yet" branch
-		# can reach the file in the same frame the child finishes, and loading it
-		# twice DOUBLE-COUNTS its confidence into the accumulated cast direction -
-		# measured, window 0 alone took the weight from 0.90 to 1.80, which would
-		# have quietly outvoted every window read after it.
+		# Not if already resident: the pump's "is it on disk" branch can reach the file the frame the child finishes, and
+		# a second load double-counts its confidence into the accumulated cast direction.
 		if not _pt_chunks.has(done):
 			_pt_load_chunk(done, path)
 		editor._set_status("✓  The umbra can see her here")
 	else:
-		# REMEMBER THE FAILURE, or the pump re-runs the same doomed child every
-		# frame for the rest of the session. A window with no pose in it at all
-		# (a title card, a cutaway) is a legitimate outcome and lands here too.
+		# Remember the failure so the pump does not rerun the same child every frame. A window with no pose in it
+		# (a title card, a cutaway) lands here too.
 		_pt_missing[done] = true
 		if done == here:
 			editor._set_status("⚠  No body found around " + _clock(float(done) * POSE_CHUNK_SECS))
@@ -264,9 +203,8 @@ func _pt_start_chunk(k: int) -> void:
 	if not FileAccess.file_exists(script):
 		_pt_fail("hosts/face/pose_track.py is missing")
 		return
-	# The ORIGINAL source where we still have it, for the same reason the face
-	# track prefers it: the prepared .ogv is theora q6 and its chroma blocks are
-	# exactly what a segmentation model has to see past.
+	# The original source where it exists, as the face track does: the prepared .ogv is theora q6, whose chroma
+	# blocks a segmentation model has to see past.
 	var src := editor.session.source_path
 	if src.is_empty() or not FileAccess.file_exists(src):
 		src = ProjectSettings.globalize_path(editor.session.video_path)
@@ -287,9 +225,8 @@ func _clock(secs: float) -> String:
 	return Clock.text(secs)
 
 
-## Read one window. Rejects and DELETES anything that is not exactly the file this
-## reader expects, so a stale grid or a half-written chunk is rebuilt rather than
-## read as plausible nonsense.
+## Read one window. Rejects and deletes anything that is not exactly the file this reader expects, so a stale grid
+## or half-written chunk is rebuilt.
 func _pt_load_chunk(k: int, path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -318,10 +255,8 @@ func _pt_load_chunk(k: int, path: String) -> void:
 		_pt_missing[k] = true
 		push_warning("ghost pose: window %d was truncated - it will be read again" % k)
 		return
-	# THE HEADER'S OWN START INDEX IS THE AUTHORITY, not the filename. A window
-	# whose samples do not sit where this reader thinks they do would put the ghost
-	# on the wrong frame, silently, which is the whole failure class the format
-	# check exists for.
+	# The header's own start index is the authority, not the filename: a misplaced window would put the ghost on the
+	# wrong frame.
 	if start != k * int(rate * POSE_CHUNK_SECS):
 		f.close()
 		DirAccess.remove_absolute(path)
@@ -339,10 +274,8 @@ func _pt_load_chunk(k: int, path: String) -> void:
 	var vis := PackedFloat32Array()
 	var mask := PackedByteArray()
 	found.resize(count)
-	# APPENDED IN WHOLE BUFFERS, never cell by cell. A window is 240 samples of
-	# 5184 mask cells, and a GDScript loop that copies one byte at a time is over a
-	# million interpreted iterations per window - a visible hitch on a file that
-	# reads off the disk in a fraction of one.
+	# Appended in whole buffers, never cell by cell (a window is 240 samples of 5184 cells: over a million interpreted
+	# iterations).
 	var found_n := 0
 	for i in count:
 		found[i] = f.get_8()
@@ -353,11 +286,8 @@ func _pt_load_chunk(k: int, path: String) -> void:
 	f.close()
 	_pt_chunks[k] = {"count": count, "found": found, "xy": xy, "vis": vis, "mask": mask}
 	editor._pt_slot = -1
-	# The throw, accumulated. One window measures it poorly (measured on the
-	# reference clip: conf 0.97 over ten minutes, 0.45 over twenty seconds, 0.06
-	# over six); weighting by each window's own confidence means a dozen of them
-	# converge on the right answer while a window that measured nothing adds
-	# nothing rather than dragging it toward its noise.
+	# The throw, accumulated. One window measures it poorly (conf 0.97 over ten minutes, 0.45 over 20 s, 0.06 over 6 s);
+	# weighting by each window's confidence lets a dozen converge while a window that measured nothing adds nothing.
 	var d := Vector2(dx, dy)
 	if conf > 0.0 and d.length() > 1e-4:
 		_pt_dir_acc += d.normalized() * conf
@@ -368,21 +298,17 @@ func _pt_load_chunk(k: int, path: String) -> void:
 		% [k, count, found_n, editor._pt_dir.x, editor._pt_dir.y, _pt_dir_w])
 
 
-## Is there a usable sample at clip time `t`, and which one? GLOBAL sample index,
-## or -1. Deliberately the NEAREST sample and not an interpolation: the silhouette
-## is a bitmap and cross-fading two of them makes a ghost with two outlines.
-## Position smoothness comes from the field sim, which advects at frame rate over
-## whatever the deposit does at 12 Hz.
+## Is there a usable sample at clip time `t`, and which? A global sample index, or -1. The nearest sample, not an
+## interpolation: the silhouette is a bitmap, and cross-fading two makes two outlines. Smoothness comes from the field
+## sim, which advects at frame rate over the 12 Hz deposit.
 func slot_at(t: float) -> int:
 	if editor._pt_state != "ready" or _pt_chunk_n <= 0:
 		return -1
 	var i := maxi(0, int(round(t * _pt_rate)))
 	if _pt_found_at(i):
 		return i
-	# Hold the nearest real sample rather than dropping the ghost for one frame -
-	# a body that blinks out on a missed detection is a worse artifact than a body
-	# a twelfth of a second stale. Bounded to within this window, because reaching
-	# into one that is not loaded is how a hold becomes a jump across a gap.
+	# Hold the nearest real sample rather than drop the ghost for a frame, bounded to this window (reaching into one
+	# not loaded turns a hold into a jump).
 	for k in range(1, 8):
 		if i - k >= 0 and _pt_found_at(i - k):
 			return i - k
@@ -423,11 +349,9 @@ func point(i: int, idx: int) -> Vector2:
 	return Vector2(xy[b], xy[b + 1])
 
 
-## ...and how much the model believes it. MediaPipe reports a landmark it cannot
-## see - one off the bottom of a half-body framing, or an ear behind a turned
-## head - with a plausible EXTRAPOLATED position and a visibility near zero, so
-## the coordinate alone never says "no". Measured on the reference clip: the hips
-## come back at y = 1.37 (below the picture) on every sample, at visibility 0.00.
+## ...and how much the model believes it. MediaPipe gives an unseen landmark (below a half-body framing, an ear behind
+## a turned head) a plausible extrapolated position with visibility near zero, so the coordinate alone never says no
+## (on the reference clip the hips are at y = 1.37 on every sample, at visibility 0.00).
 func vis_at(i: int, idx: int) -> float:
 	var c := _pt_chunk_of(i)
 	if c.is_empty():
@@ -436,22 +360,12 @@ func vis_at(i: int, idx: int) -> float:
 	return vis[(i - (i / _pt_chunk_n) * _pt_chunk_n) * _pt_points + idx]
 
 
-## Upload global sample `i`'s silhouette as the field sim's source texture.
-##
-## R and B are the SAME mask at two dilations, and that is the whole channel
-## design: R is the body the throw magnifies, B is the guard read at plain screen
-## uv, and the guard is grown a cell so its exclusion starts BEFORE her outline
-## rather than at it. Erring outward is the safe direction - the one property this
-## effect may never trade away is staying off her.
-## THE TWO CHANNELS COME FROM TWO DIFFERENT MOMENTS, and that is the whole point.
-## The BODY is her silhouette at `t + Lead` - the ghost is ahead of her, which is
-## the effect. The GUARD is her silhouette NOW, because the guard's job is to keep
-## the ghost off the woman who is on screen, and she is on screen at `t`.
-##
-## Uploading one sample for both is what produced the reported artifact: with Lead
-## wound up, a moving hand cut a hand-shaped hole in the ghost a third of a second
-## AHEAD of the hand, and left the real hand uncovered - a hard-edged gap sliding
-## through the mass with nothing where it had been.
+## Upload global sample `i`'s silhouette as the field sim's source texture. R and B are the same mask at two
+## dilations: R is the body the throw magnifies, B is the guard read at plain screen uv, grown a cell so its exclusion
+## starts before the outline (the effect must stay off the subject). The channels come from two moments: the body is
+## the silhouette at `t + Lead` (the ghost is ahead of the subject), the guard is the silhouette now (`guard_i`), since
+## it keeps the ghost off what is on screen at `t`. One sample for both would cut a hole in the ghost ahead of a
+## moving hand and leave the hand uncovered.
 func upload_mask(i: int, guard_i: int) -> void:
 	var c := _pt_chunk_of(i)
 	if c.is_empty():
@@ -465,19 +379,11 @@ func upload_mask(i: int, guard_i: int) -> void:
 		_pt_bytes.resize(cells * 4)
 	var src: PackedByteArray = c["mask"]
 	var gsrc: PackedByteArray = gc["mask"]
-	# A CENTERED THREE-TAP OVER TIME, and centered is the point. The segmentation
-	# wobbles a cell or two per sample and the track runs at 12 Hz, so the raw
-	# outline both shimmers and STEPS - which is most of "the edges are very
-	# jittery and unstable". An EMA would fix the shimmer and buy it with lag,
-	# which on this effect is the one thing that must not be spent: the Lead is
-	# the whole point. Because the track is fitted OFFLINE the future is already
-	# on disk, so the neighbor on each side can be weighted equally - zero phase,
-	# the mask arrives no later than it did, and the wobble is gone. Same argument
-	# as the face track's `_ft_point` smoothing, one dimension up.
-	# Offsets of the two neighbors INSIDE THIS WINDOW's own array. A neighbor on
-	# the far side of a window boundary is simply absent (-1) rather than reached
-	# for: the next window may not be resident, and a half-loaded blend is worse
-	# than none.
+	# A centered three-tap over time. The segmentation wobbles a cell or two per sample at 12 Hz, so the raw outline
+	# shimmers and steps. An EMA would add lag, which this effect cannot spend; the track is offline, so the neighbor
+	# on each side is weighted equally: zero phase, no wobble (as the face track's `_ft_point` smoothing, one
+	# dimension up). The neighbors are offsets inside this window's own array; across a window boundary the neighbor
+	# is absent (-1), since the next window may not be resident.
 	var local := i - (i / _pt_chunk_n) * _pt_chunk_n
 	var last := int(c["count"]) - 1
 	var prev_b := (local - 1) * cells if local > 0 else -1
@@ -488,14 +394,8 @@ func upload_mask(i: int, guard_i: int) -> void:
 		for x in _pt_mw:
 			var k := y * _pt_mw + x
 			var v := src[base + k]
-			# A REAL ONE-CELL MAX DILATION, not a gain on the same value. Scaling
-			# the coverage up only widens the guard across the mask's own soft
-			# rim, which is a cell at most and nothing at all where the rim is
-			# hard - and "hard" is exactly the case (a crisp shoulder against a
-			# plain wall) where the ghost would otherwise be allowed to touch her.
-			# A cell of this grid is ~20 px of a 1080p frame, so this costs a
-			# hairline of unpainted wall around her and buys the one property the
-			# effect may never trade away.
+			# A one-cell max dilation, not a gain: scaling coverage only widens the guard across the mask's soft rim, and
+			# nothing where the rim is hard (a crisp shoulder against a plain wall).
 			var g := int(gsrc[gbase + k])
 			if x > 0:
 				g = maxi(g, gsrc[gbase + k - 1])
@@ -506,9 +406,8 @@ func upload_mask(i: int, guard_i: int) -> void:
 			if y < _pt_mh - 1:
 				g = maxi(g, gsrc[gbase + k + _pt_mw])
 			var b4 := k * 4
-			# 0.25 / 0.50 / 0.25. A missing neighbor (the window's own ends) falls
-			# back to this sample rather than to zero, which would pull the whole
-			# outline inward for two samples either side of every window boundary.
+			# 0.25 / 0.50 / 0.25. A missing neighbor falls back to this sample, not zero (which would pull the outline
+			# inward near every window boundary).
 			var sm := int(v)
 			if prev_b >= 0 or next_b >= 0:
 				var a := int(src[prev_b + k]) if prev_b >= 0 else int(v)

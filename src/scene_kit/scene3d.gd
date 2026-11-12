@@ -3,23 +3,20 @@ class_name Scene3D
 
 ## Scene3D - the unified 3D rendering path (the convergence target).
 ##
-## The project carries several render mechanisms forward (see GhostScene's
-## render_kind); this is the one the rest should migrate onto. A Scene3D owns a
-## perspective camera ([Lens3D]) and a world of two drawable kinds - solid bodies
-## ([Mesh3D]) and flat quads ([Plane3D]) - and renders them depth-sorted under
-## forced perspective. A subclass just populates the world and flies the camera:
+## The project carries several render mechanisms (see GhostScene's render_kind); this is the one the rest should
+## migrate onto. A Scene3D owns a perspective camera ([Lens3D]) and a world of two drawable kinds, solid bodies
+## ([Mesh3D]) and flat quads ([Plane3D]), rendered depth-sorted under forced perspective. A subclass populates the
+## world and flies the camera:
 ##
 ##   build_params(rng)  - add_plane(...) / set up meshes; place the lens.
 ##   update(f, delta)    - move the lens, restate per-frame bodies, recolor planes.
 ##   _draw()             - begin_draw(); render_world().
 ##
-## Bodies are restated each frame (their basis/glow change), so the usual shape is
-## `bodies.clear()` then add_body(...) in update; planes are usually persistent and
-## mutated in place. The whole world is sorted back-to-front by camera depth before
-## drawing, so bodies and planes correctly occlude each other; each Mesh3D still
-## sorts its own faces internally. The scene is still a Node2D drawn through the 2D
-## [SceneView], so transitions, presence, and gentle shot drift all keep working -
-## the lens is the *primary* camera, the 2D view adds only subtle framing on top.
+## Bodies are restated each frame (their basis/glow change): the usual shape is `bodies.clear()` then add_body(...) in
+## update; planes are usually persistent and mutated in place. The whole world is sorted back-to-front by camera
+## depth, so bodies and planes occlude each other; each Mesh3D still sorts its own faces. The scene is still a Node2D
+## drawn through the 2D [SceneView], so transitions, presence and shot drift keep working: the lens is the primary
+## camera, the 2D view adds only subtle framing.
 
 ## The camera the world is projected through.
 var lens := Lens3D.new()

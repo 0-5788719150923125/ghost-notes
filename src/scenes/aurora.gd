@@ -2,14 +2,12 @@ extends GhostScene
 
 ## Aurora - slow curtains of light over a starlit night.
 ##
-## Wavy ribbons drift and undulate, each tied to a band of the spectrum so the curtains
-## brighten and ripple with the music, hung over a faint starfield and a dark bed. The
-## northern-lights corner. `bed` + `stars` + `aurora`, in whichever of the sky's own
-## colors the seed draws - and as broad drapes, fine ribbons, or a doubled curtain.
+## Wavy ribbons drift and undulate, each tied to a band of the spectrum so the curtains brighten and ripple
+## with the music, hung over a faint starfield and a dark bed (`bed` + `stars` + `aurora`), as broad drapes,
+## fine ribbons or a doubled curtain.
 
-# The curtain's FORM: how many ribbons hang, how saturated they are, and whether a second
-# set hangs behind on the accent hue. One display is a couple of slow drapes and another is
-# a fine-grained shimmer, so the count is the silhouette here, not a cosmetic constant.
+# The curtain's form: how many ribbons hang, how saturated they are, and whether a second set hangs behind
+# on the accent hue. The count is the silhouette here.
 const FORMS := {
 	"drapes":  {"count": [2, 3], "sat": [0.55, 0.80], "second": false},
 	"ribbons": {"count": [5, 8], "sat": [0.40, 0.62], "second": false},
@@ -17,8 +15,8 @@ const FORMS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "How the curtain hangs: a couple of slow broad drapes, many fine ribbons, or a doubled curtain with a second set behind on the accent hue."},
@@ -34,16 +32,14 @@ const FIELDS := {
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	# The moods a real aurora can take: oxygen green through the rarer cyans, violets and
-	# the high red fringe. Anything warm-orange would read as fire in the sky, not light.
+	# The moods a real aurora can take: oxygen green through cyans, violets and the high red fringe (warm orange reads as fire).
 	var sch := Scheme.among(
 		["verdant", "toxic", "teal", "glacier", "violet", "magenta", "abyss", "rose"], rng)
 	var form := String(choice("form", rng))
 	var f: Dictionary = FORMS[form]
 	var cnt: Array = f["count"]
 	var sat_r: Array = f["sat"]
-	# The night behind either answers the curtain (its accent) or opposes it (the
-	# complement) - the same display reads warm-grounded or cold depending which.
+	# The night behind either answers the curtain (its accent) or opposes it (the complement).
 	var answered := rng.randf() < 0.5
 	var bed_hue: float = sch.accent if answered else fposmod(sch.hue + 0.5, 1.0)
 	add_layer("bed", rng, {

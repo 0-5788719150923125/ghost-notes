@@ -1,32 +1,21 @@
 extends Node
 
-## scene_mix_check - that the running order is RANDOM-LIKE, not a rotation through the catalog.
+## scene_mix_check - that the running order is random-like, not a rotation through the catalog.
 ##
-## The complaint this gates: "the variety of generated scenes is not truly random... I've seen
-## most of our newly-added scene types used FIRST, before falling back to older scenes later."
+## Over K distinct scene kinds a random draw repeats one after about sqrt(pi*K/2) cuts (the birthday
+## number, roughly 9 at K = 52); a rotation repeats first at K + 1. That number separates the two and is
+## what this asserts. Alongside it, the mean position at which the ten kinds in NEW_KINDS first appear
+## is compared with the mean for every older kind: the same under an honest scheduler, so it checks
+## fairness (a scheduler favoring the start or end of the catalog array would fail).
 ##
-## THE STATISTIC. Over K distinct scene kinds, a genuinely random draw repeats one after about
-## sqrt(pi*K/2) cuts - the birthday number, roughly 9 at K = 52. A rotation that visits every
-## kind before repeating any repeats first at K + 1. That one number separates the two
-## completely and needs no judgment, so it is what this asserts.
-##
-## Alongside it, the user's own observation, measured directly: the mean position at which the
-## ten kinds added in dfa51d57 first appear, against the mean for every older kind. Under any
-## honest scheduler those are the same number; a sweep makes them the same too, so this is a
-## check on FAIRNESS rather than on the sweep - it is what would catch a scheduler that favors
-## the end (or the start) of the catalog array.
-##
-## The selection under test is Director._pick_index() itself, driven exactly as _next_entry and
-## _swap drive it. Anything else would be measuring a copy of the code rather than the code.
+## The selection under test is Director._pick_index() itself, driven as _next_entry and _swap drive it.
 ##
 ## Run: tests/run_boot_probe.sh tests/scenes/scene_mix_check.gd 180
 
 const SESSIONS := 40
 const CUTS := 140
 
-## Added 2026-08-10 in dfa51d57 ("add 10 new scene types"). Kept as a literal because the point
-## is to reproduce the user's observation about THOSE scenes; a check that read the newest
-## commit would silently change what it is measuring.
+## The ten kinds added in dfa51d57, kept as a literal so the check keeps measuring those scenes.
 const NEW_KINDS := ["canopy", "chladni", "cloth", "contour_map", "falling_sand", "glyphs",
 	"murmuration", "neural_field", "tidepool", "wallpaper"]
 
@@ -34,8 +23,8 @@ var _fails: Array = []
 
 
 func _ready() -> void:
-	# Snapshot the live autoload and put it back afterwards - a probe must not leave the
-	# Director mid-session with a scrambled history.
+	# Snapshot the live autoload and put it back afterwards: a probe must not leave the Director
+	# mid-session with a scrambled history.
 	var s_seed = Director._session_seed
 	var s_swaps = Director._swaps
 	var s_index = Director._index
@@ -88,9 +77,8 @@ func _ready() -> void:
 			seen[kind] = true
 			if not firsts.has(kind):
 				firsts[kind] = j
-			# The OTHER failure, the one a first-repeat target could be met by overshooting into:
-			# a draw so flat that a kind comes straight back. Two behaviors of one scene back to
-			# back is the thing the novelty weight was originally added to prevent.
+	# The other failure a first-repeat target could be met by overshooting into: a draw so flat
+	# that a kind comes straight back (two behaviors of one scene back to back).
 			if j > 0 and String(seq[j - 1]) == kind:
 				adjacent += 1
 			if j > 1 and String(seq[j - 2]) == kind:
@@ -118,30 +106,29 @@ func _ready() -> void:
 	print("scene_mix_check: same kind back-to-back %d, and one cut apart %d, of %d cuts"
 		% [adjacent, near, SESSIONS * CUTS])
 
-	# A rotation is the failure. Allow a generous anti-repeat bias - a scheduler SHOULD lean away
-	# from what it just showed - but not a sweep: three times the birthday number still leaves the
-	# order visibly shuffled, while a sweep sits up at one more than the kind count.
+	# A rotation is the failure. A generous anti-repeat bias is fine (a scheduler should lean away from
+	# what it just showed), but not a sweep: three times the birthday number still leaves the order
+	# visibly shuffled, while a sweep sits at one more than the kind count.
 	if mean_rep > expect * 3.0:
 		_fails.append("first repeat at cut %.1f against a random-draw expectation of %.1f - the catalog is being rotated through, not sampled"
 			% [mean_rep, expect])
 	if swept > SESSIONS / 10:
 		_fails.append("%d of %d sessions showed EVERY kind before repeating any - that is a rotation by definition"
 			% [swept, SESSIONS])
-	# TWO-SIDED, deliberately: the first-repeat target above could also be met by flattening the
-	# draw until the catalog chatters, so the anti-repeat guarantee is asserted against it.
+	# Two-sided: the first-repeat target could also be met by flattening the draw until the catalog
+	# chatters, so the anti-repeat guarantee is asserted against it.
 	if adjacent > 0:
 		_fails.append("%d cuts showed the same scene KIND twice in a row" % adjacent)
 	if near > SESSIONS * CUTS / 50:
 		_fails.append("%d of %d cuts brought a kind back one cut later - the draw has gone flat"
 			% [near, SESSIONS * CUTS])
-	# FAIRNESS: the newest scenes must not crowd the front (or the back) of the running order.
+	# Fairness: the newest scenes must not crowd the front (or back) of the running order.
 	if absf(mean_new - mean_old) > 0.25 * float(CUTS):
 		_fails.append("new kinds first appear at cut %.1f and older kinds at %.1f - the running order is biased by when a scene was added"
 			% [mean_new, mean_old])
 
-	# DETERMINISM, which is the half of this that must NOT change: one session seed has to give
-	# one running order, every play, or an export stops matching the preview it was auditioned
-	# against. Replay a seed already measured above and compare cut for cut.
+	# Determinism must not change: one session seed gives one running order every play, or an export
+	# stops matching the preview it was auditioned against. Replay a measured seed and compare cut for cut.
 	var again: Array = []
 	Director._jump_next = -1
 	Director._locked = -1

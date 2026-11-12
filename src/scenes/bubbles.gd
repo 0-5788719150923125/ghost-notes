@@ -2,17 +2,12 @@ extends GhostScene
 
 ## Bubbles - an underwater drift of rising bubbles in colored depths.
 ##
-## Bubbles wobble upward with rim highlights, fine suspended particles hang in the
-## water, and a bed with slow color pools gives the sense of light filtering down
-## from above. The water's color comes from a [Scheme] and its CHARACTER from a
-## column below, so a mineral spring and a black trench are different places rather
-## than the same picture recolored. `bed` (+ `surface`) + `kelp` + `dust` + `bubbles`.
+## Bubbles wobble upward with rim highlights, fine particles hang in the water, and a bed with slow color
+## pools suggests light filtering down. The water's color comes from a [Scheme] and its character from a
+## column below. `bed` (+ `surface`) + `kelp` + `dust` + `bubbles`.
 
-# WATER COLUMNS. The scene used to be one column - 36-60 bubbles rising slowly
-# through the same kelp, always - so every seed produced the same aquarium. A
-# column is a whole regime: how hard the vents work, how fast the gas climbs, how
-# much matter is suspended in the water, what grows there, and whether any light
-# from the surface reaches this deep at all.
+# Water columns: a column is a whole regime - how hard the vents work, how fast the gas climbs, how much
+# matter is suspended, what grows there, and whether any surface light reaches this deep.
 const COLUMNS := [
 	{"name": "spring", "bubbles": [90, 140], "rise": [0.11, 0.17], "dust": [110, 170],
 	 "form": "grass", "fronds": [14, 24], "glows": [1, 3], "bed_v": 0.34, "lit": true},
@@ -27,8 +22,8 @@ const COLUMNS := [
 ]
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed.
 const FIELDS := {
 	"caustics": {"label": "Caustics", "type": "num", "range": [5, 11], "default": null,
 		"blurb": "How many wavy bands of light from the surface shimmer across the water."},
@@ -44,15 +39,13 @@ const FIELDS := {
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	# Water is not always teal: mineral springs run green, deep water goes indigo,
-	# and a still pool under a gray sky is nearly colorless. Anything but a warm
-	# hue, which would read as air rather than depth.
+	# Water is not always teal (mineral springs run green, deep water indigo, a still pool nearly
+	# colorless), but never a warm hue, which would read as air.
 	var sch := Scheme.among(["teal", "glacier", "abyss", "verdant", "toxic", "violet", "ash"], rng)
 	var col: Dictionary = COLUMNS[rng.randi() % COLUMNS.size()]
 	add_layer("bed", rng, {"hue": sch.hue, "sat": sch.sat * 0.9,
 		"val": sch.val * float(col["bed_v"]), "pools": rng.randi_range(2, 4)})
-	# Light pouring down from the surface (with caustics) - only where any reaches.
-	# A trench with a lit ceiling is not a trench.
+	# Light pouring down from the surface (with caustics), only where any reaches.
 	if bool(col["lit"]):
 		add_layer("surface", rng, {"hue": sch.accent, "caustics": number("caustics", rng),
 			"sun_x": number("sun", rng)})

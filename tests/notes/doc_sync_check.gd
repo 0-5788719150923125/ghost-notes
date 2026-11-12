@@ -1,46 +1,32 @@
 extends Node
 
-## doc_sync_check - the Generative panel READING FROM A FILE, end to end.
+## doc_sync_check - the Generative panel reading from a file, end to end.
 ##
-## [code]doc_source_check.gd[/code] holds [FrontMatter] to account on strings; this one
-## holds the PANEL to account on a real document, because every claim the feature makes is
-## about the wiring rather than about the parser, and every one of them fails silently:
+## [code]doc_source_check.gd[/code] holds [FrontMatter] to account on strings; this holds the panel to account on a
+## real document, since every claim is about the wiring and fails silently:
 ##
-##   THE FRONTMATTER IS NEVER SPOKEN. If it leaks, the reading opens with "title colon
-##   chapter one date colon two thousand nineteen" and nothing errors.
-##   A SPEAK RE-READS THE DISK. If it does not, the panel quietly performs a version of the
-##   chapter that was current when the document was opened - which looks exactly like the
-##   author's edit not having saved.
-##   CLEAR DETACHES, IT DOES NOT DELETE. A synced file is left byte-identical, a script synced
-##   to nothing comes back with one undo, and a synced script is never copied into Settings
-##   (that copy would only ever be a stale one).
-##   SAVE… IS A STANDING STATE. The script lands in the new file with the voice in its
-##   frontmatter, and the edits after it land there too - [signal DocSource.moved] names the
-##   file it left and the one it went to (what a note follows), the old file is left byte for
+##   The frontmatter is never spoken.
+##   A speak re-reads the disk, else the panel performs the version current when the document was opened.
+##   Clear detaches, it does not delete: a synced file is left byte-identical, a script synced to nothing comes back
+##   with one undo, and a synced script is never copied into Settings.
+##   Save… is a standing state: the script lands in the new file with the voice in its frontmatter and later edits land
+##   there too; [signal DocSource.moved] names the file it left and the one it went to, the old file is left byte for
 ##   byte, and saving into the file it is in already moves nothing.
-##   THE MARK TICKS ONLY FOR A WRITE ([SaveMark]): it turns while an edit waits, flashes when
-##   the file has it, and in a process that may not write (the last check's control) it keeps
-##   turning and never ticks - a mark that ticked without a write would be worse than none.
-##   THE VOICE IS RESTORED, AND SAVED. This is the whole reason the frontmatter is written
-##   at all - a cast of two readers that comes back as one is the feature not working.
-##   THE SAVE IS AUTOMATIC, ON A QUIET PERIOD. A dial moved is a dial written, with no button
-##   pressed - and NOT written while it is still moving, or a ten-second drag is a dozen
-##   rewrites of a file the author may have open in their own editor. Both halves are
-##   asserted, because "it saved" also passes on a version that saves constantly.
-##   THE WORDS CAN BE WRITTEN IN GHOST, saved into the body on the same quiet period with the
-##   frontmatter untouched - and an edit made to the file elsewhere in the meantime is a
-##   CONFLICT the author resolves, never overwritten and never thrown away.
-##   ...AND NEVER BY AN UNATTENDED PROCESS. An export render boots this whole app against the
-##   author's settings and would find their document open. Asserted by taking the gate's own
-##   seam away and watching the same dial move reach nothing.
-##
+##   The mark ticks only for a write ([SaveMark]): in a process that may not write (the last check's control) it keeps
+##   turning and never ticks.
+##   The voice is restored and saved (a cast of two readers that comes back as one is the feature not working).
+##   The save is automatic, on a quiet period: a dial moved is written with no button, and not written while it is
+##   still moving. Both halves are asserted, since "it saved" also passes on a version that saves constantly.
+##   The words can be written in ghost, saved into the body on the same quiet period with the frontmatter untouched;
+##   an edit made to the file elsewhere meanwhile is a conflict the author resolves.
+##   Never by an unattended process: asserted by taking the gate's own seam away and watching the same dial move reach
+##   nothing.
 ## Needs a real boot: the panel's sliders are Director-backed and [Settings] is an autoload.
 ##   tests/run_boot_probe.sh tests/notes/doc_sync_check.gd 120
 
 const DIR := "user://doc_sync_check"
-## A section of the settings file that belongs to nobody, so the probe cannot disturb the
-## author's own remembered document. (A probe is read-only anyway - this is belt and braces,
-## and it also keeps the gate from picking up whatever document is really open.)
+## A section of the settings file that belongs to nobody, so the probe cannot disturb the author's remembered
+## document (and cannot pick up whatever document is really open).
 const SECTION := "doc_sync_probe"
 
 const HEAD := """---
@@ -75,20 +61,18 @@ func _ready() -> void:
 	_path = DIR + "/chapter.md"
 	_write(HEAD + BODY_A)
 
-	# Built by hand rather than added to the tree: _ready would start the voice host, and
-	# nothing here needs a python process.
+	# Built by hand rather than added to the tree: _ready would start the voice host.
 	_ed = ReadingPanel.new()
 	_ed._build_panel()
-	# THE PANEL MUST BE IN THE TREE - Range only emits value_changed for an owner inside
-	# one, so a panel built outside it has every slider callback silently dead.
+	# The panel must be in the tree: Range only emits value_changed for an owner inside one.
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)
 	_ed.remove_child(_ed._cast._repace_timer)
 	add_child(_ed._cast._repace_timer)
 	_ed.remove_child(_ed._cast._cast_timer)
 	add_child(_ed._cast._cast_timer)
-	# Re-point the source at a section of its own, BEFORE it is bound to the box: setup()
-	# has already read the author's real remembered document and this gate must not open it.
+	# Re-point the source at a section of its own, before it is bound to the box: setup() has already read the author's
+	# real remembered document and this gate must not open it.
 	_doc = _ed._doc
 	_doc._section = SECTION
 	_doc._path = ""
@@ -136,8 +120,8 @@ func _ok(cond: bool, what: String) -> void:
 		_fails.append(what)
 
 
-## A fresh Cards show starts with bundled prose in the actual Edit field. A saved draft,
-## an intentional empty field, and a synced document each keep their own text.
+## A fresh table show starts with bundled prose in the actual Edit field. A saved draft, an intentional empty field,
+## and a synced document each keep their own text.
 func _check_cards_starter() -> void:
 	var sample := FileAccess.get_file_as_string("res://rules/table/starter.md")
 	_ok(sample.contains("# The Penalty Box") and sample.contains("## The host"),
@@ -179,8 +163,8 @@ func _check_cards_starter() -> void:
 	cards.free()
 
 
-## THE CONTROL FOR EVERYTHING BELOW: synced to nothing, the panel is exactly what it was,
-## and the file on disk is nothing to it.
+## The control for everything below: synced to nothing, the panel is exactly what it was, and the file on disk is
+## nothing to it.
 func _check_input_mode() -> void:
 	_ed._text.text = "A pasted draft."
 	_ok(not _doc.is_sync(), "the panel started synced with no document open")
@@ -195,8 +179,7 @@ func _check_opening_a_document() -> void:
 	_ok(_doc.doc_path() == _path, "the source is not pointing at the document")
 	_ok(_ed._text.editable, "the document is read-only in ghost's editor")
 
-	# THE FRONTMATTER IS NOT THE CHAPTER. Two-sided: the raw file plainly contains it, and
-	# what the panel will speak plainly does not.
+	# The frontmatter is not the chapter. Two-sided: the raw file contains it, and what the panel will speak does not.
 	var raw := FileAccess.get_file_as_string(_path)
 	_ok(raw.contains("title:") and raw.contains("ghost:"),
 		"the control is wrong - the fixture has no frontmatter in it")
@@ -206,8 +189,7 @@ func _check_opening_a_document() -> void:
 	_ok(body == BODY_A, "the body read back wrong: %s" % body)
 	_ok(_ed._text.text == BODY_A, "the box is not showing the document's body")
 
-	# THE VOICE CAME WITH IT. Two readers, each with its own settings - a cast that came
-	# back as one tab would be the feature not working.
+	# The voice came with it: two readers, each with its own settings.
 	_ok(_ed._cast._slots.size() == 2,
 		"the document's cast of 2 arrived as %d tab(s)" % _ed._cast._slots.size())
 	_ok(is_equal_approx(_ed._cast._turn.value, 2.5),
@@ -224,9 +206,8 @@ func _check_opening_a_document() -> void:
 	# A key the document did NOT mention takes its default rather than arriving missing.
 	_ok(_ed._cast.slot_cfg(0).has("presence") and _ed._cast.slot_cfg(0).has("ambience"),
 		"a voice written by an older build arrived with keys missing")
-	# OPENING A DOCUMENT IS NOT AN EDIT TO IT. The autosave's snapshot is seeded by the import,
-	# so a file the author has only just opened is not written back a second later - which
-	# would happen every single time, and is what a careful writer exists to avoid.
+	# Opening a document is not an edit to it: the autosave's snapshot is seeded by the import, so a file just opened
+	# is not written back a second later.
 	_doc.allow_autosave_for_test()
 	var opened := FileAccess.get_file_as_string(_path)
 	await _wait(int(DocSource.AUTOSAVE_MS) + 700)
@@ -235,8 +216,7 @@ func _check_opening_a_document() -> void:
 	_doc._autosave_for_test = false
 
 
-## THE REAL-TIME CLAIM, which is the whole point of sync mode: the author keeps writing
-## off-screen and the next Play is the file as it is NOW.
+## The real-time claim: the author keeps writing off-screen and the next Play is the file as it is now.
 func _check_speak_rereads_the_disk() -> void:
 	_write(HEAD + BODY_B)
 	var body := _doc.pull()
@@ -244,9 +224,7 @@ func _check_speak_rereads_the_disk() -> void:
 		% body.strip_edges().substr(0, 60))
 	_ok(_ed._text.text == BODY_B, "the box did not follow the document's new text")
 
-	# ...and the control: once cleared, the file on disk is nothing to the panel, however
-	# much it changes. Without this, a `pull` that simply always read the last file it saw
-	# would pass the check above.
+	# ...and the control: once cleared, the file on disk is nothing to the panel, however much it changes.
 	_doc.clear()
 	_ed._text.insert_text_at_caret("A typed script.")
 	_write(HEAD + BODY_A)
@@ -256,8 +234,8 @@ func _check_speak_rereads_the_disk() -> void:
 	_ok(_doc.pull() == BODY_A, "opening the document again did not return to it")
 
 
-## CLEAR DETACHES, IT DOES NOT DELETE. Synced, the file is left byte-identical, its path is
-## forgotten and the editor is empty; synced to nothing, the text goes as an edit and one undo brings it back.
+## Clear detaches, it does not delete. Synced, the file is left byte-identical, its path is forgotten and the editor is
+## empty; synced to nothing, the text goes as an edit and one undo brings it back.
 func _check_clear() -> void:
 	_ok(_doc.is_sync(), "the gate lost the document before checking Clear")
 	_ok(_doc.draft().is_empty(), "a synced script is being copied into Settings")
@@ -275,7 +253,7 @@ func _check_clear() -> void:
 	_ok(_doc.is_sync() and _ed._text.text == BODY_A, "the document did not open again after Clear")
 
 
-## AND BACK OUT AGAIN. The dial moved here is the one the document must carry next time.
+## And back out again: the dial moved here is the one the document must carry next time.
 func _check_saving_the_voice() -> void:
 	var before := FileAccess.get_file_as_string(_path)
 	_ed._cast._turn.value = 4.0
@@ -284,7 +262,7 @@ func _check_saving_the_voice() -> void:
 
 	var after := FileAccess.get_file_as_string(_path)
 	_ok(after != before, "saving the voice changed nothing in the file")
-	# THE DOCUMENT IS THE AUTHOR'S. The body and their own keys are untouched.
+	# The document is the author's: the body and their own keys are untouched.
 	_ok(after.contains("title: 'Chapter One'"), "saving the voice rewrote the author's title")
 	_ok(after.contains("# an authoring note"), "saving the voice deleted the author's comment")
 	_ok(after.ends_with(BODY_A), "saving the voice changed the chapter")
@@ -304,10 +282,10 @@ func _check_saving_the_voice() -> void:
 		"the dial moved before saving did not survive the document: %s" % str(_ed._cast.slot_cfg(0)))
 
 
-## A DIAL MOVED IS A DIAL WRITTEN, with nothing pressed.
+## A dial moved is a dial written, with nothing pressed.
 func _check_autosave() -> void:
-	# A probe is read-only precisely so gates cannot edit the author's things; this gate is the
-	# exception, only for the autosave, and only against a fixture of its own.
+	# A probe is read-only so gates cannot edit the author's things; this gate is the exception, only for the autosave,
+	# and only against a fixture of its own.
 	_doc.allow_autosave_for_test()
 	_doc.reload()
 	await _wait(400)
@@ -324,24 +302,19 @@ func _check_autosave() -> void:
 		"an automatic save damaged the author's own frontmatter")
 	_ok(after.ends_with(BODY_A), "an automatic save changed the chapter")
 
-	# NOTHING FURTHER IS WRITTEN while nothing changes. Without this the panel rewrites the
-	# file four times a second forever, and an editor open on it says so every time.
+	# Nothing further is written while nothing changes (else the file is rewritten four times a second).
 	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
 	_ok(FileAccess.get_file_as_string(_path) == after,
 		"the document kept being rewritten with nothing changing")
 
 
-## ...BUT NOT WHILE IT IS STILL BEING ADJUSTED. A quiet period, not a debounce from the first
-## change: a session of nudging lands as ONE write at the end, not one per nudge.
+## ...but not while it is still being adjusted: a quiet period, not a debounce from the first change, so a session of
+## nudging lands as one write at the end.
 ##
-## THE ADJUSTMENTS HAVE TO BE SPACED, and getting that wrong is why this check first passed
-## against a build with no quiet period in it at all. A value changed EVERY FRAME never shows
-## the same snapshot to two consecutive polls, so the poll's own "has it changed" test blocks
-## the write by itself and the quiet period is never the thing being exercised. The gap here
-## is deliberately LONGER than [constant DocSource.POLL_MS] - so the snapshot really does sit
-## still between polls, and only the quiet period is left to stop the write - and SHORTER than
-## [constant DocSource.AUTOSAVE_MS], so it never elapses. That is the case an author actually
-## produces: nudge, listen, nudge again.
+## The adjustments are spaced: a value changed every frame never shows the same snapshot to two consecutive polls, so
+## the poll's own "has it changed" test blocks the write and the quiet period is never exercised. The gap is longer
+## than [constant DocSource.POLL_MS] (the snapshot sits still between polls) and shorter than [constant
+## DocSource.AUTOSAVE_MS] (so it never elapses): nudge, listen, nudge again.
 func _check_autosave_waits_for_quiet() -> void:
 	var before := FileAccess.get_file_as_string(_path)
 	var gap: int = int(DocSource.POLL_MS) + 150
@@ -352,7 +325,7 @@ func _check_autosave_waits_for_quiet() -> void:
 	_ok(FileAccess.get_file_as_string(_path) == before,
 		"the document was written during %d adjustments %d ms apart - there is no quiet "
 		% [bursts, gap] + "period, only a poll")
-	# ...and it lands once the nudging stops, on the LAST value rather than an interim one.
+	# ...and it lands once the nudging stops, on the last value rather than an interim one.
 	_ed._cast._turn.value = 2.25
 	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
 	var settled := FileAccess.get_file_as_string(_path)
@@ -361,11 +334,9 @@ func _check_autosave_waits_for_quiet() -> void:
 		"the document carries an interim value rather than where the adjusting ended")
 
 
-## EVERY SPEAK READS THE VOICE TOO, not only the words - the file is the authoritative source
-## and there is no re-read button. Two-sided: an edit made to the frontmatter outside ghost
-## must arrive, AND a dial moved a moment before Play (still inside the autosave's quiet
-## period) must survive it - the flush writes it first, so the file's older value cannot
-## come back over it.
+## Every speak reads the voice too, not only the words. Two-sided: an edit made to the frontmatter outside ghost must
+## arrive, and a dial moved a moment before Play (inside the quiet period) must survive it - the flush writes it
+## first.
 func _check_speak_takes_the_voice() -> void:
 	_doc.allow_autosave_for_test()
 	_write(HEAD.replace("pace: 0.8", "pace: 0.65") + BODY_A)
@@ -382,11 +353,9 @@ func _check_speak_takes_the_voice() -> void:
 	_doc._autosave_for_test = false
 
 
-## AN EDIT MADE OUTSIDE GHOST SURVIVES THE NEXT AUTOSAVE. The panel writes its whole block
-## whenever anything in it changes, and it used to write it from memory - so a voice dial the
-## author reverted in their own editor came straight back the next time an UNRELATED control
-## moved ("I keep reverting the frontmatter, yet Ghost keeps resetting it"). Both edits must
-## land: the file's dial and the panel's own change.
+## An edit made outside ghost survives the next autosave. The panel writes its whole block whenever anything in it
+## changes, so a voice dial the author reverted in their own editor must not come back when an unrelated control
+## moves. Both edits must land: the file's dial and the panel's own change.
 func _check_outside_edit_survives() -> void:
 	_doc.allow_autosave_for_test()
 	_doc.pull()                      # ghost and the file agree
@@ -407,10 +376,9 @@ func _check_outside_edit_survives() -> void:
 	_doc._autosave_for_test = false
 
 
-## THE PICTURE TRAVELS WITH THE DOCUMENT - the Medium's format, Look filters and the Director's dials. They
-## lived only in ghost.cfg, so a chapter opened on another machine came up in that machine's
-## medium and look. Set here, saved, changed, and read back by the next Play. Only what the format
-## uses is kept (THE CONTROL: a notebook cuts no scenes, so no scene hold is written).
+## The picture travels with the document: the Medium's format, Look filters and the Director's dials. Set here, saved,
+## changed, and read back by the next Play. Only what the format uses is kept (control: a notebook cuts no scenes, so
+## no scene hold is written).
 func _check_the_picture_travels() -> void:
 	var was := {"medium": Director.medium, "filters": Director.filters.duplicate(),
 		"pacing": Director.pacing, "camera": Director.camera, "hand": Director.hand}
@@ -457,10 +425,9 @@ func _check_the_picture_travels() -> void:
 	Director.set_hand(String(was["hand"]))
 
 
-## ONE BLOCK PER COMPONENT (next/notes.md step 5): under `ghost:` the voice, the medium, the
-## pictures' look, the Look and the bookends are siblings - each in its own block, none inside
-## another, nothing of the old one-block-per-panel shape - and a block this panel has no card for
-## is carried through a save untouched.
+## One block per component (next/notes.md step 5): under `ghost:` the voice, the medium, the pictures' look, the Look
+## and the bookends are siblings, none inside another, and a block this panel has no card for is carried through a
+## save untouched.
 func _check_one_block_per_component() -> void:
 	var raw := FileAccess.get_file_as_string(_path)
 	var m := RegEx.create_from_string("(?m)^ghost:\\n").search(raw)
@@ -491,9 +458,8 @@ func _check_one_block_per_component() -> void:
 		"a block this panel does not own was not carried through: %s" % str(data.get("synthesis")))
 
 
-## THE VOICE IS THE DOCUMENT'S, WHICHEVER PANEL SPEAKS IT: the cards_panel panel opens this chapter and
-## its cast is the cast written here - it used to keep a copy of its own, and a chapter
-## opened in it had no voices. And what the cards_panel panel then writes leaves the medium alone.
+## The voice is the document's, whichever panel speaks it: the cards_panel panel opens this chapter and its cast is
+## the cast written here. And what it then writes leaves the medium alone.
 func _check_the_voice_is_the_documents() -> void:
 	var cards_panel = load("res://src/reading/reading_panel.gd").new()
 	cards_panel.workspace = "table"
@@ -505,8 +471,8 @@ func _check_the_voice_is_the_documents() -> void:
 	cards_panel._doc._fields = {}
 	cards_panel._doc._on_picked(_path)
 	await get_tree().process_frame
-	# by the CAST, not the tabs: the cards_panel panel's tabs follow its episode's script, and the
-	# cast keeps every voice the document names whether a script cues it or not
+	# by the cast, not the tabs: the panel's tabs follow its episode's script, and the cast keeps every voice the
+	# document names whether a script cues it or not
 	var cast: Dictionary = cards_panel._cast.cast_dict()
 	var mine: Dictionary = _ed._cast.cast_dict()
 	_ok(cast.size() == mine.size() and cast.has("Emily White") and cast.has(Manuscript.NARRATOR),
@@ -531,9 +497,9 @@ func _check_the_voice_is_the_documents() -> void:
 	_doc._autosave_for_test = false
 
 
-## THE PICTURES' LOOK TRAVELS WITH THE DOCUMENT - painter, style and reference images, into
-## the frontmatter and back at the next Play. The style is the awkward case on purpose: a
-## colon, quotes and a line break, all of which YAML would take apart if written carelessly.
+## The pictures' look travels with the document: painter, style and reference images, into the frontmatter and back at
+## the next Play. The style is the awkward case on purpose: a colon, quotes and a line break, which YAML would take
+## apart if written carelessly.
 func _check_the_look_travels() -> void:
 	Illustrations.use_for_test({}, false)
 	var img := Image.create(8, 8, false, Image.FORMAT_RGB8)
@@ -566,10 +532,8 @@ func _check_the_look_travels() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(ref))
 
 
-## A LETTER'S PICTURES' LOOK IS ITS NOTE'S TOO (2026-10-27: the Letter's card showed the style and the
-## note had none - the Letter kept no `illustrations:` block): written into the letter's frontmatter
-## with the painter's model and effort, and an edit made outside (an agent's) is the library's, and
-## the card's, at the next Play.
+## A letter's pictures' look is its note's too: written into the letter's frontmatter with the painter's model and
+## effort, and an edit made outside (an agent's) is the library's, and the card's, at the next Play.
 func _check_a_letters_look_travels() -> void:
 	var path := DIR + "/letter.md"
 	var fh := FileAccess.open(path, FileAccess.WRITE)
@@ -598,7 +562,7 @@ func _check_a_letters_look_travels() -> void:
 		"the letter's look was not written into its note: %s" % str(data.keys()))
 	_ok(String((data.get("medium", {}) as Dictionary).get("format", "")) == "letter",
 		"keeping a letter's look changed what it is shown in: %s" % str(data.get("medium")))
-	# AN AGENT EDITS THE NOTE: the style and the effort, in the file, with the app's look unchanged
+	# An agent edits the note: the style and the effort, in the file, with the app's look unchanged
 	var raw := FileAccess.get_file_as_string(path)
 	look["style"] = {"image": "Charcoal on gray paper."}
 	look["painter_effort"] = "low"
@@ -618,10 +582,10 @@ func _check_a_letters_look_travels() -> void:
 	DirAccess.remove_absolute(path)
 
 
-## THE DOCUMENT IS WRITTEN IN GHOST'S OWN EDITOR. Typed text reaches the file's body after
-## the quiet period and not during it, the frontmatter is byte-identical, and the three ways a
-## clash can end are each held: refused (the file keeps the outside edit, the editor keeps the
-## author's, a Play reads what is on screen), "Take the file's", and "Keep mine".
+## The document is written in ghost's own editor. Typed text reaches the file's body after the quiet period and not
+## during it, the frontmatter is byte-identical, and the three ways a clash can end are each held: refused (the file
+## keeps the outside edit, the editor keeps the author's, a Play reads what is on screen), "Take the file's", and
+## "Keep mine".
 func _check_editing_in_ghost() -> void:
 	_doc.allow_autosave_for_test()
 	_doc.pull()
@@ -654,7 +618,7 @@ func _check_editing_in_ghost() -> void:
 	_doc.clear()
 	_ok(_doc.is_sync() and te.text.contains("And more."),
 		"leaving the document dropped edits that could not be saved")
-	# TAKE THE FILE'S.
+	# Take the file's.
 	_ok(_doc.reload() and not _doc._conflict and te.text.contains("Written elsewhere.")
 			and not te.text.contains("And more."), "'Take the file's' did not show the file")
 	# KEEP MINE.
@@ -672,9 +636,9 @@ func _check_editing_in_ghost() -> void:
 	_doc.reload()
 
 
-## TITLE, AUTHOR, BOOK: edited on the card, written into the synced file's own frontmatter by
-## the checked one-key surgery - body and every other key untouched - removed when emptied, and
-## what the reading uses (the title is read first; the book medium's cover).
+## Title, author, book: edited on the card, written into the synced file's own frontmatter by the checked one-key
+## surgery - body and every other key untouched - removed when emptied, and what the reading uses (the title is read
+## first; the book medium's cover).
 func _check_fields() -> void:
 	var before := FileAccess.get_file_as_string(_path)
 	var parts := FrontMatter.split(before)
@@ -690,16 +654,16 @@ func _check_fields() -> void:
 		"the reading does not use the fields set on the card")
 	_ok(_doc.set_field("author", "") and not FileAccess.get_file_as_string(_path).contains("author:"),
 		"emptying a field left the key behind")
-	# Back to the original value: everything is the original file but the rewritten title line
-	# (its quoting is the emitter's now - a value that was REWRITTEN, not one left alone).
+	# Back to the original value: everything is the original file but the rewritten title line (its quoting is now the
+	# emitter's).
 	_doc.set_field("title", "Chapter One")
 	var back := FileAccess.get_file_as_string(_path)
 	_ok(back == before.replace("title: 'Chapter One'", "title: Chapter One"),
 		"the fields did not round-trip back to the original file:\n%s" % back)
 
 
-## SAVE… writes the script into a new file with the voice in its frontmatter and stays
-## there: an edit typed afterwards lands in that file too, and the mark says each step.
+## Save… writes the script into a new file with the voice in its frontmatter and stays there: an edit typed afterwards
+## lands in that file too, and the mark says each step.
 func _check_save_to() -> void:
 	_doc.allow_autosave_for_test()
 	_doc.clear()
@@ -741,9 +705,9 @@ func _check_save_to() -> void:
 		"an edit after Save… did not reach the file - it was a one-time copy")
 	_ok(mark.state() == "saved" and mark.writes > writes,
 		"the mark did not tick once the edit was in the file (%s, %d writes)" % [mark.state(), mark.writes - writes])
-	# INTO THE FILE IT IS IN ALREADY: brought up to date, and nothing moved
+	# Into the file it is in already: brought up to date, and nothing moved
 	_ok(_doc.save_to(target) and moves.size() == 1, "saving into its own file moved the script: %s" % str(moves))
-	# INTO ANOTHER FILE: the one it left is named, and left byte for byte
+	# Into another file: the one it left is named, and left byte for byte
 	var before := FileAccess.get_file_as_string(target)
 	var other := DIR + "/elsewhere.md"
 	_ok(_doc.save_to(other) and moves.size() == 2 and moves[1] == [target, other],
@@ -758,9 +722,8 @@ func _check_save_to() -> void:
 	DirAccess.remove_absolute(other)
 
 
-## AN UNATTENDED PROCESS MUST NOT EDIT A MANUSCRIPT. The control for everything above: with
-## the gate's seam taken away this probe is read-only exactly as a render is, and the same
-## dial move must reach nothing.
+## An unattended process must not edit a manuscript. The control for everything above: with the gate's seam taken away
+## this probe is read-only as a render is, and the same dial move must reach nothing.
 func _check_unattended_processes_never_autosave() -> void:
 	_doc._autosave_for_test = false
 	_ok(Settings.is_read_only(),

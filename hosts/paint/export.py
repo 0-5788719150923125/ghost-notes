@@ -1,13 +1,15 @@
-"""WHAT THE PAINTER LAID, AS THE SHOW PLAYS IT (next/face_layers.md): the marks cut into elements - a run of one layer's marks with one
-tool in one paint, as a hand works - and each element's program and maps, on one clock, so the tool the show moves and the paint that
-appears under it can never drift apart.
+"""What the painter laid, as the show plays it (next/face_layers.md): the marks cut into elements - a run of one
+layer's marks with one tool in one paint, as a hand works - and each element's program and maps, on one clock, so
+the tool the show moves and the paint that appears under it cannot drift apart.
 
-THE PROGRAM is the show's own (src/table/skins.gd, `Skins._Prog.done()`): keys `[t, x, y, lift, press, where]` (millimeters over the
-surface's frame; `where` 1 back at the pot) and strokes `{pts, t, r, load, press}` (a press's also `side`, "face" or "corner"), at
-the show's own pace - the constants below are `Skins`', line for line. THE MAPS are what skin_paint.gdshader draws an element from (PaintLayers.render's): what each point holds after
-each of its first seven marks and after its last (`built`, `built_when`, 0-1 of the element's time), when it is first reached (`when`),
-what it comes to (`cover`), and its color (`tint`) - the times half floats (a third of an episode's maps had been them) - the canvas before and after the element, so the element laid over what is under it
-comes to exactly what the painter's canvas did.
+The program is the show's own (src/table/skins.gd, `Skins._Prog.done()`): keys `[t, x, y, lift, press, where]`
+(millimeters over the surface's frame; `where` 1 back at the pot) and strokes `{pts, t, r, load, press}` (a
+press's also `side`, "face" or "corner"), at the show's own pace - the constants below are `Skins`', line for
+line. The maps are what skin_paint.gdshader draws an element from (PaintLayers.render's): what each point holds
+after each of its first seven marks and after its last (`built`, `built_when`, 0-1 of the element's time), when
+it is first reached (`when`), what it comes to (`cover`), and its color (`tint`) - the times half floats - and
+the canvas before and after the element, so the element laid over what is under it comes to exactly what the
+painter's canvas did.
 """
 import json
 from pathlib import Path
@@ -29,11 +31,11 @@ LOOK, LOOK_LIFT, LOOK_EVERY = (0.6, 1.8), 9.0, 6
 PULL_DOWN, PULL_UP, PULL_LIFT = 0.22, 0.2, 1.2
 DAB, DAB_LIFT, DAB_MOVE = (0.16, 0.1, 0.16), 2.5, 70.0
 RELOAD, RELOAD_LINE, RELOAD_SWEEP, RELOAD_DABS = 3.4, 110.0, 260.0, 16
-# A LOAD ONLY RUNS OUT (feedback 0006, 2026-11-09: "This brush just went from painting very faint, almost imperceptable yellow strokes
-# ... to an extremely dark yellow stroke ... applied without ever returning to the container, to pickup a heavier load. Logically, it
-# makes no sense"): the optimizer finds each pull's strength on its own (its `th`), 0.06 to whole, and one load laid them in any order. A
-# pull laying more than the last since the brush was loaded by this much (of a whole stroke's strength) goes back to the pot first -
-# pressed harder accounts for less. Only the trips change: the marks, their order and what they lay are the painter's.
+# A load only runs out: the optimizer finds each pull's strength on its own (its `th`), 0.06 to whole, and one
+# load laid them in any order, so a brush could go from faint to dark with no return to the pot. A pull laying
+# more than the last since the brush was loaded by this much (of a whole stroke's strength) goes back to the pot
+# first - pressed harder accounts for less. Only the trips change: the marks, their order and what they lay are
+# the painter's.
 LOAD_HEAVIER = 0.2
 PRESS_NARROW = 0.12
 NEVER = 1000.0
@@ -179,16 +181,14 @@ def _press_of(hw, r):
 
 # --- the hand's order ----------------------------------------------------------------------------------------------------------------
 
-# A PULL TURNED THE OTHER WAY, AND PULLS GATHERED BY THE WAY THEY GO (feedback 0016, 2026-11-09: "This brush is flipping and twirling and
-# twisting and repositioning and it just looks chaotic. A real artist would prefer keep a neutral position, and only reposition when the
-# stroke requires it. They might choose to batch certain strokes from certain directions, before repositioning to work on strokes from
-# other directions"): the optimizer's pulls run whichever way it found them - in 732687 a flat's, a round's and a liner's next pull ran
-# the other way to the last a quarter to a third of the time (31%, 32%, 23%), 89 degrees between pulls on average - and the show leans a
-# brush the way it is pulled, so its handle was thrown from side to side. A pull whose paint is laid alike at both ends is drawn the way
-# nearest the one before it (where they are about parallel: within HEADING_SAME), else up the face and out to its side, the way the show
-# holds a brush (src/table/table_paint.gd, HELD_OUT) - 36 degrees between them on average; and a run of such pulls laid in bins of
-# HEADING_BIN degrees of the way they go, the one first come to first, each swept across - the same paint over itself, in any order, is
-# what it was. A pull whose ends differ (a tail, a load running out: ENDS_ALIKE) keeps its own way and place.
+# A pull turned the other way, and pulls gathered by the way they go: the optimizer's pulls run whichever way it
+# found them (the next pull of a brush often ran the other way to the last, 89 degrees between pulls on average)
+# and the show leans a brush the way it is pulled, so its handle would be thrown from side to side. A pull whose
+# paint is laid alike at both ends is drawn the way nearest the one before it (where they are about parallel:
+# within HEADING_SAME), else up the face and out to its side, the way the show holds a brush (src/table/
+# table_paint.gd, HELD_OUT); and a run of such pulls is laid in bins of HEADING_BIN degrees of the way they go, the
+# one first come to first, each swept across - the same paint over itself, in any order, is what it was. A pull
+# whose ends differ (a tail, a load running out: ENDS_ALIKE) keeps its own way and place.
 HEADING_SAME = 0.5
 HEADING_BIN = 45.0
 # ...each place swept so before the next (pulls whose middles lie within PLACE_MM of one another, one to the next, are a place), the
@@ -291,9 +291,8 @@ def _hand_order(marks, pre, alp, col, width_mm):
         while j < len(marks) and free[j]:
             j += 1
         run = list(range(i, j))
-        # (...A PLACE AT A TIME, the places toured ([PLACE_MM]; 2026-11-10, the user: "They tend to jump around the entire face, to random
-        # places"): gathered by the way they go over a whole run, a run of gold seams from the brow to the jaw had been swept across the
-        # face once for each way)
+        # (...a place at a time, the places toured ([PLACE_MM]): gathered by the way they go over a whole run, a long
+        # run would be swept across the face once for each way)
         for place in _places([np.asarray(marks[q].rec["pts"], float).mean(axis=0) for q in run], PLACE_MM):
             bins = {}
             for t in place:
@@ -305,7 +304,7 @@ def _hand_order(marks, pre, alp, col, width_mm):
                 mids = [np.asarray(marks[q].rec["pts"], float).mean(axis=0) for q in qs]
                 order.extend(q for _, q in sorted(zip([float(np.dot(c, across)) for c in mids], qs)))
         i = j
-    # THE WAY EACH IS DRAWN: about parallel to the last, as it went; else up the face and out to its side
+    # The way each is drawn: about parallel to the last, as it went; else up the face and out to its side
     out = []
     last = None
     for q in order:
@@ -333,7 +332,7 @@ def _hand_order(marks, pre, alp, col, width_mm):
         out.append((q, m))
     if [q for q, _ in out] == list(range(len(marks))):
         return [m for _, m in out]
-    # ...LAID AGAIN IN THAT ORDER over the canvas before the element: each mark's canvas after it, as the maps are staged from
+    # ...Laid again in that order over the canvas before the element: each mark's canvas after it, as the maps are staged from
     wp, wa = pre[y0:y1, x0:x1].copy(), alp[y0:y1, x0:x1].copy()
     laid = []
     for q, m in out:
@@ -378,7 +377,7 @@ def recompose(els, root, shape, order=None):
 
 
 def merge_layer(kept, kept_root, fresh, fresh_root, layer, out):
-    """ONE LAYER PAINTED AGAIN, PUT AMONG THE REST (next/editing.md step 4: "The painter host solves one layer and replaces only that
+    """One layer painted again, put among the rest (next/editing.md step 4: "The painter host solves one layer and replaces only that
     layer's elements"): `kept` the elements as they stood (their maps under `kept_root`), `fresh` the layer's new ones (under
     `fresh_root`); the kept layer's own go, the new take their place between the layers before and after it, each new one an id past
     every kept one (and its maps renamed with it), every kept one's maps copied as they were. Writes `out/elements.json`. -> the list."""
@@ -482,11 +481,10 @@ def export(p, starts, steps, out, log=print, canvas=None, base_layer=0):
                     tpx = _pixel_times(m, m.sl, tm[1], tm[2])
                 u = (tpx / natural).astype(np.float32)
                 kk = k[sy, sx]
-                # (...EACH MARK'S SHARE OF THE ELEMENT'S CHANGE IS WHAT THE PAINTER'S CANVAS HOLDS AFTER IT, projected onto that change -
-                # feedback 0015, 2026-11-09: "one of the regions it paints over turns much LIGHTER, even though that region had purple
-                # paint on it already": shared out by how many marks touch a point, a pull's first pass over a point a second would
-                # cross showed half the element's color, a pale patch inside 732687's dark streak, where the painter had laid it all
-                # but whole. Where the color hardly changes, the coverage's share; where neither does, the count's.)
+                # (...each mark's share of the element's change is what the painter's canvas holds after it, projected onto
+                # that change: shared out by how many marks touch a point, a pull's first pass over a point a second would
+                # cross showed half the element's color. Where the color hardly changes, the coverage's share; where
+                # neither does, the count's.)
                 dj, ddj, dalj = d[sy, sx], dd[sy, sx], dal[sy, sx]
                 by_color = np.clip(((pre[m.sl] - pre0[sy, sx]) * dj).sum(-1) / np.maximum(ddj, 1e-6), 0, 1)
                 by_cover = np.clip((alp[m.sl] - alp0[sy, sx]) / np.maximum(dalj, 1e-6), 0, 1)
@@ -502,8 +500,8 @@ def export(p, starts, steps, out, log=print, canvas=None, base_layer=0):
         dpre = np.abs(pre1 - pre0).max(-1)
         a_alpha = np.where(alp0 < 0.999, np.clip((alp1 - alp0) / np.maximum(1 - alp0, 1e-6), 0, 1), 0.0)
         a_color = np.clip((dpre - 0.004) / 0.03, 0, 1)
-        # (...the color's own change counted only over paint all but whole: over a thin coat it had stood in for the coverage, and a half
-        # laid white came out a whole grey - 327484's ground a field of grey dabs)
+        # (...the color's own change counted only over paint all but whole: over a thin coat it would stand in for
+        # the coverage, and a half laid white would come out a whole grey)
         a = np.where(alp0 < 0.95, a_alpha, np.maximum(a_alpha, a_color))
         a = np.where(n > 0, a, 0.0)
         col = np.where(a[..., None] > 1e-4, (pre1 - pre0 * (1 - a[..., None])) / np.maximum(a[..., None], 1e-4), 0.0)
@@ -538,8 +536,8 @@ def export(p, starts, steps, out, log=print, canvas=None, base_layer=0):
             if kd in HOW:
                 how = HOW[kd]
                 break
-        # (...the base pressed on with a sponge - `base_layer`, which of `steps` it is: none where only later layers are painted again, whose
-        # first had been called the base, a liner's outline played as a sponge's stipple)
+        # (...the base pressed on with a sponge - `base_layer`, which of `steps` it is: none where only later layers are
+        # painted again)
         if g["layer"] == base_layer:
             how = "sponge"
         color = p._color(g["paint"]) if g["paint"] else np.array([1.0, 1.0, 1.0])

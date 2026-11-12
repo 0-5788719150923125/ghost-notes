@@ -1,26 +1,24 @@
 extends Node
 
-## THE CARD TABLE'S OWN LIGHT ([Lights], `light` in a set dresser's `table.json`), in the medium that
-## draws it ([TableMedium]). The user, 2026-10-07: "giving them a way to control both lighting and
-## shadow". On a fixture of its own:
+## The card table's own light ([Lights], `light` in a set dresser's `table.json`), in the medium that draws it ([TableMedium]). On a
+## fixture of its own:
 ##
-##   - A TABLE WITH NO LIGHT IS LIT AS EVERY TABLE WAS: the lamp, the fill, the room's out-of-shot candles,
-##     the room's picture as painted - and a table rebuilt without its light goes back to that.
-##   - A TABLE WITH ONE has none of those: its sky in the environment, its sun leading (every candle a
-##     fill), its screens' layer cast with by the sun alone - no candle, no lamp, no lamp of its own - and
-##     the room's picture casts no shadow (a low sun behind the table would throw it over the cards).
-##   - IT MOVES WITH SHOW TIME and nothing else: a cloud over the sun dims the sun and the room's picture,
-##     and the same moment twice is the same light.
-##   - ITS EXPOSURE FOLLOWS THE CLOTH: on a pale cloth the sun is held lower than on a dark one.
-##   - ONE DRAFT LEANS EVERY FLAME ALIKE ON THE SCREEN (the user, 2026-10-11: one candle looked straight up
-##     and two leaned right): candles at the table's two ends in one wind lean the same on the screen -
+##   - A table with no light is lit as every table was: the lamp, the fill, the room's out-of-shot candles, the room's picture as
+##     painted - and a table rebuilt without its light goes back to that.
+##   - A table with one has none of those: its sky in the environment, its sun leading (every candle a fill), its screens' layer cast
+##     with by the sun alone - no candle, no lamp - and the room's picture casts no shadow (a low sun behind the table would throw it
+##     over the cards).
+##   - It moves with show time and nothing else: a cloud over the sun dims the sun and the room's picture, and the same moment twice is
+##     the same light.
+##   - Its exposure follows the cloth: on a pale cloth the sun is held lower than on a dark one.
+##   - One draft leans every flame alike on the screen: candles at the table's two ends in one wind lean the same on the screen -
 ##     where each read across its own line of sight to the lens, they would not (the control).
-##   - THE CARDS ARE NEVER IN THE DARK: with nothing in the light reaching them and no candle to lead, the
-##     lamp hangs over the table after all - against a torch, which needs none.
+##   - The cards are never in the dark: with nothing in the light reaching them and no candle to lead, the lamp hangs over the table
+##     after all - against a torch, which needs none.
 ##
 ##   tests/run_boot_probe.sh tests/table/table_light_check.gd 300
 ##
-## A BOOT probe (the medium reaches the Director); no GPU needed.
+## A boot probe (the medium reaches the Director); no GPU needed.
 
 const DIR := "user://table_light_check"
 

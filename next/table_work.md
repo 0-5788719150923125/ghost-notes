@@ -17,9 +17,7 @@ heard in the background.
 
 This note is what was found, the design, and the plan in order.
 
-**2026-10-28: what is in things is real, and moves are a hand's** - next/table_physics.md (the user, of #181083: liquids
-"not liquids", the snow should be particles, the tipped dish's crystals "remain attached to the dish", the mortar should
-grind what goes into it, the moves "jerky ... straight lines"). Liquids keep their volume in a vessel's inside and pour over
+**2026-10-28: what is in things is real, and moves are a hand's** - next/table_physics.md. Liquids keep their volume in a vessel's inside and pour over
 its rim when tipped, `grains` and `loose` parts are particles and bodies baked over show time, a pestle breaks what it is
 pressed into, and every move is minimum jerk, bowed, leaning and never quite still (`Hands`). `pour` is gone: the tip is
 the pour.
@@ -448,7 +446,7 @@ it comes last.
 
 ## 10. Five shows, and what each still needs
 
-Briefs written 2026-10-26 (the user: "scaffold the other remaining markdown guides"), each in `rift/cards/`,
+Briefs written 2026-10-26, each in `rift/cards/`,
 each telling its agents everything about its work in plain words, since the rules name none:
 
 | show | file | the cards | runs today? | what it still needs |
@@ -459,10 +457,7 @@ each telling its agents everything about its work in plain words, since the rule
 | The Recipe Tin (baking) | `the-recipe-tin.md` | one recipe card from a tin of one baker's cards | in part | pieces and `apart`, `becomes`, time passing, a thick stream, `squash` and `roll`, spreading (the painted surface, section 11) |
 | Joker Motivation (clown makeup on a mask) | `joker-motivation.md` | none | in part | its fixed things; a mask form; the painted surface; `press` in any direction (section 11) - the show with no cards is built |
 
-THE MAKEUP SHOW (the user, 2026-10-26: "the artist would always apply extremely elaborate clown makeup on a
-standardized mask. Every video would start with that mask ... follow the 'Joker Motivation' script"; asked how,
-"Straight, as the genre does it"; "We should just co-opt the entire genre, and do it better"; and "the Joker is
-in the clown makeup. Not cards"). The genre, read from four transcripts of four channels (Dark Side of Life,
+THE MAKEUP SHOW. The genre, read from four transcripts of four channels (Dark Side of Life,
 Joker's Last Words, Veiled Mind, Dark Throne Motivation) and thirty-odd titles: a deep, slow voice in the second
 person to a "chosen one"; a cold open on the title's promise; flattering contradictions; a faceless "they" who
 gossip and plot; silence recast as strategy; one plea to like and subscribe "for every chosen one"; numbered
@@ -601,18 +596,12 @@ the puppeteer's last call and its looks are shown as the set dresser's are (`Epi
 draw's row (Draw, was Shuffle) shows only where cards are drawn, and each beat's row is called what the
 producer calls one (`beat_word` in the plan: an Ingredient, a Coat; Card or Beat when it names none) with the
 beat's own name beside it (panel_fit_check `_check_rows_named`). The Draw knob (the count of cards, 0 to 0 for
-none) went to the producer too, the same evening (the user: "The 'draw' option is confusing in modes like this
-one"): the brief says in prose how many its episodes draw ("A reading draws five to eight cards"), and the plan's
+none) went to the producer too, the same evening: the brief says in prose how many its episodes draw ("A reading draws five to eight cards"), and the plan's
 spread is the draw (`TableProducer._land_plan`: cut to `SPREAD_MOST` and to a listed deck; a plan of `beats` draws
 none - one producer prompt offers both, `rules/table/producer.yaml`); earlier episodes show their counts, and how
 many cards they drew is one of the habits the producer names.
 
-*Status, 2026-10-26 afternoon, the first episode WATCHED* (`the-quiet-crucible` #142131; the user: "we shouldn't be
-doing a wash. We shouldn't even really have a deck of cards ... we might have a box to the side (like the Shoebox
-episodes), and we might pull ONE card, with ONE recipe on it ... we need to give the agents more control over what
-they draw onto a card ... many recipe cards would be held sideways"; and "we should shift objects to the center
-screen/stage/table, as we use them. In the current episode, the mortar and pestle was animated in the far left
-corner"). Found and changed:
+*Status, 2026-10-26 afternoon, the first episode WATCHED* (`the-quiet-crucible` #142131): no wash and no full deck, one card with one recipe from a box at the side; objects move to the center of the table as they are used. Found and changed:
 
 - THE WORK IS DONE WHERE IT IS SEEN. The puppeteer had ground at the mortar's own place (far left) because nothing
   let it grind anywhere else: a thing's points were found where its node last stood and `press` cast onto its
@@ -656,9 +645,7 @@ front of it); the shuffle's own moves still assume a tall card (`TableShuffle` r
 written deck belongs in a box; the drift's cover of a card is the tall card's; nothing renders a written card's
 picture against its painting yet (seen on llvmpipe with placeholders only).
 
-*Status, 2026-10-26 evening, the second episode watched* (#181083, "a solid result"; the user: "the cards are
-protruding from the front of the box, through the wall of the box itself", and in the cauldron "a light dancing
-wildly upon the liquid ... revealing that the out-of-camera light source isn't a real thing"). The set dresser's
+*Status, 2026-10-26 evening, the second episode watched* (#181083). Findings: The set dresser's
 chest had a brass handle on its front and posts at its corners: the cards were filed in its bounds less a 6 mm wall,
 the front ones before its front wall and the next through it - now the inside is measured from its own walls, clear
 across a card's width (`TableBox.inside_of`), a box is never shrunk under its cards, and an open box's room is as
@@ -668,9 +655,7 @@ behind the cauldron - mirrored by the brew (roughness 0.05) at the full glint a 
 by the fire's flicker: a lamp moved out of the shot now mirrors nothing (`Lights.build`; lights_check). Open: a
 glowing part (coals, a lit brew) casts no light of its own, so a set dresser lights one with a lamp.
 
-More of 181083, the same evening (the user: "the spoon is floating in the liquid", "the steam ... is coming in tufts",
-"some of the hot coals under the cauldron are clipping through the container", "the coals seem to pulse with
-heat/color at exactly the same rate"). The ladle was built level, its bowl at the brew's top, and every act put it
+More of 181083, the same evening. The ladle was built level, its bowl at the brew's top, and every act put it
 back there: the set dresser is told a tool left in a vessel rests as let go (rules/table/set_dresser.yaml) - this
 episode's table is already set. The steam: 1.4 puffs a second asked, half dropped at random - now a plume's puffs are
 born half a puff's size apart as they rise, at least, and fade as it steams less (`TableWork._plume`,
@@ -682,9 +667,7 @@ its own share of the glow on a slow clock of its own). The clock lying face up w
 chronometer, as one sits in its box. Open: coals still reach up into the pot's underside where it hangs low over
 them (an overhang is no wall).
 
-*Status, 2026-10-27, 181083 played live* (the user: "around halfway through when we started using the moonlight, it
-was absolute chaos ... the green dish moved on top of the crucible, then floated back to it's position... tipped-over
-... when I used the timeline to skip backwards a bit, and view it again... the second attempt worked better").
+*Status, 2026-10-27, 181083 played live*.
 Reproduced by `tests/table/work_arrival_probe.gd` (the episode played twice through `advance`: every word known from
 the first frame, as an export's sidecar has them, and arriving a sentence at a time ahead of a hushed voice, as the
 live window gives them). The schedule had taken a word not yet heard at the plan's estimate from the top - 0.4 s a
@@ -702,9 +685,7 @@ picked up, and IN means standing in the thing's body, its loose parts aside (`_b
 part has been carried); and a hand's lift into a grind switched on whole at 2 cm off (`blend_lift`: the pestle up 6 cm
 in a frame).
 
-The same evening (the user: the snowmelt vial "started, and stopped, and started, and stopped ... about 4 times";
-"a weird white line projected from the left side of the vial ... it shoots out to the side ... liquids and snow and
-such should be using physics"; "the minute hand never moves ... the script keeps announcing the current time"). A
+The same evening. A
 path's keys were each eased from rest, and a run of carries stopped at every waypoint: a move now goes on through its
 places and stops only where it holds or turns back (`Motions.slopes`, Steffen's monotone cubic, so nothing overshoots
 a key into the table; `TableWork._chains` makes back-to-back carries and paths one move) - the vial stops once, at
@@ -769,8 +750,7 @@ As above, each its own note when it is reached.
 
 Section 11, for Joker Motivation. *Status, 2026-11-05: the rest is built - fixed things, the mask form, the painted surface, a
 tool pressed onto it in any direction, brushes whose hairs bend, a sponge that gives, powder that puffs - see next/painted_surface.md.*
-*Status, 2026-10-26: A SHOW WITH NO CARDS is built (the user: "that card
-dependency shouldn't exist"); the fixed things, the mask form, the painted surface and `press` in any direction
+*Status, 2026-10-26: A SHOW WITH NO CARDS is built; the fixed things, the mask form, the painted surface and `press` in any direction
 are designed, not built.* A plan of beats (the producer's, for a brief that draws no cards) is an episode
 staged from nowhere (`TableActions.SOURCES` `none`, opened by `begin`; `CardTable.cardless`, `CardTable.beats`):
 the producer plans `beats` (`rules/table/producer.yaml` `reply_beats`; `TableProducer._land_beats`
@@ -786,7 +766,7 @@ puppeteer are told of beats (`cardless` in their rules); the Episode card lists 
 
 The user, of a coffee steaming through a two-hour episode: "that steaming coffee is going to go cold ... implemented as temperature of the liquid, since that would make sense: I think many hot liquids would produce steam, and all of them would cool down eventually." And: "pick up the mug, and bring it close (close enough to leave the camera's viewport), as if to take a drink. Then, when it returns, some of the liquid would be gone ... worth considering as a general option."
 
-**What steams cools** (`Motions.temperature`, `steam_share`, `TableWork._plume_heat`). Newton's law, a pure function of show time, so a scrub lands where it should: 85 C at the start, toward a 21 C room, losing all but a third of what it has over the room in 34 minutes for something a cup across. That puts coffee in a stoneware mug at 41 C at 40 minutes, which is about what real ones do. What is larger holds its heat longer, by how far across it is: a pot 30 cm across takes two hours to fall as far. Steam is whole down to 80 C and gone at 58 C, so a mug thins from about 4 minutes and stops at about 18, by itself, on every table already made (feedback 0045, 2026-11-07: at 44 C a mug was "12 minutes in" and still steaming, and stopped only at 35). As it cools the trail is fainter, slower, shorter-lived and smaller, and never broken into tufts.
+**What steams cools** (`Motions.temperature`, `steam_share`, `TableWork._plume_heat`). Newton's law, a pure function of show time, so a scrub lands where it should: 85 C at the start, toward a 21 C room, losing all but a third of what it has over the room in 34 minutes for something a cup across. That puts coffee in a stoneware mug at 41 C at 40 minutes, which is about what real ones do. What is larger holds its heat longer, by how far across it is: a pot 30 cm across takes two hours to fall as far. Steam is whole down to 80 C and gone at 58 C, so a mug thins from about 4 minutes and stops at about 18, by itself, on every table already made. As it cools the trail is fainter, slower, shorter-lived and smaller, and never broken into tufts.
 
 An `emits` may say `hot` (its degrees as the video starts) and `kept_hot` (something is keeping it so, as a flame under it does). What boils stays hot while it boils, whatever the clock says. Smoke and fumes are not heat and go on. `parts` tells the puppeteer when each thing will have gone cold, so a reader can notice it. Nothing yet warms a thing again: a cup refilled at minute 60 would not steam.
 
@@ -820,7 +800,7 @@ It goes over what is built (`lift_over`), since the bricks are in another world 
   stream and a level.
 - **Cost.** One more best-tier run with pictures per episode; a table with more moving parts per frame.
 - **Moves are for the story.** A clock runs because clocks run, and work moves because it is being done;
-  nothing moves for variety (the user, 2026-10-18).
+  nothing moves for variety.
 - **Copied examples.** The rules carry no sample act, and the blurbs no single sample use.
 
 ## Sources

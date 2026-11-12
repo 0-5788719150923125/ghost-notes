@@ -1,91 +1,76 @@
 extends RefCounted
 class_name TableActions
 
-## TableActions - the verbs a card show performs at the table, as ONE REGISTRY (next/notes.md step
-## 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written
-## in a reading's marks or performed between them, the rest the voice takes for it, whether it brings
-## a card up to be shown or puts the shown one down first, and the moments it makes (what the air can
-## burst on, [constant CardTable.MOMENTS]) - declared, not branched on, the way a medium's `uses`
-## is. CardReading's marks and rests and the table's schedule read it; adding a verb is an entry here
-## and its pose where the table draws it.
+## TableActions - the verbs a card show performs at the table, as one registry (next/notes.md step 9, "Actions are a
+## registry"). Each verb declares what it takes (which card), whether a reading's marks write it or it is performed
+## between them, the rest the voice takes for it, whether it brings a card up to be shown or puts the shown one down
+## first, and the moments it makes (what the air can burst on, [constant CardTable.MOMENTS]) - declared, not branched
+## on. CardReading's marks and rests and the table's schedule read it; a new verb is an entry here and its pose where
+## the table draws it.
 ##
-## THE DURATIONS ARE THE TABLE'S, in seconds - the phase constants inside each are [TableMedium]'s
-## own; these are their sums - and the voice rests exactly as long, from the same numbers, so the
-## voice waits as long as the cards move. The shuffle is the exception that proves it: readers talk
+## The durations are the table's, in seconds: the phase constants inside each are [TableMedium]'s own and these are
+## their sums. The voice rests exactly as long, from the same numbers. The shuffle is the exception: readers talk
 ## while they shuffle, so its rest is only the moment it takes to begin.
 ##
-## THE OPENING VERB SAYS WHERE THE CARDS COME FROM ([constant SOURCES]): `shuffle` - a deck shuffled
-## in the middle of the table and pushed aside before the first card - or `open` - a box the cards are
-## kept in, standing where the deck would, pulled from one at a time - or `begin`, a show that draws no
-## cards at all (the user, 2026-10-26: "that card dependency shouldn't exist ... we should start with a
-## mask every time - and just paint it while talking"): no deck, no box, and each of its beats opened by
-## `work`. A verb that takes a card from the source waits for the push (`first`) only when the source pushes.
+## The opening verb says where the cards come from ([constant SOURCES]): `shuffle` (a deck shuffled in the middle and
+## pushed aside before the first card), `open` (a box the cards are kept in, pulled from one at a time) or `begin` (a
+## show that draws no cards: no deck, no box, each beat opened by `work`). A verb that takes a card from the source
+## waits for the push (`first`) only when the source pushes.
 ##
-## Tarot's verbs are draw, jumper and spread; a show of a collection adds `deal` (a card straight to
-## its place, never held up), `fan` (a waterfall: several swept out at once, overlapping), `show` (a
-## card lying on the table picked up and held up as a drawn one is), and the turns of a card where it
-## lies - `tap` and `untap` (a quarter turn, sideways and back) and `flip` (over). Gather and discard
-## are entries to come.
+## The verbs are draw, jumper and spread; `deal` (a card straight to its place), `fan` (several swept out at once,
+## overlapping), `show` (a card lying on the table picked up and held up), and the turns of a card where it lies -
+## `tap` and `untap` (a quarter turn, sideways and back) and `flip` (over).
 
-## The shuffle starts a beat before the first word, so the hands are already busy when the voice
-## comes in.
+## The shuffle starts a beat before the first word, so the hands are busy when the voice comes in.
 const SHUFFLE_LEAD := 1.2
-## The card on display goes down into the spread: the booklet closes and the card travels to its
-## place and settles.
+## The card on display goes down into the spread: the booklet closes and the card travels to its place.
 const LAY := 1.7
-## A card is drawn: the deck squares, the top card slides off, lifts, turns over and comes up to be
-## shown, and its booklet entry opens beside it.
+## A card is drawn: the deck squares, the top card slides off, turns over and comes up to be shown, and its booklet
+## entry opens beside it.
 const DRAW := 3.4
-## Before the FIRST card: the deck, shuffled in the middle of the table, is squared and pushed to the
-## side it is drawn from, clearing the middle for the spread.
+## Before the first card: the deck is squared and pushed to the side it is drawn from, clearing the middle.
 const PUSH := 1.3
-## A jumper: one more riffle, and the card flies out of it and lands; the reader looks at it a
-## moment, then it is picked up and shown as a drawn card is.
+## A jumper: one more riffle, the card flies out and lands, is looked at a moment, then picked up and shown.
 const JUMP := 5.0
 ## The spread, once the last card is down: a moment to take it in before the close.
 const SETTLE := 1.8
-## THE BOX OPENS: the intro of a show whose cards are kept in a box - only the moment it takes to begin,
-## as the shuffle's.
+## The box opens: only the moment it takes to begin, as the shuffle's.
 const OPEN_LEAD := 0.8
 ## A card dealt: off the deck (or up out of the box), turned over, and straight down into its place.
 const DEAL := 2.0
-## A waterfall: the cards leave the deck one after another, each a beat behind the last, and slide
-## out into an overlapping line - its first card's travel, and the beat each further card adds.
+## A waterfall: the cards leave the deck a beat apart and slide out into an overlapping line - its first card's travel,
+## and the beat each further card adds.
 const FAN := 1.6
 const FAN_EACH := 0.32
 ## A card lying on the table picked up and held up to be shown.
 const SHOW := 1.6
-## A few quick looks at the box's own cards, each returned before the chosen card is drawn: three drawn
-## part of the way up out of a file, or two turned over off a pile (TableMedium.SEARCH_LOOKS) - each
-## front held to the eye about a second (TableCardPose.searched_xf). At 3.6 s a front was in view for
-## under half a second (the user, 2026-10-18: "they never stop to even look at the cards briefly").
+## A few quick looks at the box's own cards, each returned before the chosen card is drawn: three drawn part of the way
+## up out of a file, or two turned over off a pile (TableMedium.SEARCH_LOOKS), each front held to the eye about a second
+## (TableCardPose.searched_xf).
 const RUMMAGE := 5.4
 ## A revealed card stays in the hand through an unspoken beat before it is returned or laid down.
 const LINGER := 2.0
 ## A card turned where it lies: a quarter turn (tap, untap), or over (flip).
 const TURN := 0.9
 const FLIP := 1.2
-## WORK BEGINS ([TableWork], next/table_work.md): the card on display goes down, and the work of its beat
-## starts as the voice goes on - talked through, as a reader talks through a shuffle, so its rest is only
-## the moment it takes to begin.
+## Work begins ([TableWork], next/table_work.md): the card on display goes down and its beat's work starts as the voice
+## goes on, so its rest is only the moment it takes to begin.
 const WORK_LEAD := 0.4
-## A SHOW WITH NO CARDS BEGINS: only the moment it takes, as the shuffle's.
+## A show with no cards begins: only the moment it takes, as the shuffle's.
 const BEGIN_LEAD := 0.4
-## A GAME'S TABLE ([TableGame], next/tabletop.md): dice in the hand and thrown, for the voice to wait on; a figure moved, set down, knocked or taken off, and talked over; a map laid; a picture held up.
+## A game's table ([TableGame], next/tabletop.md): dice thrown, a figure moved, set down, knocked or taken off, a map laid, a picture held up.
 const ROLL := 2.2
 const MOVE := 0.25
 const NEW_MAP := 1.5
 const REVEAL := 1.1
 
-## THE VERBS. `written`: a reading's mark names it (`<!-- table: draw 3 -->`); `args`: what the mark
-## takes after the verb; `rest`: the seconds the voice holds for it; `first`: added when it brings up
-## the reading's first card (the deck's push comes before it); `shows`: it brings a card up to be
-## shown; `lays`: a card still shown is laid down first (+ the lay's duration); `ends`: nothing is
-## shown after it; `moments`: what it makes for the air.
-## `source`: an opening verb's, where the cards come from; `takes`: it takes cards from the source
-## (waiting for the push when it is the first); `range`: its mark names a run of cards (`fan 3-5`);
-## `turns`: it turns a card where it lies; `chapter`: a video chapter starts there; `beat`: the number its
-## mark takes is a beat of the reading, never a card - none is drawn by it.
+## The verbs. `written`: a reading's mark names it (`<!-- table: draw 3 -->`); `args`: what the mark takes after the
+## verb; `rest`: the seconds the voice holds for it; `first`: added when it brings up the reading's first card (the
+## deck's push comes before it); `shows`: it brings a card up to be shown; `lays`: a card still shown is laid down
+## first (+ the lay's duration); `ends`: nothing is shown after it; `moments`: what it makes for the air.
+## `source`: an opening verb's, where the cards come from; `takes`: it takes cards from the source (waiting for the
+## push when it is the first); `range`: its mark names a run of cards (`fan 3-5`); `turns`: it turns a card where it
+## lies; `chapter`: a video chapter starts there; `beat`: its mark's number is a beat of the reading, never a card.
 const REGISTRY := {
 	"shuffle": {"written": true, "args": [], "rest": SHUFFLE_LEAD, "shows": false, "lays": false,
 		"ends": false, "moments": ["shuffle"], "source": "deck",
@@ -132,7 +117,7 @@ const REGISTRY := {
 	"work": {"written": true, "args": ["card"], "rest": WORK_LEAD, "shows": false, "lays": true,
 		"ends": false, "moments": ["lay"], "beat": true,
 		"about": "the card on display goes down (if one is up), then the work of the named beat begins at the table, under the words that follow - in a show with no cards, every beat opens with it"},
-	# A GAME'S TABLE: each mark's number names something that happened in the session ([GameLedger]), written by the tools that made it so, never a card
+	# A game's table: each mark's number names something that happened in the session ([GameLedger]), never a card
 	"roll": {"written": true, "args": ["card"], "rest": ROLL, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
 		"about": "the dice of the named event are shaken and thrown from where their person sits"},
 	"move": {"written": true, "args": ["card"], "rest": MOVE, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
@@ -209,10 +194,10 @@ static func source_of(kind: String) -> String:
 	return String(REGISTRY.get(kind, {}).get("source", ""))
 
 
-## THE SOURCES: what each opening means for the table. `pushes`: the deck is shuffled in the middle
-## and pushed to its side before the first card; `shuffles`: it is shuffled at all; `jumpers`: a card
-## can fly out of it. `none` is a show that draws no cards: no producer chooses it for a show that does
-## ([method TableProducer._land_plan] sets it where the episode draws none, and takes it from any other).
+## The sources: what each opening means for the table. `pushes`: the deck is shuffled in the middle and pushed to its
+## side before the first card; `shuffles`: it is shuffled at all; `jumpers`: a card can fly out of it. `none` is a show
+## that draws no cards ([method TableProducer._land_plan] sets it where the episode draws none, and takes it from any
+## other).
 const SOURCES := {
 	"deck": {"opens": "shuffle", "pushes": true, "shuffles": true, "jumpers": true,
 		"about": "a deck, shuffled in the middle of the table while the host talks and pushed to one side before the first card"},
@@ -228,11 +213,10 @@ static func chapter(kind: String) -> bool:
 	return bool(REGISTRY.get(kind, {}).get("chapter", false))
 
 
-## THE REST THE VOICE TAKES for [param kind]. [param showing] is whether a card is up on display when
-## it begins, which a verb that `lays` puts down first; [param first] is whether no card has left the
-## source yet, when a verb that takes one waits for the push - if the source [param pushes]. [param n]
-## is how many cards it moves (a waterfall's run). Left to their defaults, [param first] is what it
-## always was: nothing up means the reading's first card.
+## The rest the voice takes for [param kind]. [param showing]: a card is up on display when it begins (a verb that
+## `lays` puts it down first); [param first]: no card has left the source yet (a verb that takes one waits for the push,
+## if the source [param pushes]); [param n]: how many cards it moves (a waterfall's run). Left at their defaults,
+## nothing up means the reading's first card.
 static func rest_of(kind: String, showing: bool, first: Variant = null, pushes := true, n := 1) -> float:
 	var a: Dictionary = REGISTRY.get(kind, {})
 	if a.is_empty():
@@ -244,10 +228,9 @@ static func rest_of(kind: String, showing: bool, first: Variant = null, pushes :
 	return (LAY if showing and bool(a["lays"]) else 0.0) + rest
 
 
-## How long the table waits after a card's action begins before that card's own phases start: the
-## lay of the card before it, or - for the reading's first card, drawn rather than thrown - the push.
-## [param showing] (a card is up to be laid first) and [param pushes] (the source pushes) default to
-## what they always were.
+## How long the table waits after a card's action begins before that card's own phases start: the lay of the card
+## before it, or - for the reading's first card - the push. [param showing] and [param pushes] default to a card up to
+## be laid and a source that pushes.
 static func lead_of(kind: String, first: bool, showing: Variant = null, pushes := true) -> float:
 	var up: bool = (not first) if showing == null else bool(showing)
 	var out := LAY if up and bool(REGISTRY.get(kind, {}).get("lays", false)) else 0.0

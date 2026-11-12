@@ -1,27 +1,23 @@
 extends Node
 
-## perf_probe - WHERE A LIVE FRAME'S TIME GOES, measured, per scene and per medium.
+## perf_probe - where a live frame's time goes, measured, per scene and per medium.
 ##
-## NOT a gate. It drives a real session the way the Director does (one update + one
-## view.commit per frame on the focal scene, medium.advance after it) and splits each
-## frame's wall time into the part the probe can name - the SIM (update/commit/advance,
-## all GDScript on the main thread) - and the REST (every _draw callback, the
-## RenderingServer submit, the present, and every other node's _process). Alongside it
-## reads the engine's own counters: draw calls, primitives and objects in the frame, and
-## the object count, so a scene that allocates per frame shows up as a rising line.
+## Not a gate. It drives a real session the way the Director does (one update + one view.commit per frame
+## on the focal scene, medium.advance after it) and splits each frame's wall time into the sim
+## (update/commit/advance, GDScript on the main thread) and the rest (every _draw callback, the
+## RenderingServer submit, the present, every other node's _process). It also reads the engine's counters
+## (draw calls, primitives, objects in the frame, the object count, so a scene that allocates per frame
+## shows as a rising line).
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/show/perf_probe.gd 600 \
 ##       -- --medium comic --cuts 8 --frames 90 --seed 404
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/show/perf_probe.gd 900 \
 ##       -- --catalog --frames 60
 ##
-## GHOST_PROBE_GPU=1 matters: under --headless the dummy renderer records the canvas
-## commands but rasterizes nothing, so the REST column loses the GPU submit and the
-## draw-call counters read zero. The probe still runs there, for the SIM column alone.
-##
-## The stage is 1920x1080 because that is what the live window is on this machine; a
-## panel's render target is sized off the stage (ComicMedium._size_targets), so a
-## smaller stage would under-report the comic.
+## GHOST_PROBE_GPU=1 matters: under --headless the dummy renderer records canvas commands but rasterizes
+## nothing, so the rest column loses the GPU submit and the draw-call counters read zero (the sim column
+## still works). The stage is 1920x1080, the live window's size; a panel's render target is sized off the
+## stage (ComicMedium._size_targets), so a smaller stage under-reports the comic.
 
 const DT := 1.0 / 60.0
 const WARM := 12                  # the Director's own pre-warm count
@@ -33,10 +29,10 @@ var _cuts := 8
 var _frames := 90
 var _catalog := false
 var _only := ""                   # --scene NAME: catalog only this script
-## --governed: measure with the stage in the state main.gd's governor puts it in on a
-## SKIPPED frame (process_mode DISABLED, render target UPDATE_DISABLED). The Director is an
-## autoload and keeps calling update()/queue_redraw() on the scene regardless, so this
-## answers whether a skipped frame is actually cheaper on the CPU or only on the GPU.
+## --governed: measure with the stage as main.gd's governor leaves it on a skipped frame (process_mode
+## DISABLED, render target UPDATE_DISABLED). The Director is an autoload and keeps calling
+## update()/queue_redraw() on the scene regardless, so this shows whether a skipped frame is cheaper on
+## the CPU or only on the GPU.
 var _governed := false
 var _medium: Medium = null
 var _live: GhostScene = null
@@ -49,8 +45,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	_parse_args()
-	# VSYNC OFF for the measurement: a frame that waits for a refresh reports the refresh,
-	# not the work. The live app keeps the project default; this is the probe's choice only.
+	# Vsync off for the measurement: a frame that waits for a refresh reports the refresh, not the work.
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	print("perf_probe: renderer %s, display %s, vsync %d, stage %dx%d, %d frames per sample, dt %.4f" % [
 		RenderingServer.get_current_rendering_method(), DisplayServer.get_name(),
@@ -126,7 +121,7 @@ func _session_run() -> void:
 		await get_tree().process_frame
 
 
-## One cut, exactly as comic_look_probe performs one (which is exactly as the Director does).
+## One cut, as comic_look_probe performs one (which is as the Director does).
 func _cut() -> void:
 	if _medium.owns_cast():
 		var handed := _medium.take_over(_live)
@@ -181,12 +176,11 @@ func _catalog_run() -> void:
 
 # --- the measurement ---------------------------------------------------------------------
 
-## THE DRAW BRACKET. CanvasItem.queue_redraw() pushes the item's redraw callback onto the
-## engine's MessageQueue, and call_deferred pushes onto the SAME FIFO queue - so a marker
-## deferred just BEFORE the sim and another just AFTER it are flushed either side of every
-## _draw the sim queued (the focal scene's, the medium's, and the off-focal panels ticked
-## inside medium.advance). The time between the two markers is the GDScript _draw cost plus
-## the canvas command recording, and nothing else.
+## The draw bracket. CanvasItem.queue_redraw() pushes the item's redraw callback onto the engine's
+## MessageQueue, and call_deferred pushes onto the same FIFO queue, so a marker deferred just before the
+## sim and another just after are flushed either side of every _draw the sim queued (the focal scene's,
+## the medium's, and the off-focal panels ticked inside medium.advance). The time between the two markers
+## is the GDScript _draw cost plus the canvas command recording.
 var _draw_t0 := 0
 var _draw_ms := 0.0
 
@@ -197,9 +191,9 @@ func _mark_draw_end() -> void:
 	_draw_ms = float(Time.get_ticks_usec() - _draw_t0) / 1000.0
 
 
-## Every viewport the engine will render this frame: the stage, the root window, and (comic)
-## the panel slots. The engine measures its own CPU and GPU render time per viewport once
-## asked to; summed, that is the RenderingServer's share of the frame.
+## Every viewport the engine will render this frame: the stage, the root window and (comic) the panel
+## slots. The engine measures its own CPU and GPU render time per viewport once asked; summed, that is
+## the RenderingServer's share of the frame.
 func _viewports() -> Array:
 	var out: Array = [get_viewport().get_viewport_rid()]
 	for vp in _all_subviewports(self):

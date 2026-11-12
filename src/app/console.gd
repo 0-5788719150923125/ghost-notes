@@ -1,26 +1,17 @@
 extends CanvasLayer
 class_name ConsoleView
 
-## The in-app console - a live tail of Godot's own log file. print(),
-## push_warning(), push_error() and engine SCRIPT ERRORs all land in
-## user://logs/godot*.log via the engine's default file logging, but anyone
-## launching ghost as a compiled app or from the Godot launcher never sees
-## that stream - it used to die in a terminal nobody had open. The `>_`
-## toggle (icon-only, on the shared bottom-right button row: console, export
-## ⤓, assistant bubble) opens a panel tailing the newest log live.
+## The in-app console - a live tail of Godot's own log file. print(), push_warning(), push_error() and
+## engine SCRIPT ERRORs land in user://logs/godot*.log, which a compiled app or launcher run never shows.
+## The `>_` toggle on the shared bottom-right row opens a panel tailing the newest log live. Part of the
+## shared Chrome (chrome.gd), so every mode carries it.
 ##
-## Part of the shared Chrome (see chrome.gd), so every mode carries it.
-## WHAT THE TERMINAL SHOWS, THIS SHOWS: a child started with Subprocess.start
-## has its output echoed into godot's log as `[tag] line` (it used to inherit
-## the terminal, and the README recording's summary never reached here), and
-## a Godot child of this project logs to a file of its own
-## (Subprocess.own_log) rather than truncating this one. A child with a log
-## file of its own (Subprocess.start_logged / start_redirected) never wrote to
-## the terminal either; its owner echoes the interesting lines into godot's
-## log when a step finishes (see mask_editor._yt_echo_log for the yt-dlp
-## example). Release builds flush the log on every line
-## (application/run/flush_stdout_on_print): ghost quits by SIGKILL, and the
-## tail of an unflushed log - the lines a crash report needs - went with it.
+## What the terminal shows, this shows: a child started with Subprocess.start has its output echoed into
+## godot's log as `[tag] line`, and a Godot child of this project logs to a file of its own
+## (Subprocess.own_log) rather than truncating this one. A child with a log file of its own
+## (Subprocess.start_logged / start_redirected) is echoed by its owner when a step finishes (see
+## mask_editor._yt_echo_log). Release builds flush the log on every line
+## (application/run/flush_stdout_on_print) because ghost quits by SIGKILL.
 
 const _TAIL_BYTES := 16384
 const _REFRESH_EVERY := 0.5
@@ -41,7 +32,7 @@ func _ready() -> void:
 	_toggle.focus_mode = Control.FOCUS_NONE
 	_toggle.custom_minimum_size = Vector2(40, 40)
 	_toggle.pressed.connect(_on_toggle)
-	# THE ROW'S (Chrome.row_button), which places it; with no Chrome, at its old slot.
+	#The row's (Chrome.row_button), which places it; with no Chrome, at its old slot.
 	var ch := Chrome.of(self)
 	if ch != null:
 		ch.row_button(&"console", _toggle)
@@ -66,7 +57,7 @@ func _ready() -> void:
 	_text = RichTextLabel.new()
 	_text.selection_enabled = true
 	_text.scroll_following = true   # pinned to the newest lines, like a real terminal
-	# Ctrl+C on a selection, which is the whole point of being able to make one.
+	#Ctrl+C on a selection.
 	_text.shortcut_keys_enabled = true
 	_text.add_theme_font_size_override("normal_font_size", 12)
 	_text.custom_minimum_size = Vector2(620, 360)
@@ -75,7 +66,7 @@ func _ready() -> void:
 
 func _on_toggle() -> void:
 	_panel.visible = not _panel.visible
-	# ONE PANEL ABOVE THE ROW AT A TIME: opening this closes the others (Chrome.panel_opened)
+	#One panel above the row at a time: opening this closes the others (Chrome.panel_opened)
 	var ch := Chrome.of(self)
 	if ch != null:
 		if _panel.visible:
@@ -93,22 +84,16 @@ func _process(dt: float) -> void:
 	if _accum < _REFRESH_EVERY:
 		return
 	_accum = 0.0
-	# A SELECTION IS A CONVERSATION IN PROGRESS. Rewriting the label's text drops
-	# it, and this refreshes twice a second, so a busy log made it impossible to
-	# highlight anything for long enough to copy it - reported exactly that way,
-	# while the log was the only place the answer to a bug lived. While something
-	# is selected the view holds; the moment it is cleared the backlog lands.
+	#A selection holds the view: rewriting the label's text drops it, and this refreshes twice a second.
+	#The backlog lands the moment the selection is cleared.
 	if not _text.get_selected_text().is_empty():
 		return
 	var tail := _read_tail()
 	if tail == _last_shown:
 		return
-	# APPEND WHAT IS NEW rather than replacing the lot. Besides keeping a
-	# selection alive between refreshes, this stops the scroll position jumping
-	# on every tick. The window slides as the file grows, so the new tail is not
-	# always an extension of the old one - when it is not (a rotation, a seek
-	# past the window, the first read) the whole thing is redrawn, which is the
-	# only case that legitimately loses the view.
+	#Append what is new rather than replacing the lot: this keeps a selection alive and the scroll position
+	#still. The window slides as the file grows, so when the new tail does not extend the old one (a
+	#rotation, a seek past the window, the first read) the whole thing is redrawn.
 	if not _last_shown.is_empty() and tail.begins_with(_last_shown):
 		_text.add_text(tail.substr(_last_shown.length()))
 	else:
@@ -116,13 +101,10 @@ func _process(dt: float) -> void:
 	_last_shown = tail
 
 
-## The CURRENT session's log. The engine always writes to the CONFIGURED path
-## (user://logs/godot.log by default) and renames PREVIOUS runs to timestamped
-## backups (godot2026-07-27T12.35.22.log) - so "newest by filename" picks a
-## STALE rotated log every time ("godot2026..." sorts above "godot.log"; the
-## first cut of this file did exactly that and the console showed a frozen old
-## session). Ask the project setting for the live file; fall back to newest by
-## mtime only if the setting is missing.
+## The current session's log. The engine writes to the configured path (user://logs/godot.log by default)
+## and renames previous runs to timestamped backups, which sort above "godot.log", so "newest by filename"
+## picks a stale log. Ask the project setting for the live file; fall back to newest by mtime only if the
+## setting is missing.
 func _resolve_log() -> String:
 	var configured := String(ProjectSettings.get_setting(
 		"debug/file_logging/log_path", "user://logs/godot.log"))
@@ -164,8 +146,8 @@ func _read_tail() -> String:
 	return s
 
 
-## Lift the toggle - and the panel above it - clear of whatever the mode has put
-## along the bottom of the frame. See Chrome.bottom_inset.
+## Lift the toggle - and the panel above it - clear of whatever the mode has put along the bottom of the
+## frame. See Chrome.bottom_inset.
 func set_bottom_inset(v: float) -> void:
 	if _toggle != null and _toggle.get_parent() == self:      # in the row, the row moves it
 		_toggle.offset_top = -68.0 - v

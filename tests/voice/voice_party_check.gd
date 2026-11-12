@@ -9,15 +9,15 @@ extends SceneTree
 ## once completed a recorded seed's partial genome IN the entry, so drawing the Collection rewrote
 ## the save. So:
 ##
-##   A PARTIAL GENOME COMES BACK WHOLE AND STAYS PARTIAL WHERE IT IS KEPT: what member_genome
+##   A partial genome comes back whole and stays partial where it is kept: what member_genome
 ##   returns holds every gene the PRIOR names - the measured ones as measured, the rest the
 ##   PRIOR's - and the entry still holds exactly the genes it was given. Two-sided by itself:
 ##   the getter that wrote the entry passes the first half and fails the second, one that does
 ##   not complete the genome the other way round.
-##   NOTHING IS WRITTEN: every function, on belts of 0, 1, 3 and 6 entries (frozen, lineage-born,
+##   Nothing is written: every function, on belts of 0, 1, 3 and 6 entries (frozen, lineage-born,
 ##   partial and descended genomes), three candidates and three drifts, leaves the belt, the
 ##   candidate and the field it was handed byte for byte as they were.
-##   THE SAME QUESTION, THE SAME ANSWER: every call made again, the global generator reseeded
+##   The same question, the same answer: every call made again, the global generator reseeded
 ##   in between, answers byte for byte the same - nothing here draws from it.
 ##
 ## THE CONTROLS: the byte comparison must see one gene completed in a copy of a belt, or

@@ -1,25 +1,24 @@
 extends SceneTree
 
-## The gate of the WORK AT THE TABLE in an episode's steps (next/table_work.md): what the puppeteer and the
+## The gate of the work at the table in an episode's steps (next/table_work.md): what the puppeteer and the
 ## readers of the work are made from, and what they are told. No renderer, no writer.
 ##
 ##   godot --headless --path . --script res://tests/table_show/work_steps_check.gd
 ##
-## - A PLAN WITH WORK HAS ITS STEPS: the puppeteer's `acts` after the table, made from the plan, the draw and
+## - a plan with work has its steps: the puppeteer's `acts` after the table, made from the plan, the draw and
 ##   the table; a work passage after each card that has work (`say:work:K`, made from the card's own passage
 ##   and the acts), the next card's passage after it; the intro and the close wait for the acts when they have
 ##   work. The control: a plan with none has exactly the steps every episode had.
-## - THE SCRIPT HAS ITS MOVES: `work K` right after card K's passage, the card laid as it begins, its passage
+## - the script has its moves: `work K` right after card K's passage, the card laid as it begins, its passage
 ##   after it.
-## - NO CHEATING HOLDS FOR THE WORK: a work passage's reader is handed its own beat's acts and no later beat's
+## - no cheating holds for the work: a work passage's reader is handed its own beat's acts and no later beat's
 ##   (the control: the later beat's own passage is handed them); the intro's reader sees no card's.
-## - A READER'S CUE IS KEPT ONLY FOR ITS OWN ACTS: `<!-- act: grind -->` stays in a passage whose beat has a
+## - a reader's cue is kept only for its own acts: `<!-- act: grind -->` stays in a passage whose beat has a
 ##   `grind`, and goes with any other comment (the control: a passage with no acts keeps none).
-## - A PLAN'S WORK LANDS: each position's `work`, the intro's and the close's, as the producer wrote them.
-## - THE READER NAMES THE VIDEO'S CHAPTERS (2026-10-31: a seven-minute brew in one chapter, its close "The
-##   spread"): each passage is told the chapter it begins - the intro's, a card's by its place and name, the
-##   close's with no card word - and a card's work passage is asked to name its own. A reader's
-##   `<!-- chapter: name -->` is kept, one line, as a table mark beside it goes (the control: an empty one goes).
+## - a plan's work lands: each position's `work`, the intro's and the close's, as the producer wrote them.
+## - the reader names the video's chapters: each passage is told the chapter it begins - the intro's, a card's by its place and
+##   name, the close's with no card word - and a card's work passage is asked to name its own. A reader's `<!-- chapter: name -->`
+##   is kept, one line, as a table mark beside it goes (the control: an empty one goes).
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
 

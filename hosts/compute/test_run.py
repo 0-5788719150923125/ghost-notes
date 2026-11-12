@@ -6,17 +6,16 @@
 Skips (exit 0, saying so) where there is no bwrap. Any Python runs it - the code it runs uses only
 the standard library, inside the sandbox around the same Python.
 
-What is held, each beside a control - the same code run plainly, outside the sandbox - that does
-what the sandbox stops:
+Held, each beside a control - the same code run plainly, outside the sandbox - that does what the sandbox
+stops:
 - a run prints, and keeps a series (y against 0, 1, 2 and y against x) with what it is about;
 - the code's own error comes back as Python prints it, its own line shown, the runner's frames out;
-- it reaches no network (a listener on this machine's loopback is not there);
-- it sees none of the author's files (the repository's README is not there) and writes nowhere but
-  its folder, while a file it saves there is there for the next run;
-- it is stopped at its time limit and when its folder grows past its cap, and an allocation past
-  its memory fails;
-- keep refuses a value that is not a finite number, and a kept file the code forged is checked again:
-  its bad series are dropped, its good one kept;
+- it reaches no network and sees none of the author's files, and writes nowhere but its folder, while a file it
+  saves there is there for the next run;
+- it is stopped at its time limit and when its folder grows past its cap, and an allocation past its memory
+  fails;
+- keep refuses a value that is not a finite number, and a kept file the code forged is checked again: its bad
+  series are dropped, its good one kept;
 - with no bwrap nothing runs at all.
 """
 import json

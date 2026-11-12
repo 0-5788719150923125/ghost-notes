@@ -1,21 +1,18 @@
 extends RefCounted
 class_name VoiceReaders
 
-## VoiceReaders - who a multi-speaker voice's speaker NUMBER actually is.
+## VoiceReaders - who a multi-speaker voice's speaker number actually is.
 ##
-## Piper's libritts voices hold hundreds of readers (904 in en_US-libritts-high) addressed by
-## an index, and the index says nothing: the only way to find a voice was to step through them
-## and listen. The model's own config names each index by its LibriTTS reader id
-## (`speaker_id_map`: "p3615" -> 10), and LibriTTS-P (LINE, CC BY 4.0) has annotated those
-## readers - perceived gender and a description of the voice ("soft, clear, calm, reassuring").
+## Piper's libritts voices hold hundreds of readers addressed by an index. The model's own config names
+## each index by its LibriTTS reader id (`speaker_id_map`: "p3615" -> 10), and LibriTTS-P (line, cc by 4.0)
+## annotates those readers with perceived gender and a description ("soft, clear, calm, reassuring").
 ## `data/libritts_speakers.json` is that annotation, keyed by reader id (see its .LICENSE).
 ##
-## Read only from files: the model config the voice host downloaded, and the data file. A voice
-## that is not installed yet, or has no map, simply has no descriptions.
+## Read only from files: the model config the voice host downloaded, and the data file. A voice that is
+## not installed, or has no map, has no descriptions.
 ##
-## ...OR SAID BY THE HOST (2026-10-25): a voice whose speakers are a list the host keeps itself -
-## Kokoro's voicepacks under the one "kokoro" voice - comes with `readers` on its row, handed in by
-## [method offer] as the host lists its voices, and they are described from those instead.
+## A voice whose speakers are a list the host keeps itself (Kokoro's voicepacks under the one "kokoro"
+## voice) carries `readers` on its row, handed in by [method offer], and is described from those.
 
 const DATA := "res://data/libritts_speakers.json"
 const LIBRITTS_ABOUT := "Descriptions: LibriTTS-P, LINE Corporation (CC BY 4.0)."
@@ -27,8 +24,7 @@ static var _about := {}            # voice id -> who described them
 
 
 ## The readers the host listed with [param voice_id] (`readers` on its row), in speaker order, and
-## who described them ([param about]). Asked again on every listing: what the host says now is what
-## a speaker number is.
+## who described them ([param about]). Asked again on every listing.
 static func offer(voice_id: String, readers: Array, about := "") -> void:
 	var rows: Array = []
 	for r in readers:

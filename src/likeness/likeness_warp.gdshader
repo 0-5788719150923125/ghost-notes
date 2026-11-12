@@ -1,15 +1,13 @@
-// THE LIKENESS'S ONE PASS (next/likeness.md, "The second build", "The third pass"): their still, bent by
-// the mesh, with the mouth and the eyes drawn from their own, cut out by their matte over the room.
+// The likeness's one pass (next/likeness.md, "The second build"): their still, bent by the mesh, with the mouth and eyes
+// drawn from their own, cut out by their matte over the room.
 //
-// The mesh is drawn over the whole frame. Each vertex sits where the moved and bent face puts it
-// (VERTEX), reads the still where that point really is (UV), and the library's box where it is in the
-// layout (COLOR.rg, carried as a varying): the GPU interpolates both across each triangle, which is a
-// piecewise affine warp of each, for nothing.
+// The mesh is drawn over the whole frame. Each vertex sits where the moved and bent face puts it (VERTEX), reads the still
+// where that point really is (UV), and the library's box where it is in the layout (COLOR.rg, carried as a varying); the GPU
+// interpolates both across each triangle, a piecewise affine warp of each.
 //
-// Inside the mouth's mask (tight to the lips) up to two library mouths are mixed with the still's own
-// mouth by their weights; inside the eyes' mask, up to two library eyes with the still's own. Each image
-// is matched to the still's light first - its gain and offset per channel, from the cheeks' mean and
-// spread in its own frame and in the still. Everything is sRGB, blended as it is.
+// Inside the mouth's mask (tight to the lips) up to two library mouths are mixed with the still's own mouth by their
+// weights; inside the eyes' mask, up to two library eyes with the still's own. Each image is matched to the still's light
+// first (gain and offset per channel, from the cheeks' mean and spread in its own frame and in the still). All sRGB.
 shader_type canvas_item;
 render_mode unshaded;
 
@@ -32,8 +30,7 @@ uniform vec3 e_off0 = vec3(0.0);
 uniform vec3 e_off1 = vec3(0.0);
 // 0 draws the still alone (the identity test, and a set with no library)
 uniform float library_on = 1.0;
-// THEIR MATTE, read where the still is: them, over the room drawn under (the third pass). Off, the
-// still is drawn whole, its own room and all.
+// Their matte, read where the still is: them, over the room drawn under. Off, the still is drawn whole, its own room and all.
 uniform sampler2D matte : filter_linear, repeat_disable;
 uniform float matte_on = 0.0;
 // a debug view: 1 shows where the masks reach

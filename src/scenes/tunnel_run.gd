@@ -2,79 +2,48 @@ extends Scene3D
 
 ## Tunnel run - the camera on a track, falling forward through a tube that twists, banks and
 ## sometimes turns right over.
+## A first-person ride: the camera is on a track inside the tube, with almost no shot or drift,
+## since a tunnel is only a tunnel while the vanishing point holds still.
 ##
-## The one thing in this catalog that is a RIDE. Everything else is looked AT - a body in a
-## void, a field, a landscape under an orbiting camera - and the difference a first-person track
-## makes is not a matter of degree: the frame stops being a picture and becomes a place the
-## viewer is inside of. That is also why it is the scene with the strongest opinion about its own
-## camera: no shot, no drift worth mentioning, because a tunnel is only a tunnel while the
-## vanishing point holds still.
+## The track is integrated, not splined, so it can loop and roll: a frame (right / up / forward)
+## is carried along and turned each step by three seeded curvature functions of arclength (yaw
+## about its own up, pitch about its right, roll about its forward). A sustained pitch is a loop,
+## a sustained yaw a spiral staircase, roll the barrel the tube turns through. The functions are
+## sums of incommensurate sinusoids, so the track never repeats; stations are generated ahead of
+## the camera and dropped behind it, so it is endless at constant memory.
 ##
-## THE TRACK IS INTEGRATED, NOT SPLINED, and that is what lets it loop. A curve fitted through
-## control points can bend but it cannot roll, and a path defined as `(x(s), y(s), s)` - the
-## obvious way - can never turn back on itself at all, because z increases by construction. Here
-## a FRAME is carried along instead (right / up / forward, orthonormal) and turned each step by
-## three seeded curvature functions of arclength: yaw about its own up, pitch about its own
-## right, roll about its own forward. Integrate that and a sustained pitch is a loop, a sustained
-## yaw is a spiral staircase, and roll is the barrel the whole tube turns through while it does
-## either. The functions are sums of sinusoids at incommensurate wavelengths, so the track never
-## repeats and never needs to be stored.
+## The wall's cross-section is a small Fourier series in the angle that twists along the track
+## and swells and closes on a long wavelength. Ribs mark distance at a fixed arclength interval,
+## seams run the length at fixed angles (they make the roll legible), motes stream past, and
+## everything fades into fog at the view distance.
 ##
-## NOTHING IS EVER STORED, in fact: stations are generated a few dozen ahead of the camera and
-## dropped behind it, so the track is endless at constant memory and there is no seam to hide.
+## Music: speed (loud is fast), and the wall's radius per angle from the spectrum, wound along
+## the track; beats brighten the ribs. The track's shape is never touched.
 ##
-## WHAT IS IN THE TUNNEL. The wall's cross-section is a small Fourier series in the angle - one
-## roll gives a circle, a lobed star, a flattened duct or a fluted column - and it TWISTS along
-## the track, so the flutes spiral past instead of running straight. Its radius swells and closes
-## on a long wavelength, which is what makes the tube open into chambers and neck back down. RIBS
-## punctuate it at a fixed interval in arclength, so they arrive at a steady rate and read as
-## distance covered; SEAMS run the whole length at a few fixed angles, which is the thing that
-## makes the roll legible (a smooth tube rolling looks like a still tube). MOTES hang in the air
-## and stream past. Everything fades into a fog at the view distance, so the tunnel recedes into
-## haze rather than ending at a hole.
-##
-## WHAT THE MUSIC DOES. The SPEED, which is the whole feeling of the thing - loud is fast. And
-## the wall's radius, per angle, from the spectrum: the cross-section carries the bands, wound
-## into a spiral along the track so the camera flies through the music rather than past a bar
-## chart of it. Beats brighten the ribs. The track's SHAPE is never touched: a tunnel whose
-## curvature moved on the beat would be a camera being shaken, which is a different and much
-## cheaper sensation.
-##
-## THE COST, AND WHY IT IS OFF-THREAD. A frame is around a thousand quads, each projected,
-## culled, shaded and depth-sorted - five to fifteen milliseconds of GDScript, which is most of
-## a frame budget. It is built inside a [FrameForge] job like the other scene3d scenes. The one
-## frame of latency that costs is uniform (the job is kicked every frame and delivered in order),
-## so it reads as a constant time offset rather than as judder.
+## Cost: about a thousand quads a frame (five to fifteen ms of GDScript), built in a
+## [FrameForge] job; its one frame of latency is uniform.
 
-## Arclength between stations. Fine enough that the wall's curvature is smooth at the near end,
-## coarse enough that the visible track is a few dozen rings rather than a few hundred.
+## Arclength between stations: fine enough that the wall's curvature is smooth at the near end,
+## coarse enough that the visible track is a few dozen rings.
 const STEP := 0.55
 
-## How many stations are kept ahead of the camera, and how far behind. The view distance is
-## STEP * AHEAD; the fog is sized from it so the far end is always haze.
-##
-## BEHIND IS LARGE BECAUSE THE CAMERA DOES NOT LOOK ALONG ITS OWN TANGENT. It aims at a point
-## several stations up the track (see update), so on a bend the view axis tilts tens of degrees
-## off the direction of travel - and then the frustum sweeps back over tube the camera has
-## already passed. At three stations there was not enough of it, and the gap showed as BLACK
-## WEDGES at the frame edges. Rings behind the eye are nearly free: they fail the near-plane
-## test and cost one comparison each.
+## Stations kept ahead of the camera (the view distance is STEP * AHEAD; the fog is sized from it)
+## and behind it. BEHIND is large because the camera aims up the track, so on a bend the frustum
+## sweeps back over passed tube (too few rings show black wedges); rings behind the eye fail the
+## near-plane test and cost one comparison.
 const AHEAD := 56
 const BEHIND := 16
 
-## How far up the track the camera aims, in stations. Enough that a bend reads as a bend being
-## taken rather than as one permanently at the edge of frame; not so far that the view axis
-## leaves the tube on the tightest tracks (which is also what BEHIND has to cover).
+## How far up the track the camera aims, in stations: enough that a bend reads as a bend being
+## taken, not so far that the view axis leaves the tube on the tightest tracks.
 const LOOK_AHEAD := 5.0
 
-## The cross-section's resolution. Sixteen was the first cut and the near wall came out as a
-## handful of enormous flat plates: at a 90-degree lens the first ring subtends most of the
-## frame, so its facets are the picture. Twenty-eight reads as a tube, and Gouraud shading in
-## the job does the rest.
+## The cross-section's resolution: at a 90-degree lens the first ring subtends most of the frame,
+## so sixteen facets read as enormous flat plates; twenty-eight reads as a tube with Gouraud
+## shading.
 const SIDES := 28
 
-## The seeded cross-sections. Each is a pair of Fourier terms on the angle - amplitude and
-## harmonic - and the whole vocabulary of tube shapes this scene has.
+## The seeded cross-sections: each a pair of Fourier terms on the angle (amplitude and harmonic).
 const PROFILES := {
 	"round": {"a1": [0.0, 0.04], "n1": [2, 3], "a2": [0.0, 0.03], "n2": [5, 7]},
 	"fluted": {"a1": [0.07, 0.16], "n1": [6, 12], "a2": [0.0, 0.04], "n2": [3, 4]},
@@ -83,16 +52,10 @@ const PROFILES := {
 	"ribbed": {"a1": [0.05, 0.10], "n1": [4, 5], "a2": [0.06, 0.12], "n2": [9, 14]},
 }
 
-## Track characters. The curvature amplitudes are radians per unit of arclength, so an amplitude
-## near 0.2 held over a quarter wavelength is most of a full loop - which is why `coaster` always
-## turns right over, and tests/scenes/tunnel_track_check.gd holds it to that.
-##
-## THESE ARE DEGREES OF THE SAME THING, not separate worlds, and it is worth being exact about
-## why. Once ROLL has turned the frame, a YAW about the frame's own now-tilted up axis IS world
-## pitch - so any character with a barrel roll can end up in any orientation whatever its own
-## pitch column says. Two attempts to make `glide` provably level failed on that and its table
-## was tightened twice for nothing; these numbers are about how HARD a track turns, which is the
-## only thing they were ever able to express.
+## Track characters. Curvature amplitudes are radians per unit of arclength: 0.2 held over a
+## quarter wavelength is most of a loop, so `coaster` always turns right over
+## (tests/scenes/tunnel_track_check.gd). They say how hard a track turns, not which way: after
+## roll, a yaw about the tilted up axis is world pitch.
 const TRACKS := {
 	"glide": {"yaw": [0.03, 0.09], "pitch": [0.02, 0.06], "roll": [0.02, 0.10], "wave": [55.0, 110.0]},
 	"weave": {"yaw": [0.10, 0.19], "pitch": [0.05, 0.12], "roll": [0.06, 0.18], "wave": [30.0, 60.0]},
@@ -103,8 +66,8 @@ const TRACKS := {
 var _forge := FrameForge.new()
 var _sch: Scheme
 
-# The track's shape, as three curvature functions of arclength. Two sinusoids each, at
-# wavelengths that share no common multiple, so the ride never comes back round to itself.
+# The track's shape, as three curvature functions of arclength: two sinusoids each at
+# wavelengths sharing no common multiple, so the ride never returns to itself.
 var _k_yaw := PackedFloat32Array()      # [amp0, w0, ph0, amp1, w1, ph1]
 var _k_pitch := PackedFloat32Array()
 var _k_roll := PackedFloat32Array()
@@ -151,8 +114,8 @@ var _ch := Vector2.ZERO
 var _f: AudioFeatures = AudioFeatures.new()
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a
+## storyboard entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"track": {"label": "Track", "type": "choice", "options": "TRACKS", "default": null,
 		"blurb": "How hard the track turns: a gentle glide, a weave, a corkscrew that rolls, or a coaster that turns right over."},
@@ -173,9 +136,8 @@ const FIELDS := {
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "scene3d"
-	# A tunnel fills the frame by definition, so it takes the gentle shots - and even those are
-	# damped hard in update(). The vanishing point is the subject; anything that moves it is
-	# the camera coming loose from the vehicle.
+	# A tunnel fills the frame, so it takes the gentle shots, damped hard in update(): anything
+	# that moves the vanishing point is the camera coming loose from the vehicle.
 	framing = "field"
 	_sch = Scheme.pick(rng)
 	_hue = _sch.vary(rng)
@@ -196,9 +158,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_n2 = float(rng.randi_range(int(pf["n2"][0]), int(pf["n2"][1])))
 	_o1 = rng.randf() * TAU
 	_o2 = rng.randf() * TAU
-	# THE TWIST is what stops a shaped cross-section reading as an extrusion. Without it the
-	# flutes are straight rails running to the vanishing point and the eye reads the tube as a
-	# static pipe however much the track bends; with it they spiral past.
+	# The twist keeps a shaped cross-section from reading as an extrusion: without it the flutes
+	# are straight rails to the vanishing point and the tube reads as a static pipe.
 	_twist = number("twist", rng)
 
 	_radius = number("width", rng)
@@ -222,11 +183,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 	_mote_n = 0 if rng.randf() < 0.25 else rng.randi_range(30, 110)
 	for i in _mote_n:
-		# `at` is an ABSOLUTE arclength, not an offset from the camera, and that distinction was
-		# the whole bug. Held as an offset, every mote sits the same distance ahead for ever: the
-		# field travels WITH the eye and nothing ever streams past, which on the nearest objects
-		# in the frame is most of what "jittery" was. It is recycled a view-length forward once
-		# the camera has gone by - see _advance_track.
+		# `at` is an absolute arclength, not an offset from the camera: as an offset, every mote
+		# sits the same distance ahead forever and nothing streams past. It is recycled a
+		# view-length forward once the camera has gone by (see _advance_track).
 		_motes.append({
 			"at": rng.randf() * STEP * float(AHEAD),
 			"th": rng.randf() * TAU,
@@ -255,9 +214,9 @@ func _pick(rng: RandomNumberGenerator, band: Array) -> float:
 	return rng.randf_range(float(band[0]), float(band[1]))
 
 
-## One curvature function: two sinusoids in arclength. Their wavelengths are deliberately NOT
-## in a simple ratio - a track whose turns share a period comes back to the same shape every
-## few seconds, and on a tunnel that reads as driving in circles.
+## One curvature function: two sinusoids in arclength, with wavelengths deliberately not in a
+## simple ratio (turns sharing a period come back to the same shape every few seconds, which
+## reads as driving in circles).
 func _roll_curve(rng: RandomNumberGenerator, amp: Array, wave: Array) -> PackedFloat32Array:
 	var w0 := _pick(rng, wave)
 	var out := PackedFloat32Array()
@@ -282,12 +241,8 @@ func _seed_track() -> void:
 	_pos.clear()
 	_bas.clear()
 	_s0 = 0.0
-	# THE CAMERA STARTS WHERE IT WILL LIVE, `BEHIND` stations into the buffer, and not at zero.
-	# _advance_track holds it at that offset for the rest of the scene, so starting anywhere else
-	# means the opening seconds run in a part of the buffer the interpolation cannot serve: with
-	# the cubic needing a station either side, the eye is PINNED at station one until the track
-	# has caught up, and then lurches into motion. It measured as a single acceleration spike
-	# sixty times the mean - worse, on that measure, than the polyline it replaced.
+	# The camera starts where it will live, `BEHIND` stations in (_advance_track holds that
+	# offset); starting at zero would pin the eye until the track catches up, then lurch.
 	_s = float(BEHIND) * STEP
 	_pos.append(Vector3.ZERO)
 	_bas.append(Basis.IDENTITY)
@@ -296,9 +251,8 @@ func _seed_track() -> void:
 
 
 ## Push one more station, by turning the carried frame and stepping along its forward axis.
-## Godot's convention is that -Z is forward, so the step is `-basis.z`; yaw turns about the
-## frame's own up and pitch about its own right, which is what makes the two compose into
-## corkscrews and loops instead of into a wobble in a fixed world plane.
+## Godot's -Z is forward, so the step is `-basis.z`; yaw turns about the frame's own up and pitch
+## about its own right, so they compose into corkscrews and loops, not a wobble in a world plane.
 func _extend() -> void:
 	var b: Basis = _bas[_bas.size() - 1]
 	var p: Vector3 = _pos[_pos.size() - 1]
@@ -306,9 +260,8 @@ func _extend() -> void:
 	b = b.rotated(b.y, _curve(_k_yaw, s) * STEP)
 	b = b.rotated(b.x, _curve(_k_pitch, s) * STEP)
 	b = b.rotated(-b.z, _curve(_k_roll, s) * STEP)
-	# Re-orthonormalized every step. Three successive rotations of a stored basis accumulate
-	# skew, and over the thousands of stations one song's worth of track is, the frame quietly
-	# stops being orthogonal - which shows up as the tube shearing into an ellipse.
+	# Re-orthonormalized every step: successive rotations of a stored basis accumulate skew, and
+	# over a song's thousands of stations the tube would shear into an ellipse.
 	b = b.orthonormalized()
 	_pos.append(p + (-b.z) * STEP)
 	_bas.append(b)
@@ -323,29 +276,17 @@ func _advance_track() -> void:
 		_s0 += STEP
 	while _pos.size() < AHEAD + BEHIND + 2:
 		_extend()
-	# Motes the camera has gone past come back a view-length ahead, so a fixed handful of them
-	# serves an endless track.
+	# Motes the camera has gone past come back a view-length ahead, so a fixed handful serves an
+	# endless track.
 	var span := STEP * float(AHEAD)
 	for m in _motes:
 		if float(m["at"]) < _s - STEP:
 			m["at"] = float(m["at"]) + span
 
 
-## The frame at an arbitrary arclength. Returns [position, basis].
-##
-## CUBIC, AND THAT IS THE WHOLE FIX FOR THE JITTER. Stations are joined by STRAIGHT segments -
-## `_extend` steps along the frame's forward axis - so interpolating between them linearly puts
-## the eye on a POLYLINE. Its position is continuous, which is why this looked correct in a still
-## frame; its VELOCITY is not. At every station the direction of travel changes abruptly by the
-## curvature times the step, and at eight units a second over a step of 0.55 that is fifteen
-## direction changes a second. Reported as "super jittery... a sequence of discrete jumps at each
-## step", which is exactly what it is.
-##
-## A Catmull-Rom through the four surrounding stations is C1: the velocity is continuous, so
-## there is no per-station kink left to see. The orientation gets the same treatment on the
-## quaternion, because a lerp of two bases has the identical defect one derivative up. The
-## polyline was only ever Euler's approximation of the curve the curvature functions describe,
-## so this is nearer the real track as well as smoother.
+## The frame at an arclength. Returns [position, basis]. Cubic (Catmull-Rom through four
+## stations, the orientation likewise on the quaternion): linear interpolation puts the eye on a
+## polyline whose velocity jumps at every station, which reads as jitter.
 func _frame_at(s: float) -> Array:
 	var fi := (s - _s0) / STEP
 	# One station of margin either side, for the cubic's four points.
@@ -362,8 +303,8 @@ func _frame_at(s: float) -> Array:
 func update(f: AudioFeatures, delta: float) -> void:
 	_f = f
 	tick(f, delta)
-	# Almost nothing. A tunnel is only a tunnel while the vanishing point holds still, and the
-	# 2D view drift that suits a field scene reads here as the camera coming loose.
+	# Almost nothing: the 2D view drift that suits a field scene reads here as the camera coming
+	# loose.
 	drift_view(f, 0.004, 0.006)
 	update_layers(f, delta)
 	_ch = chroma_hue()
@@ -371,8 +312,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_energy = lerpf(_energy, e, 1.0 - exp(-2.5 * delta))
 	_glow = maxf(_glow * exp(-3.6 * delta), clampf(f.beat, 0.0, 1.0))
 
-	# SPEED IS THE FEELING, so it is what the music gets. Bounded well above zero: a tunnel that
-	# stops is a corridor, and the whole read of the scene is that it cannot stop.
+	# Speed is the feeling, so it is what the music gets. Bounded well above zero: a tunnel that
+	# stops is a corridor.
 	_speed = _base_speed * (0.55 + 0.95 * _energy)
 	_s += _speed * delta
 	_advance_track()
@@ -380,10 +321,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	var fr := _frame_at(_s)
 	var p: Vector3 = fr[0]
 	var b: Basis = fr[1]
-	# The eye sits at the station and looks a few units up the track rather than straight along
-	# the tangent. Aiming at a point AHEAD is what makes a bend read as a bend being taken -
-	# the vanishing point leads into the turn the way a driver's eyes do - where a pure tangent
-	# keeps the turn permanently at the edge of frame.
+	# The eye sits at the station and looks a few units up the track rather than along the
+	# tangent: the vanishing point leads into the turn, so a bend reads as a bend being taken.
 	var la := _frame_at(_s + STEP * LOOK_AHEAD)
 	lens.eye = p
 	lens.look = la[0]
@@ -430,8 +369,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	job.seams = _seams
 	job.band_gain = _band_gain
 	job.band_wind = _band_wind
-	# The wall's hue travels along the track, so the ride passes through color zones instead of
-	# being one tinted pipe; the tonal center pulls the whole thing toward the music's key.
+	# The wall's hue travels along the track, so the ride passes through color zones; the tonal
+	# center pulls the whole thing toward the music's key.
 	job.hue = GhostScene.blend_hue(_hue, _ch.x, clampf(_ch.y, 0.0, 1.0) * 0.35)
 	job.hue_travel = _hue_travel
 	job.accent = _sch.accent
@@ -440,9 +379,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	job.glow = _glow
 	job.fog = _fog
 	job.light_th = _light_th
-	# COPIED, not handed over. `_motes` keeps being recycled by _advance_track while the worker
-	# is reading, and a job that shares a mutable array with the sim is the one thing
-	# [FrameForge]'s contract forbids.
+	# Copied, not handed over: `_motes` keeps being recycled by _advance_track while the worker
+	# reads, and [FrameForge]'s contract forbids a job sharing a mutable array with the sim.
 	for m in _motes:
 		job.m_at.append(float(m["at"]))
 		job.m_th.append(float(m["th"]))
@@ -454,8 +392,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 
 func _draw() -> void:
 	begin_draw()
-	# The fog color behind everything: the far end of the tube fades into it, and the ring of
-	# frame outside the near wall on a hard bend is it too.
+	# The fog color behind everything: the far end of the tube fades into it, and so does the
+	# frame outside the near wall on a hard bend.
 	var x := size.x * 0.5 * 1.25 / maxf(0.001, view.zoom_actual())
 	var y := size.y * 0.5 * 1.25 / maxf(0.001, view.zoom_actual())
 	draw_colored_polygon(PackedVector2Array([
@@ -468,18 +406,16 @@ func _draw() -> void:
 # ---------------------------------------------------------------------------------
 
 ## One frame of tunnel, built off the main thread ([FrameForge]'s job form: a fresh object per
-## kick, so nothing the worker reads can be mutated underneath it). It reads only its own
-## members - never the scene node - so a Director cut mid-build is harmless.
+## kick). It reads only its own members, never the scene node.
 class TunnelJob:
 	extends RefCounted
 
-	## The eye plane the wall is clipped against. Further out than [member Lens3D.near] on
-	## purpose: a vertex sitting a hundredth of a unit in front of the camera projects tens of
-	## thousands of pixels off screen, and the geometry is no more visible for it.
+	## The eye plane the wall is clipped against, further out than [member Lens3D.near]: a vertex
+	## a hundredth of a unit in front of the camera projects tens of thousands of pixels off screen.
 	const NEAR := 0.12
 
-	## The fraction of the generated track at which the fog is complete. Under 1.0 so the last
-	## several rings are pure haze and there is no end to see.
+	## The fraction of the generated track at which the fog is complete; under 1.0, so the last
+	## several rings are pure haze.
 	const FOG_REACH := 0.72
 
 	var f: AudioFeatures
@@ -490,8 +426,8 @@ class TunnelJob:
 	var step := 0.55
 	var sides := 16
 	var n := 0
-	# The stations, flattened: position and the two cross-section axes. Flat arrays because this
-	# crosses onto a worker thread while the scene keeps generating track.
+	# The stations, flattened: position and the two cross-section axes. Flat arrays because they
+	# cross onto a worker thread while the scene keeps generating track.
 	var px := PackedFloat32Array()
 	var py := PackedFloat32Array()
 	var pz := PackedFloat32Array()
@@ -539,11 +475,9 @@ class TunnelJob:
 		var reach := step * float(n - 1)
 		var faces: Array = []
 
-		# --- THE RING VERTICES, projected AND SHADED once each. Adjacent quads share them, so
-		# doing either per quad would repeat the work four times over - and shading per quad is
-		# also what made the first cut read as a stack of flat plates rather than as a tube.
-		# Color belongs to the vertex here (Gouraud): the wall is a smooth surface and its
-		# shading has to be continuous across a quad edge or the facets ARE the picture.
+		# The ring vertices, projected and shaded once each (adjacent quads share them). Color
+		# belongs to the vertex (Gouraud): the shading must be continuous across a quad edge or the
+		# facets are the picture.
 		var vx := PackedFloat32Array()
 		var vy := PackedFloat32Array()
 		var vd := PackedFloat32Array()          # camera depth
@@ -563,37 +497,25 @@ class TunnelJob:
 		rad.resize(n)
 		for i in n:
 			var si := s0 + float(i) * step
-			# The radius: the seeded swell (chambers opening and necking down) in arclength, so
-			# it belongs to the TUNNEL and not to the camera.
+			# The radius: the seeded swell (chambers opening, necking down) in arclength, so it
+			# belongs to the tunnel and not to the camera.
 			var rr := radius * (1.0 + swell * sin(TAU * si / maxf(4.0, swell_w)))
-			# THE RIBS BELONG TO THE TUNNEL, not to the window on it. `i % rib_every` counts
-			# from whichever station happens to be at the near end of the buffer, and that end
-			# moves: `_advance_track` retires one station every time the camera covers a step,
-			# which at this speed is ten times a second. So every rib in shot stepped BACKWARD
-			# by a station, ten times a second, while the walls and the fog - which are keyed
-			# to arclength - carried on forward. Reported exactly that way: "it almost feels
-			# like the camera is moving forward while the geometry is moving backward, and then
-			# it jumps ahead to correct itself... at least 5 times per second."
-			#
-			# `si / step` is the ABSOLUTE station number (s0 advances by exactly one step per
-			# retirement, so the quotient stays a whole number), which is fixed in the world.
+			# The ribs belong to the tunnel, not the window on it: `si / step` is the absolute
+			# station number (s0 advances by one step per retirement), whereas `i % rib_every`
+			# would step ribs backward as stations retire.
 			var rib := rib_every > 0 and (int(round(si / step)) % rib_every) == 0
 			if rib:
 				rr *= 1.0 - rib_depth
 			rad[i] = rr
 			var base := i * sides
-			# THE HUE WALKS BETWEEN THE SCHEME'S TWO COLORS AND COMES BACK, rather than
-			# accumulating. `hue + travel * s` was the first cut and arclength grows without
-			# bound: fourteen seconds in, the hue had turned two thirds of the way round the
-			# wheel and the tunnel was a color the scheme never contains. Bounded, it does what
-			# it was for - the ride passes through color zones - and stays on palette.
+			# The hue walks between the scheme's two colors and comes back, rather than accumulating
+			# (arclength grows without bound, so the tunnel would leave the palette).
 			var hue_i := GhostScene.blend_hue(hue, accent,
 				0.5 - 0.5 * cos(TAU * si * hue_travel))
 			for k in sides:
 				var th := TAU * float(k) / float(sides) + twist * si
-				# THE SPECTRUM, WOUND ALONG THE TRACK. Mapping the bands straight onto the angle
-				# makes a bar chart that happens to be bent into a circle; adding the arclength
-				# winds it into a helix, so the camera flies THROUGH the music.
+				# The spectrum, wound along the track: mapping bands straight onto the angle makes a
+				# bent bar chart; adding the arclength winds it into a helix.
 				var band: float = f.sample(fposmod(th / TAU + si * band_wind, 1.0))
 				var pr := rr * _prof(th) * (1.0 + band_gain * band)
 				var cx := cos(th)
@@ -609,21 +531,11 @@ class TunnelJob:
 				wx[vi] = qx
 				wy[vi] = qy
 				wz[vi] = qz
-				# THE LIGHT IS FIXED IN THE TUBE'S OWN CROSS-SECTION, not in the world and not
-				# on the camera. A headlight is the obvious choice and it is wrong twice over:
-				# the inward normal of a tube is very nearly perpendicular to the view axis, so
-				# a headlight shades the whole wall identically and the tube comes out flat -
-				# and a light fixed in the WORLD sweeps around the wall as the track banks,
-				# which reads as the tunnel rotating rather than as the vehicle rolling. A lit
-				# strip running along the tunnel does neither: it rolls WITH the tube, which is
-				# what finally makes a barrel roll legible.
-				# WRAPPED, not clamped. `max(0, cos)` puts a hard terminator halfway round the
-				# tube and everything past it at the ambient floor - which on a wide lens is
-				# half the frame, dead. Remapping to 0..1 keeps a full gradient the whole way
-				# round: a lit side, a shadow side, and no line between them.
+				# The light is fixed in the tube's cross-section, so it rolls with the tube (a
+				# headlight shades the wall flat; a world light sweeps as the track banks). Wrapped,
+				# not clamped: `max(0, cos)` leaves half the frame at the ambient floor.
 				var lam := 0.5 + 0.5 * cos(th - light_th)
-				# A fine banding along the track, so the near wall - which at this field of view
-				# is most of the frame - has some surface to it rather than being a smooth wash.
+				# A fine banding along the track, so the near wall (most of the frame) has some surface.
 				var panel := 0.90 + 0.10 * sin(si * 2.7)
 				var shade := (0.20 + 0.80 * pow(lam, 1.35)) * panel
 				var sa := sat
@@ -638,27 +550,10 @@ class TunnelJob:
 					sa = clampf(sat * 0.55, 0.0, 1.0)
 				vc[vi] = _fogged(Color.from_hsv(h, sa, clampf(vv, 0.0, 1.35)), si - s, reach)
 
-		# --- The wall, TWO TRIANGLES per (station, side), each culled on its own normal.
-		#
-		# ONE QUAD, ONE NORMAL WAS THE BUG. A tube quad is planar only while the cross-section
-		# is smooth. Put a groove in it - the ribbed, fluted and star profiles all have one -
-		# and the quad spanning that groove is a saddle whose two halves face opposite ways.
-		# The cull took the normal of the FIRST half and applied its verdict to both, so
-		# wherever they disagreed the back-facing half was drawn anyway: the unlit outside of
-		# the far wall, painted over the near wall. Half a quad is a triangle, which is exactly
-		# how it was reported - "black, triangular artifacts that often appear along faces of
-		# the walls... geometry is not drawing correctly".
-		#
-		# Measured on the reported symptom: 473 to 532 quads of the ~1080 in a frame had halves
-		# that disagreed. That is most of a grooved tube, not an edge case.
-		#
-		# Per-triangle culling costs the quad fast path and buys the silhouette back: where the
-		# halves disagree the front one is kept and the back one dropped, which is the fold of
-		# the groove appearing where it belongs. Nothing is uncovered by it - the tube is a
-		# closed surface, so whatever a dropped half was in front of is the adjacent triangle's
-		# to draw. It also retires a second, quieter fault: a fan is only valid on a convex
-		# polygon, and a projected tube quad over a groove is often not one, so ~25% of faces
-		# were being fanned into a shape that was not their own. A triangle cannot be concave.
+		# --- The wall, two triangles per (station, side).
+		# A groove (ribbed, fluted and star profiles) makes a quad a saddle whose halves face
+		# opposite ways, so one normal culls wrongly; hence two triangles, each shaded and sorted
+		# at its own depth (a fan is also valid only on a convex polygon).
 		for i in n - 1:
 			for k in sides:
 				var k2 := (k + 1) % sides
@@ -666,15 +561,9 @@ class TunnelJob:
 				var i1 := i * sides + k2
 				var i2 := (i + 1) * sides + k2
 				var i3 := (i + 1) * sides + k
-				# THE CULL IS THE QUAD'S, THE DEPTH IS EACH TRIANGLE'S. Culling per triangle
-				# was tried first and it pops: a saddle's back half is hidden behind the near
-				# lip of its own groove, but "hidden" under a painter's sort is a matter of
-				# draw order rather than of a depth buffer, so dropping it opens a hole that
-				# whatever is behind shows through - and at a grazing angle it drops and
-				# returns frame to frame. Measured: 25 spikes in 89 frames, 16.9 a second,
-				# where the quad rule has none. So nothing that used to be drawn is dropped;
-				# the two halves are merely SORTED APART, each at its own depth, which is what
-				# puts the dark far half behind the lit near one where it belongs.
+				# The cull is the quad's, the depth each triangle's: culling per triangle pops at
+				# grazing angles (a saddle's back half is hidden only by painter's order), so both
+				# halves are drawn, sorted apart.
 				var q1 := Vector3(wx[i1], wy[i1], wz[i1])
 				var q3 := Vector3(wx[i3], wy[i3], wz[i3])
 				var q0 := Vector3(wx[i0], wy[i0], wz[i0])
@@ -706,11 +595,9 @@ class TunnelJob:
 								Vector2(vx[c], vy[c])]),
 							"c": PackedColorArray([vc[a], vc[b], vc[c]])})
 						continue
-					# STRADDLING THE EYE PLANE, and this case is the whole reason the clip
-					# exists. Dropping such a face outright was the first cut and it punches
-					# BLACK WEDGES into the frame - not slivers at the very edge, because at a
-					# wide field of view the ring nearest the camera is enormous on screen, so
-					# one lost piece of it is a hole a tenth of the frame across.
+					# Straddling the eye plane: dropping such a face punches black wedges into the
+					# frame (at a wide field of view the nearest ring is enormous on screen), hence
+					# the clip.
 					var cl := _clip_near([pa, pb, pc], [vd[a], vd[b], vd[c]],
 						[vc[a], vc[b], vc[c]])
 					var cp: Array = cl[0]
@@ -726,15 +613,12 @@ class TunnelJob:
 						dsum += pj3.z
 					faces.append({"d": dsum / float(cp.size()), "p": sp, "c": sc})
 
-		# --- Motes: specks hanging in the tube, so the air between the camera and the wall is
-		# not empty. They are what makes the SPEED legible up close - the wall's own detail is
-		# all far away and slides slowly, and a fast tunnel with nothing near the lens reads
-		# oddly serene.
+		# --- Motes: specks hanging in the tube, so the air between the camera and the wall is not
+		# empty. They make the speed legible up close (the wall's detail is far away and slow).
 		for k in m_at.size():
 			var si2: float = m_at[k]
-			# INTERPOLATED between stations, never snapped to one. `int((si - s0) / step)` was the
-			# first cut and it teleports every mote a whole station at a time - a fifth of a
-			# second of travel, on the objects nearest the lens, fifteen times a second.
+			# Interpolated between stations, never snapped to one (snapping teleports every mote a
+			# whole station at a time, on the objects nearest the lens).
 			var fidx := (si2 - s0) / step
 			var idx := int(floor(fidx))
 			if idx < 0 or idx >= n - 1:
@@ -756,9 +640,8 @@ class TunnelJob:
 					+ lerpf(uz[idx], uz[idx + 1], ft) * cy2 * rr2))
 			if pj2.z <= 0.35:
 				continue                        # too close to be a speck; it would be a plate
-			# Clamped, and it has to be: a screen size of `world / depth` is unbounded as the
-			# depth goes to zero, and an unclamped mote arriving at the lens is a flat pasted
-			# square filling a tenth of the frame. Seen, in the first render.
+			# Clamped: a screen size of `world / depth` is unbounded as the depth goes to zero, and an
+			# unclamped mote at the lens is a flat square filling a tenth of the frame.
 			var sz := clampf(m_sz[k] * u / pj2.z, 1.0, u * 0.008)
 			var near_fade := clampf((pj2.z - 0.35) * 1.6, 0.0, 1.0)
 			var c := Vector2(pj2.x * u, pj2.y * u)
@@ -772,13 +655,11 @@ class TunnelJob:
 					c + Vector2(sz, sz), c + Vector2(-sz, sz)]),
 				"c": PackedColorArray([fc, fc, fc, fc])})
 
-		# Far first. A tube seen from inside mostly does not occlude itself - each ring's quads
-		# are at different angles from the eye - but a track that loops brings far track back
-		# into the near field, and then it does. The sort is what makes that case correct.
+		# Far first: a tube mostly does not occlude itself, but a looping track brings far track
+		# back into the near field, and the sort makes that case correct.
 		faces.sort_custom(func(a, b): return float(a["d"]) > float(b["d"]))
 		for fc2 in faces:
-			# Emitted as a FAN rather than as a quad, because the near clip can hand back a
-			# triangle or a pentagon as easily as a quad.
+			# Emitted as a fan, not a quad: the near clip can return a triangle or a pentagon.
 			var fp: PackedVector2Array = fc2["p"]
 			var fcol: PackedColorArray = fc2["c"]
 			for w in range(1, fp.size() - 1):
@@ -786,9 +667,9 @@ class TunnelJob:
 		return tb.take_chunks()
 
 
-	## Sutherland-Hodgman against the eye plane: keep the part of a polygon in front of the
-	## camera, cutting each crossing edge at the plane and interpolating its color there.
-	## Returns [points, colors].
+	## Sutherland-Hodgman against the eye plane: keep the part of a polygon in front of the camera,
+	## cutting each crossing edge at the plane and interpolating its color there. Returns
+	## [points, colors].
 	func _clip_near(pts: Array, dep: Array, cols: Array) -> Array:
 		var op: Array = []
 		var oc: Array = []
@@ -806,24 +687,13 @@ class TunnelJob:
 				oc.append((cols[e] as Color).lerp(cols[b] as Color, t))
 		return [op, oc]
 
-	## The cross-section, as a two-term Fourier series in the angle. One roll of the amplitudes
-	## gives a circle, a lobed star, a flattened duct or a fluted column - which is the whole
-	## vocabulary of tube shapes this scene has, out of four numbers.
+	## The cross-section, as a two-term Fourier series in the angle: one roll of the amplitudes
+	## gives a circle, a lobed star, a flattened duct or a fluted column.
 	func _prof(th: float) -> float:
 		return maxf(0.35, 1.0 + a1 * cos(n1 * th + o1) + a2 * cos(n2 * th + o2))
 
-	## Fade toward the fog by DISTANCE ALONG THE TRACK, not by distance from the camera.
-	##
-	## Camera depth is the obvious choice and it is wrong on exactly the tracks this scene exists
-	## for. Where the tunnel bends hard, the far end of the generated track is only a few units
-	## from the eye in a straight line while being thirty units along the tube - so it fogs as
-	## though it were close, and the last ring shows as a faceted blob hanging in mid-air with
-	## nothing behind it. Rendered, seen, twice. Arclength has no such failure: the end of the
-	## track is always the end of the track, so it is always fully haze and the tube has no
-	## visible end however it is bent.
-	##
-	## Smoothstep rather than an exponential, because this has to REACH one: an exponential is
-	## asymptotic, and the four percent it leaves behind at the far ring is that same blob at
-	## lower contrast.
+	## Fade toward the fog by distance along the track, not from the camera: on a hard bend the far
+	## end is a few units away in a straight line but thirty along the tube, and the last ring
+	## would hang in mid-air. Smoothstep, because an exponential never reaches full fog.
 	func _fogged(c: Color, ahead: float, reach: float) -> Color:
 		return c.lerp(fog, smoothstep(0.04, FOG_REACH, ahead / maxf(0.01, reach)))

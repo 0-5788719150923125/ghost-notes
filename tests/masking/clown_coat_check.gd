@@ -4,28 +4,16 @@ extends SceneTree
 ##   godot --path . --position -5000,-5000 --script res://tests/masking/clown_coat_check.gd
 ## Needs a real renderer (the paint field is a ping-pong SubViewport pair).
 ##
-## Reported from a real session: "the mask no longer tracks to the very edge of my
-## face - there is always a region where the paint will not draw", and the only
-## control that touched it was Settle, which made the band WIDER. Both halves of
-## that are one mechanism. The paint sim advects each channel toward its own
-## attractor, and advection samples BACKWARD along the flow, so at the coat's own
-## outer boundary it reads from just outside itself - where there is no paint. The
-## deposit refills that from zero every step and never catches up, so a permanent
-## unpainted rim sits at the edge, as deep as the refill is slow. Settle IS the
-## refill rate. Measured against the jawline before the fix: 3.7% of frame width
-## at the default Settle, 13% at the top of the slider.
+## The paint sim advects each channel toward its own attractor, and advection samples backward along the
+## flow, so at the coat's outer boundary it would read from just outside itself where there is no paint,
+## leaving an unpainted rim as deep as the deposit's refill is slow (Settle is the refill rate). The coat
+## therefore takes its deposit as a floor: it is a mask (where the face is), not paint that may drift off
+## its edge. The features stay erodable, since Hollow and the evidence terms need them to be.
 ##
-## The fix is that the coat takes its deposit as a FLOOR - it is a mask (a
-## statement of where the face is), not paint that may drift off the edge of it.
-## The features stay erodable, because Hollow and the evidence terms need them to
-## be. So this checks the invariant that fix establishes:
+## - Coverage: the coat fills the whole shape it was given, to the boundary.
+## - Indifference: it does so at every Settle; coverage that moves with a timing knob is the bug.
 ##
-##   COVERAGE     the coat fills the whole shape it was given, to the boundary.
-##   INDIFFERENCE and it does so at EVERY Settle - a coat whose coverage moves
-##                with a timing knob is the bug, whatever the coverage is.
-##
-## Driven by a synthetic stencil rather than a real face, so it needs no landmark
-## track, no venv and no clip: the claim is about the sim, not the detector.
+## Driven by a synthetic stencil, so it needs no landmark track, venv or clip: the claim is about the sim.
 
 const W := 256
 const H := 256
@@ -49,17 +37,14 @@ func _initialize() -> void:
 			print("Settle %.2f Bleed %.1f -> coat covers %.1f%% of the shape, "
 				% [settle, bleed, res.cover * 100.0]
 				+ "reaches %+.3f of the way past its edge" % res.reach)
-			# The shape it was handed must be filled. Not "mostly" - a ring of
-			# unpainted face is exactly what this exists to catch.
+			# The shape it was handed must be filled, not mostly: a ring of unpainted face is what this catches.
 			_expect(res.cover > 0.985,
 				"Settle %.2f Bleed %.1f: the coat covers only %.1f%% of the shape "
 				% [settle, bleed, res.cover * 100.0]
 				+ "it was given - there is an unpainted band inside the boundary")
 
-	# INDIFFERENCE TO SETTLE. This is the sharp assertion: before the fix the
-	# coverage fell away as Settle rose, and any future change that reintroduces
-	# transport at the boundary will show up here first, even if every individual
-	# coverage number still scrapes past the bar above.
+	# Indifference to Settle, the sharp assertion: any change that reintroduces transport at the boundary
+	# shows up here first, even if every coverage number still passes the bar above.
 	var lo := 1.0
 	var hi := 0.0
 	for k in seen:

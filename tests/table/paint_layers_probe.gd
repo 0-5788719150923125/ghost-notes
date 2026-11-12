@@ -1,13 +1,13 @@
 extends SceneTree
 
-## NOT a gate. THE PAINTING LAID IN LAYERS ([PaintLayers]; next/painted_surface.md, "The painting is the design") on an episode's own
-## painted face: its `face_ref.png` painted again with its table's creams (a powder or a gloss is a finish, not a color of it) and the station's
-## tools, widest first - each pass's canvas, the last, and the picture side by side, and how far each stands from it.
+## NOT a gate. The painting laid in layers ([PaintLayers]; next/painted_surface.md, "The painting is the design") on an episode's own
+## painted face: its `face_ref.png` painted again with its table's creams (a powder or a gloss is a finish, not a color of it) and the
+## station's tools, widest first - each pass's canvas, the last, and the picture side by side, and how far each stands from it.
 ##
 ##   godot --headless --path . --log-file <scratch>/x.log --script res://tests/table/paint_layers_probe.gd -- \
 ##       --dir=<user://table/<show>/<seed> as a path> --out=<dir> [--bare=#c89e80]
 ##
-## READ-ONLY: the episode is read, never written; the pictures go to `--out`.
+## Read-only: the episode is read, never written; the pictures go to `--out`.
 
 const TOOLS := [
 	{"name": "sponge", "kind": "dab", "width": 14.0},

@@ -1,12 +1,12 @@
 extends RefCounted
 class_name AssemblyTrack
 
-## AssemblyTrack - WHAT HAPPENED TO THE BRICKS, read back ([AssemblyBake] wrote it, stretch by stretch, on a clock of its own - the record's
-## tau - that stops whenever nothing is moving). A piece's pose at any moment of the record is a lookup, so an hour costs a frame what a minute
-## does and a scrub lands exactly where the same moment was: nothing here is worked out again. It knows nothing of the show's time, which
-## [method Assembly.lay] maps onto it.
+## AssemblyTrack - what happened to the bricks, read back ([AssemblyBake] wrote it, stretch by stretch, on a clock of its own - the record's
+## tau - that stops whenever nothing is moving). A piece's pose at any moment of the record is a lookup, so a scrub lands exactly where the
+## same moment was and an hour costs a frame what a minute does: nothing here is worked out again. It knows nothing of the show's time,
+## which [method Assembly.lay] maps onto it.
 
-## A record's tau is looked up by twentieths of a second, for what moved near it: a frame poses what moves then, and in a dig a coarser one had it posing the whole heap.
+## A record's tau is looked up by twentieths of a second, for what moved near it: a coarser step has a frame posing the whole heap in a dig.
 const BUCKET := 0.05
 
 var stock_ready := false
@@ -30,13 +30,13 @@ func _init(piece_count: int) -> void:
 		seats[i] = []
 
 
-## THE STOCK AS IT LAY POURED ([method AssemblyBake._pour]).
+## The stock as it lay poured ([method AssemblyBake._pour]).
 func add_stock(rest: Dictionary) -> void:
 	start = rest["poses"]
 	stock_ready = true
 
 
-## A STRETCH OF THE RECORD LANDED ([method AssemblyBake._write_stretch]), in the order they were written.
+## A stretch of the record landed ([method AssemblyBake._write_stretch]), in the order they were written.
 func add_stretch(seg: Dictionary) -> void:
 	var ks: Dictionary = seg["keys"]
 	for id in ks:
@@ -98,7 +98,7 @@ func turning(tau: float) -> bool:
 	return false
 
 
-## PIECE [param id] AT [param tau]: on the plate at [param plate], or where its keys have it: held at its first key before that.
+## Piece [param id] at [param tau]: on the plate at [param plate], or where its keys have it: held at its first key before that.
 func pose_of(id: int, tau: float, plate: Transform3D) -> Transform3D:
 	var list: Array = seats[id]
 	var i := list.size() - 1
@@ -143,7 +143,7 @@ static func _key(k: PackedFloat32Array, i: int) -> Transform3D:
 	return Transform3D(Basis(Quaternion(k[a + 4], k[a + 5], k[a + 6], k[a + 7])), Vector3(k[a + 1], k[a + 2], k[a + 3]))
 
 
-## WHAT MOVED between [param a] and [param b] of the record: a frame's work is that and only that.
+## What moved between [param a] and [param b] of the record: a frame's work is that and only that.
 func moved_between(a: float, b: float) -> Dictionary:
 	var out := {}
 	var b0 := int(minf(a, b) / BUCKET) - 1

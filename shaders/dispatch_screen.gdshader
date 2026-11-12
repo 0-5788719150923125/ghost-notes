@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode unshaded, cull_back, depth_draw_opaque;
 
-// A SCREEN ON THE DISPATCH DESK (DispatchMedium, DispatchSet): what its 2D face draws, shown as a tube or a panel shows
+// A screen on the dispatch desk (DispatchMedium, DispatchSet): what its 2D face draws, shown as a tube or a panel shows
 // it. A CRT's glass bulges (`curve`), its picture has scanlines (`lines`) and a phosphor's soft bloom round what is lit
 // (`bloom`), its corners fall off; a black-and-white one is gray (`mono`), a snowy feed has noise (`snow`); a flat panel
 // has none of that (`curve` 0, `lines` 0). `power` brings it on and off (a tube's line to a dot as it goes off); `round`

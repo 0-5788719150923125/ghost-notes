@@ -3,28 +3,24 @@ class_name ImageGen
 
 ## ImageGen - who paints the pictures. The backend axis of [Illustrations].
 ##
-## A backend turns ONE finished prompt plus a list of reference images into ONE PNG on
-## disk. Everything above that - the style, the prompt, the cache, the versions - belongs to
-## [Illustrations], so a second painter is a registry entry and a class here, never a
-## branch in the library or the panel.
+## A backend turns one finished prompt plus a list of reference images into one PNG on disk. The style,
+## prompt, cache and versions belong to [Illustrations], so a second painter is a registry entry and a
+## class here, never a branch in the library or the panel.
 ##
-## THE CONTRACT is three calls, all on the main thread (spawns go through [Subprocess],
-## whose death pact is per-thread):
+## The contract is three calls, all on the main thread (spawns go through [Subprocess], whose death
+## pact is per-thread):
 ##
 ##   start(job)    - launch the work; return a pid (<= 0 is a failure, with job.error set)
 ##   resolve(job)  - after the pid exits: the absolute path of the image it made, or ""
 ##   failure(job)  - after an empty resolve: one line saying why, for the panel
 ##
-## `job` is a Dictionary the library owns: {prompt, refs, dir, target, started}. A backend
-## may add its own keys to it (the event log, a thread id) and read them back later.
+## `job` is a Dictionary the library owns: {prompt, refs, dir, target, started}. A backend may add its
+## own keys (the event log, a thread id).
 
-## Keys are what `[illustrations] backend` in `user://ghost.cfg` stores.
-##
-## One row a backend, the one shape every registry here has (next/structure.md, step 6):
-##   label    its name in a picker
-##   backend  the inner class that runs it
-##   blurb    one line, for the picker's tooltip and docs/agents.md - ONE string literal, not a
-##            `+` continuation, so docs.py reads it whole
+## Keys are what `[illustrations] backend` in `user://ghost.cfg` stores. One row a backend, the one shape
+## every registry here has (next/structure.md): `label` (its name in a picker), `backend` (the inner
+## class that runs it), `blurb` (one line for the tooltip and docs/agents.md - one string literal, not a
+## `+` continuation, so docs.py reads it whole).
 const REGISTRY := {
 	"codex": {"label": "OpenAI (Codex CLI)", "backend": Codex,
 		"blurb": "OpenAI's image model, driven through the Codex CLI's built-in image tool. Uses the Codex login, not an API key. About a minute per picture."},
@@ -35,15 +31,15 @@ const REGISTRY := {
 }
 
 
-## Build the backend for [param key], falling back to the first entry for an unknown one: a
-## stale config must never leave the panel without a painter.
+## Build the backend for [param key], falling back to the first entry for an unknown one: a stale
+## config must not leave the panel without a painter.
 static func make(key: String) -> Backend:
 	var cls: Variant = Registry.field(REGISTRY, key, "backend", REGISTRY[REGISTRY.keys()[0]]["backend"])
 	return cls.new()
 
 
-## The base every backend extends. It does nothing; a backend that forgets a method fails
-## visibly (no pid, no image) rather than silently.
+## The base every backend extends. It does nothing; a backend that forgets a method fails visibly (no
+## pid, no image).
 class Backend:
 	extends RefCounted
 
@@ -59,8 +55,8 @@ class Backend:
 	func failure(job: Dictionary) -> String:
 		return String(job.get("error", "the painter produced nothing"))
 
-	## A painter that works in steps starts the next one here once a step's process has ended,
-	## and returns its pid; 0 when there is no next step (see [AgentJobs]).
+	## A painter that works in steps starts the next one here once a step's process has ended, and returns
+	## its pid; 0 when there is no next step (see [AgentJobs]).
 	func advance(_job: Dictionary) -> int:
 		return 0
 
@@ -69,27 +65,24 @@ class Backend:
 	static func efforts(_model := "") -> Array:
 		return [{"key": "", "label": "Default"}]
 
-	## WHAT THE PAINTER IS DOING NOW (see [method TextGen.Backend.activity]).
+	## What the painter is doing now (see [method TextGen.Backend.activity]).
 	func activity(job: Dictionary) -> Dictionary:
 		return TextGen.now_of(job, "working")
 
 
-## OPENAI THROUGH THE CODEX CLI.
+## OpenAI through the Codex CLI.
 ##
-## `codex exec` is an agent, not an image API: it is asked, in words, to call its built-in
-## image tool and save the result under an exact name in its working directory. Measured on
-## codex-cli 0.150.0 - the tool writes the original to
-## `$CODEX_HOME/generated_images/<thread_id>/*.png` and the agent then copies it where asked.
-## The copy is the step an agent can skip, so [method resolve] falls back to that directory,
-## keyed by the thread id from the first JSONL event and filtered to files made after the job
-## began - never "the newest png anywhere", which would hand one chapter another's picture.
+## `codex exec` is an agent, not an image API: it is asked, in words, to call its built-in image tool and
+## save the result under an exact name in its working directory. The tool writes the original to
+## `$CODEX_HOME/generated_images/<thread_id>/*.png` and the agent then copies it where asked. The copy
+## is the step an agent can skip, so [method resolve] falls back to that directory, keyed by the thread
+## id from the first JSONL event and filtered to files made after the job began (never "the newest png
+## anywhere", which could hand one chapter another's picture).
 ##
-## Reasoning effort is LOW unless the panel asks for another: the author's default is the
-## maximum, which is right for code and pure latency for "call one tool and copy one file".
-##
-## `--ephemeral`: ghost keeps the picture, so Codex keeps no session. A session log holds every
-## reference and the result as base64 (5-20 MB a picture) and Codex never prunes them. Measured on
-## codex-cli 0.157.0: the thread id and `generated_images` are unaffected.
+## Reasoning effort is low unless the panel asks for another (the agent only calls one tool and copies
+## one file). `--ephemeral`: ghost keeps the picture, and a session log holds every reference and the
+## result as base64 (5-20 MB a picture) and is never pruned; the thread id and `generated_images` are
+## unaffected.
 class Codex:
 	extends Backend
 
@@ -105,8 +98,7 @@ class Codex:
 		DirAccess.make_dir_recursive_absolute(dir)
 		job["events"] = dir.path_join("events.jsonl")
 		job["log"] = dir.path_join("stderr.log")
-		# The prompt carries the author's own text, so it goes on stdin (`-`), never in argv:
-		# see AssistantBackends for why.
+		#The prompt carries the author's own text, so it goes on stdin (`-`), never in argv: see AssistantBackends.
 		var prompt_path := dir.path_join("prompt.txt")
 		var pf := FileAccess.open(prompt_path, FileAccess.WRITE)
 		if pf == null:
@@ -128,11 +120,11 @@ class Codex:
 			"exec", "--skip-git-repo-check", "--json", "--ephemeral",
 			"-s", "workspace-write", "-C", String(job["dir"]),
 			"-c", "model_reasoning_effort=" + (effort if not effort.is_empty() else "low")])
-		# the model of the AGENT that calls the image tool - the picture is the tool's either way
+			#the model of the agent that calls the image tool - the picture is the tool's either way
 		if not String(job.get("model", "")).is_empty():
 			args.append_array(["-m", String(job["model"])])
-		# `--image=` per file, then `--`: the flag takes MANY values, and a bare `-i a.png`
-		# followed by the prompt swallowed the prompt as a second image ("No prompt provided").
+			#`--image=` per file, then `--`: the flag takes many values, and a bare `-i a.png` followed by the
+			#prompt would swallow the prompt as a second image.
 		for r in job.get("refs", []):
 			args.append("--image=" + String(r))
 		args.append("--")
@@ -176,11 +168,10 @@ class Codex:
 		var h := OS.get_environment("CODEX_HOME")
 		return h if not h.is_empty() else Deps.home().path_join(".codex")
 
-	## THE MODELS CODEX OFFERS, as a picker shows them: `[{key, label}]`, the CLI's own default first
-	## (key "", labelled with the model it runs - the author's config's, or what runs in its place,
-	## [method runnable]). Read from the catalog the CLI keeps for itself (`models_cache.json` - what
-	## `codex debug models` prints), so it is the list this installation actually has, and reading it
-	## costs nothing. Hidden entries stay hidden.
+	## The models Codex offers, as a picker shows them: `[{key, label}]`, the CLI's own default first (key
+	## "", labelled with the model it runs - the config's, or what runs in its place, [method runnable]).
+	## Read from the catalog the CLI keeps (`models_cache.json`, what `codex debug models` prints). Hidden
+	## entries stay hidden.
 	static func models() -> Array:
 		var dflt := Codex.default_model()
 		var cat := Codex.catalog()
@@ -193,8 +184,8 @@ class Codex:
 		return out
 
 
-	## EVERY MODEL THIS ACCOUNT'S CATALOG HOLDS, listed or hidden - each `{slug, visibility, priority, ...}`, from
-	## the CLI's own `models_cache.json`; empty when there is none to read.
+	## Every model this account's catalog holds, listed or hidden - each `{slug, visibility, priority, ...}`
+	## from the CLI's own `models_cache.json`; empty when there is none to read.
 	static func catalog() -> Array:
 		var j := JSON.new()
 		if j.parse(FileAccess.get_file_as_string(home().path_join("models_cache.json"))) != OK or not (j.data is Dictionary):
@@ -204,13 +195,10 @@ class Codex:
 			return m is Dictionary and not String((m as Dictionary).get("slug", "")).is_empty()) if listed is Array else []
 
 
-	## THE MODEL A JOB ASKS FOR, of [param chosen] ("" the author's config's, [param config]): itself while
-	## [param catalog] holds it, or when there is no catalog to ask - else ITS FIRST LISTED MODEL, by the
-	## catalog's own priority. A WITHDRAWN MODEL IS NEVER ASKED FOR (2026-10-26: this ChatGPT account's catalog,
-	## refreshed at 17:07, held no "sol" model any more - every show pinned gpt-6.1-sol and the config named
-	## gpt-6-sol - and every painting came back "The 'gpt-6.1-sol' model is not supported when using Codex with
-	## a ChatGPT account", each step twice). The choice stays the show's, marked on its row ([AgentPick]), so a
-	## model offered again is asked for again.
+	## The model a job asks for, of [param chosen] ("" the author's config's, [param config]): itself while
+	## [param catalog] holds it, or when there is no catalog to ask - else its first listed model, by the
+	## catalog's own priority. A model withdrawn from the account's catalog is never asked for. The choice
+	## stays the show's, marked on its row ([AgentPick]), so a model offered again is asked for again.
 	static func runnable(chosen: String, catalog: Array, config := "") -> String:
 		var want := chosen if not chosen.is_empty() else config
 		if want.is_empty() or catalog.is_empty() \
@@ -247,9 +235,9 @@ class Codex:
 		return ""
 
 
-	## THE REASONING LEVELS CODEX OFFERS [param model] (the config's own for ""), lightest first:
-	## its catalog's `supported_reasoning_levels`, so a picker never offers a level the model would
-	## refuse. A model the catalog does not list gets every level any listed model takes.
+	## The reasoning levels Codex offers [param model] (the config's own for ""), lightest first: its
+	## catalog's `supported_reasoning_levels`, so a picker never offers a level the model would refuse. A
+	## model the catalog does not list gets every level any listed model takes.
 	static func levels(model := "") -> PackedStringArray:
 		var want := model if not model.is_empty() else Codex.default_model()
 		var every := PackedStringArray()
@@ -319,20 +307,17 @@ class Codex:
 		return out
 
 
-## XAI'S GROK THROUGH THE GROK BUILD CLI, painting with its built-in image tools.
+## xAI's Grok through the Grok Build CLI, painting with its built-in image tools.
 ##
-## Run as the writer is ([TextGen.Grok]: an agent file whose body is the system prompt, the message a
-## file read as written, none of the setup it would borrow, no session kept), with a system prompt of
-## its own (Rules `agents/grok.painter`). Every request asks a painter to save the picture itself, and
-## Grok's `image_gen` / `image_edit` already keep what they make: in the run's session folder, with the
-## path in the tool's result (measured, CLI 1.0.50: a JPEG, 832x1248 for 2:3, ~25 s a picture). Ghost
-## reads that path off the event stream and saves the PNG itself ([method collect]) before the session
-## is deleted, so the painter needs, and has, no tool that writes a file - an agent that was given a
-## shell converted the picture with Python, which another machine may not have. Its tools are the two
-## image tools and `read_file`, for looking at the references, which are files listed ahead of the
-## request ("Attached image 1: ..."), the name the requests give them.
+## Run as the writer is ([TextGen.Grok]: an agent file whose body is the system prompt, the message a file
+## read as written, none of the borrowed setup, no session kept), with a system prompt of its own (Rules
+## `agents/grok.painter`). Grok's `image_gen` / `image_edit` keep what they make in the run's session
+## folder, with the path in the tool's result. Ghost reads that path off the event stream and saves the
+## PNG itself ([method collect]) before the session is deleted, so the painter needs no tool that writes
+## a file. Its tools are the two image tools and `read_file`, for looking at the references (files
+## listed ahead of the request as "Attached image 1: ...").
 ##
-## The effort is LOW unless one is chosen, as Codex's painter: the agent writes a prompt and calls one
+## The effort is low unless one is chosen, as Codex's painter: the agent writes a prompt and calls one
 ## tool; the picture is the image model's.
 class Grok:
 	extends Backend
@@ -346,7 +331,7 @@ class Grok:
 	func available() -> bool:
 		return Deps.has("grok")
 
-	## The models of the AGENT that calls the image tools (see [method TextGen.Grok.models]).
+	## The models of the agent that calls the image tools (see [method TextGen.Grok.models]).
 	static func models() -> Array:
 		return TextGen.Grok.models()
 
@@ -382,9 +367,9 @@ class Grok:
 			job["error"] = "could not start grok (is the Grok Build CLI installed and logged in?)"
 		return pid
 
-	## THE MESSAGE: which attached image is which file, then the request (`message`, exactly what the
-	## CLI reads). `error` names a reference that cannot be read: a painter told to match a picture it
-	## cannot see would make one up.
+	## The message: which attached image is which file, then the request (`message`, exactly what the CLI
+	## reads). `error` names a reference that cannot be read: a painter told to match a picture it cannot
+	## see would make one up.
 	static func compose(job: Dictionary) -> Dictionary:
 		var refs: Array = []
 		for r in job.get("refs", []):
@@ -402,8 +387,8 @@ class Grok:
 		var args := PackedStringArray(["--agent", TextGen.Grok.agent_path(job),
 			"--prompt-file", String(Grok.paths(job)["prompt"]), "--verbatim",
 			"--tools", ",".join(PackedStringArray(IMAGE_TOOLS + ["read_file"])), "--disallowed-tools", "search_tool,use_tool"])
-		# its calls approved: its tools are these three, and Grok's headless auto mode judges each call
-		# with a classifier - it refused ghost's MCP tools in one run of three
+		#its calls approved: its tools are these three, and Grok's headless auto mode judges each call with a
+		#classifier that sometimes refuses ghost's MCP tools
 		args.append("--always-approve")
 		args.append_array(TextGen.Grok.common(job, "low"))
 		args.append_array(["--output-format", "streaming-json"])
@@ -423,7 +408,7 @@ class Grok:
 			job["sessions"] = TextGen.Grok.sessions_of(String(job["dir"]), Grok.session_id(String(job.get("events", ""))))
 		return TextGen.Grok.forget(job, binary())
 
-	## THE PICTURE: the last one an image tool made, loaded from where Grok put it and saved as a PNG at
+	## The picture: the last one an image tool made, loaded from where Grok put it and saved as a PNG at
 	## `job.target`. Nothing when no call made one (see [method failure]).
 	static func collect(job: Dictionary) -> void:
 		var made := Grok.made(String(job.get("events", "")))
@@ -436,9 +421,9 @@ class Grok:
 		if img.save_png(target) == OK:
 			print("ghost: grok painted %dx%d" % [img.get_width(), img.get_height()])
 
-	## The path of the last picture an image tool reported making in a `--output-format streaming-json`
-	## log, when it is there; "". A tool's name is on its `tool_call` event, its result (JSON text with a
-	## `path`) on the `tool_call_update` that completes it.
+	## The path of the last picture an image tool reported making in a `--output-format streaming-json` log,
+	## when it is there; "". A tool's name is on its `tool_call` event, its result (JSON text with a `path`)
+	## on the `tool_call_update` that completes it.
 	static func made(events_path: String) -> String:
 		var names := {}
 		var last := ""
@@ -487,23 +472,21 @@ class Grok:
 		return "grok finished without a picture"
 
 
-## IMAGE MODELS ON AMAZON BEDROCK, THROUGH THE AWS CLI - Stability AI's, today (Amazon retired
-## Titan Image Generator and Nova Canvas in 2026), on the machine's AWS credentials, billed per
-## picture.
+## Image models on Amazon Bedrock, through the AWS CLI: Stability AI's, on the machine's AWS credentials,
+## billed per picture.
 ##
-## AN IMAGE MODEL IS NOT AN AGENT. Every painter prompt in ghost is written for one - "use your
-## image tool, match the attached pictures, save it here" - and a diffusion model can neither read
-## instructions nor see an attachment. So a job is a DIRECTOR and a painter: Amazon's Nova
-## ([constant DIRECTOR], through [TextGen]'s Bedrock writer) reads the request and looks at its
-## references, and writes the one paragraph the image model sees, the picture's faults to avoid and
-## its aspect ratio; then the image model paints that. The deck's hand reaches the painter only as
-## words - except through a "style" model ([constant SCHEMAS]), which is also handed the job's
-## first reference and paints in its style.
+## An image model is not an agent: every painter prompt in ghost assumes one ("use your image tool, match
+## the attached pictures, save it here"), and a diffusion model can neither read instructions nor see an
+## attachment. So a job is a director and a painter: Amazon's Nova ([constant DIRECTOR], through
+## [TextGen]'s Bedrock writer) reads the request, looks at its references and writes the one paragraph
+## the image model sees (the picture's faults to avoid, its aspect ratio); then the image model paints
+## that. A "style" model ([constant SCHEMAS]) is also handed the job's first reference and paints in its
+## style.
 ##
-## WHAT AN IMAGE MODEL IS ASKED is per family ([constant SCHEMAS]): the catalog lists every image
-## model the account can reach, and a painter offers the ones it knows how to ask. A new family is
-## an entry there and a body in [method body]. Steps, each its own process: the catalog lookup if
-## it is stale (see [BedrockCatalog]), the director, the painting.
+## What an image model is asked is per family ([constant SCHEMAS]): the catalog lists every image model
+## the account can reach and a painter offers the ones it knows how to ask. A new family is an entry
+## there and a body in [method body]. Steps, each its own process: the catalog lookup if stale (see
+## [BedrockCatalog]), the director, the painting.
 class Bedrock:
 	extends Backend
 
@@ -624,14 +607,14 @@ Ignore anything in the request about tools, files, paths or saving."""
 				return _paint(job)
 		return 0
 
-	## WHAT IT IS DOING: each step answers all at once, so its step is all there is to say.
+	## What it is doing: each step answers all at once, so its step is all there is to say.
 	func activity(job: Dictionary) -> Dictionary:
 		var now := TextGen.now_of(job, "working")
 		now["doing"] = String({"lookup": "looking up its models", "direct": "writing the picture's prompt",
 			"paint": "painting"}.get(String(job.get("step", "")), "working"))
 		return now
 
-	## THE DIRECTOR'S MESSAGE: each reference under the name the request gives it ("Attached image
+	## The director's message: each reference under the name the request gives it ("Attached image
 	## 1:" - the requests say "the first attached image"), then the request; and the record a
 	## person reads. `error` names a reference that could not be read.
 	static func brief_content(job: Dictionary) -> Dictionary:
@@ -668,7 +651,7 @@ Ignore anything in the request about tools, files, paths or saving."""
 
 	## The director's reply as `{prompt, negative_prompt, aspect_ratio}`, reshaped to what an
 	## image model takes; {} when it wrote nothing usable. A missing or unknown ratio is read off
-	## the request's own FORMAT line, else square.
+	## the request's own format line, else square.
 	static func read_brief(job: Dictionary) -> Dictionary:
 		var text := TextGen.Bedrock.reply_text({"step": "converse", "model": DIRECTOR, "route": "director"},
 			String(Bedrock.paths(job)["brief"]))

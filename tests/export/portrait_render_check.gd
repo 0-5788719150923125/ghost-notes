@@ -1,21 +1,17 @@
 extends Node
 
-## portrait_render_check - ONE SMALL REAL RENDER, read back (next/notes.md step 10): the only check that
-## catches the trap. The exporter records the viewport inside a small window, on the belief that
-## window and viewport are independent; under the project's `expand` aspect they are only while the
-## two have one shape. MEASURED: a 1080x1920 render in the old 480x270 window lays the show out in a
-## 3413x1920 view, and Movie Maker records its middle 1080 - the file is the size asked either way, so
-## a file's size alone cannot see the trap; what was laid out has to be compared with what was kept.
+## portrait_render_check - one small real render, read back (next/notes.md step 10). The exporter records the viewport inside
+## a small window; under the project's `expand` aspect window and viewport are independent only while the two have one shape,
+## so a 1080x1920 render in a 480x270 window lays the show out in a 3413x1920 view and Movie Maker records its middle 1080.
+## The file's size cannot see this; what was laid out has to be compared with what was kept.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/export/portrait_render_check.gd 240
 ##
-## Movie Maker runs as the exporter runs it - `override.cfg` written by [method Exporter.override_text],
-## `--write-movie`, `--export` (which keeps the child's settings read-only) - for a moment of a full-frame
-## show on a fixture song. The AVI's own header must say 1080x1920, and the view the child says it laid
-## the show out in (its `ghost export: view` line, in a log of its own) must be that same picture.
-## TWO-SIDED: the same render with the old override (a 480x270 window, no `aspect`) must lay out in a
-## view the recording does not hold, or this proves nothing. Refused, not run, while an export is under
-## way (its override.cfg is in the project).
+## Movie Maker runs as the exporter runs it (`override.cfg` from [method Exporter.override_text], `--write-movie`, `--export`
+## which keeps the child's settings read-only) for a moment of a full-frame show on a fixture song. The AVI's header must say
+## 1080x1920, and the view the child laid the show out in (its `ghost export: view` line, in a log of its own) must be that
+## same picture. Two-sided: the same render with the old override (480x270 window, no `aspect`) must lay out in a view the
+## recording does not hold, or this proves nothing. Refused while an export is under way (its override.cfg is in the project).
 
 var _fails: Array = []
 

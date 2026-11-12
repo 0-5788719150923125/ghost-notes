@@ -1,26 +1,18 @@
 extends SceneTree
 
-## The face track's FORMAT CONTRACT, checked from the reading side.
+## The face track's format contract, checked from the reading side.
 ##   godot --headless --path . --script res://tests/masking/face_track_check.gd
 ##
-## hosts/face/face_track.py writes this file in Python and MaskEditor reads it in
-## GDScript, which means the layout is agreed in two places and enforced in
-## neither. That is exactly the kind of seam that fails silently: when the header
-## size was first read as 16 bytes instead of 20, every sample came back shifted
-## by four bytes, so the "found" flag read 132 and a landmark at (0.62, 0.37)
-## read as (0.64, 0.80) - plausible-looking coordinates, entirely wrong, and no
-## error anywhere. This builds a track BYTE BY BYTE to the documented layout,
-## reads it through the editor's own reader, and checks the values come back.
-##
-## It deliberately does NOT need mediapipe, a venv, or a real clip - the contract
-## is the thing under test, not the detector. Whether the detector is any good is
-## a question for real footage, and the answer to that one is a picture.
+## hosts/face/face_track.py writes the file and MaskEditor reads it, so the layout is agreed in two places.
+## This builds a track byte by byte to the documented layout, reads it through the editor's own reader and
+## checks the values come back. It needs no mediapipe, venv or clip: the contract is under test, not the
+## detector.
 
 const POINTS := 478
 const COUNT := 40
 const RATE := 15.0
-## The Steadiness check's own track: long enough that the widest kernel (2.5 sigma either side of
-## sigma 10) stays inside it where it is read, and a wobble slow enough to tell the dial's ends apart.
+## The steadiness check's own track: long enough that the widest kernel (2.5 sigma either side of sigma 10)
+## stays inside it where it is read, and a wobble slow enough to tell the dial's ends apart.
 const JIGGLE_N := 120
 const JIGGLE_PERIOD := 12.0
 
@@ -31,9 +23,8 @@ func _initialize() -> void:
 	var path := ProjectSettings.globalize_path("user://face_tracks")
 	DirAccess.make_dir_recursive_absolute(path)
 	path = path.path_join("_check.bin")
-	# A synthetic track: landmark k of sample i sits at a position that is a pure
-	# function of (i, k), so ANY misread - wrong header, wrong stride, wrong
-	# endianness, off-by-one sample - lands on a value the check can name.
+	# A synthetic track: landmark k of sample i is a pure function of (i, k), so any misread (header,
+	# stride, endianness, off-by-one sample) lands on a value the check can name.
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	f.store_buffer("GFT1".to_ascii_buffer())
 	f.store_32(1)
@@ -41,8 +32,7 @@ func _initialize() -> void:
 	f.store_32(COUNT)
 	f.store_32(POINTS)
 	for i in COUNT:
-		# Sample 7 is a LOST frame - the one case the reader must not interpolate
-		# across, and the one a naive reader silently blends into its neighbors.
+		# Sample 7 is a lost frame: the reader must not interpolate across it.
 		f.store_8(0 if i == 7 else 1)
 		for k in POINTS:
 			f.store_float(_expect_x(i, k))
@@ -60,14 +50,10 @@ func _initialize() -> void:
 	_expect(ed._face._ft_count == COUNT, "count read as %d, wrote %d" % [ed._face._ft_count, COUNT])
 	_expect(ed._face._ft_points == POINTS, "points read as %d, wrote %d" % [ed._face._ft_points, POINTS])
 
-	# EXACT sample times must return exactly what was written - this is the test
-	# the 16-vs-20 byte header failed. It survives the reader's smoothing because
-	# the synthetic track is linear in the sample index; see _expect_x.
-	# Away from BOTH ends: at an edge the kernel is truncated, so it is no longer
-	# symmetric and the exact-value argument above stops applying. That is correct
-	# behavior, not a bug - there are no samples past the end to average in.
-	# Also clear of the LOST sample at 7: its window would be missing a member and
-	# so no longer symmetric either, for exactly the same reason.
+	# Exact sample times must return exactly what was written; this survives the reader's smoothing because
+	# the synthetic track is linear in the sample index (see _expect_x). Probes stay away from both ends
+	# (the kernel is truncated there, so no longer symmetric) and from the lost sample at 7 (its window is
+	# missing a member).
 	for probe in [[16, 0], [16, 33], [20, 263], [27, 1], [30, 477]]:
 		var i: int = probe[0]
 		var k: int = probe[1]
@@ -79,9 +65,8 @@ func _initialize() -> void:
 			"sample %d landmark %d read (%.4f,%.4f), wrote (%.4f,%.4f)"
 			% [i, k, got.x, got.y, want.x, want.y])
 
-	# BETWEEN samples, the reader interpolates - the mask has to move continuously
-	# rather than stepping at the sample rate.
-	# Mid-track, for the same symmetry reason as the probes above.
+	# Between samples the reader interpolates, so the mask moves continuously. Mid-track, for the same
+	# symmetry reason.
 	var mid: Vector2 = ed._face._ft_point(0, 20.5 / RATE)
 	var a := Vector2(_expect_x(20, 0), _expect_y(20, 0))
 	var b := Vector2(_expect_x(21, 0), _expect_y(21, 0))
@@ -90,15 +75,11 @@ func _initialize() -> void:
 		"the reader did not interpolate between samples (got %.4f, wanted %.4f)"
 		% [mid.x, a.lerp(b, 0.5).x])
 
-	# ...but NEVER across a lost sample. Reading just before the gap must return
-	# the last good sample, not a blend of it with a held frame.
+	# ...but never across a lost sample: reading just before the gap returns the last good sample.
 	_expect(not ed._face.has_track(7.0 / RATE), "sample 7 was written lost but reads as found")
 	_expect(ed._face.has_track(6.0 / RATE), "sample 6 was written found but reads as lost")
-	# A lost sample must be SKIPPED by the smoothing, not averaged in - its stored
-	# coordinates are a held copy of a neighbor, so including them would drag the
-	# feature toward wherever the hold happened to be. On a linear track a
-	# correctly-skipped gap still reads very close to the line (the remaining
-	# weights stay near-symmetric); an averaged-in hold pulls visibly off it.
+	# A lost sample is skipped by the smoothing, not averaged in (its stored coordinates are a held copy of
+	# a neighbor). A correctly skipped gap stays near the line; an averaged-in hold pulls visibly off it.
 	var near_gap: Vector2 = ed._face._ft_point(0, 7.0 / RATE)
 	var on_line := Vector2(_expect_x(7, 0), _expect_y(7, 0))
 	print("  at the lost sample -> (%.4f, %.4f)  (the line there is %.4f, %.4f)"
@@ -108,10 +89,8 @@ func _initialize() -> void:
 		% [near_gap.x, near_gap.y, on_line.x, on_line.y]
 		+ "the held coordinates were averaged in instead of skipped")
 
-	# THE SMOOTHING ITSELF has to be reachable and has to do something. A wider
-	# kernel over a linear track returns the same line (that is the point of a
-	# centered kernel - no lag, no bias), so what is checked here is that the
-	# reader accepts the setting and stays on the line rather than drifting.
+	# The smoothing is reachable: a wider centered kernel over a linear track returns the same line (no lag,
+	# no bias), so the reader must accept the setting and stay on the line.
 	ed._ft_sigma = 6.0
 	var wide: Vector2 = ed._face._ft_point(0, 20.0 / RATE)
 	var line20 := Vector2(_expect_x(20, 0), _expect_y(20, 0))
@@ -122,7 +101,7 @@ func _initialize() -> void:
 		% [wide.x, line20.x] + "kernel must not bias, only smooth")
 	ed._ft_sigma = 2.5
 
-	# A truncated file must be REFUSED and removed, not read as garbage.
+	# A truncated file is refused and removed, not read as garbage.
 	var t2 := ProjectSettings.globalize_path("user://face_tracks/_check_short.bin")
 	var g := FileAccess.open(t2, FileAccess.WRITE)
 	g.store_buffer("GFT1".to_ascii_buffer())
@@ -158,14 +137,11 @@ func _initialize() -> void:
 		quit(1)
 
 
-## STEADINESS CALMS A JIGGLE. The clown's Steadiness dial sets the face track's kernel
-## (`MaskFaceTrack.sigma_for`, asked through the editor: a class named here would be compiled
-## with this gate, before the autoloads it names exist); a track whose landmark shakes a pixel each way every sample
-## is read at both ends of the dial, and the top must move the drawn point well under half as
-## much from sample to sample. The kernel's other half - that it never biases a straight line -
-## is held above. (clown_face_check held this once against the CPU face model, which lost its
-## steadiness when the track took over: its check set members that no longer existed, the
-## runtime error ended the check, and the gate went on passing for a week.)
+## Steadiness calms a jiggle. The clown's Steadiness dial sets the face track's kernel
+## (`MaskFaceTrack.sigma_for`, asked through the editor: a class named here would be compiled with this
+## gate, before the autoloads it names exist); a track whose landmark shakes a pixel each way every sample
+## is read at both ends of the dial, and the top must move the drawn point well under half as much from
+## sample to sample. That the kernel never biases a straight line is held above.
 func _check_steady(s: MaskSession) -> void:
 	var path := ProjectSettings.globalize_path("user://face_tracks/_check_jiggle.bin")
 	var f := FileAccess.open(path, FileAccess.WRITE)
@@ -202,16 +178,10 @@ func _check_steady(s: MaskSession) -> void:
 	DirAccess.remove_absolute(path)
 
 
-## Distinct per (sample, landmark) so a misread is identifiable, LINEAR in the
-## sample index, and small enough never to wrap.
-##
-## Linearity is the load-bearing property. The reader smooths with a CENTERED
-## kernel, so it does not return the sample you asked for - it returns a weighted
-## average of that sample and its neighbors. Over a linear function a symmetric
-## kernel returns the value at its center EXACTLY, so the round-trip stays an
-## exact assertion instead of becoming a tolerance nobody can reason about. (An
-## earlier version wrapped with fposmod and broke linearity at the wrap, which is
-## the sort of thing that makes a test fail for a reason unrelated to the code.)
+## Distinct per (sample, landmark) so a misread is identifiable, linear in the sample index, and small
+## enough never to wrap. Linearity matters: the reader smooths with a centered kernel and returns a
+## weighted average of the sample and its neighbors, which over a linear function a symmetric kernel
+## gives exactly at its center, so the round trip stays an exact assertion.
 static func _expect_x(i: int, k: int) -> float:
 	return 0.10 + 0.004 * float(i) + 0.0008 * float(k)
 

@@ -1,23 +1,22 @@
 extends RefCounted
 class_name TableShuffle
 
-## TableShuffle - every move the deck makes between readings, and where each of its cards is
-## during one: the riffle, the overhand, the cut, the wash that spreads the whole deck over the
-## cloth and gathers it again, a jumper thrown clear. A part of [TableMedium].
+## TableShuffle - every move the deck makes between readings, and where each of its cards is during one:
+## the riffle, the overhand, the cut, the wash that spreads the whole deck over the cloth and gathers it
+## again, a jumper thrown clear. A part of [TableMedium].
 ##
-## A PURE FUNCTION OF THE TIME INTO THE SHUFFLE, like everything the table shows: [method
-## shuffle_xf] is deck slot i at u seconds, [method deck_turns] the way round each card lies,
-## and nothing here is advanced frame by frame - a scrub and an export land in the middle of a
-## wash and find every card where a live session has it.
+## A pure function of the time into the shuffle, like everything the table shows: [method shuffle_xf] is
+## deck slot i at u seconds, [method deck_turns] the way round each card lies, and nothing here is
+## advanced frame by frame, so a scrub and an export land in the middle of a wash and find every card
+## where a live session has it.
 ##
-## WHAT IT IS HANDED is written out: every `medium.` below is something the shuffle reads of the table
-## it is part of (where the deck stands, how much room the cloth leaves, what stands on it, the
-## seed), and none of it is written here. ITS OWN STATE is the chain of moves ([member moves], made
-## on first ask from its own seeded stream, [method plan_moves]), the room the schedule leaves it
-## ([method fit_room]), and what it works out and keeps: a wash's plan, the way each card began, the
-## rest each card comes to.
+## Every `medium.` below is something the shuffle reads of the table it is part of (where the deck
+## stands, how much room the cloth leaves, what stands on it, the seed), and none of it is written here.
+## Its own state is the chain of moves ([member moves], made on first ask from its own seeded stream,
+## [method plan_moves]), the room the schedule leaves it ([method fit_room]), and what it works out and
+## keeps: a wash's plan, the way each card began, the rest each card comes to.
 ##
-## THE TABLE ASKS TWELVE THINGS of it, the names without an underscore: [method plan_moves], [method
+## The table asks twelve things of it, the names without an underscore: [method plan_moves], [method
 ## fit_room], [method shuffle_xf], [method move_at], [method deck_turns], [method cut_off], [method
 ## finish_xf], [method riffle], [method riffle_top], [method wash], [method wash_jump], [method sweeps].
 ## Everything else is how those are answered.
@@ -26,12 +25,12 @@ class_name TableShuffle
 ## is handed, and the list of them is what it depends on.
 var medium: TableMedium
 
-## THE CHAIN: every move laid down so far, `{kind, t0, dur, pause, seed}` and what each works out and
+## The chain: every move laid down so far, `{kind, t0, dur, pause, seed}` and what each works out and
 ## keeps on itself - made as far as it is asked ([method move_at]) from its own seeded stream, made
 ## again from the start whenever the table changes ([method plan_moves]).
 var moves: Array = []
 var _move_rng := RandomNumberGenerator.new()
-## THE ROOM the schedule leaves the shuffle, as the table last posed it ([method fit_room]): how long
+## The room the schedule leaves the shuffle, as the table last posed it ([method fit_room]): how long
 ## it has from its start to the first card (INF: the voice has not got there yet)...
 var shuffle_room := INF
 ## ...when that first card is a jumper, how far into the shuffle it comes (-1: it is not, or not placed yet)...
@@ -42,11 +41,10 @@ var jump_scale := 1.0
 var wash_calm := true
 
 const CLOTH := TablePositions.CLOTH
-## HOW A READER SHUFFLES: in RUNS - several riffles, a string of cuts, a few overhand passes,
-## one at a tempo - and then nothing for a while, the deck squared under their hands while they
-## talk. A run per kind: how likely it is chosen, how many moves, each move's length and the gap
-## inside the run. The wash (the deck spread and swirled across the cloth) is its own event: rare,
-## long, and once at most.
+## How a reader shuffles: in runs - several riffles, a string of cuts, a few overhand passes, one at a
+## tempo - and then nothing for a while, the deck squared under their hands while they talk. A run per
+## kind: how likely it is chosen, how many moves, each move's length and the gap inside the run. The
+## wash (the deck spread and swirled across the cloth) is its own event: rare, long, and once at most.
 const RUNS := {
 	"riffle": {"weight": 3.0, "n": [2, 4], "dur": [1.7, 2.1], "gap": [0.2, 0.55]},
 	"overhand": {"weight": 2.0, "n": [2, 5], "dur": [2.1, 2.6], "gap": [0.05, 0.3]},
@@ -55,26 +53,23 @@ const RUNS := {
 }
 ## How many packets an overhand pass peels off the held cards.
 const OVERHAND_PACKETS := 5
-## A RIFFLE'S CARDS FALL IN CLUMPS (the user, 2026-10-17: the deck of 78 riffled "left, right, left,
-## right, in perfect unison through the whole shuffle ... cards tend to stick together, such that it
-## might be: 3 from the left, 2 from the right, 1 from the left, 3 from the right, 5 from the left").
-## The deck is cut near its middle, not at it: RIFFLE_CUT is the spread of the cut (cards, times the
-## square root of the deck - a fair coin's for each card) and how far off the middle it may land (a
-## share of the deck). Each half lets go of its cards from the bottom, the next from either half as
-## likely as the cards it still holds (the Gilbert-Shannon-Reeds model of a riffle) - and, past that,
-## from the half that just let go as often as the cards stick: each riffle draws its stickiness from
-## RIFFLE_STICK, so one is neater than the next. A clump is RIFFLE_CLUMP cards at most while the other
-## half still holds some; what is left when one half runs out falls as one. A clump falls together,
-## its cards RIFFLE_STAGGER seconds apart, and the next a beat after it, the beat jittered by
-## RIFFLE_BEAT - so a riffle of 78 lets go about thirty times, not 78, and is over sooner ([constant RUNS]).
+## A riffle's cards fall in clumps. The deck is cut near its middle, not at it: RIFFLE_CUT is the spread
+## of the cut (cards, times the square root of the deck - a fair coin's for each card) and how far off
+## the middle it may land (a share of the deck). Each half lets go of its cards from the bottom, the
+## next from either half as likely as the cards it still holds (the Gilbert-Shannon-Reeds model of a
+## riffle) and, past that, from the half that just let go as often as the cards stick: each riffle draws
+## its stickiness from RIFFLE_STICK, so one is neater than the next. A clump is RIFFLE_CLUMP cards at
+## most while the other half still holds some; what is left when one half runs out falls as one. A clump
+## falls together, its cards RIFFLE_STAGGER seconds apart, and the next a beat after it, the beat
+## jittered by RIFFLE_BEAT - so a riffle of 78 lets go about thirty times, not 78 ([constant RUNS]).
 const RIFFLE_CUT := Vector2(0.5, 0.15)
 const RIFFLE_STICK := Vector2(0.2, 0.45)
 const RIFFLE_CLUMP := 7
 const RIFFLE_STAGGER := 0.004
 const RIFFLE_BEAT := Vector2(0.6, 1.4)
-## The share of the deck that lies the other way round, face down (the share CardDeck.shuffled
-## turns up reversed). Shuffles carry each card's way with it; the one that ends on top is the way
-## the next card drawn comes up.
+## The share of the deck that lies the other way round, face down (the share CardDeck.shuffled turns up
+## reversed). Shuffles carry each card's way with it; the one that ends on top is the way the next card
+## drawn comes up.
 const DECK_TURNED := 0.32
 ## The pause after a run: mostly a few seconds, now and then a long linger - median ~3 s.
 const IDLE_LOG := Vector2(1.1, 0.55)
@@ -83,11 +78,10 @@ const IDLE_RANGE := Vector2(1.6, 18.0)
 const LINGER_CHANCE := 0.15
 ## A wash is sampled at this rate once, when it is planned, and posed by lookup.
 const WASH_HZ := 20.0
-## THE FAN-OUT CALMED (the user, 2026-10-08: as the cards fan out they "wobble and vibrate, which
-## is a thing cards shouldn't do"): under the palm, each card's tilt is the mean of its resting tilt
-## over CALM_REACH steps of CALM_HZ either side - a card sliding off another's edge tipped in a frame
-## (576 deg/s, measured) and back - and it is set down on its highest support at that tilt, so it
-## never floats nor dips. Calm until the cards are out, easing to the bare rest over CALM_SETTLE.
+## The fan-out calmed: under the palm, each card's tilt is the mean of its resting tilt over CALM_REACH
+## steps of CALM_HZ either side (a card sliding off another's edge tips in a frame, measured 576 deg/s),
+## and it is set down on its highest support at that tilt, so it never floats nor dips. Calm until the
+## cards are out, easing to the bare rest over CALM_SETTLE.
 const CALM_HZ := 20.0
 const CALM_REACH := 2
 const CALM_SETTLE := 0.5
@@ -103,41 +97,33 @@ const STACK_GAP := 0.0001
 ## card's thickness ([constant TableMedium.DECK_T]), so the pile a wash gathers stands as the deck does.
 const WASH_FLOOR := TableMedium.CLOTH_TOP + FLOOR_GAP + WASH_T * 0.5
 const WASH_LAYER := WASH_T + STACK_GAP
-## How long a deck card takes, as the palm comes down, to become a card on its own (seconds): its
-## own thickness and a hair over the card under it, the same height in all, so the deck keeps its
-## height and the first cards slide off its top.
+## How long a deck card takes, as the palm comes down, to become a card on its own (seconds): its own
+## thickness and a hair over the card under it, the same height in all, so the deck keeps its height
+## and the first cards slide off its top.
 const WASH_FLATTEN := 0.35
-## THE HANDS IN A WASH (2026-10-05, the user: "cards barely move... the movements are very small,
-## very localized... It would be much more common for cards to sweep back, and forth, back, and
-## forth in various directions, crossing large regions of the table, creating chaos along their
-## path"): each palm had worked a 6 cm circle, and the cards under it went round that circle and
-## back - 4 cm the longest straight run, 11 cm the farthest a card got. How often a palm scrubs,
-## swirls or fetches ([method _wash_gesture]), how long a scrub's pass is (meters), and how often a
-## palm rests a moment between gestures.
+## The hands in a wash: how often a palm scrubs, swirls or fetches ([method _wash_gesture]), how long a
+## scrub's pass is (meters), and how often a palm rests a moment between gestures. Cards sweep back and
+## forth in various directions across large regions of the table, so a pass is long.
 const WASH_GESTURES := {"scrub": 0.65, "swirl": 0.15, "fetch": 0.2}
 const WASH_SCRUB := Vector2(0.2, 0.4)
 const WASH_REST := 0.12
-## A palm flat on the cards: half its width and half its length (meters), its length along the
-## forearm from the reader's shoulder (to the side and toward the reader, about the deck's place).
-## It comes down and lifts over WASH_TOUCH seconds, keeps its middle WASH_APART from the other
-## palm's when it can, and fetches a card lying out past WASH_STRAY of the spread's reach.
+## A palm flat on the cards: half its width and half its length (meters), its length along the forearm
+## from the reader's shoulder (to the side and toward the reader, about the deck's place). It comes down
+## and lifts over WASH_TOUCH seconds, keeps its middle WASH_APART from the other palm's when it can, and
+## fetches a card lying out past WASH_STRAY of the spread's reach.
 const PALM := Vector2(0.045, 0.08)
 const WASH_SHOULDER := Vector2(0.19, 0.46)
-## A BIG DECK SPREADS WIDER: the spread as drawn holds about WASH_ROOMY cards; a deck of more goes out
+## A big deck spreads wider: the spread as drawn holds about WASH_ROOMY cards; a deck of more goes out
 ## wider by the square root of how many more, so it lies about as thick (a tarot's 78: 1.27 times).
 const WASH_ROOMY := 48.0
-## A HEAP STAYS LOW: ITS CARDS SPLAY (the user, 2026-10-15: cards looked "like they're floating a half
-## inch or an inch above the table, because they are 'stacked' upon dozens of other cards... those
-## stacks would topple and the cards would splay further"). A wash of 78 heaped cards on cards 30 and
-## 40 deep, and a stiff card lies on the highest of what is under it, so the heap stood as tall as its
-## longest chain, not its cards - one card 20 mm over the cloth with nine under it. So a card sliding
-## into one already lying SPLAY_DEPTH cards deep does not ride up onto it: it jams in under its edge,
-## as a card does against a step. And a card that comes to lie deeper than that all the same (carried
-## up by a palm, or a card slid in under its heap) TOPPLES: no palm holding it, it is pushed SPLAY_PUSH
-## (m/s each second, past what holds a card on a card) off the deeper of what it lies on, up to
-## SPLAY_SPEED (m/s), for SPLAY_WINDOW seconds from the moment it comes to lie there, and slides to a
-## stop a few centimeters on - wherever that leaves it. Pushed on for as long as it lay deep, a card
-## slid 20 cm and more across a heap, as if on ice.
+## A heap stays low: its cards splay. A stiff card lies on the highest of what is under it, so a heap of
+## cards 30 and 40 deep would stand as tall as its longest chain, not its cards. So a card sliding into
+## one already lying SPLAY_DEPTH cards deep does not ride up onto it: it jams in under its edge, as a
+## card does against a step. And a card that comes to lie deeper than that all the same (carried up by a
+## palm, or slid in under its heap) topples: no palm holding it, it is pushed SPLAY_PUSH (m/s each
+## second, past what holds a card on a card) off the deeper of what it lies on, up to SPLAY_SPEED (m/s),
+## for SPLAY_WINDOW seconds from the moment it comes to lie there, and slides to a stop a few
+## centimeters on.
 const SPLAY_DEPTH := 8
 const SPLAY_PUSH := 4.0
 const SPLAY_SPEED := 0.3
@@ -150,17 +136,16 @@ const WASH_STRAY := 0.85
 const GRIP_AT := [Vector2.ZERO, Vector2(-0.022, -0.04), Vector2(0.022, -0.04), Vector2(-0.022, 0.04),
 	Vector2(0.022, 0.04)]
 const CARD_I := (0.07 * 0.07 + 0.12 * 0.12) / 12.0
-## HOW CARDS SLIDE in a wash (centers: each wash samples its own feel round them). How hard a palm
-## can pull a card it presses whole (m/s each second - far past what the cloth holds back, so the
-## card goes with it) - where another card lies over it, WASH_COVERED of that; the drag between two
-## cards lying one on the other (per second: loose, and added when a palm presses the top one); how
-## much of the difference in their speeds a card sliding into another gives it as they meet; how fast
-## a loose card slows (m/s each second, WASH_ON_CARD of that on another card) and stops turning
-## (radians/s each second); and the fastest a hand drags a card (m/s) or turns one (radians/s).
-## A MEETING IS A NUDGE, NOT A BOUNCE (the user: cards must not "repel each other in a way that makes
-## them almost bouncy"): the card run into takes a sixth of the difference in their speeds, where
-## they touch - well short of evening them, so nothing ever comes back the way it went - and a hand
-## turns a card a few radians a second at most. The chaos along a sweep is the drag's.
+## How cards slide in a wash (centers: each wash samples its own feel round them). How hard a palm can
+## pull a card it presses whole (m/s each second - far past what the cloth holds back, so the card goes
+## with it) - where another card lies over it, WASH_COVERED of that; the drag between two cards lying
+## one on the other (per second: loose, and added when a palm presses the top one); how much of the
+## difference in their speeds a card sliding into another gives it as they meet; how fast a loose card
+## slows (m/s each second, WASH_ON_CARD of that on another card) and stops turning (radians/s each
+## second); and the fastest a hand drags a card (m/s) or turns one (radians/s). A meeting is a nudge,
+## not a bounce: the card run into takes a sixth of the difference in their speeds, where they touch,
+## so nothing comes back the way it went, and a hand turns a card a few radians a second at most. The
+## chaos along a sweep is the drag's.
 const WASH_GRIP := 40.0
 const WASH_COVERED := 0.25
 const WASH_DRAG := Vector2(5.0, 40.0)
@@ -174,15 +159,13 @@ const WASH_TURN_MAX := 3.5
 ## for a deck of up to 1024.
 const PAIR_BITS := 10
 const PAIR_MASK := (1 << PAIR_BITS) - 1
-## A CARD STRUCK HARD IS THROWN OUT OF THE SPREAD (2026-10-06, the user: "when a lot of repulsion is
-## applied, a card can get ejected... I would expect some ejections to land face-down, and thus NOT
-## be drawn"): a meeting faster than EJECT_SPEED (m/s, their speeds apart) may throw the card run
-## into - surer the harder, up to EJECT_CHANCE - a hop of EJECT_REACH (meters) along the blow, onto
-## the cloth and in the picture, clear of everything that stands. It lands face down: a deck card's
-## face is never painted, so only a drawn card - a jumper - may come down face up. A card is thrown
-## only with nothing lying on it and no palm on it, at most EJECT_MOST a wash, and none in the last
-## EJECT_ROOM seconds of the mixing (it is down before the gather). Its hop's height (meters) and
-## how long it takes (seconds).
+## A card struck hard is thrown out of the spread: a meeting faster than EJECT_SPEED (m/s, their speeds
+## apart) may throw the card run into - surer the harder, up to EJECT_CHANCE - a hop of EJECT_REACH
+## (meters) along the blow, onto the cloth and in the picture, clear of everything that stands. It lands
+## face down: a deck card's face is never painted, so only a drawn card - a jumper - may come down face
+## up. A card is thrown only with nothing lying on it and no palm on it, at most EJECT_MOST a wash, and
+## none in the last EJECT_ROOM seconds of the mixing (it is down before the gather). Its hop's height
+## (meters) and how long it takes (seconds).
 const EJECT_SPEED := 0.5
 const EJECT_CHANCE := 0.35
 const EJECT_REACH := Vector2(0.1, 0.28)
@@ -190,7 +173,7 @@ const EJECT_MOST := 2
 const EJECT_ROOM := 1.5
 const EJECT_HOP := Vector2(0.012, 0.035)
 const EJECT_TIME := Vector2(0.35, 0.55)
-## A JUMPER OUT OF A WASH: when the first card is a jumper and the deck is being washed as its moment
+## A jumper out of a wash: when the first card is a jumper and the deck is being washed as its moment
 ## comes, the jumper is the card a hard blow throws out - over, face up, clear of the rest - this far
 ## into its action (its own seconds), and lies there until it is picked up as from a riffle; the hands
 ## stop as it flies and gather the rest once it is up. Its hop (meters) and flight (seconds), how long
@@ -218,11 +201,11 @@ var _riffles := {}                   # "seed|n" -> the riffle's plan ([method _r
 # --- the shuffle ------------------------------------------------------------------------------
 
 ## Deck slot [param i] at [param u] seconds into the shuffle, posed about where the deck is
-## ([member TableMedium._cur_base]). The shuffle is a chain of RUNS (see [constant RUNS], [method move_at]).
+## ([member TableMedium._cur_base]). The shuffle is a chain of runs (see [constant RUNS], [method move_at]).
 ##
-## THE DECK'S MESHES ARE INTERCHANGEABLE: every move ends with slot i's mesh in some other slot
-## j, and the next move starts it in slot i again. They are identical cards, and a slot's small
-## offset belongs to the slot, so the hand-over is invisible.
+## The deck's meshes are interchangeable: every move ends with slot i's mesh in some other slot j, and
+## the next move starts it in slot i again. They are identical cards, and a slot's small offset belongs
+## to the slot, so the hand-over is invisible.
 func shuffle_xf(i: int, u: float) -> Transform3D:
 	var m := move_at(u)
 	if m.is_empty():
@@ -245,7 +228,7 @@ func _move_xf(i: int, v: float, m: Dictionary) -> Transform3D:
 	return medium._rest_xf(i)
 
 
-## THE MOVE THE FIRST CARD CUTS OFF: the riffle, overhand or cut still under way when the shuffle that
+## The move the first card cuts off: the riffle, overhand or cut still under way when the shuffle that
 ## began at [param ts] ends at [param te] - or empty, in a pause, or a wash (fitted to end in time,
 ## [method _wash_fit]).
 func cut_off(ts: float, te: float) -> Dictionary:
@@ -255,12 +238,11 @@ func cut_off(ts: float, te: float) -> Dictionary:
 	return {} if m.is_empty() or String(m["kind"]) == "wash" else m
 
 
-## A MOVE CUT OFF BY THE FIRST CARD IS FINISHED, NOT UNDONE: deck slot [param i] at [param t], from the
+## A move cut off by the first card is finished, not undone: deck slot [param i] at [param t], from the
 ## shuffle's end [param te] for [constant TableMedium.SQUARE] seconds, goes on through the rest of move
 ## [param m] along the move's own path, played that much faster, to the slot the move was taking its card
-## to. Eased straight back to where it began instead, a card the move had carried down into the deck rose
-## back up through the cards above it to the top (true-tarot 288024, the user, 2026-10-18: "a card
-## 'pops' to the top, clipping through the other cards from below").
+## to. Eased straight back to where it began instead, a card the move had carried down into the deck
+## would rise back up through the cards above it to the top.
 func finish_xf(i: int, t: float, ts: float, te: float, m: Dictionary) -> Transform3D:
 	var dur := float(m["dur"])
 	var v := lerpf(te - ts - float(m["t0"]), dur, TableMedium._ease(clampf((t - te) / TableMedium.SQUARE, 0.0, 1.0)))
@@ -269,17 +251,13 @@ func finish_xf(i: int, t: float, ts: float, te: float, m: Dictionary) -> Transfo
 
 # --- the deck's way round ---------------------------------------------------------------------
 
-# THE DECK'S CARDS LIE THE WAY THEY LIE (2026-10-10, the user: "when shuffling, the orientation of the
-# very top card never changes" - and, once in a while, "then it reverts wrongly"). The deck's meshes
-# are interchangeable ([method shuffle_xf]), so a card's way round was not a thing of its own: the
-# top slot was turned for the next card drawn, always, whichever mesh a cut brought up, and a mesh
-# that had flown away turned was upright again the moment its move ended. Now every card has its way
-# ([constant DECK_TURNED] of them lie turned about), a move carries it from slot to slot
-# ([method _move_goes]: where each slot goes, and which cards the move turns over, a wash's), and
-# the card that comes to the top by the shuffle's end is the way the next card drawn comes up - made
-# so by the way the deck began ([method _deck_flip0]), the one card chosen back to its start.
-# [method _chain_at] is the deck between moves: where each slot's card began, and how often it has
-# been turned about since.
+# The deck's cards lie the way they lie. The deck's meshes are interchangeable ([method shuffle_xf]), so
+# a card's way round is not a thing of its own mesh: every card has its way ([constant DECK_TURNED] of
+# them lie turned about), a move carries it from slot to slot ([method _move_goes]: where each slot
+# goes, and which cards the move turns over, a wash's), and the card that comes to the top by the
+# shuffle's end is the way the next card drawn comes up - made so by the way the deck began ([method
+# _deck_flip0]), the one card chosen back to its start. [method _chain_at] is the deck between moves:
+# where each slot's card began, and how often it has been turned about since.
 
 ## Where each slot of the deck goes in [param m], and which of its cards the move turned about:
 ## `{to: slot -> slot, turned}`.
@@ -326,9 +304,9 @@ func _chain_key() -> String:
 	return "%s|%s|%s" % [shuffle_room, jump_room, jump_scale]
 
 
-## The deck at the START of move [param idx] (and so in the pause before it): `{src, turn}` - for
-## each slot, which card of the deck's start lies there, and whether it has been turned about an odd
-## number of times since. Kept on each move, for the frames after.
+## The deck at the start of move [param idx] (and so in the pause before it): `{src, turn}` - for each
+## slot, which card of the deck's start lies there, and whether it has been turned about an odd number
+## of times since. Kept on each move, for the frames after.
 func _chain_at(idx: int) -> Dictionary:
 	var key := _chain_key()
 	var n := mini(idx, moves.size())
@@ -377,10 +355,10 @@ func _move_index_at(u: float) -> int:
 	return moves.size()
 
 
-## How each card of the deck lies at the shuffle's start: [constant DECK_TURNED] of them the other
-## way round, seeded - and the one card that is on top when the shuffle ends chosen back to its
-## start, so its way is the way the next card drawn comes up (for the jumper's wash, once it is
-## gathered, with the jumper's card gone from it).
+## How each card of the deck lies at the shuffle's start: [constant DECK_TURNED] of them the other way
+## round, seeded - and the one card that is on top when the shuffle ends chosen back to its start, so
+## its way is the way the next card drawn comes up (for the jumper's wash, once it is gathered, with the
+## jumper's card gone from it).
 func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> PackedByteArray:
 	var key := "%s|%s|%s|%s" % [te, ts, wj.get("end", ""), _chain_key()]
 	if key == _flip_key and is_same(_flip_moves, moves) and _flip0.size() == medium._plan.deck_n:
@@ -421,11 +399,11 @@ func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> Packed
 	return f0
 
 
-## The turn (radians about the card's own vertical) each deck slot's mesh carries at [param t] on top
-## of its move's pose: its card's way round, and - as the shuffle ends - a turn the move's pose had
-## in it handed over, so the card is not seen to turn back ([method wash]'s cards turned half way
-## round are squared a quarter turn at most, the rest of the turn is here). Past the end of the
-## shuffle only the top slot's turn is the table's own ([method TableMedium._pose]).
+## The turn (radians about the card's own vertical) each deck slot's mesh carries at [param t] on top of
+## its move's pose: its card's way round, and - as the shuffle ends - a turn the move's pose had in it
+## handed over, so the card is not seen to turn back ([method wash]'s cards turned half way round are
+## squared a quarter turn at most, the rest of the turn is here). Past the end of the shuffle only the
+## top slot's turn is the table's own ([method TableMedium._pose]).
 func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, jump_s: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(medium._plan.deck_n)
@@ -450,8 +428,8 @@ func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, 
 			var c := int(order[slot]) if slot < order.size() else int(plan.get("jumper", slot))
 			out[slot] = PI * float((f0[src[c]] ^ turn[c]) ^ int((plan["turned"] as PackedByteArray)[c]))
 		return out
-	# A MOVE THE FIRST CARD CUTS OFF, once it is finished ([method finish_xf]): each slot holds the card
-	# the move brought to it, the way that card lay - as each card did on its way there
+	# A move the first card cuts off, once it is finished ([method finish_xf]): each slot holds the card
+	# the move brought to it, the way that card lay
 	if wj.is_empty() and jump_s == 0.0 and t >= te + TableMedium.SQUARE and not cut_off(ts, te).is_empty():
 		var after := _chain_at(idx + 1)
 		for slot in medium._plan.deck_n:
@@ -468,7 +446,7 @@ func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, 
 
 # --- the chain of moves -----------------------------------------------------------------------
 
-## THE CHAIN MADE AGAIN from its start on the episode's seed [param seed_value], two minutes of it laid
+## The chain made again from its start on the episode's seed [param seed_value], two minutes of it laid
 ## down now rather than a frame at a time while it plays: the table calls this once the things on it
 ## stand (a wash goes round them) and again whenever the table changes.
 func plan_moves(seed_value: int) -> void:
@@ -477,7 +455,7 @@ func plan_moves(seed_value: int) -> void:
 	move_at(120.0)
 
 
-## THE ROOM, from the schedule the table poses: the shuffle runs from [param ts] to the first card at
+## The room, from the schedule the table poses: the shuffle runs from [param ts] to the first card at
 ## [param te] (INF: not reached yet), and [param jump_s] is the first card's action scale when it is a
 ## jumper (0: it is not).
 func fit_room(ts: float, te: float, jump_s: float) -> void:
@@ -486,12 +464,10 @@ func fit_room(ts: float, te: float, jump_s: float) -> void:
 	jump_scale = jump_s if jump_s > 0.0 else 1.0
 
 
-## The move under way at [param u], or empty in a pause. RUNS, NOT A LOTTERY: a reader does not
-## pick a new shuffle for every move - they riffle three times running, cut four times, and then
-## leave the deck alone for a few seconds (now and then for a long while) while they talk. So a
-## run is one kind at one tempo, and the pause after it is drawn from a long-tailed spread. A wash
-## comes at most once, and never first. Moves are made as far as they are needed, in order, from
-## their own seeded stream - so the chain is the same however a reading gets to a moment.
+## The move under way at [param u], or empty in a pause. A reader does not pick a new shuffle for every
+## move: a run is one kind at one tempo, and the pause after it is drawn from a long-tailed spread. A
+## wash comes at most once, and never first. Moves are made as far as they are needed, in order, from
+## their own seeded stream, so the chain is the same however a reading gets to a moment.
 func move_at(u: float) -> Dictionary:
 	while moves.is_empty() or float((moves[-1] as Dictionary)["t0"]) + float((moves[-1] as Dictionary)["dur"]) \
 			+ float((moves[-1] as Dictionary)["pause"]) < u:
@@ -551,7 +527,7 @@ func move_at(u: float) -> Dictionary:
 
 # --- riffle, overhand, cut --------------------------------------------------------------------
 
-## THE RIFFLE OF [param seed] for a deck of [param n] ([constant RIFFLE_STICK]): `{cut, to, at, nth,
+## The riffle of [param seed] for a deck of [param n] ([constant RIFFLE_STICK]): `{cut, to, at, nth,
 ## spread}` - the cut (the slots under it go to the left hand), where each slot lands, and for each
 ## place it lands in, the share of the drop its clump falls at (0 the first clump, 1 the last) and how
 ## many cards of its clump fell before it; and the longest of those, in seconds of stagger. Pure, so a
@@ -654,9 +630,9 @@ func riffle(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	return messy.interpolate_with(medium._rest_xf(j), TableMedium._ease(sq))
 
 
-## Where an overhand shuffle puts slot [param i] of a deck of [param n], and the packet it is peeled
-## off in (-1: not among the held cards, it stays): packets peel off the TOP of the held cards and
-## land in turn on the deck, the top packet first, so the held cards' order is reversed packet by packet.
+## Where an overhand shuffle puts slot [param i] of a deck of [param n], and the packet it is peeled off
+## in (-1: not among the held cards, it stays): packets peel off the top of the held cards and land in
+## turn on the deck, the top packet first, so the held cards' order is reversed packet by packet.
 static func _overhand_to(i: int, n: int) -> Vector2i:
 	var k0 := int(n * 0.42)
 	if i < k0:
@@ -705,9 +681,9 @@ static func _cut_split(rng: RandomNumberGenerator, n: int) -> int:
 	return rng.randi_range(int(n * 0.3), int(n * 0.7))
 
 
-## A CUT, quick enough to be done several times running: the top packet (from a point of the
-## move's own) is lifted off and set down beside the deck, the rest is put on top of it, and the
-## deck is drawn back to its place. Each cut in a run goes to its own side.
+## A cut, quick enough to be done several times running: the top packet (from a point of the move's
+## own) is lifted off and set down beside the deck, the rest is put on top of it, and the deck is drawn
+## back to its place. Each cut in a run goes to its own side.
 func _cut(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -755,10 +731,10 @@ func _messy(j: int, seed: int, like := -1) -> Transform3D:
 
 # --- a wash posed, and its flights ------------------------------------------------------------
 
-## A WASH, posed from its plan (see [method _wash_plan]): card [param i] at [param v] seconds in -
-## where the plan has it, resting on what is under it ([method _wash_rest]), a card's own thickness
-## once spread ([constant WASH_T]: a deck mesh stands for three); in the air if it is thrown
-## ([method _flight_xf]).
+## A wash, posed from its plan (see [method _wash_plan]): card [param i] at [param v] seconds in - where
+## the plan has it, resting on what is under it ([method _wash_rest]), a card's own thickness once
+## spread ([constant WASH_T]: a deck mesh stands for three); in the air if it is thrown ([method
+## _flight_xf]).
 func wash(i: int, v: float, m: Dictionary) -> Transform3D:
 	var plan := _wash_fit(m)
 	if plan.is_empty():
@@ -801,7 +777,7 @@ static func _off_cloth(plan: Dictionary, i: int, v: float) -> bool:
 	return not _flight_of(plan, i, v).is_empty() or (int(plan.get("jumper", -1)) == i and v > float(plan["gather"]))
 
 
-## A THROWN CARD at [param v] seconds into the wash: off its place with a pop, along its way and
+## A thrown card at [param v] seconds into the wash: off its place with a pop, along its way and
 ## turning, and down onto whatever is where it comes down; a jumper turns over on the way.
 func _flight_xf(plan: Dictionary, f: Dictionary, v: float) -> Transform3D:
 	var i := int(f["card"])
@@ -829,8 +805,8 @@ func _flight_xf(plan: Dictionary, f: Dictionary, v: float) -> Transform3D:
 		var slope := Vector2(r0.y, r0.z) * (1.0 - TableMedium._ease(u / 0.2)) + Vector2(r1.y, r1.z) * TableMedium._ease((u - 0.8) / 0.2)
 		turned = Basis(axis, float(f["wobble"]) * sin(PI * u)) * _tipped(g.z, slope)
 	var xf := Transform3D(turned * Basis.from_scale(Vector3(1.0, WASH_T / TableMedium.DECK_T, 1.0)), Vector3(g.x, y, g.y))
-	# CLEAR OF WHAT IT PASSES OVER: turning about its middle, an edge would dip into the cloth or a
-	# card - so it rides up over that edge, as a card does
+	# Clear of what it passes over: turning about its middle, an edge would dip into the cloth or a card,
+	# so it rides up over that edge, as a card does
 	xf.origin.y += _flight_clear(plan, i, v, xf)
 	xf.origin += medium._cur_base
 	return xf
@@ -888,38 +864,33 @@ static func _tipped(yaw: float, slope: Vector2) -> Basis:
 	var x := flat.x + Vector3.UP * slope.dot(Vector2(flat.x.x, flat.x.z))
 	var z := flat.z + Vector3.UP * slope.dot(Vector2(flat.z.x, flat.z.z))
 	var up := z.cross(x).normalized()
-	# THE LONG SIDE KEPT TRUE to the plane's own line under it, the short side squared to it: the
+	# The long side is kept true to the plane's own line under it, the short side squared to it: the
 	# card's corners on a steep slope (a card slid up onto the gathered deck tips 20 degrees) stray
 	# least from where its rest was reckoned, its long side's arm being the longer
 	z = z.normalized()
 	return Basis(up.cross(z).normalized(), up, z)
 
 
-## CARDS IN A WASH REST ON ONE ANOTHER (the user: they rest "upon each other with a gentle tilt").
-## Every card - in the deck, spread, or gathered in the pile - from the bottom of the order the plan
-## has them lying in, up, is a rigid card resting on whatever is under it: the cloth beneath its
-## corners and the faces of the cards under it, wherever they cross it ([method _rest_on]). So it
-## tips: on a card at one end, on the cloth at the other, and over the deck's edge as it slides off
-## it; and a card swept onto the pile rides up onto it rather than through it. A card is its own
-## thickness (a deck slot's in the deck and the pile, [constant WASH_T] spread); deck slots lie
-## flush, the bottom one sunk into the cloth as the squared deck is, spread cards a hair apart and a
-## hair over it.
+## Cards in a wash rest on one another. Every card, from the bottom of the order the plan has them lying
+## in, up, is a rigid card resting on whatever is under it: the cloth beneath its corners and the faces of
+## the cards under it, wherever they cross it ([method _rest_on]). So it tips: on a card at one end, on
+## the cloth at the other, and over the deck's edge as it slides off it; a card swept onto the pile rides
+## up onto it rather than through it. A card is its own thickness (a deck slot's in the deck and the pile,
+## [constant WASH_T] spread); deck slots lie flush, the bottom one sunk into the cloth as the squared deck
+## is, spread cards a hair apart and a hair over it.
 ##
-## THE CORNERS POSED DRAW IN. A card tipped twenty degrees pulls its corners in along the slope, and
-## the flat yaw rectangle the rest is reckoned on sits outside the mesh. Two deck slots squared on
-## the pile, a fraction out of parallel, cleared that rectangle and still passed through each other
-## by a tenth of a millimeter (one frame of wash-check). The rest itself stays the flat one - it is
-## the lowest plane, and what the step gate measures. A steep card is then lifted, in
-## [member _rest_lifts], by however much its posed corners would sink into the cloth or a card under
-## it. Under a few degrees the draw-in is less than the gates allow, and nothing is lifted.
+## The posed corners draw in: a card tipped twenty degrees pulls its corners in along the slope, and the
+## flat yaw rectangle the rest is reckoned on sits outside the mesh, so two squared deck slots could pass
+## through each other by a tenth of a millimeter. The rest stays the flat one (the lowest plane, what the
+## step gate measures); a steep card is then lifted, in [member _rest_lifts], by however much its posed
+## corners would sink into the cloth or a card under it. Under a few degrees nothing is lifted.
 ##
-## AT THE MOMENT ITSELF, [param v] seconds into the wash, the cards where their tracks have them
-## between the plan's steps - two steps' rests blended pass a card sliding onto another through its
-## edge for a frame - in the order of the step that ends the moment (a pair parting keeps its order
-## a step after it parts, so a pair touching at the moment is in the order it touches in). Kept for
-## the frames that ask again. Each card `Vector3(height of its middle, slope
-## across x, slope across z)`; a card in the air rests on nothing and nothing on it. Under the palm,
-## as the cards fan out, each tilt is calmed ([constant CALM_HZ]); [param bare] is the rest without.
+## At the moment itself, [param v] seconds into the wash, the cards are where their tracks have them
+## between the plan's steps (two steps' rests blended would pass a card sliding onto another through its
+## edge for a frame), in the order of the step that ends the moment. Kept for the frames that ask again.
+## Each card `Vector3(height of its middle, slope across x, slope across z)`; a card in the air rests on
+## nothing and nothing on it. Under the palm, as the cards fan out, each tilt is calmed ([constant
+## CALM_HZ]); [param bare] is the rest without.
 func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 	if not is_same(plan, _rest_plan):
 		_rest_plan = plan
@@ -932,8 +903,8 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 	if _rest_steps.size() > 40:
 		_rest_steps = {}
 		_rest_lifts = {}
-	# THE FAN-OUT'S TILTS, calmed: each card's bare tilt averaged over a window on a fixed grid (so
-	# the frames after reuse it), between the two grid points round the moment
+	# The fan-out's tilts, calmed: each card's bare tilt averaged over a window on a fixed grid (so the
+	# frames after reuse it), between the two grid points round the moment
 	var calm := 0.0 if bare or not wash_calm else \
 		1.0 - clampf((v - float((plan["mix"] as Vector2).x)) / CALM_SETTLE, 0.0, 1.0)
 	var calmed: Array = []
@@ -969,7 +940,7 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 	var out: Array = []
 	out.resize(n)
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length()
-	# WHAT EACH CARD LIES ON, first: [card, corners, middle, thickness, spread, turn, box, its floor,
+	# What each card lies on, first: [card, corners, middle, thickness, spread, turn, box, its floor,
 	# [[the card under it (its place here), where they cross - or null, squared on it]...]] - and so
 	# which cards have a card lying on them
 	var laid: Array = []
@@ -999,7 +970,7 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 			var d2 := laid_mid[k].distance_squared_to(mid)
 			if d2 > reach2 or not box.intersects(laid_box[k], true):
 				continue
-			# SQUARED ONE ON THE OTHER (the deck, the pile)
+			# Squared one on the other (the deck, the pile)
 			if d2 < 0.006 * 0.006 and absf(wrapf(qi.w - laid_turn[k], -PI * 0.5, PI * 0.5)) < 0.12:
 				on.append([k, null])
 				covered[int((laid[k] as Array)[0])] = 1
@@ -1053,7 +1024,7 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 		if covered[i] == 1 and _hold:
 			rest = _held_down(rest, corners, mid, pts, hs)
 		out[i] = rest
-	# A STEEP CARD'S MESH draws in off the flat rectangle just rested ([method _card_foot]). Lift it
+	# A steep card's mesh draws in off the flat rectangle just rested ([method _card_foot]). Lift it
 	# so those corners stay above the cloth and above every card under them. Shallow cards skip it.
 	if not bare:
 		var lifts := PackedFloat32Array()
@@ -1150,14 +1121,13 @@ static func _card_foot(mid: Vector2, yaw: float, slope: Vector2) -> PackedVector
 	return out
 
 
-## THE LOWEST A RIGID CARD CAN LIE on supports [param hs] high at [param pts] (about its middle):
-## the plane above every one of them that is lowest at the middle - which is where a card settles,
-## its weight being at its middle. It is the face, above the middle, of the hull over the
-## supports, walked to from the highest of them: tip from that point toward the middle until a
-## second holds it, swing about those two until a third does, and over the edge the middle lies
-## beyond while it lies outside the three. Every step moves the plane only as far as the first
-## support it meets, so no support ever ends up above it. `Vector3(height at the middle, slope
-## across x, slope across z)`.
+## The lowest a rigid card can lie on supports [param hs] high at [param pts] (about its middle): the
+## plane above every one of them that is lowest at the middle - which is where a card settles, its
+## weight being at its middle. It is the face, above the middle, of the hull over the supports, walked
+## to from the highest of them: tip from that point toward the middle until a second holds it, swing
+## about those two until a third does, and over the edge the middle lies beyond while it lies outside
+## the three. Every step moves the plane only as far as the first support it meets, so no support ever
+## ends up above it. `Vector3(height at the middle, slope across x, slope across z)`.
 static func _rest_on(pts: PackedVector2Array, hs: PackedFloat32Array) -> Vector3:
 	var n := pts.size()
 	var top := 0
@@ -1227,13 +1197,13 @@ static func _rest_on(pts: PackedVector2Array, hs: PackedFloat32Array) -> Vector3
 	return Vector3(h, g.x, g.y)
 
 
-## A CARD WITH CARDS LYING ON IT IS HELD DOWN BY THEM: its rest [param rest] on supports [param hs] at
+## A card with cards lying on it is held down by them: its rest [param rest] on supports [param hs] at
 ## [param pts] (about its middle) tipped back toward flat, as far as keeps every corner ([param
-## corners], about [param mid]) within [constant LEVER] of the highest support, and set down on them
-## at that tilt. Rested alone, a card whose middle hangs past an edge tips like a seesaw and its far
-## end rises - true of the top card, which droops; but under it the card lying there holds that end
-## down. Unheld, in a heap of 78 each card lifted the cards on its raised end and those lifted the
-## next, until cards stood a meter over the cloth.
+## corners], about [param mid]) within [constant LEVER] of the highest support, and set down on them at
+## that tilt. Rested alone, a card whose middle hangs past an edge tips like a seesaw and its far end
+## rises - true of the top card, which droops; but under it the card lying there holds that end down.
+## Unheld, in a heap of 78 each card would lift the cards on its raised end and those the next, until
+## cards stood far over the cloth.
 static func _held_down(rest: Vector3, corners: PackedVector2Array, mid: Vector2, pts: PackedVector2Array,
 		hs: PackedFloat32Array) -> Vector3:
 	var top := -INF
@@ -1256,12 +1226,12 @@ static func _held_down(rest: Vector3, corners: PackedVector2Array, mid: Vector2,
 
 # --- which plan a wash plays ------------------------------------------------------------------
 
-## A wash's plan for the time it has: the whole of it, or - when the first card comes before it
-## would finish - one that mixes for less and gathers in time. The spreading and the hands are the
-## same up to there (their own dice), so it is the same wash, cut short; without it the spread
-## went back into the deck in [constant TableMedium.SQUARE]. With too little room to spread, mix and gather at
-## all, there is no wash: the deck waits, squared, for the first card (empty). When the first card
-## is a jumper that comes while this wash is mixing, the wash runs on into it ([method _jumper_plan]).
+## A wash's plan for the time it has: the whole of it, or - when the first card comes before it would
+## finish - one that mixes for less and gathers in time. The spreading and the hands are the same up to
+## there (their own dice), so it is the same wash, cut short. With too little room to spread, mix and
+## gather at all, there is no wash: the deck waits, squared, for the first card (empty). When the first
+## card is a jumper that comes while this wash is mixing, the wash runs on into it ([method
+## _jumper_plan]).
 func _wash_fit(m: Dictionary) -> Dictionary:
 	var jp := _jumper_plan(m)
 	if not jp.is_empty():
@@ -1278,19 +1248,18 @@ func _wash_fit(m: Dictionary) -> Dictionary:
 	return m["cut"]
 
 
-## WASH [param m]'S WHOLE PLAN, made the first time anything asks for it and kept on the move: a deck
-## of 78 takes some two seconds to plan, and a table built only to be looked at - each look the set
-## dresser takes - never asks (every one had paid for it).
+## Wash [param m]'s whole plan, made the first time anything asks for it and kept on the move: a deck of
+## 78 takes some two seconds to plan, and a table built only to be looked at never asks.
 func _whole(m: Dictionary) -> Dictionary:
 	if not m.has("plan"):
 		m["plan"] = _wash_plan(int(m["seed"]), float(m["dur"]))
 	return m["plan"]
 
 
-## A JUMPER OUT OF A WASH: when the first card is a jumper ([member jump_room] into the shuffle, its
-## action at [member jump_scale]) and wash [param m] is mixing as it comes, the wash planned on
-## through it - mixing until the jumper is thrown [constant JUMP_EJECT] into its action, still while
-## it lies there, gathered once it is up ([constant TableMedium.JUMP_RISE]). Empty for any other wash, one only
+## A jumper out of a wash: when the first card is a jumper ([member jump_room] into the shuffle, its
+## action at [member jump_scale]) and wash [param m] is mixing as it comes, the wash planned on through
+## it - mixing until the jumper is thrown [constant JUMP_EJECT] into its action, still while it lies
+## there, gathered once it is up ([constant TableMedium.JUMP_RISE]). Empty for any other wash, one only
 ## just spread ([constant JUMP_MIX]) or already gathering, or one with no card it could throw.
 func _jumper_plan(m: Dictionary) -> Dictionary:
 	if jump_room < 0.0 or String(m.get("kind", "")) != "wash":
@@ -1311,7 +1280,7 @@ func _jumper_plan(m: Dictionary) -> Dictionary:
 	return m["jump"]
 
 
-## THE JUMPER'S WASH as the table poses it, from the shuffle's start [param ts]: the wash move, its
+## The jumper's wash as the table poses it, from the shuffle's start [param ts]: the wash move, its
 ## plan, the card thrown, and when (show time) the wash began, the card leaves it and lands, and the
 ## wash ends - or empty when the jumper does not come out of a wash.
 func wash_jump(ts: float) -> Dictionary:
@@ -1331,17 +1300,14 @@ func wash_jump(ts: float) -> Dictionary:
 
 # --- the washes' cards, as the air reads them -------------------------------------------------
 
-## WHERE THE WASH'S CARDS ARE ON THE CLOTH, for what lies there (the user, 2026-10-14: a petal on the
-## table was "completely unaffected by the card-washing" - the cards clipped through it): for each wash
-## the shuffle makes between its start [param ts] and the first card [param te], its cards as the plan
-## has them every 1/[constant WASH_HZ] seconds - `[{t, hz, cards, frames, data}]`, `t` the show time
-## of the first frame and `data` five floats a card a frame: its middle (x, z, world - [param base_at]
-## says where the deck is at a show time), its turn, how spread out it is (-1 off the cloth: in the air,
-## or the jumper picked up) and its place in the order the cards lie; `rest` answers, for a frame, how
-## high each card's face is over the cloth at its middle and how it slopes (three floats a card).
-## [param base_key] names what
-## [param base_at] depends on. Made again only when the washes change, and handed back as it was while
-## they do not (a live reading asks at every word).
+## Where the wash's cards are on the cloth, for what lies there (a petal on the table is moved by the
+## cards): for each wash between the shuffle's start [param ts] and the first card [param te], its cards
+## as the plan has them every 1/[constant WASH_HZ] seconds - `[{t, hz, cards, frames, data}]`, `t` the
+## show time of the first frame and `data` five floats a card a frame: its middle (x, z, world - [param
+## base_at] says where the deck is at a show time), its turn, how spread out it is (-1 off the cloth) and
+## its place in the order the cards lie; `rest` answers, for a frame, how high each card's face is at its
+## middle and how it slopes (three floats a card). [param base_key] names what [param base_at] depends
+## on. Made again only when the washes change (a live reading asks at every word).
 func sweeps(ts: float, te: float, base_at: Callable, base_key: String) -> Array:
 	if ts >= INF:
 		return []
@@ -1378,7 +1344,7 @@ func sweeps(ts: float, te: float, base_at: Callable, base_key: String) -> Array:
 				data[w + 3] = -1.0 if _off_cloth(plan, i, v) else _wash_spread_at(plan, i, v)
 				data[w + 4] = q.y
 				w += 5
-		# HOW HIGH EACH FACE IS, asked as it is needed: the rest the wash poses is dear (cards lying on
+		# How high each face is, asked as it is needed: the rest the wash poses is dear (cards lying on
 		# cards, tilted, lifted clear of one another), and most frames are never asked
 		var rest := func(f: int) -> PackedFloat32Array:
 			var v := float(f) / WASH_HZ
@@ -1438,11 +1404,11 @@ func _path_clear(a: Vector2, b: Vector2) -> bool:
 	return true
 
 
-## NOTHING PASSES THROUGH WHAT STANDS ON THE TABLE. A card going from [param from] to
-## [param want] (about the deck's place), turned [param yaw], is moved there a few millimeters at a
-## time, and each time it has run into something it is pushed back out - away from that thing's
-## middle, the way it came - so it slides along it, and never jumps through to its far side. Wedged
-## between two things, where a push out of one is a push into the other, it stays where it was.
+## Nothing passes through what stands on the table. A card going from [param from] to [param want]
+## (about the deck's place), turned [param yaw], is moved there a few millimeters at a time, and each
+## time it has run into something it is pushed back out - away from that thing's middle, the way it came
+## - so it slides along it, and never jumps through to its far side. Wedged between two things, where a
+## push out of one is a push into the other, it stays where it was.
 func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
 	if medium._things_part.standing.is_empty() or not _collide:
 		return want
@@ -1481,11 +1447,11 @@ func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
 	return from
 
 
-## A SWEEP GOES ROUND WHAT STANDS: a card the hands bring in from beyond a thing on the table - the palms
-## can push one out behind a row of candles - is swept round it, as a hand would, not into it (wedged
-## there, it was squared straight through it at the end). The way round for a sweep from [param from]
-## to [param to] (about the deck's place): one point, or two, of a ring round each thing in the way,
-## the shortest way that keeps clear - `[]` when the straight way is clear, or no way round is.
+## A sweep goes round what stands: a card the hands bring in from beyond a thing on the table (the palms
+## can push one out behind a row of candles) is swept round it, as a hand would, not into it. The way
+## round for a sweep from [param from] to [param to] (about the deck's place): one point, or two, of a
+## ring round each thing in the way, the shortest way that keeps clear - `[]` when the straight way is
+## clear, or no way round is.
 func _sweep_round(from: Vector2, to: Vector2) -> PackedVector2Array:
 	if not _collide or _way_clear(from, to):
 		return PackedVector2Array()
@@ -1637,10 +1603,10 @@ static func _parted(d: Vector2, v: Vector2, a0: Vector2, a1: Vector2, b0: Vector
 
 # --- the wash's plan --------------------------------------------------------------------------
 
-## THE WASH, planned once and sampled at [constant WASH_HZ] - because it is a SIMULATION, not a
-## pose: two flat palms work the cloth and drag the cards under them along, and a pose that is a
-## function of time alone cannot remember where a palm left a card. Planned from the move's seed,
-## so it is the same every time it is posed.
+## The wash, planned once and sampled at [constant WASH_HZ]. It is a simulation, not a pose: two flat
+## palms work the cloth and drag the cards under them along, and a pose that is a function of time alone
+## cannot remember where a palm left a card. Planned from the move's seed, so it is the same every time
+## it is posed.
 ##
 ##   out      the deck is pushed out across the cloth, top cards first (~2 s)
 ##   mix      most of the wash: the palms scrub back and forth across the spread, swirl wide and
@@ -1652,17 +1618,16 @@ static func _parted(d: Vector2, v: Vector2, a0: Vector2, a1: Vector2, b0: Vector
 ##            pile - some missed and fetched by a later one
 ##   square   the pile is squared into the deck, in the order it lies
 ##
-## A JUMPER'S WASH ([param jump]: `{at, pick, reversed}`, seconds into the wash): the mixing stops at
+## A jumper's wash ([param jump]: `{at, pick, reversed}`, seconds into the wash): the mixing stops at
 ## `at` and the jumper is thrown - over, face up, clear of every card - and lies there, the others
-## sliding on round it, until it is picked up at `pick`; then the hands gather the rest. It leaves
-## the deck: `jumper` names its card, -1 when no card could be thrown anywhere it may land.
+## sliding on round it, until it is picked up at `pick`; then the hands gather the rest. It leaves the
+## deck: `jumper` names its card, -1 when no card could be thrown anywhere it may land.
 ##
-## THE ORDER CHANGES, NEVER THROUGH A CARD: two cards that come to overlap lie the way they met -
-## the one sliding in goes on top (never over a card already above it: no stacking loops) - and
-## keep that order while they touch; once apart, their next meeting decides again. Each track is
-## per card, x / z about the deck's place, y its place in the order the cards lie (what
-## [method _wash_rest] rests them in, bottom up), w the card's turn; `flights` are the throws
-## ([method _flight_xf]).
+## The order changes, never through a card: two cards that come to overlap lie the way they met - the
+## one sliding in goes on top (never over a card already above it: no stacking loops) - and keep that
+## order while they touch; once apart, their next meeting decides again. Each track is per card, x / z
+## about the deck's place, y its place in the order the cards lie (what [method _wash_rest] rests them
+## in, bottom up), w the card's turn; `flights` are the throws ([method _flight_xf]).
 func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary = {}) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "wash"])
@@ -1671,8 +1636,8 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 	var dt := 1.0 / WASH_HZ
 	var out_end := minf(2.4, dur * 0.2)
 	var square := 0.6
-	# MANY SMALL SWEEPS: the pile is a few cards at a time, gathered one after another - never the
-	# whole spread arriving at once
+	# Many small sweeps: the pile is a few cards at a time, gathered one after another, never the whole
+	# spread arriving at once
 	var swipes := rng.randi_range(6, 8)
 	var gather := clampf(dur * 0.24, 4.0, 7.0)
 	var mix_end := maxf(out_end, dur - square - gather)
@@ -1714,9 +1679,8 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		spin0.append(rng.randf_range(-1.1, 1.1))
 	var was := pos.duplicate()             # where each card was at the step before, and its turn
 	var was_yaw := yaw.duplicate()
-	# HOW EACH CARD IS MOVING while it slides (x / z a second, and its turn a second), how hard a palm
-	# held it at the last step, and whether a sweep of the gather moves it instead (or it lies in the
-	# pile)
+	# How each card is moving while it slides (x / z a second, and its turn a second), how hard a palm
+	# held it at the last step, and whether a sweep of the gather moves it instead (or it lies in the pile)
 	var vel := PackedVector2Array()
 	var spin := PackedFloat32Array()
 	var held := PackedFloat32Array()
@@ -1762,9 +1726,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		over.append([])
 	var layer := PackedInt32Array()
 	layer.resize(n)
-	# ...and as it changes, step by step ([method _lay]): the cards lying directly on each, and how
-	# deep each lies - so whether one lies, however far down, on another is asked of the cards
-	# between them, not the whole heap ([method _lies_on])
+	# ...and as it changes, step by step ([method _lay]): the cards lying directly on each, and how deep
+	# each lies - so whether one lies, however far down, on another is asked of the cards between them,
+	# not the whole heap ([method _lies_on])
 	var above: Array = []
 	for i in n:
 		above.append([])
@@ -1781,9 +1745,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 	lying_on.resize(n * n)
 	var parting_now := PackedByteArray()
 	parting_now.resize(n * n)
-	# THE THROWS: every flight, the one each card is in at this step (-1 on the cloth), the jumper's
-	# card once it is picked up (out of the wash for good), and the hard blows of late (one of them
-	# throws the jumper)
+	# The throws: every flight, the one each card is in at this step (-1 on the cloth), the jumper's card
+	# once it is picked up (out of the wash for good), and the hard blows of late (one of them throws the
+	# jumper)
 	var flights: Array = []
 	var flying := PackedInt32Array()
 	flying.resize(n)
@@ -1795,10 +1759,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 	var jumper_flight := {}
 	var tried := false
 	var blown: Array = []                  # [t, card, impact, the blow's way]
-	# THE SAME WASH, CUT SHORT ([param base], the whole of it): up to where this one stops mixing, the
-	# spreading and the palms are the same, so its tracks and throws are copied rather than made
-	# again, and the cards - where they lay, how they were sliding, and who on whom - are taken up
-	# from there
+	# The same wash, cut short ([param base], the whole of it): up to where this one stops mixing, the
+	# spreading and the palms are the same, so its tracks and throws are copied rather than made again,
+	# and the cards - where they lay, how they were sliding, and who on whom - are taken up from there
 	var s_from := 0
 	if not base.is_empty() and is_equal_approx(float((base["mix"] as Vector2).x), out_end) \
 			and mix_end <= float((base["mix"] as Vector2).y):
@@ -1841,7 +1804,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		for i in n:
 			_layer_of(i, under, depth)
 	var thrown := flights.size()
-	# HOW DEEP EACH LAY at the step before, and when each came to lie too deep ([method _wash_splay])
+	# How deep each lay at the step before, and when each came to lie too deep ([method _wash_splay])
 	var deep_was := depth.duplicate()
 	var perched := PackedFloat32Array()
 	perched.resize(n)
@@ -1861,7 +1824,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		var t := float(step) * dt
 		last_pos = pos.duplicate()
 		last_yaw = yaw.duplicate()
-		# WHO IS IN THE AIR: a card from the moment it is thrown until it is down - and, the step it
+		# Who is in the air: a card from the moment it is thrown until it is down - and, the step it
 		# comes down, where its flight ends, on top of whatever it comes down on
 		flying.fill(-1)
 		landed.fill(0)
@@ -1876,12 +1839,12 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				yaw[c] = float(f["lie"])
 				vel[c] = Vector2.ZERO
 				spin[c] = 0.0
-		# THE JUMPER, DOWN, lies still where it fell - on top of anything - until it is picked up
+		# The jumper, DOWN, lies still where it fell - on top of anything - until it is picked up
 		var lying := jumper if jumper >= 0 and t >= float(jumper_flight["t1"]) and t < gather_t0 else -1
 		if jumper >= 0 and t >= gather_t0:
 			taken[jumper] = 1
 		if t < out_end:
-			# OUT: the palm comes down on the deck and it flattens ([constant WASH_FLATTEN]); then each
+			# Out: the palm comes down on the deck and it flattens ([constant WASH_FLATTEN]); then each
 			# card slides from it to its place on the cloth, turning as it goes
 			kin.fill(1)
 			for i in n:
@@ -1889,15 +1852,11 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				pos[i] = start[i].lerp(aim[i], e)
 				yaw[i] = (medium._plan.slot_jit[i] as Vector3).z + spin0[i] * e if i < medium._plan.slot_jit.size() else spin0[i] * e
 		elif t < gather_t0:
-			# MIX: cards drag what they lie on, the cloth holds back what slides (after the drag, so a
-			# card it holds is not slid by a card brushing over it), the palms bring what they press to
-			# their speed (last, so what a palm holds goes its way), and every card moves. Once the
-			# jumper is thrown the palms are still, and what slides runs on and stops.
-			# NOTHING ELSE MOVES A CARD (the user, 2026-10-14: cards no palm moved kept "slowly
-			# drifting/sliding away from each other... as if on ice" - a heap had slumped, every card
-			# three or more up creeping off the cards under it, unslowed, as long as it lay there; and
-			# every card a moving card touched slid a step, whatever held it): a card left alone runs on
-			# and stops, and lies where it stopped.
+			# Mix: cards drag what they lie on, the cloth holds back what slides (after the drag, so a card
+			# it holds is not slid by a card brushing over it), the palms bring what they press to their
+			# speed (last, so what a palm holds goes its way), and every card moves. Once the jumper is
+			# thrown the palms are still, and what slides runs on and stops. Nothing else moves a card: a
+			# card left alone runs on and stops, and lies where it stopped.
 			kin.fill(0)
 			for i in n:
 				if flying[i] >= 0 or taken[i] == 1 or i == lying:
@@ -1913,14 +1872,12 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		else:
 			if not planned_sweeps:
 				planned_sweeps = true
-				# who each sweep takes: the sweeps go round the pile, each taking the next SHARE of
-				# the cards by direction - so every sweep has cards to bring in, wherever the hands
-				# left them (fixed directions sent whole sweeps past empty cloth). A card is
-				# missed now and then and a later sweep fetches it. Each lands squared on the pile:
-				# a stiff card left with its middle at the pile's edge pivots there, and every card
-				# on it leans with it. THE CARDS LYING WHERE THE PILE GOES ARE ITS START, taken first, and
-				# every card after is swept in under them (left for a later sweep, they had lain under
-				# the pile's edge and tipped it until they were gathered).
+				# Who each sweep takes: the sweeps go round the pile, each taking the next share of the
+				# cards by direction, so every sweep has cards to bring in wherever the hands left them. A
+				# card is missed now and then and a later sweep fetches it. Each lands squared on the pile:
+				# a stiff card left with its middle at the pile's edge pivots there, and every card on it
+				# leans with it. The cards lying where the pile goes are its start, taken first, and every
+				# card after is swept in under them.
 				var by_angle: Array = []
 				for i in n:
 					if taken[i] == 0:
@@ -1991,8 +1948,8 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				pos[i] = _swept_to(from_p[i], via_p[i] as PackedVector2Array, to_p[i], e2)
 				yaw[i] = lerp_angle(from_yaw[i], to_yaw[i], e2)
 				kin[i] = 1
-			# WHAT NO SWEEP HAS REACHED YET SLIDES ON: the palms lift, and a card they let go of
-			# mid-pass runs on and stops, rather than freezing where the gather began
+			# What no sweep has reached yet slides on: the palms lift, and a card they let go of mid-pass
+			# runs on and stops, rather than freezing where the gather began
 			for i in n:
 				if kin[i] == 1:
 					vel[i] = Vector2.ZERO
@@ -2001,7 +1958,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 			_wash_drag(hands, pos, vel, spin, held, kin, rel, under, dt)
 			_wash_rub(hands, vel, spin, under, kin, dt)
 			_wash_move(hands, pos, yaw, vel, spin, kin, dt)
-		# A CARD IN THE AIR is where its flight has it; the jumper, down, stays where it fell
+		# A card in the air is where its flight has it; the jumper, down, stays where it fell
 		for i in n:
 			if i == lying:
 				vel[i] = Vector2.ZERO
@@ -2012,7 +1969,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				yaw[i] = fg.z
 				vel[i] = Vector2.ZERO
 				spin[i] = 0.0
-		# THE JUMPER IS THROWN as the mixing stops: the card a hard blow struck last, or the one sliding
+		# The jumper is thrown as the mixing stops: the card a hard blow struck last, or the one sliding
 		# fastest - over onto its face, clear of every card ([method _eject])
 		if jumping and not tried and t >= mix_end:
 			tried = true
@@ -2043,9 +2000,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				vel[i] = Vector2.ZERO
 				spin[i] = 0.0
 				break
-		# NOTHING PASSES THROUGH WHAT STANDS ON THE TABLE: every card goes from where it was to where
-		# this step put it, and whatever it runs into stops it - it slides along it instead, at the
-		# speed it really went. A thrown card's way was chosen clear.
+		# Nothing passes through what stands on the table: every card goes from where it was to where this
+		# step put it, and whatever it runs into stops it - it slides along it instead, at the speed it
+		# really went. A thrown card's way was chosen clear.
 		for i in n:
 			if flying[i] >= 0 or taken[i] == 1 or (i == lying and landed[i] == 0):
 				moved[i] = pos[i].distance_to(was[i])
@@ -2059,8 +2016,8 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				stirred[i] = 0
 				continue
 			pos[i] = _card_clear(was[i], pos[i], yaw[i])
-			# WEDGED, it stays where it was - and as it was turned: turned in place against a thing, a
-			# corner went into it, and the card stayed stuck there (or was squared through it at the end)
+			# Wedged, it stays where it was - and as it was turned: turned in place against a thing, a
+			# corner would go into it
 			if pos[i] == was[i] and yaw[i] != was_yaw[i] and _into_standing(pos[i], yaw[i]):
 				yaw[i] = was_yaw[i]
 				spin[i] = 0.0
@@ -2070,9 +2027,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				vel[i] = (pos[i] - was[i]) * WASH_HZ
 			was[i] = pos[i]
 			was_yaw[i] = yaw[i]
-		# WHO LIES ON WHOM: pairs that came apart forget their order; a pair that has just met lies
-		# the way it met, the card sliding in on top (in the deck, the higher slot on top). A card in
-		# the air, or the jumper, lies on nothing and nothing on it.
+		# Who lies on whom: pairs that came apart forget their order; a pair that has just met lies the way
+		# it met, the card sliding in on top (in the deck, the higher slot on top). A card in the air, or
+		# the jumper, lies on nothing and nothing on it.
 		var far2 := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length_squared()
 		var near2 := TableMedium.CARD.x * TableMedium.CARD.x
 		var far2_between := far2 * 1.6
@@ -2084,9 +2041,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 			ax0[i] = Vector2(c, -sn)
 			ax1[i] = Vector2(sn, c)
 			reach[i] = Vector2(card_half.x * absf(c) + card_half.y * absf(sn), card_half.x * absf(sn) + card_half.y * absf(c))
-		# TWO CARDS THAT BOTH LAY STILL LIE AS THEY DID - once the first step has said how - and are not
-		# asked: only a pair with a card that stirred in it, or one parting, can meet or part (a deck
-		# of 78 is 3003 pairs a step, most of them lying still). Each card's pairs in the same order.
+		# Two cards that both lay still lie as they did - once the first step has said how - and are not
+		# asked: only a pair with a card that stirred in it, or one parting, can meet or part. Each card's
+		# pairs in the same order.
 		var stir := PackedInt32Array()
 		for i in n:
 			if stirred[i] == 1 or step == s_from:
@@ -2163,16 +2120,14 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				if lying_on[ij] == 1:
 					continue
 				var i_top := moved[i] > moved[j] + 1e-6 if absf(moved[i] - moved[j]) > 1e-6 else false
-				# A CARD CLIMBS ONE CARD, NOT A HEAP: one lying two or more above it, or lying on a heap
+				# A card climbs one card, not a heap: one lying two or more above it, or lying on a heap
 				# already SPLAY_DEPTH deep, it runs in under
 				if i_top and (layer[j] >= layer[i] + 2 or (depth[j] >= SPLAY_DEPTH and depth[i] < depth[j] and _splay)):
 					i_top = false
 				elif not i_top and (layer[i] >= layer[j] + 2 or (depth[i] >= SPLAY_DEPTH and depth[j] < depth[i] and _splay)):
 					i_top = true
-				# GATHERED, A CARD IS SWEPT IN UNDER THE PILE (the user, 2026-10-14: "a person swiping-in
-				# cards to collect them from the table wash would be sweeping them into the bottom of the
-				# deck" - they had all gone on top): of two the hands are bringing in, the later lies
-				# under, so the pile grows from the bottom, a card's height at a time
+				# Gathered, a card is swept in under the pile: of two the hands are bringing in, the later
+				# lies under, so the pile grows from the bottom, a card's height at a time
 				if begun.has(i) and begun.has(j):
 					i_top = (land_at[i] < land_at[j]) == _sweep_under
 				# a card coming down lies on what it comes down on; nothing covers the jumper
@@ -2189,7 +2144,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				lying_on[ij] = 1
 				_lay(i if i_top else j, j if i_top else i, under, above, depth)
 				restacked = true
-				# A CARD RUN INTO IS NUDGED where the other first touches it - on its way, turned if
+				# A card run into is nudged where the other first touches it - on its way, turned if
 				# struck off its middle ([constant WASH_KNOCK]); a hard blow may throw it
 				if kin[i] == 0 and kin[j] == 0:
 					var top := i if i_top else j
@@ -2205,7 +2160,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 						blown.append([t, bot, impact, way])
 		while not blown.is_empty() and t - float((blown[0] as Array)[0]) > 1.0:
 			blown.pop_front()
-		# A HARD BLOW THROWS THE CARD IT STRIKES out of the spread, face down - the harder, the surer
+		# A hard blow throws the card it strikes out of the spread, face down - the harder, the surer
 		if not blows.is_empty() and t >= out_end and t < mix_end - EJECT_ROOM and thrown < EJECT_MOST:
 			blows.sort_custom(func(x: Array, y: Array) -> bool: return float(x[0]) > float(y[0]))
 			for bl in blows:
@@ -2236,7 +2191,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 					restacked = true
 				vel[bot] = Vector2.ZERO
 				spin[bot] = 0.0
-		# THE ORDER THE CARDS LIE IN: each one above the highest card it lies on
+		# The order the cards lie in: each one above the highest card it lies on
 		if restacked:
 			restacked = false
 			layer = depth.duplicate()
@@ -2247,11 +2202,10 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 			if flying[i] >= 0 or taken[i] == 1:
 				y = WASH_FLOOR + float(n + 1) * WASH_LAYER
 			(tracks[i] as Array).append(Vector4(pos[i].x, y, pos[i].y, yaw[i]))
-	# SQUARE: from wherever the pile left each card to its place in the deck - its place being where
-	# it lies in the pile, so none passes through another as the deck is squared - turned the short
-	# way round to the nearer of the deck's two ways (a quarter turn at most). A card the wash turned
-	# half way round stays turned: `turned` names those, and the deck carries them on
-	# ([method deck_turns]).
+	# Square: from wherever the pile left each card to its place in the deck - its place being where it
+	# lies in the pile, so none passes through another as the deck is squared - turned the short way
+	# round to the nearer of the deck's two ways (a quarter turn at most). A card the wash turned half
+	# way round stays turned: `turned` names those, and the deck carries them on ([method deck_turns]).
 	var turned := PackedByteArray()
 	turned.resize(n)
 	var order: Array = []
@@ -2281,14 +2235,11 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		if not airborne.has(c):
 			airborne[c] = []
 		(airborne[c] as Array).append(f)
-	# EVERY CARD IS ITS OWN THICKNESS from the moment the palm comes down on the deck until it is in
-	# the pile for good ([method _wash_spread_at]): a hair over the card under it, the hair closing as
-	# it lands in the pile (or as it is squared at the latest) - the same height a card either way, so
-	# THE PILE BUILDS TO THE DECK'S HEIGHT card by card, and the deck keeps its height as it is spread.
-	# Every card of the deck is washed: the deck had been 26 meshes standing for three cards each,
-	# spread as 26 single cards, and the pile stood a quarter of the deck's height and "suddenly just
-	# grows by 2x or 3x" (the user, 2026-10-08) - or, each thickened as it landed, kept "slowly growing
-	# in a strange way" (2026-10-14).
+	# Every card is its own thickness from the moment the palm comes down on the deck until it is in the
+	# pile for good ([method _wash_spread_at]): a hair over the card under it, the hair closing as it
+	# lands in the pile (or as it is squared at the latest) - the same height a card either way, so the
+	# pile builds to the deck's height card by card, and the deck keeps its height as it is spread. Every
+	# card of the deck is washed, each a single card, not a mesh standing for three.
 	var thin_at := PackedFloat32Array()
 	var thick_at := PackedFloat32Array()
 	for i in n:
@@ -2346,15 +2297,14 @@ static func _touch(at: Vector2, yaw: float, p: Vector2) -> Vector2:
 	return at + ax * clampf(d.dot(ax), -TableMedium.CARD.x * 0.5, TableMedium.CARD.x * 0.5) + az * clampf(d.dot(az), -TableMedium.CARD.y * 0.5, TableMedium.CARD.y * 0.5)
 
 
-## A CARD THROWN OUT OF THE SPREAD: card [param i], lying at [param at] turned [param yaw] (about the
-## deck's place), struck along [param way] at [param t] - a hop out along the blow, [param reach]
-## meters (least, most), onto the cloth and wholly in the picture, its way and where it lands clear
-## of what stands and of where a card in [param flights] comes down. Face down,
-## wobbling as it goes; or, the jumper ([param up]), higher and over onto its face - its top away
-## from the reader, or toward them [param reversed] - and down on as few of the cards where they lie
-## ([param pos], [param yaws]) as it can. A few tries round the blow: the flight
-## (`{card, t0, t1, from, to, yaw0, yaw1, lie, hop, axis, up, wobble}` - `lie` the turn of the card
-## as it lies when down - see [method _flight_xf]), or empty when none lands anywhere it may.
+## A card thrown out of the spread: card [param i], lying at [param at] turned [param yaw] (about the
+## deck's place), struck along [param way] at [param t] - a hop out along the blow, [param reach] meters
+## (least, most), onto the cloth and wholly in the picture, clear of what stands and of where a card in
+## [param flights] comes down. Face down, wobbling as it goes; or, the jumper ([param up]), higher and
+## over onto its face (its top away from the reader, or toward them [param reversed]), down on as few of
+## the cards where they lie ([param pos], [param yaws]) as it can. A few tries round the blow: the flight
+## (`{card, t0, t1, from, to, yaw0, yaw1, lie, hop, axis, up, wobble}` - `lie` the turn of the card as it
+## lies when down; see [method _flight_xf]), or empty when none lands anywhere it may.
 func _eject(i: int, at: Vector2, yaw: float, way: Vector2, reach: Vector2, t: float, salt: int, up: bool,
 		pos: PackedVector2Array, yaws: PackedFloat32Array, flights: Array, reversed := false) -> Dictionary:
 	var r := RandomNumberGenerator.new()
@@ -2446,8 +2396,8 @@ static func _layer_of(i: int, under: Array, layer: PackedInt32Array) -> int:
 
 
 ## Whether card [param a] lies, however far down, on card [param b] - walking down what each lies on,
-## through the cards lying deeper than [param b] ([param depth]): none shallower can lie on it. In a
-## heap of 78 the walk had gone through the whole heap at every meeting, some 60 us each.
+## through the cards lying deeper than [param b] ([param depth]): none shallower can lie on it. This
+## keeps the walk short in a heap of 78.
 static func _lies_on(under: Array, depth: PackedInt32Array, a: int, b: int) -> bool:
 	if depth[a] <= depth[b]:
 		return false
@@ -2521,11 +2471,11 @@ static func _axes_overlap(d: Vector2, a0: Vector2, a1: Vector2, b0: Vector2, b1:
 
 # --- the hands --------------------------------------------------------------------------------
 
-## THE HANDS OF A WASH: their own dice - so a wash cut short ([method _wash_fit]) has the same hands
-## up to where it was cut - and their own FEEL, each wash sampled round the centers ([constant
-## WASH_GRIP] and on): how firmly a palm holds, how cards drag and slide, how briskly these hands
-## move. Each palm: its gesture under way, when it next comes down, its size, and how it holds
-## each card this pass; and every gesture the palms made, in order ([palm, gesture]).
+## The hands of a wash: their own dice (so a wash cut short ([method _wash_fit]) has the same hands up
+## to where it was cut) and their own feel, each wash sampled round the centers ([constant WASH_GRIP]
+## and on): how firmly a palm holds, how cards drag and slide, how briskly these hands move. Each palm:
+## its gesture under way, when it next comes down, its size, and how it holds each card this pass; and
+## every gesture the palms made, in order ([palm, gesture]).
 func _wash_hands(seed: int, t0: float, rx: float, rz: float) -> Dictionary:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([seed, "wash-palms"])
@@ -2544,15 +2494,13 @@ func _wash_hands(seed: int, t0: float, rx: float, rz: float) -> Dictionary:
 		"pace": r.randf_range(0.85, 1.15)}
 
 
-## PALM [param h] for the step from [param t]. Lifted between gestures, it comes down on its next
+## Palm [param h] for the step from [param t]. Lifted between gestures, it comes down on its next
 ## ([method _wash_gesture]) where the cards are. At each of [constant GRIP_AT]'s points it presses, a
-## card is brought to the palm's speed - as far as the palm's friction there allows ([constant
-## WASH_GRIP]): a card pressed whole goes with it, one caught at an end swings round behind it, one
-## only brushed slips. Where another card lies over it the palm hardly touches it ([constant
-## WASH_COVERED]), so a card half under another is pulled out by its free half. Each pass the palm
-## takes hold afresh - the heel of a hand bears on some cards and skims others - so a scrub carries
-## a different few each way, and what it carried out it often leaves there. A card in the air
-## ([param kin]) it does not touch.
+## card is brought to the palm's speed as far as the palm's friction there allows ([constant WASH_GRIP]):
+## a card pressed whole goes with it, one caught at an end swings round behind it, one only brushed
+## slips. Where another card lies over it the palm hardly touches it ([constant WASH_COVERED]), so a card
+## half under another is pulled out by its free half. Each pass the palm takes hold afresh, so a scrub
+## carries a different few each way. A card in the air ([param kin]) it does not touch.
 func _wash_palm(hands: Dictionary, h: int, t: float, dt: float, t_end: float, pos: PackedVector2Array,
 		yaw: PackedFloat32Array, vel: PackedVector2Array, spin: PackedFloat32Array, over: Array,
 		held: PackedFloat32Array, kin: PackedByteArray) -> void:
@@ -2642,9 +2590,9 @@ static func _wash_push(vel: PackedVector2Array, spin: PackedFloat32Array, i: int
 	spin[i] += rp.dot(j) / CARD_I
 
 
-## THE CLOTH SLOWS EVERY LOOSE CARD by the same each second, as cloth does - a card let go mid-pass
-## runs on a little and stops, sooner on cloth than on another card - and its turning stops too. It
-## HOLDS what it can: a card a brush of another card would slide less than this in a step stays put.
+## The cloth slows every loose card by the same each second, as cloth does - a card let go mid-pass runs
+## on a little and stops, sooner on cloth than on another card - and its turning stops too. It holds
+## what it can: a card a brush of another card would slide less than this in a step stays put.
 static func _wash_rub(hands: Dictionary, vel: PackedVector2Array, spin: PackedFloat32Array, under: Array,
 		kin: PackedByteArray, dt: float) -> void:
 	var slide := float(hands["slide"]) * dt
@@ -2659,13 +2607,13 @@ static func _wash_rub(hands: Dictionary, vel: PackedVector2Array, spin: PackedFl
 		spin[i] = signf(spin[i]) * maxf(0.0, absf(spin[i]) - turn)
 
 
-## CARDS DRAG CARDS: two lying one on the other pull each toward the other's speed where they touch
-## - hard when a palm pressed the top one at the last step ([constant WASH_DRAG], [param held]), so a
-## card scrubbed across the spread drags and turns what it passes over and leaves a wake of cards
-## knocked askew. Before the cloth holds them back ([method _wash_rub]) and the palms, so what a palm
-## holds goes its way whatever lies under it. A CARD'S GRIP ON WHAT IS UNDER IT IS SHARED among the
-## cards it lies on ([param under]): pulled on whole by every card of a heap beneath it, a card a palm
-## held in a deck of 78 was held back by ten, and the wash went thick as syrup.
+## Cards drag cards: two lying one on the other pull each toward the other's speed where they touch -
+## hard when a palm pressed the top one at the last step ([constant WASH_DRAG], [param held]), so a card
+## scrubbed across the spread drags and turns what it passes over and leaves a wake of cards knocked
+## askew. Before the cloth holds them back ([method _wash_rub]) and the palms, so what a palm holds goes
+## its way whatever lies under it. A card's grip on what is under it is shared among the cards it lies
+## on ([param under]): pulled on whole by every card of a heap beneath it, a card a palm held would be
+## held back by all of them.
 func _wash_drag(hands: Dictionary, pos: PackedVector2Array, vel: PackedVector2Array, spin: PackedFloat32Array,
 		held: PackedFloat32Array, kin: PackedByteArray, rel: Dictionary, under: Array, dt: float) -> void:
 	var far := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length()
@@ -2702,7 +2650,7 @@ func _wash_drag(hands: Dictionary, pos: PackedVector2Array, vel: PackedVector2Ar
 		spin[top] += pt.dot(jt) / CARD_I
 
 
-## A CARD PERCHED MORE THAN [constant SPLAY_DEPTH] DEEP ([param depth]) TOPPLES at [param t]: no palm
+## A card perched more than [constant SPLAY_DEPTH] deep ([param depth]) topples at [param t]: no palm
 ## holding it ([param held]), it is pushed off the deeper of the cards it lies on ([param under]) for
 ## [constant SPLAY_WINDOW] seconds from the step it came to lie that deep ([param perched], against
 ## [param was], how deep each lay at the step before).
@@ -2729,8 +2677,8 @@ func _wash_splay(pos: PackedVector2Array, vel: PackedVector2Array, held: PackedF
 		vel[i] += dir * clampf(SPLAY_SPEED - vel[i].dot(dir), 0.0, SPLAY_PUSH * dt)
 
 
-## THE CARDS MOVE, one step: none faster than a hand ([constant HAND_SPEED]), and one going out past
-## the spread's edge is turned back, the harder the farther out, as a hand would.
+## The cards move, one step: none faster than a hand ([constant HAND_SPEED]), and one going out past the
+## spread's edge is turned back, the harder the farther out, as a hand would.
 func _wash_move(hands: Dictionary, pos: PackedVector2Array, yaw: PackedFloat32Array, vel: PackedVector2Array,
 		spin: PackedFloat32Array, kin: PackedByteArray, dt: float) -> void:
 	var rx := float(hands["rx"])
@@ -2753,18 +2701,18 @@ func _wash_move(hands: Dictionary, pos: PackedVector2Array, yaw: PackedFloat32Ar
 		yaw[i] += spin[i] * dt
 
 
-## A PALM'S NEXT GESTURE, from [param t]. It comes down on a card - mostly one on its own side of the
-## spread, and one the hands have left alone a while - and the best of a few tries keeps clear of
-## the other palm ([constant WASH_APART]). How often each ([constant WASH_GESTURES]):
+## A palm's next gesture, from [param t]. It comes down on a card - mostly one on its own side of the
+## spread, and one the hands have left alone a while - and the best of a few tries keeps clear of the
+## other palm ([constant WASH_APART]). How often each ([constant WASH_GESTURES]):
 ##
 ##   scrub   passes back and forth, each across a good part of the spread ([constant WASH_SCRUB]),
 ##           its line turning and drifting a little between them
 ##   swirl   wide rounds, often the other way round from the other palm's
 ##   fetch   out to the card lying farthest out, and back through the middle with it
 ##
-## A scrub or a fetch is its turning points `pts` at times `ts`, pressed `press` on each pass; a
-## swirl its middle `c` (drifting `v`), radii `a` and `b` turned `rot`, where round it `ph`, how
-## fast `om` and how hard `press`. Empty when there is no time left for one.
+## A scrub or a fetch is its turning points `pts` at times `ts`, pressed `press` on each pass; a swirl
+## its middle `c` (drifting `v`), radii `a` and `b` turned `rot`, where round it `ph`, how fast `om` and
+## how hard `press`. Empty when there is no time left for one.
 func _wash_gesture(hands: Dictionary, h: int, t: float, pos: PackedVector2Array, t_end: float) -> Dictionary:
 	var r: RandomNumberGenerator = hands["r"]
 	var rx := float(hands["rx"])

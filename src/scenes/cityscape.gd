@@ -2,19 +2,15 @@ extends GhostScene
 
 ## Cityscape - a skyline of rectangles that grows with the music.
 ##
-## Layered rows of buildings; each building's height tracks a slice of the
-## spectrum, so the skyline rises and falls with the track. Windows light up in a
-## grid, flickering with the beat. Back layers are dimmer and shorter for depth.
-## All axis-aligned rectangles - drawn static and upright, no triangulation.
+## Layered rows of buildings; each building's height tracks a slice of the spectrum. Windows light up in a
+## grid, flickering with the beat. Back layers are dimmer and shorter for depth. All axis-aligned
+## rectangles, drawn static and upright.
 ##
-## Which city it is varies per session: a [Scheme] mood colors the blocks and its accent
-## lights the windows (so the lit grid contrasts the mass by construction, the way sodium
-## windows sit against a blue-gray tower), and a sampled PROFILE decides the silhouette -
-## a crowded low downtown, a handful of wide towers, or a broad flat sprawl.
+## A [Scheme] mood colors the blocks and its accent lights the windows (so the lit grid contrasts the mass),
+## and a sampled profile decides the silhouette: a crowded low downtown, a handful of wide towers, or a flat sprawl.
 
-## Skyline profiles. Building count, width and height are one decision, not three: many
-## narrow blocks read as downtown density, few wide ones as a tower cluster, and the window
-## grid has to follow the facade it sits on.
+## Skyline profiles. Building count, width and height are one decision: many narrow blocks read as
+## downtown, few wide ones as a tower cluster, and the window grid follows the facade.
 const PROFILES := {
 	"dense":   {"layers": [3, 4], "count": [16, 26], "w": [0.50, 0.95], "max_h": [0.35, 0.62],
 		"wcols": [2, 3], "wrows": [5, 10]},
@@ -31,8 +27,8 @@ var _layers: Array = []
 var _sch: Scheme
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"skyline": {"label": "Skyline", "type": "choice", "options": "PROFILES", "default": null,
 		"blurb": "The skyline's profile: a dense downtown of many narrow blocks, a cluster of tall towers, a mix, or a low-rise spread."},
@@ -63,15 +59,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 				"wcols": rng.randi_range(int(pf.wcols[0]), int(pf.wcols[1])),
 				"wrows": rng.randi_range(int(pf.wrows[0]), int(pf.wrows[1])),
 				"phase": rng.randf() * TAU,
-				# Each block sits a little off the scheme's base hue, so a row of towers is
-				# a family of related grays/blues rather than one flat repeated color.
+				# Each block sits a little off the scheme's base hue: a family of related grays/blues.
 				"hue": _sch.vary(rng, 0.6),
 			})
 		var depth := float(l) / float(maxi(1, layer_count - 1))
 		_layers.append({"buildings": buildings, "depth": depth})
-	# Weather, composed from the shared Layer registry - the same snow/rain that are
-	# scenes on their own, falling over the skyline (integration, not bespoke code). It takes
-	# the scheme's accent, so the sky is lit by the same city.
+	# Weather from the shared Layer registry (snow/rain), falling over the skyline in the scheme's accent.
 	var weather := rng.randf()
 	if weather < 0.30:
 		add_layer("stars", rng, {"z": "back", "count": number("snow_stars", rng),
@@ -106,8 +99,7 @@ func _draw() -> void:
 	draw_layers("back")          # stars in the sky, behind the skyline
 	var halfw := size.x * 0.5 * OVER
 	var halfh := size.y * 0.5
-	# The baseline sits BELOW the visible bottom, so the buildings run off the bottom
-	# edge - no black bar under the skyline (the old 0.92 left a strip).
+	# The baseline sits below the visible bottom, so the buildings run off the bottom edge.
 	var ground := halfh * 1.18
 	var max_h: float = params.max_h
 
@@ -126,23 +118,21 @@ func _draw() -> void:
 			var top := ground - h
 			var shade := 0.10 + 0.16 * depth + 0.12 * loud
 			var hh := fposmod(float(bd.hue) + 0.05 * depth, 1.0)
-			# Saturation/value SCALE the mood, so an ash city stays gray concrete and a
-			# violet one stays violet without either restating absolute numbers.
+			# Saturation/value scale the mood, so an ash city stays gray and a violet one stays violet.
 			draw_rect(Rect2(x, top, w, ground - top), _sch.color(hh, 0.6, shade * 1.15))
 			_windows(x, top, w, ground, bd, loud, depth)
 
 	draw_layers("front")         # snow / rain falling over the city
 
 
-# A stable pseudo-random value in 0..1 from two ints and a salt (no per-window storage).
-# Used to assign cluster harmonics and per-window light thresholds deterministically.
+# A stable pseudo-random value in 0..1 from two ints and a salt (no per-window storage); assigns cluster
+# harmonics and per-window light thresholds.
 func _whash(a: int, b: int, salt: float) -> float:
 	var v := sin(float(a) * 127.1 + float(b) * 311.7 + salt * 7.13) * 43758.5453
 	return v - floor(v)
 
 
-# A grid of lit windows on one building face; which are lit drifts with time and
-# flares with loudness/beat.
+# A grid of lit windows on one building face; which are lit drifts with time and flares with loudness/beat.
 func _windows(x: float, top: float, w: float, ground: float, bd: Dictionary, loud: float, depth: float) -> void:
 	var cols := int(bd.wcols)
 	var rows := int(bd.wrows)
@@ -151,11 +141,9 @@ func _windows(x: float, top: float, w: float, ground: float, bd: Dictionary, lou
 	var cell_h := minf(cell_w, (ground - top) / float(rows + 1))
 	var ww := cell_w * 0.6
 	var wh := cell_h * 0.6
-	# Lights cluster and switch on/off SPARSELY, tied to harmonics - not a linear sweep. The
-	# windows are grouped into a few blocks; each block listens to its own spectral band and
-	# breathes on its own slow phase, and within an active block only a sparse subset (those
-	# with a low intrinsic threshold) actually light - so clusters glow together and fade as
-	# their harmonic comes and goes, the way real windows switch room by room.
+	# Lights cluster and switch sparsely, tied to harmonics: windows are grouped into a few blocks, each
+	# listening to its own spectral band and breathing on its own slow phase, and within an active block
+	# only those with a low intrinsic threshold light, so clusters glow together and fade as their harmonic comes and goes.
 	var cw := maxi(1, cols / 2)          # a cluster spans ~half the columns ...
 	var crows := maxi(2, rows / 3)       # ... and ~a third of the rows
 	var phase := float(bd.phase)
@@ -169,15 +157,13 @@ func _windows(x: float, top: float, w: float, ground: float, bd: Dictionary, lou
 			var cband := _whash(cx + 3, cy + 5, phase)     # this cluster's harmonic
 			var cloud := _f.sample(cband)                  # how active that harmonic is now
 			var breathe := 0.5 + 0.5 * sin(_f.time * (0.20 + 0.5 * cband) + _whash(cx, cy, phase) * TAU)
-			# A baseline presence (so a city is never fully dark) that the harmonic boosts; the
-			# slow breathing makes clusters switch on and off over time, beats add a flare.
+			# A baseline presence (a city is never fully dark) that the harmonic boosts; slow breathing and beat flares.
 			var base := 0.30 + 0.70 * cloud
 			var activation := base * (0.35 + 0.65 * breathe) + 0.30 * _f.beat * cloud + 0.12 * loud
 			var thr := _whash(wx * 2 + 1, wy * 2 + 7, phase)   # per-window sparsity
 			if activation > 0.12 + 0.7 * thr:
 				var bv := clampf(0.55 + 0.5 * activation, 0.0, 1.0)
-				# Lit windows sit on the scheme's ACCENT - the contrast against the block
-				# mass is the mood's own complement, not a second unrelated hue.
+				# Lit windows sit on the scheme's accent, the mood's own complement.
 				var col := _sch.color(fposmod(_sch.accent + 0.05 * cband, 1.0), 0.5,
 					bv * (0.7 + 0.3 * depth) * 1.6, 0.9)
 				var wx_left := x + pad + wx * cell_w

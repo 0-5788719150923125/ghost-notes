@@ -1,9 +1,9 @@
 extends SceneTree
 
-## assembly_check: A THING BUILT OF MANY SMALL PARTS ([Assembly], next/assembly.md), with no table under it and no bodies: a part goes where the
-## lattice lets it, what is said of a build is the same whenever it is played, an episode opens talking, and it stretches by stopping, never by
-## slowing. What the pieces really do is assembly_bake_check's. Its controls: a part in a taken cell, a part resting on nothing, a tile holding
-## nothing up, a removal that would leave a part on air.
+## assembly_check: a thing built of many small parts ([Assembly], next/assembly.md), with no table under it and no bodies: a part goes
+## where the lattice lets it, what is said of a build is the same whenever it is played, an episode opens talking, and it stretches by
+## stopping, never by slowing. What the pieces really do is assembly_bake_check's. Controls: a part in a taken cell, a part resting on
+## nothing, a tile holding nothing up, a removal that would leave a part on air.
 ##
 ## Run: godot --headless --path . --script tests/table/assembly_check.gd
 
@@ -179,7 +179,7 @@ func _log() -> bool:
 	for id in a._placed:
 		on_model += 1
 	_ok(on_model == 2, "what was tried and put back is not on the model: %d" % on_model)
-	# THE SAME WALK TWICE, THE SAME PLACES: nothing in it is a guess
+	# the same walk twice, the same places: nothing in it is a guess
 	var b := _make()
 	b.perform([{"name": "n", "ops": ops}])
 	var same := a.pieces.size() == b.pieces.size()
@@ -192,7 +192,7 @@ func _log() -> bool:
 	return true
 
 
-## A PART HANGS FROM WHAT IS OVER IT, by a level written, and what only it held comes away with it.
+## A part hangs from what is over it, by a level written, and what only it held comes away with it.
 func _hanging() -> bool:
 	var a := _make()
 	a.perform([{"name": "n", "ops": [
@@ -235,15 +235,15 @@ func _time() -> bool:
 	var nat := a.natural_of("n")
 	var flo := a.floor_of("n")
 	_ok(flo < nat, "hurried is quicker than easy: %.1f, %.1f" % [flo, nat])
-	# GIVEN JUST ENOUGH, each step at its easy pace
+	# given just enough, each step at its easy pace
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat}], acts, -INF)
 	var put_d := a._t1[0] - a._t0[0]
 	_ok(absf(put_d - float((a.steps[0] as Dictionary)["natural"])) < 1e-3, "given its time, a piece takes its natural time: %.2f" % put_d)
-	# GIVEN FAR MORE, A MOVE IS NO SLOWER: its record runs at one speed or stands still, and the time goes into stops, most into the pause
+	# given far more, a move is no slower: its record runs at one speed or stands still, and the time goes into stops, most into the pause
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat * 4.0}], acts, -INF)
 	_ok((a._t1[1] - a._t0[1]) > float((a.steps[1] as Dictionary)["natural"]) * 2.0, "given more, a pause takes up the time: %.1f" % (a._t1[1] - a._t0[1]))
 	_ok(a._t1[2] <= 100.0 + nat * 4.0 + 1e-3, "...and it is done by the end of its time")
-	# ...WITH THE RECORD'S OWN STOPS IN IT, as many as it wrote and where
+	# ...with the record's own stops in it, as many as it wrote and where
 	a.take_record(0, {"t0": 0.0, "t1": 4.0, "stops": [[0.0, 2.0, 0.0, 1.0], [2.5, 3.0, 0.0, 2.0], [4.0, 1.0, 0.0, 1.0]],
 		"hand": {"id": 7, "from": 1.0, "to": 3.5, "knots": [[1.0, 0.0], [1.5, 0.2], [2.2, 1.0], [2.6, 1.0], [3.5, 0.0]]}})
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat * 4.0}], acts, -INF)
@@ -261,7 +261,7 @@ func _time() -> bool:
 		last = now
 	_ok(rates.has(0) and rates.has(1), "it does both: %s" % str(rates.keys()))
 	_ok(absf(moved - 4.0) < 0.1, "and all of it is played: %.2f of 4" % moved)
-	# ...WHAT IS IN HAND IS SAID TO BE, from the grip until it leaves, the record going or stopped
+	# ...what is in hand is said to be, from the grip until it leaves, the record going or stopped
 	var d0 := float((a._stop_d[0] as PackedFloat32Array)[0])
 	var d1 := float((a._stop_d[0] as PackedFloat32Array)[1])
 	var in_stop := a._t0[0] + d0 + 2.5 + d1 * 0.5
@@ -279,7 +279,7 @@ func _time() -> bool:
 	_ok(absf(float(a_little["free"]) - free_at - 0.1) < 1e-3, "...and they go on having it")
 	var leaving := a.held_at(a._t0[0] + d0 + d1 + 3.0)
 	_ok(absf(float(leaving["free"]) - (0.4 + d1)) < 1e-2, "control: as room runs out their clock stops, so what they have done is undone along one path: %.2f" % float(leaving["free"]))
-	# ...A HAND KEPT WAITING OVER THE MODEL DRAWS BACK, and only that
+	# ...a hand kept waiting over the model draws back, and only that
 	var waits := _make()
 	waits.perform([{"name": "n", "ops": ops}])
 	waits.take_record(0, {"t0": 0.0, "t1": 2.0, "stops": [[1.0, 8.0, 0.0, 1.0]],
@@ -298,12 +298,12 @@ func _time() -> bool:
 	var on_studs := pressed.held_at(pressed._t0[0] + 1.0 + float((pressed._stop_d[0] as PackedFloat32Array)[0]) * 0.5)
 	_ok(float(on_studs["back"]) == 0.0 and float(on_studs["room"]) == 0.0, "control: pressed home it does not draw back")
 	_ok(is_nan(a.tau_at(a._t0[1] + 0.01 if a._t0[1] != INF else 0.0)) or a.step_at(a._t0[1] + 0.01) == 0, "a step the record does not hold has no place on it")
-	# GIVEN TOO LITTLE: it takes what its moves take, and no less
+	# given too little: it takes what its moves take, and no less
 	a = _make()
 	a.perform([{"name": "n", "ops": ops}])
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.5}], acts, -INF)
 	_ok(absf((a._t1[2] - a._t0[0]) - flo) < 1e-3, "given too little, it takes its floor and overruns: %.2f, %.2f" % [a._t1[2] - a._t0[0], flo])
-	# WHAT HAS BEGUN STAYS WHERE IT IS: a live reading places acts again every sentence, and a piece in the air must not jump
+	# what has begun stays where it is: a live reading places acts again every sentence, and a piece in the air must not jump
 	a.lay([{"i": 0, "t0": 100.0, "t1": 100.0 + nat}], acts, -INF)
 	var began := a._t0[0]
 	var ended := a._t1[0]
@@ -334,7 +334,7 @@ func _scrub() -> bool:
 	var before := a.pose_of(seated, a._t0[2] - 0.01)
 	var after := a.pose_of(seated, a._t1[2] + 0.01)
 	_ok(before.origin.distance_to(after.origin) > 1e-3 or true, "(turned, it goes with the plate)")
-	# THE SAME MOMENT THE SAME POSE, asked in any order: a render, a scrub and a tool's picture agree
+	# the same moment, the same pose, asked in any order: a render, a scrub and a tool's picture agree
 	var moments := [12.0, 40.0, 25.0, 90.0, 15.0, 150.0]
 	for t in moments:
 		for id in [0, 5, 20]:
@@ -380,8 +380,7 @@ func _runs() -> bool:
 	return true
 
 
-## BUILT, TAKEN APART, BUILT AGAIN (the user: "We might build some structure, then destroy it and start over"): the plate is empty after
-## and every piece that was on it lies in a stock - and a stock it came out of can give it again.
+## Built, taken apart, built again: the plate is empty after, and every piece that was on it lies in a stock that can give it again.
 func _start_over() -> bool:
 	var a := _make(40)
 	var ops := [
@@ -449,7 +448,7 @@ func _reading() -> bool:
 	# ...and it survives what a reader's words go through
 	var kept := TableProducer.clean_spoken("A word. <!-- quiet: 30 --> Another.", [])
 	_ok(kept.contains("<!-- quiet: 30 -->"), "a reader's silence is kept: %s" % kept)
-	# ...A LIVE READING ESTIMATES WHAT IT HAS NOT HEARD WITH ITS SILENCES IN IT: without them, the work under one was hurried
+	# ...a live reading estimates what it has not heard with its silences in it: without them, the work under one is hurried
 	var plan := TablePlan.new()
 	plan.parse = CardReading.parse("<!-- table: begin -->\n\n" + talk + " One two. <!-- quiet: 60 --> Three four.\n")
 	var est := plan.estimated_times(n + 4)
@@ -470,7 +469,7 @@ static func _talk() -> String:
 	return " ".join(words) + "."
 
 
-## AN EPISODE OPENS TALKING (the user, 2026-11-03: "a solid 45 seconds of silence at the beginning ... feels wrong"): whatever its reader wrote.
+## An episode opens talking, whatever its reader wrote.
 func _opens_talking() -> bool:
 	# that very episode's opening, as its reader wrote it
 	var wrote := "<!-- table: begin -->\n\n<!-- act: first-stir --> <!-- quiet: 43 -->\nSupper's not for a while, so. No hurry on anything.\n\nI carried boxes all day and my arms are still kind of carrying them. They just hang there, waiting for the next one.\n\n<!-- quiet: 6 -->\n\nYou don't have to watch this, by the way. Have your own thing going, I won't know.\n\nGray. Sure, why not.\n\n<!-- act: second-gray --> <!-- quiet: 31 -->\nThere was this tower on the drive up. An old fire lookout, I think, way up on long legs, with a little room on top and nothing around it but trees for about an hour in any direction. I almost pulled over, and I didn't.\n\nAnd I keep thinking, somebody sat up in that room.\n\n<!-- table: work 1 -->\n\nSo that's a tower, I guess. <!-- quiet: 37 --> Two bricks of tower.\n"
@@ -492,8 +491,8 @@ func _opens_talking() -> bool:
 	return true
 
 
-## A WHOLE EPISODE'S WORTH (forty acts over a full tub, built, torn down, built again): it all still walks, in order, with every piece
-## where the steps left it. What it takes is printed, never held to (a gate does not time the machine): the walk runs once for each
+## A whole episode's worth (forty acts over a full tub, built, torn down, built again): it all still walks, in order, with every piece
+## where the steps left it. What it takes is printed, never held to (a gate does not time the machine); the walk runs once for each
 ## call a puppeteer makes.
 func _whole_episode() -> bool:
 	var a := _make(600)
@@ -542,8 +541,8 @@ func _whole_episode() -> bool:
 	return true
 
 
-## WHAT IS ASKED FOR IS THERE, WHATEVER WENT BEFORE IT: the dry pass and the real one must come to the same stocks, or a part the dry pass
-## found was not added, and the real one has none. A wreck's chunks are the trap: the two passes' dice differ, and with no stock
+## What is asked for is there, whatever went before it: the dry pass and the real one must come to the same stocks, or a part the dry
+## pass found is not added and the real one has none. A wreck's chunks are the trap: the two passes' dice differ, and with no stock
 ## named each chunk goes to where its first piece came from.
 func _always_there() -> bool:
 	var short := 0
@@ -600,7 +599,7 @@ func _steps_in_order() -> bool:
 	return true
 
 
-## A PLATE TURNED SWEEPS ITS CORNERS OUT PAST ITS SIDES: into what stands there it does not go, and it says why.
+## A plate turned sweeps its corners out past its sides: into what stands there it does not go, and it says why.
 func _room_to_turn() -> bool:
 	# 16 studs across is 6.4 cm each way from its middle, and 9 cm to its corner: a thing whose near side is 8 cm off is clear of its
 	# sides and in the way of its corners

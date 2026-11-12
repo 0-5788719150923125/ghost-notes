@@ -2,19 +2,12 @@ extends GhostScene
 
 ## Embers - a drift of sparks that twinkle and flare, each on its own.
 ##
-## A cloud of point particles riding the wind (per-particle, so it drifts and rises
-## asynchronously) with a weak spring + drag so they wander about home instead of
-## escaping. The life is in the *light*, and it is async by construction: each spark
-## twinkles on its own phase, and a beat lights only the sparks whose own threshold
-## it crosses (through a nonlinear `spike`), so a hit ripples a *subset* alight - not
-## the whole cloud throbbing in unison. Size barely moves; color and brightness
-## carry the audio. (The old version pulsed every spark's size with the global beat
-## and burst them all from center together - one synchronized throb. Fixed.)
+## A cloud of point particles riding the wind per particle (so it drifts and rises asynchronously) with a
+## weak spring and drag so they wander about home. Each spark twinkles on its own phase, and a beat lights
+## only the sparks whose own threshold it crosses (through a nonlinear `spike`), so a hit ripples a subset
+## alight. Size barely moves; color and brightness carry the audio.
 
-## The cloud's FORM at rest - where the sparks live before the wind and the beats move
-## them. A drift of embers hangs as a loose cloud, rises off a fire as a plume, or rides
-## the rim of an updraft as a ring: one physics, three silhouettes. Without this the scene
-## was always the same disc of sparks however it was seeded.
+## The cloud's form at rest: a loose cloud, a plume rising off a fire, or a ring on the rim of an updraft.
 const FORMS := ["cloud", "plume", "ring"]
 
 var _f: AudioFeatures = AudioFeatures.new()
@@ -24,8 +17,8 @@ var _beat_prev := 0.0
 var _ch := Vector2.ZERO       # live tonal color (hue, strength) from the harmonic signature
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "The shape the sparks hold at rest: a loose cloud, a plume rising off a fire, or a ring riding the rim of an updraft."},
@@ -45,13 +38,12 @@ const FIELDS := {
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "particles"
 	_sys = ParticleSystem.new()
-	# Sparks are not only orange: magnesium burns green, a welding arc violet, a street
-	# flare rose. The set stays LIGHT-colored - nothing that would read as cold water.
+	# Sparks are not only orange (magnesium burns green, a welding arc violet, a street flare rose), but stay light-colored.
 	var sch := Scheme.among(
 		["ember", "sodium", "dawn", "brass", "rose", "magenta", "violet", "toxic", "bone"], rng)
 	var form := String(choice("form", rng))
 	var n: int = number("sparks", rng)
-	# The whole cloud's grain: some seeds are fine dust, some are fat drifting cinders.
+	# The cloud's grain: fine dust or fat drifting cinders.
 	var grain: float = number("spark_size", rng)
 	var spread: float = number("spread", rng)      # how far the form reaches
 	var ring_w: float = number("ring_width", rng)      # ring thickness, if it is a ring
@@ -61,34 +53,31 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		var home: Vector2
 		match form:
 			"plume":
-				# Dense at the base, fanning as it rises - pow() biases the draw downward.
+				# Dense at the base, fanning as it rises (pow() biases the draw downward).
 				var y: float = 0.45 - 0.95 * pow(rng.randf(), 2.0)
 				home = Vector2(rng.randf_range(-1.0, 1.0) * (stalk + 0.55 * spread * (0.45 - y)), y)
 			"ring":
 				var r_ring: float = spread * (1.0 + rng.randf_range(-1.0, 1.0) * ring_w)
 				home = Vector2(cos(a), sin(a)) * r_ring
 			_:
-				# A wide, loose cloud (not a tight central clump); the spawn radius itself
-				# varies per spark.
+				# A wide, loose cloud; the spawn radius varies per spark.
 				home = Vector2(cos(a), sin(a)) * sqrt(rng.randf()) * rng.randf_range(spread * 0.6, spread)
 		var p := Particle.new()
 		p.home = home
 		p.radius = clampf(rng.randf_range(0.003, 0.011) * grain, 0.002, 0.020)
 		p.hue = sch.vary(rng)
 		p.noise = Vector2(rng.randf_range(-1, 1), rng.randf_range(-1, 1))
-		# Per-particle flare threshold (some embers catch on a faint beat, some need a
-		# hard one), a twinkle phase/rate, and a mobility multiplier so each rides the
-		# wind at its own speed (the Wind force reads "mobility") - varied, not uniform.
+		# Per-particle flare threshold (some catch on a faint beat, some need a hard one), a twinkle
+		# phase/rate, and a mobility multiplier so each rides the wind at its own speed (the Wind force reads "mobility").
 		p.data = {"thresh": 0.18 + 0.5 * absf(p.noise.y), "phase": rng.randf() * TAU,
 			"rate": rng.randf_range(0.8, 2.4), "mobility": rng.randf_range(0.45, 1.7),
-			# Each ember listens to its own spectral BAND (drives its transparency), and has a
-			# high LAUNCH threshold: a strong harmonic moment flings it far outward (a mega
-			# activation), still tethered by the weak spring. `h` is its smoothed band level.
+			# Each ember listens to its own spectral band (drives its transparency) and has a high launch
+			# threshold: a strong harmonic moment flings it far outward, still tethered by the weak spring.
+			# `h` is its smoothed band level.
 			"band": rng.randf(), "launch": rng.randf_range(0.7, 1.5), "h": 0.0}
 		_sys.add(p)
 
-	# Per-particle wind drift + a *gentle* pull home (weak spring, so they wander wide
-	# instead of clumping back to center) + drag for decay. No synchronized burst.
+	# Per-particle wind drift, a gentle pull home (weak, so they wander wide) and drag for decay.
 	_sys.add_force("wind", {"amp": 0.24, "freq": 0.3, "lift": -0.14})   # negative y = rise
 	_sys.add_force("spring", {"k": 0.5})
 	_sys.add_force("drag", {"k": 1.1})
@@ -97,7 +86,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"mood": sch.name,
 		"form": form,
 		"count": n,
-		# Carried so the draw keeps the mood's own character instead of one baked constant.
+		# Carried so the draw keeps the mood's own character.
 		"sat": clampf(sch.sat * rng.randf_range(0.7, 1.05), 0.15, 1.0),
 	}
 
@@ -112,12 +101,11 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_ch = chroma_hue()          # tonal hue + strength, to tint the cloud toward the music's key
 	for p: Particle in _sys.particles:
 		var d: Dictionary = p.data
-		# Each ember tracks its own band - its harmonic strength right now (drives transparency).
+		# Each ember tracks its own band (drives transparency).
 		d.h = lerpf(float(d.h), f.sample(float(d.band)), 1.0 - exp(-6.0 * delta))
-		# MEGA ACTIVATION: on a beat, an ember whose harmonic-weighted drive clears its high
-		# launch threshold is flung far OUTWARD from the attractor (with a swirl), the further
-		# the harder the hit - then the weak spring reels it slowly back, so it fills the screen
-		# yet stays loosely coupled. Only a subset fires per beat - never the whole cloud.
+		# Mega activation: on a beat, an ember whose harmonic-weighted drive clears its launch threshold
+		# is flung outward from the attractor with a swirl (further the harder the hit) and the weak
+		# spring reels it back. Only a subset fires per beat.
 		if beat_edge:
 			var drive: float = (f.beat + 0.6 * f.energy) * (0.35 + float(d.h))
 			var excess: float = drive - float(d.launch)
@@ -139,19 +127,16 @@ func _draw() -> void:
 	var beat_drive := _f.beat + 0.4 * _f.energy
 	for p: Particle in _sys.particles:
 		var d: Dictionary = p.data
-		# Async twinkle + a flare that only fires when this spark's own threshold is
-		# crossed, shaped by a spike so the onset is emphatic.
+		# Async twinkle, and a flare that fires when this spark's own threshold is crossed, shaped by a spike.
 		var twinkle := 0.5 + 0.5 * sin(_t * float(d.rate) + float(d.phase))
 		var flare := Nonlinear.apply("spike", clampf(beat_drive - float(d.thresh), 0.0, 1.0), 3.0)
 		var harm := float(d.h)                                # this ember's own harmonic strength
 		var v := clampf(0.28 + 0.34 * twinkle + 0.75 * flare, 0.05, 1.0)
-		# Transparency is INDEPENDENT per ember, tied to its band: embers on a live harmonic
-		# stay present, those on a quiet one fade toward glass - so the cloud reads the spectrum.
+		# Transparency is per ember, tied to its band: embers on a quiet harmonic fade toward glass.
 		var alpha := clampf(0.10 + 0.85 * harm + 0.45 * flare, 0.04, 1.0)
 		var c := p.pos() * u
 		var r := p.radius * u * (0.85 + 0.3 * twinkle)        # gentle, async - not beat-synced
-		# Tint each ember toward the live tonal hue (circular nudge, scaled by tonal strength), so
-		# the warm cloud drifts in color with the music's key.
+		# Tint each ember toward the live tonal hue (circular nudge scaled by tonal strength).
 		var dh: float = _ch.x - p.hue
 		dh = dh - round(dh)
 		var col := Color.from_hsv(fposmod(p.hue + dh * 0.4 * _ch.y, 1.0), float(params.sat), v)

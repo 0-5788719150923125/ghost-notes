@@ -1,27 +1,24 @@
 extends Scene3D
 
-## Prism swarm - the swarm forms, flies the track, splits into a helix, and jumps (the-point,
+## Prism swarm - the swarm forms, flies the track, splits into a helix, and jumps (the-point
 ## scenes 12-15).
 ##
-##   12 gather - more BLUE prisms fly in one at a time beside the first, a sparse swarm of 6-7,
-##               forming up into a tight unison formation streaming along one track.
-##   13 fly    - the formation flies FORWARD in unison along an invisible track into the void.
-##   14 split  - the single track splits into TWO entangled tracks twisting like a double helix,
-##               one strand all BLUE, the other all RED, weaving in OPPOSING directions.
-##   15 jump   - the swarm commits to ONE side (banks left or right by seed), then JUMPS across
-##               to the other track - a quick lane-change leap - and holds, leaving room for a card.
+##   12 gather - blue prisms fly in one at a time beside the first and form up into a tight
+##               unison formation along one track.
+##   13 fly    - the formation flies forward in unison along an invisible track into the void.
+##   14 split  - the track splits into two entangled tracks twisting like a double helix, one
+##               strand blue, the other red, weaving in opposing directions.
+##   15 jump   - the swarm banks left or right (by seed), jumps across to the other track and
+##               holds, leaving room for a card.
 ##
-## The only scene where the camera travels (the brief allows motion from the swarm on): it flies
-## forward a touch slower than the swarm, so the formation pulls ahead and recedes into the void.
-## Arrives by morph from `two_prisms` (`morph_in = "prisms"`): the live blue prism leads the swarm.
+## The only scene where the camera travels: it flies a touch slower than the swarm, so the
+## formation pulls ahead and recedes. Arrives by morph from `two_prisms` (`morph_in = "prisms"`):
+## the live blue prism leads the swarm.
 ##
-## Both liberties this scene takes are about the SWARM: a [constant FORMATION] decides how many
-## prisms there are and how the track carries them (a lean three-body pair, the seven-strong file
-## the sequence was designed around, or a shoal of a dozen small ones on a tight fast helix), and
-## a [Scheme] mood decides the two strands' colors. The strand hues ride on the BODIES as offsets
-## from [constant HUE_BLUE] / [constant HUE_RED], the convention the rest of the prism family
-## uses, so the lead handed over by `two_prisms` keeps its color - and the strand it joins is
-## re-based onto that color, rather than the swarm reverting to blue the moment it arrives.
+## The seeded choices are the swarm: a [constant FORMATION] decides how many prisms there are and
+## how the track carries them, and a [Scheme] mood decides the two strands' colors. Strand hues
+## ride on the bodies as offsets from [constant HUE_BLUE] / [constant HUE_RED], so the lead
+## handed over by `two_prisms` keeps its color and the strand it joins is re-based onto it.
 
 var _f: AudioFeatures = AudioFeatures.new()
 var _rng := RandomNumberGenerator.new()
@@ -35,9 +32,9 @@ var _lane := 0.0               # blue swarm's strand: 0 = its own, 1 = jumped to
 var _bank := 1.0               # which way it banks before the jump (+1 / -1 by seed)
 var _lead_entry := Vector2(0.15, 0.0)   # where the lead was handed over (for a smooth entry)
 
-## The shape of the swarm. Count, along-track gap, prism size and helix geometry are ONE
-## decision: a dozen prisms at the seven-strong spacing would be a solid rope, and three at the
-## shoal's spacing would be three specks. Each variant is a different thing flying the track.
+## The shape of the swarm. Count, along-track gap, prism size and helix geometry are one
+## decision (a dozen prisms at the seven-strong spacing would be a solid rope); each variant is
+## a different thing flying the track.
 const FORMATION := {
 	"file":  {"n": [6, 8],   "gap": [0.40, 0.52], "size": [0.38, 0.46],
 		"twist": [1.0, 1.3], "rmin": [0.26, 0.34], "rmax": [0.85, 1.05]},
@@ -60,16 +57,16 @@ var _r_max := 0.95             # helix radius when fully split
 var _size := 0.42              # base prism size (world; perspective scales it on screen)
 var _stagger := 0.037          # gather join interval, as a fraction of the hold
 var _lead_off := 0.0           # the mood, as an offset from HUE_BLUE (re-based on a morph)
-# Phase thresholds as FRACTIONS of the hold, so gather / fly / split / jump all land whatever the
-# scene length; NOMINAL paces it in auto mode (no fixed hold).
+# Phase thresholds as fractions of the hold, so every phase lands whatever the scene length;
+# NOMINAL paces it in auto mode (no fixed hold).
 const FL_FLY := 0.26           # formation is up; begin flying forward
 const FL_SPLIT := 0.46         # the track opens into a double helix; red strand fades in
 const FL_JUMP := 0.74          # the lane-change leap
 const NOMINAL := 5.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice]): a storyboard entry's `set`, by
+## name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"formation": {"label": "Formation", "type": "choice", "options": "FORMATION", "default": null,
 		"blurb": "The shape of the swarm flying the track: a file of six to eight prisms, a pair of a few large ones, or a shoal of a dozen small ones."},
@@ -91,12 +88,11 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_twist = _band(fm["twist"], rng)
 	_r_min = _band(fm["rmin"], rng)
 	_r_max = _band(fm["rmax"], rng)
-	# The gather always finishes at GATHER_F however many members join, so a shoal is not still
-	# forming up when the track splits.
+	# The gather finishes at GATHER_F whatever the member count.
 	_stagger = GATHER_F / float(maxi(1, _n))
 
-	# One mood, two strands. The offsets ride on the bodies (see the class docs) and `+=` keeps
-	# each member's own small cast, so a strand is a color family rather than a stack of clones.
+	# One mood, two strands. The offsets ride on the bodies and `+=` keeps each member's own
+	# small cast, so a strand is a color family.
 	var sch := Scheme.pick(rng)
 	var lead := sch.vary(rng)
 	var counter := sch.opposed(lead)
@@ -130,11 +126,10 @@ func _band(b, rng: RandomNumberGenerator) -> float:
 	return rng.randf_range(float(a[0]), float(a[1]))
 
 
-# The prism family's second hue: the mood's own accent, never closer to the lead than Scheme.opposed allows.
-# Several moods keep their accent within a few hundredths of the base, and two strands that close
-# together would weave past each other in the same color and stop reading as two. Those are
-# pushed out along the DIRECTION the mood already chose rather than replaced by a generic
-# complement. Measured against the drifted lead, not the mood's nominal hue, since `vary` moves it.
+# The prism family's second hue: the mood's own accent, never closer to the lead than
+# Scheme.opposed allows. Moods whose accent sits within a few hundredths of the base are pushed
+# out along the direction the mood chose, or the two strands would weave in the same color.
+# Measured against the drifted lead, since `vary` moves it.
 
 
 # Arrived from two_prisms: the live blue prism leads the swarm, easing in from its last position.
@@ -144,10 +139,8 @@ func begin_morph(from: GhostScene) -> void:
 		return
 	if p.has("blue") and not _blue.is_empty():
 		_blue[0] = p["blue"]
-		# The arriving lead carries its own mood. Re-base BOTH strands by the same amount, so the
-		# swarm becomes the lead's color family and the two strands keep the separation this
-		# build rolled - otherwise the handed-over prism would fly at the head of a strand it
-		# does not match.
+		# The arriving lead carries its own mood: re-base both strands by the same amount, so the
+		# swarm takes the lead's color family and keeps the separation this build rolled.
 		var carried: float = (_blue[0] as PrismBody).hue_shift
 		var d := wrapf(carried - _lead_off, -0.5, 0.5)
 		for i in range(1, _blue.size()):
@@ -168,13 +161,13 @@ func update(f: AudioFeatures, delta: float) -> void:
 	last_f = f
 	tick(f, delta)
 	_t += delta
-	# Keyframes (gather/fly/split/jump) run on the fraction of the hold elapsed, so they land whatever
-	# the scene length; the prisms fly and spin on the raw delta, so the tempo never speeds the motion.
+	# Keyframes run on the fraction of the hold elapsed, so they land whatever the scene length;
+	# prisms fly and spin on the raw delta, so tempo never speeds the motion.
 	_frac = clampf(_t / phase_span(NOMINAL), 0.0, 1.0)
 	var drive := clampf(f.energy * 0.8 + f.beat * 0.6, 0.0, 1.0)
 
-	# Fly forward: the swarm accelerates once formed; the camera follows a touch slower so the
-	# formation pulls ahead and recedes into the void (room opens up for the end card).
+	# Fly forward: the swarm accelerates once formed; the camera follows a touch slower, so the
+	# formation recedes into the void.
 	var rate := smoothstep(FL_FLY, FL_FLY + 0.24, _frac) * (1.2 + 0.8 * drive)
 	_travel += delta * rate
 	lens.eye.z = -2.6 + _travel * 0.72
@@ -211,16 +204,14 @@ func _draw() -> void:
 	var r := _radius()
 	var items := []            # {d, center, size, hue, alpha} - depth-sorted before drawing
 
-	# Blue swarm: a stream of prisms nose-to-tail along the track. Before the split they run a
-	# straight line into the void; after it they follow the blue strand, weaving. On the jump the
-	# whole stream banks to one side and leaps to the red strand (its angular offset crosses to it).
+	# Blue swarm: prisms nose-to-tail along the track, a straight line before the split, the blue
+	# strand after. On the jump the stream banks and leaps to the red strand.
 	var blue_dir := 1.0
 	for i in _blue.size():
 		var d: float = D_HEAD - i * _spacing + _travel
 		if d <= 0.05:
 			continue
-		# Strand angle, with the lane-change: the blue stream banks (a lateral lean) then crosses
-		# from its strand to the other one over the jump.
+		# Strand angle, with the lane-change: bank (a lateral lean), then cross to the other strand.
 		var base := _strand(d, blue_dir, r)
 		var other := _strand(d, -blue_dir, r)
 		var arc := sin(_lane * PI) * _bank * r * 0.5     # the bank/overshoot of the leap
@@ -238,8 +229,8 @@ func _draw() -> void:
 		it.body = _blue[i]
 		items.append(it)
 
-	# Red strand: fades in with the split, running the OTHER way (opposing direction) so the two
-	# strands weave past each other. All red.
+	# Red strand: fades in with the split, running the other way so the strands weave past each
+	# other.
 	var red_fade := smoothstep(FL_SPLIT, FL_SPLIT + 0.18, _frac)
 	if red_fade > 0.01:
 		for i in _red.size():

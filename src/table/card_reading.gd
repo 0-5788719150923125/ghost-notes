@@ -3,55 +3,37 @@ class_name CardReading
 
 ## CardReading - a card reading as the voice reads it and the table performs it.
 ##
-## The reading is prose, and a handful of own-line marks for what happens at the table between
-## the passages:
+## The reading is prose, and a handful of own-line marks for what happens at the table between the passages:
 ##
 ##     <!-- table: shuffle -->    the deck shuffles under the words that follow
-##     <!-- table: draw 3 -->     the card on the table goes down into the spread (if one is up),
-##                                then the third card is drawn, turned and held up beside its
-##                                booklet entry while the words that follow are read
-##     <!-- table: jumper 1 -->   the first card is not drawn: it flies out of the shuffle on its
-##                                own, lands, and is picked up and held up as a drawn card is
+##     <!-- table: draw 3 -->     the card on the table goes down into the spread (if one is up), then the third card is drawn,
+##                                turned and held up beside its booklet entry while the words that follow are read
+##     <!-- table: jumper 1 -->   the first card is not drawn: it flies out of the shuffle on its own, lands, and is picked up and
+##                                held up as a drawn card is
 ##     <!-- table: spread -->     the last card goes down; the whole spread lies on the table
 ##
-## and the rest of [TableActions]' written verbs - `open` (the cards come out of a box, not a deck),
-## `deal 2`, `fan 3-5` (a run of cards in one waterfall), `show 4`, `tap 2`, `untap 2`, `flip 2`, and
-## `work 2` (the card goes down and the work of its beat begins - [TableWork]).
+## and the rest of [TableActions]' written verbs - `open` (the cards come out of a box), `deal 2`, `fan 3-5` (a run of cards in one
+## waterfall), `show 4`, `tap 2`, `untap 2`, `flip 2`, and `work 2` (the card goes down and the work of its beat begins - [TableWork]).
+## A reading with no cards opens with `begin` and each of its beats with `work K` (K a beat, never a card) and closes with `spread`; each
+## beat is a chapter of the video.
 ##
-## A READING WITH NO CARDS opens with `begin` and each of its beats with `work K` - K a beat, never a card -
-## and closes with `spread`: nothing is drawn, and each beat is a chapter of the video.
+## `<!-- act: grind -->` inside speech starts the episode's act `grind` as the word after it is said (next/table_work.md); [method parse]
+## lists each (`cues`, `{name, si}`: the spoken word it starts at). `<!-- chapter: its name -->`, written by the reader, starts a chapter
+## at the word after it; before a passage's first word it names the chapter the passage's own mark begins ([method chapters]). The take's
+## word timings place every chapter. The voice never hears these marks.
 ##
-## AN ACT AT A WORD (next/table_work.md): inside speech, `<!-- act: grind -->` starts the episode's act
-## `grind` as the word after it is said - what is done is said as it is done. [method parse] lists each
-## (`cues`, `{name, si}`: the spoken word it starts at); the voice never hears the mark.
+## The reading is written for the table by [TableProducer], one passage per mark: the intro after `shuffle`, one passage per card after
+## its `draw`, the close after `spread`. A hand-written one works the same way. A passage may hand a second voice a line with an own-line
+## `<!-- speaker: Familiar -->` and take it back with `<!-- speaker: Narrator -->` (the Generative panel's own cues); every passage opens
+## in the reader's voice.
 ##
-## A CHAPTER AT A WORD (2026-10-31, the user of the-quiet-crucible 841899's description: "0:00 Intro, 1:58
-## The Card from the Tin - Lighting a New Furnace, 9:14 The spread" - a seven-minute brew in one chapter, and
-## a card-reading word for a show that brews): `<!-- chapter: its name -->`, written by the reader where the
-## video turns to a part a viewer would look for, starts one at the word after it; before a passage's first
-## word it names the chapter the passage's own mark begins ([method chapters]). No agent writes a time: the
-## take's word timings place every chapter. The voice never hears the mark.
-##
-## THE READING IS WRITTEN FOR THE TABLE, by [TableProducer], one passage per mark - the intro
-## after `shuffle`, one passage per card after its `draw`, the close after `spread` - and a
-## hand-written one works the same way.
-##
-## MORE THAN ONE VOICE: a show may give the reader company (a familiar on its shoulder), and a
-## passage hands it a line with an own-line `<!-- speaker: Familiar -->` and takes it back with
-## `<!-- speaker: Narrator -->` - the Generative panel's own cues, kept for the voice. EVERY PASSAGE
-## OPENS IN THE READER'S VOICE: each is written on its own, so one that ended on another voice's
-## line is handed back before the next.
-##
-## ONE WALK, TWO READERS, as in [TabletScript]: [method parse] produces both the spoken words the
-## table follows the voice by and the text the voice reads ([member speakable]), in which every
-## mark is a rest long enough to perform it (`<!-- action-hold: S -->`, spliced by the voice like a
-## hesitation). The rest and the table's schedule come from the same [method rest_of], so the
-## voice waits exactly as long as the cards move. The shuffle is the exception that proves it:
-## readers talk while they shuffle, so its rest is only the moment it takes to begin.
+## One walk, two readers, as in [TabletScript]: [method parse] produces both the spoken words the table follows the voice by and the text
+## the voice reads ([member speakable]), in which every mark is a rest long enough to perform it (`<!-- action-hold: S -->`, spliced by the
+## voice like a hesitation). The rest and the table's schedule come from the same [method rest_of], so the voice waits exactly as long as
+## the cards move. The shuffle is the exception: readers talk while they shuffle, so its rest is only the moment it takes to begin.
 
-## THE TIMING OF THE TABLE, in seconds, is the action registry's ([TableActions], step 9): one table
-## of verbs, each with its rest. These names are its, kept here for the code and gates that ask
-## CardReading.
+## The timing of the table, in seconds, is the action registry's ([TableActions], step 9): one table of verbs, each with its rest.
+## These names are its, kept here for the code and gates that ask CardReading.
 const SHUFFLE_LEAD := TableActions.SHUFFLE_LEAD
 const LAY := TableActions.LAY
 const DRAW := TableActions.DRAW
@@ -62,16 +44,16 @@ const SETTLE := TableActions.SETTLE
 
 ## An act cued at a word, inside speech: group 1 the act's name.
 const ACT_MARK := "<!--\\s*act\\s*:\\s*([\\w-]+)\\s*-->"
-## A CHAPTER OF THE VIDEO, named by the reader where its words begin one: group 1 its name.
+## A chapter of the video, named by the reader where its words begin one: group 1 its name.
 const CHAPTER_MARK := "<!--\\s*chapter\\s*:\\s*([\\s\\S]*?)\\s*-->"
-## A SILENCE, written where the reader stops talking and the work goes on (the user, 2026-11-02: "There might be stretches where we do
-## not talk at all"): group 1 its seconds. It is a rest as a table's move is, never a hesitation, so it stays with the Hesitate box
-## off and is as long as it says up to QUIET_MOST; a passage's words may end on one, and it is still its beat's ([method
-## TableWork.schedule], an action's `tail`). An act cued inside one begins as much into it as is written before its mark.
+## A silence, written where the reader stops talking and the work goes on: group 1 its seconds. It is a rest as a table's move is, never a
+## hesitation, so it stays with the Hesitate box off and is as long as it says up to QUIET_MOST; a passage's words may end on one, and it
+## is still its beat's ([method TableWork.schedule], an action's `tail`). An act cued inside one begins as much into it as is written
+## before its mark.
 const QUIET_MARK := "<!--\\s*quiet\\s*:\\s*([0-9]*\\.?[0-9]+)\\s*-->"
 const QUIET_MOST := 240.0
-## AN EPISODE OPENS TALKING ([method opens_talking]): how many words come before any silence, what is only a breath (seconds), and the most that is kept of
-## what was written before them.
+## An episode opens talking ([method opens_talking]): how many words come before any silence, what is only a breath (seconds), and the
+## most that is kept of what was written before them.
 const OPEN_WORDS := 60
 const OPEN_BREATH := 3.0
 const OPEN_HELD := 30.0
@@ -83,7 +65,7 @@ static func _rx(pattern: String) -> RegEx:
 	return r
 
 
-## AN OWN-LINE MARK, for the verbs the registry says are written: group 1 is the verb, 2 the card's
+## An own-line mark, for the verbs the registry says are written: group 1 is the verb, 2 the card's
 ## place in the reading (1-based), 3 the last card of a run (`fan 3-5`).
 static func mark_pattern() -> String:
 	return "^\\s*<!--\\s*table\\s*:\\s*(%s)\\s*(\\d+)?(?:\\s*-\\s*(\\d+))?\\s*-->\\s*$" % "|".join(PackedStringArray(TableActions.written()))
@@ -108,7 +90,7 @@ static func speakable(body: String) -> String:
 	return String(parse(body)["speakable"])
 
 
-## THE WALK. Returns:
+## The walk. Returns:
 ##   passages  - [{kind, card, text}]: each mark and the words read after it, in order
 ##   actions   - [{kind, card, last, after, dur}]: `after` = how many spoken words precede the mark;
 ##               `last` the run's last card (`card` for one)
@@ -149,8 +131,7 @@ static func parse(body: String) -> Dictionary:
 	var chapter_rx := _rx(CHAPTER_MARK)
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()
-	# THE TABLE SEEN FIRST: the voice rests a settle after the intro before anything is said or done ([constant Openings.SETTLE]; it had
-	# opened on its first verb's own rest, a cardless show's 0.4 s, the voice speaking as the name went)
+		# the table seen first: the voice rests a settle after the intro before anything is said or done ([constant Openings.SETTLE])
 	speak.append("<!-- action-hold: %s -->" % String.num(Openings.SETTLE, 2))
 	var showing := false
 	var cards := 0
@@ -160,21 +141,21 @@ static func parse(body: String) -> Dictionary:
 	for p in passages:
 		var kind := String((p as Dictionary)["kind"])
 		var text := "\n".join(PackedStringArray((p as Dictionary)["lines"] as Array)).strip_edges()
-		# THE READER'S MARKS go on to the voice - a delivery, a hesitation, a change of speaker - but
+		# The reader's marks go on to the voice - a delivery, a hesitation, a change of speaker - but
 		# no comment is ever a word the table follows, and any other note is not read at all
 		var voiced := _voice_marks(text)
-		# AN ACT AT A WORD: the spoken words before its mark, counted as the table counts them
+		# An act at a word: the spoken words before its mark, counted as the table counts them
 		for m in act_rx.search_all(text):
 			var cue := {"name": m.get_string(1).strip_edges().to_lower(), "si": spoken.size() + _words_before(text, m.get_start())}
-			# ...IN A SILENCE, no word comes at it: it is timed from the word before, and how far into the silence it stands
+			# ...in a silence, no word comes at it: it is timed from the word before, and how far into the silence it stands
 			var into := quiet_around(text, m.get_start(), m.get_end())
 			if into >= 0.0:
 				cue["quiet"] = into
 			cues.append(cue)
-		# A SILENCE: the word it comes before, for what estimates a reading's time ([method TablePlan.estimated_times])
+		# A silence: the word it comes before, for what estimates a reading's time ([method TablePlan.estimated_times])
 		for m in quiet_rx.search_all(text):
 			quiets.append({"si": spoken.size() + _words_before(text, m.get_start()), "s": minf(float(m.get_string(1)), QUIET_MOST)})
-		# A CHAPTER AT A WORD, and whether it opens its passage - then it names the chapter of the passage's
+		# A chapter at a word, and whether it opens its passage - then it names the chapter of the passage's
 		# own mark (`action`, the index that mark's action is about to take; -1 for words before any mark)
 		for m in chapter_rx.search_all(text):
 			var named := " ".join(m.get_string(1).split("\n", false)).strip_edges()
@@ -227,12 +208,11 @@ static func parse(body: String) -> Dictionary:
 		"settle": Openings.SETTLE}
 
 
-## HOW FAR INTO A SILENCE a mark from [param from] to [param to] in [param text] stands: the seconds of the quiet marks between the word
+## How far into a silence a mark from [param from] to [param to] in [param text] stands: the seconds of the quiet marks between the word
 ## before it and it, if there is any quiet between the word before it and the word after it; -1 when it is at a word.
-## AN EPISODE OPENS TALKING (the user, 2026-11-03, of the first real one, whose reader was told it might open in silence and did: "a solid 45 seconds of silence at
-## the beginning ... which feels wrong. We definitely need an intro, even if we're going to go silent at parts throughout"). Whatever was written and whenever: a
-## silence before the first [constant OPEN_WORDS] words comes out, and as much as [constant OPEN_HELD] of what came out falls at the next paragraph's end instead.
-## A breath stays. The work goes on under the talk, and its stops take what the silence would have given it.
+## An episode opens talking: whatever was written, a silence before the first [constant OPEN_WORDS] words comes out, and as much as
+## [constant OPEN_HELD] of what came out falls at the next paragraph's end instead. A breath stays. The work goes on under the talk, and
+## its stops take what the silence would have given it.
 static func opens_talking(src: String) -> String:
 	var words := 0
 	var cuts: Array = []
@@ -378,14 +358,12 @@ static func _voice_marks(text: String) -> String:
 	return (out + text.substr(at)).strip_edges()
 
 
-## THE VIDEO'S CHAPTERS, from a rendered take: when the intro, each card and the close begin, and each
-## chapter the reader named, found by following the take's own word timings ([param words], a sidecar's)
-## through the reading exactly as the table does - so a chapter starts where the cards move, or at the
-## word its mark is before. `[{t, kind, card, name}]` in time order, the first the intro at 0; `name` is
-## the reader's (a passage's opening mark names its own action's chapter, the opening verb's the intro's,
-## and makes a chapter of an action that is none of itself - a card's work), "" where it named none, for
-## the caller to label. A reading with no cards ([constant TableActions.SOURCES] `none`) has a chapter at
-## each beat: its `work` marks. A mark inside a passage is `kind` "named".
+## The video's chapters, from a rendered take: when the intro, each card and the close begin, and each chapter the reader named, found by
+## following the take's own word timings ([param words], a sidecar's) through the reading exactly as the table does - so a chapter starts
+## where the cards move, or at the word its mark is before. `[{t, kind, card, name}]` in time order, the first the intro at 0; `name` is
+## the reader's (a passage's opening mark names its own action's chapter, the opening verb's the intro's, and makes a chapter of an
+## action that is none of itself - a card's work), "" where it named none, for the caller to label. A reading with no cards
+## ([constant TableActions.SOURCES] `none`) has a chapter at each beat: its `work` marks. A mark inside a passage is `kind` "named".
 static func chapters(body: String, words: Array) -> Array:
 	var p := parse(body)
 	var f := ReadingFollower.new()
@@ -424,11 +402,11 @@ static func chapters(body: String, words: Array) -> Array:
 	return [out[0]] + rest
 
 
-## A reading, written out: [param passages] are `{kind, card, text}` in order (the shape
-## [method parse] returns), each its mark and then its words.
-## WHAT [method compose] JOINED, SPLIT AGAIN (next/editing.md, design point 3: the script is one text, edited whole and
-## written back to its passages): `[{kind, card, last, text}]`, the first the words before any mark (kind ""), each after it a
-## mark's verb and the words up to the next. `split(compose(p))` gives back `p`'s marks and words, each stripped.
+## A reading, written out: [param passages] are `{kind, card, text}` in order (the shape [method parse] returns), each its mark and
+## then its words.
+## What [method compose] joined, split again (next/editing.md, design point 3: the script is one text, edited whole and written back to
+## its passages): `[{kind, card, last, text}]`, the first the words before any mark (kind ""), each after it a mark's verb and the words
+## up to the next. `split(compose(p))` gives back `p`'s marks and words, each stripped.
 static func split(script: String) -> Array:
 	var mark := _rx(mark_pattern())
 	var out: Array = []

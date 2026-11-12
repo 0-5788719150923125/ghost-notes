@@ -1,18 +1,17 @@
 extends SceneTree
 
-## timeline_kit_check - ONE TIMELINE KIT ([TimelineView], [Clock]; next/structure.md, step 26). Masking's
-## marker strip and track lanes, the storyboard's strip and a stage entry's lanes each kept their own
-## ruler ladder, wheel, playhead and clock text, and the copies had parted (two pan steps, a clock with
-## no hours, two ladders). Now:
+## timeline_kit_check - one timeline kit ([TimelineView], [Clock]; next/structure.md, step 26): Masking's
+## marker strip and track lanes, the storyboard's strip and a stage entry's lanes share one ruler ladder,
+## wheel, playhead and clock text.
 ##
 ##   godot --headless --path . --script tests/timeline/timeline_kit_check.gd
 ##
-##   - THE RULER: the step is the first of the ladder that fits the ticks asked for - finer as a view
+##   - the ruler: the step is the first of the ladder that fits the ticks asked for - finer as a view
 ##     zooms in - and the ticks are that far apart, across exactly what is in view;
-##   - THE WHEEL: Ctrl zooms about the pointer, keeping the time under it where it was; a plain notch pans
+##   - the wheel: Ctrl zooms about the pointer, keeping the time under it where it was; a plain notch pans
 ##     a tenth of the window; anything else moves nothing;
-##   - THE CLOCK: m:ss, h:mm:ss past an hour, a negative time at 0:00;
-##   - NO COPIES: no timeline handles the wheel itself, and nothing in src/ writes a clock's format but
+##   - the clock: m:ss, h:mm:ss past an hour, a negative time at 0:00;
+##   - no copies: no timeline handles the wheel itself, and nothing in src/ writes a clock's format but
 ##     [Clock] - against a made-up source that does, which the same scan must catch (the control).
 
 ## What may write the clock's digits all the same: a time of day is not a length.

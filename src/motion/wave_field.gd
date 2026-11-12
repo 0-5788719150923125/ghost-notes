@@ -1,67 +1,36 @@
 extends RefCounted
 class_name WaveField
 
-## WaveField - an analytic water surface: a sum of Gerstner components carrying its
-## own closed-form gradient.
+## WaveField - an analytic water surface: a sum of Gerstner components carrying its own closed-form gradient.
 ##
-## The thing this exists to avoid is a grid solver. A water surface can be integrated
-## on a lattice - a height field with a wave equation stepped every tick - but then the
-## surface has a resolution, a stability limit, a CFL condition tying its timestep to
-## its cell size, and a warm-up before it looks like anything. A sum of traveling
-## sinusoids has none of that: it is a closed-form function of position and time, exact
-## at any point, at any scale, with no state to carry between frames and nothing to
-## pre-warm. You can ask it for the surface at t = 900 seconds without having simulated
-## the first 899.
+## No grid solver: the surface is a closed-form function of position and time, exact at any point and scale, with no
+## state, resolution, CFL limit or warm-up.
 ##
-## GERSTNER, not plain sine. A sine surface has round crests and round troughs and reads
-## as gelatin. A Gerstner (trochoidal) component moves each particle in a circle rather
-## than up and down, which piles water into a sharp crest and flattens the trough, and
-## that asymmetry is most of what makes water look like water. The steepness [code]q[/code]
-## in 0..1 is how far toward the cusp each component leans.
+## Gerstner, not plain sine: each particle moves in a circle, which sharpens crests and flattens troughs. The
+## steepness `q` in 0..1 is how far toward the cusp each component leans.
 ##
-## WHAT IT RETURNS, AND WHY THAT IS THE INTERESTING PART. Height alone is not enough for
-## anything optical. Refraction needs the surface NORMAL, and the normal of a Gerstner
-## surface is not simply (-dh/dx, -dh/dy, 1), because the horizontal displacement warps
-## the parameter grid underneath the height. Writing the surface in parameter space as
+## A sample returns what optics needs, the surface normal, which is not simply (-dh/dx, -dh/dy, 1) because the
+## horizontal displacement warps the parameter grid. In parameter space:
 ##
 ##     H(u)  = SUM a_i cos(phase_i)
 ##     X(u)  = u - SUM q_i a_i d_i sin(phase_i)
 ##     phase_i = k_i (d_i . u) + w_i t + p_i
 ##
-## the height gradient is [code]G = -SUM a_i k_i sin(phase_i) d_i[/code] and the Jacobian
-## of the horizontal map is [code]I - SUM q_i a_i k_i cos(phase_i) d_i d_i^T[/code]. For
-## the steepnesses water actually uses, that Jacobian is well approximated by the scalar
-## [code]jz = 1 - SUM q_i a_i k_i cos(phase_i)[/code], and the normal is then simply
-## proportional to [code](-G.x, -G.y, jz)[/code] - no inverse, no square roots per
-## component. So a sample returns [code]Vector4(h, G.x, G.y, jz)[/code] and the caller
-## normalizes once. This is the same decomposition GPU Gems used for vertex-shader water,
-## restated for a CPU that has to be frugal.
+## the height gradient is `G = -SUM a_i k_i sin(phase_i) d_i` and the horizontal map's Jacobian is approximated by the
+## scalar `jz = 1 - SUM q_i a_i k_i cos(phase_i)`. The normal is proportional to `(-G.x, -G.y, jz)`, so a sample
+## returns `Vector4(h, G.x, G.y, jz)` and the caller normalizes once. Clamp jz off zero: where it goes negative the
+## surface has folded over (a breaking wave) and no normal is defined.
 ##
-## [member steep] scales every component's q at once, which is the physically right knob
-## for "the sea got choppier": it pinches the crests without changing a single amplitude
-## or wavelength, so nothing grows or shrinks. jz falling toward zero at a crest is what
-## tilts the normal hard there, and a caller reading normals should clamp it off zero -
-## past the point where jz goes negative a Gerstner surface has folded over itself, which
-## is a physical breaking wave and not something a normal is defined on.
+## [member steep] scales every component's q at once ("choppier") without changing an amplitude or wavelength.
 ##
-## THE SWEEP IS THE POINT OF THE CLASS. Sampling a grid point by point costs two
-## trigonometric calls per component per point, and a scene wanting a caustic net wants
-## thousands of points every frame. [method sweep] instead walks a row and advances each
-## component's (sin, cos) pair by a fixed angle using the angle-addition identity - four
-## multiplies and two adds, no trig at all - so the whole grid costs two trig calls per
-## component per ROW. The rotation is orthonormal by construction, so the error after a
-## hundred steps is still at the last bit of a double; there is no drift worth correcting.
+## [method sweep] walks a row and advances each component's (sin, cos) pair by a fixed angle with the angle-addition
+## identity (no trig per cell), so a grid costs two trig calls per component per row.
 ##
-## RINGS are the transient half: a drip is not a plane wave and cannot join the sweep, so
-## [method sweep_rings] adds compact wave packets whose envelope has finite support. That
-## finite support is what makes them cheap - the evaluation is bounded to the annulus the
-## packet actually occupies, computed per row in closed form, so a ring costs work
-## proportional to its circumference rather than to the grid. The caller owns their
-## lifecycle; the field only evaluates what it is handed.
+## Rings are the transient half: [method sweep_rings] adds compact wave packets (drips) whose finite-support envelope
+## bounds the evaluation to the annulus the packet occupies. The caller owns their lifecycle.
 
-## Deep-water dispersion constant. Long waves travel faster than short ones by
-## w = sqrt(g k), and keeping that relation is what makes a swell and a chop read as the
-## same body of water rather than as two unrelated animations.
+## Deep-water dispersion constant: w = sqrt(g k), so long waves travel faster than short ones and a swell and a chop
+## read as one body of water.
 const GRAVITY := 9.8
 
 var _dx := PackedFloat32Array()      # unit direction
@@ -77,10 +46,9 @@ var _n := 0
 var steep := 1.0
 
 
-## Add one traveling component. [param tempo] scales the dispersion-derived frequency:
-## real ripples on a hand-sized pool cross it in well under a second, which is true and
-## unwatchable, so a caller slows the whole field with one number rather than lying about
-## the dispersion relation per component. Returns the component's index.
+## Add one traveling component. [param tempo] scales the dispersion-derived frequency (real ripples on a hand-sized
+## pool cross it in well under a second), so a caller slows the whole field with one number. Returns the component's
+## index.
 func add(angle: float, wavelength: float, amp: float, q: float, phase: float,
 		tempo := 1.0) -> int:
 	var k := TAU / maxf(0.0001, wavelength)
@@ -111,16 +79,15 @@ func set_amp(i: int, a: float) -> void:
 		_amp[i] = maxf(0.0, a)
 
 
-## Set every amplitude at once - the per-frame audio hand-off, and deliberately a packed
-## array so it can cross a thread boundary inside a snapshot without being duplicated
-## element by element.
+## Set every amplitude at once - the per-frame audio hand-off, a packed array so it can cross a thread boundary in a
+## snapshot without being duplicated.
 func set_amps(a: PackedFloat32Array) -> void:
 	for i in mini(_n, a.size()):
 		_amp[i] = maxf(0.0, a[i])
 
 
-## The surface at one point: Vector4(height, dh/dx, dh/dy, jz). The reference form of the
-## field - correct, readable, and the wrong way to fill a grid (see [method sweep]).
+## The surface at one point: Vector4(height, dh/dx, dh/dy, jz). The reference form of the field; filling a grid is
+## [method sweep]'s job.
 func sample(p: Vector2, t: float) -> Vector4:
 	var h := 0.0
 	var gx := 0.0
@@ -146,9 +113,8 @@ func sample(p: Vector2, t: float) -> Vector4:
 ## Accumulate the whole field onto a regular grid of [param gw] x [param gh] nodes whose
 ## node (ix, iy) sits at [code]org + Vector2(ix, iy) * step[/code], row-major.
 ##
-## ADDITIVE, and it does not clear: the caller fills hh/gx/gy with 0 and jz with 1 first,
-## which is what lets rings and any other contribution stack onto the same buffers.
-## All four arrays must already be gw*gh long.
+## Additive, and it does not clear: the caller fills hh/gx/gy with 0 and jz with 1 first, so rings and any other
+## contribution stack onto the same buffers. All four arrays must already be gw*gh long.
 func sweep(t: float, org: Vector2, step: float, gw: int, gh: int,
 		hh: PackedFloat32Array, gx: PackedFloat32Array,
 		gy: PackedFloat32Array, jz: PackedFloat32Array) -> void:
@@ -161,8 +127,7 @@ func sweep(t: float, org: Vector2, step: float, gw: int, gh: int,
 		var k := _k[c]
 		var dxc := _dx[c]
 		var dyc := _dy[c]
-		# The phase is affine in the grid indices, so stepping one cell in x or y is
-		# stepping the phase by a CONSTANT - which is the whole reason this is cheap.
+		# The phase is affine in the grid indices, so stepping one cell is stepping the phase by a constant.
 		var ax := k * dxc * step
 		var ay := k * dyc * step
 		var base := k * (dxc * org.x + dyc * org.y) + _om[c] * t + _ph[c]
@@ -196,31 +161,19 @@ func sweep(t: float, org: Vector2, step: float, gw: int, gh: int,
 ## [code]k[/code], accumulated carrier phase [code]phi[/code], phase offset [code]ph[/code],
 ## and steepness [code]q[/code]. The caller advances r, phi and a; this only evaluates.
 ##
-## The envelope is [code](1 - u^2)^2[/code] over u = (r - front)/width rather than a
-## gaussian, for two reasons: it has EXACTLY compact support, so the row spans below are
-## the true extent of the packet and nothing is evaluated that contributes nothing, and
-## its derivative is a polynomial, so a ring costs no exp() anywhere. The carrier phase
-## advances faster than the front, which is what makes crests appear at the back of the
-## packet and die at its leading edge - the actual look of a drip ring.
+## The envelope is `(1 - u^2)^2` over u = (r - front)/width rather than a gaussian: it has exactly compact support
+## (the row spans are the packet's true extent) and a polynomial derivative (no exp()). The carrier phase advances
+## faster than the front, so crests appear at the back of the packet and die at its leading edge.
 ##
-## THE RINGS RIDE THE SWELL. Call this AFTER [method sweep] and the four buffers already hold
-## the traveling field, so a ring can read the water it is spreading across instead of ignoring
-## it. Two couplings, both from data already in the buffers and costing a handful of flops per
-## point:
+## The rings ride the swell: call this after [method sweep], when the four buffers already hold the traveling field.
+## Two couplings, from data already in the buffers:
 ##
-##   WARP (`warp` on the ring) displaces the packet's front and its carrier by the local swell
-##   height, so a ring crossing a crest runs ahead there and lags in the trough. It stops being
-##   a circle stamped over the water and becomes a front traveling THROUGH it - which is what
-##   "droplets create a circular ripple effect which does not interact with the other waves at
-##   all" was asking for. Physically it is the leading-order term of a shallow-water celerity
-##   c = sqrt(g(d + h)) accumulating differently over crest and trough; the second-order piece
-##   (the front's own gradient picking up the swell's) is dropped, which is worth a few percent
-##   on the normal and nothing on the silhouette.
+##   WARP (`warp` on the ring) displaces the packet's front and carrier by the local swell height, so a ring crossing
+##   a crest runs ahead and lags in the trough (the leading-order term of the shallow-water celerity
+##   c = sqrt(g(d + h)); the second-order piece is dropped).
 ##
-##   DAMP (`damp`) kills the packet where the swell is already steep. Ripples do not survive on
-##   choppy water, and a drip that dies in the rough while spreading clean across glass is most
-##   of what makes the two systems look like one body of water. Read off the squared gradient,
-##   so no square root enters the inner loop.
+##   DAMP (`damp`) kills the packet where the swell is already steep, since ripples do not survive on choppy water.
+##   Read off the squared gradient, so no square root enters the inner loop.
 static func sweep_rings(rings: Array, org: Vector2, step: float, gw: int, gh: int,
 		hh: PackedFloat32Array, gx: PackedFloat32Array,
 		gy: PackedFloat32Array, jz: PackedFloat32Array) -> void:
@@ -241,9 +194,8 @@ static func sweep_rings(rings: Array, org: Vector2, step: float, gw: int, gh: in
 		var qk: float = float(rd["q"]) * a * kk
 		var wrp: float = float(rd.get("warp", 0.0))
 		var dmp: float = float(rd.get("damp", 0.0))
-		# The warp displaces the front by `wrp` times the LOCAL swell height, so the row spans
-		# have to widen by the largest that can be, or the packet is clipped exactly where it
-		# rides a crest. The caller knows the live amplitude sum and hands the bound in.
+		# The warp displaces the front by `wrp` times the local swell height, so the row spans widen by the largest it can
+		# be, or the packet clips where it rides a crest. The caller hands in the live amplitude sum as the bound.
 		var slack := absf(float(rd.get("warp_max", 0.0)))
 		var r_out := rad + wdt + slack
 		var r_in := rad - wdt - slack
@@ -280,8 +232,7 @@ static func sweep_rings(rings: Array, org: Vector2, step: float, gw: int, gh: in
 					if rr < 0.00001:
 						i += 1
 						continue
-					# The swell as it stands at this node - sweep() has already run, so these are
-					# the traveling field's own height and gradient, not the ring's.
+					# The swell at this node (sweep() has already run): the traveling field's height and gradient, not the ring's.
 					var swell := hh[i]
 					var rw := rr - wrp * swell            # the front, carried by the water
 					var u := (rw - rad) / wdt

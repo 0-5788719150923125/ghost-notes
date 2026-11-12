@@ -1,17 +1,15 @@
 extends RefCounted
 class_name MeshCut
 
-## MeshCut - A PIECE OF A THING CUT: its mesh kept on the near side of each of the piece's cuts, and each cut closed by a
-## face of its own - the inside of the thing where the blade went through ([TablePhysics]'s pieces, cut by a blade in
-## [Particles]).
+## MeshCut - a piece of a thing cut: its mesh kept on the near side of each of the piece's cuts, and each cut closed by a face of its
+## own - the inside of the thing where the blade went through ([TablePhysics]'s pieces, cut by a blade in [Particles]).
 ##
-## The user, 2026-10-29: "put a carrot or mandrake root or whatever on the board, cut it into pieces (Fruit Ninja style,
-## which is to say - with real cutting dynamics)". A piece is drawn as the thing it was cut from, so a slice of a carrot
-## is a slice of that carrot: its skin where the skin was, its cut faces lighter, as the inside of a root or a candle is.
+## A piece is drawn as the thing it was cut from, so a slice of a carrot is a slice of that carrot: its skin where the skin was, its cut
+## faces lighter, as the inside of a root or a candle is.
 ##
-## Each plane is cut in turn (Sutherland-Hodgman, every vertex's normal, uvs and copy data carried along an edge it cuts),
-## and what a plane cuts through is closed: the edges it leaves are walked into loops and each loop filled (its outline
-## laid flat in the plane and triangulated), so a piece cut again closes its first face as well as its second.
+## Each plane is cut in turn (Sutherland-Hodgman, every vertex's normal, uvs and copy data carried along an edge it cuts), and what a
+## plane cuts through is closed: the edges it leaves are walked into loops and each loop filled (its outline laid flat in the plane and
+## triangulated), so a piece cut again closes its first face as well as its second.
 
 ## How near two ends of cut edges must be to be one point (meters), and the most loops a cut closes.
 const JOIN := 0.0002
@@ -107,7 +105,7 @@ static func _clip_all(polys: Array, plane: Plane, edges: Array) -> Array:
 	return out
 
 
-## THE FACE OVER A CUT: [param edges] walked into loops, each laid flat in [param plane] and filled - facing out of the
+## The face over a cut: [param edges] walked into loops, each laid flat in [param plane] and filled - facing out of the
 ## piece, along the plane's normal.
 static func _close(edges: Array, plane: Plane) -> Array:
 	var faces: Array = []

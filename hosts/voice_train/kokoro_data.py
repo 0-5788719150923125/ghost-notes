@@ -40,13 +40,13 @@ sys.path.insert(0, str(HERE))
 SR = 24000
 HOP = 600
 F0_HOP = 300
-# THEIR LEVEL, KOKORO'S: the median of the loud 20 ms frames, in dB - where Kokoro's own speech sits (the PyTorch
+# Their level, kokoro's: the median of the loud 20 ms frames, in dB - where Kokoro's own speech sits (the PyTorch
 # decoder, four sentences each: af_heart and af_bella -27, af_sarah -24, am_michael -28.5, bf_emma -24), so the
 # energies its predictor knows are the ones it is taught
 LEVEL = -27.0
 PEAK = 0.95
 FMIN, FMAX = 60.0, 600.0
-# THE ROOM TAKEN OUT (`quieted`): each bin's steady noise - its power over the sentence's quietest QUIET_SHARE of frames -
+# The room taken out (`quieted`): each bin's steady noise - its power over the sentence's quietest QUIET_SHARE of frames -
 # taken off GATE_OVER times over, the gain smoothed over GATE_SMOOTH bins and frames and never under GATE_FLOOR
 QUIET_SHARE = 10.0
 GATE_OVER = 2.0
@@ -83,7 +83,7 @@ def loud_level(y) -> float:
 
 
 def quieted(y):
-    """THEIR RECORDING WITHOUT ITS ROOM (2026-10-26, an ASMR channel's soft speech over a high-gain microphone): a
+    """THEIR RECORDING WITHOUT ITS ROOM: a
     stationary noise - hiss, hum - every bin's power over the sentence's quietest tenth of frames, taken off as a
     Wiener-like gain, smoothed so no bin rings alone, never more than GATE_FLOOR. Taught on the noise, Kokoro learned
     it: their pauses sat 10 log units of energy over Kokoro's silence, its decoder made breathy noise wherever energy
@@ -188,7 +188,7 @@ def whole(placed, ids: int, frames: int):
 
 
 def kokoro_range(theirs, kokoros):
-    """THEIR ENERGY IN KOKORO'S RANGE (2026-10-26): a function moving each of their energies to Kokoro's at the same
+    """THEIR ENERGY IN KOKORO'S RANGE: a function moving each of their energies to Kokoro's at the same
     quantile. Soft speech over a room never falls as quiet as Kokoro's silence - their quietest twentieth sat 8 log
     units over Kokoro's even with the room taken out - and the decoder, taught that energy, made sound wherever it
     was asked any: Whisper misheard half again as many words. Moved, the shape of their loudness is theirs and its
@@ -247,7 +247,7 @@ def main(argv=None) -> int:
             left["too quick for its ids"] = left.get("too quick for its ids", 0) + 1
             continue
         y = at_level(quieted(y[: frames * HOP]))
-        # KOKORO SAYS IT, at their pace: once to learn its length, again at the speed that makes it theirs
+        # Kokoro says it, at their pace: once to learn its length, again at the speed that makes it theirs
         x = torch.tensor([ids], device=dev)
         ref = pack[min(len(ids) - 2, pack.shape[0]) - 1][None].to(dev)
         speed = 1.0

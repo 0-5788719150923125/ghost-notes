@@ -1,24 +1,20 @@
 extends SceneTree
 
-## agent_activity_check - WHAT AN AGENT IS DOING NOW, as the Cards rows and the illustration panel say
-## it (the user, 2026-10-09: "so we know if agents are thinking, or writing, or looking, or whatever.
-## So we know they aren't stuck"). No agent runs: each backend's stream is written here in the shape
-## its CLI writes it, a few events at a time.
+## agent_activity_check - what an agent is doing now, as the Cards rows and the illustration panel say it.
+## No agent runs: each backend's stream is written here in the shape its CLI writes it, a few events at a time.
 ##
 ##   godot --headless --path . --script res://tests/agents/agent_activity_check.gd
 ##
-## - EACH BACKEND READS ITS OWN STREAM: Claude (its thinking estimates, its words as they are written
-##   - its argv asks for them - and its tool calls by their short names), Codex (a command, a tool, its
-##   message; "working" between items), Grok (its thinking and words, ghost's tools by name, a picture
-##   looked at, a picture painted; an update still running changes nothing), Bedrock (its step, having
-##   no stream).
-## - READ AS IT GROWS: each read takes only what was added since the last - nothing counted twice
-##   (the control: the same lines read whole again would double the count).
-## - THE LINE: what, how much, how long - what it has thought said while it calls a tool; "nothing new" only
-##   past three minutes of a silent stream (the control: two minutes says nothing), and never while it is
-##   finishing.
-## - THE QUEUE: a queued job is "waiting its turn", a job it does not hold says nothing; every agent
-##   step of a Cards row has a maker to name.
+## - Each backend reads its own stream: Claude (thinking estimates, words as written, tool calls by short
+##   name), Codex (a command, a tool, its message; "working" between items), Grok (thinking and words,
+##   ghost's tools by name, a picture looked at or painted; a running update changes nothing), Bedrock
+##   (its step, having no stream).
+## - Read as it grows: each read takes only what was added (control: the same lines read whole again would
+##   double the count).
+## - The line: what, how much, how long; "nothing new" only past three minutes of a silent stream (control:
+##   two minutes says nothing), never while finishing.
+## - The queue: a queued job is "waiting its turn", an unknown job says nothing; every agent step of a
+##   Cards row has a maker to name.
 
 var _fails := 0
 var _dir := ""

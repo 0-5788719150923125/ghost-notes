@@ -4,42 +4,28 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/scenes/tunnel_face_check.gd 300
 ##
-## GHOST_PROBE_GPU is not optional: the fault is a shape drawn in the wrong place, and the
-## only instrument that can see that is the picture.
+## GHOST_PROBE_GPU is required: the fault is a shape drawn in the wrong place, which only the picture shows.
 ##
-## WHAT WENT WRONG. The wall was emitted one QUAD per (station, side) and back-face culled on
-## ONE normal - the first of its two triangles. A tube quad is planar only while the
-## cross-section is smooth, and three of the six profiles (ribbed, fluted, star) have a groove
-## in them, so the quad spanning that groove is a saddle whose halves face opposite ways. The
-## cull applied the first half's verdict to both, so the back-facing half was drawn anyway:
-## the unlit outside of the far wall, laid over the near wall. Half a quad is a triangle,
-## which is how it was reported - "black, triangular artifacts that often appear along faces
-## of the walls". Measured, 473 to 532 quads of the ~1080 in a frame had halves that
-## disagreed, and the largest stray wedge covered 33,500 px2.
+## The wall is emitted one quad per (station, side) and back-face culled on one normal, the first of its
+## two triangles. A tube quad is planar only while the cross-section is smooth, and three of the six
+## profiles (ribbed, fluted, star) have a groove, so the quad spanning it is a saddle whose halves face
+## opposite ways; culling on one half's verdict draws the back-facing half (the unlit outside of the far
+## wall over the near wall) as a stray triangle. Culling the halves apart pops, since "hidden" under a
+## painter's sort is draw order and not depth, so both halves are drawn, each at its own depth, which
+## puts the dark far half behind the lit near one.
 ##
-## The fix does not cull the halves apart - that pops, because "hidden" under a painter's sort
-## is draw order and not a depth buffer, and a dropped half opens a hole that reappears frame
-## to frame (measured: 25 spikes in 89 frames against none for the quad rule). It SORTS them
-## apart: both halves are still drawn, each at its own depth, which is what puts the dark far
-## half behind the lit near one.
-##
-## THE CONTROL IS ON THE INSTRUMENT, NOT ON THE RULE, and that is worth being plain about. The
-## honest control would be the old rule rendered alongside, but the old rule is sixty lines of
-## geometry and a second copy of it in here would rot. What CAN be checked live is that the
-## detector still sees a wedge when there is one, so a planted one is put in front of it every
-## run. The rule's own before-and-after is recorded rather than re-measured: on this detector
-## the three grooved profiles scored 2.599%, 2.194% and 2.190% before the fix and nothing above
-## 0.375% after, with the next-worst seed at 0.775% before. To reproduce the failure, put the
-## cull back on one normal in `tunnel_run.gd` and watch this go red.
+## The control is on the instrument, not the rule: a planted wedge is put in front of the detector every
+## run, which must still see it. The rule's before and after is recorded: the three grooved profiles
+## scored 2.599%, 2.194% and 2.190% on this detector with the single-normal cull and nothing above
+## 0.375% after. To reproduce the failure, put the cull back on one normal in `tunnel_run.gd`.
 
 const W := 640
 const H := 360
 const DT := 1.0 / 30.0
-## Fraction of sampled pixels allowed to be a hole - far darker than the wall around them.
-## Between the 0.375% the fixed renderer scores and the 2.19% the broken one did.
+## Fraction of sampled pixels allowed to be a hole (far darker than the wall around them): between the
+## 0.375% the fixed renderer scores and the 2.19% the broken one did.
 const MAX_HOLES := 0.010
-## Seeds chosen because they roll the grooved profiles, which is where the fault lives. Named
-## rather than swept: the point is to keep watching the cases that broke.
+## Seeds that roll the grooved profiles, where the fault lives; named rather than swept.
 const SEEDS := [15, 22, 23, 13]
 
 var _fails: Array = []
@@ -54,9 +40,9 @@ func _ok(cond: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-## Fraction of sampled pixels far darker than the wall a short way off in every direction.
-## A hole in a lit surface, rather than a shaded part of one - shading has a gradient, and
-## the four probes a few pixels out would come back dark with it.
+## Fraction of sampled pixels far darker than the wall a short way off in every direction: a hole in a
+## lit surface rather than a shaded part of one (shading has a gradient, so probes a few pixels out
+## would come back dark with it).
 func _holes(img: Image) -> float:
 	var r := 7
 	var bad := 0
@@ -76,17 +62,14 @@ func _holes(img: Image) -> float:
 	return float(bad) / float(maxi(1, tot))
 
 
-## THE INSTRUMENT'S OWN CONTROL: a lit field with one dark wedge painted into it. The detector
-## has to find that and has to leave the clean field alone, or a green run below means only
-## that the detector stopped working.
+## The instrument's own control: a lit field with one dark wedge painted in. The detector must find it
+## and leave the clean field alone.
 func _check_detector() -> void:
 	var clean := Image.create_empty(W, H, false, Image.FORMAT_RGBAF)
 	clean.fill(Color(0.55, 0.28, 0.62))
 	var planted := clean.duplicate() as Image
-	# THREE wedges, sized and scattered like the fault they stand in for - the broken renderer
-	# put several in a frame, not one. A single one scores 1.03% on this detector, which is
-	# barely over the threshold it is meant to prove the detector can clear: only the RIM of a
-	# wedge is flagged, because the middle of a large one has dark neighbors too.
+	# Three wedges, sized and scattered like the fault (the broken renderer put several in a frame). A
+	# single one scores 1.03%, barely over the threshold, as only the rim of a wedge is flagged.
 	for tri in [
 			[Vector2(120.0, 60.0), Vector2(215.0, 78.0), Vector2(145.0, 165.0)],
 			[Vector2(380.0, 40.0), Vector2(470.0, 96.0), Vector2(392.0, 132.0)],
@@ -109,8 +92,7 @@ func _check_detector() -> void:
 	var on_planted := _holes(planted)
 	print("tunnel_face_check: detector - clean field %.3f%%, three planted wedges %.3f%%"
 		% [on_clean * 100.0, on_planted * 100.0])
-	# The bar is the gate's own threshold: shown the fault, the instrument has to report it as
-	# a FAILURE, not merely notice it.
+	# The bar is the gate's own threshold: shown the fault, the instrument must report a failure.
 	_ok(on_planted > MAX_HOLES * 1.5,
 		"the detector scored only %.3f%% on three planted wedges (needs over %.3f%%) - it cannot see the fault it is for"
 		% [on_planted * 100.0, MAX_HOLES * 150.0])
@@ -159,7 +141,7 @@ func _run() -> void:
 			% [sv, prof, worst * 100.0, MAX_HOLES * 100.0])
 		vp.remove_child(sc)
 		sc.free()
-	# ...and the seeds have to still be rolling the profiles the fault lives on.
+	# ...and the seeds must still roll the profiles the fault lives on.
 	_ok(grooved >= 3,
 		"only %d of the %d seeds rolled a grooved profile - the roll has moved and these seeds no longer cover the fault"
 		% [grooved, SEEDS.size()])

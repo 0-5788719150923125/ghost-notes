@@ -1,11 +1,11 @@
 """Color for the painting lab (TEST_PLAN.md): the show's own encoding, OKLab for judging, and paints mixed as pigments.
 
-THE SHOW'S ENCODING: the skin shader holds paint as sRGB and prop.gdshader decodes it with a plain `pow 2.2`, never the sRGB
+The show's encoding: the skin shader holds paint as sRGB and prop.gdshader decodes it with a plain `pow 2.2`, never the sRGB
 curve - so the lab decodes the same way, or a color matched here would come out another shade there.
 
-OKLAB, x100: a difference of 1 is about the least an eye sees side by side; 10 is plainly another color (the engine's `NEED`).
+OKLab, x100: a difference of 1 is about the least an eye sees side by side; 10 is plainly another color (the engine's `NEED`).
 
-PIGMENTS DARKEN AS THEY MIX: a mix is the weighted geometric mean of the two paints' linear light, never their average - teal and
+Pigments darken as they mix: a mix is the weighted geometric mean of the two paints' linear light, never their average - teal and
 red a muddy brown, never a lilac (PaintLayers._mixes, the same rule).
 """
 import numpy as np

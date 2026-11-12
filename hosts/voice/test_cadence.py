@@ -376,7 +376,7 @@ def check_real_voice() -> None:
         "and the ordinary boundaries are where they were",
     )
 
-    # THE HOLE, PUT THERE ON PURPOSE. Waiting for the duration predictor to produce one
+    # The hole, put there on purpose. Waiting for the duration predictor to produce one
     # is a gate that passes by luck: at the reporter's settings it is about 1% of
     # boundaries, and turning `noise_w` up only moves the odds - three runs of an earlier
     # version of this check produced an above-ceiling hole twice and none the third time.

@@ -1,16 +1,19 @@
 extends SceneTree
 
-## assembly_wall_check: WHAT IS IN A VESSEL STAYS IN IT, AND WHAT FALLS IS STILL THERE ([method AssemblyWorld.add_vessel], [AssemblyBake]; next/assembly.md "Walls, and what falls"). Feedback 0015, of the first real
-## model's tub: "an orange brick currently clipping through the side of the bucket"; and the user, of the spill: "people do make messes - just so long as those fallen bricks still remain usable, if we need them".
-## assembly_bake_check's own wall test looks at where a piece's origin goes, and an 8x8 plate standing 2.5 mm into a 3 mm wall has its origin well inside: this one looks at its corners.
+## assembly_wall_check: what is in a vessel stays in it, and what falls is still there ([method AssemblyWorld.add_vessel],
+## [AssemblyBake]; next/assembly.md "Walls, and what falls"). assembly_bake_check's own wall test looks at where a piece's origin
+## goes, and an 8x8 plate standing 2.5 mm into a 3 mm wall has its origin well inside: this one looks at its corners.
 ##
-## - A VESSEL'S INSIDE IS MEASURED: by rays, from its own surface, against what the profile says.
-## - A SHOVE HOLDS: an 8x8 plate on edge against the short wall of a warped tub, shoved by a hand that cannot give, stays at the wall's face. The control: without the rule the same shove has it past the outer face.
-## - THE RULE IS ONLY THAT: what is clear, what lies across the rim, what is outside and what has left over the rim are left alone; what went through comes back; a hand drawing one out takes it past the wall. The
-##   control: a corner past the wall below the rim is moved, by what it is past.
-## - THE TABLE HAS AN EDGE: what goes past it falls to the floor. The control: on the old slab, as wide as anything, it rested on air.
-## - WHAT FELL IS USED, in a real record from a second process: a brick that rolled in under the table, a brick off its edge, and a plate lying on the plate exactly where the first part goes. The first two come up
-##   beside the table and never through it, the third is moved off first, and all three end up pressed home. The controls: the first starts under the table, the third starts in the way.
+## - A vessel's inside is measured: by rays, from its own surface, against what the profile says.
+## - A shove holds: an 8x8 plate on edge against the short wall of a warped tub, shoved by a hand that cannot give, stays at the wall's
+##   face. Control: without the rule the same shove has it past the outer face.
+## - The rule is only that: what is clear, what lies across the rim, what is outside and what has left over the rim are left alone;
+##   what went through comes back; a hand drawing one out takes it past the wall. Control: a corner past the wall below the rim is
+##   moved, by what it is past.
+## - The table has an edge: what goes past it falls to the floor. Control: on a slab as wide as anything, it rests on air.
+## - What fell is used, in a real record from a second process: a brick that rolled in under the table, a brick off its edge, and a
+##   plate lying on the plate exactly where the first part goes. The first two come up beside the table and never through it, the
+##   third is moved off first, and all three end up pressed home. Controls: the first starts under the table, the third starts in the way.
 ##
 ## Run: timeout 300 godot --headless --path . --script tests/table/assembly_wall_check.gd
 
@@ -267,7 +270,7 @@ func _fallen_used() -> void:
 	var req := TableAssembly.request_of(a, a.spec, [], dir, names)
 	var top := Tables.top_outline({"shape": "rect", "size": [50.0, 40.0], "corner": 0.0})
 	req["top"] = top
-	# THE WORLD AS IT IS WANTED, where a pour would only maybe leave it: a record goes on from whatever its first file says
+	# the world as it is wanted, where a pour would only maybe leave it: a record goes on from whatever its first file says
 	var ids := {}
 	var poses := PackedFloat32Array()
 	poses.resize(a.pieces.size() * 7)
@@ -332,7 +335,7 @@ func _fallen_used() -> void:
 		return
 	for nm in ids:
 		_ok(int((last["state"] as PackedByteArray)[int(ids[nm])]) == AssemblyWorld.SEATED, "the one %s is pressed home" % String(nm))
-	# NEVER THROUGH THE TABLE
+	# never through the table
 	_ok(Tables.sdf(top, Vector2(0.05, 0.03)) < 0.0, "the control: the first lay under the table")
 	for nm in ["under", "past"]:
 		var path_keys: PackedFloat32Array = keys.get(int(ids[nm]), PackedFloat32Array())
@@ -346,7 +349,7 @@ func _fallen_used() -> void:
 				through += 1
 			i += 8
 		_ok(path_keys.size() > 0 and through == 0 and highest > 0.0, "the one %s comes up beside the table and over it, never through it: %d keys in it, up to %.1f cm" % [String(nm), through, highest * 100.0])
-	# MOVED OFF FIRST
+	# moved off first
 	var stray := int(ids["stray"])
 	var first_seat := float(seated_at.get(int(ids["under"]), -1.0))
 	var seat := a.place_xf(6, 6, 0, 2, 4, 0)

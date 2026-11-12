@@ -16,15 +16,13 @@ to three things:
   3. A THIN LINE IS LAID IN THE PAINT IT WAS LAID IN (layers_paint.laid_paints): the gold step laid in gold alone - the black redrawn
      aside traced again by no one. CONTROL: the rule it replaced (the step's change cut by color, each part's color its most laid
      points' darker half) finds a part that is not gold.
-  4. A POINT LAID TWICE SHOWS THE PAINTER'S CANVAS AFTER ITS FIRST MARK (feedback 0015: a dark pull's first pass showed half its color
+  4. A POINT LAID TWICE SHOWS THE PAINTER'S CANVAS AFTER ITS FIRST MARK (: a dark pull's first pass showed half its color
      where a second would cross, a pale patch in the streak): the element's first staged coverage of its color over what was under it.
      CONTROL: the coverage shared out by how many marks touch the point, as it was, does not.
-  5. A HAND'S ORDER (export._hand_order; feedback 0016: "This brush is flipping and twirling ... A real artist would prefer keep a neutral
-     position"): on a second made surface, a flat's pulls laid across and up the face by turns, every other one the other way, and one
+  5. A HAND'S ORDER (export._hand_order): on a second made surface, a flat's pulls laid across and up the face by turns, every other one the other way, and one
      with a tail - exported, each pull within 90 degrees of the last, gathered by the way they go, the tailed one its own way, the maps
      still the canvas and staged from the order the program plays. CONTROL: the order and ways they were laid in.
-  6. A LOAD ONLY RUNS OUT (export.LOAD_HEAVIER; feedback 0006: "This brush just went from painting very faint, almost imperceptable
-     yellow strokes ... to an extremely dark yellow stroke ... without ever returning to the container"): a flat's pulls in one paint,
+  6. A LOAD ONLY RUNS OUT (export.LOAD_HEAVIER): a flat's pulls in one paint,
      faint and strong by turns, as the optimizer finds them - exported, none lays more than the one before by LOAD_HEAVIER without a
      trip to the pot between them, and the maps still come to the canvas. CONTROL: the program as it was, with no such trip, does.
   8. ONE LAYER AGAIN (run.py `only`, export.merge_layer): a layer painted again alone over the canvas the ones before it leave, put among
@@ -91,7 +89,7 @@ def recompose(els, root, shape, order):
 def first_marks(p, starts, els, root):
     """For every point two or more of an element's marks lay: how far what the show draws after its first mark (the element's first
     staged coverage of its color over what was under it, pre-multiplied as the shader lays it) is from the painter's canvas after that
-    mark - and the same, the coverage shared out by how many marks touch the point (feedback 0015's pale patches)."""
+    mark - and the same, the coverage shared out by how many marks touch the point ('s pale patches)."""
     from export import groups
     pre = np.zeros((p.cv.h, p.cv.w, 3))
     alp = np.zeros((p.cv.h, p.cv.w))
@@ -145,8 +143,7 @@ def _pulls(prog):
 
 
 def hand_order():
-    """5. A HAND'S ORDER (export._hand_order; feedback 0016: "A real artist would prefer keep a neutral position ... batch certain strokes
-    from certain directions"): a flat's pulls laid as the optimizer leaves them - across and up and down the face by turns, every other
+    """5. A HAND'S ORDER (export._hand_order): a flat's pulls laid as the optimizer leaves them - across and up and down the face by turns, every other
     one the other way - and one with a tail. Exported, each pull runs within 90 degrees of the one before, the pulls are gathered by the
     way they go, the tailed one keeps its way, the maps still come to the canvas, and a point laid twice shows after its first mark what
     the canvas held after the first pull the program plays there. CONTROL: the order and ways they were laid in do none of it."""
@@ -209,8 +206,7 @@ def hand_order():
 
 
 def loads():
-    """6. A LOAD ONLY RUNS OUT (export.LOAD_HEAVIER; feedback 0006, 2026-11-09: "the new stroke here was applied without ever returning to
-    the container, to pickup a heavier load. Logically, it makes no sense"): six pulls of a flat in one paint across the face, at the
+    """6. A LOAD ONLY RUNS OUT (export.LOAD_HEAVIER): six pulls of a flat in one paint across the face, at the
     strengths the optimizer finds them - strong and faint by turns. Exported, no pull lays more than the one before it by LOAD_HEAVIER
     without a trip to the pot between them, and the maps still come to the canvas. CONTROL: with no such trip, as the program was, one
     does."""
@@ -313,7 +309,7 @@ def main():
         print("%d elements: %s" % (len(els), ", ".join("%s %s %s" % (e["id"], e["tool"], e["paint"]) for e in els)))
         check(len(els) >= 2 and els[0]["layer"] == 0, "the ground is the first element, the lines after it")
 
-        # 8. ONE LAYER AGAIN (run.py `only`; export.merge_layer): the line painted again alone over the canvas the ground left
+        # 8. One layer again (run.py `only`; export.merge_layer): the line painted again alone over the canvas the ground left
         check_one_layer(ref, pics, steps, els, root, (p.cv.h, p.cv.w))
 
         # 1. the maps come to the canvas

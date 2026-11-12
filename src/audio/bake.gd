@@ -1,24 +1,18 @@
 extends RefCounted
 class_name SpectrumBake
 
-## SpectrumBake - offline analysis of a song into a spectrum timeline.
-##
-## The live [Spectrum] reads an analyzer on the audio bus; that only works while
-## the song plays in real time, and it goes unreliable under Movie Maker's offline
-## audio - which is why a recorded video can't trust it. This bakes the spectrum
-## *ahead of time*, straight from the samples: decode the song to mono PCM, slide a
-## windowed FFT across it, and aggregate each window into the same 64 log-spaced
-## bands the analyzer produces. The result is a per-frame timeline the Spectrum can
-## replay deterministically, identically every time, independent of playback - so a
-## render driven from it is correct and reproducible. (Live sessions still use the
-## analyzer; only the exporter bakes.)
+## SpectrumBake - offline analysis of a song into a spectrum timeline. The live [Spectrum] reads an analyzer
+## on the audio bus, which is unreliable under Movie Maker's offline audio. This bakes the spectrum ahead of
+## time from the samples: decode the song to mono PCM, slide a windowed FFT across it, and aggregate each
+## window into the same 64 log-spaced bands the analyzer produces. The per-frame timeline replays
+## deterministically, so a render driven from it is reproducible. Only the exporter bakes; live sessions use
+## the analyzer.
 
 const RATE := 44100      # samples/sec we decode to
 const WIN := 2048        # FFT window (≈21 Hz bins - enough low-end for bass/beat)
 
-## Cross-process progress channel: the bake and the render write their 0..1 progress
-## here, and the exporter (a different process) reads it for the status notification.
-## They share the project's user:// dir, so this works across the separate processes.
+## Cross-process progress channel: the bake and the render write their 0..1 progress here, and the exporter
+## (another process, sharing the project's user:// dir) reads it for the status notification.
 const STATUS_PATH := "user://export_status.txt"
 
 # Shared by the editor's --script runner and an exported executable's main-scene CLI.
@@ -50,8 +44,7 @@ static func run_cli(args: PackedStringArray) -> int:
 
 
 static func write_progress(frac: float) -> void:
-	# Write to a temp file then rename: rename is atomic, so a reader in another
-	# process never catches a half-written file (which errored get_as_text).
+	#Write to a temp file then rename (atomic), so a reader in another process never catches a half-written file.
 	var tmp := STATUS_PATH + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
@@ -62,8 +55,8 @@ static func write_progress(frac: float) -> void:
 		ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(STATUS_PATH))
 
 
-# 0..1 progress, or -1 if absent/unreadable. Reads raw bytes (not get_as_text, which
-# asserts on a length mismatch) so a read landing mid-write degrades to -1, not an error.
+# 0..1 progress, or -1 if absent/unreadable. Reads raw bytes (get_as_text asserts on a length mismatch) so a
+# read landing mid-write degrades to -1.
 static func read_progress() -> float:
 	if not FileAccess.file_exists(STATUS_PATH):
 		return -1.0
@@ -75,9 +68,8 @@ static func read_progress() -> float:
 	return float(s) if s.is_valid_float() else -1.0
 
 
-## Bake `song_path` into an Array of PackedFloat32Array(band_count) - one band frame
-## per 1/fps second. Returns [] on failure (e.g. ffmpeg missing). Matches the live
-## analyzer's band edges so the baked look tracks the live preview.
+## Bake `song_path` into an Array of PackedFloat32Array(band_count), one band frame per 1/fps second. Returns
+## [] on failure (e.g. ffmpeg missing). Matches the live analyzer's band edges.
 static func bake(song_path: String, fps: int, band_count: int,
 		freq_min: float, freq_max: float, db_floor: float) -> Array:
 	var samples := _load_samples(song_path)
@@ -138,8 +130,8 @@ static func bake(song_path: String, fps: int, band_count: int,
 	return frames
 
 
-# Decode any supported audio to mono float samples at RATE via ffmpeg (already a
-# soft dependency, used for FLAC). f32le → to_float32_array is a fast native read.
+# Decode any supported audio to mono float samples at RATE via ffmpeg. f32le -> to_float32_array is a fast
+# native read.
 static func _load_samples(song_path: String) -> PackedFloat32Array:
 	var src := song_path
 	if src.begins_with("res://") or src.begins_with("user://"):
@@ -163,9 +155,8 @@ static func _load_samples(song_path: String) -> PackedFloat32Array:
 const CACHE_MAGIC := 0x42414B45     # "BAKE"
 
 
-## Where the bake for a given song is cached - keyed by its path + byte size, so
-## replacing the file invalidates it. Shared by the exporter (which writes it) and
-## Spectrum (which reads it via --bake-file).
+## Where the bake for a given song is cached, keyed by its path + byte size so replacing the file invalidates
+## it. Written by the exporter, read by Spectrum (via --bake-file).
 static func cache_path(song_path: String) -> String:
 	var p := song_path
 	if p.begins_with("res://") or p.begins_with("user://"):
@@ -179,8 +170,7 @@ static func cache_path(song_path: String) -> String:
 	return "user://bake_%d.spec" % hash(p + "_" + str(sz))
 
 
-## Write a baked timeline to a cache file (so a re-export of the same song skips the
-## analysis). Keyed by the caller (see Spectrum) on the song's path + size.
+## Write a baked timeline to a cache file, keyed by the caller (see Spectrum) on the song's path + size.
 static func save_cache(path: String, frames: Array, band_count: int) -> void:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:

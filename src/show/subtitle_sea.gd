@@ -3,44 +3,34 @@ class_name SubtitleSea
 
 ## SubtitleSea - the water the subtitles' color moves on.
 ##
-## THE TAIL RAISES THE WAVES (the user, 2026-10-20: "the tail of the text (the new text) is causing
-## 'ripples' in the color, through the harmonics, which propagates backwards through that older text").
-## The line is a one-dimensional sea - a place is a letter, the gap between two words one more - and the
-## voice is a source on it, where the reading's eye is ([method emit]). Each HARMONIC of the voice, a band
+## The line is a one-dimensional sea (a place is a letter, the gap between two words one more) and the
+## voice is a source on it, where the reading's eye is ([method emit]). Each harmonic of the voice, a band
 ## of its spectrum ([constant HARMONICS]), rings there at a swell of its own, as high as the band is loud
 ## lately; the wave runs back through the words already said at [constant SPEED] letters a second and dies
-## out over the harmonic's `reach`, so the water is only ever rough near the tail. What a letter shows is
-## the sum ([method line]): how high the water stands there and the hue the harmonics cresting there pull
-## it toward - the overlay lights it by both and lets it settle with distance from the eye.
+## out over the harmonic's `reach`, so the water is only rough near the tail. What a letter shows is the
+## sum ([method line]): how high the water stands there and the hue the harmonics cresting there pull it
+## toward; the overlay lights it by both and lets it settle with distance from the eye.
 ##
-## QUIET, AND IT DIES OUT (the user, of the first sea: "too distracting. The colors are very intense, and
-## they never decay back to the baseline color ... something more natural, more subtle, and something that
-## probably decays with distance from the tail"). That sea's longest wave ran 160 letters, a reflection off
-## the line's first letter kept the start of every long line rough, and each syllable threw a flash back
-## through the whole line; the reaches are a third of that now, the loudness follows the phrase rather than
-## the syllable ([constant ATTACK], each harmonic's `release`), and there is no reflection and no flash.
+## It is quiet and dies out: the reaches are short, the loudness follows the phrase rather than the
+## syllable ([constant ATTACK], each harmonic's `release`), and there is no reflection off the line's
+## first letter and no per-syllable flash.
 ##
-## It replaced eight lights, each a fixed run of three letters tied to one FFT band with a fixed threshold
-## ("about 2 or 3 words in an entire sentence will be highlighted ... There is little to no movement"). The
-## threshold was the dull part: on a real take the speech bands sit at 0.1-0.3 of Spectrum's 60 dB window
-## (take_7308f0: the 90th percentile of every band from 90 Hz to 10 kHz under 0.2), so `(raw - 0.10) * 2.5`
-## read zero for nearly every frame. EACH HARMONIC IS HEARD AGAINST ITSELF ([method hear]): between its own
-## running floor - the room, a soundscape under the voice - and its own recent peak.
+## Each harmonic is heard against itself ([method hear]): between its own running floor (the room, a
+## soundscape under the voice) and its own recent peak. A fixed threshold reads zero for nearly every
+## frame on a real take, where the speech bands sit at 0.1-0.3 of Spectrum's 60 dB window.
 ##
-## A WAVE BELONGS TO THE TEXT, NOT TO THE TAIL: what the source sent out is kept with where it stood
+## A wave belongs to the text, not the tail: what the source sent out is kept with where it stood
 ## ([member _g]), and the letter at p is reached at t by what left at the t0 where
 ## s(t0) - SPEED * (t - t0) = p. So the waves behind a speaking voice are stretched as a moving source's
 ## are, and through a pause they roll on out of the words where they were raised while the source calms.
-## Measured from the tail instead, the pattern would ride along with the voice: at a reading pace, nearly
-## standing still in the text.
 ##
 ## A function of show time and the bands it is handed: paused, nothing moves; a seek, a loop or a new take
 ## starts calm; a render at a fixed rate sees the same sea every time.
 
-## THE HARMONICS: `band`, the voice's frequencies it hears (Hz); `swell`, how fast its wave rises and falls
-## where it is raised (Hz - a letter behind a speaking voice sees about half that); `reach`, the letters it
-## runs before it has fallen to a third; `hue`, how far round the wheel its crests pull a letter (a turn is
-## 1); `release`, how long its loudness takes to fall when the band goes quiet (s).
+## The harmonics: `band`, the voice's frequencies it hears (Hz); `swell`, how fast its wave rises and falls
+## where it is raised (Hz; a letter behind a speaking voice sees about half); `reach`, the letters it runs
+## before it has fallen to a third; `hue`, how far round the wheel its crests pull a letter (a turn is 1);
+## `release`, how long its loudness takes to fall when the band goes quiet (s).
 const HARMONICS := {
 	"fundamental": {"label": "Fundamental", "blurb": "The voice's own pitch and its first overtones: the long, slow swell, the last to die out.",
 		"band": [90.0, 250.0], "swell": 0.55, "reach": 50.0, "hue": -0.045, "release": 0.9},
@@ -53,14 +43,14 @@ const HARMONICS := {
 	"sibilance": {"label": "Sibilance", "blurb": "The hiss of s, sh, f and t: a fine stir just behind the tail.",
 		"band": [4000.0, 10000.0], "swell": 2.0, "reach": 18.0, "hue": 0.08, "release": 0.35},
 }
-## Letters a second every wave runs back (a word of five letters and its gap in about 0.4 s - a reading
-## voice says some 15 letters a second, so the waves are left behind it, as a boat leaves its wake).
+## Letters a second every wave runs back. A reading voice says some 15 letters a second, so the waves are
+## left behind it as a boat leaves its wake.
 const SPEED := 15.0
-## How quickly a harmonic's loudness rises (s) - slow enough to follow the phrase, not each syllable - and
-## THE LEVEL A HARMONIC IS HEARD AGAINST: its floor falls to a quiet band in FLOOR_FALL and creeps up in
+## How quickly a harmonic's loudness rises (s): slow enough to follow the phrase, not each syllable. The
+## level a harmonic is heard against: its floor falls to a quiet band in FLOOR_FALL and creeps up in
 ## FLOOR_RISE (so the bed under a voice is the floor, and a voice that never pauses is not); its peak jumps
-## to a loud one and sinks back in PEAK_FALL; and the two are never closer than RANGE of the window
-## (3.6 dB), so a quiet room's breath is no wave.
+## to a loud one and sinks back in PEAK_FALL; the two are never closer than RANGE of the window (3.6 dB),
+## so a quiet room's breath is no wave.
 const ATTACK := 0.12
 const FLOOR_FALL := 0.25
 const FLOOR_RISE := 8.0
@@ -88,8 +78,8 @@ var _floor := PackedFloat32Array()
 var _peak := PackedFloat32Array()
 var _heard := -1.0
 
-## WHAT THE SOURCE SENT OUT, oldest first, from [member _at] on: when, where it stood, the two together
-## as `s + SPEED * t` (never falling, so a letter's moment is found by a walk), and its [member levels].
+## What the source sent out, oldest first, from [member _at] on: when, where it stood, the two together as
+## `s + SPEED * t` (never falling, so a letter's moment is found by a walk), and its [member levels].
 var _t := PackedFloat64Array()
 var _s := PackedFloat64Array()
 var _g := PackedFloat64Array()
@@ -122,9 +112,9 @@ func _init() -> void:
 		_peak[k] = RANGE
 
 
-## HEAR [param bands] (Spectrum's, this frame - none is silence) at reading time [param t]: each
-## harmonic's loudness, eased by show time - paused, nothing changes - against its own floor and peak. A
-## step back or a jump of more than two seconds (a seek, a loop, a new take) is silence.
+## Hear [param bands] (Spectrum's, this frame; none is silence) at reading time [param t]: each harmonic's
+## loudness, eased by show time (paused, nothing changes) against its own floor and peak. A step back or a
+## jump of more than two seconds (a seek, a loop, a new take) is silence.
 func hear(bands: PackedFloat32Array, t: float) -> void:
 	var dt := t - _heard if _heard >= 0.0 else 0.0
 	_heard = t
@@ -149,9 +139,9 @@ func hear(bands: PackedFloat32Array, t: float) -> void:
 		levels[k] = lerpf(old, x, 1.0 - exp(-dt / (ATTACK if x > old else _release[k])))
 
 
-## SEND OUT what is heard now, from where the source stands at reading time [param t] ([param source], in
+## Send out what is heard now, from where the source stands at reading time [param t] ([param source], in
 ## letters through the whole reading). Nothing is sent while time stands still; a step back in time or in
-## place, or a jump of more than two seconds, drops every wave - a sea starts calm.
+## place, or a jump of more than two seconds, drops every wave.
 func emit(t: float, source: float) -> void:
 	var n := _t.size()
 	if n > _at:
@@ -183,10 +173,10 @@ func clear() -> void:
 	_at = 0
 
 
-## THE SEA ALONG A LINE at [param t]: [constant STRIDE] values for each of [param n] letters from
-## [param p0] (the line's first letter, in the letters [method emit] was handed) - how high the water
-## stands there (about -1..1 at the tail) and the hue the cresting harmonics pull it toward (a share of a
-## turn). A letter no wave has reached, or every wave has passed, is calm: both zero.
+## The sea along a line at [param t]: [constant STRIDE] values for each of [param n] letters from
+## [param p0] (the line's first letter, in the letters [method emit] was handed): how high the water stands
+## there (about -1..1 at the tail) and the hue the cresting harmonics pull it toward (a share of a turn).
+## A letter no wave has reached, or every wave has passed, is calm: both zero.
 func line(p0: float, n: int, t: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(n * STRIDE)

@@ -1,18 +1,17 @@
 extends Node
 
-## assistant_delete_check - DELETING FROM THE FEEDBACK LIST NEVER HOLDS THE APP UP (2026-11-07, the user: "We can delete them
-## individually now, but that can be very slow ... It blocks the main thread to do that"), and DELETE ALL.
+## assistant_delete_check - deleting from the feedback list never holds the app up, and Delete all.
 ##
 ##   tests/run_boot_probe.sh tests/app/assistant_delete_check.gd 60
 ##
 ## On a folder of its own (`Assistant.root`), never the author's feedback. What it holds:
-##   - ROWS ONLY WHILE THE PANEL IS OPEN: closed, the list builds none (the control: open, one per note).
-##   - ONE NOTE DELETED leaves the list at once and takes ITS ROW ALONE - every other row is the same node it was (the
-##     control: a full refresh makes new ones) - and its files go on a worker: a task is under way when the call returns,
-##     and once it is done every file of the note is gone and no other note's is.
-##   - DELETE ALL is pressed twice (the first press only arms it), takes every note not at work and every numbered file no
-##     remaining note owns (an old screenshot's import file), and leaves a run under way, one waiting its turn, their
-##     files, and a file that is not a note's. With nothing left to take it is grayed (the control: it was not before).
+##   - Rows only while the panel is open: closed, the list builds none (control: open, one per note).
+##   - One note deleted leaves the list at once and takes its row alone (every other row is the same node;
+##     control: a full refresh makes new ones); its files go on a worker, so a task is under way when the
+##     call returns, and once done every file of the note is gone and no other note's is.
+##   - Delete all is pressed twice (the first press only arms it), takes every note not at work and every
+##     numbered file no remaining note owns, and leaves a run under way, one waiting its turn, their files
+##     and a file that is not a note's. With nothing left to take it is grayed (control: it was not before).
 ##   - The folder is given no .gdignore from a test.
 ## No run is ever started: the Assistant is held at its concurrency limit throughout.
 

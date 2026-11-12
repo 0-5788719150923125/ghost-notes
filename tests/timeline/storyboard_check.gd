@@ -1,34 +1,27 @@
 extends SceneTree
 
-## storyboard_check - a storyboard as DATA a note keeps and an editor edits (next/storyboard.md):
+## storyboard_check - a storyboard as data a note keeps and an editor edits (next/storyboard.md):
 ## the pure half, with no autoload and no window.
 ##
 ##   godot --headless --path . --script tests/timeline/storyboard_check.gd
 ##
-## AN EDIT IS A NEW TREE ([DataPath]): put, cut, insert and move each return a root of their own
-## and leave the one they were handed exactly as it was - held to a copy made before, value for
-## value - and the result shares no container with it (an edit made to the result in place never
-## reaches the original). A path that leads nowhere changes nothing.
+## Holds:
+## - an edit is a new tree ([DataPath]): put, cut, insert and move each return a root of their own and
+##   leave the one they were handed as it was (held to a copy made before) sharing no container with
+##   it; a path that leads nowhere changes nothing;
+## - a note's block is read three ways ([method Storyboard.of_block]): its own storyboard (a `sequence`,
+##   even an empty one), a file's name, or nothing written; it round-trips through the frontmatter's
+##   YAML and through [method Storyboard.to_yaml] / [method Storyboard.from_yaml];
+## - a storyboard taken into a note plays as the file did: the raw tree read from
+##   `storyboards/default.yaml`, kept as a note's block and loaded from there, is the loaded form the
+##   file gives, entry for entry; loading never changes the raw tree handed in; the loaded form written
+##   out for a render ([method Storyboard.raw_of]) and loaded there is the same storyboard;
+## - the schedule matches numbers worked by hand: a fixed hold over its tempo, a cue's least hold, the
+##   unauthored fallback, and the half-second floor.
 ##
-## A NOTE'S BLOCK IS READ THREE WAYS ([method Storyboard.of_block]): its own storyboard (a
-## `sequence`, even an empty one), a file's name, or nothing written. The block a note writes
-## round-trips through the YAML the frontmatter is written in, and through [method
-## Storyboard.to_yaml] / [method Storyboard.from_yaml], which the editor's source view uses.
-##
-## A STORYBOARD TAKEN INTO A NOTE PLAYS AS THE FILE DID: the raw tree read from
-## `storyboards/default.yaml`, kept as a note's block and loaded from there, is the loaded form
-## the file gives - entry for entry. Loading never changes the raw tree it is handed. And the
-## loaded form, written out for a render ([method Storyboard.raw_of]) and loaded there, is the
-## same storyboard again.
-##
-## THE SCHEDULE is the arithmetic the Director walked before it moved here, held to numbers
-## worked by hand: a fixed hold over its tempo, a cue's least hold, the unauthored fallback, and
-## the half-second floor.
-##
-## THE CONTROLS, without which a pass proves nothing: a storyboard with a nameless entry is
-## refused with a message that says where; YAML that does not parse is refused; a `use` of a def
-## that is not there is refused; and a deliberately aliasing "edit" (the in-place write DataPath
-## exists to prevent) is caught by the same comparison that passes the real ones.
+## Controls: a storyboard with a nameless entry is refused with a message that says where; YAML that
+## does not parse is refused; a `use` of a def that is not there is refused; a deliberately aliasing
+## "edit" (an in-place write) is caught by the same comparison that passes the real ones.
 
 var _fails: Array = []
 
@@ -99,7 +92,7 @@ func _paths() -> void:
 	_ok(DataPath.same(root, before), "after every edit above, the original is still as it was")
 	_ok(DataPath.same({"a": 4, "b": [1, 2.0]}, {"b": [1.0, 2], "a": 4.0}), "same: maps by key, numbers by value")
 	_ok(not DataPath.same([1, 2], [2, 1]), "same: lists in order")
-	# THE CONTROL: an edit made in place IS seen by this comparison
+	# The control: an edit made in place is seen by this comparison
 	var aliased := root
 	(aliased["sequence"] as Array)[0]["hold"] = 123
 	_ok(not DataPath.same(root, before), "the control: an in-place write is caught as a changed original")

@@ -1,9 +1,8 @@
 extends Node2D
 class_name IntroBlur
 
-## IntroBlur - THE INTRO'S BLUR: the whole stage read back through the intro's shader
-## ([constant ShowOpening.INTRO_SHADER]), drawn over the picture and under the channel's name - and
-## not drawn at all while it is off. The card table's and the desk's ([ShowOpening]).
+## IntroBlur - the intro's blur: the whole stage read back through the intro's shader ([constant ShowOpening.INTRO_SHADER]), drawn over
+## the picture and under the channel's name, and not drawn at all while it is off. The card table's and the desk's ([ShowOpening]).
 
 var _mat := ShaderMaterial.new()
 

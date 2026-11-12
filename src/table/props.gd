@@ -1,24 +1,19 @@
 extends RefCounted
 class_name Props
 
-## Props - things BUILT FROM A DESCRIPTION. A thing is a few PARTS, each one SHAPE with real sizes
-## and one MATERIAL whose surface is procedural, with an ORNAMENT worked into it if it has one - or a
-## GROUP of parts, placed and repeated as one (a candelabra's arm, cup and taper, copied round). An
-## agent writes the description - centimeters, the thing's base on y = 0, its front toward +z - and
+## Props: things built from a description. A thing is a few parts, each one shape with real sizes and one material whose surface is
+## procedural (with an ornament worked into it if it has one), or a group of parts, placed and repeated as one (a candelabra's arm, cup and
+## taper, copied round). An agent writes the description - centimeters, the thing's base on y = 0, its front toward +z - and
 ## [method sanitize] makes whatever it wrote buildable; [method build] makes the meshes, in meters.
 ##
-## SHAPES, MATERIALS, PLAYS and ORNAMENTS are registries, and their words are what an agent reads
-## when it chooses ([method describe]), so the prompt and the builder cannot disagree about what
-## exists.
-## Geometry is built here rather than from CSG nodes because a part's lobes, twist and wax drips
-## displace it as it is built, which a spun polygon cannot do.
+## Shapes, materials, plays and ornaments are registries, and their words are what an agent reads when it chooses ([method describe]), so
+## the prompt and the builder cannot disagree about what exists. Geometry is built here rather than from CSG nodes because a part's lobes,
+## twist and wax drips displace it as it is built.
 ##
-## FREE FORM, NOT FREE TRIANGLES. An agent draws its own curves - a lathe's profile, a tube's or a
-## loft's path, an extrude's or a section's outline, any point of them rounded or kept crisp - and
-## any part can be WARPED whole (bent, twisted, tapered, leaned, scaled, wobbled). It never writes
-## vertices: typed out by hand they come back inside out, holed and unshaded, and skip the foot and
-## the heaps that every built shape feeds. A smooth curve keeps a flat base and top flat ([method
-## _lathe]); a set dresser's teapot drawn through every point came out a ball.
+## An agent draws its own curves - a lathe's profile, a tube's or a loft's path, an extrude's or a section's outline, any point of them
+## rounded or kept crisp - and any part can be warped whole (bent, twisted, tapered, leaned, scaled, wobbled). It never writes vertices:
+## typed by hand they come back inside out, holed and unshaded, and skip the foot and the heaps every built shape feeds. A smooth curve
+## keeps a flat base and top flat ([method _lathe]).
 
 ## The most parts a thing has (every part in every group counted), points a profile or path has,
 ## copies a part makes, groups deep a part may sit, parts a thing makes in all (every copy of every
@@ -31,11 +26,11 @@ const MAX_INSTANCES := 96
 const MAX_WICKS := 6
 ## The most cross-sections a loft has.
 const MAX_SECTIONS := 12
-## How far apart a warped part's points may be, meters: a warp moves the points a shape has, and a
-## candle's wall drawn top and bottom only stayed straight however far it was bent.
+## How far apart a warped part's points may be, meters: a warp moves the points a shape has, so a long wall drawn top and bottom only
+## stays straight.
 const WARP_STEP := 0.005
-## ...and a block of a material that gives (a sponge's foam), its flat faces cut this far apart (meters): enough to show it bend over a
-## pot's mouth, few enough that what is looked at through its every point stays quick
+## ...and a block of a material that gives (a sponge's foam) has its flat faces cut this far apart (meters): enough to show it bend over a
+## pot's mouth, few enough to stay quick.
 const GIVE_STEP := 0.008
 ## The largest anything may be, centimeters: a thing past it is scaled down whole.
 const MAX_SIZE := 60.0
@@ -45,7 +40,7 @@ const FOOT_H := 0.02
 ## A crystal this clear or clearer is drawn as glass.
 const CLEAR := 0.8
 
-## THE SHAPES a part can be, and what they are for.
+## The shapes a part can be, and what they are for.
 const SHAPES := {
 	"lathe": "a solid turned about the vertical axis, as on a lathe: vessels, candles, candlesticks, cups, bowls, bottles, vases, stems, bells, finials, coins. `profile`: [radius, height] points from the middle of the bottom outward and up the outside; a HOLLOW thing goes on over its rim and back down the inside to the middle of its inner floor - a bowl is [[0,0],[3,0],[6,4],[6.4,4.2],[5.8,4],[2.8,0.6],[0,0.6]]. Optional: `smooth` true curves through the points instead of joining them straight (a flat base and a flat top stay flat); a point written [radius, height, r] has its corner rounded r centimeters, and [radius, height, 0] keeps a crisp corner in a smooth profile - a foot, a rim, the edge where a lid sits; `sides` 3-12 cuts it flat-sided (6 is hexagonal); `lobes` bulges round it (a scalloped bowl, a melon, a fluted column) with `lobe_depth` 0.05-0.4; `twist` in degrees from bottom to top (a twisted taper). A candle's wax has `wick` true - its flame is lit at the middle of its top, which is melted into a shallow pool - or `wicks` 2-6, set round the top (three make a triangle), or `wicks` [[x, z], ...] placing each, centimeters from the middle; and `drips` 0-1.",
 	"box": "a block with rounded edges: books, boxes, tins, slabs, trays, a plinth. `size` [width, height, depth]; `round` the edges' radius; `taper` 0-0.9 narrows it toward the top.",
@@ -69,7 +64,7 @@ const SHAPES := {
 	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
 }
 
-## THE STRANDS: what a strand can be, and the width it is when none is given (centimeters).
+## The strands: what a strand can be, and the width it is when none is given (centimeters).
 const STRANDS := {"rope": {"thickness": 1.2}, "cord": {"thickness": 0.5}, "wire": {"thickness": 0.15},
 	"vine": {"thickness": 0.45}, "beads": {"thickness": 0.8}, "chain": {"thickness": 0.7}}
 ## How a strand lies ([method _strand_line]).
@@ -79,17 +74,16 @@ const LAYS := ["coil", "flemish", "heap", "path", "drape"]
 const MAX_STRAND := 600.0
 const DRAPE_REACH := 220.0
 const STRAND_SAMPLES := 1400
-## THE BONES: each kind's length and shaft thickness when none is given (centimeters).
+## The bones: each kind's length and shaft thickness when none is given (centimeters).
 const BONES := {"femur": Vector2(44.0, 2.6), "long": Vector2(30.0, 2.0), "rib": Vector2(24.0, 1.2),
 	"small": Vector2(9.0, 0.6), "wishbone": Vector2(6.0, 0.35)}
-## THE SKULLS: each kind's length front to back when none is given (centimeters).
+## The skulls: each kind's length front to back when none is given (centimeters).
 const SKULLS := {"human": 19.0, "horned": 40.0, "bird": 8.0}
-## THE SKULLS AS SCULPTS ([method _skull]), their right halves (mirrored), centimeters, facing +z - each
-## sized to its length when built. Drawn by hand from the bone: a crow's (a braincase, orbits open to the side
-## and through a thin wall between them, a beak with its nostrils through, the bars under the eyes, a jaw of
-## two thin branches), a person's (a vault, brow, cheekbones and the arches behind them standing free, sockets,
-## the nose's opening, the teeth, and the jaw) and a cow's or a goat's as it is found - no jaw - long-faced,
-## its sockets at the sides in raised rims.
+## The skulls as sculpts ([method _skull]), their right halves (mirrored), centimeters, facing +z - each sized to its length when built:
+## a crow's (a braincase, orbits open to the side and through a thin wall between them, a beak with its nostrils through, the bars under
+## the eyes, a jaw of two thin branches), a person's (a vault, brow, cheekbones and the arches behind them standing free, sockets, the
+## nose's opening, the teeth, and the jaw) and a cow's or a goat's as it is found - no jaw, long-faced, its sockets at the sides in raised
+## rims.
 const SKULL_FORMS := {
 	"bird": [
 		{"points": [[0, 2.0, -1.9]], "size": [3.0, 2.6, 3.1]},
@@ -156,9 +150,9 @@ const SKULL_FORMS := {
 		{"points": [[0, 7.5, -11.5]], "size": [2.6, 2.6, 3.0], "carve": true, "blend": 0.3},
 	],
 }
-## A SCULPT's limits: its strokes, the points in all of them, the cells across its longest side (at least, and
-## at most - [method _cut_of]), the short pieces a smooth rod is cut into between two of its points, a grid
-## block's cells a side ([method _grid]), and how many built sculpts a process keeps ([method _sculpt]).
+## A sculpt's limits: its strokes, the points in all of them, the cells across its longest side (at least, and at most - [method _cut_of]),
+## the short pieces a smooth rod is cut into between two of its points, a grid block's cells a side ([method _grid]), and how many built
+## sculpts a process keeps ([method _sculpt]).
 const MAX_STROKES := 48
 const MAX_SCULPT_POINTS := 320
 const SCULPT_CELLS := Vector2(72.0, 144.0)
@@ -183,10 +177,9 @@ const EXTRUDE_OUTLINES := ["polygon", "star", "circle", "rect", "heart", "lens",
 const WARPS := {"taper": Vector2(-1.0, 0.95), "twist": Vector2(-1080.0, 1080.0), "bend": Vector2(-270.0, 270.0),
 	"bend_to": Vector2(-360.0, 360.0), "wobble": Vector2(0.0, 1.0)}
 
-## THE MATERIALS, each with its shader `code` and its defaults. `polish` is how smooth it is,
-## `wear` how used, `pattern` how strong its natural pattern, `clarity` how far light goes into
-## it, `grain` the pattern's size in centimeters. AS MATTER ([Particles], next/table_physics.md): its
-## `density` (grams a cubic centimeter: under a liquid's 1 it floats), its `strength` against a pestle (0 never
+## The materials, each with its shader `code` and its defaults. `polish` is how smooth it is, `wear` how used, `pattern` how strong its
+## natural pattern, `clarity` how far light goes into it, `grain` the pattern's size in centimeters. As matter ([Particles],
+## next/table_physics.md): its `density` (grams a cubic centimeter: under a liquid's 1 it floats), its `strength` against a pestle (0 never
 ## breaks), and how many seconds a grain of it takes to `dissolve` in a liquid (0 never).
 const MATERIALS := {
 	"metal": {"code": 1, "polish": 0.62, "wear": 0.2, "pattern": 0.0, "clarity": 0.5, "grain": 1.5, "density": 7.8, "strength": 0.0, "dissolves": 0.0,
@@ -225,7 +218,7 @@ const MATERIALS := {
 		"about": "lacquer, enamel or paint over anything"},
 }
 
-## THE ORNAMENTS a part's surface can carry, with their shader codes.
+## The ornaments a part's surface can carry, with their shader codes.
 const ORNAMENTS := {
 	"bands": {"code": 1, "about": "raised rings round it, `count` of them"},
 	"flutes": {"code": 2, "about": "grooves running up it, `count` round"},
@@ -239,8 +232,8 @@ const ORNAMENTS := {
 	"hammered": {"code": 10, "about": "the dimpled face of hand-hammered metal, all over"},
 }
 
-## THE PLAY OF LIGHT a material can have - what moves in a stone, a shell or a metal as it turns,
-## or as the flames catch it - with its shader code. Clear glass and crystal show only a rainbow.
+## The play of light a material can have - what moves in a stone, a shell or a metal as it turns, or as the flames catch it - with its
+## shader code. Clear glass and crystal show only a rainbow.
 const PLAYS := {
 	"silk": {"code": 1, "about": "a silky band of light lying across its fibers, sliding over it as it turns; `pattern` stripes it in `color2` - tiger's eye, hawk's eye, satin spar selenite"},
 	"flash": {"code": 2, "about": "broad patches that flash `color2` and the colors beside it where they catch the light, dark elsewhere - labradorite, spectrolite"},
@@ -261,8 +254,7 @@ const _GLASS := preload("res://shaders/prop_glass.gdshader")
 const _LENS := preload("res://shaders/prop_lens.gdshader")
 
 
-## A THING DRAPED ACROSS THE TABLE: one whose strand is laid `drape` - built in the table's own space and
-## standing nowhere else.
+## A thing draped across the table: one whose strand is laid `drape` - built in the table's own space and standing nowhere else.
 static func draped(thing: Dictionary) -> bool:
 	for p in thing.get("parts", []):
 		if p is Dictionary and String((p as Dictionary).get("shape", "")) == "strand" and String((p as Dictionary).get("lay", "")) == "drape":
@@ -270,7 +262,7 @@ static func draped(thing: Dictionary) -> bool:
 	return false
 
 
-## THE VOCABULARY, as an agent reads it: every shape, material and ornament with its words.
+## The vocabulary, as an agent reads it: every shape, material and ornament with its words.
 static func describe() -> String:
 	var lines := PackedStringArray()
 	lines.append("SHAPES (a part's `shape`):")
@@ -311,11 +303,10 @@ static func describe() -> String:
 
 # --- sanitizing -----------------------------------------------------------------------------
 
-## WHATEVER AN AGENT WROTE, as something [method build] can make: every part a known shape with its
-## numbers in range, every material named and known, colors colors. A part with no shape the
-## builder knows is dropped, and a thing with no part left is dropped. Keys this file does not own
-## (where a thing stands, say) are passed through for the caller to judge. [param palette] gives
-## the colors an agent left out.
+## Whatever an agent wrote, as something [method build] can make: every part a known shape with its numbers in range, every material
+## named and known, colors colors. A part with no shape the builder knows is dropped, and a thing with no part left is dropped. Keys this
+## file does not own (where a thing stands, say) are passed through for the caller to judge. [param palette] gives the colors an agent
+## left out.
 static func sanitize(spec: Dictionary, palette: Array) -> Dictionary:
 	var pal: Array = palette if not palette.is_empty() else ["#8a6a3a", "#c9b38a", "#3a3030"]
 	var mats := {}
@@ -346,7 +337,7 @@ static func sanitize_material(m: Variant, fallback: String) -> Dictionary:
 		"grain": _num(d.get("grain"), float(base["grain"]), 0.2, 20.0), "rings": _flag(d.get("rings"))}
 	for k in ["polish", "wear", "pattern", "clarity"]:
 		out[k] = _num(d.get(k), float(base[k]), 0.0, 1.0)
-	# AS MATTER: how heavy it is, and how fast it dissolves - the class's, unless the set dresser says
+	# As matter: how heavy it is, and how fast it dissolves - the class's, unless the set dresser says
 	out["density"] = _num(d.get("density"), float(base["density"]), 0.05, 20.0)
 	out["dissolves"] = _num(d.get("dissolves"), float(base["dissolves"]), 0.0, 120.0)
 	var play := String(d["play"]).strip_edges().to_lower() if d.get("play") is String else ""
@@ -367,10 +358,9 @@ static func _sanitize_thing(t: Dictionary, mats: Dictionary, pal: Array) -> Dict
 	return out
 
 
-## A list of parts made safe, a GROUP's own parts with it ({"parts": [...]} placed, turned and
-## repeated as one), [constant MAX_DEPTH] groups deep at most - a group past that is dropped, with
-## everything in it. [param budget] is how many shaped parts the thing has left ([constant
-## MAX_PARTS] in all), spent as they are kept. A group left with no part is dropped.
+## A list of parts made safe, a group's own parts with it ({"parts": [...]} placed, turned and repeated as one), [constant MAX_DEPTH]
+## groups deep at most - a group past that is dropped, with everything in it. [param budget] is how many shaped parts the thing has left
+## ([constant MAX_PARTS] in all), spent as they are kept. A group left with no part is dropped.
 static func _sanitize_parts(raw: Variant, mats: Dictionary, pal: Array, depth: int, budget: Array) -> Array:
 	var out: Array = []
 	for p in (raw if raw is Array else []):
@@ -386,7 +376,7 @@ static func _sanitize_parts(raw: Variant, mats: Dictionary, pal: Array, depth: i
 			if not kids.is_empty():
 				var group := {"parts": kids, "at": _vec3(d.get("at"), Vector3.ZERO, MAX_SIZE), "turn": _turn(d.get("turn")),
 					"wick": false, "copies": _copies_of(d), "move": {} if _burns(kids) else Rides.sanitize_move(d.get("move"))}
-				# WHAT IT DOES AT THE TABLE ([Motions]): never a lit one's (its flame stands where it was lit)
+				# What it does at the table ([Motions]): never a lit one's (its flame stands where it was lit)
 				var gw := {} if _burns(kids) else Motions.sanitize_work(d)
 				if not gw.is_empty():
 					group["work"] = gw
@@ -405,8 +395,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 		return {}
 	var out := {"shape": shape, "at": _vec3(p.get("at"), Vector3.ZERO, MAX_SIZE),
 		"turn": _turn(p.get("turn")), "wick": _flag(p.get("wick"))}
-	# WICKS: `wick` true is one, at the middle of the top; `wicks` a number set round the top, or
-	# each placed [[x, z], ...]
+	# Wicks: `wick` true is one, at the middle of the top; `wicks` a number set round the top, or each placed [[x, z], ...]
 	var wicks := 1 if bool(out["wick"]) else 0
 	var spots: Array = []
 	if p.get("wicks") is Array:
@@ -417,8 +406,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 	out["wick"] = wicks > 0
 	out["wicks"] = wicks
 	out["wick_spots"] = spots
-	# THE MATERIAL: a name under `materials` or one written inline - or a LIST of them, which the
-	# part's copies take in turn
+	# The material: a name under `materials` or one written inline - or a list of them, which the part's copies take in turn
 	var names: Array = []
 	for m in ((p["material"] as Array).slice(0, MAX_COPIES) if p.get("material") is Array else [p.get("material", "")]):
 		names.append(_material_key(m, mats, pal))
@@ -588,19 +576,18 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["width"] = _num(p.get("width"), 0.55, 0.2, 1.2)
 	out["ornament"] = _sanitize_ornament(p.get("ornament"))
 	out["copies"] = _copies_of(p)
-	# A SURFACE TO PAINT ([Skins], [TablePaint]): painted from its front (+z as it is built), one copy alone
+	# A surface to paint ([Skins], [TablePaint]): painted from its front (+z as it is built), one copy alone
 	if p.get("skin") == true and not shape in ["grains", "strand", "tuft"]:
 		out["skin"] = true
 	out["warp"] = _sanitize_warp(p.get("warp"))
-	# HOW IT MOVES with the ride and the wind ([Rides]): never a flame's (its light stands where it was lit), and
-	# never a strand laid across the table
+	# How it moves with the ride and the wind ([Rides]): never a flame's (its light stands where it was lit), and never a strand laid
+	# across the table
 	out["move"] = {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Rides.sanitize_move(p.get("move"))
-	# WHAT IT DOES AT THE TABLE ([Motions]): its name, joint, points, states, what it runs and emits - never a
-	# flame's wax, and never a strand laid across the table
+	# What it does at the table ([Motions]): its name, joint, points, states, what it runs and emits - never a flame's wax, and never a
+	# strand laid across the table
 	var work := {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Motions.sanitize_work(p)
-	# A HEAP'S OR A SCATTER'S COPIES LIE LOOSE unless written otherwise ([Particles]): a dish's stones, a pot's cloves,
-	# a brazier's coals tumble out when what holds them tips (the user, 2026-10-28: the shell's crystals "remain attached
-	# to the dish")
+	# A heap's or a scatter's copies lie loose unless written otherwise ([Particles]): a dish's stones, a pot's cloves, a brazier's coals
+	# tumble out when what holds them tips
 	if shape != "strand" and not bool(out["wick"]) and String((out["copies"] as Dictionary).get("kind", "")) in ["heap", "scatter"] \
 			and not (p.get("loose") is bool and p.get("loose") == false) and not work.has("joint"):
 		work["loose"] = true
@@ -610,7 +597,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 		work.erase("loose")
 		if shape == "grains":
 			work.erase("joint")
-	# A BLADE ([Particles]): what soft thing it is brought down through, it cuts
+	# A blade ([Particles]): what soft thing it is brought down through, it cuts
 	if p.get("edge") == true and not bool(out["wick"]):
 		out["edge"] = true
 		if not work.is_empty():
@@ -628,10 +615,9 @@ static func _burns(parts: Array) -> bool:
 	return false
 
 
-## A LOFT'S SECTIONS made safe, sorted along its path: each `{outline, points, size, sides, scale,
-## turn, shift, at}`. A section names its own outline or takes the part's; a section written as a
-## bare number is a size. One with no `at` is set between its neighbors, the first at 0 and the last
-## at 1 when they have none.
+## A loft's sections made safe, sorted along its path: each `{outline, points, size, sides, scale, turn, shift, at}`. A section names its
+## own outline or takes the part's; a section written as a bare number is a size. One with no `at` is set between its neighbors, the first
+## at 0 and the last at 1 when they have none.
 static func _sections(p: Dictionary) -> Array:
 	var base := _section(p, {"outline": "circle", "points": [], "size": Vector2(2.0, 2.0), "sides": 6})
 	var out: Array = []
@@ -687,7 +673,7 @@ static func _section(d: Dictionary, base: Dictionary) -> Dictionary:
 		"at": clampf(float(at), 0.0, 1.0) if (at is float or at is int) else -1.0}
 
 
-## A part's WARP made safe: only what it changes, each in range.
+## A part's warp made safe: only what it changes, each in range.
 static func _sanitize_warp(w: Variant) -> Dictionary:
 	if not (w is Dictionary):
 		return {}
@@ -713,9 +699,8 @@ static func _sanitize_warp(w: Variant) -> Dictionary:
 	return out
 
 
-## A part's (or a group's) repeat: its `copies` - or a REPEAT WRITTEN BESIDE IT ({"line": {...}} on
-## the part itself), which is the same repeat: a set dresser wrote a skein's turns that way, and one
-## turn of each color was built, the top one floating where the turns under it should have been.
+## A part's (or a group's) repeat: its `copies` - or a repeat written beside it ({"line": {...}} on the part itself), which is the same
+## repeat.
 static func _copies_of(p: Dictionary) -> Dictionary:
 	var c := _sanitize_copies(p.get("copies"))
 	if not c.is_empty():
@@ -871,9 +856,8 @@ static func _points2(v: Variant, lo: Vector2, hi: Vector2) -> Array:
 	return out
 
 
-## Each kept point's ROUNDING, one for one with [method _points2] ([param dims] 2) or [method
-## _points3] (3): the number an agent wrote after the point's coordinates - the radius its corner
-## is rounded to, in centimeters, 0 a crisp corner - or -1 where it wrote none.
+## Each kept point's rounding, one for one with [method _points2] ([param dims] 2) or [method _points3] (3): the number an agent wrote
+## after the point's coordinates - the radius its corner is rounded to, in centimeters, 0 a crisp corner - or -1 where it wrote none.
 static func _rounds(v: Variant, dims: int) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	if not (v is Array):
@@ -904,11 +888,10 @@ static func _points3(v: Variant, lim: float) -> Array:
 
 # --- building -----------------------------------------------------------------------------
 
-## HOW MUCH OF A DRAFT REACHES A FLAME lit at [param at] (a wick's top, world) on thing [param node]: all of
-## it in the open; little in a chimney, a lantern or a hurricane glass - any of the thing's [param meshes]
-## standing round the flame (its middle over the flame, seen from above, and wider than a wick) and
-## rising past it, the less the higher it rises over the wick ([constant SHELTER]). A candelabra's stem
-## stands beside its arms' flames, not round them, and a candle's own wax ends at its wick.
+## How much of a draft reaches a flame lit at [param at] (a wick's top, world) on thing [param node]: all of it in the open; little in a
+## chimney, a lantern or a hurricane glass - any of the thing's [param meshes] standing round the flame (its middle over the flame, seen
+## from above, and wider than a wick) and rising past it, the less the higher it rises over the wick ([constant SHELTER]). A candelabra's
+## stem stands beside its arms' flames, not round them, and a candle's own wax ends at its wick.
 static func open_to_air(at: Vector3, node: Node3D, meshes: Array) -> float:
 	var open := 1.0
 	for m in meshes:
@@ -928,28 +911,26 @@ static func open_to_air(at: Vector3, node: Node3D, meshes: Array) -> float:
 	return open
 
 
-## A FLAME SHELTERED: walls round it this far over its wick (meters) keep off all of a draft they can, and
-## that is all but this share of it - a chimney draws air of its own.
+## A flame sheltered: walls round it this far over its wick (meters) keep off all of a draft they can, and that is all but this share of
+## it - a chimney draws air of its own.
 const SHELTER := Vector2(0.05, 0.1)
 
 
-## A THING, BUILT: `node` (its meshes, in meters: base on y = 0, centered over what it stands on,
-## front toward +z), `size` (its bounds), `foot` (the convex outline of where it meets the cloth,
-## up to [constant FOOT_H], x by z), `outline` (its whole outline seen from above), `wicks`
-## (where its flames are lit), `glows` (each wick's wax material, whose `flame` the table sets as
-## the flame flickers), `meshes` (every MeshInstance3D in it), `movers` (what moves with the ride and the
-## wind, [method _holder]) and `sized` (how much it was made smaller). [param materials] are the
-## sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
-## [param keep]: built where it was written, neither moved to stand on the origin nor made smaller - a strand
-## draped across the table is laid in the table's own space ([method TableThings._drape]).
+## A thing, built: `node` (its meshes, in meters: base on y = 0, centered over what it stands on, front toward +z), `size` (its bounds),
+## `foot` (the convex outline of where it meets the cloth, up to [constant FOOT_H], x by z), `outline` (its whole outline seen from
+## above), `wicks` (where its flames are lit), `glows` (each wick's wax material, whose `flame` the table sets as the flame flickers),
+## `meshes` (every MeshInstance3D in it), `movers` (what moves with the ride and the wind, [method _holder]) and `sized` (how much it was
+## made smaller). [param materials] are the sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
+## [param keep]: built where it was written, neither moved to stand on the origin nor made smaller - a strand draped across the table is
+## laid in the table's own space ([method TableThings._drape]).
 static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := false) -> Dictionary:
 	var inner := Node3D.new()
 	var all := PackedVector3Array()
 	var wicks: Array = []
 	var glows: Array = []
 	var meshes: Array = []
-	# EVERY PART, its groups opened: its geometry and every place it stands - its groups' repeats and
-	# its own together - and no more of them in all than a thing may make
+	# Every part, its groups opened: its geometry and every place it stands - its groups' repeats and its own together - and no more of
+	# them in all than a thing may make
 	# (...a part of a material that gives - a sponge's foam - cut finely across its faces, so it can bend where it is pressed)
 	var gives := {}
 	for nm in materials:
@@ -962,14 +943,14 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		leaf["xforms"] = xs.slice(0, maxi(budget, 0))
 		leaf["chains"] = (leaf.get("chains", []) as Array).slice(0, maxi(budget, 0))
 		budget -= xs.size()
-	# WHAT MOVES ([Rides]): a node of its own for each moving copy, inside whatever moves it in turn, at rest
-	# where it was built ([method _holder])
+	# What moves ([Rides]): a node of its own for each moving copy, inside whatever moves it in turn, at rest where it was built
+	# ([method _holder])
 	var movers: Array = []
 	var mover_at := {}
-	# WHAT WORKS ([Motions]): a node of its own for each working copy, made where its chain says
+	# What works ([Motions]): a node of its own for each working copy, made where its chain says
 	var works: Array = []
-	# WHAT IS SOLID, and WHAT IS POURED ([TablePhysics]): every copy of every part where it is in the node it hangs in -
-	# its own box as built, and its meshes - and every grains part, which has no geometry of its own
+	# What is solid, and what is poured ([TablePhysics]): every copy of every part where it is in the node it hangs in - its own box as
+	# built, and its meshes - and every grains part, which has no geometry of its own
 	var solids: Array = []
 	var grains: Array = []
 	var skins: Array = []
@@ -990,13 +971,12 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 			var gb := _bounds_of((geos[gi] as Dictionary)["geo"])
 			own_box = gb if gi == 0 else own_box.merge(gb)
 		var held_meshes := {}     # holder -> its meshes of this part
-		# A FLAME FOR EVERY WICK on the top of a candle that is not turned (a turned one's are set
-		# where its pool is, in [method _lathe])
+		# A flame for every wick on the top of a candle that is not turned (a turned one's are set where its pool is, in [method _lathe])
 		var g0: Tris = (geos[0] as Dictionary)["geo"]
 		if part.get("wick") == true and g0.wicks.is_empty():
 			for sp in _wick_spots(part, _top_radius(g0)):
 				g0.wicks.append(Vector3(g0.top.x + (sp as Vector2).x, g0.top.y, g0.top.z + (sp as Vector2).y))
-		# A LIST OF MATERIALS is taken by the copies in turn: a mesh for each material's copies
+		# A list of materials is taken by the copies in turn: a mesh for each material's copies
 		var names: Array = part.get("materials", [])
 		if names.is_empty():
 			names = [String(part.get("material", "painted"))]
@@ -1032,7 +1012,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				# a part's copies each glow their own way (prop.gdshader `apart`)
 				if xforms.size() > 1:
 					mat.set_shader_parameter("apart", 1.0)
-				# A BRUSH'S HAIRS bend about their root, along their length ([Bristles]): where it is in the mesh's own space
+				# A brush's hairs bend about their root, along their length ([Bristles]): where it is in the mesh's own space
 				if String(part.get("shape", "")) == "tuft":
 					var txf: Transform3D = mine[0]
 					var up_v := txf.basis * Vector3.UP
@@ -1055,7 +1035,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 						for w in g.wicks:
 							wicks.append((xf as Transform3D) * w)
 							glows.append(mat)
-		# A SURFACE TO PAINT ([TablePaint]): its first copy, where it stands in the node it hangs in, and its own extent
+		# A surface to paint ([TablePaint]): its first copy, where it stands in the node it hangs in, and its own extent
 		if part.get("skin") == true and not held_meshes.is_empty():
 			var sch0: Array = leaf["chains"]
 			var sh := _holder(sch0[0] if not sch0.is_empty() else [], inner, movers, mover_at, seed, works)
@@ -1076,7 +1056,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	for p in all:
 		box = box.expand(p)
 	_rest_free(inner, meshes, works, box.position.y)
-	# TOO BIG IS SCALED DOWN WHOLE: an agent's 2-meter vase is a mistake in units, not a vase
+	# Too big is scaled down whole: a 2-meter vase is a mistake in units, not a vase
 	var k := minf(1.0, MAX_SIZE * 0.01 / maxf(box.size.x, maxf(box.size.y, box.size.z))) if not keep else 1.0
 	var shift := Vector3(-box.get_center().x, -box.position.y, -box.get_center().z) if not keep else Vector3.ZERO
 	inner.scale = Vector3(k, k, k)
@@ -1092,19 +1072,18 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		"inner": inner, "skins": skins}
 
 
-## THE NODE A COPY HANGS IN, for its [param chain] of movers ([method _assemble], outermost first): each a
-## node of its own under the one before it (the first under [param inner]), made once - at rest it is where
-## the copy was built, and the table turns it about its pivot as the ride and the wind move it
-## ([method TableMedium._tick_ride]). Listed in [param movers] as `{node, move, pivot and contact (the thing's
-## space, meters, before it is sized), reach, salt, parent}` ([param at]: key to place). Past [constant
-## Rides.MAX_MOVERS] a thing's copies stand as built, in the last that moves.
+## The node a copy hangs in, for its [param chain] of movers ([method _assemble], outermost first): each a node of its own under the one
+## before it (the first under [param inner]), made once - at rest it is where the copy was built, and the table turns it about its pivot
+## as the ride and the wind move it ([method TableMedium._tick_ride]). Listed in [param movers] as `{node, move, pivot and contact (the
+## thing's space, meters, before it is sized), reach, salt, parent}` ([param at]: key to place). Past [constant Rides.MAX_MOVERS] a
+## thing's copies stand as built, in the last that moves.
 static func _holder(chain: Array, inner: Node3D, movers: Array, at: Dictionary, seed: int, works: Array = []) -> Node3D:
 	var node := inner
 	var parent := -1
 	for m in chain:
 		var key := String((m as Dictionary)["key"])
-		# A WORKING LINK ([method _worker]): a node of its own, listed in [param works] as `{node, work}` - kept in
-		# [param at] as -2 less its place, so a mover's own places stay what they were
+		# A working link ([method _worker]): a node of its own, listed in [param works] as `{node, work}` - kept in [param at] as -2 less
+		# its place, so a mover's own places stay what they were
 		if (m as Dictionary).has("work"):
 			if not at.has(key):
 				if works.size() >= Motions.MAX_WORKS:
@@ -1130,12 +1109,10 @@ static func _holder(chain: Array, inner: Node3D, movers: Array, at: Dictionary, 
 	return node
 
 
-## A thing's parts, groups opened: `[{part, geos, xforms, salt}]` - each shaped part with its
-## geometry and every place it stands in the thing (its own repeats inside its groups', a group's
-## copies sized - for a scatter or a heap - and jittered about their middles by everything in it).
-## A heap is laid last, into whatever the other parts make of a vessel round it. [param path] is
-## where these parts sit among the groups; `salt` is a part's place, the same as it always was for a
-## part in no group.
+## A thing's parts, groups opened: `[{part, geos, xforms, salt}]` - each shaped part with its geometry and every place it stands in the
+## thing (its own repeats inside its groups', a group's copies sized - for a scatter or a heap - and jittered about their middles by
+## everything in it). A heap is laid last, into whatever the other parts make of a vessel round it. [param path] is where these parts sit
+## among the groups; `salt` is a part's place (the same for a part in no group).
 static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Array:
 	var out: Array = []
 	var heaps: Array = []    # [place in out, rng]: laid last, into whatever they lie in ([method _walls])
@@ -1156,9 +1133,9 @@ static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Arra
 					for e in leaf["geos"]:
 						sized.append({"geo": ((e as Dictionary)["geo"] as Tris).placed(leaf["xforms"])})
 			var outer := _placements(part, rng, sized)
-			# A MOVING GROUP: each of its copies moves as one, held where its move says in the group's space
+			# A moving group: each of its copies moves as one, held where its move says in the group's space
 			var held := _held(part["move"] if part.get("move") is Dictionary else {}, inner)
-			# A WORKING GROUP ([Motions]): each copy one node the work moves, its points where the group's `at` is
+			# A working group ([Motions]): each copy one node the work moves, its points where the group's `at` is
 			var gwork: Dictionary = part.get("work", {}) if part.get("work") is Dictionary else {}
 			var gbox := _leaves_box(inner) if not gwork.is_empty() else AABB()
 			for leaf in inner:
@@ -1190,8 +1167,7 @@ static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Arra
 				leaf["chains"] = cs
 				out.append(leaf)
 			continue
-		# GRAINS are laid by the physics into whatever holds them ([TablePhysics]): no geometry of their own, only where
-		# they are
+		# Grains are laid by the physics into whatever holds them ([TablePhysics]): no geometry of their own, only where they are
 		if String(part.get("shape", "")) == "grains":
 			own.append(out.size())
 			out.append({"part": part, "geos": [], "xforms": _placements(part, rng, []), "salt": here, "grains": true})
@@ -1216,9 +1192,8 @@ static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Arra
 			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], {}, _blocks(out, at.y * 0.01))
 		else:
 			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], _walls(out, h[0], at * 0.01))
-	# A MOVING PART: each of its copies moves on its own, held where its move says in its own space - and A
-	# WORKING ONE ([Motions]) is a node of its own outside that, its points where its `at` is, each copy's moved
-	# as the copy is from the first
+	# A moving part: each of its copies moves on its own, held where its move says in its own space - and a working one ([Motions]) is a
+	# node of its own outside that, its points where its `at` is, each copy's moved as the copy is from the first
 	for li in own:
 		var leaf: Dictionary = out[li]
 		var mv: Variant = (leaf["part"] as Dictionary).get("move")
@@ -1244,11 +1219,10 @@ static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Arra
 	return out
 
 
-## A FREE PART RESTS ON WHAT IS UNDER IT (feedback 0011, 2026-11-09, of a powder puff drawn at its pot's rim and narrower than its
-## mouth, 5 mm over the powder: "it looks like a flying saucer right now"): each part with a free joint, drawn with air between it and
-## the rest of its thing, is lowered until it first touches it - or the table's top, [param ground] - never raised, never into anything:
-## points of its own surface (at most [constant REST_LOOKS] of a mesh's) looked at straight down, the least gap taken. Only what it is
-## drawn over is asked, in [param inner]'s space, before the thing is scaled; the physics takes the part where it then lies.
+## A free part rests on what is under it: each part with a free joint, drawn with air between it and the rest of its thing, is lowered
+## until it first touches it - or the table's top, [param ground] - never raised, never into anything: points of its own surface (at most
+## [constant REST_LOOKS] of a mesh's) looked at straight down, the least gap taken. Only what it is drawn over is asked, in
+## [param inner]'s space, before the thing is scaled; the physics takes the part where it then lies.
 static func _rest_free(inner: Node3D, meshes: Array, works: Array, ground: float) -> void:
 	var free: Array = works.filter(func(wd: Dictionary) -> bool:
 		return String(((wd["work"] as Dictionary).get("joint", {}) as Dictionary).get("kind", "")) == "free")
@@ -1300,10 +1274,10 @@ static func _in_space(n: Node3D, top: Node3D) -> Transform3D:
 	return x
 
 
-## ONE COPY'S WORK ([Motions]), as a link in its chain ([method _holder]): `{key, work}` - its work as written
-## with what the table works it from, in its parent's space (meters): `box`, `middle`, `base` (the middle of
-## its foot, which a fill or a grow keeps), the joint's `pivot` and `axis`, and its `points` - [param box] where
-## this copy is, [param d] this copy's move from the first (where what was written is).
+## One copy's work ([Motions]), as a link in its chain ([method _holder]): `{key, work}` - its work as written with what the table works
+## it from, in its parent's space (meters): `box`, `middle`, `base` (the middle of its foot, which a fill or a grow keeps), the joint's
+## `pivot` and `axis`, and its `points` - [param box] where this copy is, [param d] this copy's move from the first (where what was
+## written is).
 static func _worker(work: Dictionary, box: AABB, d: Transform3D, key: String) -> Dictionary:
 	var w := work.duplicate(true)
 	var mid := box.get_center()
@@ -1337,11 +1311,10 @@ static func _moved_work(work: Dictionary, o: Transform3D) -> Dictionary:
 	return w
 
 
-## WHERE A MOVING PART OR GROUP IS HELD, in its own space (meters), from its `move` ([param move], made safe;
-## `{}` moves nothing) and [param leaves] (`[{geos, xforms}]`), what it is there: where its move says (`at`),
-## or as its kind holds it ([constant Rides.MOVES] `hold` - the middle of its foot, of its top, or its middle).
-## `{move, pivot, reach, contact}`: how far it reaches from where it is held - a stalk's height over it, a
-## pendulum's length to its middle, a liquid's radius, a rock's foot - which sets how it rings ([method
+## Where a moving part or group is held, in its own space (meters), from its `move` ([param move], made safe; `{}` moves nothing) and
+## [param leaves] (`[{geos, xforms}]`), what it is there: where its move says (`at`), or as its kind holds it ([constant Rides.MOVES]
+## `hold` - the middle of its foot, of its top, or its middle). `{move, pivot, reach, contact}`: how far it reaches from where it is held -
+## a stalk's height over it, a pendulum's length to its middle, a liquid's radius, a rock's foot - which sets how it rings ([method
 ## Rides.responder]); and for a rock, the points it rests on (what it tips about - [method _contact]).
 static func _held(move: Dictionary, leaves: Array) -> Dictionary:
 	if move.is_empty():
@@ -1373,10 +1346,9 @@ static func _held(move: Dictionary, leaves: Array) -> Dictionary:
 		"contact": _contact(leaves, box.position.y) if String(move["kind"]) == "rock" else PackedVector3Array()}
 
 
-## WHAT A THING RESTS ON: the corners of the outline, seen from above, of its points within a couple of
-## millimeters of its lowest - a block's whole base, a pebble's small patch. Tipped toward a side, it turns
-## about the point of this furthest that way ([method TableMedium._tick_ride]): about its middle, a block
-## sank through the cloth at every jolt.
+## What a thing rests on: the corners of the outline, seen from above, of its points within a couple of millimeters of its lowest - a
+## block's whole base, a pebble's small patch. Tipped toward a side, it turns about the point of this furthest that way ([method
+## TableMedium._tick_ride]), never about its middle (a block would sink through the cloth).
 static func _contact(leaves: Array, low: float) -> PackedVector3Array:
 	var pts := PackedVector2Array()
 	for leaf in leaves:
@@ -1421,10 +1393,8 @@ static func _leaves_box(leaves: Array) -> AABB:
 	return box
 
 
-## WHAT A STREWN PART MUST NOT LIE ON: the outline, seen from above, of every standing part among
-## [param leaves] (everything but the strewn ones) that rises above the floor at [param floor_y],
-## one convex hull per copy - a tablet's slab, a pedestal. Stones scattered beside a slab used to be
-## drawn through it (feedback 0009).
+## What a strewn part must not lie on: the outline, seen from above, of every standing part among [param leaves] (everything but the
+## strewn ones) that rises above the floor at [param floor_y], one convex hull per copy - a tablet's slab, a pedestal.
 static func _blocks(leaves: Array, floor_y: float) -> Array:
 	var out: Array = []
 	for leaf in leaves:
@@ -1511,12 +1481,10 @@ static func _solid(part: Dictionary) -> bool:
 	return true
 
 
-## Whether a part is a PANE: flat faces with next to nothing between them, [constant PANE_FLAT] of its surface
-## square (within [constant PANE_SQUARE]) to its thinnest way. Parallel faces turn no line of sight, so a pane
-## bends nothing ([param pane] of [method material]). Read off the normals the shader would bend by, never the
-## part's thickness: a domed reading glass is as thin as a flat magnifying glass, and does bend. Told to bend, a
-## pane read the screen off to one side by its tilt, and the wire frame it sits in is on that screen (true-tarot
-## 279427, feedback 0014: half-moons in the spectacles and every trial lens).
+## Whether a part is a pane: flat faces with next to nothing between them, [constant PANE_FLAT] of its surface square (within
+## [constant PANE_SQUARE]) to its thinnest way. Parallel faces turn no line of sight, so a pane bends nothing ([param pane] of [method
+## material]). Read off the normals the shader would bend by, never the part's thickness: a domed reading glass is as thin as a flat
+## magnifying glass, and does bend.
 static func _pane(g: Tris) -> bool:
 	if g.v.is_empty() or g.n.size() != g.v.size():
 		return false
@@ -1532,14 +1500,13 @@ static func _pane(g: Tris) -> bool:
 	return whole > 0.0 and square >= PANE_FLAT * whole
 
 
-## The material for one part: the named material's look with this part's ornament, laid out for
-## its own girth and height (so a motif keeps its shape on a tall vase and a squat bowl alike).
-## SEEN-THROUGH material is glass for a vessel - a flame inside it shows - and a lens for a solid
-## thing, which bends what is behind it unless it is a [param pane].
+## The material for one part: the named material's look with this part's ornament, laid out for its own girth and height (so a motif keeps
+## its shape on a tall vase and a squat bowl alike). A see-through material is glass for a vessel - a flame inside it shows - and a lens
+## for a solid thing, which bends what is behind it unless it is a [param pane].
 static func material(m: Dictionary, orn: Variant, girth: float, height: float, salt: int, solid := false, round_solid := true, pane := false) -> ShaderMaterial:
 	var kind := String(m.get("kind", "painted"))
 	var mat := ShaderMaterial.new()
-	# CLEAR CRYSTAL IS SEEN THROUGH: an opaque shader made a crystal ball a pearl
+	# Clear crystal is seen through: an opaque shader would make a crystal ball a pearl
 	var clear := see_through(m)
 	mat.shader = (_LENS if solid else _GLASS) if clear else _SHADER
 	if not clear:
@@ -1583,9 +1550,8 @@ static func _placements(part: Dictionary, rng: RandomNumberGenerator, geos: Arra
 	var jit := float(c.get("jitter", 0.0))
 	if String(c["kind"]) in ["scatter", "heap"]:
 		return _strewn(String(c["kind"]) == "heap", n, jit, float(c["radius"]) * 0.01, own, at, _bounds(geos, own), rng, walls, blocks)
-	# A COPY'S JITTER TURNS IT ABOUT ITS OWN MIDDLE: about the part's origin, a rod drawn away from
-	# it (a squid's arm, a jig lying on its side) swung across the thing, and a row of them splayed
-	# like legs (feedback 0006)
+	# A copy's jitter turns it about its own middle: about the part's origin, a rod drawn away from it would swing across the thing, and a
+	# row of them splay like legs
 	var pivot := _pivot(geos, own)
 	for i in n:
 		var xf := Transform3D.IDENTITY
@@ -1621,11 +1587,9 @@ static func _pivot(geos: Array, own: Transform3D) -> Vector3:
 	return Vector3((lo.x + hi.x) * 0.5, lo.y, (lo.z + hi.z) * 0.5)
 
 
-## STREWN COPIES. Scattered ones never touch: each takes a spot in the circle clear of the rest,
-## and a handful too crowded for it spreads wider rather than pass through itself. HEAPED ones
-## settle as a dropped handful does ([method _heaped]): on the floor while there is room, then in
-## the pockets of the heap, a little tipped where they lie on others - so the floor fills before
-## the heap rises.
+## Strewn copies. Scattered ones never touch: each takes a spot in the circle clear of the rest, and a handful too crowded for it spreads
+## wider rather than pass through itself. Heaped ones settle as a dropped handful does ([method _heaped]): on the floor while there is
+## room, then in the pockets of the heap, a little tipped where they lie on others - so the floor fills before the heap rises.
 static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transform3D, at: Vector3, bounds: Dictionary,
 		rng: RandomNumberGenerator, walls := {}, blocks := []) -> Array:
 	var reach := float(bounds["reach"])
@@ -1666,7 +1630,7 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 					if q.distance_to(e[0]) < r + float(e[1]) + 0.001:
 						clear = false
 						break
-				# NEVER THROUGH A STANDING PART of the same thing
+				# Never through a standing part of the same thing
 				if clear and not blocks.is_empty() and _blocked(Vector2(at.x, at.z) + q, r, blocks):
 					clear = false
 				spot = q
@@ -1685,14 +1649,11 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 	return out
 
 
-## WHERE A HEAPED LUMP COMES TO REST - its middle - [param a] wide and [param b] high (half sizes,
-## meters) among the lumps already down ([param mids], [param wide_of], [param high_of]): on the
-## floor where it is dropped while there is room there; then in a POCKET of the heap
-## ([method _pockets]) - or against the wall of the vessel it lies in ([param walls], see
-## [method _walls]); then on the floor further out, as a handful spills wider, but never through a
-## vessel's wall. Null when a vessel has no room left for it. NEVER ON TOP OF ONE ROUND LUMP: a
-## pebble balanced on another rolls off it, in the world and in the eye (feedback 0006 - a rule that
-## let a lump rest over another's middle stacked them into columns).
+## Where a heaped lump comes to rest - its middle - [param a] wide and [param b] high (half sizes, meters) among the lumps already down
+## ([param mids], [param wide_of], [param high_of]): on the floor where it is dropped while there is room there; then in a pocket of the
+## heap ([method _pockets]) - or against the wall of the vessel it lies in ([param walls], see [method _walls]); then on the floor further
+## out, as a handful spills wider, but never through a vessel's wall. Null when a vessel has no room left for it. Never on top of one
+## round lump: a pebble balanced on another rolls off it.
 static func _heaped(a: float, b: float, radius: float, mids: PackedVector3Array, wide_of: PackedFloat32Array,
 		high_of: PackedFloat32Array, walls: Dictionary, rng: RandomNumberGenerator) -> Variant:
 	# how far out its middle may lie, below the rim of what holds it
@@ -1732,13 +1693,11 @@ static func _heaped(a: float, b: float, radius: float, mids: PackedVector3Array,
 	return null if not walls.is_empty() else Vector3(q.x, b, q.y)
 
 
-## WHERE A HEAPED FLAT LUMP (a coin) COMES TO REST, sizes as in [method _heaped]. Coins are discs,
-## not the rounded lumps [method _free] and [method _pockets] treat as ellipsoids, whose rims pass
-## through each other where they overlap and which settle into pockets no disc fits: a coin is
-## dropped at several places in the circle, falls to the top of the highest coin whose disc it
-## overlaps (lying flat, one thickness above it), and takes the lowest of them - so the dish floor
-## fills before the heap rises, and no two coins ever share space (feedback 0008). Null when the
-## vessel has no room left for it.
+## Where a heaped flat lump (a coin) comes to rest, sizes as in [method _heaped]. Coins are discs, not the rounded lumps [method _free]
+## and [method _pockets] treat as ellipsoids, whose rims pass through each other where they overlap and which settle into pockets no disc
+## fits: a coin is dropped at several places in the circle, falls to the top of the highest coin whose disc it overlaps (lying flat, one
+## thickness above it), and takes the lowest of them - so the dish floor fills before the heap rises, and no two coins share space. Null
+## when the vessel has no room left for it.
 static func _stacked(a: float, b: float, radius: float, mids: PackedVector3Array, wide_of: PackedFloat32Array,
 		high_of: PackedFloat32Array, walls: Dictionary, rng: RandomNumberGenerator) -> Variant:
 	var inside := INF if walls.is_empty() else float(walls["radius"]) - a
@@ -1762,17 +1721,14 @@ static func _stacked(a: float, b: float, radius: float, mids: PackedVector3Array
 	return best
 
 
-## THE WALL ROUND A HEAP, when it lies in a vessel - a dish, a bowl, a tray among the thing's other
-## [param leaves] (the heap's own, [param skip], and every other strewn part left out): the nearest
-## surface rising from the heap's floor, measured from its middle [param at] - `{radius, top}`,
-## meters out and how high it stands above that floor. Empty when a line out from the middle in any
-## direction meets no such surface - an open heap, on the cloth or beside a candle.
+## The wall round a heap, when it lies in a vessel - a dish, a bowl, a tray among the thing's other [param leaves] (the heap's own,
+## [param skip], and every other strewn part left out): the nearest surface rising from the heap's floor, measured from its middle
+## [param at] - `{radius, top}`, meters out and how high it stands above that floor. Empty when a line out from the middle in any direction
+## meets no such surface - an open heap, on the cloth or beside a candle.
 ##
-## THE WALL IS WHAT A LEVEL JUST ABOVE THE FLOOR CUTS ([constant WALL_CUT]), each face's slice of it, and its top is
-## where that wall ends going up, cut again every [constant WALL_STEP]: a wall is one tall face or many short ones.
-## Counted only as one face reaching from the floor past the cut, a smooth lathe's dish - every face of its sloped
-## wall too short - had no wall, and the-quiet-crucible 181083's coals were heaped out to the radius asked, through
-## the brazier (the user: "some of the hot coals under the cauldron are clipping through the container").
+## The wall is what a level just above the floor cuts ([constant WALL_CUT]), each face's slice of it, and its top is where that wall ends
+## going up, cut again every [constant WALL_STEP]: a wall is one tall face or many short ones (a smooth lathe's dish has every face of its
+## sloped wall too short to count as one tall face alone).
 static func _walls(leaves: Array, skip: int, at: Vector3) -> Dictionary:
 	const RAYS := 8
 	var mid := Vector2(at.x, at.z)
@@ -1881,13 +1837,12 @@ static func _wall_slice(tris: PackedVector3Array, ids: Array, y: float, mid: Vec
 ## How far rounded lumps nestle into each other: two touch where their half sizes, summed and taken
 ## this much of, meet - a lump's bumps sit in another's hollows.
 const NESTLE := 0.9
-## A lump this many times wider than it is high (a coin, a tile, a skimming stone) is FLAT: it can
-## lie still across the middle of a single lump under it. A rounder one rolls off unless a pocket
-## holds it.
+## A lump this many times wider than it is high (a coin, a tile, a skimming stone) is flat: it can lie still across the middle of a single
+## lump under it. A rounder one rolls off unless a pocket holds it.
 const FLAT := 2.5
-## A HEAP'S VESSEL ([method _walls]): how far above the heap's floor its wall is cut to find it, how often it is cut
-## again going up to find its top, how far up at most, and how far past where a line out first met it the wall may
-## lean out and still be the same wall (meters).
+## A heap's vessel ([method _walls]): how far above the heap's floor its wall is cut to find it, how often it is cut again going up to
+## find its top, how far up at most, and how far past where a line out first met it the wall may lean out and still be the same wall
+## (meters).
 const WALL_CUT := 0.003
 const WALL_STEP := 0.004
 const WALL_UP := 0.12
@@ -1907,12 +1862,10 @@ static func _free(p: Vector3, a: float, b: float, mids: PackedVector3Array, wide
 	return true
 
 
-## THE POCKETS A LUMP CAN REST IN: where three lumps hold it from below and its weight falls
-## between them - the contact forces, each pushing it straight off the lump it touches, add up to
-## something that holds it against gravity with every one of the three pushing ([method _pocket]).
-## A FLAT lump may also lie across the middle of any one. Where three lumps stand too far apart to
-## hold it, it falls between them to the floor - a place on the floor too. Places it would pass
-## through another lump to reach are not places.
+## The pockets a lump can rest in: where three lumps hold it from below and its weight falls between them - the contact forces, each
+## pushing it straight off the lump it touches, add up to something that holds it against gravity with every one of the three pushing
+## ([method _pocket]). A flat lump may also lie across the middle of any one. Where three lumps stand too far apart to hold it, it falls
+## between them to the floor - a place on the floor too. Places it would pass through another lump to reach are not places.
 static func _pockets(a: float, b: float, mids: PackedVector3Array, wide_of: PackedFloat32Array,
 		high_of: PackedFloat32Array, rng: RandomNumberGenerator) -> Array:
 	var out: Array = []
@@ -1940,9 +1893,8 @@ static func _pockets(a: float, b: float, mids: PackedVector3Array, wide_of: Pack
 	return out
 
 
-## THE PLACES AGAINST A VESSEL'S WALL: two lumps holding a lump from below and the wall
-## ([param inside] meters out from the middle, for its middle) holding it from the side - where it
-## stands no higher than the wall's [param rim].
+## The places against a vessel's wall: two lumps holding a lump from below and the wall ([param inside] meters out from the middle, for
+## its middle) holding it from the side - where it stands no higher than the wall's [param rim].
 static func _wall_pockets(a: float, b: float, inside: float, rim: float, mids: PackedVector3Array,
 		wide_of: PackedFloat32Array, high_of: PackedFloat32Array) -> Array:
 	var out: Array = []
@@ -1970,12 +1922,11 @@ static func _both(i: int, j: int, mids: PackedVector3Array, reach: PackedFloat32
 	return Vector2(d.x, d.z).length() < reach[i] + reach[j] and absf(d.y) < tall[i] + tall[j]
 
 
-## WHERE A LUMP TOUCHING LUMPS [param c] COMES TO REST (half sizes summed: [param A] across,
-## [param B] up) - three of them, or two and a vessel's wall [param wall] meters out from the
-## heap's middle - above them: Newton's method from above, then the contact forces solved for (a
-## lump's pushing straight off its surface, the wall's straight back in) and every one required to
-## carry a share. A rest under [param b] is where it falls through to the floor, and the floor
-## there is returned for the caller to judge. Null when nothing holds it there.
+## Where a lump touching lumps [param c] comes to rest (half sizes summed: [param A] across, [param B] up) - three of them, or two and a
+## vessel's wall [param wall] meters out from the heap's middle - above them: Newton's method from above, then the contact forces solved
+## for (a lump's pushing straight off its surface, the wall's straight back in) and every one required to carry a share. A rest under
+## [param b] is where it falls through to the floor, and the floor there is returned for the caller to judge. Null when nothing holds it
+## there.
 static func _pocket(c: Array, A: Array, B: Array, b: float, wall := 0.0) -> Variant:
 	var lumps := c.size()
 	var p: Vector3 = Vector3.ZERO
@@ -2001,7 +1952,7 @@ static func _pocket(c: Array, A: Array, B: Array, b: float, wall := 0.0) -> Vari
 			g[2] = Vector3(2.0 * p.x, 0.0, 2.0 * p.z) / (wall * wall)
 		if absf(f.x) + absf(f.y) + absf(f.z) < 1e-5:
 			break
-		# the gradients as COLUMNS: transposed, they are the rows of the Jacobian
+		# the gradients as columns: transposed, they are the rows of the Jacobian
 		var jt := Basis(g[0], g[1], g[2])
 		if absf(jt.determinant()) < 1e-9:
 			return null
@@ -2013,8 +1964,8 @@ static func _pocket(c: Array, A: Array, B: Array, b: float, wall := 0.0) -> Vari
 		return null
 	if p.y < b:
 		return Vector3(p.x, b, p.z)
-	# HELD FROM BELOW: a pocket under the side of a higher lump is a wedge, and a lump dropped on
-	# the heap from above does not get in under another
+	# Held from below: a pocket under the side of a higher lump is a wedge, and a lump dropped on the heap from above does not get in under
+	# another
 	for m in lumps:
 		if p.y <= c[m].y:
 			return null
@@ -2050,8 +2001,8 @@ static func _bounds(geos: Array, own: Transform3D) -> Dictionary:
 	return {"reach": maxf(reach, 0.0005), "girth": maxf((hx + hz) * 0.5, 0.0005), "low": low, "high": maxf(high, low + 0.0005)}
 
 
-## The part's geometry, in its own space (meters): `[{geo, material?}]` - a cluster's rock is a
-## second entry when it has a material of its own - reshaped by its WARP, all of it as one.
+## The part's geometry, in its own space (meters): `[{geo, material?}]` - a cluster's rock is a second entry when it has a material of its
+## own - reshaped by its warp, all of it as one.
 static func _geometry(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 	var geos := _shaped(p, rng)
 	var w: Dictionary = p.get("warp", {})
@@ -2201,14 +2152,14 @@ static func _warped(q: Vector3, w: Dictionary, frame: Dictionary) -> Vector3:
 
 # --- the shapes -------------------------------------------------------------------------------
 
-## A TURNED SOLID. The profile is joined straight (or curved through, `smooth`), closed at the axis
+## A turned solid. The profile is joined straight (or curved through, `smooth`), closed at the axis
 ## top and bottom, and split into runs where it turns a corner, so a rim or a foot stays crisp and a
-## belly stays smooth. Each ring of it can then be displaced as it goes round: LOBES bulge it,
-## TWIST turns it with height, and wax DRIPS run down from the top - which is melted into a pool
+## belly stays smooth. Each ring of it can then be displaced as it goes round: lobes bulge it,
+## twist turns it with height, and wax drips run down from the top - which is melted into a pool
 ## when the part carries a wick.
 static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 	var pts := lathe_profile(p)
-	# THE POOL a burning candle melts round its wicks, and where its rim is
+	# The pool a burning candle melts round its wicks, and where its rim is
 	var rim := Vector2.ZERO
 	if bool(p.get("wick", false)):
 		if pts.size() >= 3 and (pts[-2] as Vector2).x >= 0.002 and absf((pts[-2] as Vector2).y - (pts[-1] as Vector2).y) <= 0.002:
@@ -2327,7 +2278,7 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 				var n01: Vector3 = (r1[1] as PackedVector3Array)[i]
 				var n11: Vector3 = (r1[1] as PackedVector3Array)[i + 1]
 				if sides >= 3:
-					# FLAT FACES: the face's own normal, kept facing out
+					# Flat faces: the face's own normal, kept facing out
 					var mid := (n00 + n10 + n01 + n11)
 					var fn := (p10 - p00).cross(p01 - p00)
 					if fn.length() < 1e-12:
@@ -2346,7 +2297,7 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 	g.girth = TAU * rmax * 100.0
 	g.height = height * 100.0
 	g.top = Vector3(0.0, (pts[-1] as Vector2).y, 0.0)
-	# THE WICKS stand on the pool, as deep in it as it is where each stands (one in the middle is at
+	# The wicks stand on the pool, as deep in it as it is where each stands (one in the middle is at
 	# its bottom); a top with no pool has them on its top
 	if bool(p.get("wick", false)):
 		var R := rim.x if rim.x > 0.0 else maxf(rtop, 0.004)
@@ -2358,7 +2309,7 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 	return g
 
 
-## A LATHE'S PROFILE as it is turned (meters, [radius, height] from the bottom's middle round to its end): curved
+## A lathe's profile as it is turned (meters, [radius, height] from the bottom's middle round to its end): curved
 ## through its points as the part says, a flat base and top kept flat, and closed onto the axis at both ends - what
 ## [method _lathe] spins, and what a solid's field ([ShapeField]) and a vessel's inside ([Vessel]) are measured on.
 static func lathe_profile(p: Dictionary) -> Array:
@@ -2367,8 +2318,7 @@ static func lathe_profile(p: Dictionary) -> Array:
 		pts.append((q as Vector2) * 0.01)
 	var rounds := _rounds_m(p, pts.size())
 	var smooth := bool(p.get("smooth", false))
-	# A FLAT BASE AND A FLAT TOP STAY FLAT in a smooth profile: curved through, a teapot's base sagged
-	# below the cloth and its top domed up, and the pot came out a ball
+	# A flat base and a flat top stay flat in a smooth profile (curved through, a base sags below the cloth and a top domes up)
 	if smooth and pts.size() >= 3:
 		var m := pts.size()
 		if rounds[1] < 0.0 and (pts[0] as Vector2).x <= 0.0002 and absf((pts[1] as Vector2).y - (pts[0] as Vector2).y) < 0.0001:
@@ -2445,12 +2395,12 @@ static func _rounds_m(p: Dictionary, n: int) -> PackedFloat32Array:
 	return out
 
 
-## A LINE THROUGH POINTS (Vector2 or Vector3), as a profile or a path is drawn: `pts`, each one's
+## A line through points (Vector2 or Vector3), as a profile or a path is drawn: `pts`, each one's
 ## place among the points it was drawn from (`src`, fractional between them, for anything given per
 ## point - a tube's radii) and whether it is a `corner`. A point with a rounding ([param rounds],
 ## the same units, -1 for none) has its corner cut by an arc that far round; one rounded 0 is a crisp
 ## corner. The rest are curved through when [param smooth] - a centripetal Catmull-Rom, which never
-## loops or overshoots between points far apart and close together as the uniform one did - and
+## loops or overshoots between points far apart and close together - and
 ## are crisp corners when not. [param steps] is how many pieces the longest span is cut into.
 static func _curve(pts: Array, rounds: PackedFloat32Array, smooth: bool, steps := 8) -> Dictionary:
 	var P: Array = []
@@ -2475,7 +2425,7 @@ static func _curve(pts: Array, rounds: PackedFloat32Array, smooth: bool, steps :
 			var v: Variant = (P[i + 1] - P[i]) / lb
 			var half := acos(clampf(u.dot(v), -1.0, 1.0)) * 0.5
 			if half > 0.02 and half < PI * 0.5 - 0.02:
-				# THE ROUNDING: from where an arc of radius r would leave one side to where it meets the
+				# The rounding: from where an arc of radius r would leave one side to where it meets the
 				# other, never more than half of either side
 				var d := minf(r / tan(half), 0.5 * minf(la, lb))
 				var a1: Variant = P[i] + u * d
@@ -2538,7 +2488,7 @@ static func _ccr(p0: Variant, p1: Variant, p2: Variant, p3: Variant, t: float) -
 	return b1 * ((t2 - tt) / (t2 - t1)) + b2 * ((tt - t1) / (t2 - t1))
 
 
-## A BLOCK WITH ROUNDED EDGES, its base at y = 0: a cube's six faces, each a grid that crowds toward
+## A block with rounded edges, its base at y = 0: a cube's six faces, each a grid that crowds toward
 ## its edges, pushed onto the rounded shape (a point's nearest point on the inner box, plus the
 ## radius toward it), then narrowed toward the top by the taper.
 static func _box(p: Dictionary) -> Tris:
@@ -2704,7 +2654,7 @@ static func _grid_normal(grid: Array, j: int, i: int, segs: int, mid: Vector3) -
 	return n
 
 
-## ONE CRYSTAL POINT into [param g]: a prism of [param sides], each face a little off the last,
+## One crystal point into [param g]: a prism of [param sides], each face a little off the last,
 ## with a pyramidal termination whose apex is a little off center, placed by [param xf].
 static func _crystal(g: Tris, radius: float, length: float, tip: float, sides: int, xf: Transform3D,
 		rng: RandomNumberGenerator) -> void:
@@ -2778,7 +2728,7 @@ static func _cluster(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 	return [{"geo": pts}, {"geo": rock, "material": base_mat}]
 
 
-## A GEODE broken open, lying open side up: the lower half of a rough round rock, its cut face a band
+## A geode broken open, lying open side up: the lower half of a rough round rock, its cut face a band
 ## of rind round a hollow lined with crystal points growing in toward the middle - `[{geo}]` the
 ## lining, then the rock in its own material. The hollow follows the rock's lumps, so the rind is
 ## as thick all round as it was asked to be.
@@ -2825,12 +2775,12 @@ static func _geode(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 				(side[1] as Tris).quad(ps[0], ps[1], ps[2], ps[3], ns[0], ns[1], ns[2], ns[3],
 					Vector2(float(i) / segs, float(j) / rings), Vector2(float(i + 1) / segs, float(j) / rings),
 					Vector2(float(i + 1) / segs, float(j + 1) / rings), Vector2(float(i) / segs, float(j + 1) / rings), hs[0], hs[1], hs[2], hs[3])
-	# THE CUT FACE: the rind, from the rock's edge in to the hollow's
+	# The cut face: the rind, from the rock's edge in to the hollow's
 	for i in segs:
 		rock.quad(outside[rings][i], outside[rings][i + 1], inside[rings][i + 1], inside[rings][i], Vector3.UP, Vector3.UP,
 			Vector3.UP, Vector3.UP, Vector2(float(i) / segs, 0.0), Vector2(float(i + 1) / segs, 0.0), Vector2(float(i + 1) / segs, 1.0),
 			Vector2(float(i) / segs, 1.0), 1.0, 1.0, 1.0, 1.0)
-	# THE CRYSTALS, spread evenly over the hollow (a spiral) from its bottom to a little under the
+	# The crystals, spread evenly over the hollow (a spiral) from its bottom to a little under the
 	# cut, each rooted in the wall and pointing in, toward a point under the middle of the cut
 	var n := int(p["count"])
 	var golden := PI * (3.0 - sqrt(5.0))
@@ -2949,7 +2899,7 @@ static func _loft(p: Dictionary) -> Tris:
 	corner = d["corner"]
 	var along := _lengths(spine)
 	var total := maxf(along[along.size() - 1], 1e-6)
-	# THE OUTLINES: one for one when every section is drawn from the same one
+	# The outlines: one for one when every section is drawn from the same one
 	var outs: Array = []
 	var sig := {}
 	for sd in secs:
@@ -3056,8 +3006,7 @@ static func _resample(poly: Array, m: int) -> Array:
 
 
 ## Whether part [param p]'s warp bends its shape rather than only scaling it - or it is of a material that gives, bent where it is
-## pressed (a sponge laid over a pot's mouth, feedback 0005: "It would bend in the middle"; its broad faces had been one flat quad each,
-## which no press could bend) - then its shape is built with points no further apart than [constant WARP_STEP].
+## pressed (a sponge laid over a pot's mouth: its broad faces must be more than one flat quad each) - then its shape is built with points no further apart than [constant WARP_STEP].
 static func _fine(p: Dictionary) -> bool:
 	if bool(p.get("_gives", false)):
 		return true
@@ -3177,8 +3126,7 @@ static func _coil(p: Dictionary) -> Tris:
 
 # --- bones --------------------------------------------------------------------------------------
 
-## A BONE lying on its side along x, resting on its knobs (asked 2026-10-07: "Chicken bones in a pile, a skull
-## upon the table, or even a large femur just sitting there"): a shaft swept along a slight bow, flaring at its
+## A bone lying on its side along x, resting on its knobs: a shaft swept along a slight bow, flaring at its
 ## ends, and the knobs of its joints - built of the rods and balls every other thing is, in its own
 ## proportions, so a set dresser writes a kind and a length and never draws one.
 static func _bone(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
@@ -3256,11 +3204,9 @@ static func _rest(g: Tris) -> void:
 	g.measure()
 
 
-## A SKULL ([constant SKULLS]), facing +z and resting on its jaw: a SCULPT ([constant SKULL_FORMS]) built as an
+## A skull ([constant SKULLS]), facing +z and resting on its jaw: a sculpt ([constant SKULL_FORMS]) built as an
 ## agent's is ([method _sculpt]) - its openings holes right through, its sockets shut in and so darkened - and
-## scaled to its length; a horned one's horns swept on. Asked 2026-10-07, of the first skulls (one surface
-## found along rays from inside, which can make no hole, with dark lumps for sockets): "The bird-like skull
-## I'm seeing does look rather cartoonish".
+## scaled to its length; a horned one's horns swept on.
 static func _skull(p: Dictionary, _rng: RandomNumberGenerator) -> Array:
 	var kind := String(p["kind"])
 	var bone := _sculpt({"strokes": _strokes(SKULL_FORMS[kind]), "mirror": true})
@@ -3359,7 +3305,7 @@ static func _strokes(v: Variant) -> Array:
 	return out
 
 
-## A SCULPT, built ([constant SHAPES] `sculpt`): its strokes as one surface ([method _carved]), in meters,
+## A sculpt, built ([constant SHAPES] `sculpt`): its strokes as one surface ([method _carved]), in meters,
 ## each point carrying how shut in it is (uv2.y, [method _cavity]). The same sculpt is built once in a
 ## process ([constant SCULPT_KEPT]): a skull is a second or two of arithmetic, and a table builds its things
 ## more than once.
@@ -3382,7 +3328,7 @@ static func _sculpt(p: Dictionary) -> Tris:
 	return g
 
 
-## A SCULPT'S FIELD (centimeters; below 0 inside): its strokes in order, each melted into what came before it
+## A sculpt's field (centimeters; below 0 inside): its strokes in order, each melted into what came before it
 ## (`k`, centimeters: soft as clay smoothed over, 0 a crisp seam) or, carved, cut out of it - a carve cuts only
 ## what came before it. A rod is a run of tapered segments (a smooth one cut short along a curve through its
 ## points), a ball an ellipsoid. Mirrored, it is sampled at |x|, so what is drawn on the right is drawn on the
@@ -3496,7 +3442,7 @@ static func sculpt_cut(p: Dictionary) -> Dictionary:
 	return {"cell": float(_cut_of(f)[1]), "thin": thin}
 
 
-## THE STROKES NEAR [param box] (centimeters): [ids, segments] - each stroke's place in the list whose bounds
+## The strokes near [param box] (centimeters): [ids, segments] - each stroke's place in the list whose bounds
 ## reach it, and for a rod the segments of it that do. Mirrored, the box is folded onto the right side.
 static func _near(f: Dictionary, box: AABB) -> Array:
 	var lo := box.position
@@ -3564,11 +3510,11 @@ static func _sample(f: Dictionary, near: Array, pts: PackedVector3Array) -> Pack
 	return out
 
 
-## THE FIELD ON A GRID: [param dims] points from [param origin], [param cell] apart (centimeters), sampled a
+## The field on a grid: [param dims] points from [param origin], [param cell] apart (centimeters), sampled a
 ## block of [constant SCULPT_BLOCK] cells at a time from the strokes near the block alone. With [param band],
 ## only near the surface: a block whose middle is further from it than the block is wide is skipped, and in
 ## the rest only the pieces of [constant SCULPT_PIECE] cells the surface can reach are sampled - the points
-## left NAN (a person's skull sampled whole block by block was 850,000 points and seven seconds). {vals,
+## left NAN (sampled whole, a person's skull is 850,000 points). {vals,
 ## blocks: each sampled piece's first and last cells, six numbers a piece}.
 static func _grid(f: Dictionary, origin: Vector3, cell: float, dims: Vector3i, band: bool) -> Dictionary:
 	var vals := PackedFloat32Array()
@@ -3634,7 +3580,7 @@ static func _grid(f: Dictionary, origin: Vector3, cell: float, dims: Vector3i, b
 	return {"vals": vals, "blocks": blocks}
 
 
-## A SCULPT'S SURFACE ([method _field_of]), meters: the field sampled on a grid ([method _cut_of], [method
+## A sculpt's surface ([method _field_of]), meters: the field sampled on a grid ([method _cut_of], [method
 ## _grid]), a point in every cell the surface passes through - the middle of where it crosses the cell's edges
 ## - and a face across every edge it crosses, joining the four cells round that edge (surface nets: what
 ## marching cubes makes, without its table, and as smooth). Each point's normal is its faces' together; its
@@ -3698,7 +3644,7 @@ static func _carved(f: Dictionary) -> Tris:
 					at[ci] = verts.size()
 					verts.append(origin + (Vector3(i, j, k) + sum / float(crossings)) * cell)
 					surf.append_array([i, j, k])
-	# THE FACES: across each edge from a cell's first corner that the surface crosses, wound so they face out
+	# The faces: across each edge from a cell's first corner that the surface crosses, wound so they face out
 	var quads := PackedInt32Array()
 	var acc := PackedVector3Array()
 	acc.resize(verts.size())
@@ -3761,7 +3707,7 @@ static func _carved(f: Dictionary) -> Tris:
 	return g
 
 
-## HOW SHUT IN each of [param pts] is (0 open, 1 deep in a hollow), with [param normals]: the field looked up
+## How shut in each of [param pts] is (0 open, 1 deep in a hollow), with [param normals]: the field looked up
 ## a few steps out from it along its normal, on a grid three cells to one of the surface's - a point the
 ## surface stays close to as it steps out (a socket's floor, a groove, the hollow under an arch) sees less of
 ## the room. What the material darkens and takes the room's light from ([code]prop.gdshader[/code]).
@@ -3814,9 +3760,8 @@ static func _ell(q: Vector3, r: Vector3) -> float:
 	return ((q / r).length() - 1.0) * minf(r.x, minf(r.y, r.z))
 
 
-## The distance from [param q] to a ROUND CONE: two balls (radius [param ra] at [param a], [param rb] at [param b])
-## and the cone touching both - exact (Inigo Quilez's), so a rod of them is smooth through its joints, where a
-## radius blended along the segment left a ring at every one.
+## The distance from [param q] to a round cone: two balls (radius [param ra] at [param a], [param rb] at [param b])
+## and the cone touching both - exact (Inigo Quilez's), so a rod of them is smooth through its joints.
 static func _cone(q: Vector3, a: Vector3, b: Vector3, ra: float, rb: float) -> float:
 	var ba := b - a
 	var l2 := ba.dot(ba)
@@ -3849,11 +3794,8 @@ static func _smin(a: float, b: float, k: float) -> float:
 
 # --- strands --------------------------------------------------------------------------------------
 
-## A STRAND: its centerline as it lies ([method strand_line]), and what is built along it - a rope's
-## twisted strands, a cord, a wire, a vine and its leaves, beads on a thread, a chain's links.
-## Asked 2026-10-07: "a coil of rope ... a vine with leaves ... a wire ... layed into a nice, coiled pile -
-## or they might be layed chaotically, unkempt ... or "draped" across the table, such that the item spills
-## over one or both sides of the table".
+## A strand: its centerline as it lies ([method strand_line]), and what is built along it - a rope's twisted strands, a cord, a wire, a
+## vine and its leaves, beads on a thread, a chain's links.
 static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 	var line := strand_line(p, rng)
 	var t := float(p["thickness"]) * 0.01
@@ -3873,8 +3815,8 @@ static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			if kind == "beads":
 				# the thread, then a bead every bead's width along it
 				g.append(_sweep(spine, none, _rings_of(n, t * 0.1, 8), _sharp(8), hollow))
-				# A BEAD AS FINE AS IT IS SEEN: a small one is a few pixels across, and a ball chain's 2.4 mm beads, each a
-				# whole 18 by 32 sphere, had run the strand past its cap half way along it (2026-10-29, a dog tag's chain)
+				# A bead as fine as it is seen: a small one is a few pixels across, so a fine chain's beads are not each a whole 18 by 32 sphere
+				# (the strand would pass its cap half way along)
 				var bead := _ball(Vector3.ONE * t * 100.0, 0.08, false, rng, clampf(t / (float((STRANDS["beads"] as Dictionary)["thickness"]) * 0.01), 0.35, 1.0))
 				var each := t * 1.08
 				var s := each * 0.5
@@ -3885,8 +3827,7 @@ static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			else:
 				var R := t * 0.36
 				var wire := t * 0.13
-				# A LINK AS FINE AS IT IS SEEN, as a bead is: a necklace's 1.5 mm links, each a whole 64 by 12 ring, ran a
-				# thousand of them to millions of corners (2026-10-29, a dog tag's chain) - and past the 360 links a
+				# A link as fine as it is seen, as a bead is (a fine chain's links are not each a whole 64 by 12 ring) - and past the 360 links a
 				# thick chain stops at, a fine one goes on to the strand's cap
 				var fine := clampf(t / (float((STRANDS["chain"] as Dictionary)["thickness"]) * 0.01), 0.2, 1.0)
 				var link := _ring(R, wire, 360.0, fine)
@@ -3910,7 +3851,7 @@ static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			g.measure()
 			return [{"geo": g}]
 		"rope":
-			# THREE STRANDS LAID ROUND EACH OTHER: a three-lobed section turning along it, a full turn every
+			# Three strands laid round each other: a three-lobed section turning along it, a full turn every
 			# few widths
 			var rings: Array = []
 			var along := _lengths(spine)
@@ -3969,7 +3910,7 @@ static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 	return [{"geo": g}]
 
 
-## A STRAND'S CENTERLINE (meters): laid out flat as `lay` says ([method _strand_flat]), raised to rest on the
+## A strand's centerline (meters): laid out flat as `lay` says ([method _strand_flat]), raised to rest on the
 ## cloth and on itself wherever it crosses ([method _strand_rest]) - and, draped over the table's edge, falling
 ## down past it ([method _draped]), when the table has given it its `ground`.
 static func strand_line(p: Dictionary, rng: RandomNumberGenerator) -> PackedVector3Array:
@@ -3984,7 +3925,7 @@ static func strand_line(p: Dictionary, rng: RandomNumberGenerator) -> PackedVect
 	return out
 
 
-## THE STRAND LAID FLAT, as `lay` says - points evenly spaced along it (meters, x z).
+## The strand laid flat, as `lay` says - points evenly spaced along it (meters, x z).
 static func _strand_flat(p: Dictionary, rng: RandomNumberGenerator) -> PackedVector2Array:
 	var t := float(p["thickness"]) * 0.01
 	var L := float(p["length"]) * 0.01
@@ -4071,7 +4012,7 @@ static func _strand_flat(p: Dictionary, rng: RandomNumberGenerator) -> PackedVec
 	return pts
 
 
-## A LOOSE END running on from where the coiling stopped: [param n] more points heading [param heading].
+## A loose end running on from where the coiling stopped: [param n] more points heading [param heading].
 static func _trail(pts: PackedVector2Array, heading: float, n: int, ds: float, noise: FastNoiseLite, loose: float) -> void:
 	var at := pts[pts.size() - 1] if not pts.is_empty() else Vector2.ZERO
 	var h := heading
@@ -4102,7 +4043,7 @@ static func _even(line: PackedVector2Array, ds: float) -> PackedVector2Array:
 	return out
 
 
-## THE HEIGHT EACH POINT OF A STRAND RESTS AT (its middle, meters): on the cloth, or over whatever of
+## The height each point of a strand rests at (its middle, meters): on the cloth, or over whatever of
 ## itself it crosses - a round section of width [param t] riding on another - and easing up and down to it
 ## over a few widths, never a step.
 static func _strand_rest(flat: PackedVector2Array, t: float) -> PackedFloat32Array:
@@ -4143,7 +4084,7 @@ static func _strand_rest(flat: PackedVector2Array, t: float) -> PackedFloat32Arr
 	return ys
 
 
-## A STRAND DRAPED OVER THE TABLE'S EDGE: where [param line] runs past the top ([param ground]'s `sdf`, its
+## A strand draped over the table's edge: where [param line] runs past the top ([param ground]'s `sdf`, its
 ## outward `normal`), it rolls over the edge and hangs straight down as far as it ran past - to the floor
 ## (`drop` below the top) at most, and on along the floor beyond that.
 static func _draped(line: PackedVector3Array, ground: Dictionary, t: float) -> PackedVector3Array:
@@ -4253,7 +4194,7 @@ static func _sweep(spine: Array, corner: PackedByteArray, rings: Array, sharp: P
 		else:
 			var dv: Vector3 = (spine[i + 1] as Vector3) - (spine[i - 1] as Vector3)
 			tans.append(dv.normalized() if dv.length() > 1e-9 else dirs[i])
-	# THE FRAME: across starts as the thing's x (its z for a path that starts along x) and is carried
+	# The frame: across starts as the thing's x (its z for a path that starts along x) and is carried
 	var t0: Vector3 = tans[0]
 	var side := Vector3.RIGHT if absf(t0.dot(Vector3.RIGHT)) < 0.9 else Vector3.BACK
 	side = (side - t0 * side.dot(t0)).normalized()
@@ -4315,7 +4256,7 @@ static func _sweep(spine: Array, corner: PackedByteArray, rings: Array, sharp: P
 				g.quad(o[k], o[k2], ins[k2], ins[k], t, t, t, t, Vector2(around[k] / perim, v), Vector2(around[k + 1] / perim, v),
 					Vector2(around[k + 1] / perim, v), Vector2(around[k] / perim, v), v, v, v, v)
 			continue
-		# THE END, closed: the outline cut into triangles - or fanned from the path, one that crosses itself
+		# The end, closed: the outline cut into triangles - or fanned from the path, one that crosses itself
 		var flat := PackedVector2Array()
 		for q in rings[end]:
 			flat.append(q)
@@ -4382,10 +4323,10 @@ static func _sweep_skin(g: Tris, rows: Array, tans: Array, corner: PackedByteArr
 				Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1), Vector2(u0, v1), v0, v0, v1, v1)
 
 
-## A SHEET into [param g]: its outline (a named one, or `points`), its base at the origin and its
+## A sheet into [param g]: its outline (a named one, or `points`), its base at the origin and its
 ## length along +z, a little thickness, the tip curled up by `bend` and the sides lifted by
 ## `fold`; placed by [param xf].
-## HOW A SHEET LIFTS off its flat at [param x] across it and [param z] along it from its base (meters) - a [param w] by
+## How a sheet lifts off its flat at [param x] across it and [param z] along it from its base (meters) - a [param w] by
 ## [param l] sheet whose tip curls up by [param bend] and whose sides lift by [param fold]: its top is that far over its
 ## thickness. What [method _sheet] builds, and what words written on it lie on ([SheetWriting]).
 static func sheet_lift(x: float, z: float, w: float, l: float, bend: float, fold: float) -> float:
@@ -4394,7 +4335,7 @@ static func sheet_lift(x: float, z: float, w: float, l: float, bend: float, fold
 	return bend * l * 0.35 * t * t + fold * w * 0.3 * s * s
 
 
-## A SHEET PART'S TOP as [method _sheet] builds it, placed in its thing by [param place]: `{place (its flat's space in
+## A sheet part's top as [method _sheet] builds it, placed in its thing by [param place]: `{place (its flat's space in
 ## the thing's), x0 and z0 (the middle of its width and the start of its length there), w, l (meters), bend, fold, thick
 ## (meters), outline}` - for words written on it ([SheetWriting]).
 static func sheet_top(p: Dictionary, place: Transform3D) -> Dictionary:
@@ -4451,7 +4392,7 @@ static func _sheet(g: Tris, p: Dictionary, xf: Transform3D) -> void:
 				var uvc := (c - lo) / Vector2(maxf(w, 1e-6), maxf(l, 1e-6))
 				g.tri(xf * pa, xf * pb, xf * pc, nn, nn, nn, uva, uvb, uvc, Vector2(1, 0) if side > 0.0 else Vector2.ZERO,
 					Vector2(1, 0) if side > 0.0 else Vector2.ZERO, Vector2(1, 0) if side > 0.0 else Vector2.ZERO)
-		# ITS EDGE, all round: a slab, not a sheet of paper standing off the cloth
+		# Its edge, all round: a slab, not a sheet of paper standing off the cloth
 		var mid := Vector2((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5)
 		for i in poly.size():
 			var a := poly[i]
@@ -4483,7 +4424,7 @@ static func _sheet(g: Tris, p: Dictionary, xf: Transform3D) -> void:
 			var z := t * sz.y
 			row.append(Vector3(x, thick + float(lift.call(x, z, sz.x, sz.y)), z))
 		grid.append(row)
-	# ITS EDGE: down each side and across the base and the tip
+	# Its edge: down each side and across the base and the tip
 	var rim: Array = []
 	for j in nl + 1:
 		rim.append(grid[j][0])
@@ -4536,7 +4477,7 @@ static func _outline_w(kind: String, t: float) -> float:
 	return pow(sin(PI * t), 0.9)
 
 
-## A FLOWER HEAD: rings of petals round a small middle, the inner rings shorter and more upright.
+## A flower head: rings of petals round a small middle, the inner rings shorter and more upright.
 static func _bloom(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 	var g := Tris.new()
 	var R := float(p["radius"])
@@ -4559,9 +4500,9 @@ static func _bloom(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 	return g
 
 
-## AN OUTLINE RAISED STRAIGHT UP, resting on y = 0: its walls - round where the outline is round,
+## An outline raised straight up, resting on y = 0: its walls - round where the outline is round,
 ## crisp where it turns a corner - narrowed toward the top by the taper, its top edge cut back by
-## the bevel, its top and its bottom. With a WALL it is hollow, as a tray is: a rim round an inner
+## the bevel, its top and its bottom. With a wall it is hollow, as a tray is: a rim round an inner
 ## floor as thick as the wall, the inside's walls facing in. The inside is the outline drawn smaller
 ## about its middle, so a star tray's wall is thinner at its points than in its notches.
 static func _extrude(p: Dictionary) -> Tris:
@@ -4733,9 +4674,8 @@ static func _extrude_face(g: Tris, r: Array, up: float, h: float) -> void:
 	var nrm := Vector3(0.0, up, 0.0)
 	var y := (r[0] as Vector3).y
 	var hf := y / maxf(h, 1e-6)
-	# CUT AT ITS OWN SIZE: Godot's ear clipping weighs each corner's turn against a fixed epsilon, and a small outline in
-	# meters fell under it (2026-10-29, a dog tag's half: a corner of its hole's notch taken for convex, a triangle laid
-	# across the hole) - drawn to a unit square, every turn is weighed as it is
+	# Cut at its own size: Godot's ear clipping weighs each corner's turn against a fixed epsilon, which a small outline in meters falls
+	# under - drawn to a unit square, every turn is weighed as it is
 	var unit := PackedVector2Array()
 	var most := maxf(span.x, span.y)
 	for v in flat:
@@ -4803,7 +4743,7 @@ static func _hull(pts: PackedVector3Array, below: float) -> PackedVector2Array:
 	return Geometry2D.convex_hull(flat) if flat.size() >= 3 else PackedVector2Array()
 
 
-## A GROWING TRIANGLE LIST - positions, normals and both UV channels, three per triangle - with
+## A growing triangle list - positions, normals and both UV channels, three per triangle - with
 ## the part's measure (its girth and height in centimeters, for laying out ornament) and the top
 ## of it where a wick goes.
 class Tris:

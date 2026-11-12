@@ -1,22 +1,19 @@
 extends Node
 
-## NOT a gate (it needs ffmpeg, util-linux, xvfb-run and a GPU). The export's SLIDING WINDOW,
-## through the exporter's own state machine (`_tick_render`, `_tick_transcode`) against a REAL
-## Movie Maker render - a small project written into --dir, a field of moving disks and a tone,
-## launched the way the exporter launches one ([method Exporter.virtual_display]).
+## Not a gate (it needs ffmpeg, util-linux, xvfb-run and a GPU). The export's sliding window, through the exporter's own state
+## machine (`_tick_render`, `_tick_transcode`) against a real Movie Maker render (a small project written into --dir: moving
+## disks and a tone), launched as the exporter launches one ([method Exporter.virtual_display]).
 ##
-##   whole    - the scratch's NAME leaves the folder while the render is still writing, what it
-##              ever held on disk stays small, every frame and the audio reach the MP4, and
-##              nothing is left: no scratch, no descriptor on it, no render, no Xvfb
-##   stopped  - closing ghost mid-render takes the render's Godot and its Xvfb with it (and the
-##              control: the launch this replaced leaves that Godot rendering)
-##   lost     - the encoder dying after a release abandons the export and stops the render
-##   early    - the encoder dying before any release falls back to encoding the whole AVI after
+##   whole   - the scratch's name leaves the folder while the render is still writing, what it held on disk stays small, every
+##             frame and the audio reach the MP4, and nothing is left (no scratch, descriptor, render or Xvfb)
+##   stopped - closing ghost mid-render takes the render's Godot and its Xvfb with it (control: a launch without the pact
+##             leaves that Godot rendering)
+##   lost    - the encoder dying after a release abandons the export and stops the render
+##   early   - the encoder dying before any release falls back to encoding the whole AVI after
 ##
 ##   tests/run_boot_probe.sh tests/export/export_follow_probe.gd 600 --dir <scratch on a real disk>
 ##
-## Refuses to run during an export: the exporter's code it drives clears the project's
-## override.cfg and rewrites the transcode progress file, which a running export owns.
+## Refuses to run during an export: it clears the project's override.cfg and rewrites the transcode progress file.
 
 const FPS := 30
 
@@ -91,8 +88,7 @@ func _stopped() -> void:
 	ex.free()
 
 
-## THE CONTROL for the pact: the launch this replaced, stopped the same way, leaves its Godot
-## rendering. Cleaned up by pid afterwards.
+## The control for the pact: a launch without it, stopped the same way, leaves its Godot rendering. Cleaned up by pid afterwards.
 func _control() -> void:
 	print("export_follow_probe: [control - the old launch]")
 	var avi := _dir.path_join("control.render.avi")

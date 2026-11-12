@@ -6,18 +6,17 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/ui/touch_text_check.gd
 ##
-## - A DRAG SCROLLS, selects nothing and takes no focus (so brings no keyboard) - against a plain TextEdit given
+## - A drag scrolls, selects nothing and takes no focus (so brings no keyboard) - against a plain TextEdit given
 ##   the same press, which takes focus with it, and the keyboard, and takes the press as the start of a
-##   selection, its caret moved there: the user's report (2026-10-31: "the note is unscrollable because clicking
-##   and swiping selects/highlights the text"). Its selecting drag follows the system's pointer, which a headless
+##   selection, its caret moved there. Its selecting drag follows the system's pointer, which a headless
 ##   run does not move, so the selection itself is not shown here.
-## - A FLICK RUNS ON after the finger lets go, slows and stops; a press stops it.
-## - A TAP puts the caret where it lands and takes focus; focus gone, the box cannot take it from a drag again.
-## - A LONG PRESS selects the word under it and takes no focus - against a press let go sooner, which selects
+## - A flick runs on after the finger lets go, slows and stops; a press stops it.
+## - A tap puts the caret where it lands and takes focus; focus gone, the box cannot take it from a drag again.
+## - A long press selects the word under it and takes no focus - against a press let go sooner, which selects
 ##   nothing; held and dragged, the selection runs on from the word, and letting go shows the markers and the bar.
-## - A MARKER dragged moves its own end, the other staying; dragged past the other, the other stays put still.
-## - THE BAR, pressed through the viewport: Select all selects the words whole, Cut takes the selection out.
-## - A DOUBLE TAP selects the word.
+## - A marker dragged moves its own end, the other staying; dragged past the other, the other stays put still.
+## - The bar, pressed through the viewport: Select all selects the words whole, Cut takes the selection out.
+## - A double tap selects the word.
 
 const WORDS := "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa"
 

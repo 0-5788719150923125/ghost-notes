@@ -1,32 +1,21 @@
 extends SceneTree
 
-## Does "repaint" actually replace the keyed color with the color asked for -
-## and does "erase" do what it claims (which is NOT the same thing)?
+## Does "repaint" replace the keyed color with the color asked for, and does "erase" do what it claims
+## (which is not the same thing)?
 ##   godot --path . --script res://tests/masking/repaint_check.gd
-## NOT --headless: the dummy renderer returns no viewport image, so a readback
-## check has to run on a real GPU (a small window flashes for a second).
+## NOT --headless: the dummy renderer returns no viewport image, so a readback check has to run on a real
+## GPU (a small window flashes for a second).
 ##
-## This exists because "the Erase effect does nothing" was reported and erase
-## turned out to be working exactly as designed - it SUBTRACTS the target's
-## chroma and the light it carried, which lands a lit yellow wall on a darkened
-## neutral and moves a pale one barely at all. That is a legitimate effect and a
-## poor answer to "replace yellow with black", so the two are measured together
-## here and each is held to its own claim:
+## - erase subtracts the target's chroma and the light it carried: the keyed color loses its chroma and
+##   ends neutral-ish and darker; it is not expected to reach the paint color.
+## - repaint lands the keyed color on the chosen color (black means black).
 ##
-##   erase   - the keyed color loses its chroma. Its RESULT is neutral-ish and
-##             darker; it is NOT expected to reach the paint color.
-##   repaint - the keyed color lands ON the chosen color. Black means black.
-##
-## The swatches are graded by how related they are to the key, because the two
-## effects owe different things to the middle grade:
-##   MEMBER    the wall itself, in three lightings. Both effects act, fully.
-##   ADJACENT  skin - 28 degrees off the wall's hue, so it genuinely shares a
-##             yellow component. Erase is gate-free by design and legitimately
-##             takes some of it; REPAINT MUST NOT, because a replacement is
-##             all-or-nothing and a face flashing to black is not a near miss.
-##             This grade is why repaint selects on an angular cone instead of
-##             the raw projection erase uses - see the shader branch.
-##   UNRELATED blue and neutral gray. Nothing may touch these, either effect.
+## The swatches are graded by how related they are to the key:
+## - MEMBER: the wall itself, in three lightings. Both effects act, fully.
+## - ADJACENT: skin, 28 degrees off the wall's hue. Erase is gate-free and takes some of it; repaint must
+##   not (a replacement is all-or-nothing), which is why repaint selects on an angular cone instead of
+##   the raw projection erase uses (see the shader branch).
+## - UNRELATED: blue and neutral gray. Nothing may touch these.
 
 const W := 64
 const H := 96
@@ -56,11 +45,11 @@ func _initialize() -> void:
 				img.set_pixel(x, y, SWATCHES[s][1])
 	var tex := ImageTexture.create_from_image(img)
 
-	# Repaint to BLACK (h any, s 0, v 0) at full Reach - the reported use case.
+	# Repaint to black (h any, s 0, v 0) at full Reach.
 	var painted := await _render(tex, MaskSession.EFFECT_REPAINT, {
 		"accent": 0.0, "stick": 0.0, "tint": 0.0, "con": 0.5})
 	var erased := await _render(tex, 0, {"accent": 0.0, "stick": 0.0, "tint": 0.0, "con": 0.5})
-	# And repaint to a saturated GREEN, so "it just darkens things" cannot pass.
+	# And to a saturated green, so "it just darkens things" cannot pass.
 	var greened := await _render(tex, MaskSession.EFFECT_REPAINT, {
 		"accent": 0.3333, "stick": 1.0, "tint": 0.85, "con": 0.5})
 
@@ -76,22 +65,20 @@ func _initialize() -> void:
 			% [SWATCHES[s][0], _fmt(src), _fmt(e), _fmt(b), _fmt(g)])
 		match int(SWATCHES[s][2]):
 			MEMBER:
-				# SWITCH: the wall must actually reach the paint, in every lighting.
+				# Switch: the wall must reach the paint, in every lighting.
 				_expect(_dist(b, Color(0, 0, 0)) < 0.16,
 					"%s: repaint->black left it at %s - the paint did not land"
 					% [SWATCHES[s][0], _fmt(b)])
 				_expect(_dist(g, Color(0.13, 0.85, 0.13)) < 0.30,
 					"%s: repaint->green left it at %s - the paint did not land"
 					% [SWATCHES[s][0], _fmt(g)])
-				# ...and erase must do its own, DIFFERENT thing: kill the chroma.
+				# ...and erase does its own, different thing: kills the chroma.
 				_expect(_chroma(e) < _chroma(src) * 0.55,
 					"%s: erase left %.3f of the %.3f chroma it was asked to subtract"
 					% [SWATCHES[s][0], _chroma(e), _chroma(src)])
 			ADJACENT:
-				# The grade that separates the two effects. Repaint holds off
-				# almost entirely; erase is allowed its share, and is checked to
-				# still be gentler here than on the wall itself (so "erase takes
-				# everything warm" would fail too).
+				# Repaint holds off almost entirely; erase is allowed its share, but must be gentler here than on
+				# the wall itself.
 				_expect(_dist(b, src) < 0.12,
 					"%s: repaint->black moved it to %s - the cone is too wide, " % [SWATCHES[s][0], _fmt(b)]
 					+ "this is the face beside the wall")
@@ -103,7 +90,7 @@ func _initialize() -> void:
 					% [SWATCHES[s][0], _chroma(src) - _chroma(e), _chroma(src)]
 					+ "subtraction on something only adjacent to the key")
 			UNRELATED:
-				# HOLD: nothing that shares no component with the key may move.
+				# Hold: nothing that shares no component with the key may move.
 				_expect(_dist(b, src) < 0.03,
 					"%s: repaint->black moved it to %s" % [SWATCHES[s][0], _fmt(b)])
 				_expect(_dist(g, src) < 0.03,
@@ -126,10 +113,8 @@ func _initialize() -> void:
 		quit(1)
 
 
-## THE REGION. A color key cannot separate two things that are the same color;
-## the whole point of the box is that position can. So: the SAME key color top
-## and bottom, a box over the top half only, and the bottom must survive - which
-## is literally the reported case (a yellow wall to remove, a gold coin to keep).
+## The region. A color key cannot separate two things of the same color; position can. The same key color
+## top and bottom, a box over the top half only, and the bottom must survive.
 func _check_region() -> void:
 	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
 	for y in H:
@@ -148,8 +133,8 @@ func _check_region() -> void:
 	_expect(_dist(bottom, Color(0.85, 0.72, 0.35)) < 0.03,
 		"OUTSIDE the region the paint landed anyway (%s) - the box does not confine it"
 		% _fmt(bottom))
-	# And the default box (whole frame) must not have grown a vignette: a layer
-	# with no region set has to render exactly as it did before regions existed.
+	# The default box (whole frame) must not vignette: a layer with no region renders as it would without
+	# regions.
 	var full := await _render(tex, MaskSession.EFFECT_REPAINT,
 		{"accent": 0.0, "stick": 0.0, "tint": 0.0, "con": 0.5,
 		 "region": Vector4(0.0, 0.0, 1.0, 1.0), "regsoft": 0.5})
@@ -158,13 +143,9 @@ func _check_region() -> void:
 			"a full-frame region left %s unpainted at (%d,%d) - the default box is "
 			% [_fmt(full.get_pixel(p.x, p.y)), p.x, p.y] + "vignetting")
 
-	# THE FLUSH EDGE, and THE UNIFORM INTERIOR. Reported from a real session: a box
-	# taken over the whole upper half left a band of the removed color hugging the
-	# very top of the picture. Two causes, both checked here - the border fade used
-	# to run inward from a side even when that side sat ON the frame's edge (so the
-	# first rows were only partly painted), and Region edge defaulted to soft, which
-	# turned the box from a selection into a gradient. Inside is now uniform and a
-	# flush side is not faded at all. Row 0 specifically: not "near the top".
+	# The flush edge and the uniform interior: a box taken over the whole upper half must leave no band of
+	# the removed color at the top of the picture (row 0 specifically), a side flush with the frame's edge
+	# is not faded, and the default Region edge must not turn the box into a gradient.
 	for soft in [0.0, 0.5]:
 		var flush := await _render(tex, MaskSession.EFFECT_REPAINT,
 			{"accent": 0.0, "stick": 0.0, "tint": 0.0, "con": 0.5,
@@ -175,12 +156,9 @@ func _check_region() -> void:
 		_expect(_dist(row0, Color(0, 0, 0)) < 0.16,
 			"edge %.1f: the box is flush with the top of the frame but row 0 is %s - "
 			% [soft, _fmt(row0)] + "a band of the removed color survives at the border")
-		# Uniform inside: every row from the top down to where the border shoulder
-		# legitimately begins must be painted the SAME. The shoulder runs inward
-		# from the box's bottom edge (0.5) by soft x half the box's smaller side
-		# (0.5) - anything above that is interior and must be flat, whatever Region
-		# edge is set to. That is the actual claim: softening happens AT the
-		# border, never across the inside.
+		# Uniform inside: every row from the top down to where the border shoulder begins must be painted the
+		# same. The shoulder runs inward from the box's bottom edge (0.5) by soft x half the box's smaller side
+		# (0.5); softening happens at the border, never across the inside.
 		var shoulder := 0.5 - maxf(soft * 0.25, 0.02)
 		var inner_max := 0.0
 		for y in range(0, int(H * shoulder)):
@@ -190,10 +168,9 @@ func _check_region() -> void:
 			+ "color) - a region is a selection, not a gradient")
 
 
-## THE EDGE. A hard color boundary keyed per pixel steps straight from painted
-## to unpainted in one pixel, which is what reads as blocky and crawls once the
-## source is compressed video. Anti-aliased, the boundary spends a few pixels in
-## between. Measured as how many rows are strictly between the two extremes.
+## The edge. A hard color boundary keyed per pixel steps from painted to unpainted in one pixel (blocky,
+## and it crawls on compressed video); anti-aliased, it spends a few pixels in between. Measured as how
+## many rows are strictly between the two extremes.
 func _check_smoothing() -> void:
 	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
 	for y in H:

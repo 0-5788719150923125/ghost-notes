@@ -1,41 +1,25 @@
 extends Node
 
-## THE WASH WASHES THE DECK ([TableShuffle], [method TablePlan.deck_count]). The user, 2026-10-14:
-## in a wash "the cards NOT being moved are still slowly drifting/sliding away from each other... the
-## cards just slide along the table, gently, as if on ice... Cards should settle, when they are not
-## being moved by the washing directly (or pushed by other cards...)"; and "when the cards are
-## collected - the deck is slowly growing in a strange way. It is as if the number of cards on the
-## table/in the wash does not match the number of cards needed in the deck when stacked"; and, of the
-## fix, "The agents define how many cards a deck will use, so be sure to use the actual card amount".
-## So, over washes of the real plan:
+## The wash washes the deck ([TableShuffle], [method TablePlan.deck_count]). Over washes of the real plan:
 ##
-##   - THE DECK IS THE EPISODE'S: as many cards as the draw's deck held (`deck_n`), else the deck the
-##     producer chose, else a box's drawn and left-in cards - never fewer than the cards drawn, and a
-##     made-up episode a tarot's; the deck stands that many cards high, and a wash spreads every one;
-##   - A CARD IS ONE CARD'S HEIGHT wherever it lies: the deck keeps its height as the palm comes down
-##     on it, and the gathered pile stands as high as the cards landed in it, card by card, to the
-##     deck's height;
-##   - A CARD SWEPT IN GOES UNDER THE PILE (the same day: "a person swiping-in cards to collect them
-##     from the table wash would be sweeping them into the bottom of the deck" - they had all gone on
-##     top): of two cards gathered in different sweeps, the later lies lower in the deck gathered;
-##   - CARDS LEFT ALONE LIE STILL: a card no palm is near and no moving card touches, once any slide it
-##     had has run out, does not move;
-##   - A HEAP IS NO TALLER THAN ITS CARDS: no card in a wash stands far over the deck's own height;
-##   - A HEAP STAYS LOW AS IT IS MIXED (2026-10-15: cards "floating a half inch or an inch above the
-##     table, because they are 'stacked' upon dozens of other cards... those stacks would topple and
-##     the cards would splay further"): no card lies 10 mm over the cloth, and 99 in 100 under 6 mm -
-##     while a card is not left alone as it topples off a heap ([constant TableShuffle.SPLAY_DEPTH]).
+##   - The deck is the episode's: as many cards as the draw's deck held (`deck_n`), else the deck the producer chose, else a box's
+##     drawn and left-in cards - never fewer than the cards drawn, and a made-up episode a full deck; the deck stands that many
+##     cards high, and a wash spreads every one.
+##   - A card is one card's height wherever it lies: the deck keeps its height as the palm comes down on it, and the gathered pile
+##     stands as high as the cards landed in it, card by card.
+##   - A card swept in goes under the pile: of two cards gathered in different sweeps, the later lies lower in the deck gathered.
+##   - Cards left alone lie still: a card no palm is near and no moving card touches, once any slide it had has run out, does not move.
+##   - A heap is no taller than its cards, and stays low as it is mixed: no card lies 10 mm over the cloth, and 99 in 100 under
+##     6 mm, while a card is not left alone as it topples off a heap ([constant TableShuffle.SPLAY_DEPTH]).
 ##
-## THE CONTROLS: the gather laying each card on top ([member TableShuffle._sweep_under] off) is caught
-## going the other way; a track made to creep as the heap's slump made it (12 mm/s) is caught; the pile posed
-## as the old deck's (26 meshes standing for three cards each, every one swelling as it landed) stands
-## off its cards' height; cards rested without the cards on them holding them down tower over the
-## cloth ([member TableShuffle._hold]); the wash as it was - no card splaying ([member TableShuffle._splay])
-## and a big deck spread no wider ([member TableShuffle._roomy]) - lies on heaps 15 mm and more tall.
+## The controls: the gather laying each card on top ([member TableShuffle._sweep_under] off) is caught going the other way; a track
+## made to creep (12 mm/s) is caught; the pile posed as meshes that swell as they land stands off its cards' height; cards rested
+## without the cards on them holding them down tower over the cloth ([member TableShuffle._hold]); a wash with no card splaying
+## ([member TableShuffle._splay]) and a big deck spread no wider ([member TableShuffle._roomy]) lies on heaps 15 mm and more tall.
 ##
 ##   tests/run_boot_probe.sh tests/table/wash_deck_check.gd 1200
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - the tracks and rests are numbers.
+## A boot probe (the medium reaches the Director); no GPU - the tracks and rests are numbers.
 
 const SEEDS := [21, 22, 23]
 const WASH_S := 28.0
@@ -111,7 +95,7 @@ func _episode(more: Dictionary, seed: int) -> void:
 	medium._shuffles.shuffle_room = INF
 
 
-## THE DECK IS THE EPISODE'S: its count, its meshes, its height and a wash's cards.
+## The deck is the episode's: its count, its meshes, its height and a wash's cards.
 func _counts() -> void:
 	var listed: Array = []
 	for k in 40:
@@ -168,8 +152,8 @@ func _stack(m: Dictionary, v: float) -> Array:
 	return [top, cover, landed, strays]
 
 
-## A CARD IS ONE CARD'S HEIGHT: the deck under the palm, and the pile as it is gathered - against the
-## old deck's pile, every card swelling to three as it landed (the control).
+## A card is one card's height: the deck under the palm, and the pile as it is gathered - against the old deck's pile, every card swelling
+## to three as it landed (the control).
 func _heights(plans: Array) -> void:
 	var drop := 0.0
 	var off := 0.0
@@ -190,11 +174,10 @@ func _heights(plans: Array) -> void:
 			if int(st[1]) == n:
 				drop = maxf(drop, top0 - float(st[0]))
 			v += 1.0 / 60.0
-		# the pile as it is gathered: wherever only cards landed in it lie in its place, it stands as high
-		# as those cards - as the old deck's did not (each of its cards swelling from a card and a hair
-		# to three cards' height over 0.6 s from landing). Cards are swept in UNDER it, often a few lying
-		# one on another together: its edge rides up on them a moment, and it lies tipped on the last of
-		# them until they are squared in
+		# the pile as it is gathered: wherever only cards landed in it lie in its place, it stands as high as those cards - as the old deck's did
+		# not (each of its cards swelling from a card and a hair to three cards' height over 0.6 s from landing). Cards are swept in under it,
+		# often a few lying one on another together: its edge rides up on them a moment, and it lies tipped on the last of them until they are
+		# squared in
 		var k := 0
 		var g0 := float(plan["gather"])
 		while g0 + float(k) / 30.0 <= WASH_S:
@@ -242,7 +225,7 @@ func _under_share(plan: Dictionary) -> Vector2i:
 	return Vector2i(right, pairs)
 
 
-## A CARD SWEPT IN GOES UNDER THE PILE - against the gather laying each on top (the control).
+## A card swept in goes under the pile - against the gather laying each on top (the control).
 func _swept(plans: Array) -> void:
 	var right := 0
 	var pairs := 0
@@ -261,9 +244,8 @@ func _swept(plans: Array) -> void:
 	_ok(share_c < 0.3, "control: laid on top instead, the later lies higher (%.0f%% lower)" % (share_c * 100.0))
 
 
-## Every card-step of [param plan]'s mixing that its card was LEFT ALONE - no palm pressing near it,
-## no card that moved touching it, for COAST steps - and how far it went: `[card, step, meters]`.
-## [param tracks] are the plan's, or made ones.
+## Every card-step of [param plan]'s mixing that its card was left alone - no palm pressing near it, no card that moved touching it, for
+## COAST steps - and how far it went: `[card, step, meters]`. [param tracks] are the plan's, or made ones.
 func _alone(plan: Dictionary, tracks: Array) -> Array:
 	var out: Array = []
 	var n := tracks.size()
@@ -330,7 +312,7 @@ func _perched(track: PackedVector4Array, st: int) -> bool:
 	return false
 
 
-## CARDS LEFT ALONE LIE STILL - against a card made to creep as the heap's slump made it (the control).
+## Cards left alone lie still - against a card made to creep as the heap's slump made it (the control).
 func _still(plans: Array) -> void:
 	var steps := 0
 	var slid := 0
@@ -372,9 +354,9 @@ func _still(plans: Array) -> void:
 	_ok(control > 10, "control: a card made to creep off as a slumping heap's did is caught (%d steps)" % control)
 
 
-## A HEAP IS NO TALLER THAN ITS CARDS - and rested without the cards on them holding them down (the
-## control), cards tower over the cloth. And A HEAP STAYS LOW AS IT IS MIXED: its cards splay - against
-## the same wash with none splaying (the control), where cards stood on chains of cards 30 deep.
+## A heap is no taller than its cards - and rested without the cards on them holding them down (the control), cards tower over the cloth.
+## And a heap stays low as it is mixed: its cards splay - against the same wash with none splaying (the control), where cards stood on
+## chains of cards 30 deep.
 func _heaps(plans: Array) -> void:
 	var tallest := 0.0
 	var steepest := 0.0
@@ -406,8 +388,7 @@ func _heaps(plans: Array) -> void:
 		% [deck * 1000.0, tallest * 1000.0, rad_to_deg(atan(steepest)), towering * 1000.0])
 	_ok(tallest < deck + TOWER, "no card in a wash stands far over the deck's own height (%.1f mm, the deck %.1f)" % [tallest * 1000.0, deck * 1000.0])
 	_ok(towering > deck + 0.05, "control: rested without the cards on them holding them down, cards tower over it (%.0f mm)" % (towering * 1000.0))
-	# AS IT IS MIXED: how high the cards lie over the cloth, against the wash as it was - no card
-	# splaying, the deck spread no wider for being big
+	# As it is mixed: how high the cards lie over the cloth, against the wash with no card splaying and the deck spread no wider for being big
 	medium._shuffles._splay = false
 	medium._shuffles._roomy = false
 	var piled := _mixed_heights(medium._shuffles._wash_plan(600 + int(SEEDS[0]), WASH_S))

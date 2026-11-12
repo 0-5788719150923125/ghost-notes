@@ -4,27 +4,21 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/reading/audition_check.gd 120
 ##
-## WHAT IT HOLDS (next/structure.md, step 19). Test had no gate at all; its state was twenty members
-## of the reading panel, and it joined its sentences with a copy of the reading's seams of its own.
-## Here a stand-in voice host answers with takes made here, and the gate holds that:
+## Holds, with a stand-in voice host that answers with takes made here:
 ##
 ## - Test asks the host for every sentence of the passage at once, in the selected voice, and says
 ##   so on its button;
 ## - a sentence that arrives before the one ahead of it waits: nothing is joined out of order;
-## - the passage is joined as a reading joins it ([ReadingJoin]): every sentence, a seam of the
-##   voice's between each two, a second of silence after the last so the room rings out - and every
-##   joined frame goes through the room, none lost and none twice;
+## - the passage is joined as a reading joins it ([ReadingJoin]): every sentence, a seam of the voice's
+##   between each two, a second of silence after the last, every joined frame through the room once;
 ## - a take is taken off the disk once it is joined;
-## - Stop drops the replies still in flight: a late one is no longer the audition's - and CANCELS
-##   them on the host, every sentence still asked and no other (2026-10-27: only forgotten, each was
-##   still made, and every Test after a few Stops waited behind whole passages).
+## - Stop drops the replies still in flight and cancels them on the host (every sentence still asked, and no other).
 ##
-## THE CONTROLS: a reply held back (out of order) leaves nothing joined until the one ahead arrives,
-## so "joined" above is something that can be withheld; a Stop once every sentence has arrived
-## cancels nothing, so "cancelled" is something a Stop can leave undone.
+## Controls: a reply held back leaves nothing joined until the one ahead arrives; a Stop after every
+## sentence has arrived cancels nothing.
 ##
-## The panel is built by hand and never added to the tree (its `_ready` starts the python voice
-## host); the audition is handed a player that IS in it, so the ring can be fed.
+## The panel is built by hand and never added to the tree (its `_ready` starts the python voice host);
+## the audition is handed a player that is in it, so the ring can be fed.
 
 class Host extends VoiceHost:
 	var asked: Array = []

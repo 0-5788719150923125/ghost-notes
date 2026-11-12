@@ -3,21 +3,19 @@ class_name NotebookLayout
 
 ## NotebookLayout - a chapter written by hand into a ruled notebook, for [NotebookMedium].
 ##
-## The same typesetter as [BookLayout] - the same blocks, the same word list the highlight
-## follows - with the choices a hand makes instead of a compositor's:
+## The same typesetter as [BookLayout] (same blocks, same word list the highlight follows) with a
+## hand's choices:
 ##
-##   THE WRITING SITS ON THE RULES. Every line box is a whole number of rules and a baseline
-##   lies on the rule under it, so the grid is the page's, not the font's. College rule.
-##   RAGGED, NOT JUSTIFIED, and every word strays a little from where a typesetter would put
-##   it - a line drifts off level along its length, a word sits a hair high or low. Hashed off
-##   the session seed, so an export writes the same page as the live reading.
-##   A TIMESTAMP GOES IN THE MARGIN. A paragraph that opens on a time ("09:40", "[14:05]",
-##   "7:15 pm") has it set to the left of the red line, where a researcher logs one.
-##   EMPHASIS IS UNDERLINED, because a hand has no italic - [NotebookMedium] draws the line.
-##   PHOTOS ARE CLIPPED ON, NOT PRINTED IN. They lie over the writing, held by a paper clip at
-##   the page's outer edge (or its top), at an angle; the text runs on underneath, heard and
-##   not seen. Pictures that follow one another with no writing between share one clip, fanned.
-##   A SKETCH IS DRAWN INTO THE WRITING: rows are left for it, and it is ink on the paper.
+##   - The writing sits on the rules: every line box is a whole number of rules and a baseline lies
+##     on the rule under it. College rule.
+##   - Ragged, not justified, and each word strays a little from where a typesetter would put it,
+##     hashed off the session seed so an export writes the same page as the live reading.
+##   - A paragraph that opens on a time ("09:40", "[14:05]", "7:15 pm") has it set left of the red line.
+##   - Emphasis is underlined (a hand has no italic); [NotebookMedium] draws the line.
+##   - Photos are clipped on, not printed in: they lie over the writing, held by a paper clip at the
+##     page's outer edge (or its top), at an angle; the text runs on underneath, heard and not seen.
+##     Pictures that follow one another with no writing between share one clip, fanned.
+##   - A sketch is drawn into the writing: rows are left for it and it is ink on the paper.
 
 ## College rule on this sheet: 7.1 mm on a 9.75 in page.
 const RULE := 46.0
@@ -28,20 +26,17 @@ const MARGIN_X := 172.0
 ## How close writing comes to the outer edge, and to the spine.
 const PAD_OUTER := 64.0
 const PAD_SPINE := 100.0
-## A SKETCH IS CENTERED IN THE COLUMN and drawn as large as its shape allows: [constant
-## SKETCH_WIDTH] of the column's width, with as many rows as that takes at its own aspect (the
-## drawing's ink, cropped - see [method BookMedium.ink_texture]), between [constant SKETCH_ROWS]
-## and [constant SKETCH_ROWS_MAX]. It used to sit at a random place along a fixed 8 rows and
-## came out small, and always somewhere different to no purpose.
+## A sketch is centered in the column and drawn as large as its shape allows: [constant SKETCH_WIDTH]
+## of the column's width, with as many rows as that takes at its own aspect (the drawing's ink,
+## cropped - see [method BookMedium.ink_texture]), between [constant SKETCH_ROWS] and
+## [constant SKETCH_ROWS_MAX].
 const SKETCH_ROWS := 6
 const SKETCH_ROWS_MAX := 13
 const SKETCH_WIDTH := 0.9
 ## A photo's white border, in page pixels.
 const PHOTO_BORDER := 18.0
-## An inline photo's LONG edge (border included) as a share of the page width. One size for
-## every print, because one camera took them: a portrait photo is the same print turned on its
-## side, not one scaled to a landscape's width (which made it 2.25x the area). Full-page photos
-## are their own, larger size.
+## An inline photo's long edge (border included) as a share of the page width. One size for every
+## print: a portrait photo is the same print turned on its side. Full-page photos are larger.
 const PRINT_LONG := 0.5
 ## A paper clip's length, and how far its outer loop stands off the page edge it grips - a clip
 ## is pushed on from the edge, so its end is always past it. Drawn in the page texture's margin
@@ -49,11 +44,10 @@ const PRINT_LONG := 0.5
 const CLIP_LEN := 150.0
 const CLIP_OVERHANG := 6.0
 
-## THE HANDS, all OFL, bundled under fonts/hands/ (licenses beside them). One is chosen per
-## session. `size` is the body size that fills a rule in that hand - they differ a lot (Caveat's
-## letters are small for their em). Sized for a phone: about a fifth larger than the sizes that
-## first looked right on a monitor, which left a third of each rule empty. Keep each under
-## RULE / 0.95 (48) or a line of body text takes two rules. `bold` is a file, or empty to thicken the regular one.
+## The hands, all OFL, bundled under fonts/hands/ (licenses beside them); one is chosen per session.
+## `size` is the body size that fills a rule in that hand (sized for a phone). Keep each under
+## Rule / 0.95 (48) or a line of body text takes two rules. `bold` is a file, or empty to thicken the
+## regular one.
 const HANDS := {
 	"caveat": {"regular": "res://fonts/hands/Caveat-Variable.ttf", "bold": "", "size": 48},
 	"kalam": {"regular": "res://fonts/hands/Kalam-Regular.ttf",
@@ -61,9 +55,8 @@ const HANDS := {
 	"patrick": {"regular": "res://fonts/hands/PatrickHand-Regular.ttf", "bold": "", "size": 40},
 }
 
-## THE PENS a voice may write in, by name - what `ink:` on a voice in the frontmatter takes
-## (a hex color works too). Ink colors, not pure ones: "blue" is a ballpoint's, not #0000FF.
-## Black is the default for every voice that names none.
+## The pens a voice may write in, by name: what `ink:` on a voice in the frontmatter takes (a hex
+## color works too). Realistic ink colors; black is the default for a voice that names none.
 const INKS := {
 	"black": Color(0.08, 0.08, 0.10),
 	"blue": Color(0.10, 0.18, 0.55),
@@ -150,15 +143,13 @@ func _bottom() -> float:
 	return HEADER + RULE * floor((PAGE.y - 80.0 - HEADER) / RULE)
 
 
-## Whole rules, as many as the size needs. Measured against the size itself, not a leading
-## factor: a hand's body size is already chosen to fill one rule (Caveat's 40 is small letters
-## on a big em), and 1.25x of it double-spaced every line in that hand.
+## Whole rules, as many as the size needs, measured against the size itself, not a leading factor: a
+## hand's body size is already chosen to fill one rule.
 func _lh(fs: int) -> float:
 	return RULE * maxf(1.0, ceil(float(fs) * 0.95 / RULE))
 
 
-## Whole rules only: a gap of half a line would take the writing off the grid for the rest of
-## the page.
+## Whole rules only: a gap of half a line would take the writing off the grid for the rest of the page.
 func _space(lines: float) -> void:
 	if _y > _top() + 1.0:
 		_y += RULE * maxf(1.0, round(lines))
@@ -179,9 +170,8 @@ func _baseline(y: float, lh: float) -> float:
 	return y + lh - 8.0
 
 
-## Words are set exactly on the line: how the writing wanders off it is drawn letter by letter
-## by [method NotebookMedium._glyph_xform], as a smooth drift. Word-by-word jitter - each word a
-## little high or low - is not how a hand writes, and was reported as looking strange.
+## Words are set exactly on the line: how the writing wanders off it is drawn letter by letter by
+## [method NotebookMedium._glyph_xform], as a smooth drift (word-by-word jitter is not how a hand writes).
 func _ink_offset(_i: int, _line_y: float, _dx: float) -> Vector2:
 	return Vector2.ZERO
 
@@ -195,7 +185,7 @@ func _title_block() -> void:
 	var f := face(2)
 	while fs > body_fs and f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > c.y - c.x:
 		fs -= 2
-	# WORDS in the header strip, not a label: the title is read aloud first.
+	# Words in the header strip, not a label: the title is read aloud first.
 	var lh := _lh(fs)
 	_y = HEADER - 22.0 - lh + 8.0
 	_set_line_words(title, fs, 2, false, {"underline": true})
@@ -263,9 +253,9 @@ func _set_margin(toks: Array, _widths: Array, n: int, base_y: float, fs: int, lh
 
 # --- pictures -----------------------------------------------------------------
 
-## WHICH WORDS EACH CLIPPED PHOTO HIDES, as `cover: [first, last]` on every photo of its stack
-## (or [-1, -1]), so the medium can lift it while they are read. A word is hidden when its
-## center or either end lies inside the photo's turned rectangle.
+## Which words each clipped photo hides, as `cover: [first, last]` on every photo of its stack (or
+## [-1, -1]), so the medium can lift it while they are read. A word is hidden when its center or
+## either end lies inside the photo's turned rectangle.
 func _finish() -> void:
 	var lo := {}
 	var hi := {}
@@ -340,8 +330,8 @@ func _photo_size(b: Dictionary, w: float) -> Vector2:
 	return Vector2(w, inner / aspect + PHOTO_BORDER * 2.0)
 
 
-## An inline photo's outer size: the same print for every picture, its long edge PRINT_LONG of
-## the page whichever way up it is.
+## An inline photo's outer size: the same print for every picture, its long edge PRINT_LONG of the
+## page whichever way up it is.
 func _print_size(b: Dictionary) -> Vector2:
 	var aspect := _aspect_of(b)
 	var long_in := PAGE.x * PRINT_LONG - PHOTO_BORDER * 2.0
@@ -362,7 +352,7 @@ func _photo(b: Dictionary, center: Vector2, sz: Vector2, ang: float, full: bool,
 		"prompt": String(b.get("prompt", "")), "full": full, "photo": true, "clip": clip}
 
 
-## Clip a photo on beside the writing at the current line. At the page's OUTER edge, with the
+## Clip a photo on beside the writing at the current line. At the page's outer edge, with the
 ## clip gripping that edge, or - near the top of a page, now and then - hanging from the top
 ## edge. A photo following another with nothing written between fans out under the same clip.
 func _clip_photo(b: Dictionary) -> void:
@@ -375,7 +365,7 @@ func _clip_photo(b: Dictionary) -> void:
 	var ang := turn * deg_to_rad(lerpf(2.0, 8.0, u.call(8)))
 	var images: Array = pages[_p]["images"]
 	if not _last_photo.is_empty() and _last_photo_p == _p and _last_photo_words == words.size():
-		# FANNED: the same clip, the photo underneath slid a little and turned the other way
+		# Fanned: the same clip, the photo underneath slid a little and turned the other way
 		var prev: Dictionary = _last_photo
 		var sz := _print_size(b)
 		var center := (prev["rect"] as Rect2).get_center() + Vector2((u.call(24) - 0.5) * 70.0,
@@ -405,7 +395,7 @@ func _clip_photo(b: Dictionary) -> void:
 		clip = {"pos": Vector2(PAGE.x + CLIP_OVERHANG if side == 1 else -CLIP_OVERHANG, gy),
 			"angle": (PI * 0.5 if side == 1 else -PI * 0.5) + (u.call(20) - 0.5) * 0.14}
 	var ph := _photo(b, center, sz, ang, false, clip)
-	# THE HINGE is the edge the clip holds; the photo lifts from the other one
+	# The hinge is the edge the clip holds; the photo lifts from the other one
 	ph["hinge"] = "top" if clip["pos"].y < 0.0 else ("right" if side == 1 else "left")
 	ph["stack"] = _stacks
 	_stacks += 1

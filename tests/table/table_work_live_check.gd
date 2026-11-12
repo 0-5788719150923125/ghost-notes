@@ -1,35 +1,29 @@
 extends Node
 
-## WORK AT THE TABLE ON A MOUNTED TABLE (next/table_work.md; [TableWork]): what `table_work_check` holds on a
-## bare medium, here on the episode's own table as the show builds it - its things stood by [TableThings],
-## its air, its schedule from a reading with `work K` marks - so everything the work makes with the stage
-## under it runs: the steam off a brew, a pour's stream, a cue's burst, the hatchlings' puffs.
+## Work at the table on a mounted table (next/table_work.md; [TableWork]): what `table_work_check` holds on a bare medium, here on
+## the episode's own table as the show builds it - its things stood by [TableThings], its air, its schedule from a reading with
+## `work K` marks - so everything the work makes with the stage under it runs: the steam off a brew, a pour's stream, a cue's
+## burst, the hatchlings' puffs.
 ##
 ##   tests/run_boot_probe.sh tests/table/table_work_live_check.gd 300
 ##
-## - THE WORK IS FOUND ON THE TABLE: every act kept, nothing said against it; each runs in its beat - card 1's
-##   after `work 1` begins, the close's after the spread - and the cued one at its word.
-## - WHAT RUNS, RUNS: the clock's minute hand 30 degrees on five minutes in; the brew's steam rising at every
-##   moment looked at, A TRAIL, NEVER TUFTS (the-quiet-crucible 181083: "normal heat would produce consistent steam
-##   trails") - its young puffs born no further apart than half a puff's size takes to rise (the control: every
-##   other one left out is caught); a jar of ink tipped over the brew pours by itself (next/table_physics.md) - its stream
-##   shows while it flows and none after, the jar holds less and the brew more; the brew is its new color when the pour is
-##   done; a cue's burst and the hatchlings' huffs have their particles.
-## - A SCRUB IN THE SAME EPISODE IS A SEEK ([method TableMedium._seek_to]; 2026-11-01, scrubbed back: "it's just stuck on
-##   'catching up' ... It might be best if we just saved the buffer"): the reading started again from a word before the grind -
-##   its words timed from 0, the document naming where it starts, as the reading hands a scrub - keeps the table, its work and
-##   what was baked: nothing built or baked again, the new reading's clock where its first word was heard before, and the pestle
-##   drawn where it was at that moment.
-## - A SKIP AHEAD LANDS IN THE WORLD THE READING WOULD HAVE REACHED (2026-11-01, the user, skipping an intro watched 20 times: "ensure that
-##   timeline scrubbing can recover properly"): only a reading's first words heard, then started again past the grind's word - the
-##   acts of the words skipped are placed before the landing, each at its written length, never all at once as it lands.
-## - A READING FROM THE TOP AGAIN IS NO SCRUB (2026-11-06, the intro lengthened between a Stop and a Play, "the speaking starting DURING
-##   the intro sequence"): the table and its work stand, its clock starts over and its plan takes the new intro - its work later with its
-##   words; the control, the same reading named as a scrub to its first word, has its clock put on.
-## - THE CONTROL: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs; and, its acts
-##   written again, it is a new table, never the last one sought in.
+## - The work is found on the table: every act kept, nothing said against it; each runs in its beat - card 1's after `work 1`
+##   begins, the close's after the spread - and the cued one at its word.
+## - What runs, runs: the clock's minute hand 30 degrees on five minutes in; the brew's steam a trail, never tufts - its young
+##   puffs born no further apart than half a puff's size takes to rise (control: every other one left out is caught); a jar of ink
+##   tipped over the brew pours by itself (next/table_physics.md) - its stream shows while it flows and none after, the jar holds
+##   less and the brew more, the brew is its new color when the pour is done; a cue's burst and the hatchlings' huffs have particles.
+## - A scrub in the same episode is a seek ([method TableMedium._seek_to]): the reading started again from a word before the grind
+##   (its words timed from 0, the document naming where it starts) keeps the table, its work and what was baked - nothing built or
+##   baked again, the new reading's clock where its first word was heard before, the pestle drawn where it was at that moment.
+## - A skip ahead lands in the world the reading would have reached: a reading's first words heard, then started again past the
+##   grind's word - the acts of the words skipped are placed before the landing, each at its written length, never all at once.
+## - A reading from the top again is no scrub: the table and its work stand, its clock starts over and its plan takes the new
+##   intro; the control, the same reading named as a scrub to its first word, has its clock put on.
+## - The control: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs; its acts written
+##   again, it is a new table, never the last one sought in.
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
+## A boot probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
 
 const DIR := "user://table_work_live_check"
 const MATERIALS := {"iron": {"kind": "metal", "color": "#2c2a28"}, "brew": {"kind": "liquid", "color": "#3a6a3a", "color2": "#c8e0b0"},
@@ -80,9 +74,8 @@ static func _table() -> Dictionary:
 ## The work: card 1's jar poured into the brew, card 2's herbs ground, the close's brew lit.
 static func _acts() -> Dictionary:
 	return {"acts": [
-		# ...up, over the cauldron's rim and down beside it, never through it, and set down on the table after its pour: carried
-		# in a low arc its foot had gone through the rim on the way, and left in the air after the pour it was let go over the
-		# brew - now that a thing an act moves is solid, it was stopped at the rim and fell into the brew
+		# ...up, over the cauldron's rim and down beside it, never through it, and set down on the table after its pour (a thing an act moves is
+		# solid: left in the air it is let go, and stopped at the rim it falls into the brew)
 		{"name": "fetch-jar", "beat": 1, "about": "the jar is carried to the cauldron", "length": 3,
 			"tracks": [{"thing": "jar", "law": "path", "keys": [{"at": 0.0}, {"at": 0.35, "by": [0, 22, 0]}, {"at": 0.8, "by": [32, 22, -10]},
 				{"at": 1.0, "by": [32, 15, -10]}]}]},
@@ -220,8 +213,7 @@ func _worked() -> void:
 			steamy += 1
 	var why := "no plume" if (w._plumes as Array).is_empty() else "a pool of %d" % int((w._plumes[0] as Dictionary)["n"])
 	_ok(steamy == 4, "the brew's steam rises at %d of 4 moments looked at (%s)" % [steamy, why])
-	# A TRAIL: the puffs in the air born no further apart than a trail's spacing - those young enough to be seen
-	# whole (a puff thins from half its life on, and the oldest die each at their own age)
+	# A trail: the puffs in the air born no further apart than a trail's spacing - those young enough to be seen whole
 	if not (w._plumes as Array).is_empty():
 		var p: Dictionary = w._plumes[0]
 		var look: Dictionary = p["look"]
@@ -242,8 +234,7 @@ func _worked() -> void:
 		_ok(births.size() > 4 and float(gap.call(births)) <= spacing + 0.001, "the steam is a trail: %d puffs in the air, at most %.3f s apart (a trail's %.3f)" % [
 			births.size(), float(gap.call(births)), spacing])
 		_ok(float(gap.call(halved)) > spacing + 0.001, "control: every other puff left out leaves gaps (%.3f s)" % float(gap.call(halved)))
-	# THE TIP IS THE POUR: its stream while it flows and not after, the jar emptier and the brew fuller; the brew its new
-	# color once poured
+	# The tip is the pour: its stream while it flows and not after, the jar emptier and the brew fuller; the brew its new color once poured
 	var pour := _run_of("pour-ink")
 	var ph: TablePhysics = w.physics
 	var ink := -1
@@ -280,7 +271,7 @@ func _worked() -> void:
 		_ok(c.is_equal_approx(Color.html("#5a2a6a")), "the brew is not its new color once poured: %s" % c.to_html(false))
 	else:
 		_ok(false, "the pour, the jar's ink or the cauldron's brew was not found (%d, %d)" % [ink, brew])
-	# THE PESTLE'S SHADE goes with it: gone while it grinds in the bowl, back where it stood before
+	# The pestle's shade goes with it: gone while it grinds in the bowl, back where it stood before
 	var pi: int = w._thing_named("pestle")
 	var shade: Node3D = ((w.things[pi] as Dictionary)["shades"][0] as Dictionary)["node"] if not ((w.things[pi] as Dictionary)["shades"] as Array).is_empty() else null
 	if shade != null:
@@ -403,10 +394,9 @@ func _skip() -> void:
 	_ok(not g.is_empty() and float(g["t0"]) < at, "the skip: the grind, its word skipped, began before the landing at %.2f s: %s" % [at, "not placed" if g.is_empty() else "at %.2f s" % float(g["t0"])])
 
 
-## A READING STARTED AGAIN FROM THE TOP is no scrub ([method TableMedium._restart]; 2026-11-06, the intro set from 6 s to 9 s between a Stop
-## and a Play: "the speaking starting DURING the intro sequence"): the table and its work stand, but its clock starts over and its plan
-## takes the intro the show holds now - its first word estimated where the new intro ends, the grind its words' 3 s later. THE CONTROL:
-## the same reading named as a scrub to its first word puts its clock on where that word was heard before.
+## A reading started again from the top is no scrub ([method TableMedium._restart]): the table and its work stand, but its clock starts over
+## and its plan takes the intro the show holds now - its first word estimated where the new intro ends, the grind its words' 3 s later. The
+## control: the same reading named as a scrub to its first word puts its clock on where that word was heard before.
 func _restarted() -> void:
 	_build(_acts())
 	var w = medium._work
@@ -444,7 +434,7 @@ func _restarted() -> void:
 	var grind_now := float(_run_of("grind").get("t0", -1.0))
 	_ok(grind_was >= 0.0 and absf(grind_now - grind_was - 3.0) < 0.5, "the restart: the grind begins %.2f s later with its words, not 3 (%.2f s, then %.2f s)" % [
 		grind_now - grind_was, grind_was, grind_now])
-	# THE CONTROL: named as a scrub to its first word, the clock is put where that word was heard last
+	# The control: named as a scrub to its first word, the clock is put where that word was heard last
 	var heard_last: float = medium._follow.st0[0]
 	again.call(true)
 	_ok(absf(medium._follow.offset - heard_last) < 1e-3 and heard_last > heard0, "THE CONTROL: a scrub to the first word puts its clock %.2f s on, not where it was heard last, %.2f s" % [
@@ -452,9 +442,9 @@ func _restarted() -> void:
 	Director.intro_hold = was_hold
 
 
-## WHAT A HAND LAYS DOWN RESTS ([constant TableWork.LAID_REST]; feedback 0008, the phoenix feather: "It came to the table, touched the table, then immediately bounced
-## upward again"): a jar brought back down to the table and taken up by the next act lies there first, on the reading's schedule and on the rehearsal `act` checks alike;
-## one set `down` likewise. The control: a jar lowered in the air, over a cauldron, goes straight on into its pour.
+## What a hand lays down rests ([constant TableWork.LAID_REST]): a jar brought back down to the table and taken up by the next act lies
+## there first, on the reading's schedule and on the rehearsal `act` checks alike; one set `down` likewise. The control: a jar lowered in
+## the air, over a cauldron, goes straight on into its pour.
 func _laid_rests() -> void:
 	var up := [{"at": 0.0}, {"at": 0.3, "by": [0, 12, 0]}, {"at": 0.8, "by": [10, 12, 0]}, {"at": 1.0, "by": [10, 0, 0]}]
 	var acts := {"acts": [

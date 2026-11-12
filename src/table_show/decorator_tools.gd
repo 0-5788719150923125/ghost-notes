@@ -1,27 +1,25 @@
 extends RefCounted
 class_name DecoratorTools
 
-## DecoratorTools - THE DECORATOR's tools (next/painted_surface.md): what is painted at the table this episode, designed as
+## DecoratorTools - the decorator's tools (next/painted_surface.md): what is painted at the table this episode, designed as
 ## elements on the surface it goes on - written, seen there, and handed in. Served over ghost's MCP server ([AgentTools]) to a
 ## writer that takes tools; one that cannot hands the design in in one reply ([TableProducer]).
 ##
-## A DESIGN IS SEEN BEFORE IT IS HANDED IN: `look` draws it on the processor ([method Skins.look]: the bare surface shaded, every
-## element in its paint, a millimeter grid, the outline and the landmarks), so a design that misses the eyes or runs off the
-## face is caught by the one who drew it - nothing on the table need stand for it.
+## A design is seen before it is handed in: `look` draws it on the processor ([method Skins.look]: the bare surface shaded, every
+## element in its paint, a millimeter grid, the outline and the landmarks).
 
 const SUBMITTED := "submitted.json"
 const LOOKS := 24
 const JUDGE := "Say what the picture actually shows: does each shape sit where you meant it on the surface - against the grid (a line every 10 mm, brighter every 50) and the landmarks (red rings) - are the two sides alike where they should be, does it read from across a room, and is it as elaborate and as beautiful as the plan asks? Write again what does not."
 ## How much of an element may lie off the surface before `submit` asks once.
 const OFF_MOST := 0.35
-## HOW LITTLE AN ELEMENT MAY DIFFER from what it is laid over, in any of red, green and blue (0-1), in the same finish, before it is said
-## to be hardly seen: a base of #f3eee5 laid over a bare mask of #ece6da went on for two minutes and showed nothing (joker-motivation
-## 856886, 2026-11-05: "it's not clear if the sponge-application is actually applying any color/tone to the face").
+## How little an element may differ from what it is laid over, in any of red, green and blue (0-1), in the same finish, before it is
+## said to be hardly seen (a base nearly the color of the bare mask shows nothing).
 const UNSEEN := 0.08
 
 var dir := ""
 var submitted := false
-## THE FACE PAINTED FIRST that the first surface's design copies (`face_ref.png`, [method Skins.face_reference]; "" none): each look of it
+## The face painted first that the first surface's design copies (`face_ref.png`, [method Skins.face_reference]; "" none): each look of it
 ## shows the painting beside it.
 var reference := ""
 ## The skins the table has ([method Skins.skins_of]).
@@ -157,9 +155,9 @@ func _said(si: int) -> String:
 	return "\n".join(lines)
 
 
-## The elements of [param made] that hardly show against what they are laid over on skin [param si] ([constant UNSEEN]): the
-## bare surface (matte), or the last fill laid before them under their middle - in nearly its color, in its finish. A powder over a
-## satin, a gloss over its own red, is a change of finish, and shows.
+## The elements of [param made] that hardly show against what they are laid over on skin [param si] ([constant UNSEEN]):
+## the bare surface (matte), or the last fill laid before them under their middle, in nearly its color and finish.
+## A change of finish (powder over satin) shows.
 func _unseen(si: int, made: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	var skin: Dictionary = skins[si]
@@ -230,8 +228,7 @@ func _look(args: Dictionary) -> Dictionary:
 	var path := dir.path_join("look_%02d.jpg" % _looks)
 	if img.save_jpg(path, 0.9) != OK:
 		return {"text": "It could not be shown.", "error": true}
-	# (...the picture itself handed back - AgentTools sends only an Image: handed its path, every look the decorator asked for had come back
-	# blank, and it had traced the painting without once seeing what it drew)
+	# the picture itself is handed back: AgentTools sends only an Image, not a path
 	return {"text": "%s Looks left: %d." % [JUDGE, LOOKS - _looks], "images": [img]}
 
 
@@ -249,7 +246,7 @@ static func _beside(look: Image, painting: Image) -> Image:
 	return out
 
 
-## THE DESIGNS AS A FILE HOLDS THEM ([TablePaint] reads `skin.json`): each surface's, with where it is and what it is in.
+## The designs as a file holds them ([TablePaint] reads `skin.json`): each surface's, with where it is and what it is in.
 func designs() -> Dictionary:
 	var out: Array = []
 	for si in _raw:

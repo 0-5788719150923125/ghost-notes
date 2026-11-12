@@ -1,43 +1,31 @@
 extends RefCounted
 class_name TablePreview
 
-## TablePreview - a table described but not yet set, SEEN: each thing alone in a studio, and the whole
-## table standing on the episode's own cloth, photographed from the camera's own place. It is what
-## the set dresser looks through ([SetDresserTools]): it makes a thing, looks at it, and fixes what
-## it sees.
+## TablePreview - a table described but not yet set, seen: each thing alone in a studio, and the whole table standing on the
+## episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through ([SetDresserTools]).
 ##
-## THE STUDIO shows a thing as it is built - every part, at its real size - on a ground ruled in
-## centimeters (a brighter line every five), lit from above and one side so its form reads, its
-## flames lit. One thing from four sides (front, its right, above, and as the episode's camera looks
-## down at the table), or several side by side, one tile each, each tile captioned.
+## The studio shows a thing as it is built - every part, at its real size - on a ground ruled in centimeters (a brighter line
+## every five), lit from above and one side so its form reads, its flames lit. One thing from four sides (front, its right,
+## above, and as the episode's camera looks down at the table), or several side by side, one tile each, each captioned.
 ##
-## THE TABLE IS THE SHOW'S OWN: a [TableMedium] built on the episode's seed and pictures - its
-## camera, its lamp, where the deck sits, the spread the cards are laid in (face down: the set dresser
-## knows no card) - with the description being tried standing in for the episode's table. Where a
-## thing stands, what is made smaller or left off for want of room, which light leads: the answers
-## are the ones the show itself will give, because it is the show's own code giving them. So is THE
-## OPENING ([method opening]): the show's name over the same table, thrown out of focus. The medium
-## is loaded by its class name when a table is stood, and only where ghost's autoloads run (it, like
-## every medium, reads the Director): naming it here would stop the gates that build prompts from
-## compiling, and a command-line process cannot stand a table anyway - it says so ([method can_set]).
+## The table is the show's own: a [TableMedium] built on the episode's seed and pictures - its camera, its lamp, where the deck
+## sits, the spread the cards are laid in (face down: the set dresser knows no card) - with the description being tried standing
+## in for the episode's table. Where a thing stands, what is made smaller or left off for want of room, which light leads: the
+## answers are the show's own code's. So is the opening ([method opening]): the show's name over the same table, thrown out of
+## focus. The medium is loaded by its class name when a table is stood, and only where ghost's autoloads run (it reads the
+## Director): naming it here would stop the gates that build prompts from compiling, and a command-line process cannot stand a
+## table anyway ([method can_set]).
 ##
-## RENDERED IN THIS PROCESS, off screen: a SubViewport per stage, drawn only while a picture is being
-## taken, then stopped. A process with no renderer (headless) takes no pictures ([method can_see]),
-## and the tools work from their reports alone.
+## Rendered in this process, off screen: a SubViewport per stage, drawn only while a picture is being taken, then stopped. A
+## process with no renderer (headless) takes no pictures ([method can_see]), and the tools work from their reports alone.
 ##
-## THE TABLE IS BUILT OFF THE MAIN THREAD ([method _stand]): built where the app draws, each picture of it
-## froze the whole app for five or six seconds (measured 2026-10-08: placing the things 2.4 s, the top
-## 1.3 s, the things 1.2 s). A fresh stage and medium are built on a worker thread, OUTSIDE the scene tree
-## - where Godot lets a thread build nodes - and swapped in once built; nothing the main thread touches is
-## shared with the build while it runs (rebuilding the stage in the tree would free its old nodes on the
-## main thread under the worker). Its report and its picture are the ones a main-thread build gives,
-## pixel for pixel.
+## The table is built off the main thread ([method _stand]): a fresh stage and medium are built on a worker thread outside the
+## scene tree and swapped in once built; nothing the main thread touches is shared with the build while it runs (rebuilding the
+## stage in the tree would free its old nodes on the main thread under the worker). Its report and picture match a main-thread
+## build's, pixel for pixel.
 ##
-## SO IS WHAT IS IN THINGS ([method _bake]): the work's physics is baked on a worker too, the app drawing on
-## while it waits - and a table stood again with other acts takes up what the last one baked, as far as their
-## plans agree ([method TablePhysics.carry]). Each of a puppeteer's `act`s had stood a table and baked the work
-## from its start on the app's own thread (2026-10-28: a draft 105 s long took one to six minutes a call, and
-## Ghost Notes would not close for two).
+## So is what is in things ([method _bake]): the work's physics is baked on a worker too, and a table stood again with other acts
+## takes up what the last one baked, as far as their plans agree ([method TablePhysics.carry]).
 
 ## The size of every picture handed back, and how wide the studio's lens is (degrees, vertical).
 const SHEET := Vector2i(1280, 720)
@@ -53,7 +41,7 @@ const TABLE_FRAMES := 6
 const UNDRAWN := 4
 ## The moment of a reading the air is shown at: some way in, its fog rolled and its motes about.
 const AIR_AT := 40.0
-## The moment the OPENING is shown at: the show's name up, the deck not yet shuffled.
+## The moment the opening is shown at: the show's name up, the deck not yet shuffled.
 const OPENING_AT := 2.0
 ## The episode's table medium, by class name: looked up when it is needed, never compiled in - it
 ## needs ghost's autoloads, and so would anything naming it (see the class note).
@@ -62,13 +50,11 @@ const MEDIUM := "TableMedium"
 var _stood := ""
 ## What the last [method work_checks] spent standing the table, baking and checking (ms) - a probe's.
 var timing := {}
-## The pictures of the episode the table is built on - copied beside the description being tried,
-## never its card faces: the set dresser knows no card - and the other files the table reads from its
-## folder that an earlier step made: the designs painted on it (`skin.json`, [TablePaint]). Left out, a
-## puppeteer's mask had no design, every paint act laid nothing and pressed its tool into the bare mask,
-## and the puppeteer would not hand the work in (joker-motivation 856886, 2026-11-05). And the face painted first that they were copied
-## from, with where it lies (`face_ref.png`, `face.json`): never laid itself (feedback 0049), it says where each operation's paint is
-## still wanted ([PaintLayers], TablePaint._from_picture) - left out, a preview's acts would be laid as the shapes say and the show's not.
+## The pictures of the episode the table is built on - copied beside the description being tried, never its card faces (the set
+## dresser knows no card) - and the other files the table reads from its folder that an earlier step made: the designs painted on
+## it (`skin.json`, [TablePaint]), and the face painted first that they were copied from, with where it lies (`face_ref.png`,
+## `face.json`). The face is never laid itself; it says where each operation's paint is still wanted ([PaintLayers],
+## TablePaint._from_picture). Left out, a preview's acts would be laid as the shapes say and the show's would not.
 const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png", "skin.json", "face_ref.png", "face.json"]
 ## The studio's four sides of one thing: a direction from its middle toward the camera, and a caption.
 const SIDES := [["front", Vector3(0.0, 0.14, 1.0)], ["its right side", Vector3(1.0, 0.14, 0.0)],
@@ -185,7 +171,7 @@ func release() -> void:
 	_medium = null
 
 
-## A BAKE UNDER WAY GIVEN UP ([method _bake]): the tools closed while it ran. The call it was for answers with an
+## A bake under way given up ([method _bake]): the tools closed while it ran. The call it was for answers with an
 ## error, and nothing is baked after.
 func halt() -> void:
 	_halted = true
@@ -195,7 +181,7 @@ func halt() -> void:
 
 # --- the studio -------------------------------------------------------------------------------------
 
-## THE THINGS in [param spec] (a sanitized table: `things`, `materials`) named in [param names] - or
+## The things in [param spec] (a sanitized table: `things`, `materials`) named in [param names] - or
 ## all of them - side by side, a tile each, from the camera's angle, each captioned with its number
 ## ([param numbers]: name -> number, the caller's; else its place here), name and size. null when no
 ## picture can be taken.
@@ -225,7 +211,7 @@ func things(spec: Dictionary, names: Array = [], numbers: Dictionary = {}) -> Im
 	return sheet
 
 
-## ONE THING from four sides ([constant SIDES]), in a sheet of four. null when no picture can be taken.
+## One thing from four sides ([constant SIDES]), in a sheet of four. null when no picture can be taken.
 func thing(spec: Dictionary, name: String) -> Image:
 	if not can_see():
 		return null
@@ -288,8 +274,7 @@ func _ensure_studio() -> void:
 	env.ambient_light_energy = 0.35
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.95
-	# SOMETHING FOR METAL TO REFLECT: a dim room-toned sky, seen in reflections only - against the
-	# flat background a polished thing reflected black and read as paint
+		# something for metal to reflect: a dim room-toned sky, seen in reflections only (against a flat background a polished thing reflects black)
 	var sky := Sky.new()
 	var sm := ProceduralSkyMaterial.new()
 	sm.sky_top_color = Color(0.42, 0.42, 0.45)
@@ -406,7 +391,7 @@ func _shot(box: AABB, side: Vector3, size: Vector2i, caption: String) -> Image:
 
 # --- the table --------------------------------------------------------------------------------------
 
-## THE WHOLE TABLE: [param raw] (the description as written) standing on the episode's table, the
+## The whole table: [param raw] (the description as written) standing on the episode's table, the
 ## cards laid face down in their spread and the deck beside it, its air (fog, motes) as it is some way
 ## into a reading, from the camera's place.
 ## `{image, stood: [{name, place, at, k, tall}], left_off: [names], key, held_down: [names], cards,
@@ -418,7 +403,7 @@ func table(raw: Dictionary, numbers: Dictionary = {}) -> Dictionary:
 	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
-	# THE TABLE AS IT MOSTLY IS: its light with the sun out and no bird crossing ([method Lights.Rig.quiet_near])
+	# The table as it mostly is: its light with the sun out and no bird crossing ([method Lights.Rig.quiet_near])
 	_pose_spread()
 	_medium._tick_air(AIR_AT)
 	_medium._tick_ride(AIR_AT)
@@ -441,7 +426,7 @@ func table(raw: Dictionary, numbers: Dictionary = {}) -> Dictionary:
 	return out
 
 
-## THE NUMBERS OVER A TABLE'S THINGS ([method table]): each a small tag just over the thing's top.
+## The numbers over a table's things ([method table]): each a small tag just over the thing's top.
 class Tags:
 	extends Node2D
 	var marks: Array = []
@@ -458,7 +443,7 @@ class Tags:
 			draw_string(font, Vector2(at.x - w * 0.5, at.y + 5.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.08, 0.08, 0.08))
 
 
-## ONE EFFECT IN MOTION: the effect named [param name] in [param raw]'s `effects`, on the episode's
+## One effect in motion: the effect named [param name] in [param raw]'s `effects`, on the episode's
 ## table, photographed four times - a burst a moment after the thing it marks happens (a card leaping
 ## from the deck, one held up and twirled, one laid down...: [constant CardTable.MOMENTS], staged
 ## here as the table stages them), fog or motes a few seconds apart, so their roll and their wander
@@ -478,7 +463,7 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 	var on := String(fx.get("on", ""))
 	var steps: Array = [0.08, 0.3, 0.6, 1.0] if burst else [0.0, 3.0, 6.0, 9.0]
 	if String(fx["kind"]) == "drift":
-		# WHAT DRIFTS, through the strongest gust of the next two minutes: falling as it comes, lifted, carried
+		# What drifts, through the strongest gust of the next two minutes: falling as it comes, lifted, carried
 		var g := _strongest_gust(_medium._wind, AIR_AT, AIR_AT + 120.0)
 		steps = [0.0, 0.8, 1.6, 2.4] if g.x < 0.0 else [g.x - 1.0 - AIR_AT, g.z - AIR_AT, g.z + 1.0 - AIR_AT, g.x + g.y - AIR_AT]
 	var moment := _staged(on) if burst else {}
@@ -498,7 +483,7 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 	return {"image": sheet, "frames": steps, "burst": burst}
 
 
-## A MOVING PART OF THE LIGHT ([Lights]) photographed four times on the episode's table: "clouds" as one
+## A moving part of the light ([Lights]) photographed four times on the episode's table: "clouds" as one
 ## passes over the sun - the sun out, the cloud coming over it, under it, the sun back; "birds" as a
 ## shadow crosses the table; something the sun falls through as it stirs; a lamp as it flickers, fails,
 ## cuts, passes or flashes. `{image, frames: [seconds], what}`; `error` when it cannot be shown.
@@ -530,7 +515,7 @@ func watch_light(raw: Dictionary, name: String) -> Dictionary:
 	return {"image": sheet, "frames": steps, "what": plan["what"]}
 
 
-## THE STRONGEST GUST of [param wind] ([method Winds.plan]) between [param t0] and [param t1]: its start, how
+## The strongest gust of [param wind] ([method Winds.plan]) between [param t0] and [param t1]: its start, how
 ## long it blows and its peak's time - x below 0 when none blows.
 static func _strongest_gust(wind: Dictionary, t0: float, t1: float) -> Vector3:
 	if wind.is_empty():
@@ -544,7 +529,7 @@ static func _strongest_gust(wind: Dictionary, t0: float, t1: float) -> Vector3:
 	return Winds.gust_span(wind, best) if best >= 0 else Vector3(-1.0, 0.0, 0.0)
 
 
-## WHEN TO PHOTOGRAPH [param name] of [param rig]'s light: `{times: [four seconds], what}`, or `{error}`.
+## When to photograph [param name] of [param rig]'s light: `{times: [four seconds], what}`, or `{error}`.
 func _light_moment(rig, name: String) -> Dictionary:
 	var low := name.to_lower()
 	if low == "wind":
@@ -625,7 +610,7 @@ func _light_moment(rig, name: String) -> Dictionary:
 		var fk: Dictionary = (l as Dictionary)["fk"]
 		var style := String((Lights.LAMPS[String(spec["look"])] as Dictionary)["flicker"])
 		if fk.has("spells"):
-			# A FAILING LIGHT through its first bad spell: before it, at its deepest sag, later in it, and after
+			# A failing light through its first bad spell: before it, at its deepest sag, later in it, and after
 			for k in (fk["spells"] as PackedFloat32Array).size():
 				var s0 := float((fk["spells"] as PackedFloat32Array)[k])
 				if s0 < AIR_AT:
@@ -669,7 +654,7 @@ func _light_moment(rig, name: String) -> Dictionary:
 	return {"error": "nothing called \"%s\" moves in the light" % name}
 
 
-## THE TABLE FROM STRAIGHT ABOVE - its top, its edge and its layers as they are laid, the things on it
+## The table from straight above - its top, its edge and its layers as they are laid, the things on it
 ## and the cards in their spread, the reader at the bottom - with the stretch the camera sees outlined:
 ## a plan, for laying a runner square or a cloth as a diamond. Lit as the show lights it. `{image}`;
 ## `error` when the table cannot be stood here.
@@ -704,7 +689,7 @@ func overhead(raw: Dictionary) -> Dictionary:
 	return {"image": img}
 
 
-## THE BLUEPRINT ([TableBlueprint]): [param raw] stood on the episode's own table and drawn from above as
+## The blueprint ([TableBlueprint]): [param raw] stood on the episode's own table and drawn from above as
 ## a plan, each thing numbered by [param numbers] (name -> number). `{image, placed}` - `placed` as
 ## [method table] says where each thing stood - or `error` when the table cannot be stood here.
 func blueprint(raw: Dictionary, numbers: Dictionary) -> Dictionary:
@@ -713,7 +698,7 @@ func blueprint(raw: Dictionary, numbers: Dictionary) -> Dictionary:
 		return {"error": err}
 	var data: Dictionary = _medium._things_part.blueprint()
 	data["numbers"] = numbers
-	# THE WORK'S SPOT, where the show has work: where each thing is brought to be worked, clear of what stands - so what
+	# The work's spot, where the show has work: where each thing is brought to be worked, clear of what stands - so what
 	# is worked where it stands can be set beside it ([method TablePlan.work_spot])
 	if not TablePrompts.work_lines(plan).is_empty():
 		var feet: Array = []
@@ -758,7 +743,7 @@ func _frame_on_table(m) -> MeshInstance3D:
 	return mi
 
 
-## THE OPENING - the video's first seconds, and its thumbnail - over this table: the deck squared in
+## The opening - the video's first seconds, and its thumbnail - over this table: the deck squared in
 ## the middle, the flames lit, the whole frame thrown out of focus as the intro throws it, and the
 ## show's name over it in the color [param raw]'s `title` names. `{image, contrast}`: `contrast` is
 ## the WCAG contrast between that color and the table behind the name - the worst of the left,
@@ -837,17 +822,14 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 		return "this process cannot stand the table (%s)" % ("no renderer" if not can_see() else "no ghost session")
 	_sync_pictures()
 	var spec := JSON.stringify(raw, "\t")
-	# THE TABLE ALREADY STANDING, OTHER ACTS: bound to them again, nothing built again - its bake kept as far as the acts agree
-	# ([method TableMedium.rework]). A puppeteer's every `act` had stood the table afresh: 6.5 s for the room, 10 s more for its
-	# work and physics, then a bake from the first change - from the show's start whenever an act moved something new (the-quiet-
-	# crucible 841899, 2026-10-31: 70 calls, 78 minutes of tools; next/framework_audit.md)
+		# the table already standing, other acts: bound to them again, nothing built again - its bake kept as far as the acts agree
+		# ([method TableMedium.rework]; next/framework_audit.md)
 	if acts != null and spec == _stood and _medium != null and is_instance_valid(_medium) and _medium._work != null \
 			and _medium._work.physics != null:
 		var e := TextGen.put(_dir.path_join("acts.json"), JSON.stringify(acts, "\t"))
 		if not e.is_empty():
 			return e
-		# ...ON A WORKER, out of the tree as a table built aside is ([method TableMedium._build_away]): the acts' paint holds alone are
-		# seconds of work (the user, 2026-11-05: "We shouldn't be doing work in the main thread, as a rule")
+				# on a worker, out of the tree as a table built aside is ([method TableMedium._build_away]): the acts' paint holds alone are seconds of work
 		var table := _table
 		var parent := table.get_parent()
 		var at := table.get_index()
@@ -900,12 +882,12 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 	if m == null:
 		vp.free()
 		return "the table medium could not be loaded"
-	# THE PICTURES ALREADY DECODED are handed on: decoding the cloth and the room again is seconds of work
+		# the pictures already decoded are handed on: decoding the cloth and the room again is seconds of work
 	if _medium != null and is_instance_valid(_medium):
 		m._textures = (_medium._textures as Dictionary).duplicate()
 		m._mtimes = (_medium._mtimes as Dictionary).duplicate()
 	m.aside = true
-	# WHAT THE LAST TABLE BAKED goes on to this one ([method TablePhysics.carry]): stood over the same table, it bakes
+	# What the last table baked goes on to this one ([method TablePhysics.carry]): stood over the same table, it bakes
 	# only from where the two plans part - with acts only (a table only set has no plan to carry)
 	var carried: Variant = null
 	if acts != null and _medium != null and is_instance_valid(_medium) and _medium._work != null and _medium._work.physics != null:
@@ -936,7 +918,7 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 	return ""
 
 
-## A MOMENT STAGED for a burst `on` [param on], at [constant AIR_AT], the way the table stages it: where
+## A moment staged for a burst `on` [param on], at [constant AIR_AT], the way the table stages it: where
 ## its emitter is through it (`moments`, as [method TableMedium._air_moments] gives them) and how the
 ## card in it moves (`card`: `[[t, Transform3D], ...]`, empty for none).
 func _staged(on: String) -> Dictionary:
@@ -1003,7 +985,7 @@ func _pose_moment(on: String, moment: Dictionary, t: float) -> void:
 		c.transform = Effects._along(card, t)
 
 
-## THE WORK ON THE TABLE ([TableWork], next/table_work.md), for the puppeteer: the table [param raw] stood
+## The work on the table ([TableWork], next/table_work.md), for the puppeteer: the table [param raw] stood
 ## with [param acts] - `{parts (what on it can be worked, in words), notes (what of the acts could not be
 ## kept), acts (the names kept)}`, or `{error}`.
 func work(raw: Dictionary, acts: Variant) -> Dictionary:
@@ -1014,7 +996,7 @@ func work(raw: Dictionary, acts: Variant) -> Dictionary:
 	return {"parts": w.parts_report(), "notes": Array(w.notes), "acts": (w.acts as Array).map(func(a: Dictionary) -> String: return String(a["name"]))}
 
 
-## ACTS [param names] OF [param acts] played on the table [param raw], in numbers ([method TableWork.check]) - ONE
+## ACTS [param names] of [param acts] played on the table [param raw], in numbers ([method TableWork.check]) - one
 ## table stood for them all, and what is in things baked once through the last of them: `{texts: {name: text},
 ## notes}` (what of the acts could not be kept), or `{error}`.
 func work_checks(raw: Dictionary, acts: Variant, names: Array) -> Dictionary:
@@ -1038,7 +1020,7 @@ func work_checks(raw: Dictionary, acts: Variant, names: Array) -> Dictionary:
 	return {"texts": texts, "notes": Array(w.notes)}
 
 
-## ACT [param name] OF [param acts] played on the table [param raw] and photographed from the camera's place
+## ACT [param name] of [param acts] played on the table [param raw] and photographed from the camera's place
 ## [param n] times through it, start to end: a sheet, `{image, frames: [seconds into it]}`, or `{error}`.
 func work_watch(raw: Dictionary, acts: Variant, name: String, n := 6) -> Dictionary:
 	var err: String = await _stand(raw, acts)
@@ -1075,7 +1057,7 @@ func work_watch(raw: Dictionary, acts: Variant, name: String, n := 6) -> Diction
 	return {"image": sheet, "frames": frames}
 
 
-## WHAT IS BUILT AS ACT [param name] LEAVES IT ([TableAssembly]), from four sides close to, by the table's own light - an agent cannot
+## What is built as act [param name] leaves it ([TableAssembly]), from four sides close to, by the table's own light - an agent cannot
 ## judge a shape from the chair, and a build's far side is only ever seen when the plate is turned. A sheet: `{image}` or `{error}`.
 func model_views(raw: Dictionary, acts: Variant, name: String) -> Dictionary:
 	var err: String = await _stand(raw, acts)
@@ -1114,7 +1096,7 @@ func model_views(raw: Dictionary, acts: Variant, name: String) -> Dictionary:
 	return {"image": sheet}
 
 
-## WHAT IS IN THINGS BAKED through rehearsal time [param t] ([method TablePhysics.bake_until]) on a worker, the app's own
+## What is in things baked through rehearsal time [param t] ([method TablePhysics.bake_until]) on a worker, the app's own
 ## thread drawing on while it waits: false when it was given up ([method halt]) or the preview given back. What is
 ## asked of the table after finds it baked.
 func _bake(t: float) -> bool:
@@ -1203,7 +1185,7 @@ func _placed(spec: Dictionary) -> Dictionary:
 		var entry := {"name": name, "place": String(th["place"]),
 			"at": Vector2((node.position.x - Tables.ORIGIN.x) * 100.0, (node.position.z - Tables.ORIGIN.y) * 100.0),
 			"k": node.transform.basis.get_scale().x, "tall": rect.size.y}
-		# WRITTEN WHERE IT STANDS: where, how far it had to move and why, its foot and height against what
+		# Written where it stands: where, how far it had to move and why, its foot and height against what
 		# its spot shows, and how much of it the frame keeps
 		var written: Variant = th.get("written")
 		if written != null:
@@ -1239,12 +1221,10 @@ func _placed(spec: Dictionary) -> Dictionary:
 ## [param vp] drawn for [param frames] frames, read back, then stopped again.
 ## null when the stage is given back while it waits ([method release]).
 ##
-## A HIDDEN WINDOW DRAWS NOTHING (reported 2026-10-19: "the set dresser stopped without handing its table
-## in"): while Ghost Notes is minimized or on another desktop, Godot runs its frames and draws none, and a
-## picture that waited for frames to be drawn waited until the window came back - a `put` 35 minutes, every
-## call behind it timed out, and the agent gave up. Measured in a virtual KWin, on X11 and on Wayland: 435
-## frames run in 3 s, none drawn. So once [constant UNDRAWN] frames pass with nothing drawn, the picture
-## draws its own ([method _draw_unseen]).
+## A hidden window draws nothing: while Ghost Notes is minimized or on another desktop, Godot runs its frames and draws none, and a
+## picture that waited for frames to be drawn waited until the window came back (measured in a virtual KWin, on X11 and on Wayland:
+## 435 frames run in 3 s, none drawn). So once [constant UNDRAWN] frames pass with nothing drawn, the picture draws its own
+## ([method _draw_unseen]).
 static func _render(vp: SubViewport, frames: int) -> Image:
 	if vp == null or not is_instance_valid(vp):
 		return null

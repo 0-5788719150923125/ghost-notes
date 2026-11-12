@@ -1,31 +1,25 @@
 extends RefCounted
 class_name RigidParts
 
-## RigidParts - WHAT THE WORK PICKS UP, AS RIGID BODIES (next/table_physics.md, "Tools"): every free part that is not loose - a
-## pestle, a ladle, a jar and its cork, a lid - and every thing that may be moved whole is a body with a mass, a middle and an inertia
-## ([method TablePhysics._mass_of]), stepped by the bake ([TablePhysics]) on its own thread. WHATEVER THE ACTS ARE (2026-11-01,
-## next/framework_audit.md): it had been a body only if some act, at any time, moved it - so the world changed with every act that
-## moved something new and nothing baked before could be kept, and a jar knocked before its fetch was a wall or a body by what came
-## after. AND DORMANT AS BUILT: untouched, a body is the solid it was before it was one - reckoned no further, met as a solid, woken by
-## nothing but a hand taking it up or what holds it moving ([method _stirred]); woken by whatever came near, a table of bodies set as
-## the set dresser left them woke one another and never settled. The user, 2026-10-29: "We
-## really want that behavior everywhere there is interaction between components, because faking it looks bad" - a
-## pestle put back had stood through its mortar's wall, a lid laid on its crock jittered on it to the end of the show,
-## and "the physics everywhere is just going to provide us with a better long-term foundation". So:
+## RigidParts: what the work picks up, as rigid bodies (next/table_physics.md, "Tools"). Every free part that is not loose - a pestle, a
+## ladle, a jar and its cork, a lid - and every thing that may be moved whole is a body with a mass, a middle and an inertia ([method
+## TablePhysics._mass_of]), stepped by the bake ([TablePhysics]) on its own thread. It is a body whatever the acts are (next/framework_audit.md):
+## being a body must not depend on whether some act moves it, or the world would change with every act and nothing baked before could be
+## kept. And it is dormant as built: untouched, a body is the solid it was before it was one - reckoned no further, met as a solid, woken
+## by nothing but a hand taking it up or what holds it moving ([method _stirred]); woken by whatever came near, a table of bodies set as
+## the set dresser left them would wake one another and never settle.
 ##
-##   - HELD, it goes where the hand takes it and MEETS WHAT IT IS MOVED INTO: kept out of every other solid and the
-##     table's top, pushed back along what it meets and turned about it as a grip gives a little (Muller, Macklin,
-##     Chentanez, Jeschke and Kim, "Detailed Rigid Body Simulation with Extended Position Based Dynamics", 2020: each
-##     contact a positional correction weighed by the body's generalized inverse mass at it, friction a correction of
-##     its slide);
-##   - LET GO, IT FALLS AND COMES TO REST: gravity, the same contacts, friction against what it lies on; still, it
-##     sleeps on that and goes where that goes - a pestle in its mortar carried to the middle - until it is taken up,
-##     its holder tips or jolts, or something moving comes to it.
+##   - Held, it goes where the hand takes it and meets what it is moved into: kept out of every other solid and the table's top, pushed
+##     back along what it meets and turned about it as a grip gives a little (Muller, Macklin, Chentanez, Jeschke and Kim, "Detailed Rigid
+##     Body Simulation with Extended Position Based Dynamics", 2020: each contact a positional correction weighed by the body's
+##     generalized inverse mass at it, friction a correction of its slide);
+##   - Let go, it falls and comes to rest: gravity, the same contacts, friction against what it lies on; still, it sleeps on that and goes
+##     where that goes - a pestle in its mortar carried to the middle - until it is taken up, its holder tips or jolts, or something moving
+##     comes to it.
 ##
-## A body is met as POINTS ON ITS SURFACE ([method ShapeField.surface_points]) against every other solid's field, and
-## every other solid's points against its own fields - so a jar's thin rim never slips between a cork's points. A move
-## is taken in pieces no longer than [constant STEP_MOST] at any point of it: never over a glass wall in one step.
-## Pure data: no node, nothing but numbers.
+## A body is met as points on its surface ([method ShapeField.surface_points]) against every other solid's field, and every other solid's
+## points against its own fields - so a jar's thin rim never slips between a cork's points. A move is taken in pieces no longer than
+## [constant STEP_MOST] at any point of it: never over a glass wall in one step. Pure data: no node, nothing but numbers.
 
 ## Substeps a frame; the most points a body's surface is met by; how far into what it touches a body may stand
 ## (meters) - and how far a move goes at most between looks (meters), in at most this many pieces a substep.
@@ -39,33 +33,28 @@ const FACE_FAR := 0.004
 const FACE_REACH := 0.008
 const STEP_MOST := 0.0012
 const PIECES_MOST := 8
-## HELD, how much faster than the hand a body goes back into it (meters a second): one held back by what it met comes back
-## as a grip settles - and is pressed into what holds it back no harder than the hand presses. (841899: a pestle the act stood
-## up through its mortar's wall was driven into the wall at the most a frame allows, 9.6 mm, and squeezed out sideways 3.4 mm
-## a frame - 34 mm off the hand in a tenth of a second, a jolt.)
+## Held, how much faster than the hand a body goes back into it (meters a second): one held back by what it met comes back as a grip
+## settles - and is pressed into what holds it back no harder than the hand presses.
 const CATCH_UP := 0.06
 ## ...and, clear of everything by CATCH_CLEAR (meters) or by more than it lags, this fast (meters a second).
 const CATCH_UP_CLEAR := 0.5
 const CATCH_CLEAR := 0.02
 ## Passes over its contacts a piece of a move: each finds them afresh.
 const PASSES := 2
-## How much of the speed it met something with a body keeps going back off it: a pushed-out body flies off only as fast as
-## it came in times this (positional pushes alone had spun a rod landing on the table up to 47 radians a second).
+## How much of the speed it met something with a body keeps going back off it: a pushed-out body flies off only as fast as it came in
+## times this (positional pushes alone spin a landing rod up).
 const BOUNCE := 0.15
-## HELD FIRM: a held body turns about what it meets this share as freely as a loose one does - a hand holds it.
+## Held firm: a held body turns about what it meets this share as freely as a loose one does - a hand holds it.
 const GRIP := 0.2
 ## Gravity; the fastest a body goes (meters a second); a loose body's turning dies this share a second.
 const GRAVITY := Vector3(0.0, -9.81, 0.0)
 const V_MOST := 3.0
 const SPIN_DAMP := 0.6
-## AT REST: touching something and slower than SETTLE at any point (meters a second), it loses SETTLE_LOSS of its speed a
-## substep - positional contacts leave a resting body trembling, never still enough to sleep (as [constant
-## Particles.SETTLE]). SLEEP: slower than this at any point of it over a frame (meters a second) for this long (seconds),
-## touching something - OR, touching something, none of it further than SLEEP_DRIFT (meters) from where it was this long
-## ago: TREMBLING IN PLACE IS AT REST (841899: the ladle laid on its rest, held up at its bowl and its handle's end, rocked
-## a hair's width each way, its far end faster than SLEEP_SPEED, and kept the bake reckoning every frame in full for
-## fifty-five seconds); WAKING: its holder tipped this far since (radians) or jolted this hard (meters a second, squared),
-## or a moving solid this near (meters).
+## At rest: touching something and slower than SETTLE at any point (meters a second), it loses SETTLE_LOSS of its speed a substep -
+## positional contacts leave a resting body trembling, never still enough to sleep (as [constant Particles.SETTLE]). Sleep: slower than
+## this at any point of it over a frame (meters a second) for this long (seconds), touching something - or, touching something, none of
+## it further than SLEEP_DRIFT (meters) from where it was this long ago: trembling in place is at rest. Waking: its holder tipped this far
+## since (radians) or jolted this hard (meters a second, squared), or a moving solid this near (meters).
 const SETTLE := 0.05
 const SETTLE_LOSS := 0.5
 const SLEEP_SPEED := 0.01
@@ -83,13 +72,11 @@ const TABLE := -2
 ## is what it sleeps on and rides, only past [constant HELD_UP].
 const LOOSE := -3
 const HELD_UP := 0.3
-## A PART IN ITS SEAT IS WELDED TO IT ([method TablePhysics._weld]): eased onto it over WELD_EASE seconds, then it goes
-## exactly where its seat goes and is woken by nothing but a hand. (841899: a cork let go in its jar's neck, woken by its jar
-## settling, trembled 3 mm about the neck for five seconds - the solver's points are coarser than a neck's fit.)
+## A part in its seat is welded to it ([method TablePhysics._weld]): eased onto it over WELD_EASE seconds, then it goes exactly where its
+## seat goes and is woken by nothing but a hand (the solver's points are coarser than a neck's fit, so a cork would tremble in its jar).
 const WELD_EASE := 0.25
-## A HAND LETS GO GENTLY ([method guide]): for GUIDE seconds after a hand lets go, or until it rests, a body goes no faster
-## than GUIDE_V at any point (meters a second) - it is lowered onto what takes it, as a hand sets a thing down, never dropped
-## (841899: a ladle let go standing in its pot, or held over a vial, fell and struck what was under it).
+## A hand lets go gently ([method guide]): for GUIDE seconds after a hand lets go, or until it rests, a body goes no faster than GUIDE_V
+## at any point (meters a second) - it is lowered onto what takes it, as a hand sets a thing down, never dropped.
 const GUIDE := 2.5
 const GUIDE_V := 0.12
 ## SUPPORTED ([method supported]): a point of its surface this near (meters) what is under it, there facing up at least
@@ -116,9 +103,8 @@ func add(wi: int, solids: PackedInt32Array, rests: Array, m: float, inertia: Bas
 	var rad := 0.0
 	for p in pts:
 		rad = maxf(rad, p.distance_to(c0))
-	# ITS SURFACE, SPREAD EVENLY: [constant POINTS] of them, each the furthest from those taken before - its corners and edges
-	# first (every k-th point of the surface's own grid had left a box's edges out, and it rested on one, 4 mm into the table;
-	# one a cell had kept a side's point for the bottom's)
+	# Its surface, spread evenly: [constant POINTS] of them, each the furthest from those taken before - its corners and edges first
+	# (every k-th point of the surface's own grid leaves a box's edges out, and the body rests on one, sunk into the table)
 	var det := inertia.determinant()
 	var ii := inertia.inverse() if absf(det) > 1e-30 else Basis.from_scale(Vector3.ONE * (1.0 / maxf(m * rad * rad * 0.4, 1e-12)))
 	# ...and how far apart the points it is met by lie: a rim as thin as that may pass between them unseen
@@ -158,8 +144,8 @@ func add(wi: int, solids: PackedInt32Array, rests: Array, m: float, inertia: Bas
 	return bodies.size() - 1
 
 
-## BODY [param bi] WELDED TO SOLID [param si], at [param rel] from it (the body's motion in that solid's space): eased there
-## over [constant WELD_EASE] from where it is, asleep on it, woken by nothing but a hand ([method TablePhysics._weld]).
+## Body [param bi] welded to solid [param si], at [param rel] from it (the body's motion in that solid's space): eased there over
+## [constant WELD_EASE] from where it is, asleep on it, woken by nothing but a hand ([method TablePhysics._weld]).
 func weld(bi: int, si: int, rel: Transform3D, xf: Transform3D) -> void:
 	var b: Dictionary = bodies[bi]
 	var now := xf.affine_inverse() * _motion(b)
@@ -190,15 +176,14 @@ func unweld(bi: int) -> void:
 	(bodies[bi] as Dictionary)["weld"] = -1
 
 
-## A HAND LETS GO OF BODY [param bi]: it is lowered onto what takes it at a hand's pace for [constant GUIDE] seconds.
+## A hand lets go of body [param bi]: it is lowered onto what takes it at a hand's pace for [constant GUIDE] seconds.
 func guide(bi: int) -> void:
 	(bodies[bi] as Dictionary)["guide"] = GUIDE
 
 
-## WHETHER BODY [param bi] IS HELD UP WHERE IT IS: points of its surface within [constant SUPPORT_NEAR] of the table's top or
-## of a solid (as the last frame left them) that faces up there at least [constant HELD_UP], and its middle over them - so let
-## go, it stays. Touching is not enough: a ladle whose bowl grazes a vial's rim, or whose handle leans on a pot's rim with its
-## weight past it, falls (841899: both were let go as "touching", and fell).
+## Whether body [param bi] is held up where it is: points of its surface within [constant SUPPORT_NEAR] of the table's top or of a solid
+## (as the last frame left them) that faces up there at least [constant HELD_UP], and its middle over them - so let go, it stays.
+## Touching is not enough: a ladle whose bowl grazes a vial's rim, or whose handle leans on a pot's rim with its weight past it, falls.
 func supported(bi: int) -> bool:
 	var b: Dictionary = bodies[bi]
 	var d := _motion(b)
@@ -234,12 +219,12 @@ func supported(bi: int) -> bool:
 	return least <= SUPPORT_GROW
 
 
-## LET GO, WHERE DOES IT GO? Body [param bi] let go where it is now - a hand lowering it ([method guide]) - stepped alone for at
-## most [param seconds] of [param dt] among everything else as the last frame left it, which holds still: `{drop}`, how far its
-## lowest point went down (meters), and `{falling}`, whether it was still going down at the end. A copy is stepped: the body
-## itself is untouched. What a hand may let go of is what this says comes to rest about where it is
-## ([method TablePhysics._would_fall]) - one test for every shape, never a rule for one: a ladle on its rest and its block, a
-## ladle standing in its pot (it leans on the rim), a cork on its jar's lip; and never a feather held up in the air.
+## Let go, where does it go? Body [param bi] let go where it is now - a hand lowering it ([method guide]) - stepped alone for at most
+## [param seconds] of [param dt] among everything else as the last frame left it, which holds still: `{drop}`, how far its lowest point
+## went down (meters), and `{falling}`, whether it was still going down at the end. A copy is stepped: the body itself is untouched. What
+## a hand may let go of is what this says comes to rest about where it is ([method TablePhysics._would_fall]) - one test for every shape,
+## never a rule for one: a ladle on its rest and its block, a ladle standing in its pot (it leans on the rim), a cork on its jar's lip; and
+## never a feather held up in the air.
 func trial(bi: int, seconds: float, dt: float) -> Dictionary:
 	var b: Dictionary = (bodies[bi] as Dictionary).duplicate(true)
 	b["held"] = null
@@ -293,9 +278,8 @@ static func _set_motion(b: Dictionary, d: Transform3D) -> void:
 	b["c"] = d * (b["c0"] as Vector3)
 
 
-## How far a body must go in a frame (meters, at any point) to stir what lies loose near it ([method
-## TablePhysics._wake_near_loose]): settling, it does not - an awake pestle trembling on the bench had woken every loose
-## thing round it, until the solver held no more and a jar's lumps could not be bodies.
+## How far a body must go in a frame (meters, at any point) to stir what lies loose near it ([method TablePhysics._wake_near_loose]):
+## settling, it does not.
 const STIRS := 0.0002
 
 
@@ -346,9 +330,8 @@ func touching(bi: int, within: float) -> bool:
 
 # --- the frame ------------------------------------------------------------------------------------------
 
-## ONE FRAME of [param dt] seconds among [param world]'s `solids` (each with its `xf`, `xf0`, `inv`, `field`, `wbox`,
-## `moving`, `mu`, `on`) over the table's `top`: each body held, falling or asleep on its holder - and its own solids put
-## where it went.
+## One frame of [param dt] seconds among [param world]'s `solids` (each with its `xf`, `xf0`, `inv`, `field`, `wbox`, `moving`, `mu`,
+## `on`) over the table's `top`: each body held, falling or asleep on its holder - and its own solids put where it went.
 func step(dt: float, world: Dictionary) -> void:
 	_solids = world.get("solids", [])
 	_top = float(world.get("top", 0.0))
@@ -369,9 +352,9 @@ func step(dt: float, world: Dictionary) -> void:
 			stirring.append([si, sd["wbox"]])
 	for bi in order:
 		var b: Dictionary = bodies[bi]
-		# DORMANT: as built, untouched - a solid that does not move, reckoned no further than whether it is taken along now ([method
-		# _stirred]). Every free part and every thing that may be moved is a body (next/framework_audit.md), and of a table's hundred
-		# and fifty a frame finds the few a hand has taken up awake.
+		# Dormant: as built, untouched - a solid that does not move, reckoned no further than whether it is taken along now ([method
+		# _stirred]). Every free part and every thing that may be moved is a body (next/framework_audit.md), and a frame finds the few a hand
+		# has taken up awake.
 		if bool(b.get("dormant", false)):
 			if b["held"] == null and not _stirred(b, stirring):
 				b["moved"] = false
@@ -391,16 +374,16 @@ func step(dt: float, world: Dictionary) -> void:
 		_place_solids(b, was, now, dt)
 
 
-## A HELD BODY: the frame's way to where the hand has it, in its pieces ([method _go]), meeting what it is moved into -
-## its speed the hand's as it goes, so let go it goes on as the hand had it going.
+## A held body: the frame's way to where the hand has it, in its pieces ([method _go]), meeting what it is moved into - its speed the
+## hand's as it goes, so let go it goes on as the hand had it going.
 func _held_frame(b: Dictionary, dt: float) -> void:
 	var near := _near(b, (b["held"] as Transform3D))
 	b["touch"] = -1
 	b["by"] = -1
 	var from := _motion(b)
 	var hand: Transform3D = b["held_from"] if b["held_from"] != null else from
-	# ...as fast as its hand, and back into it gently where it meets something - but where it was clear of everything by more than
-	# it lags, at a hand's own pace: a jar knocked behind its hand in the air stayed 35 cm behind it to the end of its carry
+	# ...as fast as its hand, and back into it gently where it meets something - but where it was clear of everything by more than it
+	# lags, at a hand's own pace
 	var lag := _way_from(b, b["held"])
 	var catch_up := CATCH_UP_CLEAR if float(b["clear"]) > minf(lag, CATCH_CLEAR) else CATCH_UP
 	_go(b, from, b["held"], near, true, dt, _span(b, hand, b["held"]) + catch_up * dt)
@@ -410,11 +393,10 @@ func _held_frame(b: Dictionary, dt: float) -> void:
 	b["host"] = -1
 
 
-## A LOOSE BODY: gravity, then its contacts, a substep at a time; still long enough, it sleeps on what holds it up.
+## A loose body: gravity, then its contacts, a substep at a time; still long enough, it sleeps on what holds it up.
 func _loose_frame(b: Dictionary, dt: float) -> void:
 	var h := dt / float(SUBSTEPS)
-	# WHAT HOLDS IT UP CARRIES IT: one settling on or in what is being moved goes with it, and only how it moves there is
-	# reckoned (a pestle let go in its mortar as the mortar was picked up had been left in the air, and fell to the table)
+	# What holds it up carries it: one settling on or in what is being moved goes with it, and only how it moves there is reckoned
 	var hs := int(b["touch"])
 	if _may_hold(hs, b) and bool((_solids[hs] as Dictionary).get("moving", false)):
 		var sd: Dictionary = _solids[hs]
@@ -447,7 +429,7 @@ func _loose_frame(b: Dictionary, dt: float) -> void:
 		if int(b["touch"]) != -1 and (b["v"] as Vector3).length() + (b["w"] as Vector3).length() * float(b["rad"]) < SETTLE:
 			b["v"] = (b["v"] as Vector3) * (1.0 - SETTLE_LOSS)
 			b["w"] = (b["w"] as Vector3) * (1.0 - SETTLE_LOSS)
-		# ...AND JUST LET GO, a hand lowers it: no point of it faster than GUIDE_V
+		# ...and just let go, a hand lowers it: no point of it faster than GUIDE_V
 		if float(b["guide"]) > 0.0:
 			var lin := (b["v"] as Vector3).length()
 			var spin := (b["w"] as Vector3).length() * float(b["rad"])
@@ -466,11 +448,11 @@ func _loose_frame(b: Dictionary, dt: float) -> void:
 		b["anchor"] = _motion(b)
 
 
-## AN ASLEEP BODY goes where its holder goes - and wakes as its holder tips past [constant WAKE_TILT] or jolts past
-## [constant WAKE_JOLT], or as a moving solid comes to it.
+## An asleep body goes where its holder goes - and wakes as its holder tips past [constant WAKE_TILT] or jolts past [constant WAKE_JOLT],
+## or as a moving solid comes to it.
 func _asleep_frame(b: Dictionary, stirring: Array) -> void:
 	var hs := int(b["host"])
-	# WELDED TO ITS SEAT: exactly where its seat is, eased onto it as it was welded - and nothing wakes it but a hand
+	# Welded to its seat: exactly where its seat is, eased onto it as it was welded - and nothing wakes it but a hand
 	if int(b["weld"]) >= 0 and hs >= 0 and hs < _solids.size():
 		var dt := float((_solids[hs] as Dictionary).get("dt", 1.0 / 60.0))
 		if float(b["weld_in"]) < 1.0:
@@ -494,13 +476,12 @@ func _asleep_frame(b: Dictionary, stirring: Array) -> void:
 	var own: PackedInt32Array = b["solids"]
 	# ...nor by what carries it: its holder's own body moving it, every solid of it
 	var hb := int((_solids[hs] as Dictionary).get("body", -1)) if hs >= 0 and hs < _solids.size() else -1
-	# ...stirring, not settling: two bodies trembling at rest side by side (a jar and its stopper) woke each other forever
+	# ...stirring, not settling: two bodies trembling at rest side by side (a jar and its stopper) would wake each other forever
 	for e in stirring:
 		var si := int((e as Array)[0])
 		if si == hs or own.has(si) or (hb >= 0 and int((_solids[si] as Dictionary).get("body", -1)) == hb):
 			continue
-		# ...nor by what rests in it or on it, which it never meets ([method _near]): a pestle grinding in its mortar kept the
-		# mortar awake the whole grind
+		# ...nor by what rests in it or on it, which it never meets ([method _near])
 		var ob := int((_solids[si] as Dictionary).get("body", -1))
 		if ob >= 0 and _yields_to(bodies[ob], b, own):
 			continue
@@ -509,11 +490,10 @@ func _asleep_frame(b: Dictionary, stirring: Array) -> void:
 			return
 
 
-## WHETHER DORMANT BODY [param b] IS TAKEN ALONG this frame ([method step]): what holds it up moves - a pestle in its mortar as the
-## mortar is carried, a cork in its jar. NOTHING ELSE WAKES IT, nothing passing near it ([param _stirring] is not looked at): until a
-## hand takes it up or what it stands on goes, it is exactly the solid it was before it was a body, met as one and moved by nothing -
-## woken by whatever came near, a table of bodies placed as the set dresser left them woke one another and never settled again
-## (841899, next/framework_audit.md: the rigid bodies 92 s and the grains 20 s of every 10 s of show, six liquids sloshing).
+## Whether dormant body [param b] is taken along this frame ([method step]): what holds it up moves - a pestle in its mortar as the
+## mortar is carried, a cork in its jar. Nothing else wakes it, nothing passing near it ([param _stirring] is not looked at): until a hand
+## takes it up or what it stands on goes, it is exactly the solid it was before it was a body, met as one and moved by nothing
+## (next/framework_audit.md).
 func _stirred(b: Dictionary, _stirring: Array) -> bool:
 	var hs := int(b["host"])
 	return hs >= 0 and hs < _solids.size() and bool((_solids[hs] as Dictionary).get("moving", false))
@@ -534,8 +514,8 @@ func _wake(b: Dictionary, sd: Variant) -> void:
 	b["host"] = -1
 
 
-## Whether solid [param si] may hold body [param b] up - be what it sleeps on and is carried by: never a lighter thing in a
-## hand (841899's frankincense jar, set down as its cork was taken up, slept on the cork and went up with it).
+## Whether solid [param si] may hold body [param b] up - be what it sleeps on and is carried by: never a lighter thing in a hand (a jar
+## set down as its cork is taken up must not sleep on the cork).
 func _may_hold(si: int, b: Dictionary) -> bool:
 	if si < 0 or si >= _solids.size():
 		return false
@@ -558,11 +538,10 @@ func _sleep(b: Dictionary) -> void:
 		b["host"] = -1
 
 
-## THE SPEED A PUSH GAVE IT, put right (Muller et al. 2020's velocity pass): at each point it met something this substep, one
-## after another, its speed along the way out is set to [constant BOUNCE] of how fast it came in there ([param v0], [param w0],
-## its speeds before) - none, coming in slower than a substep of gravity gives it, so what rests does not tremble - and its
-## slide there slowed by kinetic friction as much as that changed. (Pushed out alone, a rod landing on the table spun up to
-## 47 radians a second, and one resting on it trembled awake for ever.)
+## The speed a push gave it, put right (Muller et al. 2020's velocity pass): at each point it met something this substep, one after
+## another, its speed along the way out is set to [constant BOUNCE] of how fast it came in there ([param v0], [param w0], its speeds
+## before) - none, coming in slower than a substep of gravity gives it, so what rests does not tremble - and its slide there slowed by
+## kinetic friction as much as that changed.
 func _bounce(b: Dictionary, v0: Vector3, w0: Vector3, h: float) -> void:
 	var hits: Array = b.get("hits", [])
 	if hits.is_empty():
@@ -610,14 +589,13 @@ func _speeds(b: Dictionary, from: Transform3D, h: float) -> void:
 	b["w"] = (Vector3(dq.x, dq.y, dq.z) * (2.0 / h)).limit_length(V_MOST / maxf(float(b["rad"]), 0.01))
 
 
-## BODY [param b] FROM [param from] TOWARD [param want], in pieces short enough never to step over a thin wall, each
-## kept out of every solid near it ([param near], [method _near]) - [param held]: firm in a hand.
+## Body [param b] from [param from] toward [param want], in pieces short enough never to step over a thin wall, each kept out of every
+## solid near it ([param near], [method _near]) - [param held]: firm in a hand.
 func _go(b: Dictionary, from: Transform3D, want: Transform3D, near: Dictionary, held: bool, h: float, pace := INF) -> void:
 	var way := _span(b, from, want)
-	# ...no further a frame than its pieces at their longest: a hand that has gone on past what stopped it is followed a step at
-	# a time, never in one stride deep into what is in the way - and, held, no further than [param pace]
-	# ...BUT CLEAR OF EVERYTHING BY MORE THAN THAT, there is nothing to step past: a body had gone 58 cm a second at most, in clear air, whatever its hand did - a ladle
-	# turned over a pot fell 44 cm behind its hand, reached its rest late, was let go 5 cm up and lay on it 18 degrees off (841899's ladle-fill-vial)
+	# ...no further a frame than its pieces at their longest: a hand that has gone on past what stopped it is followed a step at a time,
+	# never in one stride deep into what is in the way - and, held, no further than [param pace]
+	# ...but clear of everything by more than that, there is nothing to step past, so it goes as its hand does
 	var most := minf(STEP_MOST * float(PIECES_MOST), pace)
 	var free := float(b["clear"]) - _way_from(b, b["clear_from"]) if float(b["clear"]) > 0.0 else 0.0
 	if free > most:
@@ -627,11 +605,11 @@ func _go(b: Dictionary, from: Transform3D, want: Transform3D, near: Dictionary, 
 		way = most
 	var pieces := clampi(int(ceil(way / STEP_MOST)), 1, PIECES_MOST)
 	for k in pieces:
-		# ...each piece on from where the last one was kept - never from the frame's start along a straight line, which threw
-		# away what had stopped it (a rod held against a block's face was put back 5 cm into it on the last piece)
+		# ...each piece on from where the last one was kept - never from the frame's start along a straight line, which throws away what
+		# had stopped it
 		var prev := _motion(b)
 		_set_motion(b, _between(b, prev, want, 1.0 / float(pieces - k)))
-		# CLEAR OF EVERYTHING by more than it has gone since it was last looked at: nothing to meet
+		# Clear of everything by more than it has gone since it was last looked at: nothing to meet
 		if float(b["clear"]) > 0.0 and _way_from(b, b["clear_from"]) < float(b["clear"]):
 			continue
 		_contacts(b, prev, near, held, h)
@@ -674,19 +652,15 @@ func _near(b: Dictionary, ahead: Transform3D) -> Dictionary:
 		if seated.has(si):
 			continue
 		var sd: Dictionary = _solids[si]
-		# ...never what hangs from it and goes where it goes: a balance's beam on its hinge, carried with its base, had held the
-		# base back (841899's balance, 47 cm short of where its act took it)
+		# ...never what hangs from it and goes where it goes: a balance's beam on its hinge, carried with its base
 		if own.has(si) or (sd.get("bodies", []) as Array).has(int(b["bi"])):
 			continue
 		if not bool(sd.get("on", true)) or not (sd["wbox"] as AABB).intersects(reach):
 			gap_least = minf(gap_least, _gap(here, sd["wbox"]))
 			continue
-		# ...NEVER WHAT RESTS IN IT OR ON IT, held or not: what a thing holds goes with it and
-		# never shoves it (841899: a mortar carried with its pestle lying in it was held back by the pestle, left on the table
-		# and tipped over; let go, the pestle leaning in it crept it across the table), NOR A LIGHTER THING IN A HAND: a pestle
-		# ground round its bowl never shoves the mortar. Anything else it meets, a vial a ladle falls on among them (a ladle
-		# dropped through one when all that weighed less was passed through) - and what another hand holds at once: two held
-		# bodies had passed through each other, and 841899's cork, carried with its jar, ended inside the jar's wall and fell in
+		# ...never what rests in it or on it, held or not: what a thing holds goes with it and never shoves it (a mortar carried with its
+		# pestle lying in it), nor a lighter thing in a hand: a pestle ground round its bowl never shoves the mortar. Anything else it
+		# meets - and what another hand holds at once: two held bodies would pass through each other
 		if sd.has("body"):
 			var ob: Dictionary = bodies[int(sd["body"])]
 			if _yields_to(ob, b, own):
@@ -695,9 +669,8 @@ func _near(b: Dictionary, ahead: Transform3D) -> Dictionary:
 		# ...one moving: how clear it was is no longer known
 		if bool(sd.get("moving", false)):
 			b["clear"] = 0.0
-	# ...and, let go, the loose things' spheres in its reach, which may hold it up - never what lies in it or on it: what a
-	# vessel holds cannot lift it (841899: the frankincense ground in the mortar, pressed into its floor by the pestle, pushed
-	# the mortar up and about, and it slid across the table)
+	# ...and, let go, the loose things' spheres in its reach, which may hold it up - never what lies in it or on it: what a vessel holds
+	# cannot lift it
 	var near_spheres := PackedInt32Array()
 	if not held and not _spheres.is_empty():
 		var sx: PackedVector3Array = _spheres["x"]
@@ -766,10 +739,9 @@ static func _box(b: Dictionary, d: Transform3D) -> AABB:
 	return AABB(d * (b["c0"] as Vector3) - Vector3.ONE * r, Vector3.ONE * r * 2.0)
 
 
-## KEPT OUT of the solids [param near] and the table's top, in [constant PASSES] passes: each of its points in a solid, and
-## each of a solid's points in it, pushed out along the way out, its slide along it since [param prev] held by friction -
-## every contact of a pass reckoned against the same pose and their corrections AVERAGED (one after another, each turned
-## the body against the last: a rod landing flat on the table spun up to 20 radians a second and came to rest on an edge).
+## Kept out of the solids [param near] and the table's top, in [constant PASSES] passes: each of its points in a solid, and each of a
+## solid's points in it, pushed out along the way out, its slide along it since [param prev] held by friction - every contact of a pass
+## reckoned against the same pose and their corrections averaged (one after another, each would turn the body against the last).
 func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool, _h: float) -> void:
 	var near: PackedInt32Array = near_d["solids"]
 	var pts: PackedVector3Array = b["pts"]
@@ -788,7 +760,7 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 	for pass_i in PASSES:
 		var d := _motion(b)
 		var hits: Array = []
-		# ITS POINTS IN THE SOLIDS, and in the table's top
+		# Its points in the solids, and in the table's top
 		var faces: Dictionary = b["faces"]
 		var closest := {}   # solid -> [its own point nearest it (as built), how near]: where [method _refined] starts from
 		for j in pts.size():
@@ -816,14 +788,14 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 				var key := j * 4096 + si
 				var xf: Transform3D = sd["xf"]
 				var sv := (xf * local - (sd["xf0"] as Transform3D) * local) / float(SUBSTEPS)
-				# ...STILL IN BY THE FACE IT CAME IN BY: kept until it is back in front of that face or clear of the wall - a let-go
-				# body's contacts are put right only in their mean, and a point left a millimeter in a 3 mm wall, asked again from
-				# inside, was put out through the far side; and kept even there, the wall's far side no way out
+				# ...still in by the face it came in by: kept until it is back in front of that face or clear of the wall - a let-go body's
+				# contacts are put right only in their mean, and a point left a little in a thin wall, asked again from inside, would be put out
+				# through the far side
 				if faces.has(key):
 					var face: Array = faces[key]
 					var past := float(face[1]) - p.dot(face[0] as Vector3)
-					# ...out of the wall, only near where it came in - out its far side; a face is a plane, and a cup's foot that
-					# grazed a bowl's rim on its way in was held up by the rim's plane over the water (841899's ladle, a dip)
+					# ...out of the wall, only near where it came in - out its far side; a face is a plane, and a cup's foot that grazed a
+					# bowl's rim on its way in would be held up by the rim's plane
 					if past < 0.0 or bool(sd.get("moving", false)) \
 							or (f.x >= -SLACK and (f.x > FACE_FAR or p.distance_to(face[2] as Vector3) > FACE_REACH)):
 						faces.erase(key)
@@ -835,15 +807,14 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 					continue
 				var way_out := (xf.basis * Vector3(f.y, f.z, f.w)).normalized()
 				var deep := -SLACK - f.x
-				# A STILL WALL IS MET ON THE SIDE IT WAS COME TO FROM: a point outside it at the piece's start is pushed back
-				# out where it came in - past a thin wall's middle, the wall's own way out is through its far side (841899:
-				# the ladle let go in its pot stood 2 mm in its copper floor and sank through it, 2 cm in half a second)
+				# A still wall is met on the side it was come to from: a point outside it at the piece's start is pushed back out where it
+				# came in - past a thin wall's middle, the wall's own way out is through its far side
 				if not bool(sd.get("moving", false)):
 					var field: ShapeField = sd["field"]
 					var inv: Transform3D = sd["inv"]
 					var pp := prev * q
-					# (out of it as far as a contact goes - within the slack it stands in what it rests on, and a point resting
-					# there had kept losing its face and never been given one again)
+					# (out of it as far as a contact goes - within the slack it stands in what it rests on, and a point resting there would
+					# keep losing its face and never be given one again)
 					if field.sample(inv * pp).x >= -SLACK:
 						var lo := 0.0
 						var hi := 1.0
@@ -864,8 +835,8 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 						hits.append([p, way_out, deep, sv, _mu_with(mu, sd), si, q, -1, faces[key]])
 						continue
 				hits.append([p, way_out, deep, sv, _mu_with(mu, sd), si, q, -1])
-		# ...AND WHERE IT IS DEEPEST IN EACH, FOUND, never only at its points ([method _refined]): a handle laid across a rim between
-		# two of its points had stood 2.2 mm into the copper as drawn, its points half a millimeter
+		# ...and where it is deepest in each, found, never only at its points ([method _refined]): a handle laid across a rim between two
+		# of its points would stand in it
 		for si in closest:
 			# ...from each place it comes near the solid, a few, apart (a ladle leaning in its pot meets it at its bowl and again
 			# where its handle crosses the rim)
@@ -884,8 +855,8 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 						break
 			for c in starts:
 				_refine_hit(b, d, prev, si, (c as Array)[0], hits, mu)
-		# ...AND THE SOLIDS' POINTS IN IT: a rim thinner than the gaps between its points - each first against its own
-		# solids' boxes, where they stand now
+		# ...and the solids' points in it: a rim thinner than the gaps between its points - each first against its own solids' boxes,
+		# where they stand now
 		var invs: Array = []
 		for k in own.size():
 			invs.append((d * (rests[k] as Transform3D)).affine_inverse())
@@ -905,7 +876,7 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 						continue
 					# its way out of the body, the other way: the body goes from the point
 					var nn := -((d * (rests[k] as Transform3D)).basis * Vector3(f.y, f.z, f.w)).normalized()
-					# ...A THIN WALL OF ITS OWN came onto a still point from one side: out that side (a ladle's bowl over a floor)
+					# ...a thin wall of its own came onto a still point from one side: out that side (a ladle's bowl over a floor)
 					var own_field: ShapeField = (_solids[own[k]] as Dictionary)["field"]
 					var lpp := (prev * (rests[k] as Transform3D)).affine_inverse() * p
 					if not bool((_solids[si] as Dictionary).get("moving", false)) and own_field.sample(lpp).x >= -SLACK:
@@ -927,8 +898,7 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 						break
 					hits.append([p, nn, -SLACK - f.x, Vector3.ZERO, _mu_with(mu, _solids[si]), si, p, k])
 					break
-		# ...AND, LET GO, THE LOOSE THINGS UNDER IT, as solids: each sphere it has sunk into holds it up (a stopper fallen into a
-		# jar of tears had sunk through them, squeezing them against the glass, awake to the end of the show)
+		# ...and, let go, the loose things under it, as solids: each sphere it has sunk into holds it up
 		var near_spheres: PackedInt32Array = near_d.get("spheres", PackedInt32Array())
 		if not held and not near_spheres.is_empty():
 			var sx: PackedVector3Array = _spheres["x"]
@@ -952,8 +922,7 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 			break
 		met = true
 		_resolve(b, hits, prev, held)
-		# ...WHAT HOLDS IT UP is what it meets from below, never what pushes it from the side or above: the ladle lifted past
-		# 841899's cork had been what the cork touched last, so it slept on the ladle and went round with every stir
+		# ...what holds it up is what it meets from below, never what pushes it from the side or above
 		for hit in hits:
 			var ny := ((hit as Array)[1] as Vector3).y
 			if ny > met_up:
@@ -962,9 +931,8 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 			if ny > up_most and ny > HELD_UP:
 				up_most = ny
 				b["touch"] = int((hit as Array)[5])
-	# THE TABLE'S TOP HOLDS, WHATEVER ELSE PUSHES: the mean of a let-go body's contacts puts right only their mean depth, and
-	# one wedged in another (841899's stopper, fallen sideways into its jar) had been pushed through the jar's floor and 1.3 mm
-	# into the table, and the jar 2.2 mm into it after
+	# The table's top holds, whatever else pushes: the mean of a let-go body's contacts puts right only their mean depth, and a body
+	# wedged in another would be pushed through the other's floor and into the table
 	if not held:
 		var d := _motion(b)
 		var under := 0.0
@@ -972,9 +940,8 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 			under = maxf(under, _top - (d * q).y)
 		if under > 0.0:
 			b["c"] = (b["c"] as Vector3) + Vector3.UP * under
-		# ...AND SO DOES A STILL WALL IT CAME INTO: what the mean left past the face a point came in by is put out along it,
-		# the deepest first (841899: the ladle let go leaning in its pot, its weight on its bowl's edge, worked a point a little
-		# deeper each step into the 3 mm copper floor until it came out under it)
+		# ...and so does a still wall it came into: what the mean left past the face a point came in by is put out along it, the deepest
+		# first
 		var faces: Dictionary = b["faces"]
 		for _k in 3:
 			d = _motion(b)
@@ -987,8 +954,8 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 				if j >= pts.size() or si >= _solids.size():
 					faces.erase(key)
 					continue
-				# ...only while it is in that wall still: a face is a plane, and one kept past its point's going out would push
-				# the body anywhere
+				# ...only while it is in that wall still: a face is a plane, and one kept past its point's going out would push the body
+				# anywhere
 				var p := d * pts[j]
 				var sd: Dictionary = _solids[si]
 				var deep := float(face[1]) - p.dot(face[0] as Vector3)
@@ -1002,23 +969,19 @@ func _contacts(b: Dictionary, prev: Transform3D, near_d: Dictionary, held: bool,
 			if way == Vector3.ZERO:
 				break
 			b["c"] = (b["c"] as Vector3) + way * (most - SLACK)
-	# HOW CLEAR IT WAS of everything, less the gaps between its points - meeting nothing, it need not be looked at again
-	# until it has gone that far ([method _go]). EVERYTHING: what it was not looked at against is as near as their boxes
-	# (`far`). (841899 played live: the ladle, carried high over the bench, was clear of the table's top by 18.5 cm and of
-	# nothing else it had been looked at against - so it was not looked at again until it had gone 18.5 cm, and let go
-	# standing in its pot it fell through the pot's floor and the brazier to the table.)
+	# How clear it was of everything, less the gaps between its points - meeting nothing, it need not be looked at again until it has
+	# gone that far ([method _go]). Everything: what it was not looked at against is as near as their boxes (`far`).
 	nearest = minf(nearest, float(near_d.get("far", INF)))
 	b["clear"] = 0.0 if met else maxf(nearest - float(b["gap"]) - SLACK, 0.0)
 	b["clear_from"] = _motion(b)
 
 
-## THE DEEPEST BODY [param b] (posed [param d]) IS IN SOLID [param si], found from its own point [param q0] (as built): down the
-## solid's distance along its own surface, a step at a time, each step put back onto its surface by its nearest solid's field -
-## the least of the solid's field over its surface near there (Macklin, Erleben, Muller, Chentanez, Jeschke and Corse, "Local
-## Optimization for Robust Signed Distance Field Collision", 2020: a contact is the deepest point of one surface in the other,
-## found by searching the surface, never one of a fixed set of samples). `[where on its surface (the table's space), how deep less
-## the slack, the solid's way out there]` - or empty, past [constant REFINE_DEEP] (a deep contact is the points', which know which
-## face of a thin wall it came in by).
+## The deepest body [param b] (posed [param d]) is in solid [param si], found from its own point [param q0] (as built): down the solid's
+## distance along its own surface, a step at a time, each step put back onto its surface by its nearest solid's field - the least of the
+## solid's field over its surface near there (Macklin, Erleben, Muller, Chentanez, Jeschke and Corse, "Local Optimization for Robust
+## Signed Distance Field Collision", 2020: a contact is the deepest point of one surface in the other, found by searching the surface,
+## never one of a fixed set of samples). `[where on its surface (the table's space), how deep less the slack, the solid's way out there]`
+## - or empty, past [constant REFINE_DEEP] (a deep contact is the points', which know which face of a thin wall it came in by).
 func _refined(b: Dictionary, d: Transform3D, si: int, q0: Vector3) -> Array:
 	var sd: Dictionary = _solids[si]
 	var inv: Transform3D = sd["inv"]
@@ -1088,10 +1051,9 @@ const REFINE_MOST := 4
 const REFINE_APART := 0.02
 
 
-## Body [param b] (posed [param d], a piece before at [param prev]) refined into solid [param si] from its point [param q0]
-## ([method _refined]): a contact added to [param hits] where it is in it - but never one whose way out has turned since a piece
-## before, in a still wall: past a thin wall's middle its way out is through its far side, which the points' faces know and this
-## does not.
+## Body [param b] (posed [param d], a piece before at [param prev]) refined into solid [param si] from its point [param q0] ([method
+## _refined]): a contact added to [param hits] where it is in it - but never one whose way out has turned since a piece before, in a still
+## wall: past a thin wall's middle its way out is through its far side, which the points' faces know and this does not.
 func _refine_hit(b: Dictionary, d: Transform3D, prev: Transform3D, si: int, q0: Vector3, hits: Array, mu: Vector2) -> void:
 	var got := _refined(b, d, si, q0)
 	if got.is_empty() or float(got[1]) <= 0.0:
@@ -1114,13 +1076,12 @@ static func _outside(box: AABB, p: Vector3) -> float:
 	return q.length()
 
 
-## Body [param b] kept out by contacts [param hits] (`[point, way out, how deep, what met it moved, friction, solid, its own
-## point as built or the solid's point, -1 or the body's solid it is in]`): each a positional correction by its generalized
-## inverse mass there - firm in a hand when [param held] - its slide since [param prev] held by friction, static or kinetic;
-## LET GO, THEIR MEAN applied, each reckoned against the same pose (one after another, each turned the body against the last,
-## and a body at rest trembled awake); HELD, each ALONE, deepest first, measured again where the body is now - a hand drives
-## what it holds into what is in the way, and the mean puts right only the mean depth: a rod tilted against a block, its
-## corners 1 and 5 mm in, had stood 2.5 mm in it.
+## Body [param b] kept out by contacts [param hits] (`[point, way out, how deep, what met it moved, friction, solid, its own point as
+## built or the solid's point, -1 or the body's solid it is in]`): each a positional correction by its generalized inverse mass there -
+## firm in a hand when [param held] - its slide since [param prev] held by friction, static or kinetic. Let go, their mean is applied,
+## each reckoned against the same pose (one after another, each would turn the body against the last, and a body at rest would tremble
+## awake); held, each alone, deepest first, measured again where the body is now - a hand drives what it holds into what is in the way,
+## and the mean puts right only the mean depth.
 func _resolve(b: Dictionary, hits: Array, prev: Transform3D, held: bool) -> void:
 	b["hits"] = hits
 	if held:
@@ -1167,10 +1128,9 @@ func _resolve(b: Dictionary, hits: Array, prev: Transform3D, held: bool) -> void
 	var q: Quaternion = b["q"]
 	var dq := Quaternion(spin.x, spin.y, spin.z, 0.0) * q
 	b["q"] = Quaternion(q.x + 0.5 * dq.x, q.y + 0.5 * dq.y, q.z + 0.5 * dq.z, q.w + 0.5 * dq.w).normalized()
-	# ...AND THE DEEPEST LEFT IN A SOLID, PUT OUT: the mean puts right only the mean depth, and of a ladle's four contacts leaning in
-	# its pot the deepest had stayed 1.3 mm in the copper as drawn - measured again where the body is now and, still past twice the
-	# slack, the body moved straight out along it, never turned (turned about one contact at a time, a jar at rest on the table
-	# trembled and kept its filings awake); the table's top is held by its own pass ([method _contacts])
+	# ...and the deepest left in a solid, put out: the mean puts right only the mean depth, so the deepest contact is measured again where
+	# the body is now and, still past twice the slack, the body is moved straight out along it, never turned (turned about one contact at a
+	# time, a jar at rest would tremble); the table's top is held by its own pass ([method _contacts])
 	if hits.size() > 1:
 		var worst: Array = []
 		var most := SLACK
@@ -1191,8 +1151,8 @@ func _depth_now(b: Dictionary, h: Array) -> Array:
 	var si := int(h[5])
 	var k := int(h[7])
 	var d := _motion(b)
-	# ...AGAINST THE FACE IT CAME IN BY, where it kept one ([method _contacts]): a thin wall's own way out past its middle is
-	# through its far side, and a held ladle's bowl, its contacts measured again one by one, was driven through a 3 mm floor
+	# ...against the face it came in by, where it kept one ([method _contacts]): a thin wall's own way out past its middle is through its
+	# far side
 	if h.size() > 8:
 		var face: Array = h[8]
 		var n: Vector3 = face[0]
@@ -1244,7 +1204,7 @@ static func _mu_with(mu: Vector2, sd: Dictionary) -> Vector2:
 func _place_solids(b: Dictionary, was: Transform3D, now: Transform3D, dt: float) -> void:
 	var own: PackedInt32Array = b["solids"]
 	var rests: Array = b["rests"]
-	# STILL, AND STILL A FRAME AGO: nothing of it to put anywhere
+	# Still, and still a frame ago: nothing of it to put anywhere
 	if not bool(b["moved"]) and not bool(b.get("was_moved", true)):
 		return
 	b["was_moved"] = b["moved"]
@@ -1255,16 +1215,16 @@ func _place_solids(b: Dictionary, was: Transform3D, now: Transform3D, dt: float)
 		sd["xf0"] = sd["xf"]
 		sd["xf"] = xf
 		sd["moving"] = not xf.is_equal_approx(sd["xf0"])
-		# ...and whether it moves enough to wake what sleeps by it: held, or going somewhere ([constant STIRS]) - and whether it
-		# presses what it meets hard enough to break it: only as a hand drives it ([member Particles._np])
+		# ...and whether it moves enough to wake what sleeps by it: held, or going somewhere ([constant STIRS]) - and whether it presses
+		# what it meets hard enough to break it: only as a hand drives it ([member Particles._np])
 		sd["stirs"] = bool(sd["moving"]) and (b["held"] != null or float(b.get("stir", 0.0)) >= STIRS)
 		sd["presses"] = b["held"] != null
 		sd["dt"] = dt
 		if bool(sd["moving"]) or not (sd["xf0"] as Transform3D).is_equal_approx(sd["xf00"]):
 			sd["inv"] = xf.affine_inverse()
 			sd["wbox"] = (xf * (sd["box"] as AABB)).grow(0.001)
-			# ...HELD, IT JOLTS NOTHING: a hand carries smoothly, and the pushes of what it met as it was taken up are no jolt to
-			# what is in it (a jar's lumps had been woken as it was lifted, and left behind in the air)
+			# ...held, it jolts nothing: a hand carries smoothly, and the pushes of what it met as it was taken up are no jolt to what is
+			# in it
 			sd["jolt"] = 0.0 if b["held"] != null else Particles.jolt_of((xf.origin - 2.0 * (sd["xf0"] as Transform3D).origin + (sd["xf00"] as Transform3D).origin) / (dt * dt))
 		else:
 			sd["jolt"] = 0.0
@@ -1272,9 +1232,8 @@ func _place_solids(b: Dictionary, was: Transform3D, now: Transform3D, dt: float)
 
 # --- kept -------------------------------------------------------------------------------------------------
 
-## Every body as it stands, for a bake begun again from here ([method restore]) - ALL OF IT a frame reads: how far each went
-## last frame (`stir`) wakes what lies loose round it, and a bake begun again with it gone woke none (841899's jar of snow,
-## taken up in the middle of its carry, spilled its grains 30 cm from where a bake from the start put them).
+## Every body as it stands, for a bake begun again from here ([method restore]) - all of what a frame reads: how far each went last frame
+## (`stir`) wakes what lies loose round it, and a bake begun again with it gone would wake none.
 func snapshot() -> Array:
 	var out: Array = []
 	for b in bodies:

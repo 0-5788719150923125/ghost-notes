@@ -6,47 +6,32 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/timeline/storyboard_editor_check.gd 300
 ##
-## THE FIELDS' TABLES AGREE WITH THE REGISTRIES THEY DESCRIBE. [Storyboard] writes its choices out
-## (it names no autoload, so it loads under `--script`); here, with everything loaded, each list is
-## held to its owner - motions to GhostScene.BEHAVIORS, shots to Shots.REGISTRY, kinds to
-## Cast.REGISTRY, verbs to Actions.REGISTRY, eases and cues to what Track and the Director make of
-## each name - and every kind and verb with a table of its own is one the registry has. The
-## control for the name checks: a name nothing knows is told apart from one something does.
-##
-## THE SEEDED SHOW IS A STORYBOARD NOBODY WROTE DOWN. `Director.forecast` says, before a frame is
-## played, which scenes this session's seed will play, with what motion and from what seed; the
-## Director is then cut through that many scenes for real, and the two lists are the same - asking
-## in between changes nothing. The control: another seed's forecast is a different list.
-##
-## WRITTEN DOWN, IT IS THE SAME SHOW. "Start from the seeded show" makes those entries the note's
-## own, the Director takes them, and what is on screen is the scene the seed opened on, built from
-## the same seed.
-##
-## THE EDITOR EDITS A TREE, AND THE SHOW FOLLOWS. An entry picked is on screen; an entry added,
-## an actor, a span, a rename (its spans follow), a retiming, a hold dragged longer, an entry moved -
-## each is a new tree, the one before it left exactly as it was (held to a copy), and each is one
-## step back. The source view takes a storyboard back as YAML, and refuses text that does not
-## make one, leaving the tree as it was (the control). With everything deleted the seed chooses
-## again.
-##
-## THE NOTE KEEPS IT: the tree reaches the note's `scenes:` block through the autosave every card
-## uses, and the note left and opened again shows and walks the same storyboard. A note that NAMES
-## a file plays it as it is and cannot change it here, until it is taken into the note.
-##
-## A VOICE WALKS ONE TOO: a note with a voice, a Medium and a storyboard hands the same plan to
-## main as a song's does - the pairing is no panel's feature.
-##
-## THE ROWS ARE THE TABLES ([SchemaForm]): a row per field, a choice picked or a line typed raises
-## one edit with the value read (a range typed `0.3..0.4` is a range), ↺ unsets, text that cannot
-## be read is put back and raises nothing, and a form that may not change raises nothing at all.
-## In the editor, a row moved in the inspector lands in the tree at the entry it was built for -
-## and a line still being typed when another entry is picked is committed to the entry it was
-## typed in, the inspector rebuilt once. The control, measured by taking the editor's guard out:
-## the second set of rows is built in the middle of the rebuild that was freeing the first, the
-## tree refuses it, and 102 nodes are left outside the tree - so the check counts orphans.
-##
-## THE DOCK TAKES ITS ROOM AND GIVES IT BACK: open, the frame is fitted above it; closed, and when
-## the note is left, the claims are gone.
+## Holds:
+## - the fields' tables agree with the registries they describe: motions to GhostScene.behaviors, shots
+##   to Shots.registry, kinds to Cast.registry, verbs to Actions.registry, eases and cues to what Track
+##   and the Director make of each name; every kind and verb with a table of its own is one the registry
+##   has (control: a name nothing knows is told apart from one something does);
+## - `Director.forecast` names the scenes, motions and seeds the seeded show will play, and the Director
+##   cut through that many scenes plays the same list; asking in between changes nothing (control:
+##   another seed's forecast differs). "Start from the seeded show" writes those entries into the note
+##   and the scene on screen is the one the seed opened on;
+## - the editor edits a tree and the show follows: an entry added, an actor, a span, a rename (its spans
+##   follow), a retiming, a hold dragged longer, an entry moved - each is a new tree, the one before it
+##   left as it was (held to a copy), and one step back. The source view takes YAML back and refuses text
+##   that makes no storyboard (control). With everything deleted the seed chooses again;
+## - the note keeps it: the tree reaches the note's `scenes:` block through the autosave, and the note
+##   left and opened again walks the same storyboard. A note that names a file plays it and cannot change
+##   it here until it is taken into the note;
+## - a note with a voice, a Medium and a storyboard hands main the same plan as a song's;
+## - the rows are the tables ([SchemaForm]): a choice picked or a line typed raises one edit with the
+##   value read (`0.3..0.4` is a range), the unset button unsets, unreadable text is put back and raises
+##   nothing, a form that may not change raises nothing. A row moved in the inspector lands at the entry
+##   it was built for, and a line still being typed when another entry is picked is committed to the
+##   entry it was typed in, the inspector rebuilt once. Control: with the editor's guard out, the second
+##   set of rows is built in the middle of the rebuild that was freeing the first and orphans are left,
+##   so the check counts orphans;
+## - the dock takes its room and gives it back: open, the frame is fitted above it; closed, and when the
+##   note is left, the claims are gone.
 
 const ROOT := "user://storyboard_editor_check"
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
@@ -324,7 +309,7 @@ func _write_and_edit(song: String) -> void:
 	await _wait(0.6)
 	_ok(int(Director.cursor()["entry"]) == 3 and Director._current.scene_name == "stage",
 		"the show is on the entry being worked on (entry %s, %s)" % [Director.cursor()["entry"], Director._current.scene_name])
-	# A CLICK ON THE STAGE PICKS WHAT IS THERE (next/editing.md step 7): at the actor drawn, the actor in the inspector - THE CONTROLS
+	# A click on the stage picks what is there (next/editing.md step 7): at the actor drawn, the actor in the inspector. Controls:
 	# a click on empty frame and one off it, which pick nothing
 	var st: GhostScene = Director._current
 	var who: Cast.Actor = st.call("actors")[0] if st.has_method("actors") and not (st.call("actors") as Array).is_empty() else null
@@ -343,7 +328,7 @@ func _write_and_edit(song: String) -> void:
 	_ok(who != null and fr.has_point(at_window) and String(Director.pick(at_window).get("actor", "")) == who.id and ed._sub == "actor"
 		and ed._cast_ids(ed.selected())[ed._sub_i] == who.id,
 		"a click on the stage at an actor picks it, and the inspector shows it (%s at %s)" % [who.id if who != null else "none", at_window])
-	# THE LOOK TURNED BY A PART OF THE SHOW (StageKeys' `look`): laid over the Look as set, and let go - THE CONTROL the Look as set
+	# The Look turned by a part of the show (StageKeys' `look`): laid over the Look as set, and let go. Control: the Look as set
 	Director.turn_look("gate", {"slip": 0.8})
 	var turned := Director.resolved_filters()
 	var as_set := Director.resolved_filters(false)
@@ -398,7 +383,7 @@ func _write_and_edit(song: String) -> void:
 			return c is Label and not c.is_queued_for_deletion() and (c as Label).text.begins_with("Entry "))
 		_ok(headings.size() == 1 and ed.selected() == 4, "...and the inspector is built once, for the entry picked (%d headings, %d forms)" % [headings.size(), forms.size()])
 		# the control's measure: built in the middle of the rebuild that was freeing it, the second
-		# set of rows is refused by the tree and left outside it (measured: 2 forms' worth of orphans)
+		# set of rows is refused by the tree and left outside it
 		var after := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 		_ok(after <= orphans, "...with no row built and left outside the tree (%d orphan nodes, %d before)" % [after, orphans])
 

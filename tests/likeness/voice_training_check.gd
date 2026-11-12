@@ -1,27 +1,24 @@
 extends SceneTree
 
-## voice_training_check - the Voice training card (next/likeness.md, "A voice alone"): a person whose voice is all
-## that is learned of them, from their own recordings, and the note reading in it (the user, 2026-10-26: "a new
-## component/card ... to fine-tune a new voice for that component ... importing a video from file, or by pointing to
-## a YouTube URL or playlist URL").
+## voice_training_check - the Voice training card (next/likeness.md, "A voice alone"): a person whose voice is all that is
+## learned of them, from their own recordings, and the note reading in it.
 ##
 ##   godot --headless --path . --script tests/likeness/voice_training_check.gd
 ##
-## A VOICE ALONE IS LISTED APART: the card offers the voices alone and the Actor card the actors (THE CONTROL: each
-## is the other's - the actor on the Actor card, the voice on this one).
-## ITS FOLDERS' SOUND FILES ARE ITS RECORDINGS: a folder of a video, a sound file and a text file gives a voice alone
-## two rows (THE CONTROL: the same folder gives an actor one, the video). A FILE PICKED BY ITSELF is a row; picked
-## again, or already in a folder of theirs, it is none.
-## A LINK IS FETCHED AS ITS SOUND: no picture and no captions, kept in the archive (THE CONTROL: an actor's fetch
-## takes the picture and the captions), and the sound file it leaves is what was fetched (a `.part` is not).
-## GENERATE MAKES THEIR VOICE AND NOTHING ELSE: each recording's probe and Hear, Kokoro's Utterances and Voice, in that
-## order - and a run that asks for every step makes no more of a voice alone (THE CONTROL: on an actor it makes
-## the survey, and its voice is Piper's, never Kokoro's). The steps are made by the gate ([member
-## ActorBuilder.make_with]): no program runs. Their voice's id is Kokoro's ("kokoro-<id>", an actor's "actor-<id>").
-## THE NOTE READS IN IT: Read in it waits for the voice, then hands the reading its id; a voice landing does the
-## same (THE CONTROL: before either, the reading has no voice made to read in).
-## NOTHING OUTSIDE THE TEST ROOT: the actors in a library moved aside ([method Actors.use_for_test]), and no actor
-## added to the author's library (its folders are only listed: the author's build may be writing inside one).
+## A voice alone is listed apart: the card offers the voices alone and the Actor card the actors (control: each is the other's).
+## Its folders' sound files are its recordings: a folder of a video, a sound file and a text file gives a voice alone two rows
+## (control: the same folder gives an actor one, the video). A file picked by itself is a row; picked again, or already in a
+## folder of theirs, it is none.
+## A link is fetched as its sound: no picture and no captions, kept in the archive (control: an actor's fetch takes the picture
+## and the captions), and the sound file it leaves is what was fetched (a `.part` is not).
+## Generate makes their voice and nothing else: each recording's probe and Hear, Kokoro's Utterances and Voice, in that order -
+## and a run that asks for every step makes no more of a voice alone (control: on an actor it makes the survey, and its voice is
+## Piper's, never Kokoro's). The steps are made by the gate ([member ActorBuilder.make_with]): no program runs. Their voice's id
+## is Kokoro's ("kokoro-<id>", an actor's "actor-<id>").
+## The note reads in it: Read in it waits for the voice, then hands the reading its id; a voice landing does the same (control:
+## before either, the reading has no voice made to read in).
+## Nothing outside the test root: the actors in a library moved aside ([method Actors.use_for_test]), and no actor added to the
+## author's library (its folders are only listed).
 
 const ROOT := "user://voice_training_check"
 
@@ -36,7 +33,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	# A GATE NEVER WRITES THE SETTINGS OF WHOEVER RUNS IT, and starts no agent
+	# a gate never writes the settings of whoever runs it, and starts no agent
 	var settings := root.get_node_or_null("Settings")
 	if settings != null:
 		settings.set("_read_only", true)
@@ -117,7 +114,7 @@ func _check() -> void:
 	actor_card.apply({"id": actor.id})
 	_ok(card._picked.has(voice.id) and not card._picked.has(actor.id) and card._voice != null and card._voice.id == voice.id,
 		"the card offers the voices alone, and opens the note's")
-	# THE VOICE'S STEPS ARE A SECTION OF THE NOTE'S PIPELINE CARD (next/pipeline.md), and an actor's are all of its own
+	# The voice's steps are a section of the note's pipeline card (next/pipeline.md), and an actor's are all of its own
 	var voice_rows: PipelineSection = card.pipeline()
 	_ok(voice_rows.title == "Voice training" and voice_rows.shown() and not voice_rows.make_tip().is_empty()
 		and (card._steps._steps as Array) == ActorSteps.voice_chain() and (actor_card._steps._steps as Array) == ActorSteps.ORDER

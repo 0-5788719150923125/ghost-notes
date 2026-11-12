@@ -1,45 +1,26 @@
 extends Node
 
-## Gate for the SPREAD of clockwork's wheels and their wear - that the scene can build more
-## than one kind of gear and corrode it more than one way.
+## Gate for the spread of clockwork's wheels and their wear: the scene can build more than one kind of
+## gear and corrode it more than one way.
 ##
 ##   tests/run_boot_probe.sh tests/scenes/clockwork_variety_check.gd 180
 ##
-## No GPU: every quantity here is sampled on the CPU into the gear dictionaries, so the
-## question is what the RANGES are, not what the pixels look like.
+## No GPU: every quantity is sampled on the CPU into the gear dictionaries, so it checks the ranges
+## of arm count, arm length and width, and of wear hue, saturation, value and mark shape.
 ##
-## WHAT WENT WRONG, and it was not a narrow range in either case - it was a constant.
-##
-##   THE ARMS. A spoke was a `draw_line` from the hub to very nearly the tooth root at a width
-##   of 0.014 of the wheel's radius. Not sampled: written. So every spoked wheel in every
-##   machine wore the same long thin arms, and the only thing that varied was how many. The
-##   count could not reach two either. Reported as "the gears always have a very similar kind
-##   of look: long spokes, with many of them... we could also allow for gears with fewer,
-##   shorter, and wider spokes - and I just think our current implementation doesn't allow for
-##   that", which was exactly right.
-##
-##   THE WEAR. The mark color was `Color.from_hsv(0.05 + hue * 0.1, 0.6, 0.30)`: a hue pinned
-##   to the orange-brown eighth of the wheel, and a saturation and value that were literal
-##   constants across every mark, every wheel and every machine. One shape too - a soft round
-##   blob. Reported as "rust is always brown, and blotchy; it always looks exactly the same".
-##
-## THE CONTROL IS THE RETIRED ARITHMETIC, evaluated here over the same machines. Both old
-## formulas are three lines, they cannot drift, and they have to FAIL the spread checks below
-## or those checks are not measuring anything. A range test with no control passes on any
-## implementation that happens to be noisy.
+## The control is the retired arithmetic (spokes written as fixed-width hub-to-root lines; wear color
+## `Color.from_hsv(0.05 + hue * 0.1, 0.6, 0.30)` with a round blob), evaluated over the same machines.
+## It must fail the spread checks below, or they measure nothing.
 
 const MACHINES := 60
-## A quantity is not "varied" if its extremes are this close together. Ratio rather than
-## difference so it reads the same whatever the units.
+## A quantity is not "varied" if its extremes are this close together (a ratio, so units do not matter).
 const MIN_SPREAD := 2.0
-## Wear hue has to cover more than one family of color - brown AND green AND near-neutral.
-## In turns of the wheel: the retired formula spanned 0.075 of it.
+## Wear hue must cover more than one family of color, in turns of the wheel (the retired formula spanned 0.075).
 const MIN_HUE_SPAN := 0.25
 ## Arms this few, and this many, both have to be reachable.
 const FEW_ARMS := 2
 const MANY_ARMS := 8
-## A wheel whose arms run less than this fraction of its radius is a SHORT-armed one, and at
-## least one machine in the sample has to cast some.
+## A wheel whose arms run less than this fraction of its radius is short-armed; at least one machine must cast some.
 const SHORT_ARM := 0.25
 
 var _fails: Array = []
@@ -71,7 +52,7 @@ func _run() -> void:
 	var w_h: Array = []
 	var w_s: Array = []
 	var w_v: Array = []
-	# THE CONTROL: what the retired rules would have produced on these same machines.
+	# the control: what the retired rules produce on these machines
 	var old_w: Array = []
 	var old_h: Array = []
 	var old_s: Array = []
@@ -100,7 +81,7 @@ func _run() -> void:
 				w_h.append(float(spd["h"]))
 				w_s.append(float(spd["s"]))
 				w_v.append(float(spd["v"]))
-				# the retired color: hue keyed to the metal, saturation and value fixed
+	# the retired color: hue keyed to the metal, saturation and value fixed
 				old_h.append(fposmod(0.05 + float(sc._hue) * 0.1, 1.0))
 				old_s.append(0.6)
 				old_v.append(0.30)
@@ -141,7 +122,7 @@ func _run() -> void:
 	_ok(vs[1] / maxf(vs[0], 1e-6) >= MIN_SPREAD, "wear value barely varies (%.2f to %.2f)" % [vs[0], vs[1]])
 	_ok(marks.size() >= 3, "only %d wear shape(s) ever appeared - %s" % [marks.size(), marks])
 
-	# --- THE CONTROL: the retired rules have to fail the very same tests ---
+	# --- the control: the retired rules must fail the same tests ---
 	var os_ := _span(old_s)
 	var ov := _span(old_v)
 	_ok(ow[1] / maxf(ow[0], 1e-6) < MIN_SPREAD,

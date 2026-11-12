@@ -5,26 +5,24 @@ class_name SplatHead
 ## splats", "The whole of them"): the avatar hosts/avatar/train.py learned, read from its `.json` and `.bin`
 ## (its room is the `.plate.png` beside them, which the medium draws behind it).
 ##
-## THE FACE AND BODY ARE POSED HERE, the splats on the graphics card: [method pose_face] moves the rig's
-## neutral face (by MediaPipe's 52 scores: [method face_of]), turns and places it as the head stands and carries
-## it on the torso; [method pose_bones] places the body's bones; each writes its binding frames - each
-## triangle's centre, axes and unit, the head's own, then each bone's - to a small float texture, which
-## [method upload] hands the shader ([code]splat_head.gdshader[/code]), and it places each splat from them. A
-## bone not seen is flagged in its frame and its splats are drawn clear, as they were learned.
+## The face and body are posed here, the splats on the graphics card: [method pose_face] moves the rig's neutral face (by
+## MediaPipe's 52 scores: [method face_of]), turns and places it as the head stands and carries it on the torso; [method
+## pose_bones] places the body's bones; each writes its binding frames - each triangle's centre, axes and unit, the head's
+## own, then each bone's - to a small float texture, which [method upload] hands the shader ([code]splat_head.gdshader[/code]),
+## and it places each splat from them. A bone not seen is flagged in its frame and its splats are drawn clear.
 ##
-## A SPLAT CHANGES WITH THE EXPRESSION (GaussianBlendshapes; hosts/avatar/train.py): its place and colour shift
-## by each of the expression's components - each part of the face's own (the eyes', the brows', the mouth's:
-## hosts/avatar/parts.py), the principal components of its scores over the frames it was learned from ([method
-## expr_of]) - each shift written as far as its part reaches the splat's triangle; [method set_expr] hands the
-## shader the expression a frame shows.
+## A splat changes with the expression (GaussianBlendshapes; hosts/avatar/train.py): its place and colour shift by each of
+## the expression's components - each part of the face's own (eyes, brows, mouth: hosts/avatar/parts.py), the principal
+## components of its scores over the frames it was learned from ([method expr_of]) - each shift written as far as its part
+## reaches the splat's triangle; [method set_expr] hands the shader the expression a frame shows.
 ##
-## THE BODY BENDS (hosts/avatar/train.py's `second_of`): a body splat may take a second bone's move, or the still's
-## own, in a share; [method pose_bones] hands the shader every bone's move, which it blends by. A head splat takes
-## none: the beard and the neck ride the head, as they were learned.
+## The body bends (hosts/avatar/train.py's `second_of`): a body splat may take a second bone's move, or the still's own, in a
+## share; [method pose_bones] hands the shader every bone's move, which it blends by. A head splat takes none: the beard
+## and the neck ride the head.
 ##
-## DRAWN IN ORDER, NEVER SORTED: the camera is far and fixed and the head turns a little, so the order the
-## export wrote them in - back to front as the neutral face stands straight on - stays right, and the canvas's
-## own blending composites them as the trainer did.
+## Drawn in order, never sorted: the camera is far and fixed and the head turns a little, so the order the export wrote
+## them in (back to front as the neutral face stands straight on) stays right, and the canvas's own blending composites
+## them as the trainer did.
 ##
 ## Its own pixels are the crop's at full resolution: the node stands where the crop's corner is on the still.
 
@@ -91,11 +89,10 @@ func load_avatar(base: String) -> String:
 	return ""
 
 
-## THE AVATAR FROM [param arr] (the arrays `.bin` holds, by name) and [param h] (`.json`'s counts, crop, size,
-## head unit and the data texture's shape) - what [method load_avatar] reads, or a gate makes. The splats come
-## as the shader's own data texture (`texels`, the trainer's export), or as their numbers one array each
-## (`place`, `log_scale`, `turn`, `colour` - not its logit - `cover`, `bind`, and `place_d`, `colour_d`
-## [N * K * 3] with `expressions` K), which are laid out here alike.
+## The avatar from [param arr] (the arrays `.bin` holds, by name) and [param h] (`.json`'s counts, crop, size, head unit and
+## the data texture's shape) - what [method load_avatar] reads, or a gate makes. The splats come as the shader's own data
+## texture (`texels`, the trainer's export), or as their numbers one array each (`place`, `log_scale`, `turn`, `colour` - not
+## its logit - `cover`, `bind`, and `place_d`, `colour_d` [N * K * 3] with `expressions` K), which are laid out here alike.
 func take(h: Dictionary, arr: Dictionary) -> void:
 	splats = int(h["splats"])
 	verts = int(h["verts"])
@@ -151,8 +148,8 @@ func _texels(arr: Dictionary, per: int, width: int) -> PackedFloat32Array:
 	return data
 
 
-## THE EXPRESSION OF [param blend] (MediaPipe's 52 scores): its components as the splats were learned with -
-## the scores less their mean, onto each component, over its spread.
+## The expression of [param blend] (MediaPipe's 52 scores): its components as the splats were learned with - the scores less
+## their mean, onto each component, over its spread.
 func expr_of(blend: PackedFloat32Array) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(expressions)
@@ -223,16 +220,15 @@ func _build(texels: PackedFloat32Array, width: int, per: int) -> void:
 	add_child(_mm)
 
 
-## THE HEAD AT A MOMENT: the neutral face moved by [param blend] (MediaPipe's 52 scores), then [param scale],
-## [param rot] (the neutral face's axes into the crop's) and [param shift] (the crop's pixels) - the rig's own
-## pose, as frames.py's points stand - and handed to the shader.
+## The head at a moment: the neutral face moved by [param blend] (MediaPipe's 52 scores), then [param scale], [param rot]
+## (the neutral face's axes into the crop's) and [param shift] (the crop's pixels), and handed to the shader.
 func pose(blend: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3) -> void:
 	pose_face(face_of(blend), scale, rot, shift)
 	upload()
 
 
-## THE FACE OF [param blend], unposed: the neutral face moved by the scores (the rig is linear in them, so a
-## player mixes faces made once - a sound's, a blink's - rather than 52 scores every frame).
+## The face of [param blend], unposed: the neutral face moved by the scores (the rig is linear in them, so a player mixes
+## faces made once - a sound's, a blink's - rather than 52 scores every frame).
 func face_of(blend: PackedFloat32Array) -> PackedFloat32Array:
 	var n := verts * 3
 	var v := canon.duplicate()
@@ -246,9 +242,9 @@ func face_of(blend: PackedFloat32Array) -> PackedFloat32Array:
 	return v
 
 
-## THE FACE [param v] (already moved: [method face_of]) at [param scale], [param rot] and [param shift], then
-## carried by [param torso] (a 2D transform of the picture: the body's posture, which the head rides on) - its
-## triangles' frames and the head's written, for [method upload].
+## The face [param v] (already moved: [method face_of]) at [param scale], [param rot] and [param shift], then carried by
+## [param torso] (a 2D transform of the picture: the body's posture, which the head rides on) - its triangles' frames and
+## the head's written, for [method upload].
 func pose_face(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3,
 		torso := Transform2D.IDENTITY) -> void:
 	if splats == 0:
@@ -275,9 +271,9 @@ func pose_face(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3,
 		_turned(torso, rot.z))
 
 
-## THE BODY'S BONES: each [param origins][b], its axes [param axes][b] (as columns) and its unit [param units][b]
-## as the still holds it, moved by [param moves][b] (a 2D transform of the picture: its share of the plan's
-## posture, breath, lifts and resting hands); a bone [param shown][b] false has its splats drawn clear.
+## The body's bones: each [param origins][b], its axes [param axes][b] (as columns) and its unit [param units][b] as the
+## still holds it, moved by [param moves][b] (a 2D transform of the picture: its share of the plan's posture, breath, lifts
+## and resting hands); a bone [param shown][b] false has its splats drawn clear.
 func pose_bones(origins: PackedVector3Array, axes: Array, units: PackedFloat32Array, moves: Array,
 		shown: PackedByteArray) -> void:
 	var first := tris.size() / 3 + 1

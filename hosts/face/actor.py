@@ -25,17 +25,15 @@ nothing else: no step knows about another except through what it wrote.
     library     each sound class's prototype mouths and their eyes half and fully closed, from any
                 video at the still's turn, unwrapped into the box
 
-THE SECOND BUILD (next/likeness.md, 2026-10-21, night): a Likeness is one still and a model of the person
-- their motion, their blinks, their mouths - so nothing here follows a set frame by frame; a step that
-needs a frame at full size seeks it ([frame_at]) and looks at it as a picture of its own.
+Nothing here follows a set frame by frame: a Likeness is one still and a model of the person (their motion,
+blinks and mouths). A step that needs a frame at full size seeks it ([frame_at]) and looks at it as a picture of
+its own.
 
-EVERY STEP WRITES A TEMPORARY NAME AND RENAMES IT INTO PLACE: a reader never opens half a file.
-Progress, where a step reports it, is a share in [0, 1] written to `--progress` as face_track.py
-writes it.
+Every step writes a temporary name and renames it into place, so a reader never opens half a file. Progress,
+where a step reports it, is a share in [0, 1] written to `--progress` as face_track.py writes it.
 
-DECODING IS FFMPEG'S, piped as raw RGB (`--ffmpeg`, ghost's own). The survey decodes only the
-frames other frames refer to (`-skip_frame noref`, measured 2026-10-21: 28.9 s of CPU for a minute
-of their 1080p60 down to 8.1 s) since it samples every 0.2 s.
+Decoding is ffmpeg's (`--ffmpeg`, ghost's own), piped as raw RGB. The survey samples every 0.2 s and decodes only
+the frames other frames refer to (`-skip_frame noref`), several times faster than decoding all.
 
 THE SURVEY'S FORMAT (survey.bin), little-endian like face_track.py's GFT1:
 
@@ -93,7 +91,7 @@ BLEND_NAMES = [
     "mouthShrugUpper", "mouthSmileLeft", "mouthSmileRight", "mouthStretchLeft", "mouthStretchRight",
     "mouthUpperUpLeft", "mouthUpperUpRight", "noseSneerLeft", "noseSneerRight",
 ]
-# THE MOUTH'S BLENDSHAPES: what a mouth is keyed by, and what a viseme is a target of.
+# The mouth's blendshapes: what a mouth is keyed by, and what a viseme is a target of.
 MOUTH_NAMES = [
     "jawOpen", "jawForward", "jawLeft", "jawRight", "mouthClose", "mouthFunnel", "mouthPucker",
     "mouthLeft", "mouthRight", "mouthSmileLeft", "mouthSmileRight", "mouthStretchLeft",
@@ -112,13 +110,13 @@ MASK_W, MASK_H = 32, 18
 THUMB_W, THUMB_H = 64, 36
 SURVEY_W, SURVEY_H = 640, 360
 
-# THE FACE OVAL, in order round the face (MediaPipe's FACE_OVAL connections, walked as a loop).
+# The face oval, in order round the face (MediaPipe's FACE_OVAL connections, walked as a loop).
 OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
         152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
 # THE LIPS: outer and inner rings.
 LIPS_OUTER = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185]
 LIPS_INNER = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191]
-# THE EYES' RIMS, each walked round its eye (MediaPipe's FACEMESH_RIGHT_EYE and _LEFT_EYE as loops).
+# The eyes' rims, each walked round its eye (MediaPipe's FACEMESH_RIGHT_EYE and _LEFT_EYE as loops).
 EYE_RIGHT = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7]
 EYE_LEFT = [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]
 # The brows: never moved with the lids.
@@ -401,8 +399,7 @@ class Watcher:
         if pr.pose_landmarks:
             rec["pose"] = [c for p in pr.pose_landmarks[0] for c in (p.x, p.y, p.z, p.visibility)]
         if pr.segmentation_masks:
-            # A COPY: the view is MediaPipe's own buffer, and the next frame writes over it (2026-10-22:
-            # every still kept the last frame's matte)
+            # A copy: the view is MediaPipe's own buffer, and the next frame writes over it
             rec["segmentation"] = np.array(pr.segmentation_masks[0].numpy_view(), copy=True)
         return rec
 
@@ -441,7 +438,7 @@ def cheek_light(rgb, pts, w: int, h: int):
 
 def hands_at_mouth(pose, box, margin=0.35, below=0.7) -> bool:
     """Is a hand in the lower half of the face box - grown by [margin] of its width to the sides and by
-    [below] of it downward, where a beard is (a hand at the chin, 2026-10-21, stood in a mouth kept)?"""
+    [below] of it downward, where a beard is?"""
     if pose is None or box is None:
         return False
     x0, y0, x1, y1 = box
@@ -520,8 +517,8 @@ def find_cuts(thumbs, floor=4.0, rel=2.5, alone=1.8):
 
 def exact_cut(ffmpeg: str, video: str, t0: float, t1: float, fps: float):
     """The cut between samples t0 and t1, if there is one: (time, how far one frame's jump stands over
-    the rest). A CUT IS ONE FRAME: between two frames the picture jumps, and between every other pair
-    it moves as it always does; a fast movement spreads its change over every frame."""
+    the rest). A cut is one frame: between two frames the picture jumps; a fast movement spreads its change
+    over every frame."""
     import numpy as np
     prev = None
     diffs = []
@@ -541,9 +538,8 @@ def exact_cut(ffmpeg: str, video: str, t0: float, t1: float, fps: float):
 
 
 CUT_STANDS = 2.2  # how far one frame's jump must stand over the next-largest for a cut
-# THE CAMERA MOVES when the room does: the mean change of the background (the thumbnail where the
-# person is not) between samples, over 2 s. Measured 2026-10-21 on their footage: a camera on a tripod
-# reads 0.1 to 0.3 (the sun moving, the encoder), a handheld one 1.5 to 20.
+# The camera moves when the room does: the mean change of the background (the thumbnail where the
+# person is not) between samples, over 2 s. A tripod reads 0.1 to 0.3 (sun, encoder), a handheld camera 1.5 to 20.
 MOVE_AT = 1.0
 MOVE_SMOOTH = 10
 
@@ -608,8 +604,7 @@ def cmd_shots(a) -> int:
     moving = camera_motion(tr) > MOVE_AT
     shots, dropped = [], []
     for s, e in zip(edges[:-1], edges[1:]):
-        # A SHOT IS ALSO SPLIT WHERE THE CAMERA STARTS OR STOPS MOVING: a handheld stretch, and the
-        # camera set down somewhere new after it, are not the room a tripod saw
+        # A shot is also split where the camera starts or stops moving: a handheld stretch is not the room a tripod saw
         for rs, re_, mv in split_moving(times, moving, s, e, max(a.min_shot, 6.0)):
             row = [round(rs, 4), round(re_, 4), bool(mv)]
             (shots if re_ - rs >= a.min_shot else dropped).append(row)
@@ -797,7 +792,7 @@ def cmd_sets(a) -> int:
                                             "box": profiles[i]["box"], "moving": profiles[i]["moving"]} for i in g],
                      "minutes": round(length / 60.0, 2), "usable": round(usable / 60.0, 2), "handheld": handheld,
                      "size": list(profiles[g[0]]["size"]), "videos": sorted({shots[i]["vid"] for i in g})})
-    # A STEADY SET FIRST: a handheld one's room moves under them, and its joins would show it
+    # A steady set first: a handheld one's room moves under them, and its joins would show it
     sets.sort(key=lambda s: (s["handheld"], -s["usable"]))
     # within-set and between-set distances, for the card and for tuning the threshold
     os.makedirs(a.sheets, exist_ok=True)
@@ -805,7 +800,7 @@ def cmd_sets(a) -> int:
     for k, st in enumerate(sets):
         st["sheet"] = os.path.join(a.sheets, st["id"] + ".jpg")
         st["shot_sheets"] = []
-        # THE SET'S SHEET: 16 frames across its length, each where they are
+        # The set's sheet: 16 frames across its length, each where they are
         spots = []
         total = sum(s["end"] - s["start"] for s in st["shots"])
         for q in range(16):
@@ -818,7 +813,7 @@ def cmd_sets(a) -> int:
                     break
                 at -= ln
         contact_sheet(a.ffmpeg, spots, st["sheet"])
-        # THE SHOTS' SHEETS: one frame from the middle of each shot, sixteen shots a sheet, numbered
+        # The shots' sheets: one frame from the middle of each shot, sixteen shots a sheet, numbered
         for b in range(0, len(st["shots"]), 16):
             picks = []
             for j, s in enumerate(st["shots"][b:b + 16]):
@@ -836,7 +831,7 @@ def cmd_sets(a) -> int:
 
 # --- what the surveys hold -------------------------------------------------------------------------
 
-# THE EYES' LOOK, summed: how far from straight ahead they are looking.
+# The eyes' look, summed: how far from straight ahead they are looking.
 LOOKS = [BLEND_NAMES.index(n) for n in ["eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight",
                                         "eyeLookOutLeft", "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight"]]
 BLINK = [BLEND_NAMES.index("eyeBlinkLeft"), BLEND_NAMES.index("eyeBlinkRight")]
@@ -859,10 +854,10 @@ def angles_of(matrices):
 
 
 def survey_records(videos, shots, pictures=False):
-    """EVERY SURVEY LOOK THAT FOUND A FACE inside [shots] (`[{vid, start, end, set}]`, a little in from
+    """Every survey look that found a face inside [shots] (`[{vid, start, end, set}]`, a little in from
     each cut), across [videos] (`{vid: {survey}}`): one array per field, shot by shot, and where each came
     from - `vid`, `time`, `set`, and `piece` (the shot it is in, so nothing is read across a cut). With
-    [pictures], the thumbnails and the person masks too. A video's survey is read once, and let go when
+    [pictures], the thumbnails and the person masks too. A video's survey is read once and let go when
     its shots are done."""
     import numpy as np
     keep = ["blend", "matrix", "box", "pose"] + (["thumb", "mask"] if pictures else [])
@@ -958,13 +953,12 @@ def sharpness(rgb, pts, w: int, h: int, region) -> float:
 
 # --- stills ----------------------------------------------------------------------------------------
 
-# A look's thumbnail is counted as straying from the set's usual picture where it differs by this many
-# gray levels (of 255): a globe held up, an arm out - while the sun's slow drift over the wall does not.
+# A look's thumbnail counts as straying from the set's usual picture where it differs by this many
+# gray levels (of 255): a globe held up, an arm out - not the sun's slow drift over the wall.
 STRAY = 28
 STILL_THUMB_W = 384
-# THE STILLS ON ONE SHEET, numbered from 1 (the fourth pass): what the rest step's writer is shown - the
-# hands at rest are a matter of what they look like, which the body's points cannot see (2026-10-22, his
-# footage: open palms, folded hands and a phone held all came out alike by every measure of the points).
+# The stills on one sheet, numbered from 1: what the rest step's writer is shown (what hands at rest look like
+# is a matter of the picture, which the body's points cannot see).
 SHEET = "sheet.jpg"
 SHEET_TILE_W = 480
 
@@ -989,11 +983,10 @@ def still_sheet(tiles, path: str, cols=4) -> None:
     cv2.imwrite(path, sheet, [cv2.IMWRITE_JPEG_QUALITY, 88])
 
 
-# THEIR HANDS, CLOSER (2026-10-25, the user on the still At rest put first: "His resting pose is open palm, face-up -
-# which is bizarre, because it makes him look like a priest"): on the sheet a hand is some 40 pixels, and the writer
-# put two stills with open palms among its five at rest. So each still's hands are cropped for it too, numbered alike:
-# the box round the landmarks of the hands seen (MediaPipe's pose, wrists to thumbs: HAND_POINTS), HANDS_GROW times as
-# large and at least HANDS_LEAST shoulder widths across, at the frame's shape; no hand seen, the body below the shoulders.
+# Their hands, closer: on the sheet a hand is some 40 pixels, so each still's hands are also cropped, numbered
+# alike: the box round the landmarks of the hands seen (MediaPipe's pose, wrists to thumbs: HAND_POINTS),
+# HANDS_GROW times as large and at least HANDS_LEAST shoulder widths across, at the frame's shape; no hand
+# seen, the body below the shoulders.
 HANDS = "hands.jpg"
 HAND_POINTS = list(range(15, 23))
 HANDS_GROW = 1.6
@@ -1059,10 +1052,9 @@ def calm_of(R):
 
 def hands_up(pose):
     """How far each look's hands are up from where they rest: each wrist seen, its height over the low
-    place wrists are seen at in these looks, past a little (in shares of the frame), summed. Their resting
-    hands are mostly on the desk, out of the frame or hidden, so the wrists seen are mostly raised ones: the
-    middle of where they are seen is a gesture (2026-10-21: every still came out mid-gesture), the low end
-    of it is rest."""
+    place wrists are seen at in these looks, past a little (in shares of the frame), summed. Resting
+    hands are mostly out of the frame or hidden, so the wrists seen are mostly raised ones: the middle
+    of where they are seen is a gesture, the low end of it is rest."""
     import numpy as np
     p = np.asarray(pose).reshape(-1, 33, 4)
     out = np.zeros(p.shape[0])
@@ -1075,60 +1067,51 @@ def hands_up(pose):
     return out
 
 
-# THE FACE AT REST: brows neither up nor down, no smile, no squint - each counted against a still.
+# The face at rest: brows neither up nor down, no smile, no squint - each counted against a still.
 EXPRESSION = [BLEND_NAMES.index(n) for n in ["browInnerUp", "browOuterUpLeft", "browOuterUpRight", "browDownLeft",
                                              "browDownRight", "mouthSmileLeft", "mouthSmileRight", "cheekSquintLeft",
                                              "cheekSquintRight", "eyeWideLeft", "eyeWideRight"]]
 
 
-# THE ROOM'S PLATE: made from this many frames of the set, at least this many seconds apart.
+# The room's plate: made from this many frames of the set, at least this many seconds apart.
 PLATE_FRAMES = 150
 PLATE_GAP = 4.0
 # A frame's pixel this likely to be them (the segmentation's) is not the room - nor any within this many
 # pixels of one, where their edge's color bleeds.
 PERSON = 0.3
 CLEAR = 12
-# A PIXEL OF THEIR MATTE THAT NEVER MOVES is not them (2026-10-22: the segmentation took the microphone in
-# front of them for them, and it would have moved with them): in this share of the set's frames it is still
-# the still's - its color within STEADY levels, the frame and the still both in the first still's light,
-# and where the still has texture (more than PLAIN over ALIKE_PATCH pixels) its patch alike too (normalized
-# correlation past ALIKE) - all at half size. Each still is judged against its own pixels. (The fourth
-# pass, measured on his footage: by texture alone the microphone's plain dark body never matched and stayed
-# in a still's matte; by color alone, without each still's own light, it never matched either - the light
-# moves 15 levels over the hour - and with it, half his dark sweater did, its knit gone at half size; by
-# color, and texture where there is some, the microphone alone, and a few flecks.)
+# A pixel of their matte that never moves is not them (a microphone in front of them is taken for them by the
+# segmentation): in this share of the set's frames it is still the still's - its color within STEADY levels, the
+# frame and the still both in the first still's light, and where the still has texture (more than PLAIN over
+# ALIKE_PATCH pixels) its patch alike too (normalized correlation past ALIKE) - all at half size. Each still is
+# judged against its own pixels. Texture alone never matches a plain dark body; color alone without each still's
+# own light never matches either (the light drifts 15 levels over the hour).
 STILL_SHARE = 0.6
 ALIKE = 0.8
 ALIKE_PATCH = 11
 STEADY = 14
 PLAIN = 20.0
-# WHAT STANDS BEFORE THEM, not behind (the fourth pass: their bones bend their matte, and a microphone left
-# in it bent with them): a pixel that never moves which is still the still's in the frames where they are
-# there (at least FRONT_SEEN of the frames), in a piece of FRONT_LEAST pixels or more - it hides them. It
-# is drawn over them and never moves (`front_K.png`), and their own picture under it is filled from round
-# it (`body_K.jpg`), so that moving behind it they show no second microphone. A pixel within EDGE pixels of
-# their matte's edge that never moves and is not before them is the wall their matte bled over: taken out.
+# What stands before them, not behind: a pixel that never moves which is still the still's in the frames where they
+# are there (at least FRONT_SEEN of the frames), in a piece of FRONT_LEAST pixels or more - it hides them. It is
+# drawn over them and never moves (`front_K.png`), and their own picture under it is filled from round it
+# (`body_K.jpg`), so that moving behind it they show no second copy. A pixel within EDGE pixels of their matte's
+# edge that never moves and is not before them is the wall their matte bled over: taken out.
 FRONT_SEEN = 0.15
 FRONT_LEAST = 3000
 EDGE = 15
 # How far from their matte a thing before them may reach, and how far past what passed it is grown (pixels).
 NEAR = 60
 FRONT_GROW = 6
-# A THING BEFORE THEM HAS AN OUTLINE OF ITS OWN (2026-10-25, the user: the actor is "especially messy at the neck and
-# around the beard"): a plain region passes as never moving whatever it is - a black t-shirt on a dark wall, a dark
-# sweater's knit at half size - and pieces of their own clothes were drawn before them, frozen over the body as it moved
-# and cutting the beard as the head turned. So a piece is kept only where at least OUTLINE_SHARE of the band round its
-# edge (from 4 pixels outside it to 12 in) is a strong edge in the still - past OUTLINE_EDGE (a 3x3 Sobel of its grey,
-# 0..255). On his four sets: a microphone's and a shock mount's 0.10 to 0.45, the t-shirt's and the sweater's pieces
-# 0.00 to 0.06. (A microphone joined to a black shirt in one piece goes with it, and moves a little with them.)
+# A thing before them has an outline of its own: a plain region (a black t-shirt on a dark wall, a dark sweater's
+# knit at half size) passes as never moving whatever it is, so a piece is kept only where at least OUTLINE_SHARE of
+# the band round its edge (from 4 pixels outside it to 12 in) is a strong edge in the still - past OUTLINE_EDGE
+# (a 3x3 Sobel of its grey, 0..255). A microphone's or shock mount's pieces measure 0.10 to 0.45, a shirt's and a
+# sweater's 0.00 to 0.06. (A microphone joined to a black shirt in one piece goes with it.)
 OUTLINE_EDGE = 60.0
 OUTLINE_SHARE = 0.08
-# THE PLATE IS TRUSTED where a quarter of the frames saw the room - a median that outvotes the frames that
-# were their own shape the segmentation missed, or the globe they held up a while - or where at least
-# TRUSTED_FRAMES saw it and AGREE: AGREEING of them within AGREE levels of their median. Elsewhere it is
-# filled from round it. (The fourth pass: by the quarter alone, the wall behind a still's head where they
-# seldom sit - seen in 4 to 14% of the frames - was all filled, a smear where the picture's frame was; by
-# six frames alone, a patch of their own face came in at their hairline, and the globe behind an arm.)
+# The plate is trusted where a quarter of the frames saw the room (a median outvotes the frames that were their own
+# shape the segmentation missed), or where at least TRUSTED_FRAMES saw it and AGREE: AGREEING of them within AGREE
+# levels of their median. Elsewhere it is filled from round it.
 TRUSTED = 0.25
 TRUSTED_FRAMES = 6
 AGREE = 12
@@ -1172,14 +1155,13 @@ def light_fit(src, dst, where, most=20000, seed=0):
 
 
 def room_plate(a, spec, R, stills_rgb, stills_person, watch, report):
-    """THE ROOM OF THE SET, WITHOUT THEM, from its frames - each frame's light matched to the first still's
-    on the room both show: per pixel, the MEDIAN of the frames where it is the room (a mean took in the
-    globe they held up a while, and ghosts of them where the segmentation missed them: 2026-10-22) and the
-    share of frames that saw it. And for each of [stills_rgb] (their people [stills_person]), WHAT NEVER
-    MOVES - at half size, the still in the first one's light too: the share of frames still the still's
-    there (its color within [STEADY], and where the still has texture its patch alike too: [patch_alike]),
-    and that share among the frames they are there in (what hides them); and the share of frames they are
-    there. `plate, trusted, [{still, front}], there, n` - trusted where the plate is ([TRUSTED])."""
+    """The room of the set without them, from its frames - each frame's light matched to the first still's
+    on the room both show: per pixel, the median of the frames where it is the room, and the share of frames
+    that saw it. And for each of [stills_rgb] (their people [stills_person]), what never moves - at half
+    size, the still in the first one's light too: the share of frames still the still's there (its color
+    within [STEADY], and where the still has texture its patch alike too: [patch_alike]), and that share among
+    the frames they are there in (what hides them); and the share of frames they are there.
+    `plate, trusted, [{still, front}], there, n` - trusted where the plate is ([TRUSTED])."""
     import cv2
     import warnings
     import numpy as np
@@ -1188,7 +1170,7 @@ def room_plate(a, spec, R, stills_rgb, stills_person, watch, report):
     half = (W // 2, H // 2)
     frames, rooms = [], []
     ker = np.ones((2 * CLEAR + 1, 2 * CLEAR + 1), np.uint8)
-    # EACH STILL AS THE FRAMES WILL BE: in the first still's light, at half size, with where it is plain
+    # Each still as the frames will be: in the first still's light, at half size, with where it is plain
     small_stills, small_grays, plains = [], [], []
     for st, person in zip(stills_rgb, stills_person):
         if st.shape != still_rgb.shape:
@@ -1207,9 +1189,8 @@ def room_plate(a, spec, R, stills_rgb, stills_person, watch, report):
     still_n = [np.zeros((H // 2, W // 2), np.float64) for _ in stills_rgb]
     front_n = [np.zeros((H // 2, W // 2), np.float64) for _ in stills_rgb]
     there_n = np.zeros((H // 2, W // 2), np.float64)
-    # ACROSS ALL OF THE SET (2026-10-22: the first PLATE_FRAMES of six times as many, taken in order, were
-    # its first sixth - the light of the session's first quarter hour, and the microphone of a still made
-    # later never matched them)
+    # Across all of the set, so the first still's light and the microphone of a still made later are not
+    # missing from the sample
     order = np.linspace(0, R["count"] - 1, num=min(R["count"], PLATE_FRAMES)).astype(int)
     picks = spaced(order, R, PLATE_GAP, PLATE_FRAMES)
     for j, i in enumerate(picks):
@@ -1259,7 +1240,7 @@ def room_plate(a, spec, R, stills_rgb, stills_person, watch, report):
             report(0.8 + 0.2 * r0 / H)
 
     def full(m):
-        # (smoothed a little first: a thing before them is a piece, not a scatter of pixels that passed)
+        # (smoothed a little first: a thing before them is a piece, not a scatter of pixels)
         return cv2.resize(cv2.GaussianBlur(m.astype(np.float32), (0, 0), 2.0), (W, H), interpolation=cv2.INTER_LINEAR)
 
     judged = [{"still": full(still_n[k] / max(1, n)), "front": full(front_n[k] / np.maximum(there_n, 1))}
@@ -1296,7 +1277,7 @@ def patch_alike(gray, still_gray):
 
 
 def outlined(before, still_rgb):
-    """The pieces of [before] (uint8, 1 where something stands before them) with AN OUTLINE OF THEIR OWN in the still: at
+    """The pieces of [before] (uint8, 1 where something stands before them) with an outline of their own in the still: at
     least [OUTLINE_SHARE] of the band round each piece's edge a strong edge ([OUTLINE_EDGE]). The rest are a plain
     region of them, still only for being plain."""
     import cv2
@@ -1314,15 +1295,13 @@ def outlined(before, still_rgb):
 
 
 def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
-    """ONE STILL'S LAYERS: its matte with what never moves taken out - the room, where it is not before them -
-    and what stands BEFORE them (`front`, 0..1: drawn over them, never moving), their picture with the
+    """One still's layers: its matte with what never moves taken out - the room, where it is not before them -
+    and what stands before them (`front`, 0..1: drawn over them, never moving), their picture with the
     front filled from round it (`body`), and the room - the still's own where it is not them, the plate's
     (in the still's light) where it is and the plate is [trusted], filled in from round it where their
     motion could uncover it and it is not. Round the [head] (a mask) the plate reaches [CLEAR] past their
     edge, so no hair is left on the wall; elsewhere only where the still is mostly them ([SOFT]), so their
-    soft edge is the still's own room (the fourth pass: in a gap between their arm and the chair, a soft
-    edge over the plate's wall showed a light sliver where the still showed the chair). `matte, room,
-    front, body`."""
+    soft edge is the still's own room. `matte, room, front, body`."""
     import cv2
     import numpy as np
     H, W = still_rgb.shape[:2]
@@ -1339,7 +1318,7 @@ def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
     for c in range(1, count):
         if stats[c, cv2.CC_STAT_AREA] < FRONT_LEAST:
             before[parts == c] = 0
-    # (grown past what passed: its lit rim, an edge at half size, was left in them and moved with them)
+    # (grown past what passed: its lit rim, an edge at half size, would be left in them)
     before = cv2.dilate(before, np.ones((2 * FRONT_GROW + 1, 2 * FRONT_GROW + 1), np.uint8)) & near.astype(np.uint8)
     before = outlined(before, still_rgb)
     # (their edge where the front is not: a hole the segmentation left for the microphone is no edge of them)
@@ -1350,8 +1329,8 @@ def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
     front = None
     if np.any(before):
         front = cv2.GaussianBlur(before.astype(np.float32), (0, 0), 1.0) * (before > 0)
-        # THEY ARE BEHIND IT: their matte whole there, whatever the segmentation made of it - else a hole
-        # in them the front's shape would move with them
+        # They are behind it: their matte whole there, whatever the segmentation made of it, else the front's shape
+        # would leave a hole in them
         matte = np.maximum(matte, cv2.GaussianBlur(cv2.dilate(before, opened).astype(np.float32), (0, 0), 1.5))
     body = still_rgb
     if front is not None:
@@ -1369,9 +1348,8 @@ def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
         person = np.where(head, person, mostly)
     gain, off = light_fit(plate, still_rgb, trusted & ~person)
     lit = np.clip(plate * gain + off, 0, 255)
-    # THE LIGHT ROUND THEM (the fourth pass: a light halo round their head): their shadow on the wall is in
-    # the still and not in the plate - made where they are not - so the plate is darkened, or lightened, as
-    # the still's room just outside them is against it, spread inward from there
+    # The light round them: their shadow on the wall is in the still and not in the plate, so the plate is
+    # darkened, or lightened, as the still's room just outside them is against it, spread inward from there
     band = ((cv2.dilate(person.astype(np.uint8), np.ones((2 * SHADE + 1, 2 * SHADE + 1), np.uint8)) > 0) & ~person
             & trusted).astype(np.float32)
     if band.sum() > 100:
@@ -1391,8 +1369,7 @@ def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
     out = np.clip(room, 0, 255).astype(np.uint8)
     if np.any(hole):
         # filled from the room round it - never from them (all of them unknown to the fill, though only
-        # the band is kept: from their own pixels, the sweater smeared into the wall) - at half size (a
-        # fill is smooth: half size loses nothing it has)
+        # the band is kept) - at half size (a fill is smooth)
         unknown = person & ~trusted
         small = cv2.resize(out, (W // 2, H // 2), interpolation=cv2.INTER_AREA)
         small_hole = cv2.resize(unknown.astype(np.uint8) * 255, (W // 2, H // 2), interpolation=cv2.INTER_NEAREST)
@@ -1402,12 +1379,12 @@ def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
 
 
 def cmd_stills(a) -> int:
-    """A SET'S STILLS: its most typical calm moments facing the camera, each a candidate for the one frame
+    """A set's stills: its most typical calm moments facing the camera, each a candidate for the one frame
     a Likeness is drawn on (next/likeness.md, "The second build"). Found in the survey, then looked at
-    again at full size - the face found, the eyes open, the mouth closed, sharp. Each with ITS MATTE (them,
-    not the room or what stands before them) and ITS ROOM (the room behind them, from the set's frames:
-    the third pass), so they are drawn over the room and the room never moves. And all of them on one
-    numbered sheet ([SHEET]), for the writer that says which show them at rest (the fourth pass)."""
+    again at full size - the face found, the eyes open, the mouth closed, sharp. Each with its matte (them,
+    not the room or what stands before them) and its room (the room behind them, from the set's frames),
+    so they are drawn over the room and the room never moves. All of them on one numbered sheet ([SHEET]),
+    for the writer that says which show them at rest."""
     import cv2
     import numpy as np
     spec = read_json(a.spec)
@@ -1417,8 +1394,7 @@ def cmd_stills(a) -> int:
     if n < 20:
         say("stills: the set has too little usable footage (%d looks)" % n)
         return 2
-    # WHAT THE SET USUALLY LOOKS LIKE (the user: "the average of all samples is likely to be a pretty
-    # normal, forward-facing actor"): its median picture and person, and how much of each look strays
+    # What the set usually looks like: its median picture and person, and how much of each look strays
     # from them - counted in places, so that the light's drift is not
     th = R["thumb"].astype(np.float32)
     strays = (np.abs(th - np.median(th, axis=0)) > STRAY).mean(axis=1)
@@ -1673,9 +1649,7 @@ def smooth(e0: float, e1: float, x: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
-# THE BODY'S BONES (the fourth pass, 2026-10-22, the user on the third: "the actor's body is completely
-# rigid, and it is just rocking around constantly ... we're not modeling the body - we're just shifting it
-# around a bunch"): a skeleton on each still from its pose, and every vertex of its mesh weighed to its
+# The body's bones: a skeleton on each still from its pose, and every vertex of its mesh weighed to its
 # bones. What a vertex's weights leave is the room's: it stays where it is.
 BONES = ["torso", "head", "shoulder_l", "shoulder_r", "upper_l", "fore_l", "hand_l", "upper_r", "fore_r", "hand_r"]
 # A SEATED TORSO from the shoulders to the hips, in shoulder widths, where the hips are not seen (behind the
@@ -1687,18 +1661,17 @@ ARM_R = {"upper": 0.18, "fore": 0.15, "hand": 0.14}
 SHOULDER_R = 0.42
 # How far past the hand's knuckles (the pose's index and pinky) its fingers reach, as a share of the hand.
 FINGERS = 0.5
-# A HAND RESTS where it is when a point of it (its wrist or knuckles) is seen this surely in the picture -
-# hands folded at the desk's edge are seen less surely than an elbow (0.4 to 0.9 on his stills), and their
-# wrist can be under the frame with the knuckles in it - or when, not seen, it is within TOGETHER shoulder
-# widths of a hand that rests: hands clasped rest together (one moved, the other held, they tore apart).
+# A hand rests where it is when a point of it (its wrist or knuckles) is seen this surely in the picture (folded
+# hands are seen less surely than an elbow, 0.4 to 0.9), or when, not seen, it is within TOGETHER shoulder widths
+# of a hand that rests: clasped hands rest together.
 WRIST_SEEN = 0.3
 TOGETHER = 0.6
 
 
 def skeleton(pose, w: int, h: int):
-    """THE STILL'S SKELETON from its pose, in pixels: the shoulders (`l` is theirs, on the picture's
+    """The still's skeleton from its pose, in pixels: the shoulders (`l` is theirs, on the picture's
     right), the neck between them, the hips (where they are seen, else [TORSO] shoulder widths under the
-    neck), and each arm's shoulder, elbow, wrist and the hand's end - with whether the hand RESTS in the
+    neck), and each arm's shoulder, elbow, wrist and the hand's end - with whether the hand rests in the
     picture, where it stays as the body moves ([WRIST_SEEN], [TOGETHER]; a hand unseen, or out of the
     picture, goes with the body). None when the shoulders are not seen."""
     import numpy as np
@@ -1744,10 +1717,10 @@ def arm_bones(skel, side: str):
 
 
 def body_points(face2d, pose, matte, w: int, h: int, ring1: float, near):
-    """THE BODY'S VERTICES on a still: its silhouette every so often, a band 55 px out (their soft edge
+    """The body's vertices on a still: its silhouette every so often, a band 55 px out (their soft edge
     moves with them, never stretched), a grid inside, the shoulders, elbows and wrists, the neck - and each
-    ARM along its bones and its two sides, so an arm bends apart from what is behind it (the fourth pass) -
-    none within the head's near ring, none crowding another or [near]."""
+    arm along its bones and its two sides, so an arm bends apart from what is behind it - none within the
+    head's near ring, none crowding another or [near]."""
     import cv2
     import numpy as np
     oval = face2d[OVAL]
@@ -1775,7 +1748,7 @@ def body_points(face2d, pose, matte, w: int, h: int, ring1: float, near):
                 cand.append(np.array([x, y], dtype=np.float64))
     p = np.asarray(pose, dtype=np.float64).reshape(33, 4)
     skel = skeleton(pose, w, h)
-    # THE ARMS FIRST: along each bone and its two sides, so the grid gives way to them
+    # The arms first: along each bone and its two sides, so the grid gives way to them
     arms = []
     if skel is not None:
         for side in ("l", "r"):
@@ -1811,11 +1784,11 @@ def body_points(face2d, pose, matte, w: int, h: int, ring1: float, near):
 
 
 def skin_weights(pts, face2d, pose, matte, w: int, h: int):
-    """EACH VERTEX'S WEIGHT ON EACH OF [BONES] (`[n, len(BONES)]`; what they leave is the room's, which
-    stays). THE HEAD: all of it near the head above the neck's foot, none at the shoulders - the neck bends
-    between. THE BODY'S share - all of it on them and near them, none out in the room - goes to an ARM
-    where the vertex is on one (by how near each of its bones is), to a SHOULDER round its joint, and the
-    rest to the TORSO."""
+    """Each vertex's weight on each of [BONES] (`[n, len(BONES)]`; what they leave is the room's, which
+    stays). The head: all of it near the head above the neck's foot, none at the shoulders - the neck bends
+    between. The body's share - all of it on them and near them, none out in the room - goes to an arm
+    where the vertex is on one (by how near each of its bones is), to a shoulder round its joint, and the
+    rest to the torso."""
     import cv2
     import numpy as np
     oval = face2d[OVAL]
@@ -1841,7 +1814,7 @@ def skin_weights(pts, face2d, pose, matte, w: int, h: int):
         if skel is None:
             out[n, col["torso"]] = body
             continue
-        # ON AN ARM: as much as it is inside the arm's nearest bone, shared among its bones by nearness
+        # On an arm: as much as it is inside the arm's nearest bone, shared among its bones by nearness
         arm_total = 0.0
         shares = {}
         for side in ("l", "r"):
@@ -1860,7 +1833,7 @@ def skin_weights(pts, face2d, pose, matte, w: int, h: int):
         for name, v in shares.items():
             out[n, col[name]] = body * v
         rest = body * (1.0 - arm_total)
-        # ROUND A SHOULDER'S JOINT, the shoulder's own
+        # Round a shoulder's joint, the shoulder's own
         sh_total = 0.0
         for side in ("l", "r"):
             s = smooth(SHOULDER_R, SHOULDER_R * 0.3, float(np.hypot(*(q - skel[side]["shoulder"]))) / skel["width"])
@@ -1895,10 +1868,10 @@ def skeleton_json(skel, face2d, w: int, h: int) -> dict:
 
 
 def cmd_rig(a) -> int:
-    """THE SET'S MESH, made on its first still: its face, the rings round it, the frame's edge, one
-    triangulation - and the face's BOX, where the library keeps its mouths and eyes, with a mask for
+    """The set's mesh, made on its first still: its face, the rings round it, the frame's edge, one
+    triangulation - and the face's box, where the library keeps its mouths and eyes, with a mask for
     each: the lips with a little round them, and each eye's lids (the beard round the mouth stays the
-    still's, bent with the jaw, and never swaps from one mouth to the next). And for EVERY still its
+    still's, bent with the jaw, and never swaps from one mouth to the next). And for every still its
     body's mesh on its skeleton, each vertex weighed to its bones ([skeleton], [body_points],
     [skin_weights])."""
     import numpy as np
@@ -1914,7 +1887,7 @@ def cmd_rig(a) -> int:
     tris = triangulate(allpts, W, H)
     weights = mouth_weights(layout)
     eyes = eye_weights(layout)
-    # THE BOX: from over the brows to under the chin, between the cheeks
+    # The box: from over the brows to under the chin, between the cheeks
     oval = layout[OVAL]
     fw = float(oval[:, 0].max() - oval[:, 0].min())
     fh = float(layout[CHIN][1] - layout[10][1])
@@ -1933,18 +1906,18 @@ def cmd_rig(a) -> int:
     mouth = feathered((img_h, img_w), [grown(lips, 1.18, 1.45)], mouth_w * 0.06)
     rims = [to_img(layout[EYE_RIGHT]), to_img(layout[EYE_LEFT])]
     eye_w = float(np.mean([r[:, 0].max() - r[:, 0].min() for r in rims]))
-    # (no higher than the lids' fold: grown taller, a glance brought another moment's brows with it)
+    # (no higher than the lids' fold: a taller box brings another moment's brows with a glance)
     eye_mask = feathered((img_h, img_w), [grown(r, 1.45, 1.9) for r in rims], eye_w * 0.1)
     out_dir = os.path.dirname(a.out)
     save_mask(os.path.join(out_dir, "mask_mouth.png"), mouth)
     save_mask(os.path.join(out_dir, "mask_eyes.png"), eye_mask)
 
-    # THE TRIANGLES THAT MOVE MOST LAST: a canvas mesh draws in order, so lips and lids are never under a fold
+    # The triangles that move most last: a canvas mesh draws in order, so lips and lids are never under a fold
     def moving(t):
         return min(max(weights[i], eyes[i]) if i < FACE_POINTS else 0.0 for i in t) > 0.5
     tris.sort(key=lambda t: 1 if moving(t) else 0)
-    # EACH STILL'S BODY: its own mesh - the face's points, its rings, its body's, the frame's edge - and
-    # each vertex's following of the head and of the body (the third pass: the whole of them moves)
+    # Each still's body: its own mesh - the face's points, its rings, its body's, the frame's edge - and
+    # each vertex's following of the head and of the body
     import cv2
     still_dir = os.path.join(os.path.dirname(a.stills), "stills")
     bodies = []
@@ -2078,7 +2051,7 @@ def unwrap(rgb, face2d, rig: Rig, tris):
 # --- visemes ---------------------------------------------------------------------------------------
 
 def cmd_visemes(a) -> int:
-    """THEIR MOUTH FOR EACH SOUND CLASS, from every video's survey: the median of their mouth blendshapes
+    """Their mouth for each sound class, from every video's survey: the median of their mouth blendshapes
     at the class's phones - where their words (captions, or what Transcribe heard) give enough of them -
     else the class's place in their own range (each class's `range`: a percentile of their range per
     blendshape)."""
@@ -2115,10 +2088,9 @@ def cmd_visemes(a) -> int:
             hits.setdefault(cls, []).append(bl[idx[k]])
     out = {}
     least = int(spec.get("least", 30))
-    # DO THE WORDS SHOW IN THEIR MOUTH? The jaw the sounds' medians span, over the jaw their range spans:
-    # a mouth hidden by a beard, or words timed only to the word, give each sound nearly the same median
-    # (2026-10-22, his: "open" 0.095, P B M 0.072, his range 0.01 to 0.31) - and drawn from those the
-    # mouth would scarcely move. Below [WORDS_SHOW] every sound keeps its place in their range.
+    # Do the words show in their mouth? The jaw the sounds' medians span, over the jaw their range spans: a mouth
+    # hidden by a beard, or words timed only to the word, give each sound nearly the same median, and the mouth
+    # would scarcely move. Below [WORDS_SHOW] every sound keeps its place in their range.
     jaw = MOUTH_NAMES.index("jawOpen")
     medians = [np.median(np.array(g), axis=0)[jaw] for g in hits.values() if len(g) >= least]
     span = float(pct[95][jaw] - pct[5][jaw]) or 1.0
@@ -2153,10 +2125,9 @@ WORDS_SHOW = 0.4
 
 # --- motion ----------------------------------------------------------------------------------------
 
-# THEIR MOTION, a row per look (the third pass: the head turns on the body, the body carries it): the
-# head's yaw, pitch and roll against the shoulders (degrees); where the shoulders are across and down (in
-# face widths), how near they lean (the log of the face's width) and the shoulders' tilt (degrees, as the
-# picture turns: the right of the picture lower is more).
+# Their motion, a row per look: the head's yaw, pitch and roll against the shoulders (degrees); where the
+# shoulders are across and down (in face widths), how near they lean (the log of the face's width) and the
+# shoulders' tilt (degrees, as the picture turns: the right of the picture lower is more).
 AXES = ["yaw", "pitch", "roll", "x", "y", "near", "tilt"]
 # A run is at least this many seconds; its quick part is what moves within this many.
 LEAST_RUN = 8.0
@@ -2165,18 +2136,14 @@ DRIFT = 4.0
 WILD = 4.0
 # A blink is caught by a look only when it falls in one: about the share of the spacing a blink lasts.
 CAUGHT = 0.55
-# THEIR POSTURE (the fourth pass, 2026-10-22: "rocking weirdly back and forth" - the body played its quick
-# part, 2-4 s swings that are mostly their gestures pulling at their shoulders): where the shoulders sit,
-# averaged over this many seconds, against the shot's own middle - how far they lean and settle, which
-# ways go together, and how long a posture holds (the lag their posture's likeness to itself falls to 1/e).
+# Their posture: where the shoulders sit, averaged over this many seconds (the quick part is mostly gestures
+# pulling at the shoulders), against the shot's own middle - how far they lean and settle, which ways go
+# together, and how long a posture holds (the lag their posture's likeness to itself falls to 1/e).
 POSTURE_S = 6.0
-# THEIR FACE'S OWN MOTION (2026-10-24, the user on the head of splats: "when the actor is not talking - the face
-# is not moving at all"; his brows, cheeks and lids move three quarters as much silent as speaking): every score
-# but what a Likeness plays itself - the blinks and the gaze (its blinks and glances) and the lips' opening and
-# protrusion (the voice's sounds; a beard reads as a pucker besides, his 90th percentile 0.71) - its quick part
-# (as the head's), smoothed to what a face does slowly (a Gaussian of FACE_SMOOTH seconds: MediaPipe's scores
-# jitter from look to look, the slow part of them going on from one look to the next), as the principal
-# components holding FACE_SHARE of it, at most FACE_MOST.
+# Their face's own motion: every score but what a Likeness plays itself - the blinks and the gaze and the lips'
+# opening and protrusion (the voice's sounds; a beard reads as a pucker besides) - its quick part (as the head's),
+# smoothed to what a face does slowly (a Gaussian of FACE_SMOOTH seconds: MediaPipe's scores jitter from look to
+# look), as the principal components holding FACE_SHARE of it, at most FACE_MOST.
 FACE_LEAVES = ("_neutral", "eyeBlink", "eyeLook", "jawOpen", "mouthClose", "mouthFunnel", "mouthPucker", "mouthRoll",
                "mouthLowerDown", "mouthUpperUp")
 FACE_SMOOTH = 0.4
@@ -2219,7 +2186,7 @@ def runs_of(R, rate: float, facing):
 
 
 def motion_rows(R, idx, aspect, roll_sign: float):
-    """THEIR MOTION at looks [idx], [AXES]: the head's turn, its roll as the picture turns ([roll_sign]
+    """Their motion at looks [idx], [AXES]: the head's turn, its roll as the picture turns ([roll_sign]
     makes it so) less the shoulders' tilt, and the shoulders' place, nearness and tilt."""
     import numpy as np
     box = R["box"][idx].astype(np.float64)
@@ -2251,7 +2218,7 @@ def smooth_looks(X, sigma: float):
 
 
 def face_components(F):
-    """THE WAYS THEIR FACE MOVES in [F] ([n, len(face_names())], its slow part): the principal components holding
+    """The ways their face moves in [F] ([n, len(face_names())], its slow part): the principal components holding
     [FACE_SHARE] of it, at most [FACE_MOST] - `(basis [K, d], sd [K])`, each row a unit direction."""
     import numpy as np
     F = np.asarray(F, dtype=np.float64)
@@ -2264,7 +2231,7 @@ def face_components(F):
 
 
 def blinks_per_minute(R, runs, rate: float) -> float:
-    """HOW OFTEN THEY BLINK, from looks a fifth of a second apart: a look with both eyes far more closed
+    """How often they blink, from looks a fifth of a second apart: a look with both eyes far more closed
     than the run's own usual is a blink caught, and a blink is caught about [CAUGHT] of the time."""
     import numpy as np
     events, looks = 0, 0
@@ -2283,7 +2250,7 @@ def blinks_per_minute(R, runs, rate: float) -> float:
 
 
 def posture_of(R, runs, rate: float, roll_sign: float, spec):
-    """THEIR POSTURE over [runs]: the shoulders' place, nearness and tilt ([AXES] 3 on) averaged over
+    """Their posture over [runs]: the shoulders' place, nearness and tilt ([AXES] 3 on) averaged over
     [POSTURE_S] seconds, each run's own middle taken out: `{sd, corr, tau}` - each axis's spread, how the
     axes go together, and the seconds a posture holds."""
     import numpy as np
@@ -2316,10 +2283,10 @@ def posture_of(R, runs, rate: float, roll_sign: float, spec):
 
 
 def cmd_motion(a) -> int:
-    """THEIR HEAD'S OWN MOTION, from every video's survey where they face the camera: its quick part (the
+    """Their head's own motion, from every video's survey where they face the camera: its quick part (the
     slow drift out), in runs a Likeness plays back in pieces, which looks are speech, and how often they
-    blink (next/likeness.md, "The second build"); THEIR POSTURE - how far and which ways their body
-    settles, and how long it holds ([posture_of], the fourth pass); and THEIR FACE'S OWN MOTION at the same
+    blink (next/likeness.md, "The second build"); their posture - how far and which ways their body
+    settles, and how long it holds ([posture_of]); and their face's own motion at the same
     looks ([face_components]: `face` - its scores' names, the directions, their spreads - and each run's
     `face` rows, how far along each the face is), so a piece moves their head and face as they moved together."""
     import numpy as np
@@ -2333,7 +2300,7 @@ def cmd_motion(a) -> int:
     pose = np.asarray(R["pose"], dtype=np.float64).reshape(-1, 33, 4)
     shoulders = (pose[:, 11, 3] > 0.5) & (pose[:, 12, 3] > 0.5)
     facing = (np.abs(ang[:, 0]) < FACING) & (np.abs(ang[:, 1]) < FACING) & shoulders
-    # THE HEAD'S ROLL AS THE PICTURE TURNS: the head and the shoulders lean together, so the roll's sign
+    # The head's roll as the picture turns: the head and the shoulders lean together, so the roll's sign
     # is whichever goes with the shoulders' tilt in their own looks
     tilt = np.degrees(np.arctan2(pose[:, 11, 1] - pose[:, 12, 1], np.maximum(pose[:, 11, 0] - pose[:, 12, 0], 1e-4)))
     roll_sign = 1.0 if facing.sum() < 50 or np.corrcoef(ang[facing, 2], tilt[facing])[0, 1] >= 0 else -1.0
@@ -2361,7 +2328,7 @@ def cmd_motion(a) -> int:
     sd = np.maximum(sd, 1e-6)
     talking = float(np.median(np.concatenate([p[2] for p in pieces])))
     basis, face_sd = face_components(np.concatenate([p[3] for p in pieces]))
-    # A LOOK FAR OUT ON ANY AXIS ENDS ITS RUN: what is kept is how they move while they talk to the camera
+    # A look far out on any axis ends its run: what is kept is how they move while they talk to the camera
     out = []
     for idx, X, spread, F in pieces:
         C = F @ basis.T
@@ -2397,10 +2364,8 @@ def cmd_motion(a) -> int:
 
 # --- learn -----------------------------------------------------------------------------------------
 
-# THEIR MOUTH, LEARNED (the third pass, 2026-10-22, the user: "true learning of some sort. Some internal
-# neurons, updated via a simple rule, and informed by ALL sets of videos. Maybe even some kind of ensemble
-# method."): from the sounds heard round a moment - which class at each of these offsets (seconds) - to
-# their mouth's shape at it.
+# Their mouth, learned: from the sounds heard round a moment - which class at each of these offsets
+# (seconds) - to their mouth's shape at it.
 OFFSETS = [-0.24, -0.18, -0.12, -0.06, 0.0, 0.06, 0.12, 0.18, 0.24]
 # Each offset's window (seconds): the windows touch, so every sound in reach is counted once.
 WINDOW = 0.06
@@ -2432,7 +2397,7 @@ def class_line(phones):
 
 
 def contexts(line, vid, times, classes):
-    """THE INPUTS: for each moment in [times], how much of each of [classes] is heard in the window of
+    """The inputs: for each moment in [times], how much of each of [classes] is heard in the window of
     [WINDOW] seconds round each of [OFFSETS] from it (the rest wherever none is), window by window: [n,
     len(OFFSETS) * len(classes)]. Shares, not a class at a point, so the mouth they make moves smoothly
     as the sounds pass (LikenessPlan reads them so)."""
@@ -2517,7 +2482,7 @@ def r2(pred, Y, weights):
 
 
 def cmd_learn(a) -> int:
-    """THEIR MOUTH FOR THE VOICE'S SOUNDS, LEARNED FROM EVERY VIDEO: an ensemble of small networks from the
+    """Their mouth for the voice's sounds, learned from every video: an ensemble of small networks from the
     sounds round a moment to their mouth's shape at it ([contexts], [train_member]), each member trained on
     its own resample of every survey look near the words heard. One video is held out first, to say how
     much of their mouth the ensemble explains there beside the plainest model (each sound's mean mouth),
@@ -2532,7 +2497,7 @@ def cmd_learn(a) -> int:
         return 2
     ang = R["angles"]
     facing = (np.abs(ang[:, 0]) < FACING) & (np.abs(ang[:, 1]) < FACING) & ~hands_at_mouth_all(R["pose"], R["box"])
-    # only the looks near words heard: elsewhere nothing was transcribed, and silence would be a lie
+    # only the looks near words heard: elsewhere nothing was transcribed
     near = np.zeros(R["count"], dtype=bool)
     for vid, (t0, t1, _cl) in line.items():
         sel = np.nonzero(R["vid"] == vid)[0]
@@ -2552,16 +2517,15 @@ def cmd_learn(a) -> int:
         X[rows] = contexts(line, vid, R["time"][use][rows], classes)
     raw = R["blend"][use][:, MOUTH_INDEX].astype(np.float64)
     mean, sd = raw.mean(axis=0), np.maximum(raw.std(axis=0), SPREAD_FLOOR)
-    # EACH VIDEO AGAINST ITS OWN MEAN AND SPREAD: a camera, a light, a distance each measure their mouth
-    # at a level of their own (their jaw while speaking 0.08 in one video, 0.16 in another), and what is
-    # learned is how it moves with the sounds, not where a video sits
+    # Each video against its own mean and spread: a camera, a light, a distance each measure their mouth at a
+    # level of their own, and what is learned is how it moves with the sounds, not where a video sits
     Y = np.zeros_like(raw)
     for vid in set(R["vid"][use].tolist()):
         rows = R["vid"][use] == vid
         Y[rows] = (raw[rows] - raw[rows].mean(axis=0)) / np.maximum(raw[rows].std(axis=0), SPREAD_FLOOR)
     weights = np.array([KEY_WEIGHT.get(n, 0.5) for n in MOUTH_NAMES])
     vids = R["vid"][use]
-    # HOW MUCH IT EXPLAINS, on a video it never saw: the one with the most looks held out
+    # How much it explains, on a video it never saw: the one with the most looks held out
     counts = {v: int((vids == v).sum()) for v in set(vids.tolist())}
     held = max(counts, key=counts.get) if len(counts) > 1 else None
     scores = {}
@@ -2584,7 +2548,7 @@ def cmd_learn(a) -> int:
                   "ensemble": round(r2(ens, Y[te], weights), 3),
                   "ensemble_jaw": round(r2(ens[:, jaw:jaw + 1], Y[te][:, jaw:jaw + 1], np.ones(1)), 3)}
         progress(a.progress, 0.5)
-    # THE ENSEMBLE KEPT: every look of every video, each member its own resample
+    # The ensemble kept: every look of every video, each member its own resample
     rng = np.random.default_rng(11)
     members = [train_member(X[idx], Y[idx], seed=100 + k) for k, idx in
                enumerate(rng.integers(0, X.shape[0], X.shape[0]) for _ in range(MEMBERS))]
@@ -2606,10 +2570,9 @@ def cmd_learn(a) -> int:
 
 # --- library ---------------------------------------------------------------------------------------
 
-# HOW MUCH EACH OF A MOUTH'S BLENDSHAPES WEIGHS, per one of their own spreads (2026-10-21: their
-# blendshapes span a few hundredths - jawOpen 0.01 to 0.22 - so raw values matched every sound to one
-# mouth). The jaw and the lips' rounding and pressing carry what a sound looks like; the rest less -
-# mouthClose least: it is the lips held together WITH the jaw open, so it rises on open mouths.
+# How much each of a mouth's blendshapes weighs, per one of their own spreads (the blendshapes span a few
+# hundredths, so raw values match every sound to one mouth). The jaw and the lips' rounding and pressing carry
+# what a sound looks like; the rest less - mouthClose least: it is the lips held together with the jaw open.
 KEY_WEIGHT = {"jawOpen": 3.0, "mouthClose": 0.3, "mouthFunnel": 1.5, "mouthPucker": 1.5,
               "mouthRollLower": 1.0, "mouthRollUpper": 1.0, "mouthStretchLeft": 0.8, "mouthStretchRight": 0.8,
               "mouthSmileLeft": 0.8, "mouthSmileRight": 0.8, "mouthPressLeft": 0.8, "mouthPressRight": 0.8,
@@ -2625,10 +2588,10 @@ DEGREES = 6.0
 OTHER_SET = 1.5
 # Candidates looked at again at full size, for each sound class and each eye state.
 CANDIDATES = 10
-# THE EYES' STATES the library keeps (both eyes' blink): the open one is the still's own.
+# The eyes' states the library keeps (both eyes' blink): the open one is the still's own.
 EYE_STATES = {"half": 0.45, "closed": 0.9}
-# THE EYES' GLANCES, as the picture turns (the third pass: "The eyes never look around"): each the
-# blendshapes that carry it, both eyes - their left eye looking out is the picture's right.
+# The eyes' glances, as the picture turns: each the blendshapes that carry it, both eyes - their left eye
+# looking out is the picture's right.
 GLANCES = {"look_right": ["eyeLookOutLeft", "eyeLookInRight"], "look_left": ["eyeLookInLeft", "eyeLookOutRight"],
            "look_up": ["eyeLookUpLeft", "eyeLookUpRight"], "look_down": ["eyeLookDownLeft", "eyeLookDownRight"]}
 # How far a glance looks (the blendshapes' mean) in the library's.
@@ -2637,8 +2600,8 @@ GLANCE = 0.55
 
 def color_like(img, ring, still_img):
     """[img] in the still's colors round the part it is drawn into: its mean and spread in Lab on [ring]
-    taken to [still_img]'s there (the spread's ratio within 0.8..1.25), the whole image moved so (2026-10-22:
-    matched by the cheeks alone, every mouth came out a color of its own - "blurry flickering patterns")."""
+    taken to [still_img]'s there (the spread's ratio within 0.8..1.25), the whole image moved so (the
+    cheeks alone would leave every mouth a color of its own)."""
     import cv2
     import numpy as np
     a_ = cv2.cvtColor(img, cv2.COLOR_RGB2LAB).astype(np.float64)
@@ -2661,9 +2624,9 @@ def mouth_scale(blend):
     return np.array([KEY_WEIGHT.get(n, 0.5) for n in MOUTH_NAMES]) / sd
 
 
-# THE SHAPES A SOUND IS SEEN BY, pushed past their own: the jaw, the lips' rounding, spreading, pressing
-# and rolling. Not mouthClose (the lips together with the jaw open: pushed, it chose open jaws for P, B
-# and M - 2026-10-21, the first library), and not the jaw's sideways slides.
+# The shapes a sound is seen by, pushed past their own: the jaw, the lips' rounding, spreading, pressing
+# and rolling. Not mouthClose (the lips together with the jaw open: pushed, it chooses open jaws for P, B
+# and M), and not the jaw's sideways slides.
 PUSHED = [MOUTH_NAMES.index(n) for n in ["jawOpen", "mouthFunnel", "mouthPucker", "mouthStretchLeft",
                                          "mouthStretchRight", "mouthSmileLeft", "mouthSmileRight", "mouthPressLeft",
                                          "mouthPressRight", "mouthRollLower", "mouthRollUpper", "mouthLowerDownLeft",
@@ -2687,9 +2650,8 @@ def glance_cost(blend, looks, g):
 
 
 def class_target(blend, rest, articulation: float):
-    """A SOUND CLASS'S MOUTH, PUSHED PAST THEIR OWN: its [PUSHED] shapes moved [articulation] times as far
-    from [rest] (their mouth is mostly near closed while they talk, so a sound's own median reads as
-    nothing on a still), the rest as they are, all within 0..1."""
+    """A sound class's mouth, pushed past their own: its [PUSHED] shapes moved [articulation] times as far
+    from [rest] (their mouth is mostly near closed while they talk), the rest as they are, all within 0..1."""
     import numpy as np
     rest = np.asarray(rest, dtype=np.float64)
     out = np.asarray(blend, dtype=np.float64).copy()
@@ -2698,10 +2660,10 @@ def class_target(blend, rest, articulation: float):
 
 
 def cmd_library(a) -> int:
-    """THE SET'S LIBRARY: for each sound class a few clean real mouths, and their eyes half and fully
+    """The set's library: for each sound class a few clean real mouths, and their eyes half and fully
     closed and glancing aside - from any video, at the still's turn, found in the surveys, then looked at
     again at full size, unwrapped into the rig's box and matched to the still's colors (next/likeness.md,
-    the second build and the third pass). Silence and open eyes are the still's own."""
+    "The second build"). Silence and open eyes are the still's own."""
     import cv2
     import numpy as np
     spec = read_json(a.spec)
@@ -2727,7 +2689,7 @@ def cmd_library(a) -> int:
     mouth = R["blend"][:, MOUTH_INDEX].astype(np.float64)
     ks = mouth_scale(mouth[near])
     rest = np.array(classes["rest"]["blend"])
-    # WHAT IS LOOKED FOR, and the survey's best guesses at each
+    # What is looked for, and the survey's best guesses at each
     wants = []
     for cls, row in classes.items():
         if cls == "rest":
@@ -2753,7 +2715,7 @@ def cmd_library(a) -> int:
             if np.isfinite(d[i]):
                 wants.append({"kind": "eye", "name": g, "target": GLANCE, "i": i})
     progress(a.progress, 0.05)
-    # EACH LOOKED AT AGAIN AT FULL SIZE: found, turned as the still, no hand at the mouth, how near what
+    # Each looked at again at full size: found, turned as the still, no hand at the mouth, how near what
     # was wanted, how sharp - and unwrapped into the box at once (the frame itself is let go)
     watch = Watcher(a.face_model, a.pose_model, masks=False, image=True)
     tris = rig.box_triangles()
@@ -2788,7 +2750,7 @@ def cmd_library(a) -> int:
                     "sharp": sharpness(rgb, rec["points"], W, H, region),
                     "image": unwrap(rgb, face2d, rig, tris), "shape": rig.to_layout(face2d),
                     "blend": bl, "yaw": yaw, "pitch": pitch, "light": cheek_light(rgb, rec["points"], W, H)})
-    # A FACE THAT STRAYS FROM THE OTHERS is something in front of it: a hand at the cheek, a mug - the
+    # A face that strays from the others has something in front of it: a hand at the cheek, a mug - the
     # mouths' lower face and the eyes' upper, against the candidates' median there
     for kind, rows in (("mouth", slice(rig.img_h // 2, None)), ("eye", slice(0, rig.img_h // 2))):
         of = [g for g in got if g["kind"] == kind]
@@ -2799,7 +2761,7 @@ def cmd_library(a) -> int:
             g["odd"] = float(np.abs(g["image"][rows].astype(np.float32) - med_img).mean())
         usual = float(np.median([g["odd"] for g in of])) or 1.0
         got = [g for g in got if g["kind"] != kind or g["odd"] <= ODD * usual]
-    # THE BEST OF EACH: nearest what was wanted, a blurred one costing more
+    # The best of each: nearest what was wanted, a blurred one costing more
     kept = []
     for kind in ("mouth", "eye"):
         of = [g for g in got if g["kind"] == kind]
@@ -2817,7 +2779,7 @@ def cmd_library(a) -> int:
     if not any(g["kind"] == "mouth" for g in kept):
         say("library: no mouth found at full size")
         return 2
-    # IN THE STILL'S COLORS: each image matched to the still's own face round the lips or the lids
+    # In the still's colors: each image matched to the still's own face round the lips or the lids
     still_rgb = cv2.cvtColor(cv2.imread(os.path.join(os.path.dirname(spec["stills"]), "stills", still["file"])), cv2.COLOR_BGR2RGB)
     sh, sw = still_rgb.shape[:2]
     still_face = to_pixels([still["points"]], sw, sh)[0]

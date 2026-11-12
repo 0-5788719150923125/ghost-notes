@@ -1,28 +1,24 @@
 extends RefCounted
 class_name BedrockCatalog
 
-## BedrockCatalog - which Amazon Bedrock models this AWS account can call, and how to reach each.
-## Shared by the Bedrock writer ([TextGen]'s `bedrock`) and painter ([ImageGen]'s `bedrock`); it
-## only ever makes the free listing calls, never a model call.
+## BedrockCatalog - which Amazon Bedrock models this AWS account can call, and how to reach each. Shared
+## by the Bedrock writer ([TextGen]'s `bedrock`) and painter ([ImageGen]'s `bedrock`); it only makes the
+## free listing calls, never a model call.
 ##
-## THE ACCOUNT'S OWN ANSWER, never a hand-kept list: which models exist changes under us (Amazon
-## retired Nova Premier, Nova Canvas and the last Titan generators in 2026), so the list comes from
-## the AWS CLI - `list-foundation-models` and `list-inference-profiles` - and is kept
-## [constant DAYS] days in [constant PATH], for the region it was asked in.
+## The list is the account's own answer, from the AWS CLI (`list-foundation-models` and
+## `list-inference-profiles`), kept [constant DAYS] days in [constant PATH] for the region it was asked in.
 ##
-## ACROSS REGIONS. A model is served in some regions and not others - Stability AI's text-to-image
-## models only in us-west-2 (2026-10), Amazon's Nova through inference profiles nearly everywhere -
-## so the models are read in the configured region AND in [constant ALSO]. A model is called where
-## the configured region reaches it, through its geographic inference profile (data stays in the
-## geography), else the global one, else directly; failing that, directly in the first other region
-## that serves it on demand.
+## Across regions: a model is served in some regions and not others, so models are read in the
+## configured region and in [constant ALSO]. A model is called where the configured region reaches it,
+## through its geographic inference profile (data stays in the geography), else the global one, else
+## directly; failing that, directly in the first other region that serves it on demand.
 ##
-## A MODEL IS KEPT BY ITS BASE ID (`amazon.nova-pro-v1:0`), so a show's choice means the same thing
-## on any machine; [method entry] turns it into this account's `{route, region}`.
+## A model is kept by its base id (`amazon.nova-pro-v1:0`), so a show's choice means the same on any
+## machine; [method entry] turns it into this account's `{route, region}`.
 ##
-## LOOKING UP IS A JOB'S FIRST STEPS. A job that finds no fresh catalog runs the listing calls one
-## after another as steps of its own ([method start_lookup] / [method after_lookup], driven by the
-## backend's `advance`), so no frame ever waits on the network.
+## Looking up is a job's first steps: a job that finds no fresh catalog runs the listing calls one after
+## another as steps of its own ([method start_lookup] / [method after_lookup], driven by the backend's
+## `advance`), so no frame waits on the network.
 
 const PATH := "user://bedrock/catalog.json"
 const DAYS := 7
@@ -30,10 +26,9 @@ const DAYS := 7
 const ALSO := ["us-west-2", "us-east-1"]
 
 
-## The configured region's two calls, then the other regions' model lists (their profiles are
-## not needed: a model reached from elsewhere is called on demand). `required` marks the calls
-## without which there is no catalog; another region failing (not enabled for the account, say)
-## just contributes nothing.
+## The configured region's two calls, then the other regions' model lists (their profiles are not needed:
+## a model reached from elsewhere is called on demand). `required` marks the calls without which there is
+## no catalog; another region failing just contributes nothing.
 static func lookups(region: String) -> Array:
 	var out: Array = [{"region": region, "what": "models", "required": true},
 		{"region": region, "what": "profiles", "required": true}]
@@ -103,13 +98,12 @@ static func _run_lookup(job: Dictionary, binary: String) -> int:
 	return run(job, binary, lookup_argv((job["lookups"] as Array)[i]), out, out + ".log", "bedrock lookup")
 
 
-## THE CATALOG from the CLI's answers - pure, so the gate can hand it canned documents.
-## [param home_models] / [param home_profiles] are the configured region's; [param others] maps
-## another region to its model list. An entry: `{id, name, provider, out ("TEXT"|"IMAGE"),
-## images (reads pictures), region, route}`. Kept: ACTIVE models answering in text alone that
-## stream (chat models do; embeddings and the reranker do not), or in images alone from a text
-## prompt; callable on demand or through a profile - never a provisioned-only variant, and never
-## a retired model whose profile has outlived it.
+## The catalog from the CLI's answers - pure, so the gate can hand it canned documents. [param
+## home_models] / [param home_profiles] are the configured region's; [param others] maps another region to
+## its model list. An entry: `{id, name, provider, out ("TEXT"|"IMAGE"), images (reads pictures), region,
+## route}`. Kept: ACTIVE models answering in text alone that stream (chat models do; embeddings and the
+## reranker do not), or in images alone from a text prompt; callable on demand or through a profile - never
+## a provisioned-only variant or a retired model whose profile has outlived it.
 static func build(home_models: Dictionary, home_profiles: Dictionary, others: Dictionary,
 		asked: String, now: int) -> Dictionary:
 	var routes := {}

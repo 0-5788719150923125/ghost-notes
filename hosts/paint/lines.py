@@ -1,13 +1,14 @@
 """The picture's own lines, found and followed as a hand would draw them (TEST_PLAN.md, stage 3; the engine's
 PaintLayers._trace_lines, the same steps).
 
-WHERE A LINE IS: where the picture stands apart from what is round it (`ROUND`, a blur) by at least `STRONG`, followed on where it
-fades to `WEAK` as long as it runs on from where it was clear (hysteresis - a crackle's faint stretches had broken it into dashes);
-its dotted gaps bridged by a pixel's growth; and only where it is narrow - deeper in than `WIDEST` is an area, not a line.
+Where a line is: where the picture stands apart from what is round it (`ROUND`, a blur) by at least `STRONG`,
+followed on where it fades to `WEAK` as long as it runs on from where it was clear (hysteresis); its dotted gaps
+bridged by a pixel's growth; and only where it is narrow - deeper in than `WIDEST` is an area, not a line.
 
-FOLLOWED AS A HAND DRAWS: thinned to a pixel (Zhang and Suen), followed from each end first, on through where lines meet the straightest
-way, joined to what is drawn already at either end - split at every meeting, a crackle had come out a scatter of dashes. Each line
-carries its width point by point (how far each point lies inside it) and its color (the picture where it is most a line).
+Followed as a hand draws: thinned to a pixel (Zhang and Suen), followed from each end first, on through where
+lines meet the straightest way, joined to what is drawn already at either end, split at every meeting. Each line
+carries its width point by point (how far each point lies inside it) and its color (the picture where it is most
+a line).
 """
 import numpy as np
 from scipy import ndimage

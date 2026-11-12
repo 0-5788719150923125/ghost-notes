@@ -1,19 +1,19 @@
-"""A PAINTING'S PLAN, LAYER BY LAYER, carried out with real marks (TEST_PLAN.md; the user, 2026-11-08: "I should paint the entire mask
-white is a logical first step, because all other colors can be painted on top of that foundation. And for the eyes, I should paint
-them orange, and later paint the inner parts purple").
+"""A painting's plan, layer by layer, carried out with real marks (TEST_PLAN.md).
 
-THE PLAN DECIDES, THE CODE LAYS: a plan is what a painter - an agent - decides from the picture: the base, then each layer in order,
-what it is (`how`), in what paint, where. Where is said loosely (`within`: a box or a polygon in millimeters, or all of it) and made
-exact from the picture: the points there nearer the layer's colors (`near`) than the others (`versus`), the shape then cleaned - its
-edge smoothed (`smooth`), its holes filled, specks dropped - so a round rivet comes out round and a diamond straight-edged. SHAPES AND
-LINES EXACT, COLORS AND TEXTURES APPROXIMATE: a texture is a stippled approximation, never copied a fleck at a time.
+The plan decides, the code lays: a plan is what a painter - an agent - decides from the picture: the base, then each layer in
+order, what it is (`how`), in what paint, where. Where is said loosely (`within`: a box or a polygon in millimeters, or all of
+it) and made exact from the picture: the points there nearer the layer's colors (`near`) than the others (`versus`), the shape
+then cleaned - its edge smoothed (`smooth`), its holes filled, specks dropped - so a round rivet comes out round and a diamond
+straight-edged. Shapes and lines are exact, colors and textures approximate: a texture is a stippled approximation, never
+copied a fleck at a time.
 
     {"layers": [{"name", "how": "base"|"fill"|"glaze"|"stipple"|"outline"|"lines"|"dots"|"blend", "paint": a paint, a mix
       ("a+b 0.25") or "auto", "within": "all" | [x0, y0, x1, y1] | [[x, y], ...], "near": [colors], "versus": [colors], "tol",
       "smooth" (mm), "fill_holes", "min_area" (mm^2), "grow" (mm), "density" (stipple), "size" (mm), "width" (mm), "th"}, ...]}
 
 Colors in `near`/`versus` are paint names, #hex, or {"at": [x0, y0, x1, y1]} - the picture's own color in that box: a painter
-judges a rust patch against the face's own cream between the patches, never against white. Each layer's marks are timed by the hand (tools.Hand), as every other mark.
+judges a rust patch against the face's own cream between the patches, never against white. Each layer's marks are timed by the
+hand (tools.Hand), as every other mark.
 """
 import numpy as np
 from PIL import Image, ImageDraw
@@ -26,35 +26,28 @@ from color import dec, delta, hex_rgb, oklab
 from solve import Painter, _chunks
 from tools import TOOLS
 
-# A BASE IS GONE BACK OVER WHEREVER IT IS THINNER THAN THIS (its coverage, softened over 0.75 mm), at most this many times.
+# A base is gone back over wherever it is thinner than this (its coverage, softened over 0.75 mm), at most this many times.
 BASE_EVEN = 0.93
 BASE_PASSES = 4
 
-# WHAT A CLEAN BRUSH DRAGS AS IT GOES (marks.soften's `drag`, feedback 0020): a blend's pulls a little, a fade's out into the white more.
+# What a clean brush drags as it goes (marks.soften's `drag`): a blend's pulls a little, a fade's out into the white more.
 FEATHER_DRAG = 0.15
 SMUDGE_DRAG = 0.3
-# A HAND KEEPING OUT OF A PLACE TAKES NOTHING UP FROM IT ([PlanPainter._seen]; feedback 0011, 2026-11-10: "The heavy smearing still created
-# large white bands around the outer part of the eye-diamond ... I believe that comes from the outer white smearing into the inner part"):
-# 732687's soot faded by the fat brush, its band 5 mm out past the soot crossing the diamond's line at its corners, laid nothing past
-# where the soot changes anything - but each pull took up the white past the line under its touch and carried it into the plum. A fade
-# may lay a little past its layer (layers_paint.FADE_PAST) but takes up only what its layer is laid on (`untaken`). Off, as it was: a
-# gate's control.
+# A hand keeping out of a place takes nothing up from it ([PlanPainter._seen]): a fade by the fat brush may lay a little
+# past its layer (layers_paint.FADE_PAST) but takes up only what its layer is laid on (`untaken`), or each pull would carry
+# the paint past the layer's line into its neighbor. Off: a gate's control.
 TAKE_INSIDE = True
-# A LINE AS A HAND DRAWS ONE ([PlanPainter._lines]; feedback 0013, 2026-11-10: "These black cracks are barely visible in most places. The
-# eyebrows are barely visible" - "the painter has a very hard time just drawing lines at all - the brush bounces around everywhere, makes
-# one tiny mark, moves on to somewhere else"): at least LINE_LEAST mm wide, however fine its picture's - 732687's cracks were laid 0.3 mm
-# wide, under a pixel on a forehead lying back from the camera - and drawn on without lifting into the next where it begins within
-# LINE_JOIN mm, up to LINE_RUN mm a pull (a liner's load lasts 110 - marks.line), the brush filled first where what is on it will not last
-# the pull (Hand.top_up): a crackle's cracks had been 43 pulls of 5 mm.
+# A line as a hand draws one ([PlanPainter._lines]): at least LINE_LEAST mm wide, however fine its picture's (a line under a
+# pixel on a forehead lying back from the camera does not show), and drawn on without lifting into the next where it begins
+# within LINE_JOIN mm, up to LINE_RUN mm a pull (a liner's load lasts 110 - marks.line), the brush filled first where what is
+# on it will not last the pull (Hand.top_up).
 LINE_LEAST = 1.0
 LINE_LOAD_MM = 110.0
 LINE_JOIN = 2.0
 LINE_RUN = 100.0
 
-# A HAND'S PATS, NEVER A LATTICE (feedback 0001, 2026-11-09: "the gaps are always in the exact same, uniform layout. It makes the forehead
-# look a bit like a grid of color, instead of organic"): each press of a base lands anywhere within this share of the sweep's step of where
-# the sweep would put it - laid on the sweep's lattice, 732687's base had left a hole between every three. (Pressed softer as well, the
-# holes had been no less even, and fifty more presses filled them.)
+# A hand's pats, never a lattice: each press of a base lands anywhere within this share of the sweep's step of where the
+# sweep would put it - laid on the sweep's lattice, a base leaves a hole between every three and the paint reads as a grid.
 PAT_WANDER = 0.4
 
 
@@ -86,8 +79,7 @@ class PlanPainter(Painter):
             return self.paints[c]
         if c in self.opt_names:
             return self.opt_cols[self.opt_names.index(c)]
-        # (...any mix, written "first paint+second paint share" in either order and any share: an agent's "white paint+rust cream 0.1"
-        # had been no color at all, and its base never laid)
+        # (...any mix, written "first paint+second paint share" in either order and any share)
         import re
         mt = re.match(r"^\s*(.+?)\s*\+\s*(.+?)\s+([0-9]*\.?[0-9]+)\s*$", str(c))
         if mt and mt.group(1) in self.paints and mt.group(2) in self.paints:
@@ -157,8 +149,8 @@ class PlanPainter(Painter):
             st = ndimage.generate_binary_structure(2, 1)
             M = ndimage.binary_opening(M, st, iterations=r)
             M = ndimage.binary_closing(M, st, iterations=r)
-            # (...ITS EDGE A PAINTER'S CURVE: the signed distance to its edge softened and cut at zero - a curve's wobble smaller than
-            # `smooth` gone, its corners kept rounder than a picture's pixels; the lips and brows had come out jagged)
+            # (...its edge a painter's curve: the signed distance to its edge softened and cut at zero - a curve's wobble smaller than
+            # `smooth` gone, its corners kept rounder than a picture's pixels)
             M = smooth_shape(M, r)
         if L.get("fill_holes"):
             M = ndimage.binary_fill_holes(M)
@@ -185,7 +177,7 @@ class PlanPainter(Painter):
         return M & self.ref.face
 
     def paint_of(self, L, M, pure=False):
-        """A layer's paint (sRGB, name): as named, else the paint or mix nearest its picture over `M`. `pure`: ONE POT'S PAINT, never a
+        """A layer's paint (sRGB, name): as named, else the paint or mix nearest its picture over `M`. `pure`: one pot's paint, never a
         mix - whatever is named, the paint nearest it."""
         p = L.get("paint", "auto")
         names, cols = self.opt_names, self.opt_cols
@@ -209,16 +201,15 @@ class PlanPainter(Painter):
         # (...the paint or mix nearest the picture where the layer goes)
         med = np.median(self.ref.lab[M], axis=0) if M.any() else self.ref.lab[self.ref.face].mean(0)
         opt_lab = oklab(dec(cols))
-        # (...hue weighed up, as the areas are cut: by lightness alone a warm cream had matched a grey)
+        # (...hue weighed up, as the areas are cut: by lightness alone a warm cream matches a grey)
         j = int(np.argmin(np.linalg.norm((opt_lab - med) * self.HUE, axis=1)))
         return cols[j], names[j]
 
     # --- what each layer is ------------------------------------------------------------------------------------------------------
 
     def _base(self, L):
-        """THE BASE: one paint patted over the whole face with the sponge until it is whole - ONE POT'S PAINT, never a mix (feedback
-        0001, 2026-11-09: "The color we're painting doesn't seem to actually match the foundation it was sourced from"): a sponge is loaded
-        from one pot, and the show takes it there - 732687's base, olive and white mixed, had been laid a grey-green from the white pot."""
+        """The base: one paint patted over the whole face with the sponge until it is whole - one pot's paint, never a mix: a sponge
+        is loaded from one pot, and the show takes it there."""
         M = self.ref.face
         # (...its paint the picture's where it is plainest - `sample`, a box or polygon - or as named)
         col, name = self.paint_of(L, self._within(L.get("sample", "all")), pure=True)
@@ -245,14 +236,12 @@ class PlanPainter(Painter):
                 c = np.array([x + off * np.cos(ang), y + off * np.sin(ang)])
                 if self._near_face(c, r * 0.7):
                     self._force(mk.sponge_print(self.cv, c, r, col, name, self.hand.load, 1.0, False, int(self.rng.integers(1 << 30))), c)
-        # (...pressed again with its face wherever it is still thin, a cell at a time - its corner, a press for every gap, had made the
-        # base ten minutes long - UNTIL IT IS EVEN (2026-11-09, the user: "the sponge was put down too early. There are still patchy
-        # areas all over the mask, where faint color is still showing through": twice over what was under 0.8, 732687's white base left
-        # 3.8% of the face between six and nine tenths, the skin's tan showing through it)
+        # (...pressed again with its face wherever it is still thin, a cell at a time (its corner, a press for every gap, would make
+        # the base ten minutes long) - until it is even: twice over what was under 0.8, so the skin's tan does not show through)
         for _ in range(BASE_PASSES):
             thin = face & (ndimage.gaussian_filter(self.cv.alp, PX * 0.75) < BASE_EVEN)
-            # (...EACH THIN PATCH WHOLE, wherever it lies - a press at its middle, or, larger than a press, presses spread over it a press
-            # apart: cut by a grid of cells, a gap across a cell's border had been pressed twice, or not at all)
+            # (...each thin patch whole, wherever it lies - a press at its middle, or, larger than a press, presses spread over it a press
+            # apart: cut by a grid of cells, a gap across a cell's border would be pressed twice, or not at all)
             comps, n = ndimage.label(thin)
             cents = []
             step = r * 1.25 * PX
@@ -277,8 +266,8 @@ class PlanPainter(Painter):
                 self._force(mk.sponge_print(self.cv, cents[i], r, col, name, self.hand.load, 1.0, False, int(self.rng.integers(1 << 30))), cents[i])
 
     def _fill(self, L):
-        """A SHAPE FILLED SOLID: along its contours, a brush as thick as each part of it is, and filled again wherever paint is still
-        thin - no bare skin left showing (the user, 2026-11-08: "large gaps ... tan is showing through in a ton of places")."""
+        """A shape filled solid: along its contours, a brush as thick as each part of it is, and filled again wherever paint is still
+        thin - no bare skin left showing."""
         M = self.mask(L)
         if not M.any():
             return
@@ -339,8 +328,8 @@ class PlanPainter(Painter):
             ls = lines_mod._follow(sk, np.ones(sk.shape), np.zeros(sk.shape + (3,)), np.ones(sk.shape), PX)
             half = min(hw, d + 0.5) if li == 0 else hw
             for l in ls:
-                # (...each ring a smooth curve, the outer one CUT IN: crisp at its outer edge, as a painter draws a shape's edge before
-                # filling it - the pixel ring had laid every wobble of the picture's edge)
+                # (...each ring a smooth curve, the outer one cut in: crisp at its outer edge, as a painter draws a shape's edge before
+                # filling it - the pixel ring would lay every wobble of the picture's edge)
                 path = smooth_path(l["pts"], max(self.EDGE_SMOOTH, d * 0.3), closed=_is_closed(l["pts"]))
                 cut = li == 0 and th >= 0.9
                 for chunk in _chunks(path, 45.0):
@@ -356,7 +345,7 @@ class PlanPainter(Painter):
                                             belly=0.8, edge=0.4, streak=(0.03, 0.2, 0.2), seed=int(self.rng.integers(1 << 30)))
                         self.try_lay(m, self.ref.lab, -1e9)
                         continue
-                    # (...a fill's strokes laid wet into each other: little bristle streaking - ring after streaked ring had shown as bands)
+                    # (...a fill's strokes laid wet into each other: little bristle streaking - ring after streaked ring shows as bands)
                     m = mk.brush_stroke(self.cv, pts, max(half, hw * mk.TIP_LEAST), col, name, th, self.hand.load,
                                         "glaze" if th < 0.9 else "sweep", tool, belly=0.75 if th < 0.9 else (0.1 if cut else 0.45),
                                         edge=0.12 if cut else 0.3, tail=0.0 if cut else mk.TAIL, streak=(0.04, 0.3, 0.3),
@@ -371,9 +360,9 @@ class PlanPainter(Painter):
             self.try_lay(mk.dab(self.cv, c, max(thick, 0.3), col, name, 1.0, th, tool), self.ref.lab, -1e9, c)
 
     def _strokes(self, L):
-        """A LONG SHAPE DRAWN AS A HAND DRAWS IT - a drip, a brow, a lid's line: one stroke along its middle, pressed to its width at
+        """A long shape drawn as a hand draws it - a drip, a brow, a lid's line: one stroke along its middle, pressed to its width at
         every point (thick where it is thick, tapering where it tapers), pulled the way it runs - a drip downward. Filled round its
-        contours, each drip had been outlined both sides and gone over again."""
+        contours, a drip would be outlined both sides and gone over again."""
         M = self.mask(L)
         if not M.any():
             return
@@ -421,7 +410,7 @@ class PlanPainter(Painter):
                                     streak=(0.05, 0.4, 0.4), seed=int(self.rng.integers(1 << 30)))
                 self.try_lay(m, self.ref.lab, -1e9)
         # (...and whatever of it is still bare, filled - only a real gap, and never round a shape drawn as one stroke: touched up along
-        # every edge, a brow had come out beaded)
+        # every edge, a brow comes out beaded)
         if L.get("one"):
             return
         left = M & (delta(self.cv.lab(), oklab(dec(col))[None, None, :]) > 12)
@@ -430,7 +419,7 @@ class PlanPainter(Painter):
             self._solid(left, col, name, 1.0, None, passes=1)
 
     def _correct(self, L):
-        """GOING BACK OVER WHAT CAME OUT WRONG, as e-David does with its camera (Deussen et al. 2012): each shape layer before this one
+        """Going back over what came out wrong, as e-David does with its camera (Deussen et al. 2012): each shape layer before this one
         looked at again - where its shape still does not show its paint, though the picture wants it there, marks added, and only marks
         that bring the canvas nearer the picture; a layer no mark helps any more is left. Never over work already right."""
         done = []
@@ -516,9 +505,7 @@ class PlanPainter(Painter):
             self.try_lay(m, self.ref.lab, -1e9, pts[i])
 
     # --- color worked on the face: shading, gradients, textured fills ------------------------------------------------------------
-    # (the user, 2026-11-09: "there is very little actual color blending or gradients here ... add a touch of black to make an entire
-    # region darker ... if the paint is still wet, then hypothetically you could feather the region between them - and blend those two
-    # colors into a new one. It's all about the gradients")
+    # A touch of black darkens a region; while the paint is wet, feathering the region between two colors blends them into a new one.
 
     def _amount(self, M, col, most=0.9, soft=1.5, target=None):
         """HOW MUCH OF PAINT `col` EACH POINT OF `M` WANTS laid over what is there now to come nearest the picture: the share along the
@@ -544,8 +531,8 @@ class PlanPainter(Painter):
                else self._amount(M, col, float(L.get("most", 0.85)), float(L.get("soft", 1.5)), L.get("target"))) / mk.FILM
         if amt.max() < 0.05:
             return
-        # (...only where it is wanted - `least` of it at the least: shading asked over the whole face had stroked every inch of it, most
-        # of those strokes laying nothing the picture needed - with a broad soft brush, the fewer strokes)
+        # (...only where it is wanted - `least` of it at the least: shading asked over the whole face would stroke every inch of it,
+        # most strokes laying nothing the picture needed - with a broad soft brush, the fewer strokes)
         M = smooth_shape(M & (amt > float(L.get("least", 0.08))), int(PX * 1.5))
         if not M.any():
             return
@@ -562,9 +549,8 @@ class PlanPainter(Painter):
         `reach` mm each way - the colors laid side by side run into each other and make new ones between."""
         tool = tool or ("blender" if "blender" in self.tools else "round")
         dt = ndimage.distance_transform_edt(M)
-        # A CAREFUL HAND (feedback 0020, 2026-11-09: "You would want a hand that generally tries to keep its whole brush inside of the edge"):
-        # every pull's touch inside `M` - its outermost a whole touch in from the edge, where it had been six tenths of one, the fat brush seen
-        # sweeping the white past it - and a brush that fits where `M` is narrower than the fat one's touch
+        # A careful hand: every pull's touch inside `M` - its outermost a whole touch in from the edge - and a brush that fits where
+        # `M` is narrower than the fat one's touch
         for smaller in ("blender", "flat", "round"):
             if TOOLS[tool]["mm"] * 0.3 * PX <= dt.max() or TOOLS[tool]["mm"] <= TOOLS[smaller]["mm"] or smaller not in self.tools:
                 continue
@@ -612,10 +598,9 @@ class PlanPainter(Painter):
         return len(self.laid) * 7919 + int(abs(float(pts[0][0])) * 37 + abs(float(pts[0][1])) * 101)
 
     def _smudge(self, L):
-        """A LARGE SMUDGE, AS STRONG AS ASKED: a fat brush, clean and damp, worked over a band either side of a shape's edge (`band` mm)
+        """A large smudge, as strong as asked: a fat brush, clean and damp, worked over a band either side of a shape's edge (`band` mm)
         - or over the whole shape (`whole`) - each pull `size` mm across, moving the paint under it about `reach` mm, with `strength`
-        (0-1): a region's paints run out into what is round them, as the picture's fade into the white (the user, 2026-11-09: "a lot
-        more feathering/fuzziness/blending around the extreme edges ... they blend right into the white")."""
+        (0-1): a region's paints run out into what is round them, as the picture's fade into the white."""
         M = self.mask(L)
         if not M.any():
             return
@@ -623,7 +608,7 @@ class PlanPainter(Painter):
         if L.get("whole"):
             area = M
         else:
-            # (...out past the edge by `band`, in from it by `inside` of that - reaching far in, it had washed a lid's color out)
+            # (...out past the edge by `band`, in from it by `inside` of that - reaching far in, it would wash a lid's color out)
             area = (ndimage.binary_dilation(M, iterations=int(band * PX))
                     & ~ndimage.binary_erosion(M, iterations=max(int(band * PX * float(L.get("inside", 0.3))), 1)))
             area &= self.ref.face
@@ -762,8 +747,8 @@ class PlanPainter(Painter):
         yy, xx = np.nonzero(M)
         if n <= 0 or len(yy) == 0:
             return
-        # (...NO LONGER THAN ITS TIME - `seconds`, three minutes unless it says: a texture asked over the whole face had been sixteen
-        # thousand presses and four hours)
+        # (...no longer than its time - `seconds`, three minutes unless it says: a texture asked over the whole face would be
+        # thousands of presses and hours)
         n = min(n, int(L.get("most", 600)))
         pick = self.rng.choice(len(yy), min(n, len(yy)), replace=False)
         pts = [np.array([xx[i] + 0.5, yy[i] + 0.5]) / PX for i in pick]
@@ -771,8 +756,8 @@ class PlanPainter(Painter):
         for i in self._tour(pts):
             if self.hand.t > t_end:
                 break
-            # (...each pounce its own: pressed harder or lighter, a little larger or smaller, the sponge turned between - as the trade
-            # stipples: the same press over and over had laid polka dots)
+            # (...each pounce its own: pressed harder or lighter, a little larger or smaller, the sponge turned between: the same press
+            # over and over lays polka dots)
             k = float(self.rng.uniform(0.7, 1.3))
             pr = float(L.get("press", 0.6)) * float(self.rng.uniform(0.6, 1.2))
             m = mk.sponge_print(self.cv, pts[i], rr * k / 0.38, col, name, min(self.hand.load, float(L.get("load", 0.75))), min(pr, 1.0), True,
@@ -878,8 +863,7 @@ class PlanPainter(Painter):
                 m = mk.flick(self.cv, l["pts"], hw, col, name, 1.0, self.hand.load, tool, int(self.rng.integers(1 << 30)))
             else:
                 m = mk.line(self.cv, l["pts"], hw, col, name, 1.0, self.hand.load, "line", tool, int(self.rng.integers(1 << 30)))
-            # (...a crackle's many short lines flicked on - `quick` - never cut in at an outline's careful pace: 22 minutes of a face's
-            # time had gone to its cracks)
+            # (...a crackle's many short lines flicked on - `quick` - never cut in at an outline's careful pace)
             if m is not None and L.get("quick"):
                 m.kind = "crack"
             self.try_lay(m, target, -1e9 if L.get("all") else 0.0, soft=self.LINE_SOFT * PX)
@@ -890,12 +874,12 @@ class PlanPainter(Painter):
         M = self.mask(L)
         if not M.any():
             return
-        # (...a box with no colors said: the round thing inside it found by itself - what differs from the box's own border - an agent's
-        # box drawn round each rivet had been painted as a square)
+        # (...a box with no colors said: the round thing inside it found by itself - what differs from the box's own border - so a
+        # box drawn round each rivet is not painted as a square)
         if "near" not in L and "darker" not in L and "lighter" not in L:
             M = self._blobs_in(L, M)
-        # (...ONLY WHAT IS A DOT: a part no larger than `max_area` and round enough - its area against the circle round its widest
-        # inside - whatever the plan's colors caught: a light patch of the face taken for a jewel had been painted as one disc 30 mm across)
+        # (...only what is a dot: a part no larger than `max_area` and round enough - its area against the circle round its widest
+        # inside - whatever the plan's colors caught)
         comps, n = ndimage.label(M)
         most = float(L.get("max_area", 20.0)) * PX * PX
         keep = np.zeros(n + 1, bool)
@@ -1029,9 +1013,8 @@ def _nearly_straight(pts, tol):
 
 
 def _chained(found, order, join, most=60.0):
-    """LINES DRAWN ON WITHOUT LIFTING where one begins near where the last ended (`join` mm), as a crackle is drawn - each lifted and set
-    down again, its cracks had taken longer than drawing them; none longer than `most` mm. The next always the nearest to where the hand
-    is, by either of its ends - from the first of `order`."""
+    """Lines drawn on without lifting where one begins near where the last ended (`join` mm), as a crackle is drawn; none longer
+    than `most` mm. The next always the nearest to where the hand is, by either of its ends - from the first of `order`."""
     if not found:
         return []
     starts = np.array([np.asarray(l["pts"])[0] for l in found])

@@ -1,23 +1,13 @@
 extends Node
 
-## Boot - the earliest hook (first autoload), for things that must happen before the
-## window is ever drawn into. In export-render mode (--export) it keeps the render
-## window out of the way as early as GDScript can - off-screen, no focus - so it
-## barely flickers into view before the render takes over. (The OS maps the window
-## during engine init, before any script runs, so a sub-frame flash isn't fully
-## avoidable without a virtual display; this gets it as close as possible.)
+## Boot - the earliest hook (first autoload), for things that must happen before the window is drawn into.
+## In export-render mode (--export) it keeps the render window off-screen and unfocused so it barely flickers
+## into view (the OS maps the window during engine init, so a flash cannot be avoided entirely).
 ##
-## NEVER minimize a Movie Maker window. Godot skips rendering while a window is
-## minimized (window_can_draw() is false), and the movie writer then re-captures the
-## last rendered buffer while the audio keeps advancing - the recording freezes for
-## as long as the compositor holds the window minimized (on Wayland it can be every
-## frame: a fully black video). This was the "4K exports partially freeze for
-## seconds" bug: the old code minimized here to hide the window on Wayland, and the
-## slow 4K frames gave the compositor every chance to throttle it. The exporter now
-## shrinks the OS window instead (window_*_override in override.cfg) - the movie
-## records the VIEWPORT, whose resolution is independent of the window in the
-## export's "viewport" stretch mode, so a tiny window costs nothing and stays
-## drawable.
+## Never minimize a Movie Maker window: Godot skips rendering a minimized window, the movie writer re-captures
+## the last buffer while audio advances, and the recording freezes (a black video on Wayland). The exporter
+## shrinks the OS window instead (window_*_override in override.cfg): the movie records the viewport, which in
+## the export's "viewport" stretch mode is independent of the window size.
 
 func _enter_tree() -> void:
 	if not OS.get_cmdline_user_args().has("--export"):
@@ -26,11 +16,10 @@ func _enter_tree() -> void:
 	DisplayServer.window_set_position(Vector2i(-5000, -5000))   # X11 honors this
 
 
-## THE PRODUCT'S NAME, for everything a person sees: the window title and the home screen. The code
-## keeps "ghost" - its directory, settings file and frontmatter key. The project is called by this
-## name too (`application/config/name`), but Godot would name the user:// folder after it and strand
-## every setting, download and episode in the old one, so project.godot names the folder outright
-## (`custom_user_dir_name`, held by docs.py's `check_user_dir`).
+## The product's name, for everything a person sees: the window title and the home screen. The code keeps
+## "ghost" for its directory, settings file and frontmatter key. The project's `application/config/name` is this
+## name too, so project.godot names the user:// folder outright (`custom_user_dir_name`, held by docs.py's
+## `check_user_dir`) or Godot would rename it.
 const NAME := "Ghost Notes"
 const TAGLINE := "A Spectral Experience"
 const TITLE := NAME + ": " + TAGLINE
@@ -52,16 +41,13 @@ const WINDOW_SHARE := 0.75
 ## Engine arguments that say where or how big the window is - a launch that gives one keeps it.
 const WINDOW_ARGS := ["--resolution", "--position", "-f", "--fullscreen", "-m", "--maximized"]
 
-## THE WINDOW OPENS AT THREE QUARTERS OF ITS SCREEN, centered on the space the desktop leaves
-## free (panels and docks excluded). The project's 1920x1080 is the STAGE - what the picture is
-## composed for, which the canvas_items stretch scales to any window - and Godot opens the window
-## at that size by default, which on a 3840x2160 screen is a quarter of it. Only for a person's
-## session: a render, a probe or a headless run keeps the size it was given (a render records
-## the viewport, and the exporter sizes that window itself), as does a launch that names a size,
+## The window opens at three quarters of its screen, centered on the space the desktop leaves free (panels
+## and docks excluded). The project's 1920x1080 is the stage, which the canvas_items stretch scales to any
+## window; Godot's default would open a window that size, a quarter of a 4K screen. Only for a person's
+## session: a render, a probe or a headless run keeps the size it was given, as does a launch that names a size,
 ## a position or a mode. [param force] is the probe's seam. True when the window was resized.
-## THE PHONE SHELL (next/notes.md step 11): a phone or a tablet - or `--handheld`, or
-## `GHOST_HANDHELD=1`, on the desktop. The flag decides, not the window: a desktop window at phone
-## size is not a phone (monotone's lesson). [member handheld_for_test] is a gate's seam.
+## The phone shell (next/notes.md step 11): a phone or tablet, or `--handheld` / `GHOST_HANDHELD=1` on the
+## desktop. The flag decides, not the window size. [member handheld_for_test] is a gate's seam.
 static var handheld_for_test := false
 
 
@@ -89,8 +75,8 @@ func fit_window(force := false) -> bool:
 	return true
 
 
-## The phone shell on the desktop opens in a phone's shape - portrait, most of the screen's height -
-## for a person; a phone fills its own screen, and a probe keeps the size it was given.
+## The phone shell on the desktop opens in a phone's shape (portrait, most of the screen's height) for a
+## person; a phone fills its own screen, and a probe keeps the size it was given.
 func _fit_handheld() -> void:
 	if OS.has_feature("mobile") or DisplayServer.get_name() == "headless" or Settings.is_read_only():
 		return
@@ -104,24 +90,14 @@ func _fit_handheld() -> void:
 	win.position = area.position + (area.size - size) / 2
 
 
-## TOOLTIP WRAPPING, applied to the whole app.
+## Tooltip wrapping, applied to the whole app.
 ##
-## Godot's built-in tooltip is a Label with autowrap OFF, and there is no theme item to change
-## that: the default theme exposes only `shadow_offset_x/y`, `outline_size` and `font_size` for
-## `TooltipLabel`, so no Theme resource can fix it. The label simply grows to fit, and a long
-## description runs off the side of the screen - measured, 79 characters is 636 px, so ghost's
-## longest tooltip renders about 3,400 px wide on a 1920 px display.
+## Godot's tooltip label has no autowrap and no theme item to turn it on, so a long description runs off the
+## screen. The text is re-flowed instead: real newlines inserted at a measured pixel width, in the font and size
+## the tooltip draws with. Hooked from `node_added`, so it covers every mode, dialog and later-added control.
 ##
-## Since the WIDTH cannot be constrained, the TEXT is re-flowed instead: real newlines inserted at
-## a measured pixel width, using the same font and size the tooltip will draw with. Hooked from
-## `node_added` so it covers every mode, every dialog and anything added later without each call
-## site having to remember - the request was for this to be global, and 68 scattered
-## `tooltip_text` assignments is exactly the kind of thing that goes stale.
-##
-## Re-flowing is IDEMPOTENT (a wrapped paragraph collapses back to one line and re-wraps to the
-## same result), which is what lets it run again on every hover - so a tooltip whose text is
-## rewritten at runtime, as the mask editor's readouts are, stays wrapped too. Blank-line
-## paragraph breaks an author wrote on purpose are preserved.
+## Re-flowing is idempotent (a wrapped paragraph collapses to one line and re-wraps identically), so it can
+## run on every hover and a tooltip rewritten at runtime stays wrapped. Blank-line paragraph breaks are kept.
 const TIP_MAX_PX := 480.0
 
 
@@ -130,32 +106,28 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--apply-update") \
 			or OS.get_cmdline_user_args().has("--update-smoke-hold"):
 		return
-	# HERE, not in _enter_tree: autoloads all ENTER the tree before any is ready, so Settings has
-	# not yet decided whether this process is a render or a probe when Boot enters it
+	# Here, not in _enter_tree: autoloads all enter the tree before any is ready, so Settings has not yet decided
+	# whether this process is a render or a probe.
 	if handheld():
 		_fit_handheld()
 	elif not OS.get_cmdline_user_args().has("--export"):
 		fit_window()
 	get_window().title = TITLE
-	# THE WINDOW'S ICON IS THIS MACHINE'S GHOST, drawn here ([AppIcon]); project.godot names none.
-	# Godot sets its own at startup and an autoload's ready comes after it, so this one stays.
+	# The window's icon is this machine's ghost ([AppIcon]); project.godot names none. An autoload's ready comes
+	# after Godot sets its own icon, so this one stays.
 	AppIcon.apply()
 	get_tree().node_added.connect(_hook_tooltip)
 
 
-## THE SYMBOLS' FONTS, FOUND ONCE (2026-11-07, measured behind the user's "We can delete them individually now, but that
-## can be very slow"). Ghost ships no UI font, so the text is Godot's own (Open Sans SemiBold), which has no ○ ✓ ✕ ⚙ ⟳ ▶:
-## for each, the shaper asked the system for a font that has it - fontconfig, every time a label was laid out, 5 to 8 ms
-## where plain text takes 0.2. A list of 60 notes, two symbols a row, took a second to build, and every panel, card and
-## row of buttons paid the same. Handed to the default font as its own FALLBACKS, they are found in it (0.15 ms).
+## Fonts for the symbols the UI uses, found once. Ghost ships no UI font, so text is Godot's own (Open Sans
+## SemiBold), which lacks ○ ✓ ✕ ⚙ ⟳ ▶; for each, the shaper would ask the system (fontconfig) on every label layout, 5 to
+## 8 ms against 0.2 for plain text. Handed to the default font as fallbacks they are found in 0.15 ms.
 ##
-## WHICH, AND WHY ONLY THESE: the sans families fontconfig itself turns to, in its order (Noto Sans, then DejaVu Sans), at
-## the default font's weight, as its search asked for them - drawn side by side, every symbol the app uses came out the
-## same. A FONT TALLER THAN THE DEFAULT IS NEVER LENT: Godot takes a label's height from the tallest font on the list, so
-## Noto Sans Symbols 2 (29 px at 16 against 23) made every label in the app 11 px taller. And no emoji font: the system
-## draws ⏸ ⏺ 🎞 🖼 in plain symbols, and an emoji font on the list would paint them in color. What none of these has (an
-## emoji, ⏳, ⤓) still finds its font the old way. One [SystemFont] per family, for a SystemFont is the first of its names
-## that is installed, never several; a machine with neither family lends nothing.
+## Only the sans families fontconfig itself turns to (Noto Sans, then DejaVu Sans), at the default font's weight.
+## A font taller than the default is never lent: Godot takes a label's height from the tallest font on the list
+## (Noto Sans Symbols 2 made every label 11 px taller). No emoji font either: it would paint ⏸ ⏺ 🎞 🖼 in color.
+## What none of these has (an emoji, ⏳, ⤓) still finds its font the slow way. One [SystemFont] per family, since a
+## SystemFont is the first of its names that is installed; a machine with neither family lends nothing.
 const SYMBOL_FONTS := ["Noto Sans", "DejaVu Sans"]
 
 
@@ -177,23 +149,20 @@ static func lend_symbol_fonts() -> void:
 	base.fallbacks = lent
 
 
-## THE BACKSTOP for background programs. Every child ghost starts goes through
-## [Subprocess], which remembers it; this kills whatever is still registered when the app
-## closes, so a mode that forgets to clean up (or is torn down in an order that skips its
-## own `_exit_tree`) still cannot leave an `ffmpeg` writing to the disk with nothing on
-## screen. Boot is the first autoload, so it is the last thing standing at shutdown.
+## The backstop for background programs. Every child ghost starts goes through [Subprocess], which remembers
+## it; this kills whatever is still registered when the app closes, so a mode that forgets to clean up still
+## cannot leave an `ffmpeg` writing to disk. Boot is the first autoload, so it is the last standing at shutdown.
 ##
-## This is the CLEAN-QUIT half only. If ghost is killed outright no script runs at all,
-## which is why `Subprocess` also binds each child to this process at the kernel level -
-## see its class doc.
+## This is the clean-quit half only. If ghost is killed outright no script runs, which is why `Subprocess` also
+## binds each child to this process at the kernel level (see its class doc).
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE:
 		Subprocess.reap_all()
 
 
 func _hook_tooltip(n: Node) -> void:
-	# A MENU'S ITEMS ARE NOT CONTROLS (2026-11-11, the user of "+"'s: "the description can be very wide; we should constrain
-	# its tooltip width"): each item's tooltip is re-flowed as the menu opens, after whatever fills it as it opens has
+	# A menu's items are not controls: each item's tooltip is re-flowed as the menu opens, after whatever fills
+	# it has run
 	if n is PopupMenu:
 		var pop: PopupMenu = n
 		if not pop.about_to_popup.is_connected(wrap_items):

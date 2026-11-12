@@ -2,23 +2,18 @@ extends GhostScene
 
 ## Filaments - the procedural-growth primitive, showcased.
 ##
-## One scene, three lives chosen by seed, all the same [Filament] mechanism on a
-## curl-noise [Flow2D] field - proof that the primitive composes:
-##   lightning - arcs that strike on the beat: a jagged forked path floods in fast,
-##               blazes, then fades, and re-strikes on the next hit (slow-motion bolts).
-##   neural    - tendrils that creep from scattered seeds and slowly regrow, a living
-##               network coiling through the frame.
+## One scene, three lives chosen by seed, all the same [Filament] mechanism on a curl-noise [Flow2D] field:
+##   lightning - arcs that strike on the beat: a jagged forked path floods in fast, blazes, then fades,
+##               and re-strikes on the next hit.
+##   neural    - tendrils that creep from scattered seeds and slowly regrow, a network coiling through the frame.
 ##   thread    - long smooth threads flowing across on the flow, barely branching.
-## Audio drives the strikes / growth surge and the brightness; nonlinearity (the
-## flow's meander, the spike-shaped drive, the asymmetric flare) is what animates it.
-## Each life draws its color from a [Scheme] mood in its own plausible set, and its
-## count/weight from a density, so no two storms are the same storm.
+## Audio drives the strikes / growth surge and the brightness; nonlinearity (the flow's meander, the
+## spike-shaped drive, the asymmetric flare) animates it. Each life draws its color from a [Scheme] mood
+## in its own plausible set, and its count/weight from a density.
 
-# `moods` is the set of [Scheme] moods that still read as this life - a bolt can be
-# any color a discharge takes (cold blue, violet, near-white, ionized green) but not
-# a warm sodium orange, which reads as fire; threads can be any fiber. `sat_mul`
-# scales whatever saturation the mood carries, which is how lightning stays close to
-# white while nerves stay vivid, without either restating an absolute number.
+# `moods` is the set of [Scheme] moods that still read as this life (a bolt can be any color a discharge
+# takes but not a warm sodium orange, which reads as fire). `sat_mul` scales the mood's saturation, so
+# lightning stays near white while nerves stay vivid.
 const MODES := {
 	"lightning": {"variant": "lightning", "count_lo": 3, "count_hi": 8, "grow": 1.6,
 		"fade": 1.1, "strike": true, "sat_mul": 0.6, "w_lo": 3.0, "w_hi": 5.0,
@@ -34,10 +29,8 @@ const MODES := {
 		"len_lo": 0.6, "len_hi": 0.95, "evolve": 0.08, "jitter": 0.006, "cluster": 0.4},
 }
 
-# HOW MANY, HOW THICK. Each mode used to run one count range, so a lightning storm
-# was always 4-7 bolts of the same weight. Trading count against width keeps the ink
-# on screen roughly constant while the SILHOUETTE changes completely: a few heavy
-# strands, or a fine web of many.
+# How many, how thick: trading count against width keeps the ink on screen roughly constant while the
+# silhouette changes completely (a few heavy strands, or a fine web of many).
 const DENSITIES := [
 	{"name": "sparse", "count": 0.55, "width": 1.5},
 	{"name": "even", "count": 1.0, "width": 1.0},
@@ -71,8 +64,8 @@ var _cur_maxd := 1           # the bolt being drawn: its deepest branch level
 var _cur_persist := false    # the bolt being drawn: is a persistent channel
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
-## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
+## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed.
 const FIELDS := {
 	"kind": {"label": "Kind", "type": "choice", "options": "MODES", "default": null,
 		"blurb": "What the filaments are: lightning bolts that strike, neural tendrils, or fiber threads."},
@@ -115,12 +108,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			fil.hold = rng.randf_range(1.6, 4.5)
 			fil.mode = _roll_mode()
 		_fils.append(fil)
-	# Mark some bolts as persistent CHANNELS: their base never fully fades and the next
-	# strike re-ionizes the SAME path (real lightning re-uses its route). The rest are
-	# transient forks that come and go. Guarantee at least one channel. NO opening strike is
-	# seeded any more: lightning scatters from real audio energy (see the loudness gate in
-	# _update_strikes), so a silent intro / long fade-in stays dark instead of flashing out
-	# of dead air.
+	# Mark some bolts as persistent channels: their base never fully fades and the next strike re-ionizes
+	# the same path. The rest are transient forks. At least one channel is guaranteed. There is no opening
+	# strike: lightning scatters from real audio energy (see the loudness gate in _update_strikes), so a
+	# silent intro stays dark.
 	if bool(_cfg.strike):
 		var any_persist := false
 		for fil in _fils:
@@ -139,12 +130,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 func _seed_path(fil: Dictionary, i: int, count: int) -> void:
 	match _mode:
 		"lightning":
-			# Spawn in several places around the upper arc, then CONVERGE: each bolt heads
-			# toward a shared strike point, so they fan in instead of falling in parallel.
+			# Spawn in several places around the upper arc, then converge on a shared strike point.
 			fil.origin = Vector2(_rng.randf_range(-0.92, 0.92), _rng.randf_range(-0.72, -0.30))
-			# Some bolts come from the DISTANCE: pushed well outside the frame along their own
-			# line to the strike point, with a longer reach, so they streak in already full
-			# rather than sprouting from just past the edge - the world extends past the view.
+			# Some bolts come from the distance: pushed well outside the frame along their own line to the
+			# strike point, with a longer reach, so they streak in already full.
 			if _rng.randf() < 0.45:
 				var dir: Vector2 = (Vector2(fil.origin) - _converge).normalized()
 				if dir.length() < 0.5:
@@ -173,8 +162,7 @@ func _seed_path(fil: Dictionary, i: int, count: int) -> void:
 
 
 func _regrow(fil: Dictionary) -> void:
-	# A distant filament reaches further (a longer path with more segments) so it spans the
-	# gap from off-screen into the frame and arrives already developed.
+	# A distant filament reaches further (a longer path with more segments), so it arrives already developed.
 	var reach: float = float(fil.get("reach", 1.0))
 	var steps := int(round(_rng.randi_range(10, 18) * clampf(reach, 1.0, 3.0)))
 	var length := _rng.randf_range(float(_cfg.len_lo), float(_cfg.len_hi)) * reach
@@ -191,9 +179,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	tick(f, delta)
 	drift_view(f, 0.03, 0.05)
 	_flow.advance(delta)
-	# Spontaneous activation: a RARE nonlinear self-ignition (independent of the audio), so the scene
-	# never freezes into dead space when the song fades out - there is always the odd flicker of life.
-	# Deliberately low-chance and impulsive (not the constant fallback that used to strobe the intro).
+	# Spontaneous activation: a rare, impulsive self-ignition independent of the audio, so the scene never
+	# freezes into dead space when the song fades out.
 	_spark = maxf(0.0, _spark - delta * 1.3)
 	var spont := false
 	if _rng.randf() < 0.22 * delta:
@@ -211,16 +198,13 @@ func update(f: AudioFeatures, delta: float) -> void:
 	queue_redraw()
 
 
-# Lightning: bolts strike on beats and on harmonic transients, flood in, blaze, then fade
-# out. They strike ONLY when the audio is actually sounding - a smoothed-loudness gate keeps
-# the scene dark through a silent intro / fade-in, so bolts scatter from real spectral energy
-# rather than out of dead air. While the audio is alive, a fallback cadence still flickers
-# the bolts and a strike is forced if none are lit, so loud passages are never black.
+# Lightning: bolts strike on beats and on harmonic transients, flood in, blaze, then fade out. They strike
+# only when the audio is sounding (a smoothed-loudness gate keeps a silent intro / fade-in dark). While the
+# audio is alive, a fallback cadence still flickers the bolts and a strike is forced if none are lit.
 func _update_strikes(f: AudioFeatures, delta: float, grow: float, beat_edge: bool, spont: bool) -> void:
 	var drive := 0.5 + 1.5 * Nonlinear.apply("spike", clampf(0.6 * f.energy + f.beat + _spark, 0.0, 1.0), 2.0)
-	# Audio-liveness gate. `energy` is the overall loudness proxy (the per-band levels are a
-	# normalized spectral shape, so they read high even in near-silence and can't gate). Smooth
-	# it so a fade-in ramps in gradually, and treat sub-threshold loudness as dead air.
+	# Audio-liveness gate on `energy` (the per-band levels are a normalized shape that reads high even in
+	# near-silence). Smoothed so a fade-in ramps in; sub-threshold loudness is dead air.
 	_loud = lerpf(_loud, f.energy, 1.0 - exp(-5.0 * delta))
 	var alive := _loud > 0.13
 	if alive:
@@ -233,11 +217,9 @@ func _update_strikes(f: AudioFeatures, delta: float, grow: float, beat_edge: boo
 	for fil in _fils:
 		if fil.active:
 			any_active = true
-	# Beats fire whenever the beat detector triggers (it only fires on real audio anyway). The
-	# fallback cadence and the never-black backstop are gated on `alive`, so silence stays dark.
-	# `spont` = the rare spontaneous activation: strike even in dead air, so a silent OUTRO still
-	# flickers - but only once the song has actually been alive at least once, so an intro's
-	# fade-in never scatters a bolt out of dead air before there is any real sound to react to.
+	# Beats fire whenever the detector triggers; the fallback cadence and the never-black backstop are
+	# gated on `alive`. `spont` strikes even in dead air (a silent outro still flickers), but only once
+	# the song has been alive at least once.
 	var trigger := beat_edge or onset or (spont and _ever_alive) \
 		or (alive and (_strike_acc >= _strike_period or not any_active))
 	if trigger:
@@ -246,26 +228,23 @@ func _update_strikes(f: AudioFeatures, delta: float, grow: float, beat_edge: boo
 	for fil in _fils:
 		if not fil.active:
 			continue
-		# Honor the per-bolt ignition stagger: a struck bolt holds dark until its delay
-		# elapses, so the cluster lights as a connected cascade, not one global flash.
+		# Honor the per-bolt ignition stagger: a struck bolt holds dark until its delay elapses (a cascade, not one flash).
 		if fil.delay > 0.0:
 			fil.delay = maxf(0.0, fil.delay - delta)
 			continue
-		# Per-bolt rate breaks the lockstep advance (the "single global oscillation").
+		# Per-bolt rate breaks the lockstep advance.
 		fil.grown = minf(1.0, fil.grown + delta * grow * drive * float(fil.rate))
 		if fil.grown >= 1.0:
-			# Fade once grown: a channel settles to its rest glow and stays (the ionized path
-			# lingers); a transient bolt fades to nothing and goes idle. Branches die tip-first
-			# in the draw (see _seg_alpha), so the system never blinks out all at once.
+			# Fade once grown: a channel settles to its rest glow; a transient bolt fades to nothing and
+			# goes idle. Branches die tip-first in the draw (see _seg_alpha).
 			var floor_v: float = float(fil.rest_floor) if fil.persist else 0.0
 			fil.life = maxf(floor_v, fil.life - delta * float(_cfg.fade))
 			if not fil.persist and fil.life <= 0.02:
 				fil.active = false
 
 
-# Strike a random subset of idle bolts. If `force`, guarantee at least one strikes even
-# when the random draw lights none (the never-pure-black backstop). The struck bolts are
-# then staggered into a connected cascade rather than all igniting on the same frame.
+# Strike a random subset of idle bolts. If `force`, at least one strikes (the never-black backstop). The
+# struck bolts are staggered into a cascade.
 func _strike_some(force: bool) -> void:
 	var struck: Array = []
 	for fil in _fils:
@@ -281,18 +260,16 @@ func _strike_some(force: bool) -> void:
 	_stagger_ignition(struck)
 
 
-# A bolt can be struck when it is idle, or when it is a channel that has flared and settled
-# back to its rest glow (ready to re-ionize) - but not mid-flash.
+# A bolt can be struck when idle, or when it is a channel that has flared and settled back to its rest glow.
 func _strikeable(fil: Dictionary) -> bool:
 	if not fil.active:
 		return true
 	return fil.persist and fil.grown >= 1.0 and fil.life <= float(fil.rest_floor) + 0.04
 
 
-# Arm a single bolt for a strike: full life and its own growth rate. A persistent channel
-# mostly re-ionizes its EXISTING path in place (re-brighten, no dark blink, no re-flood) -
-# real lightning re-uses its route - and only occasionally re-routes. A transient bolt
-# always grows a fresh forked path. The ignition delay is set afterward by _stagger_ignition.
+# Arm a single bolt for a strike: full life and its own growth rate. A persistent channel mostly
+# re-ionizes its existing path in place (real lightning re-uses its route) and only occasionally
+# re-routes; a transient bolt always grows a fresh forked path. The delay is set by _stagger_ignition.
 func _ignite(fil: Dictionary) -> void:
 	fil.active = true
 	fil.life = 1.0
@@ -304,15 +281,11 @@ func _ignite(fil: Dictionary) -> void:
 		_regrow(fil)                     # fresh path (grown reset to 0 -> floods from the root)
 
 
-# Light a cluster of struck bolts as a CONNECTED CASCADE, not one global flash. They
-# ignite in sequence sweeping outward from the shared convergence point (so the cascade
-# reads as one propagating strike, "connected"), and the gaps between ignitions are
-# nonlinear - an eased power curve, randomly accelerating or settling per strike - so it
-# never ticks like a metronome. The nearest bolt fires immediately (delay 0), so a strike
-# is always visible at once; the rest fan in over a short window.
+# Light a cluster of struck bolts as a connected cascade: they ignite in sequence sweeping outward from
+# the shared convergence point, with gaps on an eased power curve (accelerating or settling per strike)
+# so it never ticks like a metronome. The nearest bolt fires immediately; the rest fan in over a short window.
 func _stagger_ignition(struck: Array) -> void:
-	# Channels re-flash immediately (no stagger) so they never blink; only fresh transient
-	# bolts cascade in.
+	# Channels re-flash immediately; only fresh transient bolts cascade in.
 	var seq: Array = []
 	for fil in struck:
 		if fil.persist:
@@ -332,14 +305,13 @@ func _stagger_ignition(struck: Array) -> void:
 		seq[k].delay = window * pow(u, gamma) + _rng.randf_range(0.0, 0.02)
 
 
-# Neural / thread: each tendril runs an independent, staggered lifecycle - grow slowly
-# to full, hold, then retire gracefully (FADE out, or REWIND its front back inward) and
-# regrow on a fresh path. Never a clear-and-pop; always something growing. A steady
-# creep surged by energy through a spike curve.
+# Neural / thread: each tendril runs an independent, staggered lifecycle - grow slowly to full, hold, then
+# retire (fade out, or rewind its front inward) and regrow on a fresh path. A steady creep surged by
+# energy through a spike curve.
 func _update_continuous(f: AudioFeatures, delta: float, grow: float, spont: bool) -> void:
-	# The spark feeds the drive, so a spontaneous activation visibly surges the growth in dead air.
+	# The spark feeds the drive, so a spontaneous activation visibly surges growth in dead air.
 	var drive := 0.5 + 1.1 * Nonlinear.apply("spike", clampf(0.7 * f.energy + f.beat + _spark, 0.0, 1.0), 2.0)
-	# On a fresh spark, kick a random RESTING tendril back into growth so something new sprouts.
+	# On a fresh spark, kick a random resting tendril back into growth.
 	if spont and not _fils.is_empty():
 		var fil: Dictionary = _fils[_rng.randi() % _fils.size()]
 		if String(fil.state) == "hold" or String(fil.state) == "fade":
@@ -368,15 +340,13 @@ func _update_continuous(f: AudioFeatures, delta: float, grow: float, spont: bool
 					if floor_v < 0.08:
 						_recycle(fil)               # fully retracted -> new path
 					else:
-						# Partial retract: regrow the SAME tendril back up, re-rolling only
-						# the next hold/retire so it keeps varying.
+						# Partial retract: regrow the same tendril, re-rolling the next hold/retire.
 						fil.state = "grow"
 						fil.hold = _rng.randf_range(1.6, 4.5)
 						fil.mode = _roll_mode()
 
 
-# Regrow a continuous tendril on a fresh path and re-roll its lifecycle constants, so
-# each life differs (path, rate, hold, retire mode).
+# Regrow a continuous tendril on a fresh path and re-roll its lifecycle constants (path, rate, hold, retire mode).
 func _recycle(fil: Dictionary) -> void:
 	_regrow(fil)
 	fil.life = 1.0
@@ -386,20 +356,17 @@ func _recycle(fil: Dictionary) -> void:
 	fil.mode = "rewind" if _rng.randf() < 0.30 else "fade"
 
 
-# A per-filament growth-speed multiplier drawn from a ~normal distribution (sum of three
-# uniforms), with a wide spread - so the strands grow at a real variety of speeds (some
-# slow crawlers, some fast shoots, most middling) rather than all at roughly one rate.
-# How far a rewinding strand pulls its growth front back. Almost always a SHALLOW dieback
-# (the tip recedes a little, then grows out again on the same tendril); a deep pull-back
-# that nearly erases the strand is rare - a strand should partly die, not vanish.
+# A per-filament growth-speed multiplier from a ~normal distribution (sum of three uniforms), so strands
+# grow at a variety of speeds.
+# How far a rewinding strand pulls its growth front back: almost always a shallow dieback; a deep
+# pull-back is rare (a strand should partly die, not vanish).
 func _roll_retract() -> float:
 	if _rng.randf() < 0.10:
 		return _rng.randf_range(0.0, 0.30)    # rare: deep retract (and < 0.08 = full restart)
 	return _rng.randf_range(0.55, 0.88)        # usual: a small partial dieback
 
 
-# Retire mode for one growth cycle: mostly a partial REWIND (dieback + regrow), only
-# occasionally a full FADE-out + fresh path - so strands rarely disappear completely.
+# Retire mode for one growth cycle: mostly a partial rewind (dieback + regrow), occasionally a full fade-out + fresh path.
 func _roll_mode() -> String:
 	return "fade" if _rng.randf() < 0.12 else "rewind"
 
@@ -417,20 +384,16 @@ func _draw() -> void:
 			continue
 		if fil.delay > 0.0:
 			continue                      # struck but not yet ignited - stays dark until its turn
-		# The bolt being drawn: its fade level, depth, and whether it is a persistent channel
-		# (read by _seg_alpha to fade branches tip-first and keep the base channel alive).
+		# The bolt being drawn: its fade level, depth, and whether it is a persistent channel (read by _seg_alpha).
 		_cur_fade = float(fil.life)
 		_cur_maxd = maxi(1, (fil.fil as Filament).max_depth())
 		_cur_persist = bool(fil.persist)
-		# Nonlinear lifecycle: the fade eases (smoothstep) rather than ramping linearly,
-		# and the growth front advances on an eased curve - slow-fast-slow - so sprouting
-		# and dying read as living motion, not a uniform slider.
+		# Nonlinear lifecycle: the fade eases (smoothstep) and the growth front advances on a slow-fast-slow curve.
 		_life_alpha = smoothstep(0.0, 1.0, float(fil.life))
 		var eased_grown: float = Nonlinear.apply("smoothstep", clampf(float(fil.grown), 0.0, 1.0))
-		# A glowing bud where the strand sprouts - a complementary node, alive with energy.
+		# A glowing bud where the strand sprouts.
 		var bud_v: float = clampf(0.25 + 0.7 * _f.energy + 0.5 * _glow, 0.0, 1.0) * _life_alpha
-		# The bud and the tip take the scheme's accent - a related second hue rather
-		# than a flat complement, so the node reads as part of the same organism.
+		# The bud and the tip take the scheme's accent: a related second hue rather than a flat complement.
 		var bud := Color.from_hsv(_accent, clampf(_sat * 0.6, 0.0, 1.0), 1.0, 0.5 * bud_v)
 		var bsz: float = u * (0.006 + 0.010 * bud_v)
 		Layer.glow(self, Vector2(fil.origin) * u, bsz * 3.0, bud, 4)
@@ -447,11 +410,9 @@ func _color_for(depth: int, along := 0.0) -> Color:
 	return Color.from_hsv(h, sat, v, 0.92 * _seg_alpha(depth))
 
 
-# Per-segment alpha for lightning: branches die from the TIPS inward (a deeper segment
-# starts fading while the bolt's life is still high) so the structure doesn't blink out all
-# at once, and a persistent channel keeps a faint floor on its base (low depth) so the
-# ionized path lingers and the next strike re-uses it. Continuous modes keep the old
-# uniform alpha (the whole strand fades together, which is right for roots/threads).
+# Per-segment alpha for lightning: branches die from the tips inward (a deeper segment starts fading while
+# the bolt's life is still high), and a persistent channel keeps a faint floor on its base so the ionized
+# path lingers. Continuous modes use a uniform alpha (the whole strand fades together).
 func _seg_alpha(depth: int) -> float:
 	if not _strike_mode:
 		return _life_alpha

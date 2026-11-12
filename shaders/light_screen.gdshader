@@ -1,12 +1,11 @@
-// WHAT THE SUN FALLS THROUGH (src/table/lights.gd): a wall with a window, blinds or a pierced screen in it,
-// or leaves, fronds, branches, slats, an awning or a parasol overhead - drawn into nothing but the
-// sun's shadow map (the mesh is shadow-only, on Lights.SCREEN_LAYER): where a fragment is kept the
-// sun is held back, where one is discarded it gets through. Posed from show time - leaves stir, an
-// awning's edge ripples - so a render and a scrub see the same light. Its coordinates are the quad's
-// own, meters, from where the sun's ray through the screen's `at` crosses it.
+// What the sun falls through (src/table/lights.gd): a wall with a window, blinds or a pierced screen in it, or leaves,
+// fronds, branches, slats, an awning or a parasol overhead, drawn into nothing but the sun's shadow map (the mesh is
+// shadow-only, on Lights.SCREEN_LAYER): where a fragment is kept the sun is held back, where one is discarded it gets
+// through. Posed from show time so a render and a scrub see the same light. Coordinates are the quad's own, meters,
+// from where the sun's ray through the screen's `at` crosses it.
 //
-// EVERY PATTERN HERE IS Lights._pattern() TOO, line for line: the set dresser is told how much of the
-// table the sun reaches from the CPU's reckoning, and this is what is drawn.
+// Every pattern here is Lights._pattern() too, line for line: the set dresser is told how much of the table the sun
+// reaches from the CPU's reckoning, and this is what is drawn.
 shader_type spatial;
 render_mode unshaded, cull_disabled;
 

@@ -4,52 +4,23 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/ui/panel_fit_check.gd 120
 ##
-## THE REPORT: "the panel on the left of the generative mode has weird scaling. It is pushing
-## elements off the bottom, and you can't scroll down to those elements, nor are they rescaled
-## to fit the viewport correctly."
+## Holds, on every panel and at every window height in a sweep:
+## - the panel is inside the window, and scrolled to the bottom the last row is inside the panel's own
+##   rectangle (either half alone passes on a broken panel);
+## - its title row stays pinned: "‹", "⋯" and "–" are in view scrolled to the bottom;
+## - a panel that fits is unchanged: it does not stretch to fill the window;
+## - it keeps its declared width: checked on every panel, the Cards one holding real long titles;
+## - nothing on a card scrolls of its own ([TextField]): what would take the wheel from the panel, found
+##   by walking what is on the cards (a window is a place of its own).
 ##
-## THE FAILURE IS GROWTH, which is why nothing caught it and why a gate is worth having. Both
-## voice panels were a bare [PanelContainer] at a fixed corner, and a [Control] outside a
-## container is never asked to fit anything - so the panel was exactly as tall as its contents
-## and simply ran off the bottom of the window. Every row added is harmless until one is not,
-## and the row that breaks it is not the row at fault: six Look filters went onto a panel
-## already at the edge, and what went out of reach was the intro/outro holds that had been
-## there for months. Nothing errors, nothing is clipped in a way that looks wrong, and the
-## controls down there still draw, save and reload. They just cannot be reached.
-##
-## SO THE CLAIM IS REACHABILITY, not tidiness, and it is asserted in two halves because
-## either one alone passes on a broken panel:
-##
-##   THE PANEL IS INSIDE THE WINDOW. A panel that fits trivially satisfies this; so does one
-##   that has silently dropped its contents.
-##   ...AND EVERY ROW CAN BE BROUGHT INTO IT. Scrolled to the bottom, the LAST row of the
-##   panel must be inside the panel's own rectangle. That is what fails on the build this
-##   replaces - there was no scroll at all - and it is what a height cap alone would not give.
-##
-## AND ITS TITLE ROW STAYS: pinned over the body, "‹", "⋯" and "–" are in view scrolled to the bottom,
-## where the body's own first row is not.
-##
-## Plus the property that makes it safe to apply everywhere: A PANEL THAT FITS IS UNCHANGED.
-## It must not stretch to fill the window, or every mode grows a full-height sidebar.
-##
-## AND IT KEEPS ITS WIDTH. The panel is as wide as its widest row, so one control asking for
-## more pushes the whole panel across the stage: opening a card show made it 1080 px of a
-## 1920 window, because its episode list sized itself to the longest episode title. Checked on
-## every panel, the Cards one holding real long titles; its control is that list sized to its
-## items again, which must blow the width out or the titles were never in it.
-##
-## NOTHING ON A CARD SCROLLS OF ITS OWN (the user, 2026-11-03; [TextField]), on these real panels: what would take the
-## wheel from the panel, found by walking what is on their cards. A window is a place of its own. Its control is a box
-## planted on a panel, which must be found.
-##
-## THE CONTROL is the retired arrangement, built here from the same content: a bare
-## PanelContainer holding the same VBox. It must overflow at a height where the SidePanel does
-## not, or this gate is measuring a window that was always big enough.
+## Controls that must fail: a bare PanelContainer holding the same VBox must overflow at a height where
+## the SidePanel does not; the Cards panel's episode list sized to its items again must blow the width
+## out; a box planted on a panel must be found.
 
 const SidePanel_ := preload("res://src/ui/side_panel.gd")
 
-## Window heights to sweep. The viewport is 1.5x these (the project stretches content), which
-## is why the assertions are all made against the viewport's own rect rather than these.
+## Window heights to sweep. The viewport is 1.5x these (the project stretches content), so assertions
+## are made against the viewport's own rect.
 const HEIGHTS := [1920, 1080, 720]
 
 var _fails: Array = []
@@ -57,7 +28,7 @@ var _ed: ReadingPanel
 var _synth: SynthEditor
 var _cards: ReadingPanel
 var _show: EpisodeCard        # the Cards panel's episode
-var _letter: ReadingPanel     # a Letter note's panel: its sketches' long words, its pictures (2026-10-26)
+var _letter: ReadingPanel     # a Letter note's panel: its sketches' long words, its pictures
 
 
 func _ready() -> void:
@@ -65,8 +36,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	# Built by hand and reparented: _ready would start the voice host, and the panel has to be
-	# IN the tree or it has no viewport to fit itself to.
+	# Built by hand and reparented: _ready would start the voice host, and the panel has to be in the tree to have a viewport.
 	_ed = ReadingPanel.new()
 	_ed._build_panel()
 	_ed.remove_child(_ed._panel)
@@ -88,7 +58,7 @@ func _run() -> void:
 	_cards.remove_child(_cards._cast._repace_timer)
 	add_child(_cards._cast._repace_timer)
 	_cards_episodes()
-	# A LETTER'S, read off a note that has one (a fixture, read and never written: a probe is read-only)
+	# A Letter's, read off a note that has one (a fixture, read and never written)
 	_letter = ReadingPanel.new()
 	_letter.note_path = "res://tests/fixtures/letter_note.md"
 	_letter._build_panel()
@@ -101,7 +71,7 @@ func _run() -> void:
 	if letter_card != null:
 		letter_card.set("_seen", FileAccess.get_file_as_string(_letter.note_path))
 		letter_card.set("_listed", LetterScript.sketches(String(letter_card.get("_seen"))))
-		# THE NOTE'S PICTURES ARE A CARD OF THEIR OWN beside it ([PicturesCard]): its list, as the reading hands it the words
+		# The note's pictures are a card of their own beside it ([PicturesCard]): its list, as the reading hands it the words
 		var pictures: Object = _letter._block_cards.get("illustrations")
 		if pictures != null:
 			pictures.call("set_script_text", String(letter_card.get("_seen")))
@@ -158,11 +128,9 @@ func _ok(cond: bool, what: String) -> void:
 		_fails.append(what)
 
 
-## THE WHEEL IS THE PANEL'S: "scrolling through the UI is constantly, accidentally scrolling
-## values for options". Every slider on a real panel, and one added after the panel is built
-## (as a voice tab adds them), is drag-only. Asserted on the flag the engine reads: a wheel
-## event pushed through the viewport in a headless probe never reached a slider, so a check of
-## the value passed with the fix removed.
+## The wheel is the panel's: every slider on a real panel, and one added after the panel is built (as a
+## voice tab adds them), is drag-only. Asserted on the flag the engine reads, since a wheel event pushed
+## through the viewport in a headless probe never reaches a slider.
 func _check_wheel_skips_sliders(panel: SidePanel_) -> void:
 	var late := HSlider.new()
 	late.max_value = 100.0
@@ -197,8 +165,7 @@ func _settle() -> void:
 		await get_tree().process_frame
 
 
-## THE TWO HALVES, at every height: the panel is inside the window, and every row can be
-## scrolled into it.
+## The two halves, at every height: the panel is inside the window, and every row can be scrolled into it.
 func _check_fits(name: String, panel: SidePanel_) -> void:
 	var overflowed := false
 	for h in HEIGHTS:
@@ -219,8 +186,7 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 		_ok(hidden > 0.0,
 			"%s at window %d: the content wants %.0f px in %.0f of room and the panel "
 			% [name, h, wants, vp.y] + "cannot scroll at all - those rows are unreachable")
-		# ...AND SCROLLING REALLY BRINGS THE LAST ROW IN. A scrollbar with travel on it is not
-		# the same claim: the row has to end up inside the panel's own rectangle.
+		# ...and scrolling really brings the last row in: the row has to end up inside the panel's own rectangle.
 		var first_was: float = (panel.body.get_child(0) as Control).global_position.y
 		panel._scroll.scroll_vertical = int(bar.max_value)
 		await _settle()
@@ -231,15 +197,10 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 			"%s at window %d: scrolled to the bottom, the last row sits at %.0f..%.0f "
 			% [name, h, row.position.y, row.end.y]
 			+ "outside the %.0f..%.0f the panel shows" % [view.position.y, view.end.y])
-		# THE BAR HAS CLEAR SPACE BESIDE IT, and CLEARANCE is the measurement rather than
-		# non-overlap. Measured: a ScrollContainer does reserve the bar's width, so the content
-		# already stopped exactly AT the bar's left edge - touching it, with nothing between
-		# them, which is what the right-aligned value readouts were running into. An assertion
-		# that only forbade overlap was therefore true before the gutter existed and passed on
-		# a build with no gutter at all; it proved nothing. This one fails on that build.
-		# THE HEADER STAYS (asked 2026-10-07: "I have to keep scrolling to the top, to click those buttons"):
-		# scrolled to the bottom, the title row with its "⋯" and "–" is still inside the panel, above the
-		# scrolled body - and the body's first row, the control, has moved under it
+		# The bar has clear space beside it: clearance is measured rather than non-overlap, since a
+		# ScrollContainer reserves the bar's width and the content already stops at the bar's left edge.
+		# The header stays: scrolled to the bottom, the title row with its "⋯" and "–" is still inside the
+		# panel, above the scrolled body - and the body's first row, the control, has moved under it
 		var head: Control = panel._head.get_child(0) if panel._head.get_child_count() > 0 else null
 		_ok(head != null, "%s: no title row is pinned over the body" % name)
 		if head != null:
@@ -265,8 +226,7 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 			% name + "half was exercised")
 
 
-## A PANEL THAT FITS IS UNCHANGED. Without this the fix is "every panel is now a full-height
-## sidebar", which is a different bug wearing the same patch.
+## A panel that fits is unchanged: it must not become a full-height sidebar.
 func _check_short_panel_is_not_stretched() -> void:
 	get_tree().root.size = Vector2i(1280, 1920)
 	await _settle()
@@ -288,9 +248,8 @@ func _check_short_panel_is_not_stretched() -> void:
 	panel.queue_free()
 
 
-## THE CONTROL: the arrangement this replaced, given the same content, at the same height.
-## It must overflow - otherwise the sweep above is being run in a window that was always big
-## enough and proves nothing.
+## The control: the retired arrangement (a bare PanelContainer) given the same content, at the same
+## height. It must overflow, or the sweep above runs in a window that was always big enough.
 func _check_the_old_arrangement_overflows() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
 	await _settle()
@@ -301,8 +260,7 @@ func _check_the_old_arrangement_overflows() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
 	old.add_child(box)
-	# The same number of rows the Generative panel carries, at a representative height - the
-	# rows inside its cards counted as rows, which is what they were before there were cards.
+	# The same number of rows the Generative panel carries, at a representative height - the rows inside its cards counted as rows.
 	var rows := 0
 	for c in _ed._panel.body.get_children():
 		rows += _rows_in((c as Card).body) if c is Card else 1
@@ -324,8 +282,8 @@ func _check_the_old_arrangement_overflows() -> void:
 	old.queue_free()
 
 
-## A card's rows as they were before there were cards: a shared card's own node (step 5 - the
-## Look, the Medium, the bookends; the Voice since NoteCards builds it) counts its rows, not itself.
+## A card's rows as a flat list: a shared card's own node (the Look, the Medium, the bookends, the Voice)
+## counts its rows, not itself.
 func _rows_in(body: Control) -> int:
 	var n := 0
 	for r in body.get_children():
@@ -333,8 +291,8 @@ func _rows_in(body: Control) -> int:
 	return n
 
 
-## Two episodes on disk, under a root of the gate's own, with titles as long as a writer makes
-## them, and the Cards panel pointed at them - its episode list and its rows then hold them.
+## Two episodes on disk, under a root of the gate's own, with titles as long as a writer makes them, and
+## the Cards panel pointed at them - its episode list and its rows then hold them.
 func _cards_episodes() -> void:
 	TableEpisode.root = "user://panel_fit_check_cards"
 	for seed in [11, 12]:
@@ -347,8 +305,8 @@ func _cards_episodes() -> void:
 	_show._open_episode()
 
 
-## AT ITS DECLARED WIDTH, whatever its rows hold - and whatever its buttons say: Play is
-## "Resume ●" while a stale reading is paused, the widest it gets. A failure names what is too wide.
+## At its declared width, whatever its rows hold and whatever its buttons say (Play is "Resume ●" while a
+## stale reading is paused, the widest it gets). A failure names what is too wide.
 func _check_width(name: String, panel: SidePanel_) -> void:
 	get_tree().root.size = Vector2i(1280, 1080)
 	var go: Button = null
@@ -368,10 +326,8 @@ func _check_width(name: String, panel: SidePanel_) -> void:
 		go.text = "Play"
 
 
-## THE EPISODE'S ENTRY FOLLOWS ITS PLAN: an episode made while it was open (2026-10-05: "I just
-## clicked on Generate and all components were successful, but that picker entry still says (Not
-## made yet)... I have to pick a DIFFERENT entry, then return to that one"). The control is the
-## entry before the panel looks again - the stale one the report was about.
+## The episode's entry follows its plan: an episode made while it was open shows as made, not "(Not made
+## yet)". The control is the entry before the panel looks again - the stale one.
 func _check_episode_entry_follows() -> void:
 	var pick: OptionButton = _show._episode_pick
 	var fresh := TableEpisode.open("fit-check", 13)
@@ -393,10 +349,10 @@ func _check_episode_entry_follows() -> void:
 	_show._open_episode()
 
 
-## THE ROWS ARE WHAT THE EPISODE HAS, CALLED WHAT ITS PRODUCER CALLS THEM (2026-10-26: "Shuffle" and "Card"
-## rows on an alchemy show): the plan's own word names each beat's row, with the beat's name beside it; the draw's
-## row is there only where cards are drawn, and the work's only where there is work - and the panel keeps its width
-## with a long word. The control: a plan that names no word has its cards' rows called Card.
+## The rows are what the episode has, called what its producer calls them: the plan's own word names each
+## beat's row, with the beat's name beside it; the draw's row is there only where cards are drawn, and the
+## work's only where there is work - and the panel keeps its width with a long word. The control: a plan
+## that names no word has its cards' rows called Card.
 func _check_rows_named() -> void:
 	var pipe: PipelineCard = _cards.pipeline()
 	var titles := func() -> Array:
@@ -430,8 +386,8 @@ func _check_rows_named() -> void:
 	_show._open_episode()
 
 
-## THE CONTROL for the Cards panel: its episode list sized to its items again must push the
-## panel out, or the long titles never reached it and the width check above proved nothing.
+## The control for the Cards panel: its episode list sized to its items again must push the panel out,
+## or the long titles never reached it.
 func _check_long_items_would_widen() -> void:
 	var pick: OptionButton = _show._episode_pick
 	_ok(pick.item_count >= 2 and pick.get_item_text(0).length() > 80,

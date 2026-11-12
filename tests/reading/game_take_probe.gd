@@ -1,6 +1,6 @@
 extends Node
 
-## NOT a gate. A SCRIPT OF SEVERAL VOICES, MADE AND MIXED AS AN EXPORT MIXES IT (next/tabletop.md "Voices over each other"): real voices from the real host, one [ReadingJoin], one [VoiceFX], each voice where it sits. To hear overlaps, and to measure them: for what no fake tone can answer.
+## Not a gate. A script of several voices, made and mixed as an export mixes it (next/tabletop.md "Voices over each other"): real voices from the real host, one [ReadingJoin], one [VoiceFX], each voice where it sits. For hearing overlaps and measuring them.
 ##
 ##   tests/run_boot_probe.sh tests/reading/game_take_probe.gd 1200 --script <say file or files, comma separated> --note <the note's file> --out <file.wav> [--turn 0.2]
 
@@ -92,7 +92,7 @@ func _run() -> void:
 	get_tree().quit(0)
 
 
-## WHAT THE EAR HAS TO GO ON, IN NUMBERS: how much of the voices over the line is there, and whether each is in its own ear.
+## What the ear has to go on, in numbers: how much of the voices over the line is there, and whether each is in its own ear.
 func _measure(join: ReadingJoin, wet: PackedVector2Array, pan: Callable) -> void:
 	var peak := 0.0
 	for f in wet:

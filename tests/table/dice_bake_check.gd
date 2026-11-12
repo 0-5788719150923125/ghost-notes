@@ -1,6 +1,9 @@
 extends SceneTree
 
-## dice_bake_check - EVERY THROW LANDS AND CAN BE READ, IN REAL BODIES (next/tabletop.md): [DiceBake] run for real, in a process of its own, from a request a table would write: each person's dice from where they sit, a figure in the way. It holds that every die came to rest flat on the table in the picture, that a throw took a throw's time, came from the side it was thrown from, was heard only where a die was really moving, and is the same twice. A control: gravity is measured, and low gravity would read as low.
+## dice_bake_check - every throw lands and can be read, in real bodies (next/tabletop.md): [DiceBake] run for real, in a process of
+## its own, from a request a table would write: each person's dice from where they sit, a figure in the way. It holds that every die
+## came to rest flat on the table in the picture, that a throw took a throw's time, came from the side it was thrown from, was heard
+## only where a die was really moving, and is the same twice. Control: gravity is measured, and low gravity would read as low.
 ##
 ##     timeout 300 godot --headless --path . --script tests/table/dice_bake_check.gd
 
@@ -90,19 +93,19 @@ func _read(rec: Dictionary) -> void:
 			_check(int(read["face"]) == int(d["face"]), "throw %d die %d says what it shows" % [id, k])
 			_check(GameBoard.LANDS.has_point(Vector2(last.x, last.z)), "throw %d die %d is in the picture: %s" % [id, k, str(last)])
 			_check(last.y > 0.0 and last.y < 0.05 * float((rd["dice"] as Array)[k]["size"]), "throw %d die %d lies on the table: %.3f" % [id, k, last.y])
-			# FROM WHERE THEY SIT: the first key is on their side of the table
+			# from where they sit: the first key is on their side of the table
 			var first := Vector3(keys[1], keys[2], keys[3])
 			var from := GameBoard.at_seat(float(rd["seat"]), GameBoard.HAND)
 			_check(Vector2(first.x, first.z).distance_to(from) < 0.25, "throw %d die %d comes from its person's side: %s, %s" % [id, k, str(first), str(from)])
 			_check(Vector2(last.x, last.z).distance_to(from) > Vector2(first.x, first.z).distance_to(from), "...and goes across the table")
-		# HEARD: only ever a die really moving there
+		# heard: only ever a die really moving there
 		var hits: PackedFloat32Array = got["hits"]
 		_check(hits.size() >= 6, "throw %d is heard" % id)
 		for j in range(0, hits.size(), 6):
 			_check(hits[j] >= 0.0 and hits[j] <= float(got["dur"]) + 0.01, "a hit is during the throw")
 			_check(hits[j + 2] >= -0.02, "a hit is on the table")
 		_check(float((got["hand"] as Vector3).y) > 0.02, "it leaves a hand above the table")
-	# GRAVITY, MEASURED from nothing but where a die was, before it first lands: a fall is a fall
+	# gravity, measured from nothing but where a die was, before it first lands: a fall is a fall
 	var d0: Dictionary = (rolls[1] as Dictionary)["dice"][0]
 	var keys: PackedFloat32Array = d0["keys"]
 	var y := func(i: int) -> float: return keys[i * 8 + 2]

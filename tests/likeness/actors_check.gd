@@ -1,47 +1,39 @@
 extends SceneTree
 
-## actors_check - the Actors library and the runner that builds an actor (next/likeness.md, "The
-## library", "The steps"): what waits, what is stale, what ⟳ throws away, the order Generate makes
-## things in - all in a library moved aside ([method Actors.use_for_test]), so nothing of the author's
-## is touched.
+## actors_check - the Actors library and the runner that builds an actor (next/likeness.md, "The library", "The steps"):
+## what waits, what is stale, what ⟳ throws away, the order Generate makes things in - all in a library moved aside
+## ([method Actors.use_for_test]), so nothing of the author's is touched.
 ##
 ##   godot --headless --path . --script tests/likeness/actors_check.gd
 ##
-## THE STEPS ARE MADE BY THE GATE ([member ActorBuilder.make_with]): each writes its outputs as made-up
-## files, and the runner stamps them, so the order, the waiting and the staleness are the runner's own
-## and no program runs.
+## The steps are made by the gate ([member ActorBuilder.make_with]): each writes its outputs as made-up files, and the runner
+## stamps them, so the order, the waiting and the staleness are the runner's own and no program runs.
 ##
-## A STEP WAITS FOR ITS INPUT: ▶ on the survey of a video never probed makes the probe first; asked
-## alone (the CONTROL: a step started without its input), it starts nothing.
-## GENERATE'S ORDER: each video's probe before its survey before its shots, every video's shots before
-## the sets, the sets before the audit, the audit before the actor's visemes and motion and the set's
-## stills, the stills before the rig and At rest, and the rig and the visemes before the library. THEIR
-## VOICE: each video's probe before its Hear, every video's Hear before the Utterances, the Utterances
-## before the Voice; ▶ on the Voice makes those three and nothing of their picture, and the voice's
+## A step waits for its input: ▶ on the survey of a video never probed makes the probe first; asked alone (control: a step
+## started without its input), it starts nothing.
+## Generate's order: each video's probe before its survey before its shots, every video's shots before the sets, the sets
+## before the audit, the audit before the actor's visemes and motion and the set's stills, the stills before the rig and At rest,
+## the rig and the visemes before the library. Their voice: each video's probe before its Hear, every video's Hear before the
+## Utterances, the Utterances before the Voice; ▶ on the Voice makes those three and nothing of their picture, and the voice's
 ## lessons changed make the Voice stale and only it.
-## TWO RENDERERS: a run for the 2D renderer makes none of the head of splats, and the actor does not play
-## as one; a run for the gaussian renderer then makes each video's Head frames, their Head rig and Head (ONE HEAD
-## FOR EVERY SET, learned from every video), then the set's Frames, Face rig, Avatar and Fit in order, and
-## nothing else - the steps the two share are made once (THE CONTROL: the 2D run did make the 2D's library).
-## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
-## made again forget the pick (an index into the old ones).
-## A STILL WITH NOTHING BEFORE THEM: the trainers are handed no front and its own picture (THE CONTROL: a still with
-## a front is handed it and its picture filled under it).
-## THE HEAD PINNED: one video pinned "head", the head learns from it alone and the Head (not its rig) is stale;
-## unpinned, made again as it was (THE CONTROL: with none pinned it learns from both).
-## A CHANGED INPUT MARKS STALE: a setting a step reads makes it stale, and only it, until it is made
-## again - then what was made from it. ⟳ THROWS A STEP AWAY and makes it again; what is made from it
-## directly is stale (and what is made from those, once they are made again). A video unticked makes
-## the sets stale. A STILL PICKED changes nothing that is made but the body fitted to a still (the Fit: the
-## Avatar it is fitted from stays made): the library is the set's.
-## A RESTART CHANGES NOTHING: the actor read again from its file finds every step as it was, its videos
-## held in an order their ids do not sort in (2026-10-21: `actor.json` was written sorted, read back in
-## another order than the stamps were made in, and the user's built set went stale after a restart -
-## the sets, the audit and every step of the set made again).
-## A VIDEO'S FILE MOVED to another of their folders keeps its id, and nothing made from it is stale (THE CONTROL:
-## a copy beside a file still there is a row of its own). A COPY IS NOT ANOTHER VIDEO: once both are probed, the
-## same title and length as an earlier video leave it out of every step (THE CONTROL: another length is its own).
-## NOTHING OUTSIDE THE TEST ROOT: the author's library is as it was.
+## Two renderers: a run for the 2D renderer makes none of the head of splats; a run for the gaussian renderer then makes each
+## video's Head frames, their Head rig and Head, then the set's Frames, Face rig, Avatar and Fit in order, and nothing else - the
+## steps the two share are made once (control: the 2D run did make the 2D's library).
+## The still drawn on: the one picked, else the one At rest found most at ease, else the first; stills made again forget the pick.
+## A still with nothing before them: the trainers are handed no front and its own picture (control: a still with a front is
+## handed it and its picture filled under it).
+## The head pinned: one video pinned "head", the head learns from it alone and the Head (not its rig) is stale; unpinned, made
+## again as it was (control: with none pinned it learns from both).
+## A changed input marks stale: a setting a step reads makes it stale, and only it, until it is made again - then what was made
+## from it. ⟳ throws a step away and makes it again; what is made from it directly is stale (and what is made from those, once
+## they are made again). A video unticked makes the sets stale. A still picked changes nothing that is made but the body fitted
+## to a still (the Fit; the Avatar it is fitted from stays made): the library is the set's.
+## A restart changes nothing: the actor read again from its file finds every step as it was, its videos held in an order their
+## ids do not sort in.
+## A video's file moved to another of their folders keeps its id, and nothing made from it is stale (control: a copy beside a
+## file still there is a row of its own). A copy is not another video: once both are probed, the same title and length as an
+## earlier video leave it out of every step (control: another length is its own).
+## Nothing outside the test root: the author's library is as it was.
 
 const ROOT := "user://actors_check"
 
@@ -66,7 +58,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	var real := _listing(ActorsRoot.real())
 	Actors.use_for_test(ROOT)
-	# TWO VIDEOS IN A FOLDER (made: a few bytes is a video to the library, which reads only their names)
+	# two videos in a folder (a few bytes is a video to the library, which reads only their names)
 	var folder := ProjectSettings.globalize_path(ROOT).path_join("footage_in")
 	DirAccess.make_dir_recursive_absolute(folder)
 	for n in ["@someone - First talk (1080p, h264).mp4", "Second talk.mkv", "notes.txt"]:
@@ -130,7 +122,7 @@ func _run() -> void:
 	_ok(_before("utterances|", "voice|"), "the voice was taught before its utterances were cut: %s" % str(_made))
 	_ok(_actor.playable(), "a fully made actor is not playable")
 	_ok(not _made.has("fetch|" + v0), "a folder video was fetched")
-	# A RESTART CHANGES NOTHING: read again from its file, the actor finds every step as it was
+	# a restart changes nothing: read again from its file, the actor finds every step as it was
 	var moved := _restarted()
 	_ok(moved.is_empty(), "read again from its file, the actor found %s" % str(moved))
 	# A CHANGED SETTING: the survey is stale, and only it until it is made again
@@ -147,7 +139,7 @@ func _run() -> void:
 	_actor.forget()
 	_ok(_actor.state_of("survey", v0) == "made" and _actor.state_of("shots", v0) == "stale",
 		"the survey made again did not make its shots stale (survey %s, shots %s)" % [_actor.state_of("survey", v0), _actor.state_of("shots", v0)])
-	# GENERATE MAKES WHAT IS STALE, in order, and nothing that is not
+	# Generate makes what is stale, in order, and nothing that is not
 	_made = []
 	b.start()
 	_spin(b)
@@ -155,7 +147,7 @@ func _run() -> void:
 	_ok(_made.has("shots|" + v0) and _made.has("sets|") and not _made.has("probe|" + v0),
 		"Generate after a change made %s" % str(_made))
 	_ok(_actor.state_of("rig", s) == "made", "Generate left the rig %s" % _actor.state_of("rig", s))
-	# THEIR VOICE ON ITS OWN: the lessons changed make the Voice stale, and only it; ▶ on it makes it and
+	# Their voice on its own: the lessons changed make the Voice stale, and only it; ▶ on it makes it and
 	# nothing of their picture (THE CONTROL: the Hear, made, is not made again)
 	(_actor.data["settings"] as Dictionary)["voice_steps"] = 9000
 	_actor.save()
@@ -183,7 +175,7 @@ func _run() -> void:
 		heads.append("head_frames|v:" + String(v))
 	_ok(_made == heads + ["head_rig|", "head|", "frames|" + s, "face|" + s, "avatar|" + s, "fit|" + s],
 		"a gaussian run after a 2D one made %s" % str(_made))
-	# A VIDEO WITH NO SHOT OF THEIRS IN ANY SET has no moments for their head: its Head frames is moot, and made
+	# A video with no shot of theirs in any set has no moments for their head: its Head frames is moot, and made
 	# with no token (THE CONTROL: one with a shot is not)
 	_ok(_actor.moot("head_frames", "v:no-such-video") and _actor.token_of("head_frames", "v:no-such-video").is_empty()
 		and not _actor.moot("head_frames", "v:" + String(_actor.ticked()[0])),
@@ -191,7 +183,7 @@ func _run() -> void:
 	_ok(_actor.playable("", "gaussian"), "a head of splats made does not play")
 	_ok(ActorSteps.serves("motion", "gaussian") and ActorSteps.serves("motion", "2d") and not ActorSteps.serves("library", "gaussian")
 		and not ActorSteps.serves("avatar", "2d"), "a step serves the wrong renderer")
-	# A ROW FROM THE STATES A WORKER WORKS OUT (`states_of`, on a folder of its own) is the row worked out here
+	# A row from the states a worker works out (`states_of`, on a folder of its own) is the row worked out here
 	var worked := ActorBuilder.states_of(ActorFolder.open(_actor.id))
 	var apart: Array = []
 	for st in ActorSteps.ORDER:
@@ -199,14 +191,14 @@ func _run() -> void:
 			apart.append(st)
 	_ok(apart.is_empty() and worked.size() == ActorSteps.ORDER.size(), "rows from the worker's states differ: %s" % str(apart))
 	b.renderer = "2d"
-	# THE STILL DRAWN ON: the first, then the one most at rest, then the one picked
+	# The still drawn on: the first, then the one most at rest, then the one picked
 	var stills_at := _actor.set_dir(sid).path_join("stills.json")
 	_write(stills_at, JSON.stringify({"stills": [{}, {}, {}, {}]}))
 	_ok(_actor.still_of(sid) == 0, "with nothing at rest and nothing picked the still is %d" % _actor.still_of(sid))
 	_write(_actor.set_dir(sid).path_join("rest.json"), JSON.stringify({"rest": [3, 9, 1]}))
 	_ok(_actor.still_of(sid) == 3 and _actor.rest_of(sid) == [3, 1], "the still most at rest was not drawn on (%d, at rest %s)" % [
 		_actor.still_of(sid), str(_actor.rest_of(sid))])
-	# A STILL WITH NOTHING BEFORE THEM: no front for the trainers, and its own picture (THE CONTROL: one with a front)
+	# A still with nothing before them: no front for the trainers, and its own picture (THE CONTROL: one with a front)
 	_write(stills_at, JSON.stringify({"stills": [{"file": "still_0.jpg"}, {"file": "still_1.jpg", "front": "front_1.png",
 		"body": "body_1.jpg"}]}))
 	var bare := ActorBuilder.still_layers(_actor, sid, 0)
@@ -240,7 +232,7 @@ func _run() -> void:
 	_ok(_actor.state_of("rig", s) == "stale", "the stills made again left the rig %s" % _actor.state_of("rig", s))
 	# ...and what is made from those, once they are made again: one step at a time, never all at once
 	_ok(_actor.state_of("library", s) == "made", "the library went stale before the rig was made again")
-	# THE HEAD PINNED TO ONE VIDEO: it alone is learned from, the Head (not its rig) stale; unpinned, as it was
+	# The head pinned to one video: it alone is learned from, the Head (not its rig) stale; unpinned, as it was
 	var head_was := _actor.state_of("head", "")
 	var rig_was := _actor.state_of("head_rig", "")
 	_ok(_actor.head_videos(10).size() == 2, "CONTROL: with none pinned the head learns from %s" % str(_actor.head_videos(10)))
@@ -261,7 +253,7 @@ func _run() -> void:
 	_actor.save()
 	_actor.forget()
 	_ok(_actor.state_of("sets", "") == "stale", "unticking a video left the sets %s" % _actor.state_of("sets", ""))
-	# A VIDEO'S FILE MOVED to another of their folders: the same video, nothing made from it stale
+	# A video's file moved to another of their folders: the same video, nothing made from it stale
 	var mv := String(vids[0])
 	var old_path := String(_actor.video(mv)["path"])
 	var before_move := _actor.state_of("survey", "v:" + mv)
@@ -290,15 +282,15 @@ func _run() -> void:
 		"a copy of the same title and length was taken for another video")
 	_actor.video(copy_id)["duration"] = 75.0
 	_ok(_actor.copy_of(copy_id).is_empty() and _actor.ticked().has(copy_id), "CONTROL: a video of another length was taken for a copy")
-	# EVERY STEP A PROGRAM MAKES IS LANDED BY ITS MAIN FILE (a step without one would be "done" and never stamped,
-	# so made again for ever); THE CONTROL: a step that runs no program needs none
+	# every step a program makes is landed by its main file (a step without one would be "done" and never stamped); control: a
+	# step that runs no program needs none
 	var unlanded: Array = []
 	for st in ActorSteps.ORDER:
 		var runs := String(Registry.field(ActorSteps.REGISTRY, st, "runs", ""))
 		if (runs == "python" or runs == "train") and not ActorBuilder.MAIN.has(st):
 			unlanded.append(st)
 	_ok(unlanded.is_empty() and not ActorBuilder.MAIN.has("fetch"), "steps a program makes with no main file: %s" % str(unlanded))
-	# KEPT ONE BACK (next/editing.md step 12): a step's ⟳ moves what it made one back with its stamp, never deleting it; put back,
+	# Kept one back (next/editing.md step 12): a step's ⟳ moves what it made one back with its stamp, never deleting it; put back,
 	# what stood and what was kept swap - THE CONTROL: a step never made again has nothing kept to put back
 	var scope := "v:" + String(_actor.ticked()[0])
 	var sdir := _actor.scope_dir(scope)

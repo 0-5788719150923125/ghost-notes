@@ -1,15 +1,14 @@
 extends RefCounted
 class_name TakeCache
 
-## TakeCache - EVERY SENTENCE THE VOICE HAS SAID, KEPT, by what it said and how (next/editing.md step 3: "made once, a sentence
-## at a time, cached by what it says and how ... a changed sentence costs one sentence"). The host's reply for one chunk of a
-## reading - its audio and its word and phone timings - is kept under a digest of the voice, the voice's own record and every
-## argument the request carried (the text, its delivery, its pace): the same request is the same performance, so a reading
-## heard again, an export after a first listen, and an export after one sentence was changed, ask the host only for what it
-## has not said.
+## TakeCache - every sentence the voice has said, kept by what it said and how (next/editing.md step 3). The
+## host's reply for one chunk of a reading - its audio and its word and phone timings - is kept under a digest of
+## the voice, the voice's own record and every argument the request carried (the text, its delivery, its pace):
+## the same request is the same performance, so a reading heard again, or an export after one sentence changed,
+## asks the host only for what it has not said.
 ##
-## Kept under `user://take_cache/<key>.wav` and `.json`. Past [constant MOST] entries the oldest go. A process that may not
-## write the author's things reads it and never adds to it.
+## Kept under `user://take_cache/<key>.wav` and `.json`. Past [constant MOST] entries the oldest go. A process
+## that may not write the author's things reads it and never adds to it.
 
 const DIR := "user://take_cache"
 ## How many sentences are kept: a 40-minute reading is about a thousand.
@@ -21,8 +20,8 @@ const PRUNE := 1000
 static var root := DIR
 
 
-## THE KEY of a request: the voice [param voice] with its record [param meta] (a voice trained again is another performance)
-## and the request's [param args], text and all.
+## The key of a request: the voice [param voice] with its record [param meta] (a voice trained again is another
+## performance) and the request's [param args], text and all.
 static func key_of(voice: String, meta: Dictionary, args: Dictionary) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)

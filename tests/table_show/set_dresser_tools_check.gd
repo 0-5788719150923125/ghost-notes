@@ -1,73 +1,60 @@
 extends SceneTree
 
-## The set dresser's tools ([SetDresserTools]) and how the producer works them - with no agent, no
-## model and no renderer.
+## The set dresser's tools ([SetDresserTools]) and how the producer works them - with no agent, no model and no renderer.
 ##
 ##   godot --headless --path . --script res://tests/table_show/set_dresser_tools_check.gd
 ##
-## - A RUN STARTS CLEAN: what a last run handed in, logged or photographed is gone; its prompt stays.
-## - PUT says what the builder makes of a thing: its real size and flames, parts it cannot build and
-##   why, materials it does not know, more parts or deeper groups than a thing may have, and a thing
-##   taller than its place can show. A thing put again under its name REPLACES it. The tally counts
-##   lit things against the look's ask.
-## - REMOVE, LOOK and SET answer by name and say what is on the table when a name is wrong; with no
-##   renderer, LOOK and SET say there is no picture and take none.
-## - SUBMIT refuses an empty table, writes the draft exactly as written, and - where a table can be
-##   stood - sends the set dresser to look first, once; and to choose the name's color, once.
-## - TITLE keeps the name's color (a color only) in the draft, says so with no renderer and takes no
-##   picture; the toolset knows the show's name and byline, and both prompts tell the set dresser of
-##   the opening and the color it chooses.
-## - THE PRODUCER gives a writer that takes tools the toolset (a URL, a long timeout, the working
-##   prompt) and one that does not the one-reply prompt; it lands a handed-in table whatever the run's
-##   last words, says so when a run with tools handed nothing in, and closes the tools when it stops.
-## - CLAUDE WITH TOOLS loads no settings instead of `--safe-mode` (which drops every MCP server) and is
-##   pointed at the toolset by a config file, which gives a call ten minutes (the CLI's own limit is
-##   one); without tools its argv is as it was. CODEX WITH TOOLS is
-##   pointed at ghost's endpoint by config overrides, its token in its environment (never in argv), its
-##   calls approved, and told its tools are neither commands nor files; without tools, no server.
-## - THE TABLE ITSELF: a top and layers put are said back as the table will be built (a top grown to
-##   hold the cards says so), kept in the draft only once put (no `layers` is the old cloth, `[]` a bare
-##   top), a layer put again under its name replaced, taken off by name; OVERHEAD with no renderer says
-##   there is no picture and takes none.
-## - THE AIR: effects put beside things are reported - what was built, and every kind, place, look or
-##   moment the builder does not know, a size kept within its look's range - replaced and removed by
-##   name, handed in with the table, and watched by name (with no renderer, said so).
-## - THE LIGHT ([Lights]): put part by part - a part put again replaces that part alone, a screen or a
-##   lamp replaces the one of its name, null takes a part away, an empty list all of its kind - and
-##   reported: what it is, what the builder does not know, where the sun falls (on the table, and where
-##   the cards lie), how the weather runs, a lamp moved up out of the shot; parts taken off by name (or
-##   "clouds", "birds", "light"), watched by name (with no renderer, said so), handed in with the table;
-##   both prompts tell the set dresser of it, its vocabulary, its format and earlier episodes' light. A
-##   sound sign is steady, and a failing one moves.
-## - THE RIDE ([Rides]): put, said back - what it is aboard, how it knocks and jolts, what on the table
-##   moves with it, and that it is felt but not heard until the sound has a `ride` - handed in with the
-##   table, taken off by name; a thing put with a moving part says what moves and how fast, and that
-##   nothing moves it on a table with no ride and no wind; both prompts tell the set dresser of it.
+## - A run starts clean: what a last run handed in, logged or photographed is gone; its prompt stays.
+## - `put` says what the builder makes of a thing: its real size and flames, parts it cannot build and why, materials it does not
+##   know, more parts or deeper groups than a thing may have, and a thing taller than its place can show. A thing put again under
+##   its name replaces it. The tally counts lit things against the look's ask.
+## - `remove`, `look` and `set` answer by name and say what is on the table when a name is wrong; with no renderer, `look` and `set`
+##   say there is no picture and take none.
+## - `submit` refuses an empty table, writes the draft exactly as written, and - where a table can be stood - sends the set dresser
+##   to look first, once; and to choose the name's color, once.
+## - `title` keeps the name's color (a color only) in the draft, says so with no renderer and takes no picture; the toolset knows
+##   the show's name and byline, and both prompts tell the set dresser of the opening and the color it chooses.
+## - The producer gives a writer that takes tools the toolset (a URL, a long timeout, the working prompt) and one that does not the
+##   one-reply prompt; it lands a handed-in table whatever the run's last words, says so when a run with tools handed nothing in,
+##   and closes the tools when it stops.
+## - Claude with tools loads no settings instead of `--safe-mode` (which drops every MCP server) and is pointed at the toolset by a
+##   config file, which gives a call ten minutes (the CLI's own limit is one); without tools its argv is unchanged. Codex with tools
+##   is pointed at ghost's endpoint by config overrides, its token in its environment (never in argv), its calls approved, and told
+##   its tools are neither commands nor files; without tools, no server.
+## - The table itself: a top and layers put are said back as the table will be built (a top grown to hold the cards says so), kept
+##   in the draft only once put (no `layers` is the plain cloth, `[]` a bare top), a layer put again under its name replaced, taken
+##   off by name; overhead with no renderer says there is no picture and takes none.
+## - The air: effects put beside things are reported - what was built, and every kind, place, look or moment the builder does not
+##   know, a size kept within its look's range - replaced and removed by name, handed in with the table, and watched by name (with
+##   no renderer, said so).
+## - The light ([Lights]): put part by part - a part put again replaces that part alone, a screen or a lamp replaces the one of its
+##   name, null takes a part away, an empty list all of its kind - and reported: what it is, what the builder does not know, where
+##   the sun falls (on the table, and where the cards lie), how the weather runs, a lamp moved up out of the shot; parts taken off
+##   by name (or "clouds", "birds", "light"), watched by name (with no renderer, said so), handed in with the table; both prompts
+##   tell the set dresser of it, its vocabulary, its format and earlier episodes' light. A sound sign is steady, and a failing one
+##   moves.
+## - The ride ([Rides]): put, said back - what it is aboard, how it knocks and jolts, what on the table moves with it, and that it is
+##   felt but not heard until the sound has a `ride` - handed in with the table, taken off by name; a thing put with a moving part
+##   says what moves and how fast, and that nothing moves it on a table with no ride and no wind; both prompts tell the set dresser
+##   of it.
 
-## - ONE CALL AT A TIME (reported 2026-10-07: the table's job ended while a call was photographing, and
-##   every picture after it was "a previously freed instance"): two calls made together run one after the
-##   other, a release during a call gives the stages back only when it is done, and a call after it is
-##   turned away - the control, the same two calls straight into the toolset's own work, overlap.
-## - THE TABLE IS SET, AND IS TOLD SO (reported 2026-10-08: a set dresser set its table 14 times chasing
-##   things made 88% of their size): a thing made smaller to fit is said at its size, not as a fault, and
-##   with nothing left off the frame's question says the table is set and what is left (the title's color,
-##   then submit) - the control, a thing left off, is still sent to fix it; the producer says how many
-##   pictures its set dresser has taken while its tools are open, and the prompt says a shrink is fine.
-## - THE BLUEPRINT (the user, 2026-10-18: "draw a literal blueprint ... then simply ask the model to place
-##   props onto the blueprint at certain points, and with certain orientations"): things placed by name -
-##   `at`, `turn`, `scale`, only what is given - and refused with a reason when not put, the cards' box,
-##   or not a number; a thing put again keeps its place unless given one; a thing never placed waits off
-##   the table in every picture (control: the draft keeps it) and is asked about once at submit; with no
-##   renderer the plan is said in words and no picture taken. A thing written where it stands is said at
-##   its spot - moved from it, or taller than its spot shows, a fault; cut by the frame's side, not - and
-##   never "made smaller to fit".
-## - THE DRAWING ([TableBlueprint]), without a renderer: the closed-form headroom agrees with the frame
-##   walked up step by step ([method CardTable.headroom]) - control: a lens 10 degrees wider does not; each
-##   height's line holds that height at its ends, a thing that tall seen whole nearer the reader and cut
-##   behind; an outline drawn round a top is the top's size; the frame on the table meets the frame's
-##   edge; the plan fits every card and thing in the drawing.
-## - HOW FULL A TABLE IS (TablePrompts.FILLS): drawn per episode from a few things to a crowded table, some
-##   seeds asking for more than the old most (6) and some for under it.
+## - One call at a time: two calls made together run one after the other, a release during a call gives the stages back only when it
+##   is done, and a call after it is turned away - the control, the same two calls straight into the toolset's own work, overlap.
+## - The table is set, and is told so: a thing made smaller to fit is said at its size, not as a fault, and with nothing left off the
+##   frame's question says the table is set and what is left (the title's color, then submit) - the control, a thing left off, is
+##   still sent to fix it; the producer says how many pictures its set dresser has taken while its tools are open, and the prompt
+##   says a shrink is fine.
+## - The blueprint: things placed by name - `at`, `turn`, `scale`, only what is given - and refused with a reason when not put, the
+##   cards' box, or not a number; a thing put again keeps its place unless given one; a thing never placed waits off the table in
+##   every picture (control: the draft keeps it) and is asked about once at submit; with no renderer the plan is said in words and no
+##   picture taken. A thing written where it stands is said at its spot - moved from it, or taller than its spot shows, a fault; cut
+##   by the frame's side, not - and never "made smaller to fit".
+## - The drawing ([TableBlueprint]), without a renderer: the closed-form headroom agrees with the frame walked up step by step
+##   ([method CardTable.headroom]) - control: a lens 10 degrees wider does not; each height's line holds that height at its ends, a
+##   thing that tall seen whole nearer the reader and cut behind; an outline drawn round a top is the top's size; the frame on the
+##   table meets the frame's edge; the plan fits every card and thing in the drawing.
+## - How full a table is (TablePrompts.FILLS): drawn per episode from a few things to a crowded table, some seeds asking for more than
+##   the usual most (6) and some for under it.
 const ROOT := "user://set_dresser_check"
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
@@ -209,7 +196,7 @@ func _put_reports() -> bool:
 	_ok((t.draft()["things"] as Array).size() == 3 and text.contains("the table now holds 3") and text.contains("4 x 12 x 4 cm"),
 		"a thing put again under its name was not replaced (%d things):\n%s" % [(t.draft()["things"] as Array).size(), text])
 	_ok(text.contains("2 lit things (2 asked for)"), "the tally does not count lit things against the ask:\n%s" % text)
-	# A THING TALLER THAN ITS SPOT SHOWS is said where it is written - and a thing not yet placed is not judged
+	# A thing taller than its spot shows is said where it is written - and a thing not yet placed is not judged
 	var lay := CardTable.layout_of(ep.seed)
 	var room := CardTable.headroom_at(lay["camera"], float(lay["fov"]), Tables.ORIGIN + Vector2(0.0, -0.3)) * 100.0
 	r = await t.call_tool("put", {"things": [{"name": "a tall jar", "at": [0, -30], "parts": [{"shape": "box",
@@ -277,7 +264,7 @@ func _submit() -> bool:
 		"a table was not handed in exactly as drafted: %s" % r)
 	_ok(same and String((j.data as Dictionary).get("title", {}).get("color", "")) == "#1d2f5c", "the name's color was not handed in with the table")
 	t.release()
-	# THE NAME'S COLOR, asked for once - a table handed in without one gets the default
+	# The name's color, asked for once - a table handed in without one gets the default
 	var plain := _tools(ep)
 	await plain.call_tool("put", {"things": [_candle("a pillar", 9.0)], "materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
 	r = await plain.call_tool("submit", {})
@@ -285,7 +272,7 @@ func _submit() -> bool:
 	r = await plain.call_tool("submit", {})
 	_ok(not bool(r.get("error", false)) and plain.submitted and not plain.draft().has("title"), "a second submit with no color was refused: %s" % r)
 	plain.release()
-	# WHERE A TABLE CAN BE STOOD, the set dresser looks before it hands in - asked once, then trusted
+	# Where a table can be stood, the set dresser looks before it hands in - asked once, then trusted
 	var s := Standing.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 	await s.call_tool("put", {"things": [_candle("a pillar", 9.0)], "materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
 	r = await s.call_tool("submit", {})
@@ -294,7 +281,7 @@ func _submit() -> bool:
 	r = await s.call_tool("submit", {})
 	_ok(not bool(r.get("error", false)) and s.submitted, "a second submit, unchanged, was refused: %s" % r)
 	s.release()
-	# A THING NEVER PLACED ON THE BLUEPRINT is asked about once, then handed in for the table to stand
+	# A thing never placed on the blueprint is asked about once, then handed in for the table to stand
 	var loose := _tools(ep)
 	await loose.call_tool("put", {"things": [_candle("a pillar", 9.0), _candle("a stub", 4.0, "back right", null)],
 		"materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
@@ -308,7 +295,7 @@ func _submit() -> bool:
 	return true
 
 
-## THE NAME'S COLOR: kept in the draft as given (a color only, the reason with it), said back with no
+## The name's color: kept in the draft as given (a color only, the reason with it), said back with no
 ## renderer and no picture taken; anything not a color refused, the color before it kept.
 func _title() -> bool:
 	var t := _tools(_episode())
@@ -330,7 +317,7 @@ func _title() -> bool:
 func _producer() -> bool:
 	var ep := _episode()
 	TextGen.put(ep.file_of("image:surface"), "png")
-	# WITH TOOLS: the job gets the toolset's URL and a long timeout, and the working prompt
+	# With tools: the job gets the toolset's URL and a long timeout, and the working prompt
 	var spy := Spy.new(ep, {"title": "Test Tarot", "byline": "with Pen & Ink", "brief": "A brief.", "writer": "claude"})
 	spy._make_table()
 	var extra: Dictionary = spy.sent.get("extra", {})
@@ -350,13 +337,13 @@ func _producer() -> bool:
 	spy.stop()
 	_ok(spy.looks_of("table").is_empty(), "the producer says its set dresser is looking after its tools closed")
 	_ok(AgentTools.calls(url) == -1 and spy._tools.is_empty(), "stopping the producer left the tools answering")
-	# WITHOUT: the one-reply prompt, no tools
+	# Without: the one-reply prompt, no tools
 	var plain := Spy.new(ep, {"title": "Test Tarot", "brief": "A brief.", "writer": "bedrock"})
 	plain._make_table()
 	_ok((plain.sent.get("extra", {}) as Dictionary).is_empty() and plain._tools.is_empty()
 		and String((plain.sent["prompt"] as Dictionary)["prompt"]).contains("Reply with ONLY a JSON object"),
 		"a writer that takes no tools was not asked for the table in one reply")
-	# A HANDED-IN TABLE LANDS whatever the run's last words, even a run that ended badly
+	# A handed-in table lands whatever the run's last words, even a run that ended badly
 	var prod := TableProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	var given := SetDresserTools.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 	prod._tools["table"] = {"url": AgentTools.open(ep.job_dir("table"), given), "set": given}
@@ -364,7 +351,7 @@ func _producer() -> bool:
 	prod._land("table", {"ok": false, "error": "timed out after 1500 s"})
 	_ok(ep.has("table") and String(((ep.read_json("table") as Dictionary)["things"][0] as Dictionary)["name"]) == "a boxwood chess pawn",
 		"a table handed in with a tool did not land")
-	# ...but a run WITHOUT tools is answered by its own reply, never by a table some earlier run left
+	# ...but a run without tools is answered by its own reply, never by a table some earlier run left
 	ep.invalidate("table")
 	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), TablePrompts.set_example())
 	var plain_land := TableProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
@@ -402,7 +389,7 @@ func _prompts() -> bool:
 			"the set dresser %s is not told what the table holds" % tag)
 		for k in Props.SHAPES:
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the shape %s" % [tag, k])
-		# ZONES for the reply written blind; the BLUEPRINT for the one that sees
+		# Zones for the reply written blind; the blueprint for the one that sees
 		for z in CardTable.ZONES:
 			_ok(text.contains("\"%s\": %s; up to %d cm" % [z, String((CardTable.ZONES[z] as Dictionary)["about"]), int(head[z])]) == (looks == 0),
 				"the set dresser %s is %s the zone %s" % [tag, "told" if looks > 0 else "not told", z])
@@ -469,7 +456,7 @@ func _claude_argv() -> bool:
 	_ok(TextGen.make("claude").takes_tools() and TextGen.make("grok").takes_tools() and TextGen.make("codex").takes_tools()
 		and not TextGen.make("bedrock").takes_tools(),
 		"the writers that take tools are not Claude, Grok and Codex (Grok's own argv: tests/agents/grok_agent_check.gd)")
-	# CODEX: ghost's server named in its config overrides, the token in its environment and never in argv
+	# Codex: ghost's server named in its config overrides, the token in its environment and never in argv
 	var cx_url := "http://127.0.0.1:4242/mcp/" + "ab".repeat(16)
 	var cx: PackedStringArray = TextGen.Codex.argv({"dir": dir, "tier": "best", "tools_url": cx_url}, [])
 	var joined := " ".join(cx)
@@ -602,7 +589,7 @@ func _light() -> bool:
 	_ok(text.contains("The sun reaches") and text.contains("of where the cards lie"), "where the sun falls was not reported:\n%s" % text)
 	_ok(text.contains("Clouds: the sun is behind cloud") and text.contains("Birds: "), "the weather was not reported:\n%s" % text)
 	_ok(text.contains("\"the lantern\" would be seen where it was put: moved up out of the shot"), "a lamp in the shot was not reported moved:\n%s" % text)
-	# PART BY PART
+	# Part by part
 	await t.call_tool("put", {"light": {"sun": {"look": "sun", "from": "right", "height": 50}}})
 	var l: Dictionary = t.draft()["light"]
 	_ok(float((Lights.sanitize(l)["sun"] as Dictionary)["from"]) == 90.0 and (l["through"] as Array).size() == 2 and l.has("clouds"),
@@ -622,7 +609,7 @@ func _light() -> bool:
 		"watching the light with no renderer did not say so: %s" % r)
 	await t.call_tool("put", {"light": {"lamps": []}})
 	_ok(((t.draft()["light"] as Dictionary)["lamps"] as Array).is_empty(), "`lamps: []` does not take them all away")
-	# SHADOWS OUT OF THE SHOT: reported, put by name, taken off by name, watched by name
+	# Shadows out of the shot: reported, put by name, taken off by name, watched by name
 	r = await t.call_tool("put", {"light": {"shadows": [
 		{"name": "the beam", "parts": [{"shape": "box", "size": [300, 15, 20]}], "shadow": [0, -10], "height": 200},
 		{"name": "the rope", "parts": [{"shape": "tube", "path": [[0, 0, 0], [0, -100, 0]]}, {"shape": "kettle"}], "shadow": [-20, 0], "height": 140, "move": {"kind": "swing"}},
@@ -637,7 +624,7 @@ func _light() -> bool:
 	_ok(not bool(r.get("error", false)) and String(r["text"]).contains("cannot be watched"), "watching a shadow with no renderer did not say so: %s" % r)
 	gone = await t.call_tool("remove", {"names": ["far off"]})
 	_ok(not bool(gone.get("error", false)) and ((t.draft()["light"] as Dictionary)["shadows"] as Array).size() == 2, "a shadow is not taken off by name")
-	# HANDED IN with the table, and built from it
+	# Handed in with the table, and built from it
 	await t.call_tool("put", {"things": [_candle("a pillar", 9.0)], "materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
 	await t.call_tool("title", {"color": "#e9dcc0"})
 	await t.call_tool("submit", {})
@@ -645,7 +632,7 @@ func _light() -> bool:
 	var built: Dictionary = CardTable.sanitize_table(handed if handed is Dictionary else {}, CardTable.sanitize_look({}))["light"]
 	_ok(not built.is_empty() and float((built["sun"] as Dictionary)["from"]) == 90.0 and (built["through"] as Array).size() == 1,
 		"the light was not handed in with the table, or does not build: %s" % str(built))
-	# ALL OF IT taken off: the table is lit as every table was
+	# All of it taken off: the table is lit as every table was
 	await t.call_tool("remove", {"names": ["light"]})
 	_ok((CardTable.sanitize_table(t.draft(), CardTable.sanitize_look({}))["light"] as Dictionary).is_empty(), "removing \"light\" leaves a light")
 	t.release()
@@ -709,7 +696,7 @@ func _verdict() -> bool:
 	judge = SetDresserTools.judge_of(int(st["faults"]), true)
 	_ok(judge.contains("the table is set") and judge.contains("submit it") and not judge.contains("choose the title's color"),
 		"a set table whose title is chosen is not told only to submit: %s" % judge)
-	# THE CONTROL: a thing left off is a fault, and the table is sent to be fixed
+	# The control: a thing left off is a fault, and the table is sent to be fixed
 	st = SetDresserTools.stood_lines({"stood": [thing.call("a candle", 1.0)], "left_off": ["an aloe"]})
 	text = "\n".join(st["lines"] as PackedStringArray)
 	_ok(int(st["faults"]) == 1 and text.contains("an aloe: LEFT OFF"), "a thing left off is not a fault: %s" % text)
@@ -717,7 +704,7 @@ func _verdict() -> bool:
 	return true
 
 
-## A THING WRITTEN WHERE IT STANDS, as the frame's verdict says it ([method SetDresserTools.stood_lines]).
+## A thing written where it stands, as the frame's verdict says it ([method SetDresserTools.stood_lines]).
 func _verdict_written() -> bool:
 	var w := {"name": "a bell", "place": "back", "at": Vector2(-30.0, -26.0), "k": 1.0, "tall": 0.2, "written": Vector2(-30.0, -26.0),
 		"moved": 0.0, "why": "", "foot": Vector2(6.0, 6.0), "height": 9.0, "room": 14.0, "shown": 1.0}
@@ -756,7 +743,7 @@ func _verdict_written() -> bool:
 	return true
 
 
-## THE BLUEPRINT TOOL, with no renderer: placing by name, what it refuses, a place kept through a put, the
+## The blueprint tool, with no renderer: placing by name, what it refuses, a place kept through a put, the
 ## pictures' draft, and the plan in words.
 func _blueprint() -> bool:
 	if not await _verdict_written():
@@ -785,14 +772,14 @@ func _blueprint() -> bool:
 	_ok(text.contains("2. a bowl: at [25, -20], turned 30; its spot shows") and text.contains("1. a pillar: at [-30, -26]")
 		and text.contains("3. a rope: lies where its path is written") and text.contains("(No drawing: no renderer.)") and (r.get("images", []) as Array).is_empty()
 		and t.looks_used() == looks, "the plan was not said in words without a picture:\n%s" % text)
-	# A THING MADE AGAIN KEEPS ITS PLACE - unless it is given one (control)
+	# A thing made again keeps its place - unless it is given one (control)
 	await t.call_tool("put", {"things": [{"name": "a bowl", "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [7, 3], [0, 3]], "material": "beeswax"}]}]})
 	bowl = t.draft()["things"][1]
 	_ok(bowl.get("at") == [25.0, -20.0] and float(bowl.get("turn", 0)) == 30.0, "a thing put again lost its place: %s" % str(bowl))
 	await t.call_tool("put", {"things": [{"name": "a bowl", "at": [5, -10], "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [7, 3], [0, 3]], "material": "beeswax"}]}]})
 	_ok((t.draft()["things"][1] as Dictionary).get("at") == [5, -10], "control: a thing put again with a place did not move: %s" % str(t.draft()["things"][1]))
 	_ok(t._unplaced().is_empty() and (t._on_table()["things"] as Array).size() == 3, "a placed thing is still waiting: %s" % str(t._unplaced()))
-	# THE TABLE MADE SAFE keeps a written place, and drops one that is not two numbers
+	# The table made safe keeps a written place, and drops one that is not two numbers
 	var safe := CardTable.sanitize_table({"things": [{"name": "a", "at": [12, -400], "scale": 9, "parts": [{"shape": "ball", "size": [2, 2, 2]}]},
 		{"name": "b", "at": [1], "parts": [{"shape": "ball", "size": [2, 2, 2]}]},
 		{"name": "c", "at": [1, 2, 3], "parts": [{"shape": "ball", "size": [2, 2, 2]}]}]}, {})
@@ -803,13 +790,13 @@ func _blueprint() -> bool:
 	return true
 
 
-## WHERE EVERYTHING FALLS ON THE BLUEPRINT ([TableBlueprint]), worked out with no renderer.
+## Where everything falls on the blueprint ([TableBlueprint]), worked out with no renderer.
 func _drawing() -> bool:
 	for seed in [7, 5150, 15853]:
 		var lay := CardTable.layout_of(seed)
 		var cam: Transform3D = lay["camera"]
 		var fov := float(lay["fov"])
-		# THE HEADROOM, closed form, against the frame walked up 5 mm at a time - and a wider lens, which must disagree
+		# The headroom, closed form, against the frame walked up 5 mm at a time - and a wider lens, which must disagree
 		var head := CardTable.headroom(seed)
 		var worst := 0.0
 		var wide := 0.0
@@ -822,7 +809,7 @@ func _drawing() -> bool:
 			wide = maxf(wide, absf(CardTable.headroom_at(cam, fov + 10.0, aim) * 100.0 - float(head[z])))
 		_ok(worst <= 1.01, "#%d: the blueprint's headroom is %.1f cm off the frame's" % [seed, worst])
 		_ok(wide > 2.0, "#%d: control: a lens 10 degrees wider agrees with the frame (%.1f cm) - the comparison proves nothing" % [seed, wide])
-		# EACH HEIGHT'S LINE: that height at its ends; a thing that tall seen whole nearer the reader, cut behind
+		# Each height's line: that height at its ends; a thing that tall seen whole nearer the reader, cut behind
 		var area := Rect2(-0.6, -0.55, 1.2, 0.8)
 		for h in TableBlueprint.HEIGHTS:
 			var seg := TableBlueprint.height_line(cam, fov, float(h) * 0.01, area)
@@ -839,17 +826,17 @@ func _drawing() -> bool:
 			var top_far: Variant = CardTable.project(cam, fov, Vector3(mid.x, float(h) * 0.01 + 0.01, mid.y - 0.03))
 			_ok(top_near != null and (top_near as Vector2).y > 0.03 and top_far != null and (top_far as Vector2).y < 0.03,
 				"#%d: the frame does not cut a %d cm thing where its line says" % [seed, h])
-		# THE FRAME ON THE TABLE: its near edge is where the frame's bottom meets the cloth
+		# The frame on the table: its near edge is where the frame's bottom meets the cloth
 		var seen := TableBlueprint.seen(cam, fov)
 		var bottom: Vector2 = seen[80 + 20]
 		var sp: Variant = CardTable.project(cam, fov, Vector3(bottom.x, 0.0, bottom.y))
 		_ok(seen.size() == 160 and sp != null and absf((sp as Vector2).y - 1.0) < 0.002, "#%d: the frame on the table is not the frame's edge: %s" % [seed, str(sp)])
-	# AN OUTLINE drawn round a top is the top's size
+	# An outline drawn round a top is the top's size
 	var rect := Geo.bounds(TableBlueprint.outline(Tables.top_outline({"shape": "rect", "size": [120, 80]})))
 	var round := Geo.bounds(TableBlueprint.outline(Tables.top_outline({"shape": "round", "size": [146, 146]})))
 	_ok(absf(rect.size.x - 1.2) < 0.005 and absf(rect.size.y - 0.8) < 0.005 and absf(round.size.x - 1.46) < 0.01,
 		"an outline drawn round a top is not its size: %s, %s" % [rect, round])
-	# THE PLAN FITS every card and thing in the drawing
+	# The plan fits every card and thing in the drawing
 	var lay := CardTable.layout_of(5150)
 	var d := {"camera": lay["camera"], "fov": lay["fov"], "top": Tables.top_outline({"shape": "rect", "size": [190, 85]}),
 		"cards": [{"pos": Vector2(-0.1, -0.05), "yaw": 0.3}, {"pos": Vector2(0.1, -0.05), "yaw": 0.0}],
@@ -871,7 +858,7 @@ static func _area(poly: PackedVector2Array) -> float:
 	return absf(a) * 0.5
 
 
-## HOW FULL A TABLE IS: a few things to a crowded table, drawn per episode.
+## How full a table is: a few things to a crowded table, drawn per episode.
 func _fills() -> bool:
 	var most := 0
 	var least := 99

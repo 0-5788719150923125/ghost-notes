@@ -1,28 +1,23 @@
 extends RefCounted
 class_name ReaderBrowser
 
-## ReaderBrowser - the Speaker row's Browse…: every reader of the voice on screen with who they are (a
-## filter by gender, a search over the descriptions), so a reader is chosen by description rather than by
-## stepping through numbers and listening to each.
+## ReaderBrowser - the Speaker row's Browse...: every reader of the voice on screen with who they are (a filter
+## by gender, a search over the descriptions), so a reader is chosen by description rather than by stepping
+## through numbers and listening to each.
 ##
-## ON A VOICE WHOSE READERS BLEND (its backend says `blend`: Kokoro's packs), each reader is TICKED, not
-## picked (2026-11-11, the user: "instead of selecting just a single model, we have boolean toggles for
-## each one. If we select 2 or more of the available models, then they will be blended"): one ticked is
-## that reader, two or more a new voice made of them ([VoiceBlend]) - each with a weight, and in Sound
-## and delivery a part - by the method and accent picked along the top. A reader stays ticked while the
+## On a voice whose readers blend (its backend says `blend`: Kokoro's packs), each reader is ticked, not picked:
+## one ticked is that reader, two or more a new voice made of them ([VoiceBlend]) - each with a weight, and in
+## Sound and delivery a part - by the method and accent picked along the top. A reader stays ticked while the
 ## list is filtered past it.
 ##
-## NOTHING TICKED IS A WAY THROUGH, never a pick (the user, 2026-11-11: "it should be possible to select 0
-## options as well. It would be invalid ... but it would be a better UX, because the current version requires
-## backtracking after you've selected a second voice"): the last tick comes off, the tab keeps reading in what
-## it last had, Test waits for a tick, and the next tick is that reader alone.
+## Nothing ticked is a way through, never a pick: the last tick comes off, the tab keeps reading in what it last
+## had, Test waits for a tick, and the next tick is that reader alone.
 ##
-## TEST IS AT THE TOP ("I hate having to close that screen, to test voices with the 'Test' button"): the
-## Voice card's own Test ([method ReadingCast.press_test]), the passage read in what is ticked now. Every
-## change reaches the tab as it is made, as a step of the Speaker number does.
+## Test is at the top: the Voice card's own Test ([method ReadingCast.press_test]), the passage read in what is
+## ticked now. Every change reaches the tab as it is made, as a step of the Speaker number does.
 ##
-## A PART OF THE CAST ([ReadingCast]): it reads the voice on screen and its readers from the cast, and
-## hands back a reader and a blend ([method ReadingCast.pick]).
+## A part of the cast ([ReadingCast]): it reads the voice on screen and its readers from the cast, and hands back
+## a reader and a blend ([method ReadingCast.pick]).
 
 ## The cast this is a part of.
 var cast: ReadingCast
@@ -117,8 +112,8 @@ func open() -> void:
 	_tree.item_selected.connect(_selected)
 	box.add_child(_tree)
 
-	# ONE LINE, trimmed, the whole of it its tooltip: a wrapped label has no width before it is laid out and asks a
-	# line a letter - the popup opened 1,500 px tall for a summary of 88 letters, and never shrank (the guard below)
+	# One line, trimmed, the whole of it its tooltip: a wrapped label has no width before it is laid out and asks a
+	# line a letter (a popup opened 1,500 px tall for an 88-letter summary and never shrank - see the guard below)
 	_summary = Label.new()
 	_summary.add_theme_font_size_override("font_size", 12)
 	_summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -133,9 +128,8 @@ func open() -> void:
 	cast.panel.add_child(_popup)
 	_fill()
 	_say()
-	# NEVER THE STAGE'S HEIGHT (the user, 2026-11-11: it opened "full-screen height", which "pushes all of the buttons
-	# to the extreme top of the viewport"): a popup is sized to what its controls ask as it opens, before they are
-	# laid out, and never shrinks after - so whatever one asks for then, the browser is at most this much of the stage.
+	# Never the stage's height: a popup is sized to what its controls ask as it opens, before they are laid out,
+	# and never shrinks after, so the browser is capped at a share of the stage.
 	var stage := cast.panel.get_viewport()          # none for a panel out of the tree (a gate's)
 	if stage != null:
 		var room := stage.get_visible_rect().size

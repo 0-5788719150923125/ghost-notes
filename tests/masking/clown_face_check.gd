@@ -1,61 +1,34 @@
 extends SceneTree
 
-## Does the clown's face model see the SAME face the same way regardless of the
-## clip's shape?
+## Does the clown's face model see the same face the same way regardless of the clip's shape?
 ##   godot --headless --path . --script res://tests/masking/clown_face_check.gd
 ##
-## It did not, and the failure was invisible from the code: every hand-tuned bound
-## in the model and in clown_paint.gdshader was written in raw UV, which is not a
-## unit - "0.145 of the frame's width" is 0.258 frame-heights on a 16:9 clip and
-## 0.082 on a 9:16 phone clip. So the identical rule that comfortably cleared a
-## face on landscape footage crushed it to a third of its width on portrait, and
-## the effect drew a narrow vertical sliver about a fifth the area of the real
-## face. The vertical bound had the mirror-image problem: a face is at most ~0.36
-## of the frame's height is a convention about the frame's SHORT side, and on a
-## tall frame the same fraction admits an oval half again as tall as the head -
-## which aimed the eye and mouth search bands (struck as fractions of it) at the
-## forehead and the nose.
-##
-## So: the same synthetic face, framed identically against the frame's shorter
-## side, rendered once landscape and once portrait, and the fit is compared
-## against the face that was ACTUALLY DRAWN in each. Not against the other
-## shape's fit - a face cannot be the same fraction of the height in both frames
-## (0.30 frame-heights wide is wider than a portrait frame), so the two fits
-## legitimately differ; what must not differ is how faithfully each tracks its own
-## face. The ratio fitted/true is the shape-independent quantity.
-##
-## It measures what REACHES THE PICTURE, not just the CPU fit - the worst of the
-## bugs lived in the paint sim's cap rather than in the model, so a check that
-## stopped at _face_r_ema would have passed straight through it.
-##
-## The face is synthetic on purpose - a real clip has one shape, and re-cropping
-## it to the other changes the framing as well as the aspect, which is precisely
-## the confound this has to avoid.
+## Bounds written in raw UV are not shape-independent (0.145 of the frame's width is 0.258 frame-heights
+## on 16:9 and 0.082 on 9:16), so the model and clown_paint.gdshader must size against the frame's shorter
+## side. The same synthetic face, framed identically against the shorter side, is rendered landscape and
+## portrait, and each fit is compared against the face drawn in that frame, not against the other shape's
+## fit (the two legitimately differ). The ratio fitted/true is the shape-independent quantity.
+## It measures what reaches the picture, not just the CPU fit: the paint sim's coat cap is applied too.
+## The face is synthetic because a real clip has one shape, and re-cropping changes the framing as well.
 
 const SHAPES := [
 	["landscape 16:9", Vector2i(640, 360)],
 	["portrait 9:16", Vector2i(360, 640)],
 ]
-## Where the face is drawn, as a fraction of the frame: centered horizontally,
-## slightly high, and sized against the SHORTER side so both renders show the
-## same physical face.
+## Where the face is drawn, as a fraction of the frame: centered horizontally, slightly high, sized against
+## the shorter side so both renders show the same face.
 const FACE_CX := 0.5
 const FACE_CY := 0.42
-## Semi-width in units of the frame's shorter side. 0.20 puts the head across 40%
-## of that side, which is ordinary talking-head framing - and the framing the
-## sim's own caps were tuned for. Drawn much bigger (a tight close-up) the coat
-## caps legitimately bite and the coat comes out shorter than the face; that is
-## the shipped behavior on any shape and not what this check is about.
+## Semi-width in units of the frame's shorter side. 0.20 puts the head across 40% of that side, the
+## framing the sim's caps are tuned for (a tight close-up makes the coat caps bite).
 const FACE_R_SHORT := 0.20
 const FACE_TALL := 1.30       # a head is this much taller than it is wide
 const EYE_DX := 0.42          # eye offset from center, in face half-widths
 const EYE_DY := -0.30         # ...and above center, in face half-HEIGHTS
 const MOUTH_DY := 0.48
 
-## Mirrors of clown_paint.gdshader's coat cap - the last thing between the fitted
-## radii and what is drawn, and where the portrait bug actually bit. Keep in sync
-## with FACE_CAP_X* / the y clamp there; the point of the check is the number that
-## reaches the screen, so it has to apply the same cap the shader will.
+## Mirrors of clown_paint.gdshader's coat cap, the last thing between the fitted radii and what is drawn.
+## Keep in sync with FACE_CAP_X* and the y clamp there.
 const SHADER_CAP_XLO := 0.0889
 const SHADER_CAP_XHI := 0.2578
 const SHADER_CAP_YLO := 0.07
@@ -105,9 +78,7 @@ func _initialize() -> void:
 			% [got.cx, got.cy, got.eye_l.x, got.eye_l.y,
 			   got.eye_r.x, got.eye_r.y, got.mouth.x, got.mouth.y])
 		print("  eye separation  %.0f%% of the real pair's" % [got.fsep * 100.0])
-		# The coat has to be a face-sized coat on EITHER shape. This is the
-		# assertion the portrait bug failed outright: 48% of the real half-width
-		# against landscape's 86%.
+		# The coat must be face-sized on either shape.
 		_expect(got.fx > 0.60 and got.fx < 1.45,
 			"%s: the drawn coat is %.0f%% of the real face's half-width"
 			% [got.name, got.fx * 100.0])
@@ -117,9 +88,7 @@ func _initialize() -> void:
 		_expect(got.fsep > 0.6 and got.fsep < 1.5,
 			"%s: the eye pair came out %.0f%% of the real separation - every drawn "
 			% [got.name, got.fsep * 100.0] + "feature scales by this")
-		# The face is where it was drawn, on both. Generous tolerances - this is a
-		# blob fitter, not a landmark detector; it is the SHAPE-DEPENDENCE that is
-		# the bug, not the last few percent of accuracy.
+		# The face is where it was drawn, on both. Generous tolerances: a blob fitter, not a landmark detector.
 		_expect(absf(got.cx - FACE_CX) < 0.10,
 			"%s: face center x %.3f, drawn at %.3f" % [got.name, got.cx, FACE_CX])
 		_expect(absf(got.cy - FACE_CY) < 0.14,
@@ -130,24 +99,15 @@ func _initialize() -> void:
 		_expect(got.eye_r.x > got.eye_l.x,
 			"%s: the eye pair came out crossed" % got.name)
 
-	# THE POINT OF THE WHOLE CHECK: it should not MATTER which shape the clip is.
-	# Each fit is graded against its own face above; here the two grades are
-	# compared to each other, so a rule that quietly favors one shape fails even
-	# if both happen to sit inside the absolute tolerances.
+	# It should not matter which shape the clip is: the two grades are compared to each other, so a rule
+	# that favors one shape fails even inside the absolute tolerances.
 	var a: Dictionary = seen[0]
 	var b: Dictionary = seen[1]
 	print("")
 	print("landscape vs portrait, as fractions of each one's own real face:")
-	# WIDTH IS THE SHARP ONE, because width is where the raw-uv bounds did their
-	# damage - the aspect divides out of every other quantity here, but a bound on
-	# a width written in raw uv scales directly with the frame's shape. Tolerance
-	# tight enough that the pre-fix rule fails it (it fitted portrait at 0.74x
-	# landscape's faithfulness on this face, and far worse on real footage, where
-	# the fitted spread is larger and the raw cap bites harder).
-	#
-	# Height and separation are held looser on purpose: at ordinary framing the
-	# coat's own height cap legitimately bites on a 16:9 clip and not on a
-	# portrait one, which is shipped, tuned behavior rather than a shape bug.
+	# Width is the sharp one: the aspect divides out of every other quantity, but a width bound in raw uv
+	# scales directly with the frame's shape. Height and separation are looser: at ordinary framing the
+	# coat's height cap bites on 16:9 and not on portrait, which is intended.
 	for row in [["coat half-width", a.fx, b.fx, 0.85, 1.20],
 			["coat half-height", a.fy, b.fy, 0.70, 1.45],
 			["eye separation", a.fsep, b.fsep, 0.75, 1.35]]:
@@ -159,8 +119,8 @@ func _initialize() -> void:
 			"%s tracks the real face %.2fx as well on portrait as on landscape - "
 			% [row[0], lb / la] + "the model still reads one frame shape better than the other")
 
-	# STEADINESS is the face track's now, held by face_track_check (_check_steady): the CPU model
-	# this gate reads has no steadiness of its own.
+	# Steadiness is the face track's, held by face_track_check (_check_steady): the CPU model this gate
+	# reads has no steadiness of its own.
 
 	print("")
 	if _fails.is_empty():
@@ -192,10 +152,8 @@ func _session() -> MaskSession:
 	return s
 
 
-## A crude but unambiguous face: a warm oval on a cool ground, two dark eye
-## sockets, a red mouth. Every cue the model actually uses (key-hue projection,
-## warm-chroma skin, brightness against the frame's own mean, dark-in-a-skin-
-## neighborhood) is present, and nothing else in the frame competes.
+## A crude but unambiguous face: a warm oval on a cool ground, two dark eye sockets, a red mouth. Every cue
+## the model uses is present and nothing else competes.
 func _draw_face(size: Vector2i, rx: float, ry: float, dx := 0.0) -> Image:
 	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
 	var cx := FACE_CX + dx

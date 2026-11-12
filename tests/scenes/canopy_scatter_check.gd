@@ -1,30 +1,22 @@
 extends Node
 
-## canopy_scatter_check - that the wood is a WOOD: trees the right size for the hill they
-## stand on, and scattered in stands rather than on a lattice.
+## canopy_scatter_check - that the wood is a wood: trees the right size for the hill they stand on,
+## scattered in stands rather than on a lattice. Two numbers, reported for every seed.
 ##
-## Two numbers, both reported for every seed.
+## Height against relief: `_terrain.relief` is the landscape's whole vertical range; a tree's height
+## must stay a small fraction of it.
 ##
-## HEIGHT AGAINST RELIEF. `_terrain.relief` is the landscape's whole vertical range, so a tree
-## whose height approaches it is as tall as the hill. Real proportion is a couple of tens of
-## meters of tree against a few hundred of hillside.
-##
-## NEAREST-NEIGHBOR SPREAD. The headline is the coefficient of variation of nearest-neighbor
-## distances, which needs no estimate of the usable area and so cannot be argued with:
-##   ~0.52  a random (Poisson) scatter
-##   <0.30  a LATTICE - every tree the same distance from its neighbor, which is what a
-##          Poisson-disc rejection test produces and what "too uniform" was
-##   >0.60  clustered: tight stands with real gaps between them
-## The Clark-Evans ratio R is printed alongside for orientation (R > 1 dispersed, R < 1
-## clustered), against the area the scatter was actually allowed to use rather than the whole
-## square, since water and steep ground remove a lot of it.
+## Nearest-neighbor spread: the coefficient of variation of nearest-neighbor distances, which needs no
+## estimate of the usable area. About 0.52 is a random (Poisson) scatter, below 0.30 a lattice, above
+## 0.60 clustered. The Clark-Evans ratio R is printed for orientation (R > 1 dispersed, R < 1
+## clustered), against the area the scatter was allowed to use (water and steep ground remove much).
 ##
 ## Run: tests/run_boot_probe.sh tests/scenes/canopy_scatter_check.gd 180
 
 const SEEDS := 10
 ## A tree may not stand taller than this fraction of the landscape's whole relief.
 const MAX_H_FRAC := 0.30
-## ... and the wood's MEAN tree should be well under that, or every tree is a giant.
+## The wood's mean tree must be well under that, or every tree is a giant.
 const MAX_MEAN_H_FRAC := 0.18
 ## Nearest-neighbor CV below this is a lattice, not a wood.
 const MIN_CV := 0.55
@@ -82,9 +74,8 @@ func _ready() -> void:
 			var_ += (d - mean) * (d - mean)
 		var cv := sqrt(var_ / float(n)) / maxf(0.00001, mean)
 
-		# The usable area, measured rather than assumed: the fraction of the square that is out
-		# of the water at all. Without this R is biased toward "clustered" on a map that is
-		# mostly sea, which would let a lattice pass.
+	# The usable area, measured: the fraction of the square that is out of the water. Assuming the
+	# whole square biases R toward "clustered" on a mostly-sea map, letting a lattice pass.
 		var margin: float = sc._terrain.half * 0.94
 		var wet := 0
 		var probes := 4000

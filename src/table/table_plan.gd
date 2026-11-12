@@ -1,35 +1,28 @@
 extends RefCounted
 class_name TablePlan
 
-## TablePlan - what an episode decides when it is loaded: everything the table reads to show it,
-## and nothing that changes while it plays. A part of [TableMedium].
+## TablePlan - what an episode decides when it is loaded: everything the table reads to show it, and
+## nothing that changes while it plays. A part of [TableMedium].
 ##
-## The episode as the panel handed it over and its reading parsed, the look, the seed, how the
-## cards come and are shown, where the camera, the lamp, the deck, its shuffle and every card's place
-## are, and the small repeatable differences a hand makes.
+## It holds the episode as the panel handed it over and its reading parsed, the look, the seed, how the
+## cards come and are shown, where the camera, lamp, deck and every card's place are, and the small
+## repeatable differences a hand makes.
 ##
-## A FUNCTION OF THE EPISODE ([method make]): the document the panel hands the medium, the set
-## dresser's table as its file said when the episode loaded, and the show's intro hold - and nothing
-## else. Every draw comes from the episode's seed in one fixed order, so the same episode is the same
-## plan, and the order of the statements in [method make] is part of the show (a salt keeps its
-## `tarot-` name: renaming one re-rolls every episode already made). The medium builds its nodes from
-## the plan and never decides anything of its own ([method TableMedium._build_episode]);
-## tests/table/table_plan_check.gd holds both.
-##
-## WHY IT IS ITS OWN OBJECT: the table is a pure function of (this, show time). What poses the
-## cards, shuffles the deck and lights the room reads it and never writes it; what changes as the
-## show plays (the deck's place now, the box, a search, the built meshes, the things as they stood)
-## stays with the medium. A part that only poses can be handed a plan instead of the whole medium
-## (next/structure.md, step 7), and work that is a pure function of a plan and a time can be done
-## early, late or on another thread and still land where it belongs.
+## A function of the episode ([method make]): the panel's document, the set dresser's table as its file
+## said when the episode loaded, and the show's intro hold. Every draw comes from the episode's seed in
+## one fixed order, so the order of the statements in [method make] is part of the show (a salt keeps its
+## `tarot-` name: renaming one re-rolls every episode already made). The medium builds its nodes from the
+## plan and decides nothing of its own ([method TableMedium._build_episode]); what changes as the show
+## plays (the deck's place now, the box, a search, the built meshes) stays with the medium.
+## tests/table/table_plan_check.gd holds both. A part that only poses can be handed a plan instead of the
+## medium (next/structure.md, step 7).
 
 var pay: Dictionary = {}           # the episode, as the panel handed it over (TableEpisode.document)
 var parse: Dictionary = {}
 var seed_value := 0
 var hold := 0.0                    # the show's intro hold, the past of a mid-way start is replayed after
 var start_si := -1                 # a reading started mid-way: the spoken word it starts at (-1: the top)
-var since := 0.0                   # ...and how far into the reading that is (seconds, the scrub bar's; 0 from the top):
-                                   # what keeps the video's time - a clock's hands - keeps the reading's
+var since := 0.0                   # ...and how far into the reading that is (seconds, the scrub bar's; 0 from the top)
 var look: Dictionary = {}
 var foil := 0.6                    # how much foil the deck was printed with
 var staging: Dictionary = CardTable.STAGING.duplicate()   # how the cards come and are shown (CardTable.staging_of)
@@ -59,10 +52,10 @@ var wash_from := 0.0               # ...when (into the shuffle) it begins - befo
 var wash_until := 0.0              # ...and when it would end, past the jumper reckoned
 
 
-## THE PLAN OF AN EPISODE: [param document] as the panel hands it to the medium (`table`, `source`,
+## The plan of an episode: [param document] as the panel hands it to the medium (`table`, `source`,
 ## `start_words`, `start_index`), [param table_json] the set dresser's `table.json` as read (null when
 ## there is none yet: the look's candles) and [param intro_hold] the show's. Decided in one fixed
-## order - change the order and every episode already made plays another show.
+## order: changing it changes every episode already made.
 static func make(document: Dictionary, table_json: Variant, intro_hold: float) -> TablePlan:
 	var p := TablePlan.new()
 	p.pay = document.get("table", {}) if document.get("table") is Dictionary else {}
@@ -77,31 +70,29 @@ static func make(document: Dictionary, table_json: Variant, intro_hold: float) -
 	p.cards_from = String(p.parse.get("source", p.staging["source"])) if not p.parse.is_empty() else String(p.staging["source"])
 	p.alone = String(p.staging["text"]) != "booklet"
 	p.deck_n = deck_count(p.pay)
-	# A READING STARTED MID-WAY (a scrub) begins where its first words are: everything before them
-	# happened long ago, spaced as a voice would have said it, so the cards drawn by then are
-	# already down (or up) on the first frame
+	# A reading started mid-way (a scrub) begins where its first words are: everything before them
+	# is already down (or up) on the first frame
 	var spoken: PackedStringArray = p.parse.get("spoken", PackedStringArray()) if not p.parse.is_empty() \
 		else PackedStringArray()
 	var sw: Variant = document.get("start_words", PackedStringArray())
 	if sw is PackedStringArray and not (sw as PackedStringArray).is_empty() and not spoken.is_empty():
 		p.start_si = TabletScript.find_run(spoken, sw, int(document.get("start_index", -1)))
-	# A CLOCK ON THE TABLE KEEPS THE READING'S TIME, not the session's (the-quiet-crucible 181083: scrubbed back into the
-	# work, its chronometer began at 4:00 again while the voice said "four oh four" - "the minute hand never moves")
+	# A clock on the table keeps the reading's time, not the session's
 	p.since = maxf(float(document.get("start_time", 0.0)), 0.0) if p.start_si > 0 else 0.0
 	p.table = table_of(table_json, p.look, p.seed_value)
-	# EVERYTHING SAMPLED FROM THE EPISODE'S SEED, on one stream: the camera, the lamp, the deck's place,
+	# Everything sampled from the episode's seed, on one stream: the camera, the lamp, the deck's place,
 	# the deck's own small differences, then the spread
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([p.seed_value, "tarot-table"])
 	var lay := CardTable.sample_layout(rng)
-	# ...A GAME IS SEEN FROM HIGHER UP, past nobody ([method CardTable.game_camera]): drawn after the layout's own draws, so they land as they do
+	# A game is seen from higher up ([method CardTable.game_camera]): drawn after the layout's own draws, so they land as they do
 	if CardTable.game_of(p.pay.get("plan", {}) if p.pay.get("plan") is Dictionary else {}):
 		lay.merge(CardTable.game_camera(p.seed_value), true)
-	# THE CAMERA: the reader's eye, a little different every episode
+	# The camera: the reader's eye, a little different every episode
 	p.pitch = float(lay["pitch"])
 	p.cam_base = lay["camera"]
 	p.fov = float(lay["fov"])
-	# THE LIGHT: the look's own, from above and to one side
+	# The light: the look's own, from above and to one side
 	var light: Dictionary = p.look.get("light", {}) if p.look.get("light") is Dictionary else {}
 	var lc := CardTable.color(String(light.get("color", "#ffb36b")))
 	p.lamp_color = Color(1, 1, 1).lerp(lc, 0.55)
@@ -112,16 +103,16 @@ static func make(document: Dictionary, table_json: Variant, intro_hold: float) -
 	p.background = dark.darkened(0.6)
 	p.ambient = {"color": Color(0.5, 0.5, 0.5).lerp(dark.lightened(0.4), 0.35), "energy": 0.18}
 	p.fill = Color(0.75, 0.8, 1.0) if String(light.get("warmth", "warm")) == "warm" else lc
-	# THE DECK, squared where the reader keeps it
+	# The deck, squared where the reader keeps it
 	p.deck_base = lay["deck"]
-	# SHUFFLED IN THE MIDDLE, in front of the reader, and pushed to its side before the first card
+	# Shuffled in the middle, in front of the reader, and pushed to its side before the first card
 	p.mid = lay["mid"]
 	for i in p.deck_n + 1:
 		p.slot_jit.append(Vector3(rng.randf_range(-0.0007, 0.0007), rng.randf_range(-0.0007, 0.0007),
 			deg_to_rad(rng.randf_range(-1.3, 1.3))))
-	# THE SPREAD: where the cards were given to lie (a plan's coordinates, a dealer's layout - checked
-	# on the cloth, in the frame and clear of the deck), else the seeded preset. The preset is drawn
-	# either way, so every draw after it lands where it always has.
+	# The spread: the given coordinates (a plan's, a dealer's layout - checked on the cloth, in the
+	# frame and clear of the deck), else the seeded preset. The preset is drawn either way, so every
+	# draw after it lands where it always has.
 	var cards: Array = p.pay.get("cards", [])
 	var seeded := TablePositions.staged(cards, rng, CardTable.layout_of(p.seed_value), p.box_keep(), p.box_center())
 	var given := TablePositions.given(cards, p.seed_value, p.table["top"], p.box_keep(), p.box_center())
@@ -139,7 +130,7 @@ static func make(document: Dictionary, table_json: Variant, intro_hold: float) -
 	return p
 
 
-## THE SET DRESSER'S TABLE made safe - or, before it wrote one ([param table_json] null), the look's
+## The set dresser's table made safe - or, before it wrote one ([param table_json] null), the look's
 ## candles.
 static func table_of(table_json: Variant, look: Dictionary, seed: int) -> Dictionary:
 	if table_json is Dictionary:
@@ -147,13 +138,11 @@ static func table_of(table_json: Variant, look: Dictionary, seed: int) -> Dictio
 	return CardTable.default_table(look, seed)
 
 
-## HOW MANY CARDS THE DECK HOLDS, as the episode says - the table never picks a number of its own
-## (the user, 2026-10-14: "The agents define how many cards a deck will use"): what the draw was
-## shuffled from (`deck_n`, [method TableProducer._make_draw]; for an episode drawn before the draw
-## counted it, the deck its brief lists, [method EpisodeCard._table_doc]), else the deck the producer
-## chose, else a box's drawn and left-in cards - and never fewer than the cards drawn. An episode that
-## says none of these (a made-up one) holds [constant TableMedium.DECK_FALLBACK]. A show that draws no
-## cards ([method CardTable.cardless]) has no deck.
+## How many cards the deck holds, as the episode says (the table never picks a number): what the draw
+## was shuffled from (`deck_n`, [method TableProducer._make_draw]; for an older episode, the deck its
+## brief lists, [method EpisodeCard._table_doc]), else the deck the producer chose, else a box's drawn
+## and left-in cards - never fewer than the cards drawn. An episode that says none of these holds
+## [constant TableMedium.DECK_FALLBACK]. A show that draws no cards ([method CardTable.cardless]) has no deck.
 static func deck_count(pay: Dictionary) -> int:
 	var drawn: int = (pay.get("cards", []) as Array).size() if pay.get("cards") is Array else 0
 	var n := int(pay.get("deck_n", 0))
@@ -174,7 +163,7 @@ func estimated_times(n: int) -> PackedFloat32Array:
 	for a in parse.get("actions", []):
 		var k := int((a as Dictionary)["after"])
 		rests[k] = float(rests.get(k, 0.0)) + float((a as Dictionary)["dur"]) + TableMedium.LEAD + TableMedium.TAIL
-	# ...and its silences: unheard words a silence off, they were a guess that hurried the work under them ([Assembly]), and it had begun
+	# ...and its silences: unheard words a silence off
 	for q in parse.get("quiets", []):
 		var k := int((q as Dictionary)["si"])
 		rests[k] = float(rests.get(k, 0.0)) + float((q as Dictionary)["s"])
@@ -189,9 +178,11 @@ func estimated_times(n: int) -> PackedFloat32Array:
 	return out
 
 
-## EACH SPOKEN WORD'S TIME FROM A KEPT TAKE (next/editing.md step 3: "with a take standing there is no guess"): [param words], the
-## take's timed words (its sidecar's), aligned to [param spoken] as a render's follower aligns them ([ReadingFollower]); a word the
-## take does not place keeps its [param est]'s spacing from the nearest it does. The live table plans on these where its episode keeps a take made from its script -
+## Each spoken word's time from a kept take (next/editing.md step 3): [param words], the take's timed
+## words (its sidecar's), aligned to [param spoken] as a render's follower aligns them ([ReadingFollower]);
+## a word the take does not place keeps its [param est]'s spacing from the nearest it does. The live
+## table plans on these where its episode keeps a take made from its script, so the plan, the live show
+## and the export read the same times.
 ## the plan, the live show and the export read the same times.
 static func take_times(spoken: PackedStringArray, est: PackedFloat32Array, words: Array) -> PackedFloat32Array:
 	var out := est.duplicate()
@@ -200,8 +191,8 @@ static func take_times(spoken: PackedStringArray, est: PackedFloat32Array, words
 	var f := ReadingFollower.new()
 	f.reset(spoken, -1, est)
 	f.extend(words)
-	# ...a word it does not place moves with the nearest it does (the guess's spacing kept, its order too): before the first placed,
-	# by the first's offset; after one, by that one's
+	# ...a word it does not place moves with the nearest it does: before the first placed, by the first's
+	# offset; after one, by that one's
 	var n := mini(out.size(), f.st0.size())
 	var offset := 0.0
 	for j in n:
@@ -228,15 +219,13 @@ func box_center() -> Vector3:
 	return TablePositions.SHOEBOX_AT if cards_from == "box" and String(staging.get("box_style", "open")) == "shoebox" else Vector3.ZERO
 
 
-## WHERE THE WORK IS DONE (the user, 2026-10-26, of the first alchemy episode: "we should shift objects to the
-## center screen/stage/table, as we use them ... the mortar and pestle was animated in the far left corner; we
-## should have brought it front-and-center"): the spot a thing is brought to while it is worked - the middle of
-## the picture, [constant WORK_AHEAD] toward the reader, where it is seen large and whole - the nearest to that
-## which keeps [constant WORK_CLEAR] from the cards' places, the deck and the box, and from [param feet]
-## (rectangles x by z: what stands on the table), on the top whose outline is [param top_o] ([method
-## Tables.top_outline]). Meters, the table's space, on its top. A pure function of the plan and the table. Nothing
-## keeps it clear: a show whose work is all done on one thing stands that thing in the middle (a mask, worked where
-## it stands), and the spot is then beside it.
+## Where the work is done: the spot a thing is brought to while it is worked - the middle of the
+## picture, [constant WORK_AHEAD] toward the reader, where it is seen large and whole - the nearest to
+## that which keeps [constant WORK_CLEAR] from the cards' places, the deck and the box, and from
+## [param feet] (rectangles x by z: what stands on the table), on the top whose outline is [param top_o]
+## ([method Tables.top_outline]). Meters, the table's space, on its top. A pure function of the plan and
+## the table. Nothing keeps it clear: a show whose work is all done on one thing stands that thing in the
+## middle, and the spot is then beside it.
 func work_spot(top_o: Dictionary, feet: Array = []) -> Vector3:
 	var fwd := -cam_base.basis.z
 	var aim := cam_base.origin + fwd * (-cam_base.origin.y / minf(fwd.y, -0.05))
@@ -271,15 +260,15 @@ func work_spot(top_o: Dictionary, feet: Array = []) -> Vector3:
 	return Vector3(goal.x, 0.0, goal.y)
 
 
-## How far in front of the picture's middle the work is done (meters, toward the reader), and how clear of
-## everything its spot is kept - each tried in turn until one is found (meters).
+## How far in front of the picture's middle the work is done (meters, toward the reader), and how clear
+## of everything its spot is kept - each tried in turn until one is found (meters).
 const WORK_AHEAD := 0.06
 const WORK_CLEAR := [0.1, 0.075, 0.05, 0.0]
 
 
-## THE DECK PUT ASIDE ([constant TableMedium.DECK_CROWD]): the first card of the spread that would lie
+## The deck put aside ([constant TableMedium.DECK_CROWD]): the first card of the spread that would lie
 ## that near the deck, and the spot further out - in the frame, on [param top], as far from the spread
-## as it can be, by the least slide - it is moved to before that card is drawn. None when nothing
+## as it can be, by the least slide - the deck is moved to before that card is drawn. None when nothing
 ## crowds it, the die says it stays, the cards come from a box, or there is nowhere better; the first
 ## card itself crowding it puts the deck there from the start.
 func put_aside(top: Dictionary) -> void:
@@ -331,8 +320,8 @@ func put_aside(top: Dictionary) -> void:
 		aside_card = crowd
 
 
-## A JUMPER'S WASH, held back for it: an episode whose first card is a jumper washes the deck into
-## it now and then ([constant TableMedium.JUMPER_WASH], its own die) - its one wash begins
+## A jumper's wash, held back for it: an episode whose first card is a jumper washes the deck into it
+## now and then ([constant TableMedium.JUMPER_WASH], its own die) - its one wash begins
 ## [constant TableMedium.JUMPER_WASH_LEAD] before the jumper is reckoned to come (the script's words at
 ## the follower's steady pace, [method estimated_times]) and runs [constant TableMedium.JUMPER_WASH_SLACK]
 ## past it, so the jumper comes while it mixes whatever the voice's real pace.

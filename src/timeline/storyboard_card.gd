@@ -1,25 +1,23 @@
 extends VBoxContainer
 class_name StoryboardCard
 
-## StoryboardCard - the note's storyboard: the show written down, on a note with a Medium. What
-## plays, in what order, for how long - and where nothing is written, the seed still chooses. The
-## card says what the note holds and lists its entries, one a click away; the writing is done in
-## the [StoryboardEditor] it opens along the bottom of the frame ("Timeline…").
+## StoryboardCard - the note's storyboard: the show written down, on a note with a Medium. What plays,
+## in what order, for how long - and where nothing is written, the seed still chooses. The card says
+## what the note holds and lists its entries, one a click away; the writing is done in the
+## [StoryboardEditor] it opens along the bottom of the frame ("Timeline...").
 ##
-## THE STORYBOARD IS THE NOTE'S, kept in its `scenes:` block ([method Storyboard.of_block]) and
-## written there by the autosave every card's block goes through ([DocSource]): the note is the
-## project. A note may instead NAME a file (`storyboard: default`, or a path) - then the card plays
-## that file as it is, changes nothing in it, and offers to take it into the note.
+## The storyboard is the note's, kept in its `scenes:` block ([method Storyboard.of_block]) and written
+## there by the autosave every card's block goes through ([DocSource]). A note may instead name a file
+## (`storyboard: default`, or a path): then the card plays that file as it is, changes nothing in it,
+## and offers to take it into the note.
 ##
-## IT STARTS FROM SOMETHING ("Start from"): the seeded show itself, written down as this song's
-## seed plays it ([method Director.forecast]) - so "automatic" is a first draft, an edit away from
-## being authored - or one of the storyboards in `storyboards/`, copied in with its defs.
+## "Start from": the seeded show written down as this song's seed plays it ([method Director.forecast]),
+## or one of the storyboards in `storyboards/`, copied in with its defs.
 ##
-## THE SHOW FOLLOWS THE WRITING. An edit is handed to the Director a moment after the hand stops
-## ([constant SETTLE]), and the entry being worked on is put back on screen ([method
-## Director.goto_entry]); an entry picked - here or on the editor's strip - is shown at once, and
-## where the storyboard follows the song (`loop` off) the song goes to that entry's place too, so
-## picture and sound stay the pair they will be in the export.
+## The show follows the writing. An edit is handed to the Director a moment after the hand stops
+## ([constant SETTLE]), and the entry being worked on is put back on screen ([method Director.goto_entry]);
+## an entry picked - here or on the editor's strip - is shown at once, and where the storyboard follows
+## the song (`loop` off) the song goes to that entry's place too.
 
 ## The block this card keeps under a note's `ghost:` key.
 const KEY := "scenes"
@@ -78,7 +76,7 @@ func _init() -> void:
 		+ "ruler, a stage's actors and what they do under it, and whatever is picked set at the right.")
 	_timeline.toggled.connect(_toggle_editor)
 	row.add_child(_timeline)
-	# ...OPENED FROM BESIDE PLAY, as every note's timeline is ([method Transport.offer_timeline]): the card keeps no button of its own
+	# ...opened from beside Play, as every note's timeline is ([method Transport.offer_timeline]): the card keeps no button of its own
 	_timeline.visible = false
 	tree_entered.connect(func() -> void:
 		Transport.offer_timeline(self, 2, func() -> void:
@@ -154,9 +152,9 @@ func apply(block: Dictionary) -> void:
 	_changed()
 
 
-## WHAT THE SHOW WALKS: `board`, the storyboard in its loaded form ({} where nothing is written,
-## or what is written does not load - the seed chooses), and `source`, the name a render can load
-## a file's from ("" for the note's own).
+## What the show walks: `board`, the storyboard in its loaded form ({} where nothing is written, or what
+## is written does not load - the seed chooses), and `source`, the name a render can load a file's from
+## ("" for the note's own).
 func plan() -> Dictionary:
 	if _kind == "file":
 		var sb := Storyboard.load_file(_file)
@@ -224,7 +222,7 @@ func _sync_editor(fresh: bool) -> void:
 	if _kind == "file":
 		_editor.open(_data, true, "Read from %s - take it into this note to change it." % _file)
 	elif not written and Director.is_attached() and not Director.is_manual():
-		# NOTHING WRITTEN: what the seed is going to play, as the storyboard it amounts to
+		# Nothing written: what the seed is going to play, as the storyboard it amounts to
 		_editor.open({"sequence": Director.forecast(AHEAD)}, true,
 			("Nothing is written yet, so the seed chooses: these are the first %d scenes it plays. + Scene "
 			% AHEAD + "starts this note's own; Start from → \"The seeded show, written down\" makes these its first draft."), true)
@@ -361,7 +359,7 @@ func _take_to_show() -> void:
 		Director.goto_entry(0)
 
 
-## PUT ENTRY [param i] ON SCREEN (the tail's counted on from the sequence's end) - a click here, or
+## Put entry [param i] on screen (the tail's counted on from the sequence's end) - a click here, or
 ## on the editor's strip. Where the storyboard follows the song, the song goes to that entry's
 ## place in the schedule too.
 ## [param into] seconds of entry [param i] on screen: the entry played again from its start and run on to there (a stage is

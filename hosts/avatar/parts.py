@@ -1,18 +1,14 @@
-"""parts.py - THE FACE'S PARTS: the eyes, the brows and the mouth, each its own scores, its own points of
+"""parts.py - the face's parts: the eyes, the brows and the mouth, each its own scores, its own points of
 MediaPipe's face mesh and how far round them it reaches (next/likeness.md, "The sixth pass").
 
-WHY (2026-10-25, the user: "The shape/color of the face and head can be stable for several seconds, but then it
-'flickers' into something else"): the face was moved by MediaPipe's 52 scores all at once, and their footage ties
-the scores together - a glance aside came with the head turned to a lit screen, a wide mouth with the brows raised.
-Fitted over every score, the rig's basis had a glance's scores move the cheeks and the jaw (the eyes' scores moved
-the points below the nose 0.97 as far as their most), and the splats' expression components mixed every part, so a
-played glance - 3.4 of its component's spreads in 60 ms - widened the cheek and moved the face's light. Measured from
-the basis itself, every part reached nearly every triangle: what a score moves cannot be read off a fit of
-correlated scores. So THE PARTS ARE PLACES ON THE FACE: each part's points (its anchors), and a reach in the face's
-heights (the forehead's top, MediaPipe's 10, to the chin, 152) - all of it within half the reach of an anchor, none
-past it. The rig's basis moves a point by the scores of the parts that reach it alone (rig.py), the splats' expression
-has components of each part's scores alone and a splat takes them as far as the part reaches its triangle (train.py),
-and each sound's mouth moves only what the mouth reaches (rig.py's `mouths`).
+MediaPipe's 52 scores are tied together in footage (a glance aside comes with the head turned to a lit screen, a
+wide mouth with the brows raised), so a basis fitted over every score has a glance move the cheeks and the jaw,
+and every part reaches nearly every triangle: what a score moves cannot be read off a fit of correlated scores.
+So the parts are places on the face: each part's points (its anchors), and a reach in the face's heights (the
+forehead's top, MediaPipe's 10, to the chin, 152) - all of it within half the reach of an anchor, none past it.
+The rig's basis moves a point by the scores of the parts that reach it alone (rig.py), the splats' expression
+has components of each part's scores alone and a splat takes them as far as the part reaches its triangle
+(train.py), and each sound's mouth moves only what the mouth reaches (rig.py's `mouths`).
 
 Each row: its name, the scores it moves (those whose names start so), how many principal components of them a splat's
 shifts are mixed by, its anchors, and its reach.
