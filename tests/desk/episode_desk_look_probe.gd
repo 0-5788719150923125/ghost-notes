@@ -88,7 +88,9 @@ func _run() -> void:
 		rows["mood"] = _mood
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = words
-	subs.document = {"source": source, "table": {"dir": ProjectSettings.globalize_path(dir), "seed": _seed, "plan": {}},
+	# ...with the episode's plan where it has one: its beats say which of its acts are played
+	var plan: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("plan.json"))) if FileAccess.file_exists(dir.path_join("plan.json")) else {}
+	subs.document = {"source": source, "table": {"dir": ProjectSettings.globalize_path(dir), "seed": _seed, "plan": plan if plan is Dictionary else {}},
 		"medium": rows, "title": "Theorem-Grooving", "byline": "with Pen & Ink"}
 	add_child(subs)
 	if medium.bind_captions(subs):

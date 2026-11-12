@@ -9,9 +9,17 @@ gets out of the way between writes, a camera close on the line being written) an
 pen ([Pen]), the ink ([Ink]) and the hand ([Handwriting]) - and the desk is the one desk: a table show's episode plays at
 it ([EpisodeDesk]). `theorem-grooving.md`'s Medium says `format: desk`, so its next episode is made for the desk.
 
+- **The pen rests until it is needed** ([method DeskMedium._pick_up_pose], [method DeskMedium._set_down_pose]): at the desk,
+  for a lesson, a letter and an episode alike, it lies beside the pad's right edge, is picked up as its first stroke comes,
+  and is set down a beat after its last action. A letter adds its own: a guess at its first stroke before the words arrive,
+  a point at the camera holding the pen, a change of pens. The camera stays wide until the pen is picked up.
+- **An episode's pen leads the voice** ([method EpisodeDesk._ahead], [method DeskMedium._lead_of]): a line is begun ahead of
+  its word by the time its own first two words take to say, and kept that far ahead, as a letter's pen is; a lead never
+  reaches back across a pause before its line.
 - **One pen** ([Pen]). The desk, the Letter and the table pose their pens through it: the nib on a hand's strokes (eased as
   `Ink.share` has it; the table's ink picture is put down on the same easing, so the nib is at the ink's front), between
-  them, pointing and resting; the hand's lean; a lifted pen drifting as `Hands.drift` has any held thing; its frame.
+  them, pointing and resting; the hand's lean, one for all three (`Pen.UP`: to the right and a little down on the screen, back
+  over a right hand toward the writer); a lifted pen drifting as `Hands.drift` has any held thing; its frame.
 - **One hand** ([Handwriting], moved down from `desk/`). The table's words in a hand (`neat`, `quick`, `print`: Kalam,
   Caveat, Patrick Hand, `CardTable.HANDS` `strokes`) are written in the hand's traced strokes, as a letter's are, and a pen
   seen follows them ([method SheetWriting.words]); a typewriter's are set from the font. One stroke picture for a formula

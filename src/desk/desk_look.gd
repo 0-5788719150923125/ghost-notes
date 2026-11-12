@@ -1271,7 +1271,7 @@ static func _area(polys: Array) -> float:
 
 ## Where the pen lies when nobody holds it (a letter's, before its writer picks it up, [LetterMedium]): beside the pad's
 ## right edge, its top toward the writer and turned a little out from the pad - as a right hand sets it down and picks it
-## up again ([constant LetterMedium.LEAN]) - on the desk or on the mat there. `{nib, top}`, the ends of its axis on the
+## up again ([constant Pen.UP]) - on the desk or on the mat there. `{nib, top}`, the ends of its axis on the
 ## surface under it (meters, the pad's frame, [param face] the desk's face; the pen's own radius is the medium's).
 ##
 ## Pen [param k] of a letter's (`look["pens"]` of them, [constant PEN_APART]): beside the first, further out.

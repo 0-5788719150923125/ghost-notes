@@ -2,7 +2,7 @@ extends SceneTree
 
 ## The gate of the painted surface ([FaceForm], [Bristles], [Skins], [TablePaint]; next/painted_surface.md), with no renderer.
 ##
-##   timeout 2400 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s - about 30 minutes: a puff, a sponge and a fill each held and looked at through a whole act, the sponge's every drawn point, and the solver's bakes of a liner's ways)
+##   timeout 2400 godot --headless --path . --script res://tests/table/paint_check.gd   (over 300 s - about 12 minutes: a puff, a sponge and a fill each held and looked at through a whole act, the sponge's every drawn point, and the solver's bakes of a liner's ways)
 ##
 ## Each group below is one function; its comments say what is held and the control that must fail.
 ##
@@ -879,7 +879,7 @@ func _held() -> bool:
 	var sw: int = m._work._work_of(m._work._thing_named("sponge"), "wedge")
 	var node: Node3D = (m._work.works[sw] as Dictionary)["node"]
 	var pts := _box_points(node, m._work)
-	var face_mesh := TableWork._ray_mesh(_faces_of(tp.skins[0]))
+	var face := _face_of(tp, 0)
 	var sponge_mat: ShaderMaterial = ((tp.tools["w%d:pose" % sw] as Dictionary)["sponges"][0] as Dictionary)["mat"]
 	# (its mesh's own vertices and the way each faces, as its shader is handed them)
 	var sponge_mesh: MeshInstance3D = ((tp.tools["w%d:pose" % sw] as Dictionary)["sponges"][0] as Dictionary)["mesh"]
@@ -918,15 +918,15 @@ func _held() -> bool:
 				var sq_at: Vector3 = sponge_mat.get_shader_parameter("squash_at")
 				var sq_d := Vector3(sq.x, sq.y, sq.z).normalized() if sq.w > 0.0 else Vector3.ZERO
 				var mx := m._work._world_of(sponge_mesh)
+				var held_at := PackedVector3Array()
+				var drawn_at := PackedVector3Array()
 				for vi in verts.size():
 					var q: Vector3 = verts[vi]
 					var v: Vector3 = q - sq_d * maxf((q - sq_at).dot(sq_d), 0.0) * sq.w
-					var held_off := _off_face(face_mesh, tp, 0, mx * v)
-					if held_off < INF:
-						worst_held = maxf(worst_held, -held_off)
-					var off := _off_face(face_mesh, tp, 0, mx * tp.pressed_drawn(sponge_mat, 0, v, norms[vi]))
-					if off < INF:
-						worst = maxf(worst, -off)
+					held_at.append(mx * v)
+					drawn_at.append(mx * tp.pressed_drawn(sponge_mat, 0, v, norms[vi]))
+				worst_held = maxf(worst_held, float(_deepest(face, tp, 0, held_at)[0]))
+				worst = maxf(worst, float(_deepest(face, tp, 0, drawn_at)[0]))
 				count += 1
 		return Vector3(worst, count, worst_held)
 	var stippled: Vector3 = deepest.call("stipple")
@@ -2247,6 +2247,75 @@ static func _off_face(tm: TriangleMesh, tp: TablePaint, si: int, p: Vector3) -> 
 	return (local - (hit["position"] as Vector3)).dot(n) * hw.basis.get_scale().x
 
 
+## The side of a column of [method _face_of]'s (meters, the face's own space), and how far round a triangle a column counts it as under.
+const FACE_CELL := 0.002
+const FACE_CELL_GROW := 0.0001
+
+
+## Skin [param si]'s face as [method _deepest] reads it: [method _off_face]'s ray mesh, and how high the face stands along its front
+## over each FACE_CELL column of it, the highest corner of every triangle in that column.
+static func _face_of(tp: TablePaint, si: int) -> Dictionary:
+	var faces := _faces_of(tp.skins[si])
+	var f: Vector3 = ((tp.skins[si]["surface"] as Dictionary)["front"] as Vector3).normalized()
+	var u := f.cross(Vector3.UP if absf(f.y) < 0.9 else Vector3.RIGHT).normalized()
+	var v := f.cross(u)
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for q in faces:
+		lo = lo.min(Vector2(q.dot(u), q.dot(v)))
+		hi = hi.max(Vector2(q.dot(u), q.dot(v)))
+	lo -= Vector2.ONE * FACE_CELL
+	var w := ceili((hi.x - lo.x) / FACE_CELL) + 2
+	var h := ceili((hi.y - lo.y) / FACE_CELL) + 2
+	var top := PackedFloat32Array()
+	top.resize(w * h)
+	top.fill(-INF)
+	for k in range(0, faces.size(), 3):
+		var a := faces[k]
+		var b := faces[k + 1]
+		var c := faces[k + 2]
+		var up := maxf(a.dot(f), maxf(b.dot(f), c.dot(f)))
+		var ca := Vector2(a.dot(u), a.dot(v))
+		var cb := Vector2(b.dot(u), b.dot(v))
+		var cc := Vector2(c.dot(u), c.dot(v))
+		var c0 := ((ca.min(cb).min(cc) - lo) / FACE_CELL - Vector2.ONE * (FACE_CELL_GROW / FACE_CELL)).floor()
+		var c1 := ((ca.max(cb).max(cc) - lo) / FACE_CELL + Vector2.ONE * (FACE_CELL_GROW / FACE_CELL)).floor()
+		for y in range(maxi(int(c0.y), 0), mini(int(c1.y), h - 1) + 1):
+			for x in range(maxi(int(c0.x), 0), mini(int(c1.x), w - 1) + 1):
+				top[y * w + x] = maxf(top[y * w + x], up)
+	return {"mesh": TableWork._ray_mesh(faces), "f": f, "u": u, "v": v, "lo": lo, "w": w, "h": h, "top": top}
+
+
+## How deep the deepest of points [param pts] (the table's space) stands in skin [param si]'s face [param face] ([method _face_of]),
+## and which it is - 0 and -1 when none is in it; with [param box], of the points in it alone. A point over the face's highest in its
+## column, or over no face, is never in it, so [method _off_face] reads only the rest: the same answer as reading every point.
+static func _deepest(face: Dictionary, tp: TablePaint, si: int, pts: PackedVector3Array, box := AABB()) -> Array:
+	var local := tp.holder_world(si, 0.0).affine_inverse() * pts
+	var f: Vector3 = face["f"]
+	var u: Vector3 = face["u"]
+	var v: Vector3 = face["v"]
+	var lo: Vector2 = face["lo"]
+	var w: int = face["w"]
+	var h: int = face["h"]
+	var top: PackedFloat32Array = face["top"]
+	var boxed := box.has_volume()
+	var worst := 0.0
+	var at := -1
+	for i in pts.size():
+		if boxed and not box.has_point(pts[i]):
+			continue
+		var q := local[i]
+		var x := floori((q.dot(u) - lo.x) / FACE_CELL)
+		var y := floori((q.dot(v) - lo.y) / FACE_CELL)
+		if x < 0 or y < 0 or x >= w or y >= h or q.dot(f) > top[y * w + x] + FACE_CELL_GROW:
+			continue
+		var off := _off_face(face["mesh"], tp, si, pts[i])
+		if off < INF and -off > worst:
+			worst = -off
+			at = i
+	return [worst, at]
+
+
 static func _medium() -> TableMedium:
 	var m := TableMedium.new()
 	m._root3 = Node3D.new()
@@ -2809,7 +2878,7 @@ func _brush_clear() -> bool:
 	var node: Node3D = tool["node"]
 	var x0: Transform3D = tool["x0"]
 	var hw := tp.holder_world(0, 0.0)
-	var face_mesh := TableWork._ray_mesh(_faces_of(tp.skins[0]))
+	var face := _face_of(tp, 0)
 	var face_box := AABB()
 	for mi in (tp.skins[0] as Dictionary)["meshes"]:
 		face_box = face_box.merge(hw * (mi as MeshInstance3D).get_aabb()) if face_box.size != Vector3.ZERO else hw * (mi as MeshInstance3D).get_aabb()
@@ -2851,14 +2920,10 @@ func _brush_clear() -> bool:
 				var held: Vector4 = held_of.call(t, xy, pull)
 				var h := tp._skin_hold(0, xy, 0.0, 1.0, 0.0, tool, "belly", held, held, 0.0)
 				var x := tp._node_at(h, tool, x0)
-				for q in stiff:
-					var p := x * q
-					if not face_box.has_point(p):
-						continue
-					var off := _off_face(face_mesh, tp, 0, p)
-					if off < INF and -off > worst:
-						worst = -off
-						where = "at %s mm drawn %s" % [xy.snappedf(0.1), pull.snappedf(0.01)]
+				var d: Array = _deepest(face, tp, 0, x * stiff, face_box)
+				if float(d[0]) > worst:
+					worst = d[0]
+					where = "at %s mm drawn %s" % [xy.snappedf(0.1), pull.snappedf(0.01)]
 		return [worst, where]
 	var clear := func(t: Dictionary, xy: Vector2, pull: Vector2) -> Vector4:
 		return tp._cleared(0, xy, t, "belly", pull)
@@ -2901,7 +2966,7 @@ func _kept_clear() -> bool:
 	var node: Node3D = tool["node"]
 	var x0: Transform3D = tool["x0"]
 	var hw := tp.holder_world(0, 0.0)
-	var face_mesh := TableWork._ray_mesh(_faces_of(tp.skins[0]))
+	var face := _face_of(tp, 0)
 	var face_box := AABB()
 	for mi in (tp.skins[0] as Dictionary)["meshes"]:
 		face_box = face_box.merge(hw * (mi as MeshInstance3D).get_aabb()) if face_box.size != Vector3.ZERO else hw * (mi as MeshInstance3D).get_aabb()
@@ -2924,14 +2989,7 @@ func _kept_clear() -> bool:
 				for j in n + 1 - i:
 					stiff.append(a + e1 * (float(i) / float(n)) + e2 * (float(j) / float(n)))
 	var stiff_in := func(x: Transform3D) -> float:
-		var worst := 0.0
-		for q in stiff:
-			var p := x * q
-			if face_box.has_point(p):
-				var off := _off_face(face_mesh, tp, 0, p)
-				if off < INF:
-					worst = maxf(worst, -off)
-		return worst
+		return float(_deepest(face, tp, 0, x * stiff, face_box)[0])
 	# ...the places: rings round the nose's bridge and its tip, each pose held as a hand holds it, nothing held clear
 	var marks := FaceForm.landmarks(Vector3(15, 21, 8))
 	var places := PackedVector2Array()

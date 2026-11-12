@@ -11,10 +11,10 @@ class_name EpisodeDesk
 ##
 ## When each is done is the desk's ([method DeskMedium._build_plan]): a write begins at its act's word (`<!-- act: name -->`)
 ## and keeps with the words said from there to the next act's word - the old desk's dictation, its pen quicker or slower to
-## keep with them, never past [constant DeskScript.MAX_PACE] and [constant DeskScript.MIN_PACE] of its own pace; an act with
-## no word follows the one before, or begins its beat. A point is there at its word and held while it is talked about.
-## Words with no math are written in their hand's strokes on the pad's rules ([method SheetWriting.words]); what TeX lays out
-## is the episode's `ink.json` ([TableInk]), and a line not laid out yet is left unwritten.
+## keep with them, never past [constant DeskScript.MAX_PACE] and [constant DeskScript.MIN_PACE] of its own pace - and, as a
+## letter's pen does, ahead of the voice by the time its first [constant LetterScript.AHEAD_WORDS] words take to say
+## ([method _ahead]), so a line is seen as it is said; an act with no word follows the one before, or begins its beat. The
+## camera stays wide until the pen is picked up.
 ##
 ## The desk is the Letter's ([DeskLook]), dressed as the note's Medium card says ([DeskFormat]; the document's `medium`: its
 ## number `seed`, `things`, `mood`, `card_text`), each left out drawn from the episode's own number; chosen while it plays, the
@@ -199,6 +199,11 @@ static func _write_of(tr: Dictionary, records: Dictionary, strokes: Dictionary, 
 ## The desk's number: the rows' [param rows] `seed` where they give one, else the episode's own.
 func _desk_of(rows: Dictionary) -> int:
 	return int(rows.get("seed", 0)) if int(rows.get("seed", 0)) > 0 else _hand
+
+
+## A written line keeps [constant LetterScript.AHEAD_WORDS] words ahead of the voice, as a letter's does.
+func _ahead() -> int:
+	return LetterScript.AHEAD_WORDS
 
 
 ## The desk's look from its number [param desk] and what was chosen for it ([param picks]), dressed again when they changed.

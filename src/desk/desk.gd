@@ -48,6 +48,21 @@ const PAD_H := LegalPad.H
 ## The pen's body, in meters; how it eases to where it waits ([constant Pen.REST_LIFT] up).
 const PEN_LEN := 0.135
 const PEN_R := 0.0048
+## The pen's length from nib to top (m), as [DeskMedium] builds it.
+const PEN_TOP := PEN_LEN + 0.02
+## The pick-up ([method _pick_up_pose]): how long it takes, from lying on the desk to over the first stroke (seconds);
+## where the fingers hold it, up from the nib (m); the share of the way it is turned up into the hand over, and the share
+## it is raised alone before it is carried; and how high its grip arcs over the pad (m) - its nib clears the pad's edge by
+## about the height the desk's pen waits at ([constant Pen.REST_LIFT]).
+const PICK_UP := 2.2
+const PICK_GRIP := 0.05
+const PICK_TURN := 0.45
+const PICK_CARRY := 0.25
+const PICK_ARC := 0.05
+## The set-down ([method _set_down_pose]): how long after the pen's last action it begins (seconds) - the nib settles
+## beside where it stopped first, as after any line ([constant DeskMedium.REST_EASE]); the way back is the pick-up's,
+## [constant PICK_UP] long.
+const SET_DOWN_AFTER := 1.0
 const REST_EASE := 0.9
 const REACH_EASE := 0.45
 ## The pen comes down this long before its dictation's first word.
@@ -113,6 +128,7 @@ var _strokes := {}                 # item id -> Ink.schedule
 var _follower := ReadingFollower.new()
 var _built_n := -1
 var _plan: Array = []              # per action: {start, end, turn_at} (seconds), INF while not placed
+var _first_pen := 0               # the pen picked up first: the desk's own, or a letter's first ink
 var _held := {}                    # action -> what was shown of it when the plan was made again
 ## Worked out once, not every frame: the plans made so far, which a frame's answers are kept for ([method _pages]), and
 ## each finished action's ink, the same at any later moment ([method _done_ink_of]).
@@ -607,12 +623,14 @@ func _build_plan() -> void:
 		var start := INF
 		var end := INF
 		if String(a["kind"]) in DeskScript.WRITES and span > 0:
+			# ...ahead of the voice by what its own first words take to say, where the medium's pen leads ([method _lead_of])
+			var lead := _lead_of(i)
 			var due := _due(i, _word_t0(after))
 			if due == INF:
 				break
-			start = float(held.get("start", maxf(due, ready)))
+			start = float(held.get("start", maxf(due - lead, ready)))
 			var said := _word_t1(after + span - 1)
-			end = clampf(said if said < INF else start + float(span) * DeskScript.EST_WORD,
+			end = clampf(said - lead if said < INF else start + float(span) * DeskScript.EST_WORD,
 				start + write / DeskScript.MAX_PACE, start + write / DeskScript.MIN_PACE)
 			end = _paced_end(i, start, end)
 			if String(a["kind"]) == "draw":
@@ -797,7 +815,16 @@ func _share(i: int, t: float) -> float:
 	var span := int(a.get("span", 0))
 	if span <= 0:
 		return clampf((t - start) / maxf(end - start, 0.01), 0.0, 1.0)
-	var times := _dictation(int(a["after"]), span, start)
+	var lead := _lead_of(i)
+	var times := _dictation(int(a["after"]), span, start + lead)
+	if lead > 0.0:
+		# ...the pen keeping time with the words that much early
+		var t0s: PackedFloat32Array = times[0]
+		var t1s: PackedFloat32Array = times[1]
+		for j in t0s.size():
+			t0s[j] -= lead
+			t1s[j] -= lead
+		times = [t0s, t1s]
 	return elastic(t, start, end, times[0], times[1])
 
 
@@ -1135,10 +1162,7 @@ func _waiting(last: int, next: int) -> Dictionary:
 	return {"p": p, "lift": lift}
 
 
-## Where the nib waits before the first action: `{p, lift}` (page px, m) - at the desk, at the page's right, a
-## little lifted. A letter's waits over its first stroke, where it is carried from the desk ([LetterMedium]).
-func _before_first() -> Dictionary:
-	return {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": Pen.REST_LIFT}
+
 
 
 ## Does the pen get out of the way between action [param last] and action [param next] (-1: the lesson's
@@ -1256,6 +1280,146 @@ func _world(p: Vector2, lift: float) -> Vector3:
 	return _pad.transform * local
 
 
+# --- the pen at rest -----------------------------------------------------------------------------
+# The pen lies beside the pad's right edge ([method DeskLook.pen_rest]) until it is needed, is picked up as its first
+# stroke comes ([method _pick_up_pose]), and is set down a beat after its last action ([method _set_down_pose]).
+
+## Before the first thing is done the nib waits over its first stroke, where the pen is carried to from the desk ([method
+## _pick_up_pose]); with nothing to do at all, beside the page's head.
+func _before_first() -> Dictionary:
+	var i := _first_done()
+	if i < 0:
+		return {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": Pen.REST_LIFT}
+	return {"p": _action_point(_actions[i], true), "lift": Pen.REST_LIFT}
+
+
+## The first action the pen does - a point at nothing on its page it leaves be, as [method pen_at] does; -1 for none.
+func _first_done() -> int:
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
+			return i
+	return -1
+
+
+## When the pen is picked up: `(from, to)`, seconds - [constant PICK_UP] long, over as the nib sets off to its first stroke
+## ([method _reach]). A first action not placed yet is when [method _first_guess] says; INF while neither is known, and for
+## a desk whose pen does nothing: it lies where it is.
+func _pick_up() -> Vector2:
+	var i := _first_done()
+	if i < 0 or i >= _plan.size():
+		return Vector2(INF, INF)
+	var start := float(_plan[i]["start"])
+	if start == INF:
+		start = _first_guess()
+		if start == INF:
+			return Vector2(INF, INF)
+	var to := start - _reach(-1, i)
+	return Vector2(to - PICK_UP, to)
+
+
+## The pen picked up from where it lies ([method DeskLook.pen_rest]): `{xf, f}` as [method _tap_pose] gives it, the pose
+## whole - lying on its widest until [method _pick_up] begins; then held by its grip ([constant PICK_GRIP] up from the
+## nib), raised and turned up into the hand over the first [constant PICK_TURN] of the way, carried over the pad from
+## [constant PICK_CARRY] of it in an arc [constant PICK_ARC] high, and brought down to the desk's own pose [param base],
+## which it is as the pick-up ends; {} from then on.
+func _pick_up_pose(base: Transform3D) -> Dictionary:
+	var w := _pick_up()
+	if w.y < INF and _now >= w.y:
+		return {}
+	var u := clampf((_now - w.x) / PICK_UP, 0.0, 1.0) if w.x < INF else 0.0
+	return {"xf": _lift(base, _first_pen, u), "f": 1.0}
+
+
+## The last action the pen does - a point at nothing on its page it leaves be, as [method _first_done]; -1 for none.
+func _last_done() -> int:
+	for i in range(_actions.size() - 1, -1, -1):
+		var a: Dictionary = _actions[i]
+		if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
+			return i
+	return -1
+
+
+## When the pen is set down: `(from, to)`, seconds - [constant SET_DOWN_AFTER] after its last action ends (and anything
+## that keeps it in hand past that, [method _released_by]), and [constant PICK_UP] long. INF while that action is not placed
+## yet, and for a desk whose pen does nothing: it never left the desk.
+func _set_down() -> Vector2:
+	var i := _last_done()
+	if i < 0 or i >= _plan.size():
+		return Vector2(INF, INF)
+	var end := float(_plan[i]["end"])
+	if end == INF:
+		return Vector2(INF, INF)
+	end = _released_by(end)
+	if end == INF:
+		return Vector2(INF, INF)
+	return Vector2(end + SET_DOWN_AFTER, end + SET_DOWN_AFTER + PICK_UP)
+
+
+## The pen set down where it lies ([method DeskLook.pen_rest]) once its writing is done: `{xf, f}` as [method
+## _pick_up_pose] gives it, the pick-up's way back ([method _lift]) from the desk's own pose [param base] (the pen in
+## hand, at its own place), lying there from then on; {} before [method _set_down] begins.
+func _set_down_pose(base: Transform3D) -> Dictionary:
+	var w := _set_down()
+	if w.x == INF or _now <= w.x:
+		return {}
+	return {"xf": _lift(base, _pen_in_hand(), 1.0 - clampf((_now - w.x) / PICK_UP, 0.0, 1.0)), "f": 1.0}
+
+
+## Pen [param k] on its way between its place and the hand: lying where it is at [param u] 0; held by its grip ([constant
+## PICK_GRIP] up from the nib), raised and turned up into the hand over the first [constant PICK_TURN] of the way, carried
+## over the pad from [constant PICK_CARRY] of it in an arc [constant PICK_ARC] high, and brought down to the desk's own
+## pose [param base], which it is at 1. A pen put down goes the same way back.
+func _lift(base: Transform3D, k: int, u: float) -> Transform3D:
+	var lying := _lying(k)
+	if u <= 0.0:
+		return lying
+	var turned := Basis(lying.basis.get_rotation_quaternion().slerp(base.basis.get_rotation_quaternion(),
+		_ease(clampf((u - 0.05) / PICK_TURN, 0.0, 1.0))))
+	var grip := (lying.origin + lying.basis.y * PICK_GRIP).lerp(base.origin + base.basis.y * PICK_GRIP,
+		_ease(clampf((u - PICK_CARRY) / (1.0 - PICK_CARRY), 0.0, 1.0)))
+	grip.y += PICK_ARC * _ease(clampf(u / 0.4, 0.0, 1.0)) * (1.0 - _ease(clampf((u - 0.55) / 0.45, 0.0, 1.0)))
+	return Transform3D(turned, grip - turned.y * PICK_GRIP)
+
+
+## Pen [param k] lying at its place ([method DeskLook.pen_rest]), on its widest.
+func _lying(k: int) -> Transform3D:
+	var rest := DeskLook.pen_rest(look, LegalPad.DESK_Y, k)
+	var lie := Vector3.UP * PEN_R * 1.04
+	var nib: Vector3 = _pad.transform * ((rest["nib"] as Vector3) + lie)
+	return Pen.frame(nib, _pad.transform * ((rest["top"] as Vector3) + lie) - nib)
+
+
+## From [param a] to [param b] by [param f], turned about the pen's middle where the fingers hold it, and
+## lifted clear of the page on the way.
+static func _blend(a: Transform3D, b: Transform3D, f: float) -> Transform3D:
+	if f <= 0.0:
+		return a
+	if f >= 1.0:
+		return b
+	var qa := a.basis.get_rotation_quaternion()
+	var qb := b.basis.get_rotation_quaternion()
+	var basis := Basis(qa.slerp(qb, f))
+	var mid := (a.origin + a.basis.y * PEN_TOP * 0.5).lerp(b.origin + b.basis.y * PEN_TOP * 0.5, f)
+	mid += Vector3.UP * sin(PI * f) * 0.05
+	return Transform3D(basis, mid - basis.y * PEN_TOP * 0.5)
+
+
+## When a first stroke not placed yet is due: INF here (the pen lies until the first action is placed); a letter guesses it.
+func _first_guess() -> float:
+	return INF
+
+
+## How long the pen stays in hand past its last action's [param end]: no longer here; a letter's point at the camera holds it.
+func _released_by(end: float) -> float:
+	return end
+
+
+## Which pen is in hand: the first. A letter changes pens ([method LetterMedium._pen_in_hand]).
+func _pen_in_hand() -> int:
+	return _first_pen
+
+
 func _place_pen() -> void:
 	_pen.global_transform = _pen_xf()
 
@@ -1263,6 +1427,15 @@ func _place_pen() -> void:
 ## The pen's transform at [member _now]: its nib where [method pen_at] says, its body leaning as the hand does ([method
 ## Pen.lean]) and drifting off the paper ([method Pen.drift]). A medium that lays poses of its own over it answers for itself.
 func _pen_xf() -> Transform3D:
+	var base := _held_xf()
+	var pose := _pick_up_pose(base)
+	if pose.is_empty():
+		pose = _set_down_pose(base)
+	return base if pose.is_empty() else _blend(base, pose["xf"], float(pose["f"]))
+
+
+## The pen in the hand at [member _now]: its nib where [method pen_at] says, its body leaning as the hand does.
+func _held_xf() -> Transform3D:
 	var at := pen_at()
 	var p: Vector2 = at["p"]
 	var lift := float(at["lift"])
@@ -1271,14 +1444,8 @@ func _pen_xf() -> Transform3D:
 	var before: Vector2 = pen_at()["p"]
 	_now = keep
 	var moved := (p - before) / Pen.MOTION_DT
-	var up := Pen.lean(_pen_up(), _now, _seed, p.x / PW, Vector3(moved.x / PW * PAD_W, 0.0, moved.y / PH * PAD_H))
+	var up := Pen.lean(Pen.UP, _now, _seed, p.x / PW, Vector3(moved.x / PW * PAD_W, 0.0, moved.y / PH * PAD_H))
 	return Pen.frame(_world(p, lift) + Pen.drift(_now, _seed, lift), up)
-
-
-## How the pen leans from its nib as it writes, before the hand's sway ([method Pen.lean]): at the desk, [constant Pen.UP].
-## A letter's leans its own way ([LetterMedium]).
-func _pen_up() -> Vector3:
-	return Pen.UP
 
 
 # --- the camera -------------------------------------------------------------------------------
@@ -1291,7 +1458,9 @@ func _framing() -> Dictionary:
 	var turn := false
 	var line := Vector2(PW * 0.5, PH * 0.5)
 	var opening := _opening()
-	if opening < INF and _now > opening - 1.0:
+	# close once the lesson has opened and the pen is picked up for its first stroke (the springs given their lead); wide
+	# through talk before it
+	if opening < INF and _now > opening - 1.0 and _now > _pick_up().x - CAM_LEAD:
 		k = 1.0
 	var ahead := _now + CAM_LEAD
 	var page := _pages().x
@@ -1416,6 +1585,27 @@ func _blank() -> float:
 ## A medium whose pen writes ahead (a letter's, [LetterMedium]) answers for itself.
 func _due(_i: int, t0: float) -> float:
 	return t0 - PEN_LEAD if t0 < INF else INF
+
+
+## How many words a written line keeps ahead of the voice saying it: none here - the pen writes each word as it is said. A
+## medium whose pen leads answers for itself ([EpisodeDesk]).
+func _ahead() -> int:
+	return 0
+
+
+## How far ahead of the voice written action [param i] keeps, seconds: what its own first [method _ahead] words take to say
+## (estimated until they are heard, and at most twice the estimate), so a lead never reaches back across a pause before its
+## line; none where the pen writes each word as it is said, and none for a line of a word.
+func _lead_of(i: int) -> float:
+	var a: Dictionary = _actions[i]
+	var n := mini(_ahead(), int(a.get("span", 0)) - 1)
+	if n <= 0:
+		return 0.0
+	var t0 := _word_t0(int(a.get("after", 0)))
+	var tn := _word_t0(int(a.get("after", 0)) + n)
+	if t0 == INF or tn == INF:
+		return float(n) * DeskScript.EST_WORD
+	return clampf(tn - t0, 0.0, float(n) * DeskScript.EST_WORD * 2.0)
 
 
 ## When action [param i], begun at [param start], ends: [param end], the desk's - a dictated one's the elastic

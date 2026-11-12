@@ -13,16 +13,18 @@ class_name Pen
 ## strokes it lifts in an arc and travels from the end of one to the start of the next. It points at a thing written
 ## ([method point_path], [method pointing]): under a wide thing (a formula, a curve) it comes down near its start and
 ## sweeps along under it, then settles beside its right end, low on its height, where the body leans away over clean
-## paper; at a small thing it comes straight to that place. Its body leans from the nib to the frame's top right ([constant
-## UP]), swaying slowly, turned a little with where the nib is across the page and trailing the nib's travel ([method
-## lean]); lifted, it drifts as any held thing does ([method drift]), never while it writes.
+## paper; at a small thing it comes straight to that place. Its body leans from the nib as a right hand holds it, to the
+## right and a little down on the screen ([constant UP]), swaying slowly, turned a little with where the nib is across the
+## page and trailing the nib's travel ([method lean]); lifted, it drifts as any held thing does ([method drift]), never
+## while it writes.
 
 ## How high the nib lifts between strokes, waits between actions, and points from (meters).
 const LIFT := 0.004
 const REST_LIFT := 0.022
 const POINT_LIFT := 0.0035
-## How it leans from its nib: up, to the right, and away from the writer - the frame's top right.
-const UP := Vector3(0.42, 0.64, -0.40)
+## How it leans from its nib: up 48 degrees, and across to the right and 30 degrees toward the writer - back over the hand
+## toward a right-handed writer's shoulder, on the screen to the right and a little down.
+const UP := Vector3(0.582, 0.741, 0.336)
 ## Pointing: a thing this wide or wider is swept under, this far below it; where the nib stays, this far right of the
 ## thing's end (TeX points); the longest the sweep and the settle take together, and the sweep's share of that.
 const POINT_WIDE := 29.0

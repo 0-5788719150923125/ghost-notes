@@ -203,10 +203,10 @@ note and does nothing: the behavior it describes is written as `<!-- still -->`.
   to hover over the first stroke as the blank page ends (`LetterMedium._pick_up_pose`, laid over the desk's `_pen_xf`; at
   most 4 mm a frame, its nib never into the desk or the pad). The Proof desk's pen's first stroke comes with the first word.
 - **The pen leans to the right and a little down as it writes**: back over the hand toward the writer's right shoulder, as a
-  right hand holds one, seen from the camera on the writer's side (`LetterMedium.LEAN` through the desk's `_pen_up` hook: 48
+  right hand holds one, seen from the camera on the writer's side (`Pen.UP`, the one pen's lean at the desk and the table: 48
   degrees up from the nib, 30 degrees toward the writer from straight right - on the screen 14 degrees under the level on
-  average, 3 to 31 with the forearm's turn and the hand's sway). Its body lies over the paper not yet written. The Proof
-  desk keeps its own lean, and the pen lies on the desk top toward the writer as it is picked up.
+  average, 3 to 31 with the forearm's turn and the hand's sway). Its body lies over the paper not yet written, and the pen
+  lies on the desk top toward the writer as it is picked up.
 - **What is on the desk and its light are chosen; the number only places them.** The Letter's "On the desk" bank is a tick
   for each `DeskLook.THINGS` row (the mat and the candles among them), and a Light row holds the moods. Chosen (`DeskLook.of`'s
   picks: the block's `things` and `mood`), each thing is drawn from a generator of its own kind and placed by it, so another

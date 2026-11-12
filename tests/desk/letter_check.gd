@@ -54,7 +54,7 @@ extends SceneTree
 ## - The pen is picked up ([method LetterMedium._pick_up_pose]): it lies level beside the pad's right edge through the intro,
 ##   is picked up once the blur has lifted and is over the first stroke as the line begins, moving a frame at a time, no
 ##   further than a hand would (control: the desk's own pen hovering over the first stroke jumps), never into the desk or
-##   the pad. As it writes it leans right and a little down on screen ([constant LetterMedium.LEAN]), whatever the sway
+##   the pad. As it writes it leans right and a little down on screen ([constant Pen.UP]), whatever the sway
 ##   (control: the Proof desk's lean points up). Nothing lies where it rests ([method DeskLook.pen_rest]; control: with its
 ##   place not taken, a thing lands on it).
 ## - A page turned inside a paragraph after a mark is rested for, at least the turn's own rest; one that breaks a sentence
@@ -213,6 +213,10 @@ Yours.
 const DOT_SVG :="<svg viewBox=\"0 0 360 40\"><line x1=\"30\" y1=\"20\" x2=\"50\" y2=\"20\"/><circle id=\"the-dot\" cx=\"300\" cy=\"20\" r=\"4\" fill=\"black\"/></svg>"
 
 var _fails: Array = []
+
+
+## A pen leaning up, to the right and away from the writer - the frame's top right: the lean's control.
+const TOP_RIGHT := Vector3(0.42, 0.64, -0.40)
 
 
 func _init() -> void:
@@ -1393,10 +1397,10 @@ func _pick_up() -> void:
 				hi = maxf(hi, down)
 				sum += down
 				count += 1
-	var desk := _screen_down(Pen.lean(Pen.UP, 0.0, 3, 0.5, Vector3.ZERO), float(LetterMedium.LETTER_LOCAL["pitch"]))
+	var desk := _screen_down(Pen.lean(TOP_RIGHT, 0.0, 3, 0.5, Vector3.ZERO), float(LetterMedium.LETTER_LOCAL["pitch"]))
 	var mean := sum / float(maxi(count, 1))
 	_check(lo > 0.0 and hi < 35.0 and mean > 10.0 and mean < 24.0 and desk < -30.0,
-		"as it writes, the pen's top points right and a little down on the screen (%.0f degrees under the level, %.0f to %.0f with the hand's sway) - the control, the Proof desk's lean, %.0f degrees over it"
+		"as it writes, the pen's top points right and a little down on the screen (%.0f degrees under the level, %.0f to %.0f with the hand's sway) - the control, a pen leaning up and away to the frame's top right, %.0f degrees over it"
 		% [mean, lo, hi, -desk])
 	m.free()
 	# Nothing else lies there
