@@ -1890,7 +1890,7 @@ RULES: List[Rule] = [
          (("a.gd", "\tvar box := TextEdit.new()", 1), ("a.gd", "\tvar list := ScrollContainer.new()", 1),
           ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
          skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "mask_editor.gd",
-               "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_grid.gd", "assistant.gd")),
+               "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd")),
     # `Films.pump()` IS CALLED FROM main's `_process`. A window cut is an ffmpeg child, and something
     # with a frame must notice it exit and promote its output out of the `.part` name. The live film
     # panel and the Generative panel polled it - the two things usually absent - so footage showed on

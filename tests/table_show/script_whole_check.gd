@@ -20,8 +20,9 @@ var _fails := 0
 func _initialize() -> void:
 	AgentJobs.allow_for_tool(false)        # read-only: nothing here may start an agent
 	TableEpisode.root = ROOT
+	# (its whole folder cleared first: a run that died left an episode begun by hand, and the next run's begin was refused)
+	_rmrf(ProjectSettings.globalize_path(ROOT))
 	var ep := TableEpisode.open("whole-show", 5)
-	_rmrf(ep.dir)
 	ep.write_json("plan", {"episode_title": "Whole", "spread": {"name": "", "positions": [{"name": "One"}, {"name": "Two"}]},
 		"staging": {"source": "none"}, "look": CardTable.sanitize_look({})})
 	ep.write_text("say:intro", "Hello there.")
@@ -68,17 +69,16 @@ func _initialize() -> void:
 	hp.again = ["image:surface"]
 	_ok(not hp.passes_by("image:surface"), "the control: a ⟳ asking for it is not passed by")
 	_ok(not hand.begin_by_hand().is_empty(), "an episode begun is not begun again")
-	# A COPY KEPT, AND PUT BACK (next/editing.md step 1): its words and data, never a picture; put back, what changed since a version back
-	var pic := FileAccess.open(ep.file_of("image:surface"), FileAccess.WRITE)
-	pic.store_string("png")
-	pic.close()
-	_ok(ep.keep_copy().is_empty() and ep.copies().size() == 1 and ((ep.copies()[0]["steps"] as Dictionary).has("say:2"))
-		and not (ep.copies()[0]["steps"] as Dictionary).has("image:surface"), "a copy keeps the words and data, never a picture")
-	ep.write_text("say:2", "Changed after the copy.")
+	# THE WAY BACK, WHERE KEEP A COPY WAS (the Body card's Restore): a passage changed is listed among the episode's step versions,
+	# and put back is the words as they were, kept, what changed since a version back - THE CONTROL: a version not there is refused
+	ep.write_text("say:2", "Changed after the first words.")
+	var listed := ep.step_versions().filter(func(v: Dictionary) -> bool: return String((v["key"] as Array)[0]) == "say:2")
 	var back := ep.versions("say:2").size()
-	_ok(ep.restore_copy(0).is_empty() and ep.read_text("say:2") == "The second beat's words." and ep.kept("say:2")
-		and ep.versions("say:2").size() == back + 1, "put back: the copy's words again, kept, what changed since a version back")
-	_ok(not ep.restore_copy(5).is_empty(), "the control: a copy that is not there is not put back")
+	_ok(not listed.is_empty() and float(listed[0]["at"]) > 0.0, "a passage changed is listed among the episode's step versions (%d)" % listed.size())
+	_ok(not listed.is_empty() and ep.restore("say:2", int((listed[0]["key"] as Array)[1])).is_empty()
+		and ep.read_text("say:2") == "The second beat's words." and ep.kept("say:2") and ep.versions("say:2").size() == back + 1,
+		"put back: the words as they were, kept, what changed since a version back")
+	_ok(not ep.restore("say:2", 99).is_empty(), "the control: a version that is not there is not put back")
 	# THE HOST'S MAPS ONE BACK (TableProducer.swap_paint): the new put in place, the old kept, the one before that gone
 	for pass_n in [1, 2, 3]:
 		var fresh := ep.dir.path_join(TableProducer.PAINT_NEXT)
