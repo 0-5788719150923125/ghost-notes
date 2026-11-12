@@ -26,7 +26,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 | Slot | What it is | Taken by |
 | --- | --- | --- |
 | `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Voice lab, Clip |
-| `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, a voice lab's own show, or a clip's own frame. | Voice lab, Medium, Table, Actor, Clip |
+| `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, a voice lab's own show, or a clip's own frame. | Voice lab, Medium, Actor, Clip |
 
 ## Workspaces
 
@@ -56,7 +56,7 @@ By family - the color a component's card, chip and marks are drawn in.
 ### Producer
 
 - **Table** (`table`) - Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.
-  - needs text; gives text, picture, moments; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `table:`
+  - needs text; gives text, picture, moments, episode; brings Voice, Medium; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `table:`
 
 ### Voice
 
@@ -87,7 +87,7 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Medium
 
-- **Medium** (`medium`) - What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk - and that format's settings.
+- **Medium** (`medium`) - What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk; a table show at its table or a desk - and that format's settings.
   - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `medium:`
 
 ### Look

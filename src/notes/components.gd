@@ -53,7 +53,7 @@ const SLOTS := {
 ## section, and `mode` the name its Script card works in (the rows it shows, what its words are called, the marks it
 ## offers: [ScriptWriter], [ScriptMarks] `modes`), the section's where the row names none ([method script_mode]).
 ## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `hosts` (which of a note's
-## component cards it can show; a card table is its own presentation, so it shows no Medium) and `classic` (what a
+## component cards it can show; a table show's Medium offers only Table's formats, [method Medium.offered]) and `classic` (what a
 ## panel started without a note - the command line, a gate - is made of). No line of help stands under a panel's title
 ## row: what a card is for is said on hover ([method card_blurb]).
 const WORKSPACES := {
@@ -67,7 +67,7 @@ const WORKSPACES := {
 	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief, and the voice that reads them.",
 		# (the Pictures card comes with a show at a table, so it is left out here)
-		"hosts": ["table", "direction", "voice", "voice_training", "illustrations", "look", "bookends"],
+		"hosts": ["table", "direction", "voice", "voice_training", "medium", "illustrations", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"lab": {"label": "Voice lab", "section": "synth", "mode": "synthesis",
 		"blurb": "Ghost Notes' own synthesizer and the fishing game that breeds its voices."},
@@ -115,7 +115,7 @@ const REGISTRY := {
 	# notebook, a tablet, a letter, a dispatch desk ([constant Medium.REGISTRY]) - with the rows the format uses
 	# ([MediumCard]).
 	"medium": {"label": "Medium", "family": &"medium",
-		"blurb": "What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk - and that format's settings.",
+		"blurb": "What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk; a table show at its table or a desk - and that format's settings.",
 		"needs": ["picture"], "provides": ["places"], "requires": ["scenes"], "slots": ["presentation"], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["typography", "tablet", "letter", "dispatch"], "block": "medium", "card": "medium",
 		"script": "res://src/show/medium_card.gd"},
@@ -148,11 +148,12 @@ const REGISTRY := {
 		"script": "res://src/show/bookends_card.gd"},
 	# Its card is the episode: the show's knobs, its agents and every step they make. It hands the reading what is read
 	# (the episode's script), where it is heard (the table's sound) and how it goes out (the episode's title and upload
-	# notes). `heading` is the card's title where it is not the label; the tips are what the bookends hold at a table.
+	# notes). It brings a Medium, whose formats are Table's (the table, the desk - an episode keeps the one it was made
+	# for). `heading` is the card's title where it is not the label; the tips are what the bookends hold at a table.
 	"table": {"label": "Table", "family": &"producer",
 		"blurb": "Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.",
-		"needs": ["text"], "provides": ["text", "picture", "moments"], "requires": ["voice"],
-		"slots": ["presentation"], "workspace": "table", "starter": "res://rules/table/starter.md",
+		"needs": ["text"], "provides": ["text", "picture", "moments", "episode"], "requires": ["voice", "medium"],
+		"slots": [], "workspace": "table", "starter": "res://rules/table/starter.md",
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "agent:painter"], "marks": [],
 		"block": "table", "card": "episode", "heading": "Episode",
 		"script": "res://src/table_show/episode_card.gd",
@@ -381,12 +382,20 @@ static func not_ready(key: String) -> String:
 	return Capabilities.not_ready_any(capabilities_of([key]))
 
 
+## What [param keys] and what they bring provide ("text", "audio", "reading", "episode" ...), each once.
+static func provided(keys: Array) -> Array:
+	var have: Array = []
+	for k in with_required(keys):
+		for n in (REGISTRY[k] as Dictionary)["provides"]:
+			if not have.has(n):
+				have.append(n)
+	return have
+
+
 ## The needs of [param keys] that none of them provides: what a card says is missing ("the
 ## Notebook follows a reading - attach a voice").
 static func unmet(keys: Array) -> Array:
-	var have: Array = []
-	for k in with_required(keys):
-		have.append_array((REGISTRY[k] as Dictionary)["provides"])
+	var have := provided(keys)
 	var out: Array = []
 	for k in with_required(keys):
 		for n in (REGISTRY[k] as Dictionary)["needs"]:

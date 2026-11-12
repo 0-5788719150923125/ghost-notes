@@ -369,8 +369,9 @@ static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary
 	return {"chunks": out, "sentence_no": sentence_no}
 
 
-## Each chunk of [param out] given its place in its paragraph (`plan_u`) and its paragraph's place in its section
-## (`plan_v`), read off [param body], the passage the chunks were cut from.
+## Each chunk of [param out] given its place in its paragraph (`plan_u`), its paragraph's place in its section
+## (`plan_v`), which paragraph of the reading it is (`plan_p`, from 0) and where it starts and ends in its paragraph
+## by its words (`plan_span`, 0 to 1), read off [param body], the passage the chunks were cut from.
 static func place(out: Array, body: String) -> void:
 		# Paragraph boundaries come from the source text (a blank line), the only place they exist: Phonemes.parse
 		# hands back a flat run of sentences. Counting sentence-final marks per paragraph maps one onto the other.
@@ -432,7 +433,31 @@ static func place(out: Array, body: String) -> void:
 				# ...and the paragraph's place in its section: a one-paragraph section would put every paragraph at 0 again.
 		var sp := pi % SECTION_PARAS
 		out[i]["plan_v"] = float(sp) / float(maxi(1, SECTION_PARAS - 1))
+		out[i]["plan_p"] = pi
 		within += 1
+	# ...and where each chunk starts and ends in its paragraph, by its words: a voice that moves within a sentence reads
+	# each word where it stands
+	var words := {}
+	for i in out.size():
+		var p := int(out[i]["plan_p"])
+		words[p] = int(words.get(p, 0)) + _words_in(out[i])
+	var before := {}
+	for i in out.size():
+		var p := int(out[i]["plan_p"])
+		var total := maxf(1.0, float(words[p]))
+		var at := float(before.get(p, 0))
+		var own := float(_words_in(out[i]))
+		out[i]["plan_span"] = [snappedf(at / total, 0.0001), snappedf((at + own) / total, 0.0001)]
+		before[p] = at + own
+
+
+## The words chunk [param ch] says (at least one).
+static func _words_in(ch: Dictionary) -> int:
+	var n := 0
+	for t in ch.get("tokens", []):
+		if t is Dictionary and not String((t as Dictionary).get("text", "")).strip_edges().is_empty():
+			n += 1
+	return maxi(1, n)
 
 
 ## The outro mark, in chunks: `{chunks, fade}`. The reading goes on past the mark only as far as the fade can carry

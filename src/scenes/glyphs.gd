@@ -135,7 +135,6 @@ var _paper_hue := 0.1
 var _paper_sat := 0.06
 var _paper_val := 0.92
 var _rule_col := Color(0, 0, 0, 0.12)
-var _nib_col := Color(0, 0, 0, 0.8)
 
 # Per-frame geometry scratch kept as members: packed arrays are value types in GDScript, so a helper
 # that appends to a parameter would append to a copy.
@@ -147,10 +146,6 @@ var _idx := PackedInt32Array()
 # _pose's outputs, likewise (a Dictionary per character per frame is 220 allocations).
 var _pxf := Transform2D.IDENTITY
 var _pfade := 1.0
-
-var _tip := Vector2.ZERO
-var _tip_rot := 0.0
-var _tip_ok := false
 
 
 ## What this scene can be told ([method GhostScene.choice], [method GhostScene.number]): a storyboard
@@ -222,7 +217,6 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_ink_alpha = rng.randf_range(0.88, 1.0)
 		_rule_col = Color.from_hsv(fposmod(_sch.accent, 1.0), 0.40, 0.55,
 			rng.randf_range(0.10, 0.22))
-		_nib_col = Color.from_hsv(fposmod(_ink_hue, 1.0), _ink_sat * 0.7, _ink_val * 0.8, 0.85)
 	else:
 		# The dark ground is composed: the shared bed behind the writing and a thin dust in front. (`z`
 		# defaults to "front"; the bed must ask for "back".)
@@ -236,7 +230,6 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_ink_val = rng.randf_range(0.80, 1.0)
 		_ink_alpha = rng.randf_range(0.80, 0.95)
 		_rule_col = Color.from_hsv(fposmod(_sch.accent, 1.0), 0.35, 0.9, 0.07)
-		_nib_col = Color.from_hsv(fposmod(_ink_hue, 1.0), _ink_sat * 0.5, 1.0, 0.75)
 	var d := _gs.spec()
 	d["mood"] = _sch.name
 	d["layout"] = _layout
@@ -705,7 +698,6 @@ func _ink(u: float) -> void:
 	_pts.clear()
 	_cols.clear()
 	_uvs.clear()
-	_tip_ok = false
 	var now := _sim.elapsed()
 	var prev_exit := Vector2.ZERO
 	var prev_ok := false
@@ -740,10 +732,6 @@ func _ink(u: float) -> void:
 			var wv2: PackedVector2Array = _pxf * v
 			var wuv2: PackedVector2Array = (uvt * uvc) if pressed else uvc
 			_emit(wv2, wuv2, col_c)
-		var tip_local: Vector2 = tr["tip"]
-		_tip = _pxf * tip_local
-		_tip_rot = _pxf.get_rotation()
-		_tip_ok = true
 	_flush()
 
 
@@ -848,19 +836,3 @@ func _ink_color(age: float, fade: float) -> Color:
 	var s := clampf(_ink_sat * (0.55 + 0.75 * _ch.y) + 0.10 * wet, 0.0, 1.0)
 	var v := _ink_val * (1.0 - 0.35 * wet) if _paper else _ink_val * (1.0 + 0.30 * wet)
 	return Color.from_hsv(h, s, clampf(v, 0.0, 1.0), clampf(_ink_alpha * fade, 0.0, 1.0))
-
-
-# The nib itself, resting on the paper where the ink stops: a small wedge; the shaft angle and the ink imply the hand.
-func _nib(u: float) -> void:
-	if not _tip_ok:
-		return
-	var sc := _em * u
-	var shaft := Vector2(0.42, -0.91).rotated(_tip_rot)
-	var n := Vector2(-shaft.y, shaft.x)
-	var l := sc * 0.60
-	var w := sc * 0.085
-	fill_aa(PackedVector2Array([
-		_tip,
-		_tip + shaft * (l * 0.5) + n * w,
-		_tip + shaft * l,
-		_tip + shaft * (l * 0.5) - n * w]), _nib_col, 1.0)

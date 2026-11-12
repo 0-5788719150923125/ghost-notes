@@ -7,8 +7,7 @@ said or smeared. This is that ear without `transformers`: WavLM written out from
 then each of the 12 layers), its state dict's own key names, loaded from microsoft/wavlm-base-plus's
 pytorch_model.bin (CC BY-SA 3.0 - UniSpeech's license; used to teach, never part of a voice); and torchaudio's
 24 to 16 kHz resampling (`Resample`'s Hann-windowed sinc, width 6, rolloff 0.99), as StyleTTS 2 resamples. Eval mode
-throughout, as StyleTTS 2 holds it: no dropout, no masking. Checked against transformers' WavLMModel (5.x,
-2026-10-27, three seconds of a recording): every one of the 13 states within 3e-5 of its own.
+throughout, as StyleTTS 2 holds it: no dropout, no masking. Checked against transformers' WavLMModel (5.x, three seconds of a recording): every one of the 13 states within 3e-5 of its own.
 """
 
 from __future__ import annotations

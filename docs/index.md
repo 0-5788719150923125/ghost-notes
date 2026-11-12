@@ -38,7 +38,7 @@ core. The commitments:
 
 - [Components](components.md) (17 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](media.md) (10) - what the show is carried on.
+- [Media](media.md) (11) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
@@ -272,7 +272,7 @@ Text to narrated audio in two paths: ghost's own source-filter synthesizer (no m
 - [`splice.gd`](../src/voice/splice.gd) **Splice** - the cuts a reading makes in a voice's take once the model has rendered it: hesitations spliced in (a rest the model will not make on its own), hums held, every word's timing moved by the cuts before it; and the take read from and written to a WAV.
 - [`text_norm.gd`](../src/voice/text_norm.gd) **TextNorm** - turn written English into speakable words, before anything else.
 - [`voice.gd`](../src/voice/voice.gd) **Voice** - the source-filter speech synthesizer (rungs 0-2 of next/voice.md).
-- [`voice_blend.gd`](../src/voice/voice_blend.gd) **VoiceBlend** - a new voice made of a multi-speaker voice's own readers, written as one line.
+- [`voice_blend.gd`](../src/voice/voice_blend.gd) **VoiceBlend** - a new voice made of a multi-speaker voice's own readers, and shaped, written as one line.
 - [`voice_field.gd`](../src/voice/voice_field.gd) **VoiceField** - the belt as a field of interfering sources.
 - [`voice_fx.gd`](../src/voice/voice_fx.gd) **VoiceFX** - the ambience from Synthesis, over any PCM.
 - [`voice_host.gd`](../src/voice/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess.
@@ -366,6 +366,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 - [`take_cache.gd`](../src/reading/take_cache.gd) **TakeCache** - every sentence the voice has said, kept by what it said and how (next/editing.md step 3). The host's reply for one chunk of a reading - its audio and its word and phone timings - is kept under a digest of the voice, the voice's own record and every argument the request carried (the text, its ...
 - [`text_walk.gd`](../src/reading/text_walk.gd) **TextWalk** - what a reading reads of its note: the words the voice says, the title it announces, the text its cast of speakers and its fingerprint come from, and the passage a voice is auditioned with. This one is the note's own words (a tablet chapter read off its screen); a component that rewrites what the ...
 - [`voice_card.gd`](../src/reading/voice_card.gd) **VoiceCard** - the Voice: the note's cast and the speaker picked in it, a card `NoteCards` builds from the `voice` row like every other component's (next/notes.md, "the Voice as a card").
+- [`voice_shape.gd`](../src/reading/voice_shape.gd) **VoiceShape** - a voice across a paragraph, drawn and dragged (`ReaderBrowser`): the mix as bands, one a reader, their edges curves through `VoiceBlend.POINTS` points, and a lane for each of `VoiceBlend.LANES`, a curve from -1 (bottom) to 1 (top). Left to right is a paragraph, its first word to ...
 
 ### `table/` - The set
 
@@ -394,6 +395,7 @@ A place, seen and heard, built from a written description: the table itself (Tab
 - [`game_board.gd`](../src/table/game_board.gd) **GameBoard** - where a game stands on the table (next/tabletop.md): who sits where, where a map lies and how big its squares are, and a session's events gathered into what the table and the painter need. All of it is pure and names no game: a table reads it (`TableGame`), the bake reads it (`DiceBake`) and so ...
 - [`game_ledger.gd`](../src/table/game_ledger.gd) **GameLedger** - what is so at a game's table, kept by no one who could fudge it (next/tabletop.md): every sheet, where each figure stands, which map lies on the table, every die rolled. An agent forgets it took seven damage, and a viewer does not.
 - [`hands.gd`](../src/table/hands.gd) **Hands** - how a hand moves a thing (next/table_physics.md, "The hand"). Nobody is in the chair, but what moves moves as if held. Every move `TableWork` plays is shaped here, from what the study of reaching has measured, each with a share of its own drawn from its act's seed - no two alike, every one a ...
+- [`handwriting.gd`](../src/table/handwriting.gd) **Handwriting** - words in a hand, as a pen's strokes: a letter's lines at the desk (`LetterScript`) and words a pen writes at the table (`SheetWriting`).
 - [`ink.gd`](../src/table/ink.gd) **Ink** - a formula written by hand, as a function of time.
 - [`intro_blur.gd`](../src/table/intro_blur.gd) **IntroBlur** - the intro's blur: the whole stage read back through the intro's shader (`ShowOpening.INTRO_SHADER`), drawn over the picture and under the channel's name, and not drawn at all while it is off. The card table's and the desk's (`ShowOpening`).
 - [`lights.gd`](../src/table/lights.gd) **Lights** - what lights a scene, and how that light moves: the sky, a sun (or the moon) that throws shadows, what the sun falls through (a window, blinds, leaves, a pergola, an awning), the weather between it and the table (clouds, birds), lamps out of the shot (candles, a fire, a lantern, tubes, neon, a ...
@@ -401,6 +403,7 @@ A place, seen and heard, built from a written description: the table itself (Tab
 - [`motions.gd`](../src/table/motions.gd) **Motions** - work at the table as data (next/table_work.md): what a thing's parts can do, the laws that move them, and the acts an episode's puppeteer writes out of them. Nothing here knows a clock, a pestle or a cauldron: a part can be jointed (a hinge, a slide, or free to be picked up), can carry named ...
 - [`paint_layers.gd`](../src/table/paint_layers.gd) **PaintLayers** - Repaints a picture of the finished surface with the table's own paints and tools (next/painted_surface.md).
 - [`particles.gd`](../src/table/particles.gd) **Particles** - Particles: grains and loose things, stepped (next/table_physics.md, "Grains and loose things"). Position based dynamics as the unified particle solver does it (Macklin, Muller, Chentanez and Kim, SIGGRAPH 2014): everything is spheres; a grain is one, with friction; a loose thing is a few held to ...
+- [`pen.gd`](../src/table/pen.gd) **Pen** - a pen writing by itself, as a hand would hold it: where its nib is as the hand's strokes go down, between them and while it points at what was written, how it leans, how it drifts when lifted, and its frame. The desk's pen (`DeskMedium`) and a pen at the table (`TableWork`) are this one ...
 - [`props.gd`](../src/table/props.gd) **Props** - Props: things built from a description. A thing is a few parts, each one shape with real sizes and one material whose surface is procedural (with an ornament worked into it if it has one), or a group of parts, placed and repeated as one (a candelabra's arm, cup and taper, copied round). An agent ...
 - [`rides.gd`](../src/table/rides.gd) **Rides** - Rides: what the table is aboard when the reading is somewhere that moves (a train, a car, a cart behind horses, a boat, a plane). The set dresser writes it as the table's `ride` (`describe`, `sanitize`).
 - [`rigid_parts.gd`](../src/table/rigid_parts.gd) **RigidParts** - RigidParts: what the work picks up, as rigid bodies (next/table_physics.md, "Tools"). Every free part that is not loose - a pestle, a ladle, a jar and its cork, a lid - and every thing that may be moved whole is a body with a mass, a middle and an inertia (`TablePhysics._mass_of`), stepped ...
@@ -442,6 +445,7 @@ A show at a table nobody writes: a show's brief, its episodes - each planned, de
 - [`dealer_tools.gd`](../src/table_show/dealer_tools.gd) **DealerTools** - what a dealer can do while it lays an episode's cards out (next/notes.md step 9): place a card, flip it, look at the whole layout as the table will check it, and submit it. Served as tools (`AgentTools`) like `SetDresserTools`; every answer says what the table would object to (a card off the cloth, ...
 - [`decorator_tools.gd`](../src/table_show/decorator_tools.gd) **DecoratorTools** - the decorator's tools (next/painted_surface.md): what is painted at the table this episode, designed as elements on the surface it goes on - written, seen there, and handed in. Served over ghost's MCP server (`AgentTools`) to a writer that takes tools; one that cannot hands the design in in one ...
 - [`design_window.gd`](../src/table_show/design_window.gd) **DesignWindow** - a painted design's elements as rows (next/editing.md step 4): reorder, move to a beat, re-time, remove.
+- [`desk_table.gd`](../src/table_show/desk_table.gd) **DeskTable** - the table an episode shown at the desk is blocked on (`EpisodeDesk`, next/desk.md): a legal pad of sheets and a pen, and nothing for a set dresser to build or a painter to paint. The desk the episode is seen at is the Letter's (`DeskLook`); this is only what the puppeteer writes on and with, so its ...
 - [`episode_card.gd`](../src/table_show/episode_card.gd) **EpisodeCard** - the Table component's card: a show at a table nobody writes by hand - cards read, things made, or both. What it does there, and what the show is, are the brief's to say.
 - [`episode_walk.gd`](../src/table_show/episode_walk.gd) **EpisodeWalk** - a show of cards reads its episode, never the note: the note is the brief agents work from, and what the reader says is the script written for the episode up now. A `TextWalk` Cards hands its reading.
 - [`fixed_table.gd`](../src/table_show/fixed_table.gd) **FixedTable** - a show's fixed things (next/painted_surface.md; next/table_work.md section 11): what a brief says stands on every episode's table exactly as written (a mask on its stand, an artist's station), which every set dresser would otherwise build anew each episode.
@@ -469,9 +473,9 @@ A desk a letter is written at, seen and heard: the legal pad, the pen that moves
 - [`desk_light.gd`](../src/desk/desk_light.gd) **DeskLight** - the desk's light beyond its lamp: the room's, a `Lights` rig built from the light the desk's look writes (`DeskLook.of`'s `light`: the sky's fill, the sun or moon through a window, lamps out of the shot), fitted to the palest thing it falls on (the page); and the candles burning on the desk, ...
 - [`desk_look.gd`](../src/desk/desk_look.gd) **DeskLook** - what an episode's desk is made of and how it is lit, drawn from its seed (`DeskMedium`): the pad's paper, rules and binding, the ink, the pen, the desk's top and a mat on it, the lamp, and a few things lying about.
 - [`desk_script.gd`](../src/desk/desk_script.gd) **DeskScript** - a lesson as the voice reads it and the desk performs it.
+- [`episode_desk.gd`](../src/desk/episode_desk.gd) **EpisodeDesk** - a table show's episode at the desk (next/desk.md): what its acts write and point at, on the desk's pad.
 - [`legal_pad.gd`](../src/desk/legal_pad.gd) **LegalPad** - the desk's pad (`DeskMedium`): its cardboard back, its stack, the binding across its head, the page being written, and the pages turned over its head.
 - [`letter.gd`](../src/desk/letter.gd) **LetterMedium** - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) with the letter's own hand and moments (`LetterScript`).
-- [`letter_hand.gd`](../src/desk/letter_hand.gd) **LetterHand** - a letter's words in a hand, as the pen's strokes.
 - [`letter_script.gd`](../src/desk/letter_script.gd) **LetterScript** - a letter as the voice reads it and the desk writes it (next/letter.md).
 
 ### `letter/` - Letter

@@ -1,12 +1,13 @@
 extends RefCounted
-class_name LetterHand
+class_name Handwriting
 
-## LetterHand - a letter's words in a hand, as the pen's strokes.
+## Handwriting - words in a hand, as a pen's strokes: a letter's lines at the desk ([LetterScript]) and words a pen writes at
+## the table ([SheetWriting]).
 ##
-## The hand writes its own lines, no TeX: a formula needs TeX to lay it out ([Ink]), a line of a letter needs only its
-## words' widths, so this sets each word itself and hands back strokes in the shape [method Ink.strokes_of] does - points in
-## TeX points, y down from the baseline, x from the line's start - so [method Ink.schedule] and [method Ink.at] time and draw
-## them as they do a formula's.
+## The hand writes its own lines, no TeX: a formula needs TeX to lay it out ([Ink]), a line of words needs only its words'
+## widths, so this sets each word itself and hands back strokes in the shape [method Ink.strokes_of] does - points in TeX
+## points, y down from the baseline, x from the line's start - so [method Ink.schedule] and [method Ink.at] time and draw
+## them as they do a formula's, and a pen follows them ([Pen]).
 ##
 ## The hands are the journal's: Kalam, Caveat and Patrick Hand, the Notebook's ([constant NotebookLayout.HANDS]) at the
 ## Notebook's sizes, each traced once into the lines a pen draws it with (scripts/hand_strokes.py: its centerline cut where
@@ -17,7 +18,7 @@ class_name LetterHand
 ## The hand is seeded, never the layout: each word is a little bigger or smaller, set a little off its line and turned a
 ## hair, and each line drifts - from the seed and the line's own salt - but a word's width is the font's ([method
 ## advance]), so where the lines break is a function of the words alone and the voice's rests and the desk's pages always
-## agree ([LetterScript]).
+## agree ([LetterScript]). The seed's salt is a letter's: another would rewrite every letter's hand.
 
 ## The hands, by the Notebook's names: the stroke font each is traced into, and what Hershey's format
 ## cannot hold, as the tracer prints it - a font unit's share of the em (`units`), the baseline (font
@@ -30,8 +31,10 @@ const HANDS := {
 	"patrick": {"label": "Patrick Hand", "strokes": "res://fonts/hands/strokes/patrick.jhf",
 		"units": 77, "base": 18, "ascent": 0.870, "descent": 0.310, "nib": 0.0831},
 }
-## The hand a letter that names none is written in: the Notebook's own first choice.
+## The hand words that name none are written in: the Notebook's own first choice.
 const DEFAULT := "kalam"
+## A page's pixels to a TeX point: the desk's page canvas ([DeskScript]) and the size a hand is set at ([method size_px]).
+const PX_PER_PT := 3.1
 ## A word's space, as a share of the font's own.
 const SPACE := 1.0
 ## A letter's next stroke begun this close (em) to where its last ended is the same stroke: the pen
@@ -49,8 +52,8 @@ const LINE_TURN := 0.004
 const TREMOR := 0.003
 ## An underline sits this far under the baseline (em).
 const UNDER := 0.16
-## How much wider the desk draws a stroke than its `width` says ([method DeskMedium._ink_of]): the nib
-## is given that much less, so the line is the font's own width.
+## How much wider a stroke is drawn than its `width` says (the desk's ink, a table's picture): the nib is given that
+## much less, so the line is the font's own width.
 const DRAWN := 1.35
 
 static var _lines := {}
@@ -69,7 +72,7 @@ static func size_px(hand: String) -> float:
 
 ## One font unit of [param hand] in TeX points (what the strokes are measured in).
 static func unit(hand := DEFAULT) -> float:
-	return size_px(hand) / float(HANDS[of(hand)]["units"]) / DeskScript.PX_PER_PT
+	return size_px(hand) / float(HANDS[of(hand)]["units"]) / PX_PER_PT
 
 
 ## How wide [param word] is written, in points: its letters' advances, whatever the hand does.
@@ -102,7 +105,7 @@ static func descent_px(hand := DEFAULT) -> float:
 
 ## The nib [param hand] is written with, in points: as wide as the font's own stroke once drawn.
 static func nib(hand := DEFAULT) -> float:
-	return float(HANDS[of(hand)]["nib"]) * size_px(hand) / (DeskScript.PX_PER_PT * DRAWN)
+	return float(HANDS[of(hand)]["nib"]) * size_px(hand) / (PX_PER_PT * DRAWN)
 
 
 ## A line of the letter, written: [param words] (as they are written - punctuation on them), the [param emphasis] of each

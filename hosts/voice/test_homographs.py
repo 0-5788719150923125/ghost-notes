@@ -419,8 +419,8 @@ def check_page_case() -> None:
 
     Every other check here hands the pass the text as written; a reading sends each word lower-cased for the
     phoneme lookup (Phonemes.parse), and its source spelling as `cased`. Read lower-cased, "i live in hell"
-    tagged `i` an adjective, rule 2 put `live` in a noun slot, and the reading said lˈaɪv (north-star ch43,
-    2026-10-27) - the control below, the tokens as they were sent before.
+    tagged `i` an adjective, rule 2 put `live` in a noun slot, and the reading said lˈaɪv - the control
+    below sends the tokens that way.
     """
     want = _speak(["they will live them"])[0].split()[2]
     for sentence in ("I live in hell, Pen.", "Live like a Spartan, so there's enough to go around."):

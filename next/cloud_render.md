@@ -1,9 +1,8 @@
 # Rendering in the cloud: a show cut into spans, rendered side by side
 
-Asked 2026-10-30. Nothing is built, and nothing has been measured on AWS. The user: "Renders often take many
-hours to complete, on my PC. I'm wondering: if we were to spawn ephemeral EC2 instances up on AWS, and do the
-rendering there, how fast do you think we could get render times down to? I 'might' choose to leverage
-'../platformer' for the infrastructure provisioning, just to make the setup and teardown reliable and repeatable."
+Nothing is built, and nothing has been measured on AWS. The question: renders often take many hours on the
+author's PC; how fast could ephemeral EC2 instances do them, with `../platformer` possibly provisioning the
+infrastructure for reliable, repeatable setup and teardown?
 
 ## The answer, in short
 
@@ -42,7 +41,7 @@ A render is ONE Godot process drawing every frame in order (`Exporter._start_ren
 - Movie Maker reads the frame back from the GPU, so the CPU waits on the GPU every frame.
 - Its MJPEG encode runs on the main thread: about 50 of 87 ms a frame at 2880x1620 when it was measured in the
   vortex days (a raw ffmpeg pipe was 2.5x faster; it was built and reverted, Godot's own writer kept).
-- Xvfb's presentation costs about 13 ms a frame on its own (the medium frame-cost measurement, 2026-10-27).
+- Xvfb's presentation costs about 13 ms a frame on its own (the medium frame-cost measurement).
 - The medium's own frame: GDScript on the main thread, then the GPU (the table's 8192 shadow atlas, filtered
   shadows, candles).
 - x264 (`medium`, `-tune grain`, lanczos down from 2880x1620) encodes beside it on the same 4 cores.
@@ -186,7 +185,7 @@ Status: not started.
 
 ## Prices
 
-Third-party listings read 2026-10-30, not AWS's own page:
+Third-party listings, not AWS's own page:
 - g7.2xlarge (RTX PRO 4500 Blackwell, 32 GB; 8 vCPU of Xeon 6 Granite Rapids; 32 GiB): $2.52/h on-demand, about
   $0.32-0.75 spot. [Vantage](https://instances.vantage.sh/aws/ec2/g7.2xlarge),
   [Spare Cores](https://sparecores.com/server/aws/g7.2xlarge),

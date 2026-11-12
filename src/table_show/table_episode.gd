@@ -276,6 +276,20 @@ func cardless() -> bool:
 	return p is Dictionary and CardTable.cardless(p as Dictionary)
 
 
+## What the episode is shown in: its plan's `medium` (the note's Medium card's as the plan was made, one of Table's rows of
+## [constant Medium.REGISTRY]), "table" for an episode that names none.
+func medium() -> String:
+	var p: Variant = read_json("plan")
+	var m := String((p as Dictionary).get("medium", "table")) if p is Dictionary else "table"
+	return m if Medium.mode_of(m) == "table" else "table"
+
+
+## Is the episode shown at the desk ([method medium], [EpisodeDesk])? A desk's show draws no cards: its table is a pad and a
+## pen ([DeskTable]), nothing painted for it.
+func at_desk() -> bool:
+	return medium() == "desk" and cardless()
+
+
 ## What one beat of the episode is called on its rows: the producer's word for one in its plan (`beat_word`: an Ingredient, a
 ## Coat), else a Card where cards are drawn and a Beat where none are.
 func beat_word() -> String:
@@ -310,9 +324,13 @@ func steps() -> Array:
 	if wants_solve():
 		out.append("solve")
 	if cardless():
-		out.append_array(["image:surface", "image:backdrop", "table"])
-		if wants_height():
-			out.append("image:height")
+		# ...at the desk ([method at_desk]), only what its acts are blocked on: no cloth, no room, no depth to paint
+		if at_desk():
+			out.append("table")
+		else:
+			out.append_array(["image:surface", "image:backdrop", "table"])
+			if wants_height():
+				out.append("image:height")
 		if wants_face():
 			out.append_array(["image:face", "check:face"])
 			out.append_array(_layer_steps())
@@ -608,7 +626,9 @@ func needs(step: String) -> Array:
 			return out
 		"table":
 			# the table is set from the plan, looking at the cloth it stands on - and at the room, which
-			# its light must agree with (where the windows are, which side the sun comes from)
+			# its light must agree with (where the windows are, which side the sun comes from); a desk's from the plan alone
+			if at_desk():
+				return ["plan"]
 			return ["plan", "image:surface", "image:backdrop"] + (["model"] if wants_model() else [])
 		"acts":
 			# the work is blocked on the table as it is set, with the cards as they were drawn (the work is

@@ -41,11 +41,6 @@ const WINDOW_SHARE := 0.75
 ## Engine arguments that say where or how big the window is - a launch that gives one keeps it.
 const WINDOW_ARGS := ["--resolution", "--position", "-f", "--fullscreen", "-m", "--maximized"]
 
-## The window opens at three quarters of its screen, centered on the space the desktop leaves free (panels
-## and docks excluded). The project's 1920x1080 is the stage, which the canvas_items stretch scales to any
-## window; Godot's default would open a window that size, a quarter of a 4K screen. Only for a person's
-## session: a render, a probe or a headless run keeps the size it was given, as does a launch that names a size,
-## a position or a mode. [param force] is the probe's seam. True when the window was resized.
 ## The phone shell (next/notes.md step 11): a phone or tablet, or `--handheld` / `GHOST_HANDHELD=1` on the
 ## desktop. The flag decides, not the window size. [member handheld_for_test] is a gate's seam.
 static var handheld_for_test := false
@@ -56,6 +51,11 @@ static func handheld() -> bool:
 		or OS.get_environment("GHOST_HANDHELD") == "1"
 
 
+## The window opens at three quarters of its screen, centered on the space the desktop leaves free (panels
+## and docks excluded). The project's 1920x1080 is the stage, which the canvas_items stretch scales to any
+## window; Godot's default would open a window that size, a quarter of a 4K screen. Only for a person's
+## session: a render, a probe or a headless run keeps the size it was given, as does a launch that names a size,
+## a position or a mode. [param force] is the probe's seam. True when the window was resized.
 func fit_window(force := false) -> bool:
 	if not force:
 		if DisplayServer.get_name() == "headless" or Settings.is_read_only():

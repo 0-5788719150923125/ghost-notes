@@ -2,12 +2,12 @@ extends SceneTree
 
 ## Not a gate. Builds every thing in a table description (see [Props]) side by side on a dark
 ## cloth under candlelight and writes a PNG to look at - for judging shapes and materials without
-## the tarot table around them.
+## the show's table around them.
 ##
 ##   tests/run_quiet.sh -- res://tests/table/props_look_probe.gd --spec <table.json> --out /tmp/props.png
 ##
 ## `--turn D` turns every thing D degrees; `--height H` raises the camera (meters). `--lamp 1` adds
-## a lamp as the tarot table hangs one - a spot high to the left - and `--key 0` puts out the
+## a lamp as the show's table hangs one - a spot high to the left - and `--key 0` puts out the
 ## candle-like key, to see one light's shadows alone; `--lamp-shadow B,N,S` sets the lamp's shadow
 ## bias, normal bias and size (Godot's own defaults when not given), to try a setting before the
 ## table takes it. `--key-at X,Y,Z` moves the key; `--key-down 1` turns its shadow's paraboloids to
@@ -115,7 +115,7 @@ func _run() -> void:
 			world.add_child(l)
 			lights += 1
 		at += w
-	# what the things reflect, caught once, as the tarot table's probe does: metal and the play of
+	# what the things reflect, caught once, as the table's probe does: metal and the play of
 	# light read as flat paint with nothing to reflect
 	var probe := ReflectionProbe.new()
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE

@@ -21,6 +21,10 @@ class_name MediumCard
 ## [AutoMedium]) is first and shows nothing under the picker. A note whose block names a format it
 ## cannot have (a Letter whose Voice was detached) keeps it and says what it waits for ([member _held]).
 ##
+## A table show's note (its Table brings this card) is offered Table's formats - its table, a desk - and only those
+## ([method Medium.offered]): the one picked is the block's, never the remembered medium, and is what the next episode is
+## made for; each episode is shown in the one it was made for ([method TableEpisode.medium]).
+##
 ## A row a format cannot use is hidden, by each format's `uses` rather than by branching here; the rows
 ## move the moment the format does ([signal Director.medium_changed]). The block is kept in the note so
 ## a chapter opened on another machine comes up in the same medium and look. The film library stays
@@ -60,10 +64,16 @@ var _own_card := ""
 var _reshape: Callable
 ## The block of a format the note cannot have, kept as it was until another is picked ({} for none).
 var _held := {}
+## A table show's note ([member _keys] Table's formats), the format its block names, and a block naming another format
+## (a reading made a table show), kept as it was until one of Table's is picked ({} for none).
+var _episodic := false
+var _fmt := "table"
+var _kept := {}
 
 
 ## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]): `reading`
-## (the note has a voice, so every format is offered), `blocks` (the note's, so the format's own rows
+## (the note has a voice, so every format is offered), `provides` (an `episode`: a table show's, offered Table's formats),
+## `blocks` (the note's, so the format's own rows
 ## stand from the first frame), `reshape` (write the note and open it again), and the whole of it handed
 ## on to the format's own rows (a reading's `workspace`).
 static func for_note(ctx: Dictionary) -> MediumCard:
@@ -73,7 +83,14 @@ static func for_note(ctx: Dictionary) -> MediumCard:
 func _init(ctx := {"reading": true}) -> void:
 	_reading = bool(ctx.get("reading", false))
 	_reshape = ctx.get("reshape", Callable())
-	_keys = Medium.offered(["audio", "reading"] if _reading else ["audio"])
+	var blocks: Dictionary = ctx.get("blocks", {}) if ctx.get("blocks") is Dictionary else {}
+	_episodic = (ctx.get("provides", []) as Array).has("episode") or Components.provided(Components.attached_of(blocks)).has("episode")
+	_keys = Medium.offered(["audio", "reading", "episode"] if _episodic else (["audio", "reading"] if _reading else ["audio"]))
+	if _episodic:
+		var named := String((blocks.get(KEY, {}) as Dictionary).get("format", "")) if blocks.get(KEY) is Dictionary else ""
+		_fmt = named if _keys.has(named) else "table"
+		if not named.is_empty() and not _keys.has(named):
+			_kept = (blocks[KEY] as Dictionary).duplicate(true)
 	add_theme_constant_override("separation", 8)
 	_format_pick = _format_option()
 	_waiting = Label.new()
@@ -122,7 +139,7 @@ func _build_own(ctx: Dictionary) -> void:
 	var block: Variant = blocks.get(KEY)
 	var fmt := String((block as Dictionary).get("format", "")) if block is Dictionary else ""
 	if fmt.is_empty():
-		fmt = Director.resolved_medium()
+		fmt = _fmt if _episodic else Director.resolved_medium()
 	var path := _card_of(fmt)
 	if path.is_empty() or not _keys.has(fmt):
 		return
@@ -150,7 +167,7 @@ static func _card_of(key: String) -> String:
 ## has the `item_selected` signal without the index, and `resolved_medium` also knows a run launched
 ## with `--medium comic`.
 func sync_medium() -> void:
-	var key := Director.resolved_medium()
+	var key := _fmt if _episodic else Director.resolved_medium()
 	var bare := not Medium.takes_settings(key) or not _held.is_empty()
 	for row in _setting_rows:
 		(row as Control).visible = not bare
@@ -169,10 +186,15 @@ func sync_medium() -> void:
 		_waiting.text = ("⚠  The note is shown as %s, which shows a reading - attach a Voice, or pick another format."
 			% Registry.label(Medium.REGISTRY, held))
 		_format_pick.select(-1)
-	elif _keys.has(Director.medium):
-		_format_pick.select(_keys.find(Director.medium))
+	elif _keys.has(_shown()):
+		_format_pick.select(_keys.find(_shown()))
 	_waiting.visible = not _held.is_empty()
 	_sync_frames()
+
+
+## The format the picker shows: the block's at a table show, else the remembered medium.
+func _shown() -> String:
+	return _fmt if _episodic else Director.medium
 
 
 ## A format that takes no settings was picked: the dials go back to their defaults, so what it shows is
@@ -189,6 +211,13 @@ func _to_defaults() -> void:
 func capture() -> Dictionary:
 	if not _held.is_empty():
 		return _held.duplicate(true)
+	if _episodic:
+		if not _kept.is_empty():
+			return _kept.duplicate(true)
+		var mine := {"format": _fmt}
+		if _own != null and _card_of(_fmt) == _own_card:
+			mine.merge(_own.call("capture") as Dictionary, false)
+		return mine
 	var key := Director.medium
 	var out := {"format": key}
 	if not Medium.takes_settings(key):
@@ -213,6 +242,16 @@ func capture() -> Dictionary:
 ## rows than the ones built (an edit made outside Ghost Notes) opens the note again around them.
 func apply(block: Dictionary) -> void:
 	var fmt := String(block.get("format", ""))
+	if _episodic:
+		if _keys.has(fmt):
+			_fmt = fmt
+			_kept = {}
+		elif not fmt.is_empty():
+			_kept = block.duplicate(true)
+		if _own != null and _card_of(_fmt) == _own_card:
+			_own.call("apply", block)
+		sync_medium()
+		return
 	if Medium.REGISTRY.has(fmt) and Medium.mode_of(fmt).is_empty() and not _keys.has(fmt):
 		_held = block.duplicate(true)
 		sync_medium()
@@ -290,7 +329,7 @@ func _format_option() -> OptionButton:
 	opt.tooltip_text = tip
 	# The Director is the truth for this one (a whole-app setting the export render reads), so the
 	# picker drives the setter, which persists it through Settings.
-	opt.select(maxi(0, keys.find(Director.medium)))
+	opt.select(maxi(0, keys.find(_shown())))
 	opt.item_selected.connect(_pick)
 	row.add_child(opt)
 	return opt
@@ -302,6 +341,12 @@ func _pick(i: int) -> void:
 		return
 	var k := String(_keys[i])
 	_held = {}
+	if _episodic:
+		_fmt = k
+		_kept = {}
+		sync_medium()
+		noted.emit("Format: %s - the next episode is made for it; each is shown in the one it was made for." % Registry.label(Medium.REGISTRY, k))
+		return
 	if not Medium.takes_settings(k):
 		_to_defaults()
 	Director.set_medium(k)
@@ -351,7 +396,7 @@ func _sync_frames() -> void:
 
 
 ## The handwriting, the Notebook's and the Letter's (the Letter is written in the Notebook's hands,
-## [LetterHand]): a named hand, or Random.
+## [Handwriting]): a named hand, or Random.
 func _hand_option() -> OptionButton:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)

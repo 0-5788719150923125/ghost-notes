@@ -5,27 +5,21 @@ extends SceneTree
 ## No renderer needed - none of this draws anything.
 ##
 ## - Follow: the "Follow" switch beside the marker list is a per-user editor preference, so it lives in
-##   user://ghost.cfg. One cfg serves the whole app, so the write must be a read-modify-write of just the
-##   [mask] section (a fresh ConfigFile.save() would wipe the other sections).
+##   [Settings] (`[mask] follow_playhead`). A gate never writes the author's file: the value round-trips in
+##   Settings' memory and Settings, read-only in a test, never flushes it.
 ## - Key swatch: the picker stores key_sat/key_val beside hue_a, so a color picked off the footage comes
 ##   back as the same color after a save and load.
 ## - One drag, one undo: undo coalescing is bounded by the mouse button (while it is down, one entry;
 ##   everything else is its own step), and the value must still change on every step so the live preview
 ##   keeps working.
 
-const CFG := "user://ghost.cfg"
-
 var _fails: PackedStringArray = []
-var _cfg_backup := ""
-var _cfg_existed := false
 
 
 func _initialize() -> void:
-	_backup_cfg()
 	_check_follow()
 	_check_key_swatch()
 	await _check_drag_undo()
-	_restore_cfg()
 
 	print("")
 	if _fails.is_empty():
@@ -45,35 +39,13 @@ func _expect(ok: bool, msg: String) -> void:
 
 func _check_follow() -> void:
 	var ed = load("res://src/masking/mask_editor.gd").new()
-	# A neighboring section, planted first: the read-modify-write must preserve it.
-	var seed_cfg := ConfigFile.new()
-	seed_cfg.load(CFG)
-	seed_cfg.set_value("splash", "_state_check_witness", "keep me")
-	# Clear the real preference first: the default only applies when nothing is stored, and this reads the
-	# author's own ghost.cfg. The file is restored on the way out (see _restore_cfg).
-	if seed_cfg.has_section_key("mask", "follow_playhead"):
-		seed_cfg.erase_section_key("mask", "follow_playhead")
-	seed_cfg.save(CFG)
-
-	_expect(ed._face.load_follow(), "Follow does not default to ON with nothing stored - "
-		+ "that is the behavior every session had before the switch existed")
+	_expect(ed._face.load_follow(), "Follow does not default to ON with nothing stored")
 	ed._face.save_follow(false)
 	var back: bool = bool(ed._face.load_follow())
 	print("Follow: stored false -> reads back %s" % back)
-	_expect(not back, "Follow was stored as OFF and read back as %s - it is not "
-		% back + "persisting, which is the whole report")
+	_expect(not back, "Follow was stored as OFF and read back as %s - it is not persisting" % back)
 	ed._face.save_follow(true)
 	_expect(ed._face.load_follow(), "Follow stored as ON did not read back")
-
-	var after := ConfigFile.new()
-	after.load(CFG)
-	var witness := String(after.get_value("splash", "_state_check_witness", ""))
-	print("the neighboring [splash] section after two writes: %s"
-		% ("intact" if witness == "keep me" else "LOST"))
-	_expect(witness == "keep me",
-		"writing the Follow preference wiped the [splash] section - the write must "
-		+ "be a read-modify-write, or saving one editor toggle throws away the "
-		+ "remembered song, clip, pacing and synth state")
 	ed.free()
 
 
@@ -179,21 +151,3 @@ func _hold(down: bool) -> void:
 	ev.button_index = MOUSE_BUTTON_LEFT
 	ev.pressed = down
 	Input.parse_input_event(ev)
-
-
-func _backup_cfg() -> void:
-	_cfg_existed = FileAccess.file_exists(CFG)
-	if _cfg_existed:
-		var f := FileAccess.open(CFG, FileAccess.READ)
-		_cfg_backup = f.get_as_text()
-		f.close()
-
-
-## The author's own settings live in this file; put it back exactly as it was.
-func _restore_cfg() -> void:
-	if _cfg_existed:
-		var f := FileAccess.open(CFG, FileAccess.WRITE)
-		f.store_string(_cfg_backup)
-		f.close()
-	else:
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(CFG))

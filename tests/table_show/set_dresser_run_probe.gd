@@ -1,7 +1,7 @@
 extends Node
 
 ## Not a gate - it spends quota. Sets one episode's table with a REAL writer working through its
-## tools ([SetDresserTools]), the way the Tarot panel's "Set the table again" does - on a COPY of the
+## tools ([SetDresserTools]), the way the Episode card's "Set the table again" does - on a COPY of the
 ## episode (its plan, shuffle and pictures) in a show folder of its own, so the author's episodes are
 ## never touched - and prints what the set dresser did, call by call.
 ##

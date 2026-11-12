@@ -28,9 +28,6 @@ var editor: MaskEditor
 
 const FACE_VENV_DIR := "user://face_venv"
 const FACE_TRACK_DIR := "user://face_tracks"
-## Per-user editor preferences. One cfg serves the whole app, so every write is a read-modify-write of just the [mask]
-## section (as Director._save_pacing); a fresh ConfigFile.save() would wipe the other sections.
-const PREFS_CFG := "user://ghost.cfg"
 const FACE_TRACK_RATE := 15.0    # samples/sec - must match what face_track.py wrote
 const FACE_TRACK_POINTS := 478
 const FACE_TRACK_HEADER := 20    # 4 magic + u32 version + f32 rate + u32 count + u32 points
@@ -103,22 +100,16 @@ func _ensure_stencil() -> void:
 	editor.add_child(editor._stencil_vp)
 
 
-## The eye openings, subtracted from the coat's silhouette (a separate pass, see _ensure_stencil).
-## The Follow switch, out of and into user://ghost.cfg; defaults to on.
+## The Follow switch, kept in [Settings] (`[mask] follow_playhead`); on by default.
 func load_follow() -> bool:
-	var cfg := ConfigFile.new()
-	if cfg.load(PREFS_CFG) != OK:
-		return true
-	return bool(cfg.get_value("mask", "follow_playhead", true))
+	return bool(Settings.read("mask", "follow_playhead", true))
 
 
 func save_follow(on: bool) -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(PREFS_CFG)     # read-modify-write - see PREFS_CFG
-	cfg.set_value("mask", "follow_playhead", on)
-	cfg.save(PREFS_CFG)
+	Settings.write("mask", "follow_playhead", on)
 
 
+## The eye openings, subtracted from the coat's silhouette (a separate pass, see _ensure_stencil).
 func _draw_stencil_cut() -> void:
 	for pts in _stencil_cuts:
 		if pts.size() >= 3:

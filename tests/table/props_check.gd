@@ -503,8 +503,6 @@ func _sculpts() -> void:
 	_ok(Props._sanitize_part({"shape": "sculpt", "strokes": [{"points": "x"}]}, {}, PAL).is_empty(), "a sculpt with no stroke is kept")
 
 
-## How many faces of [param g] a line from [param from] along [param dir] meets - in centimeters: Godot's test
-## takes a triangle under a millimeter for one lying along the line.
 ## Whether any two of the coins [param laid] (transforms: a unit-thickness-scaled disc of half-width
 ## [param a], half-thickness [param b]) share space: overlapping in plan, and in height.
 func _coins_touch(laid: Array, a: float, b: float) -> bool:
@@ -570,6 +568,8 @@ func _facets() -> void:
 	_ok(_turned_in(g) > 0, "the control: a triangle wound inward is found - the hole check proves nothing")
 
 
+## How many faces of [param g] a line from [param from] along [param dir] meets - in centimeters: Godot's test
+## takes a triangle under a millimeter for one lying along the line.
 func _hits(g: Props.Tris, from: Vector3, dir: Vector3) -> int:
 	var n := 0
 	for t in range(0, g.v.size(), 3):

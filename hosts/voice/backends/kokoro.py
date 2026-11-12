@@ -31,7 +31,11 @@ never fetched.
 
 A blend of readers (hosts/voice/blend.py): a request's `blend` ("mix: af_heart 2, bf_emma 1") reads in a
 pack made of the checkpoint's own packs (`_blended`, the latest BLENDS_KEPT kept made), in its accent, at
-its readers' level; the backend says `blend` (`describe`). A voice taught here never blends.
+its readers' level; the backend says `blend` (`describe`). A blend that moves is read token by token where each
+stands in its paragraph (the request's `plan_span`; its noise at `plan_p` paragraphs on) through the graph made to
+take a style a token (`_moving_graph`: hosts/voice/kokoro_moving.py, made once beside the stock graph and checked
+against it) - or, without a span or that graph, a sentence at a time at its `plan_u`. A line that shapes one reader
+(breath, push, noise) is that reader moved. A voice taught here never blends.
 
 The opening: the first pad keeps its own length at every pace. Kokoro stays silent for a fixed stretch from
 the start of the sequence (8 to 14 frames by voice) and voices whatever comes after it, word or not. The
@@ -153,8 +157,10 @@ PACKS: list[tuple[str, str, str, str]] = [
     ("bm_daniel", "GB", "M", "grade D"),
 ]
 ACCENTS = {"US": "American", "GB": "British"}
-# How many blends are kept made (`_blended`): half a megabyte each.
-BLENDS_KEPT = 8
+# How many blends are kept made (`_blended`): half a megabyte each, one a place in a paragraph for a blend that moves.
+BLENDS_KEPT = 32
+# The stock graph made to take a style a token (`_moving_graph`), beside it: as big again.
+MOVING = "model_moving.onnx"
 # Where the voices taught here are, under the voices' root (`_family`).
 TRAINED = "trained"
 
@@ -381,6 +387,7 @@ class KokoroBackend(PiperBackend):
         self._vocabs: dict = {}  # checkpoint -> {symbol: id}
         self._speakers: dict = {}  # (checkpoint, pack index) -> its cfg (`_speaker`)
         self._blends: dict = {}  # (checkpoint, the blend read) -> its cfg (`_blended`), the latest BLENDS_KEPT
+        self._moving: dict = {}  # checkpoint -> its graph that takes a style a token, or None (`_moving_graph`)
 
     # -- storage -----------------------------------------------------------
 
@@ -525,11 +532,12 @@ class KokoroBackend(PiperBackend):
             }
         return self._speakers[(family, i)]
 
-    def _blended(self, family: str, spec):
-        """The cfg of the blend `spec` names (blend.py) in `_speaker`'s shape, its pack made of its readers' and
-        read in its accent - or None where it names fewer than two of this checkpoint's packs (a reader it does
-        not hold is left out), or the checkpoint is one taught here. `kokoro.blend` keeps what its level is
-        made of (`_leveled`)."""
+    def _blended(self, family: str, spec, u: float = 0.5, pos: float = 0.0):
+        """The cfg of the blend `spec` names (blend.py) in `_speaker`'s shape, its pack made of its readers' as it
+        stands at `u` across a paragraph (`pos` paragraphs into the reading, for its noise) and read in its accent -
+        or None where it names fewer than two of this checkpoint's packs and shapes none (a reader it does not hold
+        is left out), or the checkpoint is one taught here. `kokoro.blend` keeps what its level is made of
+        (`_leveled`)."""
         import blend
 
         b = blend.parse(spec) if family in FAMILIES else None
@@ -538,15 +546,20 @@ class KokoroBackend(PiperBackend):
         packs = self._family(family)["packs"]
         at = {row[0]: i for i, row in enumerate(packs)}
         voices = [v for v in b["voices"] if v[0] in at]
-        if len(voices) < 2:
+        if not voices or (len(voices) < 2 and not blend.shaped(b)):
             return None
         b = {**b, "voices": voices}
-        key = (family, b["method"], b["accent"], tuple(voices))
+        wander = b["noise"] is not None and b["noise"][0] == "wander"
+        key = (family, b["method"], b["accent"], tuple(voices), b["breath"], b["push"], b["noise"],
+               round(u, 4) if blend.moving(b) or wander else None, round(pos, 4) if wander else None)
         if key not in self._blends:
             idx = [at[r] for r, _w, _p in voices]
             readers = [self._speaker(family, i) for i in idx]
+            now = blend.at(b, u)
             pack = blend.make(b["method"], [c["kokoro"]["pack"] for c in readers],
-                              [w for _r, w, _p in voices], [p for _r, _w, p in voices])
+                              [w for _r, w, _p in now["voices"]], [p for _r, _w, p in now["voices"]])
+            if blend.shaped(b):
+                pack = (pack + blend.offset(b, u, pos).astype(pack.dtype)).astype(pack.dtype)
             gb = blend.british(b, [packs[i][1] for i in idx])
             base = readers[0]
             while len(self._blends) >= BLENDS_KEPT:
@@ -554,15 +567,51 @@ class KokoroBackend(PiperBackend):
             self._blends[key] = {
                 **base,
                 "espeak": {"voice": "en-gb" if gb else "en-us"},
-                "kokoro": {**base["kokoro"], "pack": pack, "british": gb, "blend": {"blend": b, "speakers": idx}},
+                "kokoro": {**base["kokoro"], "pack": pack, "british": gb,
+                           "blend": {"blend": b, "speakers": idx, "u": u}},
             }
         return self._blends[key]
 
     def _cfg_of(self, voice: str, params: dict) -> dict:
-        """What a request reads in: the blend it names (`_blended`) where this checkpoint can make it, else its
+        """What a request reads in: the blend it names (`_blended`) where this checkpoint can make it, read at the
+        request's place (`plan_u`, the middle of a paragraph where it has none; `plan_p` paragraphs in), else its
         speaker's pack."""
-        made = self._blended(voice, params.get("blend"))
-        return made if made is not None else self._speaker(voice, int(params.get("speaker", 0) or 0))
+        import blend
+
+        u = params.get("plan_u")
+        u = 0.5 if u is None else min(max(float(u), 0.0), 1.0)
+        span = _span(params.get("plan_span"))
+        if span is not None:
+            u = (span[0] + span[1]) / 2.0
+        p = float(params.get("plan_p", 0) or 0)
+        made = self._blended(voice, params.get("blend"), u, p + u)
+        if made is None:
+            return self._speaker(voice, int(params.get("speaker", 0) or 0))
+        b = made["kokoro"]["blend"]["blend"]
+        wander = b["noise"] is not None and b["noise"][0] == "wander"
+        if span is None or not (blend.moving(b) or wander):
+            return made
+        packs = [self._speaker(voice, i)["kokoro"]["pack"] for i in made["kokoro"]["blend"]["speakers"]]
+        return {**made, "kokoro": {**made["kokoro"], "moving": {"blend": b, "packs": packs, "span": span, "pos": p}}}
+
+    def _moving_graph(self, family: str):
+        """The checkpoint's graph made to take a style a token (kokoro_moving.py), made from the stock graph the first
+        time it is asked for (and again whenever the stock graph is newer) - None where it cannot be made."""
+        if family not in self._moving:
+            import onnxruntime as ort
+
+            import kokoro_moving
+
+            self._graph(family)  # the stock graph first: fetched and patched
+            home = self._home(family)
+            path, stock = home / MOVING, home / MODEL
+            if not path.exists() or path.stat().st_mtime < stock.stat().st_mtime:
+                print("ghost/voice: making the Kokoro graph a voice moves in, once", file=sys.stderr)
+                kokoro_moving.make(stock, path)
+            self._moving[family] = (ort.InferenceSession(str(path), sess_options=self._options(),
+                                                         providers=["CPUExecutionProvider"])
+                                    if path.exists() else None)
+        return self._moving[family]
 
     def _leveled(self, voice: str, params: dict, cfg: dict, sess) -> dict:
         """A blend at its readers' level (blend.py `gain`: each reader measured once, as any voice is); a reader at
@@ -573,7 +622,7 @@ class KokoroBackend(PiperBackend):
         import blend
 
         gains = [self._levels.gain(self, voice, i, self._speaker(voice, i), sess) for i in made["speakers"]]
-        return {**params, "level_gain": blend.gain(made["blend"], gains)}
+        return {**params, "level_gain": blend.gain(made["blend"], gains, made["u"])}
 
     def _load(self, voice: str):
         """Piper's contract, for a caller that asks it: the graph and speaker 0. No vowel probe - what it
@@ -714,7 +763,13 @@ class KokoroBackend(PiperBackend):
             raise BackendError(f"unknown Kokoro voice '{voice}'")
         sess = self._graph(voice)
         cfg = self._cfg_of(voice, params)
-        return self._synth_tokens(list(tokens), voice, out_path, self._leveled(voice, params, cfg, sess), cfg, sess)
+        run = sess
+        if cfg.get("kokoro", {}).get("moving") is not None:
+            run = self._moving_graph(voice)
+            if run is None:  # no graph to move in: a sentence at a time
+                cfg = {**cfg, "kokoro": {k: v for k, v in cfg["kokoro"].items() if k != "moving"}}
+                run = sess
+        return self._synth_tokens(list(tokens), voice, out_path, self._leveled(voice, params, cfg, sess), cfg, run)
 
     def _level_files(self, voice: str, speaker: int) -> list:
         """The checkpoint's graph and the speaker's pack (level.py)."""
@@ -853,6 +908,7 @@ class KokoroBackend(PiperBackend):
         lay_sound: list[bool] = []
         lay_unit: list[int] = []
         lay_floor: list[float] = []
+        moving = kk.get("moving")
         for a, b in _pieces(ids, units, unit_of):
             body = ids[a:b]
             n = max(1, len(body))
@@ -862,6 +918,16 @@ class KokoroBackend(PiperBackend):
                 "style": np.asarray(pack[min(n, pack.shape[0]) - 1], dtype=np.float32).reshape(1, STYLE),
                 "speed": np.array([speed], dtype=np.float32),
             }
+            if moving is not None:
+                # a row a token, each where it stands across the paragraph: its sentence's span laid over its ids
+                import blend
+
+                u0, u1 = moving["span"]
+                total = float(max(1, len(ids)))
+                places = [u0 + (u1 - u0) * min(max(x / total, 0.0), 1.0)
+                          for x in (a, *[j + 0.5 for j in range(a, b)], b)]
+                rows = [p[min(n, p.shape[0]) - 1].reshape(STYLE) for p in moving["packs"]]
+                feeds["style"] = blend.rows_along(moving["blend"], rows, places, float(moving["pos"]))
             fl = [0.0, *floor[a:b], 0.0]
             # the first pad undoes `speed`: it is planned as at speed 1.0, where the first word meets the voice waking
             sc = [speed, *scale[a:b], 1.0]
@@ -1107,6 +1173,15 @@ def _trim_ends(audio, frames, sound: list, frame_s: float):
         if left <= 0.0:
             break
     return audio[cut0 : audio.size - cut1], frames
+
+
+def _span(value):
+    """A request's `plan_span` as (start, end) within 0..1, or None where it is not two numbers."""
+    try:
+        u0, u1 = (min(max(float(v), 0.0), 1.0) for v in value)
+    except (TypeError, ValueError):
+        return None
+    return (u0, max(u0, u1))
 
 
 def _cores() -> int:

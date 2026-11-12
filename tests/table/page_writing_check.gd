@@ -13,7 +13,8 @@ extends SceneTree
 ## - A sheet's writes are a page: the first write's ink is put down in the first half of the page's time and the second's in the
 ##   second; a few writes fit a sheet at their own size, and many run off it and are written smaller, said (`shrunk` - the control:
 ##   two writes are not). A line crossed out is drawn through the line it names, in its own share of the page's time, and takes no
-##   room (the control: a strike at nothing draws nothing).
+##   room (the control: a strike at nothing draws nothing). Words in a hand are the hand's strokes ([Handwriting]) inside their line's
+##   box, for a pen to follow; a typewriter's are set, with none (the control).
 ## - The law takes a formula and a drawing: `tex` and `draw` are kept; a `draw` that is no SVG is refused with a note; a write that
 ##   names nothing is refused (the control).
 ## - A page is written in the reading's order ([method TableWork._order_writing]): writes on one sheet, listed out of order, are
@@ -152,6 +153,18 @@ func _page() -> bool:
 	_ok(not any_late, "CONTROL: a strike at nothing draws nothing")
 	var words := SheetWriting.page([{"text": "Milk and eggs", "hand": "neat"}, {"rec": _rec("frac")}], room, 7, _doc.get("fonts", {}))
 	_ok((words["image"] as Image).get_width() > 2, "words in a hand and a formula share a page")
+	# Words a pen writes are the hand's strokes ([Handwriting]), for a pen to follow, inside their box; a typewriter's are set
+	var laid: Dictionary = ((words["layout"] as Dictionary)["items"] as Array)[0]
+	var inside := true
+	for st in laid["strokes"]:
+		for q in (st as Dictionary)["points"] as PackedVector2Array:
+			var at := q + Vector2(float(laid["ox"]), float(laid["oy"]))
+			inside = inside and Rect2(float(laid["x"]) - 1.0, float(laid["y"]) - 1.0, float(laid["w"]) + 2.0, float(laid["h"]) + 4.0).has_point(at)
+	_ok(not (laid["strokes"] as Array).is_empty() and inside, "words in a hand are written in the hand's strokes, inside their line's box (%d strokes)" % (laid["strokes"] as Array).size())
+	var typed := SheetWriting.page([{"text": "Milk and eggs", "hand": "typed"}], room, 7)
+	_ok((((typed["layout"] as Dictionary)["items"] as Array)[0]["strokes"] as Array).is_empty(), "CONTROL: a typewriter's words are set, with no strokes")
+	var block := SheetWriting.words("Two lines\nof words", "quick", 3, 1.0, 0.0, true)
+	_ok(int(block["lines"]) == 2 and float(block["seconds"]) > 0.5, "a hand's own lines stay its lines, written over time (%d lines, %.1f s)" % [int(block["lines"]), float(block["seconds"])])
 	return true
 
 
@@ -275,7 +288,8 @@ func _pen() -> bool:
 		judged += 1
 		var nib := m._work._pen_nib(pen_tr, T)
 		var tip: Vector3 = tip_at.call(T)
-		var want: Vector3 = m._work._page_world(wi, nib["at"], float(nib["lift"]), T)
+		# (...lifted, it drifts as a held thing does: [method Pen.drift])
+		var want: Vector3 = m._work._page_world(wi, nib["at"], float(nib["lift"]), T) + Pen.drift(T, int(pen_tr.get("_hand", 0)), float(nib["lift"]))
 		if tip.distance_to(want) > 0.003:
 			continue
 		samples += 1
@@ -291,14 +305,15 @@ func _pen() -> bool:
 	_ok(lifted >= 4, "the tip is lifted off the paper before the first stroke, between strokes and after the last (%d)" % lifted)
 	var start := m._work._pen_nib(pen_tr, 10.05)
 	var end := m._work._pen_nib(pen_tr, 15.98)
-	_ok(float(start["lift"]) > SheetWriting.PEN_LEAD * 0.0 + TableWork.PEN_LIFT and float(end["lift"]) > TableWork.PEN_LIFT,
+	_ok(float(start["lift"]) > SheetWriting.PEN_LEAD * 0.0 + Pen.LIFT and float(end["lift"]) > Pen.LIFT,
 		"it comes down to the line, and lifts clear of it when the line is done (%.3f, %.3f m)" % [float(start["lift"]), float(end["lift"])])
 	var box: Rect2 = (point_tr["_pointed"] as Dictionary)["box"]
 	var held := m._work._point_nib(point_tr, 3.5, 4.0)
 	var p2: Vector2 = held["at"]
-	_ok(p2.x >= box.end.x and p2.x <= box.end.x + TableWork.POINT_GAP and p2.y >= box.position.y and p2.y <= box.end.y and is_equal_approx(float(held["lift"]), TableWork.POINT_LIFT),
+	_ok(p2.x >= box.end.x and p2.x <= box.end.x + Pen.POINT_GAP and p2.y >= box.position.y and p2.y <= box.end.y and is_equal_approx(float(held["lift"]), Pen.POINT_LIFT),
 		"a point holds the nib just over the paper beside the line's end (%s, the line %s)" % [str(p2), str(box)])
 	var tip_pt: Vector3 = tip_at.call(19.5)
-	_ok(tip_pt.distance_to(m._work._page_world(wi, p2, TableWork.POINT_LIFT, 19.5)) < 0.003, "and the pen's tip is there")
+	var pointed_at := m._work._page_world(wi, p2, Pen.POINT_LIFT, 19.5) + Pen.drift(19.5, int(point_tr.get("_hand", 0)), Pen.POINT_LIFT)
+	_ok(tip_pt.distance_to(pointed_at) < 0.003, "and the pen's tip is there")
 	m._root3.free()
 	return true

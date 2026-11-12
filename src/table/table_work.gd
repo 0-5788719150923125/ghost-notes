@@ -64,20 +64,6 @@ const BLEND_IN := 0.8
 ## all from nearer than BLEND_NEAR.x, wholly from further than BLEND_NEAR.y (meters).
 const BLEND_LIFT := 0.1
 const BLEND_NEAR := Vector2(0.01, 0.05)
-## A pen seen, as the desk's (at the table since next/proof.md; [method _pen_nib], [method _point_nib]):
-## how high its nib lifts between strokes and once a line is done (meters); how it leans from its nib -
-## up, to the right and away from the chair, the frame's top right - and how far that sways (degrees);
-## how near over the paper it points, how wide a thing it sweeps under before it settles beside its end
-## (TeX points), how far off the thing it stays, and how long the sweep and the settling take (seconds).
-const PEN_LIFT := 0.004
-const PEN_REST_LIFT := 0.022
-const PEN_UP := Vector3(0.42, 0.64, -0.40)
-const PEN_SWAY := 4.0
-const POINT_LIFT := 0.0035
-const POINT_WIDE := 40.0
-const POINT_GAP := 6.0
-const POINT_SWEEP := 0.9
-const POINT_SETTLE := 0.4
 ## ...and lifted a hand's whole BLEND_LIFT however clear its way, turned more than BLEND_TURN.y on the
 ## way there - from nothing at BLEND_TURN.x (radians): what turns sweeps where its way does not go.
 const BLEND_TURN := Vector2(0.35, 1.0)
@@ -815,17 +801,16 @@ func _pen_nib(tr: Dictionary, T: float) -> Dictionary:
 	var first := _stroke_point(it, 0.0)
 	var last := _stroke_point(it, float(it["seconds"]))
 	if g < lead:
-		return {"sheet": wi, "at": first["at"], "lift": lerpf(PEN_REST_LIFT, PEN_LIFT, smoothstep(0.0, 1.0, g / maxf(lead, 1e-6)))}
+		return {"sheet": wi, "at": first["at"], "lift": lerpf(Pen.REST_LIFT, 0.0, smoothstep(0.0, 1.0, g / maxf(lead, 1e-6)))}
 	if g <= lead + ink:
 		var at := _stroke_point(it, (g - lead) / maxf(ink, 1e-6) * float(it["seconds"]))
 		return {"sheet": wi, "at": at["at"], "lift": float(at["lift"])}
 	var s := smoothstep(0.0, 1.0, (g - lead - ink) / maxf(1.0 - lead - ink, 1e-6))
-	return {"sheet": wi, "at": (last["at"] as Vector2).lerp((last["at"] as Vector2) + Vector2(POINT_GAP * 4.0, POINT_GAP * 2.0), s),
-		"lift": lerpf(0.0, PEN_REST_LIFT, s)}
+	return {"sheet": wi, "at": (last["at"] as Vector2).lerp(Pen.rest_near(last["at"]), s), "lift": lerpf(0.0, Pen.REST_LIFT, s)}
 
 
 ## Where the hand's nib is [param t] seconds into item [param it]'s writing ([method SheetWriting.page]'s layout): `{at (the page's TeX
-## points), lift}` - on a stroke as far along it as the ink is, in the air between two, and along a line of words in a hand.
+## points), lift}` - on its strokes as [method Pen.on_strokes] has it, and along a line of words in a hand.
 static func _stroke_point(it: Dictionary, t: float) -> Dictionary:
 	var strokes: Array = it.get("strokes", [])
 	if strokes.is_empty():
@@ -835,63 +820,19 @@ static func _stroke_point(it: Dictionary, t: float) -> Dictionary:
 		var li := floori(f)
 		return {"at": Vector2(float(it["x"]) + (f - float(li)) * float(it["w"]), float(it["y"]) + (float(li) + 0.78) * float(it["h"]) / float(lines)),
 			"lift": 0.0}
-	var o := Vector2(float(it.get("ox", 0.0)), float(it.get("oy", 0.0)))
-	var prev: Dictionary = {}
-	for s in strokes:
-		var st: Dictionary = s
-		var pts: PackedVector2Array = st["points"]
-		if pts.is_empty():
-			continue
-		if t < float(st["t0"]):
-			if prev.is_empty():
-				return {"at": o + pts[0], "lift": PEN_LIFT}
-			# ...between two strokes: in the air from the end of one to the start of the next
-			var p0: PackedVector2Array = prev["points"]
-			var u := clampf((t - float(prev["t1"])) / maxf(float(st["t0"]) - float(prev["t1"]), 1e-6), 0.0, 1.0)
-			return {"at": o + p0[p0.size() - 1].lerp(pts[0], smoothstep(0.0, 1.0, u)), "lift": PEN_LIFT * sin(PI * u)}
-		if t <= float(st["t1"]):
-			return {"at": o + _along(pts, (t - float(st["t0"])) / maxf(float(st["t1"]) - float(st["t0"]), 1e-6)), "lift": 0.0}
-		prev = st
-	var end: PackedVector2Array = prev.get("points", PackedVector2Array([Vector2.ZERO]))
-	return {"at": o + end[end.size() - 1], "lift": PEN_LIFT}
+	var nib := Pen.on_strokes(strokes, t)
+	return {"at": Vector2(float(it.get("ox", 0.0)), float(it.get("oy", 0.0))) + (nib["at"] as Vector2), "lift": float(nib["lift"])}
 
 
-## The point [param f] of the way along [param pts] by its length, as its ink is put down ([method TableInk.picture_of]).
-static func _along(pts: PackedVector2Array, f: float) -> Vector2:
-	if pts.size() == 1:
-		return pts[0]
-	var total := 0.0
-	for i in range(1, pts.size()):
-		total += pts[i - 1].distance_to(pts[i])
-	var want := clampf(f, 0.0, 1.0) * total
-	for i in range(1, pts.size()):
-		var seg := pts[i - 1].distance_to(pts[i])
-		if want <= seg:
-			return pts[i - 1].lerp(pts[i], want / maxf(seg, 1e-9))
-		want -= seg
-	return pts[pts.size() - 1]
-
-
-## Where a point holds the nib [param tau] of [param d] seconds into its act: under a wide thing (a
-## formula, a curve) it comes down at its start and sweeps along under it, then settles beside its right
-## end, low on its height - where the pen's body leans away over clean paper; at a small one (a part of a
-## formula, a label, a dot) it comes straight to that place. `{sheet, at, lift}`, or `{}` for a point
-## that found nothing ([method _find_pointed]).
+## Where a point holds the nib [param tau] of [param d] seconds into its act: along [method Pen.point_path] of what it
+## points at, swept once the hand has brought it there ([constant BLEND_IN]). `{sheet, at, lift}`, or `{}` for a point that
+## found nothing ([method _find_pointed]).
 func _point_nib(tr: Dictionary, tau: float, d: float) -> Dictionary:
 	if not (tr.get("_pointed") is Dictionary):
 		return {}
-	var b: Rect2 = (tr["_pointed"] as Dictionary)["box"]
-	var stays := Vector2(b.end.x + POINT_GAP * 0.5, b.position.y + b.size.y * 0.7)
-	var at := stays
-	if b.size.x >= POINT_WIDE:
-		var y := b.end.y + POINT_GAP * 0.5
-		var from := Vector2(b.position.x + b.size.x * 0.1, y)
-		var to := Vector2(b.end.x - b.size.x * 0.05, y)
-		# (...the sweep after the hand has brought it, cut to what the act has, so it ends where the pen stays)
-		var sweep := minf(POINT_SWEEP, maxf(d - BLEND_IN, 0.2) * 0.6)
-		at = from.lerp(to, smoothstep(0.0, 1.0, (tau - BLEND_IN) / sweep))
-		at = at.lerp(stays, smoothstep(0.0, 1.0, (tau - BLEND_IN - sweep) / POINT_SETTLE))
-	return {"sheet": int((tr["_pointed"] as Dictionary)["sheet"]), "at": at, "lift": POINT_LIFT}
+	var pointed: Dictionary = tr["_pointed"]
+	return {"sheet": int(pointed["sheet"]), "at": Pen.pointing(Pen.point_path(pointed["box"]), tau - BLEND_IN, d - BLEND_IN),
+		"lift": Pen.POINT_LIFT}
 
 
 ## A point of sheet [param wi]'s page ([param at], TeX points from the head of its room) in the table's
@@ -912,17 +853,21 @@ func _page_world(wi: int, at: Vector2, lift: float, T: float) -> Vector3:
 	return world * (place * Vector3(x, y, z)) + (world.basis * place.basis * Vector3.UP).normalized() * lift
 
 
-## The pen held by its tip at [param A] (the table's space) at show time [param T]: its tip and grip as a
-## tool's are found ([method _tool_ends]), its body leaning from the nib to the frame's top right as a
-## writer's hand holds it, swaying a few degrees over seconds - [param x0] its rest.
-func _held_by_tip(tr: Dictionary, A: Vector3, T: float, x0: Transform3D) -> Transform3D:
-	var a0 := x0 * (tr.get("_tip", Vector3.ZERO) as Vector3)
-	var g0 := x0 * (tr.get("_grip", Vector3.UP * 0.1) as Vector3)
-	var lean := Basis(Vector3.UP, deg_to_rad(PEN_SWAY * sin(T * 0.37) + PEN_SWAY * 0.5 * sin(T * 0.91 + 1.3))) * PEN_UP.normalized()
-	var v0 := (g0 - a0).normalized()
-	var v := lean.normalized()
-	var r := Basis(Quaternion(v0, v)) if v0.length() > 0.5 and v0.dot(v) > -0.999 else Basis.IDENTITY
-	return Transform3D(r, A - r * a0) * x0
+## The pen held by its tip with its nib at [param nib] (`{sheet, at, lift}`) at show time [param T], [param before] where it
+## was [constant Pen.MOTION_DT] earlier: its tip and grip as a tool's are found ([method _tool_ends]), its body leaning from
+## the nib as a writer's hand holds it ([method Pen.lean]) and drifting while it is lifted ([method Pen.drift]) - [param x0]
+## its rest.
+func _held_by_tip(tr: Dictionary, nib: Dictionary, before: Dictionary, T: float, x0: Transform3D) -> Transform3D:
+	var wi := int(nib["sheet"])
+	var lift := float(nib["lift"])
+	var seed := int(tr.get("_hand", 0))
+	var A := _page_world(wi, nib["at"], lift, T)
+	var motion := Vector3.ZERO
+	if not before.is_empty() and int(before["sheet"]) == wi:
+		motion = (A - _page_world(wi, before["at"], float(before["lift"]), T - Pen.MOTION_DT)) / Pen.MOTION_DT
+	var pt: Vector2 = (((_writing[wi] as Dictionary)["page"] as Dictionary)["layout"] as Dictionary)["pt"]
+	var up := Pen.lean(Pen.UP, T, seed, (nib["at"] as Vector2).x / maxf(pt.x, 1e-6), motion)
+	return Pen.held(x0, tr.get("_tip", Vector3.ZERO), tr.get("_grip", Vector3.UP * 0.1), A + Pen.drift(T, seed, lift), up)
 
 
 ## What is written, for the bake's twin ([TablePhysics]): each page's layout - made once and never
@@ -2691,9 +2636,11 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			out = Transform3D(r, A - r * a0) * x0
 		# A pen seen: its nib on the ink as it goes down, or by what it points at, leaning as a hand holds it
 		"pen", "point":
-			var nib := _pen_nib(tr, T) if String(tr["law"]) == "pen" else _point_nib(tr, tau, d)
+			var writes := String(tr["law"]) == "pen"
+			var nib := _pen_nib(tr, T) if writes else _point_nib(tr, tau, d)
 			if not nib.is_empty() and _writing.has(int(nib["sheet"])):
-				out = _held_by_tip(tr, _page_world(int(nib["sheet"]), nib["at"], float(nib["lift"]), T), T, x0)
+				var before := _pen_nib(tr, T - Pen.MOTION_DT) if writes else _point_nib(tr, tau - Pen.MOTION_DT, d)
+				out = _held_by_tip(tr, nib, before, T, x0)
 	if String(tr["law"]) in ["aim", "circle", "pen", "point"] and tau < BLEND_IN:
 		# A hand brings it there first: from where it was to where the law has it, over the first moment - lifted
 		# in an arc, so it goes over a rim rather than through it, early, as a hand lifts a tool before it reaches
@@ -4156,7 +4103,8 @@ func _written(wi: int, t: float) -> void:
 		if wr.has("page"):
 			wr["node"] = SheetWriting.page_node((wk["w"] as Dictionary)["sheet"], wr["page"], Color.html(String(wr["ink"])))
 		else:
-			wr["node"] = SheetWriting.node((wk["w"] as Dictionary)["sheet"], String(wr["text"]), String(wr["hand"]), Color.html(String(wr["ink"])))
+			wr["node"] = SheetWriting.node((wk["w"] as Dictionary)["sheet"], String(wr["text"]), String(wr["hand"]), Color.html(String(wr["ink"])),
+				ink_seed + wi)
 		(wk["node"] as Node3D).add_child(wr["node"])
 	((wr["node"] as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("written", got)
 

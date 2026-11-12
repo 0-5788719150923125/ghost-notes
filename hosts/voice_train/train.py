@@ -26,8 +26,8 @@ save, the run is saved whole (`last.ckpt`, written under another name and rename
 leaves half of one), and the next run goes on from it. The voice is exported only when every epoch is done:
 the step's output is newer than its start only then.
 
-AN EPOCH IS AS LONG AS THEIR SPEECH (2026-10-24: 6,909 sentences, 8.3 hours of his, about 5 minutes an
-epoch, where the first run's 65 minutes took 40 s): each epoch's line says how long the rest will take, from
+AN EPOCH IS AS LONG AS THEIR SPEECH (6,909 sentences, 8.3 hours, about 5 minutes an
+epoch, where 65 minutes of speech took 40 s): each epoch's line says how long the rest will take, from
 the epochs this run has done past its first (which builds the cache), and the card's row shows it. It died
 at epoch 2 with the card shared with another trainer, 8.3 GB of its own at the end, so the allocator grows
 its segments rather than leaving reserved memory in pieces (`PYTORCH_CUDA_ALLOC_CONF`).

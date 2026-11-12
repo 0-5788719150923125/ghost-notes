@@ -338,12 +338,14 @@ func _row(field: String) -> String:
 ## above the voice that reads it; otherwise the rest, the Voice first. YouTube is this panel's own to build
 ## ([method _add_youtube]: a component adds rows of its own to it). Each card is handed what it may need of this
 ## panel in `ctx`: `workspace` (this panel), `cast` (the voices the reading plays), `reading` (a voice is
-## attached, so every format of the Medium is offered), `blocks` and `reshape` (the Medium's format, and the note
+## attached, so every format of the Medium is offered), `provides` (what the note's components give: a table show's
+## Medium offers Table's formats, [method Medium.offered]), `blocks` and `reshape` (the Medium's format, and the note
 ## written and opened again when it picks one with rows of its own) and the bookends' tooltips in the words of
 ## what the show is presented on (its row's `intro_tip` / `outro_tip`, or its Medium format's).
 func _note_cards(producers: bool) -> void:
 	var have := _voiced()
-	var with := {"reading": true, "workspace": self, "cast": _cast, "blocks": _blocks, "reshape": _reshape}
+	var with := {"reading": true, "workspace": self, "cast": _cast, "blocks": _blocks, "reshape": _reshape,
+		"provides": Components.provided(have)}
 	var fmt: Variant = _blocks.get("medium")
 	var rows: Array = []
 	for key in have:

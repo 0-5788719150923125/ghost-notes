@@ -16,7 +16,7 @@ class_name LetterFormat
 ##
 ## The desk and the hand are the note's: the desk's seed is the note's own file's unless the rows are given one ([method
 ## desk_seed]); how each word wavers (and so where the lines break and the rests the voice takes) is always the note's own
-## ([method hand_seed]), so the same letter is written the same way at any desk; the hand is one of the journal's ([LetterHand],
+## ([method hand_seed]), so the same letter is written the same way at any desk; the hand is one of the journal's ([Handwriting],
 ## the Notebook's): the Medium card's Handwriting ([method hand]).
 ##
 ## What is on the desk and how it is lit are chosen here: a tick per [constant DeskLook.THINGS] row (the block's `things`) and the
@@ -155,10 +155,10 @@ func hand_seed() -> int:
 func hand() -> String:
 	var h := String(Director.hand)
 	if h == "random":
-		var keys: Array = LetterHand.HANDS.keys()
+		var keys: Array = Handwriting.HANDS.keys()
 		keys.sort()
 		return String(keys[hand_seed() % keys.size()])
-	return LetterHand.of(h)
+	return Handwriting.of(h)
 
 
 ## The document's `letter`: the hand's seed (`seed`) and the desk's (`desk`), the hand, each sketch's laid-out drawing, the ink,

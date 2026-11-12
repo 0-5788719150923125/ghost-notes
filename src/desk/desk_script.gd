@@ -96,7 +96,7 @@ const EST_PER_CHAR := 0.2
 ## one rule tall), the rules, the margin, and room at the foot.
 const PW := 1100.0
 const PH := 1424.0
-const PX_PER_PT := 3.1
+const PX_PER_PT := Handwriting.PX_PER_PT
 const RULE := 46.0
 const FIRST_RULE := 196.0
 const TEXT_X := 150.0
@@ -381,9 +381,10 @@ static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 		act["turn"] = false
 		match String(act["kind"]):
 			"strike":
-				act["of"] = last_written
+				# (the last thing written, unless it names what it strikes: a table's act, [EpisodeDesk])
+				act["of"] = int(act.get("of", last_written))
 			"point":
-				var got: Dictionary = named.get(String(act.get("target", "")), {"of": -1, "part": ""})
+				var got: Dictionary = named.get(String(act.get("target", "")).to_lower(), {"of": -1, "part": ""})
 				act["of"] = int(got["of"])
 				act["part"] = String(got["part"])
 			"pad", "pad-text", "draw":
@@ -414,9 +415,9 @@ static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 				cursor = base + d * k + clear
 				last_written = out.size()
 				if not String(act.get("name", "")).is_empty():
-					named[String(act["name"])] = {"of": out.size(), "part": ""}
+					named[String(act["name"]).to_lower()] = {"of": out.size(), "part": ""}
 				for part in parts_of(String(act.get("tex", ""))):
-					named[part] = {"of": out.size(), "part": part}
+					named[part.to_lower()] = {"of": out.size(), "part": part}
 		out.append(act)
 	return out
 
@@ -425,6 +426,15 @@ static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 static func _snap_rule(y: float) -> float:
 	var n := ceilf((y - FIRST_RULE) / RULE)
 	return FIRST_RULE + maxf(n, 0.0) * RULE
+
+
+## When each of [param parsed]'s spoken words begins in a steady voice ([method rehearsal]), from the top: what a desk
+## following a reading started mid-way estimates the words not yet heard by.
+static func word_starts(parsed: Dictionary) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for w in rehearsal(parsed):
+		out.append(float((w as Dictionary)["t0"]))
+	return out
 
 
 ## A steady voice reading [param parsed] (what [method parse] returned): every spoken word [param word] seconds long, a

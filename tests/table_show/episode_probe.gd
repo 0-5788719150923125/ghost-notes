@@ -1,7 +1,7 @@
 extends SceneTree
 
-## Make (or finish) one tarot episode without the app: the same [TableProducer], [AgentJobs] and
-## episode directory the Tarot panel uses, driven from the command line.
+## Make (or finish) one table-show episode without the app: the same [TableProducer], [AgentJobs] and
+## episode directory the Cards panel uses, driven from the command line.
 ##
 ##   godot --headless --path . --script res://tests/table_show/episode_probe.gd -- \
 ##       --spec ../rift/tarot/truthful-tarot.md --seed 2 [--only plan,draw] [--redo say:3] [--root <dir>]

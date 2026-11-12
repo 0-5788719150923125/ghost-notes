@@ -59,7 +59,7 @@ class_name LetterScript
 ##
 ## One walk, two readers ([DeskScript]'s rule): [method parse] gives the spoken words the desk follows the voice by, the
 ## pen's actions anchored to them, the spans the camera and the pictures follow, and the text the voice reads ([member
-## speakable]) with its rests (`<!-- action-hold: S -->`), from the same numbers. A line is the hand's own ([LetterHand]),
+## speakable]) with its rests (`<!-- action-hold: S -->`), from the same numbers. A line is the hand's own ([Handwriting]),
 ## so its strokes and timing are known here; only a sketch's drawing comes from the ink step, handed in as [param lengths]
 ## and [param sizes] as [DeskScript.parse] takes them.
 ##
@@ -130,7 +130,7 @@ const DRAW_TAIL := 1.5
 const DRAW_ALONE := 5.0
 ## A sketch's own time in its mark's brackets: group 1 the seconds (as a timed hesitation writes them).
 const DRAWN_IN := "^([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?$"
-## The pen at its quickest, against the hand's own pace ([constant LetterHand.PACE]): past a quick voice's 180 words a
+## The pen at its quickest, against the hand's own pace ([constant Handwriting.PACE]): past a quick voice's 180 words a
 ## minute, so the pen keeps with the voice it has.
 const QUICKEST := 2.5
 ## A voice this quick a word inside a sentence (the chapter's is about 0.45), for the rests the voice is written:
@@ -371,7 +371,7 @@ static func _written(text: String) -> Array:
 	return out
 
 
-## The walk. [param seed]: the hand's unsteadiness. [param hand]: which hand writes it ([LetterHand]). [param svgs]: a
+## The walk. [param seed]: the hand's unsteadiness. [param hand]: which hand writes it ([Handwriting]). [param svgs]: a
 ## sketch's key -> its SVG (one not drawn yet is left off the page, and its paragraph is only said). [param lengths] and
 ## [param sizes]: a drawing's id -> its drawing time and typeset record, as [method DeskScript.parse] takes them. Returns:
 ##   actions   - the pen's, in [DeskMedium]'s shape (each with an `id`, "" for what puts no ink down) and the words'
@@ -388,7 +388,7 @@ static func _written(text: String) -> Array:
 ##   pauses    - the spoken words a hesitation follows (on a line of its own, or in a written paragraph): the writer
 ##               stops there too ([LetterMedium])
 static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
-		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> Dictionary:
+		sizes: Dictionary = {}, hand := Handwriting.DEFAULT) -> Dictionary:
 	var point := _rx(POINT)
 	var actions: Array = []
 	var spans: Array = []
@@ -1029,7 +1029,7 @@ static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bo
 	var cur: Array = []
 	var x := 0.0
 	var from_x := 0.0                # where the line being built begins, along its rule
-	var sp := LetterHand.space(hand) * DeskScript.PX_PER_PT
+	var sp := Handwriting.space(hand) * DeskScript.PX_PER_PT
 	var ends := {}                   # a written word's index after a struck run -> the cut's index
 	for c in cuts.size():
 		ends[int((cuts[c] as Dictionary)["at"])] = c
@@ -1038,7 +1038,7 @@ static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bo
 	var ws := _written(text)
 	for wi in ws.size():
 		var w: Dictionary = ws[wi]
-		var adv := LetterHand.advance(String(w["text"]), hand) * DeskScript.PX_PER_PT
+		var adv := Handwriting.advance(String(w["text"]), hand) * DeskScript.PX_PER_PT
 		if bool(w.get("glued", false)) and x > 0.0:
 			x -= sp
 			if cur.is_empty():
@@ -1099,7 +1099,7 @@ static func _said_in(words: Array) -> int:
 	return k
 
 
-## One line's action: its words written by the [param hand] ([LetterHand]), timed by [method Ink.schedule].
+## One line's action: its words written by the [param hand] ([Handwriting]), timed by [method Ink.schedule].
 static func _line_action(words: Array, base: int, seed: int, n: int, hand: String) -> Dictionary:
 	var texts := PackedStringArray()
 	var emph: Array = []
@@ -1113,8 +1113,8 @@ static func _line_action(words: Array, base: int, seed: int, n: int, hand: Strin
 			if first < 0:
 				first = int(w["spoken"])
 	var salt := "line-%d" % n
-	var written := LetterHand.line(texts, emph, seed, salt, hand)
-	var sched := Ink.schedule(written["strokes"], seed, LetterHand.PACE)
+	var written := Handwriting.line(texts, emph, seed, salt, hand)
+	var sched := Ink.schedule(written["strokes"], seed, Handwriting.PACE)
 	# when each spoken word is on the page, seconds into the line: its last stroke's end (a word drawn with none, the one
 	# before's) - what the voice is held behind ([method _voice_text])
 	var done := {}
@@ -1168,7 +1168,7 @@ static func _keep_with(actions: Array, spans: Array) -> void:
 ## for a new page), `turn` on what starts it. A strike stands on the page of what it crosses out; a point on the page it is
 ## made over, which may no longer hold what it names ([method DeskMedium.target_box]). Pure: a function of the actions and
 ## the typeset drawings.
-static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAULT) -> Array:
+static func lay_out(actions: Array, sizes: Dictionary, hand := Handwriting.DEFAULT) -> Array:
 	var out: Array = []
 	var page := 0
 	var y := FIRST_LINE - DeskScript.RULE       # the last baseline used
@@ -1184,13 +1184,13 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 		match String(act["kind"]):
 			"pad-text":
 				var gap := DeskScript.RULE if under_text and bool(act.get("para", false)) else 0.0
-				var base := _snap_rule(maxf(y + DeskScript.RULE, bottom + LetterHand.ascent_px(hand) * 0.8) + gap)
+				var base := _snap_rule(maxf(y + DeskScript.RULE, bottom + Handwriting.ascent_px(hand) * 0.8) + gap)
 				var x := DeskScript.TEXT_X
 				if bool(act.get("cont", false)) and started and under_text:
 					# beside the words struck: on the same rule, from where they end ([method _lay_para])
 					base = y
 					x += float(act.get("cont_x", 0.0))
-				elif started and (bool(act.get("page_break", false)) or base + LetterHand.descent_px(hand) > foot):
+				elif started and (bool(act.get("page_break", false)) or base + Handwriting.descent_px(hand) > foot):
 					page += 1
 					act["turn"] = true
 					base = FIRST_LINE
@@ -1199,9 +1199,9 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 				act["k"] = 1.0
 				act["w"] = float(act.get("w_pt", 0.0)) * DeskScript.PX_PER_PT
 				act["h"] = STRIKE_H
-				act["d"] = LetterHand.descent_px(hand) * 0.5
+				act["d"] = Handwriting.descent_px(hand) * 0.5
 				y = base
-				bottom = base + LetterHand.descent_px(hand) * 0.6
+				bottom = base + Handwriting.descent_px(hand) * 0.6
 				started = true
 				under_text = true
 			"draw":
@@ -1216,7 +1216,7 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 				var top := bottom + DeskScript.RULE * 0.5
 				# the lines kept with it: the first lands up to a rule and a half under it past the rule left empty, each next a rule on
 				var keep := int(act.get("keep", 0))
-				var kept := (float(keep) + 1.0 + UNDER_SKETCH) * DeskScript.RULE + LetterHand.descent_px(hand) if keep > 0 else 0.0
+				var kept := (float(keep) + 1.0 + UNDER_SKETCH) * DeskScript.RULE + Handwriting.descent_px(hand) if keep > 0 else 0.0
 				var fresh := FIRST_LINE - DeskScript.RULE * 0.5 + (h + d) * k + kept <= foot
 				if started and (bool(act.get("page_break", false)) or top + (h + d) * k > foot
 						or (fresh and top + (h + d) * k + kept > foot)):
@@ -1248,14 +1248,14 @@ static func _snap_rule(y: float) -> float:
 
 ## [param body] as the voice reads it.
 static func speakable(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
-		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> String:
+		sizes: Dictionary = {}, hand := Handwriting.DEFAULT) -> String:
 	return String(parse(body, seed, svgs, lengths, sizes, hand)["speakable"])
 
 
 ## How long [param body] runs when it is read (seconds, the bookends aside): every spoken word at
 ## [constant DeskScript.SAID_WORD] and every rest the letter asks the voice for.
 static func runtime(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
-		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> float:
+		sizes: Dictionary = {}, hand := Handwriting.DEFAULT) -> float:
 	var parsed := parse(body, seed, svgs, lengths, sizes, hand)
 	var t := float((parsed["spoken"] as PackedStringArray).size()) * DeskScript.SAID_WORD
 	for m in _rx("<!--\\s*action-hold\\s*:\\s*([0-9.]+)\\s*-->").search_all(String(parsed["speakable"])):

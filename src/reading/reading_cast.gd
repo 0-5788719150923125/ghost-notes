@@ -272,7 +272,7 @@ func build_voice(box: VBoxContainer) -> void:
 	var browse := Button.new()
 	browse.text = "Browse…"
 	browse.focus_mode = Control.FOCUS_NONE
-	browse.tooltip_text = "Every reader on this voice, with their gender and a description (libritts: how they sound, from LibriTTS-P; kokoro: accent and Kokoro's own grade). Filter, search, and pick one - or, on kokoro, tick two or more to blend them into a new voice. Test is at its top. Another voice - an actor's own among them - is picked from the Voice list above."
+	browse.tooltip_text = "Every reader on this voice, with their gender and a description (libritts: how they sound, from LibriTTS-P; kokoro: accent and Kokoro's own grade). Filter, search, and pick one - or, on kokoro, tick two or more to blend them into a new voice, and shape it across each paragraph (each reader's share, breath, push, noise). Test is at its top. Another voice - an actor's own among them - is picked from the Voice list above."
 	browse.pressed.connect(_open_speaker_browser)
 	_speaker_row.add_child(browse)
 
@@ -759,8 +759,6 @@ func slot_cfg(i: int) -> Dictionary:
 	return _merge(_slots[clampi(i, 0, _slots.size() - 1)] as Dictionary)
 
 
-## The settings of the voice named [param who] - how a chunk asks, since a tab's index moves whenever the script
-## gains or loses a speaker, and a reading in flight must not change voice when a name is typed further down.
 ## Which ear [param who] is heard in ([method Delivery.pan_of_seat]): what a voice over the line is placed by ([method ReadingJoin.side_between]).
 func pan_of(who: String) -> float:
 	return Delivery.pan_of_seat(float(cfg_of(who).get("seat", 0.0)))
@@ -779,6 +777,8 @@ static func said_word(cfg: Dictionary) -> float:
 	return base / clampf(float(cfg.get("pace", 1.0)), 0.25, 4.0)
 
 
+## The settings of the voice named [param who] - how a chunk asks, since a tab's index moves whenever the script
+## gains or loses a speaker, and a reading in flight must not change voice when a name is typed further down.
 func cfg_of(who: String) -> Dictionary:
 	who = _who(who)
 	var i := _names.find(who)
@@ -1120,7 +1120,7 @@ func speaker_of(s: Dictionary) -> int:
 ## blend left on a slot whose voice was changed in the note by hand is never sent to a model it means nothing to.
 func blend_of(s: Dictionary) -> String:
 	var spec := String(s.get("blend", ""))
-	return spec if not spec.is_empty() and blends(voice_id_of(s)) and VoiceBlend.readers(spec).size() >= 2 else ""
+	return spec if not spec.is_empty() and blends(voice_id_of(s)) and not VoiceBlend.parse(spec).is_empty() else ""
 
 
 ## The Turn dial: the extra rest at a handover, as a multiple of [constant Delivery.TURN_GAP].

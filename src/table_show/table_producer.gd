@@ -340,7 +340,11 @@ func _make(step: String) -> void:
 		"skin":
 			_make_skin()
 		"table":
-			_make_table()
+			# ...a desk's is its pad and its pen, landed as a set dresser's table is ([DeskTable])
+			if episode.at_desk():
+				_finish("table", _land_table(JSON.stringify(DeskTable.spec())))
+			else:
+				_make_table()
 		"acts":
 			_make_acts()
 		"prep":
@@ -1997,10 +2001,18 @@ func _land_plan(text: String) -> String:
 	plan["inventory"] = {"count": inventory.size(), "printings": printings}
 	plan["seed"] = episode.seed
 	plan["dice"] = TablePrompts.dice(episode.seed)
+	_land_medium(plan)
 	var bad := _land_problem(plan)
 	if not bad.is_empty():
 		return bad
 	return episode.write_json("plan", plan)
+
+
+## What [param plan] is shown in, as the note's Medium card says now (the spec's `medium`): the episode keeps it ([method
+## TableEpisode.medium]), so a show moved to another medium keeps every episode made before as it was made.
+func _land_medium(plan: Dictionary) -> void:
+	var shown := String(spec.get("medium", "table"))
+	plan["medium"] = shown if Medium.mode_of(shown) == "table" else "table"
 
 
 ## The plan of a show that draws no cards, as it lands: its beats (`beats`) kept as the spread's positions -
@@ -2046,6 +2058,7 @@ func _land_beats(plan: Dictionary) -> String:
 	plan["inventory"] = {"count": 0, "printings": {}}
 	plan["seed"] = episode.seed
 	plan["dice"] = TablePrompts.dice(episode.seed)
+	_land_medium(plan)
 	var bad := _land_problem(plan)
 	if not bad.is_empty():
 		return bad

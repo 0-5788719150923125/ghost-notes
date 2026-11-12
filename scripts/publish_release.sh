@@ -32,9 +32,7 @@ else
 		--repo "$repo" \
 		--target "$sha" \
 		--title "Build ${sha:0:7}" \
-		--notes "Automated build of $sha.
-
-macOS: the app is signed ad hoc, not notarized. The first time, macOS refuses to open it; choose System Settings > Privacy & Security > Open Anyway (or run \`xattr -dr com.apple.quarantine \"Ghost Notes.app\"\`)."
+		--notes "Automated build of $sha."
 fi
 
 # Only build releases are eligible. Other releases and tags are untouched.

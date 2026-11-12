@@ -13,8 +13,9 @@ extends SceneTree
 ## workspace runs the show). Two-sided: the same voice without Table is a reading.
 ##
 ## Slots: a note has one clock and one presentation. A second clock is refused with a sentence naming the one in the
-## way (a Voice on a note with a Song), and a Medium on a table show is refused the same way - and lit again once what
-## held the slot is gone.
+## way (a Voice on a note with a Song) - and lit again once what held the slot is gone. A table show brings its Medium,
+## whose formats are Table's, so it is never refused one; Table is refused beside an Actor, whose room that Medium would take
+## (the control).
 ##
 ## Everything attached comes off: what "+" attaches, detach removes - the same blocks, and with a Medium the
 ## illustrations that only come with it. Two refusals, each with its reason: the text is the note, and a Voice stays
@@ -213,10 +214,12 @@ func _slots() -> void:
 		"...and has room on a note with no clock")
 	_ok(Components.slot_note("song", ["text", "voice"]).contains("Voice"), "a Song on a reading is refused the same way")
 	_ok(Components.slot_note("clip", ["text", "song"]).contains("Song"), "a clip is a clock too")
-	why = Components.slot_note("medium", ["text", "table"])
-	_ok(why.contains("presentation") and why.contains("Table"), "a Medium on a show of cards: the table is its presentation (%s)" % why)
+	_ok(Components.with_required(["table"]).has("medium") and Components.slot_note("medium", ["text", "table"]).is_empty(),
+		"a show at a table brings its Medium (its formats are Table's), so it is never refused one")
 	_ok(Components.slot_note("table", ["text", "voice"]).is_empty(), "Table on a reading with no Medium has room")
-	_ok(Components.slot_note("table", ["text", "voice", "medium"]).contains("Medium"), "...and none once a Medium holds the presentation")
+	_ok(Components.slot_note("table", ["text", "voice", "medium"]).is_empty(), "...and on one with a Medium: it brings the one the note has")
+	why = Components.slot_note("table", ["text", "voice", "actor"])
+	_ok(why.contains("presentation") and why.contains("Actor"), "CONTROL: ...but not beside an Actor, whose room its Medium would take (%s)" % why)
 	_ok(Components.slot_note("table", ["text", "song"]).contains("Song"), "Table brings a voice, so a song's clock is in its way too")
 	_ok(Components.slot_note("look", ["text", "song", "voice"]).is_empty(), "a component with no slot is never refused for one")
 

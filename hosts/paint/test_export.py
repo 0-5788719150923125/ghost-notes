@@ -27,7 +27,7 @@ to three things:
      trip to the pot between them, and the maps still come to the canvas. CONTROL: the program as it was, with no such trip, does.
   8. ONE LAYER AGAIN (run.py `only`, export.merge_layer): a layer painted again alone over the canvas the ones before it leave, put among
      the rest - their elements as they were, its own with ids past them, the canvas near the whole painting's. CONTROL: the layer left out.
-  7. A PLACE AT A TIME (export._places, PLACE_MM; 2026-11-10: "They tend to jump around the entire face, to random places"): a run's
+  7. A PLACE AT A TIME (export._places, PLACE_MM): a run's
      pulls in two places 110 mm apart, listed turn about, are gathered into the two places. CONTROL: one place as wide as the face.
 """
 

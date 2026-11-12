@@ -269,7 +269,7 @@ static func picks_of(letter: Dictionary) -> Dictionary:
 	var card := String(letter.get("card_text", "")).strip_edges()
 	if not card.is_empty():
 		out["card_text"] = card
-		out["hand"] = LetterHand.of(String(letter.get("hand", "")))
+		out["hand"] = Handwriting.of(String(letter.get("hand", "")))
 	return out
 
 
@@ -454,7 +454,7 @@ static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "
 				var entry := {"kind": kind, "thing": (safe["things"] as Array)[0], "materials": safe["materials"],
 					"engraving": spec.get("engraving", {})}
 				if spec.get("writing") is Dictionary:
-					entry["writing"] = (spec["writing"] as Dictionary).merged({"hand": LetterHand.of(hand)})
+					entry["writing"] = (spec["writing"] as Dictionary).merged({"hand": Handwriting.of(hand)})
 				out.append(entry)
 	return out
 
@@ -734,7 +734,7 @@ static func _engrave(node: Node3D, e: Dictionary) -> void:
 ## Words written on the top index card ([param w], `{text, card, hand}` - the card's size in centimeters, as [method _thing]
 ## builds it about its middle): in the letter's hand ([constant NotebookLayout.HANDS]' font) and [param ink], from the
 ## card's top left inside [constant CARD_MARGIN], turned a hair off square ([constant CARD_TILT], from [param r]). As the
-## pad is written: the hand's size ([method LetterHand.size_px]) on a pixel of the pad's page ([constant DeskScript.PH] to
+## pad is written: the hand's size ([method Handwriting.size_px]) on a pixel of the pad's page ([constant DeskScript.PH] to
 ## [constant LegalPad.H]), its lines a rule apart ([constant DeskScript.RULE]), smaller where a line is too long for the
 ## card (to [constant CARD_LEAST] of it), then wrapped, and smaller again only where the lines overrun it; rastered finer, a
 ## glyph's thin strokes are averaged away by its mipmaps from across the desk. The writing is turned on the card by the
@@ -749,7 +749,7 @@ static func _write(node: Node3D, w: Dictionary, turn: float, ink: Color, r: Rand
 	var across := posmod(quarter, 2) == 0
 	var room := (Vector2(card.x, card.z) if across else Vector2(card.z, card.x)) - Vector2.ONE * CARD_MARGIN * 2.0
 	room *= 0.01
-	var px := int(LetterHand.size_px(String(w["hand"])))
+	var px := int(Handwriting.size_px(String(w["hand"])))
 	# meters a pixel of the font's: the pad's - smaller while its longest line is wider than the card, to CARD_LEAST of it,
 	# and then while the words wrapped to the card's width overrun it
 	var pad := LegalPad.H / DeskScript.PH
@@ -800,7 +800,7 @@ static func card_lines(font: Font, text: String, wide: float, px: int) -> int:
 ## The font [param hand] is written in on a card ([constant NotebookLayout.HANDS]' own), its glyphs with mipmaps: a card is
 ## seen from across the desk, several of a glyph's pixels to one of the screen's.
 static func _card_font(hand: String) -> Font:
-	var key := LetterHand.of(hand)
+	var key := Handwriting.of(hand)
 	if not _card_fonts.has(key):
 		var f := (load(String(NotebookLayout.HANDS[key]["regular"])) as FontFile).duplicate() as FontFile
 		f.generate_mipmaps = true

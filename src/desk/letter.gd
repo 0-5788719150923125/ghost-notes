@@ -84,7 +84,7 @@ const LEAN := Vector3(0.582, 0.741, 0.336)
 ## The pick-up ([method _pick_up_pose]): how long it takes, from lying on the desk to over the first stroke (seconds);
 ## where the fingers hold it, up from the nib (m); the share of the way it is turned up into the hand over, and the share
 ## it is raised alone before it is carried; and how high its grip arcs over the pad (m) - its nib clears the pad's edge by
-## about the height the desk's pen waits at ([constant DeskMedium.REST_LIFT]).
+## about the height the desk's pen waits at ([constant Pen.REST_LIFT]).
 const PICK_UP := 2.2
 const PICK_GRIP := 0.05
 const PICK_TURN := 0.45
@@ -252,7 +252,7 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 		_strokes[id] = sched
 		lengths[id] = float(sched["length"])
 	var parsed := LetterScript.parse(source, _hand, svgs, lengths, _records,
-		LetterHand.of(String(letter.get("hand", ""))))
+		Handwriting.of(String(letter.get("hand", ""))))
 	_actions = parsed["actions"]
 	_spans = parsed["spans"]
 	_first_pen = int(parsed.get("first_pen", 0))
@@ -294,24 +294,8 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 		if String(act["kind"]) == "pad-text":
 			for k in range(int(act.get("after", 0)), mini(int(act.get("after", 0)) + int(act.get("span", 0)), _spoken_n)):
 				_written_words[k] = 1
-	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
-	var est := PackedFloat32Array()
-	if from > 0:
-		for w in DeskScript.rehearsal(parsed):
-			est.append(float((w as Dictionary)["t0"]))
-	_follower.reset(spoken, from, est)
-	_built_n = -1
-	_held = {}
-	_plan = []
-	_plan_rev += 1
-	_done_ink = {}
-	for i in _actions.size():
-		_plan.append({"start": INF, "end": INF, "turn_at": INF})
 	_load_pictures(letter.get("pictures", {}) if letter.get("pictures") is Dictionary else {})
-	_snap = true
-	for c in [_canvas, _wet, _canvas_turn]:
-		if c != null:
-			(c as PadCanvas).forget()
+	_begin(spoken, start, near, func() -> PackedFloat32Array: return DeskScript.word_starts(parsed))
 
 
 ## Every picture the letter shows, read now (at the session's start, so a render's frames find them made): [param paths]
@@ -718,9 +702,9 @@ func _action_point(a: Dictionary, first: bool) -> Vector2:
 
 func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 	if String(a["kind"]) == "tap":
-		return {"p": _action_point(a, true), "lift": REST_LIFT}
+		return {"p": _action_point(a, true), "lift": Pen.REST_LIFT}
 	if String(a["kind"]) == "swap":
-		return {"p": _action_point(a, _now - start < LetterScript.SWAP_DOWN), "lift": REST_LIFT}
+		return {"p": _action_point(a, _now - start < LetterScript.SWAP_DOWN), "lift": Pen.REST_LIFT}
 	return super._pen_during(a, i, start)
 
 
@@ -741,7 +725,7 @@ func _pen_xf() -> Transform3D:
 
 
 ## The pen leans to the right and a little down: back over the hand toward the writer's right shoulder, as a right hand
-## holds one, its body over the paper not yet written (the desk's leans to the top right, [constant DeskMedium.PEN_UP],
+## holds one, its body over the paper not yet written (the desk's leans to the top right, [constant Pen.UP],
 ## over the lines already written above the nib).
 func _pen_up() -> Vector3:
 	return LEAN
@@ -753,7 +737,7 @@ func _before_first() -> Dictionary:
 	var i := _first_done()
 	if i < 0:
 		return super._before_first()
-	return {"p": _action_point(_actions[i], true), "lift": REST_LIFT}
+	return {"p": _action_point(_actions[i], true), "lift": Pen.REST_LIFT}
 
 
 ## The first action the pen does - a point at nothing on its page it leaves be, as [method pen_at] does; -1 for none.
@@ -855,7 +839,7 @@ func _lying(k: int) -> Transform3D:
 	var rest := DeskLook.pen_rest(look, LegalPad.DESK_Y, k)
 	var lie := Vector3.UP * PEN_R * 1.04
 	var nib: Vector3 = _pad.transform * ((rest["nib"] as Vector3) + lie)
-	return _pen_frame(nib, _pad.transform * ((rest["top"] as Vector3) + lie) - nib)
+	return Pen.frame(nib, _pad.transform * ((rest["top"] as Vector3) + lie) - nib)
 
 
 ## The desk's seed a document's `letter` names: its `desk`, or the hand's where it names none.
@@ -955,7 +939,7 @@ func _tap_pose(_base: Transform3D) -> Dictionary:
 			spot.y += LegalPad.DESK_Y
 		var lean := TAP_LEAN.normalized()
 		var top := spot + Vector3.UP * h
-		return {"xf": _pen_frame(top + lean * PEN_TOP, -lean), "f": f * f * (3.0 - 2.0 * f)}
+		return {"xf": Pen.frame(top + lean * PEN_TOP, -lean), "f": f * f * (3.0 - 2.0 * f)}
 	return {}
 
 
@@ -977,7 +961,7 @@ func _camera_pose(_base: Transform3D) -> Dictionary:
 		var to_lens := (eye - nib).normalized()
 		# the body behind the nib, away from the lens, turned a little off its line so it reads as a pen
 		var up := (-to_lens + Vector3(CAMERA_OFF, CAMERA_OFF * 0.4, -CAMERA_OFF * 0.6)).normalized()
-		return {"xf": _pen_frame(nib, up), "f": f * f * (3.0 - 2.0 * f)}
+		return {"xf": Pen.frame(nib, up), "f": f * f * (3.0 - 2.0 * f)}
 	return {}
 
 
@@ -986,18 +970,6 @@ func _camera_pose(_base: Transform3D) -> Dictionary:
 func _camera_until(sp: Dictionary) -> float:
 	var said := _guess(int(sp["after"]) + int(sp["span"]) - 1, true)
 	return said + maxf(CAMERA_HOLD, float(sp.get("linger", 0.0)) - CAMERA_EASE)
-
-
-## The pen's transform with its nib at [param nib] and its body along [param up] (nib to top), as
-## [method DeskMedium._pen_xf] builds one.
-static func _pen_frame(nib: Vector3, up: Vector3) -> Transform3D:
-	var y := up.normalized()
-	var x := y.cross(Vector3.FORWARD)
-	if x.length() < 0.01:
-		x = y.cross(Vector3.RIGHT)
-	x = x.normalized()
-	var z := x.cross(y).normalized()
-	return Transform3D(Basis(x, y, z), nib)
 
 
 ## From [param a] to [param b] by [param f], turned about the pen's middle where the fingers hold it, and

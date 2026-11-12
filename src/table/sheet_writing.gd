@@ -5,9 +5,11 @@ class_name SheetWriting
 ## written by an unseen pen as the act goes on. Nothing on a table carries words as it is set; the work writes them, when the script says
 ## so.
 ##
-## In a recipe's own hand: the words are set in one of [constant CardTable.HANDS] - the hands a written card is written in - and drawn on
-## the processor from the font's own glyphs ([method picture]: no viewport and no renderer, so it is the same in a gate, a render and the
-## app), into a picture whose red is the ink and whose green is when each point of it is put down: line by line, left to right. A thin
+## In a recipe's own hand: the words are in one of [constant CardTable.HANDS] - the hands a written card is written in - written by a pen
+## in that hand's strokes ([Handwriting], [method words]) and drawn on the processor ([method TableInk.picture_of_schedule]: no viewport
+## and no renderer, so it is the same in a gate, a render and the app), into a picture whose red is the ink and whose green is when each
+## point of it is put down, stroke by stroke as the hand writes - a pen seen follows the same strokes ([Pen]). A typewriter's words are
+## set from the font's own glyphs instead ([method picture]), line by line, left to right. A thin
 ## skin over the sheet's top - bent and folded as the sheet is ([method Props.sheet_lift]) - shows that picture as far as the pen has got
 ## (`shaders/sheet_writing.gdshader`).
 ##
@@ -31,6 +33,10 @@ const ABOVE := 0.00015
 const GRID := Vector2i(16, 6)
 ## The most lines the words are broken into to suit the sheet's shape.
 const MOST_LINES := 4
+## Words a pen writes: a line's height against the hand's own (its reach above and below the line), the least it is (a TeX line,
+## [constant TableInk.LINE_PT]), and the pixels a TeX point their picture on a sheet of its own is drawn at.
+const WORDS_LEADING := 1.12
+const WORDS_PX := 8.0
 ## How sharp the pen's front is in a sheet's `written` (the shader's `sharp`): a page's is this times its writes.
 const SHARP := 100.0
 ## A page: the room between its writes (a share of a line), the largest a hand writes (meters a TeX point: a 15 pt line about 9 mm), and
@@ -49,8 +55,106 @@ const PEN_TAIL := 0.45
 const WORD_LETTER := 0.12
 
 
-## The words' picture: [param text] (lines split by "\n", and broken further at spaces to suit a box [param aspect] wide for its height)
-## in hand [param hand] ([constant CardTable.HANDS]): R the ink's coverage, G when it is put down.
+## The hand [param hand] ([constant CardTable.HANDS]) is written in by a pen ([Handwriting]), or "" for one that is set (a typewriter's).
+static func stroke_hand(hand: String) -> String:
+	return String((CardTable.HANDS.get(hand, CardTable.HANDS["neat"]) as Dictionary).get("strokes", ""))
+
+
+## [param text] written by a pen in hand [param hand] (one [method stroke_hand] names), its own lines broken further at spaces - at
+## [param width] TeX points where that is given, else into as many lines (up to [constant MOST_LINES]) as bring the whole nearest to
+## [param aspect] wide for its height - each line [param centered] or from the left, [param step] TeX points apart (a page's rules;
+## 0 for the hand's own), by the hand seeded [param seed]. `{strokes (the hand's schedule, [method Ink.schedule]: TeX points from
+## the block's top left), seconds, size (TeX points), lines, ascent (the first line's baseline, down from the top)}`.
+static func words(text: String, hand: String, seed: int, aspect := 1.0, width := 0.0, centered := false, step := 0.0) -> Dictionary:
+	var h := Handwriting.of(stroke_hand(hand))
+	var own := text.split("\n", false)
+	if own.is_empty():
+		own = PackedStringArray([" "])
+	var lines := _wrapped_hand(own, h, width) if width > 0.0 else _broken_hand(own, h, aspect)
+	var asc := Handwriting.ascent_px(h) / Handwriting.PX_PER_PT
+	if step <= 0.0:
+		step = _words_step(h)
+	var made: Array = []
+	var widths: Array = []
+	var wide := 1.0
+	for li in lines.size():
+		var got := Handwriting.line(String(lines[li]).split(" ", false), [], seed, "sheet-%d" % li, h)
+		made.append(got)
+		widths.append(float(got["width"]))
+		wide = maxf(wide, float(got["width"]))
+	var strokes: Array = []
+	for li in made.size():
+		var off := Vector2((wide - float(widths[li])) * 0.5 if centered else 0.0, asc + step * float(li))
+		for st in (made[li] as Dictionary)["strokes"]:
+			var row: Dictionary = (st as Dictionary).duplicate()
+			var pts := PackedVector2Array()
+			for q in row["points"] as PackedVector2Array:
+				pts.append(q + off)
+			row["points"] = pts
+			# (a word's place over the whole block, so the hand breathes between words and lines alike)
+			row["k"] = li * 1000 + int(row.get("k", 0))
+			strokes.append(row)
+	var sched := Ink.schedule(strokes, seed)
+	var tall := step * float(maxi(lines.size() - 1, 0)) + asc + Handwriting.descent_px(h) / Handwriting.PX_PER_PT
+	return {"strokes": sched["strokes"], "length": float(sched["length"]), "seconds": maxf(float(sched["length"]), 1e-3),
+		"size": Vector2(wide, tall), "lines": lines.size(), "ascent": asc}
+
+
+## A line of words in hand [param h] ([Handwriting]): its reach above and below the line and a little room, never less than TeX's line.
+static func _words_step(h: String) -> float:
+	return maxf(TableInk.LINE_PT, (Handwriting.ascent_px(h) + Handwriting.descent_px(h)) / Handwriting.PX_PER_PT * WORDS_LEADING)
+
+
+## The lines [param own] is written in by hand [param h]: each broken at spaces into as many (up to [constant MOST_LINES] in all) as
+## bring the whole nearest to [param aspect] wide for its height.
+static func _broken_hand(own: PackedStringArray, h: String, aspect: float) -> PackedStringArray:
+	var total := 0.0
+	for line in own:
+		total += _hand_width(String(line), h)
+	var best := own
+	var best_off := INF
+	for n in range(own.size(), MOST_LINES + 1):
+		var lines := _wrapped_hand(own, h, total / float(n) * 1.08)
+		if lines.size() != n and n > own.size():
+			continue
+		var wide := 0.0
+		for line in lines:
+			wide = maxf(wide, _hand_width(String(line), h))
+		var off := absf(log(maxf(wide, 1.0) / (_words_step(h) * float(lines.size())) / maxf(aspect, 1e-3)))
+		if off < best_off:
+			best_off = off
+			best = lines
+	return best
+
+
+## [param own] lines broken at spaces so none runs past [param width] TeX points in hand [param h] (a word longer than that stands alone).
+static func _wrapped_hand(own: PackedStringArray, h: String, width: float) -> PackedStringArray:
+	var out := PackedStringArray()
+	for line in own:
+		var cur := ""
+		for word in String(line).split(" ", false):
+			var next := word if cur.is_empty() else cur + " " + word
+			if not cur.is_empty() and _hand_width(next, h) > width:
+				out.append(cur)
+				cur = word
+			else:
+				cur = next
+		out.append(cur)
+	return out
+
+
+## How wide [param line] is written in hand [param h] (TeX points): its words' advances and the spaces between.
+static func _hand_width(line: String, h: String) -> float:
+	var words := line.split(" ", false)
+	var w := 0.0
+	for word in words:
+		w += Handwriting.advance(String(word), h)
+	return w + Handwriting.space(h) * float(maxi(words.size() - 1, 0))
+
+
+## The words' picture in a hand that is set, never written (a typewriter's, [method stroke_hand] ""): [param text] (lines split by
+## "\n", and broken further at spaces to suit a box [param aspect] wide for its height) in hand [param hand] ([constant
+## CardTable.HANDS]): R the ink's coverage, G when it is put down, line by line, left to right.
 static func picture(text: String, hand: String, aspect: float) -> Image:
 	var row: Dictionary = CardTable.HANDS.get(hand, CardTable.HANDS["neat"])
 	var font: FontFile = load(String(row["file"]))
@@ -152,12 +256,19 @@ static func _wrapped(own: PackedStringArray, font: FontFile, px: int, n: int) ->
 
 ## The words on sheet [param sheet] ([method Props.sheet_top]), in [param hand] and [param ink]: a skin over its top, in the space the
 ## sheet was built in, its [code]written[/code] how far the pen has got (0 at first).
-static func node(sheet: Dictionary, text: String, hand: String, ink: Color) -> MeshInstance3D:
+static func node(sheet: Dictionary, text: String, hand: String, ink: Color, seed := 1) -> MeshInstance3D:
 	var w := float(sheet["w"])
 	var l := float(sheet["l"])
 	var margin := MARGIN if String(sheet.get("outline", "")) in ["rect", "points"] else MARGIN_ROUND
 	var room := Vector2(w * (1.0 - 2.0 * margin), l * (1.0 - 2.0 * margin))
-	var img := picture(text, hand, room.x / maxf(room.y, 1e-6))
+	var img: Image
+	if stroke_hand(hand).is_empty():
+		img = picture(text, hand, room.x / maxf(room.y, 1e-6))
+	else:
+		var got := words(text, hand, seed, room.x / maxf(room.y, 1e-6), 0.0, true)
+		var size: Vector2 = got["size"]
+		img = TableInk.picture_of_schedule(got, size, 0.0, minf(WORDS_PX, float(PAGE_MOST_PX) / maxf(size.x, size.y)))
+		img.generate_mipmaps()
 	var aspect := float(img.get_width()) / float(img.get_height())
 	var box := Vector2(room.x, room.x / aspect) if aspect > room.x / maxf(room.y, 1e-6) else Vector2(room.y * aspect, room.y)
 	var x0 := float(sheet["x0"]) - box.x * 0.5
@@ -217,9 +328,11 @@ static func room_of(sheet: Dictionary) -> Vector2:
 ## anchors ({name: Rect2}, the page's points)}]}`.
 static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = {}) -> Dictionary:
 	var n := maxi(items.size(), 1)
-	# each item's size in TeX points: TeX's own for a record; for words, their picture in the hand, a line of it a line's height
+	# each item's size in TeX points: TeX's own for a record; words a pen writes, their strokes' ([method words]); a typewriter's, their
+	# picture, a line of it a line's height
 	var sizes: Array = []
-	var words: Array = []
+	var typed: Array = []
+	var written: Array = []
 	var widest := TableInk.PAD_WIDTH
 	var tall := 0.0
 	for it in items:
@@ -229,10 +342,16 @@ static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = 
 		if d.has("strike"):
 			# (a line crossed out takes no room of its own: it is drawn through the line it strikes)
 			sizes.append(Vector2.ZERO)
-			words.append(null)
+			typed.append(null)
+			written.append({})
 			continue
+		var hw: Dictionary = {}
 		if d.get("rec") is Dictionary and not (d["rec"] as Dictionary).is_empty():
 			sz = TableInk.size_of(d["rec"])
+		elif not stroke_hand(String(d.get("hand", "neat"))).is_empty():
+			# words a pen writes: in the hand's strokes, wrapped at a page's width
+			hw = words(String(d.get("text", " ")), String(d.get("hand", "neat")), seed, 1.0, TableInk.PAD_WIDTH)
+			sz = hw["size"]
 		else:
 			var text := String(d.get("text", " "))
 			var lines := _broken(text, _font_of(String(d.get("hand", "neat"))), PX, TableInk.PAD_WIDTH / TableInk.LINE_PT)
@@ -241,7 +360,8 @@ static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = 
 			var h := TableInk.LINE_PT * WORDS_TALLER * float(maxi(lines.size(), 1))
 			sz = Vector2(h * float(said.get_width()) / float(maxi(said.get_height(), 1)), h)
 		sizes.append(sz)
-		words.append(said)
+		typed.append(said)
+		written.append(hw)
 		widest = maxf(widest, sz.x)
 		tall += sz.y + (TableInk.LINE_PT * PAGE_GAP if sizes.size() > 1 else 0.0)
 	# One size for the page: as wide as its widest line, no larger than a hand writes - and smaller, said, when it runs off
@@ -271,8 +391,13 @@ static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = 
 			missing.append_array(got["missing"])
 			seconds = float(got["seconds"])
 			strokes = got["strokes"]
+		elif not (written[k] as Dictionary).is_empty():
+			var hw: Dictionary = written[k]
+			part = TableInk.picture_of_schedule(hw, hw["size"], 0.0, px)
+			seconds = float(hw["seconds"])
+			strokes = hw["strokes"]
 		else:
-			part = words[k]
+			part = typed[k]
 			part.clear_mipmaps()
 			part.convert(Image.FORMAT_RGBAH)
 			part.resize(maxi(int(round((sizes[k] as Vector2).x * px)), 1), maxi(int(round((sizes[k] as Vector2).y * px)), 1), Image.INTERPOLATE_BILINEAR)
@@ -287,6 +412,10 @@ static func page(items: Array, room: Vector2, seed: int, outlines: Dictionary = 
 		var at := {"x": float(x0) / px, "y": y, "w": float(part.get_width()) / px, "h": (sizes[k] as Vector2).y, "strokes": strokes,
 			"seconds": seconds, "lead": lead, "ink": ink, "lines": maxi(int(round((sizes[k] as Vector2).y / (TableInk.LINE_PT * WORDS_TALLER))), 1),
 			"anchors": {}}
+		if not (written[k] as Dictionary).is_empty():
+			# (a pen's words: their strokes from the block's top left)
+			at["ox"] = float(x0) / px + float(TableInk.PAD_PX) / px
+			at["oy"] = y + float(TableInk.PAD_PX) / px
 		if not rec.is_empty():
 			at["ox"] = float(x0) / px + float(TableInk.PAD_PX) / px
 			at["oy"] = y + float(TableInk.PAD_PX) / px + float(rec.get("h", 0.0))

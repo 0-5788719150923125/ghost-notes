@@ -152,10 +152,10 @@ func _card() -> void:
 		"its block round trips without a hand: the document carries the Medium card's Handwriting")
 	director.set_hand("random")
 	var drawn := String((card.call("document") as Dictionary)["hand"])
-	_check(LetterHand.HANDS.has(drawn) and String((card.call("document") as Dictionary)["hand"]) == drawn,
+	_check(Handwriting.HANDS.has(drawn) and String((card.call("document") as Dictionary)["hand"]) == drawn,
 		"Random is drawn from the note's own number, the same each time (%s)" % drawn)
 	director.set("hand", "comic")
-	_check(String((card.call("document") as Dictionary)["hand"]) == LetterHand.DEFAULT, "a hand it does not know is Kalam (the control)")
+	_check(String((card.call("document") as Dictionary)["hand"]) == Handwriting.DEFAULT, "a hand it does not know is Kalam (the control)")
 	director.set_hand("caveat")
 	director.set_medium("letter")
 	as_letter.call("apply", {"format": "letter", "hand": "caveat", "seed": 7, "mood": "dusk"})
@@ -164,7 +164,7 @@ func _card() -> void:
 		and String(whole["mood"]) == "dusk" and not whole.has("camera") and not whole.has("scene_hold"),
 		"the Medium's one block holds the format, the hand and the rows' keys - and nothing the letter does not use")
 	# the hand back to the default the walk is compared against (the Medium card's own, which the walk follows)
-	director.set_hand(LetterHand.DEFAULT)
+	director.set_hand(Handwriting.DEFAULT)
 	card.apply({})
 	_check(int(card.call("desk_seed")) == 1, "without a note, its desk is the first")
 	var walk: TextWalk = load("res://src/letter/letter_walk.gd").new(card)

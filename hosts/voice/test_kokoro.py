@@ -870,34 +870,88 @@ def test_a_speaker_is_its_pack_and_accent():
 
 # -- 11. blends ------------------------------------------------------------
 
-# The lines src/voice/voice_blend.gd is held to read the same (tests/voice/voice_blend_check.gd).
+# The lines src/voice/voice_blend.gd is held to read the same (tests/voice/voice_blend_check.gd):
+# line -> (method, accent, voices, breath, push, noise)
 BLEND_LINES = {
-    "mix: af_heart 2, bf_emma 1": ("mix", "", [("af_heart", 2.0, "both"), ("bf_emma", 1.0, "both")]),
+    "mix: af_heart 2, bf_emma 1": (
+        "mix", "", [("af_heart", (2.0,), "both"), ("bf_emma", (1.0,), "both")], (0.0,), (0.0,), None),
     "split british: af_heart sound, bf_emma 0.5 delivery": (
-        "split", "british", [("af_heart", 1.0, "sound"), ("bf_emma", 0.5, "delivery")]),
-    "Swirl welsh: af_heart 99, bf_emma -3, am_puck": (
-        "mix", "", [("af_heart", 10.0, "both"), ("bf_emma", 0.1, "both"), ("am_puck", 1.0, "both")]),
+        "split", "british", [("af_heart", (1.0,), "sound"), ("bf_emma", (0.5,), "delivery")], (0.0,), (0.0,), None),
+    "Swirl welsh: af_heart 999, bf_emma -3, am_puck": (
+        "mix", "", [("af_heart", (100.0,), "both"), ("bf_emma", (0.0,), "both"), ("am_puck", (1.0,), "both")],
+        (0.0,), (0.0,), None),
+    "max: am_santa 60/50/30, af_nicole 40/50/70; breath 0.2/0.6; noise wander 0.3 17": (
+        "max", "", [("am_santa", (60.0, 50.0, 30.0), "both"), ("af_nicole", (40.0, 50.0, 70.0), "both")],
+        (0.2, 0.6), (0.0,), ("wander", 0.3, 17)),
+    "mix: bf_emma; breath 0.7; push -2; noise fixed 0.5": (
+        "mix", "", [("bf_emma", (1.0,), "both")], (0.7,), (-1.0,), ("fixed", 0.5, 0)),
+    "mix: af_heart, bf_emma; breath x/1; noise hiss 0.4; tremble 3": (
+        "mix", "", [("af_heart", (1.0,), "both"), ("bf_emma", (1.0,), "both")], (0.0,), (0.0,), None),
 }
+# points -> {u: value}: the same curve read in voice_blend.gd's `curve_at`
+CURVE_POINTS = {
+    (0.0, 1.0): {0.25: 0.25},
+    (0.0, 1.0, 0.0): {0.25: 0.625, 0.5: 1.0, 0.75: 0.625},
+    (60.0, 50.0, 30.0, 35.0, 30.0): {0.1: 56.48, 0.3: 46.0, 0.6: 31.76, 0.9: 32.48},
+    (0.0, 0.0, 1.0, 1.0): {0.4: 0.104, 0.5: 0.5, 0.6: 0.896},
+    (0.7,): {0.4: 0.7},
+}
+
+
+def _axes_table():
+    """A made-up kokoro_axes.json: breath along the first number, push along the last, a spread of two."""
+    breath = [0.0] * 256
+    breath[0] = 1.0
+    push = [0.0] * 256
+    push[255] = 1.0
+    spread = [[0.0] * 256, [0.0] * 256]
+    spread[0][1], spread[1][2] = 1.0, 1.0
+    return {"breath": {"axis": breath, "sigma": 0.5}, "push": {"axis": push, "sigma": 0.25},
+            "spread": {"axes": spread, "sd": [2.0, 1.0]}}
 
 
 @check
 def test_a_blend_line_is_read():
-    """The line voice_blend.gd writes, read as it reads it: the method, an accent, each reader's weight and part -
-    an unknown method a mix, an unknown accent unsaid, a weight clamped. THE CONTROLS: one reader, no colon and
-    nothing are no blend."""
+    """The line voice_blend.gd writes, read as it reads it: the method, an accent, each reader's weights (one, or
+    points across a paragraph) and part, the lanes and the noise - an unknown method a mix, an unknown accent, clause
+    or number unsaid, a number clamped. One reader shaped is a voice. THE CONTROLS: one reader unshaped, no colon,
+    noise of nothing and nothing are no voice."""
     import blend
 
-    for line, (method, accent, voices) in BLEND_LINES.items():
-        eq(blend.parse(line), {"method": method, "accent": accent, "voices": voices}, repr(line))
-    for line in ("mix: af_heart", "af_heart, bf_emma", "", None):
-        eq(blend.parse(line), None, f"CONTROL: {line!r} is no blend")
+    for line, (method, accent, voices, breath, push, noise) in BLEND_LINES.items():
+        eq(blend.parse(line), {"method": method, "accent": accent, "voices": voices, "breath": breath, "push": push,
+                               "noise": noise}, repr(line))
+    for line in ("mix: af_heart", "af_heart, bf_emma", "mix: af_heart; noise fixed 0", "", None):
+        eq(blend.parse(line), None, f"CONTROL: {line!r} is no voice")
+
+
+@check
+def test_a_curve_is_read_across_a_paragraph():
+    """Points evenly across a paragraph, read by a monotone cubic: through every point, never past two neighbors,
+    one point flat. THE CONTROL: a straight line between two points is a straight line."""
+    import blend
+
+    for points, want in CURVE_POINTS.items():
+        for u, v in want.items():
+            eq(round(blend.curve_at(points, u), 6), v, f"{points} at {u}")
+    pts = (60.0, 50.0, 30.0, 35.0, 30.0)
+    ok(all(abs(blend.curve_at(pts, k / 4) - pts[k]) < 1e-9 for k in range(5)), "through every point")
+    lows = [blend.curve_at((0.0, 0.0, 1.0, 1.0), u / 100) for u in range(101)]
+    ok(min(lows) >= 0.0 and max(lows) <= 1.0, "never past its points (a share never under nothing)")
+    b = blend.parse("mix: af_heart 100/0, bf_emma 0/100")
+    eq([round(w, 6) for _r, w, _p in blend.at(b, 0.25)["voices"]], [75.0, 25.0], "a reader's weight at its place")
+    eq([w for _r, w, _p in blend.at(b, None)["voices"]], [50.0, 50.0], "...or across the paragraph, its mean")
+    eq([w for _r, w, _p in blend.at(blend.parse("mix: af_heart 0, bf_emma 0"), 0.5)["voices"]], [1.0, 1.0],
+       "every weight nothing: each counts once")
+    ok(blend.moving(b) and not blend.moving(blend.parse("mix: af_heart 2, bf_emma")), "a curve moves; a weight does not")
 
 
 @check
 def test_the_methods_make_a_pack():
     """mix: the weighted average, number by number; spherical: each half's length the readers' own (weighted) where
     the plain mix's is shorter; split: the sound side's timbre with the delivery side's prosody, a side nobody is on
-    everyone's; max and min, number by number. A reader mixed with itself is itself, by any method."""
+    everyone's; max and min: equal weights each number the largest and the smallest, a weight leaning it toward its
+    reader. A reader mixed with itself is itself, by any method."""
     import numpy as np
 
     import blend
@@ -921,39 +975,84 @@ def test_the_methods_make_a_pack():
        "split: the one's sound with the other's delivery")
     sp = blend.make("split", [a, b], [1, 1], ["sound", "sound"])
     ok(np.allclose(sp[..., 128:], (a[..., 128:] + b[..., 128:]) / 2, atol=1e-6), "a side nobody is on takes everyone")
-    ok(np.array_equal(blend.make("max", [a, b], [5, 1], both), np.maximum(a, b))
-       and np.array_equal(blend.make("min", [a, b], [5, 1], both), np.minimum(a, b)),
-       "max and min: each number the largest and the smallest, weights unused")
+    ok(np.allclose(blend.make("max", [a, b], [1, 1], both), np.maximum(a, b), atol=1e-6)
+       and np.allclose(blend.make("min", [a, b], [2, 2], both), np.minimum(a, b), atol=1e-6),
+       "max and min at equal weights: each number the largest and the smallest")
+    lean = blend.make("max", [a, b], [5, 1], both)
+    ok(np.allclose(lean, np.maximum(a, b) + (5 * a + b) / 6 - (a + b) / 2, atol=1e-5),
+       "...a weight leans it toward its reader")
+    ok(not np.allclose(lean, np.maximum(a, b), atol=1e-3), "CONTROL: an unequal max is not the plain max")
     for method in blend.METHODS:
         ok(np.allclose(blend.make(method, [a, a], [2, 1], both), a, atol=1e-5), f"{method}: a reader with itself is itself")
 
 
 @check
+def test_a_voice_is_shaped():
+    """breath and push move the style along their axes by their sigmas (BREATH_SIGMAS, PUSH_SIGMAS) at their place
+    across the paragraph; noise is a draw over the spread, the same everywhere when fixed, easing between paragraphs
+    when it wanders, another for another seed. THE CONTROLS: nothing shaped moves nothing, and no axes move nothing."""
+    import numpy as np
+
+    import blend
+
+    table = _axes_table()
+    b = blend.parse("mix: bf_emma; breath 0/1; push -1")
+    off = blend.offset(b, 0.5, 0.0, table)
+    ok(abs(off[0] - 0.5 * blend.BREATH_SIGMAS * 0.5) < 1e-9 and abs(off[255] + blend.PUSH_SIGMAS * 0.25) < 1e-9,
+       "breath at its place, push all the way down", f"{off[0]:.4f} {off[255]:.4f}")
+    ok(not np.any(blend.offset(blend.parse("mix: af_heart, bf_emma"), 0.5, 0.0, table)), "CONTROL: nothing shaped")
+    ok(not np.any(blend.offset(b, 0.5, 0.0, {})), "CONTROL: no axes, nothing moved")
+    fixed = blend.parse("mix: bf_emma; noise fixed 1 4")
+    one, two = blend.offset(fixed, 0.0, 0.0, table), blend.offset(fixed, 1.0, 7.5, table)
+    ok(np.allclose(one, two) and np.any(one[1:3]) and not np.any(one[3:]), "fixed noise: one draw, within the spread")
+    ok(not np.allclose(one, blend.offset(blend.parse("mix: bf_emma; noise fixed 1 5"), 0.0, 0.0, table)),
+       "another seed, another draw")
+    wander = blend.parse("mix: bf_emma; noise wander 1 4")
+    near = [blend.offset(wander, 0.0, p, table) for p in (2.999, 3.0, 3.001)]
+    ok(np.allclose(near[0], near[1], atol=1e-3) and np.allclose(near[1], near[2], atol=1e-3),
+       "wandering noise eases on through a paragraph's end")
+    ok(not np.allclose(blend.offset(wander, 0.0, 3.0, table), blend.offset(wander, 0.0, 4.0, table)),
+       "...and is somewhere else a paragraph on")
+    half = blend.offset(blend.parse("mix: bf_emma; noise fixed 0.5 4"), 0.0, 0.0, table)
+    ok(np.allclose(half, one / 2), "half the noise is half as far")
+
+
+@check
 def test_a_blends_accent_and_level():
-    """Read in its heaviest reader's accent (a split's heaviest delivery's; a tie the first) unless it says one;
-    played at its readers' weighted geometric mean gain, a split's sound side's alone."""
+    """Read in its heaviest reader's accent across the paragraph (a split's heaviest delivery's; a tie the first)
+    unless it says one; played at its readers' weighted geometric mean gain where it stands, a split's sound side's
+    alone."""
     import blend
 
     us_gb = ["US", "GB"]
     eq(blend.british(blend.parse("mix: af_heart 2, bf_emma"), us_gb), False, "the heaviest reader's accent")
     eq(blend.british(blend.parse("mix: af_heart, bf_emma 2"), us_gb), True, "...whichever it is")
     eq(blend.british(blend.parse("mix: af_heart, bf_emma"), us_gb), False, "a tie, the first")
+    eq(blend.british(blend.parse("mix: af_heart 30/30, bf_emma 10/45"), us_gb), False,
+       "heaviest across the paragraph, never where it ends")
     eq(blend.british(blend.parse("mix british: af_heart 5, bf_emma"), us_gb), True, "an accent said is the accent")
     eq(blend.british(blend.parse("split: bf_emma 5 sound, af_heart delivery"), ["GB", "US"]), False,
        "in a split, the delivery's")
     eq(round(blend.gain(blend.parse("mix: af_heart, bf_emma"), [1.0, 4.0]), 6), 2.0, "the geometric mean of the gains")
     eq(round(blend.gain(blend.parse("mix: af_heart 3, bf_emma"), [1.0, 16.0]), 6), 2.0, "...by weight")
+    moving = blend.parse("mix: af_heart 100/0, bf_emma 0/100")
+    eq([round(blend.gain(moving, [1.0, 4.0], u), 6) for u in (0.0, 0.5, 1.0)], [1.0, 2.0, 4.0], "...where it stands")
     eq(round(blend.gain(blend.parse("split: af_heart sound, bf_emma delivery"), [1.0, 4.0]), 6), 1.0,
        "a split's level is its sound's")
-    eq(round(blend.gain(blend.parse("max: af_heart 3, bf_emma"), [1.0, 4.0]), 6), 2.0, "max weighs every reader once")
+    eq(round(blend.gain(blend.parse("max: af_heart 3, bf_emma"), [1.0, 16.0]), 6), 2.0, "max by weight too")
 
 
 @check
 def test_a_request_reads_in_its_blend():
-    """A request's `blend` reads in a pack made of the checkpoint's own (`_cfg_of`), once, at its readers' level, and
-    that pack's row is the style the graph is fed; a reader it does not hold is left out. THE CONTROLS: no blend, a
-    blend naming one reader it holds, and a voice taught here read the speaker's own pack."""
+    """A request's `blend` reads in a pack made of the checkpoint's own (`_cfg_of`), once for each place it stands
+    across a paragraph (`plan_u`), at its readers' level there, and that pack's row is the style the graph is fed; a
+    reader it does not hold is left out; one reader shaped is that reader moved. Given where its sentence stands
+    (`plan_span`), a blend that moves is fed a row a token through the graph that moves. THE CONTROLS: no blend, a
+    blend naming one reader it holds and shaping nothing, and a voice taught here read the speaker's own pack; a blend
+    that never moves, or no span, or no graph to move in, reads a sentence at a time."""
     import numpy as np
+
+    import blend
     from backends.kokoro import BLENDS_KEPT, PACKS, KokoroBackend
 
     at = {row[0]: i for i, row in enumerate(PACKS)}
@@ -970,15 +1069,30 @@ def test_a_request_reads_in_its_blend():
     cfg = k._cfg_of("kokoro", {"speaker": 0, "blend": "mix: af_heart 3, bf_emma 1"})
     ok(np.allclose(cfg["kokoro"]["pack"], 1.5), "a 3:1 mix of packs of 1 and 3 is 1.5")
     eq((cfg["espeak"]["voice"], cfg["kokoro"]["british"]), ("en-us", False), "read in its heaviest reader's accent")
-    ok(k._cfg_of("kokoro", {"blend": "mix: af_heart 3, bf_emma 1"}) is cfg, "made once")
+    ok(k._cfg_of("kokoro", {"blend": "mix: af_heart 3, bf_emma 1", "plan_u": 0.9}) is cfg,
+       "made once, wherever it is read")
     gain = k._leveled("kokoro", {}, k._cfg_of("kokoro", {"blend": "mix: af_heart, bf_emma"}), None)["level_gain"]
     eq(round(gain, 6), 2.0, "played at its readers' level")
+    moving = "mix: af_heart 100/0, bf_emma 0/100"
+    ends = [k._cfg_of("kokoro", {"blend": moving, "plan_u": u}) for u in (0.0, 1.0)]
+    ok(np.allclose(ends[0]["kokoro"]["pack"], 1.0) and np.allclose(ends[1]["kokoro"]["pack"], 3.0),
+       "a blend that moves reads where its sentence stands in the paragraph")
+    eq([round(k._leveled("kokoro", {}, c, None)["level_gain"], 6) for c in ends], [1.0, 4.0], "...at the level there")
+    blend._axes = _axes_table()
+    try:
+        shaped = k._cfg_of("kokoro", {"speaker": 0, "blend": "mix: bf_emma; breath 1"})
+        pack = shaped["kokoro"]["pack"]
+        ok(abs(float(pack[0, 0, 0]) - (3.0 + blend.BREATH_SIGMAS * 0.5)) < 1e-5 and np.allclose(pack[..., 1:], 3.0),
+           "one reader shaped is that reader moved along the axis")
+        eq(round(k._leveled("kokoro", {}, shaped, None)["level_gain"], 6), 4.0, "...at that reader's level")
+    finally:
+        blend._axes = None
     ok(np.allclose(k._cfg_of("kokoro", {"blend": "mix: af_heart, bf_emma, af_nobody"})["kokoro"]["pack"], 2.0),
        "a reader the checkpoint does not hold is left out")
     emma = at["bf_emma"]
     ok(k._cfg_of("kokoro", {"speaker": emma}) is k._speaker("kokoro", emma), "CONTROL: no blend is the speaker's pack")
     ok(k._cfg_of("kokoro", {"speaker": emma, "blend": "mix: bf_emma, af_nobody"}) is k._speaker("kokoro", emma),
-       "CONTROL: one reader it holds is no blend")
+       "CONTROL: one reader it holds, shaped by nothing, is no blend")
     ok(k._blended("kokoro-someone", "mix: voice, voice") is None, "CONTROL: a voice taught here is never blended")
     for n in range(BLENDS_KEPT + 3):
         k._cfg_of("kokoro", {"blend": f"mix: af_heart {1 + n}, bf_emma"})
@@ -992,6 +1106,41 @@ def test_a_request_reads_in_its_blend():
                       "pause_scale": 0.0, "trail": 0.0})
     ok(np.allclose(sess.fed[0]["style"], 3.0), "the graph is fed the blend's style",
        f"{float(sess.fed[0]['style'].mean()):.2f}")
+    # a blend that moves, given where its sentence stands, is fed a row a token through the graph that moves
+    moved = _Session()
+    k._moving_graph = lambda family: moved
+    with tempfile.TemporaryDirectory() as td:
+        k.synthesize("", "kokoro", str(Path(td) / "a.wav"),
+                     {"tokens": [dict(t) for t in SENTENCE], "blend": "mix: af_heart 100/0, am_puck 0/100",
+                      "plan_span": [0.0, 1.0], "phonemizer": "ghost", "pause_scale": 0.0, "trail": 0.0})
+    rows = moved.fed[0]["style"] if moved.fed else np.zeros((1, 256))
+    ok(rows.shape == (len(moved.fed[0]["ids"]), 256) if moved.fed else False,
+       "a blend that moves is fed a row a token, through the graph that moves", str(rows.shape))
+    ok(abs(float(rows[0].mean()) - 1.0) < 0.05 and abs(float(rows[-1].mean()) - 5.0) < 0.05
+       and np.all(np.diff(rows.mean(axis=1)) >= -1e-6),
+       "...each token where it stands: heart at the first word, puck at the last, never back",
+       f"{float(rows[0].mean()):.2f} .. {float(rows[-1].mean()):.2f}")
+    cfg = k._cfg_of("kokoro", {"blend": "mix: af_heart 100/0, am_puck 0/100", "plan_span": [0.5, 0.75]})
+    eq(cfg["kokoro"]["moving"]["span"], (0.5, 0.75), "the span it is read across")
+    ok("moving" not in k._cfg_of("kokoro", {"blend": "mix: af_heart 3, am_puck"
+                                             , "plan_span": [0.0, 1.0]})["kokoro"],
+       "CONTROL: a blend that never moves is read a sentence at a time")
+    ok("moving" not in k._cfg_of("kokoro", {"blend": "mix: af_heart 100/0, am_puck 0/100"})["kokoro"],
+       "CONTROL: without a span, a sentence at a time")
+    k._moving_graph = lambda family: None
+    sess.fed.clear()
+    with tempfile.TemporaryDirectory() as td:
+        k.synthesize("", "kokoro", str(Path(td) / "a.wav"),
+                     {"tokens": [dict(t) for t in SENTENCE], "blend": "mix: af_heart 100/0, am_puck 0/100",
+                      "plan_span": [0.0, 1.0], "phonemizer": "ghost", "pause_scale": 0.0, "trail": 0.0})
+    ok(sess.fed and sess.fed[0]["style"].shape == (1, 256), "CONTROL: with no graph to move in, the stock graph and "
+       "one style a sentence")
+    rows = blend.rows_along(blend.parse("mix: af_heart 2, am_puck"), [np.full(256, 1.0), np.full(256, 4.0)],
+                            [0.0, 0.5, 1.0])
+    ok(np.allclose(rows, 2.0), "rows along a blend that never moves are its one style")
+    ok(Path(blend.AXES).is_file() and len(blend.axes()["breath"]["axis"]) == 256
+       and len(blend.axes()["spread"]["axes"]) == len(blend.axes()["spread"]["sd"]),
+       "the axes measured off the readers are beside blend.py, whole")
 
 
 def main() -> int:

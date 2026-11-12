@@ -41,8 +41,8 @@ voice; a voice of one speaker averages them all and draws among them sentence by
 part alone (93 minutes from 19 videos) it was misheard half as often (15.9%) and held its register (its pitch from
 sentence to sentence varied 9 Hz, against 17). So every candidate is measured as it is cut (`signature`) and the
 ones kept are chosen together (`choose`), by measurement - never by a list of videos:
-- CLEAN: its speech CLEAN dB over its own pauses - or, where none of theirs is (2026-10-26: an ASMR channel's soft
-  speech over a high-gain microphone's hiss, a median 19 dB, 30 for none of 253), within CLEAN_FROM_BEST of their
+- CLEAN: its speech CLEAN dB over its own pauses - or, where none of theirs is (soft speech over a hissy
+  microphone, a median 19 dB, where a fixed 30 keeps none), within CLEAN_FROM_BEST of their
   cleanest (the 90th percentile): what is noisy is noisy against how they record;
 - PACED AS SPEECH: RATE characters a second of loud sound (a music bed under it is loud with no words; soft speech
   has few loud frames, so its rate reads high - 25 a second their median, a quarter over 34);

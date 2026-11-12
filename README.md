@@ -18,7 +18,7 @@ The macOS build is not notarized, so macOS refuses it the first time: open it fr
 
 ## description
 
-Ghost Notes is a notes app made with [Godot](https://godotengine.org/) 4.7, in which a note becomes whatever is attached to it. With a song it is a spectral audio visualizer - procedural and deterministic, so the same song always draws the same show, with no generative model in the render path. With a script it is a reading, in a voice synthesized from first principles or a small local neural one; with a show's brief, a show at a table made by AI agents, whatever the brief says is done there - cards read (a tarot reading, a box of baseball cards, a card game's deck, flashcards, a tin of recipe cards), or things made and worked on the table, or both; with a clip, a chroma-key effects editor. Any show exports to video. On a phone, it is a notes app and nothing more.
+Ghost Notes is an app made with [Godot](https://godotengine.org/) 4.7, in which a note becomes whatever is attached to it. With a song it is a spectral audio visualizer - procedural and deterministic, so the same song always draws the same show, with no generative model in the render path. With a script it is a reading, in a voice synthesized from first principles or a small local neural one; with a show's brief, a show at a table made by AI agents, whatever the brief says is done there - cards read (a tarot reading, a box of baseball cards, a card game's deck, flashcards, a tin of recipe cards), or things made and worked on the table, or both; with a clip, a chroma-key effects editor. Any show exports to video. On a phone, it is a notes app and nothing more.
 
 <details>
 
@@ -30,7 +30,7 @@ Ghost Notes is built from registries. Each page below is generated from one, lis
 
 - [Components](docs/components.md) (17 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](docs/scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](docs/media.md) (10) - what the show is carried on.
+- [Media](docs/media.md) (11) - what the show is carried on.
 - [Look filters](docs/filters.md) (8) - the post-process over the whole picture.
 - [Layers](docs/layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.

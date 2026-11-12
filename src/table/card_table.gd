@@ -46,13 +46,13 @@ const FRAMES := {
 ## A written card ([constant FRAMES] `written`): the hand its writing is in and its stock's ruling, each the producer's. No picture on
 ## it: nothing is painted for one.
 const HANDS := {
-	"neat": {"file": "res://fonts/hands/Kalam-Regular.ttf", "scale": 1.0, "about": "a careful, rounded hand - a cook copying a recipe out for keeps"},
-	"quick": {"file": "res://fonts/hands/Caveat-Variable.ttf", "scale": 1.3, "about": "a quick, slanted, looping hand - a note dashed off, a recipe taken down over the phone"},
-	"print": {"file": "res://fonts/hands/PatrickHand-Regular.ttf", "scale": 1.1, "about": "plain printed capitals and small letters, felt-tip or ballpoint - a label, a class's card"},
+	"neat": {"file": "res://fonts/hands/Kalam-Regular.ttf", "strokes": "kalam", "scale": 1.0, "about": "a careful, rounded hand - a cook copying a recipe out for keeps"},
+	"quick": {"file": "res://fonts/hands/Caveat-Variable.ttf", "strokes": "caveat", "scale": 1.3, "about": "a quick, slanted, looping hand - a note dashed off, a recipe taken down over the phone"},
+	"print": {"file": "res://fonts/hands/PatrickHand-Regular.ttf", "strokes": "patrick", "scale": 1.1, "about": "plain printed capitals and small letters, felt-tip or ballpoint - a label, a class's card"},
 	"typed": {"file": "res://fonts/cards/CourierPrime-Regular.ttf", "scale": 0.92, "about": "a typewriter - a typed card, an office's or a community cookbook's"},
 }
 ## (A hand's `scale`: its size on a rule against the others' - Caveat's small letters set at Kalam's size read a size
-## smaller.)
+## smaller. Its `strokes`: the hand a pen writes it in ([Handwriting]); a typewriter's has none, and is set.)
 const RULINGS := {
 	"ruled": "an index card's ruling: a red line under the title, faint blue lines under the writing",
 	"plain": "plain stock, the writing kept level by eye",
@@ -279,7 +279,7 @@ static func game_camera(seed: int) -> Dictionary:
 ## The episode's layout, drawn from [param rng] in a fixed order: the camera (`camera`, `fov`, `pitch`), the lamp (`lamp`, `lamp_energy`),
 ## where the deck is kept (`deck`) and shuffled (`mid`). The table draws it as it is built; [method layout_of] lets a prompt know it first.
 static func sample_layout(rng: RandomNumberGenerator) -> Dictionary:
-	# shallow enough that the room always shows past the table's far edge (at 48 it was a sliver)
+	# shallow enough that the room always shows past the table's far edge
 	var pitch := rng.randf_range(34.0, 42.0)
 	var dist := rng.randf_range(0.5, 0.56)
 	var yaw := deg_to_rad(rng.randf_range(-3.5, 3.5))

@@ -1,7 +1,8 @@
 extends Node
 
 ## Smoke test for the picture settings in the Generative panel - the Medium card's Format picker, the film controls
-## and the Look filters: builds the whole panel and reads the controls back. Restores the setting it found and
+## and the Look filters: builds the whole panel and reads the controls back. A table show's Medium card offers Table's
+## formats alone and keeps its pick in its block, never the remembered medium (the control: a reading's offers neither). Restores the setting it found and
 ## flushes that restore to disk (the debounce would not land before the check quits).
 ##
 ## Run: tests/run_boot_probe.sh tests/media/medium_pick_check.gd 90
@@ -119,6 +120,31 @@ func _run() -> void:
 		pic._format_pick.select(maxi(0, Medium.pickable().find(cam)))
 		ed._sync_medium_rows()
 		pic.sync_medium()
+	# A table show's Medium ([MediumCard] handed `provides` an episode): Table's formats alone, a pick its block and never the
+	# remembered medium; a block naming another format kept as it was until one of Table's is picked. The control: a reading's
+	# card offers neither of Table's.
+	var reading_keys := Medium.offered(["audio", "reading"])
+	if Medium.offered(["audio", "reading", "episode"]) != ["table", "desk"] or reading_keys.has("table") or reading_keys.has("desk"):
+		print("vpick: FAILED - a table show is offered %s, a reading %s" % [str(Medium.offered(["audio", "reading", "episode"])), str(reading_keys)])
+		fails += 1
+	var remembered := Director.medium
+	var at_table := MediumCard.new({"reading": true, "provides": ["text", "audio", "reading", "episode"], "blocks": {}})
+	at_table._pick(at_table._keys.find("desk"))
+	if at_table._keys != ["table", "desk"] or String(at_table.capture().get("format", "")) != "desk" or Director.medium != remembered:
+		print("vpick: FAILED - a table show's pick: keys %s, block %s, remembered '%s' (was '%s')"
+			% [str(at_table._keys), str(at_table.capture()), Director.medium, remembered])
+		fails += 1
+	at_table.free()
+	var held := {"format": "comic", "camera": 1.4}
+	var kept := MediumCard.new({"reading": true, "provides": ["text", "audio", "reading", "episode"], "blocks": {"medium": held}})
+	var before := str(kept.capture())
+	kept._pick(kept._keys.find("desk"))
+	if before != str(held) or String(kept.capture().get("format", "")) != "desk":
+		print("vpick: FAILED - a block naming another format on a table show: %s, then %s" % [before, str(kept.capture())])
+		fails += 1
+	else:
+		print("vpick: a table show offers its table and a desk; another format's block is kept until one is picked")
+	kept.free()
 	# The look filters, and the same three questions: a row per registry entry, each showing the live setting, and a
 	# tick that actually reaches the Director.
 	if (ed._block_cards["look"] as LookCard)._filter_rows.size() != Filters.REGISTRY.size():

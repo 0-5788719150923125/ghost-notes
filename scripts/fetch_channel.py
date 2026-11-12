@@ -8,7 +8,7 @@
 
 <channel> is a handle (`@EphemeralRift`) or a channel's link. Its Videos tab is read newest first - the tab
 YouTube keeps Shorts and live streams out of - and anything still to premiere or not public is passed over,
-until N are found. Every length is taken (2026-10-27: a two-minute video is another sound and setting to
+until N are found. Every length is taken (a short video is another sound and setting to
 learn from); --min-minutes passes over the shorter. Each is fetched as the Actor card fetches a link
 (src/likeness/actor_sources.gd, `fetch_args`): up to 1080p, H.264 and AAC where the site has them, its
 automatic captions (json3: a time for every word) and its details beside it, named
@@ -21,14 +21,12 @@ MADE TO RUN OVERNIGHT AND AGAIN:
   the Actor card compares titles, its "(1080p, h264)" tag aside) and written into the archive.
 - A video that fails is tried once more at the end; the rest go on. A partial download is carried on
   from where it stopped (`--continue`).
-- A VIDEO'S CAPTIONS NEVER COST IT THE VIDEO (2026-10-27: "HTTP Error 429: Too Many Requests" on the captions of
-  every captioned video, and so none of them fetched): yt-dlp asks for YouTube's captions as a browser would,
+- A video's captions never cost it the video: yt-dlp asks for YouTube's captions as a browser would,
   through curl_cffi - without it they are refused - and a caption refused is a warning, the video fetched all
   the same (`--ignore-errors`: a video that fails still fails); its captions are asked for alone at the end. A
   video left without them is heard by the Actor card's Hear instead.
 - It waits --wait seconds (give or take a third) between videos, and a second between requests.
-- WHEN YOUTUBE ASKS IF IT IS A BOT ("Sign in to confirm you're not a bot" - after a dozen videos in a row,
-  2026-10-23), it waits --backoff seconds (an hour: fifteen minutes was not enough) before the next, rather
+- When YouTube asks if it is a bot ("Sign in to confirm you're not a bot", after a dozen videos in a row), it waits --backoff seconds (an hour: fifteen minutes is not enough) before the next, rather
   than meeting the same answer for every one left; that video is tried again at the end. Signed in, it is asked less: --cookies-from-browser reads the
   browser's own cookies (firefox, chrome, chromium, brave, edge, vivaldi, opera, safari; `name:profile` for a
   profile), --cookies a cookies.txt - the same as yt-dlp's options, handed to it. The cookies stay where they

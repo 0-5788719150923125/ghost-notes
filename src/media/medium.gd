@@ -42,7 +42,9 @@ class_name Medium
 ##   frames  the frames it can be shown in (next/notes.md, "Two frames"): landscape 16:9 for every
 ##           one, portrait 9:16 only where it was measured to work.
 ##   needs   optional: what it needs from the note beyond a sound to cut on. Formats that show a
-##           reading (its words, timed by the voice) are not offered for a note with only a song.
+##           reading (its words, timed by the voice) are not offered for a note with only a song. An
+##           `episode` (a table show's, which Table makes): offered to a note with one, and such a note
+##           is offered nothing else ([method offered]).
 ##   card    optional: the format's own rows, by path - a script answering `for_note(ctx)`,
 ##           `capture()` and `apply(block)`, built into the Medium card under the shared rows. What it
 ##           keeps is part of the Medium's one block; what it hands the reading (its `walk`,
@@ -50,10 +52,9 @@ class_name Medium
 ##   capabilities  optional: what the format asks of the platform ([Capabilities]); a format
 ##           impossible here is grayed in the picker, saying why.
 ##   intro_tip, outro_tip  optional: what the Intro & outro card's holds say under this format.
-##   mode    optional: the component it belongs to, which shows its readings in it (the card table is
-##           Table's, drawn from an episode Table produced). Never offered by a picker
-##           ([method pickable]) nor remembered as the setting; its component pins it for the session
-##           (see [member Director.medium_override]).
+##   mode    optional: the component it belongs to, which shows its readings in it (the table and the desk are
+##           Table's, drawn from an episode Table produced). Never remembered as the setting ([method pickable]);
+##           its component pins it for the session (see [member Director.medium_override]).
 ##   bare    optional: it takes no settings - the Medium card shows nothing under the picker and picking
 ##           it resets the Director's dials to their defaults (see [AutoMedium]).
 ##   blurb   one line, for the picker's tooltip and docs/media.md - one string literal, not a `+`
@@ -90,9 +91,14 @@ const REGISTRY := {
 		"intro_tip": "Seconds the desk holds, its title over it; then the desk at rest, a few seconds more, before the first word.",
 		"outro_tip": "Seconds held after the last word, the desk in the dark, fading picture and sound out together.",
 		"blurb": "One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear (every voice but the room's heard through one), a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk."},
-	"table": {"label": "Card table", "script": "res://src/table/table.gd",
-		"uses": ["opening"], "frames": ["landscape"], "mode": "table",
-		"blurb": "A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Table mode's own medium - its deck, pictures and spread come from the episode the agents produced."},
+	"table": {"label": "Table", "script": "res://src/table/table.gd",
+		"uses": ["opening"], "frames": ["landscape"], "mode": "table", "needs": ["episode"],
+		"blurb": "A show at a table the agents built, seen from the chair: its things, its light and its room, the cards drawn and read, the work done with the table's things - every move from the episode the agents produced."},
+	"desk": {"label": "Desk", "script": "res://src/desk/episode_desk.gd",
+		"uses": ["opening"], "frames": ["landscape"], "mode": "table", "needs": ["episode"],
+		"intro_tip": "Seconds the desk holds before the first line is written, the episode's title over it.",
+		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together.",
+		"blurb": "A lesson at a desk, seen close from the chair: a legal pad under a lamp or candles, and a pen writing what the episode's work writes - formulas, drawings, words in a hand - stroke by stroke as the words are said, pointing at what is talked about, turning a page over the binding when it is full. The desk is the Letter's."},
 	"likeness": {"label": "Likeness", "script": "res://src/likeness/likeness.gd",
 		"uses": [], "frames": ["landscape"], "needs": ["reading"], "mode": "likeness",
 		"blurb": "An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium."},
@@ -105,12 +111,18 @@ static func takes_settings(key: String) -> bool:
 
 
 ## The media a picker offers a note that provides [param have] (a note with a song provides
-## "audio"; a reading, "reading" too), in registry order - [method pickable] less what needs more.
+## "audio"; a reading, "reading" too), in registry order - [method pickable] less what needs more. A
+## table show's note ("episode") is offered Table's formats and only those: its words are an episode's,
+## which no other format reads.
 static func offered(have: Array) -> Array:
 	var out: Array = []
-	for k in pickable():
+	var episodic := have.has("episode")
+	for k in REGISTRY:
+		var needs: Array = Registry.field(REGISTRY, k, "needs", []) as Array
+		if needs.has("episode") != episodic or (not episodic and not mode_of(k).is_empty()):
+			continue
 		var ok := true
-		for n in Registry.field(REGISTRY, k, "needs", []) as Array:
+		for n in needs:
 			if not have.has(n):
 				ok = false
 		if ok:

@@ -142,22 +142,28 @@ static func size_of(rec: Dictionary) -> Vector2:
 	return Vector2(maxf(float(rec.get("w", 0.0)), 1.0), maxf(float(rec.get("h", 0.0)) + float(rec.get("d", 0.0)), 1.0))
 
 
-## Record [param rec] written by the hand seeded [param seed], at [param px] pixels a TeX point: an image whose R is the
-## ink's coverage and G when each point is put down, 0 to 0.98 along the hand's schedule. [param outlines] is the
-## answer's `fonts`, for a glyph no stroke font has. `{image, missing, seconds, strokes}`: `missing` the glyphs it found
-## no stroke for; `strokes` the hand's schedule ([method Ink.schedule]: each stroke's points in the record's TeX points
-## and when it is drawn), which a pen seen follows ([method TableWork._pen_nib]).
+## Record [param rec] written by the hand seeded [param seed], at [param px] pixels a TeX point ([method picture_of_schedule]).
+## [param outlines] is the answer's `fonts`, for a glyph no stroke font has. `{image, missing, seconds, strokes}`: `missing`
+## the glyphs it found no stroke for; `strokes` the hand's schedule ([method Ink.schedule]: each stroke's points in the
+## record's TeX points and when it is drawn), which a pen seen follows ([method TableWork._pen_nib]).
 static func picture_of(rec: Dictionary, seed: int, px: float, outlines: Dictionary = {}) -> Dictionary:
 	var made := Ink.strokes_of(rec, seed, outlines)
 	var sched := Ink.schedule(made["strokes"], seed)
+	return {"image": picture_of_schedule(sched, size_of(rec), float(rec.get("h", 0.0)), px), "missing": made["missing"],
+		"seconds": maxf(float(sched["length"]), 1e-3), "strokes": sched["strokes"]}
+
+
+## A hand's schedule ([method Ink.schedule]) as ink, at [param px] pixels a TeX point in a box [param size] TeX points (and
+## [constant PAD_PX] round it), its strokes' y [param top] down from the box's top: an image whose R is the ink's coverage
+## and G when each point is put down, 0 to 0.98 along the schedule - each point when the hand's stroke reaches it ([method
+## Ink.share]), so a pen following the schedule is at the ink's front. A formula's strokes and a hand's words alike.
+static func picture_of_schedule(sched: Dictionary, size: Vector2, top: float, px: float) -> Image:
 	var length := maxf(float(sched["length"]), 1e-3)
-	var size := size_of(rec)
 	var pad := PAD_PX
 	var w := int(ceil(size.x * px)) + pad * 2
 	var h := int(ceil(size.y * px)) + pad * 2
 	var img := Image.create(maxi(w, 2), maxi(h, 2), false, Image.FORMAT_RGBAH)
 	img.fill(Color(0.0, 1.0, 0.0, 1.0))
-	var top := float(rec.get("h", 0.0))
 	for s in sched["strokes"]:
 		var st: Dictionary = s
 		var pts: PackedVector2Array = st["points"]
@@ -177,13 +183,13 @@ static func picture_of(rec: Dictionary, seed: int, px: float, outlines: Dictiona
 			continue
 		for i in range(1, pts.size()):
 			var seg := pts[i - 1].distance_to(pts[i])
-			var a_t := t0 + (t1 - t0) * (at / maxf(total, 1e-6))
+			var a_t := t0 + (t1 - t0) * Ink.when_along(at / maxf(total, 1e-6))
 			at += seg
-			var b_t := t0 + (t1 - t0) * (at / maxf(total, 1e-6))
+			var b_t := t0 + (t1 - t0) * Ink.when_along(at / maxf(total, 1e-6))
 			var cur := Vector2(pts[i].x * px + pad, (pts[i].y + top) * px + pad)
 			_segment(img, prev, cur, r, a_t / length * 0.98, b_t / length * 0.98, shade)
 			prev = cur
-	return {"image": img, "missing": made["missing"], "seconds": length, "strokes": sched["strokes"]}
+	return img
 
 
 ## A segment of ink from [param a] to [param b] (pixels), [param r] its half width, put down from [param wa] to [param wb]: each

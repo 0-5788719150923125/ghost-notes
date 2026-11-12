@@ -525,8 +525,8 @@ func _check_new_card_starter() -> void:
 		"the Cards workspace opens, and Edit shows the starter brief")
 	if editor != null:
 		var titles: Array = (editor._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
-		_ok(titles.has("Episode") and titles.has("Voice") and not titles.has("Medium"),
-			"its cards are the show's: the Episode and the Voice it brings, and no Medium (%s)" % str(titles))
+		_ok(titles.has("Episode") and titles.has("Voice") and titles.has("Medium"),
+			"its cards are the show's: the Episode, and the Voice and the Medium it brings (%s)" % str(titles))
 		_ok(bool(editor.show_plan()["picture"]), "...and the table is what it is seen in")
 
 

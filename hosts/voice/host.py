@@ -44,9 +44,8 @@ of their own into a line the main loop takes from, one at a time, in order; a
 answered `cancelled` and never made (the one being made finishes, and its reply
 is the caller's to drop). Read in turn, a cancel would have waited behind the
 very requests it names: Test asks for its whole passage at once, and a Stop only
-forgot the replies - pressed a few times, every new Test waited for each old
-passage to be made in full ("it will not work again until we restart the app",
-2026-10-27). Read on a thread, stdin is also always drained, so ghost's write of
+forgot the replies, so a new Test would wait for each old passage to be made in
+full. Read on a thread, stdin is also always drained, so ghost's write of
 a request never blocks its frame on a full pipe.
 
 STDOUT IS THE PROTOCOL. Anything a backend prints would corrupt it, so stdout is

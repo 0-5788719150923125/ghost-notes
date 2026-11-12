@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Does a letter hold together without a voice, an agent or a renderer: the hand, the format, the voice's rests and the
-## desk's clock ([LetterHand], [LetterScript], [LetterMedium]; next/letter.md)? Each item names its control, which must
+## desk's clock ([Handwriting], [LetterScript], [LetterMedium]; next/letter.md)? Each item names its control, which must
 ## fail the assertion.
 ##
 ## - Hand: strokes for every letter, digit and mark; an i's dot after its stem; no letter lost (control: a word with one
@@ -278,39 +278,39 @@ static func _box(pts: PackedVector2Array) -> Rect2:
 func _hand() -> void:
 	print("-- the hand")
 	var lacking := PackedStringArray()
-	for h in LetterHand.HANDS:
-		if LetterHand.nib(h) <= 0.0 or LetterHand.ascent_px(h) <= 0.0:
+	for h in Handwriting.HANDS:
+		if Handwriting.nib(h) <= 0.0 or Handwriting.ascent_px(h) <= 0.0:
 			lacking.append("%s has no nib or no height" % h)
 		for ch in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:!?'\"-()&":
-			var g := LetterHand._glyph(ch, h)
+			var g := Handwriting._glyph(ch, h)
 			if g.is_empty() or (g[2] as Array).is_empty():
 				lacking.append("%s %s" % [h, ch])
 	_check(lacking.is_empty(), "every hand has a nib and strokes for every letter, digit and mark %s" % ", ".join(lacking))
-	var i_strokes: Array = LetterHand.line(PackedStringArray(["i"]), [], 3, "a")["strokes"]
+	var i_strokes: Array = Handwriting.line(PackedStringArray(["i"]), [], 3, "a")["strokes"]
 	var stem := _box(i_strokes[0]["points"]) if i_strokes.size() == 2 else Rect2()
 	var dot := _box(i_strokes[1]["points"]) if i_strokes.size() == 2 else Rect2()
 	_check(i_strokes.size() == 2 and dot.end.y < stem.position.y and dot.size.length() < stem.size.length() * 0.5,
 		"an i's dot is made after its stem, above it (%d strokes)" % i_strokes.size())
-	var whole := _ink(LetterHand.line(PackedStringArray(["Dear"]), [], 3, "b")["strokes"])
+	var whole := _ink(Handwriting.line(PackedStringArray(["Dear"]), [], 3, "b")["strokes"])
 	var alone := 0.0
 	for ch in "Dear":
-		alone += _ink(LetterHand.line(PackedStringArray([ch]), [], 3, "c")["strokes"])
-	var mm := _ink(LetterHand.line(PackedStringArray(["minimum"]), [], 3, "b")["strokes"])
+		alone += _ink(Handwriting.line(PackedStringArray([ch]), [], 3, "c")["strokes"])
+	var mm := _ink(Handwriting.line(PackedStringArray(["minimum"]), [], 3, "b")["strokes"])
 	var mm_alone := 0.0
 	for ch in "minimum":
-		mm_alone += _ink(LetterHand.line(PackedStringArray([ch]), [], 3, "c")["strokes"])
-	var short := _ink(LetterHand.line(PackedStringArray(["minimu"]), [], 3, "b")["strokes"])
+		mm_alone += _ink(Handwriting.line(PackedStringArray([ch]), [], 3, "c")["strokes"])
+	var short := _ink(Handwriting.line(PackedStringArray(["minimu"]), [], 3, "b")["strokes"])
 	_check(whole >= alone * 0.97 and mm >= mm_alone * 0.97 and short < mm_alone * 0.9,
 		"no letter is lost: \"Dear\" has the ink of its letters (%.0f of %.0f pt), \"minimum\" (%.0f of %.0f) - \"minimu\" less (%.0f)"
 		% [whole, alone, mm, mm_alone, short])
-	var a := LetterHand.line(PackedStringArray(["the", "pen"]), [], 3, "d")
-	var b := LetterHand.line(PackedStringArray(["the", "pen"]), [], 3, "d")
-	var c := LetterHand.line(PackedStringArray(["the", "pen"]), [], 4, "d")
-	var other := LetterHand.line(PackedStringArray(["the", "pen"]), [], 3, "d", "caveat")
+	var a := Handwriting.line(PackedStringArray(["the", "pen"]), [], 3, "d")
+	var b := Handwriting.line(PackedStringArray(["the", "pen"]), [], 3, "d")
+	var c := Handwriting.line(PackedStringArray(["the", "pen"]), [], 4, "d")
+	var other := Handwriting.line(PackedStringArray(["the", "pen"]), [], 3, "d", "caveat")
 	_check(a["strokes"][0]["points"] == b["strokes"][0]["points"] and a["strokes"][0]["points"] != c["strokes"][0]["points"]
 		and is_equal_approx(float(a["width"]), float(c["width"])) and not is_equal_approx(float(a["width"]), float(other["width"])),
 		"the same line is the same strokes, another seed's differ, its width the words' alone - and another hand's its own")
-	_check(not LetterHand.line(PackedStringArray(["1974"]), [], 3, "e")["strokes"].is_empty(), "a year is written")
+	_check(not Handwriting.line(PackedStringArray(["1974"]), [], 3, "e")["strokes"].is_empty(), "a year is written")
 
 
 ## The actions of [param kind] in [param d].
@@ -345,7 +345,7 @@ func _format() -> void:
 	for l in lines:
 		var y := (l["at"] as Vector2).y
 		on_rules = on_rules and is_equal_approx(fposmod(y - DeskScript.FIRST_RULE, DeskScript.RULE), 0.0) \
-			and y + LetterHand.descent_px() <= DeskScript.PH - DeskScript.FOOT
+			and y + Handwriting.descent_px() <= DeskScript.PH - DeskScript.FOOT
 	_check(on_rules, "every line is on a rule, above the foot")
 	_check(not written.contains("always well") and spoken.has("always"), "a thought is said and never written")
 	var strikes := _of(d, "strike")
@@ -377,7 +377,7 @@ func _format() -> void:
 	var after := lines.filter(func(l: Dictionary) -> bool: return String(l["text"]).begins_with("A cross"))
 	var dr: Dictionary = draws[0] if draws.size() == 1 else {}
 	var clear := ((dr.get("at", Vector2.ZERO) as Vector2).y + float(dr.get("d", 0.0))) + DeskScript.RULE * 0.25
-	var was_y := DeskScript._snap_rule(maxf(DeskScript._snap_rule(clear), clear + LetterHand.ascent_px() * 0.8))
+	var was_y := DeskScript._snap_rule(maxf(DeskScript._snap_rule(clear), clear + Handwriting.ascent_px() * 0.8))
 	var after_y := ((after[0] as Dictionary)["at"] as Vector2).y if after.size() == 1 else 0.0
 	_check(draws.size() == 1 and int(dr["span"]) == 0 and spoken[int(dr["after"])] == "a" and after.size() == 1
 		and int(after[0]["span"]) == 5 and acts.find(after[0]) > acts.find(dr)
@@ -795,7 +795,7 @@ func _clock() -> void:
 	m._now = (ls + float(m._plan[li]["end"])) * 0.5
 	var pen_free := float(m._plan[li - 1]["end"]) + m._way(li - 1, li)
 	_check(absf(ls - maxf(two_back, pen_free)) < 0.05 and m._written(li) > 0.1 and m._written(li) < 0.9
-		and float(m.pen_at()["lift"]) <= DeskMedium.LIFT + 0.0001,
+		and float(m.pen_at()["lift"]) <= Pen.LIFT + 0.0001,
 		"a line begins as the voice begins the word %d before its first, or as the pen is free, the pen on the paper" % LetterScript.AHEAD_WORDS)
 	var paced := true
 	for i in m._actions.size():
@@ -849,7 +849,7 @@ func _clock() -> void:
 		if String((m._actions[i] as Dictionary)["kind"]) == "pad-text":
 			var w := m._written(i)
 			writing = writing or (w > 0.0 and w < 1.0)
-	_check(not writing and float(m.pen_at()["lift"]) > DeskMedium.LIFT,
+	_check(not writing and float(m.pen_at()["lift"]) > Pen.LIFT,
 		"through a thought nothing is written and the pen is up")
 	_check(is_equal_approx(float(m._framing()["k"]), m._arc()), "and the camera neither stands back nor comes in")
 	var ti := -1
@@ -1364,13 +1364,13 @@ func _pick_up() -> void:
 		t += dt
 		k += 1
 	m._now = w.x
-	var hover := m._world(m._before_first()["p"], DeskMedium.REST_LIFT)
+	var hover := m._world(m._before_first()["p"], Pen.REST_LIFT)
 	_check(worst < 0.005 and hover.distance_to(lies) > 0.1,
 		"on the way it moves at most %.1f mm a frame - the control, the desk's own pen hovering over the first stroke, is %.0f cm from where it lies"
 		% [worst * 1000.0, hover.distance_to(lies) * 100.0])
 	_check(lowest > -0.0002, "and it never goes into the desk or the pad (%.1f mm clear at the least)" % (lowest * 1000.0))
 	m._now = start + 0.05
-	_check(m._pick_up_pose(Transform3D.IDENTITY).is_empty() and float(m.pen_at()["lift"]) <= DeskMedium.LIFT + 0.0001,
+	_check(m._pick_up_pose(Transform3D.IDENTITY).is_empty() and float(m.pen_at()["lift"]) <= Pen.LIFT + 0.0001,
 		"and once the line begins the pen is the desk's own, on the paper")
 	# The pen leans to the right and a little down as the camera sees it, close and wide, all the while it writes
 	var lo := INF
@@ -1393,7 +1393,7 @@ func _pick_up() -> void:
 				hi = maxf(hi, down)
 				sum += down
 				count += 1
-	var desk := _screen_down(DeskMedium.lean(DeskMedium.PEN_UP, 0.0, 3, 0.5, Vector3.ZERO), float(LetterMedium.LETTER_LOCAL["pitch"]))
+	var desk := _screen_down(Pen.lean(Pen.UP, 0.0, 3, 0.5, Vector3.ZERO), float(LetterMedium.LETTER_LOCAL["pitch"]))
 	var mean := sum / float(maxi(count, 1))
 	_check(lo > 0.0 and hi < 35.0 and mean > 10.0 and mean < 24.0 and desk < -30.0,
 		"as it writes, the pen's top points right and a little down on the screen (%.0f degrees under the level, %.0f to %.0f with the hand's sway) - the control, the Proof desk's lean, %.0f degrees over it"
@@ -1913,7 +1913,7 @@ func _card_writing() -> void:
 			fits += int(wide <= room.x + 1e-6 and tall <= room.y + 1e-6 and label.position.x >= -room.x * 0.5 - 1e-6
 				and label.position.z >= -room.y * 0.5 - 1e-6 and on.position.y > size.y * 0.01)
 			var advance := label.font.get_height(label.font_size) + label.line_spacing
-			as_pad += int(label.font_size == int(LetterHand.size_px("kalam")) and label.pixel_size <= pad_px + 1e-9
+			as_pad += int(label.font_size == int(Handwriting.size_px("kalam")) and label.pixel_size <= pad_px + 1e-9
 				and absf(advance - DeskScript.RULE) < 1e-3)
 			at_pad += int(absf(label.pixel_size - pad_px) < 1e-9)
 		var other := DeskLook.dress(DeskLook.of(seed + 100, {"things": things, "mood": "lamplight"}), seed + 100, LegalPad.DESK_Y)

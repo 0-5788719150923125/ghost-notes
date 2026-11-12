@@ -1,8 +1,7 @@
 # Supply chain: what reaches users, and what a helper may touch
 
-Researched and decided 2026-10-26. Nothing is built: "We're going to wait a bit before execution."
-The user's fear, which started it: "my biggest fear is accidentally hitting hundreds or thousands of
-users with a bad dependency update, and compromising them all."
+Researched and decided; nothing is built. The fear behind it: hitting hundreds or thousands of users with a
+bad dependency update and compromising them all.
 
 ## Decided
 
@@ -26,7 +25,7 @@ users with a bad dependency update, and compromising them all."
 
 The first draft tied the cooldown to lockfiles; it does not need them. uv's `--exclude-newer "7 days"`
 on the same floating install takes the newest release that is at least a week old (checked on ghost's
-own uv 0.13.5, 2026-10-26). There is no lock and nothing to keep current: every environment still
+own uv 0.13.5). There is no lock and nothing to keep current: every environment still
 moves every day, a week behind the edge, and fail fast still holds, a week later. uv never picks a
 yanked release either, so a bad one pulled within the week is never taken.
 

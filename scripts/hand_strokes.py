@@ -3,7 +3,7 @@
     python3 scripts/hand_strokes.py fonts/hands/Kalam-Regular.ttf fonts/hands/strokes/kalam.jhf
     python3 scripts/hand_strokes.py <font.ttf> <out.jhf> --sample <out.png>    # and a picture to check it by
 
-A LETTER IS WRITTEN BY A PEN ([LetterHand], src/desk/letter_hand.gd): every glyph is drawn as lines, in the
+A LETTER IS WRITTEN BY A PEN ([Handwriting], src/table/handwriting.gd): every glyph is drawn as lines, in the
 order a hand makes them, and the journal's hands ([NotebookLayout.HANDS]: Kalam, Caveat, Patrick Hand) are
 outline fonts - shapes to fill, not lines to draw. This renders each printable ASCII character large, thins it
 to its centerline (Zhang-Suen), cuts the centerline where it branches, drops the stubs thinning leaves at a

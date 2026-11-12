@@ -22,7 +22,7 @@ gradient reaching the predictor through them - curves like the ones it will be p
 decoder was taught on their measured pitch and energy and played on the base voice's planned ones, smooth where theirs
 move twice as sharply (energy, frame to frame) and lower (theirs a median 220 Hz, af_heart's 192). Each sentence's
 prosody style is the base pack's row for its length, as it is read. THE VOICE IS PLAYED WITH KOKORO'S OWN DELIVERY
-(kokoro_export.py leaves the taught pitch and energy behind; 2026-10-28, an ASMR channel's 12 minutes, twenty unseen
+(kokoro_export.py leaves the taught pitch and energy behind; measured on 12 minutes of one voice, twenty unseen
 sentences): with no style read from the recording - Kokoro has none - the taught pitch follows theirs r = 0.01, and
 played with it the words smeared (22.9% misheard); with Kokoro's own, 5.3%, the best taught voice yet (kept: 9.6%), its
 floor between words 61 dB down (kept: 55) and its 4-8 kHz 1.3 dB under their own recordings (kept: 7.0). Taught on

@@ -1,10 +1,9 @@
 # The app's icon
 
-Asked 2026-10-31: "The icon for this project kind of sucks. I also don't like how we've pre-created
-it, and shipped as a static thing with the project ... a simple picture of a ghost ... with the color
-changed depending upon what is generated ... hash on something machine-stable, such that different
-users get different icons." Then: "Don't forget about mobile", and "If mobile icons are fixed, then we
-can at least generate novel ones for every build, so that new updates always come with a new icon."
+The icon is not pre-created or shipped as a static file: it is drawn, a simple picture of a ghost whose
+color changes with what is generated, hashed on something machine-stable so different users get different
+icons. On mobile the icon is fixed per build, so every build can carry a novel one, and each update comes with
+a new icon.
 
 ## What an app can change, and where
 

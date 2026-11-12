@@ -170,7 +170,7 @@ def _lpc(x: np.ndarray, order: int) -> np.ndarray | None:
 def measure_formants(x: np.ndarray) -> list[float]:
     """Formants by LPC root-solving, at the full rate and a generous order.
 
-    The old analyzer's tracker (measure_voice.py, removed 2026-10-06) decimated
+    The old analyzer's tracker (measure_voice.py, removed) decimated
     to 11 kHz at order 12, and on a synthetic vowel - three
     resonances and a pulse train, with none of the spectral clutter of a real one -
     that fit spends a pole pair on a harmonic and reports it between F2 and F3.

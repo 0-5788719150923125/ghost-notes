@@ -275,7 +275,8 @@ static func gap_before(chunks: Array, idx: int, s: Dictionary, turn := 1.0) -> f
 ## Everything the host needs to read one chunk in one voice. Written once for the live window and the
 ## export, so the render is the performance that was auditioned.
 ## A [param blend] of the voice's readers ([VoiceBlend]) is asked only when there is one, so a take kept
-## under a voice that has none keeps its key.
+## under a voice that has none keeps its key; where the chunk stands in its paragraph (`plan_span`) only when the blend
+## moves within one, and which paragraph it is (`plan_p`) only when its noise wanders.
 static func request_args(s: Dictionary, ch: Dictionary, speaker := 0, blend := "") -> Dictionary:
 	var t := preset_of(s)
 	var lean: Vector4 = ch.get("lean", Vector4.ZERO)
@@ -305,6 +306,11 @@ static func request_args(s: Dictionary, ch: Dictionary, speaker := 0, blend := "
 	}
 	if not blend.is_empty():
 		args["blend"] = blend
+		if VoiceBlend.moves(blend):
+			var u := float(ch.get("plan_u", 0.5))
+			args["plan_span"] = ch.get("plan_span", [u, u])
+		if VoiceBlend.wanders(blend):
+			args["plan_p"] = int(ch.get("plan_p", 0))
 	return args
 
 

@@ -6,15 +6,19 @@ class_name ReaderBrowser
 ## through numbers and listening to each.
 ##
 ## On a voice whose readers blend (its backend says `blend`: Kokoro's packs), each reader is ticked, not picked:
-## one ticked is that reader, two or more a new voice made of them ([VoiceBlend]) - each with a weight, and in
-## Sound and delivery a part - by the method and accent picked along the top. A reader stays ticked while the
-## list is filtered past it.
+## one ticked is that reader, two or more a new voice made of them ([VoiceBlend]) - in Sound and delivery each with
+## a part - by the method and accent picked along the top. A reader stays ticked while the list is filtered past it.
+##
+## Beside the list, THE SHAPE of the voice across each paragraph ([VoiceShape]): each reader's share as a band whose
+## edges are dragged (a new reader ticked takes an even share), the Breath and Push lanes, and the noise under them (a
+## kind, how far, and its Seed - a number, so the draw heard is the draw shown);
+## Shapes fills them in to start from ([constant VoiceBlend.SHAPES]). One reader shaped is that reader moved.
 ##
 ## Nothing ticked is a way through, never a pick: the last tick comes off, the tab keeps reading in what it last
 ## had, Test waits for a tick, and the next tick is that reader alone.
 ##
 ## Test is at the top: the Voice card's own Test ([method ReadingCast.press_test]), the passage read in what is
-## ticked now. Every change reaches the tab as it is made, as a step of the Speaker number does.
+## ticked now. Every change reaches the tab as it is made (a drag, as it lets go), as a step of the Speaker number does.
 ##
 ## A part of the cast ([ReadingCast]): it reads the voice on screen and its readers from the cast, and hands back
 ## a reader and a blend ([method ReadingCast.pick]).
@@ -27,12 +31,21 @@ var _tree: Tree
 var _test: Button
 var _method: OptionButton
 var _accent: OptionButton
+var _shapes: MenuButton
 var _which: OptionButton
 var _find: LineEdit
+var _shape: VoiceShape
+var _shape_box: VBoxContainer
+var _noise_kind: OptionButton
+var _noise_amount: HSlider
+var _noise_seed: SpinBox
+var _seed_box: HBoxContainer   # "Seed" and its number, shown with the noise
 var _summary: Label
 var _all: Array = []           # every reader of the voice: [{i, reader, g, d}]
 var _blends := false           # whether this voice's readers blend
-var _on: Array = []            # what is ticked, in the order ticked: [{i, reader, weight, part}]
+var _on: Array = []            # what is ticked, in the order ticked: [{i, reader, part, weights}] (shares, POINTS)
+var _lanes := {}               # each lane's points ([constant VoiceBlend.LANES])
+var _noise := {}               # {kind, amount, seed}; {} for none
 var _method_key := "mix"
 var _accent_key := ""
 
@@ -54,7 +67,7 @@ func open() -> void:
 		_popup.queue_free()
 	_popup = PopupPanel.new()
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(620, 500)
+	box.custom_minimum_size = Vector2(1000 if _blends else 620, 500)
 	box.add_theme_constant_override("separation", 6)
 	_popup.add_child(box)
 
@@ -87,11 +100,29 @@ func open() -> void:
 		_accent_key = String(VoiceBlend.ACCENTS.keys()[i])
 		_hand_back())
 	top.add_child(_accent)
-	_method.visible = _blends
-	_accent.visible = _blends
+	_shapes = MenuButton.new()
+	_shapes.text = "Shapes ▾"
+	_shapes.flat = false
+	_shapes.tooltip_text = ("Ways to move the voice across each paragraph: each fills in the mix and the lanes, around "
+		+ "the shares as they stand, to drag on from.")
+	var menu := _shapes.get_popup()
+	for k in VoiceBlend.SHAPES:
+		menu.add_item(Registry.label(VoiceBlend.SHAPES, k))
+		menu.set_item_tooltip(menu.item_count - 1, Registry.blurb(VoiceBlend.SHAPES, k))
+	menu.id_pressed.connect(func(id: int) -> void: apply_shape(String(VoiceBlend.SHAPES.keys()[id])))
+	top.add_child(_shapes)
+	for c in [_method, _accent, _shapes]:
+		(c as Control).visible = _blends
 
+	var body := HBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 12)
+	box.add_child(body)
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(left)
 	var bar := HBoxContainer.new()
-	box.add_child(bar)
+	left.add_child(bar)
 	_which = OptionButton.new()
 	for label in ["All", "♀ Female", "♂ Male"]:
 		_which.add_item(label)
@@ -103,14 +134,72 @@ func open() -> void:
 	_find.clear_button_enabled = true
 	_find.text_changed.connect(func(_t: String) -> void: _fill())
 	bar.add_child(_find)
-
 	_tree = Tree.new()
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tree.hide_root = true
 	_tree.select_mode = Tree.SELECT_ROW
 	_tree.item_edited.connect(_edited)
 	_tree.item_selected.connect(_selected)
-	box.add_child(_tree)
+	left.add_child(_tree)
+
+	_shape_box = VBoxContainer.new()
+	_shape_box.custom_minimum_size = Vector2(470, 0)
+	_shape_box.visible = _blends
+	body.add_child(_shape_box)
+	var across := Label.new()
+	across.text = "Across each paragraph"
+	across.add_theme_font_size_override("font_size", 12)
+	across.modulate = Color(1, 1, 1, 0.7)
+	_shape_box.add_child(across)
+	_shape = VoiceShape.new()
+	_shape.edited.connect(_shape_edited)
+	_shape_box.add_child(_shape)
+	var noise := HBoxContainer.new()
+	noise.add_theme_constant_override("separation", 6)
+	_shape_box.add_child(noise)
+	_noise_kind = OptionButton.new()
+	_noise_kind.focus_mode = Control.FOCUS_NONE
+	_noise_kind.add_item("No noise")
+	_noise_kind.set_item_tooltip(0, "The voice as it is shaped above, nothing drawn at random.")
+	for k in VoiceBlend.NOISES:
+		_noise_kind.add_item("Noise: " + Registry.label(VoiceBlend.NOISES, k))
+		_noise_kind.set_item_tooltip(_noise_kind.item_count - 1, Registry.blurb(VoiceBlend.NOISES, k))
+	_noise_kind.item_selected.connect(_noise_picked)
+	noise.add_child(_noise_kind)
+	_noise_amount = HSlider.new()
+	_noise_amount.min_value = 0.05
+	_noise_amount.max_value = 1.0
+	_noise_amount.step = 0.05
+	_noise_amount.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_noise_amount.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_noise_amount.tooltip_text = "How far the noise takes the voice: at the top, most of the way to another reader."
+	_noise_amount.drag_ended.connect(func(changed: bool) -> void:
+		if changed:
+			_noise["amount"] = _noise_amount.value
+			_hand_back())
+	noise.add_child(_noise_amount)
+	# the draw is a number, shown and stepped as the Speaker number is: the same seed is the same voice or path again
+	_seed_box = HBoxContainer.new()
+	_seed_box.add_theme_constant_override("separation", 4)
+	noise.add_child(_seed_box)
+	var seed_label := Label.new()
+	seed_label.text = "Seed"
+	_seed_box.add_child(seed_label)
+	_noise_seed = SpinBox.new()
+	_noise_seed.min_value = 0
+	_noise_seed.max_value = 9999
+	_noise_seed.step = 1
+	_noise_seed.custom_minimum_size = Vector2(84, 0)
+	_noise_seed.tooltip_text = ("Which draw of the noise: each number is another voice near this one (Fixed) or another "
+		+ "path among them (Wander), and the same number is always the same one.")
+	_noise_seed.value_changed.connect(func(v: float) -> void:
+		_noise["seed"] = int(v)
+		_hand_back())
+	_seed_box.add_child(_noise_seed)
+	# typed into, the number lets go on Enter or a click anywhere else: nothing else in the pane takes the focus
+	var typed := _noise_seed.get_line_edit()
+	typed.text_submitted.connect(func(_t: String) -> void: typed.release_focus())
+	_popup.window_input.connect(_let_go)
 
 	# One line, trimmed, the whole of it its tooltip: a wrapped label has no width before it is laid out and asks a
 	# line a letter (a popup opened 1,500 px tall for an 88-letter summary and never shrank - see the guard below)
@@ -127,6 +216,7 @@ func open() -> void:
 
 	cast.panel.add_child(_popup)
 	_fill()
+	_show_shape()
 	_say()
 	# Never the stage's height: a popup is sized to what its controls ask as it opens, before they are laid out,
 	# and never shrinks after, so the browser is capped at a share of the stage.
@@ -152,6 +242,11 @@ func row_of(i: int) -> TreeItem:
 	return null
 
 
+## The shape on screen ([VoiceShape]): what a gate drags.
+func shape() -> VoiceShape:
+	return _shape
+
+
 ## The Test button says what pressing it does now, as the Voice card's does.
 func show_testing(on: bool) -> void:
 	if _test != null and is_instance_valid(_test):
@@ -159,24 +254,58 @@ func show_testing(on: bool) -> void:
 		_test.disabled = _on.is_empty() and not on      # nothing ticked hears nothing; a test playing still stops
 
 
-## What the tab reads in now, as ticks: its blend's readers (those this voice holds), or its one reader.
+## What the tab reads in now, as ticks and a shape: its blend's readers (those this voice holds) with their shares,
+## lanes and noise, or its one reader.
 func _take_selection() -> void:
 	_on = []
 	_method_key = "mix"
 	_accent_key = ""
+	_lanes = {}
+	for lane in VoiceBlend.LANES:
+		_lanes[lane] = _even([0.0])
+	_noise = {}
 	var b := VoiceBlend.parse(cast.blend_now()) if _blends else {}
+	var curves: Array = []
 	for v in b.get("voices", []):
 		var at := _index_of(String((v as Dictionary)["reader"]))
 		if at >= 0:
-			_on.append({"i": at, "reader": String((v as Dictionary)["reader"]),
-				"weight": float((v as Dictionary)["weight"]), "part": String((v as Dictionary)["part"])})
-	if _on.size() >= 2:
+			_on.append({"i": at, "reader": String((v as Dictionary)["reader"]), "part": String((v as Dictionary)["part"])})
+			curves.append((v as Dictionary)["weights"])
+	if not _on.is_empty():
 		_method_key = String(b["method"])
 		_accent_key = String(b["accent"])
+		_set_shares(curves)
+		for lane in VoiceBlend.LANES:
+			_lanes[lane] = _even(b[lane])
+		_noise = (b["noise"] as Dictionary).duplicate()
 		return
-	_on = []
 	var i := clampi(cast.speaker_now(), 0, _all.size() - 1)
-	_on.append({"i": i, "reader": String((_all[i] as Dictionary).get("reader", "")), "weight": 1.0, "part": "both"})
+	_on.append({"i": i, "reader": String((_all[i] as Dictionary).get("reader", "")), "part": "both"})
+	_set_shares([[1.0]])
+
+
+## Each ticked reader's share at each point, from their weights' points ([param curves], one array a reader).
+func _set_shares(curves: Array) -> void:
+	for r in _on.size():
+		(_on[r] as Dictionary)["weights"] = []
+	for k in VoiceBlend.POINTS:
+		var s := VoiceBlend.shares_at(curves, float(k) / float(VoiceBlend.POINTS - 1))
+		for r in _on.size():
+			((_on[r] as Dictionary)["weights"] as Array).append(s[r])
+
+
+func _even(points: Array) -> Array:
+	var out: Array = []
+	for k in VoiceBlend.POINTS:
+		out.append(VoiceBlend.curve_at(points, float(k) / float(VoiceBlend.POINTS - 1)))
+	return out
+
+
+func _curves() -> Array:
+	var out: Array = []
+	for v in _on:
+		out.append((v as Dictionary)["weights"])
+	return out
 
 
 func _index_of(reader: String) -> int:
@@ -197,26 +326,18 @@ func _parts() -> bool:
 	return _blends and bool(Registry.field(VoiceBlend.METHODS, _method_key, "parts", false))
 
 
-func _weighted() -> bool:
-	return _blends and not bool(Registry.field(VoiceBlend.METHODS, _method_key, "unweighted", false))
-
-
-## The list, as the filter and the search leave it: a tick, a weight (where the method weighs) and a part
-## (where it gives parts) on a voice whose readers blend, a row to pick on one whose readers do not.
+## The list, as the filter and the search leave it: a tick and a part (where the method gives parts) on a voice
+## whose readers blend, a row to pick on one whose readers do not.
 func _fill() -> void:
 	_tree.clear()
-	_tree.columns = 1 + (1 if _weighted() else 0) + (1 if _parts() else 0)
+	_tree.columns = 2 if _parts() else 1
 	_tree.column_titles_visible = _blends
 	if _blends:
 		_tree.set_column_title(0, "Reader")
-	if _weighted():
-		_tree.set_column_title(1, "Weight")
+	if _parts():
+		_tree.set_column_title(1, "Part")
 		_tree.set_column_expand(1, false)
-		_tree.set_column_custom_minimum_width(1, 76)
-		if _parts():
-			_tree.set_column_title(2, "Part")
-			_tree.set_column_expand(2, false)
-			_tree.set_column_custom_minimum_width(2, 96)
+		_tree.set_column_custom_minimum_width(1, 96)
 	var root := _tree.create_item()
 	var want: String = ["", "F", "M"][_which.selected]
 	var words := _find.text.strip_edges().to_lower().split(" ", false)
@@ -237,7 +358,7 @@ func _fill() -> void:
 			it.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
 			it.set_editable(0, true)
 		it.set_text(0, "%d   %s" % [int(d["i"]), VoiceReaders.line(d, 10)])
-		_shape(it)
+		_row_cells(it)
 		if first == null and _ticked(int(d["i"])) >= 0:
 			first = it
 	if first != null:
@@ -246,42 +367,55 @@ func _fill() -> void:
 		_tree.scroll_to_item.call_deferred(first)
 
 
-## One row's cells as what is ticked says: its tick, and its weight and part while it is ticked.
-func _shape(it: TreeItem) -> void:
+## One row's cells as what is ticked says: its tick, and its part while it is ticked.
+func _row_cells(it: TreeItem) -> void:
 	if not _blends:
 		return
 	var k := _ticked(int(it.get_metadata(0)))
 	it.set_checked(0, k >= 0)
-	for col in range(1, _tree.columns):
-		if k < 0:
-			it.set_cell_mode(col, TreeItem.CELL_MODE_STRING)
-			it.set_text(col, "")
-			it.set_editable(col, false)
-			continue
-		var v: Dictionary = _on[k]
-		it.set_cell_mode(col, TreeItem.CELL_MODE_RANGE)
-		it.set_editable(col, true)
-		if col == 1:
-			it.set_range_config(1, VoiceBlend.WEIGHT_MIN, VoiceBlend.WEIGHT_MAX, 0.1)
-			it.set_range(1, float(v["weight"]))
-			it.set_tooltip_text(1, "Its share of the blend: a ratio, so 2 and 1 are two parts to one.")
-		else:
-			var labels := PackedStringArray()
-			for p in VoiceBlend.PARTS:
-				labels.append(Registry.label(VoiceBlend.PARTS, p))
-			it.set_text(2, ",".join(labels))
-			it.set_range(2, VoiceBlend.PARTS.keys().find(String(v["part"])))
-			it.set_tooltip_text(2, Registry.blurb(VoiceBlend.PARTS, String(v["part"])))
+	if _tree.columns < 2:
+		return
+	if k < 0:
+		it.set_cell_mode(1, TreeItem.CELL_MODE_STRING)
+		it.set_text(1, "")
+		it.set_editable(1, false)
+		return
+	var labels := PackedStringArray()
+	for p in VoiceBlend.PARTS:
+		labels.append(Registry.label(VoiceBlend.PARTS, p))
+	it.set_cell_mode(1, TreeItem.CELL_MODE_RANGE)
+	it.set_editable(1, true)
+	it.set_text(1, ",".join(labels))
+	var part := String((_on[k] as Dictionary)["part"])
+	it.set_range(1, VoiceBlend.PARTS.keys().find(part))
+	it.set_tooltip_text(1, Registry.blurb(VoiceBlend.PARTS, part))
 
 
-## A tick, a weight or a part changed.
+## The shape pane as what is ticked says: the bands, the lanes and the noise.
+func _show_shape() -> void:
+	if _shape == null:
+		return
+	var who := PackedStringArray()
+	for v in _on:
+		who.append(String((v as Dictionary)["reader"]))
+	_shape.set_shape(who, _curves(), _lanes)
+	var kind := String(_noise.get("kind", ""))
+	_noise_kind.select(0 if kind.is_empty() else VoiceBlend.NOISES.keys().find(kind) + 1)
+	_noise_amount.value = float(_noise.get("amount", 0.3))
+	_noise_seed.set_value_no_signal(float(_noise.get("seed", 0)))
+	_noise_amount.visible = not kind.is_empty()
+	_seed_box.visible = not kind.is_empty()
+
+
+## A tick or a part changed.
 func _edited() -> void:
 	var it := _tree.get_edited()
 	if it != null:
 		edit(it, _tree.get_edited_column())
 
 
-## Row [param it]'s cell in column [param col] as it now stands, taken: a tick (0), a weight (1) or a part (2).
+## Row [param it]'s cell in column [param col] as it now stands, taken: a tick (0) or a part (1). A reader ticked
+## takes an even share, the others giving way in proportion; one unticked leaves its share to the rest.
 func edit(it: TreeItem, col: int) -> void:
 	var i := int(it.get_metadata(0))
 	var k := _ticked(i)
@@ -289,19 +423,26 @@ func edit(it: TreeItem, col: int) -> void:
 		0:
 			if it.is_checked(0) and k < 0:
 				var d: Dictionary = _all[i]
+				var n := _on.size()
+				for v in _on:
+					var w: Array = (v as Dictionary)["weights"]
+					for j in w.size():
+						w[j] = float(w[j]) * float(n) / float(n + 1)
+				var even: Array = []
+				even.resize(VoiceBlend.POINTS)
+				even.fill(1.0 / float(n + 1))
 				# in Sound and delivery the first one ticked gives the sound and the rest the delivery
-				_on.append({"i": i, "reader": String(d.get("reader", "")), "weight": 1.0,
-					"part": ("delivery" if _on.size() > 0 else "sound") if _parts() else "both"})
+				_on.append({"i": i, "reader": String(d.get("reader", "")), "weights": even,
+					"part": ("delivery" if n > 0 else "sound") if _parts() else "both"})
 			elif not it.is_checked(0) and k >= 0:
 				_on.remove_at(k)
+				_set_shares(_curves())
+			_show_shape()
 		1:
 			if k >= 0:
-				(_on[k] as Dictionary)["weight"] = it.get_range(1)
-		2:
-			if k >= 0:
-				(_on[k] as Dictionary)["part"] = String(VoiceBlend.PARTS.keys()[clampi(int(it.get_range(2)), 0,
+				(_on[k] as Dictionary)["part"] = String(VoiceBlend.PARTS.keys()[clampi(int(it.get_range(1)), 0,
 					VoiceBlend.PARTS.size() - 1)])
-	_reshape.call_deferred(i)          # its weight and part shown or hidden - never inside the edit
+	_reshape.call_deferred(i)          # its part shown or hidden - never inside the edit
 	_hand_back()
 
 
@@ -309,7 +450,7 @@ func edit(it: TreeItem, col: int) -> void:
 func _reshape(i: int) -> void:
 	var it := row_of(i)
 	if it != null:
-		_shape(it)
+		_row_cells(it)
 
 
 ## A row picked, on a voice whose readers do not blend: that reader.
@@ -320,7 +461,8 @@ func _selected() -> void:
 	if it == null:
 		return
 	var i := int(it.get_metadata(0))
-	_on = [{"i": i, "reader": String((_all[i] as Dictionary).get("reader", "")), "weight": 1.0, "part": "both"}]
+	_on = [{"i": i, "reader": String((_all[i] as Dictionary).get("reader", "")), "part": "both"}]
+	_set_shares([[1.0]])
 	_hand_back()
 
 
@@ -335,11 +477,65 @@ func _method_picked(i: int) -> void:
 	_hand_back()
 
 
-## What is ticked, to the tab: its first reader as the Speaker number, and the blend when there are two.
-## Nothing ticked hands back nothing: the tab reads on in what it had.
+## A press anywhere but the Seed number lets go of the number (its text taken, as Enter takes it). The popup's own
+## input, so its position is the popup's, as its controls' rects are.
+func _let_go(event: InputEvent) -> void:
+	var press := event as InputEventMouseButton
+	if press == null or not press.pressed or _noise_seed == null or not is_instance_valid(_noise_seed):
+		return
+	var typed := _noise_seed.get_line_edit()
+	if typed.has_focus() and not _noise_seed.get_global_rect().has_point(press.position):
+		_noise_seed.apply()
+		typed.release_focus()
+
+
+## A drag let go in the shape: its shares and lanes taken.
+func _shape_edited() -> void:
+	for r in mini(_on.size(), _shape.weights.size()):
+		(_on[r] as Dictionary)["weights"] = (_shape.weights[r] as Array).duplicate()
+	for lane in VoiceBlend.LANES:
+		_lanes[lane] = (_shape.lanes[lane] as Array).duplicate()
+	_hand_back()
+
+
+## Shape [param key] of [constant VoiceBlend.SHAPES] laid over what is ticked.
+func apply_shape(key: String) -> void:
+	var got := VoiceBlend.reshaped(key, _curves())
+	for r in _on.size():
+		(_on[r] as Dictionary)["weights"] = got["weights"][r]
+	for lane in VoiceBlend.LANES:
+		_lanes[lane] = got[lane]
+	_show_shape()
+	_hand_back()
+
+
+## A kind of noise picked (or none): at a third of the way out the first time.
+func _noise_picked(i: int) -> void:
+	if i == 0:
+		_noise = {}
+	else:
+		_noise = {"kind": String(VoiceBlend.NOISES.keys()[i - 1]), "amount": float(_noise.get("amount", 0.3)),
+			"seed": int(_noise.get("seed", 0))}
+	_show_shape()
+	_hand_back()
+
+
+## What is ticked and its shape, as the tab's line: shares out of a hundred.
+func spec() -> String:
+	var voices: Array = []
+	for v in _on:
+		var d: Dictionary = v
+		voices.append({"reader": d["reader"], "part": d["part"],
+			"weights": (d["weights"] as Array).map(func(x: float) -> float: return roundf(100.0 * x))})
+	return VoiceBlend.compose(_method_key, _accent_key, voices, {"breath": _lanes.get("breath", [0.0]),
+		"push": _lanes.get("push", [0.0]), "noise": _noise})
+
+
+## What is ticked, to the tab: its first reader as the Speaker number, and the line when there are two or one is
+## shaped. Nothing ticked hands back nothing: the tab reads on in what it had.
 func _hand_back() -> void:
 	if not _on.is_empty():
-		cast.pick(int((_on[0] as Dictionary)["i"]), VoiceBlend.compose(_method_key, _accent_key, _on))
+		cast.pick(int((_on[0] as Dictionary)["i"]), spec())
 	_say()
 
 
@@ -354,12 +550,13 @@ func _say() -> void:
 			now = String((_all[clampi(cast.speaker_now(), 0, _all.size() - 1)] as Dictionary)["d"]).get_slice(", ", 0)
 		_summary.text = "Nothing ticked: tick one, or two or more to blend. Until then it reads in %s." % now
 	else:
-		var spec := VoiceBlend.compose(_method_key, _accent_key, _on)
+		var line := spec()
 		var one := VoiceReaders.line(_all[int((_on[0] as Dictionary)["i"])], 10)
-		_summary.text = VoiceBlend.line(spec) if not spec.is_empty() \
+		_summary.text = VoiceBlend.line(line) if not line.is_empty() \
 			else one + ("    -  tick another to blend them into a new voice" if _blends else "")
 	_summary.tooltip_text = _summary.text
 	if _method != null:
 		_method.disabled = _on.size() < 2
 		_accent.disabled = _on.size() < 2
+		_shapes.disabled = _on.is_empty()
 	show_testing(cast.panel._test_busy())

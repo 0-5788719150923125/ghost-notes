@@ -201,8 +201,8 @@ static func schedule(strokes: Array, seed: int, pace := 1.0) -> Dictionary:
 
 
 ## The ink on the page `t` seconds into a schedule: [{points, width}], every stroke begun by then,
-## the one under the pen cut where the pen is (a minimum-jerk stroke: slow off the mark, slow into
-## the end), and `pen` - where the nib is, Vector2.INF when it is lifted or done.
+## the one under the pen cut where the pen is ([method share]), and `pen` - where the nib is,
+## Vector2.INF when it is lifted or done.
 static func at(sched: Dictionary, t: float) -> Dictionary:
 	var ink: Array = []
 	var pen := Vector2.INF
@@ -216,11 +216,38 @@ static func at(sched: Dictionary, t: float) -> Dictionary:
 		if t >= t1:
 			ink.append({"points": pts, "width": float(st["width"]), "faint": bool(st.get("faint", false))})
 			continue
-		var u := clampf((t - t0) / maxf(t1 - t0, 1e-6), 0.0, 1.0)
-		var part := _partial(pts, u * u * u * (10.0 - 15.0 * u + 6.0 * u * u))
+		var part := _partial(pts, share(st, t))
 		ink.append({"points": part, "width": float(st["width"]), "faint": bool(st.get("faint", false))})
 		pen = part[part.size() - 1]
 	return {"ink": ink, "pen": pen}
+
+
+## How much of scheduled stroke [param st] is down [param t] seconds into its schedule, by length: a hand's stroke,
+## slow off the mark and slow into its end ([method Hands.smooth]). Every drawing of the ink and every pen seen reads it,
+## so the nib is always at the ink's front.
+static func share(st: Dictionary, t: float) -> float:
+	var t0 := float(st["t0"])
+	return Hands.smooth((t - t0) / maxf(float(st["t1"]) - t0, 1e-6))
+
+
+## Where the nib is on scheduled stroke [param st] at [param t] (its points' units): as far along it as [method share].
+static func nib_on(st: Dictionary, t: float) -> Vector2:
+	var part := _partial(st["points"], share(st, t))
+	return part[part.size() - 1]
+
+
+## When [param f] of a stroke's length is down, as a share of its time: [method share] turned around (0..1).
+static func when_along(f: float) -> float:
+	var lo := 0.0
+	var hi := 1.0
+	var want := clampf(f, 0.0, 1.0)
+	for _i in 22:
+		var mid := (lo + hi) * 0.5
+		if Hands.smooth(mid) < want:
+			lo = mid
+		else:
+			hi = mid
+	return (lo + hi) * 0.5
 
 
 ## Can the hand write the glyph TeX names `name` (in font `font`)? For the gate and the audit.
@@ -579,7 +606,7 @@ static func _partial(pts: PackedVector2Array, f: float) -> PackedVector2Array:
 # --- the stroke fonts ------------------------------------------------------------
 
 ## One glyph of a Hershey font by its ASCII character: [left, right, strokes], [] when none. [param font]
-## is a name of [constant FONTS] or a .jhf file's path (a letter's hands, [LetterHand]). The fonts are
+## is a name of [constant FONTS] or a .jhf file's path (a letter's hands, [Handwriting]). The fonts are
 ## the original data (.jhf, one glyph a line from code 32), read once and kept; locked, because a desk
 ## may build off the main thread.
 static func _hershey(font: String, ch: String) -> Array:

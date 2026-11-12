@@ -15,7 +15,7 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted inside the stage SubViewport, so the stage governor stops the medium and every panel viewport under it together.
 
-Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (10 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (11 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
 ## `auto` - Auto
 
@@ -139,9 +139,9 @@ Redacted words on the terminal are hidden over the frame (`DispatchCensor`, `_ce
 
 Source: [src/dispatch/dispatch.gd](../src/dispatch/dispatch.gd)
 
-## `table` - Card table
+## `table` - Table
 
-_A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Table mode's own medium - its deck, pictures and spread come from the episode the agents produced._
+_A show at a table the agents built, seen from the chair: its things, its light and its room, the cards drawn and read, the work done with the table's things - every move from the episode the agents produced._
 
 TableMedium - a card reading at a table, seen from the reader's chair.
 
@@ -158,6 +158,20 @@ Foil: the brightest, most colorful parts of each painting - found per picture fr
 Nothing is built on the app's thread: an episode's table is built on a worker, out of the tree, the show waiting for it as it waits for its bake, and put back (`_build_away`). A render and a gate build where they stand, their frames waiting for nothing; a preview's table is built aside too (`TablePreview._stand`).
 
 Source: [src/table/table.gd](../src/table/table.gd)
+
+## `desk` - Desk
+
+_A lesson at a desk, seen close from the chair: a legal pad under a lamp or candles, and a pen writing what the episode's work writes - formulas, drawings, words in a hand - stroke by stroke as the words are said, pointing at what is talked about, turning a page over the binding when it is full. The desk is the Letter's._
+
+EpisodeDesk - a table show's episode at the desk (next/desk.md): what its acts write and point at, on the desk's pad.
+
+The episode is made by Table's agents (`TableEpisode`) and drawn from the reading's document as the card table draws it: its `table` (the episode's folder, seed and plan) and its `source` (the episode's script, the reader's marks in it, `CardReading`). Each act's writes (`tex`, `draw`, words, `strike`) and points (`Motions.LAWS` `write`, `point`) are the desk's actions (`DeskScript`'s kinds), whatever sheet and pen they name: the desk has one pad and one pen. What else an act does has no thing here to do it to, and is not shown.
+
+When each is done is the desk's (`DeskMedium._build_plan`): a write begins at its act's word (`<!-- act: name -->`) and keeps with the words said from there to the next act's word - the old desk's dictation, its pen quicker or slower to keep with them, never past `DeskScript.MAX_PACE` and `DeskScript.MIN_PACE` of its own pace; an act with no word follows the one before, or begins its beat. A point is there at its word and held while it is talked about. Words with no math are written in their hand's strokes on the pad's rules (`SheetWriting.words`); what TeX lays out is the episode's `ink.json` (`TableInk`), and a line not laid out yet is left unwritten.
+
+The desk is the Letter's (`DeskLook`): its things and mood the note's Medium card's where it chose them (the document's `medium`: `things`, `mood`), else drawn from the episode's seed. Its camera is the old desk's, a little closer (`EPISODE_LOCAL`, `EPISODE_WIDE`): on the line being written, the whole pad as a page turns.
+
+Source: [src/desk/episode_desk.gd](../src/desk/episode_desk.gd)
 
 ## `likeness` - Likeness
 

@@ -185,7 +185,15 @@ func _on_reading_ready() -> void:
 ## leaves no pin behind.
 func _enter_tree() -> void:
 	if reading != null:
-		Director.pin_medium("table", self)
+		Director.pin_medium(_shown_in(), self)
+
+
+## What the episode up now is shown in ([method TableEpisode.medium]) - before it has a plan, what the note's Medium card says.
+## Pinned again as an episode opens: the next session's stage is built in it ([method main._sync_medium]).
+func _shown_in() -> String:
+	if _episode != null and _episode.has("plan"):
+		return _episode.medium()
+	return _note_medium()
 
 
 func _exit_tree() -> void:
@@ -461,6 +469,9 @@ func book(d: Dictionary, body: String) -> Dictionary:
 	d["title"] = String(_export_pin["title"]) if pinned else _show_title()
 	d["byline"] = String(_export_pin.get("byline", "")) if pinned else _show_byline()
 	d["table"] = _export_pin["doc"] if pinned else (_table_doc(_episode) if _episode != null else {})
+	# ...and the desk's rows, where it is shown at one ([EpisodeDesk]: its things and mood)
+	var block: Variant = reading.block_now("medium") if reading != null else {}
+	d["medium"] = (block as Dictionary).duplicate(true) if block is Dictionary else {}
 	return d
 
 
@@ -634,7 +645,17 @@ func _spec() -> Dictionary:
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
 		"players": _knobs["players"] if not String(_knobs["players"]).is_empty() else _knobs["writer"], "players_model": _knobs["players_model"], "players_effort": _knobs["players_effort"],
 		# ...and where to take the next episode, as the Direction card says it now ([Direction]): an episode takes it up as its plan is made
-		"direction": Direction.text_of(reading.block_now(Direction.KEY)) if reading != null else ""}
+		"direction": Direction.text_of(reading.block_now(Direction.KEY)) if reading != null else "",
+		# ...and what it is shown in, as the Medium card says it now: the episode keeps it in its plan ([method TableEpisode.medium])
+		"medium": _note_medium()}
+
+
+## What the note's Medium card shows a show in now: one of Table's formats ([constant Medium.REGISTRY] `mode`), "table" where it
+## names none of them.
+func _note_medium() -> String:
+	var block: Variant = reading.block_now("medium") if reading != null else {}
+	var f := String((block as Dictionary).get("format", "table")) if block is Dictionary else "table"
+	return f if Medium.mode_of(f) == "table" else "table"
 
 
 ## The show's own block: the knobs, and its YouTube title and description.
@@ -920,6 +941,8 @@ func _open_episode() -> void:
 	# the spec is taken when Generate is pressed (see _generate) - never here, where reading the
 	# document would land back in apply
 	_producer = TableProducer.new(_episode, {})
+	if is_inside_tree() and reading != null:
+		Director.pin_medium(_shown_in(), self)
 	_brief_changed = false
 	_refill_episodes()
 	_fill_upload_fields(true)

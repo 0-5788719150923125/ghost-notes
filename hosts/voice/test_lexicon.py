@@ -8,8 +8,7 @@ Run it directly with the voice venv's python - no pytest needed:
 eSpeak is real here (the readings it guesses are the subject); Wiktionary is NOT - a fake
 fetch hands back kaikki's own entries for the words, so the suite never touches the network.
 
-  THE REPORT - cosine, cotangent and cosecant come out exactly as the clip the user chose
-  ("B sounds quite a bit better", 2026-10-16): kˈoʊsˌaɪn, kˈoʊtˌændʒənt, kˈoʊsˌiːkənt.
+  THE REPORT - cosine, cotangent and cosecant come out as kˈoʊsˌaɪn, kˈoʊtˌændʒənt, kˈoʊsˌiːkənt.
   THE CONVERSION - Wiktionary's transcription in eSpeak's spelling: the stress on the vowel, the
   long vowels long, the narrow detail gone; an accent not ours is not used.
   THE HOLDS - a word not marked rare, one with an authored reading, a reading the voice cannot

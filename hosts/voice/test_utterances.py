@@ -250,9 +250,8 @@ def one_voice():
 
 @check
 def soft_spoken():
-    """THEIR OWN CLEAN (2026-10-26, an ASMR channel: soft speech over a high-gain microphone's hiss, a median 19 dB over
-    its pauses and 30 for none of 253): every sentence 19 to 25 dB keeps them all and leaves the noisy one out, where 30
-    dB whoever they are would keep none (THE CONTROL)."""
+    """A speaker's own clean level: soft speech over a hissy microphone (a median 19 dB over its pauses): every
+    sentence 19 to 25 dB keeps them all and leaves the noisy one out. Control: a fixed 30 dB keeps none."""
     c, _ = _cands()
     soft = [{**x, "clean": 19.0 + (i % 7)} for i, x in enumerate(c[:30])] + [{**c[0], "text": "a noisy one", "clean": 9.0}]
     kept, found = U.choose(soft)
