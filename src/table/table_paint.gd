@@ -32,6 +32,7 @@ const RETURN := 2.0
 ## and 8:30 - there is no animation at all"): a live voice says its words slower than the plan's guess (732687's intro, 442 s guessed,
 ## about 510 s said), and the last acts of a beat, sized once the voice's pace is known, take up all of what the first were not given -
 ## at 1.6 and 4 s they put their tools down and the hand waited out the words.
+## (Their numbers are rows a show may tune: [constant TableTune.ROWS] `slow_most`, `rest_most` - these are the defaults.)
 const SLOW_MOST := 2.5
 const REST_MOST := 6.0
 const QUICK_MOST := 0.4
@@ -3047,9 +3048,9 @@ func plan_of(tr: Dictionary, d: float) -> Dictionary:
 	var rest := 0.0
 	var after := 0.0
 	if d > natural and work_len > 0.0:
-		k = minf((d - fixed) / work_len, SLOW_MOST)
+		k = minf((d - fixed) / work_len, TableTune.value(work.tune, "slow_most"))
 		var left := d - fixed - work_len * k
-		rest = minf(left / float(maxi(parts.size(), 1)), REST_MOST)
+		rest = minf(left / float(maxi(parts.size(), 1)), TableTune.value(work.tune, "rest_most"))
 		after = maxf(left - rest * float(parts.size()), 0.0)
 	elif d < natural and work_len > 0.0:
 		k = maxf((d - fixed * minf(d / natural, 1.0)) / work_len, QUICK_MOST)
@@ -3120,7 +3121,7 @@ func _paced(si: int, tr: Dictionary, parts: Array, clean: Array) -> void:
 		var start: Vector3 = on.call(xy0)
 		var start_lean: Vector3 = lean.call(xy0, pd["prog"])
 		if here != Vector3.INF:
-			pd["move"] = maxf(MOVE, _way_length(here, start, here_lean, start_lean, tool) / MOVE_PACE)
+			pd["move"] = maxf(MOVE, _way_length(here, start, here_lean, start_lean, tool) / TableTune.value(work.tune, "move_pace"))
 		var last: Array = keys[keys.size() - 1]
 		var xy1 := Vector2(float(last[1]), float(last[2]))
 		here = on.call(xy1)

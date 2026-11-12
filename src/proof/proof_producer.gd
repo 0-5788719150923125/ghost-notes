@@ -50,6 +50,9 @@ const LONG_BY := 0.2
 const MOST_MINUTES := 180.0
 
 var episode: ProofEpisode
+## WHO MAKES EACH STEP, as its record says it ([method KeptSteps.note_made]).
+const BY := {"problem": "framer", "solve": "solver", "draft": "teacher", "review": "student", "lesson": "teacher",
+	"ink": "code", "script": "code"}
 ## {title (the channel's name), byline, uploads_as (the line an episode's title goes up in), before
 ## (the titles this note's other episodes took), brief, writer, writer_model, writer_effort}
 var spec: Dictionary = {}
@@ -64,6 +67,8 @@ var _tools := {}       # step -> {url, set}
 var _local := {}       # step -> {pid, out, log}: a step ghost runs as a program (the ink)
 var _errors := {}      # step -> why it failed, once out of tries
 var _tries := {}       # step -> runs started
+var _from := {}       # step -> what it was made from when its making began (KeptSteps.made_from)
+var _again := {}      # steps asked to be made again (a ⟳): made though they stand
 var _fix := {}         # what the next lesson must mend: {broken, notation, undictated, letters, points, still, long: [..]}
 
 
@@ -76,6 +81,8 @@ func start(steps: Array = []) -> void:
 	_errors.clear()
 	_tries.clear()
 	only = steps.duplicate()
+	# AN EPISODE MADE BEFORE RECORDS gains them as it stands, before anything is made over it
+	episode.adopt()
 	running = true
 	tick()
 	changed.emit()
@@ -84,6 +91,7 @@ func start(steps: Array = []) -> void:
 func stop() -> void:
 	running = false
 	waiting = ""
+	_again.clear()
 	for step in _jobs:
 		AgentJobs.cancel(String(_jobs[step]))
 		AgentJobs.forget(String(_jobs[step]))
@@ -100,17 +108,36 @@ func busy() -> bool:
 	return not _jobs.is_empty() or not _local.is_empty()
 
 
-## "ready", "running", "queued", "waiting", "failed" or "missing".
+## "ready", "stale", "running", "queued", "failed" or "missing" - a step being made again is running, what stands playing meanwhile.
 func state_of(step: String) -> String:
-	if episode.has(step):
-		return "ready"
 	if _local.has(step):
 		return "running"
 	if _jobs.has(step):
 		return "running" if AgentJobs.state(String(_jobs[step])) == "running" else "queued"
 	if _errors.has(step):
 		return "failed"
+	if episode.has(step):
+		return "stale" if episode.stale(step) and not episode.kept(step) else "ready"
 	return "missing"
+
+
+## WHETHER GENERATE MAKES [param step] (next/editing.md step 12, as a table's steps): missing, asked again (its ⟳), or made from
+## something changed since and not kept (🔒, or changed by a hand).
+func owed(step: String) -> bool:
+	return _again.has(step) or not episode.has(step) or (episode.stale(step) and not episode.kept(step))
+
+
+## A step on the way to a lesson passed by while the lesson stands ([method ProofEpisode.moot]) - unless the lesson is to be made
+## again, when it is written from them.
+func _moot(step: String) -> bool:
+	return episode.moot(step) and not owed("lesson")
+
+
+## [param step] MADE AGAIN (its ⟳), NOTHING THROWN AWAY: what stands plays until the new one lands; then what was made from it is
+## stale, and Generate makes it again unless it is kept (the ink and the script, the tools', at once).
+func again(step: String) -> void:
+	_again[step] = true
+	start([step])
 
 
 func error_of(step: String) -> String:
@@ -159,13 +186,14 @@ func tick() -> void:
 	if running:
 		for s in ProofEpisode.STEPS:
 			var step := String(s)
-			if episode.has(step) or _jobs.has(step) or _local.has(step) or _errors.has(step):
+			if not owed(step) or _jobs.has(step) or _local.has(step) or _errors.has(step):
 				continue
-			if episode.moot(step):
+			if _moot(step):
 				continue
+			# made from what stands, made: a source still to be made (or made again) goes first
 			var ready := true
 			for need in episode.needs(step):
-				if not episode.has(String(need)):
+				if owed(String(need)):
 					ready = false
 			if not ready or not (only.is_empty() or only.has(step) or LOCAL.has(step)):
 				continue
@@ -204,6 +232,7 @@ func _lacks(step: String) -> String:
 # --- making one step ---------------------------------------------------------------------
 
 func _make(step: String) -> void:
+	_from[step] = episode.made_from(step)
 	match step:
 		"problem":
 			_submit_text(step, ProofPrompts.framer(_title(), _brief(), String(spec.get("uploads_as", "")),
@@ -334,6 +363,18 @@ func _finish(step: String, err: String) -> void:
 		err = "it wrote nothing (see the log)"
 	if not err.is_empty():
 		_errors[step] = err
+		_again.erase(step)
+		return
+	_made(step)
+
+
+## [param step] MADE: recorded as its maker's, from what stood when its making began - and no longer asked again.
+func _made(step: String) -> void:
+	_again.erase(step)
+	var err := episode.note_made(step, String(BY.get(step, "")), _from.get(step, {}))
+	_from.erase(step)
+	if not err.is_empty():
+		push_warning("ghost: proof %s - its record: %s" % [step, err])
 
 
 # --- landing -------------------------------------------------------------------------------------
@@ -365,10 +406,12 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_lesson(String(res.get("text", "")))
 	if err.is_empty():
 		_errors.erase(step)
+		_made(step)
 		return
 	push_warning("ghost: proof %s - %s" % [step, err])
 	if int(_tries.get(step, 0)) > (SOLVE_RETRIES if step == "solve" else RETRIES):
 		_errors[step] = err
+		_again.erase(step)
 
 
 ## THE FIXED PROBLEM, in the shape every later step reads: its words, its TeX, how it is checked, and
@@ -621,7 +664,8 @@ func _land_ink(job: Dictionary) -> void:
 		if r is Dictionary and not bool((r as Dictionary).get("ok", false)):
 			broken.append("%s: %s" % [_tex_of(String((r as Dictionary).get("id", ""))),
 				String((r as Dictionary).get("error", ""))])
-	if not broken.is_empty() and int(_tries.get("lesson", 0)) <= RETRIES + 1:
+	# ...never a lesson KEPT (🔒, or a hand's): what TeX refuses in it, the pen leaves out
+	if not broken.is_empty() and not episode.kept("lesson") and int(_tries.get("lesson", 0)) <= RETRIES + 1:
 		_fix["broken"] = broken
 		episode.invalidate("lesson")
 		push_warning("ghost: proof ink - %d formula(s) TeX refused; the lesson is written again" % broken.size())

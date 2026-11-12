@@ -61,6 +61,10 @@ const BUFFER_PAUSED := 900.0
 
 # THE PLAN on the stream ([ReadingPlan])
 var chunks: Array = []        # [{tokens, words, ...}] planned up front, cheap
+## THE TAKE KEPT, playing whole as the session's audio ([method _play_take]): its wav, "" while the reading is said live.
+var take_path := ""
+## ...and it has played to its end: the reading is over ([method ReadingPanel.take_ended]).
+var take_done := false
 ## The reading on the stream no longer matches the panel: the next Play reads it again.
 var stale := false
 ## THE OUTRO MARK, live: how long the fade is (0 = no mark; where it starts is the join's,
@@ -143,6 +147,12 @@ func play() -> void:
 		panel._set_status("Paused. Space or ▶ carries on; ■ ends the reading."
 			if Spectrum.paused else "Resumed.")
 		return
+	# A TAKE KEPT FOR THESE WORDS IN THESE VOICES plays as it is, the host asked for nothing
+	var said := panel._reading_body().strip_edges()
+	if not said.is_empty():
+		panel._cast.refresh(said)
+		if _play_take(panel.kept_take(said)):
+			return
 	if panel._host == null or not panel._host.is_up() or panel._cast.voice_pick.selected < 0:
 		return
 	# THE REAL-TIME READ. In sync mode this is the file as it is on disk RIGHT NOW, not as
@@ -169,6 +179,31 @@ func play() -> void:
 	_sync_speak_buttons()
 	panel._set_status("Planned %d chunk(s). Synthesizing the first…%s" % [chunks.size(), panel._plan_note])
 	_pump()
+
+
+## THE TAKE KEPT AT [param path], PLAYED WHOLE (next/editing.md step 3: "the take itself played as the session's audio, so a seek
+## is a seek inside one file"): the file a render plays, through the session a render opens - its bookend and words its
+## sidecar's - so what is heard and seen is the export's, a seek lands at once, paused or not, and the voice host makes nothing.
+## (The note below on seeking a generator: "render the take, then open the rendered file" - this is that, on Play.) False for no
+## take, or one the owner could not play: then the reading is said live.
+func _play_take(path: String) -> bool:
+	if path.is_empty() or not panel.begin_take.is_valid():
+		return false
+	if has_reading() or playback != null:
+		_reset_playback()
+	if not bool(panel.begin_take.call(path)):
+		return false
+	take_path = path
+	take_done = false
+	stale = false
+	panel._set_status("Playing the kept take (%s): what the export will be, and a seek lands where it is asked."
+		% Clock.text(Spectrum.song_length()))
+	return true
+
+
+## Whether there is a reading on the transport: one planned to be said, or a take kept playing.
+func has_reading() -> bool:
+	return not chunks.is_empty() or not take_path.is_empty()
 
 
 ## Tear the stream down and read again from the top. plan clears the pending
@@ -202,7 +237,7 @@ func restart() -> void:
 ## The synth editor has had both since it was written; this path was given only the opening
 ## half, so nothing was ever able to close it.
 func stop() -> void:
-	if chunks.is_empty() and playback == null:
+	if not has_reading() and playback == null:
 		return
 	Spectrum.set_stream_paused(false)
 	_reset_playback()
@@ -238,6 +273,8 @@ func plan(body: String) -> void:
 ## instead of spliced into a reading that no longer exists.
 func _reset_playback() -> void:
 	chunks = []
+	take_path = ""
+	take_done = false
 	_ready_takes = []
 	_req_chunk = {}
 	_next_to_request = 0
@@ -272,7 +309,7 @@ func _reset_playback() -> void:
 ## Play and Stop, from one place. Two buttons whose enabled state is set at each of the
 ## several points a reading starts or ends is two buttons that will eventually disagree.
 func _sync_speak_buttons() -> void:
-	if chunks.is_empty():
+	if not has_reading():
 		stale = false
 
 
@@ -343,6 +380,8 @@ func start_words() -> PackedStringArray:
 ## stream never announces its end, so "every chunk played and the buffer drained" is the end -
 ## and then Play reads again from the top rather than pausing silence.
 func live() -> bool:
+	if not take_path.is_empty():
+		return not take_done and Spectrum.has_audio()
 	if chunks.is_empty():
 		return false
 	if _next_to_play < chunks.size() or not _pending.is_empty() or playback == null:
@@ -356,13 +395,13 @@ func play_label() -> String:
 	var label := "Play"
 	if live():
 		label = "Resume" if Spectrum.paused else "Pause"
-	return label + (" ●" if stale and not chunks.is_empty() else "")
+	return label + (" ●" if stale and has_reading() else "")
 
 
 ## The reading on the stream no longer matches the panel. The same dot the text
 ## box raises, and for the same reason: the cast changed under what is playing.
 func mark_stale() -> void:
-	if not chunks.is_empty():
+	if has_reading():
 		stale = true
 
 
@@ -374,6 +413,9 @@ func mark_stale() -> void:
 ## un-drained chunk onward is thrown away and re-requested, so the new pace
 ## lands within a chunk or two rather than at the end of the chapter.
 func repace() -> void:
+	if not take_path.is_empty():
+		stale = true                # a take kept is as it was said: Stop, then Play, says it live
+		return
 	if chunks.is_empty() or _next_to_play >= chunks.size():
 		return
 	_epoch += 1                     # in-flight replies from the old pace are now stale
@@ -413,12 +455,16 @@ func repace() -> void:
 
 ## The scrub bar's length: the whole reading, estimated.
 func length() -> float:
+	if not take_path.is_empty():
+		return Spectrum.song_length()
 	return _chunk_t[_chunk_t.size() - 1] if not _chunk_t.is_empty() else 0.0
 
 
 ## The scrub bar's position: where a waiting seek is going, else the sentence being heard and
 ## how far through it, on the estimated scale.
 func position() -> float:
+	if not take_path.is_empty():
+		return Spectrum.current.time
 	var n := _chunk_t.size() - 1
 	if n <= 0:
 		return 0.0
@@ -443,6 +489,10 @@ func position() -> float:
 ## The scrub bar asks to go to [param t] (estimated seconds): remember the sentence there and
 ## restart from it once the bar settles.
 func seek(t: float) -> void:
+	if not take_path.is_empty():
+		take_done = false
+		Spectrum.seek_file(t)
+		return
 	var k := 0
 	for i in _chunk_t.size() - 1:
 		if _chunk_t[i] <= t:
@@ -452,11 +502,15 @@ func seek(t: float) -> void:
 		panel._seek_timer.start()
 
 
-## The bar has settled: read from the sentence a seek waits on.
+## The bar has settled: read from the sentence a seek waits on. A SEEK WHILE PAUSED STAYS PAUSED (next/editing.md step 3: "a
+## seek while paused lands and stays paused"): the voice is made from there while nobody listens, and plays on Play.
 func seek_now() -> void:
 	var k := _seek_k
 	if k >= 0:
+		var hold := Spectrum.paused
 		speak_from(k)
+		if hold:
+			Spectrum.set_stream_paused(true)
 
 
 # --- the window: what is asked of the host ----------------------------------------------------
@@ -464,6 +518,8 @@ func seek_now() -> void:
 ## HOW FAR AHEAD OF THE PLAYHEAD THE VOICE IS MADE (seconds): what is decoded and waiting, the ring's too - and, once the last
 ## sentence is made, to the end ([method ReadingPanel.transport_hooks]'s `ahead`).
 func ahead() -> float:
+	if not take_path.is_empty():
+		return INF
 	if _next_to_play >= chunks.size() and _outro_queued:
 		return INF
 	return _buffered_seconds()
@@ -490,7 +546,8 @@ func _pump() -> void:
 	# still to be pushed is taken off (an underestimate once it plays, so it stays safe).
 	var intro_left := maxf(0.0, _lead_in - float(_pushed) / float(maxi(panel._sr, 1)))
 	var planned := false
-	while _in_flight < LOOKAHEAD and _next_to_request < chunks.size() \
+	var hits := 0             # sentences taken from the cache this pump: a window's worth at most, then drained
+	while _in_flight < LOOKAHEAD and hits < LOOKAHEAD and _next_to_request < chunks.size() \
 			and _buffered_seconds() - intro_left < _depth_now():
 		var idx := _next_to_request
 		if not planned:
@@ -499,9 +556,24 @@ func _pump() -> void:
 		_next_to_request += 1
 		_in_flight += 1
 		var s := panel._cast.cfg_of(String((chunks[idx] as Dictionary).get("speaker", "")))
+		var args: Dictionary = panel._request_args(s, chunks[idx])
+		var key: String = panel.take_key(s, args)
+		# A SENTENCE SAID BEFORE ([TakeCache]) is in the queue at once, as the host's reply would be - no host asked
+		var kept := TakeCache.find(key)
+		if not kept.is_empty():
+			var copy := TakeCache.copy_out(key, ReadingPanel.TAKE_DIR + "/chunk_%d_%d.wav" % [idx, _epoch])
+			if not copy.is_empty():
+				_in_flight -= 1
+				var out: Dictionary = kept["out"]
+				panel._sr = int(out.get("sample_rate", panel._sr))
+				_ready_takes.append({"wav": copy, "index": idx, "spans": out.get("tokens", []), "phones": out.get("phones", [])})
+				hits += 1
+				continue
 		var id := panel._host.request("", panel._cast.voice_id_of(s),
-			ReadingPanel.TAKE_DIR + "/chunk_%d_%d.wav" % [idx, _epoch], panel._request_args(s, chunks[idx]), null)
-		_req_chunk[id] = {"idx": idx, "epoch": _epoch, "sent": Time.get_ticks_msec()}
+			ReadingPanel.TAKE_DIR + "/chunk_%d_%d.wav" % [idx, _epoch], args, null)
+		_req_chunk[id] = {"idx": idx, "epoch": _epoch, "sent": Time.get_ticks_msec(), "key": key}
+	if hits > 0:
+		_drain_ready()
 
 
 ## How deep the window is now: [method depth] over the chunks the pump would ask for next - and, WHILE THE READING IS PAUSED,
@@ -598,6 +670,9 @@ func arrived(id: int, result: Dictionary) -> void:
 		panel._set_status("The host returned no audio.")
 		return
 	panel._sr = int(result.get("sample_rate", panel._sr))
+	# ...kept, so it is never asked for again ([TakeCache])
+	if not Settings.is_read_only():
+		TakeCache.put(String(meta.get("key", "")), wav, result)
 	_ready_takes.append({"wav": wav, "index": idx,
 		"spans": result.get("tokens", []), "phones": result.get("phones", [])})
 	_drain_ready()

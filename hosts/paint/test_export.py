@@ -27,6 +27,8 @@ to three things:
      yellow strokes ... to an extremely dark yellow stroke ... without ever returning to the container"): a flat's pulls in one paint,
      faint and strong by turns, as the optimizer finds them - exported, none lays more than the one before by LOAD_HEAVIER without a
      trip to the pot between them, and the maps still come to the canvas. CONTROL: the program as it was, with no such trip, does.
+  8. ONE LAYER AGAIN (run.py `only`, export.merge_layer): a layer painted again alone over the canvas the ones before it leave, put among
+     the rest - their elements as they were, its own with ids past them, the canvas near the whole painting's. CONTROL: the layer left out.
   7. A PLACE AT A TIME (export._places, PLACE_MM; 2026-11-10: "They tend to jump around the entire face, to random places"): a run's
      pulls in two places 110 mm apart, listed turn about, are gathered into the two places. CONTROL: one place as wide as the face.
 """
@@ -81,21 +83,9 @@ def made_surface():
 
 
 def recompose(els, root, shape, order):
-    """The elements' maps laid in `order` as the shader lays them: color over what is under it by coverage (pre-multiplied)."""
-    from canvas import PX
-    pre = np.zeros(shape + (3,))
-    alp = np.zeros(shape)
-    for i in order:
-        e = els[i]
-        m = e["maps"]
-        w, h = m["w"], m["h"]
-        x0, y0 = int(round(e["rect"][0] * PX)), int(round(e["rect"][1] * PX))
-        a = np.fromfile(root / m["cover"], np.uint8).reshape(h, w) / 255.0
-        c = np.fromfile(root / m["tint"], np.uint8).reshape(h, w, 3) / 255.0
-        box = (slice(y0, y0 + h), slice(x0, x0 + w))
-        pre[box] = c * a[..., None] + pre[box] * (1 - a[..., None])
-        alp[box] = a + alp[box] * (1 - a)
-    return pre, alp
+    """The elements' maps laid in `order` as the shader lays them (export.recompose, which a layer painted again alone is painted over)."""
+    from export import recompose as laid
+    return laid(els, root, shape, order)
 
 
 def first_marks(p, starts, els, root):
@@ -279,6 +269,38 @@ def loads():
     check(was >= 1, "CONTROL: as the program was, %d pulls lay markedly more than the one before with no trip between" % was)
 
 
+def check_one_layer(ref, pics, steps, els, root, shape):
+    """8. ONE LAYER PAINTED AGAIN (next/editing.md step 4): the second layer alone, over the canvas the first left (its elements' maps),
+    merged among the rest - the others' elements as they were, ids and maps; the new ones past every kept id; and the canvas they
+    all leave near the whole painting's. CONTROL: the layer left out, the canvas far from it."""
+    from layers_paint import paint_layers
+    from export import export, recompose, merge_layer
+    whole, _ = recompose(els, root, shape)
+    face = ref.face
+    with tempfile.TemporaryDirectory() as t2:
+        t2 = Path(t2)
+        under = [i for i, e in enumerate(els) if int(e["layer"]) < 1]
+        canvas = recompose(els, root, shape, under)
+        p, starts, _ = paint_layers(ref, steps, pics, log=lambda s: None, first=1, last=1, canvas=canvas)
+        fresh = export(p, starts, steps, t2 / "fresh", log=lambda s: None, canvas=canvas, base_layer=-1)
+        for e in fresh:
+            e["layer"] = 1
+        merged = merge_layer(els, root, fresh, t2 / "fresh", 1, t2 / "out")
+        kept_ids = [e["id"] for e in els if int(e["layer"]) != 1]
+        same = [e["id"] for e in merged if int(e["layer"]) != 1] == kept_ids and all(
+            (root / f).read_bytes() == (t2 / "out" / f).read_bytes()
+            for e in merged if int(e["layer"]) != 1 for f in e["maps"].values() if isinstance(f, str))
+        check(same, "the other layers' elements are as they were, ids and maps")
+        top = max(int(i.split("_")[-1]) for i in [e["id"] for e in els])
+        new = [e for e in merged if int(e["layer"]) == 1]
+        check(bool(new) and all(int(e["id"].split("_")[-1]) > top for e in new), "the layer's new elements take ids past every kept one")
+        again, _ = recompose(merged, t2 / "out", shape)
+        near = float(np.abs(again - whole).max(-1)[face].mean())
+        gone, _ = recompose([e for e in merged if int(e["layer"]) != 1], t2 / "out", shape)
+        far = float(np.abs(gone - whole).max(-1)[face].mean())
+        check(near < 0.02 and far > near * 2, "the canvas they leave is near the whole painting's (%.4f); CONTROL: the layer left out, far (%.4f)" % (near, far))
+
+
 def main():
     from layers_paint import paint_layers
     from export import export, NEVER
@@ -290,6 +312,9 @@ def main():
         els = export(p, starts, steps, root, log=lambda s: None)
         print("%d elements: %s" % (len(els), ", ".join("%s %s %s" % (e["id"], e["tool"], e["paint"]) for e in els)))
         check(len(els) >= 2 and els[0]["layer"] == 0, "the ground is the first element, the lines after it")
+
+        # 8. ONE LAYER AGAIN (run.py `only`; export.merge_layer): the line painted again alone over the canvas the ground left
+        check_one_layer(ref, pics, steps, els, root, (p.cv.h, p.cv.w))
 
         # 1. the maps come to the canvas
         shape = (p.cv.h, p.cv.w)

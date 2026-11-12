@@ -21,6 +21,8 @@ class_name ActorFolder
 
 const FILE := "actor.json"
 const STAMPS := "steps.json"
+## Where what a step made before its last ⟳ is kept, under each scope's folder ([method drop]).
+const VERSIONS := "versions"
 const VIDEO_EXTS := ["mp4", "mkv", "webm", "mov", "m4v", "avi"]
 ## What a voice alone is also heard from: recordings with no picture.
 const SOUND_EXTS := ["m4a", "mp3", "wav", "flac", "ogg", "opus", "aac"]
@@ -339,17 +341,68 @@ func put_stamp(step: String, scope: String, summary := "") -> String:
 ## [param step]'s outputs for [param scope] thrown away, and its stamp: ⟳ makes it again, and
 ## what was made from it is stale once it is.
 func drop(step: String, scope: String) -> void:
+	# KEPT ONE BACK, NEVER DELETED (next/editing.md step 12, "the Actor takes step 1"): what the step made moved - never copied, a
+	# model or a video's frames are large - into `versions/<step>/`, its stamp beside it, over the one kept before ([method put_back])
+	var back := scope_dir(scope).path_join(VERSIONS).path_join(step)
+	var all := _stamps(scope)
+	var moved := false
 	for f in ActorSteps.outputs(step):
 		var p := scope_dir(scope).path_join(String(f))
-		if DirAccess.dir_exists_absolute(p):
-			Actors._remove_tree(p)
-		elif FileAccess.file_exists(p):
-			DirAccess.remove_absolute(p)
-	var all := _stamps(scope)
+		if not (DirAccess.dir_exists_absolute(p) or FileAccess.file_exists(p)):
+			continue
+		if not moved:
+			Actors._remove_tree(back)
+			DirAccess.make_dir_recursive_absolute(back)
+			moved = true
+		if DirAccess.rename_absolute(p, back.path_join(String(f).replace("/", "_"))) != OK:
+			if DirAccess.dir_exists_absolute(p):
+				Actors._remove_tree(p)
+			else:
+				DirAccess.remove_absolute(p)
+	if moved:
+		write_file(back.path_join(STAMPS), JSON.stringify({"stamp": all.get(step)}, "\t"))
 	forget()
 	if all.has(step):
 		all.erase(step)
 		write_file(scope_dir(scope).path_join(STAMPS), JSON.stringify(all, "\t"))
+
+
+## Whether what [param step] made before its last ⟳ is kept for [param scope] ([method drop]).
+func kept_back(step: String, scope: String) -> bool:
+	return FileAccess.file_exists(scope_dir(scope).path_join(VERSIONS).path_join(step).path_join(STAMPS))
+
+
+## WHAT [param step] MADE BEFORE ITS LAST ⟳ PUT BACK for [param scope]: what stands now goes one back in its place (a swap), the
+## stamp with it. "" done, else why not.
+func put_back(step: String, scope: String) -> String:
+	if not kept_back(step, scope):
+		return "nothing %s made before is kept" % step
+	var back := scope_dir(scope).path_join(VERSIONS).path_join(step)
+	var aside := scope_dir(scope).path_join(VERSIONS).path_join(step + ".now")
+	Actors._remove_tree(aside)
+	var kept: Variant = read_kept(back.path_join(STAMPS))
+	var was_stamp: Variant = (kept as Dictionary).get("stamp") if kept is Dictionary else null
+	var all := _stamps(scope)
+	DirAccess.make_dir_recursive_absolute(aside)
+	for f in ActorSteps.outputs(step):
+		var name := String(f).replace("/", "_")
+		var p := scope_dir(scope).path_join(String(f))
+		if DirAccess.dir_exists_absolute(p) or FileAccess.file_exists(p):
+			DirAccess.rename_absolute(p, aside.path_join(name))
+		if DirAccess.dir_exists_absolute(back.path_join(name)) or FileAccess.file_exists(back.path_join(name)):
+			DirAccess.make_dir_recursive_absolute(p.get_base_dir())
+			if DirAccess.rename_absolute(back.path_join(name), p) != OK:
+				return "could not put %s back" % String(f)
+	write_file(aside.path_join(STAMPS), JSON.stringify({"stamp": all.get(step)}, "\t"))
+	Actors._remove_tree(back)
+	DirAccess.rename_absolute(aside, back)
+	if was_stamp != null:
+		all[step] = was_stamp
+	else:
+		all.erase(step)
+	write_file(scope_dir(scope).path_join(STAMPS), JSON.stringify(all, "\t"))
+	forget()
+	return ""
 
 
 ## Is [param step] moot for [param scope]? A folder video has nothing to fetch, one with no captions link

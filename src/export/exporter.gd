@@ -74,6 +74,8 @@ const SHORT_MAX := 180.0
 # itself (see synth_editor.gd's `autopilot`). Meaningless for a plain song
 # export (no game to automate), so it's disabled when there's no take_provider.
 const UI_TOGGLE_ID := 1000
+## The quality menu's "A stretch again" ([method _ask_stretch]; [Stitch]).
+const STRETCH_ID := 1001
 # Generous but arbitrary: a catch's own reel alone can run 45-240s (see
 # synth_editor.gd's _begin_hook), so no fixed window guarantees a full throw
 # -> catch -> hold/fold cycle. This is long enough to usually show one.
@@ -109,7 +111,15 @@ var _btn: Button
 var _status: Label
 var _dialog: FileDialog
 var _quality_menu: PopupMenu
-var _state := "idle"     # idle | baking | rendering | transcoding | upload_wait | uploading | done
+var _state := "idle"     # idle | baking | rendering | transcoding | stitching | upload_wait | uploading | done
+## A STRETCH RENDERED AGAIN ([Stitch]): {old, t0, t1, span} while one is under way, {} otherwise.
+var _stretch := {}
+var _stretch_dialog: ConfirmationDialog
+var _stretch_old: LineEdit
+var _stretch_from: LineEdit
+var _stretch_to: LineEdit
+var _stitch_steps: Array = []    # the ffmpeg runs still to go, each an argv
+var _stitch_pid := -1
 var _bake_pid := -1
 var _render_pid := -1
 var _transcode_pid := -1
@@ -201,6 +211,11 @@ const STALL_MIN_GROWTH := 65536   # bytes; below this the file is not really mov
 ## the current take to disk and returns its path. Export then works from the
 ## very first moment - the click IS the trigger that makes the audio.
 var take_provider := Callable()
+
+## THE TAKE PROVIDER MAKES THE EXPORT'S AUDIO even while a file plays: a reading's take kept plays as a file
+## ([method ReadingStream.play]), and its export still pins its episode and writes what goes with the take
+## ([method ReadingPanel.export_take], which hands over the kept take rather than saying it again).
+var take_first := false
 
 ## Optional companion to [member take_provider]: returns true when the provider
 ## has something worth rendering (in synthesis: at least one seed on the belt,
@@ -344,8 +359,14 @@ func _build_ui() -> void:
 	# toggle on the very click meant to set it, so only quality items (uncheckable)
 	# close it.
 	_quality_menu.hide_on_checkable_item_selection = false
+	# ...AND A STRETCH OF AN EARLIER EXPORT RENDERED AGAIN (next/editing.md step 13; [Stitch])
+	_quality_menu.add_item("A stretch again, into an earlier export…", STRETCH_ID)
+	_quality_menu.set_item_tooltip(_quality_menu.get_item_index(STRETCH_ID),
+		"Render only a stretch of an export you made before - a late fix - and put it back in its place: the rest of the\n"
+		+ "video is copied as it was, never rendered again. The earlier file is kept beside it.")
 	_quality_menu.id_pressed.connect(_on_quality)
 	add_child(_quality_menu)
+	_build_stretch_dialog()
 
 	_dialog = FileDialog.new()
 	_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
@@ -406,6 +427,8 @@ func _process(dt: float) -> void:
 			_tick_render(dt)
 		"transcoding":
 			_tick_transcode()
+		"stitching":
+			_tick_stitch()
 		"preparing":
 			_set_status("⇪  Taking the thumbnail for %s…" % _out.get_file(), Color(0.95, 0.92, 0.7))
 		"upload_wait":
@@ -537,6 +560,9 @@ func _tick_render(dt: float) -> void:
 func _tick_transcode() -> void:
 	if Subprocess.alive(_transcode_pid):
 		_set_status("⏳  Finalizing %s …  %d%%" % [_out.get_file(), _read_transcode_pct()], Color(0.95, 0.92, 0.7))
+	elif FileAccess.file_exists(_out) and _file_size(_out) > 4096 and not _stretch.is_empty():
+		_drop_scratch()
+		_start_stitch()                   # a stretch: put back into the earlier export
 	elif FileAccess.file_exists(_out) and _file_size(_out) > 4096:
 		_drop_scratch()                   # transcode ok -> the scratch goes, and its space with it
 		_state = "done"
@@ -561,6 +587,158 @@ func _tick_transcode() -> void:
 		_done_t = 30.0
 		_set_status("⚠  Transcode failed; raw file kept: %s" % _avi, Color(1.0, 0.7, 0.6))
 		push_warning("ghost export: transcode failed; kept AVI at " + _avi)
+
+
+# --- a stretch again ([Stitch]; next/editing.md step 13) ------------------------------------------------------------------
+
+func _build_stretch_dialog() -> void:
+	_stretch_dialog = ConfirmationDialog.new()
+	_stretch_dialog.title = "A stretch again"
+	_stretch_dialog.ok_button_text = "Render the stretch"
+	var col := VBoxContainer.new()
+	var say := Label.new()
+	say.text = ("The earlier export, and the stretch of it to render again. Only that stretch is rendered - widened to the "
+		+ "video's keyframes, every two seconds - and put back in its place; the rest is copied as it was. The note must be "
+		+ "the one the export was made from, with the same words.")
+	say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	say.custom_minimum_size = Vector2(480, 0)
+	col.add_child(say)
+	_stretch_old = _stretch_field(col, "The earlier export (.mp4)")
+	_stretch_from = _stretch_field(col, "From (m:ss or seconds)")
+	_stretch_to = _stretch_field(col, "To (m:ss or seconds)")
+	_stretch_dialog.add_child(col)
+	_stretch_dialog.confirmed.connect(_on_stretch)
+	add_child(_stretch_dialog)
+
+
+func _stretch_field(col: Container, label: String) -> LineEdit:
+	var l := Label.new()
+	l.text = label
+	col.add_child(l)
+	var e := LineEdit.new()
+	col.add_child(e)
+	return e
+
+
+func _ask_stretch() -> void:
+	if _stretch_old.text.strip_edges().is_empty() and not _out.is_empty() and FileAccess.file_exists(_out):
+		_stretch_old.text = _out
+	_stretch_dialog.popup_centered(Vector2i(560, 0))
+
+
+## [param s] ("1:23", "83", "1:02:03") as seconds, -1 for nothing readable.
+static func clock_seconds(s: String) -> float:
+	var parts := s.strip_edges().split(":")
+	var t := 0.0
+	for p in parts:
+		if not p.strip_edges().is_valid_float():
+			return -1.0
+		t = t * 60.0 + float(p)
+	return t if not parts.is_empty() else -1.0
+
+
+## THE STRETCH ASKED FOR: the earlier export read (its size and rate must be one of the qualities, so the stretch is encoded as
+## it was), and the export's own way taken from there with only the stretch rendered.
+func _on_stretch() -> void:
+	var old := _stretch_old.text.strip_edges()
+	var t0 := clock_seconds(_stretch_from.text)
+	var t1 := clock_seconds(_stretch_to.text)
+	if not FileAccess.file_exists(old) or t0 < 0.0 or t1 <= t0:
+		_fail("⚠  A stretch needs an earlier export that is there, and a From before its To")
+		return
+	var probe: Array = []
+	OS.execute("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate",
+		"-of", "csv=p=0", old], probe)
+	var got := String("".join(probe)).strip_edges().split(",")
+	var fit := {}
+	if got.size() >= 3:
+		var rate := got[2].split("/")
+		var fps := float(rate[0]) / maxf(1.0, float(rate[1])) if rate.size() == 2 else float(rate[0])
+		for q in qualities_for(Director.resolved_frame()):
+			if int(q.w) == int(got[0]) and int(q.h) == int(got[1]) and absf(float(q.fps) - fps) < 0.01:
+				fit = q
+	if fit.is_empty():
+		_fail("⚠  %s is no export of this frame's qualities, so a stretch could not be encoded to match it" % old.get_file())
+		return
+	_quality = fit
+	_stretch = {"old": old, "t0": t0, "t1": t1}
+	_on_path(old.get_basename() + ".stretch.mp4")
+
+
+## THE STRETCH PUT BACK ([Stitch]): the earlier export's head and tail copied, the stretch's pictures, joined under its whole sound.
+func _start_stitch() -> void:
+	var old := String(_stretch["old"])
+	var sp: Vector2 = _stretch.get("span", Vector2.ZERO)
+	var parts_dir := old.get_basename() + ".stitch"
+	DirAccess.make_dir_recursive_absolute(parts_dir)
+	var length := _media_seconds(old)
+	var parts: Array = []
+	_stitch_steps = []
+	var head := parts_dir.path_join("head.mp4")
+	var head_args := Stitch.head_args(old, sp.x, float(_quality.fps), head)
+	if not head_args.is_empty():
+		_stitch_steps.append(head_args)
+		parts.append(head)
+	var pic := parts_dir.path_join("stretch.mp4")
+	_stitch_steps.append(Stitch.picture_args(_out, pic))
+	parts.append(pic)
+	var tail := parts_dir.path_join("tail.mp4")
+	var tail_args := Stitch.tail_args(old, sp.y, length, tail)
+	if not tail_args.is_empty():
+		_stitch_steps.append(tail_args)
+		parts.append(tail)
+	var list := parts_dir.path_join("parts.txt")
+	var f := FileAccess.open(list, FileAccess.WRITE)
+	if f == null:
+		_fail("⚠  Could not write the stitch's list")
+		return
+	f.store_string(Stitch.list_text(parts))
+	f.close()
+	_stitch_steps.append(Stitch.join_args(list, old, parts_dir.path_join("whole.mp4")))
+	_stitch_pid = -1
+	_state = "stitching"
+
+
+func _tick_stitch() -> void:
+	if _stitch_pid > 0 and Subprocess.alive(_stitch_pid):
+		_set_status("⏳  Putting the stretch back into %s…" % String(_stretch["old"]).get_file(), Color(0.95, 0.92, 0.7))
+		return
+	if not _stitch_steps.is_empty():
+		_stitch_pid = Subprocess.start("ffmpeg", _stitch_steps.pop_front(), "stitch")
+		if _stitch_pid <= 0:
+			_fail("⚠  Could not start ffmpeg to put the stretch back")
+			_stretch = {}
+		return
+	var old := String(_stretch["old"])
+	var parts_dir := old.get_basename() + ".stitch"
+	var whole := parts_dir.path_join("whole.mp4")
+	if not FileAccess.file_exists(whole) or _file_size(whole) < 4096:
+		_fail("⚠  The stretch could not be put back (see the console); %s is as it was, the stretch at %s" % [old.get_file(), _out])
+		_stretch = {}
+		return
+	var kept := Stitch.kept_name(old)
+	if DirAccess.rename_absolute(old, kept) != OK or DirAccess.rename_absolute(whole, old) != OK:
+		_fail("⚠  Could not put the stitched video in place: it is at %s" % whole)
+		_stretch = {}
+		return
+	for p in DirAccess.get_files_at(parts_dir):
+		DirAccess.remove_absolute(parts_dir.path_join(p))
+	DirAccess.remove_absolute(parts_dir)
+	DirAccess.remove_absolute(_out)
+	var sp: Vector2 = _stretch.get("span", Vector2.ZERO)
+	_state = "done"
+	_done_t = 30.0
+	_set_status("✓  %s - %s put back into %s (the earlier one kept as %s)" % [Clock.text(sp.x), Clock.text(sp.y), old.get_file(), kept.get_file()],
+		Color(0.82, 0.95, 0.86))
+	print("ghost: a stretch %.1f-%.1fs put back into %s; the earlier kept as %s" % [sp.x, sp.y, old, kept])
+	_stretch = {}
+
+
+## How long a video is, seconds (ffprobe), 0 when it cannot be read.
+static func _media_seconds(path: String) -> float:
+	var got: Array = []
+	OS.execute("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path], got)
+	return float(String("".join(got)).strip_edges())
 
 
 # THE BUTTON IS ALWAYS VISIBLE. History, because this exact gate regressed
@@ -612,7 +790,7 @@ func _on_export() -> void:
 		_note_t = 6.0
 		_set_status("⏳  " + Deps.hint("ffmpeg"), Color(1.0, 0.85, 0.6))
 		return
-	_song = Spectrum.audio_path()
+	_song = "" if take_first and take_provider.is_valid() else Spectrum.audio_path()
 	if _song.is_empty() and not take_provider.is_valid():
 		_note_t = 4.0
 		_set_status("⚠  Nothing to export yet - play or speak something first",
@@ -643,6 +821,9 @@ func _on_export() -> void:
 
 
 func _on_quality(id: int) -> void:
+	if id == STRETCH_ID:
+		_ask_stretch()
+		return
 	if id == UI_TOGGLE_ID:
 		_synth_autoplay = not _synth_autoplay
 		_quality_menu.set_item_checked(_quality_menu.get_item_index(UI_TOGGLE_ID), _synth_autoplay)
@@ -650,6 +831,7 @@ func _on_quality(id: int) -> void:
 	var list := qualities_for(Director.resolved_frame())
 	if id < 0 or id >= list.size():
 		return
+	_stretch = {}            # a whole export, never a stretch left from before
 	_quality = list[id]
 	var named := safe_name(String(name_provider.call())) if name_provider.is_valid() else ""
 	_dialog.current_file = ("%s.mp4" % named) if not named.is_empty() else "ghost_notes_%s.mp4" % _quality.tag
@@ -692,6 +874,9 @@ func _on_path(out_path: String) -> void:
 	var peek := _upload_peek()
 	_upload_this = not peek.is_empty() and not peek.has("refused")
 	_upload_meta = {}
+	# (a stretch goes back into a file, and the file goes up once it is whole, if at all)
+	if not _stretch.is_empty():
+		_upload_this = false
 	if _upload_this:
 		_check_sign_in(Callable(), scopes_for(peek), str(peek.get("channel", "")), str(peek.get("channel_name", "")),
 			str(peek.get("client", "")))
@@ -789,6 +974,11 @@ func _start_render() -> void:
 	var args := Subprocess.own_log("render") + Boot.project_args() + PackedStringArray([
 		"--write-movie", _avi, "--fixed-fps", str(_quality.fps),
 		"--", "--export", "--bake-file", _cache, "--audio", _song])
+	# A STRETCH ONLY ([Stitch]): from the keyframe before it to the one after
+	if not _stretch.is_empty():
+		var sp := Stitch.span(float(_stretch["t0"]), float(_stretch["t1"]), _song_dur)
+		_stretch["span"] = sp
+		args.append_array(PackedStringArray(["--from", "%.3f" % sp.x, "--until", "%.3f" % sp.y]))
 	# THE SEED: pin it only when there is a live session to reproduce. Without
 	# one (exporting a take straight from the belt - no cast, no show watched
 	# yet) passing session_seed() would pin the render to 0, which is not a
@@ -928,7 +1118,7 @@ func _start_transcode(follow := false) -> void:
 	# converting it to 709 costs 6.2 dB for nothing. And do NOT reach for ffmpeg's `colorspace`
 	# filter to force limited range: it CLAMPS instead of scaling here, pinning 92% of the frame to
 	# code 16 and collapsing PSNR from 46.8 to 29.0 dB while exiting 0.
-	var gop := int(_quality.fps) * 2       # 2 s keyframe interval - YouTube's guidance (x264 defaults to 250)
+	var gop := int(_quality.fps * Stitch.GOP_S)   # a keyframe every 2 s - YouTube's guidance (x264 defaults to 250), and where a stretch is cut ([Stitch])
 	# THE DOWNSCALE is the antialiasing resolve (see QUALITIES). lanczos rather than bicubic: bicubic
 	# scores marginally higher on edge PSNR but lands ~18% BELOW ground truth in near-Nyquist energy,
 	# i.e. slightly soft - and the complaint here was blurry AND aliased, so the kernel that keeps the
@@ -1354,6 +1544,7 @@ func _clear_override() -> void:
 func _fail(msg: String) -> void:
 	_clear_override()
 	_upload_this = false
+	_stretch = {}            # a stretch that failed is over: the next export is a whole one
 	_state = "done"
 	_done_t = 8.0
 	_set_status(msg, Color(1.0, 0.7, 0.6))

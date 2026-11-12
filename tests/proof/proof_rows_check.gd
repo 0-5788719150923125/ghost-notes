@@ -6,8 +6,8 @@ extends SceneTree
 ##
 ## Each step is a row, with a Whole episode row over them where Make episode's second meaning had been (a button that made
 ## the first time and threw everything away the second; 2026-11-02). THE WHOLE EPISODE ASKS, and nothing runs until it is
-## answered. A STEP THROWS AWAY ONLY WHAT AGENTS MADE: the solve asks, naming the lesson; the ink does not (THE CONTROL), for the
-## script after it is the tools'. ⟳ GOES ON FROM WHERE IT STOPPED: on the first step never made, in an episode begun, it is
+## answered. A STEP'S ⟳ THROWS NOTHING AWAY (next/editing.md step 12): the solve is made again over what stands, kept a version back,
+## and does not ask (THE CONTROL: the whole episode, which does); each made step has its 🔒 and its ✎. ⟳ GOES ON FROM WHERE IT STOPPED: on the first step never made, in an episode begun, it is
 ## offered, and on a later one it is not (THE CONTROL). A step passed by while the lesson stands has nothing to make, and is
 ## left out of the count. Generate refuses a note with no problem, saying so over the rows.
 
@@ -85,9 +85,13 @@ func _check() -> void:
 	var whole := _redo("whole")
 	_ok(not whole.disabled and _pipe.asks_first("whole") and whole.tooltip_text.contains("thrown away"), "the whole episode asks first, and says what goes")
 	var solve := _redo("solve")
-	_ok(_pipe.asks_first("solve") and solve.tooltip_text.contains("Lesson") and not solve.tooltip_text.contains("Ink"),
-		"the solve throws the agents' work away and says which: %s" % solve.tooltip_text.replace("\n", " "))
-	_ok(not _pipe.asks_first("ink"), "control: the ink takes only the script, the tools': it does not ask")
+	_ok(not _pipe.asks_first("solve") and solve.tooltip_text.contains("kept a version back"),
+		"a step's ⟳ throws nothing away - it does not ask, and says what stands is kept: %s" % solve.tooltip_text.replace("\n", " "))
+	var row: PipelineRow = null
+	for r in _proof._step_rows():
+		if (r as PipelineRow).key == "solve":
+			row = r
+	_ok(row != null and row.lockable and row.edit.is_valid() and not row.edit_tip.is_empty(), "a made step has its 🔒 and its ✎")
 	# PRESSED
 	whole.pressed.emit()
 	_ok(_ep.has("lesson") and _pipe.asking != null, "pressed: it asks, nothing thrown away yet")

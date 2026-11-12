@@ -85,6 +85,8 @@ EOF
 # xorg-server-xvfb, exactly like run_quiet.sh.
 GODOT="${GODOT:-godot}"   # scripts/check.sh and build.sh pass theirs
 RUNNER=("$GODOT" --headless)
+# What the timeout and Godot run INSIDE (the virtual display), when there is one - see the last line.
+WRAP=()
 if [[ "${GHOST_PROBE_GPU:-0}" != "0" ]]; then
   if command -v xvfb-run >/dev/null 2>&1; then
     # A DISPLAY OF ITS OWN. `xvfb-run -a` looks for a free display number and starts its server a
@@ -94,10 +96,11 @@ if [[ "${GHOST_PROBE_GPU:-0}" != "0" ]]; then
     # number, which cannot collide; an xvfb-run too old to have it starts looking from a number of
     # this process's own.
     if xvfb-run --help 2>&1 | grep -q -- '--auto-display'; then
-      RUNNER=(xvfb-run -d -s "-screen 0 1280x1024x24" "$GODOT")
+      WRAP=(xvfb-run -d -s "-screen 0 1280x1024x24")
     else
-      RUNNER=(xvfb-run -a -n "$((100 + $$ % 20000))" -s "-screen 0 1280x1024x24" "$GODOT")
+      WRAP=(xvfb-run -a -n "$((100 + $$ % 20000))" -s "-screen 0 1280x1024x24")
     fi
+    RUNNER=("$GODOT")
   else
     echo "run_boot_probe: GHOST_PROBE_GPU set but xvfb-run not found -" \
          "falling back to a VISIBLE window." >&2
@@ -122,7 +125,11 @@ fi
 # Anything after the timeout is handed to the PROBE as user args (read them with
 # OS.get_cmdline_user_args), so a probe can take options the way clown_look_probe does.
 # Keep the runner in the terminal's process group so Ctrl+C reaches Godot too.
-timeout --foreground "$TIMEOUT" "${RUNNER[@]}" --path . "res://$SCENE" -- "${@:3}" 2>&1
+# THE TIMEOUT IS INSIDE THE VIRTUAL DISPLAY, Godot its own child. Outside it, `timeout --foreground` ended `xvfb-run`
+# alone, and a probe that never quit went on running with its Xvfb: on the graphics card and a core, beside whatever
+# was measured next (2026-11-11: three of them, one for 23 minutes, and fourteen older Xvfb found idle). Now Godot is
+# what is ended, and xvfb-run, seeing it go, takes its server down and hands back the 124.
+${WRAP[@]+"${WRAP[@]}"} timeout --foreground "$TIMEOUT" "${RUNNER[@]}" --path . "res://$SCENE" -- "${@:3}" 2>&1
 status=$?
 if [[ $status -eq 124 ]]; then
   echo "run_boot_probe: TIMED OUT after ${TIMEOUT}s (probe never quit)" >&2

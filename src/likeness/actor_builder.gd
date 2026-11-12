@@ -144,8 +144,8 @@ func start(steps: Array = []) -> void:
 	changed.emit()
 
 
-## ⟳: [param step]'s outputs thrown away over every scope, and made again; what is made from it is
-## stale once it is.
+## ⟳: [param step]'s outputs moved one back over every scope ([method ActorFolder.drop]; [method put_back] brings them back), and
+## made again; what is made from it is stale once it is.
 func redo(step: String) -> void:
 	for sc in actor.scopes_of(step):
 		if not _runs.has(_key(step, String(sc))):
@@ -153,6 +153,31 @@ func redo(step: String) -> void:
 	if step == "audit":
 		Actors._remove_tree(actor.dir.path_join("audit.parts"))
 	start([step])
+
+
+## WHAT [param step] MADE BEFORE ITS LAST ⟳ PUT BACK over every scope that kept one ([method ActorFolder.put_back]); what is made
+## from it is stale where it was made from what stood. "" done, else why not.
+func put_back(step: String) -> String:
+	if not _runs.is_empty():
+		return "wait for what is being made to end"
+	var any := false
+	for sc in actor.scopes_of(step):
+		if actor.kept_back(step, String(sc)):
+			var err := actor.put_back(step, String(sc))
+			if not err.is_empty():
+				return err
+			any = true
+	refresh = true
+	changed.emit()
+	return "" if any else "nothing %s made before is kept" % step
+
+
+## Whether [param step] has what it made before its last ⟳ kept, in any scope.
+func kept_back(step: String) -> bool:
+	for sc in actor.scopes_of(step):
+		if actor.kept_back(step, String(sc)):
+			return true
+	return false
 
 
 ## STOP: every run ends now; what each finished is kept.

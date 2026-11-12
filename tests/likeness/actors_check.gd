@@ -298,6 +298,27 @@ func _run() -> void:
 		if (runs == "python" or runs == "train") and not ActorBuilder.MAIN.has(st):
 			unlanded.append(st)
 	_ok(unlanded.is_empty() and not ActorBuilder.MAIN.has("fetch"), "steps a program makes with no main file: %s" % str(unlanded))
+	# KEPT ONE BACK (next/editing.md step 12): a step's ⟳ moves what it made one back with its stamp, never deleting it; put back,
+	# what stood and what was kept swap - THE CONTROL: a step never made again has nothing kept to put back
+	var scope := "v:" + String(_actor.ticked()[0])
+	var sdir := _actor.scope_dir(scope)
+	DirAccess.make_dir_recursive_absolute(sdir)
+	_write(sdir.path_join("probe.json"), "first")
+	ActorFolder.write_file(sdir.path_join(ActorFolder.STAMPS), JSON.stringify({"probe": {"v": 1}}))
+	_actor.forget()
+	_actor.drop("probe", scope)
+	var back := sdir.path_join(ActorFolder.VERSIONS).path_join("probe")
+	_ok(not FileAccess.file_exists(sdir.path_join("probe.json")) and FileAccess.get_file_as_string(back.path_join("probe.json")) == "first"
+		and _actor.kept_back("probe", scope), "a step made again keeps what it made one back")
+	_write(sdir.path_join("probe.json"), "second")
+	ActorFolder.write_file(sdir.path_join(ActorFolder.STAMPS), JSON.stringify({"probe": {"v": 2}}))
+	_actor.forget()
+	var put := _actor.put_back("probe", scope)
+	var stamps: Variant = JSON.parse_string(FileAccess.get_file_as_string(sdir.path_join(ActorFolder.STAMPS)))
+	_ok(put.is_empty() and FileAccess.get_file_as_string(sdir.path_join("probe.json")) == "first"
+		and FileAccess.get_file_as_string(back.path_join("probe.json")) == "second" and int(((stamps as Dictionary)["probe"] as Dictionary)["v"]) == 1,
+		"put back, what stood and what was kept swap, its stamp with it (%s)" % put)
+	_ok(not _actor.kept_back("survey", scope) and not _actor.put_back("survey", scope).is_empty(), "the control: a step never made again has nothing to put back")
 	# THE LIBRARY: listed by name, opened by id
 	var listed := Actors.list()
 	_ok(listed.size() == 1 and String(listed[0]["name"]) == "A Person", "the library lists %s" % str(listed))

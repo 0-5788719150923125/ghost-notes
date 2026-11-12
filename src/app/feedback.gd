@@ -162,6 +162,11 @@ func _open_console() -> void:
 	# ...and what a table draws off where it stood, and why ([method TableWork.drawn_report]): a live-only report names its part
 	if Director._medium != null and Director._medium.has_method("work_report"):
 		_shot_desc["table"] = Director._medium.call("work_report")
+	# ...and which episode, at what moment of it: a report may be of its data, not the code (TableMedium.episode_report)
+	if Director._medium != null and Director._medium.has_method("episode_report"):
+		var ep: Dictionary = Director._medium.call("episode_report")
+		if not ep.is_empty():
+			_shot_desc["episode"] = ep
 	_open = true
 	_ui.visible = true
 	# The panels above the bottom-right row draw over every scene, this console included: opening

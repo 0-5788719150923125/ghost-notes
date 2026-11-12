@@ -20,9 +20,14 @@ class_name SchemaForm
 ##
 ## TYPES: `bool`, `enum`, `float`, `int`, `text`, `scene` (a choice among [code]context.scenes[/code]),
 ## `actor` (one of [code]context.actors[/code]), `targets` (some of them; none is everyone), `num` (a number, or a range
-## `lo..hi` sampled once per instance), `vec3` (three of those, `x, y, z`) and `data` (anything
+## `lo..hi` sampled once per instance), `vec3` (three of those, `x, y, z`), `pair` (two plain numbers, `x, z`) and `data` (anything
 ## else, as JSON - how a value with no field of its own is still reachable). A key the map has
 ## and the table does not gets a row by what its value is ([method infer]).
+##
+## A BOUNDED NUMBER IS A SLIDER beside its box (next/editing.md step 5: "SchemaForm gains a color, a slider ... a reference"):
+## dragged, it is ONE edit, written as the drag ends - never one per step of it - and unset, it stands at the default, dimmed, and
+## sets the value only once moved. `color` is a picker, written `#rrggbb`; `ref` a choice among the names the context lists
+## under the field's `of` (an actor, a thing, a point), "" unsetting it.
 
 ## A row was moved: the field's key and its new value; null unsets the key.
 signal edited(key: String, value: Variant)
@@ -55,6 +60,41 @@ func show_fields(schema: Dictionary, values: Dictionary, context := {}) -> void:
 			if not schema.has(key):
 				_add_row(String(key), infer(String(key), values[key]), values, context)
 	_building = false
+
+
+## ONE ROW SHAPE (next/editing.md step 5: "one shape for every registry, the five dialects turned to it"): what this form reads -
+## `type`, `label`, `blurb`, `default`, and `min`/`max`/`step`, `options` or `of` as its type has them - from a row written in any
+## registry's dialect: the storyboard's and the table's (this shape, untouched), a layer's (`num`, `flag`, `txt`, `dict`), a scene's
+## (`choice` with its options listed, `num` with a `range`; [method SceneRoster.fields_of] names a table's options first), the
+## Look's tonemap adjustments (`min`/`max`/`step` and no type) and the Look's filters (no type and no bounds: a dial, 0 to 1).
+static func normalize(row: Dictionary) -> Dictionary:
+	var out := row.duplicate()
+	match String(row.get("type", "")):
+		"flag":
+			out["type"] = "bool"
+		"txt":
+			out["type"] = "text"
+		"dict":
+			out["type"] = "data"
+		"choice":
+			out["type"] = "enum" if row.get("options") is Array else "text"
+		"num":
+			if row.get("range") is Array and row.get("default") == null:
+				out["default"] = row["range"]
+		"":
+			if row.has("min") and row.has("max"):
+				out["type"] = "float"
+			elif typeof(row.get("default")) in [TYPE_INT, TYPE_FLOAT]:
+				out["type"] = "float"
+				out["min"] = 0.0
+				out["max"] = 1.0
+			elif row.get("default") is bool:
+				out["type"] = "bool"
+			elif row.get("default") is String:
+				out["type"] = "text"
+			else:
+				out["type"] = "data"
+	return out
 
 
 ## A field row for a value no table describes: a switch, a number, a line of text, or JSON.
@@ -116,6 +156,21 @@ static func vec3_text(v: Variant) -> String:
 	return ", ".join(parts)
 
 
+## TWO NUMBERS as a person types them, `x, z` - a place on a table in centimeters, say. "" for anything else.
+static func pair_text(v: Variant) -> String:
+	if not (v is Array) or (v as Array).size() != 2 or not _is_num((v as Array)[0]) or not _is_num((v as Array)[1]):
+		return ""
+	return "%s, %s" % [num_text((v as Array)[0]), num_text((v as Array)[1])]
+
+
+## ...and read back: `[x, z]`, or null for text that is not two numbers.
+static func parse_pair(text: String) -> Variant:
+	var parts := text.strip_edges().trim_prefix("[").trim_suffix("]").split(",", false)
+	if parts.size() != 2 or not parts[0].strip_edges().is_valid_float() or not parts[1].strip_edges().is_valid_float():
+		return null
+	return [float(parts[0]), float(parts[1])]
+
+
 ## ...and read back: `[x, y, z]`, or null for text that is not three components.
 static func parse_vec3(text: String) -> Variant:
 	var parts := text.strip_edges().trim_prefix("[").trim_suffix("]").split(",", false)
@@ -144,7 +199,8 @@ static func _trim(f: float) -> String:
 	return str(int(f)) if is_equal_approx(f, roundf(f)) and absf(f) < 1e9 else str(snappedf(f, 0.0001))
 
 
-func _add_row(key: String, field: Dictionary, values: Dictionary, context: Dictionary) -> void:
+func _add_row(key: String, raw: Dictionary, values: Dictionary, context: Dictionary) -> void:
+	var field := normalize(raw)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	add_child(row)
@@ -191,16 +247,10 @@ func _control(key: String, field: Dictionary, value: Variant, has: bool, context
 		"actor":
 			return _choice(key, [""] + (context.get("actors", []) as Array), String(value) if value != null else "")
 		"float", "int":
-			if field.has("min") and field.has("max") and value != null:
-				var spin := SpinBox.new()
-				spin.min_value = float(field["min"])
-				spin.max_value = float(field["max"])
-				spin.step = float(field.get("step", 1.0 if String(field["type"]) == "int" else 0.01))
-				spin.set_value_no_signal(float(value))
-				spin.editable = not read_only
-				spin.value_changed.connect(func(v: float) -> void:
-					_emit(key, int(v) if String(field["type"]) == "int" else v))
-				return spin
+			# (a slider for one number: a range sampled once, `[lo, hi]`, or a value from a def stays the line it was)
+			if field.has("min") and field.has("max") and (value == null or typeof(value) in [TYPE_INT, TYPE_FLOAT]) \
+					and typeof(field.get("default", field["min"])) in [TYPE_INT, TYPE_FLOAT]:
+				return _slider(key, field, value, has)
 			return _line(key, num_text(value) if has else "", num_text(field.get("default")),
 				func(t: String) -> Variant:
 					if not t.strip_edges().is_valid_float():
@@ -210,13 +260,65 @@ func _control(key: String, field: Dictionary, value: Variant, has: bool, context
 			return _line(key, num_text(value) if has else "", num_text(field.get("default")), parse_num)
 		"vec3":
 			return _line(key, vec3_text(value) if has else "", vec3_text(field.get("default")), parse_vec3)
+		"pair":
+			return _line(key, pair_text(value) if has else "", pair_text(field.get("default")), parse_pair)
 		"text":
 			return _line(key, String(value) if has and value != null else "", "", func(t: String) -> Variant:
 				return t.strip_edges() if not t.strip_edges().is_empty() else null)
 		"targets":
 			return _targets(key, value, context.get("actors", []) as Array)
+		"color":
+			var pick := ColorPickerButton.new()
+			pick.custom_minimum_size = Vector2(48, 0)
+			pick.color = Color.from_string(String(value if has and value != null else field.get("default", "#ffffff")), Color.WHITE)
+			pick.edit_alpha = false
+			pick.disabled = read_only
+			pick.modulate.a = 1.0 if has else 0.6
+			pick.color_changed.connect(func(c: Color) -> void: _emit(key, "#" + c.to_html(false)))
+			return pick
+		"ref":
+			return _choice(key, [""] + (context.get(String(field.get("of", "")), []) as Array), String(value) if value != null else "")
 	return _line(key, JSON.stringify(value) if has else "", "", func(t: String) -> Variant:
 		return JSON.parse_string(t))
+
+
+## A BOUNDED NUMBER: a slider and its box, as one. The box writes what is typed; the slider writes once, as its drag ends (or at
+## once for a click or a key). Unset, both stand at the default, dimmed.
+func _slider(key: String, field: Dictionary, value: Variant, has: bool) -> Control:
+	var whole := String(field["type"]) == "int"
+	var row := HBoxContainer.new()
+	var slide := HSlider.new()
+	var spin := SpinBox.new()
+	for r in [slide, spin]:
+		(r as Range).min_value = float(field["min"])
+		(r as Range).max_value = float(field["max"])
+		(r as Range).step = float(field.get("step", 1.0 if whole else 0.01))
+		(r as Range).set_value_no_signal(float(value if has and value != null else field.get("default", field["min"])))
+	slide.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slide.custom_minimum_size = Vector2(90, 0)
+	slide.editable = not read_only
+	spin.editable = not read_only
+	row.modulate.a = 1.0 if has else 0.6
+	var out := func(v: float) -> Variant: return int(v) if whole else v
+	var dragging := [false]
+	slide.drag_started.connect(func() -> void: dragging[0] = true)
+	slide.drag_ended.connect(func(changed: bool) -> void:
+		dragging[0] = false
+		if changed:
+			_emit(key, out.call(slide.value)))
+	slide.value_changed.connect(func(v: float) -> void:
+		spin.set_value_no_signal(v)
+		if not dragging[0]:
+			_emit(key, out.call(v)))
+	# ...THE BOX'S EDIT HANDED OVER ONCE ITS PRESS IS DONE: an arrow pressed sets the value and then starts the box's own repeat timer,
+	# and an owner that draws its form again on an edit (the storyboard's inspector) had freed the box between the two - Godot's
+	# "Unable to start the timer because it's not inside the scene tree", twice a press (the user's log, 2026-11-11)
+	spin.value_changed.connect(func(v: float) -> void:
+		slide.set_value_no_signal(v)
+		_emit.call_deferred(key, out.call(v)))
+	row.add_child(slide)
+	row.add_child(spin)
+	return row
 
 
 func _emit(key: String, value: Variant) -> void:

@@ -293,6 +293,9 @@ func _write_and_edit(song: String) -> void:
 		["a stage entry added after it", func() -> void: ed.add_entry("stage")],
 		["an actor put on the stage", func() -> void: ed.add_actor("eye")],
 		["something for it to do", func() -> void: ed.add_span("blink", "eye", 1.0)],
+		["a camera flag added (StageKeys)", func() -> void: ed.add_key("camera.fov", 1.5)],
+		["an actor's size flag added", func() -> void: ed.add_key("actor.scale", 2.0, "eye")],
+		["a flag on the Look's dial added", func() -> void: ed.add_key("look", 2.5, "slip")],
 		["the moment moved", func() -> void: ed._retime(0, 2.0, 2.0)],
 		["the moment made a window", func() -> void: ed._span_as(0, true)],
 		["the actor renamed", func() -> void: ed._rename_actor(ed._path(ed.selected()), 0, "left")],
@@ -321,6 +324,40 @@ func _write_and_edit(song: String) -> void:
 	await _wait(0.6)
 	_ok(int(Director.cursor()["entry"]) == 3 and Director._current.scene_name == "stage",
 		"the show is on the entry being worked on (entry %s, %s)" % [Director.cursor()["entry"], Director._current.scene_name])
+	# A CLICK ON THE STAGE PICKS WHAT IS THERE (next/editing.md step 7): at the actor drawn, the actor in the inspector - THE CONTROLS
+	# a click on empty frame and one off it, which pick nothing
+	var st: GhostScene = Director._current
+	var who: Cast.Actor = st.call("actors")[0] if st.has_method("actors") and not (st.call("actors") as Array).is_empty() else null
+	var drawn: Dictionary = st.call("project_actor", who) if who != null else {}
+	var fr := Director.frame_rect
+	var at_window := Vector2(-1, -1)
+	if not drawn.is_empty():
+		var in_view: Vector2 = st.call("view_point", drawn["center"] as Vector2)
+		at_window = fr.position + in_view / st.get_viewport().get_visible_rect().size * fr.size
+	ed._sub = "entry"
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = at_window
+	ed._unhandled_input(click)
+	_ok(who != null and fr.has_point(at_window) and String(Director.pick(at_window).get("actor", "")) == who.id and ed._sub == "actor"
+		and ed._cast_ids(ed.selected())[ed._sub_i] == who.id,
+		"a click on the stage at an actor picks it, and the inspector shows it (%s at %s)" % [who.id if who != null else "none", at_window])
+	# THE LOOK TURNED BY A PART OF THE SHOW (StageKeys' `look`): laid over the Look as set, and let go - THE CONTROL the Look as set
+	Director.turn_look("gate", {"slip": 0.8})
+	var turned := Director.resolved_filters()
+	var as_set := Director.resolved_filters(false)
+	Director.turn_look("gate", {})
+	_ok(is_equal_approx(float(turned.get("slip", 0.0)), 0.8) and float(as_set.get("slip", 0.0)) != 0.8
+		and float(Director.resolved_filters().get("slip", 0.0)) == float(as_set.get("slip", 0.0)),
+		"a dial a part of the show turns is laid over the Look, and let go - the control: the Look as set is not")
+	var look_keys: Array = (((ed.data["sequence"] as Array).filter(func(e: Dictionary) -> bool: return String(e.get("scene", "")) == "stage")[0] as Dictionary)
+		.get("track", {}) as Dictionary).get("keys", [])
+	_ok(look_keys.any(func(k: Dictionary) -> bool: return String(k.get("field", "")) == "look" and String(k.get("filter", "")) == "slip"),
+		"the editor's flag on the Look names its filter")
+	_ok(Director.pick(fr.position + Vector2(3, 3)).is_empty() and Director.pick(fr.position - Vector2(20, 20)).is_empty(),
+		"the controls: a click on empty frame, and one off the frame, pick nothing (corner %s, drawn %s, frame %s)"
+		% [Director.pick(fr.position + Vector2(3, 3)), drawn, fr])
 	ed._move(3, 0)
 	_ok(String(ed.data["sequence"][0]["scene"]) == "stage" and ed.selected() == 0, "an entry moved stands where it was put, still picked")
 	ed.shift_entry(1)

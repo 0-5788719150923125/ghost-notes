@@ -524,6 +524,7 @@ func _make_twin() -> void:
 	twin._moved = work._moved
 	twin._soft = work._soft
 	twin.since = work.since
+	twin.tune = work.tune          # the show's tuning ([TableTune]): the bake paces its hands as the live table does
 	twin._spot = work._spot
 	twin._chan = _entries_of(work._chan)
 	twin.runs = work.runs

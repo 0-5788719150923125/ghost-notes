@@ -317,6 +317,12 @@ func draft() -> String:
 	return _text.text
 
 
+## THE WORDS IN THE BOX AS THEY STAND - nothing read, flushed or applied (what [method pull] does is a read of the file that lays
+## its blocks over every card): for a question asked often, as a row's state is.
+func shown() -> String:
+	return _text.text if _text != null else ""
+
+
 ## THE REAL-TIME READ: the document as it is on disk at this instant - its words AND its
 ## voice. The file is the authoritative source, so every Play and every export starts here
 ## and there is no separate "re-read" to remember to press.

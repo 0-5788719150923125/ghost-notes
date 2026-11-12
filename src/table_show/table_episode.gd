@@ -1,4 +1,4 @@
-extends RefCounted
+extends KeptSteps
 class_name TableEpisode
 
 ## TableEpisode - one episode of a card show, as it lies on disk.
@@ -37,8 +37,6 @@ static var discard: Callable = Callable()
 
 var show := ""
 var seed := 0
-## Absolute.
-var dir := ""
 var _script_cache := {}
 var _cards_stamp := "-"           # the plan and draw files the printings and waterfalls were last read from
 var _printing_keys: Array = []      # per drawn card: its printing's file key, "" the deck's own
@@ -54,6 +52,15 @@ static func open(show_key: String, seed_value: int) -> TableEpisode:
 	e.show = show_key
 	e.seed = seed_value
 	e.dir = ProjectSettings.globalize_path(root.path_join(show_key).path_join(str(seed_value)))
+	return e
+
+
+## The episode kept in folder [param path] (absolute, or under user://): `<show>/<seed>`, named by the folder's own names.
+static func at_dir(path: String) -> TableEpisode:
+	var e := TableEpisode.new()
+	e.dir = ProjectSettings.globalize_path(path).trim_suffix("/")
+	e.seed = int(e.dir.get_file())
+	e.show = e.dir.get_base_dir().get_file()
 	return e
 
 
@@ -215,9 +222,13 @@ func read_text(step: String) -> String:
 
 ## Written ATOMICALLY - a file that exists is a step that is done, so a half-written one must
 ## never be seen: temp beside it, then renamed over.
+##
+## WHAT IT REPLACES GOES A VERSION BACK ([method keep_version]) when it says something else: nothing written over is lost.
 func write_text(step: String, text: String) -> String:
 	var p := file_of(step)
 	DirAccess.make_dir_recursive_absolute(p.get_base_dir())
+	if FileAccess.file_exists(p) and FileAccess.get_file_as_string(p) != text:
+		keep_version(step)
 	var tmp := p + ".part"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
@@ -583,33 +594,113 @@ func _game_needs(parts: PackedStringArray) -> Array:
 	return []
 
 
-## A STEP UNLOCKED IS MADE AGAIN ALONE (the user, 2026-11-09: "a 'lock' button next to the regenerate buttons, for every step ... If
-## toggled to 'locked,' then the current behavior is maintained ... Tainting future steps is a good default behavior, because of the
-## sequential nature of most things we do here. But if set to 'unlocked,' then a step would be detached from that behavior - allowing
-## us to regenerate just a single step, without breaking all of the other ones"): every step is locked until it is unlocked, and which
-## are unlocked is the episode's own (`unlocked.json`) - a 40-minute painting made again had thrown away a script worth keeping.
-func unlocked(step: String) -> bool:
-	return (_unlocked_steps() as Array).has(step)
+## WHAT [param step] IS MADE FROM, AS IT STANDS: each made step it needs (never one it waits on only for order, [method _soft]) ->
+## its digest. The script is put together from every passage, so it is made from all of them.
+func made_from(step: String) -> Dictionary:
+	var out := {}
+	var from: Array = needs(step)
+	if step == "script":
+		from = steps().filter(func(s: Variant) -> bool: return String(s).begins_with("say:"))
+	for n in from:
+		if not _soft(String(n), step) and has(String(n)):
+			out[String(n)] = digest(String(n))
+	return out
 
 
-## ...and [param step] unlocked ([param on]) or locked again. "" written, else why not.
-func set_unlocked(step: String, on: bool) -> String:
-	var steps: Array = _unlocked_steps()
-	if on and not steps.has(step):
-		steps.append(step)
-	elif not on:
-		steps.erase(step)
+## AN EPISODE BEGUN BY HAND, no agent asked (next/editing.md step 8: "a human should be able to create nonlinear scenes from scratch"):
+## a plan of [param beats] beats that draws no cards, the table - [param fixed], the brief's fixed things ([FixedTable]), where it
+## has any - its passages empty and its script put together from them; every step BY HAND ([method by_hand]) and kept, the
+## pictures it has not got too, so Generate makes nothing and each row waits for its ✎. "" done, else why not.
+func begin_by_hand(beats := 1, fixed := {}) -> String:
+	if has("plan"):
+		return "this episode is begun already"
+	var positions: Array = []
+	for k in range(1, maxi(beats, 1) + 1):
+		positions.append({"name": "Beat %d" % k})
+	var plan := {"episode_title": "By hand", "spread": {"name": "", "positions": positions}, "staging": {"source": "none"},
+		"look": CardTable.sanitize_look({}), "beat_word": "Beat"}
+	var err := write_json("plan", plan)
+	if err.is_empty():
+		err = write_json("draw", {"cards": [], "deck_n": 0})
+	if err.is_empty():
+		err = write_json("table", FixedTable.merge({"things": []}, fixed) if not fixed.is_empty() else {"things": []})
+	for st in ["say:intro"] + range(1, positions.size() + 1).map(func(k: int) -> String: return "say:%d" % k) + ["say:close"]:
+		if err.is_empty():
+			err = write_text(String(st), "")
+	if err.is_empty():
+		var passages: Array = []
+		for m in TableProducer.choreography(plan, []):
+			passages.append({"kind": (m as Dictionary)["kind"], "card": (m as Dictionary).get("card", 0), "last": (m as Dictionary).get("last", (m as Dictionary).get("card", 0)), "text": ""})
+		err = write_text("script", CardReading.compose(passages))
+	if not err.is_empty():
+		return err
+	for st in steps():
+		var s := String(st)
+		if has(s):
+			note_made(s, "hand")
+			set_kept(s, true)
+		if s != "script":
+			set_by_hand(s, true)
+	return ""
+
+
+## THE VOICE'S TAKE, KEPT (next/editing.md step 3: "the voice is the clock, so the take is kept"): `take.wav` and its sidecar
+## `take.json` (every word's time), with the digest of the script it was said from - not a step: a function of the words and
+## the voices, made again cheaply ([TakeCache]) and never by Generate.
+func take_file() -> String:
+	return dir.path_join("take.wav")
+
+
+## Whether the take kept was said from the script as it stands - and, given [param sig] ([method ReadingPanel.take_sig]), in the
+## voices as they stand: where it was, the table plans on its words' times and the reading plays it.
+func take_matches(sig := "") -> bool:
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(take_file().get_basename() + ".json")) \
+		if FileAccess.file_exists(take_file().get_basename() + ".json") and FileAccess.file_exists(take_file()) else null
+	return side is Dictionary and has("script") and String((side as Dictionary).get("script_sha", "")) == digest("script") \
+		and (sig.is_empty() or String((side as Dictionary).get("sig", "")) == sig)
+
+
+## The take kept: its length in seconds (its last word's end and its outro), 0 for none.
+func take_length() -> float:
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(take_file().get_basename() + ".json")) \
+		if FileAccess.file_exists(take_file().get_basename() + ".json") else null
+	var words: Array = (side as Dictionary).get("words", []) if side is Dictionary and (side as Dictionary).get("words") is Array else []
+	if words.is_empty() or not (words.back() is Dictionary):
+		return 0.0
+	var out: Variant = ((side as Dictionary).get("bookend", {}) as Dictionary).get("out", 0.0) if (side as Dictionary).get("bookend") is Dictionary else 0.0
+	return float((words.back() as Dictionary).get("t1", 0.0)) + float(out)
+
+
+## [param wav] (a take just rendered) and its sidecar kept as the episode's take, said from the script as it stands now. "" done.
+func keep_take(wav: String) -> String:
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(wav.get_basename() + ".json"))
+	if not (side is Dictionary):
+		return "the take's sidecar is unreadable"
+	(side as Dictionary)["script_sha"] = digest("script")
 	DirAccess.make_dir_recursive_absolute(dir)
-	return TextGen.put(dir.path_join(UNLOCKED_FILE), JSON.stringify({"steps": steps}))
+	if DirAccess.copy_absolute(ProjectSettings.globalize_path(wav), take_file() + ".part") != OK \
+			or DirAccess.rename_absolute(take_file() + ".part", take_file()) != OK:
+		return "could not keep the take"
+	return _put(take_file().get_basename() + ".json", JSON.stringify(side))
 
 
-func _unlocked_steps() -> Array:
-	var p := dir.path_join(UNLOCKED_FILE)
-	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(p)) if FileAccess.file_exists(p) else null
-	return ((d as Dictionary).get("steps", []) as Array).duplicate() if d is Dictionary and (d as Dictionary).get("steps") is Array else []
+## What is cached of the steps' files, forgotten ([method KeptSteps._changed]): a version put back changes them.
+func _changed() -> void:
+	_script_cache = {}
 
 
-const UNLOCKED_FILE := "unlocked.json"
+## The files [param step] is: its own, and what comes with it.
+func files_of(step: String) -> Array:
+	var p := file_of(step)
+	if p.is_empty():
+		return []
+	var out := [p]
+	if step == "image:face":
+		for f in FACE_FILES:
+			out.append(dir.path_join(String(f)))
+	elif step == "image:height":
+		out.append(dir.path_join("height.json"))
+	return out
 
 
 ## Everything made from [param step], directly or through another step. A card's picture is NOT
@@ -732,14 +823,16 @@ func model_words() -> String:
 	return "\n".join(lines)
 
 
-## REDO [param step]: delete it and everything made from it - or, [param alone], it and nothing else ([method unlocked]). Returns
-## what went. A card painted or designed again starts with nothing sent back ([method sent_back]) - but [param keep_sent] keeps
-## it, for the art director's own send-back, which the painter is told of.
-func invalidate(step: String, keep_sent := false, alone := false) -> Array:
-	var gone := [step] if alone else [step] + dependents(step)
-	# the plan decides how many cards there are: going back to it takes every card step with it,
-	# including ones a smaller spread no longer lists
+## THROW [param step] AWAY, AND EVERYTHING MADE FROM IT - each moved a version back ([method keep_version]), never deleted. What a
+## gate resets a fixture with, and what the art director's send-back repaints by; a person's ⟳ throws nothing away
+## ([method TableProducer.again]). Returns what went. A card painted or designed again starts with nothing sent back
+## ([method sent_back]) - but [param keep_sent] keeps it, for the art director's own send-back, which the painter is told of.
+func invalidate(step: String, keep_sent := false) -> Array:
+	var gone := [step] + dependents(step)
+	# the plan decides how many cards there are: going back to it takes every card step with it, including ones a smaller
+	# spread no longer lists - moved together into one folder of what that plan had made ([constant SWEPT_KEPT] kept)
 	if (step == "plan" or step == "draw") and DirAccess.dir_exists_absolute(dir):
+		var swept := ""
 		for f in DirAccess.get_files_at(dir):
 			var fs := String(f)
 			if fs.begins_with("design_") or fs.begins_with("card_") or fs.begins_with("say_") \
@@ -747,25 +840,36 @@ func invalidate(step: String, keep_sent := false, alone := false) -> Array:
 					or fs == "script.md" or fs == "acts.json" or fs == "game.json" or fs == "prep.json" or fs.begins_with("events_") \
 					or fs.begins_with("map_") or fs.begins_with("figure_") or fs.begins_with("reveal_") or (step == "plan" and (fs in ["draw.json", "back.png", "surface.png",
 					"backdrop.png", "height.png", "height.json"] or fs.begins_with("back_") or fs.begins_with("face"))):
-				DirAccess.remove_absolute(dir.path_join(fs))
+				if swept.is_empty():
+					swept = _swept_folder()
+				DirAccess.rename_absolute(dir.path_join(fs), swept.path_join(fs))
 	for s in gone:
-		var p := file_of(String(s))
-		if not p.is_empty() and FileAccess.file_exists(p):
-			DirAccess.remove_absolute(p)
-		# the height map's fit goes with it
-		if String(s) == "image:height" and FileAccess.file_exists(dir.path_join("height.json")):
-			DirAccess.remove_absolute(dir.path_join("height.json"))
-		# ...and the face's canvas, where it lies and what the surface wears of it ([method TableProducer._land_face]); and what was sent back
-		# of it, unless the art director sent it back
-		if String(s) == "image:face":
-			for f in FACE_FILES:
-				DirAccess.remove_absolute(dir.path_join(String(f)))
-			if not keep_sent:
-				DirAccess.remove_absolute(_sent_back_file("face"))
+		keep_version(String(s), true)
 		var card := String(s).trim_prefix("image:card:").trim_prefix("design:")
+		if String(s) == "image:face" and not keep_sent:
+			DirAccess.remove_absolute(_sent_back_file("face"))
 		if not keep_sent and card != String(s) and card.is_valid_int():
 			DirAccess.remove_absolute(_sent_back_file(int(card)))
+	_script_cache = {}
 	return gone
+
+
+## How many folders of what a thrown-away plan had made are kept ([method invalidate]).
+const SWEPT_KEPT := 2
+
+
+## A new folder under `versions/_swept/` for what a plan thrown away had made; past [constant SWEPT_KEPT], the oldest goes.
+func _swept_folder() -> String:
+	var base := dir.path_join(VERSIONS_DIR).path_join("_swept")
+	DirAccess.make_dir_recursive_absolute(base)
+	var olds := Array(DirAccess.get_directories_at(base))
+	olds.sort()
+	var n := int(String(olds.back()).trim_prefix("v")) + 1 if not olds.is_empty() else 1
+	while olds.size() >= SWEPT_KEPT:
+		_remove_tree(base.path_join(String(olds.pop_front())))
+	var out := base.path_join("v%03d" % n)
+	DirAccess.make_dir_recursive_absolute(out)
+	return out
 
 
 ## WHAT THE ART DIRECTOR SENT BACK of card [param k]'s paintings so far (or "face", the face painted first's), a list of faults per
@@ -1017,6 +1121,171 @@ func write_upload_notes(take: String, tags := PackedStringArray(), description :
 ## The YouTube uploads made of this episode, oldest first (`youtube.json`, kept by youtube.gd).
 func uploads() -> Array:
 	return YouTube.uploads_in(file_of("youtube"))
+
+
+# --- as a timeline -----------------------------------------------------------------------
+
+## THE EPISODE AS A [Timeline] on the voice's clock (next/editing.md, "The Timeline"): the intro, each beat and the close a
+## group, as long as its words take at the plan's pace ([constant TablePrompts.SAID_WORD] a word) or its acts one after another,
+## whichever is longer; each act a span on the `time` engine - the table is a pure function of show time - in the lane of the
+## first thing it works ("work" for none), its `source` its place in `acts.json`; each `<!-- act: -->` cue a flag in lane "words"
+## at the word it stands before, its `source` the passage and the cue's number in it. A FIRST READING: the schedule the show
+## plays ([method TableWork.schedule]) and a kept take's word times are what step 3 makes it.
+func timeline() -> Dictionary:
+	var raw: Variant = read_json("acts") if has("acts") else null
+	var acts: Array = (raw as Dictionary).get("acts", []) if raw is Dictionary and (raw as Dictionary).get("acts") is Array else []
+	var told := _told_lengths(raw)
+	var bare := cardless()
+	var plan: Variant = read_json("plan")
+	var pos: Array = (((plan as Dictionary).get("spread", {}) as Dictionary).get("positions", []) as Array) \
+		if plan is Dictionary and (plan as Dictionary).get("spread") is Dictionary else []
+	var beats: Array = [["intro", "Intro", ["say:intro"]]]
+	for k in range(1, beat_count() + 1):
+		var nm := String((pos[k - 1] as Dictionary).get("name", "")) if k - 1 < pos.size() and pos[k - 1] is Dictionary else ""
+		var says := ["say:%d" % k] if bare else ["say:%d" % k, "say:work:%d" % k]
+		beats.append([str(k), "%d. %s" % [k, nm] if not nm.is_empty() else "%s %d" % [beat_word(), k], says])
+	beats.append(["close", "Close", ["say:close"]])
+	var cue := RegEx.create_from_string(CardReading.ACT_MARK)
+	var mark := RegEx.create_from_string("<!--.*?-->")
+	var groups: Array = []
+	var start := 0.0
+	for b in beats:
+		var g := Timeline.group(String(b[0]), String(b[1]), start, 0.0, "time")
+		var said := 0.0
+		for st in b[2]:
+			if not has(String(st)):
+				continue
+			var text := read_text(String(st))
+			var n := 0
+			for m in cue.search_all(text):
+				var before := mark.sub(text.substr(0, m.get_start()), " ", true).split(" ", false).size()
+				n += 1
+				var flag := Timeline.item("%s-cue-%d" % [String(st).replace(":", "-"), n], m.get_string(1),
+					said + before * TablePrompts.SAID_WORD, 0.0, [String(st), "cue", n - 1])
+				flag["passage_at"] = said
+				Timeline.add(g, "words", "Words", flag)
+			said += mark.sub(text, " ", true).split(" ", false).size() * TablePrompts.SAID_WORD
+		var at := 0.0
+		for i in acts.size():
+			var a: Dictionary = acts[i] if acts[i] is Dictionary else {}
+			# (a beat's place is a number in the file, which JSON reads back as 1.0)
+			var beat: Variant = a.get("beat", "")
+			if (str(int(beat)) if typeof(beat) in [TYPE_INT, TYPE_FLOAT] else str(beat)) != String(b[0]):
+				continue
+			var tracks: Array = a.get("tracks", []) if a.get("tracks") is Array else []
+			var thing := String((tracks[0] as Dictionary).get("thing", "")) if not tracks.is_empty() and tracks[0] is Dictionary else ""
+			var lane := thing if not thing.is_empty() else "work"
+			# (as long as its reader is told it takes - an act sized by its words, `under`, at what it is guessed or laid at)
+			var length := maxf(float(told.get(Manuscript.slug(String(a.get("name", ""))), 6.0)), 0.1)
+			Timeline.add(g, lane, lane, Timeline.item(String(a.get("name", "act-%d" % (i + 1))), String(a.get("name", "")), at, length, ["acts", i]))
+			at += length
+		g["length"] = maxf(said, at)
+		groups.append(g)
+		start += float(g["length"])
+	var tl := Timeline.make("voice", groups)
+	# A CUE NAMING NOTHING IS A PROBLEM SHOWN, never a mark dropped (next/editing.md step 2): neither an act's name nor a layer
+	# an act lays ([method TableWork.resolve_cues])
+	var known := {}
+	for a in acts:
+		if a is Dictionary:
+			known[Manuscript.slug(String((a as Dictionary).get("name", "")))] = true     # as the sanitizer names it
+			for l in ((a as Dictionary).get("layers", []) if (a as Dictionary).get("layers") is Array else []):
+				known[Manuscript.slug(str(l))] = true
+	var problems := PackedStringArray()
+	for g in groups:
+		for l in (g as Dictionary)["lanes"]:
+			if String((l as Dictionary)["id"]) != "words":
+				continue
+			for it in (l as Dictionary)["items"]:
+				var nm := Manuscript.slug(String((it as Dictionary)["label"]))
+				if not known.has(nm):
+					problems.append("%s: the cue \"%s\" names no act and no layer, so it starts nothing" % [String((g as Dictionary)["label"]), nm])
+	tl["problems"] = problems
+	return tl
+
+
+## WHAT EACH ACT OF [param raw] (`acts.json`) TAKES, as its reader is told (as [method TableProducer._acts_of] tells it): its
+## length made safe ([method Motions.sanitize_acts]), and a painting act what its strokes take ([method Skins.act_natural]).
+## slug -> seconds.
+func _told_lengths(raw: Variant) -> Dictionary:
+	var out := {}
+	if not (raw is Dictionary):
+		return out
+	var safe: Array = Motions.sanitize_acts(raw, beat_count())["acts"]
+	var doc: Variant = read_json("skin") if has("skin") else null
+	var folded := Skins.folded_coats((raw as Dictionary).get("acts", []), doc) if doc is Dictionary else {}
+	for a in safe:
+		var length := float((a as Dictionary).get("length", 6.0))
+		if doc is Dictionary:
+			var natural := Skins.act_natural(a as Dictionary, doc, read_json("table"), FileAccess.file_exists(dir.path_join("face_ref.png")), folded)
+			if natural > 0.0:
+				length = natural
+		out[String((a as Dictionary)["name"])] = length
+	return out
+
+
+## AN ACT'S LENGTH SET BY HAND (the Timeline's block stretched; next/editing.md step 4): act [param i] of `acts.json` made
+## [param seconds] long, what stood a version back, and the step kept - a hand's edit is never made over by Generate. "" done.
+func set_act_length(i: int, seconds: float) -> String:
+	var raw: Variant = read_json("acts")
+	var acts: Variant = (raw as Dictionary).get("acts") if raw is Dictionary else null
+	if not (acts is Array) or i < 0 or i >= (acts as Array).size() or not ((acts as Array)[i] is Dictionary):
+		return "there is no act %d to set" % (i + 1)
+	((acts as Array)[i] as Dictionary)["length"] = snappedf(clampf(seconds, 0.3, Motions.MAX_LENGTH), 0.01)
+	var err := write_json("acts", raw)
+	return err if not err.is_empty() else set_kept("acts", true)
+
+
+## A CUE MOVED BY HAND (the Timeline's flag dragged): cue [param n] of passage [param step] put before the word said
+## [param at] seconds into the passage (at [constant TablePrompts.SAID_WORD] a word), what stood a version back, and the
+## passage kept. "" done.
+func move_cue(step: String, n: int, at: float) -> String:
+	var text := read_text(step)
+	var cues := RegEx.create_from_string(CardReading.ACT_MARK).search_all(text)
+	if n < 0 or n >= cues.size():
+		return "%s has no cue %d" % [step, n + 1]
+	var cue: RegExMatch = cues[n]
+	var rest := text.substr(0, cue.get_start()).rstrip(" ") + (" " if cue.get_start() > 0 else "") + text.substr(cue.get_end()).lstrip(" ")
+	var mark := RegEx.create_from_string("<!--.*?-->")
+	var want := maxi(0, roundi(at / TablePrompts.SAID_WORD))
+	# ...before the word [want] of the words said, counted as the timeline counts them (marks are no words)
+	var blank := rest
+	for mm in mark.search_all(rest):
+		blank = blank.substr(0, mm.get_start()) + " ".repeat(mm.get_end() - mm.get_start()) + blank.substr(mm.get_end())
+	var said := 0
+	var put := rest.length()
+	for w in RegEx.create_from_string("\\S+").search_all(blank):
+		if said == want:
+			put = (w as RegExMatch).get_start()
+			break
+		said += 1
+	var moved := rest.substr(0, put) + cue.get_string() + " " + rest.substr(put)
+	var err := write_text(step, moved.strip_edges() + ("\n" if text.ends_with("\n") else ""))
+	return err if not err.is_empty() else set_kept(step, true)
+
+
+## WHAT IS WRONG WITH THE EPISODE AS IT STANDS, in words - [] for nothing (next/editing.md, design point 9: the checks are a
+## list, for a person and the same list for an agent's tool): a step's data that does not parse, what the acts' sanitizer
+## says of them, the faults of its Timeline and every cue naming nothing, and each step made from something changed since.
+## Reads only: what `--episode-check` prints, in seconds, for an edit made in a terminal.
+func problems() -> PackedStringArray:
+	var out := PackedStringArray()
+	if not has("plan"):
+		out.append("there is no plan here (%s)" % dir)
+		return out
+	for st in ["plan", "draw", "table", "acts", "skin", "layers", "model"]:
+		if has(st) and read_json(st) == null:
+			out.append("%s does not parse as JSON" % file_of(st).get_file())
+	if has("acts") and read_json("acts") != null:
+		for n in Motions.sanitize_acts(read_json("acts"), beat_count())["notes"]:
+			out.append("acts: " + String(n))
+	var tl := timeline()
+	out.append_array(Timeline.check(tl))
+	out.append_array(PackedStringArray(tl.get("problems", [])))
+	for st in steps():
+		if stale(String(st)):
+			out.append("%s is stale: made from something that has changed since%s" % [String(st), " (kept)" if kept(String(st)) else ""])
+	return out
 
 
 # --- what the table is given ------------------------------------------------------------

@@ -11,7 +11,9 @@ extends SceneTree
 ## and a new Cloth does not (THE CONTROL), for its depth is remade with it, nor the Close, for the script is only the readings put
 ## together. And only when that work exists (THE CONTROL: the same row, on an episode with nothing made after it, asks nothing).
 ## A ⟳ ONLY WHAT CAN START: one whose inputs are not made is not offered, saying so (it had been passed by without a word).
-## While the episode is being made every ⟳ waits. Pressed and answered, the step and what was made from it go.
+## While the episode is being made every ⟳ waits. PRESSED AND ANSWERED, NO FILE GOES (next/editing.md step 1): the step is made again
+## over what stands, and what was made from it goes stale (THE CONTROL: invalidate, which moves them a version back, out of place).
+## A MADE ROW CARRIES A LOCK, and locked it is kept.
 ## WHAT IT TAKES WITH IT IS WORKED OUT ONCE, the same as [method TableEpisode.dependents] says for every step (THE CONTROL: a
 ## card's painting takes its reading), and read again only when the episode's files change (THE CONTROL: a new file).
 
@@ -95,7 +97,7 @@ func _check() -> void:
 		"a step that cannot be made again by itself has none: the draw is the seed's, the script its readings'")
 
 	# WHAT IT THROWS AWAY
-	_ok(not _pipe.asks_first("say:intro") and not _redo("say:intro").tooltip_text.contains("throws away"),
+	_ok(not _pipe.asks_first("say:intro") and not _redo("say:intro").tooltip_text.contains("goes stale"),
 		"control: with nothing made from it yet, its ⟳ asks nothing - the same row asks once there is")
 	_ep.write_json("draw", {"cards": [{"name": "The Tower", "key": "tower"}, {"name": "The Moon", "key": "moon"}], "deck_n": 78})
 	_write(["design:1", "image:back", "table", "image:height", "image:card:1", "check:1", "say:intro", "say:1", "say:2",
@@ -119,7 +121,8 @@ func _check() -> void:
 	_write(["say:1"])
 	_pipe.refresh()
 
-	# WHILE IT IS MADE
+	# WHILE IT IS MADE (the list built again since: a row made carries a lock)
+	plan = _redo("plan")
 	_ok(not plan.disabled, "made and idle, its ⟳ is offered")
 	_show._producer.running = true
 	_pipe.refresh()
@@ -153,10 +156,66 @@ func _check() -> void:
 	_ok(_ep.has("image:card:1") and _ep.has("say:1"), "no: all still there")
 	_redo("image:card:1").pressed.emit()
 	_pipe.asking.confirmed.emit()
-	_ok(not _ep.has("image:card:1") and not _ep.has("say:1") and _ep.has("design:1") and _ep.has("image:surface"),
-		"yes: the painting and what was made from it go; what it was made from stays")
+	_ok(_ep.has("image:card:1") and _ep.has("say:1") and _ep.has("design:1") and _ep.has("image:surface"),
+		"yes: no file goes - the painting is made again over what stands, and its reading goes stale")
 	_pipe.refresh()
 	_ok(_show._section.told.contains("read-only"), "a read-only process makes nothing, and says so over the rows")
+	_ok(_ep.invalidate("image:card:1").has("say:1") and not _ep.has("image:card:1") and not _ep.has("say:1")
+		and not _ep.versions("image:card:1").is_empty(), "the control: invalidate takes them out of place, each a version back")
+	_write(["image:card:1", "check:1", "say:1", "say:2", "say:close", "script"])
+
+	# A MADE ROW CARRIES A LOCK, AND LOCKED IT IS KEPT
+	_pipe.refresh()
+	var lock_b: Variant = _pipe.row("say:1").get("lock")
+	_ok(lock_b is Button and not _ep.kept("say:1"), "a made row carries a lock, open")
+	(lock_b as Button).pressed.emit()
+	_ok(_ep.kept("say:1"), "pressed, the step is kept")
+
+	# ✎ ON A ROW (next/editing.md step 4): what it made, changed by hand, kept as a hand's version
+	_pipe.refresh()
+	_ok(_pipe.row("script").get("edit") is Button and _pipe.row("say:intro").get("edit") is Button
+		and _pipe.row("plan").get("edit") is Button and _pipe.row("image:surface").get("edit") is Button,
+		"the script, a passage, the plan and a picture each carry a ✎: %s" % str(["script", "say:intro", "plan", "image:surface"].map(func(k: String) -> bool: return _pipe.row(k).get("edit") is Button)))
+	DirAccess.remove_absolute(_ep.file_of("say:2"))
+	_pipe.refresh()
+	_ok(_pipe.row("say:2").get("edit") == null, "the control: a step not made carries none")
+	_write(["say:2"])
+	_pipe.refresh()
+	(_pipe.row("say:intro")["edit"] as Button).pressed.emit()
+	var w: SourceWindow = _show._source_window
+	_ok(w._ask_row.visible and w._ask_b.text == "Ask the reader again" and not w.ask_again("  ").is_empty() and w.visible,
+		"a passage's window offers its reader asked again with a note (the control: no note, nothing asked)")
+	var back: int = _ep.versions("say:intro").size()
+	w.text_edit.text = "Hello, by hand."
+	_ok(w.apply().is_empty() and _ep.read_text("say:intro") == "Hello, by hand." and _ep.kept("say:intro") and _ep.versions("say:intro").size() == back + 1,
+		"a passage's ✎: its words, written as a hand's version, kept, what stood a version back")
+	# ...AND ITS VERSIONS: the words before the hand's put back from the same window, the hand's a version back
+	_ok(w._versions.visible and w._versions.item_count >= 1, "the window offers the versions kept (%d)" % w._versions.item_count)
+	w.open_on("Intro", _ep.read_text("say:intro"), _show)
+	var vcount: int = _ep.versions("say:intro").size()
+	_ok(w.put_back(vcount - 1).is_empty() and _ep.read_text("say:intro") != "Hello, by hand." and w.text_edit.text == _ep.read_text("say:intro")
+		and _ep.versions("say:intro").size() == vcount + 1, "a version put back is shown, what stood a version back")
+	(_pipe.row("plan")["edit"] as Button).pressed.emit()
+	var plan_was: String = _ep.read_text("plan")
+	w.text_edit.text = "{ not json"
+	_ok(not w.apply().is_empty() and w.visible and _ep.read_text("plan") == plan_was, "the control: JSON that does not parse is refused, the window open, the file as it was")
+	w.text_edit.text = JSON.stringify({"episode_title": "Retitled by hand", "spread": {"name": "", "positions": []}})
+	_ok(w.apply().is_empty() and String((_ep.read_json("plan") as Dictionary)["episode_title"]) == "Retitled by hand" and _ep.kept("plan"),
+		"the plan's ✎: its JSON taken back, kept")
+	# A PART BY HAND, NOT MADE YET (next/editing.md step 8): its row waits for you, with its ✎
+	DirAccess.remove_absolute(_ep.file_of("image:backdrop"))
+	_ep.set_by_hand("image:backdrop", true)
+	_pipe.refresh()
+	_ok(String(_pipe.row("image:backdrop")["text"].text).contains("waits for you") and _pipe.row("image:backdrop").get("edit") is Button,
+		"a part by hand not made yet says it waits for you, and carries its ✎")
+	_ep.set_by_hand("image:backdrop", false)
+	_write(["image:backdrop"])
+	var pic := Image.create(8, 8, false, Image.FORMAT_RGB8)
+	pic.fill(Color(0.9, 0.1, 0.2))
+	var own := ProjectSettings.globalize_path(ROOT).path_join("own.png")
+	pic.save_png(own)
+	_ok(_show.import_picture("image:surface", own).is_empty() and _ep.kept("image:surface")
+		and Image.load_from_file(_ep.file_of("image:surface")).get_pixel(2, 2).r > 0.8, "a picture of one's own, imported over the cloth, kept")
 
 
 func _menus(node: Node) -> int:

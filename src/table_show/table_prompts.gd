@@ -702,13 +702,23 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	if not work.is_empty():
 		var acts: Array = []
 		var seconds := 0.0
+		var told_layers := {}
 		for a in work:
 			var ad: Dictionary = a
 			# ...WHAT IS BUILT TAKES WHAT ITS STEPS TAKE ([Assembly]): under its words, but no guess
 			var timed: bool = ad.has("_natural")
-			acts.append({"name": String(ad.get("name", "")), "about": String(ad.get("about", "")),
-				"under": bool(ad.get("under", false)) and not timed, "seconds": roundi(float(ad.get("length", 0.0)))})
 			seconds += 12.0 if bool(ad.get("under", false)) and not timed else float(ad.get("length", 0.0))
+			# A PAINTED STEP IS CALLED BY ITS LAYER (next/editing.md step 2): an act made from the painting is named by its place in
+			# line, which a repaint changes - the layer keeps its name, so the reader cues that, once, at the first act laying it
+			var layers: Array = ad.get("layers", []) if ad.get("layers") is Array else []
+			var name := String(ad.get("name", ""))
+			if not layers.is_empty():
+				if told_layers.has(String(layers[0])):
+					continue
+				told_layers[String(layers[0])] = true
+				name = String(layers[0])
+			acts.append({"name": name, "about": String(ad.get("about", "")),
+				"under": bool(ad.get("under", false)) and not timed, "seconds": roundi(float(ad.get("length", 0.0)))})
 		vars["work_acts"] = acts
 		vars["work_seconds"] = roundi(seconds)
 		if work_k > 0:

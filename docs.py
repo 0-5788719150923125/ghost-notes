@@ -18,6 +18,7 @@ that statically (no Godot boot required) and writes:
   docs/layers.md       - the Layer registry (visual components).
   docs/forces.md       - the Primitives registry (physics forces).
   docs/stage.md        - the storyboard stage: Cast actors + Actions verbs.
+  docs/table.md        - a table show's data as rows: acts, things, parts, the laws.
   docs/masking.md      - the Masking: effects, controls, CLI.
   docs/script.md       - every mark a script may carry.
   docs/architecture.md - how the show is made, from the audio to a video file.
@@ -277,6 +278,14 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
      "feature's environment too with `all`, one row by its key with what it needs (`mathlib` brings Lean), or bring "
      "everything installed to its newest release with `update`. The same jobs an ordinary launch runs in the "
      "background. Exits non-zero if anything asked for could not be had. Pairs with `--headless`.", False),
+    ("--from", "<seconds>",
+     "With `--export`: render from this point on the show clock - the take played from there, a storyboard's entry played "
+     "up to its moment - so a late fix renders only its stretch; with `--until`, the stretch's end. The exporter's \"A "
+     "stretch again\" uses it and puts the stretch back into the earlier export (src/export/stitch.gd).", False),
+    ("--episode-check", "<dir>",
+     "Print what is wrong with a table show's episode as it stands (a step's data that does not parse, what the acts' "
+     "sanitizer says, the faults of its Timeline and every cue naming nothing, each stale step), then exit - non-zero when "
+     "anything is. Reads only: for an edit made in a terminal, in seconds. Pairs with `--headless`.", False),
     ("--seed", "<N>",
      "Override the session seed (default derives from the audio's own content fingerprint, so the same song replays "
      "the same show).", False),
@@ -1115,6 +1124,40 @@ def stage_page(cast: Script, actions: Script, track: Script, board: Script) -> s
     return page("Stage: actors and verbs", blocks)
 
 
+def table_page(rows: Script, motions: Script) -> str:
+    """A table show's data as rows: what the episode's inspector shows of an act, a thing and a part
+    (`TableRows`), and every law with the fields the puppeteer is told - its rows' types come from the
+    law's sanitizer at run time. Holds an act's length bounds to the sanitizer's."""
+    blocks: List[Block] = [
+        "What a person may set of a table show's data, as the inspector of an episode's Timeline dock shows it "
+        f"(`TableRows` in {link(rows.rel)}): a field in a table is a row in the inspector, and a key it does not "
+        "name is shown as what its value is. A track's rows are its law's fields below - each the sentence the "
+        "puppeteer reads, typed by what the law's sanitizer makes of a track that tells it nothing "
+        "(`TableRows.law_fields`).",
+    ]
+    for title, name in (("An act", "ACT"), ("A thing on the table", "THING"), ("A part of a thing", "PART")):
+        fields = rows.const(name, {})
+        if not fields:
+            warn(f"could not parse TableRows.{name}")
+        blocks += [f"## {title}", schema_table(fields)]
+    # THE BOUNDS ARE THE CODE'S: an act's length as Motions.sanitize_acts keeps it
+    length = (rows.const("ACT", {}) or {}).get("length", {})
+    most = motions.const("MAX_LENGTH", None)
+    if most is None or not length or float(length.get("max", -1)) != float(most):
+        warn(f"TableRows.ACT length's max ({length.get('max') if length else None}) is not Motions.MAX_LENGTH ({most})")
+    laws = motions.const("LAWS", {})
+    if not laws:
+        warn("could not parse Motions.LAWS")
+    blocks += ["## The laws", f"What a track may do to its thing (`Motions.LAWS` in {link(motions.rel)}): each law, "
+               "what it is for, and its fields as the puppeteer is told them."]
+    for key, row in laws.items():
+        fields = [f for f in items(row, "fields") if isinstance(f, list) and len(f) == 2]
+        blocks += entry(f"`{key}` - {text(row, 'label')}", md(text(row, "blurb")), None,
+                        fields and table(["Field", "What it is"], ([f"`{f[0]}`", md(str(f[1]))] for f in fields)),
+                        level=3)
+    return page("Table: a show's data as rows", blocks)
+
+
 def masking_page(session: Script, editor: Script) -> str:
     """docs/masking.md: the session's model, the editor, and the effects - each effect's control
     groups from `EFFECT_CONTROLS`, and its note from that table's comments."""
@@ -1847,7 +1890,7 @@ RULES: List[Rule] = [
          (("a.gd", "\tvar box := TextEdit.new()", 1), ("a.gd", "\tvar list := ScrollContainer.new()", 1),
           ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
          skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "mask_editor.gd",
-               "storyboard_editor.gd", "note_grid.gd", "assistant.gd")),
+               "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_grid.gd", "assistant.gd")),
     # `Films.pump()` IS CALLED FROM main's `_process`. A window cut is an ffmpeg child, and something
     # with a frame must notice it exit and promote its output out of the `.part` name. The live film
     # panel and the Generative panel polled it - the two things usually absent - so footage showed on
@@ -2286,6 +2329,7 @@ def main() -> int:
             "Forces: the physics-primitive registry",
             "Reusable force modules a scene composes into a `ParticleSystem` by key.", s("primitives")),
         "stage": lambda: stage_page(s("cast"), s("actions"), s("track"), s("storyboard")),
+        "table": lambda: table_page(s("table_rows"), s("motions")),
         "masking": lambda: masking_page(s("mask_session"), s("mask_editor")),
         "media": lambda: media_page(s("medium")),
         "filters": lambda: filters_page(s("filters")),

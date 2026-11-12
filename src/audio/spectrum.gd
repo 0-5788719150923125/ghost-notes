@@ -337,7 +337,9 @@ var _stream_length := 0.0
 ## same input replays the same show). The audio path / length are unknown at
 ## start; the caller reports them via set_stream_info() once the take is done.
 func begin_stream(fp: int, sr: int) -> AudioStreamGeneratorPlayback:
+	var held := paused
 	stop()
+	paused = held
 	var gen := AudioStreamGenerator.new()
 	gen.mix_rate = sr
 	gen.buffer_length = STREAM_BUFFER
@@ -349,6 +351,8 @@ func begin_stream(fp: int, sr: int) -> AudioStreamGeneratorPlayback:
 	# play() first, then the caller pushes its prebuffer in this same frame -
 	# so pushed sample N plays at N / sr and timing maps cannot drift.
 	_player.play()
+	# ...HELD WHERE THE SESSION IS PAUSED: a reading sought to while paused begins its new stream paused (ReadingStream.seek_now)
+	_player.stream_paused = paused
 	return _player.get_stream_playback()
 
 
@@ -443,7 +447,15 @@ func seek(t: float) -> void:
 	if h.is_valid():
 		h.call(t)
 		return
-	if not conductor().is_empty() or not seekable():
+	if not conductor().is_empty():
+		return
+	seek_file(t)
+
+
+## THE FILE'S OWN SEEK, [param t] on the session clock: what [method seek] does where nothing conducts - and what a conductor
+## playing a file of its own asks for (a reading's take kept, [method ReadingStream.seek]). Nothing for a stream.
+func seek_file(t: float) -> void:
+	if not _has_audio or _streaming or _content_length() <= 0.0:
 		return
 	var content := _content_length()
 	var want := clampf(t, 0.0, lead_in + content + tail)
@@ -459,8 +471,24 @@ func seek(t: float) -> void:
 	var pos := clampf(want - _clock_offset(), 0.0, maxf(0.0, content - 0.05))
 	if not _player.playing:
 		_player.play(pos)
+		# ...A FRESH PLAYBACK, which the player does not hold where the session is paused (measured: a take sought while paused
+		# played on, take_play_check) - held again, set both ways since the player skips a value it already has
+		var hold := paused or not _waits.is_empty()
+		_player.stream_paused = not hold
+		_player.stream_paused = hold
 	else:
 		_player.seek(pos)
+
+
+## A RENDER BEGUN [param t] SECONDS IN (`--from`; [Stitch]): its frame-counted clock starts there and the take plays from
+## there, so Movie Maker records the stretch from [param t] - its pictures and its sound - and nothing before it.
+func render_from(t: float) -> void:
+	_held = false
+	_render_t = maxf(0.0, t - _clock_offset())
+	if _player.playing:
+		_player.seek(_render_t)
+	else:
+		_player.play(_render_t)
 
 
 ## Restart the loaded song from the top WITHOUT touching any session state - no

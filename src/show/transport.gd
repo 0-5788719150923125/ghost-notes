@@ -39,6 +39,12 @@ class_name Transport
 ## at the bottom edge; nothing positions the row by a figure of its own. Change PAD, HIT or the
 ## rail's height and the row follows.
 ##
+## THE NOTE'S TIMELINE OPENS FROM HERE (the user, 2026-11-11: "it should just be a button next to the play/stop buttons,
+## everywhere"): whatever has a timeline for the note offers it ([method offer_timeline]: a storyboard, an episode, a lesson, the
+## words' marks), the highest rank standing is the button's, and the button shows even before Play. WHILE ONE IS OPEN THE RAIL STEPS
+## ASIDE ("I do not think we should have two timelines"): the editor's own strip tracks the show and seeks it, and the buttons and
+## the time stay ([constant EDITORS]).
+##
 ## IT FADES WITH THE REST OF THE FURNITURE while a show plays alone (the group [constant Shell.FADES]: the shell sets its
 ## root's alpha, and keeps its claim), and a pointer on the rail holds it up ([method Shell.hold_up]) - the rail is drawn,
 ## not a control the shell could find under the pointer.
@@ -53,6 +59,12 @@ const HIT := 10.0                   # how far past the rail a pointer still coun
 const CLEARANCE := 8.0              # kept between that zone and anything above it, px
 const BUFFERED := 0.32              # how strong the stretch made ahead of the playhead is drawn (the played: 0.85)
 const CLAIM := &"transport"         # the key of its claim on the bottom of the frame
+## The group every open timeline editor joins: while one is open the rail is not drawn and takes no click.
+const EDITORS := &"timeline_editors"
+const TIMELINE_TIP := "The timeline: what happens when, to be picked, moved and changed. While it is open its own strip is the scrubber."
+
+## What offers the note's timeline ([method offer_timeline]): [{who (a WeakRef), rank, toggle, is_open, tip}].
+static var _offers: Array = []
 const PLAY_TIP := "Play / pause (Space)"
 const STALE_TIP := ("\n\nThe script changed after this reading began. ■ then ▶ reads it again "
 	+ "with the new words.")
@@ -69,6 +81,7 @@ var _painter: Control
 var _stale_tip := false
 var _claimed := false               # holds a claim on Chrome's bottom edge now
 var _holding := false               # holds the furniture up now (the pointer on the rail)
+var _tl: Button                     # the timeline's button, beside Play
 
 
 func _ready() -> void:
@@ -84,6 +97,12 @@ func _ready() -> void:
 	_play.pressed.connect(func() -> void: Spectrum.transport_toggle())
 	_stop = _button("■", "Stop")
 	_stop.pressed.connect(func() -> void: Spectrum.transport_stop())
+	_tl = _button("☰", TIMELINE_TIP)
+	_tl.toggle_mode = true
+	_tl.pressed.connect(func() -> void:
+		var o := offered()
+		if not o.is_empty():
+			(o["toggle"] as Callable).call())
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 12)
 	_label.add_theme_color_override("font_color", Color(0.92, 0.94, 0.98, 0.9))
@@ -103,6 +122,36 @@ func _ready() -> void:
 	get_window().mouse_exited.connect(func() -> void:
 		_mouse_in = false
 		_hover_x = -1.0)
+
+
+## [param who] OFFERS THE NOTE'S TIMELINE: [param toggle] opens or closes it, [param is_open] says whether it is, [param rank] decides
+## between two offers on one note (the words' marks 1, a storyboard 2, an episode or a lesson 3). Taken back by
+## [method withdraw_timeline], or by [param who] leaving.
+static func offer_timeline(who: Object, rank: int, toggle: Callable, is_open: Callable, tip := "") -> void:
+	withdraw_timeline(who)
+	_offers.append({"who": weakref(who), "rank": rank, "toggle": toggle, "is_open": is_open, "tip": tip})
+
+
+static func withdraw_timeline(who: Object) -> void:
+	_offers = _offers.filter(func(o: Dictionary) -> bool:
+		var w: Variant = (o["who"] as WeakRef).get_ref()
+		return w != null and w != who)
+
+
+## The offer the button stands for: the highest rank whose offerer is still there, {} for none.
+static func offered() -> Dictionary:
+	var best := {}
+	for o in _offers:
+		var w: Variant = (o["who"] as WeakRef).get_ref()
+		if w != null and is_instance_valid(w) and (w as Object) is Node and (w as Node).is_inside_tree() \
+				and (best.is_empty() or int(o["rank"]) > int(best["rank"])):
+			best = o
+	return best
+
+
+## Whether a timeline editor is open: the rail steps aside for it.
+func editing() -> bool:
+	return is_inside_tree() and get_tree().get_first_node_in_group(EDITORS) != null
 
 
 ## How much of the frame's bottom edge the transport takes while it shows: from the edge up past
@@ -163,9 +212,19 @@ func _process(delta: float) -> void:
 	# eases in by less than the threshold, and snapping then kept the bar hidden for good.
 	if want == 0.0 and _shown < 0.004:
 		_shown = 0.0
-	_root.visible = _shown > 0.0
+	# THE TIMELINE'S BUTTON stands whenever the note offers one, played or not
+	var offer := offered()
+	_root.visible = _shown > 0.0 or not offer.is_empty()
 	if not _root.visible:
 		return
+	_tl.visible = not offer.is_empty()
+	if _tl.visible:
+		_tl.set_pressed_no_signal(bool((offer["is_open"] as Callable).call()))
+		var tip := String(offer["tip"]) if not String(offer["tip"]).is_empty() else TIMELINE_TIP
+		if _tl.tooltip_text != tip:
+			_tl.tooltip_text = tip
+	for c in [_play, _stop, _label]:
+		(c as Control).visible = _shown > 0.0
 	var playing := Spectrum.transport_playing()
 	# THE EDIT DOT: a reading whose script changed after it began plays the old words until it
 	# is stopped and played again - the panel's Play button carried the same dot.
@@ -186,6 +245,7 @@ func _process(delta: float) -> void:
 	var y := r.position.y + r.size.y * 0.5 - BTN * 0.5
 	_play.position = Vector2(r.position.x - 2.0 * (BTN + GAP), y)
 	_stop.position = Vector2(r.position.x - (BTN + GAP), y)
+	_tl.position = Vector2(r.position.x - 3.0 * (BTN + GAP), y)
 	var t := Spectrum.scrub_position()
 	var total := maxf(0.0, Spectrum.scrub_length())
 	_label.text = "%s / %s" % [Clock.text(t), Clock.text(total)] if total > 0.0 else Clock.text(t)
@@ -207,7 +267,7 @@ func _input(event: InputEvent) -> void:
 	if not Spectrum.seekable():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		var inside := _rail().grow(HIT).has_point(event.position)
+		var inside := _rail().grow(HIT).has_point(event.position) and not editing()
 		if event.pressed and inside:
 			_dragging = true
 			_seek_to(event.position.x)
@@ -216,7 +276,7 @@ func _input(event: InputEvent) -> void:
 			_dragging = false
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
-		var over: bool = _mouse_in and _rail().grow(HIT).has_point(event.position)
+		var over: bool = _mouse_in and not editing() and _rail().grow(HIT).has_point(event.position)
 		_hover_x = event.position.x if over or _dragging else -1.0
 		if _dragging:
 			_seek_to(event.position.x)
@@ -283,7 +343,7 @@ func _rail() -> Rect2:
 			var r := c.get_global_rect()
 			if r.position.x < vp.x * 0.5:
 				left = maxf(left, r.end.x + 24.0)
-	left += 2.0 * (BTN + GAP)
+	left += 3.0 * (BTN + GAP)
 	return Rect2(Vector2(left, vp.y - PAD), Vector2(maxf(10.0, vp.x - margin - left), BAR_H))
 
 
@@ -295,7 +355,8 @@ class Painter:
 		if owner_node == null:
 			return
 		var a: float = owner_node._shown
-		if a <= 0.0:
+		# (no rail while a timeline editor is open: its own strip is the scrubber)
+		if a <= 0.0 or owner_node.editing():
 			return
 		var r: Rect2 = owner_node._rail()
 		var seekable := Spectrum.seekable()

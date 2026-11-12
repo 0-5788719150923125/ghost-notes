@@ -16,8 +16,11 @@ extends SceneTree
 ##   behind - one rest between two paragraphs - and is handed no notation, with a lesson whose speech
 ##   says "$x^2$" as the control the audit must catch.
 ## - THE EPISODE ON DISK ([ProofEpisode], under a scratch root): what each step needs, that a redo of
-##   the solve deletes its notebook, its Lean file, its runs and data and everything made after it, and
-##   nothing else.
+##   the solve moves its notebook, its Lean file, its runs and data and everything made after it a
+##   version back, and nothing else. ITS STEPS KEPT ([KeptSteps]; next/editing.md step 12): each recorded,
+##   a solve made again stales what was made from it through the chain, a step kept or changed by hand is
+##   passed by (THE CONTROLS: an episode made in order owes nothing; a kept draft stales nothing past it),
+##   and a lesson written before there were drafts is made from the solve.
 ## - NOT EVERY CLAIM IS A THEOREM (the user, 2026-10-19: "it should be a general theorem-prover and
 ##   learning tool"): a COMPUTATION is framed with what it computes and no Lean statement (one that does
 ##   not say what it computes is refused - the control), and a problem framed before there were
@@ -587,6 +590,19 @@ func _episode() -> void:
 		else:
 			gone.append(step)
 	_check(kept == PackedStringArray(["problem"]), "a redo of the solve keeps only the problem (kept %s)" % ", ".join(kept))
+	# THROWN AWAY, NEVER DELETED (next/editing.md step 12): each a version back, and what is written over too
+	var solve_back := ep.dir.path_join("versions/solve").path_join(String((ep.versions("solve").back() as Dictionary).get("dir", ""))) \
+		if not ep.versions("solve").is_empty() else ""
+	_check(not ep.versions("solve").is_empty() and not ep.versions("lesson").is_empty()
+		and FileAccess.file_exists(solve_back.path_join("notebook.md")) and FileAccess.file_exists(solve_back.path_join("runs.json")),
+		"what a redo throws away is a version back, not gone - the solver's notebook and runs with its session (solve %d, lesson %d)"
+		% [ep.versions("solve").size(), ep.versions("lesson").size()])
+	var before_n := ep.versions("problem").size()
+	ep.write_json("problem", {"episode_title": "Primes, again"})
+	_check(ep.versions("problem").size() == before_n + 1, "what a write replaces is a version back")
+	ep.write_json("problem", {"episode_title": "Primes, again"})
+	_check(ep.versions("problem").size() == before_n + 1, "the control: the same written again keeps no version")
+	ep.write_json("problem", {"episode_title": "Primes never run out"})
 	_check(not DirAccess.get_files_at(ep.dir).has("problem.json.part"), "nothing half-written is left")
 	var two := ProofEpisode.open("my-note", 2)
 	two.write_json("problem", {"episode_title": "Odd numbers"})
@@ -596,6 +612,57 @@ func _episode() -> void:
 	_check(ep.seed != two.seed and ep.seed == ProofEpisode.open("my-note", 1).seed,
 		"each episode's hand has a seed of its own, the same every time")
 	_check(ProofEpisode.show_key_of("/notes/My Proof Note.md") == "my-proof-note", "a note's key is its file's name")
+	_kept_steps()
+
+
+## PROOF'S STEPS KEPT ([KeptSteps], next/editing.md step 12) - on the episode and the producer's reading of it, never its tick: a
+## gate that starts the producer can start an agent.
+func _kept_steps() -> void:
+	var k := ProofEpisode.open("my-note", 3)
+	for step in ProofEpisode.STEPS:
+		k.write_text(String(step), "{}" if String(step) in ["problem", "solve", "review", "ink"] else "x " + String(step))
+		k.note_made(String(step), String(ProofProducer.BY.get(step, "")))
+	var pp := ProofProducer.new(k, {})
+	_check(ProofEpisode.STEPS.all(func(st: Variant) -> bool: return not k.stale(String(st)) and not pp.owed(String(st)) and pp.state_of(String(st)) == "ready"),
+		"the control: an episode made in order - nothing stale, nothing owed")
+	k.write_json("solve", {"verified": true, "checks": 3})
+	k.note_made("solve", "solver")
+	var chain := ["draft", "review", "lesson", "ink", "script"]
+	_check(chain.all(func(st: Variant) -> bool: return k.stale(String(st))) and not k.stale("problem") and not k.stale("solve"),
+		"a solve made again stales what was made from it, through the chain")
+	_check(pp.owed("draft") and pp.owed("lesson") and pp.state_of("lesson") == "stale" and String(k.record("solve").get("by", "")) == "solver",
+		"Generate owes them, the rows say stale, and the solve is recorded as the solver's")
+	k.set_kept("draft", true)
+	_check(not pp.owed("draft") and not k.stale("review") and not pp.owed("lesson"),
+		"the control: a draft kept is passed by, and nothing past it is stale through it")
+	k.write_text("lesson", "the lesson, by hand")
+	_check(k.kept("lesson") and k.changed_by_hand("lesson") and k.stale("ink") and pp.owed("ink") and not pp.owed("lesson"),
+		"a lesson changed by hand is kept, and the ink made from it is owed")
+	var back: Array = k.versions("lesson")
+	_check(not back.is_empty() and String((back.back() as Dictionary).get("by", "")) == "teacher",
+		"what the hand wrote over is a version back, the teacher's")
+	_check(k.restore("lesson", back.size() - 1).is_empty() and k.read_text("lesson") == "x lesson" and k.kept("lesson"),
+		"and put back, it is kept - a person chose it")
+	# THE LESSON AS A TIMELINE (next/editing.md step 12): one group on the voice's clock, each pad item the pen writes a span in
+	# lane "pen" where it comes in the words, in order - THE CONTROL: an episode with no lesson has no timeline
+	k.write_text("lesson", LESSON)
+	var tl := k.timeline()
+	var pen: Array = []
+	for l in (tl.get("groups", [{}]) as Array)[0].get("lanes", []):
+		if String((l as Dictionary)["id"]) == "pen":
+			pen = (l as Dictionary)["items"]
+	var ordered := pen.size() >= 3
+	for i in range(1, pen.size()):
+		ordered = ordered and float((pen[i] as Dictionary)["at"]) >= float((pen[i - 1] as Dictionary)["at"])
+	_check(String(tl.get("clock", "")) == "voice" and ordered and String((pen[0] as Dictionary)["kind"]) == "span"
+		and DataPath.same((pen[1] as Dictionary)["source"], ["lesson", "action", 1]) and Timeline.check(tl).is_empty(),
+		"the lesson is a timeline on the voice's clock, the pen's marks spans in order where they come (%d)" % pen.size())
+	_check(ProofEpisode.open("my-note", 9).timeline().is_empty(), "the control: an episode with no lesson has no timeline")
+	var old := ProofEpisode.open("my-note", 4)
+	old.write_json("problem", {"episode_title": "Before drafts"})
+	old.write_json("solve", {"verified": true})
+	old.write_text("lesson", "written before there were drafts")
+	_check(old.made_from("lesson").keys() == ["solve"], "a lesson written before there were drafts is made from the solve (%s)" % str(old.made_from("lesson").keys()))
 
 
 # --- a drawing, a letter, the student ------------------------------------------------------------

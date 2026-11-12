@@ -74,6 +74,10 @@ const CHAIN_MAX := 2
 const JUMPER_CHANCE := 0.3
 ## The steps made here, with no agent and no quota - see the class note.
 const LOCAL := ["draw", "script"]
+## WHO MAKES EACH KIND OF STEP, as its record and its row name them (a step's first word -> its maker).
+const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
+	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master",
+	"layers": "art director"}
 
 var episode: TableEpisode
 ## {title, brief, deck, chooses, writer, painter} - how many cards are drawn, whether they come up reversed
@@ -82,6 +86,9 @@ var spec: Dictionary = {}
 var running := false
 ## The steps this run was asked for; empty for the whole episode.
 var only: Array = []
+## THE STEPS MADE AGAIN THOUGH THEY ARE MADE (a row's ⟳, [method start]'s [param remake]): what stands plays until the new one lands
+## over it, a version back ([method TableEpisode.keep_version]), and what was made from it goes stale - nothing is thrown away.
+var again: Array = []
 
 var _jobs := {}        # step -> AgentJobs id
 var _tools := {}       # step -> {url, set}: the tools a step's agent is working with, until it lands
@@ -89,6 +96,12 @@ var _errors := {}      # step -> why it failed, once it is out of tries
 var _tries := {}       # step -> runs started
 var _hosts := {}       # step -> the painter host making it: {pid, out, log} ([method _make_skin_host])
 var _waiting := {}     # step -> what it waits on being installed
+var _from := {}        # step -> what it was made from as its making began ([method TableEpisode.made_from])
+## ONE LAYER LAID AGAIN ([method lay_layer]; next/editing.md step 4): its index from 0, -1 for the whole painting.
+var skin_layer := -1
+## STEPS ASKED AGAIN WITH A NOTE (next/editing.md step 9): step -> the author's note, appended to that step's prompt alone
+## ([method _asked]) until it lands.
+var asked := {}
 
 
 func _init(ep: TableEpisode, sp: Dictionary) -> void:
@@ -96,11 +109,21 @@ func _init(ep: TableEpisode, sp: Dictionary) -> void:
 	spec = sp
 
 
-## Make what is missing: every step, or only [param steps] (and the free steps that follow them).
-func start(steps: Array = []) -> void:
+## Make what is missing: every step, or only [param steps] (and the free steps that follow them) - and, with [param remake], those
+## steps again though they are made (a row's ⟳). GENERATE ([param steps] empty) MAKES WHAT IS MISSING AND WHAT IS STALE, unless it
+## is kept ([method owed]). A person pressing is what starts it, so here an episode made before records gains them ([method
+## TableEpisode.adopt]).
+func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
 	_errors.clear()
 	_tries.clear()
+	skin_layer = layer
 	only = steps.duplicate()
+	again = steps.duplicate() if remake else []
+	asked = {}
+	if not note.strip_edges().is_empty():
+		for s in steps:
+			asked[String(s)] = note.strip_edges()
+	episode.adopt()
 	running = true
 	tick()
 	changed.emit()
@@ -125,10 +148,9 @@ func busy() -> bool:
 	return not _jobs.is_empty() or not _hosts.is_empty()
 
 
-## "ready", "running", "queued", "failed" or "missing".
+## "ready", "running", "queued", "failed" or "missing". A step being made again is being made, and one that failed to be made
+## again failed - what stands of it still plays.
 func state_of(step: String) -> String:
-	if episode.has(step):
-		return "ready"
 	if _jobs.has(step):
 		var st := AgentJobs.state(String(_jobs[step]))
 		return "running" if st == "running" else "queued"
@@ -138,6 +160,8 @@ func state_of(step: String) -> String:
 		return "queued"
 	if _errors.has(step):
 		return "failed"
+	if episode.has(step):
+		return "ready"
 	return "missing"
 
 
@@ -168,6 +192,8 @@ func tick() -> void:
 		AgentJobs.forget(id)
 		_jobs.erase(step)
 		_land(String(step), res)
+		if episode.has(String(step)) and not _errors.has(step):
+			_made(String(step), String(MAKERS.get(String(step).get_slice(":", 0), "agent")))
 		moved = true
 	for step in _hosts.keys():
 		if Subprocess.alive(int((_hosts[step] as Dictionary)["pid"])):
@@ -181,15 +207,19 @@ func tick() -> void:
 			push_warning("ghost: table %s - %s" % [step, err])
 			var tail := FileAccess.get_file_as_string(String(h["log"])).strip_edges().split("\n")
 			print("ghost: table %s - the painter's log (%s) ends:\n%s" % [step, String(h["log"]), "\n".join(tail.slice(maxi(tail.size() - 12, 0)))])
+		else:
+			_made(String(step), "painter host")
 		moved = true
 	if running:
 		for step in episode.steps():
 			var s := String(step)
-			if episode.has(s) or _jobs.has(s) or _hosts.has(s) or _errors.has(s):
+			if (episode.has(s) and not owed(s)) or _jobs.has(s) or _hosts.has(s) or _errors.has(s) or passes_by(s):
 				continue
+			# ...ONCE WHAT IT IS MADE FROM IS MADE, AND NOT ABOUT TO BE MADE AGAIN: made now from what goes a version back, it
+			# would only go stale
 			var ready := true
 			for need in episode.needs(s):
-				if not episode.has(String(need)):
+				if not episode.has(String(need)) or owed(String(need)) or _jobs.has(String(need)) or _hosts.has(String(need)):
 					ready = false
 					break
 			if not ready or not (only.is_empty() or only.has(s) or LOCAL.has(s)):
@@ -205,7 +235,37 @@ func tick() -> void:
 
 # --- making one step ---------------------------------------------------------------------
 
+## WHETHER [param step], MADE, IS TO BE MADE AGAIN in this run: asked for again ([member again]), or stale and not kept ([method
+## TableEpisode.stale], [method TableEpisode.kept]) where Generate runs - or where it is a free step that follows what was asked.
+func owed(step: String) -> bool:
+	if again.has(step):
+		return true
+	return (only.is_empty() or LOCAL.has(step)) and episode.stale(step) and not episode.kept(step)
+
+
+## [param prompt] for [param step], with the author's note where it was asked again with one ([member asked]).
+func _asked(step: String, prompt: String) -> String:
+	return prompt if not asked.has(step) else prompt + "\n\n" + Rules.say("table/show.asked", {"note": String(asked[step])})
+
+
+## WHETHER GENERATE PASSES [param step] BY, made or not: it is made by hand ([method TableEpisode.by_hand]) and nobody asked for
+## it by name (a row's ⟳ hands it to its agent).
+func passes_by(step: String) -> bool:
+	return episode.by_hand(step) and not again.has(step) and not only.has(step)
+
+
+## [param step] LANDED, made by [param by]: recorded from what it was made from as its making began, and no longer owed.
+func _made(step: String, by: String) -> void:
+	var err := episode.note_made(step, by, _from.get(step, {}))
+	if not err.is_empty():
+		push_warning("ghost: table %s - its record was not kept: %s" % [step, err])
+	_from.erase(step)
+	again.erase(step)
+	asked.erase(step)
+
+
 func _make(step: String) -> void:
+	_from[step] = episode.made_from(step)
 	var parts := step.split(":")
 	match String(parts[0]):
 		"plan":
@@ -249,7 +309,7 @@ func _submit_text(step: String, p: Dictionary, tier: String, extra: Dictionary =
 		return
 	var job := {"kind": "text", "backend": String(spec.get("writer", "claude")),
 		"tier": tier, "dir": episode.job_dir(step), "system": String(p["system"]),
-		"prompt": String(p["prompt"]), "images": p.get("images", []), "label": "table %s" % step,
+		"prompt": _asked(step, String(p["prompt"])), "images": p.get("images", []), "label": "table %s" % step,
 		"model": String(spec.get("writer_model", "")), "effort": String(spec.get("writer_effort", ""))}
 	job.merge(extra, true)
 	var id := AgentJobs.submit(job)
@@ -262,8 +322,10 @@ func _submit_text(step: String, p: Dictionary, tier: String, extra: Dictionary =
 
 func _submit_image(step: String, prompt: String, refs: Array) -> void:
 	_tries[step] = int(_tries.get(step, 0)) + 1
+	# (the painter writes its picture straight over the one there: that one a version back first)
+	episode.keep_version(step)
 	var id := AgentJobs.submit({"kind": "image", "backend": String(spec.get("painter", "codex")),
-		"dir": episode.job_dir(step), "prompt": prompt, "refs": refs,
+		"dir": episode.job_dir(step), "prompt": _asked(step, prompt), "refs": refs,
 		"target": episode.file_of(step), "label": "table %s" % step,
 		"model": String(spec.get("painter_model", "")), "effort": String(spec.get("painter_effort", ""))})
 	if id.is_empty():
@@ -280,6 +342,8 @@ func _finish(step: String, err: String) -> void:
 		err = "it wrote nothing (see the log)"
 	if not err.is_empty():
 		_errors[step] = err
+	else:
+		_made(step, "code")
 
 
 func _plan() -> Dictionary:
@@ -750,16 +814,22 @@ func _make_skin_host() -> void:
 		images.append(ProjectSettings.globalize_path(episode.file_of("image:layer:%d" % k)))
 		var l: Dictionary = episode.layers()[k - 1]
 		layers.append({"name": String(l.get("name", "")), "soft": bool(l.get("soft", false))})
-	var out := ProjectSettings.globalize_path(episode.dir.path_join("paint"))
+	# ...INTO A FOLDER OF ITS OWN, so what stands plays on while it paints and is kept one back once it lands ([method swap_paint])
+	var out := ProjectSettings.globalize_path(episode.dir.path_join(PAINT_NEXT))
 	DirAccess.make_dir_recursive_absolute(out)
 	var m: Dictionary = meta
 	var spec := out.path_join("spec.json")
 	# (...pixels as whole numbers: JSON keeps no ints, and `face.json`'s `[0, 22]` comes back `[0.0, 22.0]`, which Python cannot slice by)
 	var at := [int((m["at"] as Array)[0]), int((m["at"] as Array)[1])]
 	var size := [int((m["size"] as Array)[0]), int((m["size"] as Array)[1])]
-	var err := TextGen.put(spec, JSON.stringify({"out": out, "bare_image": ProjectSettings.globalize_path(episode.dir.path_join("face_bare.png")),
+	var fields := {"out": out, "bare_image": ProjectSettings.globalize_path(episode.dir.path_join("face_bare.png")),
 		"at": at, "size": size, "px": float(m.get("px", 3.0)), "bare": String((surfaces[0] as Dictionary).get("color", "#c89e80")),
-		"paints": paints, "layers": layers, "images": images}, "\t"))
+		"paints": paints, "layers": layers, "images": images}
+	# ...ONE LAYER ALONE ([method lay_layer]): over the canvas the layers before it leave, the rest kept as they stand
+	if skin_layer >= 0:
+		fields["only"] = skin_layer
+		fields["keep"] = ProjectSettings.globalize_path(episode.dir.path_join("paint"))
+	var err := TextGen.put(spec, JSON.stringify(fields, "\t"))
 	if not err.is_empty():
 		_errors["skin"] = err
 		return
@@ -780,6 +850,12 @@ func _land_skin_host(h: Dictionary) -> String:
 	if not (done is Dictionary) or not bool((done as Dictionary).get("ok", false)):
 		var said := String((done as Dictionary).get("error", "")) if done is Dictionary else FileAccess.get_file_as_string(String(h["log"])).strip_edges().right(400)
 		return "the painter failed: " + said
+	if not FileAccess.file_exists(out.path_join("elements.json")):
+		return "the painter laid nothing"
+	var swapped := swap_paint(out)
+	if not swapped.is_empty():
+		return swapped
+	out = ProjectSettings.globalize_path(episode.dir.path_join("paint"))
 	var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(out.path_join("elements.json")))
 	var els: Array = (doc as Dictionary).get("elements", []) if doc is Dictionary else []
 	if els.is_empty():
@@ -802,18 +878,84 @@ func _land_skin_host(h: Dictionary) -> String:
 			"plan": {"thing": String(tool.get("thing", "")), "part": String(tool.get("part", "")), "how": String(ed["how"]),
 				"beat": String(beats[String(ed["id"])]), "seconds": float(ed["seconds"]), "pot": _pot_of_paint(String(ed["paint"]), scanned["paints"]),
 				"host": String(ed["id"])}})
+	# ...ONE LAYER LAID AGAIN ([method lay_layer]): the design as it stood for every other layer - a hand's edits to them kept -
+	# and this layer's new elements in its place among them
+	if skin_layer >= 0 and episode.has("skin"):
+		elements = merged_layer(episode.read_json("skin"), elements, episode.layers(), skin_layer)
 	var design := {"thing": String(skin["thing"]), "part": String(skin["part"]), "frame": [(skin["frame"] as Vector2).x, (skin["frame"] as Vector2).y],
 		"outline": String(skin.get("outline", "")), "name": String(_plan().get("painted", "")).left(60), "elements": elements}
 	var wrote := episode.write_json("skin", {"designs": [design]})
-	# ...AND THE WORK THAT IS MADE FROM IT, where it was kept - the painting made again alone ([method TableEpisode.unlocked]): it is the
-	# painting's own, made from it here in a moment, and kept it would block elements there are no longer; the words pointed at it
-	if wrote.is_empty() and episode.has("acts"):
-		var again := _acts_from_painting()
-		if again.is_empty():
-			_recue_words()
-		elif again != NOT_PAINTED:
-			push_warning("ghost: table acts - made again from the painting: " + again)
+	# ...AND THE WORK THAT IS MADE FROM IT, where it stands and is not kept: it is the painting's own, made from it here in a moment,
+	# and left it would block elements there are no longer. The words are left as they are: a cue names a layer, which a repaint
+	# keeps ([method TableWork.resolve_cues]), and one that names nothing now is a problem shown (next/editing.md step 2)
+	if wrote.is_empty() and episode.has("acts") and not episode.kept("acts"):
+		var remade := _acts_from_painting()
+		if remade.is_empty():
+			_made("acts", "code")
+		elif remade != NOT_PAINTED:
+			push_warning("ghost: table acts - made again from the painting: " + remade)
 	return wrote
+
+
+## LAYER [param k] (from 1) LAID AGAIN ON THE TABLE, ALONE (next/editing.md step 4: "The painter host solves one layer and replaces
+## only that layer's elements"): the host paints it over the canvas the layers before it leave and puts its new elements among the
+## rest, and the design is made again from them - minutes, where the whole painting is forty. "" started, else why not.
+func lay_layer(k: int) -> String:
+	if k < 1 or k > episode.layer_count():
+		return "there is no layer %d" % k
+	if not FileAccess.file_exists(episode.dir.path_join("paint").path_join("elements.json")):
+		return "the painting has not been laid on the table yet: make the design first"
+	start(["skin"], true, "", k - 1)
+	return ""
+
+
+## THE DESIGN'S ELEMENTS WITH ONE LAYER LAID AGAIN: [param old] (`skin.json` as it stands, a hand's edits and all) for every layer
+## but [param layer] (from 0, of [param layers] - an element's `stage` its layer's name), and [param fresh]'s elements of that layer
+## in their place, the layers in their order. Pure: a gate holds it.
+static func merged_layer(old: Variant, fresh: Array, layers: Array, layer: int) -> Array:
+	var names: Array = layers.map(func(l: Variant) -> String: return String((l as Dictionary).get("name", "")) if l is Dictionary else "")
+	var redone := String(names[layer]) if layer >= 0 and layer < names.size() else ""
+	var stood: Array = []
+	for g in ((old as Dictionary).get("designs", []) if old is Dictionary else []):
+		if g is Dictionary:
+			stood = (g as Dictionary).get("elements", [])
+			break
+	var order := func(e: Variant) -> int: return names.find(String((e as Dictionary).get("stage", ""))) if e is Dictionary else -1
+	var out: Array = []
+	for e in stood:
+		if order.call(e) >= 0 and order.call(e) < layer:
+			out.append(e)
+	for e in fresh:
+		if e is Dictionary and String((e as Dictionary).get("stage", "")) == redone:
+			out.append(e)
+	for e in stood:
+		if order.call(e) > layer:
+			out.append(e)
+	return out
+
+
+## Where the painter host paints, beside what stands ([method swap_paint]).
+const PAINT_NEXT := "paint_next"
+
+
+## THE HOST'S NEW MAPS PUT IN PLACE, THE OLD ONES KEPT ONE BACK (next/editing.md step 1: "one back for a host's maps" - half a
+## gigabyte each, so moved, never copied): `paint/` to `versions/_paint_prev/` (the one before that gone), [param fresh] to
+## `paint/`. "" done, else why not (and what stood stands).
+func swap_paint(fresh: String) -> String:
+	var live := ProjectSettings.globalize_path(episode.dir.path_join("paint"))
+	if fresh == live:
+		return ""
+	var prev := ProjectSettings.globalize_path(episode.dir.path_join(TableEpisode.VERSIONS_DIR).path_join("_paint_prev"))
+	if DirAccess.dir_exists_absolute(live):
+		TableEpisode._remove_tree(prev)
+		DirAccess.make_dir_recursive_absolute(prev.get_base_dir())
+		if DirAccess.rename_absolute(live, prev) != OK:
+			return "the painter's last maps could not be kept one back"
+	if DirAccess.rename_absolute(fresh, live) != OK:
+		if DirAccess.dir_exists_absolute(prev) and not DirAccess.dir_exists_absolute(live):
+			DirAccess.rename_absolute(prev, live)
+		return "the painter's new maps could not be put in place"
+	return ""
 
 
 ## EACH ELEMENT'S BEAT, by id: where its middle falls in the painting's time, each counted with the trips its run takes ([constant
@@ -1207,9 +1349,6 @@ func _make_acts() -> void:
 	var painted := _acts_from_painting()
 	if painted != NOT_PAINTED:
 		_finish("acts", painted)
-		# (...and the words kept from before it pointed at it - [method _recue_words])
-		if painted.is_empty():
-			_recue_words()
 		return
 	var table: Variant = episode.read_json("table")
 	var tbl: Dictionary = table if table is Dictionary else {}
@@ -1281,10 +1420,14 @@ static func acts_from_painting(doc: Variant, tbl: Variant, beats: int) -> Dictio
 			var pl: Dictionary = (run[0] as Dictionary)["plan"]
 			var how := String(pl["how"])
 			var paints: PackedStringArray = []
+			var layers: Array = []        # ...and the layers it lays, by the names they keep through a repaint (layers.json)
 			for e in run:
 				var pot := String(((e as Dictionary)["plan"] as Dictionary).get("pot", ""))
 				if not pot.is_empty() and not paints.has(pot):
 					paints.append(pot)
+				var layer := Manuscript.slug(String((e as Dictionary).get("stage", "")))
+				if not layer.is_empty() and not layers.has(layer):
+					layers.append(layer)
 			var track := {"thing": String(pl["thing"]), "part": String(pl["part"]), "law": "paint", "on": on,
 				"paint": run.map(func(e: Dictionary) -> String: return String(e["id"])), "manner": String(Skins.PAINTER_HOWS.get(how, "pat"))}
 			if not water.is_empty():
@@ -1293,7 +1436,7 @@ static func acts_from_painting(doc: Variant, tbl: Variant, beats: int) -> Dictio
 				track["dry"] = towel
 			acts.append({"name": "%s %d %s" % ["intro" if key == "intro" else ("close" if key == "close" else "stage " + String(key)), k[0], String(pl["part"])],
 				"beat": key if key in ["intro", "close"] else int(key), "about": "%s with the %s: %s" % [how, String(pl["part"]), ", ".join(paints)],
-				"length": "under", "cues": [], "tracks": [track]})
+				"length": "under", "cues": [], "tracks": [track], "layers": layers})
 			run.clear()
 		for e in els:
 			var pl: Dictionary = (e as Dictionary)["plan"]
@@ -1466,70 +1609,6 @@ static func _beat_of(step: String, bare := false) -> String:
 	return ""
 
 
-## THE WORDS KEPT WHEN THE WORK IS MADE AGAIN (the user, 2026-11-09: "I REALLY don't want to lose this script. It's a really good one.
-## Is there any way we can apply the painter fixes without losing the script?"): each passage's act cues pointed at its beat's acts as
-## they are now ([method recue_map]), and the script put together from them again. A step unlocked made again alone keeps the words
-## ([method TableEpisode.unlocked]); the work it is made from, made again, renames and recounts the acts - 732687's stage 2 went from
-## seven to four - and its cues had named acts there were no longer. Nothing but the cues changes.
-func _recue_words() -> void:
-	var cue := RegEx.create_from_string(CardReading.ACT_MARK)
-	var bare := episode.cardless()
-	var mapping := {}
-	var texts := {}
-	for st in episode.steps():
-		var step := String(st)
-		if not step.begins_with("say:") or not episode.has(step):
-			continue
-		var beat := _beat_of(step, bare)
-		if beat.is_empty():
-			continue
-		var text := episode.read_text(step)
-		texts[step] = text
-		var olds: Array = []
-		for m in cue.search_all(text):
-			olds.append(m.get_string(1).strip_edges().to_lower())
-		var news: Array = _acts_of(beat).map(func(a: Dictionary) -> String: return String(a["name"]))
-		mapping.merge(recue_map(olds, news))
-	if mapping.is_empty():
-		return
-	for step in texts:
-		var text := String(texts[step])
-		var out := ""
-		var at := 0
-		for m in cue.search_all(text):
-			out += text.substr(at, m.get_start() - at)
-			at = m.get_end()
-			var name := m.get_string(1).strip_edges().to_lower()
-			if not mapping.has(name):
-				out += m.get_string()
-			elif not String(mapping[name]).is_empty():
-				out += "<!-- act: %s -->" % String(mapping[name])
-			elif text.substr(at, 1) == " ":
-				at += 1
-		out += text.substr(at)
-		if out != text:
-			episode.write_text(String(step), out)
-	if episode.has("script"):
-		_make_script()
-
-
-## WHICH ACT EACH OF A PASSAGE'S CUES NOW NAMES: [param olds] its cues in order, [param news] its beat's acts in order (names as a cue
-## writes them). The first cue its beat's first act, at its place; the others taken out (named ""), the rest of the beat's acts following
-## on, each given its share of the passage by what it takes ([method TableWork.schedule]). Nothing for a passage whose cues are its acts
-## already. -> {old: new or ""}. EACH CUE HAD KEPT ITS PLACE, naming the act now there (2026-11-10, the user: "Starting around 5:30, and
-## continuing for at least 90 seconds... there is no animation at all"): an act made again is not the one the reader cued there, and
-## 732687's, cued where acts two and three times as long had been, put their tools down and waited out the words to the next cue.
-static func recue_map(olds: Array, news: Array) -> Dictionary:
-	var out := {}
-	if olds.is_empty() or olds == news:
-		return out
-	for o in olds:
-		out[String(o)] = ""
-	if not news.is_empty():
-		out[String(olds[0])] = String(news[0])
-	return out
-
-
 ## THE ACTS OF [param beat], as the puppeteer blocked them (`acts.json`, made safe) - none for a beat with no
 ## work, or before they are blocked. A reader is handed its own beat's alone: NO CHEATING holds for the work.
 func _acts_of(beat: String) -> Array:
@@ -1548,6 +1627,43 @@ func _acts_of(beat: String) -> Array:
 				(a as Dictionary)["_natural"] = natural
 				(a as Dictionary)["length"] = natural
 	return acts
+
+
+## THE SCRIPT EDITED WHOLE, WRITTEN BACK TO ITS PASSAGES (next/editing.md, design point 3): [param text] split where its marks
+## are ([method CardReading.split]) and each passage's words written to its step - a hand's version, kept ([method
+## TableEpisode.set_kept]) - then the script put together from them again, so neither is ever made over the other. ITS MARKS
+## ARE THE SHOW'S: the same moves in the same order ([method choreography]); only the words between them are the hand's. A
+## game's script is its play, as it was played. "" written, else why not (and nothing written).
+func write_script(text: String) -> String:
+	if episode.wants_game():
+		return "a game's script is its play, written as it was played"
+	var moves := choreography(_plan(), _drawn(episode.card_count()))
+	var parts := CardReading.split(text)
+	if not String((parts[0] as Dictionary)["text"]).is_empty():
+		return "the script has words before its first mark, where no passage is"
+	var marked: Array = parts.slice(1)
+	if marked.size() != moves.size():
+		return "the script has %d marks where the show has %d moves: edit the words between them, and leave the marks as they are" % [marked.size(), moves.size()]
+	var writes := {}
+	for i in moves.size():
+		var mv: Dictionary = moves[i]
+		var p: Dictionary = marked[i]
+		if String(p["kind"]) != String(mv["kind"]) or int(p["card"]) != int(mv.get("card", 0)):
+			return "mark %d is \"%s %d\" where the show has \"%s %d\": the marks are the show's moves" % [i + 1, String(p["kind"]), int(p["card"]), String(mv["kind"]), int(mv.get("card", 0))]
+		var say := String(mv.get("say", ""))
+		if say.is_empty():
+			if not String(p["text"]).is_empty():
+				return "the words after mark %d (%s) have no passage to go in: that move has none" % [i + 1, String(mv["kind"])]
+			continue
+		if episode.read_text(say).strip_edges() != String(p["text"]):
+			writes[say] = String(p["text"])
+	for say in writes:
+		var err := episode.write_text(String(say), String(writes[say]))
+		if err.is_empty():
+			err = episode.set_kept(String(say), true)
+		if not err.is_empty():
+			return err
+	return _make_script() if not writes.is_empty() else ""
 
 
 func _make_script() -> String:

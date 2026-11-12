@@ -33,6 +33,10 @@ extends Scene3D
 var _actors := {}                  # id -> Cast.Actor (insertion-ordered)
 var _track: Track = null
 var _nominal := 8.0
+var _keys: Array = []          # the track's flags, made safe ([StageKeys]): the camera moved at the entry's own time
+var _turning := false          # ...and the Look turned by them, to be let go
+var _cam0 := {}                # ...from what the entry set it to
+var _actor0 := {}              # an actor a key names -> {param: what it was built with}
 var _t := 0.0
 var _flashes: Array = []           # transient overlays: {actor, k, col}
 var _ties: Array = []              # snap ties: {a, b, k}
@@ -68,6 +72,16 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if typeof(spec.get("track")) == TYPE_DICTIONARY:
 		_track = Track.new(spec["track"], rng)
 		_nominal = _track.nominal
+		_keys = StageKeys.sanitize((spec["track"] as Dictionary).get("keys", []))["keys"]
+	_cam0 = {"camera.eye": lens.eye, "camera.look": lens.look, "camera.fov": lens.fov}
+	for k in _keys:
+		var who := String((k as Dictionary).get("actor", ""))
+		if not who.is_empty() and _actors.has(who):
+			var param := String((k as Dictionary)["field"]).trim_prefix("actor.")
+			if not _actor0.has(who):
+				_actor0[who] = {}
+			if not (_actor0[who] as Dictionary).has(param):
+				_actor0[who][param] = (_actors[who] as Cast.Actor).get_param(param)
 	# A stage chooses nothing of its own - it reports what the BOARD chose, so a probe
 	# reading params can see that this scene's variety lives in the storyboard and in
 	# the Cast registry rather than in a table here.
@@ -131,6 +145,28 @@ func update(f: AudioFeatures, delta: float) -> void:
 		_t += delta * _clock_rate(f, delta)
 		if _track != null:
 			_track.advance(_t, phase_span(_nominal), self, f, delta)
+		# THE TRACK'S FLAGS ([StageKeys]): its keys at the entry's own time, in the track's nominal seconds - a pure function of it
+		if not _keys.is_empty():
+			var nt := _t * _nominal / maxf(0.05, phase_span(_nominal))
+			lens.eye = StageKeys.value_at(_cam0["camera.eye"], _keys, "camera.eye", nt)
+			lens.look = StageKeys.value_at(_cam0["camera.look"], _keys, "camera.look", nt)
+			lens.fov = StageKeys.value_at(_cam0["camera.fov"], _keys, "camera.fov", nt)
+			# ...and an actor's own values, from its first key on (a verb rules them before)
+			for who in _actor0:
+				for param in _actor0[who]:
+					var field := "actor." + String(param)
+					if nt >= StageKeys.first_start(_keys, field, String(who)):
+						(_actors[who] as Cast.Actor).set_param(String(param), float(StageKeys.value_at(float(_actor0[who][param]), _keys, field, nt, String(who))))
+			# ...and the Look's dials, from each one's first key on - turned over the picture as the show's own
+			var dials := {}
+			for k in _keys:
+				var kd: Dictionary = k
+				var fil := String(kd.get("actor", ""))
+				if String(kd["field"]) == "look" and not dials.has(fil) and nt >= StageKeys.first_start(_keys, "look", fil):
+					dials[fil] = float(StageKeys.value_at(feed.look_amount(fil), _keys, "look", nt, fil))
+			if not dials.is_empty() or _turning:
+				feed.turn_look("stage:%d" % get_instance_id(), dials)
+				_turning = not dials.is_empty()
 	for a in _actors.values():
 		a.update(f, delta, self)
 	# Pose locks resolve after every body has advanced, so a locked pair is exact.
@@ -229,6 +265,42 @@ func spatter(p: Vector3, count: int, rng: RandomNumberGenerator,
 		var sp := rng.randf_range(0.25, 0.7)
 		_drops.append({"p": p, "r": rng.randf_range(0.008, 0.02), "k": 1.0, "col": col,
 			"v": Vector3(cos(a) * sp, sin(a) * sp * 0.7 + 0.22, rng.randf_range(-0.1, 0.1))})
+
+
+func _exit_tree() -> void:
+	# the Look its flags turned, let go with it
+	if _turning:
+		feed.turn_look("stage:%d" % get_instance_id(), {})
+		_turning = false
+
+
+## WHAT IS AT [param at] (pixels of the view the stage is drawn in): `{actor: id}` for the nearest actor drawn there, {} for none -
+## what a click on the stage picks (next/editing.md step 7: "a click on the stage names a thing"). An actor not shown is not there.
+func pick(at: Vector2) -> Dictionary:
+	if not is_inside_tree():
+		return {}
+	var local := _drawn_to_view().affine_inverse() * at
+	var best := ""
+	var best_z := INF
+	for id in _actors:
+		var a: Cast.Actor = _actors[id]
+		var pr := project_actor(a)
+		if pr.is_empty() or a.fade < 0.05:
+			continue
+		if (pr["center"] as Vector2).distance_to(local) <= float(pr["px"]) and float(pr["z"]) < best_z:
+			best = String(id)
+			best_z = float(pr["z"])
+	return {"actor": best} if not best.is_empty() else {}
+
+
+## Where a point drawn at [param local] (as [method project_actor] gives one) is in the view, pixels.
+func view_point(local: Vector2) -> Vector2:
+	return _drawn_to_view() * local
+
+
+## What drawing goes through to reach the view: the node's place, then [method GhostScene.begin_draw]'s own transform.
+func _drawn_to_view() -> Transform2D:
+	return get_global_transform_with_canvas() * view.matrix(size)
 
 
 ## Project an actor's slot to screen: {center: px Vector2, px: perspective size, z}.

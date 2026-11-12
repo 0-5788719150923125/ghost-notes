@@ -1,11 +1,14 @@
-extends RefCounted
+extends KeptSteps
 class_name ProofEpisode
 
 ## ProofEpisode - one episode of a Proof note, as it lies on disk (next/proof.md, "How an episode is
 ## made"). EVERY STEP IS A FILE under `user://proofs/<show>/<n>/`, written the moment it is made, as a
-## card show's episodes are ([TableEpisode]): re-opening an episode re-uses what it made, a ghost that
-## quit half way picks up where it stopped, and REDOING A STEP IS DELETING IT ([method invalidate]
-## removes the step and everything made from it; the producer makes what is missing).
+## card show's episodes are ([TableEpisode]): re-opening an episode re-uses what it made, and a ghost that
+## quit half way picks up where it stopped. A STEP IS KEPT, NEVER DELETED ([KeptSteps]; next/editing.md
+## step 12): who made each and from what is recorded, what replaces or throws one away moves it a version
+## back, a step made from something changed since is stale, and a step kept (🔒, or changed by a hand)
+## is passed by ([method invalidate] moves the step and what was made from it a version back; the
+## producer makes what is missing, and what is stale and not kept).
 ##
 ##   problem   problem.json  the framer's: the problem fixed before anyone works on it - its words,
 ##                           its TeX, how it is checked (a proof or a computation), its exact Lean
@@ -42,8 +45,6 @@ static var discard: Callable = Callable()
 
 var show := ""
 var number := 1
-## Absolute.
-var dir := ""
 
 
 static func open(show_key: String, n: int) -> ProofEpisode:
@@ -114,14 +115,52 @@ func file_of(step: String) -> String:
 	return ""
 
 
-## A step exists when its file does: every write lands by rename, so a file that is there is whole.
-func has(step: String) -> bool:
-	var p := file_of(step)
-	return not p.is_empty() and FileAccess.file_exists(p)
+func steps() -> Array:
+	return STEPS
+
+
+## The solver's step is its session and what it kept beside it: its notebook, Lean file, runs and data go where it goes.
+func files_of(step: String) -> Array:
+	var out := super.files_of(step)
+	if step == "solve":
+		for f in ["notebook", "proof", "runs", "data"]:
+			out.append(file_of(String(f)))
+	return out
 
 
 func needs(step: String) -> Array:
 	return NEEDS.get(step, [])
+
+
+## WHAT [param step] IS MADE FROM, AS IT STANDS: each step it needs that is made - and for one that is not (a draft passed by
+## while a lesson written before there were drafts stands), what that one is made from, so such a lesson is stale when the work
+## it was written from changes.
+func made_from(step: String) -> Dictionary:
+	var out := {}
+	var todo: Array = needs(step).duplicate()
+	while not todo.is_empty():
+		var n := String(todo.pop_front())
+		if has(n):
+			out[n] = digest(n)
+		else:
+			todo.append_array(needs(n))
+	return out
+
+
+## STALE THROUGH WHAT IT IS MADE FROM: a step whose source is stale, and not kept, is stale too - a solve made again stales the
+## draft, the student's notes, the lesson written from them and its ink, so Generate makes each again, in order ([KeptSteps]).
+func stale(step: String) -> bool:
+	if super.stale(step):
+		return true
+	if not has(step):
+		return false
+	var from: Variant = record(step).get("from")
+	if not (from is Dictionary):
+		return false
+	for n in from:
+		if has(String(n)) and not kept(String(n)) and stale(String(n)):
+			return true
+	return false
 
 
 ## A step there is no need to make: one on the way to a lesson ([constant DRAFTING]) while the lesson
@@ -155,19 +194,12 @@ func _closure(step: String) -> Array:
 	return out
 
 
-## REDO IS DELETE: [param step] and everything made from it are removed (the solver's notebook, Lean
-## file, runs and data go with its step), and the producer makes them again.
+## [param step] AND EVERYTHING MADE FROM IT THROWN AWAY - a version back, never deleted (next/editing.md step 12, as a table's
+## steps are: [method KeptSteps.keep_version]; the solver's notebook, Lean file, runs and data go with its step) - and the
+## producer makes them again. A lesson made again never costs the one before it.
 func invalidate(step: String) -> void:
 	for s in [step] + dependents(step):
-		DirAccess.remove_absolute(file_of(String(s)))
-		if s == "solve":
-			for f in ["notebook", "proof", "runs", "data"]:
-				DirAccess.remove_absolute(file_of(f))
-
-
-## The folder a step's agent job runs in - kept, with its prompt.
-func job_dir(step: String) -> String:
-	return dir.path_join("jobs").path_join(step)
+		keep_version(String(s), true)
 
 
 func read_json(step: String) -> Variant:
@@ -189,6 +221,9 @@ func write_text(step: String, text: String) -> String:
 	if p.is_empty():
 		return "no file for the step %s" % step
 	DirAccess.make_dir_recursive_absolute(p.get_base_dir())
+	# ...what it replaces a version back, when it says something else ([method keep_version])
+	if FileAccess.file_exists(p) and FileAccess.get_file_as_string(p) != text:
+		keep_version(step)
 	var tmp := p + ".part"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
@@ -202,6 +237,35 @@ func write_text(step: String, text: String) -> String:
 
 func write_json(step: String, value: Variant) -> String:
 	return write_text(step, JSON.stringify(value, "\t"))
+
+
+## THE LESSON AS A TIMELINE (next/editing.md step 12: "the desks hand a score"): one group on the voice's clock, as long as the
+## lesson runs read at a steady voice ([method DeskScript.rehearsal]; a desk keeps no take) - each thing the pen does a span in lane
+## "pen" from the word it comes after, as long as its writing takes (the ink's, else guessed), each page turned a flag in lane
+## "page"; every item's `source` is `["lesson", "action", i]`. What the pen does is the lesson's marks, edited in its words. {}
+## before there is a lesson.
+func timeline() -> Dictionary:
+	var body := read_text("lesson")
+	if body.strip_edges().is_empty() or not DeskScript.is_lesson(body):
+		return {}
+	var parsed := DeskScript.parse(body, lengths(), sizes())
+	var words := DeskScript.rehearsal(parsed, DeskScript.SAID_WORD, 0.35, 0.0)
+	var end := float((words.back() as Dictionary)["t1"]) if not words.is_empty() else 0.0
+	var g := Timeline.group("lesson", "Lesson", 0.0, 1.0, "time")
+	var acts: Array = parsed["actions"]
+	for i in acts.size():
+		var a: Dictionary = acts[i]
+		var n := int(a.get("after", 0))
+		var at := float((words[n] as Dictionary)["t0"]) if n >= 0 and n < words.size() else end
+		var what := String(a.get("tex", "")) if not String(a.get("tex", "")).is_empty() else String(a.get("target", ""))
+		var write := maxf(float(a.get("write", 0.0)), 0.0)
+		Timeline.add(g, "pen", "The pen", Timeline.item("a%d" % i, ("%s %s" % [String(a.get("kind", "")), what.left(28)]).strip_edges(),
+			at, write, ["lesson", "action", i]))
+		if bool(a.get("turn", false)):
+			Timeline.add(g, "page", "Pages", Timeline.item("p%d" % i, "page %d" % (int(a.get("page", 0)) + 1), at, 0.0, ["lesson", "turn", i]))
+		end = maxf(end, at + write)
+	g["length"] = maxf(end, 0.05)
+	return Timeline.make("voice", [g])
 
 
 ## What the voice reads: the script, "" before it is made.

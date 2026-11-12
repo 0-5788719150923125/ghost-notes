@@ -44,7 +44,17 @@ var begin_stream: Callable     # begin_stream.call(fp, sample_rate, words) -> pl
 ## frees the subtitle overlay. Optional - an owner that does not set it simply cannot Stop.
 var end_stream: Callable
 
+## Set by main: play a take kept whole as the session's audio, as a render plays it - `begin_take.call(path) -> bool`, false when
+## it would not load ([method kept_take]; next/editing.md step 3). Optional: without it a reading is always said live.
+var begin_take: Callable
+
+var _marks_dock: TimelineDock = null
+var _marks_btn: Button = null
+var _kept: NoteKept = null
+
 const TAKE_DIR := "user://generative"
+## Where an export's take is written, [constant TAKE_DIR] (a gate's seam: a test writes nothing of the author's).
+var take_dir := TAKE_DIR
 
 # Persisted through [Settings], which owns the one file the whole app shares - one save
 # for ghost, not one per mode.
@@ -163,6 +173,10 @@ var bed: ReadingBed = ReadingBed.new()
 ## take renders, what an upload says. A note's own, unless a component's card hands another.
 var publish: ReadingPublish = ReadingPublish.new()
 
+## WHAT THE SHOW MAY BE PACED BY ([TuneSection]): each component whose parts read such numbers hands one; the Pacing card shows the
+## rows they offer now, and none at all when none do ([PacingCard]).
+var tune_sections: Array = []
+
 ## THE AUTHOR CHANGED THE SCRIPT by hand (never a document arriving): for a component that keeps
 ## count of what an edit changes - Cards' brief changes the NEXT episode, not this one.
 signal source_edited
@@ -238,13 +252,13 @@ func transport_hooks() -> Dictionary:
 		"stop": _stream.stop,
 		"playing": func() -> bool: return _stream.live() and not Spectrum.paused,
 		"can_play": func() -> bool: return _can_play,
-		"can_stop": func() -> bool: return not _stream.chunks.is_empty() or _stream.playback != null,
+		"can_stop": func() -> bool: return _stream.has_reading() or _stream.playback != null,
 		# A stopped reading has nothing on the rail: the sentence scale is the last plan's until
 		# the next one, and a seek there would start a reading.
-		"position": func() -> float: return _stream.position() if not _stream.chunks.is_empty() else 0.0,
-		"length": func() -> float: return _stream.length() if not _stream.chunks.is_empty() else 0.0,
+		"position": func() -> float: return _stream.position() if _stream.has_reading() else 0.0,
+		"length": func() -> float: return _stream.length() if _stream.has_reading() else 0.0,
 		"seek": _transport_seek,
-		"stale": func() -> bool: return _stream.stale and not _stream.chunks.is_empty(),
+		"stale": func() -> bool: return _stream.stale and _stream.has_reading(),
 		# ...and how far ahead of the playhead the voice is made ([method ReadingStream.ahead]): the transport's buffered stretch
 		"ahead": func() -> float: return _stream.ahead() if _stream.live() else -1.0,
 	}
@@ -267,7 +281,7 @@ func _transport_pause() -> void:
 
 
 func _transport_seek(t: float) -> void:
-	if not _stream.chunks.is_empty():
+	if _stream.has_reading():
 		_stream.seek(t)
 
 
@@ -316,6 +330,10 @@ func _build_panel() -> void:
 	# ...and where the video goes, when the note says so
 	if _attached.has("youtube"):
 		_add_youtube()
+	# ...WHAT THE SHOW MAY BE PACED BY ([PacingCard]): a card only while some component offers a row
+	_panel.add_card("pacing", "Pacing", &"producer").add_child(PacingCard.new(func() -> Array: return tune_sections))
+	# ...THE TIMELINE OPEN, AS A LIST ([TimelineList]): a card shown only while a timeline editor is open
+	_panel.add_card("timeline", "Timeline", &"picture").add_child(TimelineList.new())
 	# ...and what is made for all of it, last of them: found in one place on every note (next/pipeline.md)
 	_pipeline.put_on(_panel)
 	# rows only some media use (the Ink) follow the medium the moment it changes
@@ -563,6 +581,103 @@ func _build_source(box: VBoxContainer) -> void:
 		_on_source_edited())
 	box.add_child(_writer)
 	_writer.doc.default_text = _starter()
+	# ...AND ITS MARKS ON THE VOICE'S CLOCK (next/editing.md step 12: [ReadingTimeline]): docked under the show, read-only
+	var tl := Button.new()
+	tl.text = "Timeline…"
+	tl.toggle_mode = true
+	tl.focus_mode = Control.FOCUS_NONE
+	tl.tooltip_text = ("The words' marks as a timeline, under the show: each mark - a pause, a voice heard through a phone, a strike, "
+		+ "a sketch - a flag where it comes in the words as the reader says them, each heading a group. Move a mark in the words.")
+	tl.toggled.connect(func(on: bool) -> void:
+		if on:
+			if open_marks() == null:
+				tl.set_pressed_no_signal(false)
+		else:
+			close_marks())
+	box.add_child(tl)
+	_marks_btn = tl
+	# ...OPENED FROM BESIDE PLAY, as every note's timeline is ([method Transport.offer_timeline]), below a show's own: no button here
+	tl.visible = false
+	tree_entered.connect(_offer_marks)
+	tree_exiting.connect(func() -> void: Transport.withdraw_timeline(self))
+	# (the panel builds its cards from its _ready, already in the tree: offered now)
+	if is_inside_tree():
+		_offer_marks()
+	# ...AND WHAT IS KEPT OF THE NOTE ([NoteKept]): its cache - the picked episode's folder, else its own - and every state to go back to
+	var kept := NoteKept.new()
+	kept.doc = _doc
+	kept.cache_dir = func() -> String:
+		var f := episode_feed()
+		return f.folder() if f != null and not f.folder().is_empty() else NoteUpload.folder_of(note_path)
+	kept.history_dir = func() -> String: return NoteUpload.folder_of(note_path).path_join("history") if not note_path.is_empty() else ""
+	kept.feed = episode_feed
+	kept.after = func() -> void: _stream.mark_stale()
+	box.add_child(kept)
+	_kept = kept
+
+
+func _offer_marks() -> void:
+	Transport.offer_timeline(self, 1, func() -> void:
+		if _marks_dock != null and is_instance_valid(_marks_dock):
+			close_marks()
+		else:
+			open_marks(), func() -> bool: return _marks_dock != null and is_instance_valid(_marks_dock),
+		"The words' timeline: each mark - a pause, a voice heard through a phone, a strike, a sketch - where the reader comes to it.")
+
+
+## THE WORDS' MARKS, DOCKED ([ReadingTimeline]): each where the reader comes to it, a mark picked shown as written and found in the
+## words. The dock, null for words with no marks.
+func open_marks() -> TimelineDock:
+	if _marks_dock != null and is_instance_valid(_marks_dock):
+		return _marks_dock
+	var body := walk.body(_doc.shown() if _doc != null else "")
+	var tl := ReadingTimeline.of(body, ReadingCast.said_word(_cast.cfg_of(_cast.reader())))
+	if tl.is_empty():
+		_set_status("There are no marks in the words yet: the timeline is where each comes as the reader says them.")
+		return null
+	_marks_dock = TimelineDock.new()
+	_marks_dock.open(tl, "The words' marks")
+	_marks_dock.closed.connect(close_marks)
+	_marks_dock.inspector = func(what: Dictionary, box: VBoxContainer) -> void:
+		var it: Dictionary = what.get("item", {}) if what.get("item") is Dictionary else {}
+		var key := String((it.get("text", "") as String)).trim_prefix("<!--").strip_edges().get_slice(":", 0).strip_edges().get_slice(" ", 0)
+		var head := Label.new()
+		head.text = String(it.get("text", ""))
+		head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(head)
+		var about := Label.new()
+		about.text = "%s\nAt %s as the reader says it." % [ScriptMarks.blurb(key) if ScriptMarks.REGISTRY.has(key) else "", Clock.text(float(it.get("at", 0.0)))]
+		about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		about.add_theme_font_size_override("font_size", 12)
+		about.modulate = Color(1, 1, 1, 0.7)
+		box.add_child(about)
+		var src: Array = it.get("source", []) if it.get("source") is Array else []
+		var find := Button.new()
+		find.text = "Find it in the words"
+		find.focus_mode = Control.FOCUS_NONE
+		find.pressed.connect(func() -> void:
+			var at := _text.text.find(String(it.get("text", "")), maxi(0, int(src[2]) - 64) if src.size() == 3 else 0)
+			if at < 0:
+				return
+			var line := _text.text.substr(0, at).count("\n")
+			var col := at - (_text.text.rfind("\n", at - 1) + 1) if at > 0 else 0
+			_text.select(line, col, line, col + String(it.get("text", "")).length())
+			_text.set_caret_line(line)
+			_text.center_viewport_to_caret()
+			_text.grab_focus())
+		box.add_child(find)
+	add_child(_marks_dock)
+	if _marks_btn != null:
+		_marks_btn.set_pressed_no_signal(true)
+	return _marks_dock
+
+
+func close_marks() -> void:
+	if _marks_dock != null and is_instance_valid(_marks_dock):
+		_marks_dock.queue_free()
+	_marks_dock = null
+	if _marks_btn != null:
+		_marks_btn.set_pressed_no_signal(false)
 
 
 ## THE NOTE WAS SAVED INTO ANOTHER FILE ([signal DocSource.moved]): this panel is that file's now,
@@ -588,7 +703,7 @@ func _starter() -> String:
 ## The author changed the document by hand. Where the document IS the reading ([method
 ## TextWalk.reads_source]), what is on the stream no longer matches it.
 func _on_source_edited() -> void:
-	if walk.reads_source() and not _stream.chunks.is_empty():
+	if walk.reads_source() and _stream.has_reading():
 		_stream.stale = true            # the reading no longer matches the box
 	source_edited.emit()
 
@@ -885,6 +1000,17 @@ func _plan_near(chunks: Array, from: int, voice := "") -> void:
 ## how the host may look up a word eSpeak would guess at (lexicon.py): from Wiktionary, kept in its
 ## cache; never in a process that must not write the user's things (a gate, a probe), so a test is
 ## the same on every machine.
+## THE KEY A SENTENCE IS KEPT UNDER ([TakeCache]): voice config [param s]'s voice, that voice's own record, and the request's
+## [param args].
+func take_key(s: Dictionary, args: Dictionary) -> String:
+	var id := _cast.voice_id_of(s)
+	var record := {}
+	for v in _cast.voice_meta:
+		if String((v as Dictionary).get("id", "")) == id:
+			record = v
+	return TakeCache.key_of(id, record, args)
+
+
 func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
 	var a := Delivery.request_args(s, ch, _cast.speaker_of(s))
 	a["lexicon"] = "off" if Settings.is_read_only() else "fetch"
@@ -907,7 +1033,7 @@ func _on_test() -> void:
 		return
 	if _host == null or not _host.is_up() or _cast.voice_meta.is_empty():
 		return
-	if not _stream.chunks.is_empty():
+	if _stream.has_reading():
 		_stream.stop()
 	_cast.capture_slot()
 	_audition.start(_test_passage(), _cast.tab_name())
@@ -1023,13 +1149,88 @@ func export_take() -> String:
 		return ""
 	if _note_upload != null:
 		_note_upload.start()
-	var path: String = await _render_take()
+	# A TAKE KEPT FOR THESE WORDS IN THESE VOICES is the export's, nothing said again
+	var body := _reading_body().strip_edges()
+	var kept := kept_take(body)
+	var path: String = _kept_copy(kept, body) if not kept.is_empty() else ""
+	if path.is_empty():
+		path = await _render_take()
 	if _note_upload != null and not path.is_empty():
 		await _note_upload.settled()
 	var said := publish.after_take(path)
 	if not said.is_empty():
 		_set_status(said)
 	return path
+
+
+## THE TAKE KEPT AT [param kept], AS AN EXPORT'S OWN: copied beside the takes an export renders, its sidecar's book and opening as
+## they stand now ([method _render_take] writes both at render time); its sound, words and bookend are the take's. The copy's
+## absolute path, "" when it could not be made (and then the take is rendered).
+func _kept_copy(kept: String, body: String) -> String:
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(kept.get_basename() + ".json"))
+	if not (side is Dictionary):
+		return ""
+	var path := ProjectSettings.globalize_path(take_dir + "/take_%d.wav" % Time.get_ticks_msec())
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	if DirAccess.copy_absolute(kept, path) != OK:
+		return ""
+	(side as Dictionary)["opening"] = Director.opening_shown()
+	(side as Dictionary)["book"] = book_document(body)
+	var f := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
+	if f == null:
+		return ""
+	f.store_string(JSON.stringify(side))
+	f.close()
+	_set_status("The take kept is the export's: nothing is said again.")
+	return path
+
+
+## WHAT A TAKE OF [param body] (the words to read, by default) IS SAID FROM, as a digest: the words, every voice's settings and
+## the record of the voice each is said in, the bookend and the place under it - everything [method _render_take] reads. Written
+## in every take's sidecar (`sig`): a take kept whose `sig` is this one is the reading as it would be said now, word for word.
+func take_sig(body := "") -> String:
+	# ...the words as they stand, never pulled: a pull reads the file and lays its blocks over every card, and a row asks this
+	# at every refresh (panel_fit_check: the show a card had open was put back to the file's)
+	var b := (walk.body(_doc.shown() if _doc != null else "") if body.is_empty() else body).strip_edges()
+	var cast := _cast.capture()
+	var records := {}
+	var voices: Dictionary = cast.get("voices", {}) if cast.get("voices") is Dictionary else {}
+	for name in voices:
+		var id := _cast.voice_id_of(voices[name])
+		for v in _cast.voice_meta:
+			if String((v as Dictionary).get("id", "")) == id:
+				records[id] = v
+	var place := bed.of(true)
+	return JSON.stringify([b, cast, records, Director.intro_hold, Director.outro_hold, String(place.get("key", "")),
+		bed.level()]).sha256_text()
+
+
+## THE TAKE KEPT FOR [param body]: the episode's ([method EpisodeFeed.take]) where it was said from these words in the voices as
+## they stand ([method take_sig]) - "" for none, and then the reading is said live.
+func kept_take(body: String) -> String:
+	var feed := episode_feed()
+	var path := feed.take() if feed != null else ""
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return ""
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".json"))
+	return path if side is Dictionary and String((side as Dictionary).get("sig", "")) == take_sig(body) else ""
+
+
+## Whether the reading heard now is a take kept, playing as a file ([method kept_take]).
+func take_playing() -> bool:
+	return not _stream.take_path.is_empty()
+
+
+## The take kept has played to its end ([signal Spectrum.song_finished]): the reading is over, as a reading said live ends, and
+## Play plays it again from the top.
+func take_ended() -> void:
+	_stream.take_done = true
+
+
+## THE WHOLE TAKE, rendered as an export renders it and nothing else done (no upload notes, no publish): what a show's "Voice"
+## row keeps (next/editing.md step 3). Every sentence said before comes from the [TakeCache]. The take's path, "" for none.
+func render_take() -> String:
+	return await _render_take()
 
 
 ## A coroutine, because the host answers asynchronously and the exporter awaits
@@ -1079,19 +1280,31 @@ func _render_take() -> String:
 		# that was auditioned, which is the one thing the render must never be.
 		var who := String((chunks[i] as Dictionary).get("speaker", ""))
 		var s := _cast.cfg_of(who)
-		var id := _host.request("", _cast.voice_id_of(s),
-			TAKE_DIR + "/export_%d_%d.wav" % [stamp, i], _request_args(s, chunks[i]), null)
-		var res: Array = []
-		while true:
-			res = await _host.synthesized
-			if int(res[0]) == id:
-				break
-		var out: Dictionary = res[1]
-		var wav := String(out.get("wav", ""))
-		if wav.is_empty():
-			continue
-		var part := Splice.read_wav(wav)
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
+		var args := _request_args(s, chunks[i])
+		# A SENTENCE SAID BEFORE IS NOT SAID AGAIN ([TakeCache]): the same request is the same performance - a first listen, or
+		# an export before one sentence was changed, made it already
+		var key := take_key(s, args)
+		var hit := TakeCache.find(key)
+		var out: Dictionary
+		var part := PackedFloat32Array()
+		if not hit.is_empty():
+			out = hit["out"]
+			part = Splice.read_wav(String(hit["wav"]))
+		else:
+			var id := _host.request("", _cast.voice_id_of(s), TAKE_DIR + "/export_%d_%d.wav" % [stamp, i], args, null)
+			var res: Array = []
+			while true:
+				res = await _host.synthesized
+				if int(res[0]) == id:
+					break
+			out = res[1]
+			var wav := String(out.get("wav", ""))
+			if wav.is_empty():
+				continue
+			if not Settings.is_read_only():
+				TakeCache.put(key, wav, out)
+			part = Splice.read_wav(wav)
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
 		if part.is_empty():
 			continue
 		pcm.append_array(join.add(chunks, i, part, out.get("tokens", []), s, _cast.turn_scale(), out.get("phones", [])))
@@ -1176,7 +1389,7 @@ func _render_take() -> String:
 			var u := float(i - f0) / maxf(1.0, float(fade_n))
 			wet[i] *= 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
 
-	var path := TAKE_DIR + "/take_%d.wav" % stamp
+	var path := take_dir + "/take_%d.wav" % stamp
 	var abs_path := Splice.write_wav(path, wet, 2 if leans else 1, _sr)
 	# ALWAYS written now, words or not: the book medium reads the chapter from it.
 	var side := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
@@ -1189,7 +1402,7 @@ func _render_take() -> String:
 		# ...AND THE PHONES, each sound timed as the words are, for a medium whose mouth says them
 		# ...AND THE OPENING it was rendered with ([Openings]): a thumbnail of its title screen asks the take
 		side.store_string(JSON.stringify({
-			"words": words, "phones": phones, "bookend": {"in": intro, "out": outro},
+			"words": words, "phones": phones, "bookend": {"in": intro, "out": outro}, "sig": take_sig(body),
 			"opening": Director.opening_shown(), "book": book_document(body)}))
 		side.close()
 	_set_status("Rendered %.1fs for export (%.0fs intro, %.0fs outro)." % [spoken, intro, outro])

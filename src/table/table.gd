@@ -277,6 +277,10 @@ var _printed: Array = []              # per drawn card, when its text is on its 
 var _placeholder: GhostScene
 var _root3: Node3D
 var _cam: Camera3D
+var _free := false                   # the eye let go of for a free look ([method free_look])
+var _free_yaw := 0.0
+var _free_pitch := 0.0
+var _free_reach := 1.0
 var _env: Environment
 var _attrs: CameraAttributesPractical
 var _lamp: SpotLight3D
@@ -665,6 +669,14 @@ func work_report() -> Array:
 	return _work.drawn_report(_now) if _work != null and _build_task < 0 else []
 
 
+## WHICH EPISODE IS PLAYING, AND WHERE (a report from the feedback console; next/editing.md step 9: "a report from a playing episode
+## can go to a fix of the episode's data, not only of the code"): its folder, show and seed, and the episode's own time now.
+func episode_report() -> Dictionary:
+	if _plan == null:
+		return {}
+	return {"dir": String(_plan.pay.get("dir", "")), "show": String(_plan.pay.get("show", "")), "seed": int(_plan.pay.get("seed", 0)), "at": snappedf(_now, 0.01)}
+
+
 func advance(_features, delta: float, _bookend: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
 	# THE EPISODE'S CLOCK: the reading's, and a reading started again in it (a scrub, [method _seek_to]) on the clock of the one
@@ -771,7 +783,7 @@ func _make_episode(d: Dictionary, pay: Dictionary, src: String, hold: float) -> 
 	_plan = TablePlan.make(d, _table_json(pay), hold)
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray()) if not _plan.parse.is_empty() \
 		else PackedStringArray()
-	_est = _plan.estimated_times(spoken.size())
+	_est = _word_times(spoken)
 	# ...A MID-WAY START'S PAST JUST BEFORE 0 ([member ReadingFollower.near_past]): what its acts did is baked before the first frame
 	_follow.near_past = true
 	_follow.reset(spoken, _plan.start_si, _est)
@@ -874,6 +886,18 @@ func _seek_to(d: Dictionary) -> void:
 		si, at, _work.physics.baked_to() if _work.physics != null else 0.0])
 
 
+## EACH SPOKEN WORD'S TIME as the table plans on it: a kept take's, where the episode has one made from its script (`take`, the
+## document's - [method TablePlan.take_times]), else the estimate ([method TablePlan.estimated_times]).
+func _word_times(spoken: PackedStringArray) -> PackedFloat32Array:
+	var est := _plan.estimated_times(spoken.size())
+	var take := String(_plan.pay.get("take", ""))
+	if take.is_empty() or not FileAccess.file_exists(take.get_basename() + ".json"):
+		return est
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(take.get_basename() + ".json"))
+	var words: Array = (side as Dictionary).get("words", []) if side is Dictionary and (side as Dictionary).get("words") is Array else []
+	return TablePlan.take_times(spoken, est, words)
+
+
 ## THE SAME EPISODE READ AGAIN FROM THE TOP (a Stop, then a Play): the table and what was baked of it stand, but its clock and its
 ## plan's times start over, with the intro the show holds NOW - its words come on the new reading's own clock, intro and all, and
 ## every act begins again as its words come. Taken as a scrub's seek it had kept the last reading's: the intro set from 6 s to 9 s
@@ -883,7 +907,7 @@ func _seek_to(d: Dictionary) -> void:
 func _restart() -> void:
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray())
 	_plan.hold = feed.intro_hold
-	_est = _plan.estimated_times(spoken.size())
+	_est = _word_times(spoken)
 	_follow.near_past = true
 	_follow.reset(spoken, -1, _est)
 	_built_n = -1
@@ -1651,6 +1675,7 @@ func _build_work(spec: Dictionary) -> void:
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
 	_work.since = _plan.since
 	_work.skin_doc = _skin_json()
+	_work.tune = TableTune.sanitize(_plan.pay.get("tune", {}))["values"]
 	_skin_picture()
 	_work.build(raw, beats, spec.get("sound", {}) if spec.get("sound") is Dictionary else {})
 	for n in _work.notes:
@@ -1669,6 +1694,7 @@ func rework(raw: Variant) -> void:
 	_acts_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
 	_work.skin_doc = _skin_json()
+	_work.tune = TableTune.sanitize(_plan.pay.get("tune", {}))["values"]
 	_skin_picture()
 	_work.rebind(raw, beats)
 	if not _sched.is_empty():
@@ -1780,6 +1806,87 @@ func _tick_camera(t: float) -> void:
 	var give := Rides.camera(_ride, t)
 	var base := _plan.cam_base if _work.game == null else _work.game.shot_at(t, _plan.cam_base)
 	_cam.transform = base if give == Vector3.ZERO else base * Transform3D(Basis.from_euler(give), Vector3.ZERO)
+	# ...OR LET GO OF FOR A FREE LOOK ([method free_look]): turned about the middle of the reading, drawn in or out
+	if _free:
+		_cam.transform = free_eye(_cam.transform, _plan.mid, _free_yaw, _free_pitch, _free_reach)
+
+
+## A FREE LOOK AT THE TABLE (next/editing.md step 7: "a second view: the plan from above ... and a free look"): the reader's eye let
+## go of, for a person looking the set over - turned about the middle of the reading and drawn in or out ([method look_by]) - and
+## given back as it was when [param on] is false. Never in a render: what is exported is the show's own eye.
+func free_look(on: bool) -> void:
+	_free = on and not OS.get_cmdline_user_args().has("--export")
+	_free_yaw = 0.0
+	_free_pitch = 0.0
+	_free_reach = 1.0
+
+
+## Whether the eye is let go of ([method free_look]).
+func looking_freely() -> bool:
+	return _free
+
+
+## The free look turned [param yaw] and [param pitch] radians more and drawn to [param reach] times as far.
+func look_by(yaw: float, pitch: float, reach := 1.0) -> void:
+	_free_yaw = wrapf(_free_yaw + yaw, -PI, PI)
+	_free_pitch = clampf(_free_pitch + pitch, -1.2, 1.2)
+	_free_reach = clampf(_free_reach * reach, 0.25, 4.0)
+
+
+## THE EYE [param base] TURNED ABOUT [param pivot]: [param yaw] round the upright, [param pitch] over it, [param reach] times as far -
+## kept above the table, looking at the pivot.
+static func free_eye(base: Transform3D, pivot: Vector3, yaw: float, pitch: float, reach: float) -> Transform3D:
+	var off := (base.origin - pivot).rotated(Vector3.UP, yaw)
+	var side := off.cross(Vector3.UP)
+	if side.length() > 1e-5:
+		off = off.rotated(side.normalized(), pitch)
+	off *= reach
+	off.y = maxf(off.y, 0.02)
+	return Transform3D(Basis(), pivot + off).looking_at(pivot, Vector3.UP)
+
+
+## THE TABLE STANDING, FROM ABOVE ([method TableThings.blueprint], as [TableBlueprint] draws it): its top, its cards, where nothing
+## may stand and each thing as it stood - for a plan a person moves things on (next/editing.md step 7). {} before one stands.
+func blueprint() -> Dictionary:
+	if _built_key.is_empty() or _cam == null:
+		return {}
+	return _things_part.blueprint()
+
+
+## The folder of the episode standing on the table, "" for none: whose [method blueprint] it is.
+func standing_dir() -> String:
+	return String(episode_report().get("dir", ""))
+
+
+## WHAT IS AT [param at] (pixels of the view the table is seen in): `{thing, part}` for the nearest thing standing there, {} for none
+## (next/editing.md step 7: "a click on the stage names a thing and its part - a ray against what is built"). The reader's eye as it
+## is now ([method ray_pick] over what stands, [member TableThings.on_table]).
+func pick(at: Vector2) -> Dictionary:
+	if _cam == null or not _cam.is_inside_tree():
+		return {}
+	return ray_pick(_cam.project_ray_origin(at), _cam.project_ray_normal(at), _things_part.on_table)
+
+
+## THE THING A RAY FROM [param from] ALONG [param dir] MEETS FIRST among [param things] (`on_table`'s shape: `{name, meshes}`): each
+## mesh's box where it stands now, the nearest met naming the thing and the part (its mesh's name). {} for none met.
+static func ray_pick(from: Vector3, dir: Vector3, things: Array) -> Dictionary:
+	var best := {}
+	var best_d := INF
+	for t in things:
+		if not (t is Dictionary):
+			continue
+		for m in (t as Dictionary).get("meshes", []):
+			var mi := m as MeshInstance3D
+			if mi == null or not is_instance_valid(mi) or not mi.is_inside_tree() or not mi.is_visible_in_tree():
+				continue
+			var hit: Variant = (mi.global_transform * mi.get_aabb()).intersects_ray(from, dir)
+			if hit is Vector3 and from.distance_to(hit) < best_d:
+				best_d = from.distance_to(hit)
+				# a part is named where its mesh was given a name; one Godot named for itself says nothing
+				var part := String(mi.name)
+				best = {"thing": String((t as Dictionary).get("name", "")),
+					"part": "" if part.begins_with("@") or part.begins_with("MeshInstance3D") else part}
+	return best
 
 
 # --- what moves ----------------------------------------------------------------------------------------

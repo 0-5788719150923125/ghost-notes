@@ -268,9 +268,9 @@ func _widened() -> void:
 	card.free()
 
 
-## A LOCK BESIDE A ⟳ (the user, 2026-11-09: "a 'lock' button next to the regenerate buttons, for every step"): a row something is made
-## from carries one, locked until pressed, its tooltip saying what its ⟳ throws away either way; pressed, it is unlocked and says so.
-## THE CONTROL: a row nothing is made from carries none.
+## A LOCK BESIDE A ⟳ (the user, 2026-11-09: "a 'lock' button next to the regenerate buttons, for every step"; next/editing.md step 1):
+## a made row carries one, open until pressed; pressed, the row is KEPT and its tooltip says Generate passes it by.
+## THE CONTROL: a row that is not lockable carries none.
 func _locks() -> void:
 	var card = _Card.new()
 	var s = Stub.new("Episode")
@@ -285,11 +285,11 @@ func _locks() -> void:
 	card.add(s)
 	card.refresh()
 	var lock_b: Variant = card.row("painted").get("lock")
-	_ok(lock_b is Button and (lock_b as Button).tooltip_text.begins_with("Locked"), "a row something is made from carries a lock, locked")
+	_ok(lock_b is Button and (lock_b as Button).tooltip_text.begins_with("Press to keep"), "a made row carries a lock, open")
 	(lock_b as Button).pressed.emit()
-	_ok(calls == [false] and (card.row("painted")["lock"] as Button).tooltip_text.begins_with("Unlocked"),
-		"pressed, it is unlocked and says so: %s" % str(calls))
-	_ok(card.row("tags").get("lock") == null, "the control: a row nothing is made from carries none")
+	_ok(calls == [true] and (card.row("painted")["lock"] as Button).tooltip_text.begins_with("Kept"),
+		"pressed, it is kept and says so: %s" % str(calls))
+	_ok(card.row("tags").get("lock") == null, "the control: a row that is not lockable carries none")
 	card.free()
 
 

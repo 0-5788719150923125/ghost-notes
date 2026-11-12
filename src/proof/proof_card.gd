@@ -48,16 +48,21 @@ const NOTE_WRITERS := {
 }
 ## The rows of the episode list: a label, the step, who makes it, and what its ⟳ says.
 const ROWS := [
-	["Problem", "problem", "framer", "Fix the problem again from the note (clears everything after it)"],
-	["Solve", "solve", "solver", "Work the problem again at the desk (clears the lesson)"],
-	["Draft", "draft", "teacher", "Write the first draft again (clears the student's notes and the lesson)"],
-	["Student", "review", "student", "Read the draft again as the viewer (clears the lesson)"],
-	["Lesson", "lesson", "teacher", "Write the lesson again from the draft and the student's notes"],
+	["Problem", "problem", "framer", "Fix the problem again from the note: what stands is kept a version back"],
+	["Solve", "solve", "solver", "Work the problem again at the desk: what stands is kept a version back"],
+	["Draft", "draft", "teacher", "Write the first draft again: what stands is kept a version back"],
+	["Student", "review", "student", "Read the draft again as the viewer: what stands is kept a version back"],
+	["Lesson", "lesson", "teacher", "Write the lesson again from the draft and the student's notes: what stands is kept a version back"],
 	["Ink", "ink", "TeX", "Lay the formulas out again"],
 	["Script", "script", "", ""],
 ]
+## The steps whose file is words (the rest are data, edited as JSON).
+const WORDS := ["draft", "lesson", "script"]
 
 var reading: ReadingPanel
+var _source_window: SourceWindow = null
+var _dock: TimelineDock = null
+var _tl_btn: Button = null
 var _doc: DocSource
 var _text: TextEdit
 var _knobs := KNOBS.duplicate(true)
@@ -232,6 +237,17 @@ class Feed extends EpisodeFeed:
 
 	func folder() -> String:
 		return episode.dir
+
+	func versions() -> Array:
+		return episode.step_versions()
+
+	func put_back(key: Variant) -> String:
+		var k: Array = key if key is Array else []
+		if k.size() != 2:
+			return "no such version"
+		var err := episode.restore(String(k[0]), int(k[1]))
+		card._after_hand(episode)
+		return err
 
 	func show_title() -> String:
 		return card.show_title()
@@ -439,6 +455,10 @@ func _open_episode() -> void:
 	if reading != null:
 		reading.episode_left(_feed)
 	_episode = ProofEpisode.open(_show_key(), int(_knobs["episode"]))
+	# AN EPISODE MADE BEFORE RECORDS gains them as it is opened (KeptSteps.adopt), so its rows show at once what is kept - never in a
+	# process that may not write the author's things
+	if not Settings.is_read_only():
+		_episode.adopt()
 	_feed = Feed.new(self, _episode)
 	_producer = ProofProducer.new(_episode, {})
 	_script_seen = -1
@@ -599,6 +619,8 @@ func _new_episode() -> void:
 	_open_episode()
 
 
+## ⟳: [param step] MADE AGAIN, NOTHING THROWN AWAY ([method ProofProducer.again]): what stands plays until the new one lands, and
+## what was made from it goes stale - Generate makes it again unless it is kept.
 func _redo(step: String) -> void:
 	if _episode == null:
 		return
@@ -606,10 +628,121 @@ func _redo(step: String) -> void:
 		_set_status("Episode %d is being exported - redo a step once the export is done." % _episode.number)
 		return
 	_producer.stop()
-	_episode.invalidate(step)
 	reading.mark_stale()
 	_producer.spec = _spec()
-	_producer.start()
+	_producer.again(step)
+
+
+## ✎ ON A STEP (next/editing.md steps 4 and 12, as a table's): what it made, by hand - its words, or its data as JSON (taken back
+## only as a map) - written as a hand's version and KEPT, what stood a version back, any version put back from the same window;
+## the ink and the script made again from it at once, what an agent makes from it stale until Generate.
+func _edit_step(step: String) -> void:
+	if _episode == null or not _episode.has(step):
+		return
+	if _source_window == null or not is_instance_valid(_source_window):
+		_source_window = SourceWindow.new()
+	var w := _source_window
+	var ep := _episode
+	var words := WORDS.has(step)
+	w.notes = Callable()
+	w.ask = Callable()
+	w.ask_who = ""
+	w.versions = func() -> PackedStringArray:
+		var out := PackedStringArray()
+		for v in ep.versions(step):
+			var vd: Dictionary = v
+			var by := String(vd.get("by", ""))
+			out.append("%s%s" % ["made by the %s" % by if not by.is_empty() and by != "hand" and by != "code" else (
+				"yours" if by == "hand" else "as it was"),
+				", " + Time.get_datetime_string_from_unix_time(int(vd.get("at", 0)), true).substr(5, 11) if int(vd.get("at", 0)) > 0 else ""])
+		return out
+	w.restore = func(i: int) -> String:
+		var err := ep.restore(step, i)
+		_after_hand(ep)
+		return err
+	w.reread = func() -> String:
+		return ep.read_text(step) if words else JSON.stringify(ep.read_json(step), "\t")
+	w.take = func(text: String) -> String:
+		var err := ""
+		if words:
+			err = ep.write_text(step, text.strip_edges() + "\n")
+		else:
+			var j := JSON.new()
+			if j.parse(text) != OK:
+				return "it is not JSON: %s (line %d)" % [j.get_error_message(), j.get_error_line()]
+			if not (j.data is Dictionary):
+				return "it must be a map, as it was"
+			err = ep.write_json(step, j.data)
+		if err.is_empty():
+			err = ep.set_kept(step, true)
+		_after_hand(ep)
+		return err
+	var named := step
+	for row in ROWS:
+		if String(row[1]) == step:
+			named = String(row[0])
+	w.open_on("%s - episode %d" % [named, ep.number], w.reread.call(), self)
+
+
+## THE LESSON'S TIMELINE, DOCKED ([method ProofEpisode.timeline]): read-only - the pen's marks are the lesson's, changed in its words
+## (the inspector's "✎ The lesson"). The dock, null before there is a lesson.
+func open_timeline() -> TimelineDock:
+	if _dock != null and is_instance_valid(_dock):
+		return _dock
+	var tl: Dictionary = _episode.timeline() if _episode != null else {}
+	if tl.is_empty():
+		_set_status("There is no lesson yet: its timeline is the lesson's words and the pen's marks.")
+		return null
+	_dock = TimelineDock.new()
+	_dock.open(tl, "Lesson - episode %d" % _episode.number)
+	_dock.closed.connect(close_timeline)
+	_dock.inspector = func(what: Dictionary, box: VBoxContainer) -> void:
+		var it: Dictionary = what.get("item", {}) if what.get("item") is Dictionary else {}
+		var head := Label.new()
+		head.text = String(it.get("label", ""))
+		head.add_theme_font_size_override("font_size", 14)
+		box.add_child(head)
+		var src: Array = it.get("source", []) if it.get("source") is Array else []
+		var acts: Array = DeskScript.parse(_episode.read_text("lesson"))["actions"] if _episode != null else []
+		if src.size() == 3 and int(src[2]) < acts.size():
+			var a: Dictionary = acts[int(src[2])]
+			var said := Label.new()
+			said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			said.add_theme_font_size_override("font_size", 12)
+			said.text = "%s%s\nAt %s, %s of writing." % [String(a.get("tex", a.get("target", ""))),
+				(" (on page %d)" % (int(a.get("page", 0)) + 1)), Clock.text(float(it.get("at", 0.0))), Clock.text(float(it.get("length", 0.0)))]
+			box.add_child(said)
+		var b := Button.new()
+		b.text = "✎ The lesson"
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(func() -> void: _edit_step("lesson"))
+		box.add_child(b)
+	add_child(_dock)
+	if _tl_btn != null:
+		_tl_btn.set_pressed_no_signal(true)
+	return _dock
+
+
+func close_timeline() -> void:
+	if _dock != null and is_instance_valid(_dock):
+		_dock.queue_free()
+	_dock = null
+	if _tl_btn != null:
+		_tl_btn.set_pressed_no_signal(false)
+
+
+## After a hand changed what [param ep] made: the reading follows, and the tools' steps (the ink, the script) are made again from it
+## at once - what an agent makes waits for Generate.
+func _after_hand(ep: ProofEpisode) -> void:
+	if ep != _episode:
+		return
+	reading.mark_stale()
+	if not _making() and not Settings.is_read_only():
+		_producer.spec = _spec()
+		_producer.start(["ink", "script"])
+	if _dock != null and is_instance_valid(_dock) and not _episode.timeline().is_empty():
+		_dock.reload(_episode.timeline())
+	_refresh()
 
 
 # --- on the Pipeline card ------------------------------------------------------------------------
@@ -649,12 +782,22 @@ class Section extends PipelineSection:
 		return card._making()
 
 	func missing() -> bool:
-		return card._episode != null and not card._episode.has("script")
+		return card._episode != null and (not card._episode.has("script") or card._owes())
 
 
 ## What it hands the note's Pipeline card.
 func pipeline() -> PipelineSection:
 	return _section
+
+
+## Whether Generate has something to make again: a step stale and not kept.
+func _owes() -> bool:
+	if _producer == null:
+		return false
+	for st in ProofEpisode.STEPS:
+		if _producer.state_of(String(st)) == "stale":
+			return true
+	return false
 
 
 func _making() -> bool:
@@ -688,8 +831,9 @@ func _step_rows() -> Array:
 		var r := PipelineRow.new(step, String(row[0]))
 		var st := _producer.state_of(step)
 		match st:
-			"ready":
-				r.state = "made"
+			"ready", "stale":
+				# STALE: made from something changed since - it still plays, and Generate makes it again unless it is kept
+				r.state = "made" if st == "ready" else "stale"
 				r.said = _ready_note(step)
 			"running":
 				r.state = "running"
@@ -704,30 +848,26 @@ func _step_rows() -> Array:
 			_:
 				r.state = "none" if _episode.moot(step) else "missing"
 		var again := String(row[3])
+		var stands := st == "ready" or st == "stale"
 		if not again.is_empty():
 			var go_on: bool = made and (st == "failed" or (st == "missing" and step == first_missing))
-			r.again = again if st == "ready" else "Make this step and the ones after it - what is made before it is kept"
-			r.open = not busy and (st == "ready" or go_on)
-			r.asks = _asks_of(step) if st == "ready" else ""
+			r.again = again if stands else "Make this step and the ones after it - what is made before it is kept"
+			r.open = not busy and (stands or go_on)
 			r.redo = _redo.bind(step)
+		# 🔒 ON WHAT STANDS (KeptSteps.kept): kept, Generate passes it by, stale or not; a step changed by hand is kept until unlocked
+		r.lockable = _episode.has(step)
+		r.locked = _episode.kept(step)
+		r.lock = func(on: bool) -> void:
+			var err := _episode.set_kept(step, on)
+			if not err.is_empty():
+				_set_status("Could not keep the lock: " + err)
+			_refresh()
+		if _episode.has(step):
+			r.edit_tip = ("Edit these words by hand: kept as yours, what stood a version back." if WORDS.has(step)
+				else "Edit what was made, as JSON: taken back if it is still a map, kept as yours, what stood a version back.")
+			r.edit = _edit_step.bind(step)
 		out.append(r)
 	return out
-
-
-## WHAT [param step]'S ⟳ THROWS AWAY besides what it remakes - the agents' own work; the ink and the script are the tools',
-## and are made again unasked. "" for nothing: then it starts at once.
-func _asks_of(step: String) -> String:
-	var lost := PackedStringArray()
-	for s in _episode.dependents(step):
-		if not String(s) in ["ink", "script"] and _episode.has(String(s)):
-			lost.append(String(s))
-	if lost.is_empty():
-		return ""
-	var named := PackedStringArray()
-	for row in ROWS:
-		if lost.has(String(row[1])):
-			named.append(String(row[0]))
-	return "It also throws away what was made from it, which is made again after it: %s." % ", ".join(named)
 
 
 ## What the episode as a whole says, over the rows.
@@ -829,17 +969,11 @@ func _build() -> void:
 	new_btn.text = "New episode"
 	new_btn.tooltip_text = "Another go at the note: a fresh episode, made when you press Generate on the Pipeline card."
 	new_btn.pressed.connect(_new_episode)
-	erow.add_child(new_btn)
-	# THE PANEL IS 380 PX, DECLARED (SidePanel): Folder stands here, beside the episode it opens,
-	# so the row of what to do fits - all four in one row asked for 374 px of a 380 px panel's room
-	var folder := Button.new()
-	folder.text = "Folder"
-	folder.tooltip_text = "Open this episode's folder: every prompt as sent, every reply, every Lean check, the notebook and the proof."
-	folder.pressed.connect(func() -> void:
-		if _episode != null:
-			DirAccess.make_dir_recursive_absolute(_episode.dir)
-			OS.shell_open(_episode.dir))
-	erow.add_child(folder)
+	# ...ITS NAME GIVEN THE WHOLE ROW, what is done to an episode beneath it, as on a table show's card
+	var arow := HBoxContainer.new()
+	arow.add_theme_constant_override("separation", 6)
+	add_child(arow)
+	arow.add_child(new_btn)
 
 	# THE NOTE'S WORDS, then the episode made from them: two rows, since the four buttons side by side
 	# ask for 375 px of a 380 px panel (Invent clipped to "Invent a pr…")
@@ -866,16 +1000,37 @@ func _build() -> void:
 	_refine_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_refine_btn.clip_text = true
 	wrow.add_child(_refine_btn)
-	var grow := HBoxContainer.new()
-	grow.add_theme_constant_override("separation", 6)
-	add_child(grow)
 	_del_btn = Button.new()
 	_del_btn.text = "Delete…"
 	_del_btn.tooltip_text = ("Delete the episode picked above: its problem, work, lesson, ink and upload notes "
 		+ "go to the system trash (restore it from there). Exported videos and the note's other episodes "
 		+ "are not touched.")
 	_del_btn.pressed.connect(_ask_delete)
-	grow.add_child(_del_btn)
+	arow.add_child(_del_btn)
+	# ...AND ITS TIMELINE (next/editing.md step 12): the lesson on the voice's clock, the pen's every mark where it is made
+	var tl := Button.new()
+	tl.text = "Timeline…"
+	tl.toggle_mode = true
+	tl.tooltip_text = ("This episode's lesson as a timeline, under the show: what the pen writes, strikes and points at, each where "
+		+ "it comes in the words and as long as its writing takes, and every page turned. Read from the lesson as it stands.")
+	tl.toggled.connect(func(on: bool) -> void:
+		if on:
+			if open_timeline() == null:
+				tl.set_pressed_no_signal(false)
+		else:
+			close_timeline())
+	arow.add_child(tl)
+	_tl_btn = tl
+	# ...OPENED FROM BESIDE PLAY, as every note's timeline is ([method Transport.offer_timeline]): no button of its own here
+	tl.visible = false
+	tree_entered.connect(func() -> void:
+		Transport.offer_timeline(self, 3, func() -> void:
+			if _dock != null and is_instance_valid(_dock):
+				close_timeline()
+			else:
+				open_timeline(), func() -> bool: return _dock != null and is_instance_valid(_dock),
+			"The lesson's timeline: what the pen writes, strikes and points at, each where it comes in the words."))
+	tree_exiting.connect(func() -> void: Transport.withdraw_timeline(self))
 
 	# WHO WRITES: the agent, its model and how hard it reasons - one row, built the way every card
 	# that runs agents builds it ([AgentPick], Cards' own)

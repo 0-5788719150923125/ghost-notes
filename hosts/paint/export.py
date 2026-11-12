@@ -359,6 +359,55 @@ def _pixel_times(m, sl, ts_pts, pts):
     return td[i]
 
 
+def recompose(els, root, shape, order=None):
+    """The elements' maps laid in `order` (all of them, as listed, by default) as the shader lays them: color over what is under it by
+    coverage (pre-multiplied). -> (pre, alp): the canvas they leave - what a layer painted again alone is painted over (run.py)."""
+    pre = np.zeros(tuple(shape) + (3,))
+    alp = np.zeros(tuple(shape))
+    for i in (range(len(els)) if order is None else order):
+        e = els[i]
+        m = e["maps"]
+        w, h = m["w"], m["h"]
+        x0, y0 = int(round(e["rect"][0] * PX)), int(round(e["rect"][1] * PX))
+        a = np.fromfile(Path(root) / m["cover"], np.uint8).reshape(h, w) / 255.0
+        c = np.fromfile(Path(root) / m["tint"], np.uint8).reshape(h, w, 3) / 255.0
+        box = (slice(y0, y0 + h), slice(x0, x0 + w))
+        pre[box] = c * a[..., None] + pre[box] * (1 - a[..., None])
+        alp[box] = a + alp[box] * (1 - a)
+    return pre, alp
+
+
+def merge_layer(kept, kept_root, fresh, fresh_root, layer, out):
+    """ONE LAYER PAINTED AGAIN, PUT AMONG THE REST (next/editing.md step 4: "The painter host solves one layer and replaces only that
+    layer's elements"): `kept` the elements as they stood (their maps under `kept_root`), `fresh` the layer's new ones (under
+    `fresh_root`); the kept layer's own go, the new take their place between the layers before and after it, each new one an id past
+    every kept one (and its maps renamed with it), every kept one's maps copied as they were. Writes `out/elements.json`. -> the list."""
+    import shutil
+    out = Path(out)
+    (out / "maps").mkdir(parents=True, exist_ok=True)
+    before = [e for e in kept if int(e["layer"]) < layer]
+    after = [e for e in kept if int(e["layer"]) > layer]
+    for e in before + after:
+        for tag, f in e["maps"].items():
+            if isinstance(f, str) and (Path(kept_root) / f).resolve() != (out / f).resolve():
+                shutil.copyfile(Path(kept_root) / f, out / f)
+    top = max([int(str(e["id"]).split("_")[-1]) for e in kept if str(e["id"]).split("_")[-1].isdigit()] + [-1])
+    renamed = []
+    for k, e in enumerate(fresh):
+        e = json.loads(json.dumps(e))
+        name = "el_%03d" % (top + 1 + k)
+        for tag, f in list(e["maps"].items()):
+            if isinstance(f, str):
+                nf = "maps/%s_%s.bin" % (name, tag)
+                shutil.copyfile(Path(fresh_root) / f, out / nf)
+                e["maps"][tag] = nf
+        e["id"] = name
+        renamed.append(e)
+    els = before + renamed + after
+    (out / "elements.json").write_text(json.dumps({"px": PX, "elements": els}))
+    return els
+
+
 def export(p, starts, steps, out, log=print, canvas=None, base_layer=0):
     """THE ELEMENTS, written to `out`: `elements.json` and each one's maps (`maps/`), replaying the painter's marks on a fresh canvas -
     or on `canvas` ((pre, alp)), where only some of the layers were painted again over the ones before them (layers_paint.paint_layers)."""

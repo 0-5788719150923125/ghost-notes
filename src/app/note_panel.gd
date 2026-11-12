@@ -81,6 +81,12 @@ func _ready() -> void:
 	_writer.bind_note()
 	_writer.doc.moved.connect(_on_note_moved)
 	script_card.add_child(_writer)
+	# ...AND WHAT IS KEPT OF THE NOTE ([NoteKept]): its cache and every state to go back to
+	var kept := NoteKept.new()
+	kept.doc = _writer.doc
+	kept.cache_dir = func() -> String: return NoteUpload.folder_of(path)
+	kept.history_dir = func() -> String: return NoteUpload.folder_of(path).path_join("history") if not path.is_empty() else ""
+	script_card.add_child(kept)
 	if has_song:
 		_song = SongCard.new(_song_path())
 		_song.chosen.connect(_choose_song)
@@ -88,6 +94,8 @@ func _ready() -> void:
 	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape,
 		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
 		"outro_tip": "Seconds held after the song ends, picture and sound fading out together."})
+	# ...THE TIMELINE OPEN, AS A LIST ([TimelineList]): a card shown only while a timeline editor is open
+	_panel.add_card("timeline", "Timeline", &"picture").add_child(TimelineList.new())
 	_medium = _cards.get("medium") as MediumCard
 	_story = _cards.get("scenes") as StoryboardCard
 	_youtube = _cards.get("youtube") as YouTubeCard

@@ -1,40 +1,12 @@
-extends Control
+extends FlagStrip
 class_name MaskTimeline
 
-## MaskTimeline - the mask editor's scrub strip.
-##
-## A bespoke-drawn instrument: click-drag on the body
-## to scrub (emits `scrubbed`). Marker moves are TWO-STEP, to stop the misclick
-## where aiming to select a marker dragged it off its time in the same gesture: a
-## marker's triangle HANDLE (the top band only - grabbing anywhere on the full tick
-## made it far too easy to snag a marker while aiming for the playhead) is grabbable
-## ONLY once it is the selected marker. The first press on a handle just SELECTS it
-## (emits `marker_picked`); a second press-drag on the now-selected marker is what
-## picks it up and moves it (emits `marker_moved` while held). Session markers are
-## mutated directly (time, plus a re-sort); MaskEditor stays the source of truth for
-## everything else.
-##
-## Ctrl+scroll ZOOMS around the cursor (plain scroll pans when zoomed), for
-## granular work across short sequences - all drawing and hit-testing goes through
-## the shared TimelineView (see timeline_view.gd), so this strip and any track
-## lane above it always agree on where a second sits on screen.
-##
-## Every marker is a ramp or a damp (see MaskSession.MARKER_KINDS) and draws as
-## three things together: the anchor line, the triangle handle pointing the
-## direction its span runs (back into the past for a ramp, forward for a damp),
-## and a translucent tint across exactly the span itself (MaskSession.marker_span).
-
-signal scrubbed(t: float)
-signal marker_picked(m: Dictionary)
-## Fired once per drag gesture, BEFORE the first time-mutation - the hook point
-## for undo (see MaskUndo.push). A plain click-to-select never fires
-## this at all (no motion, no mutation, nothing to undo).
-signal marker_drag_started(m: Dictionary)
-signal marker_moved(m: Dictionary)
+## MaskTimeline - the mask editor's scrub strip: the timeline's [FlagStrip] (its scrub, its two-step marker moves, its zoom,
+## ruler and playhead) over the session's markers, with the clip's amplitude waveform under them. Session markers are mutated
+## directly (time, plus a re-sort); MaskEditor stays the source of truth for everything else.
 
 var session: MaskSession = null
 var player: VideoStreamPlayer = null
-var selected: Variant = null   # the currently-selected marker Dictionary, or null
 var waveform_texture: Texture2D = null   # set by MaskEditor once generated; null draws nothing
 # Hi-res waveform slice for the zoomed-in view (see MaskWaveform.poll_hi):
 # same recipe as the base strip, rendered over just wavehi_span seconds, drawn
@@ -42,106 +14,42 @@ var waveform_texture: Texture2D = null   # set by MaskEditor once generated; nul
 # (soft) base shows.
 var wavehi_texture: Texture2D = null
 var wavehi_span := Vector2.ZERO
-## The shared pixel<->time mapping - see timeline_view.gd. Set by MaskEditor
-## (one instance shared with every track lane, so they all agree on where a
-## second sits on screen). Never owned here anymore - multi-track needs the
-## SAME zoom/pan read by more than one Control.
-var tview: TimelineView = null
-
-var _dragging := false                 # scrubbing the playhead (grabbed empty space)
-var _dragging_marker: Variant = null   # the marker Dictionary being dragged, or null
-var _drag_started_emitted := false     # per-gesture latch for marker_drag_started
-
-const _HANDLE_H := 16.0    # the triangle-handle band; also the only marker-grab region
 
 
-func _ready() -> void:
-	custom_minimum_size = Vector2(0, 84)
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	clip_contents = true   # zoomed-in drawing runs past both edges; never bleed out
+func _markers() -> Array:
+	return session.markers if session != null else []
 
 
-func _process(_dt: float) -> void:
-	if tview != null:
-		tview.width = maxf(1.0, size.x)
-	queue_redraw()
+func _span_of(m: Dictionary) -> Vector2:
+	return session.marker_span(m)
 
 
-func _gui_input(event: InputEvent) -> void:
-	if session == null or session.duration <= 0.0 or tview == null:
-		return
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if tview.wheel(mb):
-			accept_event()
-			return
-		if mb.button_index == MOUSE_BUTTON_LEFT:
-			if mb.pressed:
-				var m: Variant = _marker_near(mb.position)
-				if m != null:
-					# Two-step (see the class doc): the FIRST press on a marker only
-					# SELECTS it - it is not grabbable until it is the selected one.
-					# Press it again (now selected) to pick it up and drag. selected is
-					# kept in sync by MaskEditor via marker_picked -> _select_marker
-					# synchronously, so the next press already sees this marker selected.
-					# Matches _draw's own `selected == m` identity test.
-					if selected != null and selected == m:
-						_dragging_marker = m
-						_drag_started_emitted = false
-					else:
-						marker_picked.emit(m)
-				else:
-					_dragging = true
-					scrubbed.emit(tview.t_of(mb.position.x))
-			else:
-				_dragging = false
-				_dragging_marker = null
-			accept_event()
-	elif event is InputEventMouseMotion:
-		if _dragging_marker != null:
-			_drag_marker_to_x(event.position.x)
-			accept_event()
-		elif _dragging:
-			scrubbed.emit(tview.t_of(event.position.x))
-			accept_event()
-
-
-## Move the dragged marker to the time under `x`, keeping the array sorted (the
-## interpolation in MaskSession.at_time assumes sorted order) - re-sorting every
-## motion event is trivial at marker-list sizes, no need to defer it to release.
-func _drag_marker_to_x(x: float) -> void:
-	if not _drag_started_emitted:
-		_drag_started_emitted = true
-		marker_drag_started.emit(_dragging_marker)
-	_dragging_marker.time = clampf(tview.t_of(x), 0.0, session.duration)
+## Keeping the array sorted (the interpolation in MaskSession.at_time assumes sorted order) - re-sorting every motion
+## event is trivial at marker-list sizes, no need to defer it to release.
+func _move(m: Dictionary, t: float) -> void:
+	m.time = t
 	session.markers.sort_custom(func(a, b): return a.time < b.time)
-	marker_moved.emit(_dragging_marker)
 
 
-## Markers are grabbable ONLY by their triangle handle in the top band - clicking
-## the strip's body always scrubs, however close to a marker's anchor line it lands.
-func _marker_near(pos: Vector2) -> Variant:
-	if pos.y > _HANDLE_H + 4.0:
-		return null
-	for m in session.markers:
-		var mx := tview.x_of(float(m.time))
-		if pos.x > mx - 7.0 and pos.x < mx + _HANDLE_H:   # anchor edge through triangle tip
-			return m
-	return null
+func _extent() -> float:
+	return session.duration
 
 
+func _playhead() -> float:
+	return player.stream_position if player != null else 0.0
 
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.09, 0.10, 0.13, 0.94))
-	if session == null or session.duration <= 0.0 or tview == null:
-		# Distinct from "session is null" (no clip picked at all) so a clip that IS
-		# loaded but came back with a bad/zero probe reads as its own state, not the
-		# same blank message as never having opened anything.
-		var msg := "no clip loaded" if session == null else "clip loaded, but duration came back 0 - re-preparing…"
-		draw_string(ThemeDB.fallback_font, Vector2(12, size.y * 0.5 + 4),
-			msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.5, 0.55, 0.62))
-		return
-	var span := tview.visible_span()
+
+## Distinct from "session is null" (no clip picked at all) so a clip that IS loaded but came back with a bad/zero probe
+## reads as its own state, not the same blank message as never having opened anything.
+func _empty_text() -> String:
+	if session == null:
+		return "no clip loaded"
+	if session.duration <= 0.0 or tview == null:
+		return "clip loaded, but duration came back 0 - re-preparing…"
+	return ""
+
+
+func _draw_under() -> void:
 	# The amplitude waveform (rendered once via ffmpeg's showwavespic, cached next to
 	# the clip - see MaskWaveform.ensure). Drawn across wherever the clip's
 	# OWN span [0, duration] currently maps to on screen - not the full widget width -
@@ -173,52 +81,3 @@ func _draw() -> void:
 				draw_rect(Rect2(hx0, 4, hx1 - hx0, size.y - 20), Color(0.09, 0.10, 0.13, 1.0))
 				draw_texture_rect_region(wavehi_texture, Rect2(hx0, 4, hx1 - hx0, size.y - 20),
 					Rect2(u0, 0, u1 - u0, hth), Color(0.55, 0.68, 0.85, 0.85))
-	# Marker spans - a translucent tint across exactly the time range each marker's
-	# own ramp/damp occupies (see MaskSession.marker_span). Ramp = cool/green,
-	# damp = warm/orange; overlapping spans layer visibly.
-	for m in session.markers:
-		var mspan: Vector2 = session.marker_span(m)
-		var x0 := tview.x_of(clampf(mspan.x, 0.0, session.duration))
-		var x1 := tview.x_of(clampf(mspan.y, 0.0, session.duration))
-		if x1 < 0.0 or x0 > size.x:
-			continue
-		var is_ramp: bool = int(m.get("kind", 0.0)) == 0
-		var tint := Color(0.45, 0.85, 0.55, 0.16) if is_ramp else Color(0.95, 0.55, 0.3, 0.16)
-		draw_rect(Rect2(x0, 0, maxf(1.0, x1 - x0), size.y), tint)
-	# The ruler adapts its tick step to the visible window, so zooming in brings
-	# finer gradations instead of one lonely label ([method TimelineView.step_for]).
-	var step := TimelineView.step_for(span, 14.0)
-	for tt in tview.ticks(step):
-		var x := tview.x_of(tt)
-		draw_line(Vector2(x, size.y - 14), Vector2(x, size.y), Color(0.3, 0.34, 0.4, 0.6), 1.0)
-		draw_string(ThemeDB.fallback_font, Vector2(x + 3, size.y - 4),
-			TimelineView.tick_label(tt, step), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.45, 0.5, 0.58))
-	# Markers: an anchor line (taller/brighter when selected) plus a triangle handle
-	# pointing back (ramp - it's pulling the timeline in from the past) or forward
-	# (damp - pushing away into the future), colored to match its span tint. The
-	# handle is also the ONLY grab region (see _marker_near).
-	for m in session.markers:
-		var x := tview.x_of(float(m.time))
-		if x < -20.0 or x > size.x + 20.0:
-			continue
-		var on: bool = selected != null and selected == m
-		var is_ramp: bool = int(m.get("kind", 0.0)) == 0
-		draw_line(Vector2(x, 0), Vector2(x, size.y - 16),
-			Color(1.0, 0.82, 0.4, 0.95) if on else Color(0.55, 0.75, 1.0, 0.85), 3.0 if on else 2.0)
-		var col := Color(0.5, 0.95, 0.6) if is_ramp else Color(0.98, 0.6, 0.35)
-		if on:
-			col = col.lightened(0.35)
-		var h := _HANDLE_H
-		var tip_x := x - h * 0.7 if is_ramp else x + h * 0.7
-		var pts := PackedVector2Array([Vector2(x, 1), Vector2(x, h), Vector2(tip_x, h * 0.5)])
-		draw_colored_polygon(pts, col)
-	# Playhead, with its own time tag riding right above it - the point being you
-	# never have to look away from "where the line is" to read "what time that is".
-	var t: float = player.stream_position if player != null else 0.0
-	var px := tview.x_of(t)
-	if px >= -2.0 and px <= size.x + 2.0:
-		TimelineView.draw_playhead(self, px, Color(1, 1, 1, 0.92), Clock.text(t))
-	# Zoom badge, so a zoomed view never masquerades as the whole clip.
-	if tview.zoom > 1.01:
-		draw_string(ThemeDB.fallback_font, Vector2(size.x - 74, 14),
-			"%.0fx zoom" % tview.zoom, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.7, 0.78, 0.9, 0.8))

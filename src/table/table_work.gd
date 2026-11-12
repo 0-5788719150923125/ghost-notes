@@ -31,6 +31,8 @@ var assembly_spec := {}
 ## `skin.json`, as parsed - [member skin_doc]) and the acts that paint them.
 var paint: TablePaint
 var skin_doc := {}
+## THE SHOW'S TUNING ([TableTune]), made safe: what it tells of the numbers a person judged; a row's default where it tells none.
+var tune := {}
 ## ...and THE PICTURE THE DESIGNS WERE MADE FROM (`face_ref.png`; null none) and the surface it is of (`face.json`'s `on`, "thing/part"):
 ## where each operation's paint is still wanted ([PaintLayers]) - never laid itself, every mark a tool's (feedback 0049; next/painted_surface.md,
 ## "The painting is the design").
@@ -1447,6 +1449,34 @@ static func _ray(tm: TriangleMesh, from: Vector3, dir: Vector3) -> Dictionary:
 
 # --- when each act runs ---------------------------------------------------------------------------
 
+## WHICH ACT EACH CUE STARTS (next/editing.md step 2: words do not name the work's place in line): [param cues] as
+## [method CardReading.parse] gives them, each named for the act it starts - its own name where an act is called that, else
+## the next act not yet cued that lays the LAYER it names (an act made from a painting is named by its place in line, which a
+## repaint changes; its layers keep their names). A cue naming neither is left as it is, and starts nothing: the problem a
+## Timeline says ([method TableEpisode.timeline]). -> the cues, each a copy, `name` the act's.
+static func resolve_cues(cues: Array, acts: Array) -> Array:
+	var named := {}
+	for a in acts:
+		named[String((a as Dictionary).get("name", ""))] = true
+	var out: Array = []
+	var after := -1          # the act the last layer cue started: a later one starts an act after it
+	var claimed := {}
+	for c in cues:
+		var cd: Dictionary = (c as Dictionary).duplicate()
+		var nm := String(cd.get("name", ""))
+		if not named.has(nm):
+			for i in range(maxi(after, 0), acts.size()):
+				var a: Dictionary = acts[i]
+				if not claimed.has(i) and (a.get("layers", []) as Array).has(nm):
+					cd["name"] = String(a["name"])
+					cd["layer"] = nm
+					claimed[i] = true
+					after = i
+					break
+		out.append(cd)
+	return out
+
+
 ## WHEN EACH ACT RUNS, from the reading's placed schedule [param sched] (`[{a, t0, s}]`, [method
 ## ReadingFollower.place]), its walk [param parse] ([method CardReading.parse]) and when each spoken word was
 ## said ([param said0], [param said1] - [constant ReadingFollower.NO_TIME] where not yet; [param est], each
@@ -1522,8 +1552,10 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 		# ...AND ITS LAST SILENCE IS ITS OWN ([CardReading], a quiet its words end on): the work goes on through it
 		b1 += float(a.get("tail", 0.0))
 		spans[beat] = Vector2(b0, maxf(b1, b0 + 1.0))
+	# EACH CUE AS THE ACT IT STARTS ([method resolve_cues]): an act's own name, or a painted layer's
+	var cues := resolve_cues(parse.get("cues", []), acts)
 	var cued := {}
-	for c in parse.get("cues", []):
+	for c in cues:
 		var cd: Dictionary = c
 		# ...A CUE IN A SILENCE is timed from the word the silence follows: the next word is not said until the silence is over, and
 		# what was cued to begin in it would wait out the whole of it
@@ -1545,7 +1577,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 	# (...and the word each act is cued at, for the act before it to be sized by while that word is still to come)
 	var cue_si := {}
 	var cue_into := {}     # ...a cue in a silence: how far into it, after the word the silence follows
-	for c in parse.get("cues", []):
+	for c in cues:
 		cue_si[String((c as Dictionary)["name"])] = int((c as Dictionary)["si"])
 		if (c as Dictionary).has("quiet"):
 			cue_into[String((c as Dictionary)["name"])] = float((c as Dictionary)["quiet"])
@@ -1553,7 +1585,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 	var before_quiet := {}
 	for q in parse.get("quiets", []):
 		before_quiet[int((q as Dictionary)["si"])] = true
-	for c in parse.get("cues", []):
+	for c in cues:
 		var cd: Dictionary = c
 		var si := int(cd["si"])
 		# (...a cue INSIDE the silence too - one at its end, the next passage's first act, is one: 732687's liner waited out the intro's 24 s)
@@ -1635,7 +1667,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 					# ...its rest too, where the one before laid down what it takes up
 					for ch in _laid_by(mine[k - 1]):
 						if _channels_of(b).has(ch):
-							after += LAID_REST
+							after += TableTune.value(tune, "laid_rest")
 							break
 				t1 = maxf(t0 + 1.0, until - after)
 				if a.has("_natural") and shared > 0.0 and until < INF:
@@ -1665,7 +1697,7 @@ func schedule(sched: Array, parse: Dictionary, said0: PackedFloat32Array, said1:
 				busy[ch] = maxf(float(busy.get(ch, -INF)), t1)
 			# ...and what it laid down rests before that hand takes it up again
 			for ch in _laid_by(i):
-				busy[ch] = maxf(float(busy.get(ch, -INF)), t1 + LAID_REST)
+				busy[ch] = maxf(float(busy.get(ch, -INF)), t1 + TableTune.value(tune, "laid_rest"))
 			t = t1
 	_last_now = now
 	out.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["t0"]) < float(y["t0"]))
@@ -1801,7 +1833,7 @@ func rehearse(from: float) -> Dictionary:
 			times[String(a["name"])] = [t, t + len]
 			t += len
 			for ch in _laid_by(i):
-				rests[ch] = t + LAID_REST
+				rests[ch] = t + TableTune.value(tune, "laid_rest")
 	# ...THE SAME REHEARSAL AS STANDS, nothing made again: each act a call checks had rebuilt every channel's timeline (841899's
 	# 38 acts, six checks a call - half of what a puppeteer's `act` waited on)
 	var key := "rehearsed %f" % from

@@ -80,6 +80,7 @@ Looked at under xvfb only (`pipeline_look_probe`), not yet by the user in the ap
 
 Open, not built:
 
-- An undo for a thrown-away step (`invalidate` deletes). With one, the question could go.
+- A table step made again throws nothing away since 2026-11-11 (next/editing.md step 1: versions, stale, 🔒 kept); stepping back
+  to a version from the card, and the same for Proof's steps, are not built.
 - Which group to scroll to when a long Generate moves past the list's view: the tally says where it is, the list stays
   where it was left - or, left at its end, stays at its end as steps are added (`PanelDeck`, next/panel_deck.md).

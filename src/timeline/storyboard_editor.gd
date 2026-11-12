@@ -6,8 +6,8 @@ class_name StoryboardEditor
 ##
 ## THREE VIEWS OF ONE TREE. The STRIP ([StoryboardStrip]) is the story: its entries along a
 ## ruler, in the order and for the lengths the Director will walk them, the tail after the
-## sequence. The LANES ([StoryboardLanes]) open under it for a stage entry: a lane per actor, and
-## on it what happens to that actor, when. The INSPECTOR, at the right, is whatever is picked -
+## sequence. The LANES ([TimelineLanes], Masking's controls) open under it for a stage entry: a block per window
+## span, trimmed and moved, and its moments as flags on a strip that scrubs the entry. The INSPECTOR, at the right, is whatever is picked -
 ## an entry, one of its actors, one of its spans - as rows built from the fields' own tables
 ## ([SchemaForm] over [constant Storyboard.ENTRY], [constant Cast.PARAMS], [constant Actions.ARGS]
 ## ...), so nothing here lists what a scene, an actor or a verb can be told.
@@ -31,6 +31,8 @@ class_name StoryboardEditor
 signal edited(data: Dictionary)
 ## An entry was picked: its index, the tail's counted on from the sequence's end.
 signal picked(entry: int)
+## A moment inside the entry picked was asked for: [param into] seconds of it, as it plays (its lanes' strip scrubbed).
+signal scrubbed(entry: int, into: float)
 ## The dock was closed.
 signal closed
 
@@ -62,7 +64,7 @@ var _play_elapsed := 0.0
 var _root: PanelContainer
 var _body: HBoxContainer
 var _strip: StoryboardStrip
-var _lanes: StoryboardLanes
+var _lanes: TimelineLanes
 var _lanes_scroll: ScrollContainer
 var _lanes_hint: Label
 var _inspector: VBoxContainer
@@ -79,6 +81,7 @@ var _refresh_again := false        # ...and an edit landed meanwhile: once more 
 
 
 func _ready() -> void:
+	add_to_group(TimelineDock.GROUP)
 	# over the stage and the subtitles, under the transport (120) and everything modal
 	layer = 110
 	_build()
@@ -141,6 +144,41 @@ func set_cursor(entry: int, elapsed: float) -> void:
 ## The entry picked, -1 for none.
 func selected() -> int:
 	return _sel
+
+
+## EVERY ITEM, IN THE ORDER IT COMES, for the panel's Timeline card ([TimelineList], [constant TimelineDock.GROUP]): each entry, then
+## its verbs and flags - `{label, at (the song's seconds), kind, group, item}` - read from the storyboard as it stands
+## ([method Storyboard.timeline]).
+func timeline_items() -> Array:
+	var out: Array = []
+	var groups: Array = Storyboard.timeline(data).get("groups", [])
+	for gi in groups.size():
+		var g: Dictionary = groups[gi]
+		out.append({"label": String(g["label"]), "at": float(g["start"]), "kind": "group", "group": gi})
+		var its: Array = []
+		for l in g["lanes"]:
+			for it in (l as Dictionary)["items"]:
+				its.append(it)
+		its.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["at"]) < float(b["at"]))
+		for it in its:
+			out.append({"label": String((it as Dictionary).get("label", "")), "at": float(g["start"]) + float((it as Dictionary)["at"]),
+				"kind": String((it as Dictionary)["kind"]), "group": gi, "item": it})
+	return out
+
+
+## ROW [param i] OF [method timeline_items] PRESSED: its entry picked and shown (the show goes there), a verb picked in the inspector.
+func pick_item(i: int) -> void:
+	var all := timeline_items()
+	if i < 0 or i >= all.size():
+		return
+	var e: Dictionary = all[i]
+	var src: Array = (e.get("item", {}) as Dictionary).get("source", []) if e.get("item") is Dictionary else []
+	var entry := int(src[1]) if src.size() >= 2 and String(src[0]) == "sequence" else int(e["group"])
+	_pick(entry)
+	if src.size() >= 5 and String(src[3]) == "spans":
+		_sub = "span"
+		_sub_i = int(src[4])
+		_refresh()
 
 
 ## Every scene an entry can name: the stage first, then the catalog, each once.
@@ -391,6 +429,40 @@ func add_span(verb: String, actor: String, at: float) -> void:
 	_edit(DataPath.insert(next, p, n, span))
 
 
+## A FLAG ([StageKeys]) for [param field] at [param at] nominal seconds of the entry picked: a ramp over a second, its value
+## what the entry's camera sets now - a key that changes nothing until its `to` is written.
+func add_key(field: String, at: float, actor := "") -> void:
+	if _sel < 0 or not StageKeys.FIELDS.has(field) or ((field.begins_with("actor.") or field == "look") and actor.is_empty()):
+		return
+	var now: Variant = null
+	if field == "look":
+		# (the Look's: the filter's amount as the Look card sets it - [param actor] names the filter)
+		now = Director.look_amount(actor)
+	elif field.begins_with("actor."):
+		# (an actor's: what its cast entry sets, else what an actor is built with)
+		var param := field.trim_prefix("actor.")
+		for c in _resolved(_path(_sel)).get("cast", []):
+			if c is Dictionary and String((c as Dictionary).get("id", "")) == actor and typeof((c as Dictionary).get(param)) in [TYPE_INT, TYPE_FLOAT]:
+				now = float((c as Dictionary)[param])
+		if now == null:
+			now = {"scale": 0.3, "hue": 0.6, "fade": 1.0}[param]
+	else:
+		var cam: Variant = _resolved(_path(_sel)).get("camera", {})
+		var part := field.trim_prefix("camera.")
+		now = (cam as Dictionary).get(part) if cam is Dictionary else null
+		if now == null:
+			now = {"fov": 48.0, "eye": [0.0, 0.0, 4.0], "look": [0.0, 0.0, 0.0]}[part]
+	var k := {"field": field, "at": snappedf(clampf(at, 0.0, _nominal(_sel)), 0.05), "to": now, "over": 1.0, "ease": "ramp"}
+	if not actor.is_empty():
+		k["filter" if field == "look" else "actor"] = actor
+	var p := _path(_sel) + ["track", "keys"]
+	var next: Variant = data
+	if not DataPath.has(data, _path(_sel) + ["track", "nominal"]):
+		next = DataPath.put(next, _path(_sel) + ["track", "nominal"], _nominal(_sel))
+	var have: Variant = DataPath.at(next, p)
+	_edit(DataPath.insert(next, p, (have as Array).size(), k) if have is Array else DataPath.put(next, p, [k]))
+
+
 func _retime(span: int, from: float, to: float) -> void:
 	var p := _path(_sel) + ["track", "spans", span]
 	var raw: Variant = DataPath.at(data, p)
@@ -412,7 +484,7 @@ func _span_as(span: int, window: bool) -> void:
 	if not (raw is Dictionary):
 		return
 	var s: Dictionary = (raw as Dictionary).duplicate(true)
-	var w := StoryboardLanes.window_of(s)
+	var w := TimelineLanes.window_of(s)
 	s.erase("at")
 	s.erase("from")
 	s.erase("to")
@@ -495,13 +567,22 @@ func _build() -> void:
 	_lanes_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_lanes_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(_lanes_scroll)
-	_lanes = StoryboardLanes.new()
+	_lanes = TimelineLanes.new()
 	_lanes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# ...ITS STRIP SCRUBBED: that moment of the entry, its nominal seconds scaled to the seconds it plays for
+	_lanes.scrubbed.connect(func(t: float) -> void:
+		if _sel >= 0 and _sel < _strip.rows.size():
+			scrubbed.emit(_sel, t / maxf(0.05, _lanes.nominal) * float(_strip.rows[_sel]["length"])))
 	_lanes.picked.connect(func(span: int) -> void:
 		_sub = "span"
 		_sub_i = span
 		_refresh())
 	_lanes.retimed.connect(_retime)
+	# ...A KEY DRAGGED ([StageKeys]): its moment, written where it lives
+	_lanes.key_retimed.connect(func(key: int, at: float) -> void:
+		var p := _path(_sel) + ["track", "keys", key, "at"]
+		if DataPath.has(data, p):
+			_edit(DataPath.put(data, p, snappedf(at, 0.01))))
 	_lanes.wanted.connect(func(actor: String, at: float) -> void: add_span(NEW_VERB, actor, at))
 	_lanes_scroll.add_child(_lanes)
 
@@ -627,6 +708,33 @@ func _process(_delta: float) -> void:
 		_place()
 
 
+## A CLICK ON THE STAGE PICKS WHAT IS THERE (next/editing.md step 7, "one thing picked, one inspector"): an actor of the entry
+## showing, picked in the inspector ([method pick_actor]). A click that names nothing goes on to whatever else wants it.
+func _unhandled_input(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT or _source_on or _root == null or not _root.is_visible_in_tree():
+		return
+	var hit := Director.pick(mb.position)
+	if hit.has("actor") and pick_actor(String(hit["actor"])):
+		get_viewport().set_input_as_handled()
+
+
+## THE ACTOR [param id] PICKED ON THE STAGE: the entry showing it picked (the one playing, else the one picked) and the actor
+## opened in the inspector - without starting the entry again. False when that entry has no such actor.
+func pick_actor(id: String) -> bool:
+	var i := _play_entry if _play_entry >= 0 and _play_entry < _count() else _sel
+	if i < 0 or i >= _count():
+		return false
+	var j := _cast_ids(i).find(id)
+	if j < 0:
+		return false
+	_sel = i
+	_sub = "actor"
+	_sub_i = j
+	_refresh()
+	return true
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo or read_only or _source_on:
@@ -732,9 +840,13 @@ func _show_all() -> void:
 		_lanes_hint.text = ("%s rolls its own look from its seed - pin the seed to keep one. A stage entry has a "
 			+ "timeline here: who is on it, and what they do.") % String(rows[_sel]["name"]).replace("_", " ").capitalize()
 	if stage:
+		_lanes.tooltip_text = "Click an actor on the stage to pick it here."
+	if stage:
 		_lanes.read_only = read_only
 		_lanes.selected = _sub_i if _sub == "span" else -1
 		_lanes.set_track(_cast_ids(_sel), _spans(_sel), _nominal(_sel))
+		var tr: Variant = _resolved(_path(_sel)).get("track", {})
+		_lanes.set_keys((tr as Dictionary).get("keys", []) if tr is Dictionary and (tr as Dictionary).get("keys") is Array else [])
 	_show_inspector()
 	set_cursor(_play_entry, _play_elapsed)
 
@@ -917,6 +1029,32 @@ func _span_rows(p: Array, ctx: Dictionary) -> void:
 	add.get_popup().index_pressed.connect(func(i: int) -> void:
 		add_span(String(add.get_popup().get_item_metadata(i)), "", maxf(0.0, _lanes.playhead)))
 	_inspector.add_child(add)
+	# ...AND A FLAG ([StageKeys]): a camera value that changes at the playhead, eased in, and holds - starting as the entry
+	# sets it, for its `to` to be written
+	var key := MenuButton.new()
+	key.text = "+ Key ▾"
+	key.flat = false
+	key.disabled = read_only
+	key.tooltip_text = "Add a flag at the playhead: a camera value that changes there, eased in over a second, and holds. Drag it on the strip; write its value in Source."
+	for field in StageKeys.FIELDS:
+		if String(field).begins_with("actor.") or String(field) == "look":
+			continue
+		key.get_popup().add_item(String(Registry.label(StageKeys.FIELDS, String(field))))
+		key.get_popup().set_item_metadata(key.get_popup().item_count - 1, [field, ""])
+	# ...and each actor's size, hue and shown, by its name
+	for who in _cast_ids(_sel):
+		for field in StageKeys.FIELDS:
+			if String(field).begins_with("actor."):
+				key.get_popup().add_item("%s: %s" % [String(who), Registry.label(StageKeys.FIELDS, String(field))])
+				key.get_popup().set_item_metadata(key.get_popup().item_count - 1, [field, String(who)])
+	# ...and the Look's every filter, by its name
+	for fil in Filters.REGISTRY:
+		key.get_popup().add_item("The Look: %s" % Registry.label(Filters.REGISTRY, String(fil)))
+		key.get_popup().set_item_metadata(key.get_popup().item_count - 1, ["look", String(fil)])
+	key.get_popup().index_pressed.connect(func(i: int) -> void:
+		var m: Array = key.get_popup().get_item_metadata(i)
+		add_key(String(m[0]), maxf(0.0, _lanes.playhead), String(m[1])))
+	_inspector.add_child(key)
 	var spans := _spans(_sel)
 	if _sub != "span" or _sub_i < 0 or _sub_i >= spans.size():
 		return

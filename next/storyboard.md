@@ -87,7 +87,8 @@ show is fitted above it (`Chrome.claim_stage`), so what is edited is seen whole.
   Click to pick (the show cuts there, and where the storyboard follows the song the song seeks
   too); drag to reorder; drag the right edge of a fixed hold to lengthen it. A cue-timed entry has
   a broken edge: it has no fixed end.
-- **The lanes** (`StoryboardLanes`): for a stage entry, a lane per actor and its spans - a block
+- **The lanes** (`TimelineLanes` since 2026-11-11, on Masking's `TrackLane` and `FlagStrip`; next/editing.md, "The
+  Timeline"; first `StoryboardLanes`): for a stage entry, a lane per actor and its spans - a block
   for a window, a diamond for a moment. Drag to retime; double-click a lane to add.
 - **The inspector**: whatever is picked - the storyboard, an entry, an actor, a span - as rows from
   the tables. A value a def gives is shown dimmed, as a default is; changing it writes the map's

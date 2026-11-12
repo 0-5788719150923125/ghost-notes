@@ -88,6 +88,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Cards, generalized**
       Built: the rename (Cards, 2026-10-06), the table's verbs as one registry, positions as data, a dealer's tools and the reader's guard (step 9). Open: card state over show time; decks and faces read from the show's guide (the rules are every show's since 2026-10-08 - a tarot show is its brief; the card's size and face are still the tarot's); a dealer run by a real agent (the tools exist, and no episode step calls them yet); pick-a-pile episodes.
 
+- [ ] **A show edited by hand, and by agents**
+      Planned 2026-11-10; built 2026-11-11, waiting on the author's eye. Every step kept, never deleted; one Timeline for every show, docked with one inspector (acts, tracks, cues, a thing on the table and its parts, the table from above) and Undo; a click on the stage picks; the voice's take kept and played as a file; a layer of a painting laid again alone (run on 732687). Open: a change on the set seen without a stand, and smaller items. See [editing.md](editing.md).
+
 - [ ] **The storyboard's editor, continued**
       Built 2026-10-12: a note keeps its own storyboard and edits it in a dock under the show - a strip of entries, a stage entry's lanes, rows built from the fields' tables, undo, a YAML source view, and the seeded show written down as a first draft. Open: the author's own pass over it; a `layers` scene so a scene's look is data too; a storyboard that conducts itself with no sound; keyframed property lanes; a transition as a timeline item. See [storyboard.md](storyboard.md).
 
@@ -96,9 +99,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [ ] **The scene-spec pipeline**
       The north star, "cattle, not pets": a declarative spec that samples a configuration of geometry families, modifiers, materials, motion and lighting and composes them, so lifelike scenes come from integrating many sampled domains rather than from code written per scene. `rocks` and `bloom` sample small specs already, and the storyboard `stage` spec is the same idea for choreography; next is pushing the spec down into the bodies' own geometry and material numbers, the `eye`'s hand-tuned constants first. Every tunable constant is a candidate for sampling.
-
-- [ ] **A show edited by hand, and by agents**
-      Audited and planned 2026-11-10, after Joker Motivation's deadline; nothing built. A step is kept, never deleted (versions, who made it, stale instead of gone); words stop naming the work's place in line; the voice's take is kept, so time is known and a seek is a seek; every Pipeline row gains an edit; then typed rows for the table's vocabulary, the storyboard's dock as any show's score, the set picked and inspected, a show made from nothing, agents asked about what is picked. The first four steps are the small version. See [editing.md](editing.md).
 
 - [ ] **The card table's light, in real episodes**
       Built 2026-10-07: the set dresser lights its table (`Lights`) - a sky, a sun or the moon and what it falls through (a window, blinds, a lattice, leaves, an awning, a parasol...), clouds passing over the sun, birds' shadows, lamps out of the shot - and watches what moves in it. Open: the first real set dresser run with it (how it reads the plan's light and the room's painting, and how many of its 40 pictures the light takes); a screen for a lamp at night (a street lamp through a window's bars); rain on a window; water's caustics. See [cards.md](cards.md), "THE LIGHT".

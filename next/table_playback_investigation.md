@@ -169,6 +169,8 @@ resolutions in the Graphics menu ... default to 1080p"):
   that ...`, with the stage's size and its time on the card.
 - **Resolution, on the Graphics menu** (`Graphics.stage_size`): 720p, 1080p (as it always drew), 1440p, 4K - the
   viewer's alone; an export is drawn at its own size.
+- **A probe that times out no longer stays on the card.** `tests/run_boot_probe.sh` ended `xvfb-run` alone, and the
+  probe's `godot` and `Xvfb` ran on; the timeout is inside the virtual display now, Godot its own child.
 
 Open:
 
@@ -177,5 +179,3 @@ Open:
 - Lesser, each measured above: the paint's canvases drawn only as paint is laid (1.1 ms), multisampling 2x (0.5 ms).
 - A scene costing the thread 14 to 24 ms stays at whatever level a build's long frame put it at until the next cut
   (`starfield`: 16 ms, held at one frame in two). It did before, too.
-- `tests/run_boot_probe.sh` under `GHOST_PROBE_GPU` leaves its `godot` and `Xvfb` running when the timeout ends it
-  (`timeout --foreground` reaches `xvfb-run` alone). A probe that never quits then stays on the card.

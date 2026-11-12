@@ -307,6 +307,51 @@ static func schedule(sequence: Array, sensitivity: float, unauthored: float) -> 
 	return {"starts": starts, "lengths": lengths, "end": acc}
 
 
+## THE STORYBOARD [param data] (a raw tree, defs and all) AS A [Timeline] on the song's clock: an entry a group, timed as
+## [method schedule] times it ([param unauthored] seconds for one that gives none), on the `verb` engine - a scene is a
+## simulation that answers the music. A stage entry's cast are its lanes and its track's spans their items, scaled from the
+## track's nominal seconds into the entry's own as the stage scales them ([Track]); a span aimed at several actors, or at
+## all, stands in lane "all". Each item's `source` is its span's path in [param data].
+static func timeline(data: Dictionary, unauthored := 8.0) -> Dictionary:
+	var tree: Variant = expanded(data, data.get("defs", {}))
+	var seq: Array = (tree as Dictionary).get("sequence", []) if tree is Dictionary and (tree as Dictionary).get("sequence") is Array else []
+	var sched := schedule(seq, float((tree as Dictionary).get("sensitivity", 1.0)) if tree is Dictionary else 1.0, unauthored)
+	var groups: Array = []
+	for i in seq.size():
+		var e: Dictionary = seq[i] if seq[i] is Dictionary else {}
+		var length := float(sched["lengths"][i])
+		var g := Timeline.group("entry-%d" % (i + 1), "%d. %s" % [i + 1, String(e.get("scene", "?")).replace("_", " ")],
+			float(sched["starts"][i]), length, "verb")
+		if String(e.get("scene", "")) == "stage":
+			for c in e.get("cast", []) if e.get("cast") is Array else []:
+				if c is Dictionary:
+					g["lanes"].append({"id": String((c as Dictionary).get("id", "")), "label": String((c as Dictionary).get("id", "")), "items": []})
+			var track: Dictionary = e.get("track", {}) if e.get("track") is Dictionary else {}
+			var scale := length / maxf(0.05, float(track.get("nominal", 8.0)))
+			var spans: Array = track.get("spans", []) if track.get("spans") is Array else []
+			for j in spans.size():
+				var sd: Dictionary = spans[j] if spans[j] is Dictionary else {}
+				var t0 := float(sd.get("at", sd.get("from", 0.0)))
+				var t1 := float(sd.get("to", t0)) if not sd.has("at") else t0
+				var target: Variant = sd.get("target", "all")
+				var lane := String(target) if target is String else "all"
+				Timeline.add(g, lane, lane, Timeline.item("span-%d" % (j + 1), String(sd.get("action", "")), t0 * scale,
+					maxf(t1 - t0, 0.0) * scale, ["sequence", i, "track", "spans", j]))
+			# ...AND ITS FLAGS ([StageKeys]): each key a flag in lane "camera" on the `time` engine - a pure function of the entry's
+			# time, seekable, as a verb is not - with its ease and its seconds
+			for k in StageKeys.sanitize(track.get("keys", []))["keys"]:
+				var kd: Dictionary = k
+				var flag := Timeline.item("key-%d" % (int(kd["index"]) + 1), StageKeys.key_name(kd), float(kd["at"]) * scale, 0.0,
+					["sequence", i, "track", "keys", int(kd["index"])], "time")
+				flag["ease"] = String(kd["ease"])
+				flag["over"] = float(kd["over"]) * scale
+				# (an actor's in its own lane, beside its verbs)
+				var lane := "look" if String(kd["field"]) == "look" else (String(kd.get("actor", "")) if not String(kd.get("actor", "")).is_empty() else "camera")
+				Timeline.add(g, lane, lane, flag)
+		groups.append(g)
+	return Timeline.make("song", groups)
+
+
 ## A new entry for [param scene], as the editor adds one: a stage with a camera, an empty cast and
 ## an empty timeline; any other scene with nothing but its name - every key unset is a default.
 static func new_entry(scene: String) -> Dictionary:

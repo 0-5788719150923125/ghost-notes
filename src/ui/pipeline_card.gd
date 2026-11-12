@@ -288,7 +288,8 @@ func refresh() -> void:
 		plan.append((s as PipelineSection).title)
 		for r in rows:
 			var it := r as PipelineRow
-			plan.append("%s|%s|%s|%s|%s|%s" % [it.key, it.group, it.label, not it.again.is_empty(), not it.go.is_empty(), it.lockable])
+			plan.append("%s|%s|%s|%s|%s|%s|%s" % [it.key, it.group, it.label, not it.again.is_empty(), not it.go.is_empty(), it.lockable,
+				not it.edit_tip.is_empty()])
 	var key := "\n".join(plan)
 	if key != _built:
 		_built = key
@@ -435,13 +436,19 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 		make = _small_button("▶", it.go)
 		make.pressed.connect(_press_make.bind(at))
 		row.add_child(make)
-	# A LOCK BESIDE ITS ⟳ (TableEpisode.unlocked): locked, making it again throws away what was made from it; unlocked, it alone
+	# A LOCK BESIDE ITS ⟳ ([member PipelineRow.locked]): locked, it is KEPT - Generate passes it by, stale or not
 	var lock_b: Button = null
 	if it.lockable:
 		lock_b = _small_button("", "")
 		lock_b.icon = _lock_icon(true)
 		lock_b.pressed.connect(_press_lock.bind(at))
 		row.add_child(lock_b)
+	# ✎ BESIDE THEM ([member PipelineRow.edit]): what it made, changed by hand
+	var edit_b: Button = null
+	if not it.edit_tip.is_empty():
+		edit_b = _small_button("✎", it.edit_tip)
+		edit_b.pressed.connect(_press_edit.bind(at))
+		row.add_child(edit_b)
 	var redo := _small_button("⟳", it.again)
 	redo.pressed.connect(_press_redo.bind(at))
 	# A ROW WITH NO ⟳ KEEPS ITS PLACE: the column stays straight down the list
@@ -450,7 +457,8 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 		redo.disabled = true
 		redo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(redo)
-	_rows[at] = {"section": section, "row": it, "glyph": glyph, "name": name_l, "text": text, "redo": redo, "make": make, "line": row, "lock": lock_b}
+	_rows[at] = {"section": section, "row": it, "glyph": glyph, "name": name_l, "text": text, "redo": redo, "make": make, "line": row, "lock": lock_b,
+		"edit": edit_b}
 	return name_l
 
 
@@ -528,43 +536,75 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 	if make is Button:
 		(make as Button).disabled = walking_now or not it.go_open
 		(make as Button).tooltip_text = it.go
+	var edit_b: Variant = r.get("edit")
+	if edit_b is Button:
+		(edit_b as Button).disabled = walking_now
+		(edit_b as Button).tooltip_text = it.edit_tip
 	var lock_b: Variant = r.get("lock")
 	if lock_b is Button:
 		(lock_b as Button).icon = _lock_icon(it.locked)
 		(lock_b as Button).disabled = walking_now
-		(lock_b as Button).tooltip_text = ("Locked: making this again also throws away what was made from it. Press to unlock it."
-			if it.locked else "Unlocked: making this again makes it alone, and keeps what was made from it. Press to lock it again.")
+		(lock_b as Button).tooltip_text = ("Kept: Generate passes this by, even once what it was made from has changed. Its ⟳ still "
+			+ "makes it again. Press to let Generate make it again when it goes stale." if it.locked
+			else "Press to keep this: Generate passes a kept part by, even once what it was made from has changed.")
 
 
-## A PADLOCK, closed or open, drawn here (a glyph the theme's fonts lack is a font search at every layout - Boot.lend_symbol_fonts): 12 by
-## 14 pixels, white, its shackle raised and off its body when open.
+## A PADLOCK, closed or open, drawn here (a glyph the theme's fonts lack is a font search at every layout - Boot.lend_symbol_fonts):
+## 14 by 12 pixels, the height of the glyphs beside it, its edges smoothed (each pixel covered as far as the shape reaches into it -
+## the hard-pixel lock read as jagged and too large, the user, 2026-11-11). Closed, its shackle stands over the body; open, it is
+## SWUNG TO THE LEFT, hooked in by its right leg alone - "move the curved top part to the other direction, so that it's more clear".
 static func _lock_icon(closed: bool) -> ImageTexture:
 	var key := "closed" if closed else "open"
 	if _locks.has(key):
 		return _locks[key]
-	var img := Image.create(12, 14, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var ink := Color(1, 1, 1, 0.85)
-	for y in range(7, 14):
-		for x in range(1, 11):
-			img.set_pixel(x, y, ink)
-	img.set_pixel(5, 10, Color(0, 0, 0, 0))
-	img.set_pixel(6, 10, Color(0, 0, 0, 0))
-	img.set_pixel(5, 11, Color(0, 0, 0, 0))
-	img.set_pixel(6, 11, Color(0, 0, 0, 0))
-	# (...closed: its shackle's top on row 1, both legs down into the body; open: raised to row 0, its left leg stopping short of it)
-	var top := 1 if closed else 0
-	for x in range(4, 8):
-		img.set_pixel(x, top, ink)
-	for y in range(top + 1, 7):
-		img.set_pixel(8, y, ink)
-	for y in range(top + 1, 7 if closed else 4):
-		img.set_pixel(3, y, ink)
+	var img := Image.create(LOCK_SIZE.x, LOCK_SIZE.y, false, Image.FORMAT_RGBA8)
+	for y in LOCK_SIZE.y:
+		for x in LOCK_SIZE.x:
+			var a := clampf(0.5 - lock_distance(Vector2(x + 0.5, y + 0.5), closed), 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, 0.88 * a))
 	_locks[key] = ImageTexture.create_from_image(img)
 	return _locks[key]
 
 
+const LOCK_SIZE := Vector2i(14, 12)
+
+
+## How far [param p] (pixels of the icon) lies outside the padlock, negative inside: its body a rounded box with a keyhole, its
+## shackle an arch of stroke 1.4 px - over the body when [param closed], swung to its left when not.
+static func lock_distance(p: Vector2, closed: bool) -> float:
+	var c := Vector2(9.0, 8.6)                    # the body: 8 by 6, its corners rounded
+	var half := Vector2(4.0, 3.0)
+	var q := (p - c).abs() - (half - Vector2(1.2, 1.2))
+	var body := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - 1.2
+	body = maxf(body, -(p.distance_to(Vector2(9.0, 8.3)) - 1.0))       # ...less its keyhole
+	var w := 0.7                                   # half the shackle's stroke
+	var r := 2.4
+	var ac := Vector2(9.0, 3.4) if closed else Vector2(4.2, 2.9)      # the arch's middle: over the body, or swung left
+	var arch := absf(p.distance_to(ac) - r) - w if p.y <= ac.y else INF
+	var right_end := 6.0                          # each leg down into the body - the open one's left leg hangs free
+	var left_end := 6.0 if closed else ac.y + 1.4
+	var right := _to_segment(p, ac + Vector2(r, 0.0), Vector2(ac.x + r, right_end)) - w
+	var left := _to_segment(p, ac - Vector2(r, 0.0), Vector2(ac.x - r, left_end)) - w
+	return minf(body, minf(arch, minf(right, left)))
+
+
+static func _to_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 1e-6), 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+
 static var _locks := {}
+
+
+## A ROW'S ✎ PRESSED: what it made, opened to be changed by hand ([member PipelineRow.edit]).
+func _press_edit(at: String) -> void:
+	var r: Dictionary = _rows.get(at, {})
+	if r.is_empty():
+		return
+	var it: PipelineRow = r["row"]
+	if it.edit.is_valid():
+		it.edit.call()
 
 
 ## A ROW'S LOCK PRESSED: locked becomes unlocked and back ([member PipelineRow.lock]), its ⟳'s words read again.

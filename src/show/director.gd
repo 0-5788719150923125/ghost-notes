@@ -146,6 +146,10 @@ const PACING_MAX := 4.0
 @export var layer_time: float = 6.0
 
 var _host: Node = null
+## WHERE THE FRAME IS IN THE WINDOW (window pixels): the app says it as it lays the stage out, so a click on the frame can be asked
+## of the scene showing ([method pick]).
+var frame_rect := Rect2()
+var _turned := {}                # who -> {filter: amount}: the Look as parts of the show turn it now ([method turn_look])
 ## THE MEDIUM - what the show is carried on (see [Medium]). Set by [method attach];
 ## null is treated exactly as `full`, so nothing here needs a medium to exist.
 ##
@@ -587,11 +591,35 @@ func filter_amount(key: String) -> float:
 
 ## The look this run actually uses: `--filter ...` if given, else the remembered set. Read by
 ## [main] when it builds the stage and whenever the set changes.
-func resolved_filters() -> Dictionary:
+func resolved_filters(turned := true) -> Dictionary:
 	var over: Variant = Filters.from_args(OS.get_cmdline_user_args())
-	if over is Dictionary:
-		return over as Dictionary
-	return Filters.sanitize(filters)
+	var out: Dictionary = (over as Dictionary).duplicate() if over is Dictionary else Filters.sanitize(filters)
+	# ...AND WHAT A PART OF THE SHOW TURNS OF IT NOW ([method turn_look]: a stage's flags) - in a render as live
+	if turned:
+		for who in _turned:
+			for k in (_turned[who] as Dictionary):
+				out[k] = float((_turned[who] as Dictionary)[k])
+		out = Filters.sanitize(out)
+	return out
+
+
+## THE LOOK TURNED by [param who] ([method ShowFeed.turn_look]): kept until it lets go, the picture told when it changes.
+func turn_look(who: String, dials: Dictionary) -> void:
+	var was: Dictionary = _turned.get(who, {})
+	var same := was.size() == dials.size()
+	for k in dials:
+		same = same and was.has(k) and absf(float(was[k]) - float(dials[k])) < 0.002
+	if same:
+		return
+	if dials.is_empty():
+		_turned.erase(who)
+	else:
+		_turned[who] = dials.duplicate()
+	filters_changed.emit()
+
+
+func look_amount(filter: String) -> float:
+	return float(Filters.sanitize(filters).get(filter, 0.0))
 
 
 ## PIN [param key] AS THE MEDIUM while [param by] is up ([member medium_override]): a mode's card that is its
@@ -670,6 +698,26 @@ func _save_pacing() -> void:
 	Settings.write("director", "subtitle_reveal", subtitle_reveal)
 	Settings.write("director", "tonemap", tonemap)
 	Settings.write("director", "tonemap_adjust", tonemap_adjust)
+
+
+## The medium the show is in now, null for none.
+func shown_medium() -> Medium:
+	return _medium if _medium != null and is_instance_valid(_medium) else null
+
+
+## WHAT IS AT [param at] ON THE FRAME (window pixels), as what shows it says (its own `pick`: a table names its thing and part, a
+## stage its actor) - {} for nothing there, a click off the frame, or nothing that picks (next/editing.md step 7).
+func pick(at: Vector2) -> Dictionary:
+	if not frame_rect.has_point(at) or frame_rect.size.x <= 0.0:
+		return {}
+	# what the medium shows first (a table names its things), then the scene
+	for who: Node in [_medium, _current]:
+		if who == null or not is_instance_valid(who) or not who.has_method("pick") or not who.is_inside_tree():
+			continue
+		var hit: Dictionary = who.call("pick", (at - frame_rect.position) / frame_rect.size * who.get_viewport().get_visible_rect().size)
+		if not hit.is_empty():
+			return hit
+	return {}
 
 
 func attach(host: Node, medium: Medium = null) -> void:
@@ -849,6 +897,9 @@ func _seed_source() -> String:
 ## later attach() starts cleanly. Called when a session ends (main._end_session) and as a
 ## new one starts. Does not clear a storyboard loaded for the *next* session (load it after).
 func detach() -> void:
+	if not _turned.is_empty():
+		_turned = {}
+		filters_changed.emit()
 	# A cast-owning medium's scenes belong to its page, not to this session's current/next
 	# pair - they are still parented in their own panels and its release() lets them go.
 	# Freeing them here would leave the medium holding freed nodes.
@@ -990,7 +1041,10 @@ func cursor() -> Dictionary:
 ## PUT ENTRY [param i] ON SCREEN NOW - the sequence's, then the tail's counted on from its end. An
 ## editor's jump, so it is a cut whatever the entries' own transitions say: no morph from an
 ## entry that is not its neighbor, no dip to wait through. The walk carries on from there.
-func goto_entry(i: int) -> void:
+## [param into] seconds IN: the entry played from its start and run on to there at once, as the Echo's rejoin does
+## ([method _listen_echo]) - a scene is a simulation, its verbs latched as they play, so a moment inside it is reached by
+## playing up to it (at most [constant INTO_MOST] seconds).
+func goto_entry(i: int, into := 0.0) -> void:
 	if _host == null or not is_manual():
 		return
 	_step = clampi(i, 0, _storyboard_seq.size() + _storyboard_tail.size() - 1)
@@ -1015,6 +1069,31 @@ func goto_entry(i: int) -> void:
 	_current = nxt
 	_swaps += 1
 	_arm()
+	var left := clampf(into, 0.0, INTO_MOST)
+	if left > 1e-3:
+		_elapsed = left
+		while left > 1e-4:
+			var dt := minf(left, SIM_STEP)
+			_current.update(Spectrum.current, dt)
+			_current.view.commit(dt)
+			left -= dt
+
+
+## THE SHOW PUT AT [param t] SECONDS (a render begun there, `--from`; [Stitch]): a written storyboard's entry then on screen,
+## played up to its moment ([method goto_entry]). A function of show time (a table, a desk) needs nothing; a seeded show's walk
+## is rolled as it goes, so a stretch of one is its own.
+func seek_show(t: float) -> void:
+	if not is_manual() or _sched_starts.is_empty():
+		return
+	var i := 0
+	for k in _sched_starts.size():
+		if float(_sched_starts[k]) <= t:
+			i = k
+	goto_entry(i, t - float(_sched_starts[i]))
+
+
+## The furthest into an entry [method goto_entry] plays at once (seconds): past it, a long hold's moment would stall a frame.
+const INTO_MOST := 120.0
 
 
 # Cumulative schedule start time (s) of each sequence entry, mirroring _make_scene's

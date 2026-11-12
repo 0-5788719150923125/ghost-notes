@@ -189,6 +189,34 @@ func estimated_times(n: int) -> PackedFloat32Array:
 	return out
 
 
+## EACH SPOKEN WORD'S TIME FROM A KEPT TAKE (next/editing.md step 3: "with a take standing there is no guess"): [param words], the
+## take's timed words (its sidecar's), aligned to [param spoken] as a render's follower aligns them ([ReadingFollower]); a word the
+## take does not place keeps its [param est]'s spacing from the nearest it does. The live table plans on these where its episode keeps a take made from its script -
+## the plan, the live show and the export read the same times.
+static func take_times(spoken: PackedStringArray, est: PackedFloat32Array, words: Array) -> PackedFloat32Array:
+	var out := est.duplicate()
+	if words.is_empty():
+		return out
+	var f := ReadingFollower.new()
+	f.reset(spoken, -1, est)
+	f.extend(words)
+	# ...a word it does not place moves with the nearest it does (the guess's spacing kept, its order too): before the first placed,
+	# by the first's offset; after one, by that one's
+	var n := mini(out.size(), f.st0.size())
+	var offset := 0.0
+	for j in n:
+		if f.st0[j] != ReadingFollower.NO_TIME:
+			offset = f.st0[j] - est[j]
+			break
+	for j in n:
+		if f.st0[j] != ReadingFollower.NO_TIME:
+			out[j] = f.st0[j]
+			offset = f.st0[j] - est[j]
+		else:
+			out[j] = est[j] + offset
+	return out
+
+
 ## Where the box the cards are kept in may stand, across and deep - kept clear by the spread - or zero
 ## when they come from a deck.
 func box_keep() -> Vector2:

@@ -149,6 +149,17 @@ func ready_ahead(_who: String, _seconds: float) -> void:
 	pass
 
 
+
+## THE LOOK TURNED BY A PART OF THE SHOW this moment (next/editing.md step 10: a stage's flags on a filter's dial): [param dials]
+## `{filter: amount}` laid over the Look as it is set, {} to let go. [param who] names the part, so two never fight.
+func turn_look(_who: String, _dials: Dictionary) -> void:
+	pass
+
+
+## A filter's amount in the Look as it is set (0 off), before any part turns it: where a flag on its dial starts from.
+func look_amount(_filter: String) -> float:
+	return 0.0
+
 ## The music's harmonic signature now (12 chroma bins and a coarse shape - [HarmonicSignature]),
 ## empty when nothing is heard: the continuous half of harmonic seeding, a scene's palette pulled
 ## toward the music's key.

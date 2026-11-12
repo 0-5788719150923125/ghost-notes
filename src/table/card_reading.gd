@@ -426,6 +426,30 @@ static func chapters(body: String, words: Array) -> Array:
 
 ## A reading, written out: [param passages] are `{kind, card, text}` in order (the shape
 ## [method parse] returns), each its mark and then its words.
+## WHAT [method compose] JOINED, SPLIT AGAIN (next/editing.md, design point 3: the script is one text, edited whole and
+## written back to its passages): `[{kind, card, last, text}]`, the first the words before any mark (kind ""), each after it a
+## mark's verb and the words up to the next. `split(compose(p))` gives back `p`'s marks and words, each stripped.
+static func split(script: String) -> Array:
+	var mark := _rx(mark_pattern())
+	var out: Array = []
+	var cur := {"kind": "", "card": 0, "last": 0, "lines": []}
+	for line in script.split("\n"):
+		var m := mark.search(line)
+		if m == null:
+			(cur["lines"] as Array).append(line)
+			continue
+		out.append(cur)
+		var num := m.get_string(2)
+		var to := m.get_string(3)
+		var card := int(num) if not num.is_empty() else 0
+		cur = {"kind": m.get_string(1), "card": card, "last": int(to) if not to.is_empty() else card, "lines": []}
+	out.append(cur)
+	for p in out:
+		(p as Dictionary)["text"] = "\n".join(PackedStringArray((p as Dictionary)["lines"])).strip_edges()
+		(p as Dictionary).erase("lines")
+	return out
+
+
 static func compose(passages: Array) -> String:
 	var parts := PackedStringArray()
 	for p in passages:

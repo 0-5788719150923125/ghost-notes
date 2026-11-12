@@ -28,3 +28,19 @@ context: >-
   {{brief}}
 
   </brief>
+
+# ASKED AGAIN WITH A NOTE (next/editing.md step 9: "a person can hand a detail to an agent with a note"): the author looked at
+# what this role made for one step and asks for it again, saying what to change - appended to that step's own prompt alone,
+# so NO CHEATING holds: a reader asked again is still shown only what came before its beat.
+#
+# The code gives: {{note}}.
+asked: >-
+  THE AUTHOR HAS SEEN WHAT WAS MADE FOR THIS BEFORE AND ASKS FOR IT AGAIN, with this note:
+
+  <note>
+
+  {{note}}
+
+  </note>
+
+  Make it again with the note in mind. What the note does not touch, make as your instructions ask.

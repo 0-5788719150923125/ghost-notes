@@ -97,6 +97,11 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		# CTRL+WHEEL ZOOMS FROM ANY LANE, about the pointer, as on the strip (the user, 2026-11-11: "it only works when moused over the
+		# bottom lane ... A complex scene might have many lanes"); a plain wheel is left to the list of lanes, which scrolls them
+		if mb.ctrl_pressed and tview.wheel(mb):
+			accept_event()
+			return
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				_drag_mode = _hit(mb.position)
@@ -327,9 +332,12 @@ func _draw() -> void:
 	if set_fade_out.is_valid() and fx.y >= -_EDGE_W and fx.y <= size.x + _EDGE_W:
 		draw_rect(Rect2(fx.y - 2.0, 2, 4, size.y - 4), fade_col)
 	if label != "":
+		# ...inside its block, cut at its end: a name past a short block ran over the next one's
 		var lx := clampf(maxf(xa + 6, reserved_left), 4, size.x - 60)
-		draw_string(ThemeDB.fallback_font, Vector2(lx, size.y * 0.5 + 4),
-			label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.9, 0.92, 0.96, 0.9))
+		var room := minf(xb, size.x) - lx - 4.0
+		if room > 18.0:
+			draw_string(ThemeDB.fallback_font, Vector2(lx, size.y * 0.5 + 4),
+				label, HORIZONTAL_ALIGNMENT_LEFT, room, 12, Color(0.9, 0.92, 0.96, 0.9))
 	# Playhead, same style as MaskTimeline's - but tagged with THIS track's own local
 	# source position (cin + how far the master playhead sits into this clip's span),
 	# not the master time, since knowing where the alt track itself is tracking is the

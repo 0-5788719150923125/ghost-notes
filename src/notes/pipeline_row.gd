@@ -44,12 +44,17 @@ var open := true
 var asks := ""
 ## Its ⟳.
 var redo := Callable()
-## WHETHER ITS ⟳ ALSO THROWS AWAY WHAT WAS MADE FROM IT ([member lockable] rows): locked (the default), it does, and [member asks]
-## says what; unlocked, it makes this row again alone and keeps the rest (TableEpisode.unlocked).
+## WHETHER IT IS KEPT ([member lockable] rows; next/editing.md step 1): locked, Generate passes it by, stale or not - its ⟳ still
+## makes it again, throwing nothing away (TableEpisode.kept). A part a hand changed is kept until it is unlocked.
 var lockable := false
-var locked := true
+var locked := false
 ## ...and how it is locked or unlocked: (on: bool) -> void, true locked.
 var lock := Callable()
+## WHAT ITS ✎ DOES, "" for a row with none (next/editing.md step 4): what it made opened to be changed by hand - its words, its
+## data, a picture of one's own - and written back as a hand's version, kept. A person is one maker, an agent another.
+var edit_tip := ""
+## Its ✎.
+var edit := Callable()
 ## WHAT ITS ▶ DOES, "" for a row with none: what is made without throwing anything away (an actor's step and what it needs).
 var go := ""
 ## Whether its ▶ is offered now.

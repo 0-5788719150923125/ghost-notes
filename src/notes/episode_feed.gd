@@ -60,6 +60,24 @@ func made_by() -> String:
 	return "Generate"
 
 
+## THE EPISODE'S VOICE, KEPT WHOLE (next/editing.md step 3): its take's wav, absolute, where it was said from the episode's words as
+## they stand - "" for none, and then the reading is said live. Whether it was said in the voices as they stand is the reading's to
+## judge ([method ReadingPanel.kept_take]).
+func take() -> String:
+	return ""
+
+
+## THE EPISODE'S STEPS AS THEY STOOD BEFORE, to be put back (the Body card's Restore, beside the note's own history): newest first,
+## `[{at (unix seconds), said, key}]` - none for an episode that keeps no versions.
+func versions() -> Array:
+	return []
+
+
+## Version [param key] (from [method versions]) put back: what stands now goes a version back in its place. "" done, else why not.
+func put_back(_key: Variant) -> String:
+	return "nothing here keeps versions"
+
+
 ## THE EPISODE'S OWN PICTURES, absolute paths - a show's paintings - for a step that may be shown them;
 ## none for an episode painted nothing.
 func pictures() -> PackedStringArray:

@@ -55,6 +55,8 @@ const OUTRO := 1.0
 ## The note the recording makes. Its title is the header of the panel in the picture.
 const TITLE := "A prism divides"
 const BODY := "One blue prism, then two - a blue one and a red one.\n"
+## THE DEMO NOTE'S SONG ([method make_demo_note]): the recording's song, written once beside the author's things.
+const DEMO_SONG := "user://demo/a_prism_divides.wav"
 
 ## What the README shows, and the stamp beside it.
 const OUT := "res://docs/showcase.webp"
@@ -166,6 +168,25 @@ static func mark_started(work: String) -> void:
 	if f != null:
 		f.store_string(str(int(Time.get_unix_time_from_system())))
 		f.close()
+
+
+## THE DEMO NOTE (the user, 2026-11-11: "import that one into Ghost Notes by default (excluding mobile), because it already
+## ships with the app - and it would make for a good demo"): the note this recording plays, made in the notes folder with its
+## song ([constant DEMO_SONG] by default; a gate's seam) - and WITH ITS OWN COPY OF THE STORYBOARD, so the Timeline edits it.
+## The recording names the file instead and keeps it as it ships. A machine's first desktop launch makes it once
+## ([method main._seed_demo_note]). Returns the note's path, or "" with the reason pushed as a warning.
+static func make_demo_note(song_path := DEMO_SONG) -> String:
+	var song := ProjectSettings.globalize_path(song_path)
+	DirAccess.make_dir_recursive_absolute(song.get_base_dir())
+	if not FileAccess.file_exists(song) and not ShowcaseRecorder.write_song(song):
+		push_warning("ghost: could not write the demo note's song (%s)" % song)
+		return ""
+	var read := Storyboard.read_raw(STORYBOARD)
+	if not bool(read["ok"]):
+		push_warning("ghost: could not read the demo note's storyboard - %s" % String(read["error"]))
+		return ""
+	return NoteStore.create(TITLE, BODY, {"song": {"path": song}, "medium": {"format": "full"},
+		"scenes": Storyboard.own_block(read["data"]), "bookends": {"intro": INTRO, "outro": OUTRO}})
 
 
 ## Is the README's animation out of date: no webp, no stamp, or the files it loaded have changed?

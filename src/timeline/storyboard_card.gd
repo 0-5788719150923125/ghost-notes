@@ -78,6 +78,16 @@ func _init() -> void:
 		+ "ruler, a stage's actors and what they do under it, and whatever is picked set at the right.")
 	_timeline.toggled.connect(_toggle_editor)
 	row.add_child(_timeline)
+	# ...OPENED FROM BESIDE PLAY, as every note's timeline is ([method Transport.offer_timeline]): the card keeps no button of its own
+	_timeline.visible = false
+	tree_entered.connect(func() -> void:
+		Transport.offer_timeline(self, 2, func() -> void:
+			if _editor != null:
+				close_editor()
+			else:
+				open_editor(), func() -> bool: return _editor != null,
+			"The storyboard's timeline: its entries, a stage's actors and what they do, flags on the camera and the Look."))
+	tree_exiting.connect(func() -> void: Transport.withdraw_timeline(self))
 	_start = MenuButton.new()
 	_start.text = "Start from ▾"
 	_start.flat = false
@@ -186,6 +196,7 @@ func open_editor() -> void:
 	_sync_editor(true)
 	_editor.edited.connect(_on_edited)
 	_editor.picked.connect(show_entry)
+	_editor.scrubbed.connect(show_entry)
 	_editor.closed.connect(close_editor)
 	add_child(_editor)
 	_timeline.set_pressed_no_signal(true)
@@ -353,7 +364,9 @@ func _take_to_show() -> void:
 ## PUT ENTRY [param i] ON SCREEN (the tail's counted on from the sequence's end) - a click here, or
 ## on the editor's strip. Where the storyboard follows the song, the song goes to that entry's
 ## place in the schedule too.
-func show_entry(i: int) -> void:
+## [param into] seconds of entry [param i] on screen: the entry played again from its start and run on to there (a stage is
+## a simulation - a verb latches as it plays - so a moment inside it is reached, never jumped to; [method Director.goto_entry]).
+func show_entry(i: int, into := 0.0) -> void:
 	if not Director.is_attached():
 		noted.emit("Entry %d - it is shown once the note's show is up." % (i + 1))
 		return
@@ -362,7 +375,7 @@ func show_entry(i: int) -> void:
 		_take_to_show()
 	if not Director.is_manual():
 		return
-	Director.goto_entry(i)
+	Director.goto_entry(i, into)
 	var p := plan()
 	var board: Dictionary = p["board"]
 	if board.is_empty() or bool(board.get("loop", true)) or not Spectrum.conductor().is_empty() or not Spectrum.seekable():
@@ -372,7 +385,7 @@ func show_entry(i: int) -> void:
 		return
 	var s := Storyboard.schedule(seq, Director.storyboard_sensitivity(), Director.unauthored_hold())
 	var paused := Spectrum.paused
-	Spectrum.seek(float(s["starts"][i]))
+	Spectrum.seek(float(s["starts"][i]) + into)
 	Spectrum.set_paused(paused)
 
 

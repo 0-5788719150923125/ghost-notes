@@ -56,7 +56,7 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/agents/text_gen.gd` | `TextGen`: who writes words - a registry beside `ImageGen` (`claude`, `codex`). Stateless writers; pictures go with the words. Claude runs with no tools; Codex is told to work from the message alone. |
 | `src/agents/agent_jobs.gd` | `AgentJobs`: one queue for every AI run (text and image) - limits per kind, LANES (one at a time, in order), timeouts, read-only refusal, and a rerun's folder cleared of the last run's output. Polled from `main._process`. |
 | `src/media/reading_follower.gd` | `ReadingFollower`: where the voice is in a document - the tablet's sequential word match, and the schedule that puts actions in the voice's rests. |
-| `src/table_show/table_episode.gd` | `TableEpisode`: an episode on disk, one file per step, under `user://table/<show>/<seed>/`. A redo is a delete. |
+| `src/table_show/table_episode.gd` | `TableEpisode`: an episode on disk, one file per step, under `user://table/<show>/<seed>/`. A redo keeps what it replaces a version back (`KeptSteps`, next/editing.md). |
 | `src/table_show/table_producer.gd` | `TableProducer`: makes whatever is missing, in drawing order. |
 | `src/table_show/table_prompts.gd` | `TablePrompts`: which rules each agent is told, and what fills them in. Pure. |
 | `rules/table/*.yaml`, `src/data/rules.gd` | The words themselves, one file per role (producer, designer, set_dresser, reader, painter, show), each rule's reason a comment above it; `Rules` reads them (items in order, `when` flags, `insert`, Mustache sections). Moved out of the code 2026-10-08 with every prompt byte for byte the same (227 prompts over three real episodes, compared before and after). |

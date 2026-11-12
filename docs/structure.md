@@ -5,33 +5,33 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 618 references inside a folder, 1081 down the stack, 0 up it.
+Between scripts today: 648 references inside a folder, 1149 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
-| `app/` | The shell | 13 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `render`, `audio`, `platform`, `data` |
-| `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
+| `app/` | The shell | 13 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
+| `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `dispatch/` | Dispatch desk | 9 | `desk`, `table`, `reading`, `media`, `scene_kit`, `render`, `data` |
 | `letter/` | Letter | 3 | `desk`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
-| `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
+| `proof/` | Proof | 6 | `desk`, `reading`, `export`, `timeline`, `show`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
-| `table_show/` | The table's show | 18 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
-| `table/` | The set | 58 | `media`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
-| `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
-| `export/` | Export | 5 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
-| `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
+| `table_show/` | The table's show | 21 | `table`, `reading`, `export`, `timeline`, `show`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
+| `table/` | The set | 60 | `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
+| `reading/` | The voice's workspaces | 14 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
+| `export/` | Export | 6 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
+| `timeline/` | The storyboard's editor | 9 | `show`, `ui`, `scenes`, `stage`, `scene_kit`, `audio`, `data` |
 | `show/` | The show | 11 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 20 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 22 | `notes`, `agents`, `render`, `platform`, `data` |
-| `notes/` | Notes | 10 | `agents`, `stage`, `platform`, `data` |
+| `ui/` | The panel kit | 26 | `notes`, `agents`, `render`, `platform`, `data` |
+| `notes/` | Notes | 12 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
-| `stage/` | Storyboards & stage | 4 | `geometry`, `render`, `audio`, `data` |
-| `scene_kit/` | Scene substrate | 8 | `geometry`, `motion`, `render`, `audio`, `data` |
+| `stage/` | Storyboards & stage | 5 | `scene_kit`, `geometry`, `render`, `audio`, `data` |
+| `scene_kit/` | Scene substrate | 9 | `geometry`, `motion`, `render`, `audio`, `data` |
 | `geometry/` | Generative form | 12 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
 | `render/` | Drawing | 12 | `data` |
@@ -81,13 +81,13 @@ Self-contained generators a scene composes rather than hand-models - each one sa
 
 What every scene is built on: the `GhostScene` base and its 3D sibling, the camera, framing pools, lighting, the visual layers scenes compose by key (`Layer`), and `ShowFeed` - what the show hands the parts it mounts.
 
-[`ghost_scene`](../src/scene_kit/ghost_scene.gd), [`layer`](../src/scene_kit/layer.gd), [`lighting`](../src/scene_kit/lighting.gd), [`openings`](../src/scene_kit/openings.gd), [`scene3d`](../src/scene_kit/scene3d.gd), [`scene_view`](../src/scene_kit/scene_view.gd), [`shots`](../src/scene_kit/shots.gd), [`show_feed`](../src/scene_kit/show_feed.gd)
+[`ghost_scene`](../src/scene_kit/ghost_scene.gd), [`layer`](../src/scene_kit/layer.gd), [`lighting`](../src/scene_kit/lighting.gd), [`openings`](../src/scene_kit/openings.gd), [`scene3d`](../src/scene_kit/scene3d.gd), [`scene_view`](../src/scene_kit/scene_view.gd), [`shots`](../src/scene_kit/shots.gd), [`show_feed`](../src/scene_kit/show_feed.gd), [`timeline`](../src/scene_kit/timeline.gd)
 
 ### `stage/` - Storyboards & stage
 
 A show written down, as data: the storyboard's spec and its field tables, and the Cast/Actions/Track stack that renders a described scene. See [storyboards/README.md](../storyboards/README.md) for the data spec and [stage.md](stage.md) for the fields and the actor/verb registries.
 
-[`actions`](../src/stage/actions.gd), [`cast`](../src/stage/cast.gd), [`storyboard`](../src/stage/storyboard.gd), [`track`](../src/stage/track.gd)
+[`actions`](../src/stage/actions.gd), [`cast`](../src/stage/cast.gd), [`stage_keys`](../src/stage/stage_keys.gd), [`storyboard`](../src/stage/storyboard.gd), [`track`](../src/stage/track.gd)
 
 ### `scenes/` - Scenes
 
@@ -103,13 +103,13 @@ Every piece of writing and painting ghost asks an AI for: who writes (TextGen) a
 
 The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), the registry of the marks a script may carry (`ScriptMarks`), and where a note's cards meet without naming each other: what each hands the note's one list of what is made for it (`PipelineSection`, `PipelineRow`), the episode one card makes (`EpisodeFeed`) and the steps the others make from it (`EpisodeStep`, `EpisodeSteps`).
 
-[`components`](../src/notes/components.gd), [`doc_source`](../src/notes/doc_source.gd), [`episode_feed`](../src/notes/episode_feed.gd), [`episode_step`](../src/notes/episode_step.gd), [`episode_steps`](../src/notes/episode_steps.gd), [`note_store`](../src/notes/note_store.gd), [`pipeline_row`](../src/notes/pipeline_row.gd), [`pipeline_section`](../src/notes/pipeline_section.gd), [`save_mark`](../src/notes/save_mark.gd), [`script_marks`](../src/notes/script_marks.gd)
+[`components`](../src/notes/components.gd), [`doc_source`](../src/notes/doc_source.gd), [`episode_feed`](../src/notes/episode_feed.gd), [`episode_step`](../src/notes/episode_step.gd), [`episode_steps`](../src/notes/episode_steps.gd), [`kept_steps`](../src/notes/kept_steps.gd), [`note_history`](../src/notes/note_history.gd), [`note_store`](../src/notes/note_store.gd), [`pipeline_row`](../src/notes/pipeline_row.gd), [`pipeline_section`](../src/notes/pipeline_section.gd), [`save_mark`](../src/notes/save_mark.gd), [`script_marks`](../src/notes/script_marks.gd)
 
 ### `ui/` - The panel kit
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_kept`](../src/ui/note_kept.gd), [`note_tile`](../src/ui/note_tile.gd), [`pacing_card`](../src/ui/pacing_card.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`source_window`](../src/ui/source_window.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`tune_section`](../src/ui/tune_section.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 
@@ -133,31 +133,31 @@ The player: the Director's schedule and transitions, the one transport, karaoke 
 
 The card that keeps a note's storyboard and the dock it opens: a strip of entries, a stage entry's lanes, and the ruler.
 
-[`storyboard_card`](../src/timeline/storyboard_card.gd), [`storyboard_editor`](../src/timeline/storyboard_editor.gd), [`storyboard_lanes`](../src/timeline/storyboard_lanes.gd), [`storyboard_strip`](../src/timeline/storyboard_strip.gd), [`timeline_view`](../src/timeline/timeline_view.gd)
+[`flag_strip`](../src/timeline/flag_strip.gd), [`storyboard_card`](../src/timeline/storyboard_card.gd), [`storyboard_editor`](../src/timeline/storyboard_editor.gd), [`storyboard_strip`](../src/timeline/storyboard_strip.gd), [`timeline_dock`](../src/timeline/timeline_dock.gd), [`timeline_lanes`](../src/timeline/timeline_lanes.gd), [`timeline_list`](../src/timeline/timeline_list.gd), [`timeline_view`](../src/timeline/timeline_view.gd), [`track_lane`](../src/timeline/track_lane.gd)
 
 ### `export/` - Export
 
 Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither.
 
-[`exporter`](../src/export/exporter.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd), [`youtube_tags`](../src/export/youtube_tags.gd), [`youtube_thumbnail`](../src/export/youtube_thumbnail.gd)
+[`exporter`](../src/export/exporter.gd), [`stitch`](../src/export/stitch.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd), [`youtube_tags`](../src/export/youtube_tags.gd), [`youtube_thumbnail`](../src/export/youtube_thumbnail.gd)
 
 ### `reading/` - The voice's workspaces
 
 The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on it, and the voice lab with the fishing game that breeds its voices.
 
-[`note_upload`](../src/reading/note_upload.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd)
+[`note_upload`](../src/reading/note_upload.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`reading_timeline`](../src/reading/reading_timeline.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`take_cache`](../src/reading/take_cache.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd)
 
 ### `table/` - The set
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`assembly`](../src/table/assembly.gd), [`assembly_bake`](../src/table/assembly_bake.gd), [`assembly_heap`](../src/table/assembly_heap.gd), [`assembly_meshes`](../src/table/assembly_meshes.gd), [`assembly_model`](../src/table/assembly_model.gd), [`assembly_track`](../src/table/assembly_track.gd), [`assembly_world`](../src/table/assembly_world.gd), [`boil`](../src/table/boil.gd), [`bristles`](../src/table/bristles.gd), [`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`dice`](../src/table/dice.gd), [`dice_bake`](../src/table/dice_bake.gd), [`dice_notation`](../src/table/dice_notation.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`face_form`](../src/table/face_form.gd), [`fingers`](../src/table/fingers.gd), [`formula`](../src/table/formula.gd), [`game_board`](../src/table/game_board.gd), [`game_ledger`](../src/table/game_ledger.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`paint_layers`](../src/table/paint_layers.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`rigid_parts`](../src/table/rigid_parts.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_bend`](../src/table/sheet_bend.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`skins`](../src/table/skins.gd), [`soundscape`](../src/table/soundscape.gd), [`surface_waves`](../src/table/surface_waves.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_assembly`](../src/table/table_assembly.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_game`](../src/table/table_game.gd), [`table_light`](../src/table/table_light.gd), [`table_paint`](../src/table/table_paint.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
+[`assembly`](../src/table/assembly.gd), [`assembly_bake`](../src/table/assembly_bake.gd), [`assembly_heap`](../src/table/assembly_heap.gd), [`assembly_meshes`](../src/table/assembly_meshes.gd), [`assembly_model`](../src/table/assembly_model.gd), [`assembly_track`](../src/table/assembly_track.gd), [`assembly_world`](../src/table/assembly_world.gd), [`boil`](../src/table/boil.gd), [`bristles`](../src/table/bristles.gd), [`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`dice`](../src/table/dice.gd), [`dice_bake`](../src/table/dice_bake.gd), [`dice_notation`](../src/table/dice_notation.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`face_form`](../src/table/face_form.gd), [`fingers`](../src/table/fingers.gd), [`formula`](../src/table/formula.gd), [`game_board`](../src/table/game_board.gd), [`game_ledger`](../src/table/game_ledger.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`paint_layers`](../src/table/paint_layers.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`rigid_parts`](../src/table/rigid_parts.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_bend`](../src/table/sheet_bend.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`skins`](../src/table/skins.gd), [`soundscape`](../src/table/soundscape.gd), [`surface_waves`](../src/table/surface_waves.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_assembly`](../src/table/table_assembly.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_game`](../src/table/table_game.gd), [`table_light`](../src/table/table_light.gd), [`table_paint`](../src/table/table_paint.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_rows`](../src/table/table_rows.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_tune`](../src/table/table_tune.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
 
 ### `table_show/` - The table's show
 
 A show at a table nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents a card or a beat of work at a time, kept on disk step by step - the set dresser that builds the table and the puppeteer that works what stands on it. The rules are every show's; the brief says what is done there - cards read (tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards, listed or left to each episode's producer), things made, or both. Design: next/cards.md, next/table_work.md.
 
-[`card_deck`](../src/table_show/card_deck.gd), [`dealer_tools`](../src/table_show/dealer_tools.gd), [`decorator_tools`](../src/table_show/decorator_tools.gd), [`episode_card`](../src/table_show/episode_card.gd), [`episode_walk`](../src/table_show/episode_walk.gd), [`fixed_table`](../src/table_show/fixed_table.gd), [`game_prep_tools`](../src/table_show/game_prep_tools.gd), [`game_tools`](../src/table_show/game_tools.gd), [`model_studio`](../src/table_show/model_studio.gd), [`model_tools`](../src/table_show/model_tools.gd), [`painter_tools`](../src/table_show/painter_tools.gd), [`puppeteer_tools`](../src/table_show/puppeteer_tools.gd), [`set_dresser_tools`](../src/table_show/set_dresser_tools.gd), [`table_blueprint`](../src/table_show/table_blueprint.gd), [`table_episode`](../src/table_show/table_episode.gd), [`table_preview`](../src/table_show/table_preview.gd), [`table_producer`](../src/table_show/table_producer.gd), [`table_prompts`](../src/table_show/table_prompts.gd)
+[`card_deck`](../src/table_show/card_deck.gd), [`dealer_tools`](../src/table_show/dealer_tools.gd), [`decorator_tools`](../src/table_show/decorator_tools.gd), [`design_window`](../src/table_show/design_window.gd), [`episode_card`](../src/table_show/episode_card.gd), [`episode_walk`](../src/table_show/episode_walk.gd), [`fixed_table`](../src/table_show/fixed_table.gd), [`game_prep_tools`](../src/table_show/game_prep_tools.gd), [`game_tools`](../src/table_show/game_tools.gd), [`model_studio`](../src/table_show/model_studio.gd), [`model_tools`](../src/table_show/model_tools.gd), [`painter_tools`](../src/table_show/painter_tools.gd), [`puppeteer_tools`](../src/table_show/puppeteer_tools.gd), [`set_dresser_tools`](../src/table_show/set_dresser_tools.gd), [`table_blueprint`](../src/table_show/table_blueprint.gd), [`table_episode`](../src/table_show/table_episode.gd), [`table_plan_view`](../src/table_show/table_plan_view.gd), [`table_preview`](../src/table_show/table_preview.gd), [`table_producer`](../src/table_show/table_producer.gd), [`table_prompts`](../src/table_show/table_prompts.gd), [`thing_library`](../src/table_show/thing_library.gd)
 
 ### `desk/` - The desk
 
@@ -193,7 +193,7 @@ An actor played from their own footage: the library of actors, each built from t
 
 The video chroma-key masking editor - a second app surface inside ghost. See [masking.md](masking.md).
 
-[`mask_audio_fx`](../src/masking/mask_audio_fx.gd), [`mask_editor`](../src/masking/mask_editor.gd), [`mask_export`](../src/masking/mask_export.gd), [`mask_face_track`](../src/masking/mask_face_track.gd), [`mask_marker_tool`](../src/masking/mask_marker_tool.gd), [`mask_pose_track`](../src/masking/mask_pose_track.gd), [`mask_prep`](../src/masking/mask_prep.gd), [`mask_region`](../src/masking/mask_region.gd), [`mask_session`](../src/masking/mask_session.gd), [`mask_timeline`](../src/masking/mask_timeline.gd), [`mask_tracks`](../src/masking/mask_tracks.gd), [`mask_undo`](../src/masking/mask_undo.gd), [`mask_url_import`](../src/masking/mask_url_import.gd), [`mask_waveform`](../src/masking/mask_waveform.gd), [`track_lane`](../src/masking/track_lane.gd)
+[`mask_audio_fx`](../src/masking/mask_audio_fx.gd), [`mask_editor`](../src/masking/mask_editor.gd), [`mask_export`](../src/masking/mask_export.gd), [`mask_face_track`](../src/masking/mask_face_track.gd), [`mask_marker_tool`](../src/masking/mask_marker_tool.gd), [`mask_pose_track`](../src/masking/mask_pose_track.gd), [`mask_prep`](../src/masking/mask_prep.gd), [`mask_region`](../src/masking/mask_region.gd), [`mask_session`](../src/masking/mask_session.gd), [`mask_timeline`](../src/masking/mask_timeline.gd), [`mask_tracks`](../src/masking/mask_tracks.gd), [`mask_undo`](../src/masking/mask_undo.gd), [`mask_url_import`](../src/masking/mask_url_import.gd), [`mask_waveform`](../src/masking/mask_waveform.gd)
 
 ### `app/` - The shell
 

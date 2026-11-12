@@ -11,6 +11,9 @@ extends Node
 ##       [--seek=T[:after],wK[:after],... [--after=20]]
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/episode_bake_probe.gd 3600 --take=... --shots=29,228.5 [--out=<dir>]
 ##
+## THE TAKE AN EPISODE KEEPS is one too (next/editing.md step 3): `--take=<the episode's folder>/take.json`, the "Voice" row's - its
+## words the times the live table and the export plan on (`TablePlan.take_times`).
+##
 ## A take whose book names `start_words`, `start_index` and `start_time` is a reading started mid-way (a scrub): its words from
 ## there, timed from 0, and what was done before them baked first ([member TablePhysics._t0]).
 ##

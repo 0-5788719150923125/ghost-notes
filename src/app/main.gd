@@ -155,6 +155,15 @@ func _ready() -> void:
 	if args.has("--provision"):
 		_provision(_arg_value(args, "--provision"))
 		return
+	# `--episode-check <dir>`: what is wrong with an episode as it stands, printed, then exit - for an edit made in a terminal
+	# (next/editing.md step 4). Non-zero when anything is.
+	if args.has("--episode-check"):
+		var said := TableEpisode.at_dir(_arg_value(args, "--episode-check")).problems()
+		for p in said:
+			print("ghost: episode - " + p)
+		print("ghost: episode - %s" % ("nothing wrong" if said.is_empty() else "%d problem(s)" % said.size()))
+		get_tree().quit(0 if said.is_empty() else 1)
+		return
 	# `--showcase-now`: record the README's animation now and quit (see showcase.gd) - from a
 	# terminal, so it needs nothing else to come up
 	if args.has("--showcase-now"):
@@ -183,6 +192,12 @@ func _ready() -> void:
 		# it cannot be set from here). Run clean and quit when the song ends.
 		Spectrum.song_finished.connect(func(): get_tree().quit())
 		_begin_session()
+		# `--from <seconds>`: only a stretch is rendered, from there (Stitch puts it back into the earlier export)
+		var from := float(_arg_value(args, "--from")) if not _arg_value(args, "--from").is_empty() else 0.0
+		if from > 0.0 and Spectrum.has_audio():
+			Spectrum.render_from(from)
+			Director.seek_show(from)
+			print("ghost export: rendering from %.2fs" % from)
 		# A render with no audio has NO END: song_finished never fires, so Movie
 		# Maker records silence until something kills it (one such run reached
 		# 5.7 GB). An export is defined by its audio - if it didn't load, say so
@@ -234,6 +249,8 @@ func _ready() -> void:
 	_adopt_old_episodes()
 	# ...and each note's medium, moved once into its `medium:` block since the Medium card took the Picture's place
 	_adopt_old_media()
+	# ...and the demo note, made once on a machine (the phone shell returned above, so never on a phone)
+	_seed_demo_note()
 	# THE COMMAND LINE'S WORKSPACES, through the one path a note takes - BELOW the chrome,
 	# deliberately: every interactive mode gets the full furniture. `--mask-edit` used to be read
 	# before Chrome existed, so a command-line Masking session had none of it (step 7).
@@ -319,6 +336,20 @@ func _adopt_old_media() -> void:
 	Settings.write(NoteStore.SECTION, "media_moved", true)
 	if moved > 0:
 		print("ghost: %d note(s) keep their medium in a `medium:` block now" % moved)
+
+
+## THE DEMO NOTE, MADE ONCE ([method Showcase.make_demo_note]: the README's prism, its storyboard the note's own to edit):
+## once per machine (`[notes] demo_made`), so a deleted demo stays deleted; never in a process that may not write the
+## author's things, nor under a notes folder moved aside. One that could not be made is tried again next launch.
+func _seed_demo_note() -> void:
+	if Settings.is_read_only() or NoteStore.root != NoteStore.DEFAULT \
+			or bool(Settings.read(NoteStore.SECTION, "demo_made", false)):
+		return
+	var path := Showcase.make_demo_note()
+	if path.is_empty():
+		return
+	Settings.write(NoteStore.SECTION, "demo_made", true)
+	print("ghost: the demo note \"%s\" is in the notes list (%s)" % [Showcase.TITLE, path])
 
 
 ## OPEN A NOTE: every note opens the same way. What it has attached is read off its blocks
@@ -552,6 +583,11 @@ func _on_song_finished() -> void:
 		Spectrum.replay()
 		print("ghost: take looped (synthesis session continues)")
 		return
+	# A READING'S TAKE KEPT ENDS AS A READING DOES: over, the stage left as it is, Play from the top
+	if _generative != null and is_instance_valid(_generative) and _generative.has_method("take_playing") \
+			and _generative.take_playing():
+		_generative.take_ended()
+		return
 	if Director.is_manual():
 		Spectrum.replay()
 		print("ghost: song looped (manual session continues)")
@@ -662,6 +698,7 @@ func _release_exporter() -> void:
 		return
 	var ex: Node = _chrome.exporter
 	ex.take_provider = Callable()
+	ex.take_first = false
 	ex.take_ready = Callable()
 	ex.name_provider = Callable()
 	ex.upload_provider = Callable()
@@ -739,7 +776,7 @@ func _sync_filters() -> void:
 	# Said once per CHANGE, not per call - this is also reached by every window resize and
 	# every frame of a dial being dragged. It is the line that tells a render's log what look
 	# it inherited, which is otherwise invisible in a process nobody is watching.
-	var said := Filters.describe(look)
+	var said := Filters.describe(Director.resolved_filters(false))
 	if said != _filter_said:
 		_filter_said = said
 		print("ghost: look %s" % said)
@@ -801,6 +838,7 @@ func _sync_stage_size() -> void:
 	_stage.size = Graphics.stage_size(r.size)
 	_stage_view.position = r.position
 	_stage_view.size = r.size
+	Director.frame_rect = r
 	# The dot lattice and the grain are sized in pixels, so the look has to be told when the
 	# frame changes size - otherwise a resized window renders a different picture.
 	_sync_filters()
@@ -1038,6 +1076,7 @@ func _open_reading(workspace := "reading") -> void:
 	editor.reopen = reopen_note
 	editor.begin_stream = _begin_generative_stream
 	editor.end_stream = _end_generative_stream
+	editor.begin_take = _begin_generative_take
 	_synth_editor = editor
 	_generative = editor
 	add_child(editor)
@@ -1046,6 +1085,7 @@ func _open_reading(workspace := "reading") -> void:
 	# Here the requirement is simply text and a loaded voice.
 	if _chrome.exporter != null:
 		_chrome.exporter.take_provider = editor.export_take
+		_chrome.exporter.take_first = true
 		_chrome.exporter.take_ready = editor.can_export_take
 		_chrome.exporter.name_provider = editor.export_name
 		_chrome.exporter.upload_provider = editor.upload_meta
@@ -1085,8 +1125,11 @@ func _begin_generative_stream(fp: int, sr: int, words: Array) -> AudioStreamGene
 	# Director stage on top of the previous one without detaching. The old scene
 	# stayed in the tree with nothing driving it, so it sat frozen behind the
 	# new one and they piled up as settings were changed.
+	# ...AND A PAUSE STAYS: a reading sought to while paused begins again paused (ReadingStream.seek_now)
+	var held := Spectrum.paused
 	Director.detach()
 	Spectrum.stop()
+	Spectrum.set_paused(held)
 	var pb: AudioStreamGeneratorPlayback = Spectrum.begin_stream(fp, sr)
 	# THE READING'S SHOW IS THE NOTE'S: a Medium attached puts the stage up, a Storyboard is what
 	# it walks - and a voice alone is heard, with its words over an empty frame
@@ -1104,6 +1147,26 @@ func _begin_generative_stream(fp: int, sr: int, words: Array) -> AudioStreamGene
 	if _generative != null and is_instance_valid(_generative):
 		_generative.subtitles = subs   # the editor re-bases its clock per frame
 	return pb
+
+
+## THE READING'S TAKE KEPT, PLAYED WHOLE ([method ReadingStream.play]; next/editing.md step 3): the file at [param path] opened as
+## a render opens it ([method _begin_session]'s steps) - its bookend and words its sidecar's, the show the reading's - so a seek is
+## a seek inside one file and the live show is the export's. False when it would not load (nothing is left playing).
+func _begin_generative_take(path: String) -> bool:
+	Director.detach()
+	Spectrum.stop()
+	Spectrum.lead_in = Director.intro_hold
+	Spectrum.tail = Director.outro_hold
+	Spectrum.begin(path)
+	if not Spectrum.has_audio() or Spectrum.audio_path() != path:
+		Spectrum.stop()
+		return false
+	_attach_show(_generative.show_plan() if _generative != null and is_instance_valid(_generative)
+		else {"picture": true})
+	_attach_subtitles()
+	if _generative != null and is_instance_valid(_generative):
+		_generative.subtitles = _subtitles
+	return true
 
 
 ## Export autopilot: the Synthesis panel, playing itself over the take being

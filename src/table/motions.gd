@@ -787,6 +787,15 @@ static func sanitize_acts(raw: Variant, beats: int) -> Dictionary:
 			notes.append("%s: its `beat` is \"intro\", \"close\" or a beat's place 1-%d - left out" % [nm, beats])
 			continue
 		var act := {"name": nm, "about": Props._text(d.get("about", ""), 300), "beat": b}
+		# THE LAYERS IT PAINTS, where it was made from a painting (TableProducer.acts_from_painting): a reader's cue names one, and it
+		# survives the painting made again where the act's own name, its place in line, does not (next/editing.md step 2)
+		var layers: Array = []
+		for l in (d.get("layers", []) if d.get("layers") is Array else []):
+			var ls := Manuscript.slug(str(l))
+			if not ls.is_empty() and not layers.has(ls) and layers.size() < 8:
+				layers.append(ls)
+		if not layers.is_empty():
+			act["layers"] = layers
 		var ln: Variant = d.get("length", 6.0)
 		if ln is String and String(ln).strip_edges().to_lower() == "under":
 			act["under"] = true

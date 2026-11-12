@@ -38,6 +38,8 @@ var _drawn: Array = []
 
 ## A section called [param named] of the rows of [param steps], in their order, of the card [param by]: Generate is its
 ## [param generate], the line over the rows [param line_of], and the ▶ on its heading says [param make_tip].
+var _kept := {}               # step -> whether what it made before its last ⟳ is kept ([method ActorBuilder.kept_back])
+
 func _init(named := "", steps: Array = [], by: Object = null, generate := Callable(), line_of := Callable(), make_tip_said := "") -> void:
 	title = named
 	_steps = steps
@@ -135,6 +137,7 @@ func _make(step: String) -> void:
 func _redo(step: String) -> void:
 	if _builder == null:
 		return
+	_kept = {}
 	if before_start.is_valid():
 		before_start.call()
 	_builder.redo(step)
@@ -158,6 +161,7 @@ func _rows_key() -> String:
 ## THE STEPS' STATES WORKED OUT ON A WORKER, on a folder of its own ([method ActorBuilder.states_of]): one at a
 ## time - asked again while it works, it goes again once done.
 func _work_rows() -> void:
+	_kept = {}            # (what is kept one back is asked again with the states, never at every refresh)
 	if _rows_task >= 0:
 		_rows_again = true
 		return
@@ -229,8 +233,17 @@ func _fill_rows(now_busy: bool) -> Array:
 		r.make = _make.bind(step)
 		r.again = "Make %s again from scratch" % name
 		r.open = not now_busy and (st == "made" or st == "stale" or st == "failed")
-		r.asks = ("What %s made is thrown away. Everything made from it is marked stale (⚠): it is still used until it is "
-			+ "made again too - Generate does that.") % name
+		r.asks = ("What %s made is kept one back (its ✎ puts it back). Everything made from it is marked stale (⚠): it is still "
+			+ "used until it is made again too - Generate does that.") % name
 		r.redo = _redo.bind(step)
+		# ✎ WHERE ONE IS KEPT BACK: what the step made before its last ⟳, put back (next/editing.md step 12)
+		if not _kept.has(step):
+			_kept[step] = _builder.kept_back(step)
+		if bool(_kept[step]):
+			r.edit_tip = "Put back what %s made before its last ⟳: what stands now is kept one back in its place." % name
+			r.edit = func() -> void:
+				_kept = {}
+				var err := _builder.put_back(step)
+				said.emit(("Not put back: " + err) if not err.is_empty() else "%s is as it was before its last ⟳." % name)
 		out.append(r)
 	return out

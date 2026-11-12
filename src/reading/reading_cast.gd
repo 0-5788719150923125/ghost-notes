@@ -285,7 +285,7 @@ func build_voice(box: VBoxContainer) -> void:
 			return
 		capture_slot()
 		# same model, different reader: only the un-played chunks need redoing
-		if not panel._stream.chunks.is_empty():
+		if panel._stream.has_reading():
 			panel._stream.repace()
 		panel.touch())
 	_speaker_row.add_child(_speaker)
@@ -325,7 +325,7 @@ func build_voice(box: VBoxContainer) -> void:
 		capture_slot()
 		# a tone changes the model's own parameters, so un-played chunks have
 		# to be regenerated - the same path a pace change takes
-		if not panel._stream.chunks.is_empty():
+		if panel._stream.has_reading():
 			panel._stream.repace()
 		panel.touch())
 	trow.add_child(_tone)
@@ -1064,7 +1064,7 @@ func _voice_picked() -> void:
 	# mid-narration; and leaving the old requests in flight keeps both
 	# models loaded and chunking, halving the throughput of each. So: kill
 	# the session and read again in the new voice.
-	if not panel._stream.chunks.is_empty():
+	if panel._stream.has_reading():
 		panel._stream.restart()
 	panel.touch()
 

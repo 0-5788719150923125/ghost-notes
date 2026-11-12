@@ -7,7 +7,8 @@ written as the show plays it (export.py): each element's program and maps.
 
 The spec is JSON, never argv: {"out": folder, "bare_image": face_bare.png, "at": [x, y], "size": [w, h] (the surface's place in the
 bare picture, pixels), "px": its pixels a millimeter, "bare": "#rrggbb" (the surface's own color), "paints": {name: "#rrggbb"} (the
-table's creams), "layers": [{name, soft}], "images": [layer_1.png, ...]}. Writes into `out`: `elements.json`, `maps/`, and `done.json`
+table's creams), "layers": [{name, soft}], "images": [layer_1.png, ...]} - and, to paint ONE layer again, "only": its index from 0 and
+"keep": the folder of the elements as they stand (its own painted again over the canvas the layers before it leave, the rest kept). Writes into `out`: `elements.json`, `maps/`, and `done.json`
 ({ok, elements, minutes} or {ok: false, error}). Progress goes to stdout, a line a step.
 """
 import json
@@ -88,11 +89,32 @@ def main():
             img = Image.fromarray(_filled((np.clip(r, 0, 1) * 255).astype(np.uint8)))
             big = np.asarray(img.resize((ref.w, ref.h), Image.BICUBIC)).astype(float) / 255.0
             pics.append(np.clip(big[..., :3], 0, 1))
-        print("  %d layers, %d paints; painting" % (len(layers), len(ref.paints)), flush=True)
         from layers_paint import paint_layers
-        p, starts, _ = paint_layers(ref, layers, pics, log=lambda s: print(s, flush=True))
         from export import export
-        els = export(p, starts, layers, out, log=lambda s: print(s, flush=True))
+        only = spec.get("only")
+        if only is not None:
+            # ONE LAYER AGAIN (next/editing.md step 4): over the canvas the layers before it left (their maps, as kept), its elements
+            # alone made and put among the rest - the others' as they were
+            only = int(only)
+            keep = Path(spec["keep"])
+            kept = json.loads((keep / "elements.json").read_text())["elements"]
+            from canvas import PX as _px
+            from export import recompose, merge_layer
+            under = [i for i, e in enumerate(kept) if int(e["layer"]) < only]
+            canvas = recompose(kept, keep, (ref.h, ref.w), under)
+            print("  layer %d of %d again, over %d elements kept; painting" % (only + 1, len(layers), len(under)), flush=True)
+            p, starts, _ = paint_layers(ref, layers, pics, log=lambda s: print(s, flush=True), first=only, last=only, canvas=canvas)
+            fresh = out / "fresh"
+            fresh_els = export(p, starts, layers, fresh, log=lambda s: print(s, flush=True), canvas=canvas, base_layer=0 if only == 0 else -1)
+            # (export counts the layers it was handed marks for from 0: these are layer `only`'s)
+            for e in fresh_els:
+                e["layer"] = only
+                e["layer_name"] = layers[only].get("name", "")
+            els = merge_layer(kept, keep, fresh_els, fresh, only, out)
+        else:
+            print("  %d layers, %d paints; painting" % (len(layers), len(ref.paints)), flush=True)
+            p, starts, _ = paint_layers(ref, layers, pics, log=lambda s: print(s, flush=True))
+            els = export(p, starts, layers, out, log=lambda s: print(s, flush=True))
         done.write_text(json.dumps({"ok": True, "elements": len(els), "minutes": sum(e["seconds"] for e in els) / 60,
                                     "seconds_to_solve": round(time.time() - t0, 1)}))
     except Exception as e:
