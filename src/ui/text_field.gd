@@ -36,6 +36,13 @@ var _tip := ""
 var _preview: Label
 var _window: Window      # made when first opened: most never are
 var _edit: TextEdit
+## WHAT A CARD DOES WITH THE WORDS, IN THE WINDOW BESIDE THEM ([method add_action], [method add_line]; the user, 2026-11-11, of the
+## Direction's Refine on its card: "It's pointless to force the user to back-out of the Direction text, just to push the button and
+## then re-enter it, to check results"): its own controls at the window's foot before Done, and lines above the foot.
+var _actions: Array = []
+var _lines: Array = []
+var _foot: HBoxContainer
+var _col: VBoxContainer
 
 
 ## [param heading] names it on the card and on its window, [param placeholder] stands in for no words, and [param
@@ -73,6 +80,35 @@ func _show() -> void:
 		show_words(_preview, text, _placeholder)
 
 
+## [param c] - a card's own control, a button that works on the words - at the window's foot, before Done.
+func add_action(c: Control) -> void:
+	_actions.append(c)
+	if _foot != null:
+		_foot.add_child(c)
+		_foot.move_child(c, _foot.get_child_count() - 2)
+
+
+## [param c] - a line of the card's own, what an action is doing - across the window, above its foot.
+func add_line(c: Control) -> void:
+	_lines.append(c)
+	if _col != null:
+		_col.add_child(c)
+		_col.move_child(c, _col.get_child_count() - 2)
+
+
+## THE WORDS REPLACED AS ONE EDIT where the window has them, so its own undo (Ctrl+Z) takes the replacement back - what a card's
+## action writes over them. [signal text_changed] is not emitted: it says a hand changed them.
+func replace(v: String) -> void:
+	if _edit == null:
+		text = v
+		return
+	_edit.begin_complex_operation()
+	_edit.select_all()
+	_edit.insert_text_at_caret(v)
+	_edit.end_complex_operation()
+	text = v
+
+
 func _build_window() -> void:
 	_window = Window.new()
 	_window.title = _title
@@ -95,6 +131,7 @@ func _build_window() -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	margin.add_child(col)
+	_col = col
 
 	_edit = TextEdit.new()
 	_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -106,12 +143,18 @@ func _build_window() -> void:
 	_edit.add_theme_constant_override("line_spacing", 6)
 	_edit.text = text
 	_edit.text_changed.connect(func() -> void:
+		# (...words that already stand were put there, never typed: [method replace])
+		if _edit.text == text:
+			return
 		text = _edit.text
 		text_changed.emit())
 	col.add_child(_edit)
+	for c in _lines:
+		col.add_child(c)
 
 	var foot := HBoxContainer.new()
 	col.add_child(foot)
+	_foot = foot
 	var hint := Label.new()
 	hint.text = _tip
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -119,6 +162,8 @@ func _build_window() -> void:
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.modulate = Color(1, 1, 1, 0.55)
 	foot.add_child(hint)
+	for c in _actions:
+		foot.add_child(c)
 	var done := Button.new()
 	done.text = "Done"
 	done.pressed.connect(_window.hide)

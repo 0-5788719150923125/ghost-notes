@@ -22,7 +22,6 @@ func track(card: Card) -> void:
 	chip.flat = false
 	chip.focus_mode = Control.FOCUS_NONE
 	chip.add_theme_font_size_override("font_size", 11)
-	chip.tooltip_text = "Bring the %s card into view." % card.title
 	chip.gui_input.connect(func(ev: InputEvent) -> void: _on_chip(card, ev))
 	add_child(chip)
 	_chips[card] = chip
@@ -46,6 +45,13 @@ func follow() -> void:
 			_paint(card)
 
 
+## A CHIP SAYS WHAT ITS CARD IS FOR (2026-11-11, the user: "If you mouse over the colored components near the + button, they
+## don't tell you anything useful"): the card's [member Card.blurb], then what a click does.
+static func tip_of(card: Card) -> String:
+	var click := "Click to bring the %s card into view." % card.title
+	return click if card.blurb.is_empty() else card.blurb + "\n\n" + click
+
+
 func _on_chip(card: Card, ev: InputEvent) -> void:
 	var mb := ev as InputEventMouseButton
 	if mb == null or mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
@@ -60,6 +66,7 @@ func _paint(card: Card) -> void:
 	_shown[card] = card.visible
 	chip.visible = card.visible
 	chip.text = card.title
+	chip.tooltip_text = tip_of(card)
 	var c := card.color()
 	chip.add_theme_color_override("font_color", c.lightened(0.3))
 	chip.add_theme_color_override("font_hover_color", c.lightened(0.55))

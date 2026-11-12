@@ -352,15 +352,6 @@ func _say(text: String) -> void:
 
 func _build() -> void:
 	add_theme_constant_override("separation", 8)
-	var hint := Label.new()
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.modulate = Color(1, 1, 1, 0.7)
-	hint.text = ("The note's words are the letter: the pen writes each paragraph as the voice reads it. A "
-		+ "paragraph in italics is a thought - said, not written. Edit lists the letter's marks: strike, "
-		+ "sketch, tap, point, a picture over a passage, a new page.")
-	add_child(hint)
-
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 6)
 	add_child(srow)

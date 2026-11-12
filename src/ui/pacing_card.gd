@@ -6,6 +6,8 @@ class_name PacingCard
 ## otherwise: a show with nothing to pace has no Pacing card. Looked at again every second (what a section offers follows what is
 ## being shown - an episode picked, acts made again), and drawn again only when that changed.
 
+## What the card is for, on its title bar and its chip ([member Card.blurb]).
+const BLURB := "The numbers this show can be paced by, each at its default until you move it. Shown while something on the note offers one."
 const POLL := 60              # frames between looks
 
 var _sections: Callable       # () -> Array of TuneSection

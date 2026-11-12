@@ -57,7 +57,6 @@ var _ed: ReadingPanel
 var _synth: SynthEditor
 var _cards: ReadingPanel
 var _show: EpisodeCard        # the Cards panel's episode
-var _proof: ReadingPanel      # a Proof note's panel (2026-10-15: its card asked for 448 px of 380)
 var _letter: ReadingPanel     # a Letter note's panel: its sketches' long words, its pictures (2026-10-26)
 
 
@@ -89,18 +88,6 @@ func _run() -> void:
 	_cards.remove_child(_cards._cast._repace_timer)
 	add_child(_cards._cast._repace_timer)
 	_cards_episodes()
-	_proof = ReadingPanel.new()
-	_proof.workspace = "proof"
-	_proof._build_panel()
-	_proof.remove_child(_proof._panel)
-	add_child(_proof._panel)
-	_proof.remove_child(_proof._cast._repace_timer)
-	add_child(_proof._cast._repace_timer)
-	# THE PROOF CARD'S PICKERS, filled as a real note fills them: a long problem title, and the
-	# writers by their whole names - the selected one is what an unclipped picker is as wide as
-	var proof_card: ProofCard = _proof._block_cards["proof"]
-	proof_card._pick.add_item("Episode 12 - Pick More Than Half, and One Divides Another, Every Time")
-	proof_card._pick.select(proof_card._pick.item_count - 1)
 	# A LETTER'S, read off a note that has one (a fixture, read and never written: a probe is read-only)
 	_letter = ReadingPanel.new()
 	_letter.note_path = "res://tests/fixtures/letter_note.md"
@@ -121,19 +108,17 @@ func _run() -> void:
 	_ok(letter_card != null, "a Letter note's panel has the Medium card, the Letter's rows on it")
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
 	# would be as wide as
-	for e in [_ed, _cards, _proof, _letter]:
+	for e in [_ed, _cards, _letter]:
 		(e as ReadingPanel)._cast.voice_pick.add_item("libritts high  (downloads)")
 		(e as ReadingPanel)._cast.voice_pick.add_item("en_GB southern english female medium  (downloads)")
 
 	await _check_fits("Generative", _ed._panel)
 	await _check_fits("Synthesis", _synth._panel)
 	await _check_fits("Cards", _cards._panel)
-	await _check_fits("Proof", _proof._panel)
 	await _check_fits("Letter", _letter._panel)
 	await _check_width("Generative", _ed._panel)
 	await _check_width("Synthesis", _synth._panel)
 	await _check_width("Cards", _cards._panel)
-	await _check_width("Proof", _proof._panel)
 	await _check_width("Letter", _letter._panel)
 	await _check_long_items_would_widen()
 	await _check_episode_entry_follows()
@@ -142,7 +127,7 @@ func _run() -> void:
 	await _check_the_old_arrangement_overflows()
 	await _check_wheel_skips_sliders(_ed._panel)
 	for pair in [["Generative", _ed._panel], ["Synthesis", _synth._panel], ["Cards", _cards._panel],
-			["Proof", _proof._panel], ["Letter", _letter._panel]]:
+			["Letter", _letter._panel]]:
 		var found := _scrollers_in((pair[1] as SidePanel).body)
 		_ok(found.is_empty(), "the %s panel has %d thing(s) scrolling on a card: %s" % [pair[0], found.size(), found.slice(0, 5)])
 	var planted := TextEdit.new()
@@ -153,12 +138,10 @@ func _run() -> void:
 	_synth._panel.queue_free()
 	_ed._panel.queue_free()
 	_cards._panel.queue_free()
-	_proof._panel.queue_free()
 	_letter._panel.queue_free()
 	_synth.free()
 	_ed.free()
 	_cards.free()
-	_proof.free()
 	_letter.free()
 	if _fails.is_empty():
 		print("panel_fit_check: ALL OK")

@@ -29,6 +29,27 @@ context: >-
 
   </brief>
 
+# THE AUTHOR'S DIRECTION (the Direction card, next/direction.md; the user, 2026-11-11: "a high-priority instruction add-on ...
+# beyond the initial markdown prompt, and with higher priority"): where the next episode goes, kept in the episode as its first step
+# and given to every agent behind it after the brief (TableProducer.with_direction). It decides what this episode is about and does;
+# the brief's voice and standing rules hold unless it changes them in so many words, and the dice only flavor what it leaves open.
+#
+# The code gives: {{direction}}.
+direction: >-
+  THE AUTHOR'S DIRECTION FOR THIS EPISODE, given beside the brief and above it:
+
+
+  <direction>
+
+  {{direction}}
+
+  </direction>
+
+
+  Where the direction and the brief - or anything else you are told about what this episode is about, or what happens in
+  it - disagree, follow the direction. Keep the brief's voice and its standing rules unless the direction changes them in
+  so many words. Any numbers or chances you are given to vary the episode only flavor what the direction leaves open.
+
 # ASKED AGAIN WITH A NOTE (next/editing.md step 9: "a person can hand a detail to an agent with a note"): the author looked at
 # what this role made for one step and asks for it again, saying what to change - appended to that step's own prompt alone,
 # so NO CHEATING holds: a reader asked again is still shown only what came before its beat.

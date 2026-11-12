@@ -849,6 +849,85 @@ newer does.
 **Next, after listening:** Kokoro's own dwell measured and the pause figures made per backend; F0 as
 an input (the Tone's `noise` as the F0 range); then, for an actor, the style fit before the recipe.
 
+## Blending Kokoro voices (2026-11-11)
+
+The user: "new voices can be synthesized by merging tensors from separate model checkpoints, through averaging,
+through interpolation, through weighted merges ... we have boolean toggles for each one. If we select 2 or more ...
+then they will be blended. In that same Browse menu, we should provide a pick-list of merging options" - and a Test
+at the top of Browse ("I hate having to close that screen, to test voices").
+
+**What is merged is the pack, not the weights.** A Kokoro voice is a style pack, [510, 1, 256] (a row per sentence
+length): the first 128 numbers of a row are what the decoder is given (timbre), the last 128 what the duration, F0
+and energy predictors are (prosody; Kokoro's `ref_s[:, :128]` / `ref_s[:, 128:]`, StyleTTS 2's acoustic and
+prosodic styles). Every pack of a checkpoint runs on the same graph, so a blend costs nothing to run. What the
+community does (looked up 2026-11-11): Kokoro's own `voice="af_bella,af_sky"` is the packs' mean; Kokoro-FastAPI,
+PyKokoro and kokoro-tts take weights (`af_bella(2)+af_sky(1)`, normalized); a ComfyUI node adds slerp, said to keep
+more of each voice than the mean, which shrinks the vector; kvoicewalk random-walks a pack toward a target
+recording, scored by Resemblyzer.
+
+### Built
+
+- `hosts/voice/blend.py`: the line (`mix: af_heart 2, bf_emma 1`, `split british: af_heart sound, bf_emma
+  delivery`) and five methods - **Mix** (weighted mean), **Mix, kept full** (spherical: each half's length put back
+  to the readers' own), **Sound and delivery** (one side's timbre, the other's prosody; a part per reader),
+  **Max** and **Min** (number by number, weights unused - the user's own two ideas).
+- The Kokoro backend reads a request's `blend` into a pack made of the checkpoint's own (`_blended`, eight kept made),
+  read in the heaviest reader's accent (a split's delivery's) unless the line says one. The BACKEND says it blends
+  (`describe`), never a voice's row: every field of a row keys the takes kept in that voice, and one added would
+  have made every kept Kokoro sentence again. A voice taught here (one pack, its own decoder) never blends.
+- `VoiceBlend` (`src/voice/`) writes and says the line; `ReaderBrowser` (`src/reading/`) is Browse…: on a voice that
+  blends, every reader is a tick with a weight (and a part in Sound and delivery), the method and accent along the
+  top, Test first. The tab keeps `blend:` beside `speaker:` (the note's voice block, `SLOT_DEFAULTS`); stepping the
+  Speaker number or picking another voice ends it. A blend is asked only when there is one, so no kept take's key
+  moved.
+- Test at the top of Browse… is the Voice card's own (`ReadingCast.press_test`): a press while it plays ALWAYS stops
+  it, and the next press reads what is ticked then. (A first cut started it over when the voice had changed meanwhile;
+  the user: "ensure that we always stop before we allow the Test button to be started for playback again".) Nothing
+  ticked is allowed on the way to another reader; the tab reads on in what it had. The browser is at most 80% of the
+  stage's height, its summary one line (a wrapped label opened it 1,500 px tall).
+- Gates: `hosts/voice/test_kokoro.py` (11), `tests/voice/voice_blend_check.gd` (the same lines read alike in both
+  languages), `tests/reading/reader_browser_check.gd`.
+
+### What was measured
+
+Four sentences in four pairs (Heart+Emma, Heart+Puck, Emma+George, Bella+Michael) through the real v1.0 graph, ten
+ways each; `dist/kokoro_blends/` holds every take (gitignored).
+
+- **Every word heard in every take** - Whisper medium.en on all 46 (the six voices alone and 40 blends, the odd
+  methods too): every word of the four sentences in each. One take scored otherwise only because Whisper made up a
+  sign-off in its trailing silence ("Thank you all for being with us today" after Heart's sound with Emma's
+  delivery). Being understood does not tell the methods apart; only the ear can.
+- **The level, from the readers' own** (a blend is never measured: a weight moved is a new blend, and each would wait
+  seconds and leave a row in levels.json). Spoken level against the weighted geometric mean of the readers' levels:
+
+  | method | four pairs, dB off the estimate | worst |
+  |---|---|---|
+  | mix 1:1 | -0.15 +0.15 -0.52 -0.28 | -0.5 |
+  | mix 3:1 | -0.07 +0.09 -0.46 +0.02 | -0.5 |
+  | kept full (spherical) | -0.60 -0.46 -2.40 -0.92 | -2.4 |
+  | sound of A, delivery of B (A's level) | +0.15 -0.92 -0.87 -2.31 | -2.3 |
+  | sound of B, delivery of A (B's level) | -0.41 +0.08 +0.47 +0.73 | +0.7 |
+  | max | -1.06 -0.52 -1.58 -1.61 | -1.6 |
+  | min | +0.34 +0.74 +0.19 +0.65 | +0.7 |
+  | strongest of each number (by size) | -3.59 -3.03 -1.44 -3.93 | -3.9 |
+  | mosaic (16-number blocks, seeded) | +0.34 +1.52 +0.36 -0.74 | +1.5 |
+  | extrapolate (1.5 A - 0.5 B) | -2.30 -4.42 +0.66 +1.14 | -4.4 |
+
+  A split's level is its SOUND's (Heart's sound with Emma's delivery spoke at 0.084, Heart 0.082, Emma 0.107): the
+  decoder makes the level, so a split is estimated from its sound side alone. A mean shrinks the style (Heart and
+  Emma, 1.59 and 1.67 in a row's timbre, mix to 1.46); kept full puts it back, and came out quieter than estimated.
+- Left out of the list, the files kept for the ear: strongest-of-each, mosaic and extrapolation (their levels miss
+  by up to 4.4 dB).
+
+### Status
+
+Built and gated; nothing heard by the user yet. Waiting on the ear: whether a mix of two graded voices beats either
+(Heart+Emma), whether kept full sounds fuller than the mix or only louder, whether Sound and delivery gives a voice
+another's delivery, and whether Max and Min earn their rows. Not built: blending libritts's readers (Piper's speaker
+embedding is a Gather inside the graph - patchable the way `rest_floor` was), blending across checkpoints (v1.1's
+decoder was retrained), a blend saved under a name of its own, voice arithmetic (A + B - C, an accent moved), and a
+kvoicewalk-style search from a blend toward a recording.
+
 ## Training Kokoro (2026-10-26)
 
 **The user:** "Sadly, I likely won't use Piper models for anything other than testing now, given that Kokoro is so

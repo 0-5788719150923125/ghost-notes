@@ -31,6 +31,10 @@ VOICES TRAINED HERE (2026-10-26, next/voice_engines.md "Training Kokoro"): a che
 (hosts/voice_train/kokoro_export.py), its tokenizer, ONE pack (`voices/voice.bin`, the taught style in every row)
 and `voice.json` ({name, license, chain, british}) - listed beside the stock checkpoints (`_family`), never fetched.
 
+A BLEND OF READERS (2026-11-11, hosts/voice/blend.py): a request's `blend` ("mix: af_heart 2, bf_emma 1") reads in a
+pack made of the checkpoint's own packs (`_blended`, the latest BLENDS_KEPT kept made), in its accent, at its readers'
+level - the backend says `blend` (`describe`); a voice taught here, one pack on a decoder of its own, never blends.
+
 THE OPENING: THE FIRST PAD KEEPS ITS OWN LENGTH AT EVERY PACE (2026-11-03, the user, of Heart's "Hello, my loves":
 "almost like a record skipping, like several clicks in a row, 'h-h-h-ello'", others "Uh-hello"; of "A mind does not
 film the world", 2026-10-27, "the 'A' is dropped entirely"; of Emma's "Ha." at Pace 0.85, 2026-10-30, "He-sah-vah").
@@ -175,6 +179,9 @@ PACKS: list[tuple[str, str, str, str]] = [
     ("bm_daniel", "GB", "M", "grade D"),
 ]
 ACCENTS = {"US": "American", "GB": "British"}
+# How many blends are kept made (`_blended`): half a megabyte each, and a weight moved in the reader browser is
+# a new one.
+BLENDS_KEPT = 8
 # Where the voices taught here are, under the voices' root (`_family`).
 TRAINED = "trained"
 
@@ -361,6 +368,9 @@ class KokoroBackend(PiperBackend):
                 "duration_control": True,  # speed, and the patched plan
                 "pitch_control": False,  # the F0 curve is in the graph, not yet an input
                 "timings": True,  # the rounded plan, exact
+                # ITS READERS BLEND (blend.py) - said of the backend, never on a voice's row: every field of a row
+                # keys the takes kept in that voice (TakeCache), and one added would make every one of them again
+                "blend": True,
             }
         )
         return d
@@ -401,6 +411,7 @@ class KokoroBackend(PiperBackend):
         self._models: dict = {}  # checkpoint -> its graph, every pack of it shares
         self._vocabs: dict = {}  # checkpoint -> {symbol: id}
         self._speakers: dict = {}  # (checkpoint, pack index) -> its cfg (`_speaker`)
+        self._blends: dict = {}  # (checkpoint, the blend read) -> its cfg (`_blended`), the latest BLENDS_KEPT
 
     # -- storage -----------------------------------------------------------
 
@@ -545,6 +556,56 @@ class KokoroBackend(PiperBackend):
             }
         return self._speakers[(family, i)]
 
+    def _blended(self, family: str, spec):
+        """The cfg of the blend `spec` names (blend.py) in `_speaker`'s shape, its pack made of its readers' and
+        read in its accent - or None where it names fewer than two of this checkpoint's packs (a reader it does
+        not hold is left out), or the checkpoint is one taught here. `kokoro.blend` keeps what its level is
+        made of (`_leveled`)."""
+        import blend
+
+        b = blend.parse(spec) if family in FAMILIES else None
+        if b is None:
+            return None
+        packs = self._family(family)["packs"]
+        at = {row[0]: i for i, row in enumerate(packs)}
+        voices = [v for v in b["voices"] if v[0] in at]
+        if len(voices) < 2:
+            return None
+        b = {**b, "voices": voices}
+        key = (family, b["method"], b["accent"], tuple(voices))
+        if key not in self._blends:
+            idx = [at[r] for r, _w, _p in voices]
+            readers = [self._speaker(family, i) for i in idx]
+            pack = blend.make(b["method"], [c["kokoro"]["pack"] for c in readers],
+                              [w for _r, w, _p in voices], [p for _r, _w, p in voices])
+            gb = blend.british(b, [packs[i][1] for i in idx])
+            base = readers[0]
+            while len(self._blends) >= BLENDS_KEPT:
+                self._blends.pop(next(iter(self._blends)))
+            self._blends[key] = {
+                **base,
+                "espeak": {"voice": "en-gb" if gb else "en-us"},
+                "kokoro": {**base["kokoro"], "pack": pack, "british": gb, "blend": {"blend": b, "speakers": idx}},
+            }
+        return self._blends[key]
+
+    def _cfg_of(self, voice: str, params: dict) -> dict:
+        """What a request reads in: the blend it names (`_blended`) where this checkpoint can make it, else its
+        speaker's pack."""
+        made = self._blended(voice, params.get("blend"))
+        return made if made is not None else self._speaker(voice, int(params.get("speaker", 0) or 0))
+
+    def _leveled(self, voice: str, params: dict, cfg: dict, sess) -> dict:
+        """A blend at its readers' level (blend.py `gain`: each reader measured once, as any voice is); a reader at
+        its own (level.py)."""
+        made = cfg.get("kokoro", {}).get("blend")
+        if made is None:
+            return super()._leveled(voice, params, cfg, sess)
+        import blend
+
+        gains = [self._levels.gain(self, voice, i, self._speaker(voice, i), sess) for i in made["speakers"]]
+        return {**params, "level_gain": blend.gain(made["blend"], gains)}
+
     def _load(self, voice: str):
         """Piper's contract, for a caller that asks it: the graph and speaker 0. No vowel probe - what it
         measures is a Piper checkpoint's (vowel_probe.py)."""
@@ -683,7 +744,7 @@ class KokoroBackend(PiperBackend):
         if not self.owns(voice):
             raise BackendError(f"unknown Kokoro voice '{voice}'")
         sess = self._graph(voice)
-        cfg = self._speaker(voice, int(params.get("speaker", 0) or 0))
+        cfg = self._cfg_of(voice, params)
         return self._synth_tokens(list(tokens), voice, out_path, self._leveled(voice, params, cfg, sess), cfg, sess)
 
     def _level_files(self, voice: str, speaker: int) -> list:

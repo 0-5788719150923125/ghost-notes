@@ -1,5 +1,65 @@
 # Proof: a mathematician at a desk, thinking out loud
 
+## Status: Proof became a table show (2026-11-11)
+
+**Decided by the user, 2026-11-11** ("we are able to support many different kinds of projects, without the need for a
+dedicated component ... we implement the underlying primitives, methods, functions and data classes, and we allow the
+agents to select the tools they need dynamically"): the Proof component is gone, and a lesson is a brief the Table
+component plays, as bricks, puzzles, a painted mask and a tabletop game already were. The show is
+`~/repos/rift/animations/theorem-grooving.md`, which carries the Theorem-Grooving channel's voice and YouTube settings
+from the Proof note; the teacher's, the student's and the framer's rules became its prose, which the user edits.
+
+**What moved down into the table, for any show to use:**
+
+- **Work a computer checks** - a `problem` in the producer's plan (`SolverTools.land_problem`, rules/table/producer.yaml
+  `problem`) makes a `solve` step before the table is set: the solver (`SolverTools`, rules/table/solver.yaml - Proof's
+  `ProofTools` and solver, unchanged in what they do) keeps a lab notebook, checks Lean files, runs sandboxed Python and
+  hands in a verified proof or a computed result, retried as Proof's was and landed honestly unchecked after that. The
+  puppeteer and every reader are handed what it found (`TableProducer._plan`'s `worked`, `table/solver.worked`), and the
+  upload says what checked it (`SolverTools.check_line`). Held by `tests/table_show/solve_step_check.gd`.
+- **Math on a page** - the `write` law takes `tex` (a formula) and `draw` (an SVG in figure.py's words: axes, curves
+  computed from their expressions, series a run kept) beside `text`, and words with `$...$` in them. Several writes on
+  one sheet are a PAGE, one under another from its head at one size (`SheetWriting.page`), each written stroke by
+  stroke in the Hershey hand from TeX's own layout (`TableInk`, `Ink` - moved down from desk/), in the reading's order
+  (`TableWork._order_writing`); a page that runs off its sheet is written smaller and says so. A write's `strike` crosses
+  an earlier line out - a stroke of the hand through it, in its own turn and taking no room (`SheetWriting._strike`) -
+  for a dead end the notebook records, as Proof's `<!-- strike -->` was. The `ink` step lays it
+  out with TeX once the acts are blocked. The puppeteer is told the drawing language where the table has a sheet
+  (rules/table/puppeteer.yaml `drawings`) and what each act writes reaches the reader, who says it as it is written.
+  Held by `tests/table/page_writing_check.gd` and `tests/table/ink_check.gd`.
+- **No notation in what is said** - any reader's passage with TeX in its words is sent back once
+  (`TableProducer.notation_in`), and `[a]` is kept as the letter's name (`clean_spoken`).
+- **A pen seen, and pointing** (the user, the same day: "we probably do want the point marker, and we probably do want
+  the pen ... The pointing is a crucial tool here, because we need to direct the viewer's attention somehow") - a
+  `write` may name a pen on the table (`with`): its nib follows the very page layout and hand schedule the ink is drawn
+  from (`TableWork._pen_nib`, `SheetWriting.page`'s `layout`), coming down in the write's lead, on each stroke as the
+  ink goes down, 4 mm up between strokes and 2.2 cm clear in its tail, held by its tip and grip as any tool is
+  (`TablePaint.tool_of`, found once at build so the bake's twin never reads its nodes) and leaning to the frame's top
+  right as the desk's pen did (`PEN_UP`). The `point` law sends a pen to something written - a formula's
+  `\pin{name}{...}`, a drawing element's `id`, or the act that wrote the line (`_find_pointed`, which says what can be
+  pointed at when it finds nothing) - sweeping under a wide thing and settling beside its end, 3.5 mm over the paper,
+  as the desk's did (`_point_nib`). The puppeteer blocks point acts and the reader starts each at its word
+  (`<!-- act: name -->`), as any act; the brief asks for the pen to point whenever something written is talked about.
+  Held by `tests/table/page_writing_check.gd` (the tip on the ink, lifted between strokes, beside the line when it
+  points; the controls a pen nobody put on the table and a name nothing carries); looked at on a made desk
+  (2026-11-11), the pen mid-stroke on its third formula and then pointing at the second.
+
+**What did not come over** (the user's to judge whether it is missed): from the desk, the elastic pen's tie to the
+voice word by word (a write here runs over its act's seconds, started at its word), parking far off the pad in a long
+stretch of talk, the legal pad's curled page turn and the camera's stations; and the student's review pass, whose
+place is now Ink's questions in the brief. A full sheet is put aside by an act rather than turned over a binding.
+`DeskMedium` stays as the base Letter is written at; no medium row names it now. The seven Proof episodes under
+`user://proofs/` and the Proof note in the notes folder are left as they were (the note no longer opens a Proof card).
+
+**What the user still has to judge:** a first lesson made at the table and watched - whether the camera at the host's
+chair reads the page (the set dresser is asked for the pad square to the chair and in view; on the made desk a line
+of writing is about 9 mm tall), whether the pen points often enough, and whether the brief - Pen teaching, Ink asking
+- holds the teaching as the old rules did. Ink's voice (speaker 3 of the LibriTTS voice) is a placeholder for the
+user's ear.
+
+The rest of this note is the record of Proof as it was built, kept because the reasons in it still stand behind the
+primitives above.
+
 Opened 2026-10-15, for the user's proposal: a new kind of show in which an actor sits at a desk with
 a pad of paper, writes equations, looks things up on a tablet, works numbers on a calculator and
 checks a proof in Lean - narrating all of it, to teach a hard idea to someone who knows little

@@ -76,7 +76,7 @@ class_name Medium
 ##   capabilities  optional: what the format asks of the platform beyond the stage ([Capabilities]): a format
 ##           impossible here is grayed in the picker, saying why.
 ##   intro_tip, outro_tip  optional: what the Intro & outro card's holds say under this format.
-##   mode    optional: THE COMPONENT IT BELONGS TO, which shows its readings in it (the desk is Proof's). The card
+##   mode    optional: THE COMPONENT IT BELONGS TO, which shows its readings in it (the card table is Table's). The card
 ##           table is drawn from an episode Table produced - its deck, its pictures, its spread - so a
 ##           chapter read anywhere else has nothing to put on it. Such a medium is never offered
 ##           by a picker ([method pickable]) and never becomes the remembered setting; its component
@@ -123,9 +123,6 @@ const REGISTRY := {
 	"likeness": {"label": "Likeness", "script": "res://src/likeness/likeness.gd",
 		"uses": [], "frames": ["landscape"], "needs": ["reading"], "mode": "likeness",
 		"blurb": "An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium."},
-	"desk": {"label": "Desk", "script": "res://src/desk/desk.gd",
-		"uses": ["opening"], "frames": ["landscape"], "mode": "proof",
-		"blurb": "A ghost doing math at a desk: a legal pad under a lamp, and a pen that writes each formula on it by itself while the teacher talks, in a hand drawn from TeX's own layout. The Proof component's own medium - what it writes comes from the lesson its agents made."},
 }
 
 

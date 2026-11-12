@@ -19,7 +19,7 @@ A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that build
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (17 components, 2 slots, 6 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (17 components, 2 slots, 5 workspaces).
 
 ## Slots
 
@@ -28,7 +28,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 | Slot | What it is | Taken by |
 | --- | --- | --- |
 | `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Voice lab, Clip |
-| `presentation` | What the show is seen in: the Medium and the format it names, a card table, a proof's desk, an actor's room, a voice lab's own show, or a clip's own frame. | Voice lab, Medium, Table, Proof, Actor, Clip |
+| `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, a voice lab's own show, or a clip's own frame. | Voice lab, Medium, Table, Actor, Clip |
 
 ## Workspaces
 
@@ -38,8 +38,7 @@ The panels that run a note. Most components are a card on whichever panel is up;
 | --- | --- | --- |
 | **Note** (`note`) | no component: the default | The note's own panel: its words, and a card for each thing attached. |
 | **Reading** (`reading`) | Voice | A voice reads the note: the cast, each speaker's delivery and room, the stream. |
-| **Table** (`table`) | Table | A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them. |
-| **Proof** (`proof`) | Proof | A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them. |
+| **Table** (`table`) | Table | A show at a table: the episodes agents make from the note's brief, and the voice that reads them. |
 | **Voice lab** (`lab`) | Voice lab | Ghost Notes' own synthesizer and the fishing game that breeds its voices. |
 | **Masking** (`clip`) | Clip | A clip's editor: its markers, tracks, effects and timeline. |
 
@@ -49,60 +48,60 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Text
 
-- **Text** (`text`) - The note's own words: what a voice reads, the brief an agent works from, or just a note.
+- **Text** (`text`) - The note's own words: what a voice reads, the brief agents work from, or just a note.
   - gives text
-- **Intro & outro** (`bookends`) - Seconds held before the first word and after the last.
+- **Direction** (`direction`) - Where to take what is made next: every agent making the next episode is told it first. The note's own words stay as you wrote them.
+  - asks for `agent:writer`; kept in `direction:`
+- **Intro & outro** (`bookends`) - Seconds held before the first word and after the last, and how the show opens.
   - needs audio; asks for `forward_plus`; kept in `bookends:`
 
 ### Producer
 
-- **Table** (`table`) - Agents plan, paint and write a show at a table, a beat at a time: cards drawn and read, things made - or both. The note's words are the show's brief: they say what is done there.
+- **Table** (`table`) - Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.
   - needs text; gives text, picture, moments; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `table:`
-- **Proof** (`proof`) - Agents work a math problem at a desk - the note's words are the problem - check the proof in Lean, and teach it: a pen writes each formula on a pad while the voice explains.
-  - needs text; gives text, picture, moments; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `tex`, `lean`, `python:math`; kept in `proof:`
 
 ### Voice
 
-- **Voice** (`voice`) - A small local neural voice reads the text: a cast of speakers, their delivery and their room.
+- **Voice** (`voice`) - A local neural voice reads the note: a cast of speakers, each with their own delivery and room.
   - needs text; gives audio, reading, moments; takes the clock; asks for `stage`, `subprocess`, `python:voice`; kept in `voice:`
-- **Voice training** (`voice_training`) - Teaches a voice to speak as someone does, from their own recordings - a folder, files, or links to videos, playlists or a channel: their speech heard, cut into clean sentences, and a voice fine-tuned on them on the graphics card. The note reads in it, and every Voice card can pick it.
+- **Voice training** (`voice_training`) - Teaches a voice to speak like someone, from their recordings - files, a folder, or links to videos. The note reads in it, and any Voice card can pick it.
   - needs reading; brings Voice; asks for `subprocess`, `ffmpeg`, `python:voice`, `python:speech`, `python:download`, `python:voice_train`; kept in `voice_training:`
-- **Voice lab** (`voice_lab`) - Ghost Notes' own synthesizer reads the text, and the fishing game breeds its voices.
+- **Voice lab** (`voice_lab`) - Ghost Notes' own synthesizer reads the note, and a fishing game breeds its voices.
   - needs text; gives audio, reading, moments; brings Scenes; takes the clock and the presentation; asks for `stage`; kept in `synthesis:`
 
 ### Sound
 
-- **Song** (`song`) - A song the show is cut on: its beat and its spectrum drive the scenes.
+- **Song** (`song`) - A song the show is timed by: its beat and its spectrum drive the scenes.
   - gives audio; takes the clock; asks for `stage`; kept in `song:`
 
 ### Picture
 
-- **Scenes** (`scenes`) - The visualizer scenes, chosen by the seed and cut on the sound.
+- **Scenes** (`scenes`) - The visualizer scenes, picked by the seed and cut to the sound.
   - needs audio; gives picture, moments; asks for `forward_plus`
-- **Storyboard** (`storyboard`) - The show written down: which scenes play, in what order, how long each stays and how it leaves - and, on a stage, who is there and what they do. Nothing written, and the seed chooses.
+- **Storyboard** (`storyboard`) - The show written down: which scenes play, in what order and for how long. Where nothing is written, the seed chooses.
   - needs audio, places; gives picture; brings Scenes; asks for `forward_plus`; kept in `scenes:`
-- **Pictures** (`illustrations`) - The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk - and every picture a show's agents painted for its episode.
+- **Pictures** (`illustrations`) - The note's pictures: painted by an agent from the image marks in its words, imported from a file, or made by a show's agents for its episode.
   - needs text; gives picture; comes with Medium, Table; asks for `forward_plus`; kept in `illustrations:`
-- **Actor** (`actor`) - An actor reads the note in their own room, built from their own videos - a folder, or links to videos, playlists or a channel: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks, mouths and voice learned from every video. Every pixel of them is their own.
+- **Actor** (`actor`) - An actor reads the note in their own room, learned from their own videos - their look, motion, face and voice, every pixel their own.
   - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `ffmpeg`, `python:face`, `python:speech`, `python:download`, `agent:writer`; kept in `actor:`
-- **Clip** (`clip`) - A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.
+- **Clip** (`clip`) - A video from a file or a link, with chroma-key effects over it: markers, tracks and renders.
   - gives picture, audio; takes the clock and the presentation; asks for `forward_plus`, `subprocess`, `ffmpeg`; kept in `clip:`
 
 ### Medium
 
-- **Medium** (`medium`) - What the note is shown in - Auto (the seeded show, nothing to set), full frame, a comic, a novel, a notebook, a tablet, a letter written at a desk, a dispatch desk at night - and the settings that format uses.
+- **Medium** (`medium`) - What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk - and that format's settings.
   - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `medium:`
 
 ### Look
 
-- **Look** (`look`) - A post-process over the whole picture: grain, noir, a vignette, and the rest.
+- **Look** (`look`) - A finish over the whole picture: filters such as grain, noir and a vignette, the tonemapper, and how subtitles appear.
   - needs picture; asks for `forward_plus`; kept in `look:`
 - **Masks** (`masks`) - Chroma-key effects over a clip: markers, tracks and renders.
   - needs picture; brings Clip; asks for `forward_plus`, `subprocess`, `ffmpeg`
 
 ### Publish
 
-- **YouTube** (`youtube`) - Uploads the exported video to your YouTube channel: its title, who may see it and the playlist it joins.
+- **YouTube** (`youtube`) - Uploads the exported video to your YouTube channel: its title, thumbnail, privacy and playlist.
   - needs picture, audio; asks for `movie_export`, `subprocess`, `ffmpeg`; kept in `youtube:`
 
 ## Capabilities
@@ -121,7 +120,6 @@ What a component may ask of the platform. Each is possible somewhere or not at a
 | `python:voice_train` | the voice-training environment | the desktop |
 | `tex` | TeX | the desktop |
 | `python:math` | the math environment | the desktop |
-| `lean` | Lean and Mathlib | the desktop |
 | `agent:writer` | an AI writer | the desktop |
 | `agent:painter` | an AI painter | the desktop |
 | `movie_export` | rendering a video | the desktop |

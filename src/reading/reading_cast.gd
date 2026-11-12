@@ -69,7 +69,11 @@ var _fx_pad: HSlider
 var _tone: OptionButton
 var _speaker: SpinBox
 var _speaker_about: Label        # who that speaker number is (VoiceReaders)
-var _speaker_browse: PopupPanel
+var _browser: ReaderBrowser      # the Speaker row's Browse… (ReaderBrowser)
+## A BLEND OF READERS ([VoiceBlend]): the tab on screen's, "" for its Speaker number alone. Ticked in the reader
+## browser on a voice whose readers blend; stepping the Speaker number by hand, or another voice, ends it.
+var _blend := ""
+var _blending := {}              # the backends whose readers blend, as the host said ([method offer_blends])
 var _speaker_row: HBoxContainer
 var _turn: HSlider
 var _hesitate: HSlider
@@ -254,7 +258,7 @@ func build_voice(box: VBoxContainer) -> void:
 		+ "words every time, so two voices - or two settings of one - can be compared by "
 		+ "ear. Press again to stop. Starting a test ends a reading in progress.")
 	_test.disabled = true
-	_test.pressed.connect(panel._on_test)
+	_test.pressed.connect(press_test)
 	vrow.add_child(_test)
 
 	# Multi-speaker checkpoints carry many readers under one model - libritts-high
@@ -283,6 +287,7 @@ func build_voice(box: VBoxContainer) -> void:
 	_speaker.value_changed.connect(func(_v: float) -> void:
 		if _syncing:
 			return
+		_blend = ""                  # a number stepped by hand is that reader alone
 		capture_slot()
 		# same model, different reader: only the un-played chunks need redoing
 		if panel._stream.has_reading():
@@ -295,7 +300,7 @@ func build_voice(box: VBoxContainer) -> void:
 	var browse := Button.new()
 	browse.text = "Browse…"
 	browse.focus_mode = Control.FOCUS_NONE
-	browse.tooltip_text = "Every reader on this voice, with their gender and a description (libritts: how they sound, from LibriTTS-P; kokoro: accent and Kokoro's own grade). Filter, search, and pick one. Another voice - an actor's own among them - is picked from the Voice list above."
+	browse.tooltip_text = "Every reader on this voice, with their gender and a description (libritts: how they sound, from LibriTTS-P; kokoro: accent and Kokoro's own grade). Filter, search, and pick one - or, on kokoro, tick two or more to blend them into a new voice. Test is at its top. Another voice - an actor's own among them - is picked from the Voice list above."
 	browse.pressed.connect(_open_speaker_browser)
 	_speaker_row.add_child(browse)
 
@@ -557,6 +562,16 @@ func follow_text() -> void:
 func show_testing(on: bool) -> void:
 	if _test != null:
 		_test.text = "Test ■" if on else "Test"
+	if _browser != null:
+		_browser.show_testing(on)
+
+
+## TEST, the Voice card's and the reader browser's: a press while a test plays ALWAYS stops it, whatever was changed
+## meanwhile, and only the next press starts one, in what is picked then (2026-11-11, the user, of a press that started
+## the test over in a blend changed during it: "Please ensure that we always stop before we allow the Test button to
+## be started for playback again").
+func press_test() -> void:
+	panel._on_test()
 
 
 ## A backend that can change its pace was found: the Pace row is shown.
@@ -860,7 +875,7 @@ func capture_slot() -> void:
 	if slot < 0 or slot >= _slots.size() or _rate == null:
 		return
 	_slots[slot] = {
-		"voice": _selected_voice_id(), "speaker": int(_speaker.value),
+		"voice": _selected_voice_id(), "speaker": int(_speaker.value), "blend": _blend,
 		"tone": _tone.selected, "pace": _rate.value, "pause": _pause.value,
 		"dynamics": _dynamics.value, "arc": _arc.value, "effort": _effort.value,
 		"echo": _fx_echo.value, "room": _fx_room.value, "resonance": _fx_res.value,
@@ -879,6 +894,7 @@ func _apply_slot(i: int) -> void:
 	var s := slot_cfg(i)
 	_syncing = true
 	_want_voice = String(s["voice"])
+	_blend = String(s["blend"])
 	for k in voice_meta.size():
 		if String((voice_meta[k] as Dictionary).get("id", "")) == _want_voice:
 			voice_pick.select(k)
@@ -962,6 +978,8 @@ func _refresh_tab_labels() -> void:
 		if model.is_empty():
 			model = "default voice"
 		var desc := model + ((" #%d" % int(s["speaker"])) if multi else "")
+		if not blend_of(s).is_empty():
+			desc = model + " " + VoiceBlend.line(blend_of(s), true)
 		desc += "  ·  " + String(tones[clampi(int(s["tone"]), 0, tones.size() - 1)])
 		var b := _tabs.get_child(i) as Button
 		b.text = "%s    %s" % [_names[i], desc]
@@ -1056,6 +1074,7 @@ func _read_in(id: String) -> void:
 
 ## The voice picked: the slot keeps it, and what was read in the old one is read again.
 func _voice_picked() -> void:
+	_blend = ""                      # a blend is of one voice's readers
 	_show_voice_license()
 	panel.warm_voice(_selected_voice_id())
 	capture_slot()
@@ -1075,68 +1094,58 @@ func _describe_speaker() -> void:
 	if _speaker_about == null:
 		return
 	var d := VoiceReaders.describe(_selected_voice_id(), int(_speaker.value))
-	_speaker_about.text = VoiceReaders.line(d, 8)
-	_speaker_about.visible = _speaker_row.visible and not d.is_empty()
+	var mixed := VoiceBlend.line(_blend) if blends(_selected_voice_id()) else ""
+	_speaker_about.text = mixed if not mixed.is_empty() else VoiceReaders.line(d, 8)
+	_speaker_about.visible = _speaker_row.visible and (not d.is_empty() or not mixed.is_empty())
 
 
-## The reader browser: a filter by gender, a search over the descriptions, and the list.
-## Picking one sets the speaker number (which regenerates what has not played, as a step does).
+## The reader browser ([ReaderBrowser]): every reader of the voice, picked - or ticked and blended.
 func _open_speaker_browser() -> void:
-	var all := VoiceReaders.all(_selected_voice_id())
-	if all.is_empty():
-		panel._set_status("Nothing is known about this voice's readers (is it installed, and multi-speaker?).")
+	if _browser == null:
+		_browser = ReaderBrowser.new(self)
+	_browser.open()
+
+
+## The reader on screen, as its Speaker number.
+func speaker_now() -> int:
+	return int(_speaker.value)
+
+
+## The blend on screen ([member _blend]).
+func blend_now() -> String:
+	return _blend
+
+
+## The host says backend [param backend]'s readers blend (its `describe`): never a voice's row, whose every field keys
+## the takes kept in it ([TakeCache]).
+func offer_blends(backend: String) -> void:
+	_blending[backend] = true
+
+
+## Whether voice [param id]'s readers blend: its backend's do ([method offer_blends]) and it has more than one.
+func blends(id: String) -> bool:
+	for v in voice_meta:
+		if String((v as Dictionary).get("id", "")) == id:
+			return _blending.has(String((v as Dictionary).get("backend", ""))) \
+				and int((v as Dictionary).get("speakers", 1)) > 1
+	return false
+
+
+## THE READER BROWSER'S PICK, to the tab on screen: reader [param speaker] and [param blend] ("" for that
+## reader alone) - regenerating what has not played, as a step of the Speaker number does. The same pick
+## again changes nothing.
+func pick(speaker: int, blend: String) -> void:
+	if speaker == int(_speaker.value) and blend == _blend:
 		return
-	if _speaker_browse != null and is_instance_valid(_speaker_browse):
-		_speaker_browse.queue_free()
-	_speaker_browse = PopupPanel.new()
-	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(560, 460)
-	_speaker_browse.add_child(box)
-	var bar := HBoxContainer.new()
-	box.add_child(bar)
-	var which := OptionButton.new()
-	for label in ["All", "♀ Female", "♂ Male"]:
-		which.add_item(label)
-	bar.add_child(which)
-	var find := LineEdit.new()
-	find.placeholder_text = "Search: soft, deep, calm, raspy…"
-	find.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	find.clear_button_enabled = true
-	bar.add_child(find)
-	var list := ItemList.new()
-	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(list)
-	var note := Label.new()
-	note.text = VoiceReaders.about_of(_selected_voice_id())
-	note.add_theme_font_size_override("font_size", 10)
-	note.modulate = Color(1, 1, 1, 0.55)
-	box.add_child(note)
-	var fill := func() -> void:
-		list.clear()
-		var want: String = ["", "F", "M"][which.selected]
-		var words := find.text.strip_edges().to_lower().split(" ", false)
-		for r in all:
-			var d: Dictionary = r
-			if not want.is_empty() and String(d["g"]) != want:
-				continue
-			var hay := String(d["d"]).to_lower()
-			var ok := true
-			for w in words:
-				ok = ok and hay.contains(w)
-			if not ok:
-				continue
-			var at := list.add_item("%d   %s" % [int(d["i"]), VoiceReaders.line(d, 10)])
-			list.set_item_metadata(at, int(d["i"]))
-			if int(d["i"]) == int(_speaker.value):
-				list.select(at)
-	which.item_selected.connect(func(_i: int) -> void: fill.call())
-	find.text_changed.connect(func(_t: String) -> void: fill.call())
-	list.item_selected.connect(func(at: int) -> void:
-		_speaker.value = float(int(list.get_item_metadata(at))))
-	panel.add_child(_speaker_browse)
-	fill.call()
-	_speaker_browse.popup_centered()
-	list.ensure_current_is_visible()
+	_blend = blend
+	_syncing = true
+	_speaker.value = clampf(float(speaker), _speaker.min_value, _speaker.max_value)
+	_syncing = false
+	capture_slot()
+	_describe_speaker()
+	if panel._stream.has_reading():
+		panel._stream.repace()
+	panel.touch()
 
 
 ## Always shown: these checkpoints are licensed individually and the terms are
@@ -1183,6 +1192,13 @@ func speaker_of(s: Dictionary) -> int:
 		if String((v as Dictionary).get("id", "")) == vid:
 			return clampi(int(s["speaker"]), 0, maxi(0, int((v as Dictionary).get("speakers", 1)) - 1))
 	return maxi(0, int(s["speaker"]))
+
+
+## A slot's blend ([VoiceBlend]) as the host is asked it: "" where its voice's readers do not blend, so a
+## blend left on a slot whose voice was changed in the note by hand is never sent to a model it means nothing to.
+func blend_of(s: Dictionary) -> String:
+	var spec := String(s.get("blend", ""))
+	return spec if not spec.is_empty() and blends(voice_id_of(s)) and VoiceBlend.readers(spec).size() >= 2 else ""
 
 
 ## The Turn dial: the extra rest at a handover, as a multiple of [constant Delivery.TURN_GAP].

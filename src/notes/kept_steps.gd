@@ -2,7 +2,7 @@ extends RefCounted
 class_name KeptSteps
 
 ## KeptSteps - AN EPISODE'S STEPS, KEPT, NEVER DELETED (next/editing.md step 1; the user, 2026-11-10: "there is no easy way to fix
-## mistakes without regenerating steps"), for every show that makes episodes a step at a time ([TableEpisode], [ProofEpisode]: step
+## mistakes without regenerating steps"), for every show that makes episodes a step at a time ([TableEpisode]: step
 ## 12, "the other shows take step 1"). Each step made is recorded in `steps.json` - who made it (a role, `code`, or a `hand`), when,
 ## a digest of its file and of each file it was made from ([method made_from]) - and whatever replaces or throws away a step's file
 ## first moves it a version back (`versions/<step>/vNNN/`, the newest [constant VERSIONS_KEPT]: [method keep_version], [method

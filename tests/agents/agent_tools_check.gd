@@ -50,7 +50,7 @@ class Toolset:
 				for i in 3:
 					await tree.process_frame
 				return {"text": "done after three frames"}
-			# AN ERROR IN WORDS, and none in words: what a toolset may say (ProofTools, DealerTools)
+			# AN ERROR IN WORDS, and none in words: what a toolset may say (SolverTools, DealerTools)
 			"fails":
 				return {"text": "", "error": "the disk is full"}
 			"fine":

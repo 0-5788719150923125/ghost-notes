@@ -8,6 +8,10 @@
 # because it cannot steer away from choices it has never seen; the habits are in the form (every deck a
 # human figure on every card, every running bit a status revised at each card), not in the subjects.
 #
+# WHO AN EPISODE IS FOR IS WHAT THEY KNOW, NEVER THEIR AGE (2026-11-11: a plan's "younger students among them", carried from a
+# direction, went to every agent after it, and the safeguard stopped each solver run - the user: "We care about the level of
+# experience of the viewer, not the age").
+#
 # THE DICE are numbers drawn from the seed (TablePrompts.dice) - a place, a year, a hue, an hour - so the
 # space they draw from is the whole world rather than a list someone typed.
 #
@@ -26,7 +30,8 @@
 # positions. One prompt offers both, because which one an episode is, is the brief's to say.
 #
 # The code gives: {{seed}}, {{spread_most}}, {{beats_most}}, the flags `chooses` (the producer chooses the
-# deck: the brief lists none) and `habits` (there are earlier episodes, given as `past`), the dice ({{place}},
+# deck: the brief lists none), `habits` (there are earlier episodes, given as `past`) and `run` (code can run here,
+# SolverTools.can_run: a problem may be a computation), the dice ({{place}},
 # {{year}}, {{hue}}, {{hour}}, {{direction}}), the show's own deck ({{deck_size}}, {{deck_names}}) or the
 # box's range ({{box_lo}} to {{box_hi}}), the line the episode's title goes up in ({{uploads_as}}), and the
 # registries' keys for the reply's `frame` and `page` ({{frame_styles}}, {{windows}}, {{corners}},
@@ -147,6 +152,8 @@ prompt:
   # none leaves every `work` out, and the episode is what it always was
   - include: work
   - ""
+  - include: problem
+  - ""
   - include: agents/episode.title
   - ""
   - >-
@@ -173,7 +180,7 @@ reply: |-
     "episode_title": "this episode's title, in title case{{#uploads_as}} - its own part of the line the video goes up as{{/uploads_as}}",
     "description": "the video's YouTube description, in the genre's own shape (a greeting, what this reading covers, the usual disclaimers and calls to action) and told the show's way; three short paragraphs, no emoji, no links",
     "tags": ["eight to twelve search tags, the genre's own"],
-    "audience": "who this episode says it is for",
+    "audience": "who this episode says it is for, by what they already know and care about - never by their age",
     "topic": "what the reading is about, in a few words",
     "premise": "the episode's angle, in one or two sentences",
     "reader_mood": "how the reader is today",
@@ -183,6 +190,7 @@ reply: |-
     "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt, swept or searched - optional", "destination": "row, stack or box - optional", "comment": "none, brief, story or aside - optional", "linger": false, "lies": "sideways - optional", "on": false, "then": [], "work": "what is done at the table after this card is shown - optional"}]},
     "work_intro": "what is done at the table while the intro is said - optional",
     "work_close": "what is done at the table during the close - optional",
+    "problem": "only where the brief's episodes work a problem a computer checks (PROBLEM, above): its object; left out otherwise",
   {{#chooses}}
     "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "series": "its printing's name, when the deck mixes printings", "meaning": "what the card is and why it is in this box, one or two sentences"}],
   {{/chooses}}
@@ -214,7 +222,7 @@ reply_beats: |-
     "episode_title": "this episode's title, in title case{{#uploads_as}} - its own part of the line the video goes up as{{/uploads_as}}",
     "description": "the video's YouTube description, in the genre's own shape and told the show's way; three short paragraphs, no emoji, no links",
     "tags": ["eight to twelve search tags, the genre's own"],
-    "audience": "who this episode says it is for",
+    "audience": "who this episode says it is for, by what they already know and care about - never by their age",
     "topic": "what the episode is about, in a few words",
     "premise": "the episode's angle, in one or two sentences",
     "reader_mood": "how the host is today",
@@ -227,6 +235,7 @@ reply_beats: |-
     "build": "where `assembly` is true: the one thing this episode builds, so it can be designed before anything is picked up, in a sentence or two - what it is, what is in it, what makes it this one and no other",
     "painted": "where the brief has something painted at the table: what is painted on it this episode, as its designer would be told - the look, its colors, its parts and the order they go on, what makes it this one and no other - in three to six sentences; left out otherwise",
     "quiet": "how much of the work nobody talks through, as the brief has it, a share from 0 to 0.8 - 0 when the voice goes on throughout",
+    "problem": "only where the brief's episodes work a problem a computer checks (PROBLEM, above): its object; left out otherwise",
     "game": "true only when the brief's show is a game really played at a table: then leave `beats` empty",
     "scenes": "where `game` is true: how many stretches this session may run to, at most",
     "table_note": "where `game` is true: anything about who is at the table tonight that the brief leaves to you, such as a newcomer's name and work",
@@ -239,6 +248,41 @@ reply_beats: |-
       "candles": 1
     }
   }
+
+# A PROBLEM A COMPUTER CHECKS (Proof's framer, at the table since 2026-11-11 - next/proof.md): where the brief's episodes work a
+# problem, the producer fixes it in the plan before anyone works on it, so the statement the solver proves and the one the reader
+# talks through are one statement, set down first (SolverTools.land_problem refuses a proof with no `theorem main` and a
+# computation that does not say what is computed). FORBIDDEN FACTS: Mathlib often holds the very theorem (Nat.exists_infinite_primes,
+# irrational_sqrt_two), and a proof that cites it proves nothing a viewer can learn from - the checker refuses one
+# (hosts/math/lean_check.py). NOT EVERY CLAIM IS A THEOREM: where code can run (`run`), a claim about a model, a simulation or data
+# is a computation, what is computed fixed here as a statement is.
+problem:
+  - >-
+      PROBLEM. Some shows work a problem in each episode - a claim proved, an answer computed - and
+      show the work as it is done. Where the brief's episodes do, fix this episode's in `problem`
+      before anyone works on it: {"statement": "the problem in plain words, as the host will first
+      say it", "latex": "the precise statement in LaTeX math, without dollar signs", "check":
+      "proof{{#run}} or computation{{/run}}", "lean": "for a proof, the exact Lean 4 statement, starting
+      with theorem main and ending before := (no proof)", "forbidden": ["for a proof, the Mathlib names
+      that ARE this theorem or prove it outright"],{{#run}} "computation": "for a computation, what is
+      computed and how its numbers are checked",{{/run}} "history": "two to four sentences on where the
+      problem comes from, only what you are sure of"}. A brief with no such work leaves `problem` out.
+  - >-
+      Keep the claim at the depth and generality the brief asks for, so long as it can really be
+      settled; if it cannot, fix the nearest honest version and say so in "statement". A claim of
+      mathematics that Lean can state exactly is a proof.{{#run}} A claim about a model, a simulation,
+      an estimate or data - one whose answer is found by computing it - is a computation; a theorem
+      whose cases are worth seeing is still a proof, and its cases can be run.{{/run}}
+  - >-
+      For a proof, the Lean statement says exactly what the plain statement says - no stronger, no
+      weaker - in Mathlib's standard definitions, as simply as the claim allows. Name it main. Use
+      Unicode notation the way Mathlib does.{{#run}} For a computation, "computation" fixes the work as
+      a statement fixes a proof: the model, its equations and its numbers, or how the data is made
+      (anything random with its seed fixed); the quantity to find; and the checks that make the
+      numbers trustworthy - a case with a known exact answer, or a finer step or more samples giving
+      the same result.{{/run}} In "history", never invent a name, a date or a quotation: say less rather
+      than guess. The title names what the viewer will wonder about, never the theorem's textbook name
+      alone, and never promises more than the episode gives.
 
 # THE STAGING: where the cards come from and where their text is (TableActions.SOURCES, CardTable.TEXTS
 # - the registries' own words, as `sources` and `texts`), and how each position's card comes and lies.

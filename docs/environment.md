@@ -10,16 +10,16 @@ godot --headless --path . -- --deps             # what is installed, and where
 godot --headless --path . -- --provision        # install uv, FFmpeg and Python now
 godot --headless --path . -- --provision all    # ...and every feature's environment
 godot --headless --path . -- --provision update # bring everything up to date
-godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Proof component (~8 GB)
+godot --headless --path . -- --provision mathlib # Lean and Mathlib, for a table show's proofs (~8 GB)
 ```
 
 ## What Ghost Notes installs itself
 
 - **FFmpeg**, ~70 MB (~115 MB on Windows) - Masking (clip prep, waveforms, thumbnails), video export and transcode, film panels, and decoding the audio formats the engine has no loader for (FLAC, and MP3 in some builds). Ghost Notes downloads the newest release itself: Martin Riedl's static builds on Linux and macOS, Gyan Doshi's on Windows, BtbN's on Windows on ARM.
 - **uv**, ~20 MB - Builds Ghost Notes' Python environments: installs Python itself, then each feature's packages, from its own cache. The newest release, from PyPI.
-- **TeX (TinyTeX)**, ~55 MB (~250 MB on Windows), ~190 MB installed - TeX itself, for the Proof component: it lays out every formula the desk's pen writes (hosts/math/typeset.py) and typesets each episode's paper - and the labels of a Letter's sketches. TinyTeX's small build of TeX Live, its newest monthly release. Downloaded the first time a Proof or a Letter needs it.
+- **TeX (TinyTeX)**, ~55 MB (~250 MB on Windows), ~190 MB installed - TeX itself: it lays out every formula and drawing a table show's pen writes on a page (hosts/math/typeset.py) - and the labels of a Letter's sketches. TinyTeX's small build of TeX Live, its newest monthly release. Downloaded the first time a show or a Letter needs it.
   - Not on Windows on ARM: TinyTeX publishes no build for Windows on ARM.
-- **Lean**, ~930 MB, ~3.4 GB installed - The Lean theorem prover, for the Proof component's formal check. Not Lean's newest release but the one the newest Mathlib release is built for - and that the Lean REPL has a release for too - so the three always agree. Downloaded the first time a Proof needs it.
+- **Lean**, ~930 MB, ~3.4 GB installed - The Lean theorem prover, for the formal check of a problem a table show works. Not Lean's newest release but the one the newest Mathlib release is built for - and that the Lean REPL has a release for too - so the three always agree. Downloaded the first time an episode's problem is a proof.
   - Not on Windows on ARM: Lean publishes no build for Windows on ARM.
 - **Python**, ~35 MB - The interpreter every environment below runs on: CPython's newest patch of the version Ghost Notes targets, installed by uv into its own directory - never onto PATH or into the system.
 - **Voice environment**, ~320 MB - onnxruntime, numpy and the eSpeak phonemizer for the Generative voice. Built the first time you open Generative.
@@ -36,10 +36,10 @@ godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Pro
   - Not on Intel Macs: a voice is trained on an NVIDIA graphics card (CUDA), which a Mac has none of.
   - Not on Windows (x86-64): PyPI's PyTorch for Windows has no CUDA build.
   - Not on Windows on ARM: PyPI's PyTorch for Windows has no CUDA build.
-- **Math environment**, ~16 MB - fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name (and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py) - a Proof's figures and a Letter's sketches. Built the first time a Proof or a Letter needs it.
+- **Math environment**, ~16 MB - fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name (and its outline, for a glyph no hand draws), so the pen writes what TeX laid out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py) - a table show's drawings and a Letter's sketches. Built the first time a show or a Letter needs it.
 - **Painter environment**, ~3 GB - numpy, SciPy, Pillow and PyTorch, for the painter at the table (hosts/paint/run.py, next/face_layers.md): a show's picture painted again in layers, each laid with real marks found by gradient descent - on the GPU where there is one. Built the first time a table show paints its layers.
-- **Compute environment**, ~220 MB - numpy, SciPy and SymPy, for the code a Proof solver RUNS (hosts/compute/run.py): a simulation, a fit, a derivation or a small model trained, inside a sandbox (bubblewrap), its numbers kept for the pad's drawings. Built the first time a Proof's solver works where the sandbox is installed.
-- **Mathlib**, ~7.5 GB - Mathlib, Lean's library of mathematics, downloaded already compiled, and the Lean REPL built against it: the workbench every proof the Proof component shows is checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. Built the first time a Proof needs it, and moved to each new Mathlib release.
+- **Compute environment**, ~220 MB - numpy, SciPy and SymPy, for the code a table show's solver RUNS (hosts/compute/run.py): a simulation, a fit, a derivation or a small model trained, inside a sandbox (bubblewrap), its numbers kept for the drawings on a page. Built the first time a solver works where the sandbox is installed.
+- **Mathlib**, ~7.5 GB - Mathlib, Lean's library of mathematics, downloaded already compiled, and the Lean REPL built against it: the workbench every proof a table show works is checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. Built the first time an episode's problem is a proof, and moved to each new Mathlib release.
   - Not on Windows on ARM: Lean publishes no build for Windows on ARM.
 - **Voice models (Piper)**, ~60 MB each - The neural voices themselves, fetched per voice from Hugging Face the first time one is selected. Data, not code - the models are MIT-tagged and no GPL Piper code is installed (see hosts/voice/requirements.txt).
 
@@ -51,15 +51,15 @@ A few programs are part of the system or keep their own logins, so they stay you
   - Linux: `sudo pacman -S util-linux   ·   sudo apt install util-linux   (needs 2.33+ for --pdeathsig)`
 - **fallocate (util-linux)**, Linux - Keeping a video export's scratch file SMALL: the render's AVI is encoded as it is written, and the part already encoded is released from disk as it goes (a punched hole), so the intermediate never grows past a few seconds of video. Without it the scratch file grows to the whole film before it is deleted.
   - Linux: `part of util-linux - installed on every mainstream distribution`
-- **bubblewrap**, Linux - The sandbox a Proof solver's code runs in (hosts/compute/run.py): its own view of the files - the system's libraries read-only, one folder to write in, nothing of yours - and no network. Without it the solver cannot run code, and its episodes are proofs in Lean only. Flatpak uses it, so most desktops have it already.
+- **bubblewrap**, Linux - The sandbox a table show's solver's code runs in (hosts/compute/run.py): its own view of the files - the system's libraries read-only, one folder to write in, nothing of yours - and no network. Without it the solver cannot run code, and its episodes are proofs in Lean only. Flatpak uses it, so most desktops have it already.
   - Linux: `sudo pacman -S bubblewrap   ·   sudo apt install bubblewrap   ·   sudo dnf install bubblewrap`
 - **xvfb-run**, Linux - Giving a video export a display of its own, so the recording cannot be frozen by the desktop: Godot stops rendering whenever the compositor stops drawing its window, and the movie writer then re-captures the last frame while the audio keeps advancing. Also what the pixel-readback gates in tests/ use (tests/run_quiet.sh), so no window ever appears for those. An X server, so it stays the system's to install.
   - Linux: `sudo pacman -S xorg-server-xvfb   ·   sudo apt install xvfb   ·   sudo dnf install xorg-x11-server-Xvfb`
-- **Git** - Lake, Lean's build tool, fetches Mathlib and the Lean REPL with it when the Proof component's workbench is built. Every developer machine has it; ghost does not fetch its own.
+- **Git** - Lake, Lean's build tool, fetches Mathlib and the Lean REPL with it when the Lean workbench is built. Every developer machine has it; ghost does not fetch its own.
   - Linux: `sudo pacman -S git   ·   sudo apt install git   ·   sudo dnf install git`
   - macOS: `xcode-select --install   (or: brew install git)`
   - Windows: `winget install Git.Git`
-- **curl** - Mathlib's cache tool downloads the compiled library with it when the Proof component's workbench is built. Part of macOS and of Windows 10 and later.
+- **curl** - Mathlib's cache tool downloads the compiled library with it when the Lean workbench is built. Part of macOS and of Windows 10 and later.
   - Linux: `sudo pacman -S curl   ·   sudo apt install curl   ·   sudo dnf install curl`
   - macOS: `part of macOS`
   - Windows: `part of Windows 10 and later (C:\Windows\System32\curl.exe)`

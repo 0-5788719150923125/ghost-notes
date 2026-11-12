@@ -6,7 +6,7 @@
 
 THE WORK SHOWN IS THE WORK DONE (next/proof.md): a claim about a model, a simulation or data is
 settled by code that really ran, and a drawing on the pad plots the numbers that code kept - never
-numbers an agent typed. A Proof solver hands its code to the `run` tool (ProofTools); this runs it.
+numbers an agent typed. A table show's solver hands its code to the `run` tool (SolverTools); this runs it.
 
 The spec is JSON - never argv: {"code", "out", "work", "io", "seconds", "memory_mb", "work_mb",
 "bwrap"} (`work_mb` may only lower the folder's cap).
@@ -18,7 +18,7 @@ system's programs and libraries and this Python, read-only; `work`, the one plac
 fresh /tmp; no home folder and nothing else of the author's. It has no network, sees no other
 process, and holds no privileges. The host caps its memory (`memory_mb`, its address space), its
 processor time, the size of any file it writes and of its folder, and kills it at `seconds` of wall
-time. Without bwrap nothing runs (ProofTools.can_run does not offer the tool).
+time. Without bwrap nothing runs (SolverTools.can_run does not offer the tool).
 
 keep(name, y) or keep(name, x, y), inside the code: a named series - y against x, or against 0, 1,
 2, ... - kept for the lesson's drawings (figure.py's <plot data>, <dots data>, <bars data>), with an

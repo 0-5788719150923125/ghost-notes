@@ -92,8 +92,7 @@ extends SceneTree
 ##   no thumbnail of the episode card's own and its folder kept off the wire, for the episode an export
 ##   rendered even after another is picked. The description and tags are the YouTube card's; THE TITLE IS THE SCRIPT CARD'S EPISODE,
 ##   handed the picked episode's: an edit written into its plan, an emptied one not, none kept in the block,
-##   and a new episode's empty and waiting for its plan. A Proof note's Episode is its framer's title, an
-##   edit written into its problem; a note read as it is written shows its own once it has a YouTube card
+##   and a new episode's empty and waiting for its plan; a note read as it is written shows its own once it has a YouTube card
 ##   (the control: not before), and goes up with it.
 ## - EACH EPISODE'S TAGS (2026-10-18, the user: "allow the 'Generate' button to override/rewrite those
 ##   tags ... it would not be okay to tightly-couple the two cards"): the writer's answer is cleaned (no
@@ -117,10 +116,7 @@ extends SceneTree
 ##   ([PipelineCard]), in a YouTube section of its own, under the Close only while the box is ticked, told
 ##   which episode is shown, waiting for the reading (its words with the marks out), made once the words are
 ##   written (here refused, read-only, said on the row), with ✓, the tags and ⟳ once made - and
-##   what it wrote is the show's one list, on the card and going up, for any episode's upload. The Proof
-##   card shows the note's tags as one list too, hands the step the note's tags
-##   with the framer's, and uploads the note's list alone - the framer's go into an empty one, once, and
-##   never in a read-only process (the control) - until the step writes over it.
+##   what it wrote is the show's one list, on the card and going up, for any episode's upload.
 ## - A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, of an actor's note: "I don't see anywhere
 ##   it would be possible to write a description ... be sure that the auto-tagging mechanism should work as
 ##   well"): ITS EXPORT IS NAMED AFTER IT (2026-10-31: it had been "ghost_notes_1080p.mp4") - its Title, its Episode
@@ -193,7 +189,7 @@ func _run() -> void:
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
 	for check in [_client, _import, _clients, _channels, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes,
-			_menu, _card, _episode_tags, _thumbnails, _tag_field, _panel_fields, _proof_steps, _note_steps, _doc_file]:
+			_menu, _card, _episode_tags, _thumbnails, _tag_field, _panel_fields, _note_steps, _doc_file]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -934,80 +930,6 @@ func _card() -> bool:
 	return true
 
 
-## THE PROOF CARD lists the step too: under its Script, the note's tags with the framer's handed to it.
-func _proof_steps() -> bool:
-	var keep := ProofEpisode.root
-	ProofEpisode.root = ROOT + "_proof"
-	var ed = load("res://src/reading/reading_panel.gd").new()
-	ed.workspace = "proof"
-	ed._build_panel()
-	ed._doc._sync = false
-	ed._doc._fields = {"title": "Proofs", "tags": "math"}
-	var proof = ed._block_cards["proof"]
-	ed._attach("youtube")
-	_ok(ed._note_upload == null and not ed._youtube._desc.visible,
-		"control: a note whose card makes its episodes shows no description box of the YouTube card's, and lists no step there")
-	ed._youtube._upload.set_pressed_no_signal(true)
-	ed._youtube._write_tags.button_pressed = true
-	proof._open_episode()
-	proof._refresh()
-	var step = ed._youtube.episode_steps()[0]
-	var pipe = ed.pipeline()
-	pipe.refresh()
-	var listed: Array = pipe.names()
-	_ok(not pipe.row(step.key, "YouTube").is_empty() and pipe.row(step.key, "Proof").is_empty() and listed.find("Tags") > listed.find("Script"),
-		"its row stands under the Script, in a section of the YouTube card's own: %s" % str(listed))
-	_ok(ed.episode_feed() == proof._feed and ed._youtube._write_tags.text == "Write each episode's tags",
-		"the episode shown is the Proof card's, and the box names each episode's tags")
-	_ok(step.shown == proof._feed, "the step is told which episode is shown")
-	proof._episode.write_json("problem", {"episode_title": "Why Two Is Prime", "description": "Two is prime.", "tags": ["primes", "math"]})
-	proof._episode.write_text("script", "Two has no divisors but one and itself.")
-	_ok(Array(proof._feed.tags()) == ["math", "primes"] and proof._feed.episode_title() == "Why Two Is Prime"
-		and proof._feed.words() == "Two has no divisors but one and itself.", "it hands the step the note's tags with the framer's, and the lesson")
-	var named: LineEdit = ed._writer._field_edits["episode"]
-	ed._writer._refresh_handed()
-	_ok(named.text == "Why Two Is Prime" and named.editable, "the Script card's Episode is the framer's title")
-	named.text = "Two Is Prime"
-	ed._writer._commit_field("episode")
-	var problem: Dictionary = proof._episode.read_json("problem")
-	_ok(proof.episode_title() == "Two Is Prime" and problem.get("description") == "Two is prime."
-		and ed._youtube.title_now() == "Proofs: Two Is Prime",
-		"an edit is written into its problem, the rest kept, and is its %%episode%% (%s)" % ed._youtube.title_now())
-	named.text = "Why Two Is Prime"
-	ed._writer._commit_field("episode")
-	proof._refresh_tags()
-	_ok(_tag_fields(ed._youtube) == 1 and Array(proof._tags_field.get_tags()) == ["math"]
-		and ed.upload_meta("").get("tags") == ["math"],
-		"the YouTube card shows the note's tags as one list, and the upload takes it alone - the framer's are not added unseen")
-	AgentJobs._ended["text-youtube-check-proof"] = {"ok": true, "text": "{\"tags\": [\"prime numbers\", \"divisors\", \"proof\"]}"}
-	step._jobs[proof._feed.folder()] = {"id": "text-youtube-check-proof", "feed": proof._feed, "stamp": proof._feed.stamp()}
-	pipe.refresh()
-	var r: Dictionary = pipe.row(step.key)
-	_ok((r["glyph"] as Label).text == "✓" and (r["text"] as Label).text == "3 tags: prime numbers, divisors, proof" and not (r["redo"] as Button).disabled,
-		"made: its ✓, its tags, and its ⟳ (%s)" % (r["text"] as Label).text)
-	_ok(ed._doc.field("tags") == "prime numbers, divisors, proof" and Array(proof._tags_field.get_tags()) == ["prime numbers", "divisors", "proof"]
-		and ed.upload_meta("").get("tags") == ["prime numbers", "divisors", "proof"],
-		"landed, they replace the note's tags: the one list on the card, and what goes up (%s)" % ed._doc.field("tags"))
-	ed._youtube._write_tags.button_pressed = false
-	pipe.refresh()
-	_ok(pipe.row(step.key).is_empty() and ed.upload_meta("").get("tags") == ["prime numbers", "divisors", "proof"],
-		"box cleared: the row goes, and the list stays as it was written")
-	# A NOTE WITH NO TAGS TAKES THE FRAMER'S, once
-	ed._doc._fields.erase("tags")
-	proof._seed_tags()
-	_ok(ed._doc.field("tags").is_empty(), "control: a read-only process does not fill an empty list")
-	proof._seed_from_problem()
-	_ok(ed._doc.field("tags") == "primes, math" and Array(proof._tags_field.get_tags()) == ["primes", "math"],
-		"a note with no tags takes the framer's, on the card (%s)" % ed._doc.field("tags"))
-	ed._doc._fields["tags"] = "mine"
-	proof._seed_from_problem()
-	_ok(ed._doc.field("tags") == "mine", "and a note with tags keeps its own")
-	ed.free()
-	_wipe(ProofEpisode.root)
-	ProofEpisode.root = keep
-	return true
-
-
 ## A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, of an actor's note: "I don't see anywhere it
 ## would be possible to write a description ... be sure that the auto-tagging mechanism should work as well").
 func _note_steps() -> bool:
@@ -1207,8 +1129,8 @@ func _panel_fields() -> bool:
 	ed._panel.plus.about_to_popup.emit()
 	var pop: PopupMenu = ed._panel.plus.get_popup()
 	# "+" lists what a note can have; on a show of cards the clock and the presentation are taken,
-	# so what takes neither is all it can be given - YouTube, and Voice training (its reader can be
-	# taught someone's voice) - and the rest is grayed with its reason
+	# so what takes neither is all it can be given - YouTube, Voice training (its reader can be
+	# taught someone's voice) and a Direction (where to take the next episode) - and the rest is grayed with its reason
 	var at := -1
 	var lit: Array = []
 	for i in pop.item_count:
@@ -1217,8 +1139,8 @@ func _panel_fields() -> bool:
 			at = i
 		if not key.is_empty() and not pop.is_item_disabled(i):
 			lit.append(key)
-	_ok(at >= 0 and lit == ["voice_training", "youtube"],
-		"its \"+\" offers YouTube and Voice training, and nothing that takes the show's clock or presentation (%s)" % str(lit))
+	_ok(at >= 0 and lit == ["direction", "voice_training", "youtube"],
+		"its \"+\" offers YouTube, Voice training and a Direction, and nothing that takes the show's clock or presentation (%s)" % str(lit))
 	if at >= 0:
 		pop.id_pressed.emit(pop.get_item_id(at))
 	_ok(ed._youtube != null and show._yt_desc != null and show._yt_desc.get_parent() == ed._youtube.extra,
@@ -1231,7 +1153,7 @@ func _panel_fields() -> bool:
 		twice = twice or key == "youtube"
 		if not key.is_empty() and not pop.is_item_disabled(i):
 			left.append(key)
-	_ok(not twice and left == ["voice_training"], "and \"+\" does not offer it twice - Voice training is all it can be given now (%s)" % str(left))
+	_ok(not twice and left == ["direction", "voice_training"], "and \"+\" does not offer it twice - Voice training and a Direction are all it can be given now (%s)" % str(left))
 	ed._youtube._upload.set_pressed_no_signal(true)
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read

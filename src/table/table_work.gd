@@ -45,6 +45,10 @@ var game: TableGame
 var game_spec := {}
 var game_dir := ""
 var game_seed := 0
+## WHAT IS WRITTEN THAT TEX LAID OUT ([TableInk]): the episode's `ink.json` as parsed (`{}` before the ink step), and the seed the
+## hand that writes it is drawn from.
+var ink_doc := {}
+var ink_seed := 0
 
 ## A FRAME POSES ONLY WHAT CAN HAVE CHANGED ([method _settled]): every part after a jump in show time longer than QUIET_JUMP
 ## (seconds - a scrub, a seek), and a part from QUIET_EDGE before a move of it to twice that after it, so its last value is drawn.
@@ -59,6 +63,20 @@ const BLEND_IN := 0.8
 ## all from nearer than BLEND_NEAR.x, wholly from further than BLEND_NEAR.y (meters).
 const BLEND_LIFT := 0.1
 const BLEND_NEAR := Vector2(0.01, 0.05)
+## A PEN SEEN, as the desk's (Proof's, at the table since 2026-11-11 - next/proof.md; [method _pen_nib], [method _point_nib]): how
+## high its nib lifts between strokes and once a line is done (meters); how it leans from its nib - up, to the right and away from
+## the chair, the frame's top right - and how far that sways (degrees); how near over the paper it points, how wide a thing it
+## sweeps under before it settles beside its end (TeX points), how far off the thing it stays, and how long the sweep and the
+## settling take (seconds).
+const PEN_LIFT := 0.004
+const PEN_REST_LIFT := 0.022
+const PEN_UP := Vector3(0.42, 0.64, -0.40)
+const PEN_SWAY := 4.0
+const POINT_LIFT := 0.0035
+const POINT_WIDE := 40.0
+const POINT_GAP := 6.0
+const POINT_SWEEP := 0.9
+const POINT_SETTLE := 0.4
 ## ...and lifted a hand's whole BLEND_LIFT however clear its way, turned more than BLEND_TURN.y on the way there - from nothing at
 ## BLEND_TURN.x (radians): what turns sweeps where its way does not go.
 const BLEND_TURN := Vector2(0.35, 1.0)
@@ -234,7 +252,7 @@ var _chan := {}               # channel -> [{t0, t1, track, from, end, i}] in or
 var _rest := {}               # channel -> its value before anything acts on it
 var _runs_of := {}            # channel -> the laws its part follows all the time
 var _plumes: Array = []
-var _writing := {}            # work -> the words written on it, as its last `write` says, and once drawn their skin
+var _writing := {}            # work -> what is written on it ([method _order_writing]): one write's words, or a page of them, and once drawn their skin
 var _drunk := {}              # a liquid's work -> how full the drinks so far leave it ([method _drunk_from])
 var _aloft_of := {}           # a channel and where a move left it -> whether it touches nothing there ([method _held_up])
 var _parent_work := {}        # work index -> the work it is a part of, or -1 ([method _within])
@@ -565,7 +583,6 @@ func _take_acts(raw: Variant, beats: int) -> void:
 	notes = made["notes"]
 	if assembly != null:
 		notes.append_array(assembly_notes)
-	_writing = {}
 	_aloft_of = {}
 	_drunk = {}
 	acts = []
@@ -596,6 +613,12 @@ func _take_acts(raw: Variant, beats: int) -> void:
 		if kept.is_empty():
 			notes.append("%s: none of its tracks found anything on the table to move" % String(act["name"]))
 			continue
+		# ...A WRITE BY A PEN SEEN brings the pen with it: its nib on the ink as it goes down ([method _pen_nib])
+		for tr in kept.duplicate():
+			if String((tr as Dictionary)["law"]) == "write" and (tr as Dictionary).has("with"):
+				var pen := _pen_track(act, tr as Dictionary)
+				if not pen.is_empty():
+					kept.append(pen)
 		# ...AND THE WATER A BRUSH IS RINSED IN CLOUDS WITH WHAT IS RINSED OUT OF IT ([method TablePaint.cloud_at])
 		for tr in kept.duplicate():
 			if String((tr as Dictionary)["law"]) == "paint" and (tr as Dictionary).has("rinse"):
@@ -604,9 +627,311 @@ func _take_acts(raw: Variant, beats: int) -> void:
 					kept.append(cloud)
 		act["tracks"] = _trips(act, kept)
 		acts.append(act)
-		for tr in kept:
-			if String((tr as Dictionary)["law"]) == "write":
-				_writing[int(tr["_wi"])] = {"text": tr["text"], "hand": tr["hand"], "ink": tr["ink"]}
+	_order_writing()
+
+
+## WHAT IS WRITTEN ON EACH SHEET, in the order it is written: the acts' writes taken a sheet at a time by beat, then as listed. One
+## write of words is the sheet's alone, fitted to it ([method SheetWriting.node]); more than one, or a formula or a drawing, is a
+## PAGE ([method SheetWriting.page]) - write K of N taking the sheet's `written` from K/N to (K+1)/N, and its picture made here,
+## on the worker the table is built on, never on the frame that first shows it.
+func _order_writing() -> void:
+	for wr in _writing.values():
+		if (wr as Dictionary).has("node") and is_instance_valid((wr as Dictionary)["node"]):
+			((wr as Dictionary)["node"] as Node).queue_free()
+	_writing = {}
+	var order: Array = range(acts.size())
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var ra := _beat_rank((acts[a] as Dictionary).get("beat"))
+		var rb := _beat_rank((acts[b] as Dictionary).get("beat"))
+		return ra < rb or (ra == rb and a < b))
+	var on := {}
+	var named := {}       # work -> the act that wrote each of its writes, in order
+	var points: Array = []
+	for i in order:
+		for t in ((acts[i] as Dictionary)["tracks"] as Array):
+			var tr: Dictionary = t
+			if String(tr.get("law", "")) == "point":
+				points.append([String((acts[i] as Dictionary)["name"]), tr])
+			if String(tr.get("law", "")) == "write" and tr.has("_wi"):
+				if not on.has(int(tr["_wi"])):
+					on[int(tr["_wi"])] = []
+					named[int(tr["_wi"])] = []
+				(on[int(tr["_wi"])] as Array).append(tr)
+				(named[int(tr["_wi"])] as Array).append(String((acts[i] as Dictionary)["name"]))
+	for wi in on:
+		var list: Array = on[wi]
+		var n := list.size()
+		for k in n:
+			(list[k] as Dictionary)["value"] = float(k + 1) / float(n)
+			# ...and which of the sheet's writes it is, for the pen that writes it ([method _pen_nib])
+			(list[k] as Dictionary)["_sheet"] = int(wi)
+			(list[k] as Dictionary)["_k"] = k
+			(list[k] as Dictionary)["_n"] = n
+		var first: Dictionary = list[0]
+		var wr := {"text": first["text"], "hand": first["hand"], "ink": first["ink"]}
+		# (...a page also wherever a pen seen writes, which follows the page's layout)
+		if n > 1 or not TableInk.item_of_track(first).is_empty() or list.any(func(t: Dictionary) -> bool: return t.has("with")):
+			var items: Array = []
+			var unset := 0
+			for tr in list:
+				# ...a line crossed out: the earlier write it names on this sheet, by its act
+				if (tr as Dictionary).has("strike"):
+					var target := (named[wi] as Array).find(String((tr as Dictionary)["strike"]))
+					if target < 0 or target >= items.size():
+						notes.append("%s: nothing written on it before is called \"%s\", so nothing is crossed out (its writes: %s)" % [
+							String((works[wi] as Dictionary)["name"]), String((tr as Dictionary)["strike"]), ", ".join(PackedStringArray(named[wi]))])
+					items.append({"strike": target if target >= 0 and target < items.size() else -1})
+					continue
+				var it := TableInk.item_of_track(tr as Dictionary)
+				if it.is_empty():
+					items.append({"text": String((tr as Dictionary)["text"]), "hand": String((tr as Dictionary)["hand"])})
+					continue
+				var rec := TableInk.record_in(ink_doc, it)
+				if rec.is_empty():
+					unset += 1
+					items.append({"text": " ", "hand": String((tr as Dictionary)["hand"])})
+				else:
+					items.append({"rec": rec})
+			var sheet: Dictionary = ((works[wi] as Dictionary)["w"] as Dictionary)["sheet"]
+			wr["page"] = SheetWriting.page(items, SheetWriting.room_of(sheet), ink_seed, ink_doc.get("fonts", {}) if ink_doc.get("fonts") is Dictionary else {})
+			var name := String((works[wi] as Dictionary)["name"])
+			# (...none laid out at all is the ink step still to come, which is no fault: only what TeX refused is said)
+			if unset > 0 and not ink_doc.is_empty():
+				notes.append("%s: TeX could not set %d of its %d writes, so they are left blank - write them so they set" % [name, unset, n])
+			if bool((wr["page"] as Dictionary)["shrunk"]):
+				notes.append("%s: its %d writes run off the sheet, so they are written smaller to fit - write the rest on another sheet" % [name, n])
+			var laid: Array = ((wr["page"] as Dictionary)["layout"] as Dictionary)["items"]
+			for k in mini(laid.size(), (named[wi] as Array).size()):
+				(laid[k] as Dictionary)["act"] = String(named[wi][k])
+		_writing[wi] = wr
+	# WHAT EACH POINT POINTS AT, found on its page now the pages are laid ([method _point_nib]) - or said, while it can be put right
+	for pair in points:
+		if (pair[1] as Dictionary).has("_ch") and not (pair[1] as Dictionary).has("_tip"):
+			_tool_ends(pair[1] as Dictionary)
+		var why := _find_pointed(pair[1] as Dictionary)
+		if not why.is_empty():
+			notes.append("%s: %s" % [String(pair[0]), why])
+
+
+## THE PEN THAT WRITES [param tr] (its `with`, "thing" or "thing/part"), as a track of act [param act] on the pen's own pose - its nib
+## where the ink goes down ([method _pen_nib]) - or `{}`, said, where there is no such pen.
+func _pen_track(act: Dictionary, tr: Dictionary) -> Dictionary:
+	var said := String(tr["with"])
+	var cut := said.find("/")
+	var pen := {"law": "pen", "thing": said.substr(0, cut) if cut >= 0 else said, "between": tr.get("between", Vector2(0.0, 1.0)),
+		"_write": tr}
+	if cut >= 0:
+		pen["part"] = said.substr(cut + 1)
+	var why := _resolve(pen)
+	if not why.is_empty():
+		notes.append("%s: its pen - %s" % [String(act["name"]), why])
+		return {}
+	pen.erase("_copies")
+	_tool_ends(pen)
+	return pen
+
+
+## A HELD TOOL'S ENDS, found once as the table is built and kept on its track [param tr] (`_tip`, `_grip`: its node's space) - by a
+## painter of its own ([method TablePaint.tool_of]: its points `tip` and `grip`, else the ends of its length), so the bake's twin,
+## which poses it on another thread, never reads the tool's nodes while the app's thread moves them.
+func _tool_ends(tr: Dictionary) -> void:
+	var tool := TablePaint.new(self).tool_of(String(tr["_ch"]), tr)
+	tr["_tip"] = tool.get("tip", Vector3.ZERO)
+	tr["_grip"] = tool.get("grip", Vector3.UP * 0.1)
+	# ...A WHOLE THING held by a point one of its parts names (a pen's nib on its body): that point, in the thing's own space
+	if tr.has("_ti") and not tr.has("_wi"):
+		var ti := int(tr["_ti"])
+		var inv := _world_of((things[ti] as Dictionary)["node"]).affine_inverse()
+		for wi in (things[ti] as Dictionary)["works"]:
+			var pts: Dictionary = ((works[wi] as Dictionary)["w"] as Dictionary).get("points", {})
+			for k in pts:
+				if String(k).to_lower() in ["tip", "grip"]:
+					tr["_" + String(k).to_lower()] = inv * (_world_of((works[wi] as Dictionary)["node"]) * (pts[k] as Vector3))
+
+
+## WHAT POINT [param tr] POINTS AT, found on its page: its sheet (`on`) and the box there of what it names (`at`: a formula's part
+## written as `\pin{name}{...}`, a drawing's element by its id, or the act that wrote the line), kept as `_pointed` - "" found, else
+## why not, naming what can be pointed at.
+func _find_pointed(tr: Dictionary) -> String:
+	tr.erase("_pointed")
+	var on := String(tr["on"])
+	var cut := on.find("/")
+	var ti := _thing_named(on.substr(0, cut) if cut >= 0 else on)
+	if ti < 0:
+		return "it points at \"%s\", and no thing on the table is called that" % on
+	var wi := -1
+	if cut >= 0:
+		wi = int(_part_of(ti, on.substr(cut + 1))["wi"])
+	else:
+		for w in (things[ti] as Dictionary)["works"]:
+			if ((works[w] as Dictionary)["w"] as Dictionary).has("sheet"):
+				wi = int(w)
+				break
+	if wi < 0 or not _writing.has(wi) or not (_writing[wi] as Dictionary).has("page"):
+		return "it points at \"%s\", where nothing is written by then" % on
+	var at := String(tr["at"]).strip_edges()
+	var names := PackedStringArray()
+	for it in (((_writing[wi] as Dictionary)["page"] as Dictionary)["layout"] as Dictionary)["items"]:
+		var d: Dictionary = it
+		for nm in (d["anchors"] as Dictionary):
+			names.append(String(nm))
+			if String(nm).to_lower() == at.to_lower():
+				tr["_pointed"] = {"sheet": wi, "box": (d["anchors"] as Dictionary)[nm]}
+				return ""
+		if d.has("act"):
+			names.append(String(d["act"]))
+			if String(d["act"]).to_lower() == at.to_lower():
+				tr["_pointed"] = {"sheet": wi, "box": Rect2(float(d["x"]), float(d["y"]), float(d["w"]), float(d["h"]))}
+				return ""
+	return "nothing written on \"%s\" is called \"%s\" (what can be pointed at there: %s)" % [on, at, ", ".join(names) if not names.is_empty() else "nothing yet"]
+
+
+## WHERE A PEN'S NIB IS at show time [param T] as it writes ([param tr], a write's pen, [method _pen_track]): `{sheet, at (the page's
+## TeX points), lift (meters)}` - or `{}`. It follows the sheet's own `written`, so it is always where the ink is going down: coming
+## down to the first stroke in the write's lead, on each stroke as far along it as the ink is, lifted between strokes, and lifted
+## clear to the right of what it wrote in the tail ([constant SheetWriting.PEN_LEAD]).
+func _pen_nib(tr: Dictionary, T: float) -> Dictionary:
+	var w: Dictionary = tr["_write"]
+	var wi := int(w.get("_sheet", -1))
+	if wi < 0 or not _writing.has(wi) or not (_writing[wi] as Dictionary).has("page"):
+		return {}
+	var laid: Array = (((_writing[wi] as Dictionary)["page"] as Dictionary)["layout"] as Dictionary)["items"]
+	var k := int(w["_k"])
+	if k >= laid.size():
+		return {}
+	var it: Dictionary = laid[k]
+	var g := clampf(float(value("w%d:written" % wi, T)) * float(w["_n"]) - float(k), 0.0, 1.0)
+	var lead := float(it["lead"])
+	var ink := float(it["ink"])
+	var first := _stroke_point(it, 0.0)
+	var last := _stroke_point(it, float(it["seconds"]))
+	if g < lead:
+		return {"sheet": wi, "at": first["at"], "lift": lerpf(PEN_REST_LIFT, PEN_LIFT, smoothstep(0.0, 1.0, g / maxf(lead, 1e-6)))}
+	if g <= lead + ink:
+		var at := _stroke_point(it, (g - lead) / maxf(ink, 1e-6) * float(it["seconds"]))
+		return {"sheet": wi, "at": at["at"], "lift": float(at["lift"])}
+	var s := smoothstep(0.0, 1.0, (g - lead - ink) / maxf(1.0 - lead - ink, 1e-6))
+	return {"sheet": wi, "at": (last["at"] as Vector2).lerp((last["at"] as Vector2) + Vector2(POINT_GAP * 4.0, POINT_GAP * 2.0), s),
+		"lift": lerpf(0.0, PEN_REST_LIFT, s)}
+
+
+## Where the hand's nib is [param t] seconds into item [param it]'s writing ([method SheetWriting.page]'s layout): `{at (the page's TeX
+## points), lift}` - on a stroke as far along it as the ink is, in the air between two, and along a line of words in a hand.
+static func _stroke_point(it: Dictionary, t: float) -> Dictionary:
+	var strokes: Array = it.get("strokes", [])
+	if strokes.is_empty():
+		# words in a hand: line by line, left to right, as their picture is put down
+		var lines := maxi(int(it.get("lines", 1)), 1)
+		var f := clampf(t / maxf(float(it["seconds"]), 1e-6), 0.0, 0.999) * float(lines)
+		var li := floori(f)
+		return {"at": Vector2(float(it["x"]) + (f - float(li)) * float(it["w"]), float(it["y"]) + (float(li) + 0.78) * float(it["h"]) / float(lines)),
+			"lift": 0.0}
+	var o := Vector2(float(it.get("ox", 0.0)), float(it.get("oy", 0.0)))
+	var prev: Dictionary = {}
+	for s in strokes:
+		var st: Dictionary = s
+		var pts: PackedVector2Array = st["points"]
+		if pts.is_empty():
+			continue
+		if t < float(st["t0"]):
+			if prev.is_empty():
+				return {"at": o + pts[0], "lift": PEN_LIFT}
+			# ...between two strokes: in the air from the end of one to the start of the next
+			var p0: PackedVector2Array = prev["points"]
+			var u := clampf((t - float(prev["t1"])) / maxf(float(st["t0"]) - float(prev["t1"]), 1e-6), 0.0, 1.0)
+			return {"at": o + p0[p0.size() - 1].lerp(pts[0], smoothstep(0.0, 1.0, u)), "lift": PEN_LIFT * sin(PI * u)}
+		if t <= float(st["t1"]):
+			return {"at": o + _along(pts, (t - float(st["t0"])) / maxf(float(st["t1"]) - float(st["t0"]), 1e-6)), "lift": 0.0}
+		prev = st
+	var end: PackedVector2Array = prev.get("points", PackedVector2Array([Vector2.ZERO]))
+	return {"at": o + end[end.size() - 1], "lift": PEN_LIFT}
+
+
+## The point [param f] of the way along [param pts] by its length, as its ink is put down ([method TableInk.picture_of]).
+static func _along(pts: PackedVector2Array, f: float) -> Vector2:
+	if pts.size() == 1:
+		return pts[0]
+	var total := 0.0
+	for i in range(1, pts.size()):
+		total += pts[i - 1].distance_to(pts[i])
+	var want := clampf(f, 0.0, 1.0) * total
+	for i in range(1, pts.size()):
+		var seg := pts[i - 1].distance_to(pts[i])
+		if want <= seg:
+			return pts[i - 1].lerp(pts[i], want / maxf(seg, 1e-9))
+		want -= seg
+	return pts[pts.size() - 1]
+
+
+## WHERE A POINT HOLDS THE NIB [param tau] of [param d] seconds into its act: under a wide thing (a formula, a curve) it comes down at its
+## start and sweeps along under it, then settles beside its right end, low on its height - where the pen's body leans away over clean
+## paper; at a small one (a part of a formula, a label, a dot) it comes straight to that place. `{sheet, at, lift}`, or `{}` for a point
+## that found nothing ([method _find_pointed]).
+func _point_nib(tr: Dictionary, tau: float, d: float) -> Dictionary:
+	if not (tr.get("_pointed") is Dictionary):
+		return {}
+	var b: Rect2 = (tr["_pointed"] as Dictionary)["box"]
+	var stays := Vector2(b.end.x + POINT_GAP * 0.5, b.position.y + b.size.y * 0.7)
+	var at := stays
+	if b.size.x >= POINT_WIDE:
+		var y := b.end.y + POINT_GAP * 0.5
+		var from := Vector2(b.position.x + b.size.x * 0.1, y)
+		var to := Vector2(b.end.x - b.size.x * 0.05, y)
+		# (...the sweep after the hand has brought it, cut to what the act has, so it ends where the pen stays)
+		var sweep := minf(POINT_SWEEP, maxf(d - BLEND_IN, 0.2) * 0.6)
+		at = from.lerp(to, smoothstep(0.0, 1.0, (tau - BLEND_IN) / sweep))
+		at = at.lerp(stays, smoothstep(0.0, 1.0, (tau - BLEND_IN - sweep) / POINT_SETTLE))
+	return {"sheet": int((tr["_pointed"] as Dictionary)["sheet"]), "at": at, "lift": POINT_LIFT}
+
+
+## A POINT OF SHEET [param wi]'s PAGE ([param at], TeX points from the head of its room) in the table's space at show time [param T],
+## [param lift] meters off the paper - on the sheet as it lies, bent and folded, wherever it has been moved to.
+func _page_world(wi: int, at: Vector2, lift: float, T: float) -> Vector3:
+	var sheet: Dictionary = ((works[wi] as Dictionary)["w"] as Dictionary)["sheet"]
+	var scale := float((((_writing[wi] as Dictionary)["page"] as Dictionary)["layout"] as Dictionary)["scale"])
+	var room := SheetWriting.room_of(sheet)
+	var w := float(sheet["w"])
+	var l := float(sheet["l"])
+	var x := float(sheet["x0"]) - room.x * 0.5 + at.x * scale
+	var z := float(sheet["z0"]) + l * 0.5 - room.y * 0.5 + at.y * scale
+	var y := float(sheet["thick"]) + SheetWriting.ABOVE + Props.sheet_lift(x - float(sheet["x0"]), z - float(sheet["z0"]), w, l,
+		float(sheet["bend"]), float(sheet["fold"]))
+	var place: Transform3D = sheet["place"]
+	var world := _work_world(wi, T)
+	return world * (place * Vector3(x, y, z)) + (world.basis * place.basis * Vector3.UP).normalized() * lift
+
+
+## THE PEN HELD BY ITS TIP AT [param A] (the table's space) at show time [param T]: its tip and grip as a tool's are found
+## ([method _tool_ends]), its body leaning from the nib to the frame's top right as a writer's hand holds it, swaying a few degrees
+## over seconds - [param x0] its rest.
+func _held_by_tip(tr: Dictionary, A: Vector3, T: float, x0: Transform3D) -> Transform3D:
+	var a0 := x0 * (tr.get("_tip", Vector3.ZERO) as Vector3)
+	var g0 := x0 * (tr.get("_grip", Vector3.UP * 0.1) as Vector3)
+	var lean := Basis(Vector3.UP, deg_to_rad(PEN_SWAY * sin(T * 0.37) + PEN_SWAY * 0.5 * sin(T * 0.91 + 1.3))) * PEN_UP.normalized()
+	var v0 := (g0 - a0).normalized()
+	var v := lean.normalized()
+	var r := Basis(Quaternion(v0, v)) if v0.length() > 0.5 and v0.dot(v) > -0.999 else Basis.IDENTITY
+	return Transform3D(r, A - r * a0) * x0
+
+
+## WHAT IS WRITTEN, FOR THE BAKE'S TWIN ([TablePhysics]): each page's layout - made once and never written again - in dictionaries of its
+## own, so the pen and what points are posed alike on the twin, and the app's thread, which adds each page's skin to the work's own
+## when it is first drawn, shares nothing it writes with the bake.
+func pages_for_twin() -> Dictionary:
+	var out := {}
+	for wi in _writing:
+		if (_writing[wi] as Dictionary).has("page"):
+			out[wi] = {"page": {"layout": ((_writing[wi] as Dictionary)["page"] as Dictionary)["layout"]}}
+	return out
+
+
+## Where beat [param b] comes in the reading: the intro first, the close last, a numbered beat in its place.
+static func _beat_rank(b: Variant) -> int:
+	if b is String and String(b) == "intro":
+		return 0
+	if b is String and String(b) == "close":
+		return 1 << 30
+	return int(b) if (b is int or b is float or (b is String and String(b).is_valid_int())) else 1 << 29
 
 
 ## HOW MUCH WATER cloud track [param tr] ([method _cloud_of]) clouds, milliliters: its vessel's as the physics found it drawn, or a
@@ -778,7 +1103,7 @@ func _resolve(track: Dictionary) -> String:
 	if ti < 0:
 		return "no thing on the table is called \"%s\"" % String(track["thing"])
 	var part := String(track.get("part", ""))
-	var pose := law in ["circle", "aim", "carry", "pour", "dip", "drink", "paint"] or (law == "path" and _path_moves(track))
+	var pose := law in ["circle", "aim", "carry", "pour", "dip", "drink", "paint", "pen", "point"] or (law == "path" and _path_moves(track))
 	if pose and part.is_empty() and assembly != null and assembly.holds_stock(String((things[ti] as Dictionary)["name"])):
 		return "\"%s\" holds the assembly's pieces, which are not its parts: it stays where it stands" % String(track["thing"])
 	var state := String(track.get("state", ""))
@@ -2362,7 +2687,12 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			if absf(roll) > 1e-6 and v.length() > 0.5:
 				r = Basis(v, roll) * r
 			out = Transform3D(r, A - r * a0) * x0
-	if String(tr["law"]) in ["aim", "circle"] and tau < BLEND_IN:
+		# A PEN SEEN: its nib on the ink as it goes down, or by what it points at, leaning as a hand holds it
+		"pen", "point":
+			var nib := _pen_nib(tr, T) if String(tr["law"]) == "pen" else _point_nib(tr, tau, d)
+			if not nib.is_empty() and _writing.has(int(nib["sheet"])):
+				out = _held_by_tip(tr, _page_world(int(nib["sheet"]), nib["at"], float(nib["lift"]), T), T, x0)
+	if String(tr["law"]) in ["aim", "circle", "pen", "point"] and tau < BLEND_IN:
 		# A HAND BRINGS IT THERE FIRST: from where it was to where the law has it, over the first moment - lifted
 		# in an arc, so it goes over a rim rather than through it, early, as a hand lifts a tool before it reaches
 		var lin := tau / BLEND_IN
@@ -3824,7 +4154,10 @@ func _written(wi: int, t: float) -> void:
 		if got <= 0.0:
 			return
 		var wk: Dictionary = works[wi]
-		wr["node"] = SheetWriting.node((wk["w"] as Dictionary)["sheet"], String(wr["text"]), String(wr["hand"]), Color.html(String(wr["ink"])))
+		if wr.has("page"):
+			wr["node"] = SheetWriting.page_node((wk["w"] as Dictionary)["sheet"], wr["page"], Color.html(String(wr["ink"])))
+		else:
+			wr["node"] = SheetWriting.node((wk["w"] as Dictionary)["sheet"], String(wr["text"]), String(wr["hand"]), Color.html(String(wr["ink"])))
 		(wk["node"] as Node3D).add_child(wr["node"])
 	((wr["node"] as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("written", got)
 

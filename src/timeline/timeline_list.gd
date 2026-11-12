@@ -8,6 +8,8 @@ class_name TimelineList
 ## come, each its time and its name; a row pressed picks it in the editor's inspector and moves the show there. The card it is on
 ## is shown while an editor is open and hidden otherwise - the list follows the editor, never the other way.
 
+## What its card is for, on the card's title bar and its chip ([member Card.blurb]).
+const BLURB := "The open timeline as a list: every beat, cue or entry at its time. Press one to pick it and move the show there. Shown while a timeline is open."
 const POLL := 10              # frames between looks at what is open
 
 var _editor: Node = null

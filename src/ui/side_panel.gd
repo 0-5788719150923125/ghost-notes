@@ -197,10 +197,13 @@ func add_component_row(attached: Callable, attach: Callable) -> CardRow:
 ## A new card at the end of [member body], with a chip in [member card_row]; returns the card's
 ## body, which is where its rows go. [param key] names it on the panel. A card that is a
 ## COMPONENT's ([param component], its key in [constant Components.REGISTRY]) can be taken off the
-## note from its title bar, where the panel says how ([member detach]).
-func add_card(key: String, card_title: String, family: StringName, component := "") -> VBoxContainer:
+## note from its title bar, where the panel says how ([member detach]). WHAT IT IS FOR ([param about]) is its
+## title bar's and its chip's tooltip: a component's card says its row's blurb when [param about] is empty
+## ([method Components.card_blurb]), so every card a note's components bring says it with nothing passed.
+func add_card(key: String, card_title: String, family: StringName, component := "", about := "") -> VBoxContainer:
 	var card: Card = CardScript.new(("%s.%s" % [card_prefix, key]) if not card_prefix.is_empty() else "",
 		card_title, family)
+	card.blurb = about if not about.is_empty() else Components.card_blurb(key, component)
 	body.add_child(card)
 	_deck.adopt(card)
 	if card_row != null:
@@ -249,10 +252,12 @@ func _add_detach(card: Card, component: String) -> void:
 
 
 ## A card PINNED UNDER the scrolling body, with a chip in [member card_row]; returns the card's body.
-## It stays in view however far the body is scrolled, and the body gets the room that is left.
-func add_footer_card(key: String, card_title: String, family: StringName) -> VBoxContainer:
+## It stays in view however far the body is scrolled, and the body gets the room that is left. [param about] as
+## [method add_card]'s.
+func add_footer_card(key: String, card_title: String, family: StringName, about := "") -> VBoxContainer:
 	var card: Card = CardScript.new(("%s.%s" % [card_prefix, key]) if not card_prefix.is_empty() else "",
 		card_title, family)
+	card.blurb = about if not about.is_empty() else Components.card_blurb(key)
 	_footer.add_child(card)
 	if not _foot_pad.visible:
 		_foot_pad.visible = true

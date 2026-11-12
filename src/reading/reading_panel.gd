@@ -17,7 +17,7 @@ class_name ReadingPanel
 ## Everything DOWNSTREAM is shared, because a take is just a WAV: [Spectrum],
 ## the scenes, the exporter, the subtitles and the ` feedback console all work
 ## unchanged. The panel deliberately mirrors [SynthEditor]'s - same corner, same
-## width, same title/hide/hint/text shape - so this reads as another ghost mode
+## width, same title/hide/text shape - so this reads as another ghost mode
 ## rather than a bolted-on window.
 ##
 ## WHAT IT IS MADE OF (next/structure.md, steps 17-23): the voices and the Voice card's rows are
@@ -31,7 +31,7 @@ class_name ReadingPanel
 ## A READING OF A DOCUMENT, WHOEVER WROTE IT. This panel is the voice and the room a reading is
 ## heard in; what is read comes from the document a [ScriptWriter] holds, and what it is SEEN in is
 ## the cards of the note's components. NOTHING EXTENDS IT (next/structure.md, step 12): the
-## workspace it runs is a row ([member workspace]: its section, title, hint and the cards a panel
+## workspace it runs is a row ([member workspace]: its section, title and the cards a panel
 ## without a note has), and a component that changes the reading HANDS it the part - what is read
 ## ([member walk]), where it is heard ([member bed]) and how it goes out ([member publish]). Cards'
 ## [EpisodeCard] hands all three, so the voice pipeline, the cast, the export and the scrubbing
@@ -71,6 +71,8 @@ const DEFAULT_VOICE := "en_US-libritts-high"
 ## broken, and a key added later arrives with a sane value everywhere at once.
 const SLOT_DEFAULTS := {
 	"voice": DEFAULT_VOICE, "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
+	# a new voice made of the voice's readers (VoiceBlend: "mix: af_heart 2, bf_emma 1"); "" is the Speaker alone
+	"blend": "",
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35,
 	"echo": 0.0, "room": 0.0, "resonance": 0.0, "presence": 1.0, "ambience": 0.0,
 	"lean": 0.0, "near": 0.0, "seat": 0.0,
@@ -157,7 +159,7 @@ var _mode := "generative"
 
 ## THE WORKSPACE THIS PANEL RUNS, a key of [constant Components.WORKSPACES] - `reading` (a note read
 ## aloud), `table` (a show at a table) or `proof` - set by main before the panel is added. Its row says the
-## panel's section, title and hint, which of a note's cards it can show (`hosts`) and every card a
+## panel's section and title, which of a note's cards it can show (`hosts`) and every card a
 ## panel started without a note has (`classic`).
 var workspace := "reading":
 	set(key):
@@ -331,9 +333,9 @@ func _build_panel() -> void:
 	if _attached.has("youtube"):
 		_add_youtube()
 	# ...WHAT THE SHOW MAY BE PACED BY ([PacingCard]): a card only while some component offers a row
-	_panel.add_card("pacing", "Pacing", &"producer").add_child(PacingCard.new(func() -> Array: return tune_sections))
+	_panel.add_card("pacing", "Pacing", &"producer", "", PacingCard.BLURB).add_child(PacingCard.new(func() -> Array: return tune_sections))
 	# ...THE TIMELINE OPEN, AS A LIST ([TimelineList]): a card shown only while a timeline editor is open
-	_panel.add_card("timeline", "Timeline", &"picture").add_child(TimelineList.new())
+	_panel.add_card("timeline", "Timeline", &"picture", "", TimelineList.BLURB).add_child(TimelineList.new())
 	# ...and what is made for all of it, last of them: found in one place on every note (next/pipeline.md)
 	_pipeline.put_on(_panel)
 	# rows only some media use (the Ink) follow the medium the moment it changes
@@ -346,7 +348,7 @@ func _build_panel() -> void:
 	box.add_child(_status)
 
 
-## What the workspace's row says ([member workspace]): `title`, `hint`.
+## What the workspace's row says ([member workspace]): its `label`.
 func _row(field: String) -> String:
 	return String(Registry.field(Components.WORKSPACES, workspace, field, ""))
 
@@ -546,16 +548,9 @@ func episode_left(feed: EpisodeFeed) -> void:
 		_pipeline.episode_left(feed, episode_feed())
 
 
-func _build_header(box: VBoxContainer) -> void:
+func _build_header(_box: VBoxContainer) -> void:
 	# pinned over the scrolling body, so "⋯" and "–" never scroll away - and naming no mode (SidePanel.pin_title_row)
 	(_panel as SidePanel).pin_title_row(self)
-
-	var hint := Label.new()
-	hint.text = _row("hint")
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.add_theme_font_size_override("font_size", 12)
-	hint.modulate = Color(1, 1, 1, 0.6)
-	box.add_child(hint)
 
 
 ## THE SCRIPT: a card here, the writing in the editor window it opens. Where the words
@@ -727,6 +722,17 @@ func _note(msg: String) -> void:
 # --- what a component's card asks of the reading --------------------------------------------------
 # A card that changes the reading ([EpisodeCard]) hands it a walk, a bed and a publish, and asks it
 # these few things by name - never its own members.
+
+
+## A BLOCK AS IT STANDS NOW, for a card that reads another component's without naming its card (the Episode card reads the
+## Direction, [method Direction.text_of]): the card's own as it is - what [method _doc_capture] would write - where that card is
+## up, else the note's as it was opened, else {}.
+func block_now(key: String) -> Dictionary:
+	var got: Variant = _capture_block(key)
+	if got is Dictionary:
+		return got
+	var stored: Variant = _blocks.get(key)
+	return stored if stored is Dictionary else {}
 
 
 ## The document the script card holds (the note, or a draft).
@@ -1012,7 +1018,7 @@ func take_key(s: Dictionary, args: Dictionary) -> String:
 
 
 func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
-	var a := Delivery.request_args(s, ch, _cast.speaker_of(s))
+	var a := Delivery.request_args(s, ch, _cast.speaker_of(s), _cast.blend_of(s))
 	a["lexicon"] = "off" if Settings.is_read_only() else "fetch"
 	return a
 
@@ -1093,6 +1099,8 @@ func _on_synthesized(id: int, result: Dictionary) -> void:
 		for name in caps:
 			if bool((caps[name] as Dictionary).get("duration_control", false)):
 				_cast.show_pace()
+			if bool((caps[name] as Dictionary).get("blend", false)):
+				_cast.offer_blends(String(name))
 		return
 	if result.has("voices"):
 		_cast.fill_voices(result["voices"])

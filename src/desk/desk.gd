@@ -1,13 +1,16 @@
 extends Medium
 class_name DeskMedium
 
-## DeskMedium - a ghost doing math at a desk: a legal pad under a lamp, and a pen that writes on it
-## by itself while the teacher reads aloud what it writes (next/proof.md, "The desk").
+## DeskMedium - a desk with a legal pad under a lamp, and a pen that writes on it by itself while the
+## voice reads aloud what it writes (next/proof.md, "The desk"): the base a Letter is written at
+## ([LetterMedium]). Proof's own medium until 2026-11-11, when Proof became a table show (next/proof.md,
+## "Proof became a table show") - so no row of [constant Medium.REGISTRY] names it any more, and what is
+## below about a lesson's formulas is the pen a Letter inherits.
 ##
-## WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the lesson with the
-## pen's marks ([DeskScript]); its `desk`, what the Proof component hands the reading
-## ([method ProofEpisode.document]): every formula as TeX laid it out (`ink`) and the episode's seed,
-## which is the hand's; and its `title` and `byline`, the channel's, for the title screen.
+## WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the words with the
+## pen's marks ([DeskScript]); its `desk`, what the component hands the reading: every formula as TeX
+## laid it out (`ink`) and the seed, which is the hand's; and its `title` and `byline`, the channel's,
+## for the title screen.
 ##
 ## IT OPENS AND CLOSES AS THE CARD TABLE DOES ([ShowOpening], the user, 2026-10-16: "the intro/outro
 ## doesn't inherit the behavior from cards mode"): the channel's name over the desk thrown far out of

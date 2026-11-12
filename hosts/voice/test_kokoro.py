@@ -32,7 +32,12 @@ What is held, each with the case that must not change:
  10. the happy vowel: where the word's dictionary reading has an unstressed "ee" and eSpeak a lax ɪ, after a
      stress or before a vowel, Kokoro is sent i ("babysitter", "everything", "video", "reaction") - an
      unstressed prefix before a consonant ("pretend"), vowels that do not line up, a word no dictionary holds
-     and every word Piper reads are left as eSpeak read them.
+     and every word Piper reads are left as eSpeak read them;
+ 11. a blend of readers (blend.py): its line read as src/voice/voice_blend.gd writes it; mix, spherical and
+     split made row by row; its accent its heaviest reader's (a split's delivery's) unless it says one, its level
+     its readers' (a split's sound side's); a request's `blend` made of the checkpoint's packs, once, and fed to
+     the graph - a reader it does not hold left out, fewer than two the speaker's own pack, a voice taught here
+     never blended.
 
 Synthesis runs against a fake session, as in test_expression.py: no model download, no eSpeak.
 """
@@ -799,6 +804,7 @@ def test_a_voice_taught_here():
 
     import numpy as np
     from backends.kokoro import KokoroBackend
+    from backends.piper import PiperBackend
 
     with _voices_root() as root:
         d = root / "kokoro" / "trained" / "kokoro-someone"
@@ -822,6 +828,8 @@ def test_a_voice_taught_here():
         sp = k._speaker("kokoro-someone", 0)
         eq((sp["espeak"]["voice"], sp["kokoro"]["pack"].shape), ("en-gb", (510, 1, 256)),
            "read in its own accent, from its own pack")
+        eq(("blend" in rows["kokoro"], KokoroBackend.describe().get("blend"), PiperBackend.describe().get("blend")),
+           (False, True, None), "the backend says its readers blend, never a voice's row - whose fields key its kept takes")
         ok("kokoro-half" not in rows and not KokoroBackend.owns("kokoro-half"), "CONTROL: without its description, no voice")
         ok(not KokoroBackend.owns("../trained/kokoro-someone"), "CONTROL: a name with a path in it is not")
         eq(KokoroBackend._trained("kokoro"), None, "CONTROL: a checkpoint's name is never a voice taught here")
@@ -864,6 +872,132 @@ def test_a_speaker_is_its_pack_and_accent():
        "a speaker of the second checkpoint reads in that checkpoint's symbols")
     eq(asked, [("kokoro", "af_heart"), ("kokoro", "bf_emma"), ("kokoro", PACKS[-1][0]), ("kokoro-1.1", "bf_vale")],
        "each pack loaded once; past the end is the last")
+
+
+# -- 11. blends ------------------------------------------------------------
+
+# The lines src/voice/voice_blend.gd is held to read the same (tests/voice/voice_blend_check.gd).
+BLEND_LINES = {
+    "mix: af_heart 2, bf_emma 1": ("mix", "", [("af_heart", 2.0, "both"), ("bf_emma", 1.0, "both")]),
+    "split british: af_heart sound, bf_emma 0.5 delivery": (
+        "split", "british", [("af_heart", 1.0, "sound"), ("bf_emma", 0.5, "delivery")]),
+    "Swirl welsh: af_heart 99, bf_emma -3, am_puck": (
+        "mix", "", [("af_heart", 10.0, "both"), ("bf_emma", 0.1, "both"), ("am_puck", 1.0, "both")]),
+}
+
+
+@check
+def test_a_blend_line_is_read():
+    """The line voice_blend.gd writes, read as it reads it: the method, an accent, each reader's weight and part -
+    an unknown method a mix, an unknown accent unsaid, a weight clamped. THE CONTROLS: one reader, no colon and
+    nothing are no blend."""
+    import blend
+
+    for line, (method, accent, voices) in BLEND_LINES.items():
+        eq(blend.parse(line), {"method": method, "accent": accent, "voices": voices}, repr(line))
+    for line in ("mix: af_heart", "af_heart, bf_emma", "", None):
+        eq(blend.parse(line), None, f"CONTROL: {line!r} is no blend")
+
+
+@check
+def test_the_methods_make_a_pack():
+    """mix: the weighted average, number by number; spherical: each half's length the readers' own (weighted) where
+    the plain mix's is shorter; split: the sound side's timbre with the delivery side's prosody, a side nobody is on
+    everyone's; max and min, number by number. A reader mixed with itself is itself, by any method."""
+    import numpy as np
+
+    import blend
+
+    rng = np.random.default_rng(1)
+    a = rng.normal(size=(510, 1, 256)).astype(np.float32)
+    b = rng.normal(size=(510, 1, 256)).astype(np.float32)
+    both = ["both", "both"]
+    ok(np.allclose(blend.make("mix", [a, b], [3, 1], both), 0.75 * a + 0.25 * b, atol=1e-6),
+       "a 3:1 mix is three quarters of one and a quarter of the other")
+    sph = blend.make("spherical", [a, b], [1, 1], both)
+    mix = blend.make("mix", [a, b], [1, 1], both)
+    for name, half in (("timbre", slice(0, 128)), ("prosody", slice(128, None))):
+        want = (np.linalg.norm(a[..., half], axis=-1) + np.linalg.norm(b[..., half], axis=-1)) / 2
+        ok(np.allclose(np.linalg.norm(sph[..., half], axis=-1), want, rtol=1e-4),
+           f"spherical keeps the {name}'s length the readers' own")
+        ok(float(np.linalg.norm(mix[..., half], axis=-1).mean()) < 0.8 * float(want.mean()),
+           f"CONTROL: the plain mix's {name} is shorter")
+    sp = blend.make("split", [a, b], [1, 1], ["sound", "delivery"])
+    ok(np.array_equal(sp[..., :128], a[..., :128]) and np.array_equal(sp[..., 128:], b[..., 128:]),
+       "split: the one's sound with the other's delivery")
+    sp = blend.make("split", [a, b], [1, 1], ["sound", "sound"])
+    ok(np.allclose(sp[..., 128:], (a[..., 128:] + b[..., 128:]) / 2, atol=1e-6), "a side nobody is on takes everyone")
+    ok(np.array_equal(blend.make("max", [a, b], [5, 1], both), np.maximum(a, b))
+       and np.array_equal(blend.make("min", [a, b], [5, 1], both), np.minimum(a, b)),
+       "max and min: each number the largest and the smallest, weights unused")
+    for method in blend.METHODS:
+        ok(np.allclose(blend.make(method, [a, a], [2, 1], both), a, atol=1e-5), f"{method}: a reader with itself is itself")
+
+
+@check
+def test_a_blends_accent_and_level():
+    """Read in its heaviest reader's accent (a split's heaviest delivery's; a tie the first) unless it says one;
+    played at its readers' weighted geometric mean gain, a split's sound side's alone."""
+    import blend
+
+    us_gb = ["US", "GB"]
+    eq(blend.british(blend.parse("mix: af_heart 2, bf_emma"), us_gb), False, "the heaviest reader's accent")
+    eq(blend.british(blend.parse("mix: af_heart, bf_emma 2"), us_gb), True, "...whichever it is")
+    eq(blend.british(blend.parse("mix: af_heart, bf_emma"), us_gb), False, "a tie, the first")
+    eq(blend.british(blend.parse("mix british: af_heart 5, bf_emma"), us_gb), True, "an accent said is the accent")
+    eq(blend.british(blend.parse("split: bf_emma 5 sound, af_heart delivery"), ["GB", "US"]), False,
+       "in a split, the delivery's")
+    eq(round(blend.gain(blend.parse("mix: af_heart, bf_emma"), [1.0, 4.0]), 6), 2.0, "the geometric mean of the gains")
+    eq(round(blend.gain(blend.parse("mix: af_heart 3, bf_emma"), [1.0, 16.0]), 6), 2.0, "...by weight")
+    eq(round(blend.gain(blend.parse("split: af_heart sound, bf_emma delivery"), [1.0, 4.0]), 6), 1.0,
+       "a split's level is its sound's")
+    eq(round(blend.gain(blend.parse("max: af_heart 3, bf_emma"), [1.0, 4.0]), 6), 2.0, "max weighs every reader once")
+
+
+@check
+def test_a_request_reads_in_its_blend():
+    """A request's `blend` reads in a pack made of the checkpoint's own (`_cfg_of`), once, at its readers' level, and
+    that pack's row is the style the graph is fed; a reader it does not hold is left out. THE CONTROLS: no blend, a
+    blend naming one reader it holds, and a voice taught here read the speaker's own pack."""
+    import numpy as np
+    from backends.kokoro import BLENDS_KEPT, PACKS, KokoroBackend
+
+    at = {row[0]: i for i, row in enumerate(PACKS)}
+    value = {"af_heart": 1.0, "bf_emma": 3.0, "am_puck": 5.0}
+    k = KokoroBackend()
+    k._vocabs = {"kokoro": {ch: i for i, ch in enumerate(VOCAB)}}
+    k._pack_array = lambda family, name: np.full((510, 1, 256), value.get(name, 9.0), np.float32)
+
+    class Levels:
+        def gain(self, backend, voice, speaker, cfg, sess):
+            return {at["af_heart"]: 1.0, at["bf_emma"]: 4.0}.get(speaker, 1.0)
+
+    k._levels = Levels()
+    cfg = k._cfg_of("kokoro", {"speaker": 0, "blend": "mix: af_heart 3, bf_emma 1"})
+    ok(np.allclose(cfg["kokoro"]["pack"], 1.5), "a 3:1 mix of packs of 1 and 3 is 1.5")
+    eq((cfg["espeak"]["voice"], cfg["kokoro"]["british"]), ("en-us", False), "read in its heaviest reader's accent")
+    ok(k._cfg_of("kokoro", {"blend": "mix: af_heart 3, bf_emma 1"}) is cfg, "made once")
+    gain = k._leveled("kokoro", {}, k._cfg_of("kokoro", {"blend": "mix: af_heart, bf_emma"}), None)["level_gain"]
+    eq(round(gain, 6), 2.0, "played at its readers' level")
+    ok(np.allclose(k._cfg_of("kokoro", {"blend": "mix: af_heart, bf_emma, af_nobody"})["kokoro"]["pack"], 2.0),
+       "a reader the checkpoint does not hold is left out")
+    emma = at["bf_emma"]
+    ok(k._cfg_of("kokoro", {"speaker": emma}) is k._speaker("kokoro", emma), "CONTROL: no blend is the speaker's pack")
+    ok(k._cfg_of("kokoro", {"speaker": emma, "blend": "mix: bf_emma, af_nobody"}) is k._speaker("kokoro", emma),
+       "CONTROL: one reader it holds is no blend")
+    ok(k._blended("kokoro-someone", "mix: voice, voice") is None, "CONTROL: a voice taught here is never blended")
+    for n in range(BLENDS_KEPT + 3):
+        k._cfg_of("kokoro", {"blend": f"mix: af_heart {1 + n}, bf_emma"})
+    eq(len(k._blends), BLENDS_KEPT, "only the latest blends are kept made")
+    # ...and the graph is fed the blend's row
+    sess = _Session()
+    k._graph = lambda family: sess
+    with tempfile.TemporaryDirectory() as td:
+        k.synthesize("", "kokoro", str(Path(td) / "a.wav"),
+                     {"tokens": [dict(t) for t in SENTENCE], "blend": "mix: af_heart, am_puck", "phonemizer": "ghost",
+                      "pause_scale": 0.0, "trail": 0.0})
+    ok(np.allclose(sess.fed[0]["style"], 3.0), "the graph is fed the blend's style",
+       f"{float(sess.fed[0]['style'].mean()):.2f}")
 
 
 def main() -> int:

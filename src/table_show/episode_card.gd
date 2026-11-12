@@ -46,6 +46,7 @@ const MAKERS := TableProducer.MAKERS
 ## are drawn, the work only where the plan has work, and each beat called what the producer calls one ([method
 ## TableEpisode.beat_word] - an ingredient, a card, a coat of paint), with its own name beside it.
 const STEPS := {
+	"direction": {"label": "Direction", "again": "Take up the Direction card's words again: what was made from the old ones goes stale"},
 	"plan": {"label": "Plan", "again": "Make a new plan"},
 	"draw": {"label": "Draw", "again": ""},
 	"image:back": {"label": "Back", "again": "Paint a new card back"},
@@ -59,6 +60,8 @@ const STEPS := {
 	"image:layer:K": {"label": "Layer", "again": "Paint this layer, and the ones after it, again"},
 	"skin": {"label": "What is painted", "again": "Design what is painted again"},
 	"prep": {"label": "Preparation", "again": "Prepare the game again"},
+	"solve": {"label": "Worked", "again": "Work the problem again"},
+	"ink": {"label": "Ink", "again": ""},
 	"table": {"label": "Set", "again": "Set the table again"},
 	"image:map:K": {"label": "Map", "again": "Paint this map again"},
 	"image:figure:K": {"label": "Figure", "again": "Paint this figure again"},
@@ -642,7 +645,9 @@ func _spec() -> Dictionary:
 		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(), "said_word": reading.reader_said_word(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
-		"players": _knobs["players"] if not String(_knobs["players"]).is_empty() else _knobs["writer"], "players_model": _knobs["players_model"], "players_effort": _knobs["players_effort"]}
+		"players": _knobs["players"] if not String(_knobs["players"]).is_empty() else _knobs["writer"], "players_model": _knobs["players_model"], "players_effort": _knobs["players_effort"],
+		# ...AND WHERE TO TAKE THE NEXT EPISODE, as the Direction card says it now ([Direction]): an episode takes it up as its plan is made
+		"direction": Direction.text_of(reading.block_now(Direction.KEY)) if reading != null else ""}
 
 
 ## The show's own block: the knobs, and its YouTube title and description.
@@ -1170,7 +1175,8 @@ func _step_rows() -> Array:
 	var f := _facts()
 	var has: Array = f["steps"]
 	var busy := _making()
-	var out: Array = [_row_of("plan", "plan", "", busy, f)]
+	# ...THE DIRECTION IT WAS MADE FROM, where it was given one ([Direction]): first, as the plan is made from it
+	var out: Array = ([_row_of("direction", "direction", "", busy, f)] if has.has("direction") else []) + [_row_of("plan", "plan", "", busy, f)]
 	if not bool(f["cardless"]):
 		out.append(_row_of("draw", "draw", "", busy, f))
 	if _players != null:
@@ -1185,6 +1191,9 @@ func _step_rows() -> Array:
 			out.append(_row_of("image:back:%s" % key, "image:back:", "Table", busy, f, "Back: %s" % key))
 	if has.has("model"):
 		out.append(_row_of("model", "model", "", busy, f))
+	# ...THE PROBLEM WORKED, where the plan fixed one ([SolverTools]): before the table is set
+	if has.has("solve"):
+		out.append(_row_of("solve", "solve", "", busy, f))
 	for st in ["image:surface", "image:backdrop", "table"]:
 		out.append(_row_of(st, st, "Table", busy, f))
 	if bool(f["depth"]):
@@ -1211,6 +1220,9 @@ func _step_rows() -> Array:
 		out.append(_row_of("skin", "skin", "", busy, f))
 	if has.has("acts"):
 		out.append(_row_of("acts", "acts", "", busy, f))
+	# ...and what it writes that TeX lays out ([TableInk])
+	if has.has("ink"):
+		out.append(_row_of("ink", "ink", "", busy, f))
 	out.append(_row_of("say:intro", "say:intro", "", busy, f))
 	var word := String(f["word"])
 	for k in range(1, int(f["cards"]) + 1):
@@ -2121,7 +2133,7 @@ func _doing_of(step: String) -> String:
 	if a.is_empty():
 		return ""
 	var piece := "%s %s" % [String(MAKERS.get(step.get_slice(":", 0), "agent")), a]
-	var calls := _tools_progress(step) if step in ["model", "skin", "table", "acts", "prep"] or (step.begins_with("say:") and _episode.wants_game()) else ""
+	var calls := _tools_progress(step) if step in ["model", "skin", "table", "acts", "prep", "solve"] or (step.begins_with("say:") and _episode.wants_game()) else ""
 	if not calls.is_empty():
 		# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
 		var looked: Array = _producer.looks_of(step)

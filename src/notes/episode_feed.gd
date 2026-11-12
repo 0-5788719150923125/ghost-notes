@@ -6,13 +6,13 @@ class_name EpisodeFeed
 ##
 ## WHERE THE CARDS ON A NOTE MEET (the user, 2026-10-18: "dependency inversion. It's okay to hook into
 ## an interface that populates that list of steps, but it would not be okay to tightly-couple the two
-## cards"). A card that makes episodes - Cards' [EpisodeCard], Proof's [ProofCard] - says which it shows, and names
+## cards"). A card that makes episodes - a table's [EpisodeCard] - says which it shows, and names
 ## no card that makes a step from it; a card that makes one - the YouTube card's tags ([YouTubeTags]) - reads the
 ## episode through this, and names no card that makes it. The panel puts the two together ([method
 ## ReadingPanel.episode_feed]).
 ##
 ## ONE EPISODE, not whichever is picked: a step started on one writes into it after another is picked.
-## A maker hands a feed of its own (`EpisodeCard.Feed`, `ProofCard.Feed`); these defaults are an
+## A maker hands a feed of its own (`EpisodeCard.Feed`); these defaults are an
 ## episode with nothing in it.
 
 

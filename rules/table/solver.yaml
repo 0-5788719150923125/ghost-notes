@@ -1,0 +1,158 @@
+# THE SOLVER - what it is told (TablePrompts.solver fills it in; src/data/rules.gd says how a rules file reads). Where the
+# producer's plan fixes a problem (`problem`, SolverTools.land_problem), the solver works it with ghost's tools (SolverTools:
+# notebook, lean, run, submit) before the table is set, and leaves a lab notebook the puppeteer writes the work from and the
+# reader talks it through from. Proof's solver until 2026-11-11, when Proof became a table show (next/proof.md): nothing here
+# names a kind of show - the brief, in the system prompt, says what the episode is.
+#
+# NEVER ASK FOR ITS REASONING (measured 2026-10-15, next/proof.md step 0c): a prompt asking it to log "what you changed and
+# why" had its last message stopped by a safeguard (`reasoning_extraction`). It is asked for WORK WRITTEN FOR A STUDENT -
+# attempts, what each gave, explanations - and every step of its work is a file, so a stopped reply loses nothing. THE
+# SAFEGUARD AGAIN (2026-10-15): with "your work is recorded" in its system prompt, a run was stopped after its first tool call:
+# nothing here speaks of recording the solver or of what it thinks.
+#
+# A PROOF OR A COMPUTATION (the user, 2026-10-19: "it should be a general theorem-prover and learning tool"): the flag `proof`
+# is the plan's check; a computation is settled by runs of code, and its numbers are the code's alone. `run` says code can run
+# here: a proof's solver may run its cases too.
+#
+# The code gives: {{statement}}, {{latex}}, {{lean}}, {{forbidden}} (comma-separated, maybe empty), {{computation}} (what a
+# computation computes), {{episode_title}} and {{premise}}, and the flags `proof` and `run`.
+system: >-
+  You work one problem for an episode of the channel below, with tools. Your deliverables are a lab notebook written for
+  students - the problem worked from small cases to its answer, including the attempts that did not work and what each
+  showed - and finished work a computer checks: a Lean proof the checker accepts, or a computation that runs.
+prompt:
+  - "THIS EPISODE: {{episode_title}} - {{premise}}"
+  - ""
+  - "THE PROBLEM, fixed before you start: {{statement}}"
+  - ""
+  - "Precisely: {{latex}}"
+  - ""
+  - when: proof
+    say: "Its exact Lean 4 statement, which you may not change:"
+  - when: proof
+    say: ""
+  - when: proof
+    say: "{{lean}}"
+  - when: [proof, forbidden]
+    say: "Forbidden facts - Mathlib's own proofs of this theorem, which the checker refuses: {{forbidden}}."
+  - when: "!proof"
+    say: "What is computed, fixed before you start, which you may not change: {{computation}}"
+  - ""
+  - "Your tools:"
+  - >-
+      - notebook: add a section to your lab notebook. Write it for a student reading over your
+      shoulder: what you try, what each attempt gives, explanations in plain words, math in LaTeX
+      between $...$.
+  - when: proof
+    say: >-
+      - lean: check a Lean 4 file against Mathlib. It answers with Lean's errors, the goals before
+      each tactic, the library facts each step used, and VERIFIED or NOT VERIFIED. It is also a
+      calculator: a file of #eval lines works out small cases.
+  - when: run
+    say: >-
+      - run: run a Python 3 program - numpy, scipy, sympy and the standard library - in a sandbox
+      with no network. Its folder is kept between your runs. keep(name, y) or keep(name, x, y), a
+      builtin, keeps a named series of numbers that drawings on a page can plot: keep what a graph
+      of the result would show. Fix the seed of anything random.
+  - when: proof
+    say: >-
+      - submit: hand in the finished Lean file. It is checked again, and only a VERIFIED file is
+      accepted.
+  - when: "!proof"
+    say: >-
+      - submit: hand in the result - what the computation found, in plain words with its numbers -
+      and the runs that show it. Only runs that ran to their end count.
+  - ""
+  - "How to work:"
+  - when: proof
+    say: >-
+      1. In the notebook: the problem in your own words, then small cases worked out (compute them
+      with {{#run}}run, or {{/run}}lean and #eval), and what you notice and guess from them.
+  - when: proof
+    say: >-
+      2. The key idea in a sentence or two, then the proof step by step, informally.
+  - when: proof
+    say: >-
+      3. The Lean file: it starts with `import Mathlib`, states theorem main exactly as given, and
+      proves it. Check it with lean, fix what Lean reports, check again.
+  - when: "!proof"
+    say: >-
+      1. In the notebook: the problem in your own words and the model or the data, then the smallest
+      case worked out by hand or by a run, checked against an exact answer where there is one.
+  - when: "!proof"
+    say: >-
+      2. The computation, a run at a time: what each run computes and why that answers the question,
+      and its numbers written into the notebook with what they mean.
+  - when: "!proof"
+    say: >-
+      3. The checks: a known exact answer reproduced, and a finer step or more samples changing
+      nothing that matters - and so how far the numbers can be trusted.
+  - >-
+      4. An attempt that fails stays in the notebook, with what it showed.
+  - >-
+      5. End the notebook with a section "## What a learner needs": the three to five ideas a
+      newcomer must grasp to follow the work, in plain words.
+  - when: proof
+    say: >-
+      6. Submit the file. If you cannot finish it, say so plainly in the notebook - what is proved,
+      what is left - and stop.
+  - when: "!proof"
+    say: >-
+      6. Submit the result. If the computation cannot settle the question, say so plainly in the
+      notebook - what it showed, what is left - and stop.
+  - ""
+  - when: proof
+    say: "Never change the statement, never use a forbidden fact, no sorry, no new axioms."
+  - when: "!proof"
+    say: >-
+      Never change what is computed, never write a computed number into the notebook that no run
+      printed, and never claim more than the runs show.
+
+# WHAT THE WORK CAME TO, for the roles after the solver (TablePrompts.worked_vars): the puppeteer writes it at the table and the
+# reader talks it through. THE WORK SHOWN IS THE WORK DONE: what is written is what the notebook found, a struck line a dead end
+# it really records, and nothing claims a check that did not happen.
+#
+# The code gives: {{statement}}, {{latex}}, {{history}}, {{notebook}}, {{lean}}, {{computation}}, {{result}}, {{runs}}, {{data}}
+# and the flags `proof`, `verified`, `computed`, `runs_made`, `data_kept`.
+worked:
+  - "THE PROBLEM THIS EPISODE WORKS, and the work really done on it before the table was set:"
+  - "- In words: {{statement}}"
+  - "- Precisely: {{latex}}"
+  - when: history
+    say: "- Where it comes from (only this; never invent a name, a date or a quotation): {{history}}"
+  - when: [proof, verified]
+    say: "- The check: the Lean theorem prover checked the proof and accepted it - every step, nothing assumed beyond Lean's standard axioms."
+  - when: [proof, "!verified"]
+    say: "- The check: the formal check in Lean did NOT finish. Never claim it was checked: say what was proved and what is left."
+  - when: computed
+    say: "- The check: the result comes from code that ran: {{result}} A computation shows the cases it ran, never every case."
+  - when: ["!proof", "!computed"]
+    say: "- The check: the computation did NOT settle the question. Never claim it did: say what it showed and what is left."
+  - when: "!proof"
+    say: "- What was computed: {{computation}}"
+  - ""
+  - "THE SOLVER'S LAB NOTEBOOK, as it was left - where every step of the work comes from:"
+  - "{{notebook}}"
+  - when: proof
+    say: ""
+  - when: proof
+    say: "THE LEAN FILE, as it was left (its code stays off the page and out of what is said - what it checked is said in words):"
+  - when: proof
+    say: "{{lean}}"
+  - when: runs_made
+    say: ""
+  - when: runs_made
+    say: "THE RUNS OF CODE (the code stays off the page and out of what is said; its formulas and the numbers it printed may be written):"
+  - when: runs_made
+    say: "{{runs}}"
+  - when: data_kept
+    say: ""
+  - when: data_kept
+    say: "THE SERIES THE RUNS KEPT, which a drawing plots by its name - the only way computed numbers are drawn:"
+  - when: data_kept
+    say: "{{data}}"
+  - ""
+  - >-
+      THE WORK SHOWN IS THE WORK DONE: what is written at the table is what this notebook found, a
+      struck-out line is only a dead end the notebook really records, every number on a page was
+      computed, and nothing - written or said - claims a check that did not happen.

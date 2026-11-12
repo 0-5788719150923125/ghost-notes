@@ -192,6 +192,13 @@ func _notification(what: int) -> void:
 
 
 func _hook_tooltip(n: Node) -> void:
+	# A MENU'S ITEMS ARE NOT CONTROLS (2026-11-11, the user of "+"'s: "the description can be very wide; we should constrain
+	# its tooltip width"): each item's tooltip is re-flowed as the menu opens, after whatever fills it as it opens has
+	if n is PopupMenu:
+		var pop: PopupMenu = n
+		if not pop.about_to_popup.is_connected(wrap_items):
+			pop.about_to_popup.connect(wrap_items.bind(pop))
+		return
 	if not (n is Control):
 		return
 	var c: Control = n
@@ -209,6 +216,19 @@ func _wrap_tooltip(c: Control) -> void:
 	var wrapped := wrap_tip(c.tooltip_text, TIP_MAX_PX)
 	if wrapped != c.tooltip_text:
 		c.tooltip_text = wrapped
+
+
+## Every item of [param pop] with a tooltip, its tooltip re-flowed ([method wrap_tip]).
+static func wrap_items(pop: PopupMenu) -> void:
+	if not is_instance_valid(pop):
+		return
+	for i in pop.item_count:
+		var tip := pop.get_item_tooltip(i)
+		if tip.is_empty():
+			continue
+		var wrapped := wrap_tip(tip, TIP_MAX_PX)
+		if wrapped != tip:
+			pop.set_item_tooltip(i, wrapped)
 
 
 ## Re-flow `text` so no line exceeds `max_px` in the tooltip's own font. Public, so anything that

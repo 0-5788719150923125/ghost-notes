@@ -11,7 +11,8 @@
 # `parts`, the set
 # table's working parts (TableWork.parts_report); `laws` (Motions.describe_laws); `bursts`, the looks a cue's
 # burst can take; `tools` (it works with tools and sees what it blocks, {{looks}} pictures); `cardless`, a show
-# that draws no cards, its {{beats}} beats each said while its work is done.
+# that draws no cards, its {{beats}} beats each said while its work is done; `sheets`, a sheet on the table to
+# write and draw on (`drawings`); `worked`, a problem the plan fixed and the work done on it (table/solver.worked).
 prompt:
   - >-
       You are the PUPPETEER. The table for episode #{{seed}} is set{{^cardless}} and its cards are
@@ -40,6 +41,10 @@ prompt:
   - ""
   - insert: laws
   - ""
+  - when: sheets
+    include: drawings
+  - when: worked
+    include: worked
   - when: painted_design
     include: painting
   - include: acts
@@ -52,6 +57,75 @@ prompt:
     include: with_tools
   - when: "!tools"
     include: in_one_reply
+
+# DRAWINGS ON A PAGE (Proof's pad, at the table since 2026-11-11 - next/proof.md): a `write`'s `draw` is an SVG the pen draws
+# (hosts/math/figure.py reads it), its labels set by TeX. A GRAPH IS COMPUTED, never guessed: a curve is a <plot> of its
+# expression, and numbers a run computed are a series it kept, drawn by its name (`data`).
+drawings:
+  - >-
+      DRAWINGS. A `write` with `draw` puts a drawing on a sheet, drawn by the pen part by part in the
+      order its elements are listed: <svg viewBox="0 0 360 HEIGHT"> ... </svg>, 360 wide (the page's
+      width) and HEIGHT between 80 and 260. The pen draws <line>, <polyline>, <polygon>, <rect>,
+      <circle>, <ellipse> and <path> as outlines - a fill on a small circle makes it a dot, on a bigger
+      shape shades it with hatching; stroke-dasharray makes a line dashed; arrow="end" (or "start" or
+      "both") on a line, polyline or path gives it an arrowhead. <dot x="" y=""/> is a dot.
+      <text x="" y="" text-anchor="start">a label, math in $...$</text> writes a label whose baseline
+      starts at x, y (text-anchor="middle" centers it there, "end" ends it there). <angle x="" y=""
+      r="" from="" to=""/> marks an angle at x, y: an arc of radius r from one direction to the
+      other, in degrees counterclockwise from pointing right (0 right, 90 up); right="true" draws a
+      right angle's square corner instead.
+  - >-
+      For a graph: <axes x="LOW HIGH" y="LOW HIGH" box="LEFT TOP WIDTH HEIGHT" xlabel="$x$"
+      ylabel="$y$"> ... </axes> draws a pair of axes with numbered ticks on that box of the drawing;
+      ticks="STEPX STEPY" sets the steps, and grid="true" adds a faint line at each tick. A range or a
+      step may be written with pi, without spaces (x="0 2*pi" ticks="pi/2 1"). Inside the axes,
+      coordinates are the axes' own, y up: <plot fn="EXPRESSION"/> draws the graph of a function of
+      x, computed from the expression (+ - * / ^, parentheses, sqrt, sin, cos, tan, asin, acos, atan,
+      exp, log, abs, pi; write 2*x, not 2x; from="" and to="" draw part of the range); <plot
+      x="EXPRESSION" y="EXPRESSION" t="LOW HIGH"/> draws a curve whose x and y are each given in t,
+      and <plot r="EXPRESSION" t="LOW HIGH"/> one whose distance from the origin is given at the
+      angle t (radians). <dot x y/>, <label x y>text</label>, <line .../>, <polyline .../>,
+      <polygon .../>, <circle cx cy r/>, <ellipse cx cy rx ry/> and <rect x y width height/> (x, y
+      its lower left corner: a bar of a bar chart, shaded with fill="black") are placed in the axes'
+      coordinates, and <angle/> at a point of them.
+  - when: data_kept
+    say: >-
+      A SERIES A RUN KEPT is drawn by its name, inside <axes> (choose the axes' ranges from the ranges
+      listed with it): <plot data="NAME"/> joins its points with a line, <dots data="NAME"/> puts a
+      dot at each point (a few hundred at most), and <bars data="NAME" width="W"/> stands a bar of
+      width W on the axis at each point's x, as tall as its y (sixty at most; fill="black" shades
+      them). These are the only way to draw computed numbers: never type them into a drawing.
+  - >-
+      No colors, no images and no comments inside the SVG. Lay the drawing out with room for its
+      labels, so nothing overlaps. Give every part that will be pointed at an id="name" (on a <g>
+      round several, inside <axes> too); in a formula, write such a part as \pin{name}{...}. Every number, point and curve in a drawing is true: a point is
+      where the math puts it, a length or an angle is drawn to its size, a curve is a <plot> of its
+      function. A drawing takes the pen far longer than a line of words - every number on its axes
+      and every label is written by hand - so give its act the seconds a hand takes.
+
+# THE WORK, AS IT WAS REALLY DONE (table/solver.worked; next/proof.md): where the plan fixed a problem, the puppeteer writes the
+# work at the table from the solver's notebook - never work of its own - and the reader says each line as it is written
+worked:
+  - include: table/solver.worked
+  - ""
+  - >-
+      WRITING THE WORK. Where the brief has the work written down at the table, write it from this
+      notebook in the order the episode goes through it: each key line its own act with a `write` on
+      a sheet - a formula as `tex`, a line of words with its math between $...$ in `text`, a picture
+      as `draw` - so the reader can say it as it is written. Where a pen is on the table, every
+      write names it (`with`), so the viewer sees the pen write. A dead end the notebook really records
+      may be written and then crossed out - a `write` whose `strike` names the act that wrote it -
+      never one it does not record. A sheet fills from its head a line at a time; when one is full,
+      go on on the next. Write the key lines, never everything that is said.
+  - >-
+      POINTING. While the reader talks about something already written - a part of a formula, a
+      step of the work, a curve or a label in a drawing - the pen goes to it and stays by it: a
+      `point` act on the pen, `on` the sheet and `at` what is talked about, as long as the talk
+      about it lasts. Give the parts you will point at names when you write them (\pin{name}{...}
+      in a formula, id="name" in a drawing), or point at a whole line by the name of the act that
+      wrote it. The pen is never still for long while the reader explains: it writes, draws or
+      points.
+  - ""
 
 # A SURFACE PAINTED (next/painted_surface.md; the user, 2026-11-05: "this is gentle, and slow. We're in no rush. We are creating a
 # work of art"): the design is the decorator's, and the puppeteer only says which tool lays which elements when - the hand finds the

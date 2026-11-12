@@ -2,7 +2,7 @@ extends RefCounted
 class_name ActorBuilder
 
 ## ActorBuilder - makes whatever an actor is missing, in the order [ActorSteps] gives, the way
-## [ProofProducer] makes a Proof episode's (next/likeness.md, "The runner").
+## [TableProducer] makes a table episode's (next/likeness.md, "The runner").
 ##
 ## THE ORDER IS NOT A SCRIPT: every [method tick] lands what ended and starts each step whose inputs
 ## exist and whose own output is missing - or stale, when that was asked for - over every video, the

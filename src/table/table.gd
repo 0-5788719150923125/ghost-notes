@@ -397,6 +397,7 @@ var _box_part := TableBox.new()
 var _work := TableWork.new()
 var _sounds: WorkSounds = null        # the work heard ([method advance])
 var _acts_mt := -2                    # the acts file's time when the work was last built (-1: none)
+var _ink_mt := -2                     # ...and TeX's layout of what it writes ([TableInk]), likewise
 var _skin_mt := -2                    # ...and the designs painted on it ([TablePaint], `skin.json`)
 var _ready_said := false               # this table has told its feed how far ahead it is baked ([method ShowFeed.ready_ahead])
 var _est := PackedFloat32Array()      # each spoken word's estimated time ([method TablePlan.estimated_times])
@@ -843,7 +844,8 @@ func _settle_away() -> void:
 func _as_built(pay: Dictionary) -> bool:
 	var dir := String(pay.get("dir", ""))
 	var mt := func(f: String) -> int: return FileAccess.get_modified_time(dir.path_join(f)) if FileAccess.file_exists(dir.path_join(f)) else -1
-	return int(mt.call("table.json")) == _table_mt and int(mt.call("acts.json")) == _acts_mt and int(mt.call("skin.json")) == _skin_mt
+	return int(mt.call("table.json")) == _table_mt and int(mt.call("acts.json")) == _acts_mt and int(mt.call("skin.json")) == _skin_mt \
+		and int(mt.call(TableInk.FILE)) == _ink_mt
 
 
 ## A SCRUB IN THE EPISODE STANDING, [param d] the reading started again ([ReadingFollower.seek]; the user, 2026-11-01: scrubbed back
@@ -1365,8 +1367,10 @@ func _poll_pictures(force := false) -> void:
 	# ...and THE WORK, blocked while it can already be playing: built again over the table as it stands
 	var apath := dir.path_join("acts.json")
 	var spath := dir.path_join("skin.json")
+	var ipath := dir.path_join(TableInk.FILE)
 	if (FileAccess.get_modified_time(apath) if FileAccess.file_exists(apath) else -1) != _acts_mt \
-			or (FileAccess.get_modified_time(spath) if FileAccess.file_exists(spath) else -1) != _skin_mt:
+			or (FileAccess.get_modified_time(spath) if FileAccess.file_exists(spath) else -1) != _skin_mt \
+			or (FileAccess.get_modified_time(ipath) if FileAccess.file_exists(ipath) else -1) != _ink_mt:
 		_build_table()
 		_plan_moves()
 	var room := _picture(dir.path_join("backdrop.png"), force)
@@ -1675,6 +1679,7 @@ func _build_work(spec: Dictionary) -> void:
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
 	_work.since = _plan.since
 	_work.skin_doc = _skin_json()
+	_ink_json()
 	_work.tune = TableTune.sanitize(_plan.pay.get("tune", {}))["values"]
 	_skin_picture()
 	_work.build(raw, beats, spec.get("sound", {}) if spec.get("sound") is Dictionary else {})
@@ -1694,6 +1699,7 @@ func rework(raw: Variant) -> void:
 	_acts_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
 	_work.skin_doc = _skin_json()
+	_ink_json()
 	_work.tune = TableTune.sanitize(_plan.pay.get("tune", {}))["values"]
 	_skin_picture()
 	_work.rebind(raw, beats)
@@ -1703,6 +1709,16 @@ func rework(raw: Variant) -> void:
 
 ## THE DESIGNS PAINTED ON THIS TABLE ([TablePaint]): the episode's `skin.json` as parsed, read from the FILE as the acts are - and
 ## its time noted, so a design that lands live is painted.
+## WHAT TEX LAID OUT of what the work writes ([TableInk]): the episode's `ink.json`, handed to the work with the seed its hand is
+## drawn from - `{}` before the ink step, and the writes it lays out are left blank until it lands.
+func _ink_json() -> void:
+	var path := String(_plan.pay.get("dir", "")).path_join(TableInk.FILE)
+	_ink_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+	var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+	_work.ink_doc = got if got is Dictionary else {}
+	_work.ink_seed = _plan.seed_value
+
+
 func _skin_json() -> Dictionary:
 	var dir := String(_plan.pay.get("dir", ""))
 	var path := dir.path_join("skin.json")

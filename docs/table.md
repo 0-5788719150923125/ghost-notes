@@ -180,14 +180,27 @@ the table's assembly worked, one step after another (ASSEMBLY, below, says what 
 
 ### `write` - Write
 
-words written onto a sheet (a part of the `sheet` shape) by an unseen pen, left to right and line by line, in a hand - a name on a slip, a label, a line on a page; write only what the script or a card says is written there
+words, a formula or a drawing written onto a sheet (a part of the `sheet` shape) by an unseen pen, stroke by stroke, in a hand - a name on a slip, a label, a line on a page, an equation, a graph; several writes on one sheet go one under another from its head, as lines on a page do, so a page is filled a line at a time (when it is full, write on the next sheet); write only what the script or a card says is written there, or what the work really found
 
 | Field | What it is |
 | --- | --- |
-| `text` | the words, a line or a few (\n between lines) |
-| `hand` | neat, quick or print (left out: neat) |
+| `text` | the words, a line or a few (\n between lines); math inside them between $...$ in TeX |
+| `tex` | in place of `text`: one formula in TeX math, written on its own line - several lines inside \begin{aligned} ... \end{aligned} |
+| `draw` | in place of `text`: a drawing, an <svg viewBox="..."> the pen draws (DRAWINGS, below, says what it may hold) |
+| `strike` | in place of `text`: the name of an earlier act whose line on this sheet is crossed out - a line drawn through it, for a dead end the work really hit |
+| `hand` | neat, quick or print, for words with no math (left out: neat) |
+| `with` | the pen that writes it, seen: a thing on the table (or "thing/part"), held by its point `tip` (its nib, else the end of its length) - it is picked up, writes each stroke as the ink goes down, lifts between them, and is held just over the page once the line is done (left out: the pen is unseen) |
 | `ink` | "#rrggbb" (left out: a brown-black) |
 | `between` | [u0, u1]: the stretch of the act the pen writes in (left out: all of it) |
+
+### `point` - Point
+
+a pen (or any tool held by its tip) brought to something written or drawn on a sheet and held there, its nib just over the paper beside it - sweeping along under a wide formula or curve first - so the viewer sees what is being talked about; start it at the word that names the thing (<!-- act: name -->) and give it as long as the talk about it lasts
+
+| Field | What it is |
+| --- | --- |
+| `on` | the sheet it points at, as a write names it ("pad/page 1") |
+| `at` | what it points at: a part of a formula written as \pin{name}{...}, an element of a drawing by its id="name", or the name of the act that wrote the line |
 
 ### `paint` - Paint
 

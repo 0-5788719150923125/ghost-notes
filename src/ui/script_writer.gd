@@ -2,7 +2,7 @@ extends VBoxContainer
 class_name ScriptWriter
 
 ## ScriptWriter - where a note's words are written: the BODY card on its panel (2026-10-31, "Script" until the
-## user: "the word script only makes sense in some contexts" - a show's Brief and a Proof's Problem keep their
+## user: "the word script only makes sense in some contexts" - a show's Brief keeps its
 ## own words, [constant WORDING]), and an editor window it opens. Its fields name the note: a Title edited
 ## here renames a file named after its title ([method NoteStore.follows]).
 ##
@@ -42,11 +42,11 @@ class_name ScriptWriter
 ## that names its episodes hands the row its picked one's ([method hand_field]: Cards' plan, Proof's
 ## problem), so its Episode is edited here too, never on a card of its own.
 const FIELDS := {
-	"title": {"label": "Title", "modes": ["generative", "table", "proof", "note"],
+	"title": {"label": "Title", "modes": ["generative", "table", "note"],
 		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds. The %title% of the YouTube title."},
-	"byline": {"label": "Byline", "modes": ["table", "proof"],
+	"byline": {"label": "Byline", "modes": ["table"],
 		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\". Empty, the name stands alone."},
-	"episode": {"label": "Episode", "modes": ["table", "proof"],
+	"episode": {"label": "Episode", "modes": ["table"],
 		"wait": "named with the episode",
 		"tip": "What this video is called: the %episode% of the YouTube title. A card show's or a Proof note's is the picked episode's - its writer names it as it plans the episode, an edit here is written into the episode, and it names the export; an episode needs one. A note read as it is written names its own here."},
 	"author": {"label": "Author", "modes": ["generative"],
@@ -63,12 +63,6 @@ const WORDING := {
 		"edit_tip": "Open the show's brief in an editor, with every mark a brief understands listed beside it - the deck, other voices, notes to yourself - ready to insert at the cursor. The brief is what the show is, who reads it and by what rules, and every agent behind every episode is handed it.",
 		"placeholder": "What is this show? Who reads it, how, and by what rules?",
 		"speakers": "Voices in this brief"},
-	# A PROOF NOTE'S BODY IS ITS PROBLEM: what the agents work, written by hand or by "Invent a
-	# problem" - never read aloud (the voice reads the episode's lesson)
-	"proof": {"window": "Problem",
-		"edit_tip": "Open the problem in an editor. It is what every agent behind an episode works from: the problem in words, its precise statement, and anything you want stressed. Never read aloud - the voice reads the episode's lesson.",
-		"placeholder": "What problem should the episode work? Write it, or press Invent a problem.",
-		"speakers": "Voices"},
 }
 
 ## How long typing must pause before the card's summary is recounted.

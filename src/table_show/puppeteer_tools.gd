@@ -48,6 +48,9 @@ var _released := false
 var _warned_unseen := false
 var _watched := {}              # act name -> true, once watched since it was last written
 var _preview: TablePreview
+## WHAT THE ACTS WRITE THAT TEX LAYS OUT, laid out as they are put ([method _lay_ink]): item id -> TeX's record, and the fonts.
+var _laid := {}
+var _fonts := {}
 
 
 ## [param table]: the episode's set table, as `table.json` holds it.
@@ -180,6 +183,7 @@ func _act(args: Dictionary) -> Dictionary:
 	# ONE TABLE FOR THE CALL: every act put checked on it, and what could not be kept read off it - a table stood for each
 	# act and once more for the notes had baked the work from its start every time (2026-10-28: 330 s for four acts)
 	var checking: Array = put.filter(func(nm: String) -> bool: return kept.has(nm))
+	var refused := await _lay_ink()
 	var got: Dictionary = await _preview.work_checks(_table, draft(), checking)
 	for nm in put:
 		if not kept.has(nm):
@@ -191,6 +195,7 @@ func _act(args: Dictionary) -> Dictionary:
 	var notes: Array = []
 	for n in made["notes"]:
 		notes.append(String(n))
+	notes.append_array(refused)
 	for n in got.get("notes", []):
 		if not notes.has(String(n)):
 			notes.append(String(n))
@@ -200,6 +205,37 @@ func _act(args: Dictionary) -> Dictionary:
 			lines.append("- " + String(n))
 	lines.append("Acts in the work now: %s." % _names())
 	return {"text": "\n".join(lines)}
+
+
+## WHAT THE ACTS WRITE THAT TEX LAYS OUT, LAID OUT NOW ([method TableInk.typeset]) - only what is new since the last call - and
+## written beside the preview's acts, so the table tried shows the formulas and drawings as the episode will: each one TeX refuses
+## said in TeX's own words, while the puppeteer can still write it so it sets. Nothing where TeX is not installed yet (the ink step
+## lays it out later).
+func _lay_ink() -> Array:
+	var out: Array = []
+	var fresh: Array = TableInk.items_of(draft()).filter(func(it: Dictionary) -> bool: return not _laid.has(String(it["id"])))
+	if fresh.is_empty():
+		return out
+	var data: Variant = episode.read_json("data")
+	var got := await TableInk.typeset(fresh, data if data is Dictionary else {}, dir.path_join("ink"))
+	if got.has("error"):
+		if not String(got["error"]).is_empty():
+			out.append("TeX could not lay out what is written: %s" % String(got["error"]))
+		return out
+	if got.get("fonts") is Dictionary:
+		_fonts.merge(got["fonts"], true)
+	for r in got.get("items", []):
+		if not (r is Dictionary):
+			continue
+		_laid[String((r as Dictionary).get("id", ""))] = r
+		if not bool((r as Dictionary).get("ok", false)):
+			var tex := ""
+			for it in fresh:
+				if String((it as Dictionary)["id"]) == String((r as Dictionary).get("id", "")):
+					tex = String((it as Dictionary)["tex"])
+			out.append("TeX could not set \"%s\": %s - write it so that it sets" % [tex.left(160), String((r as Dictionary).get("error", ""))])
+	TextGen.put(dir.path_join("preview").path_join(TableInk.FILE), JSON.stringify({"items": _laid.values(), "fonts": _fonts}))
+	return out
 
 
 func _remove(args: Dictionary) -> Dictionary:

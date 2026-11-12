@@ -439,7 +439,9 @@ static func gap_before(chunks: Array, idx: int, s: Dictionary, turn := 1.0) -> f
 ## used by both the live window and the export, because the render must be the
 ## performance that was auditioned - a second copy of this list is how the two
 ## drift apart a parameter at a time.
-static func request_args(s: Dictionary, ch: Dictionary, speaker := 0) -> Dictionary:
+## A [param blend] of the voice's readers ([VoiceBlend]) is asked only when there is one, so a take kept under
+## a voice that has none keeps the key it is kept under.
+static func request_args(s: Dictionary, ch: Dictionary, speaker := 0, blend := "") -> Dictionary:
 	var t := preset_of(s)
 	var lean: Vector4 = ch.get("lean", Vector4.ZERO)
 	var near: Dictionary = ch.get("near", {})
@@ -447,7 +449,7 @@ static func request_args(s: Dictionary, ch: Dictionary, speaker := 0) -> Diction
 	# playing back r times faster restores the intended pace
 	var r := pitch_ratio_of(s)
 	var d := delivery_of(s)
-	return {
+	var args := {
 		"length_scale": r / maxf(float(s["pace"]) * float(t["pace"]), 0.1) * (1.0 - LEAN_PACE * lean.x),
 		"noise_scale": float(t["noise"]) * (1.0 + LEAN_LIVELY * lean.y), "noise_w": float(t["noise_w"]),
 		"lean_semis": LEAN_SEMIS * lean.y,
@@ -466,6 +468,9 @@ static func request_args(s: Dictionary, ch: Dictionary, speaker := 0) -> Diction
 		"play_ratio": r,
 		"tokens": ch["tokens"],
 	}
+	if not blend.is_empty():
+		args["blend"] = blend
+	return args
 
 
 ## A delivery mark's words ([constant DELIVERY_WORDS]) as one lean: their steps added, at most two

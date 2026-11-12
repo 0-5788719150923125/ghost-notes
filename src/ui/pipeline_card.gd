@@ -23,6 +23,8 @@ class_name PipelineCard
 ## words first, then what is made from them. The ▶ on a section's heading makes that section alone. While Generate walks,
 ## every ⟳ waits.
 
+## What the card is for, on its title bar and its chip ([member Card.blurb]).
+const BLURB := "Everything agents and tools make for this note, in one list. Generate makes what is missing, and a row's ⟳ makes that one thing again."
 ## The widest a row's name stands: a longer one is clipped, whole in its tooltip.
 const NAME_MOST := 124.0
 ## How far a group's rows stand in.
@@ -101,7 +103,7 @@ func _bar_button(text: String, tip: String) -> Button:
 ## there and then, and with no card yet that takes the bar into the list (as it did from the first build: every panel the gates
 ## built was out of the tree, and the engine said so only in the log).
 func put_on(panel: SidePanel) -> void:
-	var box := panel.add_card("pipeline", "Pipeline", &"producer")
+	var box := panel.add_card("pipeline", "Pipeline", &"producer", "", BLURB)
 	var node: Node = box.get_parent()
 	while node != null and not (node is Card):
 		node = node.get_parent()

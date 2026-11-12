@@ -24,6 +24,11 @@ class_name TableProducer
 ##              set table with the cards as drawn - through [PuppeteerTools] when its writer takes tools
 ##   say:work:K the reader talks card K's work through as it is done, told its acts and no later beat's
 ##   script     the passages and the marks between them, ready for the voice
+##   solve      WORK A COMPUTER CHECKS, where the plan fixes a problem ([SolverTools]; Proof's solver until 2026-11-11, next/proof.md):
+##              the solver works it with a lab notebook, Lean checks and runs of code before the table is set, and the puppeteer
+##              and the reader are handed what it really found ([method _plan]'s `worked`)
+##   ink        what the work writes that TeX lays out - a formula, a drawing, words with math - laid out once the acts are
+##              blocked ([TableInk], here, no agent)
 ##   prep       A GAME (next/tabletop.md): the game master prepares, in secret: the world, and every player's sheet and want
 ##   say:K      ...and in a game each is a stretch of the session, played live through [GameTools], the players asked as it goes, the words and the dice written as they happen
 ##   image:map:K, image:figure:K, image:reveal:K     ...painted after it is played: whatever it turned out to need
@@ -72,11 +77,18 @@ const WRITING_MOST := 16
 const CHAIN_MAX := 2
 ## The chance the first card is a jumper, when the plan lets one fly (`staging.jumpers`).
 const JUMPER_CHANCE := 0.3
+## Characters that are notation, never words: a voice is never handed them ([method notation_in]).
+const NOTATION := ["$", "\\", "^", "_", "{", "}"]
 ## The steps made here, with no agent and no quota - see the class note.
-const LOCAL := ["draw", "script"]
+const LOCAL := ["draw", "script", "ink", "direction"]
+## The solver, tried more: a safeguard sometimes stops a sound run part way (Proof's first real episode, 2026-10-15: its first try
+## stopped after one Lean check; its retry verified), and its run is the episode's work. It may work this long (seconds).
+const SOLVE_RETRIES := 2
+const SOLVE_TIMEOUT := 3600
 ## WHO MAKES EACH KIND OF STEP, as its record and its row name them (a step's first word -> its maker).
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
 	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master",
+	"solve": "solver", "ink": "code", "direction": "author",
 	"layers": "art director"}
 
 var episode: TableEpisode
@@ -124,9 +136,31 @@ func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
 		for s in steps:
 			asked[String(s)] = note.strip_edges()
 	episode.adopt()
+	_take_direction()
 	running = true
 	tick()
 	changed.emit()
+
+
+## AN EPISODE TAKES UP THE DIRECTION as its plan is first made ([Direction]): the Direction card's words, handed in the spec
+## (`direction`), written into an episode that has no plan and no direction yet - its first step, recorded as the author's. A made
+## episode keeps its own; taking the card up again into it is its row's ⟳ ([method _make]).
+func _take_direction() -> void:
+	var d := String(spec.get("direction", "")).strip_edges()
+	if d.is_empty() or episode.has("plan") or episode.has("direction"):
+		return
+	var err := episode.write_text("direction", d + "\n")
+	if not err.is_empty():
+		push_warning("ghost: table direction - %s" % err)
+		return
+	_made("direction", "author")
+
+
+## [param system] (an agent's system prompt) with WHERE THE AUTHOR TOOK THIS EPISODE after it ([method TableEpisode.direction],
+## rules/table/show.yaml `direction`) - every agent behind the episode told it, above the brief - or as it is, given none.
+func with_direction(system: String) -> String:
+	var d := episode.direction()
+	return system if d.is_empty() else system + "\n\n" + Rules.say("table/show.direction", {"direction": d})
 
 
 func stop() -> void:
@@ -171,13 +205,26 @@ func error_of(step: String) -> String:
 
 ## What [param step]'s agent is doing now ([method AgentJobs.activity]); "" when it is not being made.
 func activity_of(step: String) -> String:
+	if _hosts.has(step) and step == "ink":
+		return "laying out what is written with TeX"
 	if _hosts.has(step):
 		# (...the painter host's last line: which layer, how far)
 		var lines := FileAccess.get_file_as_string(String((_hosts[step] as Dictionary)["log"])).strip_edges().split("\n")
 		return "the painter: " + String(lines[lines.size() - 1]).strip_edges() if not lines.is_empty() else "the painter is starting"
 	if _waiting.has(step):
 		return String(_waiting[step])
-	return AgentJobs.activity(String(_jobs[step])) if _jobs.has(step) else ""
+	if not _jobs.has(step):
+		return ""
+	var said := AgentJobs.activity(String(_jobs[step]))
+	# ...and the solver's checks and runs so far
+	var t: Dictionary = _tools.get(step, {})
+	if not t.is_empty() and t["set"] is SolverTools:
+		var set: SolverTools = t["set"]
+		if set.checks > 0:
+			said += " · %d Lean check%s" % [set.checks, "" if set.checks == 1 else "s"]
+		if set.runs > 0:
+			said += " · %d run%s" % [set.runs, "" if set.runs == 1 else "s"]
+	return said
 
 
 ## Land what ended; start what can start.
@@ -200,6 +247,16 @@ func tick() -> void:
 			continue
 		var h: Dictionary = _hosts[step]
 		_hosts.erase(step)
+		# ...TEX'S LAYOUT of what the work writes: ghost's own, no painter's
+		if String(step) == "ink":
+			var why := _land_ink(h)
+			if not why.is_empty():
+				_errors[step] = why
+				push_warning("ghost: table ink - %s" % why)
+			else:
+				_made("ink", "code")
+			moved = true
+			continue
 		var err := _land_skin_host(h)
 		if not err.is_empty():
 			_errors[step] = err
@@ -298,6 +355,13 @@ func _make(step: String) -> void:
 			_make_prep()
 		"layers":
 			_make_layers()
+		"direction":
+			# ...TAKEN UP AGAIN from the card (its row's ⟳): what was made from the old words goes stale
+			_finish(step, episode.write_text("direction", String(spec.get("direction", "")).strip_edges() + "\n"))
+		"solve":
+			_make_solve()
+		"ink":
+			_make_ink()
 
 
 ## [param extra]: more of the job's spec - its tools and their timeout (see [method _make_table]).
@@ -308,7 +372,7 @@ func _submit_text(step: String, p: Dictionary, tier: String, extra: Dictionary =
 		_close_tools(step)
 		return
 	var job := {"kind": "text", "backend": String(spec.get("writer", "claude")),
-		"tier": tier, "dir": episode.job_dir(step), "system": String(p["system"]),
+		"tier": tier, "dir": episode.job_dir(step), "system": with_direction(String(p["system"])),
 		"prompt": _asked(step, String(p["prompt"])), "images": p.get("images", []), "label": "table %s" % step,
 		"model": String(spec.get("writer_model", "")), "effort": String(spec.get("writer_effort", ""))}
 	job.merge(extra, true)
@@ -378,6 +442,12 @@ func _plan() -> Dictionary:
 			lines.append_array(Skins.summary(made, Vector2(float(fr[0]), float(fr[1]))))
 		if not lines.is_empty():
 			(p as Dictionary)["painted_design"] = "\n".join(lines)
+	# ...AND THE WORK REALLY DONE, where the plan fixed a problem and the solver worked it ([TablePrompts.worked_vars]): for the
+	# puppeteer, who writes it at the table, and the reader, who talks it through
+	if episode.wants_solve() and episode.has("solve"):
+		(p as Dictionary)["worked"] = {"problem": episode.problem(), "solve": episode.solved(), "notebook": episode.read_text("notebook"),
+			"proof": episode.read_text("proof"), "runs": episode.read_json("runs") if episode.read_json("runs") is Array else [],
+			"data": episode.read_json("data") if episode.read_json("data") is Dictionary else {}}
 	return p
 
 
@@ -1750,6 +1820,22 @@ static func _then_moves(p: Dictionary, n: int) -> Array:
 # --- landing a job -------------------------------------------------------------------------
 
 func _land(step: String, res: Dictionary) -> void:
+	# THE SOLVER'S SESSION, ENDED: what it handed in, or an honest account of a run that handed in nothing ([method _land_solve])
+	if step == "solve":
+		var t: Dictionary = _tools.get("solve", {})
+		var checks := int((t["set"] as SolverTools).checks) if not t.is_empty() and t["set"] is SolverTools else 0
+		var handed_in := _handed_in("solve")
+		_close_tools("solve")
+		var why := _land_solve(handed_in, res, checks)
+		if why.is_empty():
+			# what the runs left in their folder was scratch: what they did is in runs.json
+			Provision.remove_tree(episode.job_dir("solve").path_join("compute"))
+			_errors.erase(step)
+			return
+		push_warning("ghost: table solve - %s" % why)
+		if int(_tries.get(step, 0)) > SOLVE_RETRIES:
+			_errors[step] = why
+		return
 	var err := ""
 	var had_tools := _tools.has(step)
 	var handed := _handed_in(step) if had_tools else ""
@@ -1788,8 +1874,16 @@ func _land(step: String, res: Dictionary) -> void:
 				var cues: Array = beat_acts.map(func(a: Dictionary) -> String: return String(a["name"]))
 				var t := own_voices(clean_spoken(String(res.get("text", "")), cues), _voices(), _reader_name())
 				t = fit_silence(t, beat_acts, _said_word())
-				err = "the reader wrote nothing speakable" if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20) \
-					else episode.write_text(step, t)
+				# ...AND NO NOTATION IN WHAT IS SAID (Proof's speech audit, now every reader's): a voice handed TeX reads its marks
+				var notation := notation_in(t)
+				if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20):
+					err = "the reader wrote nothing speakable"
+				elif not notation.is_empty() and int(_tries.get(step, 0)) <= RETRIES:
+					err = "its words carry notation the voice cannot say (%d line%s): %s" % [notation.size(), "" if notation.size() == 1 else "s", notation[0]]
+				else:
+					if not notation.is_empty():
+						push_warning("ghost: table %s - kept with notation in its words: %s" % [step, notation[0]])
+					err = episode.write_text(step, t)
 			"image":
 				err = "" if episode.has(step) else "the picture did not arrive"
 				if err.is_empty() and step == "image:height":
@@ -1934,6 +2028,9 @@ func _land_plan(text: String) -> String:
 	plan["inventory"] = {"count": inventory.size(), "printings": printings}
 	plan["seed"] = episode.seed
 	plan["dice"] = TablePrompts.dice(episode.seed)
+	var bad := _land_problem(plan)
+	if not bad.is_empty():
+		return bad
 	return episode.write_json("plan", plan)
 
 
@@ -1980,7 +2077,157 @@ func _land_beats(plan: Dictionary) -> String:
 	plan["inventory"] = {"count": 0, "printings": {}}
 	plan["seed"] = episode.seed
 	plan["dice"] = TablePrompts.dice(episode.seed)
+	var bad := _land_problem(plan)
+	if not bad.is_empty():
+		return bad
 	return episode.write_json("plan", plan)
+
+
+## THE PROBLEM [param plan] FIXES, landed in place ([method SolverTools.land_problem]): kept in the shape the solver and everyone
+## after it read, or taken out where the plan has none - "" - or why the plan cannot stand.
+func _land_problem(plan: Dictionary) -> String:
+	var got := SolverTools.land_problem(plan.get("problem"), SolverTools.can_run())
+	if got.has("error"):
+		return String(got["error"])
+	if got.is_empty():
+		plan.erase("problem")
+	else:
+		plan["problem"] = got
+	return ""
+
+
+## THE SOLVER, with its tools ([SolverTools]): waits while what it works with installs (Lean and Mathlib for a proof, the compute
+## environment for runs of code - all fetched by ghost itself), and fails, saying so, on a writer that takes no tools or a computation
+## where no sandbox can run it. A SOLVE BEGUN AFRESH begins from nothing - what an earlier one left goes a version back - and a retry
+## keeps what the first try saved.
+func _make_solve() -> void:
+	_close_tools("solve")
+	_waiting.erase("solve")
+	var problem := episode.problem()
+	var lacks := PackedStringArray()
+	for k in SolverTools.needs_of(problem):
+		if not Provision.ensure(String(k)):
+			lacks.append(String(Deps.entry(String(k)).get("name", k)))
+	if not lacks.is_empty():
+		_waiting["solve"] = "waiting for %s to be installed" % " and ".join(lacks)
+		return
+	var writer := String(spec.get("writer", "claude"))
+	if not TextGen.has(writer) or not TextGen.make(writer).takes_tools():
+		_errors["solve"] = "the writer picked takes no tools, and a problem is worked with them: pick one that does"
+		return
+	if SolverTools.kind_of(problem) == "computation" and not SolverTools.can_run():
+		_errors["solve"] = "this problem is settled by running code, and this machine has no sandbox to run it in: install bubblewrap (see the Environment panel)"
+		return
+	var dir := episode.job_dir("solve")
+	DirAccess.make_dir_recursive_absolute(dir)
+	DirAccess.remove_absolute(dir.path_join(SolverTools.SUBMITTED))
+	if int(_tries.get("solve", 0)) == 0:
+		for k in ["notebook", "proof", "runs", "data"]:
+			if FileAccess.file_exists(episode.file_of(String(k))):
+				episode.keep_version(String(k), true)
+				DirAccess.remove_absolute(episode.file_of(String(k)))
+		Provision.remove_tree(dir.path_join("compute"))
+	var toolset := SolverTools.new(episode, problem, dir)
+	var url := AgentTools.open(dir, toolset)
+	if url.is_empty():
+		_errors["solve"] = "the tools could not be served (a read-only session?)"
+		return
+	_tools["solve"] = {"url": url, "set": toolset}
+	_submit_text("solve", TablePrompts.solver(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(), problem, SolverTools.can_run()),
+		"best", {"tools_url": url, "timeout": SOLVE_TIMEOUT})
+
+
+## THE SOLVER'S SESSION, ENDED. A handed-in proof was VERIFIED when it was handed in, and a handed-in result names runs that ran to
+## their end (SolverTools accepts nothing else): `verified` or `computed`, with what checked it. With neither, the run is tried again;
+## after that the episode goes on honestly unchecked, so long as there is a notebook to work from - and says so.
+func _land_solve(handed: String, res: Dictionary, checks: int) -> String:
+	var r: Variant = episode.read_json("runs")
+	var runs := (r as Array).size() if r is Array else 0
+	if not handed.is_empty():
+		var sub: Variant = JSON.parse_string(handed)
+		var d: Dictionary = sub if sub is Dictionary else {}
+		if bool(d.get("computed", false)):
+			return episode.write_json("solve", {"verified": false, "computed": true, "checks": checks,
+				"runs": runs, "result": String(d.get("result", "")), "evidence": d.get("runs", [])})
+		episode.write_text("proof", String(d.get("code", episode.read_text("proof"))))
+		return episode.write_json("solve", {"verified": true, "checks": int(d.get("checks", checks)),
+			"runs": runs, "axioms": d.get("axioms", {}), "seconds": d.get("seconds", 0.0),
+			"lean": String(Provision.installed("lean").get("version", "")),
+			"mathlib": String(Provision.workbench().get("tag", ""))})
+	var why := ("the solver stopped without handing in a result" if SolverTools.kind_of(episode.problem()) == "computation"
+		else "the solver stopped without handing in a verified proof")
+	if not bool(res.get("ok", false)):
+		why = "the solver stopped: %s" % String(res.get("error", "its run failed"))
+	if int(_tries.get("solve", 0)) <= SOLVE_RETRIES:
+		return why
+	if episode.read_text("notebook").strip_edges().is_empty():
+		return why + ", and left no notebook"
+	return episode.write_json("solve", {"verified": false, "computed": false, "checks": checks, "runs": runs, "note": why})
+
+
+## THE INK: what the work writes that TeX lays out ([TableInk]: formulas, drawings, words with math), set by ghost's own TeX in one run
+## (hosts/math/typeset.py) - waiting while TeX and the math environment install. Landed by [method _land_ink].
+func _make_ink() -> void:
+	_waiting.erase("ink")
+	var lacks := PackedStringArray()
+	for k in ["tex", "math_venv"]:
+		if not Provision.ensure(k):
+			lacks.append(String(Deps.entry(k).get("name", k)))
+	if not lacks.is_empty():
+		_waiting["ink"] = "waiting for %s to be installed" % " and ".join(lacks)
+		return
+	var py := Deps.venv_bin("user://math_venv", "python")
+	var host := BundledHosts.path("res://hosts/math/typeset.py")
+	var latex := Provision.tool_path("tex", "latex")
+	if host.is_empty() or latex.is_empty() or not FileAccess.file_exists(py):
+		_errors["ink"] = "TeX or the math environment is missing"
+		return
+	var answer := episode.dir.path_join("ink.answer.json")
+	var spec_path := episode.dir.path_join("ink.spec.json")
+	var log := episode.dir.path_join("ink.log")
+	DirAccess.remove_absolute(answer)
+	var data: Variant = episode.read_json("data")
+	var err := TextGen.put(spec_path, JSON.stringify({"items": TableInk.items_of(episode.read_json("acts")), "out": answer,
+		"work": episode.dir.path_join("ink_work"), "width": TableInk.PAD_WIDTH, "outlines": true,
+		"bin": latex.get_base_dir(), "data": data if data is Dictionary else {}}))
+	if not err.is_empty():
+		_errors["ink"] = err
+		return
+	var pid := Subprocess.start_logged(py, PackedStringArray(["-I", host, spec_path]), log, "table ink")
+	if pid <= 0:
+		_errors["ink"] = "TeX's layout could not start"
+		return
+	_hosts["ink"] = {"pid": pid, "out": answer, "log": log}
+
+
+## TeX's layout landed ([param h], the host's run): written as the episode's ink - "" - or why not. What TeX refused is named in the
+## log and left blank on its page ([method TableWork._order_writing] says so too): the rest is written all the same.
+func _land_ink(h: Dictionary) -> String:
+	var out := String(h["out"])
+	var answer: Variant = JSON.parse_string(FileAccess.get_file_as_string(out)) if FileAccess.file_exists(out) else null
+	DirAccess.remove_absolute(out)
+	if not (answer is Dictionary):
+		return "TeX's layout failed: " + FileAccess.get_file_as_string(String(h["log"])).strip_edges().right(300)
+	var broken := PackedStringArray()
+	for r in (answer as Dictionary).get("items", []):
+		if r is Dictionary and not bool((r as Dictionary).get("ok", false)):
+			broken.append("%s: %s" % [String((r as Dictionary).get("id", "")), String((r as Dictionary).get("error", ""))])
+	if not broken.is_empty():
+		push_warning("ghost: table ink - TeX refused %d of what the work writes, left blank: %s" % [broken.size(), "; ".join(broken)])
+	return episode.write_json("ink", answer)
+
+
+## WHAT IN [param text] THE VOICE WOULD BE HANDED THAT IS NOTATION, never words: each line of it (marks aside) carrying a character of
+## [constant NOTATION], cut short - none when there is none. Math is said in words; a letter that names something is `[x]`.
+static func notation_in(text: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var said := Manuscript._rx("<!--[\\s\\S]*?-->").sub(text, "", true)
+	for line in said.split("\n"):
+		for c in NOTATION:
+			if String(line).contains(c):
+				out.append(String(line).strip_edges().substr(0, 120))
+				break
+	return out
 
 
 ## A CARD GOES BACK IN THE BOX ONLY WHEN IT WAS PASSED OVER - or when every card does. The user,
@@ -2412,7 +2659,8 @@ static func clean_spoken(text: String, acts: Array = []) -> String:
 			continue
 		keep.append(l)
 	t = "\n".join(keep)
-	t = Manuscript._rx("\\[[^\\]]*\\]").sub(t, "", true)
+	# (...a bracket round a direction goes; one round a single letter is the letter's name said, `[a]` - TextNorm's `letter`)
+	t = Manuscript._rx("\\[(?![A-Za-z]\\])[^\\]]*\\]").sub(t, "", true)
 	# (`**word**` stays as written: it is the harder of the two stresses, and shown in bold)
 	t = t.replace("\u2014", " - ").replace("\u2013", " - ")
 	t = Manuscript._rx("[ \\t]{2,}").sub(t, " ", true)

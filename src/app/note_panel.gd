@@ -95,7 +95,7 @@ func _ready() -> void:
 		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
 		"outro_tip": "Seconds held after the song ends, picture and sound fading out together."})
 	# ...THE TIMELINE OPEN, AS A LIST ([TimelineList]): a card shown only while a timeline editor is open
-	_panel.add_card("timeline", "Timeline", &"picture").add_child(TimelineList.new())
+	_panel.add_card("timeline", "Timeline", &"picture", "", TimelineList.BLURB).add_child(TimelineList.new())
 	_medium = _cards.get("medium") as MediumCard
 	_story = _cards.get("scenes") as StoryboardCard
 	_youtube = _cards.get("youtube") as YouTubeCard

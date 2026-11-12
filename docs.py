@@ -164,27 +164,24 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), "
      "its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), "
      "its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces "
-     "printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`)."),
+     "printed on them, what a pen writes on a page (words, and formulas and drawings TeX lays out, written stroke by "
+     "stroke in a seeded hand from the Hershey stroke fonts) - and the medium that puts it all on the stage "
+     "(`table.gd`, a row of `Medium.REGISTRY`)."),
     ("table_show", "The table's show",
      "A show at a table nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by "
      "agents a card or a beat of work at a time, kept on disk step by step - the set dresser that builds the table and "
-     "the puppeteer that works what stands on it. The rules are every show's; the brief says what is done there - "
-     "cards read (tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards, listed or left to "
-     "each episode's producer), things made, or both. Design: next/cards.md, next/table_work.md."),
+     "the puppeteer that works what stands on it, and the solver that works a problem the plan fixes with work a "
+     "computer checks (a Lean proof, a sandboxed computation). The rules are every show's; the brief says what is done "
+     "there - cards read (tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards, listed or "
+     "left to each episode's producer), things made, a problem worked, or any of them. Design: next/cards.md, "
+     "next/table_work.md, next/proof.md."),
     ("desk", "The desk",
-     "A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, written stroke by stroke in a "
-     "seeded hand from the Hershey stroke fonts), the pad, the pen that moves by itself, the instruments it reaches "
-     "for - a calculator, a tablet, a screen with Lean on it - and the medium that puts them on the stage. Its room is "
-     "built from the table's parts - and the letter written at the same desk: its own cursive hand (the Hershey script "
-     "font, no TeX), what it says and writes, and its medium. Design: next/proof.md, next/letter.md."),
-    ("proof", "Proof",
-     "A ghost doing math, made by agents: a note's problem fixed, worked at the desk with Lean - a lab notebook, "
-     "checks, a proof handed in only when verified - and taught, each episode kept on disk step by step; the solver's "
-     "tools, the rules each agent is told, and the card that runs it all and hands the reading its lesson. Design: "
-     "next/proof.md."),
+     "A desk a letter is written at, seen and heard: the legal pad, the pen that moves by itself and writes what the "
+     "voice says as it says it, the letter's own hand (journal fonts, no TeX), what it says and writes, and the medium "
+     "that puts them on the stage. Its room is built from the table's parts. Design: next/letter.md, next/proof.md."),
     ("letter", "Letter",
      "A note read as a letter written by hand at a desk, one of the Medium card's formats: its own rows there, which "
-     "draw its sketches (an agent's SVG, laid out by the Proof pad's ink step) and hand the reading the letter with the "
+     "draw its sketches (an agent's SVG, laid out by ghost's own TeX) and hand the reading the letter with the "
      "pen's rests in it. Design: next/letter.md."),
     ("dispatch", "Dispatch desk",
      "A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read "
@@ -994,10 +991,13 @@ def media_page(base: Script) -> str:
     # The folder also holds what the media set and show (layouts, films, pictures): only a
     # script that IS a medium - one extending Medium or a registered medium - must be a row.
     kinds = {"Medium"} | {script_at(ROOT / rel).class_name for rel in registered if (ROOT / rel).exists()}
+    # ...unless a registered medium extends it: then it is that medium's base, never a row of its own (DeskMedium, the desk a
+    # Letter is written at, since Proof - whose medium it was - became a table show)
+    bases = {script_at(ROOT / rel).extends for rel in registered if (ROOT / rel).exists()}
     for path in sorted(SCRIPTS.glob("*/*.gd")):
         rel = path.relative_to(ROOT).as_posix()
         if rel not in registered and path.stem != "medium" and path.parent != SCENES_DIR \
-                and script_at(path).extends in kinds:
+                and script_at(path).extends in kinds and script_at(path).class_name not in bases:
             warn(f"{rel} is a medium not registered in Medium.REGISTRY - it can never be selected")
     return page("Media: what carries the show", blocks)
 
@@ -1313,7 +1313,7 @@ def environment_page(deps: Script) -> str:
          "godot --headless --path . -- --provision        # install uv, FFmpeg and Python now",
          "godot --headless --path . -- --provision all    # ...and every feature's environment",
          "godot --headless --path . -- --provision update # bring everything up to date",
-         "godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Proof component (~8 GB)",
+         "godot --headless --path . -- --provision mathlib # Lean and Mathlib, for a table show's proofs (~8 GB)",
          "```"],
         "## What Ghost Notes installs itself",
         rows_of("FETCHED", "MANAGED"),
@@ -1889,7 +1889,7 @@ RULES: List[Rule] = [
          "a click from a window. In a window of its own, or on no card, add it to this rule's skip",
          (("a.gd", "\tvar box := TextEdit.new()", 1), ("a.gd", "\tvar list := ScrollContainer.new()", 1),
           ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
-         skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "mask_editor.gd",
+         skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "reader_browser.gd", "mask_editor.gd",
                "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd")),
     # `Films.pump()` IS CALLED FROM main's `_process`. A window cut is an ffmpeg child, and something
     # with a frame must notice it exit and promote its output out of the `.part` name. The live film

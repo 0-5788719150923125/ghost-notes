@@ -23,9 +23,9 @@ class_name NoteCards
 ## workspace, so a component that can be attached can always be taken off again.
 
 ## The components whose settings are a card any workspace can show, in the order they stand:
-## the rows of [constant Components.REGISTRY] that name a `script`. Cards' and Proof's episodes
-## first, then the voice that reads them: what produces the text stands above what shows it.
-const KEYS := ["table", "proof", "voice", "voice_training", "medium", "illustrations", "actor", "storyboard",
+## the rows of [constant Components.REGISTRY] that name a `script`. A table's episodes first, where to take
+## the next one, then the voice that reads them: what produces the text stands above what shows it.
+const KEYS := ["table", "direction", "voice", "voice_training", "medium", "illustrations", "actor", "storyboard",
 	"look", "bookends", "youtube"]
 
 

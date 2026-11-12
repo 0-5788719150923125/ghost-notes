@@ -265,7 +265,7 @@ static func producer(title: String, brief: String, seed: int,
 	var past := PackedStringArray()
 	for i in mini(history.size(), PAST_FULL + PAST_LINES):
 		past.append(_past(_d(history[i])) if i < PAST_FULL else _past_line(_d(history[i])))
-	var vars := {"seed": seed, "chooses": chooses, "spread_most": spread_most,
+	var vars := {"seed": seed, "chooses": chooses, "spread_most": spread_most, "run": SolverTools.can_run(),
 		"beats_most": TableProducer.BEATS_MOST, "habits": not past.is_empty(), "past": "\n".join(past), "uploads_as": uploads_as.strip_edges(),
 		"place": String(d["place"]), "year": int(d["year"]), "hue": int(d["hue"]), "hour": int(d["hour"]), "direction": int(d["direction"]),
 		"frame_styles": ", ".join(frames.keys()), "windows": ", ".join(CardTable.WINDOWS.keys()), "corners": ", ".join(CardTable.CORNERS.keys()),
@@ -398,6 +398,8 @@ static func work_lines(plan: Dictionary) -> Array:
 ## How long a word takes a voice to say, seconds - the pace measured on real exports for Proof's lessons: the
 ## words a passage needs to cover its work.
 const SAID_WORD := 0.52
+## The most characters of the runs of code a later role is shown whole ([method runs_text]); past it, a line each.
+const RUNS_SHOWN := 40000
 ## A game's session at its longest (minutes), and how many words its opening and its close each run to.
 const GAME_MINUTES := 40
 const GAME_END_WORDS := Vector2i(350, 700)
@@ -427,12 +429,120 @@ static func puppeteer(title: String, brief: String, plan: Dictionary, seed: int,
 		cards.append({"n": i + 1, "name": String(c.get("name", "")), "meaning": String(c.get("meaning", "")).strip_edges(),
 			"writing": " / ".join(DataPath.strings(w.get("lines", [])))})
 	var vars := {"seed": seed, "episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")),
+		"sheets": parts.contains("sheet"),
 		"work": work_lines(plan), "cards": cards, "parts": parts if not parts.strip_edges().is_empty() else "(nothing on the table works yet)",
 		"laws": Motions.describe_laws(), "bursts": ", ".join(PackedStringArray(Effects.BURSTS.keys())),
 		"tools": looks > 0, "looks": looks, "cardless": CardTable.cardless(plan), "beats": CardTable.beats(plan),
 		"assembly": plan.get("assembly") == true, "assembly_steps": Assembly.describe(plan.has("model_words")), "model_words": String(plan.get("model_words", "")), "designed": plan.has("model_words"),
 		"painted_design": String(plan.get("painted_design", ""))}
+	vars.merge(worked_vars(plan.get("worked", {}) if plan.get("worked") is Dictionary else {}))
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/puppeteer.prompt", vars)}
+
+
+## THE SOLVER, working the problem the plan fixed ([SolverTools]): the problem, how it is checked, and its tools - [param run], code can
+## run here.
+static func solver(title: String, brief: String, plan: Dictionary, problem: Dictionary, run := false) -> Dictionary:
+	return {"system": Rules.say("table/solver.system", {}) + "\n\n" + show_context(title, brief),
+		"prompt": Rules.say("table/solver.prompt", {
+			"episode_title": String(plan.get("episode_title", "")), "premise": String(plan.get("premise", "")),
+			"statement": str(problem.get("statement", "")), "latex": str(problem.get("latex", "")),
+			"lean": str(problem.get("lean", "")), "proof": SolverTools.kind_of(problem) == "proof", "run": run,
+			"computation": str(problem.get("computation", "")),
+			"forbidden": ", ".join(PackedStringArray(problem.get("forbidden", [])))})}
+
+
+## WHAT THE WORK CAME TO, as the roles after the solver are told it (table/solver.worked): [param worked] is the plan's `worked`
+## ([method TableProducer._plan]) - `{problem, solve, notebook, proof, runs, data}` - or `{}` where the plan fixed no problem or it
+## is not worked yet, when `worked` is false and nothing else is said.
+static func worked_vars(worked: Dictionary) -> Dictionary:
+	var problem: Dictionary = worked.get("problem", {}) if worked.get("problem") is Dictionary else {}
+	if problem.is_empty() or not (worked.get("solve") is Dictionary):
+		return {"worked": false, "data_kept": false}
+	var solve: Dictionary = worked["solve"]
+	var is_proof := SolverTools.kind_of(problem) == "proof"
+	var notebook := String(worked.get("notebook", "")).strip_edges()
+	var lean := String(worked.get("proof", "")).strip_edges()
+	var runs: Array = worked.get("runs", []) if worked.get("runs") is Array else []
+	var data: Dictionary = worked.get("data", {}) if worked.get("data") is Dictionary else {}
+	return {"worked": true, "statement": str(problem.get("statement", "")), "latex": str(problem.get("latex", "")),
+		"history": str(problem.get("history", "")), "computation": str(problem.get("computation", "")),
+		"notebook": notebook if not notebook.is_empty() else "(the solver left no notes)",
+		"lean": lean if not lean.is_empty() else "(no Lean file)",
+		"proof": is_proof, "verified": is_proof and bool(solve.get("verified", false)),
+		"computed": not is_proof and bool(solve.get("computed", false)), "result": str(solve.get("result", "")),
+		"runs_made": not runs.is_empty(), "runs": runs_text(runs, solve.get("evidence", []) if solve.get("evidence") is Array else []),
+		"data_kept": not data.is_empty(), "data": data_text(data)}
+
+
+## THE RUNS as a later role reads them: the ones the result names ([param evidence]) first, then the others that ran to their end, each
+## with its code and what it printed, while [constant RUNS_SHOWN] lasts; every other run a line. "" for none.
+static func runs_text(runs: Array, evidence: Array) -> String:
+	var named: Array = []
+	for v in evidence:
+		named.append(int(v))
+	var order: Array = []
+	for r in runs:
+		if r is Dictionary and named.has(int((r as Dictionary).get("n", 0))):
+			order.append(r)
+	for r in runs:
+		if r is Dictionary and not order.has(r):
+			order.append(r)
+	var full := PackedStringArray()
+	var short := PackedStringArray()
+	var used := 0
+	for r in order:
+		var d: Dictionary = r
+		var ran := int(d.get("exit", -1)) == 0 and not bool(d.get("timed_out", false))
+		var out := str(d.get("stdout", "")).strip_edges()
+		var block := "Run %d%s:\n```python\n%s\n```\nIt printed:\n%s" % [int(d.get("n", 0)),
+			" (the result names it)" if named.has(int(d.get("n", 0))) else "", str(d.get("code", "")).strip_edges(),
+			out if not out.is_empty() else "(nothing)"]
+		if ran and used + block.length() <= RUNS_SHOWN:
+			full.append(block)
+			used += block.length()
+			continue
+		var last := out.get_slice("\n", out.count("\n")) if not out.is_empty() else ""
+		var why := str(d.get("error", "")) if not str(d.get("error", "")).is_empty() else \
+			("exit %d" % int(d.get("exit", -1)) if not ran else "")
+		short.append("- run %d: %s%s" % [int(d.get("n", 0)), ("did not finish (%s)" % why) if not ran else "ran",
+			(", last printed: " + last.substr(0, 200)) if not last.is_empty() else ""])
+	var text := "\n\n".join(full)
+	if not short.is_empty():
+		text += ("\n\n" if not text.is_empty() else "") + "Other runs:\n" + "\n".join(short)
+	return text
+
+
+## THE SERIES the runs kept, as a later role reads them: a line per series - its name, its size and range, what it is, and the run
+## that kept it. "" for none.
+static func data_text(data: Dictionary) -> String:
+	var lines := PackedStringArray()
+	var names := data.keys()
+	names.sort()
+	for k in names:
+		var d: Dictionary = data[k] if data[k] is Dictionary else {}
+		var about := str(d.get("about", "")).strip_edges()
+		lines.append("- %s: %s%s (run %d)" % [k, SolverTools.series_summary(d.get("points", [])),
+			(" - " + about) if not about.is_empty() else "", int(d.get("run", 0))])
+	return "\n".join(lines)
+
+
+## WHAT AN ACT WRITES ON A PAGE, as the reader is told it so the words are said as they are written: each `write`'s words or formula,
+## and "a drawing" for a drawing - "" for an act that writes nothing.
+static func writes_of(act: Dictionary) -> String:
+	var out := PackedStringArray()
+	for t in (act.get("tracks", []) if act.get("tracks") is Array else []):
+		if not (t is Dictionary) or String((t as Dictionary).get("law", "")) != "write":
+			continue
+		var d: Dictionary = t
+		if not String(d.get("strike", "")).strip_edges().is_empty():
+			out.append("a line through what `%s` wrote - it is crossed out" % String(d["strike"]).strip_edges())
+		elif not String(d.get("draw", "")).strip_edges().is_empty():
+			out.append("a drawing (say what each part of it is as it is drawn)")
+		elif not String(d.get("tex", "")).strip_edges().is_empty():
+			out.append("the formula %s" % String(d["tex"]).strip_edges())
+		elif not String(d.get("text", "")).strip_edges().is_empty():
+			out.append("\"%s\"" % String(d["text"]).strip_edges().replace("\n", " / "))
+	return "; ".join(out)
 
 
 ## THE MODELER, designing what this episode builds ([AssemblyModel], [ModelTools]): what the plan says it is, what earlier episodes built, how it is written, and - with [param looks] - its tools.
@@ -651,6 +761,8 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		"on_the_table": CardTable.on_the_table(look), "said": spoken, "on_table": on_table, "box": boxed, "pictured": pictured,
 		"intro": step == "intro", "close": step == "close", "card": step != "intro" and step != "close", "voices": not voices.is_empty(),
 		"box_count": box_count if boxed else 0}
+	# ...AND THE WORK REALLY DONE, where the plan fixed a problem (table/solver.worked): every passage is written from it
+	vars.merge(worked_vars(plan.get("worked", {}) if plan.get("worked") is Dictionary else {}))
 	var bare := CardTable.cardless(plan)
 	vars["cardless"] = bare
 	var lo_hi: Array = WORDS["card"]
@@ -717,7 +829,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 					continue
 				told_layers[String(layers[0])] = true
 				name = String(layers[0])
-			acts.append({"name": name, "about": String(ad.get("about", "")),
+			acts.append({"name": name, "about": String(ad.get("about", "")), "writes": writes_of(ad),
 				"under": bool(ad.get("under", false)) and not timed, "seconds": roundi(float(ad.get("length", 0.0)))})
 		vars["work_acts"] = acts
 		vars["work_seconds"] = roundi(seconds)

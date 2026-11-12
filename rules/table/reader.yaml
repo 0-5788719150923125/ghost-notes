@@ -43,6 +43,10 @@ prompt:
       What you are building, which is what the viewer watches come together, and which stands whole by the end:
       {{model_words}}
       Say what it is becoming when you would, and never talk as if it were something else.
+  - when: worked
+    say: ""
+  - when: worked
+    include: worked
   - when: "!cardless"
     say: "The spread: {{spread_name}}, {{spread_size}} cards:"
   - when: cardless
@@ -134,6 +138,24 @@ prompt:
   - "Write {{lo}} to {{hi}} words."
   - ""
   - include: spoken
+
+# THE WORK, AS IT WAS REALLY DONE (table/solver.worked; next/proof.md, "Proof became a table show"): where the plan fixed a
+# problem, every passage is written from the solver's notebook, and the check is said as it came out. MATH IS SAID IN WORDS
+# (Proof's speech audit, now any reader's: TableProducer.notation_in sends back words that carry notation) - and no sample phrase
+# here, which a writer copies (next/proof.md: two came back in an episode almost word for word)
+worked:
+  - include: table/solver.worked
+  - ""
+  - >-
+      TALKING THE WORK THROUGH. What you say of the work comes from this notebook and nowhere else:
+      tell the steps that lead to the answer and the small cases that show its idea, not every check
+      the solver ran. Say the check as it came out, in plain words, once - what checked it and what it
+      checked - and never more than it did.
+  - >-
+      MATH IS SAID IN WORDS a listener can follow by ear, never as notation: no dollar signs,
+      backslashes, carets, underscores or braces in what you say. A letter that names something - a
+      variable, a point, a side - is written in square brackets, [x], so the voice says the letter
+      itself. What a step writes on a page is said as it is written, in those words.
 
 # THE INTRO: the video opens - nobody knows a card yet
 aside:
@@ -514,7 +536,7 @@ work:
 work_list:
   - "WHAT IS DONE WHILE YOU SPEAK, in this order:"
   - each: work_acts
-    say: '  - {{about}} ({{#under}}for as long as your words around it take{{/under}}{{^under}}about {{seconds}} seconds{{/under}}; it is called `{{name}}`)'
+    say: '  - {{about}} ({{#under}}for as long as your words around it take{{/under}}{{^under}}about {{seconds}} seconds{{/under}}; it is called `{{name}}`){{#writes}} - it writes: {{writes}}{{/writes}}'
   # THE WORK IS SEEN, SO IT NEED NOT ALL BE SAID (the user, 2026-10-29: "the script sounds very much like the narrator
   # just narrating every single action. Which is fine, but I also think it would be nice if they told stories, or
   # deviated into parallel topics"): a step named where it helps, what it changes noticed as it changes, and between

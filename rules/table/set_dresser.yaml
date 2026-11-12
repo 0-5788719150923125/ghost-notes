@@ -237,7 +237,8 @@ prompt:
     say: >-
           Build every thing this work uses so it can be worked, as WORKING PARTS describes: the vessels
           and the tools and what is in them, every part that moves, fills, empties, changes color or is
-          reached given a `name`, a `joint` and the `points` it is held and reached by. What the work
+          reached given a `name`, a `joint` and the `points` it is held and reached by - a tool held by its
+          working end, as a pen by its nib or a pencil by its point, names that end `tip`. What the work
           makes or adds begins as it begins (`start`): not there yet, empty, or small. WHAT IS IN A THING
           IS WHAT IT IS, and behaves as it would: a liquid is a part of its own in its vessel, of the
           liquid material, drawn as full as it is; loose stuff that is poured - sand, salt, snow, seeds,

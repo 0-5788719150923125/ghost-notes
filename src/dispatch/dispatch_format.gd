@@ -126,14 +126,6 @@ func _body() -> String:
 
 func _build() -> void:
 	add_theme_constant_override("separation", 8)
-	var hint := Label.new()
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.modulate = Color(1, 1, 1, 0.7)
-	hint.text = ("The note's words are the script, played at the desk: the first voice cued is the room's, every other is "
-		+ "heard through a phone. Edit lists the desk's marks - calls, rings, texts, pings, the terminal's typed and shown "
-		+ "blocks, the printer, the static, a picture on a screen. The note's desk: block names the phones.")
-	add_child(hint)
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 6)
 	add_child(srow)

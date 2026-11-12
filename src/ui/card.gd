@@ -19,6 +19,10 @@ class_name Card
 ## its presses; anywhere else it stands at the card's top. [member head]'s the only title bar there is, so what is on it is live
 ## wherever it lies.
 ##
+## WHAT IT IS FOR, ON HOVER ([member blurb]; 2026-11-11, the user: "after it's added, there is no longer a way to know what
+## each component is for"): its title bar's tooltip, and its chip's ([CardRow]) - a component's card says its row's blurb,
+## the one "+" offered it with ([method SidePanel.add_card]).
+##
 ## Add rows to [member body], never to the card.
 
 ## The families: a label and a hue in degrees, in the order cards stand on a panel. A family is a
@@ -53,6 +57,13 @@ var title := "":
 		title = t
 		if _name != null:
 			_name.text = t
+
+## What the card is for, in a sentence or two: its title bar's tooltip, and its chip's.
+var blurb := "":
+	set(t):
+		blurb = t
+		if head != null:
+			head.tooltip_text = t
 
 var _hover := false
 var _name: Label

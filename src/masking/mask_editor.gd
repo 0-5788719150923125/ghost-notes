@@ -2824,7 +2824,8 @@ func _build_panel() -> void:
 	# layers in the shader, not competing "sides" - so there's no swap control any
 	# more either (swapping meant something when every pixel was forced to one side
 	# or the other; independent channels just re-pick their own colors).
-	col = _panel.add_card("effect", "Effect", &"look")
+	col = _panel.add_card("effect", "Effect", &"look", "",
+		"The chroma-key effect at the marker picked: the color each channel keys, and what it does there.")
 	_grp_color = VBoxContainer.new()
 	_grp_color.add_theme_constant_override("separation", 8)
 	col.add_child(_grp_color)
@@ -3235,7 +3236,8 @@ func _build_panel() -> void:
 	# --- own scroll - the whole "manage markers" workflow stays visible together,
 	# --- rather than the create buttons living up in the scrolling edit area where
 	# --- reaching them means scrolling past everything else first.
-	var list_col: VBoxContainer = _panel.add_footer_card("markers", "Markers", &"look")
+	var list_col: VBoxContainer = _panel.add_footer_card("markers", "Markers", &"look",
+		"The clip's markers in order, each where the effect changes - a ramp eases in before it, a damp builds after - with add, delete and undo.")
 	list_col.add_theme_constant_override("separation", 4)
 
 	_marker_label = Label.new()

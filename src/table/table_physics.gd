@@ -472,6 +472,7 @@ func rebind() -> void:
 	twin.paint = work.paint.twin_for(twin) if work.paint != null else null
 	twin._moved = work._moved
 	twin._soft = work._soft
+	twin._writing = work.pages_for_twin()
 	_find_sprinkles()
 	_drawn_tables()
 	_intervals = {}
@@ -533,6 +534,8 @@ func _make_twin() -> void:
 	twin.swings = work.swings
 	twin.hung = work.hung
 	twin.paint = work.paint.twin_for(twin) if work.paint != null else null
+	# ...and what is written, where a pen seen writes and points ([method TableWork.pages_for_twin])
+	twin._writing = work.pages_for_twin()
 
 
 ## The pose of the node solid [param sd] hangs from at show time [param t], by the twin.

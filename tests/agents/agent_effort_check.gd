@@ -187,28 +187,5 @@ func _panel() -> bool:
 	_ok(ed._painter.efforts.disabled, "a painter with no effort setting grays the picker out")
 	row.set_choice("codex", "m-small", "ultra")
 	_ok(pick.get_item_text(pick.selected) == "Ultra  (not offered)", "a level this model does not offer stays, marked")
-	# ONE CHOICE OF AGENTS, EVERYWHERE (2026-10-15, the user: "We need to unify agent selection under a
-	# single codebase"): a Proof note's writer row is the same row as a card show's - the same agents,
-	# models and levels for the same choice - and what it chooses is the note's and its producer's.
-	var proof_panel = load("res://src/reading/reading_panel.gd").new()
-	proof_panel.workspace = "proof"
-	proof_panel._build_panel()
-	proof_panel._doc._sync = false
-	var proof = proof_panel._block_cards["proof"]
-	_ok(proof._writer is AgentPick, "the Proof card chooses its writer with the same row as Cards")
-	if proof._writer is AgentPick:
-		var theirs: AgentPick = proof._writer
-		row.set_choice("claude", "sonnet", "")
-		theirs.set_choice("claude", "sonnet", "")
-		var same := true
-		for pair in [[row.agents, theirs.agents], [row.models, theirs.models], [row.efforts, theirs.efforts]]:
-			same = same and _items(pair[0]) == _items(pair[1])
-		_ok(same and _items(theirs.efforts).size() > 1, "and it lists the same agents, models and levels (%s)" % str(_items(theirs.models)))
-		theirs.efforts.select(2)
-		theirs.efforts.item_selected.emit(2)
-		_ok(String(proof._knobs["writer_effort"]) == String(theirs.efforts.get_item_metadata(2))
-			and String(proof._spec()["writer_effort"]) == String(theirs.efforts.get_item_metadata(2)),
-			"a level chosen there is the note's knob and its producer's")
-	proof_panel.free()
 	panel.free()
 	return true

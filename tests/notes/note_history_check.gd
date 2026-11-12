@@ -28,7 +28,8 @@ func _initialize() -> void:
 	_ok(all.size() == 3 and String(all[1]["said"]).contains("look.vignette 0.4 → 0.35"),
 		"a setting changed is said by its place and its two values: %s" % String(all[1]["said"]) if all.size() > 1 else "?")
 	_ok(String(all[0]["said"]).contains("the words, 2 more"), "the words changed are said by how many more: %s" % String(all[0]["said"]))
-	_ok(float(all[0]["at"]) >= float(all[2]["at"]) and NoteHistory.text_of(dir, all[2]) == t1, "newest first, each read back as it was")
+	_ok(float(all[0]["at"]) >= float(all[2]["at"]) and NoteHistory.text_of(dir, all[2]) == t1 and NoteHistory.text_of(dir, all[1]) == t2
+		and NoteHistory.text_of(dir, all[0]) == t3, "newest first, each read back as it was - one file each, however close together")
 	NoteHistory.record(dir, t1, 3)
 	var after := NoteHistory.entries(dir)
 	_ok(after.size() == 3 and NoteHistory.text_of(dir, after[0]) == t1 and not FileAccess.file_exists(dir.path_join(String(all[2]["file"]))),

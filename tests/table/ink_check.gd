@@ -3,7 +3,7 @@ extends SceneTree
 ## Does the desk's hand write what TeX laid out - every glyph, in a hand's order, in its box, and as
 ## a function of time?
 ##
-## The fixture, tests/desk/ink_layout.json, is TeX's own answer (hosts/math/typeset.py, run on
+## The fixture, tests/table/ink_layout.json, is TeX's own answer (hosts/math/typeset.py, run on
 ## ghost's TinyTeX) for nine items: a superscript sum, a radical and a fraction, a sum with limits,
 ## a two-line align*, the logic symbols, calligraphic and blackboard letters with the drawn-by-recipe
 ## glyphs, big delimiters and a matrix, a paragraph with inline math, and a contour integral - the
@@ -22,13 +22,13 @@ extends SceneTree
 ## (lines that meet still meet), never ruler-straight (the control), and faster than writing - a
 ## line drawn at the writing pace is the control that must take longer.
 ##
-##   godot --headless --path . --script tests/desk/ink_check.gd
+##   godot --headless --path . --script tests/table/ink_check.gd
 
 var _fails: Array = []
 
 
 func _init() -> void:
-	var text := FileAccess.get_file_as_string("res://tests/desk/ink_layout.json")
+	var text := FileAccess.get_file_as_string("res://tests/table/ink_layout.json")
 	var parsed: Variant = JSON.parse_string(text)
 	var layout: Dictionary = parsed if parsed is Dictionary else {}
 	_check(not layout.is_empty(), "the fixture reads")

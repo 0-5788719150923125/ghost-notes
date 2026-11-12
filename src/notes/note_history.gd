@@ -28,7 +28,11 @@ static func record(dir: String, text: String, kept := KEPT) -> String:
 			return ""
 	DirAccess.make_dir_recursive_absolute(dir)
 	var at := Time.get_unix_time_from_system()
-	var file := "%d.md" % int(at * 1000.0)
+	# ...ONE FILE EACH, though two land in one millisecond (a fast machine did: the second wrote over the first, CI 2026-11-11)
+	var n := int(at * 1000.0)
+	while FileAccess.file_exists(dir.path_join("%d.md" % n)):
+		n += 1
+	var file := "%d.md" % n
 	var f := FileAccess.open(dir.path_join(file), FileAccess.WRITE)
 	if f == null:
 		return "could not keep the note's state in " + dir

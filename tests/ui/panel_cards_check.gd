@@ -12,7 +12,13 @@ extends Node
 ##   panel scrolled to its top, the last card's chip brings it out of the bottom pile, and its rows still show - on the
 ##   Generative and Cards panels, which overflow the window (Synthesis' three cards fit it, and have no pile).
 ##
-## THE CONTROL: before the press the last card lies in the bottom pile, or "brought" proves nothing. The deck's own
+##   EVERY CARD SAYS WHAT IT IS FOR (2026-11-11, the user: "after it's added, there is no longer a way to know what each
+##   component is for"): its title bar's tooltip is its blurb, and its chip's says it before what a click does - a
+##   component's card the blurb of its row, the words "+" offered it with. And "+"'s own tooltips are folded as the menu
+##   opens (Boot.wrap_items; "the description can be very wide"): no line wider than a tooltip is let be.
+##
+## THE CONTROL: before the press the last card lies in the bottom pile, or "brought" proves nothing. A card made with no
+## blurb must not pass as saying what it is for, and the menu's widest blurb must be wider than a tooltip unfolded. The deck's own
 ## mechanics (where a press brings a card, the piles, the fan) are panel_deck_check's.
 
 var _fails: Array = []
@@ -24,6 +30,9 @@ func _ready() -> void:
 
 func _run() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
+	var bare := Card.new("x.bare", "Bare", &"paper")
+	_ok(not _says(bare, null), "the control - a card made with no blurb does not say what it is for")
+	bare.free()
 	await _panel("Generative", func() -> Node: return ReadingPanel.new(), true)
 	await _panel("Synthesis", func() -> Node: return SynthEditor.new(), false)
 	await _panel("Cards", func() -> Node:
@@ -82,6 +91,7 @@ func _panel(name: String, make: Callable, overflows: bool) -> void:
 		_ok(not card.key.is_empty() and card.key.begins_with(panel.card_prefix + "."),
 			"%s: '%s' has a key of its panel's (%s)" % [name, card.title, card.key])
 		_ok(Card.FAMILIES.has(card.family), "%s: '%s' is of a known family (%s)" % [name, card.title, card.family])
+		_ok(_says(card, panel.card_row), "%s: '%s' says what it is for, on its bar and its chip ('%s')" % [name, card.title, card.blurb])
 	if overflows:
 		await _brings(name, panel)
 	panel.queue_free()
@@ -125,10 +135,57 @@ func _note_panel() -> void:
 	# (a card shown only at times - the Timeline card, while a timeline is open - keeps its chip hidden with it)
 	var chips := np._panel.card_row.get_children().filter(func(c: Node) -> bool: return (c as CanvasItem).visible)
 	_ok(chips.size() == cards.size(), "...with a chip each (%d shown for %d cards)" % [chips.size(), cards.size()])
+	var rows := {"Body": "text", "Song": "song", "Medium": "medium", "Storyboard": "storyboard"}
+	for c in cards:
+		var card: Card = c
+		var want := String((Components.REGISTRY.get(rows.get(card.title, ""), {"blurb": "?"}) as Dictionary)["blurb"])
+		_ok(card.blurb == want and _says(card, np._panel.card_row), "...'%s' says its component's blurb on its bar and its chip" % card.title)
+	await _menu_folds(np._panel)
 	np.queue_free()
 	await _settle(1)
 	DirAccess.remove_absolute(note)
 	DirAccess.remove_absolute(note.get_base_dir())
+
+
+## WHAT A CARD SAYS IT IS FOR: a blurb, its bar's tooltip, and its chip's tooltip leading with it (a chip in [param row];
+## null asks of the bar alone). Boot may have folded a tooltip already, so each is read unfolded.
+func _says(card: Card, row: CardRow) -> bool:
+	if card.blurb.strip_edges().is_empty() or _flat(card.head.tooltip_text) != _flat(card.blurb):
+		return false
+	if row == null:
+		return true
+	var chip: Button = row._chips.get(card)
+	return chip != null and _flat(chip.tooltip_text).begins_with(_flat(card.blurb))
+
+
+## [param tip] with Boot's folding taken out: a line break within a paragraph is a space again.
+static func _flat(tip: String) -> String:
+	return tip.replace("\n\n", "\u0001").replace("\n", " ").replace("\u0001", "\n\n")
+
+
+## "+" OPENED AS A PRESS OPENS IT, its tooltips folded by then: no line of one is wider than a tooltip may be. The control:
+## the widest item's tooltip, unfolded, is wider than that.
+func _menu_folds(panel: SidePanel) -> void:
+	var pop := panel.plus.get_popup()
+	panel.plus.show_popup()
+	await _settle(2)
+	var font: Font = ThemeDB.fallback_font
+	var fsize := ThemeDB.get_default_theme().get_font_size("font_size", "TooltipLabel")
+	var widest := 0.0
+	var unfolded := 0.0
+	var tips := 0
+	for i in pop.item_count:
+		var tip := pop.get_item_tooltip(i)
+		if tip.is_empty():
+			continue
+		tips += 1
+		for line in tip.split("\n"):
+			widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x)
+		for para in _flat(tip).split("\n\n"):
+			unfolded = maxf(unfolded, font.get_string_size(para, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x)
+	pop.hide()
+	_ok(tips > 0 and unfolded > Boot.TIP_MAX_PX, "the control - '+' offers tooltips (%d), the widest %d px unfolded" % [tips, int(unfolded)])
+	_ok(tips > 0 and widest <= Boot.TIP_MAX_PX + 1.0, "'+' folds its tooltips as it opens: the widest line %d px of %d" % [int(widest), int(Boot.TIP_MAX_PX)])
 
 
 ## MASKING, before a clip is chosen: the framework's panel with one card, the Clip.
@@ -141,5 +198,7 @@ func _masking() -> void:
 	var cards: Array = p.cards() if p != null else []
 	_ok(cards.size() == 1 and (cards[0] as Card).key == "masking.clip",
 		"Masking with no clip: a side panel with a Clip card (%s)" % str(cards.map(func(c: Node) -> String: return (c as Card).key)))
+	_ok(cards.size() == 1 and (cards[0] as Card).blurb == String(Components.REGISTRY["clip"]["blurb"]) and _says(cards[0], p.card_row),
+		"...which says what a Clip is for")
 	me.queue_free()
 	await _settle(1)

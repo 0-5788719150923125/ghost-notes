@@ -62,7 +62,7 @@ const SLOTS := {
 	"clock": {"label": "clock",
 		"blurb": "What the show is timed by, and how long it is: a song, a voice reading the text, or a clip."},
 	"presentation": {"label": "presentation",
-		"blurb": "What the show is seen in: the Medium and the format it names, a card table, a proof's desk, an actor's room, a voice lab's own show, or a clip's own frame."},
+		"blurb": "What the show is seen in: the Medium and the format it names, a card table, an actor's room, a voice lab's own show, or a clip's own frame."},
 }
 
 ## THE WORKSPACES: the panels that run a note. Most components are a card on whichever panel is
@@ -73,30 +73,24 @@ const SLOTS := {
 ## became Table (2026-10-26): the table's settings kept their section, and its Script card, built in the
 ## section, showed no Byline, no brief's marks and no "Brief" (2026-10-29: "It's not displayed in the UI
 ## anywhere").
-## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `hint` (the
-## line under its title row, which names no mode - [method SidePanel.pin_title_row]), `hosts` (which of a note's component cards it can
-## show - a card table is its own presentation, so it shows no Medium) and `classic` (what a panel
-## started without a note - the command line, a gate - is made of).
+## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `hosts` (which of a note's component
+## cards it can show - a card table is its own presentation, so it shows no Medium) and `classic` (what a panel started without
+## a note - the command line, a gate - is made of). NO LINE OF HELP STANDS UNDER A PANEL'S TITLE ROW (2026-11-11, the user of a
+## table's "Open a show: ...": "It's pointless to put that there and to make it persistent"): what a card is for is said on
+## hover ([method card_blurb]).
 const WORKSPACES := {
 	"note": {"label": "Note", "section": "note",
 		"blurb": "The note's own panel: its words, and a card for each thing attached."},
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
-		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
-		"hosts": ["voice", "voice_training", "medium", "illustrations", "actor", "storyboard", "look", "bookends"],
+		"hosts": ["direction", "voice", "voice_training", "medium", "illustrations", "actor", "storyboard", "look", "bookends"],
 		"classic": ["text", "voice", "medium", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards: renamed, the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
-		"blurb": "A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them.",
-		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card (or one beat of work) at a time by the agents, then read here in the voice below, at the table.",
+		"blurb": "A show at a table: the episodes agents make from the note's brief, and the voice that reads them.",
 		# (...and the Pictures card, which comes with a show at a table: left out here, it was built for none - 2026-11-09)
-		"hosts": ["table", "voice", "voice_training", "illustrations", "look", "bookends"],
+		"hosts": ["table", "direction", "voice", "voice_training", "illustrations", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
-	"proof": {"label": "Proof", "section": "proof",
-		"blurb": "A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them.",
-		"hint": "The note's words are the problem: write one, or press Invent a problem. Generate, on the Pipeline card, has the agents fix it, solve it at the desk and check the proof in Lean, then write the lesson the voice below reads while the pen writes it on the pad.",
-		"hosts": ["proof", "voice", "voice_training", "look", "bookends"],
-		"classic": ["text", "proof", "voice", "look", "bookends"]},
 	"lab": {"label": "Voice lab", "section": "synth", "mode": "synthesis",
 		"blurb": "Ghost Notes' own synthesizer and the fishing game that breeds its voices."},
 	"clip": {"label": "Masking", "section": "",
@@ -105,24 +99,24 @@ const WORKSPACES := {
 
 const REGISTRY := {
 	"text": {"label": "Text", "family": &"paper",
-		"blurb": "The note's own words: what a voice reads, the brief an agent works from, or just a note.",
+		"blurb": "The note's own words: what a voice reads, the brief agents work from, or just a note.",
 		"needs": [], "provides": ["text"], "requires": [], "slots": [], "workspace": "", "capabilities": [],
 		"marks": [], "block": "", "card": "body"},
 	"song": {"label": "Song", "family": &"sound",
-		"blurb": "A song the show is cut on: its beat and its spectrum drive the scenes.",
+		"blurb": "A song the show is timed by: its beat and its spectrum drive the scenes.",
 		"needs": [], "provides": ["audio"], "requires": [], "slots": ["clock"], "workspace": "", "capabilities": ["stage"],
 		"marks": [], "block": "song", "card": "song"},
 	"scenes": {"label": "Scenes", "family": &"picture",
-		"blurb": "The visualizer scenes, chosen by the seed and cut on the sound.",
+		"blurb": "The visualizer scenes, picked by the seed and cut to the sound.",
 		"needs": ["audio"], "provides": ["picture", "moments"], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "", "card": ""},
 	"storyboard": {"label": "Storyboard", "family": &"picture",
-		"blurb": "The show written down: which scenes play, in what order, how long each stays and how it leaves - and, on a stage, who is there and what they do. Nothing written, and the seed chooses.",
+		"blurb": "The show written down: which scenes play, in what order and for how long. Where nothing is written, the seed chooses.",
 		"needs": ["audio", "places"], "provides": ["picture"], "requires": ["scenes"], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "scenes", "card": "scenes",
 		"script": "res://src/timeline/storyboard_card.gd"},
 	"voice": {"label": "Voice", "family": &"voice",
-		"blurb": "A small local neural voice reads the text: a cast of speakers, their delivery and their room.",
+		"blurb": "A local neural voice reads the note: a cast of speakers, each with their own delivery and room.",
 		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": [], "slots": ["clock"], "workspace": "reading",
 		"capabilities": ["stage", "subprocess", "python:voice"], "marks": ["voices", "timing", "pronunciation"],
 		"block": "voice", "card": "voice", "script": "res://src/reading/voice_card.gd"},
@@ -130,13 +124,13 @@ const REGISTRY := {
 	# person does, from their recordings - a folder, files, or links fetched as their sound - and the note reads in
 	# it. The Actor card's voice steps, without their picture; it brings a Voice.
 	"voice_training": {"label": "Voice training", "family": &"voice",
-		"blurb": "Teaches a voice to speak as someone does, from their own recordings - a folder, files, or links to videos, playlists or a channel: their speech heard, cut into clean sentences, and a voice fine-tuned on them on the graphics card. The note reads in it, and every Voice card can pick it.",
+		"blurb": "Teaches a voice to speak like someone, from their recordings - files, a folder, or links to videos. The note reads in it, and any Voice card can pick it.",
 		"needs": ["reading"], "provides": [], "requires": ["voice"], "slots": [], "workspace": "",
 		"capabilities": ["subprocess", "ffmpeg", "python:voice", "python:speech", "python:download", "python:voice_train"],
 		"marks": [], "block": "voice_training", "card": "voice_training",
 		"script": "res://src/likeness/voice_training_card.gd"},
 	"voice_lab": {"label": "Voice lab", "family": &"voice",
-		"blurb": "Ghost Notes' own synthesizer reads the text, and the fishing game breeds its voices.",
+		"blurb": "Ghost Notes' own synthesizer reads the note, and a fishing game breeds its voices.",
 		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": ["scenes"],
 		"slots": ["clock", "presentation"], "workspace": "lab",
 		"capabilities": ["stage"], "marks": ["voices", "timing"], "block": "synthesis", "card": "water"},
@@ -145,7 +139,7 @@ const REGISTRY := {
 	# ([MediumCard]). The Letter and the Dispatch desk were components of their own until then, each holding the
 	# presentation; a Picture card picked among the rest, beside the Pictures card ("That is confusing").
 	"medium": {"label": "Medium", "family": &"medium",
-		"blurb": "What the note is shown in - Auto (the seeded show, nothing to set), full frame, a comic, a novel, a notebook, a tablet, a letter written at a desk, a dispatch desk at night - and the settings that format uses.",
+		"blurb": "What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk - and that format's settings.",
 		"needs": ["picture"], "provides": ["places"], "requires": ["scenes"], "slots": ["presentation"], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["typography", "tablet", "letter", "dispatch"], "block": "medium", "card": "medium",
 		"script": "res://src/show/medium_card.gd"},
@@ -154,18 +148,25 @@ const REGISTRY := {
 	# standing while its format shows pictures, and with a show whose agents paint pictures of their own (2026-11-09: what a
 	# table show's painter made, seen - EpisodeFeed.made_pictures), and is never attached by itself.
 	"illustrations": {"label": "Pictures", "family": &"picture",
-		"blurb": "The note's pictures, painted by an agent from the image marks in its words or imported from a file - one card, whatever the note is shown in: a novel, a notebook, a tablet, a letter, a dispatch desk - and every picture a show's agents painted for its episode.",
+		"blurb": "The note's pictures: painted by an agent from the image marks in its words, imported from a file, or made by a show's agents for its episode.",
 		"needs": ["text"], "provides": ["picture"], "requires": [], "comes_with": ["medium", "table"],
 		"slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["pictures"], "block": "illustrations", "card": "pictures",
 		"script": "res://src/show/pictures_card.gd"},
 	"look": {"label": "Look", "family": &"look",
-		"blurb": "A post-process over the whole picture: grain, noir, a vignette, and the rest.",
+		"blurb": "A finish over the whole picture: filters such as grain, noir and a vignette, the tonemapper, and how subtitles appear.",
 		"needs": ["picture"], "provides": [], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "look", "card": "look",
 		"script": "res://src/show/look_card.gd"},
+	# WHERE TO TAKE WHAT IS MADE NEXT (next/direction.md, 2026-11-11): a direction beside the note's words and above them, read
+	# by whatever runs agents for the note - a table's episode keeps the one it was made from ([Direction])
+	"direction": {"label": "Direction", "family": &"paper",
+		"blurb": "Where to take what is made next: every agent making the next episode is told it first. The note's own words stay as you wrote them.",
+		"needs": [], "provides": [], "requires": [], "slots": [], "workspace": "",
+		"capabilities": ["agent:writer"], "marks": [], "block": "direction", "card": "direction",
+		"script": "res://src/ui/direction_card.gd"},
 	"bookends": {"label": "Intro & outro", "family": &"paper",
-		"blurb": "Seconds held before the first word and after the last.",
+		"blurb": "Seconds held before the first word and after the last, and how the show opens.",
 		"needs": ["audio"], "provides": [], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "bookends", "card": "bookends",
 		"script": "res://src/show/bookends_card.gd"},
@@ -174,7 +175,7 @@ const REGISTRY := {
 	# goes out (the episode's title and upload notes). `heading` is the card's title where it is
 	# not the label; the tips are what the bookends hold at a card table.
 	"table": {"label": "Table", "family": &"producer",
-		"blurb": "Agents plan, paint and write a show at a table, a beat at a time: cards drawn and read, things made - or both. The note's words are the show's brief: they say what is done there.",
+		"blurb": "Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.",
 		"needs": ["text"], "provides": ["text", "picture", "moments"], "requires": ["voice"],
 		"slots": ["presentation"], "workspace": "table", "starter": "res://rules/table/starter.md",
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "agent:painter"], "marks": [],
@@ -182,18 +183,6 @@ const REGISTRY := {
 		"script": "res://src/table_show/episode_card.gd",
 		"intro_tip": "Seconds the table holds with the channel's name and the episode's title over it; then the table itself, a few seconds more, before the reader speaks. The deck starts shuffling a beat before the first word.",
 		"outro_tip": "Seconds held after the last word, the spread on the table and the channel's name over it, fading picture and sound out together."},
-	# A GHOST DOING MATH AT A DESK (next/proof.md, 2026-10-15): its card is the episode - the problem
-	# fixed, solved at the desk with Lean, taught - and it hands the reading the lesson to read and the
-	# desk's document. It brings a Voice, as Cards does, and its own medium (the desk).
-	"proof": {"label": "Proof", "family": &"producer",
-		"blurb": "Agents work a math problem at a desk - the note's words are the problem - check the proof in Lean, and teach it: a pen writes each formula on a pad while the voice explains.",
-		"needs": ["text"], "provides": ["text", "picture", "moments"], "requires": ["voice"],
-		"slots": ["presentation"], "workspace": "proof",
-		"capabilities": ["forward_plus", "subprocess", "agent:writer", "tex", "lean", "python:math"], "marks": [],
-		"block": "proof", "card": "proof", "heading": "Proof",
-		"script": "res://src/proof/proof_card.gd",
-		"intro_tip": "Seconds the desk holds, its title over it where it has one; then the desk itself, a few seconds more, before the teacher speaks.",
-		"outro_tip": "Seconds held after the last word, the page on the desk, fading picture and sound out together."},
 	# AN ACTOR READS THE NOTE (next/likeness.md): its card builds them from their own videos - the footage
 	# surveyed and cut into sets, a still of the set in use, a model of them and their voice from every
 	# video - and puts them on the stage, the still moved by their own motion, the mouth and eyes drawn
@@ -201,7 +190,7 @@ const REGISTRY := {
 	# Actor that built and a Likeness that played, until the user: "If we're doing all that pipeline work
 	# with Actor... then the implication is we want to use that actor in the scene").
 	"actor": {"label": "Actor", "family": &"picture",
-		"blurb": "An actor reads the note in their own room, built from their own videos - a folder, or links to videos, playlists or a channel: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks, mouths and voice learned from every video. Every pixel of them is their own.",
+		"blurb": "An actor reads the note in their own room, learned from their own videos - their look, motion, face and voice, every pixel their own.",
 		"needs": ["reading"], "provides": ["picture"], "requires": ["voice"],
 		"slots": ["presentation"], "workspace": "",
 		"capabilities": ["forward_plus", "subprocess", "ffmpeg", "python:face", "python:speech", "python:download", "agent:writer"], "marks": [],
@@ -209,7 +198,7 @@ const REGISTRY := {
 		"intro_tip": "Seconds the actor fades up from black, sitting, before starting to read.",
 		"outro_tip": "Seconds held after the last word, fading picture and sound out together."},
 	"clip": {"label": "Clip", "family": &"picture",
-		"blurb": "A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.",
+		"blurb": "A video from a file or a link, with chroma-key effects over it: markers, tracks and renders.",
 		"needs": [], "provides": ["picture", "audio"], "requires": [], "slots": ["clock", "presentation"], "workspace": "clip",
 		"capabilities": ["forward_plus", "subprocess", "ffmpeg"], "marks": [], "block": "clip", "card": "clip"},
 	"masks": {"label": "Masks", "family": &"look",
@@ -219,11 +208,24 @@ const REGISTRY := {
 	# AN EXPORT'S DESTINATION (2026-10-07): it needs what a video is made of, and the exporter that
 	# makes one - Masking's own export is a relaunch of its editor, so its panel offers no "+".
 	"youtube": {"label": "YouTube", "family": &"publish",
-		"blurb": "Uploads the exported video to your YouTube channel: its title, who may see it and the playlist it joins.",
+		"blurb": "Uploads the exported video to your YouTube channel: its title, thumbnail, privacy and playlist.",
 		"needs": ["picture", "audio"], "provides": [], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["movie_export", "subprocess", "ffmpeg"], "marks": [], "block": "youtube", "card": "youtube",
 		"script": "res://src/export/youtube_card.gd"},
 }
+
+
+## WHAT A CARD IS FOR, said wherever it is hovered (2026-11-11, the user: "after it's added, there is no longer a way to know
+## what each component is for"): the blurb of the component [param component], else of the row whose `card` is [param card] -
+## the same words "+" offered it with ([method attach_menu]), on its title bar and its chip ([method SidePanel.add_card]).
+## "" for a card no component brings (a panel's own says what it is for itself).
+static func card_blurb(card: String, component := "") -> String:
+	if REGISTRY.has(component):
+		return String((REGISTRY[component] as Dictionary)["blurb"])
+	for k in REGISTRY:
+		if String((REGISTRY[k] as Dictionary)["card"]) == card and not card.is_empty():
+			return String((REGISTRY[k] as Dictionary)["blurb"])
+	return ""
 
 
 ## THE MODE THE SCRIPT CARD OF WORKSPACE [param key] WORKS IN: its row's `mode`, else its section.
@@ -263,8 +265,8 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"synthesis": {}}
 		"table":
 			return {"table": {}}
-		"proof":
-			return {"proof": {}}
+		"direction":
+			return {"direction": {}}
 		"actor":
 			return {"actor": {}}
 		"voice_training":

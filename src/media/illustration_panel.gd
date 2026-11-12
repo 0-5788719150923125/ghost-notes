@@ -53,14 +53,6 @@ var _live := {}                    # key -> [its status label, the line under th
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 6)
-	var hint := Label.new()
-	hint.text = ("Painted from the image marks in the note's words, or a file of yours imported for one. Each is made "
-		+ "once and kept; nothing is painted until you ask, because every picture spends your image quota.")
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.modulate = Color(1, 1, 1, 0.6)
-	add_child(hint)
-
 	# THE PAINTER IS EVERY CARD'S ROW ([AgentPick]: the agent, its model, how hard it reasons), kept in
 	# the look; this panel's own list of agents had no model and no effort (2026-10-27)
 	_pick = AgentPick.painter("Who paints the pictures. Takes effect at the next picture painted.")

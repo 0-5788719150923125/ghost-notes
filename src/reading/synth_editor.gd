@@ -293,13 +293,6 @@ func _build_panel() -> void:
 	# pinned over the scrolling body, so "⋯" and "–" never scroll away - and naming no mode (SidePanel.pin_title_row)
 	(_panel as SidePanel).pin_title_row(self)
 
-	var hint := Label.new()
-	hint.text = "Write, then throw - the water is silent until you cast. Pull when it anchors; the reel is the fight; hold or fold."
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.add_theme_font_size_override("font_size", 12)
-	hint.modulate = Color(1, 1, 1, 0.6)
-	box.add_child(hint)
-
 	# THE CARDS (next/notes.md, step 2): the script, the water and the Collection, each a card
 	# that folds, with its chip under the heading.
 	_panel.card_prefix = "synth"
@@ -447,7 +440,8 @@ func _build_panel() -> void:
 
 	# --- The Collection: your seeds, ALWAYS last. Click a seed to cast from it
 	# (slot it in), click it again to release. Count shown by the title. ---
-	box = _panel.add_card("collection", "Collection", &"voice")
+	box = _panel.add_card("collection", "Collection", &"voice", "",
+		"Your seeds: click one to cast from it, and click it again to release it.")
 	_coll_title = Label.new()
 	_coll_title.text = "Collection"
 	_coll_title.add_theme_font_size_override("font_size", 13)

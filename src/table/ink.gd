@@ -15,7 +15,7 @@ class_name Ink
 ##   [method schedule]   - strokes and a pace -> when each is drawn;
 ##   [method at]         - a schedule and a time -> the ink on the page then.
 ##
-## What was measured (next/proof.md, "Ink"), and is held by tests/desk/ink_check.gd:
+## What was measured (next/proof.md, "Ink"), and is held by tests/table/ink_check.gd:
 ## - A GLYPH KEEPS ITS OWN PROPORTIONS. Stretching a stroke glyph to its TeX box crowded
 ##   superscripts into their bases and swelled commas; it is scaled uniformly and centered in the
 ##   box, shrunk only where it would overrun it by much (a little overflow is handwriting).

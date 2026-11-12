@@ -98,10 +98,10 @@ const FETCHED := [
 		"version_args": ["--version"],
 		"tier": TIER_FEATURE,
 		"size": "~55 MB (~250 MB on Windows), ~190 MB installed",
-		"used_for": "TeX itself, for the Proof component: it lays out every formula the desk's pen "
-			+ "writes (hosts/math/typeset.py) and typesets each episode's paper - and the labels of a "
-			+ "Letter's sketches. TinyTeX's small build of TeX Live, its newest monthly release. "
-			+ "Downloaded the first time a Proof or a Letter needs it.",
+		"used_for": "TeX itself: it lays out every formula and drawing a table show's pen writes on a "
+			+ "page (hosts/math/typeset.py) - and the labels of a Letter's sketches. TinyTeX's small "
+			+ "build of TeX Live, its newest monthly release. Downloaded the first time a show or a "
+			+ "Letter needs it.",
 		"sources": {
 			"linux-x86_64": {"via": "github", "repo": "rstudio/tinytex-releases",
 				"asset": "^TinyTeX-1-linux-x86_64-v([0-9.]+)\\.tar\\.xz$"},
@@ -126,10 +126,10 @@ const FETCHED := [
 		"version_args": ["--version"],
 		"tier": TIER_FEATURE,
 		"size": "~930 MB, ~3.4 GB installed",
-		"used_for": "The Lean theorem prover, for the Proof component's formal check. Not Lean's "
-			+ "newest release but the one the newest Mathlib release is built for - and that the "
-			+ "Lean REPL has a release for too - so the three always agree. Downloaded the first "
-			+ "time a Proof needs it.",
+		"used_for": "The Lean theorem prover, for the formal check of a problem a table show works. "
+			+ "Not Lean's newest release but the one the newest Mathlib release is built for - and "
+			+ "that the Lean REPL has a release for too - so the three always agree. Downloaded the "
+			+ "first time an episode's problem is a proof.",
 		"sources": {
 			"linux-x86_64": {"via": "lean", "asset": "^lean-([0-9.]+)-linux\\.zip$"},
 			"linux-arm64": {"via": "lean", "asset": "^lean-([0-9.]+)-linux_aarch64\\.zip$"},
@@ -325,9 +325,9 @@ const MANAGED := [
 		"imports": "fontTools, svgelements",
 		"size": "~16 MB",
 		"used_for": "fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name "
-			+ "(and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid "
-			+ "out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py) - a "
-			+ "Proof's figures and a Letter's sketches. Built the first time a Proof or a Letter needs it.",
+			+ "(and its outline, for a glyph no hand draws), so the pen writes what TeX laid out; and "
+			+ "svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py) - a table "
+			+ "show's drawings and a Letter's sketches. Built the first time a show or a Letter needs it.",
 	},
 	{
 		"key": "paint_venv",
@@ -350,10 +350,10 @@ const MANAGED := [
 		"requirements": "res://hosts/compute/requirements.txt",
 		"imports": "numpy, scipy, sympy",
 		"size": "~220 MB",
-		"used_for": "numpy, SciPy and SymPy, for the code a Proof solver RUNS (hosts/compute/run.py): "
-			+ "a simulation, a fit, a derivation or a small model trained, inside a sandbox "
-			+ "(bubblewrap), its numbers kept for the pad's drawings. Built the first time a Proof's "
-			+ "solver works where the sandbox is installed.",
+		"used_for": "numpy, SciPy and SymPy, for the code a table show's solver RUNS "
+			+ "(hosts/compute/run.py): a simulation, a fit, a derivation or a small model trained, "
+			+ "inside a sandbox (bubblewrap), its numbers kept for the drawings on a page. Built the "
+			+ "first time a solver works where the sandbox is installed.",
 	},
 	{
 		"key": "mathlib",
@@ -363,9 +363,9 @@ const MANAGED := [
 		"size": "~7.5 GB",
 		"unsupported": {"windows-arm64": "Lean publishes no build for Windows on ARM"},
 		"used_for": "Mathlib, Lean's library of mathematics, downloaded already compiled, and the "
-			+ "Lean REPL built against it: the workbench every proof the Proof component shows is "
-			+ "checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. "
-			+ "Built the first time a Proof needs it, and moved to each new Mathlib release.",
+			+ "Lean REPL built against it: the workbench every proof a table show works is checked "
+			+ "in. Lake fetches them with git; Mathlib's cache tool downloads with curl. Built the "
+			+ "first time an episode's problem is a proof, and moved to each new Mathlib release.",
 	},
 	{
 		"key": "voices",
@@ -421,7 +421,7 @@ const TOOLS := [
 		"version_args": ["--version"],
 		"tier": TIER_FEATURE,
 		"platforms": ["linux"],
-		"used_for": "The sandbox a Proof solver's code runs in (hosts/compute/run.py): its own view "
+		"used_for": "The sandbox a table show's solver's code runs in (hosts/compute/run.py): its own view "
 			+ "of the files - the system's libraries read-only, one folder to write in, nothing of "
 			+ "yours - and no network. Without it the solver cannot run code, and its episodes are "
 			+ "proofs in Lean only. Flatpak uses it, so most desktops have it already.",
@@ -454,7 +454,7 @@ const TOOLS := [
 		"version_args": ["--version"],
 		"tier": TIER_FEATURE,
 		"used_for": "Lake, Lean's build tool, fetches Mathlib and the Lean REPL with it when the "
-			+ "Proof component's workbench is built. Every developer machine has it; ghost does not "
+			+ "Lean workbench is built. Every developer machine has it; ghost does not "
 			+ "fetch its own.",
 		"install": {
 			"linux": "sudo pacman -S git   ·   sudo apt install git   ·   sudo dnf install git",
@@ -469,8 +469,8 @@ const TOOLS := [
 		"bins": ["curl"],
 		"version_args": ["--version"],
 		"tier": TIER_FEATURE,
-		"used_for": "Mathlib's cache tool downloads the compiled library with it when the Proof "
-			+ "component's workbench is built. Part of macOS and of Windows 10 and later.",
+		"used_for": "Mathlib's cache tool downloads the compiled library with it when the Lean "
+			+ "workbench is built. Part of macOS and of Windows 10 and later.",
 		"install": {
 			"linux": "sudo pacman -S curl   ·   sudo apt install curl   ·   sudo dnf install curl",
 			"macos": "part of macOS",

@@ -99,9 +99,21 @@ const LAWS := {
 	# paper", and nothing on the table may carry words - the user, 2026-10-29, of the white square that went in: "a little
 	# white square kind of looks like nothing ... The slip should show writing, if the script says it should")
 	"write": {"label": "Write", "on": ["written"],
-		"blurb": "words written onto a sheet (a part of the `sheet` shape) by an unseen pen, left to right and line by line, in a hand - a name on a slip, a label, a line on a page; write only what the script or a card says is written there",
-		"fields": [["text", "the words, a line or a few (\\n between lines)"], ["hand", "neat, quick or print (left out: neat)"],
+		"blurb": "words, a formula or a drawing written onto a sheet (a part of the `sheet` shape) by an unseen pen, stroke by stroke, in a hand - a name on a slip, a label, a line on a page, an equation, a graph; several writes on one sheet go one under another from its head, as lines on a page do, so a page is filled a line at a time (when it is full, write on the next sheet); write only what the script or a card says is written there, or what the work really found",
+		"fields": [["text", "the words, a line or a few (\\n between lines); math inside them between $...$ in TeX"],
+			["tex", "in place of `text`: one formula in TeX math, written on its own line - several lines inside \\begin{aligned} ... \\end{aligned}"],
+			["draw", "in place of `text`: a drawing, an <svg viewBox=\"...\"> the pen draws (DRAWINGS, below, says what it may hold)"],
+			["strike", "in place of `text`: the name of an earlier act whose line on this sheet is crossed out - a line drawn through it, for a dead end the work really hit"],
+			["hand", "neat, quick or print, for words with no math (left out: neat)"],
+			["with", "the pen that writes it, seen: a thing on the table (or \"thing/part\"), held by its point `tip` (its nib, else the end of its length) - it is picked up, writes each stroke as the ink goes down, lifts between them, and is held just over the page once the line is done (left out: the pen is unseen)"],
 			["ink", "\"#rrggbb\" (left out: a brown-black)"], ["between", "[u0, u1]: the stretch of the act the pen writes in (left out: all of it)"]]},
+	# POINTING AT WHAT IS SAID (Proof's desk, at the table since 2026-11-11 - next/proof.md; the user: "The pointing is a crucial tool
+	# here, because we need to direct the viewer's attention somehow"): the pen comes to something written on a page and stays by it
+	# while it is talked about ([method TableWork._point_nib])
+	"point": {"label": "Point", "on": ["pose"],
+		"blurb": "a pen (or any tool held by its tip) brought to something written or drawn on a sheet and held there, its nib just over the paper beside it - sweeping along under a wide formula or curve first - so the viewer sees what is being talked about; start it at the word that names the thing (<!-- act: name -->) and give it as long as the talk about it lasts",
+		"fields": [["on", "the sheet it points at, as a write names it (\"pad/page 1\")"],
+			["at", "what it points at: a part of a formula written as \\pin{name}{...}, an element of a drawing by its id=\"name\", or the name of the act that wrote the line"]]},
 	# A SURFACE PAINTED (next/painted_surface.md; the user, 2026-11-05: "The person slowly and meticulously applies a foundation, and details,
 	# and eye liner, and lipstick, and gently smears things with a sponge"): the agent says which elements of the design, with what and from
 	# where; the hand finds the way ([TablePaint])
@@ -575,10 +587,29 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 			if running:
 				notes.append("a write is an act's, never a part's `runs`")
 				return {}
-			var text := String(d.get("text", "")).strip_edges().replace("\\n", "\n").left(160)
-			if text.is_empty():
-				notes.append("a write names no `text` - nothing is written")
+			# ...A FORMULA OR A DRAWING, laid out by TeX ([TableInk]): what it writes, as the ink step reads it
+			if d.has("draw") and not String(d.get("draw", "")).strip_edges().begins_with("<svg"):
+				notes.append("a write's `draw` is an <svg> - nothing is drawn")
 				return {}
+			if String(d.get("draw", "")).length() > TableInk.MOST_SVG:
+				notes.append("a write's drawing is longer than %d characters - nothing is drawn" % TableInk.MOST_SVG)
+				return {}
+			var wrote := TableInk.raw_write(d)
+			var text := String(wrote.get("text", ""))
+			# ...OR A LINE CROSSED OUT: an earlier write of this sheet, found by its act's name ([method TableWork._order_writing])
+			if d.get("strike") is String and not String(d["strike"]).strip_edges().is_empty():
+				out["strike"] = String(d["strike"]).strip_edges()
+				text = ""
+				wrote = {}
+			if text.is_empty() and not wrote.has("tex") and not wrote.has("draw") and not out.has("strike"):
+				notes.append("a write names no `text`, `tex` or `draw` - nothing is written")
+				return {}
+			for k in ["tex", "draw"]:
+				if wrote.has(k):
+					out[k] = wrote[k]
+			# ...BY A PEN SEEN, where it names one ([method TableWork._pen_nib])
+			if d.get("with") is String and not String(d["with"]).strip_edges().is_empty():
+				out["with"] = String(d["with"]).strip_edges()
 			var hand := String(d.get("hand", "neat")).strip_edges().to_lower()
 			out["text"] = text
 			out["hand"] = hand if hand in WRITING_HANDS else "neat"
@@ -589,6 +620,17 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 			out["between"] = _between(d.get("between"))
 		"circle":
 			_point_law(d, out, notes)
+		"point":
+			if running:
+				notes.append("a point is an act's, never a part's `runs`")
+				return {}
+			var on := String(d.get("on", "")).strip_edges()
+			var at := String(d.get("at", "")).strip_edges()
+			if on.is_empty() or at.is_empty():
+				notes.append("a point names the sheet it points at (`on`) and what on it (`at`) - it stays where it is")
+				return {}
+			out["on"] = on
+			out["at"] = at
 		"aim":
 			for end in ["tip", "grip"]:
 				if not (d.get(end) is Dictionary):

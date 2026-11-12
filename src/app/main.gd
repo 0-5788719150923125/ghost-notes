@@ -375,7 +375,7 @@ func open_note(path: String) -> void:
 	Director.reset_show()
 	Films.set_frequency(Films.FREQ_DEFAULT)
 	match ws:
-		"reading", "table", "proof", "lab":
+		"reading", "table", "lab":
 			var section := String((Components.WORKSPACES[ws] as Dictionary)["section"])
 			Settings.write(section, "doc_path", path)
 			Settings.write(section, "sync", true)
@@ -484,7 +484,7 @@ func start_workspace(key: String, source := "", note := "") -> void:
 				push_warning("ghost: a note's own panel needs a note - open one with --note")
 				return
 			_open_note_panel(note)
-		"reading", "table", "proof":
+		"reading", "table":
 			_open_reading(key)
 		"lab":
 			_open_synth_editor()

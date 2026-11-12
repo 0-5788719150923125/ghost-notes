@@ -1,41 +1,41 @@
 extends RefCounted
-class_name ProofTools
+class_name SolverTools
 
-## ProofTools - what the solver at the desk can do while it works (next/proof.md, "How an episode is
-## made"): add to its lab NOTEBOOK, check a Lean file with LEAN, RUN code, and SUBMIT what it finished.
-## Served as tools ([AgentTools]), as the set dresser's are, so any writer that takes tools works with
-## them - and every call is kept in the job's `tools.jsonl`.
+## SolverTools - WORK A COMPUTER CHECKS, for any show whose plan has a problem in it ([method TableEpisode.wants_solve]): the
+## solver keeps a lab NOTEBOOK, checks a Lean file with LEAN, RUNS code, and SUBMITS what it finished. Served as tools
+## ([AgentTools]), as the set dresser's are, so any writer that takes tools works with them - and every call is kept in the
+## job's `tools.jsonl`.
 ##
-## THE SOLVER'S TOOLS ARE THE DESK: what it writes, checks and runs here is the trace the lesson is
-## made from, so the work shown is the work done.
+## Proof's solver, at the table since 2026-11-11 (next/proof.md, "Proof became a table show"; the user: "we implement the
+## underlying primitives ... and we allow the agents to select the tools they need dynamically"). Nothing here names a kind of
+## show: a lesson's theorem, a puzzle's answer, an alchemist's yield are each a problem the plan fixes, and the brief says
+## whether its episodes have one.
 ##
-## A CHECK IS LEAN'S OWN ANSWER: `hosts/math/lean_check.py` runs the Lean REPL in ghost's Mathlib
-## workbench ([method Provision.workbench_path]) and answers with Lean's errors, the goals before every
-## tactic, the facts each used, the axioms and a verdict. VERIFIED means no error, no `sorry`, only
-## Lean's three standard axioms, no forbidden fact (Mathlib's own copy of the theorem, caught through
-## the facts used) and the theorem `main` stated. A check costs 12-40 s with a warm disk (2026-10-15;
-## nearly all of it `import Mathlib`), more the first time after the cache is cold.
+## THE WORK SHOWN IS THE WORK DONE: what the solver writes, checks and runs here is the trace the puppeteer writes on a page and
+## the reader teaches from, so nothing on screen claims a check that did not happen.
 ##
-## NOT EVERY CLAIM IS A THEOREM (the user, 2026-10-19: "I don't want to specialize that mode too much
-## on just math: it should be a general theorem-prover and learning tool"): a claim about a model, a
-## simulation or data is settled by code that RAN. `run` hands Python to `hosts/compute/run.py`, which
-## runs it in a sandbox (bubblewrap: the system read-only, one folder to write in, no network, nothing
-## of the author's; its memory, time and files capped) in the compute environment (numpy, SciPy,
-## SymPy). Each run is kept in the episode's `runs.json` - its code and what it printed - and the series
-## it kept with `keep()` in `data.json`, which the pad's drawings plot by name (figure.py). Where there
-## is no sandbox the tool is not offered ([method can_run]), and a problem framed as a computation is
-## not solved here.
+## A CHECK IS LEAN'S OWN ANSWER: `hosts/math/lean_check.py` runs the Lean REPL in ghost's Mathlib workbench ([method
+## Provision.workbench_path]) and answers with Lean's errors, the goals before every tactic, the facts each used, the axioms and
+## a verdict. VERIFIED means no error, no `sorry`, only Lean's three standard axioms, no forbidden fact (Mathlib's own copy of
+## the theorem, caught through the facts used) and the theorem `main` stated. A check costs 12-40 s with a warm disk
+## (2026-10-15; nearly all of it `import Mathlib`), more the first time after the cache is cold.
 ##
-## WHAT IS SUBMITTED depends on the problem's `check` ([method kind_of]): a "proof" is a Lean file,
-## accepted only VERIFIED; a "computation" is the result in words with the runs that show it, each one
-## that ran to its end.
+## NOT EVERY CLAIM IS A THEOREM (the user, 2026-10-19: "it should be a general theorem-prover and learning tool"): a claim about
+## a model, a simulation or data is settled by code that RAN. `run` hands Python to `hosts/compute/run.py`, which runs it in a
+## sandbox (bubblewrap: the system read-only, one folder to write in, no network, nothing of the author's; its memory, time and
+## files capped) in the compute environment (numpy, SciPy, SymPy). Each run is kept in the episode's `runs.json` - its code and
+## what it printed - and the series it kept with `keep()` in `data.json`, which a page's drawings plot by name (figure.py).
+## Where there is no sandbox the tool is not offered ([method can_run]), and a problem framed as a computation is not solved.
+##
+## WHAT IS SUBMITTED depends on the problem's `check` ([method kind_of]): a "proof" is a Lean file, accepted only VERIFIED; a
+## "computation" is the result in words with the runs that show it, each one that ran to its end.
 
 ## The file a submission is written to, in the job's folder: what the producer lands.
 const SUBMITTED := "submitted.json"
 ## The most checks one solver may make: a runaway loop ends here, not in the author's quota.
 const MAX_CHECKS := 40
-## The most runs one solver may make, and the longest one may take (seconds; the host also stops one
-## whose folder grows past its limit).
+## The most runs one solver may make, and the longest one may take (seconds; the host also stops one whose folder grows past
+## its limit).
 const MAX_RUNS := 60
 const RUN_SECONDS := 300.0
 const RUN_SECONDS_DEFAULT := 60.0
@@ -43,23 +43,27 @@ const RUN_SECONDS_DEFAULT := 60.0
 ## The compute environment runs are made in. Moved aside only by a probe, to run in a scratch one.
 static var venv := "user://compute_venv"
 
-var episode: ProofEpisode
+var episode: TableEpisode
 var problem: Dictionary
 var job_dir := ""
 var checks := 0
 var runs := 0
 var submitted := false
 var _running := false
+var _released := false
 
 
-func _init(ep: ProofEpisode, fixed: Dictionary, dir: String) -> void:
+func _init(ep: TableEpisode, fixed: Dictionary, dir: String) -> void:
 	episode = ep
 	problem = fixed
 	job_dir = dir
 
 
-## "proof" (a Lean statement to prove) or "computation" (a claim settled by code that runs) - the
-## framer's `check`; a problem framed before there were computations is a proof.
+func release() -> void:
+	_released = true
+
+
+## "proof" (a Lean statement to prove) or "computation" (a claim settled by code that runs) - the plan's `check`.
 static func kind_of(p: Dictionary) -> String:
 	return "computation" if String(p.get("check", "")) == "computation" else "proof"
 
@@ -69,13 +73,20 @@ static func can_run() -> bool:
 	return Deps.platform().begins_with("linux") and not Deps.resolve("bwrap").is_empty()
 
 
+## What [param p] runs on, as [Deps] rows: Lean, Mathlib and the math environment for a proof, the compute environment for
+## runs of code wherever they can run.
+static func needs_of(p: Dictionary) -> Array:
+	var keys: Array = ["compute_venv"] if kind_of(p) == "computation" else ["mathlib", "math_venv"]
+	if can_run() and not keys.has("compute_venv"):
+		keys.append("compute_venv")
+	return keys
+
+
 func instructions() -> String:
 	if kind_of(problem) == "computation":
-		return ("You are working one problem at a desk. Keep your lab notebook with `notebook`, run Python "
-			+ "with `run`, and hand in the result with `submit`.")
-	return ("You are working one problem at a desk. Keep your lab notebook with `notebook`, check Lean "
-		+ "files with `lean` (it is also a calculator: #eval)%s, and hand in the finished proof with `submit`. "
-		+ "The theorem is `main`, stated exactly as given.") % (", run Python with `run`" if can_run() else "")
+		return "Keep your lab notebook with `notebook`, run Python with `run`, and hand in the result with `submit`."
+	return ("Keep your lab notebook with `notebook`, check Lean files with `lean` (it is also a calculator: #eval)%s, and hand "
+		+ "in the finished proof with `submit`. The theorem is `main`, stated exactly as given.") % (", run Python with `run`" if can_run() else "")
 
 
 func list_tools() -> Array:
@@ -88,7 +99,7 @@ func list_tools() -> Array:
 		out.append({"name": "lean", "description": "Check a whole Lean 4 file (start it with `import Mathlib`) against Mathlib. Answers with Lean's errors and warnings by line, the goals before each tactic, the library facts each step used, the axioms of each theorem, and VERIFIED or NOT VERIFIED. A file of #eval lines works as a calculator. Takes about half a minute.",
 			"inputSchema": {"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]}})
 	if can_run():
-		out.append({"name": "run", "description": ("Run a Python 3 program (numpy, scipy and sympy are installed, and the standard library) in a sandbox: no network, no files but its own folder, which is kept between your runs. Answers with its exit status, what it printed and its errors. keep(name, y) or keep(name, x, y) - a builtin - keeps a named series of numbers (y against x, or against 0, 1, 2, ...; about=\"what it is\" optional) that the lesson's drawings can plot. Fix the random seed of anything random. Default time limit %d s (seconds: up to %d); memory 4 GB.") % [int(RUN_SECONDS_DEFAULT), int(RUN_SECONDS)],
+		out.append({"name": "run", "description": ("Run a Python 3 program (numpy, scipy and sympy are installed, and the standard library) in a sandbox: no network, no files but its own folder, which is kept between your runs. Answers with its exit status, what it printed and its errors. keep(name, y) or keep(name, x, y) - a builtin - keeps a named series of numbers (y against x, or against 0, 1, 2, ...; about=\"what it is\" optional) that drawings on a page can plot. Fix the random seed of anything random. Default time limit %d s (seconds: up to %d); memory 4 GB.") % [int(RUN_SECONDS_DEFAULT), int(RUN_SECONDS)],
 			"inputSchema": {"type": "object", "properties": {"code": {"type": "string"}, "seconds": {"type": "number"}}, "required": ["code"]}})
 	if computing:
 		out.append({"name": "submit", "description": "Hand in the result: what the computation found, in plain words with its numbers, and the numbers of the runs that show it - each one must have run to its end.",
@@ -100,6 +111,8 @@ func list_tools() -> Array:
 
 
 func call_tool(name: String, args: Dictionary) -> Dictionary:
+	if _released:
+		return {"text": "This work is handed in.", "error": true}
 	var computing := kind_of(problem) == "computation"
 	match name:
 		"notebook":
@@ -150,8 +163,8 @@ func _lean(code: String, submitting: bool) -> Dictionary:
 	return {"text": report + "\n\nAccepted. The proof is handed in."}
 
 
-## RUN [param code] in the sandbox (see the class note), one run at a time - the folder is shared. The
-## run is kept in the episode's `runs.json` and what it kept in `data.json`, whatever it did.
+## RUN [param code] in the sandbox (see the class note), one run at a time - the folder is shared. The run is kept in the
+## episode's `runs.json` and what it kept in `data.json`, whatever it did.
 func _run(code: String, seconds: Variant) -> Dictionary:
 	if code.strip_edges().is_empty():
 		return {"text": "", "error": "the program is empty"}
@@ -233,8 +246,8 @@ static func _short(v: float) -> String:
 	return String.num(v, 4) if absf(v) >= 0.001 else "%.3e" % v
 
 
-## THE RESULT of a computation, handed in: the words and the runs that show it, each one that ran to
-## its end ([constant SUBMITTED]).
+## THE RESULT of a computation, handed in: the words and the runs that show it, each one that ran to its end ([constant
+## SUBMITTED]).
 func _submit_result(result: String, cited: Variant) -> Dictionary:
 	if result.strip_edges().is_empty():
 		return {"text": "", "error": "say what the computation found"}
@@ -259,10 +272,9 @@ func _submit_result(result: String, cited: Variant) -> Dictionary:
 	return {"text": "Accepted. The result is handed in."}
 
 
-## RUN [param code] in the sandbox ([code]hosts/compute/run.py[/code]), [param work] its folder,
-## [param io_root] where each run's own files go (removed after): the host's answer - `{ok, exit,
-## timed_out, seconds, stdout, stderr, kept, work_mb, error}` - or `{ok: false, error}` when it could
-## not run (no sandbox, the compute environment missing). Awaits the host.
+## RUN [param code] in the sandbox ([code]hosts/compute/run.py[/code]), [param work] its folder, [param io_root] where each
+## run's own files go (removed after): the host's answer - `{ok, exit, timed_out, seconds, stdout, stderr, kept, work_mb,
+## error}` - or `{ok: false, error}` when it could not run (no sandbox, the compute environment missing). Awaits the host.
 static func run_code(code: String, work: String, io_root: String, seconds: float) -> Dictionary:
 	var bwrap := Deps.resolve("bwrap")
 	if bwrap.is_empty():
@@ -281,7 +293,7 @@ static func run_code(code: String, work: String, io_root: String, seconds: float
 		"seconds": seconds, "bwrap": bwrap}))
 	if not err.is_empty():
 		return {"ok": false, "error": err}
-	var pid := Subprocess.start_logged(py, PackedStringArray(["-I", host, spec]), log, "proof run")
+	var pid := Subprocess.start_logged(py, PackedStringArray(["-I", host, spec]), log, "solver run")
 	if pid <= 0:
 		return {"ok": false, "error": "the run could not start"}
 	var tree := Engine.get_main_loop() as SceneTree
@@ -298,9 +310,9 @@ static func run_code(code: String, work: String, io_root: String, seconds: float
 	return answer
 
 
-## CHECK [param code] with Lean (see the class note): the host's answer - `{ok, verified, report,
-## messages, tactics, axioms, forbidden_used, seconds}` - or `{ok: false, report}` when it could not
-## run (Lean or Mathlib not installed yet, the math environment missing). Awaits the host.
+## CHECK [param code] with Lean (see the class note): the host's answer - `{ok, verified, report, messages, tactics, axioms,
+## forbidden_used, seconds}` - or `{ok: false, report}` when it could not run (Lean or Mathlib not installed yet, the math
+## environment missing). Awaits the host.
 static func check(code: String, forbidden: Array, theorem := "main") -> Dictionary:
 	var bench := Provision.workbench_path()
 	var lake := Provision.tool_path("lean", "lake")
@@ -334,3 +346,64 @@ static func check(code: String, forbidden: Array, theorem := "main") -> Dictiona
 		return {"ok": false, "report": "the Lean check failed: " + said.strip_edges().right(600)}
 	DirAccess.remove_absolute(log)
 	return answer
+
+
+# --- the problem, as a plan fixes it ----------------------------------------------------------------
+
+## THE PROBLEM A PLAN FIXES ([param d], the plan's `problem`), in the shape every later step reads, or `{error}` - `{}` for none
+## (a plan with no problem has no solve). Static and pure for the gate.
+##
+## Its words, its TeX, how it is checked - `check` "proof" (Lean: a statement that names `main` and stops before its proof, and
+## the facts it may not cite) or "computation" (what is computed, fixed as a statement is) - and where it comes from. A plan
+## framed where no code can run is never a computation ([method can_run]).
+static func land_problem(d: Variant, run := true) -> Dictionary:
+	if not (d is Dictionary) or (d as Dictionary).is_empty():
+		return {}
+	var p: Dictionary = d
+	var out := {}
+	for k in ["statement", "latex", "lean", "history", "computation"]:
+		out[k] = str(p.get(k, "")).strip_edges()
+	if String(out["statement"]).is_empty():
+		return {"error": "the plan's problem has no statement"}
+	out["check"] = "computation" if str(p.get("check", "")).strip_edges().to_lower() == "computation" else "proof"
+	if out["check"] == "computation":
+		if not run:
+			return {"error": "the plan's problem is a computation, and no code can run on this machine: frame a proof"}
+		if String(out["computation"]).is_empty():
+			return {"error": "the plan's problem is a computation and does not say what is computed"}
+		out["lean"] = ""
+		out["forbidden"] = []
+		return out
+	var lean := String(out["lean"])
+	# a statement handed back with its proof, or its `:=`, keeps only the statement
+	var at := lean.find(":=")
+	if at >= 0:
+		lean = lean.substr(0, at).strip_edges()
+	lean = lean.trim_prefix("```lean").trim_suffix("```").strip_edges()
+	out["lean"] = lean
+	if not RegEx.create_from_string("^theorem\\s+main\\b").search(lean):
+		return {"error": "the plan's problem is a proof, and its Lean statement does not state theorem main"}
+	var forbidden: Array = []
+	for f in (p.get("forbidden", []) if p.get("forbidden") is Array else []):
+		var name := str(f).strip_edges()
+		if not name.is_empty() and not name.contains(" "):
+			forbidden.append(name)
+	out["forbidden"] = forbidden
+	out["computation"] = ""
+	return out
+
+
+## WHAT THE CHECK CAME TO, in a sentence a viewer reads under the video: Lean's verdict with the versions it was checked in, a
+## computation that ran, or a check that did not finish - "" with no solve.
+static func check_line(solve: Dictionary, problem: Dictionary) -> String:
+	if bool(solve.get("verified", false)):
+		return ("The proof in this video was checked by the Lean theorem prover%s: every step, with no gaps and nothing assumed "
+			+ "beyond Lean's standard axioms.") % (" (Lean %s, Mathlib %s)" % [solve["lean"], solve["mathlib"]]
+			if not String(solve.get("lean", "")).is_empty() else "")
+	if bool(solve.get("computed", false)):
+		return ("The numbers and graphs in this video come from code that was run for it (Python, with NumPy, SciPy and SymPy). "
+			+ "A computation shows what happens in the cases it ran; it is not a proof for every case.")
+	if solve.is_empty():
+		return ""
+	return ("The computation for this episode did not settle the question, and the video says so." if kind_of(problem) == "computation"
+		else "The formal check in Lean did not finish for this episode, and the video says so.")

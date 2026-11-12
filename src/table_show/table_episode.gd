@@ -156,6 +156,9 @@ func file_of(step: String) -> String:
 	match String(parts[0]):
 		"plan":
 			return dir.path_join("plan.json")
+		# WHERE THE AUTHOR TOOK THIS EPISODE ([Direction]): the Direction card's words as the plan was first made
+		"direction":
+			return dir.path_join("direction.md")
 		"draw":
 			return dir.path_join("draw.json")
 		"design":
@@ -193,6 +196,21 @@ func file_of(step: String) -> String:
 			return dir.path_join(DealerTools.LAYOUT)
 		"layers":
 			return dir.path_join("layers.json")
+		# WORK A COMPUTER CHECKS ([SolverTools]): the verdict, and what the solver left as it worked - its lab notebook, its Lean
+		# file, its runs and the series they kept
+		"solve":
+			return dir.path_join("solve.json")
+		"notebook":
+			return dir.path_join("notebook.md")
+		"proof":
+			return dir.path_join("proof.lean")
+		"runs":
+			return dir.path_join("runs.json")
+		"data":
+			return dir.path_join("data.json")
+		# WHAT IS WRITTEN ON A PAGE, laid out by TeX ([TableInk])
+		"ink":
+			return dir.path_join(TableInk.FILE)
 	return ""
 
 
@@ -296,11 +314,16 @@ func beat_count() -> int:
 ## painting, no check - and no work passage of a card's: each beat's passage `say:K` is said while its work
 ## is done.
 func steps() -> Array:
-	var out := ["plan", "draw"]
+	# (...the direction first, where the episode was given one: the plan is made from it)
+	var out: Array = (["direction"] if has("direction") else []) + ["plan", "draw"]
 	if wants_game():
 		return _game_steps(out)
 	if wants_model():
 		out.append("model")
+	# WORK A COMPUTER CHECKS, where the plan fixes a problem ([method wants_solve]): worked before the table is set, so the
+	# work written at it and the words said over it are the work done
+	if wants_solve():
+		out.append("solve")
 	if cardless():
 		out.append_array(["image:surface", "image:backdrop", "table"])
 		if wants_height():
@@ -312,6 +335,8 @@ func steps() -> Array:
 			out.append("skin")
 		if not work_plan().is_empty():
 			out.append("acts")
+			if wants_ink():
+				out.append("ink")
 		out.append("say:intro")
 		for k in range(1, beat_count() + 1):
 			out.append("say:%d" % k)
@@ -337,6 +362,8 @@ func steps() -> Array:
 		out.append("skin")
 	if not works.is_empty():
 		out.append("acts")
+		if wants_ink():
+			out.append("ink")
 	for k in range(1, n + 1):
 		if written_card(k):
 			continue
@@ -375,6 +402,37 @@ func layers() -> Array:
 	var d: Variant = read_json("layers") if has("layers") else null
 	var list: Variant = (d as Dictionary).get("layers", []) if d is Dictionary else []
 	return (list as Array).filter(func(l: Variant) -> bool: return l is Dictionary) if list is Array else []
+
+
+## WHERE THE AUTHOR TOOK THIS EPISODE ([Direction], `direction.md`): the Direction card's words as its plan was first made - "" for
+## an episode given none. Every agent behind the episode reads this, never the card ([method TableProducer.with_direction]).
+func direction() -> String:
+	return read_text("direction").strip_edges() if has("direction") else ""
+
+
+## WHETHER THE PLAN FIXES A PROBLEM to be worked and checked by a computer ([SolverTools], `problem`): a theorem Lean proves or
+## a computation that runs. The brief says whether its episodes have one; nothing else does.
+func wants_solve() -> bool:
+	return not problem().is_empty()
+
+
+## THE PROBLEM THE PLAN FIXES, as it landed ([method SolverTools.land_problem]): `{}` for none.
+func problem() -> Dictionary:
+	var p: Variant = read_json("plan")
+	var got: Variant = (p as Dictionary).get("problem") if p is Dictionary else null
+	return got if got is Dictionary and not String((got as Dictionary).get("statement", "")).is_empty() else {}
+
+
+## WHAT THE SOLVE CAME TO (`solve.json`): `{verified, computed, checks, runs, ...}`, `{}` before it is made.
+func solved() -> Dictionary:
+	var s: Variant = read_json("solve") if has("solve") else null
+	return s if s is Dictionary else {}
+
+
+## WHETHER ANYTHING THE WORK WRITES IS LAID OUT BY TEX ([method TableInk.items_of]): a formula, a drawing, or words with math in
+## them - then the ink is a step, made from the acts.
+func wants_ink() -> bool:
+	return has("acts") and not TableInk.items_of(read_json("acts")).is_empty()
 
 
 ## A GAME PLAYED AT THE TABLE (next/tabletop.md): the secret preparation, the table, the session played a stretch at a time, THEN what it turned out to need painted - a map of a boat, if there came to be a
@@ -470,8 +528,11 @@ func needs(step: String) -> Array:
 		if not made.is_empty():
 			return made
 	match String(parts[0]):
-		"plan":
+		"direction":
 			return []
+		"plan":
+			# ...made from the direction it was given, where it was given one: a direction taken up again makes the plan stale
+			return ["direction"] if has("direction") else []
 		"draw":
 			return ["plan"]
 		"design":
@@ -518,7 +579,8 @@ func needs(step: String) -> Array:
 			var who := String(parts[1])
 			var works := work_plan()
 			if who == "intro":
-				return ["draw", "acts"] if works.has("intro") else ["draw"]
+				# ...and, where the plan fixed a problem, after the work was done: the reader teaches what was really found
+				return (["draw", "acts"] if works.has("intro") else ["draw"]) + (["solve"] if wants_solve() else [])
 			# A BEAT OF A SHOW WITH NO CARDS is said while its work is done: after the passage before it, knowing
 			# its acts
 			var bare := cardless()
@@ -550,6 +612,11 @@ func needs(step: String) -> Array:
 			return ["image:face", "check:face"]
 		"model":
 			return ["plan"]
+		"solve":
+			return ["plan"]
+		"ink":
+			# what the work writes, laid out once it is blocked - and the series a drawing plots, which the solve kept
+			return ["acts"]
 		"skin":
 			# what is painted is designed on the surface the table stands it on - copied from the face painted on it first, looked at
 			# ...and, where it was painted again in layers, every layer: the painter at the table lays them (next/face_layers.md)
@@ -566,7 +633,8 @@ func needs(step: String) -> Array:
 			# the work is blocked on the table as it is set, with the cards as they were drawn (the work is
 			# made of them: an ingredient fetched and ground) - no reader sees past its own beat's - and, where
 			# a card is WRITTEN, what is written on it (a recipe's steps are the work)
-			var out := ["plan", "draw", "table"] + (["model"] if wants_model() else []) + (["skin"] if wants_skin() else [])
+			var out := ["plan", "draw", "table"] + (["model"] if wants_model() else []) + (["skin"] if wants_skin() else []) \
+				+ (["solve"] if wants_solve() else [])
 			var p: Variant = read_json("plan")
 			if p is Dictionary and (p as Dictionary).get("look") is Dictionary and CardTable.written((p as Dictionary)["look"]):
 				for k in range(1, n + 1):
@@ -700,6 +768,10 @@ func files_of(step: String) -> Array:
 			out.append(dir.path_join(String(f)))
 	elif step == "image:height":
 		out.append(dir.path_join("height.json"))
+	elif step == "solve":
+		for k in ["notebook", "proof", "runs", "data"]:
+			if FileAccess.file_exists(file_of(String(k))):
+				out.append(file_of(String(k)))
 	return out
 
 
@@ -1040,8 +1112,14 @@ func upload_notes(take := "") -> Dictionary:
 	var plan: Variant = read_json("plan")
 	var p: Dictionary = plan if plan is Dictionary else {}
 	var desc := String(p.get("description", "")).strip_edges()
+	if desc.is_empty():
+		desc = String(p.get("premise", "")).strip_edges()
+	# ...WITH WHAT THE CHECK CAME TO, where a problem was worked: from the verdict, never the producer's words
+	var check := SolverTools.check_line(solved(), problem())
+	if not check.is_empty():
+		desc = (desc + "\n\n" + check).strip_edges()
 	var out := {"title": String(p.get("episode_title", "")).strip_edges(),
-		"description": desc if not desc.is_empty() else String(p.get("premise", "")).strip_edges(),
+		"description": desc,
 		"chapters": PackedStringArray(),
 		"tags": PackedStringArray(p.get("tags", []) if p.get("tags") is Array else [])}
 	var side := FileAccess.get_file_as_string(take.get_basename() + ".json") \
