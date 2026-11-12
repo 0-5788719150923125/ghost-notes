@@ -9,6 +9,10 @@ class_name VoiceShape
 ##
 ## Drag a point to move it, or the line between points to move all of it; double-click a lane to flatten it (a lane
 ## already flat, to zero). [signal edited] when a drag lets go: [member weights] and [member lanes] are then the shape.
+##
+## While a test plays, THE PLAYHEAD: [member follow] says where the voice being heard is across its paragraph, asked
+## every frame; a line is drawn there through every lane, a mark where it crosses each curve and the values there in each
+## lane's corner. It sweeps each paragraph without stopping and starts again at the next.
 
 signal edited
 
@@ -30,6 +34,10 @@ var weights: Array = []
 ## Each lane's points, -1 to 1.
 var lanes := {}
 
+## Asked every frame for where the voice being heard is across its paragraph, 0 to 1: -1 when nothing plays.
+var follow := Callable()
+
+var _head := -1.0                # what [member follow] said last
 var _drag := {}                  # while a drag is held: {lane, edge, k (-1 the whole line), from, start}
 var _hover := Vector2(-1, -1)
 
@@ -136,6 +144,7 @@ func _draw() -> void:
 		_draw_mix(rects["mix"], font)
 	for lane in VoiceBlend.LANES:
 		_draw_lane(rects[lane], lane, font)
+	_draw_head(rects)
 	var bottom := _height() - 4.0
 	var span: Rect2 = rects[VoiceBlend.LANES.keys()[0]]
 	draw_string(font, Vector2(span.position.x, bottom), "paragraph's first word", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, dim)
@@ -170,8 +179,8 @@ func _draw_mix(r: Rect2, font: Font) -> void:
 		draw_polyline(line, Color(1, 1, 1, 0.85), 1.5, true)
 		for k in VoiceBlend.POINTS:
 			draw_circle(_handle("mix", e, k, r), 4.5, Color.WHITE)
-	if _inside(r):
-		var u := _u_of(r, _hover.x)
+	if _inside(r) or playhead() >= 0.0:
+		var u := _u_of(r, _hover.x) if _inside(r) else playhead()
 		var s := VoiceBlend.shares_at(weights, u)
 		var said := PackedStringArray()
 		for b in n:
@@ -196,9 +205,27 @@ func _draw_lane(r: Rect2, lane: String, font: Font) -> void:
 	draw_polyline(line, c, 1.5, true)
 	for k in VoiceBlend.POINTS:
 		draw_circle(_handle(lane, -1, k, r), 4.5, Color.WHITE)
-	if _inside(r):
-		var v := VoiceBlend.curve_at(points, _u_of(r, _hover.x))
+	if _inside(r) or playhead() >= 0.0:
+		var v := VoiceBlend.curve_at(points, _u_of(r, _hover.x) if _inside(r) else playhead())
 		_readout(r, "%s %s%.2f" % [Registry.label(VoiceBlend.LANES, lane), "+" if v > 0.0 else "", v], font)
+
+
+## The playhead: a line through every lane where the voice being heard is, and a mark on each curve there.
+func _draw_head(rects: Dictionary) -> void:
+	var u := playhead()
+	if u < 0.0 or rects.is_empty():
+		return
+	var head := Color(1.0, 0.86, 0.35)
+	var top: Rect2 = rects[rects.keys()[0]]
+	var low: Rect2 = rects[rects.keys()[rects.size() - 1]]
+	var x := _px(top, u)
+	draw_line(Vector2(x, top.position.y), Vector2(x, low.end.y), head, 3.0)
+	if rects.has("mix"):
+		var r: Rect2 = rects["mix"]
+		for e in _edges_at(u):
+			draw_circle(Vector2(x, r.position.y + e * r.size.y), 4.0, head)
+	for lane in VoiceBlend.LANES:
+		draw_circle(Vector2(x, _lane_y(rects[lane], VoiceBlend.curve_at(lanes[lane], u))), 4.0, head)
 
 
 func _readout(r: Rect2, text: String, font: Font) -> void:
@@ -250,6 +277,20 @@ func _gui_input(event: InputEvent) -> void:
 		if not _drag.is_empty():
 			drag_to(mm.position.y)
 		queue_redraw()
+
+
+func _process(_delta: float) -> void:
+	if not follow.is_valid() or (is_inside_tree() and not is_visible_in_tree()):
+		return
+	var now := float(follow.call())
+	if not is_equal_approx(now, _head):
+		_head = now
+		queue_redraw()
+
+
+## Where the playhead is across the paragraph, or -1 when nothing plays.
+func playhead() -> float:
+	return _head
 
 
 func _notification(what: int) -> void:

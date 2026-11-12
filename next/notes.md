@@ -165,7 +165,9 @@ a sentence on the card ("the Notebook follows a reading - attach a voice"), neve
 does nothing.
 
 **The color follows the component everywhere:** the card's border, its chip on the note, its marks
-highlighted in the text, its moments on a timeline.
+highlighted in the text, its moments on a timeline. A note's own color on the notes list is its path's
+(a hue drawn from it, `NoteTile.color_of`; a note of words alone the paper's gray): its components show
+in its chips.
 
 **Color is per family, not per component,** as in Scratch and Blockly categories and TouchDesigner's
 operator families. Hues run out near eight, and since most families allow one member per note, within a

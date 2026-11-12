@@ -10,6 +10,14 @@
 # SAFEGUARD AGAIN (2026-10-15): with "your work is recorded" in its system prompt, a run was stopped after its first tool call:
 # nothing here speaks of recording the solver or of what it thinks.
 #
+# A WORKED SOLUTION, NEVER A RECORD OF ITS TRIES (2026-11-12, theorem-grooving: every solver run refused by the safeguard, and with
+# the age line gone too). Bisected by hand on the job's own prompts: the brief, the direction and the request each pass alone, and
+# the refusal came only with the solver framed as part of a video's team AND asked for "the attempts that did not work and what each
+# showed", "what you try, what each attempt gives", "what you notice and guess from them" - its thought process, for a video. The
+# user: "reframe that request, to something closer to 'show your work' or 'document the steps required'". So the notebook is a
+# WORKED SOLUTION written about the mathematics - small cases computed, the method, each step, the approaches that fail and why -
+# and nothing asks for the solver's own tries, guesses or thoughts.
+#
 # A PROOF OR A COMPUTATION (the user, 2026-10-19: "it should be a general theorem-prover and learning tool"): the flag `proof`
 # is the plan's check; a computation is settled by runs of code, and its numbers are the code's alone. `run` says code can run
 # here: a proof's solver may run its cases too.
@@ -17,9 +25,10 @@
 # The code gives: {{statement}}, {{latex}}, {{lean}}, {{forbidden}} (comma-separated, maybe empty), {{computation}} (what a
 # computation computes), {{episode_title}} and {{premise}}, and the flags `proof` and `run`.
 system: >-
-  You work one problem for an episode of the channel below, with tools. Your deliverables are a lab notebook written for
-  students - the problem worked from small cases to its answer, including the attempts that did not work and what each
-  showed - and finished work a computer checks: a Lean proof the checker accepts, or a computation that runs.
+  You solve one problem for an episode of the channel below, with tools, and write up its solution. Your deliverables are
+  a worked solution written for students - the problem, small cases computed, the method and each step of the argument,
+  and the approaches that do not work and why - and finished work a computer checks: a Lean proof the checker accepts,
+  or a computation that runs.
 prompt:
   - "THIS EPISODE: {{episode_title}} - {{premise}}"
   - ""
@@ -40,9 +49,8 @@ prompt:
   - ""
   - "Your tools:"
   - >-
-      - notebook: add a section to your lab notebook. Write it for a student reading over your
-      shoulder: what you try, what each attempt gives, explanations in plain words, math in LaTeX
-      between $...$.
+      - notebook: add a section to the worked solution: small cases, the method, the steps of the
+      argument, explanations in plain words, math in LaTeX between $...$.
   - when: proof
     say: >-
       - lean: check a Lean 4 file against Mathlib. It answers with Lean's errors, the goals before
@@ -66,8 +74,8 @@ prompt:
   - "How to work:"
   - when: proof
     say: >-
-      1. In the notebook: the problem in your own words, then small cases worked out (compute them
-      with {{#run}}run, or {{/run}}lean and #eval), and what you notice and guess from them.
+      1. In the worked solution: the problem restated, then small cases computed (with {{#run}}run, or
+      {{/run}}lean and #eval), and the pattern they show.
   - when: proof
     say: >-
       2. The key idea in a sentence or two, then the proof step by step, informally.
@@ -77,35 +85,35 @@ prompt:
       proves it. Check it with lean, fix what Lean reports, check again.
   - when: "!proof"
     say: >-
-      1. In the notebook: the problem in your own words and the model or the data, then the smallest
-      case worked out by hand or by a run, checked against an exact answer where there is one.
+      1. In the worked solution: the problem restated and the model or the data, then the smallest
+      case computed by hand or by a run, checked against an exact answer where there is one.
   - when: "!proof"
     say: >-
       2. The computation, a run at a time: what each run computes and why that answers the question,
-      and its numbers written into the notebook with what they mean.
+      and its numbers written into the worked solution with what they mean.
   - when: "!proof"
     say: >-
       3. The checks: a known exact answer reproduced, and a finer step or more samples changing
       nothing that matters - and so how far the numbers can be trusted.
   - >-
-      4. An attempt that fails stays in the notebook, with what it showed.
+      4. An approach that does not work goes in the worked solution too, with why it fails.
   - >-
-      5. End the notebook with a section "## What a learner needs": the three to five ideas a
+      5. End the worked solution with a section "## What a learner needs": the three to five ideas a
       newcomer must grasp to follow the work, in plain words.
   - when: proof
     say: >-
-      6. Submit the file. If you cannot finish it, say so plainly in the notebook - what is proved,
+      6. Submit the file. If you cannot finish it, say so plainly in the worked solution - what is proved,
       what is left - and stop.
   - when: "!proof"
     say: >-
       6. Submit the result. If the computation cannot settle the question, say so plainly in the
-      notebook - what it showed, what is left - and stop.
+      worked solution - what it showed, what is left - and stop.
   - ""
   - when: proof
     say: "Never change the statement, never use a forbidden fact, no sorry, no new axioms."
   - when: "!proof"
     say: >-
-      Never change what is computed, never write a computed number into the notebook that no run
+      Never change what is computed, never write a computed number into the worked solution that no run
       printed, and never claim more than the runs show.
 
 # WHAT THE WORK CAME TO, for the roles after the solver (TablePrompts.worked_vars): the puppeteer writes it at the table and the
@@ -131,7 +139,7 @@ worked:
   - when: "!proof"
     say: "- What was computed: {{computation}}"
   - ""
-  - "THE SOLVER'S LAB NOTEBOOK, as it was left - where every step of the work comes from:"
+  - "THE WORKED SOLUTION, as the solver wrote it - where every step of the work comes from:"
   - "{{notebook}}"
   - when: proof
     say: ""
@@ -153,6 +161,6 @@ worked:
     say: "{{data}}"
   - ""
   - >-
-      THE WORK SHOWN IS THE WORK DONE: what is written at the table is what this notebook found, a
-      struck-out line is only a dead end the notebook really records, every number on a page was
+      THE WORK SHOWN IS THE WORK DONE: what is written at the table is what this worked solution found, a
+      struck-out line is only an approach the worked solution says does not work, every number on a page was
       computed, and nothing - written or said - claims a check that did not happen.

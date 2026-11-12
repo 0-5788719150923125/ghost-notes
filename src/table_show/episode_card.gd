@@ -382,6 +382,9 @@ class Feed extends EpisodeFeed:
 	func episode_title() -> String:
 		return String(episode.upload_notes()["title"])
 
+	func seed() -> int:
+		return episode.seed
+
 	func description() -> String:
 		return card._cur_desc if not card._cur_desc.is_empty() else String(episode.upload_notes()["description"])
 

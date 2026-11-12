@@ -2,7 +2,9 @@ extends Node
 
 ## Smoke test for the picture settings in the Generative panel - the Medium card's Format picker, the film controls
 ## and the Look filters: builds the whole panel and reads the controls back. A table show's Medium card offers Table's
-## formats alone and keeps its pick in its block, never the remembered medium (the control: a reading's offers neither). Restores the setting it found and
+## formats alone and keeps its pick in its block, never the remembered medium (the control: a reading's offers neither); at the
+## desk the Desk's own rows stand and keep their light and things in the block (the control: at its table, none), and a pick
+## from one to the other opens the note again around its rows. Restores the setting it found and
 ## flushes that restore to disk (the debounce would not land before the check quits).
 ##
 ## Run: tests/run_boot_probe.sh tests/media/medium_pick_check.gd 90
@@ -145,6 +147,28 @@ func _run() -> void:
 	else:
 		print("vpick: a table show offers its table and a desk; another format's block is kept until one is picked")
 	kept.free()
+	var episodic := ["text", "audio", "reading", "episode"]
+	var two: Array = DeskLook.THINGS.keys().slice(0, 2)
+	var desk_block := {"format": "desk", "mood": "dusk", "things": two}
+	var at_desk := MediumCard.new({"reading": true, "provides": episodic, "blocks": {"medium": desk_block}})
+	at_desk.apply(desk_block)
+	var own := at_desk.own()
+	var desk_kept := at_desk.capture()
+	var reshaped := [false]
+	var at_its_table := MediumCard.new({"reading": true, "provides": episodic, "blocks": {"medium": {"format": "table"}},
+		"reshape": func() -> void: reshaped[0] = true})
+	var bare := at_its_table.own() == null
+	at_its_table._pick(at_its_table._keys.find("desk"))
+	await get_tree().process_frame
+	if not (own is DeskFormat) or (own as DeskFormat)._desk.desk_mood() != "dusk" or String(desk_kept.get("format", "")) != "desk" \
+			or String(desk_kept.get("mood", "")) != "dusk" or desk_kept.get("things") != two or not bare or not reshaped[0]:
+		print("vpick: FAILED - a table show at the desk: rows %s, block %s; at its table bare %s; a pick opened it again %s"
+			% [str(own), str(desk_kept), str(bare), str(reshaped[0])])
+		fails += 1
+	else:
+		print("vpick: at the desk, its own rows keep the light and things in the block; at the table none; a pick opens the note again")
+	at_desk.free()
+	at_its_table.free()
 	# The look filters, and the same three questions: a row per registry entry, each showing the live setting, and a
 	# tick that actually reaches the Director.
 	if (ed._block_cards["look"] as LookCard)._filter_rows.size() != Filters.REGISTRY.size():

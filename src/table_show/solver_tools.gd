@@ -80,14 +80,14 @@ static func needs_of(p: Dictionary) -> Array:
 
 func instructions() -> String:
 	if kind_of(problem) == "computation":
-		return "Keep your lab notebook with `notebook`, run Python with `run`, and hand in the result with `submit`."
-	return ("Keep your lab notebook with `notebook`, check Lean files with `lean` (it is also a calculator: #eval)%s, and hand "
+		return "Write up the worked solution with `notebook`, run Python with `run`, and hand in the result with `submit`."
+	return ("Write up the worked solution with `notebook`, check Lean files with `lean` (it is also a calculator: #eval)%s, and hand "
 		+ "in the finished proof with `submit`. The theorem is `main`, stated exactly as given.") % (", run Python with `run`" if can_run() else "")
 
 
 func list_tools() -> Array:
 	var out: Array = [
-		{"name": "notebook", "description": "Add a section to your lab notebook, written for a student reading over your shoulder: what you try, what it gives, plain-words explanations, math in LaTeX between $...$. Sections are kept in order.",
+		{"name": "notebook", "description": "Add a section to the worked solution, written for students: small cases computed, the method, the steps of the argument, the approaches that do not work and why, plain-words explanations, math in LaTeX between $...$. Sections are kept in order.",
 			"inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}},
 	]
 	var computing := kind_of(problem) == "computation"

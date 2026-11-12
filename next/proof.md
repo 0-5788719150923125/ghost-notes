@@ -24,6 +24,14 @@ Proof needed moved down into the table for any show to use.
   step lays it out with TeX once the acts are blocked. The puppeteer is told the drawing language where the
   table has a sheet (rules/table/puppeteer.yaml `drawings`). Held by `tests/table/page_writing_check.gd` and
   `tests/table/ink_check.gd`.
+- **The solver writes a worked solution, never a record of its tries** (2026-11-12): theorem-grooving's solver was refused
+  by the safeguard on every run. Bisected on the job's own prompts with capped CLI runs, the brief, the direction and the
+  request each passed alone; it was refused only with the solver framed as a video's team member and asked for "the
+  attempts that did not work", "what you try, what each attempt gives", "what you notice and guess" - Proof's own wording,
+  which passed in October. Reframed, the user's idea ("closer to 'show your work'"), as a worked solution about the
+  mathematics (rules/table/solver.yaml, "A WORKED SOLUTION"): the same prompt otherwise, run once, went straight to work.
+  An age line ("Younger students are among them") had also reached the direction and the plan; audiences are now said by
+  what people know, never by age.
 - **No notation in what is said.** A reader's passage with TeX in its words is sent back once
   (`TableProducer.notation_in`), and `[a]` is kept as the letter's name (`clean_spoken`).
 - **A pen seen, and pointing.** A `write` may name a pen on the table (`with`): its nib follows the page layout

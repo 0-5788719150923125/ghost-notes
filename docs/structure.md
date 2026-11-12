@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 655 references inside a folder, 1151 down the stack, 0 up it.
+Between scripts today: 657 references inside a folder, 1153 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -16,7 +16,7 @@ Between scripts today: 655 references inside a folder, 1151 down the stack, 0 up
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `dispatch/` | Dispatch desk | 9 | `desk`, `table`, `reading`, `media`, `scene_kit`, `render`, `data` |
 | `letter/` | Letter | 3 | `desk`, `table`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
-| `desk/` | The desk | 8 | `table`, `media`, `scene_kit`, `render`, `data` |
+| `desk/` | The desk | 10 | `table`, `reading`, `media`, `ui`, `notes`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 23 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 64 | `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 16 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
@@ -162,7 +162,7 @@ A show at a table nobody writes: a show's brief, its episodes - each planned, de
 
 A desk a letter is written at, seen and heard: the legal pad, the pen that moves by itself and writes what the voice says as it says it, the letter's own hand (journal fonts, no TeX), what it says and writes, and the medium that puts them on the stage. Its room is built from the table's parts. Design: next/letter.md, next/proof.md.
 
-[`desk`](../src/desk/desk.gd), [`desk_light`](../src/desk/desk_light.gd), [`desk_look`](../src/desk/desk_look.gd), [`desk_script`](../src/desk/desk_script.gd), [`episode_desk`](../src/desk/episode_desk.gd), [`legal_pad`](../src/desk/legal_pad.gd), [`letter`](../src/desk/letter.gd), [`letter_script`](../src/desk/letter_script.gd)
+[`desk`](../src/desk/desk.gd), [`desk_format`](../src/desk/desk_format.gd), [`desk_light`](../src/desk/desk_light.gd), [`desk_look`](../src/desk/desk_look.gd), [`desk_rows`](../src/desk/desk_rows.gd), [`desk_script`](../src/desk/desk_script.gd), [`episode_desk`](../src/desk/episode_desk.gd), [`legal_pad`](../src/desk/legal_pad.gd), [`letter`](../src/desk/letter.gd), [`letter_script`](../src/desk/letter_script.gd)
 
 ### `letter/` - Letter
 

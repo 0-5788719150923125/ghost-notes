@@ -12,7 +12,8 @@ class_name ReaderBrowser
 ## Beside the list, THE SHAPE of the voice across each paragraph ([VoiceShape]): each reader's share as a band whose
 ## edges are dragged (a new reader ticked takes an even share), the Breath and Push lanes, and the noise under them (a
 ## kind, how far, and its Seed - a number, so the draw heard is the draw shown);
-## Shapes fills them in to start from ([constant VoiceBlend.SHAPES]). One reader shaped is that reader moved.
+## Shapes fills them in to start from ([constant VoiceBlend.SHAPES]). One reader shaped is that reader moved. While Test
+## plays, a playhead on the shape shows where the words being heard stand on it ([method ReadingAudition.place_now]).
 ##
 ## Nothing ticked is a way through, never a pick: the last tick comes off, the tab keeps reading in what it last
 ## had, Test waits for a tick, and the next tick is that reader alone.
@@ -153,6 +154,8 @@ func open() -> void:
 	_shape_box.add_child(across)
 	_shape = VoiceShape.new()
 	_shape.edited.connect(_shape_edited)
+	# the playhead: where the test being heard is across its paragraph
+	_shape.follow = func() -> float: return cast.panel._audition.place_now()
 	_shape_box.add_child(_shape)
 	var noise := HBoxContainer.new()
 	noise.add_theme_constant_override("separation", 6)

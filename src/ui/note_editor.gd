@@ -189,7 +189,7 @@ func open(p: String, fresh := false) -> void:
 	body.set_caret_line(0)
 	_dirty_ms = -1
 	_title_dirty = false
-	color = NoteTile.color_of(Components.attached_of(NoteStore.blocks_of(p)))
+	color = NoteTile.color_of(p, Components.attached_of(NoteStore.blocks_of(p)))
 	_date.text = "Edited %s" % NoteTile.when(FileAccess.get_modified_time(p)) if not fresh else ""
 	_style()
 	visible = true

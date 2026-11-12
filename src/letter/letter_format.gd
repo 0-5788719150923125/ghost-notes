@@ -15,27 +15,22 @@ class_name LetterFormat
 ## it goes out ([LetterFormat.Publish]: the document a render draws the letter from). What they keep is part of the Medium's one block.
 ##
 ## The desk and the hand are the note's: the desk's seed is the note's own file's unless the rows are given one ([method
-## desk_seed]); how each word wavers (and so where the lines break and the rests the voice takes) is always the note's own
+## DeskRows.desk_seed]); how each word wavers (and so where the lines break and the rests the voice takes) is always the note's own
 ## ([method hand_seed]), so the same letter is written the same way at any desk; the hand is one of the journal's ([Handwriting],
 ## the Notebook's): the Medium card's Handwriting ([method hand]).
 ##
-## What is on the desk and how it is lit are chosen here: a tick per [constant DeskLook.THINGS] row (the block's `things`) and the
-## Light (`mood`, [constant DeskLook.MOODS]); the number only places them and draws how they look (paper, ink, top), never how a
-## word is written. Until either is chosen they are what the number drew, and the first change of anything on the desk, the number
-## included, keeps them ([method _hold_desk]). Changed while the letter plays, the desk is dressed again at once ([method
-## _redress_live]); the hand waits for the next Play, since it changes how every word is written.
+## Which desk, its light, what is on it and the index cards' words are the desk's rows ([DeskRows], the Desk format's too), 0 the
+## note's own desk. Changed while the letter plays, the desk is dressed again at once ([method _redress_live]); the hand waits for
+## the next Play, since it changes how every word is written.
 ##
 ## Generation is explicit, on the note's Pipeline card ([Section]; next/pipeline.md): Generate draws the sketches not drawn, then
 ## lays them out; a sketch's ⟳ draws it again. Nothing runs on open.
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "letter"
-## Its keys in the Medium's block: the desk's seed (0: the note's own), its light ("": the seed's), who draws the sketches and what
-## is written on the index cards (`card_text`, [method DeskLook.picks_of]), and, once chosen, `things` (what is on the desk,
-## [constant DeskLook.THINGS] keys; none written: the seed's). The hand is the Medium card's own row (`hand`).
-const KNOBS := {"seed": 0, "mood": "", "writer": "claude", "writer_model": "", "writer_effort": "", "card_text": ""}
-## How long the index cards' words rest unchanged before a playing letter's desk is dressed again with them (seconds).
-const CARD_SETTLE := 0.6
+## Its keys in the Medium's block: who draws the sketches; the desk's are its rows' ([constant DeskRows.KNOBS]). The hand is the
+## Medium card's own row (`hand`).
+const KNOBS := {"writer": "claude", "writer_model": "", "writer_effort": ""}
 
 signal noted(text: String)
 
@@ -52,11 +47,7 @@ var _installing := ""            # what the ink step waits to be installed, "" f
 ## What it hands the note's pipeline card ([method pipeline]).
 var _section: Section = null
 
-var _seed_box: SpinBox
-var _light_pick: OptionButton    # the desk's light ([constant DeskLook.MOODS])
-var _bank := {}                  # a [constant DeskLook.THINGS] key -> its CheckBox
-var _card_box: TextField         # what is written on the index cards, shown while they are on the desk
-var _card_due := 0.0             # seconds till a playing letter's desk takes the cards' words, 0 for nothing waiting
+var _desk: DeskRows              # which desk, its light, what is on it, the index cards' words
 var _writer: AgentPick
 
 
@@ -83,10 +74,6 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
-	if _card_due > 0.0:
-		_card_due -= delta
-		if _card_due <= 0.0:
-			_redress_live()
 	_row_t -= delta
 	if _row_t > 0.0:
 		return
@@ -102,24 +89,19 @@ func _process(delta: float) -> void:
 # --- the block ---------------------------------------------------------------------------------
 
 func capture() -> Dictionary:
-	return _knobs.duplicate(true)
+	var out := _knobs.duplicate(true)
+	out.merge(_desk.capture(), true)
+	return out
 
 
 func apply(cfg: Dictionary) -> void:
 	_knobs = KNOBS.duplicate(true)
 	for k in KNOBS:
 		if cfg.has(k):
-			_knobs[k] = int(cfg[k]) if k == "seed" else String(cfg[k])
+			_knobs[k] = String(cfg[k])
 	if not TextGen.has(String(_knobs["writer"])):
 		_knobs["writer"] = "claude"
-	if not DeskLook.MOODS.has(String(_knobs["mood"])):
-		_knobs["mood"] = ""
-	if cfg.get("things") is Array:
-		var kinds: Array = []
-		for k in DeskLook.THINGS:
-			if k in (cfg["things"] as Array):
-				kinds.append(k)
-		_knobs["things"] = kinds
+	_desk.apply(cfg)
 	_show_knobs()
 
 
@@ -135,11 +117,6 @@ class Publish extends ReadingPublish:
 	func book(d: Dictionary, _body: String) -> Dictionary:
 		d["letter"] = card.document()
 		return d
-
-
-## The desk's seed: the rows', or the note's own ([method hand_seed]).
-func desk_seed() -> int:
-	return int(_knobs["seed"]) if int(_knobs["seed"]) > 0 else hand_seed()
 
 
 ## The hand's seed, how each word wavers and where the lines break: the note's own file's (a draft with no file, the first),
@@ -178,29 +155,9 @@ func document() -> Dictionary:
 		var path := Illustrations.path_for(String((im as Dictionary)["key"]))
 		if not path.is_empty():
 			pictures[String(im["key"])] = ProjectSettings.globalize_path(path)
-	return {"seed": hand_seed(), "desk": desk_seed(), "hand": hand(), "svgs": svgs,
-		"ink": ink, "pictures": pictures, "things": desk_things(), "mood": desk_mood(), "card_text": String(_knobs["card_text"])}
-
-
-## What is on the desk ([constant DeskLook.THINGS] keys, in its order): what was ticked, or what the number drew.
-func desk_things() -> Array:
-	if _knobs.get("things") is Array:
-		return (_knobs["things"] as Array).duplicate()
-	return DeskLook.kinds(DeskLook.of(desk_seed()))
-
-
-## The desk's light ([constant DeskLook.MOODS]): the one chosen, or the number's.
-func desk_mood() -> String:
-	var mood := String(_knobs["mood"])
-	return mood if DeskLook.MOODS.has(mood) else String(DeskLook.of(desk_seed())["mood"])
-
-
-## What is on the desk and its light kept as they are now, before anything on the desk changes: the number moves them, never chooses them.
-func _hold_desk() -> void:
-	if not (_knobs.get("things") is Array):
-		_knobs["things"] = desk_things()
-	if String(_knobs["mood"]).is_empty():
-		_knobs["mood"] = desk_mood()
+	var out := {"seed": hand_seed(), "hand": hand(), "svgs": svgs, "ink": ink, "pictures": pictures}
+	out.merge(_desk.picks(), true)
+	return out
 
 
 ## The desk dressed again while the letter plays: its number, what is on it, its light and the cards' words, handed to the reading's
@@ -211,10 +168,7 @@ func _redress_live() -> void:
 		return
 	var doc: Dictionary = subs.get("document")
 	if doc.get("letter") is Dictionary:
-		(doc["letter"] as Dictionary)["desk"] = desk_seed()
-		(doc["letter"] as Dictionary)["things"] = desk_things()
-		(doc["letter"] as Dictionary)["mood"] = desk_mood()
-		(doc["letter"] as Dictionary)["card_text"] = String(_knobs["card_text"])
+		(doc["letter"] as Dictionary).merge(_desk.picks(), true)
 
 
 func _body() -> String:
@@ -340,97 +294,10 @@ func _say(text: String) -> void:
 
 func _build() -> void:
 	add_theme_constant_override("separation", 8)
-	var srow := HBoxContainer.new()
-	srow.add_theme_constant_override("separation", 6)
-	add_child(srow)
-	var sl := Label.new()
-	sl.text = "Desk"
-	sl.custom_minimum_size.x = 64.0
-	sl.add_theme_font_size_override("font_size", 12)
-	srow.add_child(sl)
-	_seed_box = SpinBox.new()
-	_seed_box.min_value = 0
-	_seed_box.max_value = 99999
-	_seed_box.step = 1
-	_seed_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_seed_box.tooltip_text = ("Which desk the letter is written at, by number: its paper, ink and pen, its top, where "
-		+ "each thing on it lies and how it looks, and the lamp - never what is on it or how it is lit, which are "
-		+ "chosen below, nor how the words are written, which is the note's own. 0 is the note's own desk, the same "
-		+ "every time; any other number is a desk of its own. Seen at once while the letter plays, paused or not.")
-	_seed_box.value_changed.connect(func(v: float) -> void:
-		if not _syncing:
-			_hold_desk()
-			_knobs["seed"] = int(v)
-			_touch()
-			_redress_live()
-		_show_desk())
-	srow.add_child(_seed_box)
-	var again := Button.new()
-	again.text = "New desk"
-	again.tooltip_text = "Another desk, drawn at random: the same things, the same light, placed and colored anew."
-	again.pressed.connect(func() -> void: _seed_box.value = randi_range(1, 99999))
-	srow.add_child(again)
-
-	# The light, chosen
-	var lrow := HBoxContainer.new()
-	lrow.add_theme_constant_override("separation", 6)
-	add_child(lrow)
-	var ll := Label.new()
-	ll.text = "Light"
-	ll.custom_minimum_size.x = 64.0
-	ll.add_theme_font_size_override("font_size", 12)
-	lrow.add_child(ll)
-	_light_pick = OptionButton.new()
-	_light_pick.focus_mode = Control.FOCUS_NONE
-	_light_pick.fit_to_longest_item = false
-	_light_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for k in DeskLook.MOODS:
-		_light_pick.add_item(String(DeskLook.MOODS[k]["label"]))
-		_light_pick.set_item_tooltip(_light_pick.item_count - 1, String(DeskLook.MOODS[k]["blurb"]))
-	_light_pick.item_selected.connect(func(i: int) -> void:
-		if _syncing:
-			return
-		_hold_desk()
-		_knobs["mood"] = String(DeskLook.MOODS.keys()[i])
-		_touch()
-		_show_desk()
-		_redress_live())
-	lrow.add_child(_light_pick)
-
-	# What is on the desk, a tick each
-	var dl := Label.new()
-	dl.text = "On the desk"
-	dl.add_theme_font_size_override("font_size", 12)
-	add_child(dl)
-	var bank := HFlowContainer.new()
-	bank.add_theme_constant_override("h_separation", 4)
-	add_child(bank)
-	for k in DeskLook.THINGS:
-		var row: Dictionary = DeskLook.THINGS[k]
-		var box := CheckBox.new()
-		box.text = _thing_name(String(row["label"]))
-		box.tooltip_text = String(row["blurb"]) + (" It burns." if bool(row.get("lit", false)) else "")
-		box.focus_mode = Control.FOCUS_NONE
-		box.add_theme_font_size_override("font_size", 11)
-		var kind := String(k)
-		box.toggled.connect(func(on: bool) -> void: _tick_thing(kind, on))
-		bank.add_child(box)
-		_bank[kind] = box
-
-	# What is written on the index cards (shown while they are on the desk), the right way up from the writer's seat ([method DeskLook._write])
-	_card_box = TextField.new("On the index cards", "Nothing - the cards are blank",
-		"Written on the top index card or sticky note in the letter's hand and the desk's ink, line "
-		+ "for line as typed here - smaller where it needs the room, wrapped to the card's width. Nothing on the desk moves "
-		+ "for it: the cards lie where the desk's number put them, and the writing turns to read the nearest way up from "
-		+ "the writer's seat - down a card lying along the pad. Seen at once while the letter plays, paused or not.")
-	_card_box.text_changed.connect(func() -> void:
-		if _syncing:
-			return
-		_hold_desk()
-		_knobs["card_text"] = _card_box.text
-		_touch()
-		_card_due = CARD_SETTLE)
-	add_child(_card_box)
+	_desk = DeskRows.new(hand_seed, "the note's own desk, the same every time")
+	_desk.changed.connect(_touch)
+	_desk.redress.connect(_redress_live)
+	add_child(_desk)
 
 	_writer = AgentPick.writer(("Who draws the letter's sketches: each one's words, turned into a drawing the "
 		+ "pen makes. Takes effect at the next Generate or ⟳."),
@@ -465,49 +332,7 @@ func _show_knobs() -> void:
 		return
 	_syncing = true
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
-	_seed_box.value = int(_knobs["seed"])
-	_show_desk()
-	if _card_box.text != String(_knobs["card_text"]):
-		_card_box.text = String(_knobs["card_text"])
 	_syncing = false
-
-
-## The desk's light and what is on it, as they stand: chosen, or the number's.
-func _show_desk() -> void:
-	if _light_pick == null:
-		return
-	var was := _syncing
-	_syncing = true
-	_light_pick.select(maxi(0, DeskLook.MOODS.keys().find(desk_mood())))
-	var on := desk_things()
-	for k in _bank:
-		(_bank[k] as CheckBox).set_pressed_no_signal(k in on)
-	_card_box.visible = "cards" in on
-	_syncing = was
-
-
-## A thing ticked on or off the desk.
-func _tick_thing(kind: String, on: bool) -> void:
-	if _syncing:
-		return
-	_hold_desk()
-	var had: Array = _knobs["things"]
-	var kinds: Array = []
-	for k in DeskLook.THINGS:
-		if (k == kind and on) or (k != kind and k in had):
-			kinds.append(k)
-	_knobs["things"] = kinds
-	_touch()
-	_show_desk()
-	_redress_live()
-
-
-## A thing's name on its tick: its label without its article, capitalized ("a cup of pencils": "Cup of pencils").
-static func _thing_name(label: String) -> String:
-	for a in ["a ", "an "]:
-		if label.begins_with(a):
-			label = label.substr(a.length())
-	return label.substr(0, 1).to_upper() + label.substr(1)
 
 
 func _touch() -> void:

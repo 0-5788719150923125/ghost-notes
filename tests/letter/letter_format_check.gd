@@ -166,7 +166,7 @@ func _card() -> void:
 	# the hand back to the default the walk is compared against (the Medium card's own, which the walk follows)
 	director.set_hand(Handwriting.DEFAULT)
 	card.apply({})
-	_check(int(card.call("desk_seed")) == 1, "without a note, its desk is the first")
+	_check(int(_rows(card).call("desk_seed")) == 1, "without a note, its desk is the first")
 	var walk: TextWalk = load("res://src/letter/letter_walk.gd").new(card)
 	var read: Dictionary = walk.spoken(LETTER, "A Title")
 	_check(String(read["title"]).is_empty() and String(read["body"]) == LetterScript.speakable(LETTER, 1),
@@ -180,6 +180,11 @@ func _card() -> void:
 	_finish()
 
 
+## The Letter's desk rows ([DeskRows]).
+func _rows(card: Object) -> Object:
+	return card.get("_desk")
+
+
 ## What is on the desk and its light, chosen on the rows: what the number drew until anything on the desk changes, then kept.
 func _desk() -> void:
 	print("-- what is on the desk, chosen")
@@ -190,18 +195,18 @@ func _desk() -> void:
 	card.apply({"seed": 42})
 	var drawn := DeskLook.kinds(DeskLook.of(42))
 	var mood := String(DeskLook.of(42)["mood"])
-	var bank: Dictionary = card.get("_bank")
+	var bank: Dictionary = _rows(card).get("_bank")
 	var ticked := true
 	for k in bank:
 		ticked = ticked and (bank[k] as CheckBox).button_pressed == (k in drawn)
-	_check(card.call("desk_things") == drawn and card.call("desk_mood") == mood and not card.capture().has("things")
+	_check(_rows(card).call("desk_things") == drawn and _rows(card).call("desk_mood") == mood and not card.capture().has("things")
 		and bank.size() == DeskLook.THINGS.size() and ticked,
 		"with nothing chosen the desk is what its number drew, ticked so on the bank of every thing (%s, %s)" % [", ".join(drawn), mood])
 	# another number, whose own desk is not this one's
 	var other := 43
 	while DeskLook.kinds(DeskLook.of(other)) == drawn and String(DeskLook.of(other)["mood"]) == mood:
 		other += 1
-	(card.get("_seed_box") as SpinBox).value = other
+	(_rows(card).get("_seed_box") as SpinBox).value = other
 	var block: Dictionary = card.capture()
 	var its_own := DeskLook.kinds(DeskLook.of(other)) != drawn or String(DeskLook.of(other)["mood"]) != mood
 	_check(int(block["seed"]) == other and block.get("things") == drawn and String(block["mood"]) == mood and its_own,
@@ -211,13 +216,13 @@ func _desk() -> void:
 	var long := LETTER + "\n" + "I keep the tag by the lamp, where I can see it while I write to you about the days we had. ".repeat(6) + "\n"
 	var walk: TextWalk = load("res://src/letter/letter_walk.gd").new(card)
 	var at_other: String = walk.spoken(long, "")["body"]
-	(card.get("_seed_box") as SpinBox).value = 777
+	(_rows(card).get("_seed_box") as SpinBox).value = 777
 	var doc_now: Dictionary = card.call("document")
 	_check(int(doc_now["desk"]) == 777 and int(doc_now["seed"]) == int(card.call("hand_seed"))
 		and String(walk.spoken(long, "")["body"]) == at_other and LetterScript.speakable(long, 777) != LetterScript.speakable(long, other),
 		"the number is the desk's alone: the document's hand is the note's own, and the letter is said the same at either desk - the control, the hand seeded by the number, is said otherwise")
 	(bank["dog_tag"] as CheckBox).button_pressed = true
-	var light: OptionButton = card.get("_light_pick")
+	var light: OptionButton = _rows(card).get("_light_pick")
 	var dusk := DeskLook.MOODS.keys().find("dusk")
 	light.select(dusk)
 	light.item_selected.emit(dusk)
@@ -233,12 +238,12 @@ func _desk() -> void:
 	none.apply(MiniYaml.parse(MiniYaml.emit({"letter": {"seed": other, "things": [], "mood": "dusk"}}))["data"]["letter"])
 	var odd: Control = script.call("for_note", {})
 	odd.apply({"seed": other, "things": ["mug", "a spaceship"], "mood": "noon"})
-	_check(again.call("desk_things") == block["things"] and again.call("desk_mood") == "dusk"
-		and (none.call("desk_things") as Array).is_empty() and odd.call("desk_things") == ["mug"]
-		and odd.call("desk_mood") == String(DeskLook.of(other)["mood"]),
+	_check(_rows(again).call("desk_things") == block["things"] and _rows(again).call("desk_mood") == "dusk"
+		and (_rows(none).call("desk_things") as Array).is_empty() and _rows(odd).call("desk_things") == ["mug"]
+		and _rows(odd).call("desk_mood") == String(DeskLook.of(other)["mood"]),
 		"the block round trips through the note's frontmatter, an empty desk too; a thing or a light it does not know is dropped")
 	# what is written on the index cards
-	var cards_box: TextField = card.get("_card_box")
+	var cards_box: TextField = _rows(card).get("_card_box")
 	(bank["cards"] as CheckBox).button_pressed = false
 	var hidden := not cards_box.visible
 	(bank["cards"] as CheckBox).button_pressed = true
@@ -254,7 +259,7 @@ func _desk() -> void:
 	reread.apply(back)
 	_check(hidden and shown and String(block["card_text"]) == address and String(doc["card_text"]) == address
 		and String(picks.get("card_text", "")) == address and String(picks.get("hand", "")) == String(doc["hand"])
-		and String(reread.capture()["card_text"]) == address and (reread.get("_card_box") as TextField).text == address,
+		and String(reread.capture()["card_text"]) == address and (_rows(reread).get("_card_box") as TextField).text == address,
 		"the cards' box is shown with the cards ticked - the control, without them, hidden - and what is typed in it is kept in the block, carried by the document to the desk with the letter's hand, and round trips through the frontmatter, its lines and all")
 	for c in [card, again, none, odd, reread]:
 		(c as Node).free()

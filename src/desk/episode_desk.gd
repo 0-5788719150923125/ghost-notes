@@ -16,9 +16,10 @@ class_name EpisodeDesk
 ## Words with no math are written in their hand's strokes on the pad's rules ([method SheetWriting.words]); what TeX lays out
 ## is the episode's `ink.json` ([TableInk]), and a line not laid out yet is left unwritten.
 ##
-## The desk is the Letter's ([DeskLook]): its things and mood the note's Medium card's where it chose them (the document's
-## `medium`: `things`, `mood`), else drawn from the episode's seed. Its camera is the old desk's, a little closer
-## ([constant EPISODE_LOCAL], [constant EPISODE_WIDE]): on the line being written, the whole pad as a page turns.
+## The desk is the Letter's ([DeskLook]), dressed as the note's Medium card says ([DeskFormat]; the document's `medium`: its
+## number `seed`, `things`, `mood`, `card_text`), each left out drawn from the episode's own number; chosen while it plays, the
+## desk is dressed again and nothing written changes. Its camera is the old desk's, a little closer ([constant EPISODE_LOCAL],
+## [constant EPISODE_WIDE]): on the line being written, the whole pad as a page turns.
 
 ## The camera's close and wide framings (meters away, degrees above the desk).
 const EPISODE_LOCAL := {"dist": 0.66, "pitch": 79.0}
@@ -31,6 +32,10 @@ const CLOSE := 1000000
 
 ## What the episode wrote nothing for: lines TeX has not laid out, strikes and points at nothing - said once a load.
 var notes := PackedStringArray()
+## The episode's number: how its hand wavers. The desk's own is [member DeskMedium._seed], the rows' number where they give one.
+var _hand := 1
+## What was chosen for the desk ([method DeskLook.picks_of]) as it was last dressed.
+var _picks := {}
 
 
 func _ensure_doc() -> void:
@@ -46,9 +51,12 @@ func _ensure_doc() -> void:
 		if d.get("start_words") is PackedStringArray else PackedStringArray()
 	var dir := String(pay.get("dir", ""))
 	# ...and the files the acts and their ink are read from, as they stand: blocked or laid out again, the desk is too
-	var key := "%s|%d|%d|%d|%d|%d|%s" % [dir, int(pay.get("seed", 0)), src.hash(), hash(rows), _modified(dir.path_join("acts.json")),
+	var key := "%s|%d|%d|%d|%d|%s" % [dir, int(pay.get("seed", 0)), src.hash(), _modified(dir.path_join("acts.json")),
 		_modified(dir.path_join("ink.json")), " ".join(start)]
 	if key == _doc_key:
+		# the desk's rows, chosen while it plays: the desk dressed again, the episode as it is
+		if DeskLook.picks_of(rows) != _picks or _desk_of(rows) != _seed:
+			_set_look(DeskLook.picks_of(rows), _desk_of(rows))
 		return
 	_doc_key = key
 	load_episode(pay, src, rows, start, int(d.get("start_index", -1)))
@@ -58,14 +66,13 @@ func _ensure_doc() -> void:
 ## rows [param rows] (`things`, `mood`); for a reading started mid-way its first words [param start] (normalized), [param
 ## near] the index they are about. Public for a gate, which hands it one by hand.
 func load_episode(pay: Dictionary, src: String, rows := {}, start := PackedStringArray(), near := -1) -> void:
-	_seed = int(pay.get("seed", 1))
-	look = DeskLook.of(_seed, DeskLook.picks_of(rows))
-	_dress()
+	_hand = int(pay.get("seed", 1))
+	_set_look(DeskLook.picks_of(rows), _desk_of(rows))
 	var dir := String(pay.get("dir", ""))
 	var plan: Dictionary = pay.get("plan", {}) if pay.get("plan") is Dictionary else {}
 	var parsed := CardReading.parse(src)
 	var lesson := lesson_of(_json(dir.path_join("acts.json")), _json(dir.path_join("ink.json")), parsed,
-		CardTable.beats(plan) if CardTable.cardless(plan) else 0, _seed)
+		CardTable.beats(plan) if CardTable.cardless(plan) else 0, _hand)
 	_records = lesson["records"]
 	_strokes = lesson["strokes"]
 	notes = lesson["notes"]
@@ -187,6 +194,21 @@ static func _write_of(tr: Dictionary, records: Dictionary, strokes: Dictionary, 
 		records[id] = {"id": id, "ok": true, "w": size.x, "h": asc, "d": size.y - asc, "anchors": {}}
 		strokes[id] = {"strokes": lines, "length": float(got["length"])}
 	return {"kind": "pad-text", "id": id, "tex": text, "write": float((strokes[id] as Dictionary)["length"])}
+
+
+## The desk's number: the rows' [param rows] `seed` where they give one, else the episode's own.
+func _desk_of(rows: Dictionary) -> int:
+	return int(rows.get("seed", 0)) if int(rows.get("seed", 0)) > 0 else _hand
+
+
+## The desk's look from its number [param desk] and what was chosen for it ([param picks]), dressed again when they changed.
+func _set_look(picks: Dictionary, desk: int) -> void:
+	if picks != _picks:
+		_dressed = -1
+	_picks = picks
+	_seed = desk
+	look = DeskLook.of(_seed, picks)
+	_dress()
 
 
 ## Where beat [param beat] stands among an episode's: the intro, the beats by number, the close.

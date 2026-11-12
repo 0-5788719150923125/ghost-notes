@@ -7,7 +7,7 @@ class_name MediumCard
 ## owns (the seeded show, full frame, a comic, a novel, a notebook, a tablet, a letter, a dispatch desk).
 ## Under it stand the shared rows (the frame, scene hold and flourishes, the camera, the handwriting, the
 ## films), each shown only where the format `uses` it, and under those the format's own rows (a row's
-## `card`: the Letter's desk and sketch writer, the Dispatch desk's number), built from the script the
+## `card`: the Letter's desk and sketch writer, the Desk's desk, the Dispatch desk's number), built from the script the
 ## row names. One block holds them all, only what the format uses: switching a Letter to a Tablet drops
 ## the desk. The note's pictures stay the Pictures card's ([PicturesCard]).
 ##
@@ -250,6 +250,8 @@ func apply(block: Dictionary) -> void:
 			_kept = block.duplicate(true)
 		if _own != null and _card_of(_fmt) == _own_card:
 			_own.call("apply", block)
+		elif _keys.has(fmt) and _card_of(fmt) != _own_card and _reshape.is_valid():
+			_reshape.call_deferred()
 		sync_medium()
 		return
 	if Medium.REGISTRY.has(fmt) and Medium.mode_of(fmt).is_empty() and not _keys.has(fmt):
@@ -344,8 +346,13 @@ func _pick(i: int) -> void:
 	if _episodic:
 		_fmt = k
 		_kept = {}
+		var said := "Format: %s - the next episode is made for it; each is shown in the one it was made for." % Registry.label(Medium.REGISTRY, k)
+		if _card_of(k) != _own_card and _reshape.is_valid():
+			noted.emit(said + " The note opens again with its settings.")
+			_reshape.call_deferred()
+			return
 		sync_medium()
-		noted.emit("Format: %s - the next episode is made for it; each is shown in the one it was made for." % Registry.label(Medium.REGISTRY, k))
+		noted.emit(said)
 		return
 	if not Medium.takes_settings(k):
 		_to_defaults()

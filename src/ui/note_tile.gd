@@ -8,13 +8,9 @@ class_name NoteTile
 ## Drawn as a [Card] is: flat, a one-pixel border in the note's color, the title in a band tinted by it,
 ## the rest dark. Each chip is drawn the same way in its component's family color.
 ##
-## The note's color is its components', mixed ([method color_of]). Each component has a hue of its own -
-## its family's, nudged across [constant SPREAD] by its place among its kin - and the note's hue is their
-## mean on the color wheel, the one that shows the note (its `presentation` slot) counting most, then the
-## one that times it (`clock`), then the rest, each [constant PULL] of the one before. Notes made of the
-## same things are the same color. Drawn at the cards' one saturation and value ([constant Card.SAT],
-## [constant Card.VAL]); a note of words alone is the paper's gray. Nothing in the note's file says its
-## color: it changes as components come and go.
+## The note's color is its own: a hue drawn from its file's path ([method color_of]), so a note keeps its color as components
+## come and go, and two notes beside each other are seldom alike. Drawn at the cards' one saturation and value ([constant
+## Card.SAT], [constant Card.VAL]); a note of words alone is the paper's gray. Nothing in the note's file says its color.
 ##
 ## A tap is a press and a release in place ([constant TAP_SLOP]): the tile passes its presses on, so a
 ## finger dragged across it scrolls the list on a phone instead of opening the note under it.
@@ -22,10 +18,6 @@ class_name NoteTile
 signal opened(path: String)
 signal delete_asked(path: String)
 
-## Degrees a family's components are spread across, centered on the family's hue.
-const SPREAD := 40.0
-## How much each component after the first counts toward the note's hue, against the one before it.
-const PULL := 0.2
 ## How far a press may move, in pixels at scale 1, and still be a tap.
 const TAP_SLOP := 8.0
 const COL_DATE := Color(0.5, 0.56, 0.66)
@@ -55,7 +47,7 @@ func _init(p_path: String, summary: Dictionary, mtime: int, p_scale := 1.0, dele
 	path = p_path
 	title = String(summary.get("title", p_path.get_file().get_basename()))
 	s = p_scale
-	color = color_of(summary.get("attached", []))
+	color = color_of(p_path, summary.get("attached", []))
 	tooltip_text = p_path
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	clip_contents = true
@@ -162,43 +154,14 @@ static func chips_of(attached: Array) -> Array:
 	return out
 
 
-## A component's own hue, in degrees: its family's, nudged by its place among the family's components
-## across [constant SPREAD]; -1 for one with no hue (the words).
-static func hue_of(key: String) -> float:
-	var fam: StringName = Components.REGISTRY[key]["family"]
-	var base := float((Components.FAMILIES.get(fam, {"hue": -1.0}) as Dictionary)["hue"])
-	if base < 0.0:
-		return -1.0
-	var kin: Array = Components.REGISTRY.keys().filter(func(k: String) -> bool:
-		return StringName(Components.REGISTRY[k]["family"]) == fam)
-	if kin.size() < 2:
-		return base
-	return fposmod(base + (float(kin.find(key)) / float(kin.size() - 1) - 0.5) * SPREAD, 360.0)
-
-
-## How much a component says what its note is: 2 for the one it is seen in, 1 for the one that times it.
-static func standing_of(key: String) -> int:
-	var slots: Array = Components.REGISTRY[key]["slots"]
-	return 2 if slots.has("presentation") else (1 if slots.has("clock") else 0)
-
-
-## The note's color from the components on it ([param attached], [method Components.attached_of]).
-static func color_of(attached: Array) -> Color:
-	var keys: Array = Components.REGISTRY.keys()
+## The note at [param note_path]'s color, with the components on it [param attached] ([method Components.attached_of]): a hue
+## drawn from its path, the same whatever is on it; the paper's gray for a note of words alone.
+static func color_of(note_path: String, attached: Array) -> Color:
 	var hued := attached.filter(func(k: String) -> bool:
-		return Components.REGISTRY.has(k) and hue_of(k) >= 0.0)
+		return Components.REGISTRY.has(k) and StringName(Components.REGISTRY[k]["family"]) != &"paper")
 	if hued.is_empty():
 		return Card.PAPER
-	hued.sort_custom(func(a: String, b: String) -> bool:
-		var sa := standing_of(a)
-		var sb := standing_of(b)
-		return sa > sb if sa != sb else keys.find(a) < keys.find(b))
-	var v := Vector2.ZERO
-	var w := 1.0
-	for k in hued:
-		v += Vector2.from_angle(deg_to_rad(hue_of(k))) * w
-		w *= PULL
-	return Color.from_hsv(fposmod(rad_to_deg(v.angle()), 360.0) / 360.0, Card.SAT, Card.VAL)
+	return Color.from_hsv(float(note_path.md5_text().substr(0, 6).hex_to_int()) / float(0x1000000), Card.SAT, Card.VAL)
 
 
 ## When a note last changed, as a list says it: "today", "yesterday", "Oct 3", "2025-12-01".

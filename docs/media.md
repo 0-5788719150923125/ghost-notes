@@ -169,7 +169,7 @@ The episode is made by Table's agents (`TableEpisode`) and drawn from the readin
 
 When each is done is the desk's (`DeskMedium._build_plan`): a write begins at its act's word (`<!-- act: name -->`) and keeps with the words said from there to the next act's word - the old desk's dictation, its pen quicker or slower to keep with them, never past `DeskScript.MAX_PACE` and `DeskScript.MIN_PACE` of its own pace; an act with no word follows the one before, or begins its beat. A point is there at its word and held while it is talked about. Words with no math are written in their hand's strokes on the pad's rules (`SheetWriting.words`); what TeX lays out is the episode's `ink.json` (`TableInk`), and a line not laid out yet is left unwritten.
 
-The desk is the Letter's (`DeskLook`): its things and mood the note's Medium card's where it chose them (the document's `medium`: `things`, `mood`), else drawn from the episode's seed. Its camera is the old desk's, a little closer (`EPISODE_LOCAL`, `EPISODE_WIDE`): on the line being written, the whole pad as a page turns.
+The desk is the Letter's (`DeskLook`), dressed as the note's Medium card says (`DeskFormat`; the document's `medium`: its number `seed`, `things`, `mood`, `card_text`), each left out drawn from the episode's own number; chosen while it plays, the desk is dressed again and nothing written changes. Its camera is the old desk's, a little closer (`EPISODE_LOCAL`, `EPISODE_WIDE`): on the line being written, the whole pad as a page turns.
 
 Source: [src/desk/episode_desk.gd](../src/desk/episode_desk.gd)
 

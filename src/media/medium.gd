@@ -96,6 +96,7 @@ const REGISTRY := {
 		"blurb": "A show at a table the agents built, seen from the chair: its things, its light and its room, the cards drawn and read, the work done with the table's things - every move from the episode the agents produced."},
 	"desk": {"label": "Desk", "script": "res://src/desk/episode_desk.gd",
 		"uses": ["opening"], "frames": ["landscape"], "mode": "table", "needs": ["episode"],
+		"card": "res://src/desk/desk_format.gd",
 		"intro_tip": "Seconds the desk holds before the first line is written, the episode's title over it.",
 		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together.",
 		"blurb": "A lesson at a desk, seen close from the chair: a legal pad under a lamp or candles, and a pen writing what the episode's work writes - formulas, drawings, words in a hand - stroke by stroke as the words are said, pointing at what is talked about, turning a page over the binding when it is full. The desk is the Letter's."},

@@ -147,7 +147,7 @@ worked:
   - include: table/solver.worked
   - ""
   - >-
-      TALKING THE WORK THROUGH. What you say of the work comes from this notebook and nowhere else:
+      TALKING THE WORK THROUGH. What you say of the work comes from this worked solution and nowhere else:
       tell the steps that lead to the answer and the small cases that show its idea, not every check
       the solver ran. Say the check as it came out, in plain words, once - what checked it and what it
       checked - and never more than it did.

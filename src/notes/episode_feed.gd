@@ -28,6 +28,11 @@ func episode_title() -> String:
 	return ""
 
 
+## The episode's number, what its show is drawn from: 0 for none.
+func seed() -> int:
+	return 0
+
+
 ## The description it goes up with, "" for none.
 func description() -> String:
 	return ""

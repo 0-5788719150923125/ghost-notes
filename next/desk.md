@@ -20,9 +20,13 @@ it ([EpisodeDesk]). `theorem-grooving.md`'s Medium says `format: desk`, so its n
   desk's actions on its one pad, whatever sheet and pen they name: a write begins at its act's word and keeps with the words
   to the next act's word, as the old desk's dictation did; a point is held while it is talked about; a strike crosses out
   the line its act names. Words with no math are written in their hand on the pad's rules; what TeX lays out is the
-  episode's `ink.json`. The desk is the Letter's ([DeskLook]: mood, things, candles - the `medium:` block's `mood` and
-  `things` where written, else the seed's), its camera the old desk's a little closer ([constant EpisodeDesk.EPISODE_LOCAL]).
-  The lesson, the letter and the episode lay out their actions and begin the desk one way ([method DeskMedium._begin]).
+  episode's `ink.json`. The desk is the Letter's ([DeskLook]), its camera the old desk's a little closer ([constant
+  EpisodeDesk.EPISODE_LOCAL]). The lesson, the letter and the episode lay out their actions and begin the desk one way
+  ([method DeskMedium._begin]).
+- **The desk's rows are the Letter's** ([DeskRows], on the Medium card under Desk: [DeskFormat]): which desk by number, its
+  light, what is on it, the index cards' words, kept in the `medium:` block and seen at once while an episode plays (the
+  desk dressed again, the episode not loaded again). A number of 0 is each episode's own desk: the things and light chosen,
+  placed from the episode's number. A pick between Table and Desk opens the note again around its rows.
 - **The episode keeps its medium.** A table show's note has the Medium card (Table brings it; [method Medium.offered] gives a
   note that `provides` an episode Table's formats alone - the table, the desk); a pick is its block, never the remembered
   medium, and a block naming another format is kept as it was until one of Table's is picked. Generate hands the producer
@@ -31,8 +35,9 @@ it ([EpisodeDesk]). `theorem-grooving.md`'s Medium says `format: desk`, so its n
   solve, its table ([DeskTable]: a pad of sheets and a pen, landed as a set dresser's table is), the acts, the ink and the
   readers - no set dresser, no cloth, room or depth painted.
 
-Held by `tests/desk/episode_desk_check.gd` (the lesson from an episode's acts, played at the words; the episode's medium
-and steps; the producer keeping it), `tests/media/medium_pick_check.gd` (a table show's Medium card),
+Held by `tests/desk/episode_desk_check.gd` (the lesson from an episode's acts, played at the words; the desk dressed by its
+rows; the episode's medium and steps; the producer keeping it), `tests/media/medium_pick_check.gd` (a table show's Medium
+card, the Desk's rows), `letter_format_check` (the desk rows on a letter),
 `tests/notes/components_check.gd` (Table brings its Medium; the control an Actor), `page_writing_check` (the table's words
 the hand's strokes), `letter_check`, `ink_check`. Looked at with `tests/desk/episode_desk_look_probe.gd` (its own lesson
 of a page and more: the opening, formulas, words, a drawing, a point, a strike, a page turned).
@@ -40,10 +45,17 @@ of a page and more: the opening, formulas, words, a drawing, a point, a strike, 
 **What the user still has to judge:** a Theorem Grooving episode made at the desk and watched - how close the camera is,
 whether each write keeps with its words, the desk's mood and things.
 
-**Open:** the desk's own rows on the Medium card (its mood and things, as the Letter's are); the producer choosing an
-episode's medium among the formats the note allows; telling the producer and the puppeteer what a desk shows (they see
-its table, a pad and a pen; what an act does to anything else is not shown at the desk); the Letter's page ink
-([DeskMedium]'s canvases) and a table sheet's picture skin are still two ways to draw ink.
+**Open:**
+
+- **The producer choosing the medium.** An episode is made for the format the Medium card names; the producer does not yet
+  choose among the formats the note allows (a lesson at the desk, a demonstration at the table).
+- **Telling the agents what a desk shows.** The producer and the puppeteer see its table (a pad and a pen) but are not told
+  that the desk shows only writes, points and strikes: an act that moves or uses anything else is not shown there.
+- **Two ways to draw ink.** The Letter's page ink ([DeskMedium]'s canvases) and a table sheet's picture skin
+  ([TableInk]) still draw the same strokes two ways.
+- **The GPU gates over this work.** The pixel and shader gates (`scripts/check.sh --gpu`) have not run since the desk was
+  joined; the desk was looked at with `episode_desk_look_probe.gd`.
+- **Outside this repo.** The status table in `~/repos/rift`'s ENTRYPOINT still calls Theorem Grooving a table show.
 
 ## Why the desk is not rebuilt inside the table
 

@@ -12,9 +12,8 @@ extends Node
 ##   the file itself has both), and a first heading that only says the title again (control: one that says
 ##   something else stays); a chip for each component and none for the words; the notes in the list's
 ##   order, newest first.
-## - The color is the components': the same components make the same color whatever order they are named in;
-##   two of one family (Scenes and a Storyboard) are near and still apart; a letter is far from a Table; what
-##   shows the note counts most (a letter read by a Voice is nearer the Medium's own hue than the Voice's); and
+## - The color is the note's own: it keeps it as components come and go; notes made of the same
+##   things are many colors, two of one name in two folders among them (control: one note's path, many times, is one color);
 ##   a note of words alone is the paper's gray.
 ## - The search: a word of the title, of the words, a component's name or its Medium's format finds its notes; two words find only
 ##   the notes with both; a word no note has leaves none and says so; Escape brings every note back; Enter
@@ -127,20 +126,30 @@ func _check_tiles(notes: Dictionary) -> void:
 
 
 func _check_colors() -> void:
-	print("-- the color is the components'")
-	var letter := NoteTile.color_of(["text", "medium", "voice", "youtube"])
-	_ok(letter == NoteTile.color_of(["youtube", "voice", "text", "medium"]), "the same components make the same color, in any order")
-	var table := NoteTile.color_of(["text", "table", "voice"])
-	var scenes := NoteTile.color_of(["text", "scenes"])
-	var board := NoteTile.color_of(["text", "storyboard"])
-	var d_kin := _hue_apart(scenes, board)
-	_ok(d_kin > 8.0 and d_kin < 60.0, "two of one family (Scenes and a Storyboard) are near and still apart (%.0f degrees)" % d_kin)
-	_ok(_hue_apart(table, letter) > 90.0, "a read letter is far from a Table (%.0f)" % _hue_apart(table, letter))
-	var own := Color.from_hsv(NoteTile.hue_of("medium") / 360.0, Card.SAT, Card.VAL)
-	var voice := Color.from_hsv(NoteTile.hue_of("voice") / 360.0, Card.SAT, Card.VAL)
-	_ok(_hue_apart(letter, own) < _hue_apart(letter, voice) / 3.0,
-		"what shows the note counts most: a read letter is near the Medium's hue (%.0f), far from the Voice's (%.0f)" % [_hue_apart(letter, own), _hue_apart(letter, voice)])
-	_ok(NoteTile.color_of(["text"]) == Card.PAPER and NoteTile.color_of([]) == Card.PAPER, "a note of words alone is the paper's gray")
+	print("-- the color is the note's own")
+	var letter := NoteTile.color_of("notes/dear-friend.md", ["text", "medium", "voice"])
+	_ok(letter == NoteTile.color_of("notes/dear-friend.md", ["text", "table", "voice", "medium", "youtube"]),
+		"a note keeps its color as components come and go")
+	_ok(letter != NoteTile.color_of("elsewhere/books/dear-friend.md", ["text", "medium", "voice"]),
+		"two notes of one name in two folders are two colors")
+	var same := ["text", "table", "voice", "medium"]
+	var names := ["algebra", "binary", "circles", "dice", "euler", "fractions", "graphs", "halving", "induction", "jumps",
+		"knots", "limits"]
+	var hues := {}
+	var widest := 0.0
+	for a in names:
+		var ca := NoteTile.color_of("notes/%s.md" % a, same)
+		hues[snappedf(ca.h, 0.01)] = true
+		for b in names:
+			widest = maxf(widest, _hue_apart(ca, NoteTile.color_of("notes/%s.md" % b, same)))
+	_ok(hues.size() >= 10 and widest > 120.0,
+		"twelve notes made of the same things are many colors (%d hues, %.0f degrees apart at most)" % [hues.size(), widest])
+	var one := {}
+	for _i in names.size():
+		one[snappedf(NoteTile.color_of("notes/algebra.md", same).h, 0.01)] = true
+	_ok(one.size() == 1, "THE CONTROL: one note's path twelve times is one color")
+	_ok(NoteTile.color_of("notes/plain.md", ["text"]) == Card.PAPER and NoteTile.color_of("notes/plain.md", []) == Card.PAPER,
+		"a note of words alone is the paper's gray")
 
 
 func _check_search(notes: Dictionary) -> void:

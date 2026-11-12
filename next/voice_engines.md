@@ -764,7 +764,10 @@ moved), and a kvoicewalk-style search from a blend toward a recording.
 
 In the app, word by word: Browse… beside its list draws the voice across each paragraph ([VoiceShape]): each
 reader's share as a band whose edges are dragged, the Breath and Push lanes, noise (Fixed or Wander, how far, and its
-Seed - a number, so the draw heard is the draw shown) and Shapes to start from (`VoiceBlend.SHAPES`). The line carries it (`max: am_santa 60/55/45/35/30, af_nicole
+Seed - a number, so the draw heard is the draw shown) and Shapes to start from (`VoiceBlend.SHAPES`). While Test
+plays, a playhead sweeps the lanes where the words heard stand, with each lane's value there, never stopping
+(`ReadingAudition.place_now`: the second heard, its sentence's span gone through from its start to the next's, the rest
+after its last word included). The line carries it (`max: am_santa 60/55/45/35/30, af_nicole
 40/45/55/65/70; breath 0/0/0.1/0.25/0.4; noise wander 0.3 7`), one reader shaped is a voice (`mix: bf_emma;
 breath 0.9`), and Max and Min take shares (the weighted mix plus the edge's reach past the plain mean; equal
 shares are the old Max). The axes ship as data, `hosts/voice/kokoro_axes.json`, made by

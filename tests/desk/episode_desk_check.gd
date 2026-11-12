@@ -12,6 +12,9 @@ extends SceneTree
 ## - The row: `desk` is a Medium row of Table's (`mode`), needing an episode, made as an [EpisodeDesk].
 ## - Played ([method EpisodeDesk.load_episode], words handed as a voice would): the formula begun as its word is said, the pen
 ##   on its ink while it is written; the point at the line its act names; the strike after the line it strikes.
+## - Dressed by the Desk's rows ([DeskFormat]; the document's `medium`): a number of their own is the desk's and its light the
+##   one chosen, the hand still the episode's; chosen while it plays, the desk is dressed again and the episode not loaded
+##   again. Control: rows with no number are the episode's own desk.
 ## - The episode keeps what it is shown in ([method TableEpisode.medium]): a plan naming the desk is at the desk, with no cloth,
 ##   room or depth to paint and its table made from the plan alone; the producer keeps the Medium card's format in the plan.
 ##   Controls: a plan naming no medium, or one no table plays, is at its table and paints its cloth and room. (The Medium
@@ -20,6 +23,11 @@ extends SceneTree
 ##   godot --headless --path . --script res://tests/desk/episode_desk_check.gd
 
 const DIR := "user://episode_desk_check"
+
+
+## What the desk reads a reading's document from (the Subtitles' `document`, which needs the app).
+class Words extends Node:
+	var document := {}
 
 var _fails := 0
 var _doc := {}
@@ -162,6 +170,27 @@ func _played() -> void:
 	_ok(box.has_point(nib["p"]) and float(nib["lift"]) <= Pen.LIFT + 0.0001, "the pen is on the formula's ink while it is written (%s in %s)" % [str(nib["p"]), str(box)])
 	_ok(m.target_box(m._actions[2]).size.x > 0.0, "the point finds the line its act names")
 	_ok(float(m._plan[3]["start"]) >= float(m._plan[0]["end"]), "the strike comes after the line it strikes")
+	# the Desk's rows: its number and light, chosen
+	var own_desk := m._seed
+	var hand_was: Dictionary = (m._strokes as Dictionary).duplicate(true)
+	m.load_episode({"dir": DIR, "seed": 3, "plan": {}}, SCRIPT, {"seed": 77, "mood": "dusk"})
+	_ok(own_desk == 3 and m._seed == 77 and String(m.look["mood"]) == "dusk" and m._strokes == hand_was,
+		"the rows' number is the desk's and their light the one chosen; the hand is still the episode's (desk %d, then %d)" % [own_desk, m._seed])
+	# ...chosen while it plays: the desk dressed again, the episode as it was
+	var subs := Words.new()
+	subs.document = {"source": SCRIPT, "table": {"dir": DIR, "seed": 3, "plan": {}}, "medium": {"seed": 77, "mood": "dusk"}}
+	m._subs = subs
+	m._title = TitleCard.new()
+	m._ensure_doc()
+	var laid: Array = m._actions
+	(subs.document["medium"] as Dictionary)["mood"] = "candlelight"
+	(subs.document["medium"] as Dictionary)["seed"] = 0
+	m._ensure_doc()
+	_ok(String(m.look["mood"]) == "candlelight" and is_same(m._actions, laid),
+		"a light chosen while it plays dresses the desk again, the episode not loaded again")
+	_ok(m._seed == 3, "CONTROL: rows with no number are the episode's own desk (%d)" % m._seed)
+	m._title.free()
+	subs.free()
 	m._pad.free()
 	m.free()
 	for f in ["acts.json", "ink.json"]:

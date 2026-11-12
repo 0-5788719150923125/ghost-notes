@@ -88,6 +88,51 @@ func busy() -> bool:
 	return not _req.is_empty() or (_player != null and _player.playing)
 
 
+## Where the passage is now being heard across its paragraph ([method place_at] the moment playing, the ring and the
+## output's latency taken off what was pushed) - -1 when nothing plays.
+func place_now() -> float:
+	if _player == null or not _player.playing or _join == null or _sr <= 0:
+		return -1.0
+	var pb := _player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if pb == null:
+		return -1.0
+	var queued := maxi(0, _cap - pb.get_frames_available())
+	return place_at(float(_pushed - queued) / float(_sr) - AudioServer.get_output_latency())
+
+
+## Where second [param heard] of the audition stands across its paragraph, as the voice's curves read it: its sentence's
+## `plan_span` gone through steadily from the sentence's start to the next's, the rest after its last word included, so a
+## playhead never stops while the voice plays (a paragraph's spans meet end to end; the next paragraph starts again at
+## 0). The last sentence joined so far goes through its span by its words. -1 before the first sentence.
+func place_at(heard: float) -> float:
+	if _join == null:
+		return -1.0
+	var at := -1
+	var start := 0.0
+	for k in _join.chunk_at:
+		var s := float(_join.chunk_at[k]) / float(_join.sr)
+		if s <= heard and (at < 0 or s > start):
+			at = int(k)
+			start = s
+	if at < 0 or at >= chunks.size():
+		return -1.0
+	var end := INF
+	for k in _join.chunk_at:
+		var s := float(_join.chunk_at[k]) / float(_join.sr)
+		if s > start and s < end:
+			end = s
+	if is_inf(end):
+		end = start
+		for w in _join.words:
+			if float((w as Dictionary)["t0"]) >= start - 0.001:
+				end = maxf(end, float(w["t1"]))
+	var ch: Dictionary = chunks[at]
+	var u := float(ch.get("plan_u", 0.5))
+	var span: Array = ch.get("plan_span", [u, u])
+	var f := 1.0 if end <= start else clampf((heard - start) / (end - start), 0.0, 1.0)
+	return lerpf(float(span[0]), float(span[1]), f)
+
+
 ## Whether the host's reply [param id] is one of this audition's.
 func owns(id: int) -> bool:
 	return _req.has(id)

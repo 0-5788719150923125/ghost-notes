@@ -13,6 +13,9 @@ extends Node
 ## - the shape ([VoiceShape]), dragged as a mouse does: a band's edge dragged whole moves every share, one point moves
 ##   one, a double-click flattens; the Breath line dragged up moves the whole lane, one Push point moves one; a Shape
 ##   fills them in; noise picked, its seed set, and none - and a wandering noise's request says its paragraph;
+## - while Test plays, the shape shows a playhead where the words heard stand across their paragraph
+##   ([method ReadingAudition.place_at]: a sentence's span gone through steadily from its start to the next's, still
+##   moving through the rest after its last word, starting again each paragraph), and none when nothing plays (control);
 ## - the method and the accent reach the line; Sound and delivery gives the first reader the sound and the rest the
 ##   delivery, and a part is the reader's own; Max keeps the shares;
 ## - one reader shaped is a line of its own, and the request carries it; shaped by nothing, that reader alone;
@@ -169,6 +172,32 @@ func _run() -> void:
 	b.apply_shape("steady")
 	_ok(cast.blend_now() == "mix: af_heart 59, bf_emma 41" and not b._noise_amount.visible and not b._seed_box.visible,
 		"no noise, and Steady holds the mix at its mean with no lanes: %s" % cast.blend_now())
+
+	# the playhead: where the test being heard stands across its paragraph, and the shape following it
+	var heard := ReadingAudition.new(_ed)
+	heard.chunks = [{"plan_span": [0.0, 0.6]}, {"plan_span": [0.6, 1.0]}, {"plan_span": [0.0, 1.0]}]
+	heard._join = ReadingJoin.new(1000)
+	heard._join.chunk_at = {0: 0, 1: 2000, 2: 5000}
+	heard._join.words = [{"t0": 0.2, "t1": 0.6, "text": "One"}, {"t0": 0.7, "t1": 1.2, "text": "two"},
+		{"t0": 2.1, "t1": 2.9, "text": "Four"}, {"t0": 5.0, "t1": 6.0, "text": "Six"}]
+	var mid := heard.place_at(1.0)
+	_ok(absf(mid - 0.3) < 1e-4, "halfway from the first sentence's start to the next's is halfway along its span: %.4f" % mid)
+	var rest := [heard.place_at(1.3), heard.place_at(1.8), heard.place_at(2.0)]
+	_ok(float(rest[0]) < float(rest[1]) and float(rest[1]) < 0.6 and absf(float(rest[2]) - 0.6) < 1e-4,
+		"through the rest after its last word it keeps moving, and meets the next sentence where its span begins: %s" % str(rest))
+	var turn := [heard.place_at(4.99), heard.place_at(5.0), heard.place_at(5.5)]
+	_ok(float(turn[0]) > 0.99 and absf(float(turn[1])) < 1e-4 and absf(float(turn[2]) - 0.5) < 1e-4,
+		"a paragraph's end meets 1, the next paragraph starts the sweep again, and the last sentence joined goes by its words: %s" % str(turn))
+	_ok(heard.place_at(-0.5) < 0.0 and heard.place_now() < 0.0, "CONTROL: before the first sentence, and with "
+		+ "nothing playing, no playhead")
+	_ok(sh.follow.is_valid() and float(sh.follow.call()) < 0.0 and sh.playhead() < 0.0,
+		"the shape asks the test where it is, and with none playing draws no playhead")
+	var asked := sh.follow
+	sh.follow = func() -> float: return 0.25
+	sh._process(0.0)
+	_ok(is_equal_approx(sh.playhead(), 0.25), "...and follows it when one plays")
+	sh.follow = asked
+	sh._process(0.0)
 
 	# the accent, the method
 	b._accent.select(2)
