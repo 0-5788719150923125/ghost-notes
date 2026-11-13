@@ -185,7 +185,7 @@ Not yet done by anything real: a painter's maps, figures and pictures; a set dre
 - **A GM's voices.** A GM doing a silly voice for a barkeep is half the fun. Delivery marks move little. A voice of its own per person they play is easy to offer (a row of the cast), and is not in the first pass.
 - **Knocked figures.** A die that hits a figure bounces off it; knocking it over is possible with bodies and has no first-pass path back to the ledger. It would be the best thing on the table, so it is next once the first version is watched.
 - **Sheets on the table** are props with scribble to begin with. Numbers that visibly change come later.
-- **Episodes that continue.** Each one is one session and one story for now. A campaign (same characters, dead stay dead, what carried over) is `TableEpisode.archive` plus the last ledger, worth it after one good episode exists.
+- **Episodes that continue.** A brief may have its people play the same characters every episode (it names each once its player has); nothing else carries over yet, and each night starts from a fresh preparation. Carrying the sheets and what became of each character is `TableEpisode.archive` plus the last ledger.
 - **The GM's drawn map.** A marker sketching rooms on a wet-erase mat as they are entered (`SheetWriting` could draw it). Later.
 - **A phone** cannot bake; it plays what was baked elsewhere, as bricks.
 

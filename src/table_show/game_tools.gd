@@ -307,7 +307,7 @@ func _answer_of(who: String, q: String) -> String:
 func _start_answer(who: String, q: String) -> String:
 	_jobs += 1
 	var sheet: Dictionary = (ledger.sheets.get(who, {}) as Dictionary)
-	var p := TablePrompts.game_player(String(plan.get("_show_title", "")), String(plan.get("_brief", "")), plan, who, people, sheet, _want_of(who), heard(who), _asked.get(who, []), q)
+	var p := TablePrompts.game_player(String(plan.get("_show_title", "")), String(plan.get("_brief", "")), plan, who, people, sheet, _want_of(who), heard(who), _asked.get(who, []), q, _prepared(who, "character"))
 	var ask_dir := dir.path_join("ask_%03d" % _jobs)
 	DirAccess.make_dir_recursive_absolute(ask_dir)
 	return AgentJobs.submit({"kind": "text", "slot": "aside", "backend": String(players.get("backend", "claude")), "tier": "fast", "dir": ask_dir,
@@ -340,8 +340,13 @@ func _remember(who: String, q: String, a: String) -> void:
 
 
 func _want_of(who: String) -> String:
-	var sheet: Variant = (prep.get("people", {}) as Dictionary).get(who, {}) if prep.get("people") is Dictionary else {}
-	return String((sheet as Dictionary).get("wants", "")) if sheet is Dictionary else ""
+	return _prepared(who, "wants")
+
+
+## What the preparation wrote of [param who] under [param key], found by the person as the table spells them.
+func _prepared(who: String, key: String) -> String:
+	var got: Variant = GamePrepTools._named(prep.get("people", {}) as Dictionary, who) if prep.get("people") is Dictionary else null
+	return String((got as Dictionary).get(key, "")) if got is Dictionary else ""
 
 
 ## What has been said aloud, as [param who] heard it: names on the lines, a hidden roll no number, the last [constant HEARD_MOST] words.

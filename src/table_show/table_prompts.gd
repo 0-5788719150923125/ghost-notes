@@ -586,8 +586,8 @@ static func game_master(title: String, brief: String, plan: Dictionary, people: 
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prompt", vars)}
 
 
-## A player, asked ([GameTools]): only their sheet, their want, what was said aloud and what they were just asked.
-static func game_player(title: String, brief: String, plan: Dictionary, who: String, people: PackedStringArray, sheet: Dictionary, want: String, heard_so_far: String, asked: Array, question: String) -> Dictionary:
+## A player, asked ([GameTools]): only who they are playing (the preparation's line for them, and their sheet), their want, what was said aloud and what they were just asked.
+static func game_player(title: String, brief: String, plan: Dictionary, who: String, people: PackedStringArray, sheet: Dictionary, want: String, heard_so_far: String, asked: Array, question: String, character := "") -> Dictionary:
 	var others := PackedStringArray()
 	for p in people.slice(1):
 		if p != who:
@@ -596,6 +596,7 @@ static func game_player(title: String, brief: String, plan: Dictionary, who: Str
 	for k in sheet:
 		fields.append("%s: %s" % [k, GameLedger._plain(sheet[k])])
 	var vars := {"name": who, "gm": people[0] if not people.is_empty() else "", "others": ", ".join(others), "sheet": "\n".join(fields),
+		"has_character": not character.strip_edges().is_empty(), "character": character.strip_edges(),
 		"has_want": not want.is_empty(), "want": want, "heard_any": not heard_so_far.is_empty(), "heard": heard_so_far,
 		"asked_any": not asked.is_empty(), "asked": asked, "question": question, "table_note": String(plan.get("table_note", ""))}
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_player.prompt", vars)}

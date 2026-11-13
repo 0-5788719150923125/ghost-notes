@@ -262,6 +262,12 @@ func _prompts() -> void:
 	_check(t.contains("BEA-WANT") and t.contains("hp: 3") and t.contains("Dell: Hello.") and t.contains("What do you do?") and t.contains("A1"), "a player knows what they know")
 	_check(not t.contains("SECRET") and not t.contains("MILO-WANT"), "and nothing else")
 	_check(not t.contains("{{"), "nothing is left unfilled (a player)")
+	# who they play reaches them from the preparation, by their name as the table spells it; the control is a player it says nothing of
+	var asked := _tools()
+	asked.prep["people"]["Bea"]["character"] = "BEA-CHARACTER"
+	var told := TablePrompts.game_player("T", "B", plan, "Bea", people, {"hp": 3}, "", "", [], "Who are you playing?", asked._prepared("bea", "character"))
+	_check(String(told["prompt"]).contains("BEA-CHARACTER") and not String(told["prompt"]).contains("{{"), "a player knows who they are playing")
+	_check(asked._prepared("Milo", "character").is_empty() and not t.contains("BEA-CHARACTER"), "and only what was prepared for them")
 	var pr := TablePrompts.game_prep("T", "B", plan, people, [])
 	_check(String(pr["prompt"]).contains("Bea") and not String(pr["prompt"]).contains("{{"), "the preparation is whole")
 	for kind in ["map", "figure", "reveal"]:
