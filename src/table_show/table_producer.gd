@@ -52,6 +52,8 @@ signal changed
 
 ## A step whose job fails is tried this many more times before the episode stops on it.
 const RETRIES := 1
+## A show's names, filled in its byline ([method _byline]).
+const Macros := preload("res://src/data/macros.gd")
 ## The most beats a show that draws no cards is planned in, between its intro and its close.
 const BEATS_MOST := 12
 ## The most cards an episode draws: a spread planned longer is cut to it ([method _land_plan]).
@@ -84,7 +86,7 @@ const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "
 	"layers": "art director"}
 
 var episode: TableEpisode
-## {title, brief, deck, chooses, writer, painter} - how many cards are drawn, whether they come up reversed
+## {title, byline, names, brief, deck, chooses, writer, painter} - how many cards are drawn, whether they come up reversed
 ## and whether one jumps are the plan's ([method _land_plan], [method CardTable.staging_of]), never the author's
 var spec: Dictionary = {}
 var running := false
@@ -404,6 +406,15 @@ func _finish(step: String, err: String) -> void:
 		_errors[step] = err
 	else:
 		_made(step, "code")
+
+
+## The show's byline as this episode shows it under the show's name: its macros filled from the show's names (the spec's
+## `names`: title, author, book) and this episode's title and seed - what the set dresser is told and its preview draws.
+func _byline() -> String:
+	var v: Dictionary = (spec["names"] as Dictionary).duplicate() if spec.get("names") is Dictionary else {}
+	v["episode"] = String(_plan().get("episode_title", "")).strip_edges()
+	v["seed"] = str(episode.seed)
+	return Macros.line(String(spec.get("byline", "")), v)
 
 
 func _plan() -> Dictionary:
@@ -1234,7 +1245,7 @@ func _make_table() -> void:
 	var extra := {}
 	if TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
 		var toolset := SetDresserTools.new(episode, _plan(), episode.job_dir("table"), String(spec.get("title", "")),
-			String(spec.get("byline", "")), spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {})
+			_byline(), spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {})
 		var url := AgentTools.open(episode.job_dir("table"), toolset)
 		if not url.is_empty():
 			_tools["table"] = {"url": url, "set": toolset}
@@ -1243,7 +1254,7 @@ func _make_table() -> void:
 			toolset.release()
 	var p := TablePrompts.set_dresser(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(),
 		episode.seed, CardTable.headroom(episode.seed), seen.slice(0, 40), cloth,
-		SetDresserTools.LOOKS if not extra.is_empty() else 0, airs.slice(0, 24), String(spec.get("byline", "")),
+		SetDresserTools.LOOKS if not extra.is_empty() else 0, airs.slice(0, 24), _byline(),
 		tables.slice(0, 10), lights.slice(0, 10), room, jumps(episode.seed, _plan()))
 	var images: Array = []
 	if cloth:
@@ -1961,6 +1972,7 @@ func _land_plan(text: String) -> String:
 	if plan.get("staging") is Dictionary and str((plan["staging"] as Dictionary).get("source", "")).strip_edges().to_lower() == "none":
 		(plan["staging"] as Dictionary)["source"] = "deck"
 	plan["staging"] = CardTable.staging_of(plan)
+	plan["look"] = CardTable.dealt_look(plan["look"] as Dictionary, plan["staging"] as Dictionary)
 	for i in pos.size():
 		var p: Dictionary = pos[i]
 		if String((plan["staging"] as Dictionary)["source"]) != "box" and String(p.get("comes", "")) == "searched":

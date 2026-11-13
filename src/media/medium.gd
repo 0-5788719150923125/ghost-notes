@@ -245,7 +245,7 @@ func mount(st: SubViewport) -> void:
 
 
 ## A session is starting and [method Director.session_seed] is valid: roll everything sampled here.
-## Called by [method Director.attach], and again for every take in the synthesis modes.
+## Called by [method Director.attach], and again for every take a reading restarts.
 func begin_session() -> void:
 	pass
 

@@ -10,7 +10,7 @@ extends Node
 ## Measured after each return: nodes in the tree and orphan nodes (Godot's monitors); the stage (wiped: no
 ## medium mounted); Chrome's claims on the bottom of the frame, the show's room and the export button (the
 ## notes list's own only); the row (Masking's ⤓ gone, the ⌂ hidden); the transport (no conductor, nothing
-## timed); the Director (no storyboard, no game pacing, no pinned medium); the audio buses and effects; the
+## timed); the Director (no storyboard, no pinned medium); the audio buses and effects; the
 ## background programs [Subprocess] tracks. A number that grows with every cycle is a leak. The first cycle of
 ## a mode may build what later ones reuse, so cycles 2..N must agree with each other.
 ##
@@ -36,7 +36,7 @@ extends Node
 
 const CYCLES := 3
 ## What each note is made of: the blocks a note of that make-up carries (`SONG` stands for the fixture's path).
-const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "narrated", "table",
+const MODES := ["note", "auto", "manual", "story", "generative", "narrated", "table",
 	"likeness", "masking"]
 const BLOCKS := {
 	"note": {},
@@ -44,7 +44,6 @@ const BLOCKS := {
 	"manual": {"song": {"path": "SONG"}, "medium": {"format": "full"}},
 	# a storyboard of the note's own, with the editor opened over the show before each leaving
 	"story": {"song": {"path": "SONG"}, "medium": {"format": "full"}},
-	"synthesis": {"synthesis": {}},
 	"generative": {"voice": {}},
 	# a voice with a Medium and a storyboard: a pairing no template had
 	"narrated": {"voice": {}, "medium": {"format": "full"}},
@@ -184,9 +183,9 @@ func _check_home(mode: String, cycle: int, m: Dictionary, home: Dictionary) -> v
 	_ok(not m["home_button"], "%s: the ⌂ hides again" % tag)
 	_ok(m["row"] == home["row"], "%s: the row is back to %d buttons (%d)" % [tag, home["row"], m["row"]])
 	_ok(not m["conductor"] and not m["timed"], "%s: nothing conducts and nothing is timed" % tag)
-	_ok(not m["manual"] and not m["paced"] and String(m["override"]).is_empty(),
-		"%s: the Director is a session's again (storyboard %s, game-paced %s, pinned '%s')"
-		% [tag, m["manual"], m["paced"], m["override"]])
+	_ok(not m["manual"] and String(m["override"]).is_empty(),
+		"%s: the Director is a session's again (storyboard %s, pinned '%s')"
+		% [tag, m["manual"], m["override"]])
 	_ok(m["procs"] == home["procs"], "%s: no background program left running (%d, home %d)" % [tag, m["procs"], home["procs"]])
 	_ok(m["modes"] == 0, "%s: no mode's node is left in the tree (%d)" % [tag, m["modes"]])
 	_ok(not m["stage"] and not m["medium"], "%s: the stage is wiped (shown %s, a medium mounted %s)" % [tag, m["stage"], m["medium"]])
@@ -258,7 +257,7 @@ func _measure() -> Dictionary:
 		buses.append("%s:%d" % [AudioServer.get_bus_name(i), AudioServer.get_bus_effect_count(i)])
 	var modes := 0
 	for n in _main.get_children():
-		if n is ReadingPanel or n is SynthEditor or n is MaskEditor or n is NotePanel:
+		if n is ReadingPanel or n is MaskEditor or n is NotePanel:
 			modes += 1
 	return {
 		"list": _main._list != null and is_instance_valid(_main._list),
@@ -272,7 +271,6 @@ func _measure() -> Dictionary:
 		"conductor": not Spectrum.conductor().is_empty(),
 		"timed": Spectrum.timed(),
 		"manual": Director.is_manual(),
-		"paced": Director._game_paced,
 		"override": Director.medium_override,
 		"buses": buses,
 		"procs": Subprocess.tracked(),

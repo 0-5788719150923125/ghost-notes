@@ -614,7 +614,7 @@ func _card() -> bool:
 		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet, with YouTube's thumbnail - matched to the video's pictures once painted (%s)" % str(cap))
 	var names = _names({"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"})
 	_ok(not names.shows_field("title") and not names.shows_field("episode") and not names.shows_field("author")
-		and not names.shows_field("book"), "a Voice lab's Script card shows no Title, Episode, Author or Book of its own")
+		and not names.shows_field("book"), "a Script card in a mode no field stands in shows no Title, Episode, Author or Book of its own")
 	card.name_from(names)
 	_ok(names.shows_field("title") and names.shows_field("episode") and names.shows_field("author") and names.shows_field("book")
 		and card.values_now() == {"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"},
@@ -690,25 +690,12 @@ func _card() -> bool:
 	_ok(unbound.values_now().is_empty() and unbound.meta({"tags": []}).has("refused") and unbound._preview.text.begins_with("⚠"),
 		"control: a card no panel bound fills nothing, says so, and nothing goes up")
 	unbound.free()
-	_ok(YouTube.unfilled("%title%: %episode% (%date%)", {"title": "", "episode": ""}).is_empty()
-		and Array(YouTube.unfilled("%title% #%seed% %what%", {"title": "T"})) == ["seed"],
-		"a value filled empty is filled, the date always is, and an unknown macro is no claim")
 	_ok(card._playlist.get_item_text(card._playlist.selected) == "Readings", "the block's playlist is shown before the list is loaded")
 	card.apply({"privacy": "everyone"})
 	_ok(card.capture()["privacy"] == "private", "a privacy YouTube does not know reads as private")
 	_ok(card.capture()["category"] == "22", "and a block that names no category is People & Blogs, as every upload was")
 	card.apply({"category": "30"})
 	_ok(card.capture()["category"] == "22", "the control: a category an upload cannot take (Movies) reads as People & Blogs")
-	# the title's macros
-	var v := {"title": "Truthful Tarot", "episode": "The Tower"}
-	_ok(YouTube.expand_title("%title%: %episode%", v) == "Truthful Tarot: The Tower", "the default template")
-	_ok(YouTube.expand_title("%title%: %episode%", {"title": "A Note"}) == "A Note", "no episode leaves nothing dangling")
-	_ok(YouTube.expand_title("%title%: %episode%", {"episode": "Bare"}) == "Bare", "no title neither")
-	_ok(YouTube.expand_title("%title%: %episode%", {"title": "Truthful Tarot", "episode": "truthful tarot: Named"})
-		== "truthful tarot: Named", "a name is never said twice")
-	_ok(YouTube.expand_title("%title% - %episode% - %date%", {"title": "T", "date": "D"}) == "T - D",
-		"a gap in the middle closes up (%s)" % YouTube.expand_title("%title% - %episode% - %date%", {"title": "T", "date": "D"}))
-	_ok(YouTube.expand_title("%title% #%seed% %what%", {"title": "T", "seed": "7"}) == "T #7 %what%", "an unknown macro is left as written")
 	# the line an episode's title goes up in, shown to whoever names the episode
 	_ok(YouTube.title_shape("%title%: %episode%", {"title": "Truthful Tarot"}, "[x]") == "Truthful Tarot: [x]", "the default template's line")
 	_ok(YouTube.title_shape("%episode% | %title% #%seed% (%date%)", {"title": "T", "seed": "7"}, "[x]") == "[x] | T #7 ([date])",
@@ -956,11 +943,11 @@ func _own_publish() -> Object:
 	return g.new()
 
 
-## A Script card of the gate's own, in a Voice lab's mode (no Title or Episode of its own) and kept in no
+## A Script card of the gate's own, in a mode no field stands in (no Title or Episode of its own) and kept in no
 ## file: the note's names are [param fields].
 func _names(fields: Dictionary):
 	var w = load("res://src/ui/script_writer.gd").new()
-	w.setup("youtube_check", PackedStringArray(), "synthesis")
+	w.setup("youtube_check", PackedStringArray(), "")
 	w.doc._sync = false
 	w.doc._fields = fields
 	return w
@@ -1107,6 +1094,15 @@ func _panel_fields() -> bool:
 	ed._doc._fields["title"] = "Truthful Tarot"
 	_ok(ed.upload_meta("").get("title") == "Truthful Tarot: My Own Title" and ed.export_name() == "My Own Title",
 		"the upload's title is the show's name, then the episode's - the file keeps the episode's alone")
+	show._yt_desc.text = "- Episode %seed% of %title%: %episode%"
+	show._flush_upload_fields(true)
+	_ok(ed.upload_meta("").get("description") == "- Episode 21 of Truthful Tarot: My Own Title"
+		and show._yt_desc.text.contains("%episode%"),
+		"the show's description takes the title's macros, filled for the episode as it goes up and kept as written (%s)"
+		% ed.upload_meta("").get("description"))
+	show._yt_desc.text = "Mine."
+	show._flush_upload_fields(true)
+	_ok(ed.upload_meta("").get("description") == "Mine.", "control: a description naming none goes up as written")
 	show._refresh_upload_note()
 	_ok(ed._youtube._preview.text.begins_with("Goes up as \"Truthful Tarot: My Own Title\""), "the card shows the title as it goes up")
 	# the producer is shown that line before it names the next episode
@@ -1140,6 +1136,21 @@ func _panel_fields() -> bool:
 	card._commit_field("byline")
 	_ok(ed._doc.field("byline") == "with Pen & Ink" and ed.book_document()["byline"] == "with Pen & Ink",
 		"it is the show's `byline:`, handed to the title screen")
+	(card._field_edits["byline"] as LineEdit).text = "with Pen & Ink - %episode%"
+	card._commit_field("byline")
+	_ok(ed._doc.field("byline") == "with Pen & Ink - %episode%" and ed.book_document()["byline"] == "with Pen & Ink - My Own Title"
+		and String(show._spec().get("byline")) == "with Pen & Ink - %episode%"
+		and (show._spec().get("names") as Dictionary).get("title") == "" and String(card.FIELDS["byline"]["tip"]).contains("%episode%"),
+		"the byline takes the macros: kept as written, the title screen's filled for the picked episode (%s), the producer handed both"
+		% ed.book_document()["byline"])
+	show._knobs["seed"] = 24
+	show._open_episode()
+	_ok(ed.book_document()["byline"] == "with Pen & Ink", "control: an episode not yet named leaves the words alone (%s)"
+		% ed.book_document()["byline"])
+	show._knobs["seed"] = 21
+	show._open_episode()
+	(card._field_edits["byline"] as LineEdit).text = "with Pen & Ink"
+	card._commit_field("byline")
 	# a new episode: the show's values at once
 	show._knobs["seed"] = 22
 	show._open_episode()

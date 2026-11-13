@@ -1,6 +1,6 @@
 # Media: what carries the show
 
-Every mode that runs the Director (Auto, Manual, Synthesis, Generative) paints one scene, full-bleed, edge to edge, and cuts
+Every note that runs the Director (a song's show, a reading) paints one scene, full-bleed, edge to edge, and cuts
 to the next one.
 
 A **medium** is that choice made addressable: the substrate the show is carried on. `full` is the default and paints one scene
@@ -206,7 +206,7 @@ case.
 
 - Ink / halftone / screentone filters over the panels.
 - Round-robin liveness for held panels.
-- Speech balloons and captions carrying the Synthesis/Generative narration.
+- Speech balloons and captions carrying a reading's narration.
 - A real page turn with a bent page and a printed back.
 - A page turn seen from the reading distance: it is a gesture designed to be watched from further back than the camera sits.
 - Adaptive `LIVE_MAX`, tied to what the stage governor is measuring.

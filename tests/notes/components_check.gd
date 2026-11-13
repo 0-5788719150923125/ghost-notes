@@ -132,8 +132,9 @@ func _registry() -> void:
 		for written in Components.attach_blocks(k):
 			_ok(written == b, "%s: attaching it writes its own block ('%s', not '%s')" % [k, b, written])
 	# the blocks the panels keep are the components' blocks
-	for b in ["voice", "medium", "illustrations", "look", "bookends", "table", "synthesis", "song", "clip", "youtube"]:
+	for b in ["voice", "medium", "illustrations", "look", "bookends", "table", "song", "clip", "youtube"]:
 		_ok(blocks.has(b), "the document block '%s' belongs to a component" % b)
+	_ok(not blocks.has("synthesis"), "no component keeps a synthesis: block - the formant voice is a Voice's")
 	_ok(not blocks.has("scenes"), "the control: no component keeps a scenes: block (a storyboard is kept in the note's folder)")
 	_ok(not (Components as Script).get_script_constant_map().has("TEMPLATES"), "there is no table of kinds of note")
 	_ok(Components.unmet(["text", "voice"]).is_empty(), "text + voice needs nothing more")
@@ -171,7 +172,7 @@ func _composition() -> void:
 		[{"song": {"path": ""}, "medium": {}, "look": {}}, "note", "a song, a Medium and a Look"],
 		[{"voice": {}}, "reading", "a voice"],
 		[{"voice": {}, "medium": {}, "look": {}}, "reading", "a voice with a medium and a look"],
-		[{"synthesis": {}}, "lab", "a voice lab"],
+		[{"synthesis": {}}, "note", "a block no component keeps (the old voice lab's): words alone"],
 		[{"clip": {"path": ""}}, "clip", "a clip"],
 		[{"table": {}}, "table", "a show of cards"],
 		[{"table": {}, "voice": {}, "look": {}}, "table", "a show of cards with its voice written down"],
@@ -318,8 +319,9 @@ func _menu() -> void:
 	_ok(_item(menu, "scenes") < 0 and _item(menu, "masks") < 0 and _item(menu, "illustrations") < 0,
 		"what only comes with another component is not offered by itself")
 	# a plain note is offered everything that can be attached, with no list of what "decides" it
-	for k in ["song", "voice", "voice_lab", "clip", "table", "medium", "look", "bookends", "youtube"]:
+	for k in ["song", "voice", "clip", "table", "medium", "look", "bookends", "youtube"]:
 		_ok(_item(menu, k) >= 0, "a plain note's \"+\" offers %s" % k)
+	_ok(_item(menu, "voice_lab") < 0, "...and no voice lab: the formant voice is one the Voice card picks")
 	var look := _item(menu, "look")
 	_ok(look >= 0 and menu.is_item_disabled(look) and menu.get_item_tooltip(look).contains("Medium"),
 		"a Look on a note with no medium is grayed, and says to attach a Medium (%s)" % (menu.get_item_tooltip(look).get_slice("\n\n", 1) if look >= 0 else ""))

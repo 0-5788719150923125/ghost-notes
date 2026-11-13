@@ -22,7 +22,7 @@ class_name DocSource
 ##
 ## Frontmatter is never spoken ([FrontMatter] cuts it off before the synthesizer); ghost keeps its own key in there.
 ## One block per component, not per panel (next/notes.md step 5): `voice:`, `picture:`, `illustrations:`, `look:`,
-## `bookends:`, `cards:`, `synthesis:` are siblings under `ghost:`, a panel reads and writes the ones it has cards for
+## `bookends:`, `cards:`, `youtube:` are siblings under `ghost:`, a panel reads and writes the ones it has cards for
 ## ([method setup]'s [code]blocks[/code]), and a block no open panel owns is carried through untouched.
 ##
 ## Saving is automatic and checked: [method FrontMatter.write_block] re-reads from disk, replaces one key textually,

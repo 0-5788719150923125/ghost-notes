@@ -1,14 +1,17 @@
 extends Node
 
-## reader_browser_check - the Speaker row's Browse… ([ReaderBrowser]): readers ticked, blended and shaped, and Test
-## at its top:
+## reader_browser_check - the Voice row's Lab… ([ReaderBrowser]): readers ticked, blended and shaped, the voice's
+## own rows, and Test at its top:
 ##
 ##   tests/run_boot_probe.sh tests/reading/reader_browser_check.gd 120
 ##
-## Holds, with a stand-in voice host that lists a voice whose readers blend (Kokoro's) and one whose do not (libritts):
+## Holds, with a stand-in voice host that lists a voice whose readers blend (Kokoro's), one whose do not (libritts),
+## one of a single reader and one whose readers nobody described:
 ##
+## - the Lab holds the voice's own rows (Tone through Ambience) and the card no reader number; the Lab is in the tree
+##   with the card, so a row moved there reaches the tab;
 ## - on the blending voice every reader is a tick, what the tab reads in ticked; a second tick is a blend on the
-##   tab ([VoiceBlend]) at even shares, its first reader the Speaker number, and every request carries it under a take
+##   tab ([VoiceBlend]) at even shares, its first reader the tab's, and every request carries it under a take
 ##   key of its own;
 ## - the shape ([VoiceShape]), dragged as a mouse does: a band's edge dragged whole moves every share, one point moves
 ##   one, a double-click flattens; the Breath line dragged up moves the whole lane, one Push point moves one; a Shape
@@ -23,18 +26,26 @@ extends Node
 ##   paragraph's words), so every word is read where it stands; one that never moves says no span;
 ## - unticking back to one reader is that reader alone; the last tick comes off too: nothing ticked, the tab reads
 ##   on in what it had, Test waits for a tick, and the next tick is that reader alone;
-## - the browser opened again shows the blend ticked, and the line under the Speaker row says it;
+## - the Lab opened again shows the blend ticked, and the line under the Voice row says it;
 ## - Test at the top asks the host for the passage in the blend, both Test buttons say so, a press while it plays
 ##   always stops it (a blend changed meanwhile too), and the next press reads the new blend;
-## - stepping the Speaker number by hand, or picking another voice, ends the blend.
+## - picking another voice ends the blend;
+## - a voice of one reader opens on its rows alone, Test ready; readers nobody described are picked by number;
+## - every Lab opens sized to what its voice holds, in the middle of the room beside the panel and clear of it - a
+##   narrow one opened after a wide one too (centered on the last one's size, it would keep the wide one's left edge);
+## - on Ghost Notes' own voice ([FormantVoice]) the Lab is its fishing game ([VoiceFishing]), the paragraph dials it
+##   does not take hidden: a cast there is the tab's voice, every request carries it under a take key of its own, the
+##   line under the Voice row names it, and the Lab closed lets the line go with the tab keeping its voice; the line
+##   and the Listen booth read the Test passage every voice reads.
 ##
 ## Controls: nothing ticked never reaches the tab (its reader and blend stay as they were); on the voice whose
 ## readers do not blend there are no ticks, no shape and a row picks; a blend left on a slot whose voice does not
 ## blend is never sent; a request with no blend has no `blend` and keeps the key it had; noise that does not wander
-## sends no paragraph.
+## sends no paragraph; a row moved in the Lab with no reader list keeps the reader; a tab on another voice sends no
+## formant voice and its Lab shows no game.
 ##
-## The panel is built by hand and never added to the tree (its `_ready` starts the python voice host); the popup is
-## the panel's child, so it is out of the tree too - its controls are driven, never clicked.
+## The panel is built by hand (its `_ready` starts the python voice host) and its cards moved into the tree; the Lab
+## hangs on the Voice card's row, so it is in the tree too - its controls are driven, never clicked.
 
 class Host extends VoiceHost:
 	var asked: Array = []
@@ -60,6 +71,9 @@ var _host: Host
 func _ready() -> void:
 	_ed = ReadingPanel.new()
 	_ed._build_panel()
+	# the words Test reads are the plain reading's: a format's walk (a Letter's, a desk's) taken from the Director's
+	# last medium in the author's settings must not choose them
+	_ed.walk = TextWalk.new()
 	if _ed._doc != null:
 		_ed._doc._sync = false
 	_ed.remove_child(_ed._panel)
@@ -82,7 +96,9 @@ func _ready() -> void:
 			"readers": readers, "readers_about": "Grades: the host's."},
 		{"id": "en_US-libritts-high", "name": "libritts high", "backend": "piper", "speakers": 3, "installed": true,
 			"readers": readers, "readers_about": "Readers: the host's."},
-		{"id": "kokoro-someone", "name": "Someone", "backend": "kokoro", "speakers": 1, "installed": true}])
+		{"id": "kokoro-someone", "name": "Someone", "backend": "kokoro", "speakers": 1, "installed": true},
+		{"id": "piper-undescribed", "name": "undescribed", "backend": "piper", "speakers": 4, "installed": false},
+		FormantVoice.ROW.duplicate()])
 	_ed._cast._apply_slot(0)
 	_ed._sr = 22050
 	var player := AudioStreamPlayer.new()
@@ -96,8 +112,13 @@ func _run() -> void:
 	var plain_key := _ed.take_key(cast.slot_cfg(0), _ed._request_args(cast.slot_cfg(0), _chunk()))
 	_ok(cast.blends("kokoro") and not cast.blends("en_US-libritts-high") and not cast.blends("kokoro-someone"),
 		"the readers of a voice blend where its backend says so and it has more than one (CONTROLS: libritts, a voice of one)")
-	cast._open_speaker_browser()
-	var b := cast._browser
+	cast._open_lab()
+	var b := cast._lab
+	var wide := b._popup.size.x
+	_ok(b._sound.is_ancestor_of(cast._tone) and b._sound.is_ancestor_of(cast._rate_row)
+		and b._sound.is_ancestor_of(cast._fx_pad) and not b._sound.is_ancestor_of(cast._test)
+		and b._popup.is_inside_tree() and not ("_speaker_row" in cast) and cast._speaker is int,
+		"the Lab holds the voice's own rows, in the tree with the card, and the card has no reader number")
 	_ok(b != null and b._blends and b._tree.columns == 1 and b._shape_box.visible and b.shape().names.size() == 1,
 		"a voice whose readers blend opens with ticks and its shape")
 	_ok(b._test != null and b._test.get_parent().get_index() == 0 and b._test.get_index() == 0,
@@ -108,11 +129,12 @@ func _run() -> void:
 	_tick(b, 2, true)
 	_ok(cast.blend_now() == "mix: af_heart, bf_emma", "a second tick is a mix of the two: %s" % cast.blend_now())
 	_ok(String(cast.slot_cfg(0)["blend"]) == cast.blend_now() and int(cast.slot_cfg(0)["speaker"]) == 0,
-		"the tab keeps the blend, its first reader the Speaker number")
+		"the tab keeps the blend, its first reader the tab's")
 	var args := _ed._request_args(cast.slot_cfg(0), _chunk())
 	_ok(String(args.get("blend", "")) == "mix: af_heart, bf_emma", "the host is asked in the blend: %s" % str(args.get("blend")))
 	_ok(_ed.take_key(cast.slot_cfg(0), args) != plain_key, "a blend's takes are kept under a key of their own")
-	_ok(cast._speaker_about.text == "Mix: heart 50%, emma 50%", "the Speaker row says the blend: %s" % cast._speaker_about.text)
+	_ok(cast._speaker_about.text == "Mix: heart 50%, emma 50%" and cast._speaker_about.visible,
+		"the line under the Voice row says the blend: %s" % cast._speaker_about.text)
 
 	# the shape, dragged
 	var sh := b.shape()
@@ -278,18 +300,18 @@ func _run() -> void:
 	# opened again on a blend: ticked as it was
 	_tick(b, 1, true)
 	var kept := cast.blend_now()
-	cast._open_speaker_browser()
-	b = cast._browser
-	_ok(b.row_of(0).is_checked(0) and b.row_of(1).is_checked(0) and not b.row_of(2).is_checked(0)
+	cast._open_lab()
+	_ok(cast._lab == b and b.row_of(0).is_checked(0) and b.row_of(1).is_checked(0) and not b.row_of(2).is_checked(0)
 		and cast.blend_now() == kept, "opened again, the blend is ticked as it was: %s" % kept)
 
-	# the Speaker number stepped by hand ends it
-	cast._speaker.value = 2
-	_ok(cast.blend_now() == "" and String(cast.slot_cfg(0)["blend"]) == "", "a Speaker number stepped by hand ends the blend")
+	# a row of the voice's own, moved in the Lab, reaches the tab and keeps the blend
+	cast._tone.select(2)
+	cast._tone.item_selected.emit(2)
+	_ok(int(cast.slot_cfg(0)["tone"]) == 2 and cast.blend_now() == kept, "a Tone picked in the Lab is the tab's")
+	cast._tone.select(0)
+	cast._tone.item_selected.emit(0)
 
 	# a voice whose readers do not blend
-	_tick(b, 2, true)
-	_ok(not cast.blend_now().is_empty(), "blended again")
 	cast.voice_pick.select(1)
 	cast._voice_picked()
 	_ok(cast.blend_now() == "", "another voice ends the blend")
@@ -297,12 +319,71 @@ func _run() -> void:
 	stale["blend"] = "mix: af_heart, bf_emma"
 	_ok(cast.blend_of(stale) == "" and not _ed._request_args(stale, _chunk()).has("blend"),
 		"CONTROL: a blend left on a voice whose readers do not blend is never sent")
-	cast._open_speaker_browser()
-	b = cast._browser
-	_ok(not b._blends and b._tree.columns == 1 and b.row_of(0).get_cell_mode(0) != TreeItem.CELL_MODE_CHECK
+	cast._open_lab()
+	_ok(not b._blends and b._readers.visible and b._tree.columns == 1 and b.row_of(0).get_cell_mode(0) != TreeItem.CELL_MODE_CHECK
 		and not b._shape_box.visible, "CONTROL: a voice whose readers do not blend has no ticks and no shape")
 	b.row_of(1).select(0)
 	_ok(int(cast.slot_cfg(0)["speaker"]) == 1 and cast.blend_now() == "", "...and a row picks its reader")
+
+	# a voice of one reader: its rows alone
+	cast.voice_pick.select(2)
+	cast._voice_picked()
+	cast._open_lab()
+	_ok(not b._readers.visible and not b._shape_box.visible and not b._method.visible and not b._summary.visible
+		and not b._test.disabled and b._who.text.ends_with("Someone") and not cast._speaker_about.visible,
+		"a voice of one reader opens on its rows alone, Test ready, and the card says no reader")
+	_ok(b._popup.size.x < wide - 400, "...and the Lab opens narrower than with its readers and shape (%d px, %d px)"
+		% [b._popup.size.x, wide])
+	_ok(_beside(b), "...centered in the room beside the panel, not where the wider Lab stood (at %d, %d px wide)"
+		% [b._popup.position.x, b._popup.size.x])
+	cast._fx_echo.value = 0.4
+	_ok(is_equal_approx(float(cast.slot_cfg(0)["echo"]), 0.4) and int(cast.slot_cfg(0)["speaker"]) == 1,
+		"CONTROL: a row moved with no reader list keeps the reader")
+	cast._fx_echo.value = 0.0
+
+	# readers nobody described: picked by number
+	cast.voice_pick.select(3)
+	cast._voice_picked()
+	cast._open_lab()
+	_ok(b._readers.visible and b._all.size() == 4 and b.row_of(3) != null and not b._note.visible,
+		"readers nobody described are listed by number, credited to no one")
+	b.row_of(3).select(0)
+	_ok(int(cast.slot_cfg(0)["speaker"]) == 3, "...and one picked is the tab's reader")
+
+	# Ghost Notes' own voice: the Lab is its fishing game, and what is cast there is the tab's
+	var game := b.fishing()
+	game.quiet = true                    # no line heard, and the author's Collection never read or written
+	cast.voice_pick.select(4)
+	cast._voice_picked()
+	cast._open_lab()
+	_ok(game.visible and not b._readers.visible and not b._shape_box.visible and b._note.visible
+		and not cast._dynamics.get_parent().visible and cast._tone.get_parent().visible and not game.casting(),
+		"on the formant voice the Lab is its fishing game, still water, and the paragraph dials it does not take are hidden")
+	_ok(_beside(b), "...centered in the room beside the panel (at %d, %d px wide)" % [b._popup.position.x, b._popup.size.x])
+	_ok(game._passage() == Manuscript.unspoken(_ed._test_passage()).strip_edges() and not game._passage().is_empty(),
+		"the line and the Listen booth read the Test passage every voice reads")
+	game._throw_from(0)
+	var bred: Dictionary = cast.slot_cfg(0)["formant"]
+	_ok(not bred.is_empty() and bred["lineage"] == game._lineage, "a cast in the Lab is the tab's voice (%s)" % str(bred.get("lineage")))
+	var fargs := _ed._request_args(cast.slot_cfg(0), _chunk())
+	_ok(fargs.get("formant", {}) == bred, "...and every request for the tab carries it")
+	_ok(cast._speaker_about.visible and cast._speaker_about.text.begins_with(FormantVoice.name_of(game._lineage)),
+		"the line under the Voice row names it: %s" % cast._speaker_about.text)
+	game._throw()
+	_ok(_ed.take_key(cast.slot_cfg(0), _ed._request_args(cast.slot_cfg(0), _chunk())) != _ed.take_key(cast.slot_cfg(0), fargs),
+		"another voice cast is kept under a take key of its own")
+	var held: Array = (cast.slot_cfg(0)["formant"] as Dictionary)["lineage"]
+	b._popup.hide()
+	_ok(not game.casting() and (cast.slot_cfg(0)["formant"] as Dictionary)["lineage"] == held,
+		"the Lab closed lets the line go, and the tab keeps its voice")
+	cast._open_lab()
+	_ok(game._lineage == held and not game.casting(), "opened again, the voice on the line is the tab's")
+	cast.voice_pick.select(0)
+	cast._voice_picked()
+	_ok(not _ed._request_args(cast.slot_cfg(0), _chunk()).has("formant") and cast._dynamics.get_parent().visible,
+		"CONTROL: a tab on another voice sends no formant voice, and has its paragraph dials")
+	cast._open_lab()
+	_ok(not game.visible, "CONTROL: ...and its Lab shows no game")
 
 	for f in _fails:
 		print("  FAIL: ", f)
@@ -333,6 +414,14 @@ func _drag(sh: VoiceShape, from: Vector2, to: Vector2, twice := false) -> void:
 	up.button_index = MOUSE_BUTTON_LEFT
 	up.position = to
 	sh._gui_input(up)
+
+
+## Whether the Lab stands in the middle of the room beside the panel, clear of it.
+func _beside(b: ReaderBrowser) -> bool:
+	var room := (b._popup.get_parent() as Control).get_viewport().get_visible_rect()
+	var left := (_ed._panel as Control).get_global_rect().end.x + ReaderBrowser.BESIDE
+	var mid := float(b._popup.position.x) + 0.5 * float(b._popup.size.x)
+	return absf(mid - 0.5 * (left + room.end.x)) <= 1.0 and float(b._popup.position.x) >= left - 0.5
 
 
 func _chunk() -> Dictionary:

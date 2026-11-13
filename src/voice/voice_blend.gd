@@ -20,7 +20,7 @@ class_name VoiceBlend
 ## paragraph's first word, its last, and evenly between ([method curve_at]); each word reads where it stands (a
 ## sentence at a time where the host cannot make the graph that moves within one). Then the lanes (`breath`, `push`: points from -1 to 1 along directions measured off Kokoro's readers)
 ## and the noise (`fixed` or `wander`, an amount, a seed). Fewer than two readers is no blend unless a lane or the
-## noise shapes the one - the Speaker number reads alone. Only a voice whose backend says `blend` takes one
+## noise shapes the one - the tab's one reader (`speaker:`) reads alone. Only a voice whose backend says `blend` takes one
 ## (`ReadingCast.blend_of`); elsewhere it is ignored.
 
 ## How the readers are made one: what the host does for each (blend.py), said in the reader browser.

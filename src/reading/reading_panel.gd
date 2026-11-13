@@ -1,16 +1,14 @@
 extends CanvasLayer
 class_name ReadingPanel
 
-## ReadingPanel - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the
+## ReadingPanel - a reading of a document in its voices: the script, the cast, the voice, the stream, the
 ## transport's hooks and the export. It runs two workspaces, a note read aloud and a show at a table, and is the
 ## same panel for both: what differs is the note's components, each a card ([method _note_cards]) keeping its
 ## block in the document ([method _doc_blocks]).
 ##
-## Not a backend swap inside [SynthEditor]: the fishing game's economy is defined over the procedural engine's
-## parameter space (a 25-dimensional trait-plus-genome vector), while a neural backend exposes a speaker id and
-## three global scalars. Everything downstream is shared, because a take is a WAV: [Spectrum], the scenes, the
-## exporter, the subtitles and the feedback console work unchanged. The panel mirrors [SynthEditor]'s corner,
-## width and title/hide/text shape.
+## A voice is a neural one the host makes, or Ghost Notes' own formant voice ([FormantVoice]) made in-process and
+## answered the same way. Everything downstream is shared, because a take is a WAV: [Spectrum], the scenes, the
+## exporter, the subtitles and the feedback console work unchanged.
 ##
 ## Made of (next/structure.md, steps 17-23): the voices and the Voice card's rows are [ReadingCast] (the `voice`
 ## block); the reading on the stream is [ReadingStream] (the sliding window: a chapter is too long to synthesize
@@ -60,6 +58,8 @@ const SLOT_DEFAULTS := {
 	"voice": DEFAULT_VOICE, "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
 	# a new voice made of the voice's readers (VoiceBlend: "mix: af_heart 2, bf_emma 1"); "" is the Speaker alone
 	"blend": "",
+	# Ghost Notes' own voice as the Lab's fishing game bred it (FormantVoice.kept), read where `voice` is formant
+	"formant": {},
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35,
 	"echo": 0.0, "room": 0.0, "resonance": 0.0, "presence": 1.0, "ambience": 0.0,
 	"lean": 0.0, "near": 0.0, "seat": 0.0,
@@ -829,7 +829,7 @@ func _test_passage() -> String:
 	return walk.test_passage(ReadingAudition.PASSAGE)
 
 
-# --- persistence (mirrors SynthEditor._persist / _load_persisted) ---------------------------------
+# --- persistence -----------------------------------------------------------------------------------
 
 
 ## Debounced: a keystroke marks the draft dirty, and the write happens once the typing stops.
@@ -1002,6 +1002,8 @@ func take_key(s: Dictionary, args: Dictionary) -> String:
 func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
 	var a := Delivery.request_args(s, ch, _cast.speaker_of(s), _cast.blend_of(s))
 	a["lexicon"] = "off" if Settings.is_read_only() else "fetch"
+	if _cast.voice_id_of(s) == FormantVoice.ID:
+		a["formant"] = (s["formant"] as Dictionary).duplicate(true)
 	return a
 
 

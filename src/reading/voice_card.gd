@@ -5,7 +5,8 @@ class_name VoiceCard
 ## the `voice` row like every other component's (next/notes.md, "the Voice as a card").
 ##
 ## Its insides are the reading's ([ReadingCast]): the cast rows (Turn, Hesitate, the list of speakers) are global,
-## and every row below the list belongs to the speaker selected in it. The reading plays what the cast holds, so
+## and every row below the list belongs to the speaker selected in it - the Voice row (the model, Test, Lab…), who
+## reads, the ink - with the rest of that voice's sound in its Lab ([ReaderBrowser]). The reading plays what the cast holds, so
 ## the cast stays the panel's and the card is where it is shown and kept - the panel hands it over in `ctx`
 ## (`cast`), as a producer is handed the panel itself.
 ##

@@ -4,9 +4,10 @@ class_name YouTubeCard
 ## YouTubeCard - the YouTube component's card: whether an export goes up, what it is called, who may see it and the playlist
 ## it joins, plus the Google client and the sign-in an upload needs. Its block in a document is `youtube:`.
 ##
-## The title is a template ([method YouTube.expand_title]) of the macros in [constant YouTube.MACROS], so one note makes many
-## videos. Its names are the Script card's: every panel that shows this card binds it to its Script card ([method name_from]),
-## which shows Title, Episode, Author and Book, and the card reads %title%, %episode%, %author% and %book% from there. A panel
+## The title is a template ([method Macros.line]) of the macros in [constant Macros.ROWS], so one note makes many
+## videos; the description takes them too, as prose ([method Macros.fill]). Its names are the Script card's: every panel
+## that shows this card binds it to its Script card ([method name_from]), which shows Title, Episode, Author and Book, and
+## the card reads %title%, %episode%, %author% and %book% from there. A panel
 ## adds only what it alone knows ([member values]: a show's own name, its episode's seed), and what it hands with an export
 ## (the episode rendered) is laid over the note's names. The card claims only what the note fills: the title box's tooltip
 ## names only those macros, and a title naming one the note does not fill is said under it and does not go up, the export
@@ -51,6 +52,7 @@ class_name YouTubeCard
 ## loads the list itself when its sign-in may already see them, asking and saying nothing ([method _look_quietly]).
 
 const YouTube := preload("res://src/export/youtube.gd")
+const Macros := preload("res://src/data/macros.gd")
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "youtube"
@@ -60,7 +62,7 @@ const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": 
 	"write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
 	"thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
 	"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true}
-## The Script card's rows the title's macros are read from ([method name_from]): [constant YouTube.MACROS]' keys of the same names.
+## The Script card's rows the title's macros are read from ([method name_from]): [constant Macros.ROWS]' keys of the same names.
 const NAMES := ["title", "episode", "author", "book"]
 
 signal noted(msg: String)
@@ -247,7 +249,8 @@ func _init() -> void:
 	_build_thumbnail()
 	_desc = TextField.new("Description", "No description yet - click to write one",
 		"The video's description, as it goes up. The playlist it joins is named and linked "
-		+ "under it, and what the note's cards add (an actor's likeness, said) between the two.")
+		+ "under it, and what the note's cards add (an actor's likeness, said) between the two. "
+		+ "It takes the title's macros (%title%, %episode%, %date%...), filled as the title's are.")
 	_desc.visible = false
 	add_child(_desc)
 	extra = VBoxContainer.new()
@@ -529,17 +532,17 @@ func _values(given: Dictionary) -> Dictionary:
 
 
 ## Why the title cannot go up as it stands ("" when it can), with the macros' [param given] values laid over the note's now:
-## it names a macro the note does not fill ([method YouTube.unfilled]), or no panel ever said what the note is called.
+## it names a macro the note does not fill ([method Macros.unfilled]), or no panel ever said what the note is called.
 func why_not(given := {}) -> String:
 	var v := _values(given)
 	if v.is_empty():
 		return "This panel never says what the note is called, so the title cannot be made here."
-	var out := YouTube.unfilled(template(), v)
+	var out := Macros.unfilled(template(), v)
 	if out.is_empty():
 		return ""
 	var said := PackedStringArray()
 	for k in out:
-		said.append("%s (%s)" % [String(YouTube.MACROS[k]["label"]), String(YouTube.MACROS[k]["blurb"])])
+		said.append("%s (%s)" % [Registry.label(Macros.ROWS, k), Registry.blurb(Macros.ROWS, k)])
 	return "The title names %s, which this note does not have: take %s out of the title, or nothing goes up." % [
 		" and ".join(said), "it" if out.size() == 1 else "them"]
 
@@ -547,14 +550,14 @@ func why_not(given := {}) -> String:
 ## The title box's tooltip: what each macro the note fills stands for - only those.
 static func _title_tip(v: Dictionary) -> String:
 	return ("The video's title, made of the words written here and these macros: %s What a missing one leaves "
-		% YouTube.macros_said(v) + "(a dangling \": \") goes, and a name is never said twice. YouTube takes 100 characters.")
+		% Macros.said(v) + "(a dangling \": \") goes, and a name is never said twice. YouTube takes 100 characters.")
 
 
 ## The title as it goes up: the template, its macros filled from [param given] laid over
 ## [method values_now], the note as it stands now.
 func title_now(given := {}) -> String:
 	var v := _values(given)
-	return YouTube.fit_title(YouTube.expand_title(template(), v))
+	return YouTube.fit_title(Macros.line(template(), v))
 
 
 ## The title's template as it stands: the field's, else the one a new card starts with.
@@ -565,8 +568,9 @@ func template() -> String:
 ## What an upload of [param take] says (see [member Exporter.upload_provider]): [param base] (the panel's own part: its
 ## description, tags, the episode's folder and record, and the macros' `values` when they are not the panel's as it stands now)
 ## with this card's title, privacy, category, playlist (its id and title), channel and thumbnail ([method thumbnail_of]) laid
-## over it, and the description written here ([method describe]) before the panel's. {} when nothing is to go up: the box is
-## clear, or the panel has nothing ({}); `{refused: why}` when its title cannot be made ([method why_not]).
+## over it, and the description written here ([method describe]) before the panel's, the macros in both filled as the title's
+## are. {} when nothing is to go up: the box is clear, or the panel has nothing ({}); `{refused: why}` when its title cannot be
+## made ([method why_not]).
 func meta(base: Dictionary, take := "") -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
@@ -582,6 +586,8 @@ func meta(base: Dictionary, take := "") -> Dictionary:
 	var given: Variant = out.get("values", {})
 	out.erase("values")
 	out["title"] = title_now(given if given is Dictionary else {})
+	if out.has("description"):
+		out["description"] = Macros.fill(str(out["description"]), _values(given if given is Dictionary else {}))
 	out["privacy"] = _privacy_key()
 	out["category"] = _category_key()
 	out["playlist"] = String(_list["id"])

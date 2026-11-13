@@ -562,7 +562,8 @@ What the work is, as real episodes shaped it:
   a long line wrapped and indented, too many cut with an ellipsis (`CardFaces.written_layout`). Card sizes are
   rows (`CardTable.CARD_SIZES`), with `index` (3 x 5 in) and `recipe` (4 x 6 in) read sideways: wider than
   tall, the mesh, the held card, the box's files and the footprints follow (`CardFaces.face_px`, the short
-  side 720 px). The designer writes a written card's `writing` in place of a booklet entry (kept as its text
+  side 720 px). Only a box deals them: the shuffle, the spread and the drifts lay every card as
+  `TablePositions.CARD`, so a deck that is shuffled is dealt tall (`CardTable.dealt_look`). The designer writes a written card's `writing` in place of a booklet entry (kept as its text
   for every reader, `TableProducer._land_design`), the painter paints only the small picture, the puppeteer
   is handed each written card's lines (a recipe's steps are the work) and waits for its design. Gate:
   `tests/table/written_card_check.gd`.

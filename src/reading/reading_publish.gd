@@ -36,7 +36,7 @@ func upload_base(_take: String) -> Dictionary:
 	return {"tags": []}
 
 
-## What the component adds to the YouTube title's macros ([constant YouTube.MACROS]), laid over the
+## What the component adds to the YouTube title's macros ([constant Macros.ROWS]), laid over the
 ## note's Title and Episode, which the YouTube card reads from the Script card itself ([method
 ## YouTubeCard.name_from]): a show's own name (never the note's file name) and its episode's title and
 ## seed. {} adds nothing.

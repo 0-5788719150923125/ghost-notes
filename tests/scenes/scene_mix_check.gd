@@ -29,7 +29,6 @@ func _ready() -> void:
 	var s_swaps = Director._swaps
 	var s_index = Director._index
 	var s_last: Dictionary = Director._kind_last.duplicate()
-	var s_jump = Director._jump_next
 	var s_lock = Director._locked
 
 	var kinds := {}
@@ -49,7 +48,6 @@ func _ready() -> void:
 	var first_seq: Array = []
 
 	for s in SESSIONS:
-		Director._jump_next = -1
 		Director._locked = -1
 		Director._index = -1
 		Director._swaps = 0
@@ -130,7 +128,6 @@ func _ready() -> void:
 	# Determinism must not change: one session seed gives one running order every play, or an export
 	# stops matching the preview it was auditioned against. Replay a measured seed and compare cut for cut.
 	var again: Array = []
-	Director._jump_next = -1
 	Director._locked = -1
 	Director._index = -1
 	Director._swaps = 0
@@ -157,7 +154,6 @@ func _ready() -> void:
 	Director._swaps = s_swaps
 	Director._index = s_index
 	Director._kind_last = s_last
-	Director._jump_next = s_jump
 	Director._locked = s_lock
 
 	if _fails.is_empty():

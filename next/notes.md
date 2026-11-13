@@ -69,9 +69,8 @@ each medium shows ("adding a presentation is an entry in these tables, never new
 else"). `Filters.REGISTRY` builds its own rows, and every entry in `ScriptMarks.REGISTRY` carries a
 `modes` filter, which becomes a component filter.
 
-**Moments exist twice.** `CardTable.MOMENTS` (shuffle, jumper, reveal, pirouette, lay, close) are what
-the air effects fire on. In Synthesis the fishing owns the moments (`Director._should_change`): a catch
-or a seed jump cuts the scene. Both are one part telling another that something happened.
+**Moments are one part telling another that something happened.** `CardTable.MOMENTS` (shuffle,
+jumper, reveal, pirouette, lay, close) are what the air effects fire on.
 
 **Sound meets in one place.** `Spectrum` analyzes the Master bus, so a song and a voice take reach the
 scenes the same way, and it owns the show clock (live, baked, or counted from frames in a render). A
@@ -220,7 +219,7 @@ Suggested, not attached: attaching can start a model download or an agent.
 ## How components meet
 
 Components never refer to each other. If Table has to know that scenes exist, every new component pays
-for every old one (n squared pairs), the trap the modes were in (the Director's `_game_paced` was the
+for every old one (n squared pairs), the trap the modes were in (a game pacing the Director was a
 fishing game reaching into the scene cutter). Components meet only through things the note owns. There
 are five.
 
@@ -378,8 +377,8 @@ Left/right and Home keep seeking.
 
 **Pause stops all of show time,** including the intro and outro counters.
 
-**What stays on a card.** A voice's Test plays one voice through its own player, outside the show;
-Synthesis's click on a seed is an audition; Masking's timeline stays its workspace's editing tool. A song
+**What stays on a card.** A voice's Test plays one voice through its own player, outside the show, and
+so does the formant voice's fishing line in its Lab; Masking's timeline stays its workspace's editing tool. A song
 that ends returns nowhere: the transport stops at the end, and the loop is a setting on the Song card.
 
 ## Two frames: landscape and portrait
@@ -577,13 +576,13 @@ templates. [Tabletop Simulator](https://api.tabletopsimulator.com/object/),
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Auto       | Song + Scenes (seeded) + Look                                                                                                 |
 | Manual     | Song + Scenes (storyboards, dials) + Look                                                                                     |
-| Synthesis  | Voice (synthesis engine) + Voice lab (genome, belt, fishing) + Scenes + Look                                                  |
+| Synthesis  | Voice (the formant voice; its genome, Collection and fishing in the Voice card's Lab) + one presentation + Look               |
 | Generative | Voice (neural engine) + one presentation, or Scenes full frame + Illustrations or Films, as the presentation uses them + Look |
 | Tarot      | Cards with the tarot guide (brings the table) + Voice + Look                                                                  |
 | Masking    | Clip + Masks (markers, tracks, effects, its timeline)                                                                         |
 
-Auto and Manual differ by one setting of one component; Synthesis and Generative by the voice engine
-and the lab. Six modes are about a dozen components, and most modes share most of theirs.
+Auto and Manual differ by one setting of one component; Synthesis and Generative by the voice the Voice
+card picks. Six modes are about a dozen components, and most modes share most of theirs.
 
 **The modes survive as a way in.** A new note starts empty and "+" attaches components; the six code
 paths behind the old modes and the home screen they were listed on are gone.
@@ -866,8 +865,8 @@ pause, seek and stop through the bar for a song and for a reading, finds the clo
 - Spectrum has a conductor: `conduct(owner, hooks)` / `release_conductor(owner)`, held through a WeakRef so a
   freed owner drops out by itself, and transport verbs that call its hooks or drive a plain file (Stop =
   back to the start, paused).
-- The reading panels conduct from `_ready` to `_exit_tree` (`transport_hooks()`); Synthesis conducts while a
-  take plays, with no seek, and the seed click stays an audition.
+- The reading panels conduct from `_ready` to `_exit_tree` (`transport_hooks()`); the Lab's fishing line plays
+  on its own player and conducts nothing.
 - `Spectrum.paused` holds the intro and tail counters too. Space is the transport's except while typing; N
   skips a scene.
 - Setting `stream_paused` turns the player's `playing` false at once in 4.7, so "playing" is never
@@ -942,7 +941,7 @@ reason.
 
 **Status: done.** `src/platform/capabilities.gd` is the table from Platforms, each entry answering
 `impossible()` and `not_ready()` with a reason, plus `stage` (the show itself: a clock, a transport, a stage
-that plays), which a song, a voice and the voice lab need. `src/notes/components.gd` holds the registry
+that plays), which a song and a voice need. `src/notes/components.gd` holds the registry
 (label, blurb, family, needs, provides, requires, capabilities, mark groups, block, card).
 `main.start_template(key, source)` was the one session path, and `--mask-edit` runs after Chrome exists. "+" is
 `Components.attach_menu`: impossible components left out, not-ready ones grayed with the reason. `Subprocess`

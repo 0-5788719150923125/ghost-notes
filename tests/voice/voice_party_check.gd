@@ -4,8 +4,8 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/voice/voice_party_check.gd
 ##
-## [VoiceParty] is the Synthesis lab's belt and candidate as numbers, and a belt entry is the
-## player's save: [method SynthEditor._persist] writes the belt as it stands. The genome getter
+## [VoiceParty] is the fishing game's Collection and candidate as numbers, and a Collection entry is the
+## player's save: [method VoiceFishing._persist] writes the Collection as it stands. The genome getter
 ## once completed a recorded seed's partial genome IN the entry, so drawing the Collection rewrote
 ## the save. So:
 ##

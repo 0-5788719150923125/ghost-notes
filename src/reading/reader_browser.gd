@@ -1,9 +1,16 @@
 extends RefCounted
 class_name ReaderBrowser
 
-## ReaderBrowser - the Speaker row's Browse...: every reader of the voice on screen with who they are (a filter
-## by gender, a search over the descriptions), so a reader is chosen by description rather than by stepping
-## through numbers and listening to each.
+## ReaderBrowser - the Voice card's Lab...: the voice on screen worked on in one place, Test at its top. Who reads (on
+## a voice of more than one reader, every reader with who they are: a filter by gender, a search over the
+## descriptions), and the voice's own rows - the Tone, Pace, Pause, delivery dials and room - which the cast builds
+## into it ([method ReadingCast.build_voice]) and keeps as the truth for the tab on screen. A voice of one reader opens
+## on its rows alone.
+##
+## Built once, hung on the Voice row ([method build]): its rows are in the tree wherever the card is, so a change to
+## one reaches the tab whether the Lab is open or not. [method open] fills it for the voice on screen, sized to what
+## that voice's Lab holds and centered in the room beside the panel - never under the panel where it fits - and it
+## stays centered as what it holds changes its size ([method _center]).
 ##
 ## On a voice whose readers blend (its backend says `blend`: Kokoro's packs), each reader is ticked, not picked:
 ## one ticked is that reader, two or more a new voice made of them ([VoiceBlend]) - in Sound and delivery each with
@@ -18,8 +25,11 @@ class_name ReaderBrowser
 ## Nothing ticked is a way through, never a pick: the last tick comes off, the tab keeps reading in what it last
 ## had, Test waits for a tick, and the next tick is that reader alone.
 ##
-## Test is at the top: the Voice card's own Test ([method ReadingCast.press_test]), the passage read in what is
-## ticked now. Every change reaches the tab as it is made (a drag, as it lets go), as a step of the Speaker number does.
+## Test is the Voice card's own ([method ReadingCast.press_test]), the passage read in what is ticked now. Every
+## change reaches the tab as it is made (a drag, as it lets go).
+##
+## On Ghost Notes' own voice ([FormantVoice]) the readers' pane is the fishing game that breeds it ([VoiceFishing]):
+## every voice cast or held there is the tab's. Its line is let go when the Lab closes or Test plays.
 ##
 ## A part of the cast ([ReadingCast]): it reads the voice on screen and its readers from the cast, and hands back
 ## a reader and a blend ([method ReadingCast.pick]).
@@ -28,6 +38,11 @@ class_name ReaderBrowser
 var cast: ReadingCast
 
 var _popup: PopupPanel
+var _who: Label                # whose voice the Lab is working on, in which model
+var _readers: VBoxContainer    # the list's pane, on a voice of more than one reader
+var _fishing: VoiceFishing     # the game's pane, on the formant voice
+var _sound: VBoxContainer      # the voice's own rows, the cast's
+var _note: Label               # who described the readers
 var _tree: Tree
 var _test: Button
 var _method: OptionButton
@@ -50,25 +65,20 @@ var _noise := {}               # {kind, amount, seed}; {} for none
 var _method_key := "mix"
 var _accent_key := ""
 
+## Room kept between the Lab and the panel beside it.
+const BESIDE := 16.0
+
 
 func _init(owner: ReadingCast) -> void:
 	cast = owner
 
 
-## Open on the voice on screen, what it reads in now ticked (or picked).
-func open() -> void:
-	var vid := cast._selected_voice_id()
-	_all = VoiceReaders.all(vid)
-	if _all.is_empty():
-		cast.panel._set_status("Nothing is known about this voice's readers (is it installed, and multi-speaker?).")
-		return
-	_blends = cast.blends(vid)
-	_take_selection()
-	if _popup != null and is_instance_valid(_popup):
-		_popup.queue_free()
+## The Lab, hung on [param host] (the card's Voice row) and hidden until [method open]: the column the voice's own
+## rows go in is handed back for the cast to build them into.
+func build(host: Node) -> VBoxContainer:
 	_popup = PopupPanel.new()
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(1000 if _blends else 620, 500)
+	box.custom_minimum_size = Vector2(0, 500)
 	box.add_theme_constant_override("separation", 6)
 	_popup.add_child(box)
 
@@ -77,18 +87,21 @@ func open() -> void:
 	box.add_child(top)
 	_test = Button.new()
 	_test.focus_mode = Control.FOCUS_NONE
-	_test.tooltip_text = ("Hear what is ticked now: the Voice card's short fixed passage, read with every setting "
-		+ "on this tab. Press again to stop; the press after that reads what is ticked then.")
+	_test.tooltip_text = ("Hear the voice as it stands here: the Voice card's short fixed passage, read with every "
+		+ "setting on this tab and what is ticked now. Press again to stop; the press after that reads what is set then.")
 	_test.pressed.connect(cast.press_test)
 	top.add_child(_test)
-	show_testing(cast.panel._test_busy())
+	_who = Label.new()
+	_who.add_theme_font_size_override("font_size", 12)
+	_who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_who.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_who.mouse_filter = Control.MOUSE_FILTER_PASS
+	top.add_child(_who)
 	_method = OptionButton.new()
 	_method.focus_mode = Control.FOCUS_NONE
-	_method.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for k in VoiceBlend.METHODS:
 		_method.add_item(Registry.label(VoiceBlend.METHODS, k))
 		_method.set_item_tooltip(_method.item_count - 1, Registry.blurb(VoiceBlend.METHODS, k))
-	_method.select(VoiceBlend.METHODS.keys().find(_method_key))
 	_method.item_selected.connect(_method_picked)
 	top.add_child(_method)
 	_accent = OptionButton.new()
@@ -96,7 +109,6 @@ func open() -> void:
 	for k in VoiceBlend.ACCENTS:
 		_accent.add_item(Registry.label(VoiceBlend.ACCENTS, k))
 		_accent.set_item_tooltip(_accent.item_count - 1, Registry.blurb(VoiceBlend.ACCENTS, k))
-	_accent.select(VoiceBlend.ACCENTS.keys().find(_accent_key))
 	_accent.item_selected.connect(func(i: int) -> void:
 		_accent_key = String(VoiceBlend.ACCENTS.keys()[i])
 		_hand_back())
@@ -112,18 +124,21 @@ func open() -> void:
 		menu.set_item_tooltip(menu.item_count - 1, Registry.blurb(VoiceBlend.SHAPES, k))
 	menu.id_pressed.connect(func(id: int) -> void: apply_shape(String(VoiceBlend.SHAPES.keys()[id])))
 	top.add_child(_shapes)
-	for c in [_method, _accent, _shapes]:
-		(c as Control).visible = _blends
 
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 12)
 	box.add_child(body)
-	var left := VBoxContainer.new()
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(left)
+	_fishing = VoiceFishing.new(cast)
+	_fishing.visible = false
+	body.add_child(_fishing)
+	_popup.popup_hide.connect(_fishing.close)
+	_readers = VBoxContainer.new()
+	_readers.custom_minimum_size = Vector2(380, 0)
+	_readers.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(_readers)
 	var bar := HBoxContainer.new()
-	left.add_child(bar)
+	_readers.add_child(bar)
 	_which = OptionButton.new()
 	for label in ["All", "♀ Female", "♂ Male"]:
 		_which.add_item(label)
@@ -141,17 +156,12 @@ func open() -> void:
 	_tree.select_mode = Tree.SELECT_ROW
 	_tree.item_edited.connect(_edited)
 	_tree.item_selected.connect(_selected)
-	left.add_child(_tree)
+	_readers.add_child(_tree)
 
 	_shape_box = VBoxContainer.new()
 	_shape_box.custom_minimum_size = Vector2(470, 0)
-	_shape_box.visible = _blends
 	body.add_child(_shape_box)
-	var across := Label.new()
-	across.text = "Across each paragraph"
-	across.add_theme_font_size_override("font_size", 12)
-	across.modulate = Color(1, 1, 1, 0.7)
-	_shape_box.add_child(across)
+	_shape_box.add_child(_heading("Across each paragraph"))
 	_shape = VoiceShape.new()
 	_shape.edited.connect(_shape_edited)
 	# the playhead: where the test being heard is across its paragraph
@@ -181,7 +191,7 @@ func open() -> void:
 			_noise["amount"] = _noise_amount.value
 			_hand_back())
 	noise.add_child(_noise_amount)
-	# the draw is a number, shown and stepped as the Speaker number is: the same seed is the same voice or path again
+	# the draw is a number, shown and stepped: the same seed is the same voice or path again
 	_seed_box = HBoxContainer.new()
 	_seed_box.add_theme_constant_override("separation", 4)
 	noise.add_child(_seed_box)
@@ -204,30 +214,105 @@ func open() -> void:
 	typed.text_submitted.connect(func(_t: String) -> void: typed.release_focus())
 	_popup.window_input.connect(_let_go)
 
+	_sound = VBoxContainer.new()
+	_sound.custom_minimum_size = Vector2(330, 0)
+	_sound.add_theme_constant_override("separation", 4)
+	body.add_child(_sound)
+
 	# One line, trimmed, the whole of it its tooltip: a wrapped label has no width before it is laid out and asks a
-	# line a letter (a popup opened 1,500 px tall for an 88-letter summary and never shrank - see the guard below)
+	# line a letter, and a popup opened as tall as that never shrinks
 	_summary = Label.new()
 	_summary.add_theme_font_size_override("font_size", 12)
 	_summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_summary.mouse_filter = Control.MOUSE_FILTER_PASS
 	box.add_child(_summary)
-	var note := Label.new()
-	note.text = VoiceReaders.about_of(vid)
-	note.add_theme_font_size_override("font_size", 10)
-	note.modulate = Color(1, 1, 1, 0.55)
-	box.add_child(note)
+	_note = Label.new()
+	_note.add_theme_font_size_override("font_size", 10)
+	_note.modulate = Color(1, 1, 1, 0.55)
+	box.add_child(_note)
+	host.add_child(_popup)
+	_popup.size_changed.connect(_center)
+	return _sound
 
-	cast.panel.add_child(_popup)
+
+## A quiet heading over a part of the Lab.
+static func _heading(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 12)
+	l.modulate = Color(1, 1, 1, 0.7)
+	return l
+
+
+## Open on the voice on screen: what it reads in now ticked (or picked), its readers' pane shown where it has more
+## than one, its shape where they blend.
+func open() -> void:
+	var vid := cast._selected_voice_id()
+	var fishing := vid == FormantVoice.ID
+	_fishing.visible = fishing
+	if fishing:
+		_fishing.open(cast.formant_now())
+	_all = VoiceReaders.all(vid)
+	var many := cast.readers_of(vid)
+	if _all.is_empty() and many > 1:
+		# readers nobody described (a voice not yet downloaded) are still picked, by number
+		for i in many:
+			_all.append({"i": i, "reader": str(i), "g": "", "d": ""})
+	_blends = cast.blends(vid) and not _all.is_empty()
+	_take_selection()
+	_who.text = "%s  ·  %s" % [cast.tab_name(), cast.voice_name(vid)]
+	_who.tooltip_text = "Every change here is to %s's voice, and reaches the reading as it is made." % cast.tab_name()
+	_readers.visible = not _all.is_empty()
+	_shape_box.visible = _blends
+	_method.select(VoiceBlend.METHODS.keys().find(_method_key))
+	_accent.select(VoiceBlend.ACCENTS.keys().find(_accent_key))
+	for c in [_method, _accent, _shapes]:
+		(c as Control).visible = _blends
+	_summary.visible = not _all.is_empty()
+	var described := _all.any(func(r: Dictionary) -> bool: return not String(r["d"]).is_empty())
+	_note.text = VoiceReaders.about_of(vid) if described else ""
+	if fishing:
+		_note.text = "Cast from a seed, let it nibble, Pull, reel it in, then Hold or Fold. Every voice cast or held is this tab's."
+	_note.visible = not _note.text.is_empty()
 	_fill()
 	_show_shape()
 	_say()
 	# Never the stage's height: a popup is sized to what its controls ask as it opens, before they are laid out,
-	# and never shrinks after, so the browser is capped at a share of the stage.
-	var stage := cast.panel.get_viewport()          # none for a panel out of the tree (a gate's)
+	# and never shrinks after, so the Lab is capped at a share of the window.
+	var host := _popup.get_parent()
+	var stage := host.get_viewport() if host != null and host.is_inside_tree() else null   # none out of the tree (a gate's)
 	if stage != null:
 		var room := stage.get_visible_rect().size
 		_popup.max_size = Vector2i(int(room.x * 0.9), int(room.y * 0.8))
-	_popup.popup_centered()
+	if _popup.visible:
+		_popup.hide()
+	# the size this voice's Lab asks, never the last one's: centered on a stale size, a narrower Lab keeps a wider
+	# one's left edge
+	_popup.reset_size()
+	_popup.popup()
+	_center()
+	_center.call_deferred()
+
+
+## The Lab in the middle of the room beside the panel it was opened from, as large as it is now: clear of the panel
+## where it fits, slid left as far as the window's edge where it does not.
+func _center() -> void:
+	if _popup == null or not _popup.visible:
+		return
+	var host := _popup.get_parent() as Control
+	if host == null or not host.is_inside_tree():
+		return
+	var room := host.get_viewport().get_visible_rect()
+	var left := room.position.x
+	var panel: Control = cast.panel._panel if cast.panel != null else null
+	if panel != null and panel.is_visible_in_tree():
+		left = maxf(left, panel.get_global_rect().end.x + BESIDE)
+	var size := Vector2(_popup.size)
+	var x := clampf(left + (room.end.x - left - size.x) * 0.5, room.position.x, maxf(room.position.x, room.end.x - size.x))
+	var y := maxf(room.position.y, room.position.y + (room.size.y - size.y) * 0.5)
+	var at := Vector2i(roundi(x), roundi(y))
+	if _popup.position != at:
+		_popup.position = at
 
 
 ## Whether the browser is open.
@@ -245,6 +330,17 @@ func row_of(i: int) -> TreeItem:
 	return null
 
 
+## The game on screen ([VoiceFishing]): what a gate fishes with.
+func fishing() -> VoiceFishing:
+	return _fishing
+
+
+## One sound at a time: the game's line let go for another (Test, a reading).
+func hush() -> void:
+	if _fishing != null and _fishing.casting():
+		_fishing.release_line()
+
+
 ## The shape on screen ([VoiceShape]): what a gate drags.
 func shape() -> VoiceShape:
 	return _shape
@@ -254,7 +350,8 @@ func shape() -> VoiceShape:
 func show_testing(on: bool) -> void:
 	if _test != null and is_instance_valid(_test):
 		_test.text = "Test ■" if on else "Test"
-		_test.disabled = _on.is_empty() and not on      # nothing ticked hears nothing; a test playing still stops
+		# nothing ticked hears nothing; a voice of one reader has nothing to tick; a test playing still stops
+		_test.disabled = not _all.is_empty() and _on.is_empty() and not on
 
 
 ## What the tab reads in now, as ticks and a shape: its blend's readers (those this voice holds) with their shares,
@@ -281,6 +378,8 @@ func _take_selection() -> void:
 		for lane in VoiceBlend.LANES:
 			_lanes[lane] = _even(b[lane])
 		_noise = (b["noise"] as Dictionary).duplicate()
+		return
+	if _all.is_empty():
 		return
 	var i := clampi(cast.speaker_now(), 0, _all.size() - 1)
 	_on.append({"i": i, "reader": String((_all[i] as Dictionary).get("reader", "")), "part": "both"})
@@ -367,7 +466,15 @@ func _fill() -> void:
 	if first != null:
 		if not _blends:
 			first.select(0)
-		_tree.scroll_to_item.call_deferred(first)
+		_scroll_to.call_deferred(int(first.get_metadata(0)))
+
+
+## Reader [param i]'s row brought into view - found again, since the list may have been filled anew since (a row
+## held across that would be freed).
+func _scroll_to(i: int) -> void:
+	var it := row_of(i)
+	if it != null:
+		_tree.scroll_to_item(it)
 
 
 ## One row's cells as what is ticked says: its tick, and its part while it is ticked.
@@ -534,7 +641,7 @@ func spec() -> String:
 		"push": _lanes.get("push", [0.0]), "noise": _noise})
 
 
-## What is ticked, to the tab: its first reader as the Speaker number, and the line when there are two or one is
+## What is ticked, to the tab: its first reader as the tab's reader, and the line when there are two or one is
 ## shaped. Nothing ticked hands back nothing: the tab reads on in what it had.
 func _hand_back() -> void:
 	if not _on.is_empty():
@@ -546,6 +653,9 @@ func _hand_back() -> void:
 ## ticked, what to do and what the tab reads in until then.
 func _say() -> void:
 	if _summary == null:
+		return
+	if _all.is_empty():
+		show_testing(cast.panel._test_busy())
 		return
 	if _on.is_empty():
 		var now := VoiceBlend.line(cast.blend_now(), true)

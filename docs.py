@@ -129,10 +129,10 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "- the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a "
      "kit for a note's components."),
     ("voice", "Synthesis (voice)",
-     "Text to narrated audio in two paths: ghost's own source-filter synthesizer (no models, no weights, fully "
-     "inspectable, and the only path that can sing), and a small local neural voice run by a subprocess host. Shared "
-     "between them: the text front end and its normalization, the threaded real-time stream and the buffer effects. "
-     "Design: next/voice.md."),
+     "Text to narrated audio in two paths: ghost's own formant synthesizer (no models, no weights, fully inspectable, "
+     "and the only path that can sing), made in-process, and local neural voices run by a subprocess host - both "
+     "answered alike to the reading. Shared between them: the text front end and its normalization, the room and the "
+     "buffer effects. Design: next/voice.md."),
     ("media", "Media",
      "What the show is carried on: the `Medium` base and its registry, each medium ([media.md](media.md)), the layouts "
      "they set (comic pages, a novel, a notebook, a tablet's pages), the films and pictures they show, and where a "
@@ -147,8 +147,8 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the "
      "workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither."),
     ("reading", "The voice's workspaces",
-     "The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on "
-     "it, and the voice lab with the fishing game that breeds its voices."),
+     "The panels a voice runs in: the reading (script, cast, voice, stream, export), the Voice card and its Lab (who "
+     "reads, a blend of readers, and the fishing game that breeds the formant voice)."),
     ("table", "The set",
      "A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), "
      "its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), "
@@ -266,11 +266,6 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
     ("--seed", "<N>",
      "Override the session seed (default derives from the audio's own content fingerprint, so the same song replays "
      "the same show).", False),
-    ("--synth", "[text-file]",
-     "Open the voice-synthesis editor: write or paste a script, sample a voice by seed; each reading renders a WAV "
-     "take and plays it as a normal session (scenes react to the narration; karaoke subtitles track it).", False),
-    ("--say", "",
-     "With `--synth`: speak the loaded text immediately on boot (automation, demos, headless checks).", False),
     ("--table", "",
      "Open the Table mode: a show's brief, its episodes (planned, dealt, painted and written by agents a card or a "
      "beat at a time) and the Generative voice that reads them at the table.", False),
@@ -289,10 +284,6 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
      "Internal helper: after the parent exits, replace the portable executable with a verified update.", True),
     ("--update-smoke-hold", "",
      "Keep the exported app running briefly while the updater's replacement path is tested.", True),
-    ("--synth-autopilot", "",
-     "With `--export`: open the Synthesis panel over the take and let the fishing game play itself (random "
-     "Throw/Pull/reel/hold-or-fold), so the UI is recorded into the video. Generates no audio and persists nothing "
-     "(set by the exporter's 'Automate the Synthesis game' toggle).", True),
     ("--use-bake", "", "Drive `Spectrum` from the song's cached bake instead of the live analyzer.", True),
     ("--bake-file", "<path>", "Explicit spectrum-bake cache for a render (implies `--use-bake`).", True),
     ("--showcase-now", "",
@@ -1874,7 +1865,7 @@ RULES: List[Rule] = [
          "a click from a window. In a window of its own, or on no card, add it to this rule's skip",
          (("a.gd", "\tvar box := TextEdit.new()", 1), ("a.gd", "\tvar list := ScrollContainer.new()", 1),
           ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
-         skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "reader_browser.gd", "mask_editor.gd",
+         skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "reader_browser.gd", "voice_fishing.gd", "mask_editor.gd",
                "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd")),
     # `Films.pump()` is called from main's `_process`: a window cut is an ffmpeg child, and something with a
     # frame must notice it exit and promote its output out of the `.part` name. A probe replaces the main scene,

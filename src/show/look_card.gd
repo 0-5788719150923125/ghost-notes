@@ -5,7 +5,7 @@ class_name LookCard
 ## Filters.REGISTRY] (next/notes.md; one card per section, in every panel that has it).
 ##
 ## It is the Director's, like the medium, so a look set here is the look of every session: a reading, a
-## synthesis take, a song in Auto mode and an export render (a second process against the same settings
+## song in Auto mode and an export render (a second process against the same settings
 ## file).
 ##
 ## A checkbox and a dial, not a picker: every filter is independently switchable and all are applied in

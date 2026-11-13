@@ -1,25 +1,24 @@
 extends Node
 class_name VoiceStream
 
-## VoiceStream - real-time speech on its own thread: render lag cannot break it.
+## VoiceStream - the formant voice ([Voice]) spoken live on its own thread, on a player of its own: the
+## Lab's fishing game ([VoiceFishing]) hears its line through it.
 ##
 ## Synthesis and audio delivery run on a worker thread decoupled from the render loop: the thread keeps
 ## a sliding lead (~[constant TARGET_LEAD]s) of PCM synthesized ahead of the playhead and pushed into
-## the [AudioStreamGeneratorPlayback] that [Spectrum] opened on the analyzed bus. The main thread only
-## drains word-timing snapshots for the karaoke and relays completion signals.
+## its player's [AudioStreamGeneratorPlayback] ([method play]). The main thread only drains word-timing
+## snapshots and relays completion.
 ##
 ## The stream is a live instrument, not a render job:
 ## - [method retune] swaps the voice spec mid-stream (an atomic reference swap the worker reads per
 ##   chunk), so timbre traits bend the voice while it speaks, landing ~[constant TARGET_LEAD]s later.
 ## - [method restart] replaces the content in place (new text or a re-planned voice): worker joined,
-##   generator buffer cleared, timing rebased via [member time_base]; the session, scene and Director
-##   are untouched.
-## The session seed comes from the first content's fingerprint; the take's WAV + sidecar are written when
-## synthesis completes (the WAV is what was heard, retunes included), and finished takes loop on the
-## thread.
+##   the player cycled, [method heard] from zero again.
+## - presence and reception ([method set_presence], [method set_location]) are applied as samples are
+##   pushed, so the game moves them per frame.
+## A finished take loops on the thread; nothing is written (the reading makes the take a voice is kept in).
 
-signal completed(dur: float, wav_path: String)
-signal restarted(base: float)
+signal completed(dur: float)
 
 const PREBUFFER := 0.3              # synthesized + pushed before the thread takes over
 # Deep lead: the ring holds seconds of finished audio, so a machine saturated by a heavy scene (which
@@ -42,10 +41,8 @@ const LOC_Q := 0.4                  # SVF damping (lower = more resonant)
 const LOC_CARRIER := 0.02           # faint carrier-tone amplitude at close range
 const LOC_CEIL := 0.95              # soft ceiling on the reception path: tanh rounds the resonant boost's overshoot (a hard clamp clicks)
 
-var words: Array = []               # main-thread copy for Subtitles (shared by reference)
+var words: Array = []               # main-thread copy of the words said so far
 var events: Array = []              # planned strike times [{t, kind, a}] - the bites
-var take_base := ""                 # user://synth/take_<id> (wav + json on completion)
-var time_base := 0.0                # playback time at the current content's start
 
 var _spec: Voice.Spec               # swapped whole by retune() - worker reads per chunk
 var _segs: Array = []
@@ -54,15 +51,18 @@ var _next_seg := 0
 var _pcm := PackedFloat32Array()
 var _pushed := 0                    # frames handed to the generator (worker-owned)
 var _playback: AudioStreamGeneratorPlayback
+var _player: AudioStreamPlayer      # its own ([method play])
 var _thread: Thread
 var _mutex := Mutex.new()
 var _cancel := false
 var _words_snapshot: Array = []     # worker-written duplicates, mutex-guarded
 var _words_dirty := false
 var _done := false
-var _finish_info: Array = []        # [dur, wav_path] once, mutex-guarded
+var _finish_info: Array = []        # [dur] once, mutex-guarded
 var _emitted_done := false
 var _underruns := 0                 # telemetry: times the ring went dry (see worker)
+var _gain := 1.0                    # the voice's level gain, set from the main thread (atomic; [method set_gain])
+var _gn := -1.0                     # worker-side glided gain (-1: not yet started, takes the first at once)
 var _presence := 1.0                # target, set from the main thread (atomic)
 var _pg := 0.0                      # worker-side glided gain (streams fade IN)
 var _lp := 0.0                      # distance lowpass state
@@ -79,30 +79,35 @@ var _restarting := false            # restart() is async (fade-cut); latest wins
 var _restart_queue: Array = []
 
 
-func setup(text: String, spec: Voice.Spec, base: String) -> void:
+func setup(text: String, spec: Voice.Spec) -> void:
 	_spec = spec
-	take_base = base
 	events.clear()
 	_segs = Voice.plan(text, spec, events)
 	_state = Voice.synth_state(spec)
 
 
-## The session seed source: same text + same trait vector = the same show.
-func fingerprint() -> int:
-	var trait_sig := str(_spec.reading) + str(_spec.influences) + ";"
-	for key in Voice.TRAIT_KEYS:
-		trait_sig += "%s=%.3f;" % [key, float(_spec.traits.get(key, 0.0))]
-	return hash(trait_sig + JSON.stringify(_segs.size()) + str(_segs))
-
-
-## Synthesize and push the prebuffer synchronously (a few ms), so the caller can start the player in
-## this same frame (pushed sample N plays at N / SR), then hand production to the worker thread.
-func attach_playback(pb: AudioStreamGeneratorPlayback) -> void:
-	_playback = pb
+## Start speaking on a player of its own, on bus [param bus]: the prebuffer synthesized and pushed in this
+## frame (pushed sample N plays at N / SR), then production handed to the worker thread. Once, after
+## [method setup], in the tree.
+func play(bus := &"Master") -> void:
+	_player = AudioStreamPlayer.new()
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = Voice.SR
+	gen.buffer_length = Spectrum.STREAM_BUFFER
+	_player.stream = gen
+	_player.bus = bus
+	add_child(_player)
+	_player.play()
+	_playback = _player.get_stream_playback()
 	_synth_chunks(int(PREBUFFER * Voice.SR))
 	_push_available()
 	_snapshot_words()
 	_start_worker()
+
+
+## Seconds of the current content heard so far (a finished take looping counts on); 0 before [method play].
+func heard() -> float:
+	return _player.get_playback_position() if _player != null and _player.playing else 0.0
 
 
 ## Swap the voice mid-stream (timbre traits: pitch, tract, breath, grit). An atomic reference swap read
@@ -110,6 +115,12 @@ func attach_playback(pb: AudioStreamGeneratorPlayback) -> void:
 ## (pace, drawl, lilt) and text changes need restart() instead.
 func retune(spec: Voice.Spec) -> void:
 	_spec = spec
+
+
+## The gain that levels this voice with every other ([method FormantVoice.gain_of]), glided as presence is: set
+## before [method play] it is the first sample's, set after it eases in. Safe from any thread.
+func set_gain(g: float) -> void:
+	_gain = maxf(g, 0.0)
 
 
 ## Where the voice stands relative to the caster, 0 (far / silent) .. 1
@@ -166,8 +177,10 @@ func restart(text: String, spec: Voice.Spec) -> void:
 		return
 	_restarting = true
 	_stop_worker()
-	if _playback != null:
-		await Spectrum.fade_stream()
+	if _player != null and _player.playing:
+		var tw := create_tween()
+		tw.tween_property(_player, "volume_db", -60.0, 0.04)
+		await tw.finished
 	_spec = spec
 	events.clear()
 	_segs = Voice.plan(text, spec, events)
@@ -179,18 +192,19 @@ func restart(text: String, spec: Voice.Spec) -> void:
 	_emitted_done = false
 	_finish_info = []
 	_words_snapshot = []
-	words.clear()                    # same Array instance Subtitles holds
-	if _playback != null:
+	words.clear()
+	if _player != null:
 		# a generator's ring can't be cleared while active: cycle the player, which rebases playback
 		# time to 0 and yields a fresh playback
-		_playback = Spectrum.restart_stream()
-	time_base = 0.0
+		_player.stop()
+		_player.volume_db = 0.0
+		_player.play()
+		_playback = _player.get_stream_playback()
 	_pg = 0.0                        # fade the new content in from silence
 	_lp = 0.0
 	_synth_chunks(int(PREBUFFER * Voice.SR))
 	_push_available()
 	_snapshot_words()
-	restarted.emit(time_base)
 	_start_worker()
 	_restarting = false
 	if not _restart_queue.is_empty():
@@ -212,9 +226,9 @@ func _process(_delta: float) -> void:
 		_mutex.lock()
 		var info := _finish_info
 		_mutex.unlock()
-		if info.size() == 2:
+		if info.size() == 1:
 			_emitted_done = true
-			completed.emit(info[0], info[1])
+			completed.emit(info[0])
 
 
 func _exit_tree() -> void:
@@ -304,10 +318,13 @@ func _push_available() -> void:
 		buf.resize(n)
 		var target := _presence
 		var kk := 0.0
+		if _gn < 0.0:
+			_gn = _gain
 		if Voice.RAW_MODE:
 			# raw diagnostic: the take reaches the bus untouched
 			for i in n:
-				var vr := _pcm[src + i]
+				_gn += (_gain - _gn) * P_GLIDE
+				var vr := _pcm[src + i] * _gn
 				buf[i] = Vector2(vr, vr)
 			_playback.push_buffer(buf)
 			_pushed += n
@@ -315,7 +332,8 @@ func _push_available() -> void:
 			continue
 		for i in n:
 			_pg += (target - _pg) * P_GLIDE
-			var v := _pcm[src + i]
+			_gn += (_gain - _gn) * P_GLIDE
+			var v := _pcm[src + i] * _gn
 			if _pg < 0.995:
 				# distance: darker and a little quieter the further out; the filter carries the cue and
 				# the gain is linear (a squared gain buries a fresh cast at ~8% amplitude). The
@@ -354,16 +372,10 @@ func _generator_capacity() -> int:
 	return int(Spectrum.STREAM_BUFFER * Voice.SR)
 
 
-## Worker-side: the take is fully synthesized. Write the WAV + sidecar here
-## (FileAccess is fine off-thread); the main thread emits `completed`.
+## Worker-side: the take is fully synthesized and loops from here; the main thread emits `completed`.
 func _finish_take() -> void:
 	_done = true
 	var dur := float(_pcm.size()) / Voice.SR
-	DirAccess.make_dir_recursive_absolute("user://synth")
-	var wav := Voice.write_wav(take_base + ".wav", _pcm)
-	var side := FileAccess.open(take_base + ".json", FileAccess.WRITE)
-	side.store_string(JSON.stringify({"words": _state.words}))
-	side.close()
 	_mutex.lock()
-	_finish_info = [dur, wav]
+	_finish_info = [dur]
 	_mutex.unlock()

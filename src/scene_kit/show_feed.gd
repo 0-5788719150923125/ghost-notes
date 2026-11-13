@@ -72,10 +72,6 @@ var live_fade := 1.0
 
 # --- what moves as it plays -----------------------------------------------------------------------
 
-## The metamorphosis bus: while a catch is being reeled in, its influence contorts the current scene (every GhostScene
-## reads this in tick() and stretches its motion tempo, zoom-breathing and pan-sweeps by it). 0 = no contortion; big
-## catches push past 1.
-var aura := 0.0
 ## Below this smoothed audio level the track is treated as silent and scenes never change (forcing a cut with nothing
 ## playing reads as broken). Kept well under lull_threshold so a musical lull still cuts but true silence holds the scene.
 @export var silence_floor: float = 0.03

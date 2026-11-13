@@ -218,7 +218,7 @@ func begin_session() -> void:
 
 
 ## The session is over: let the book go, and open nothing. The medium outlives a session (main owns it;
-## the synthesis modes re-attach per take), so release resets the book rather than tearing the pool down
+## a reading re-attaches per take), so release resets the book rather than tearing the pool down
 ## (rebuilding twenty-four render targets per settings change is reallocation churn). It does not turn to
 ## the first spread: that would cast a panel at teardown (a scene minted through the Director, logged as a
 ## cut, its viewport left running), and main releases a medium twice as a note closes, the second time

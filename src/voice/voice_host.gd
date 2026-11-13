@@ -13,6 +13,10 @@ class_name VoiceHost
 ##
 ## Nothing here blocks the frame. The wait is polled; synthesis is a request whose reply arrives on a
 ## later frame. The caller gets signals, not return values.
+##
+## Ghost Notes' own voice ([FormantVoice]) is made here rather than in the host: a request for it runs on a worker,
+## one at a time as the host makes them, and is answered on `synthesized` as the host's are; every listing of the
+## voices carries its row.
 
 signal host_ready(backends: PackedStringArray)  # not `ready`: Node already has one
 signal failed(stage: String, message: String)
@@ -34,6 +38,8 @@ var _said := ""                      # the last progress line, so each is emitte
 var _rx := ""                        # partial line buffer
 var _stderr: FileAccess              # the host's diagnostics
 var _erx := ""
+var _here: Array = []                # requests for [FormantVoice] waiting their turn: [{id, out, params}]
+var _making := {}                    # the one being made: {id, task, box}
 
 
 func _ready() -> void:
@@ -56,6 +62,8 @@ func start() -> void:
 
 
 func stop() -> void:
+	_here.clear()
+	_finish_here()
 	# Only ask a host that is actually there: on the way out `Boot` has already reaped the registry
 	# when this runs from `_exit_tree`, and the polite shutdown would write into a dead process.
 	if _state == "up" and Subprocess.alive(_pid):
@@ -79,6 +87,10 @@ func request(text: String, voice: String, out_path: String,
 		params: Dictionary = {}, phonemes: Variant = null) -> int:
 	var id := _next_id
 	_next_id += 1
+	if voice == FormantVoice.ID:
+		_here.append({"id": id, "out": ProjectSettings.globalize_path(out_path), "params": params.duplicate(true)})
+		_make_next_here()
+		return id
 	var req := {"id": id, "op": "synthesize", "text": text, "voice": voice,
 		"out": ProjectSettings.globalize_path(out_path), "params": params}
 	if phonemes != null:
@@ -118,6 +130,7 @@ func ensure(voice: String) -> int:
 ## Take requests [param ids] out of the host's line: each one still waiting is answered `cancelled`
 ## and never made, and the one being made finishes. Neither answer is signaled.
 func cancel(ids: Array) -> void:
+	_here = _here.filter(func(r: Dictionary) -> bool: return not ids.has(int(r["id"])))
 	if ids.is_empty() or _state != "up":
 		return
 	var id := _next_id
@@ -187,7 +200,7 @@ func _fail(stage: String, msg: String) -> void:
 	print("ghost/voice: FAILED at %s - %s" % [stage, msg])
 	Provision.release(ENV, "voice host")
 	_state = "dead"
-	set_process(false)
+	set_process(not _making.is_empty())    # a sentence made here still comes back
 	failed.emit(stage, msg)
 
 
@@ -195,6 +208,7 @@ func _fail(stage: String, msg: String) -> void:
 
 
 func _process(delta: float) -> void:
+	_pump_here()
 	_poll += delta
 	if _poll < POLL_SEC and _state == "provisioning":
 		return
@@ -215,6 +229,49 @@ func _process(delta: float) -> void:
 				_drain_stderr()          # whatever it managed to say on the way out
 				_fail("host", "the voice host exited unexpectedly - see the "
 					+ "ghost/voice lines above in the console")
+
+
+# --- the voice made here ([FormantVoice]) ---------------------------------------
+
+
+## The next request for the voice made here onto a worker, when none is being made.
+func _make_next_here() -> void:
+	if not _making.is_empty() or _here.is_empty():
+		return
+	var r: Dictionary = _here.pop_front()
+	var params: Dictionary = r["params"]
+	var out := String(r["out"])
+	var box := {}
+	var task := WorkerThreadPool.add_task(func() -> void:
+		box["result"] = FormantVoice.say(params.get("tokens", []) as Array, params.get("formant", {}) as Dictionary,
+			params, out))
+	_making = {"id": int(r["id"]), "task": task, "box": box}
+	set_process(true)
+
+
+## A request made here that has finished, answered as the host answers one; then the next.
+func _pump_here() -> void:
+	if _making.is_empty() or not WorkerThreadPool.is_task_completed(int(_making["task"])):
+		return
+	var id := int(_making["id"])
+	var result: Dictionary = _finish_here()
+	_make_next_here()
+	if not bool(result.get("ok", false)):
+		var err := String(result.get("error", "the formant voice made nothing"))
+		print("ghost/voice: request %d failed: %s" % [id, err])
+		failed.emit("synthesize", err)
+		return
+	synthesized.emit(id, result)
+
+
+## The worker of the request being made, waited for: its result, {} when none was being made.
+func _finish_here() -> Dictionary:
+	if _making.is_empty():
+		return {}
+	WorkerThreadPool.wait_for_task_completion(int(_making["task"]))
+	var result: Dictionary = (_making["box"] as Dictionary).get("result", {})
+	_making = {}
+	return result
 
 
 ## Read whatever the host has written and dispatch complete lines. Partial lines
@@ -276,6 +333,8 @@ func _handle(line: String) -> void:
 	_pending.erase(id)
 	if bool(msg.get("cancelled", false)) or String(meta.get("op", "")) == "cancel":
 		return
+	if msg.get("voices") is Array:
+		msg["voices"] = (msg["voices"] as Array) + [FormantVoice.ROW.duplicate()]
 	if not bool(msg.get("ok", false)):
 		var err := String(msg.get("error", "unknown error"))
 		print("ghost/voice: request %d failed: %s" % [id, err])

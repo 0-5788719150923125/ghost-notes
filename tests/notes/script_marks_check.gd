@@ -54,16 +54,15 @@ func _registry_shape() -> void:
 		_ok(ScriptMarks.GROUPS.has(e.get("group", "")), "%s names an unknown group" % k)
 		_ok(String(e.get("line", "")) in ["", "own", "start"], "%s has an unknown line rule" % k)
 		for m in e.get("modes", []):
-			_ok(m in ["generative", "synthesis", "table"], "%s names an unknown mode %s" % [k, m])
+			_ok(m in ["generative", "table"], "%s names an unknown mode %s" % [k, m])
 		for m in e.get("blurbs", {}):
 			_ok((e["modes"] as Array).has(m) and not String(e["blurbs"][m]).is_empty(),
 				"%s words itself for %s, a panel it is not offered in" % [k, m])
 		_ok(String(e.get("within", "")) in ["", "deck"], "%s names an unknown `within`" % k)
 		var re := RegEx.new()
 		_ok(re.compile(String(e.get("pattern", ""))) == OK, "%s's pattern does not compile" % k)
-	# Both panels have something to offer.
-	_ok(ScriptMarks.for_mode("generative").size() > ScriptMarks.for_mode("synthesis").size()
-			and ScriptMarks.for_mode("synthesis").size() > 0,
+	# A reading has something to offer; a note's own panel (its mode "note") offers nothing.
+	_ok(ScriptMarks.for_mode("generative").size() > 0 and ScriptMarks.for_mode(Components.script_mode("note")).is_empty(),
 		"the per-mode palettes are not what they should be")
 	# ...and so has a brief: its own marks, and none that need a page or a tablet
 	var cards := ScriptMarks.for_mode("table")
@@ -437,14 +436,14 @@ func _highlighter() -> void:
 	var at := te.text.find("<!--")
 	_ok(l.has(at) and (l[at]["color"] as Color).is_equal_approx(note),
 		"an inline speaker cue is colored as a working cue: %s" % l)
-	# The synthesis panel honors no cues: the same line there is a note.
+	# A note's own panel (its mode "note") offers no marks: the same cue there is words, never a voice's cue.
 	var te2 := TextEdit.new()
-	var hl2 := ScriptHighlighter.new("synthesis")
+	var hl2 := ScriptHighlighter.new(Components.script_mode("note"))
 	te2.syntax_highlighter = hl2
 	te2.text = "<!-- speaker: Emily -->"
 	var s0 := hl2.get_line_syntax_highlighting(0)
-	_ok(s0.has(0) and (s0[0]["color"] as Color).is_equal_approx(note),
-		"the synthesis highlighter colors a cue it does not honor")
+	var c0: Color = (s0[0]["color"] as Color) if s0.has(0) else plain
+	_ok(c0.is_equal_approx(plain), "a note's own highlighter colors a cue it does not honor: %s" % s0)
 	te.free()
 	te2.free()
 

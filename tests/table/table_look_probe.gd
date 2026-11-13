@@ -13,7 +13,7 @@ extends Node
 ## `--root user://somewhere` reads the episode from another root than the author's (a copy restaged to look at).
 ## `--looks 1` prints when each held card looks at its back, and which looks are pirouettes - to aim a `--clip` at one.
 ## `--size 2880x1600` renders at that resolution. To try a shadow without rebuilding the table: `--candle light_size=0,shadow_blur=1.5`
-## sets those properties on every candle's light, `--atlas 8192` the stage's shadow atlas, `--quality 4` the soft shadow filter's
+## sets those properties on every candle's light (`--sun shadow_normal_bias=1.0` on every sun's), `--atlas 8192` the stage's shadow atlas, `--quality 4` the soft shadow filter's
 ## quality (RenderingServer.ShadowQuality). Each photograph's line says what the stage's last frame took on the GPU; `--timing N`
 ## plays N frames on past the last one and prints their median.
 ## `--graphics export` draws at the Export column's defaults ([Graphics]; `live` the viewer's), and `--graphics supersample=2,anisotropy=4`
@@ -51,6 +51,7 @@ var _name := "Truthful Tarot"
 var _byline := ""
 var _ink := ""          # --ink #rrggbb: the name's color, as a set dresser's choice
 var _candle := {}       # --candle k=v,...: properties set on every candle's light
+var _sun := {}          # --sun k=v,...: properties set on every sun's light
 var _atlas := 0         # --atlas N: the stage's positional shadow atlas
 var _quality := -1      # --quality Q: the positional soft shadow filter's quality
 var _timing := 0        # --timing N: N frames played on past the last photograph, their median GPU time
@@ -100,6 +101,10 @@ func _run() -> void:
 				for kv in String(args[i + 1]).split(","):
 					var pair := kv.split("=")
 					_candle[pair[0]] = float(pair[1])
+			"--sun":
+				for kv in String(args[i + 1]).split(","):
+					var pair := kv.split("=")
+					_sun[pair[0]] = float(pair[1])
 			"--atlas": _atlas = int(args[i + 1])
 			"--quality": _quality = int(args[i + 1])
 			"--timing": _timing = int(args[i + 1])
@@ -236,6 +241,9 @@ func _run() -> void:
 				elif int(k) == -1:
 					(medium as TableMedium)._lamp.light_energy = 0.0
 			var rig = (medium as TableMedium)._light_part._rig
+			for sn in (rig.suns if rig != null else []):
+				for key in _sun:
+					(sn as Light3D).set(key, _sun[key])
 			for k in _dark_lamps:
 				if rig != null and int(k) >= 0 and int(k) < (rig.lamps as Array).size():
 					(((rig.lamps as Array)[int(k)] as Dictionary)["light"] as Light3D).light_energy = 0.0

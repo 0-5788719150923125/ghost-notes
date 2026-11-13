@@ -13,7 +13,8 @@ extends SceneTree
 ## - `submit` refuses an empty table, writes the draft exactly as written, and - where a table can be stood - sends the set dresser
 ##   to look first, once; and to choose the name's color, once.
 ## - `title` keeps the name's color (a color only) in the draft, says so with no renderer and takes no picture; the toolset knows
-##   the show's name and byline, and both prompts tell the set dresser of the opening and the color it chooses.
+##   the show's name and byline (its macros filled from the episode's plan; control: one naming none as written), and both prompts
+##   tell the set dresser of the opening and the color it chooses.
 ## - The producer gives a writer that takes tools the toolset (a URL, a long timeout, the working prompt) and one that does not the
 ##   one-reply prompt; it lands a handed-in table whatever the run's last words, says so when a run with tools handed nothing in,
 ##   and closes the tools when it stops.
@@ -327,6 +328,10 @@ func _producer() -> bool:
 		"the toolset does not know the show's name and byline for the opening")
 	_ok(prompt.contains("\"Test Tarot\", set large across the middle of the frame, and under it \"with Pen & Ink\""),
 		"the set dresser is not told the name and byline over its table")
+	var named := Spy.new(ep, {"title": "Test Tarot", "byline": "with Pen & Ink - %episode%", "names": {"title": "Test Tarot"}})
+	_ok(named._byline() == "with Pen & Ink - A Table Set On Purpose", "a byline naming the episode is not filled from its plan: %s" % named._byline())
+	named.spec["byline"] = "with Pen & Ink"
+	_ok(named._byline() == "with Pen & Ink", "control: a byline naming none is not told as written: %s" % named._byline())
 	var url := String(extra.get("tools_url", ""))
 	_ok(url.begins_with("http://127.0.0.1:") and not extra.has("timeout"),
 		"a writer that takes tools was not given them: %s" % extra)

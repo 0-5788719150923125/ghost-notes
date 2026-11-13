@@ -19,10 +19,7 @@ var _note := ""                      # the note open now, "" on the list
 var _feedback: Node = null
 var _chrome: Node = null             # shared session furniture (exporter/assistant/feedback)
 var _mask_editor: Node = null
-var _synth_editor: Node = null
-var _synth_active := false           # a synth take is playing as the session
-var _generative: Node = null         # the generative editor, when that mode is up
-var _stream: Node = null             # the live VoiceStream feeding the session
+var _generative: Node = null         # the reading's panel, when a reading or a table show is up
 var _subtitles: Node = null          # karaoke overlay, present when the audio has a sidecar
 var _status_t := 0.0     # throttle for writing render progress (export mode)
 
@@ -180,10 +177,6 @@ func _ready() -> void:
 				_arg_value(args, "--audio"))
 			get_tree().quit(1)
 			return
-		#With this flag the Synthesis panel opens over the take and plays itself (see synth_editor.gd's
-			#autopilot), so the UI is in the video. It generates no audio and persists nothing.
-		if args.has("--synth-autopilot"):
-			_open_synth_autopilot()
 		return
 	#The live window stretches in "canvas_items" mode (project.godot): 2D rasterizes at the window's
 	#native resolution while the coordinate system scales proportionally. (Export overrides this; see
@@ -210,9 +203,6 @@ func _ready() -> void:
 	_seed_demo_note()
 	if args.has("--mask-edit"):
 		start_workspace("clip", _arg_value(args, "--mask-edit"))
-		return
-	if args.has("--synth"):
-		start_workspace("lab")
 		return
 	# --table: straight into the Table workspace (its document is the one it last had open)
 	if args.has("--table"):
@@ -303,7 +293,7 @@ func _seed_demo_note() -> void:
 ## Open a note: every note opens the same way. What it has attached is read off its blocks
 ## ([method Components.attached_of]), and the workspace those components name runs it
 ## ([method Components.workspace_of]) - its own panel, unless something attached is an editor of
-## its own (a voice's reading, a show of cards, the voice lab, a clip). A workspace that reads the
+## its own (a voice's reading, a show of cards, a clip). A workspace that reads the
 ## note's text is pointed at the note before it is built; a clip is the note's own block's path.
 ##
 ## Every note starts from nothing: the last note's stage went with it ([method _clear_stage]), the
@@ -320,7 +310,7 @@ func open_note(path: String) -> void:
 	Director.reset_show()
 	Films.set_frequency(Films.FREQ_DEFAULT)
 	match ws:
-		"reading", "table", "lab":
+		"reading", "table":
 			var section := String((Components.WORKSPACES[ws] as Dictionary)["section"])
 			Settings.write(section, "doc_path", path)
 			Settings.write(section, "sync", true)
@@ -405,7 +395,7 @@ func delete_note(path: String, answer: String) -> void:
 
 
 ## Start a workspace - a key of [constant Components.WORKSPACES] - through one path: every note
-## opened, and the command line's `--synth`, `--table` and `--mask-edit`. [param source] is the clip
+## opened, and the command line's `--table` and `--mask-edit`. [param source] is the clip
 ## (the `clip` workspace); [param note] the note it runs, "" from the command line. Builds the note's
 ## own panel, a panel that reads the text, or Masking's editor (which never touches the Director or
 ## Spectrum).
@@ -418,8 +408,6 @@ func start_workspace(key: String, source := "", note := "") -> void:
 			_open_note_panel(note)
 		"reading", "table":
 			_open_reading(key)
-		"lab":
-			_open_synth_editor()
 		"clip":
 			_open_mask_editor(source, note)
 		_:
@@ -502,11 +490,6 @@ func _begin_session(audio_path := "") -> void:
 # Director's walk, the storyboard's tail and the dial's modulations carry across). Whether the sequence
 # replays is the board's own `loop` field. Auto stops at the end and stays in its note.
 func _on_song_finished() -> void:
-	#A synth take is endless like a manual session: loop the narration in place.
-	if _synth_active:
-		Spectrum.replay()
-		print("ghost: take looped (synthesis session continues)")
-		return
 	#A reading's kept take ends as a reading does: over, the stage left as it is, Play from the top
 	if _generative != null and is_instance_valid(_generative) and _generative.has_method("take_playing") \
 			and _generative.take_playing():
@@ -535,7 +518,7 @@ func leave_blocker() -> String:
 	if _chrome != null and is_instance_valid(_chrome) and _chrome.exporter != null \
 			and _chrome.exporter.preparing():
 		return "An export is rendering this mode's take - leave once the render has started."
-	for n in [_mask_editor, _synth_editor, _note_panel]:
+	for n in [_mask_editor, _generative, _note_panel]:
 		if n != null and is_instance_valid(n) and n.has_method("leave_blocker"):
 			var w := String(n.leave_blocker())
 			if not w.is_empty():
@@ -566,22 +549,17 @@ func _end_session(home := true) -> void:
 		if not fb.closed.is_connected(_end_session):
 			fb.closed.connect(_end_session.bind(home), CONNECT_ONE_SHOT)
 		return
-	for n in [_list, _subtitles, _synth_editor, _mask_editor, _stream, _note_panel]:
+	for n in [_list, _subtitles, _generative, _mask_editor, _note_panel]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
 	_chrome.detach_feedback()
 	_feedback = null
 	_subtitles = null
-	_synth_editor = null
 	_generative = null
 	_mask_editor = null
-	_stream = null
 	_note_panel = null
 	_list = null
-	_synth_active = false
 	_release_exporter()
-	Director.set_game_paced(false)
-	Director.set_aura(0.0)
 	Director.detach()
 	Spectrum.stop()
 	_clear_stage()
@@ -618,7 +596,6 @@ func _release_exporter() -> void:
 	ex.name_provider = Callable()
 	ex.upload_provider = Callable()
 	ex.show_provider = Callable()
-	ex.automation_available = false
 
 
 ## The stage the Director attaches scenes to (created on first session): a SubViewport with its own 3D
@@ -904,30 +881,8 @@ func _arg_value(args: PackedStringArray, flag: String) -> String:
 	return ""
 
 
-## --synth: the voice-synthesis editor. Each reading renders a WAV take and plays it as a fresh
-## session; the take loops when it ends, like a manual session.
-func _open_synth_editor() -> void:
-	var editor := preload("res://src/reading/synth_editor.gd").new()
-	editor.note_path = _note
-	editor.note_moved = note_moved
-	editor.reopen = reopen_note
-	editor.begin_stream = _begin_synth_stream
-	editor.end_stream = _end_synth_stream
-	_synth_editor = editor
-	add_child(editor)
-	if _chrome.exporter != null:
-		_chrome.exporter.take_provider = editor.export_take
-		_chrome.exporter.take_ready = editor.can_export_take
-		_chrome.exporter.name_provider = Callable()
-		_chrome.exporter.upload_provider = editor.upload_meta
-		_chrome.exporter.automation_available = true
-	_feedback = _chrome.attach_feedback()
-	_entered_mode()
-
-
-## The generative path: a small local neural voice run by the voice host subprocess. A separate editor
-## from synth_editor, not a backend swap: the fishing game's economy is defined over the procedural
-## engine's 25-dimensional genome, while a neural backend exposes a speaker id and three scalars.
+## The reading: a note read in its voices (a neural one the voice host makes, or Ghost Notes' own formant
+## voice), run by [ReadingPanel].
 ##
 ## [param workspace] is which one the panel runs: a note read aloud, or a show of cards, whose reading
 ## is written by agents (its episode is a card on the same panel) - the same stream, export and
@@ -941,7 +896,6 @@ func _open_reading(workspace := "reading") -> void:
 	editor.begin_stream = _begin_generative_stream
 	editor.end_stream = _end_generative_stream
 	editor.begin_take = _begin_generative_take
-	_synth_editor = editor
 	_generative = editor
 	add_child(editor)
 	if _chrome.exporter != null:
@@ -951,8 +905,6 @@ func _open_reading(workspace := "reading") -> void:
 		_chrome.exporter.name_provider = editor.export_name
 		_chrome.exporter.upload_provider = editor.upload_meta
 		_chrome.exporter.show_provider = editor.show_plan
-		_chrome.exporter.automation_available = false
-		# no fishing game on this path, so nothing to record
 	_feedback = _chrome.attach_feedback()
 	_entered_mode()
 
@@ -1022,86 +974,8 @@ func _begin_generative_take(path: String) -> bool:
 	return true
 
 
-## Export autopilot: the Synthesis panel, playing itself over the take being rendered. Not wired to
-## begin_stream/end_stream - the editor must not synthesize live audio (the export's --audio take is
-## the audio); it only drives the panel, HUD and Director scene jumps. The editor self-activates its
-## autopilot from the --synth-autopilot flag in its own _ready.
-func _open_synth_autopilot() -> void:
-	var editor := preload("res://src/reading/synth_editor.gd").new()
-	_synth_editor = editor
-	add_child(editor)
-
-
-## Start (or restart) the session on a live VoiceStream: audio begins the same frame Play is clicked
-## (the stream synthesizes ahead of the playhead and the analyzer bus hears it like a song). Streamed
-## takes loop inside the stream itself (song_finished never fires for a generator).
-func _begin_synth_stream(stream: Node) -> void:
-	if _synth_active:
-		Director.detach()
-		Spectrum.stop()
-	if _stream != null and is_instance_valid(_stream):
-		_stream.queue_free()
-	_stream = stream
-	add_child(stream)
-	var pb: AudioStreamGeneratorPlayback = Spectrum.begin_stream(stream.fingerprint(), Voice.SR)
-	stream.attach_playback(pb)
-	Director.attach(_stage_host(), _medium)
-	#synthesis is game paced: the fishing owns the cuts - a scene changes when a catch jumps it
-	Director.set_game_paced(true)
-	_attach_live_subtitles(stream)
-	stream.completed.connect(_on_stream_completed)
-	stream.restarted.connect(_on_stream_restarted)
-	_synth_active = true
-
-
-## Release the line: tear the synthesis session back down to the state the editor boots in (no voice,
-## no show, no Director) while the editor stays open. The mirror of _begin_synth_stream.
-func _end_synth_stream() -> void:
-	if not _synth_active:
-		return
-	if _stream != null and is_instance_valid(_stream):
-		_stream.queue_free()
-	_stream = null
-	if _subtitles != null and is_instance_valid(_subtitles):
-		_subtitles.queue_free()
-	_subtitles = null
-	Director.set_game_paced(false)
-	Director.set_aura(0.0)
-	Director.detach()
-	Spectrum.stop()
-	_hide_stage()
-	_synth_active = false
-
-
-## Subtitles for a live stream: share the stream's growing word array directly (the sidecar file
-## doesn't exist yet; the take is still being synthesized).
-func _attach_live_subtitles(stream: Node) -> void:
-	if _subtitles != null and is_instance_valid(_subtitles):
-		_subtitles.queue_free()
-	var subs := preload("res://src/show/subtitles.gd").new()
-	subs.words = stream.words
-	_subtitles = subs
-	add_child(subs)
-	_bind_captions(subs)
-
-
-func _on_stream_completed(dur: float, wav_path: String) -> void:
-	Spectrum.set_stream_info(wav_path, dur)
-	if _subtitles != null and is_instance_valid(_subtitles):
-		_subtitles.loop_length = dur
-	print("ghost: take complete (%.1fs) -> %s" % [dur, wav_path])
-
-
-## The stream replaced its content in place (an implicit re-speak): rebase the karaoke clock and forget
-## the previous take's loop length until the new take finishes.
-func _on_stream_restarted(base: float) -> void:
-	if _subtitles != null and is_instance_valid(_subtitles):
-		_subtitles.time_base = base
-		_subtitles.loop_length = 0.0
-
-
 ## Karaoke subtitles are session content, not editor chrome: whenever the session's audio has a sidecar
-## timing map (a synth take), attach the overlay - live sessions, reopened takes and export renders.
+## timing map (a voice's take), attach the overlay - live sessions, reopened takes and export renders.
 ## Music without a sidecar gets nothing.
 func _attach_subtitles() -> void:
 	if _subtitles != null and is_instance_valid(_subtitles):

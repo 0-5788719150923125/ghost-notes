@@ -45,7 +45,7 @@ const SLOTS := {
 	"clock": {"label": "clock",
 		"blurb": "What the show is timed by, and how long it is: a song, a voice reading the text, or a clip."},
 	"presentation": {"label": "presentation",
-		"blurb": "What the show is seen in: the Medium and the format it names, a card table, an actor's room, a voice lab's own show, or a clip's own frame."},
+		"blurb": "What the show is seen in: the Medium and the format it names, a card table, an actor's room, or a clip's own frame."},
 }
 
 ## The workspaces: the panels that run a note. Most components are a card on whichever panel is up; a few are an
@@ -69,8 +69,6 @@ const WORKSPACES := {
 		# (the Pictures card comes with a show at a table, so it is left out here)
 		"hosts": ["table", "direction", "voice", "voice_training", "medium", "illustrations", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
-	"lab": {"label": "Voice lab", "section": "synth", "mode": "synthesis",
-		"blurb": "Ghost Notes' own synthesizer and the fishing game that breeds its voices."},
 	"clip": {"label": "Masking", "section": "",
 		"blurb": "A clip's editor: its markers, tracks, effects and timeline."},
 }
@@ -89,7 +87,7 @@ const REGISTRY := {
 		"needs": ["audio"], "provides": ["picture", "moments"], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "", "card": ""},
 	"voice": {"label": "Voice", "family": &"voice",
-		"blurb": "A local neural voice reads the note: a cast of speakers, each with their own delivery and room.",
+		"blurb": "A voice reads the note: a cast of speakers, each with their own delivery and room, in a local neural voice or Ghost Notes' own formant synthesizer (its voices bred in the Lab's fishing game).",
 		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": [], "slots": ["clock"], "workspace": "reading",
 		"capabilities": ["stage", "subprocess", "python:voice"], "marks": ["voices", "timing", "pronunciation"],
 		"block": "voice", "card": "voice", "script": "res://src/reading/voice_card.gd"},
@@ -101,11 +99,6 @@ const REGISTRY := {
 		"capabilities": ["subprocess", "ffmpeg", "python:voice", "python:speech", "python:download", "python:voice_train"],
 		"marks": [], "block": "voice_training", "card": "voice_training",
 		"script": "res://src/likeness/voice_training_card.gd"},
-	"voice_lab": {"label": "Voice lab", "family": &"voice",
-		"blurb": "Ghost Notes' own synthesizer reads the note, and a fishing game breeds its voices.",
-		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": ["scenes"],
-		"slots": ["clock", "presentation"], "workspace": "lab",
-		"capabilities": ["stage"], "marks": ["voices", "timing"], "block": "synthesis", "card": "water"},
 	# What the note is shown in, one card: a format picked on it - the seeded show, full frame, a comic, a novel, a
 	# notebook, a tablet, a letter, a dispatch desk ([constant Medium.REGISTRY]) - with the rows the format uses
 	# ([MediumCard]).
@@ -226,8 +219,6 @@ static func attach_blocks(key: String) -> Dictionary:
 	match key:
 		"voice":
 			return {"voice": {}}
-		"voice_lab":
-			return {"synthesis": {}}
 		"table":
 			return {"table": {}}
 		"direction":

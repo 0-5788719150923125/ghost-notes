@@ -14,9 +14,8 @@ class_name Subtitles
 ## whose harmonics raise waves that run back through the words already said, in live playback and baked
 ## exports alike.
 ##
-## Timing comes from a sidecar JSON written next to a voice take by [SynthEditor] (`take_N.wav` +
-## `take_N.json`), so the same overlay works in the live synthesis session, a plain `--audio` boot and the
-## export render, where no editor exists.
+## Timing comes from a sidecar JSON written next to a voice take by the reading ([ReadingPanel]), so the
+## same overlay works in a live reading, a plain `--audio` boot and the export render, where no panel exists.
 
 ## The line only exists while there is something to read. [constant LEAD] is how long before its first word
 ## a line may appear, and [constant HANG] how long after its last it stays. Both are longer than an
@@ -208,7 +207,7 @@ var _order_of: Array = []           # ...in this words array
 var _order_n := 0                   # ...read this far
 
 ## Voice [param who]'s place among this reading's voices, by when each first speaks (see [constant
-## Scheme.VOICE_BANDS]). A word that names no voice (a synthesis take, an older sidecar) is the first
+## Scheme.VOICE_BANDS]). A word that names no voice (an older sidecar) is the first
 ## voice's. Read on as [member words] grows; a new reading starts it over.
 func voice_order(who: String) -> int:
 	if who.is_empty():

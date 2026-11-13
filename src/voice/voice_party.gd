@@ -1,7 +1,7 @@
 extends RefCounted
 class_name VoiceParty
 
-## VoiceParty - the Synthesis lab's party math: the belt of kept seeds and the candidate on the line, as
+## VoiceParty - the fishing game's party math ([VoiceFishing]): the belt (the Collection) of kept seeds and the candidate on the line, as
 ## numbers. A seed as a vector in the shared trait and genome space, how much the belt accepts each
 ## member, the party's acceptance-weighted center and blend, how well a candidate fits the party and how
 ## hard it is to catch, the interference field the belt makes and where the candidate stands in it, the
@@ -9,10 +9,10 @@ class_name VoiceParty
 ## sustain bank that composition sings with.
 ##
 ## Pure: functions of what they are handed. A belt is an Array of entries (`{lineage, traits, genome,
-## loc, scene, m}`, the editor's save). A candidate is `{traits, lineage, genome}`, the voice on the
+## loc, m}`, the game's save). A candidate is `{traits, lineage, genome}`, the voice on the
 ## line; an empty genome is its lineage's own. Drift is the freedom the line's distance buys
-## ([method SynthEditor._drift_free]). A field is what [method field_at] returns. Called by
-## [SynthEditor]; tests/voice/ensemble_check.gd and voice_party_check.gd hold it.
+## ([method VoiceFishing._drift_free]). A field is what [method field_at] returns. Called by
+## [VoiceFishing]; tests/voice/ensemble_check.gd and voice_party_check.gd hold it.
 
 # The trust region: a fresh draw is normalized relative to the pool being harmonized with (the party's
 # center; the curated default when the belt is empty). A candidate beyond the radius is pulled back

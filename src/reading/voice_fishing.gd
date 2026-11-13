@@ -1,41 +1,46 @@
-extends CanvasLayer
-class_name SynthEditor
+extends VBoxContainer
+class_name VoiceFishing
 
-## SynthEditor - the synthesis surface. The loop is a fishing trip:
+## VoiceFishing - the fishing game that breeds Ghost Notes' own voices ([FormantVoice]): the Lab's pane on a tab that
+## reads in it ([ReaderBrowser]). The loop is a fishing trip:
 ##
-##   throw into the unknown -> something anchors and pulls -> pull to set the hook -> the reel: the adrenochrome
-##   anneals toward and against your party, then freezes -> accept or release.
+##   cast from a seed in the Collection -> something anchors and pulls -> pull to set the hook -> the reel: the voice
+##   anneals toward and against the Collection, then freezes -> hold it or fold it.
 ##
-## A throw speaks a new candidate immediately. Its planned strikes (echo, stretch, pitch, hesitation - the sparse
-## activations) are the bites: when one plays, a detection window opens and decays (an EMA over the moment), so a
-## catch soon after the hit has strong odds. A strike stays in the genome: land the seed at any moment and every
-## effect it carries is kept.
+## Every voice cast or held is the tab's at once ([method ReadingCast.pick_formant]): the reading reads in the voice
+## last heard on the line. Folding a catch, or letting the line go, leaves the tab as it was.
 ##
-## A successful catch presents a card: the seed drawn as a constellation (lines seeded random, color attuned to
-## the cosine similarity between the candidate and the party's center). Accept folds it into the belt, and every
-## member's color re-attunes to the new party. Release changes nothing. Throwing again folds a pending card.
+## The line is heard on a player of its own ([VoiceStream]) reading the Test passage, in the tab's Tone, Pace and Pause
+## ([method FormantVoice.tuned]), one sound at a time: casting stops a reading and a Test. Its planned strikes (echo,
+## stretch, pitch, hesitation - the sparse activations) are the bites: a strike latches an anchor that pulls for a long
+## while, and each fresh strike while it holds is a nibble that steadies the odds of a pull. A strike stays in the
+## genome: a seed landed at any moment keeps every effect it carries.
 ##
-## Reward profiles (Drift / Snap / Hunt) shape how throws range and how catches earn. Acceptance (hold time +
-## rewards vs the belt average) weights parent selection; ancestors earn from their line. Everything autosaves.
+## A catch is presented as a constellation (lines seeded random, color attuned to how the catch fits the Collection).
+## Hold folds it into the Collection, and every seed re-attunes. Fold changes nothing. Casting again folds a pending
+## catch.
+##
+## The modes (Drift / Anchor / Reel) shape how throws range and how catches earn. Acceptance (hold time and rewards
+## against the Collection's average) weights which seed a throw descends from; ancestors earn from their line. The
+## Collection, the mode and the reserve are the player's, kept in [Settings] (`synth`), never one note's.
 
-const AUTOSAVE_DELAY_MS := 800
 const BELT_MAX := 23                # the Collection ceiling; oldest falls off past this
 
 # Easy fishing: bites are latent - a strike latches an anchor that pulls for a long while (slow decay),
 # occasionally letting go on its own. No reflexes.
 const ANCHOR_TAU := 45.0            # seconds: how slowly an anchored pull fades
-const ANCHOR_CHECK := 5.0         # seconds between vanish checks
+const ANCHOR_CHECK := 5.0           # seconds between vanish checks
 # Nibbles: each distinct fresh strike that lands while the anchor still holds counts as one; sitting through
 # several steadies the pull odds.
 const NIBBLE_MAX := 5
 const NIBBLE_BONUS := 0.05          # added to pull odds per accumulated nibble
-# The reel: once the hook sets, the adrenochrome accumulates - a genome annealing toward the party's attractors
+# The reel: once the hook sets, the adrenochrome accumulates - a genome annealing toward the Collection's attractors
 # and against its repulsors, freezing at the end.
 const HOOK_STEPS := 140             # anneal steps across the reel
 
 # The toll: a catch is dragged home against its will, and the cost comes back through the voice. It grows with how
 # foreign the catch is (kin cost nothing) and how far it has been reeled in, and works four ways at once:
-#   1. every repulsion the party exerts is amplified;
+#   1. every repulsion the Collection exerts is amplified;
 #   2. the population prior loses its grip on a creature this foreign;
 #   3. the annealing schedule inverts: cooling becomes heating;
 #   4. the roughness axes fray directly, so the damage is audible.
@@ -45,38 +50,18 @@ const TOLL_PRIOR_LOSS := 0.75       # how much of the prior's grip the toll diss
 const TOLL_HEAT := 3.0              # noise multiplier at full toll (vs cooling at none)
 const TOLL_GENOME_SPAN := 2.0       # extra genome clamp width at full toll
 # Both deformation terms are quadratic in the toll, so the cost climbs steeply only for a genuinely foreign catch,
-# and they are strong: a linear nudge lost to the party's own forces by ~10:1.
+# and they are strong: a linear nudge lost to the Collection's own forces by ~10:1.
 const TOLL_FRAY := 0.14             # saturating drive toward damage (roughness axes)
 const TOLL_EXTREME := 0.01          # drive away from the ordinary (every other axis)
 # The axes that make a voice sound damaged rather than different: glottal roughness, breath noise, the static
 # band. All live-retunable, so the fraying is heard while the reel runs.
 const FRAY_KEYS := ["grit", "air", "breath"]
 # A voice may become hideous, but it must remain a voice: unbounded pace genes would stretch a take to many times
-# its length, and every playback, render and export of that seed would pay it.
+# its length, and every reading of that seed would pay it.
 const PACE_MIN := 0.55
 const PACE_MAX := 2.2
-# The party's own math (the trust region, the field's lift, the ensemble's reach) and its constants are [VoiceParty]'s.
-
-
-## The note this panel is (set by main before it is added), "" when started without one.
-var note_path := ""
-## Set by main: (from: String, to: String) -> String - the note was saved into another file (its Script card's
-## Save...), which is the note from here on; returns what became of the file it left.
-var note_moved: Callable
-## Set by main: (path: String) -> void - open the note again, as what a component attached to it or taken off it
-## made it.
-var reopen: Callable
-## The components the note has ([method Components.attached_of]); [] without a note.
-var _attached: Array = []
-## The note's own cards this workspace shows ([constant HOSTED]), by block.
-var _block_cards := {}
-## Of a note's component cards, the ones the lab can show: its show is the scenes, full frame, so no Medium and no
-## Storyboard - a Look over them, and the holds at either end.
-const HOSTED := ["look", "bookends"]
-
-# Who contributed to the current candidate and how much - what VoiceParty.ensemble_traits handed back for the
-# throw that made it, so the sustain bank is built from the same combination rather than re-rolled.
-var _ensemble_last: Array = []
+# The Collection's own math (the trust region, the field's lift, the ensemble's reach) and its constants are
+# [VoiceParty]'s.
 
 # The three modes of fishing - what the line is doing (each earns differently):
 # DRIFT - the cast is left behind while you keep moving, so the line's scale grows with time (meters become
@@ -84,91 +69,85 @@ var _ensemble_last: Array = []
 #   foreign. Time sitting with it earns.
 # ANCHOR - freeze in place and search this area: throws stay tight around the current candidate, the pull rarely
 #   leaves on its own. Quick, decisive catches earn.
-# REEL - retrieval: pulling toward you. A seasoned belt (accumulated hold statistics) reels faster, because it can
-#   preview the catch's influence more accurately. Foreignness earns.
+# REEL - retrieval: pulling toward you. A seasoned Collection (accumulated hold statistics) reels faster, because it
+#   can preview the catch's influence more accurately. Foreignness earns.
 const PROFILES := {
 	"drift": {"label": "Drift", "wild": 0.15, "jitter": 0.8, "vanish": 0.03,
 		"tip": "The crab cage: leave the cast behind. The line's scale grows - miles, lightyears - the cosmos opens, and time earns."},
 	"anchor": {"label": "Anchor", "wild": 0.05, "jitter": 0.6, "vanish": 0.008,
 		"tip": "Freeze in place and search this area. Throws stay close, the pull holds. Quick decisive catches earn."},
 	"reel": {"label": "Reel", "wild": 0.45, "jitter": 1.5, "vanish": 0.03,
-		"tip": "Retrieval. A seasoned belt reels faster - accumulated statistics preview the catch's influence. Foreignness earns."},
+		"tip": "Retrieval. A seasoned Collection reels faster - accumulated statistics preview the catch's influence. Foreignness earns."},
 }
 
 # The drift is a journey, not a clock: the line has a velocity that accelerates from a crawl to a raw maximum the
-# longer the cast is out, and an odometer (_drift_dist, 0..1) accumulates it. The streaks, the cast dot and the
-# distance caption all read the odometer.
+# longer the cast is out, and an odometer (_drift_dist) accumulates it. The streaks, the cast dot and the distance
+# caption all read the odometer.
 #
 # Raw velocity alone cannot reach the far field (au, lightyears) in a sitting, which is what the warp is for: hold
-# DRIFT for WARP_CHARGE seconds and the drive charges; once charged, with enough adrenochrome banked, the wire
-# jumps faster than raw velocity allows, spending the reserve as it burns. The charge is time spent drifting,
-# nothing else, so it is the same short ritual from any state: enter drift, hold 6 s, jump.
+# DRIFT for WARP_CHARGE seconds and the drive charges; once charged, with enough reserve banked, the wire jumps
+# faster than raw velocity allows, spending the reserve as it burns. The charge is time spent drifting, nothing
+# else, so it is the same short ritual from any state: enter drift, hold 6 s, jump.
 const DRIFT_V0 := 1.0 / 600.0       # odometer/sec at the start of a drift (a crawl)
 const DRIFT_VMAX := 1.0 / 180.0     # raw maximum odometer/sec - deliberately slow: the deep field is not free
 const DRIFT_ACCEL := (1.0 / 180.0 - 1.0 / 600.0) / 8.0    # ramp crawl -> raw max over ~8s of unbroken drift
 const WARP_CHARGE := 6.0            # seconds of unbroken DRIFT before the drive charges
 const WARP_VEL := 1.0 / 16.0        # warp odometer/sec - the streaks that "move faster than velocity allows"
-const REEL_DECAY := 0.45            # bare-line retrieval (no hook) = EXPONENTIAL decay of the odometer (scaled by VoiceParty.reel_power) - unwinds from ANY distance in log-time, since the odometer is now unbounded
+const REEL_DECAY := 0.45            # bare-line retrieval (no hook) = EXPONENTIAL decay of the odometer (scaled by VoiceParty.reel_power) - unwinds from ANY distance in log-time, since the odometer is unbounded
 # The fight is fought on the line: reeling hauls the odometer itself home in log-time (each equal slice of the arc
 # closes an equal factor of the distance - warp-fast from lightyears out, honest up close), and a strong run
 # reverses the haul: real line pays back out and the distance caption climbs. Progress is how much of the
-# (log-space) way home has been walked, so the arc, the HUD caption, presence and the beacon read one odometer.
+# (log-space) way home has been walked, so the arc, the caption, presence and the beacon read one odometer.
 const REEL_HOME := 0.02             # odometer value that counts as LANDED (~20 m)
-const HOOK_MIN_D0 := 0.12           # a strike snaps the slack out: the fight starts
-                                    # at least this far out, however close the cast
-const REEL_HAUL := 0.085            # log-distance hauled /s /unit power on a KIN
-                                    # catch - a full-drift kin fight lands in about
-                                    # the old 45 s / power; depth stretches it in
-                                    # log-time only (the warp answer)
-const REEL_HAUL_FOREIGN := 0.19     # foreign haul multiplier: yields line ~5x
-                                    # slower (the old 240 s duration, now emergent)
-const RUN_PAYOUT := 1.6             # how hard a run opposes the haul; above 1/run
-                                    # the net goes NEGATIVE and line pays out
-const WARP_BURN := 0.32             # adrenochrome spent per second of warp
+const HOOK_MIN_D0 := 0.12           # a strike snaps the slack out: the fight starts at least this far out, however
+                                    # close the cast
+const REEL_HAUL := 0.085            # log-distance hauled /s /unit power on a KIN catch; depth stretches it in
+                                    # log-time only
+const REEL_HAUL_FOREIGN := 0.19     # foreign haul multiplier: yields line ~5x slower
+const RUN_PAYOUT := 1.6             # how hard a run opposes the haul; above 1/run the net goes NEGATIVE and line pays out
+const WARP_BURN := 0.32             # reserve spent per second of warp
 const WARP_MIN := 0.4               # reserve needed to IGNITE a warp (a floored charge)
-# Adrenochrome is the currency the warp spends. A landed catch banks its reward and patient nibbling trickles a
-# little in. It persists across runs with the belt.
-const RESERVE_TRICKLE := 0.03       # adrenochrome/sec while a pull is anchored (patience pays)
+# The reserve is the currency the warp spends. A landed catch banks its reward and patient nibbling trickles a
+# little in. It persists across runs with the Collection.
+const RESERVE_TRICKLE := 0.03       # reserve/sec while a pull is anchored (patience pays)
 const RESERVE_MAX := 40.0           # a tank ceiling so it cannot grow unbounded
+## The [Settings] section the player's Collection, mode and reserve are kept in.
+const SECTION := "synth"
 
-var begin_stream: Callable          # set by main: (stream: VoiceStream) -> void
-var end_stream: Callable            # set by main: () -> void, tears the session down
+## The cast this is a part of: the tab the voice goes to, the panel the reading and Test are. Null in a gate.
+var cast: ReadingCast
+## Nothing is heard and the Collection is never kept: a gate drives the game by hand.
+var quiet := false
 
-var _panel: PanelContainer
-var _writer: ScriptWriter
-var _doc: DocSource
-var _youtube: YouTubeCard       # where the video goes, when the note has one
-var _text: TextEdit
 var _status: Label
 var _stream: VoiceStream = null
-var _traits := {}                   # the current voice - carried by seeds, never hand-set
-var _lineage: Array = [1]           # the reading's seed chain (root + refinements)
-var _belt: Array = []               # kept seeds: [{lineage, traits, m}]
+var _traits := {}                   # the voice on the line - carried by seeds, never hand-set
+var _lineage: Array = [1]           # its seed chain (root + refinements)
+var _belt: Array = []               # the Collection: [{lineage, traits, genome, loc, m}]
 var _reading_label: Label
 var _belt_rows: VBoxContainer
 var _coll_title: Label              # "Collection  N/23" - the count lives here
-var _inv_labels: Array = []         # metrics Label per inventory row
-var _inv_glyphs: Array = []         # SeedGlyph per inventory row
+var _inv_labels: Array = []         # metrics Label per Collection row
+var _inv_glyphs: Array = []         # SeedGlyph per Collection row
 var _inv_slots: Array = []          # the name Button per row - the SLOT you click to cast
 var _catch_btn: Button
-var _card: PanelContainer           # the reel (annealing) and the pending catch
-var _sampler: VoiceSampler          # echo-a-living-voice modal (the Listen button)
+var _card: PanelContainer           # the pending catch
+var _sampler: VoiceSampler          # echo-a-living-voice booth (the Listen button)
 var _card_glyph: Control
 var _card_label: Label
 var _accept_btn: Button
 var _release_btn: Button
-var _pending := {}                  # {d, reward, traits, genome} frozen, undecided
+var _pending := {}                  # {d, reward, traits, genome, loc} frozen, undecided
 var _loop_len := 0.0                # take length once complete (time wrapping)
 var _anchor := 0.0                  # the latent pull: latched by strikes, slow to fade
 var _vanish_t := 0.0                # timer for the pull-leaves-on-its-own check
 var _nibbles := 0                   # distinct fresh strikes felt since the anchor was last empty
 var _last_strike_t := -999.0        # stream-local time of the last strike counted as a nibble
-var _hook := {}                     # the live reel: rng, step, t, d0, haul, members,
-                                    # traits, genome (annealing), d, reward
-var _working_genome := {}           # adrenochrome carried by the WORKING candidate
-var _working_loc := {}              # the RECEPTION the candidate carries: the
-                                    # {prox, freq} acoustics of the spot it was
-                                    # caught at - a seed keeps its place's sound
+var _hook := {}                     # the live reel: rng, step, t, d0, haul, members, traits, genome, ...
+var _working_genome := {}           # adrenochrome carried by the voice on the line
+var _working_loc := {}              # the RECEPTION it carries: the spot it was caught at
+var _ensemble_last: Array = []      # who composed the throw that made it ([method VoiceParty.ensemble_traits])
+var _bank_held: Array = []          # the bank of a voice taken from the tab, which no throw here composed
 var _metrics_t := 0.0
 var _status_t2 := 0.0               # throttle for the calm line readout
 var _profile := "anchor"
@@ -177,93 +156,31 @@ var _hud: Control                   # the LCD water (custom drawn)
 var _hud_glyph: Control             # the candidate constellation living in it
 var _throw_ms := 0
 var _catching := false
-var _dirty := false
-var _restart_pending := false
-var _last_edit_ms := 0
-var _cast := false                  # silent until the first throw of the session
-var _landed := false                # the working voice is a landed/kept catch
+var _cast := false                  # silent until the first throw
+var _landed := false                # the voice on the line is a landed catch
 var _retune_t := 0.0                # reel audition retune pacing
 var _line_gen := 0                  # bumped on release: in-flight animations check it
 var _slotted_lineage: Array = []    # the seed currently cast FROM - re-clicking it releases; clicking another swaps bait
-# The drift journey (see the DRIFT_ constants). All reset by _drift_reset on a release; a new cast starts near,
-# at a crawl.
-var _drift_dist := 0.0              # the odometer: 0..1, what every drift visual reads
-var _drift_vel := 0.0              # current odometer/sec, ramping V0 -> VMAX (-> WARP_VEL)
-var _warp_charge_t := 0.0          # seconds spent DRIFTING, charging the warp
-var _warping := false              # the drive is lit and burning reserve right now
-var _reserve := 0.0               # banked adrenochrome - fishing mints it, the warp spends it
-# Autopilot: the game plays itself over a fixed take, for the UI-recorded export (see main.gd's --synth-autopilot
-# and exporter.gd). Random transitions on timers; no live audio is generated and nothing is persisted.
-var _autopilot := false
-var _ap_t := 0.0                    # countdown to the autopilot's next decision
-var _belt_shadow_t := 0.0           # throttle for re-orienting belt moons to the cast
+var _loaded := false                # the Collection read from [Settings]
+var _drift_dist := 0.0              # the odometer: 0..1 and beyond, what every drift visual reads
+var _drift_vel := 0.0               # current odometer/sec, ramping V0 -> VMAX (-> WARP_VEL)
+var _warp_charge_t := 0.0           # seconds spent DRIFTING, charging the warp
+var _warping := false               # the drive is lit and burning reserve right now
+var _reserve := 0.0                 # banked reserve - fishing mints it, the warp spends it
+var _belt_shadow_t := 0.0           # throttle for re-orienting the Collection's moons to the cast
+var _gain := 0.6                    # the gain the last voice on the line was leveled to ([method _level])
 
 
-func _ready() -> void:
-	layer = 10
-	_build_panel()
-	_load_persisted()
-	# the Collection is never empty: force a seed in if there is nothing to slot
-	_ensure_collection()
-	# The box is the source's to fill: in sync mode it shows the open document's body and the pasted draft goes
-	# into the source's keeping instead.
-	_doc.bind_text(_text)
-	var args := OS.get_cmdline_user_args()
-	var i := args.find("--synth")
-	if i >= 0 and i + 1 < args.size() and FileAccess.file_exists(args[i + 1]):
-		_text.text = FileAccess.get_file_as_string(args[i + 1])
-	_text.text_changed.connect(_mark_structural)
-	# the water is silent at launch: the first throw casts the voice. --say (demos, headless checks) counts as a
-	# thrown-and-landed cast.
-	if args.has("--say") and not _text.text.strip_edges().is_empty():
-		_cast = true
-		_landed = true
-		_update_reading_label()
-		_apply.call_deferred()
-	_sync_line_button()
-	# UI-recorded export: the panel is visible and the game plays itself over the take (see _autopilot_tick).
-	if args.has("--synth-autopilot"):
-		_autopilot = true
-		_ap_t = 1.5
+func _init(owner: ReadingCast) -> void:
+	cast = owner
+	custom_minimum_size = Vector2(400, 0)
+	add_theme_constant_override("separation", 8)
+	_build()
 
 
-func _build_panel() -> void:
-	# A [SidePanel] rather than a bare PanelContainer, so rows past the bottom edge are reachable. See side_panel.gd.
-	_panel = preload("res://src/ui/side_panel.gd").new(380.0)
-	_panel.title = "Synthesis"
-	if not note_path.is_empty():
-		_attached = Components.attached_of(NoteStore.blocks_of(note_path))
-		_panel.detach = _detach
-		_panel.detach_blocker = func(key: String) -> String: return Components.detach_blocker(key, _has())
-	add_child(_panel)
-	var box: VBoxContainer = _panel.body
-	box.add_theme_constant_override("separation", 8)
-
-	# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_title_row)
-	(_panel as SidePanel).pin_title_row(self)
-
-	# The cards (next/notes.md, step 2): the script, the water and the Collection, each a card that folds, with its
-	# chip under the heading.
-	_panel.card_prefix = "synth"
-	_panel.add_component_row(_has, _attach)
-	# The script: a card here, the writing in the editor window it opens. Its source is a draft or a file on disk
-	# re-read at every cast; see ScriptWriter and DocSource.
-	box = _panel.add_card("body", "Body", &"paper")
-	_writer = preload("res://src/ui/script_writer.gd").new()
-	_writer.setup("synth", PackedStringArray(_doc_blocks()), Components.script_mode("lab"))
-	if not note_path.is_empty():
-		_writer.bind_note()
-		_writer.doc.moved.connect(_on_note_moved)
-	_doc = _writer.doc
-	_doc.capture = _doc_capture
-	_doc.apply = _doc_apply
-	_text = _writer.text_edit
-	box.add_child(_writer)
-
-	# --- The HUD: the water. A dedicated LCD readout where the fishing is
-	# Where the fishing is drawn: the candidate's constellation, the line that pulls when something anchors, the
-	# reel's progress, with the reward switchboard on its right edge.
-	box = _panel.add_card("water", "The water", &"voice", "voice_lab")
+func _build() -> void:
+	# --- The HUD: the water. An LCD readout where the fishing is: the candidate's constellation, the line that pulls
+	# when something anchors, the reel's progress, with the modes on its right edge.
 	var hud_panel := PanelContainer.new()
 	var hud_style := StyleBoxFlat.new()
 	hud_style.bg_color = Color(0.015, 0.045, 0.03, 0.96)
@@ -272,7 +189,7 @@ func _build_panel() -> void:
 	hud_style.set_corner_radius_all(4)
 	hud_style.set_content_margin_all(6)
 	hud_panel.add_theme_stylebox_override("panel", hud_style)
-	box.add_child(hud_panel)
+	add_child(hud_panel)
 	var hud_col := VBoxContainer.new()
 	hud_col.add_theme_constant_override("separation", 2)
 	hud_panel.add_child(hud_col)
@@ -280,7 +197,7 @@ func _build_panel() -> void:
 	hud_row.add_theme_constant_override("separation", 8)
 	hud_col.add_child(hud_row)
 	_hud = Hud.new()
-	_hud.editor = self
+	_hud.game = self
 	_hud.custom_minimum_size = Vector2(0, 84)
 	_hud.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hud_row.add_child(_hud)
@@ -311,17 +228,17 @@ func _build_panel() -> void:
 		_profile_btns[key] = b
 	# the readout line lives in the HUD: the text is part of the instrument
 	_status = Label.new()
-	_status.text = "the water is silent - write, then throw"
+	_status.text = "the water is still - click a seed to cast from it"
 	_status.add_theme_font_size_override("font_size", 11)
 	_status.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
+	_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	hud_col.add_child(_status)
 
-	# --- The loop: Pull ---
-	# Casting a line is done by slotting a seed from the Collection (see _on_seed_clicked). Pull stays here to set
-	# the hook once something bites.
+	# --- The loop: Pull. A line is cast by slotting a seed from the Collection (see _on_seed_clicked); Pull sets the
+	# hook once something bites.
 	var loop_row := HBoxContainer.new()
 	loop_row.add_theme_constant_override("separation", 8)
-	box.add_child(loop_row)
+	add_child(loop_row)
 	_catch_btn = Button.new()
 	_catch_btn.text = "Pull"
 	_catch_btn.custom_minimum_size = Vector2(90, 40)
@@ -334,11 +251,13 @@ func _build_panel() -> void:
 	var listen_btn := Button.new()
 	listen_btn.text = "Listen"
 	listen_btn.custom_minimum_size = Vector2(70, 40)
-	listen_btn.tooltip_text = ("Echo a living voice: read a short passage aloud "
+	listen_btn.tooltip_text = ("Echo a living voice: read the Test passage aloud "
 		+ "and the instrument mints a new seed that sits where your voice sits - "
 		+ "its pitch, tempo, pauses and breath, measured and re-synthesized. "
 		+ "The recording itself is never kept.")
-	listen_btn.pressed.connect(func(): _sampler.open())
+	listen_btn.pressed.connect(func():
+		release_line()
+		_sampler.open(_passage()))
 	loop_row.add_child(listen_btn)
 	_reading_label = Label.new()
 	_reading_label.add_theme_font_size_override("font_size", 12)
@@ -348,7 +267,7 @@ func _build_panel() -> void:
 	# --- The card: a caught seed awaiting judgment (hold or fold) ---
 	_card = PanelContainer.new()
 	_card.visible = false
-	box.add_child(_card)
+	add_child(_card)
 	var card_row := HBoxContainer.new()
 	card_row.add_theme_constant_override("separation", 10)
 	_card.add_child(card_row)
@@ -367,173 +286,71 @@ func _build_panel() -> void:
 	card_col.add_child(card_btns)
 	_accept_btn = Button.new()
 	_accept_btn.text = "Hold"
-	_accept_btn.tooltip_text = "Hold on to it - fold it into your Collection; every seed's color re-attunes"
+	_accept_btn.tooltip_text = "Hold on to it - fold it into your Collection, and the tab reads in it; every seed's color re-attunes"
 	_accept_btn.pressed.connect(_accept_catch)
 	card_btns.add_child(_accept_btn)
 	_release_btn = Button.new()
-	# "Fold", not "Release": the line has its own Release, and this is the other decision - hold or fold the catch
+	# "Fold", not "Release": a seed has its own release, and this is the other decision - hold or fold the catch
 	_release_btn.text = "Fold"
 	_release_btn.tooltip_text = "Let it go - nothing changes"
 	_release_btn.pressed.connect(_release_catch)
 	card_btns.add_child(_release_btn)
 
-	# --- The sampler: echo a living voice into a brand-new seed (see
-	# voice_sampler.gd: a card-style panel, hidden until Listen opens it.
+	# --- The sampler: echo a living voice into a brand-new seed (a booth hidden until Listen opens it)
 	_sampler = VoiceSampler.new()
-	box.add_child(_sampler)
+	add_child(_sampler)
 	_sampler.seed_ready.connect(_add_recorded_seed)
 
-	# --- The Collection: your seeds, ALWAYS last. Click a seed to cast from it
-	# Click a seed to cast from it (slot it in), click it again to release. Count shown by the title. ---
-	box = _panel.add_card("collection", "Collection", &"voice", "",
-		"Your seeds: click one to cast from it, and click it again to release it.")
+	# --- The Collection: your seeds, always last. Click a seed to cast from it, click it again to let the line go.
 	_coll_title = Label.new()
 	_coll_title.text = "Collection"
 	_coll_title.add_theme_font_size_override("font_size", 13)
 	_coll_title.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
-	box.add_child(_coll_title)
+	_coll_title.tooltip_text = "Your seeds: click one to cast from it, and click it again to let the line go."
+	_coll_title.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(_coll_title)
+	# the Lab is a window of its own, sized to a share of the screen: the Collection scrolls inside it
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(0, 140)
+	add_child(scroll)
 	_belt_rows = VBoxContainer.new()
 	_belt_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_belt_rows.add_theme_constant_override("separation", 4)
-	box.add_child(_belt_rows)
-	# The note's own cards, after the lab's (see NoteCards), and where the video goes
-	_block_cards = NoteCards.build(_panel, _attached, {"only": HOSTED})
-	for key in _block_cards:
-		if (_block_cards[key] as Object).has_signal("noted"):
-			(_block_cards[key] as Object).connect("noted", func(msg: String) -> void: _status.text = msg)
-	if _attached.has("youtube"):
-		_add_youtube()
+	scroll.add_child(_belt_rows)
 
 
-## The components this note has, for "+" and for what may be detached: what its blocks say, and what has been
-## attached since the panel came up. Without a note, what a voice lab is made of.
-func _has() -> Array:
-	var have: Array = _attached.duplicate() if not note_path.is_empty() else ["text", "voice_lab"]
-	if _youtube != null and not have.has("youtube"):
-		have.append("youtube")
-	return have
+## Open on the tab's voice [param voice] (its row's `formant:`): the water still, the voice on the line the tab's -
+## or, for a tab with none yet, the Collection's own blend.
+func open(voice: Dictionary) -> void:
+	if not _loaded:
+		_loaded = true
+		_load_persisted()
+	_ensure_collection()
+	release_line()
+	var v := FormantVoice.voice_of(voice)
+	if not v.is_empty():
+		_lineage = (v["lineage"] as Array).duplicate()
+		_traits = (v["traits"] as Dictionary).duplicate()
+		_working_genome = (v["genome"] as Dictionary).duplicate()
+		_working_loc = (v["reception"] as Dictionary).duplicate()
+		_bank_held = (v["bank"] as Array).duplicate(true)
+	_update_reading_label()
+	_update_slot_highlights()
 
 
-## The blocks this panel keeps in the note: the voice's own, the cards the note has attached that the lab shows,
-## and YouTube's (it may be attached while the panel is up).
-func _doc_blocks() -> Array:
-	var out: Array = ["synthesis"]
-	for key in HOSTED:
-		if _attached.has(key):
-			out.append_array(Components.blocks_of(key))
-	out.append("youtube")
-	return out
+## The Lab closed: the line let go, the Listen booth shut (it turns the whole show down while it is open), and the
+## Collection kept.
+func close() -> void:
+	release_line()
+	if _sampler.visible:
+		_sampler.close()
 
 
-## The note was saved into another file ([signal DocSource.moved]): this panel is that file's now, and main makes
-## it the note everywhere else (see [method ReadingPanel._on_note_moved]).
-func _on_note_moved(from: String, to: String) -> void:
-	note_path = to
-	var said := String(note_moved.call(from, to)) if note_moved.is_valid() else ""
-	_doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
-
-
-## A component picked from "+". YouTube's card is added at once (the autosave writes its block into the note).
-## Anything else changes what the note is made of: its block is written and the note opened again
-## ([method NoteCards.attach]).
-func _attach(key: String) -> void:
-	if key == "youtube" and _youtube == null:
-		_add_youtube()
-		return
-	_rewrite(func(held: Dictionary) -> String: return NoteCards.attach(note_path, key, held))
-
-
-## A card's ×, once asked: its blocks out of the note, and the note opened again without it.
-func _detach(key: String) -> void:
-	_rewrite(func(held: Dictionary) -> String: return NoteCards.detach(note_path, key, held))
-
-
-## Change what the note is made of, then open it again (see [method NotePanel._rewrite]).
-func _rewrite(write: Callable) -> void:
-	if note_path.is_empty() or not reopen.is_valid():
-		_status.text = "⚠  That needs a note - this panel was opened without one."
-		return
-	if not _doc.settle():
-		return
-	var err := String(write.call(_doc_capture()))
-	if not err.is_empty():
-		push_warning("ghost: could not change what %s is made of - %s" % [note_path.get_file(), err])
-		_status.text = "⚠  " + err
-		return
-	_doc.set_process(false)
-	_doc.capture = Callable()
-	reopen.call(note_path)
-
-
-## The YouTube card, after the Collection.
-func _add_youtube() -> void:
-	_youtube = YouTubeCard.new()
-	_youtube.name_from(_writer)
-	_panel.add_card("youtube", "YouTube", &"publish", "youtube").add_child(_youtube)
-	_youtube.noted.connect(func(msg: String) -> void: _status.text = msg)
-
-
-## What an upload of the take says (see [member Exporter.upload_provider]): the YouTube card's
-## title, visibility and playlist; {} without a card, or with its box clear.
-func upload_meta(take: String) -> Dictionary:
-	return _youtube.meta({"tags": []}, take) if _youtube != null else {}
-
-
-## Is there anything worth exporting? The export does not need the live player: it renders from the seeds. A belt
-## with seeds can always speak (the party's blend); a voice already cast can speak as itself. An empty belt with
-## nothing cast has no voice to render.
-func can_export_take() -> bool:
-	return not _text.text.strip_edges().is_empty() and (_cast or not _belt.is_empty())
-
-
-## The exporter's take provider: render the current text through the voice once, write the WAV + subtitle
-## sidecar, and hand back the path. A coroutine: the snapshot (text + spec + take name) is taken on the main thread
-## so the worker never touches live UI or fishing state, then the render and the per-sample WAV encode run on a
-## WorkerThreadPool task while the app keeps drawing (synthesis is ~20x real time).
-func export_take() -> String:
-	var text := Manuscript.unspoken(_doc.pull()).strip_edges()
-	if text.is_empty():
-		return ""
-	# The export is independent of the realtime game: with nothing cast, the take is read by the party (the
-	# acceptance-weighted blend of the belt, the same background voice the water speaks with). The belt's lineages
-	# also join as influences, so the export reflects the whole collection.
-	var spec := _current_spec()
-	if not _cast and not _belt.is_empty():
-		spec = Voice.Spec.from_traits(VoiceParty.background_traits(_belt), int(_lineage[0]), _lineage)
-		spec.adrenochrome = _working_genome.duplicate()
-		var infl: Array = []
-		for e in _belt:
-			infl.append((e.lineage as Array).duplicate())
-		spec.influences = infl
-	# distinct from the live stream's take file: the stream's worker may still be synthesizing the same lineage and
-	# would race this write
-	var base := "user://synth/take_%06x_export" % (hash(str(_lineage)) & 0xFFFFFF)
-	DirAccess.make_dir_recursive_absolute("user://synth")
-	# capture the reception we are hearing (the resolver: the spot while exploring, the hook's frozen spot
-	# mid-fight, the seed's own carried color when landed) - the export bakes exactly that
-	var rc := _reception()
-	var loc_prox := float(rc.prox)
-	var loc_freq := float(rc.freq)
-	var done := {}
-	var task := WorkerThreadPool.add_task(func():
-		var result := Voice.render(text, spec)
-		result.pcm = VoiceStream.bake_location(result.pcm, loc_prox, loc_freq)
-		var wav := Voice.write_wav(base + ".wav", result.pcm)
-		var side := FileAccess.open(base + ".json", FileAccess.WRITE)
-		side.store_string(JSON.stringify({"words": result.words}))
-		side.close()
-		done["wav"] = wav)
-	while not WorkerThreadPool.is_task_completed(task):
-		await get_tree().process_frame
-	WorkerThreadPool.wait_for_task_completion(task)
-	return String(done.get("wav", ""))
-
-
-func _current_spec() -> Voice.Spec:
-	var spec := Voice.Spec.from_traits(_traits, int(_lineage[0]), _lineage)
-	spec.adrenochrome = _working_genome.duplicate()
-	spec.sustain_bank = _sustain_bank()
-	return spec
+## Whether a line is out.
+func casting() -> bool:
+	return _cast
 
 
 func _sync_switchboard() -> void:
@@ -543,24 +360,41 @@ func _sync_switchboard() -> void:
 			b.set_pressed_no_signal(key == _profile)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2:
-		_panel.visible = not _panel.visible
+## The voice the line plays, as the synthesizer reads it: its traits, the genome it carries and the bank it sings with.
+func _current_spec() -> Voice.Spec:
+	var spec := Voice.Spec.from_traits(_traits, int(_lineage[0]), _lineage)
+	spec.adrenochrome = _working_genome.duplicate()
+	spec.sustain_bank = _sustain_bank()
+	return spec
 
 
-# ---- the loop: throw, bite, catch, accept / release ------------------------
+## ...as the tab's rows have it read ([method FormantVoice.tuned]): what the reading will make of it.
+func _heard(spec: Voice.Spec) -> Voice.Spec:
+	if cast == null:
+		return spec
+	cast.capture_slot()
+	return FormantVoice.tuned(spec, Delivery.request_args(cast.slot_cfg(cast.slot), {"tokens": []}))
+
+
+## The voice on the line, to the tab ([method ReadingCast.pick_formant]).
+func _hand_back() -> void:
+	if cast != null:
+		cast.pick_formant(FormantVoice.kept(_lineage, _traits, _working_genome, _working_loc, _sustain_bank()))
+
+
+# ---- the loop: throw, bite, catch, hold / fold ------------------------
 
 
 ## Slotting: click a Collection seed to cast a line from it (a fresh candidate parented on that seed, spoken
-## immediately); click the seed you are already fishing (or any of its ancestors on the line) to release back to
-## still water. One line at a time - clicking a different seed switches the slot to it.
+## immediately); click the seed you are already fishing to let the line go. One line at a time - clicking a
+## different seed switches the slot to it.
 func _on_seed_clicked(idx: int) -> void:
 	if idx < 0 or idx >= _belt.size():
 		return
 	# release only when re-clicking the exact seed that is currently cast from; clicking any other seed (an ancestor
 	# on the same lit lineage included) swaps the bait: a new cast from that seed at the same position
 	if _cast and _belt[idx].lineage == _slotted_lineage:
-		_release_line()
+		release_line()
 	else:
 		_throw_from(idx)
 
@@ -601,9 +435,10 @@ func _update_slot_highlights() -> void:
 			b.remove_theme_color_override("font_hover_color")
 
 
-## Release - back to baseline. The water goes quiet (the session is torn down, not just muted), the working
-## candidate is let go, and anything hooked or waiting for judgment is abandoned. The belt keeps everything it earned.
-func _release_line() -> void:
+## Let the line go - back to still water. The line goes quiet, anything hooked or waiting for judgment is abandoned,
+## and the voice on the line returns to the Collection's own blend. The tab keeps the voice it was handed; the
+## Collection keeps everything it earned.
+func release_line() -> void:
 	_line_gen += 1                   # in-flight orb animations must not resurrect a hook
 	_pending = {}
 	_card.visible = false
@@ -613,28 +448,28 @@ func _release_line() -> void:
 	_last_strike_t = -999.0
 	_catching = false
 	_loop_len = 0.0
-	Director.set_aura(0.0)
-	Spectrum.release_conductor(self)
-	if end_stream.is_valid():
-		end_stream.call()
+	if _stream != null and is_instance_valid(_stream):
+		_stream.queue_free()
 	_stream = null
+	var was := _cast
 	_cast = false
 	_landed = false
 	_slotted_lineage = []            # nothing is baited now
 	_drift_reset()                   # the journey ends with the line
-	# no active seed: the working candidate returns to the population baseline (the party's own blend, or the curated
-	# default when the belt is empty)
+	# no active seed: the voice on the line returns to the population baseline (the Collection's own blend, or the
+	# synthesizer's default speaker when it is empty)
 	_lineage = [1]
 	_traits = VoiceParty.background_traits(_belt)
 	_working_genome = {}
 	_working_loc = {}
 	_ensemble_last = []              # the baseline was composed by no throw
-	_restart_pending = false
+	_bank_held = []
 	_sync_line_button()
 	_update_reading_label()
 	_refresh_inventory()
-	_persist()
-	_status.text = "released - the water is still"
+	if was:
+		_persist()
+		_status.text = "the line is in - the water is still"
 
 
 func _throw() -> void:
@@ -642,7 +477,6 @@ func _throw() -> void:
 		_release_catch()             # throwing again folds the pending card
 	if not _hook.is_empty():
 		_hook = {}                   # abandoning the reel loses the creature
-		Director.set_aura(0.0)
 		_card.visible = false
 		_status.text = "the line snapped - thrown again"
 	_anchor = 0.0
@@ -650,6 +484,7 @@ func _throw() -> void:
 	_last_strike_t = -999.0
 	_cast = true                     # the first throw breaks the silence
 	_landed = false                  # a fresh candidate swims far away
+	_bank_held = []
 	var prof: Dictionary = PROFILES[_profile]
 	# a long drift pulls the next throw from further away: wilder odds, wider jitter
 	var drift := _drift_free()
@@ -680,21 +515,21 @@ func _throw() -> void:
 			_traits[key] = clampf(
 				float(t.get(key, 0.0)) + randfn(0.0, maxf(jitter, 0.06)), -1.0, 1.0)
 		_traits = VoiceParty.temper_traits(_traits, drift, _belt, _field_at_candidate())
-		# a child of an adrenochrome seed inherits the frozen genome verbatim; the reading still varies
+		# a child of a frozen seed inherits its genome verbatim; the reading still varies
 		_working_genome = (parent.get("genome", {}) as Dictionary).duplicate()
 		_working_loc = (parent.get("loc", {}) as Dictionary).duplicate()
-		_jump_to_seed_scene(parent.lineage)
-		_status.text = "thrown (from %s) - the water is quiet" % _seed_name(parent.lineage)
+		_status.text = "thrown (from %s) - the water is quiet" % FormantVoice.name_of(parent.lineage)
 	_throw_ms = Time.get_ticks_msec()
 	# no drift reset: a throw casts from wherever the line already sits; only a release returns home
 	_sync_line_button()
 	_update_reading_label()
 	_persist()
-	_apply()
+	_hand_back()
+	_speak()
 
 
 ## Cast a line from a specific Collection seed (the slotting click): a fresh candidate parented on that seed,
-## jittered by the profile, spoken at once. The child gets its own lineage, so the reel/catch/accept loop grows the
+## jittered by the mode, spoken at once. The child gets its own lineage, so the reel/catch/hold loop grows the
 ## Collection from here.
 func _throw_from(idx: int) -> void:
 	if idx < 0 or idx >= _belt.size():
@@ -703,13 +538,13 @@ func _throw_from(idx: int) -> void:
 		_release_catch()
 	if not _hook.is_empty():
 		_hook = {}
-		Director.set_aura(0.0)
 		_card.visible = false
 	_anchor = 0.0
 	_nibbles = 0
 	_last_strike_t = -999.0
 	_cast = true
 	_landed = false
+	_bank_held = []
 	var parent: Dictionary = _belt[idx]
 	parent.m.evolves += 1
 	var prof: Dictionary = PROFILES[_profile]
@@ -731,19 +566,18 @@ func _throw_from(idx: int) -> void:
 	_traits = VoiceParty.temper_traits(_traits, drift, _belt, _field_at_candidate())
 	_working_genome = (parent.get("genome", {}) as Dictionary).duplicate()
 	_working_loc = (parent.get("loc", {}) as Dictionary).duplicate()
-	_jump_to_seed_scene(parent.lineage)
 	_slotted_lineage = (parent.lineage as Array).duplicate()   # this seed is the bait now
-	_status.text = "cast from %s" % _seed_name(parent.lineage)
+	_status.text = "cast from %s" % FormantVoice.name_of(parent.lineage)
 	_throw_ms = Time.get_ticks_msec()
 	# no drift reset: fish from wherever the line currently sits
 	_sync_line_button()
 	_update_reading_label()
 	_persist()
-	_apply()
+	_hand_back()
+	_speak()
 
 
-## The Collection is never empty: if there is nothing to slot, force one seed in (a wild, tempered voice). Called
-## at boot and after the last seed is deleted.
+## The Collection is never empty: if there is nothing to slot, force one seed in (a wild, tempered voice).
 func _ensure_collection() -> void:
 	if not _belt.is_empty():
 		return
@@ -753,7 +587,7 @@ func _ensure_collection() -> void:
 	var traits: Dictionary = VoiceParty.temper_traits(Voice.Spec.sample(rng).traits, 0.0, _belt,
 		_field_at_candidate())
 	_belt.append({
-		"lineage": lin, "traits": traits, "genome": {}, "scene": "",
+		"lineage": lin, "traits": traits, "genome": {},
 		"m": {"s": 0.0, "acts": 1, "restores": 0, "evolves": 0, "catches": 0,
 			"r": 0.5, "d": 0.35, "t": int(Time.get_unix_time_from_system())},
 	})
@@ -761,9 +595,11 @@ func _ensure_collection() -> void:
 	_persist()
 
 
-## The sustain bank the working voice sings with: its own cycle and its throw's
-## contributors ([method VoiceParty.sustain_bank]).
+## The sustain bank the voice on the line sings with: its own cycle and its throw's contributors ([method
+## VoiceParty.sustain_bank]) - or, for a voice taken from the tab, the bank it came with.
 func _sustain_bank() -> Array:
+	if not _bank_held.is_empty():
+		return _bank_held.duplicate(true)
 	return VoiceParty.sustain_bank(_traits, _ensemble_last)
 
 
@@ -788,7 +624,7 @@ func _pick_parent() -> Dictionary:
 func _fresh_strike() -> Vector2:
 	if _stream == null or not is_instance_valid(_stream):
 		return Vector2(0.0, -1.0)
-	var t: float = Spectrum.current.time - _stream.time_base
+	var t: float = _stream.heard()
 	if _loop_len > 0.0:
 		t = fmod(t, _loop_len)
 	var best := 0.0
@@ -830,8 +666,7 @@ func _drift_reach() -> float:
 
 ## The freedom the distance buys, unbounded but soft-compressed. `_drift_norm` clamps at 1.0, which the warp
 ## crosses in about 16 seconds, so gameplay quantities that read the clamp stop changing past it. log1p keeps the
-## near field identical in feel (~x for small x) while a long haul keeps paying with diminishing returns. The
-## bounded quantities (reward, the reception band, anything laid out against the finite line) read `_drift_norm`.
+## near field identical in feel (~x for small x) while a long haul keeps paying with diminishing returns.
 func _drift_free() -> float:
 	return log(1.0 + _drift_reach())
 
@@ -848,7 +683,7 @@ func _drift_reset() -> void:
 ##   DRIFT  - accelerate outward; hold DRIFT for WARP_CHARGE s to charge the warp, which surges the odometer while
 ##            it burns the reserve.
 ##   ANCHOR - stop dead where you are (velocity 0, warp off); you fish under the conditions of where you drifted to.
-##   REEL   - walk the line back toward home, faster with a seasoned belt (VoiceParty.reel_power).
+##   REEL   - walk the line back toward home, faster with a seasoned Collection (VoiceParty.reel_power).
 func _advance_drift(delta: float) -> void:
 	if not _cast:
 		return
@@ -914,7 +749,7 @@ func _drift_caption() -> String:
 
 ## The reception resolver - one rule for what color the voice carries:
 ##   hooked          -> the spot's acoustics frozen at hook-set (the reel keeps sounding like the place)
-##   landed / uncast -> the working candidate's own stored reception (a caught seed carries its fishing spot's sound)
+##   landed / uncast -> the voice's own stored reception (a caught seed carries its fishing spot's sound)
 ##   exploring       -> the live interference field (see _field_reception)
 func _reception() -> Dictionary:
 	if not _hook.is_empty() and _hook.has("loc"):
@@ -926,11 +761,11 @@ func _reception() -> Dictionary:
 	return _field_reception()
 
 
-## The water as an interference field: every belt seed is a source - its own frequency (rooted in its voice's f0),
-## at its own depth along the drift, its strength set by how accepted it is - plus the water's own beacon (the
-## prior, so an empty belt still has structure). Amplitudes decay with distance; the line hears the superposition:
-## the nearest source dominates, the center frequency is the amplitude-weighted blend, and where two comparable
-## sources overlap their detune beats. Deep seeds need the warp to reach.
+## The water as an interference field: every seed is a source - its own frequency (rooted in its voice's f0), at its
+## own depth along the drift, its strength set by how accepted it is - plus the water's own beacon (the prior, so an
+## empty Collection still has structure). Amplitudes decay with distance; the line hears the superposition: the
+## nearest source dominates, the center frequency is the amplitude-weighted blend, and where two comparable sources
+## overlap their detune beats. Deep seeds need the warp to reach.
 func _field_reception() -> Dictionary:
 	# Geometry, not hashes: this reads the same [VoiceField] the candidate's traits do, so what the player hears and
 	# what the catch feels are the same field by construction.
@@ -964,10 +799,10 @@ func _pull() -> void:
 	if _catching or not _hook.is_empty() or not _pending.is_empty():
 		return
 	if not _cast:
-		_status.text = "nothing is out there - throw first"
+		_status.text = "nothing is out there - cast from a seed first"
 		return
-	# No "already on the belt" refusal: when the fished voice is one we already own, the catch becomes a fresh
-	# descendant at accept time (see _accept_catch), so a rich spot can be worked again for new variations.
+	# No "already in the Collection" refusal: when the fished voice is one we already own, the catch becomes a fresh
+	# descendant at hold time (see _accept_catch), so a rich spot can be worked again for new variations.
 	var d := _candidate_difficulty()
 	var nibble_bonus: float = NIBBLE_BONUS * float(_nibbles)
 	var p := clampf(0.1 + 0.6 * minf(_anchor, 1.0) - 0.2 * d + nibble_bonus, 0.03, 0.9)
@@ -976,6 +811,7 @@ func _pull() -> void:
 	_catching = true
 	var gen := _line_gen             # a release mid-animation must void this pull
 	var orb := CatchOrb.new()
+	orb.top_level = true             # over the Lab, never laid out in its column
 	orb.anchor = _hud.get_global_rect().get_center()
 	orb.hue = float(hash(str(_lineage)) % 360) / 360.0
 	orb.wobbles = wobbles
@@ -999,8 +835,8 @@ func _pull() -> void:
 				_status.text = "the hook did not set - the pull is gone")
 
 
-## Hook set: the reel begins. Duration scales with integration difficulty and the reward profile. During the reel
-## the adrenochrome anneals: each step the genome moves toward the party's attractors (high-acceptance members) and
+## Hook set: the reel begins. Duration scales with integration difficulty and the mode. During the reel the
+## adrenochrome anneals: each step the genome moves toward the Collection's attractors (high-acceptance seeds) and
 ## away from its repulsors, under cooling noise.
 func _begin_hook(d: float) -> void:
 	_anchor = 0.0
@@ -1013,7 +849,7 @@ func _begin_hook(d: float) -> void:
 		"drift":
 			profile_scale = 1.4
 		"reel":
-			profile_scale = 1.0      # knowledge now powers the reel globally
+			profile_scale = 1.0      # knowledge powers the reel globally
 	var members: Array = []
 	var accs: Array = []
 	for e in _belt:
@@ -1044,8 +880,7 @@ func _begin_hook(d: float) -> void:
 		"progress": 0.0, "run": 0.0, "run_t": frng.randf_range(2.0, 6.0),
 		"frng": frng, "power": VoiceParty.reel_power(_belt),
 		"d0": _drift_reach(),
-		"loc": _reception(),         # the SPOT's acoustics, frozen: the reel and
-		                             # the catch keep sounding like this place
+		"loc": _reception(),         # the SPOT's acoustics, frozen: the reel and the catch keep sounding like this place
 		"haul": lerpf(1.0, REEL_HAUL_FOREIGN, d) / profile_scale,
 		"members": members, "d": d, "reward": _catch_reward(d),
 		"traits": _traits.duplicate(),
@@ -1057,10 +892,10 @@ func _begin_hook(d: float) -> void:
 	_status.text = "hook set - the fight begins"
 
 
-## One anneal step: the frozen genome moves through the party's force field. Deterministic per (lineage, party
-## snapshot). For kin the noise cools toward the freeze; for a foreign creature the toll inverts that (see the
-## TOLL_ constants): the party shoves harder, the prior lets go, the noise heats and the voice frays, in proportion
-## to how far in it has been dragged. The reel retunes the live stream from these traits while it runs.
+## One anneal step: the frozen genome moves through the Collection's force field. Deterministic per (lineage,
+## Collection snapshot). For kin the noise cools toward the freeze; for a foreign creature the toll inverts that (see
+## the TOLL_ constants): the Collection shoves harder, the prior lets go, the noise heats and the voice frays, in
+## proportion to how far in it has been dragged. The reel retunes the line from these traits while it runs.
 func _adreno_step() -> void:
 	var h := _hook
 	var rng: RandomNumberGenerator = h.rng
@@ -1125,18 +960,14 @@ func _hook_toll() -> float:
 func _finish_hook() -> void:
 	var h := _hook
 	_hook = {}
-	# the catch: contortion releases, and the show jumps to the scene this seed owns
-	Director.set_aura(0.0)
-	Director.jump(hash(str(_lineage)))
 	_pending = {"d": h.d, "reward": h.reward,
-		"traits": h.traits, "genome": h.genome, "loc": h.get("loc", {}),
-		"scene": Director.scene_title(hash(str(_lineage)))}
+		"traits": h.traits, "genome": h.genome, "loc": h.get("loc", {})}
 	var fit := VoiceParty.relative_fit(h.traits, _lineage, h.genome, _belt)
 	_card_glyph.seed_hash = hash(str(_lineage))
 	_card_glyph.fit = fit
 	_card_glyph.queue_redraw()
 	_card_label.text = "it has stopped changing · %s\n%s" % [
-		_seed_name(_lineage), _fit_verdict(fit)]
+		FormantVoice.name_of(_lineage), _fit_verdict(fit)]
 	_card_label.add_theme_color_override("font_color", SeedGlyph.fit_color(fit))
 	_accept_btn.visible = true
 	_release_btn.visible = true
@@ -1146,16 +977,16 @@ func _finish_hook() -> void:
 
 func _fit_verdict(fit: float) -> String:
 	if fit < 0.25:
-		return "NOT a good fit for your party"
+		return "NOT a good fit for your Collection"
 	if fit < 0.5:
-		return "an uneasy fit - it would pull the party"
+		return "an uneasy fit - it would pull the Collection"
 	if fit < 0.75:
 		return "a workable fit"
-	return "kin - it belongs with this party"
+	return "kin - it belongs in this Collection"
 
 
-## Accept the frozen creature: it joins the belt with its annealed traits and adrenochrome genome, and the working
-## candidate becomes it: the stream restarts so you hear what you caught.
+## Hold the frozen creature: it joins the Collection with its annealed traits and genome, the voice on the line
+## becomes it, and the tab reads in it; the line restarts so you hear what you caught.
 func _accept_catch() -> void:
 	if _pending.is_empty():
 		return
@@ -1172,18 +1003,18 @@ func _accept_catch() -> void:
 			e.m.r += reward * 0.5
 	_landed = true                   # the caught voice speaks at full presence
 	_slotted_lineage = _lineage.duplicate()   # the caught seed is now the bait that's out
-	_reserve = minf(_reserve + reward, RESERVE_MAX)   # the catch mints adrenochrome for the warp
+	_reserve = minf(_reserve + reward, RESERVE_MAX)   # the catch mints reserve for the warp
 	_traits = (_pending.traits as Dictionary).duplicate()
 	_working_genome = (_pending.genome as Dictionary).duplicate()
 	_working_loc = (_pending.get("loc", {}) as Dictionary).duplicate()
-	# the landed voice sings as itself: its belt entry and the note keep no contributors, so the bank it is heard
-	# with now is the one it is heard with when it comes back
+	# the landed voice sings as itself: its seed and the tab keep no contributors, so the bank it is heard with now
+	# is the one it is heard with when it comes back
 	_ensemble_last = []
+	_bank_held = []
 	_belt.append({
 		"lineage": _lineage.duplicate(), "traits": _traits.duplicate(),
 		"genome": _working_genome.duplicate(),
 		"loc": _working_loc.duplicate(),
-		"scene": _pending.get("scene", ""),
 		"m": {"s": 0.0, "acts": 1, "restores": 0, "evolves": 0, "catches": 0,
 			"r": reward, "d": _pending.d,
 			"t": int(Time.get_unix_time_from_system())},
@@ -1192,39 +1023,26 @@ func _accept_catch() -> void:
 		_belt.pop_front()
 	_pending = {}
 	_card.visible = false
-	_rebuild_belt()                  # every member's color re-attunes here
+	_rebuild_belt()                  # every seed's color re-attunes here
 	_persist()
 	_status.text = "held +%.1f - hear what you caught (Collection %d/%d)" % [
 		reward, _belt.size(), BELT_MAX]
-	_apply()
+	_hand_back()
+	_speak()
 
 
 func _release_catch() -> void:
 	_pending = {}
 	_card.visible = false
-	# the reel's audition bent the stream's timbre toward the adrenochrome; a fold hands the body back
+	# the reel's audition bent the line's timbre toward the adrenochrome; a fold hands the body back
 	if _stream != null and is_instance_valid(_stream):
-		_stream.retune(_current_spec())
-	_status.text = "released - nothing changes"
-
-
-## A seed owns a scene (Director.jump derives it from the lineage hash, the identity the catch stamped into
-## entry.scene). Clicking or casting a seed brings its place back deterministically across runs. Deduped so
-## re-clicking the active seed does not re-cut the same scene.
-var _last_scene_jump := 0
-
-
-func _jump_to_seed_scene(lineage: Array) -> void:
-	var jh := hash(str(lineage))
-	if jh == _last_scene_jump:
-		return
-	_last_scene_jump = jh
-	Director.jump(jh)
+		_stream.retune(_heard(_current_spec()))
+	_status.text = "folded - nothing changes"
 
 
 ## A recorded seed enters the Collection like a catch: fresh root lineage, measured traits, measured (partial)
 ## genome riding the adrenochrome contract (ProsodyWalk backfills unmeasured genes from the PRIOR). Not tempered:
-## this voice lands exactly where it was measured. Difficulty is how foreign it sits from the party's center, so
+## this voice lands exactly where it was measured. Difficulty is how foreign it sits from the Collection's center, so
 ## fishing from it later fights like the outsider it is.
 func _add_recorded_seed(traits: Dictionary, genome: Dictionary, report: String) -> void:
 	# the root is deterministic in the measurement: the same voice, read the same way, echoes to the same seed
@@ -1237,7 +1055,7 @@ func _add_recorded_seed(traits: Dictionary, genome: Dictionary, report: String) 
 	var d := clampf(sqrt(acc / float(Voice.TRAIT_KEYS.size())) / 0.9, 0.05, 1.0)
 	_belt.append({
 		"lineage": lin, "traits": traits.duplicate(), "genome": genome.duplicate(),
-		"scene": "", "echo": report,
+		"echo": report,
 		"m": {"s": 0.0, "acts": 1, "restores": 0, "evolves": 0, "catches": 0,
 			"r": 0.6, "d": d, "t": int(Time.get_unix_time_from_system())},
 	})
@@ -1255,33 +1073,27 @@ func _release_capture(idx: int) -> void:
 	_belt.remove_at(idx)
 	# if the deleted seed's line (or a descendant of it) was out, cut it
 	if _cast and (removed.lineage == _lineage or _is_prefix(removed.lineage, _lineage)):
-		_release_line()
+		release_line()
 	_rebuild_belt()
 	_persist()
-	# never leave the Collection empty: force a seed back and cast it automatically
-	if _belt.is_empty():
-		_ensure_collection()
-		_throw_from(0)
+	# never leave the Collection empty: force a seed back
+	_ensure_collection()
 
 
 func _is_prefix(a: Array, b: Array) -> bool:
 	return a.size() < b.size() and b.slice(0, a.size()) == a
 
 
-func _seed_name(lineage: Array) -> String:
-	return "g%d·%06x" % [lineage.size() - 1, hash(str(lineage)) & 0xFFFFFF]
-
-
 func _update_reading_label() -> void:
-	# before anything is thrown there is no candidate: the persisted (or default) working lineage is only a
-	# parent-to-be, and naming it would put a phantom seed on a line that has never touched the water
+	# before anything is cast there is no candidate: the voice held is only a parent-to-be, and naming it would put a
+	# phantom seed on a line that has never touched the water
 	if not _cast:
 		_reading_label.text = "nothing on the line"
 		if _hud_glyph != null and is_instance_valid(_hud_glyph):
 			_hud_glyph.visible = false
 		return
 	_reading_label.text = "%s · %s catch" % [
-		_seed_name(_lineage), _difficulty_word(_candidate_difficulty())]
+		FormantVoice.name_of(_lineage), _difficulty_word(_candidate_difficulty())]
 	if _hud_glyph != null and is_instance_valid(_hud_glyph):
 		_hud_glyph.visible = true
 		_hud_glyph.seed_hash = hash(str(_lineage))
@@ -1299,16 +1111,16 @@ func _difficulty_word(d: float) -> String:
 	return "wild"
 
 
-# ---- the party on screen: the candidate, its bearings, the moons -------------------------------
+# ---- the Collection on screen: the candidate, its bearings, the moons -------------------------------
 
 
-## The voice on the line, as [VoiceParty] takes a candidate: what the members hold at this moment. A throw sets
-## its candidate a piece at a time, so a call made partway through one reads a new lineage beside old traits.
+## The voice on the line, as [VoiceParty] takes a candidate: what the seeds hold at this moment. A throw sets its
+## candidate a piece at a time, so a call made partway through one reads a new lineage beside old traits.
 func _candidate() -> Dictionary:
 	return {"traits": _traits, "lineage": _lineage, "genome": _working_genome}
 
 
-## Where the candidate stands in the belt's field, at the line's drift ([method VoiceParty.field_at]).
+## Where the candidate stands in the Collection's field, at the line's drift ([method VoiceParty.field_at]).
 func _field_at_candidate() -> Dictionary:
 	return VoiceParty.field_at(_candidate(), _belt, _drift_free())
 
@@ -1318,30 +1130,30 @@ func _candidate_difficulty() -> float:
 	return VoiceParty.candidate_difficulty(_candidate(), _belt)
 
 
-## The party's center ([method VoiceParty.party_vector]).
+## The Collection's center ([method VoiceParty.party_vector]).
 func _party_vector() -> PackedFloat32Array:
 	return VoiceParty.party_vector(_belt)
 
 
-## How close a belt member sits to the candidate - the HUD draws it as a tiny planet only when this is high
+## How close a seed sits to the candidate - the HUD draws it as a tiny planet only when this is high
 ## ([method VoiceParty.closeness]).
 func _member_closeness(e: Dictionary) -> float:
 	return VoiceParty.closeness(e, _candidate())
 
 
-## A belt member's bearing in the shared party frame ([method VoiceParty.member_bearing]).
+## A seed's bearing in the shared Collection frame ([method VoiceParty.member_bearing]).
 func _member_bearing(e: Dictionary, party: PackedFloat32Array) -> Vector3:
 	return VoiceParty.member_bearing(e, party)
 
 
-## The candidate's bearing from the party, for the HUD compass ([method VoiceParty.bearing_of]).
+## The candidate's bearing from the Collection, for the HUD compass ([method VoiceParty.bearing_of]).
 func _bearing3() -> Vector3:
 	return VoiceParty.bearing_of(VoiceParty.seed_vector(_traits, _lineage, _working_genome), _party_vector())
 
 
-## Where the line sits: the working candidate's position, pushed outward along its own heading as the drift
-## grows. The belt's shadows are read against this frame, so the pattern of moons is the map of the region
-## relative to where you are fishing. With nothing cast, the frame falls back to the party center (home).
+## Where the line sits: the candidate's position, pushed outward along its own heading as the drift grows. The
+## Collection's shadows are read against this frame, so the pattern of moons is the map of the region relative to
+## where you are fishing. With nothing cast, the frame falls back to the Collection's center (home).
 func _cast_vector() -> PackedFloat32Array:
 	var party := _party_vector()
 	if not _cast:
@@ -1356,19 +1168,19 @@ func _cast_vector() -> PackedFloat32Array:
 	return out
 
 
-## Re-orient every belt moon (and the big candidate moon) to the current cast: each seed's shadow points and
-## wanes by where it sits relative to the line. Cheap (belt <= 7); throttled by the caller.
+## Re-orient every seed's moon (and the big candidate moon) to the current cast: each seed's shadow points and
+## wanes by where it sits relative to the line. Cheap; throttled by the caller.
 func _update_belt_shadows() -> void:
-	var cast := _cast_vector()
+	var cast_at := _cast_vector()
 	for i in mini(_belt.size(), _inv_glyphs.size()):
 		var g = _inv_glyphs[i]
 		if not is_instance_valid(g):
 			continue
-		var b := _member_bearing(_belt[i], cast)
+		var b := _member_bearing(_belt[i], cast_at)
 		g.planet_dir = atan2(b.y, b.x)
 		g.planet_phase = b.z
 		g.queue_redraw()
-	# the big candidate planet: its own bearing from home, waxing full near the party and waning to a crescent as
+	# the big candidate planet: its own bearing from home, waxing full near the Collection and waning to a crescent as
 	# the cast reaches out
 	if _hud_glyph != null and is_instance_valid(_hud_glyph):
 		var cb := _bearing3()
@@ -1396,9 +1208,9 @@ func _rebuild_belt() -> void:
 		row.add_child(glyph)
 		_inv_glyphs.append(glyph)
 		var slot := Button.new()
-		slot.text = _seed_name(entry.lineage)
+		slot.text = FormantVoice.name_of(entry.lineage)
 		slot.custom_minimum_size = Vector2(96, 26)
-		slot.tooltip_text = "Slot this seed in - cast a line from it. Click again to release."
+		slot.tooltip_text = "Slot this seed in - cast a line from it. Click again to let the line go."
 		var idx := i
 		slot.pressed.connect(func(): _on_seed_clicked(idx))
 		row.add_child(slot)
@@ -1412,7 +1224,7 @@ func _rebuild_belt() -> void:
 		_inv_labels.append(metrics)
 		var release := Button.new()
 		release.text = "×"
-		release.tooltip_text = "Release this seed"
+		release.tooltip_text = "Let this seed go from the Collection"
 		release.custom_minimum_size = Vector2(26, 26)
 		release.pressed.connect(func(): _release_capture(idx))
 		row.add_child(release)
@@ -1423,8 +1235,8 @@ func _rebuild_belt() -> void:
 		_coll_title.text = "Collection  %d/%d" % [_belt.size(), BELT_MAX]
 
 
-## The bag keeps reflecting fit: each member's color is its relative standing in the current party (similarity to
-## the center blended with its own acceptance record), restretched every refresh, so an Accept shifts every color.
+## The Collection keeps reflecting fit: each seed's color is its relative standing (similarity to the center blended
+## with its own acceptance record), restretched every refresh, so a Hold shifts every color.
 func _refresh_inventory() -> void:
 	var party := _party_vector()
 	var sims: Array = []
@@ -1444,8 +1256,8 @@ func _refresh_inventory() -> void:
 		if i < _inv_glyphs.size() and is_instance_valid(_inv_glyphs[i]):
 			var glyph: SeedGlyph = _inv_glyphs[i]
 			glyph.fit = 0.55 * float(sim_n[i]) + 0.45 * float(acc_n[i])
-			# color is the seed's behavior in the party frame, an identity that stays put as you fish; its shadow is
-			# set separately, in the cast frame, and re-orients live (see _update_belt_shadows)
+			# color is the seed's behavior in the Collection's frame, an identity that stays put as you fish; its
+			# shadow is set separately, in the cast frame, and re-orients live (see _update_belt_shadows)
 			glyph.tint = SeedGlyph.behavior_color(_member_bearing(e, party))
 			glyph.is_planet = true
 			glyph.queue_redraw()
@@ -1459,7 +1271,7 @@ func _seed_tooltip(e: Dictionary) -> String:
 		var v := float((e.traits as Dictionary).get(key, 0.0))
 		if absf(v) >= 0.15:
 			tv += "%s %+.1f  " % [key, v]
-	return ("lineage %s\nreward %.1f · held %.0fs over %d plays (%.1fx belt)\n"
+	return ("lineage %s\nreward %.1f · held %.0fs over %d plays (%.1fx the Collection)\n"
 		+ "caught at %s difficulty · kept %d · thrown-from %d · line kept %d\n"
 		+ "opens %.2f hot, settles to %.2f (half-life %.0fs)\n"
 		+ "breath every ~%.0f syllables · emphasis appetite %.2f\n"
@@ -1472,7 +1284,6 @@ func _seed_tooltip(e: Dictionary) -> String:
 		g.breath_span, g.lean, g.gravity, g.ring, g.act_thr,
 		g.pace_hot, g.pace_calm,
 		(("voice: " + tv) if not tv.is_empty() else "voice: near default")
-			+ (("\nhaunts " + str(e.scene)) if not str(e.get("scene", "")).is_empty() else "")
 			+ (("\nechoed from a living voice: " + str(e.echo)) if e.has("echo") else "")
 			+ (("\ncarries its spot's reception: ~%d Hz at %d%%" % [
 				int(float((e.loc as Dictionary).get("freq", 0.0))),
@@ -1480,108 +1291,94 @@ func _seed_tooltip(e: Dictionary) -> String:
 				if e.has("loc") and float((e.get("loc", {}) as Dictionary).get("prox", 0.0)) > 0.05 else "")]
 
 
-# ---- the implicit loop: debounce -> persist + apply ------------------------
-
-
-func _mark_structural() -> void:
-	if _doc.is_quiet():
-		return              # the document being shown, not the author typing
-	_dirty = true
-	_restart_pending = true
-	_last_edit_ms = Time.get_ticks_msec()
+# ---- the frame: presence, reception, the bites --------------------------------
 
 
 func _process(delta: float) -> void:
-	if _dirty and Time.get_ticks_msec() - _last_edit_ms >= AUTOSAVE_DELAY_MS:
-		_persist()
-		if _restart_pending:
-			_apply()
-	# the drift journey integrates every frame whether or not a stream is playing (it self-gates on drift mode +
-	# cast), so the odometer and warp advance the same in a live session and in the autopilot export
+	if not is_visible_in_tree() and not _cast:
+		return                       # the Lab is shut and the line is in: nothing moves
+	# the drift journey integrates every frame whether or not the line is heard yet (it self-gates on the cast)
 	_advance_drift(delta)
-	# re-orient the belt's moons to the cast a few times a second, so the shadows track where the line sits
+	# re-orient the Collection's moons to the cast a few times a second, so the shadows track where the line sits
 	_belt_shadow_t += delta
 	if _belt_shadow_t >= 0.12:
 		_belt_shadow_t = 0.0
 		_update_belt_shadows()
-	if _autopilot:
-		_autopilot_tick(delta)
+	if _stream == null or not is_instance_valid(_stream) or _stream.words.is_empty():
+		if not _hook.is_empty():
+			_advance_reel(delta)
 		_hud.queue_redraw()
 		return
-	if _stream != null and is_instance_valid(_stream) and _stream.words.size() > 0:
-		for e in _belt:
-			if e.lineage == _lineage or _is_prefix(e.lineage, _lineage):
-				e.m.s += delta
-		# presence: how near the voice is to the caster. A fresh cast swims far (a few dB down - audible; distance is the
-		# filter's job, silence belongs only to the un-cast water); an anchored pull brings it closer; the reel drags it
-		# in and a run drags it back out; landed = full voice.
-		var presence := 1.0
-		if not _landed:
-			if _hook.is_empty():
-				presence = 0.55 + 0.25 * clampf(_anchor, 0.0, 1.0)
-			else:
-				presence = clampf(0.6 + 0.4 * float(_hook.progress)
-					- 0.2 * float(_hook.run), 0.3, 1.0)
-		_stream.set_presence(presence)
-		# the reception (see _reception): the spot's acoustics while exploring, the hook's frozen spot through the fight,
-		# the seed's own carried color once landed - what you hear is what you catch
-		var rc := _reception()
-		_stream.set_location(float(rc.prox), float(rc.freq))
-		_metrics_t += delta
-		if _metrics_t >= 5.0:
-			_metrics_t = 0.0
-			_refresh_inventory()
-			_persist()
-		# the latent water: strikes latch an anchor that pulls for a long while (slow decay), and sometimes it just
-		# leaves; the HUD shows the line bending for as long as it lasts
+	for e in _belt:
+		if e.lineage == _lineage or _is_prefix(e.lineage, _lineage):
+			e.m.s += delta
+	# presence: how near the voice is to the caster. A fresh cast swims far (a few dB down - audible; distance is the
+	# filter's job, silence belongs only to still water); an anchored pull brings it closer; the reel drags it in and
+	# a run drags it back out; landed = full voice.
+	var presence := 1.0
+	if not _landed:
 		if _hook.is_empty():
-			var strike := _fresh_strike()
-			var s: float = strike.x
-			if s > 0.0:
-				_anchor = clampf(maxf(_anchor, 0.45 + 0.45 * minf(s, 1.2)), 0.0, 1.2)
-				# a genuinely new strike (not the same one still trailing) is a nibble: sitting through several steadies the odds
-				if strike.y > _last_strike_t + 0.01:
-					_last_strike_t = strike.y
-					_nibbles = mini(_nibbles + 1, NIBBLE_MAX)
-			_anchor *= exp(-delta / ANCHOR_TAU)
-			if _anchor < 0.05:
+			presence = 0.55 + 0.25 * clampf(_anchor, 0.0, 1.0)
+		else:
+			presence = clampf(0.6 + 0.4 * float(_hook.progress) - 0.2 * float(_hook.run), 0.3, 1.0)
+	_stream.set_presence(presence)
+	# the reception (see _reception): the spot's acoustics while exploring, the hook's frozen spot through the fight,
+	# the seed's own carried color once landed - what you hear is what you catch
+	var rc := _reception()
+	_stream.set_location(float(rc.prox), float(rc.freq))
+	_metrics_t += delta
+	if _metrics_t >= 5.0:
+		_metrics_t = 0.0
+		_refresh_inventory()
+		_persist()
+	# the latent water: strikes latch an anchor that pulls for a long while (slow decay), and sometimes it just
+	# leaves; the HUD shows the line bending for as long as it lasts
+	if _hook.is_empty():
+		var strike := _fresh_strike()
+		var s: float = strike.x
+		if s > 0.0:
+			_anchor = clampf(maxf(_anchor, 0.45 + 0.45 * minf(s, 1.2)), 0.0, 1.2)
+			# a genuinely new strike (not the same one still trailing) is a nibble: sitting through several steadies the odds
+			if strike.y > _last_strike_t + 0.01:
+				_last_strike_t = strike.y
+				_nibbles = mini(_nibbles + 1, NIBBLE_MAX)
+		_anchor *= exp(-delta / ANCHOR_TAU)
+		if _anchor < 0.05:
+			_anchor = 0.0
+			_nibbles = 0
+			_last_strike_t = -999.0
+		_vanish_t += delta
+		if _vanish_t >= ANCHOR_CHECK:
+			_vanish_t = 0.0
+			# anchored searching holds its pull; drifting lines lose theirs
+			if _anchor > 0.0 and randf() < float(PROFILES[_profile].vanish):
 				_anchor = 0.0
 				_nibbles = 0
 				_last_strike_t = -999.0
-			_vanish_t += delta
-			if _vanish_t >= ANCHOR_CHECK:
-				_vanish_t = 0.0
-				# anchored searching holds its pull; drifting lines lose theirs
-				if _anchor > 0.0 and randf() < float(PROFILES[_profile].vanish):
-					_anchor = 0.0
-					_nibbles = 0
-					_last_strike_t = -999.0
-			# patience pays: an anchored pull slowly mints adrenochrome for the warp
+		# patience pays: an anchored pull slowly mints reserve for the warp
+		if _anchor > 0.1:
+			_reserve = minf(_reserve + RESERVE_TRICKLE * delta, RESERVE_MAX)
+		_status_t2 += delta
+		if _status_t2 >= 0.5 and _pending.is_empty() and not _catching:
+			_status_t2 = 0.0
 			if _anchor > 0.1:
-				_reserve = minf(_reserve + RESERVE_TRICKLE * delta, RESERVE_MAX)
-			_status_t2 += delta
-			if _status_t2 >= 0.5 and _pending.is_empty() and not _catching:
-				_status_t2 = 0.0
-				if _anchor > 0.1:
-					_status.text = "something is pulling (%d nibble%s felt) - set the hook when ready" % [
-						_nibbles, "" if _nibbles == 1 else "s"]
-				elif _status.text.begins_with("something is pulling"):
-					_status.text = "the line is slack"
-		else:
-			_advance_reel(delta)
-		_hud.queue_redraw()
+				_status.text = "something is pulling (%d nibble%s felt) - set the hook when ready" % [
+					_nibbles, "" if _nibbles == 1 else "s"]
+			elif _status.text.begins_with("something is pulling"):
+				_status.text = "the line is slack"
+	else:
+		_advance_reel(delta)
+	_hud.queue_redraw()
 
 
-## One frame of the reel fight - the fish is dragged in, the adrenochrome anneals, the scene contorts, and it
-## lands when progress hits 1. Shared by the live session and the autopilot (the live stream's timbre audition is
-## skipped when there is no stream, e.g. an export playing itself over a fixed take).
+## One frame of the reel fight - the fish is dragged in, the adrenochrome anneals, and it lands when progress hits 1.
 func _advance_reel(delta: float) -> void:
 	if _hook.is_empty():
 		return
-	# The reel is a fight, not a timer: progress is the belt's power against the creature's runs. A run pays line
-	# back out (progress can regress; the voice drops away mid-pull); knowledge reels harder. Everything hooked lands
-	# eventually; the wait is the accumulation (the adrenochrome anneals step by step) and the audition (presence and
-	# timbre close in as it nears), so the hold-or-fold decision is informed by the time it surfaces.
+	# The reel is a fight, not a timer: progress is the Collection's power against the creature's runs. A run pays
+	# line back out (progress can regress; the voice drops away mid-pull); knowledge reels harder. Everything hooked
+	# lands eventually; the wait is the accumulation (the adrenochrome anneals step by step) and the audition (presence
+	# and timbre close in as it nears), so the hold-or-fold decision is informed by the time it surfaces.
 	var h := _hook
 	h.t += delta
 	h.run = maxf(float(h.run) - delta / 2.2, 0.0)
@@ -1593,7 +1390,7 @@ func _advance_reel(delta: float) -> void:
 	# the fight plays out on the odometer (see the REEL_ consts): the haul closes an equal factor of the remaining
 	# distance per second (log-time, so a lightyears-deep hook still comes home) and a strong run turns the exponent
 	# positive: real line pays out and progress (the log-space fraction of the way home) rolls backwards. One
-	# odometer feeds the arc, the caption, presence, aura and the beacon.
+	# odometer feeds the arc, the caption, presence and the beacon.
 	var haul: float = REEL_HAUL * float(h.haul) * float(h.power) \
 		* (1.0 - RUN_PAYOUT * float(h.run))
 	_drift_dist = maxf(_drift_dist * exp(-haul * delta), REEL_HOME)
@@ -1602,15 +1399,13 @@ func _advance_reel(delta: float) -> void:
 		0.0, 1.0)
 	while h.step < int(float(h.progress) * HOOK_STEPS):
 		_adreno_step()
-	# the audition: every couple of seconds the stream's timbre bends toward the annealing adrenochrome (atomic
-	# retune; the reading stays the thrown plan until an Accept restarts it). No stream (export autopilot) = none.
+	# the audition: every couple of seconds the line's timbre bends toward the annealing adrenochrome (atomic retune;
+	# the reading stays the thrown plan until a Hold restarts it)
 	_retune_t += delta
 	if _retune_t >= 2.0:
 		_retune_t = 0.0
 		if _stream != null and is_instance_valid(_stream):
-			_stream.retune(Voice.Spec.from_traits(h.traits, int(_lineage[0]), _lineage))
-	# the metamorphosis: pulling the fish closer contorts the current scene, and a foreign catch contorts it big
-	Director.set_aura(float(h.progress) * (0.4 + 1.1 * float(h.d)))
+			_stream.retune(_heard(Voice.Spec.from_traits(h.traits, int(_lineage[0]), _lineage)))
 	_status_t2 += delta
 	if _status_t2 >= 0.5:
 		_status_t2 = 0.0
@@ -1630,79 +1425,24 @@ func _advance_reel(delta: float) -> void:
 		_finish_hook()
 
 
-## The autopilot: for the UI-recorded export, the fishing plays itself so the panel and HUD animate over a fixed
-## take. A small state machine on random timers walks the loop (Throw, let a bite build, Pull, ride the reel, hold
-## or fold), driving the same verbs a player would (and the same Director scene jumps on a catch), but generating
-## no audio of its own.
-func _autopilot_tick(delta: float) -> void:
-	_ap_t -= delta
-	if not _pending.is_empty():
-		# a catch is on the card: decide after a beat (mostly keep it)
-		if _ap_t <= 0.0:
-			if randf() < 0.7:
-				_accept_catch()
-			else:
-				_release_catch()
-			_ap_t = randf_range(1.5, 3.0)
-	elif not _hook.is_empty():
-		_advance_reel(delta)          # ride the fight to the freeze
-	elif _catching:
-		pass                          # the orb is deciding; wait it out
-	elif not _cast:
-		_throw()
-		_ap_t = randf_range(1.5, 3.5)
-	else:
-		# cast and searching: manufacture a bite, then set the hook once it holds
-		_anchor = clampf(_anchor + delta * (0.35 + 0.4 * randf()), 0.0, 1.15)
-		if _nibbles < NIBBLE_MAX and randf() < delta * 1.5:
-			_nibbles += 1
-		if _ap_t <= 0.0 and _anchor > 0.55:
-			_pull()
-			_ap_t = randf_range(2.5, 5.0)
-
-
 func _exit_tree() -> void:
-	Spectrum.release_conductor(self)
-	if _dirty:
-		_persist()
-
-
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST and _dirty:
-		_persist()
+	_persist()
 
 
 func _persist() -> void:
-	# a UI-recorded export plays the game to make a video, not to progress the save: it must never write over the
-	# player's real belt/reserve
-	if _autopilot:
+	if quiet or not _loaded:
 		return
-	_dirty = false
-	Settings.write("synth", "text", _doc.draft())
-	Settings.write("synth", "traits", _traits)
-	Settings.write("synth", "lineage", _lineage)
-	Settings.write("synth", "belt", _belt)
-	Settings.write("synth", "profile", _profile)
-	Settings.write("synth", "adreno", _working_genome)
-	Settings.write("synth", "loc", _working_loc)
-	Settings.write("synth", "reserve", _reserve)
+	Settings.write(SECTION, "belt", _belt)
+	Settings.write(SECTION, "profile", _profile)
+	Settings.write(SECTION, "reserve", _reserve)
 
 
 func _load_persisted() -> void:
-	_traits = Settings.read("synth", "traits", {})
-	_lineage = Settings.read("synth", "lineage", [1])
-	_belt = Settings.read("synth", "belt", [])
-	_profile = str(Settings.read("synth", "profile", "anchor"))
-	# older saves used the reward-flavor names; map them onto the modes
-	if _profile == "snap":
-		_profile = "anchor"
-	elif _profile == "hunt":
-		_profile = "reel"
+	_belt = Settings.read(SECTION, "belt", []) if not quiet else []
+	_profile = str(Settings.read(SECTION, "profile", "anchor"))
 	if not PROFILES.has(_profile):
 		_profile = "anchor"
-	_working_genome = Settings.read("synth", "adreno", {})
-	_working_loc = Settings.read("synth", "loc", {})
-	_reserve = float(Settings.read("synth", "reserve", 0.0))
+	_reserve = float(Settings.read(SECTION, "reserve", 0.0))
 	_sync_switchboard()
 	for e in _belt:
 		if not e.has("m"):
@@ -1711,120 +1451,66 @@ func _load_persisted() -> void:
 		if not e.m.has("r"):
 			e.m.r = 0.0
 			e.m.d = 0.35
-		e.erase("active")
-	if _traits.is_empty():
-		_traits = VoiceParty.background_traits(_belt)
+	_traits = VoiceParty.background_traits(_belt)
 	_update_reading_label()
 	_rebuild_belt()
 
 
-# ---- the document's own voice ----------------------------------------------
+## The words the line reads and the Listen booth asks for: the Test passage, the same every voice is tested with
+## ([method ReadingPanel._test_passage]), so voices are compared on the same words.
+func _passage() -> String:
+	return Manuscript.unspoken(cast.panel._test_passage() if cast != null and cast.panel != null
+		else ReadingAudition.PASSAGE).strip_edges()
 
 
-## The working voice, for [DocSource] to store in a document's frontmatter. The Collection is not in it: a seed
-## belt and a reserve are what the player has caught, which belongs to the player and not to one chapter. What a
-## document owns is the voice it is read in: the lineage that names it, the traits that are it, the genome it
-## carries and the reception it is heard at.
-func _doc_capture() -> Dictionary:
-	var out := {"synthesis": {
-		"lineage": _lineage.duplicate(),
-		"traits": _traits.duplicate(),
-		"genome": _working_genome.duplicate(),
-		"reception": _working_loc.duplicate(),
-	}}
-	if _youtube != null:
-		out["youtube"] = _youtube.capture()
-	for key in _block_cards:
-		out[key] = (_block_cards[key] as Object).call("capture")
-	return out
-
-
-## ...and back, when a document that carries one is opened. A block with no lineage is a document never given a
-## voice, and leaves the water exactly as it was.
-func _doc_apply(blocks: Dictionary) -> void:
-	if _youtube != null and blocks.get("youtube") is Dictionary:
-		_youtube.apply(blocks["youtube"] as Dictionary)
-	for key in _block_cards:
-		if blocks.get(key) is Dictionary:
-			(_block_cards[key] as Object).call("apply", blocks[key] as Dictionary)
-	var cfg: Dictionary = blocks["synthesis"] if blocks.get("synthesis") is Dictionary else {}
-	var lineage: Variant = cfg.get("lineage", null)
-	if not (lineage is Array) or (lineage as Array).is_empty():
+## The line heard: the Test passage read in the voice on the line, as the tab's rows have it - a reading and a Test
+## stopped first, one sound at a time. Restarted in place when the line is already out.
+func _speak() -> void:
+	if quiet or not _cast:
 		return
-	var lin: Array = []
-	for v in lineage as Array:
-		lin.append(int(v))
-	_lineage = lin
-	_traits = _floats(cfg.get("traits", {}))
-	_working_genome = _floats(cfg.get("genome", {}))
-	_working_loc = _floats(cfg.get("reception", {}))
-	_ensemble_last = []              # a document's voice is its own: no throw composed it
-	if _traits.is_empty():
-		_traits = VoiceParty.background_traits(_belt)
-	_update_reading_label()
-	_update_slot_highlights()
-	# Whatever is in the water is being spoken by the voice that was there a moment ago. The restart goes through the
-	# ordinary debounce rather than straight to [method _apply], so opening a document costs one re-synthesis.
-	_dirty = true
-	_restart_pending = true
-	_last_edit_ms = Time.get_ticks_msec()
-
-
-## A stored map -> floats. A trait read back out of YAML is an int wherever it landed on a whole number, and every
-## consumer multiplies them.
-func _floats(v: Variant) -> Dictionary:
-	var out := {}
-	if not (v is Dictionary):
-		return out
-	for k in v as Dictionary:
-		out[str(k)] = float((v as Dictionary)[k])
-	return out
-
-
-func _apply() -> void:
-	_restart_pending = false
-	# autopilot performs over a fixed take (the export's audio): it must not synthesize a stream of its own
-	if _autopilot:
-		return
-	if not _cast:
-		# edits before the first throw only shape the draft - the water stays silent until a voice is cast into it
-		_status.text = "the water is silent - throw to cast a voice"
-		return
-	# The real-time read, in sync mode: the file as it is on disk right now, so the author can keep writing in their
-	# own editor and hear the change at the next cast.
-	var text := Manuscript.unspoken(_doc.pull()).strip_edges()
+	var text := _passage()
 	if text.is_empty():
-		_status.text = "write something, then throw"
 		return
+	if cast != null:
+		if cast.panel._stream.has_reading():
+			cast.panel._stream.stop()
+		if cast.panel._test_busy():
+			cast.panel._stop_test()
+	if _sampler.visible:
+		_sampler.close()             # the booth turns the show down: the line would be all but silent under it
 	_loop_len = 0.0
-	var spec := _current_spec()
+	var voice := _current_spec()
+	var spec := _heard(voice)
 	if _stream != null and is_instance_valid(_stream):
 		_stream.restart(text, spec)
-		return
-	var stream: VoiceStream = preload("res://src/voice/voice_stream.gd").new()
-	stream.setup(text, spec, "user://synth/take_%06x" % (hash(str(_lineage)) & 0xFFFFFF))
-	stream.completed.connect(func(dur: float, _wav: String):
-		_loop_len = dur)
-	_stream = stream
-	if begin_stream.is_valid():
-		begin_stream.call(stream)
-	# The take conducts while it plays: the transport pauses it and Stop releases the line. A generator cannot be
-	# seeked, so the rail shows the take and takes no click.
-	Spectrum.conduct(self, {
-		"play": func() -> void: Spectrum.set_paused(false),
-		"pause": func() -> void: Spectrum.set_paused(true),
-		"stop": _release_line,
-		"playing": func() -> bool: return _stream != null and not Spectrum.paused,
-		"can_play": func() -> bool: return _stream != null,
-		"can_stop": func() -> bool: return _stream != null,
-		"position": func() -> float: return fmod(Spectrum.current.time, _loop_len) if _loop_len > 0.0 else Spectrum.current.time,
-		"length": func() -> float: return _loop_len,
-	})
+	else:
+		_stream = VoiceStream.new()
+		_stream.setup(text, spec)
+		_stream.completed.connect(func(dur: float) -> void: _loop_len = dur)
+		_stream.set_gain(_gain)
+		add_child(_stream)
+		_stream.play()
+	_level(voice)
 
 
-## The catch animation, anchored beside the button that was pressed: an orb in the seed's hue closes on the voice,
-## wobbles (each a contest), then settles with a ring (caught) or bursts into shards (slipped away). The roll is
-## decided before the orb appears.
+## The voice on the line played at every voice's level ([method FormantVoice.gain_of]): measured on a worker, the
+## line meanwhile at the last voice's gain - a voice cast from the Collection is near its kin's - gliding to its
+## own once known.
+func _level(voice: Voice.Spec) -> void:
+	var line := _line_gen
+	var at := _stream
+	var box := {}
+	var task := WorkerThreadPool.add_task(func() -> void: box["gain"] = FormantVoice.gain_of(voice))
+	while not WorkerThreadPool.is_task_completed(task):
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	_gain = float(box.get("gain", _gain))
+	if line == _line_gen and at == _stream and is_instance_valid(at):
+		at.set_gain(_gain)
+
+
+## The catch animation, over the water: an orb in the seed's hue closes on the voice, wobbles (each a contest), then
+## settles with a ring (caught) or bursts into shards (slipped away). The roll is decided before the orb appears.
 class CatchOrb:
 	extends Control
 	signal finished
@@ -1839,7 +1525,8 @@ class CatchOrb:
 	const RESULT := 0.55
 
 	func _ready() -> void:
-		set_anchors_preset(Control.PRESET_FULL_RECT)
+		position = Vector2.ZERO
+		size = get_viewport_rect().size
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _total() -> float:
@@ -1890,31 +1577,31 @@ class CatchOrb:
 ## home and rolling back when the catch runs, while the live distance caption walks in below it.
 class Hud:
 	extends Control
-	var editor: SynthEditor
+	var game: VoiceFishing
 
 	func _draw() -> void:
-		if editor == null:
+		if game == null:
 			return
 		var s := size
 		var glyph_c := Vector2(34.0, s.y * 0.5)
 		var t := Time.get_ticks_msec() / 1000.0
 		var line_col := Color(0.4, 0.85, 0.65, 0.35)
 		var y0: float = s.y * 0.5
-		if not editor._hook.is_empty():
+		if not game._hook.is_empty():
 			# the reel: progress arc + the fight. The arc is the distance: the log-space fraction of the way home the haul has
 			# closed, so a run visibly rolls it backwards while the caption below climbs
-			var progress: float = clampf(float(editor._hook.progress), 0.0, 1.0)
-			var run: float = float(editor._hook.get("run", 0.0))
+			var progress: float = clampf(float(game._hook.progress), 0.0, 1.0)
+			var run: float = float(game._hook.get("run", 0.0))
 			# the toll bleeds the readout: an easy catch reels in clean amber, a foreign one sickens toward violet as it is
 			# dragged in
-			var toll: float = editor._hook_toll()
+			var toll: float = game._hook_toll()
 			var arc_col := Color(1.0, 0.75, 0.3, 0.9).lerp(
 				Color(0.75, 0.25, 0.95, 0.95), toll)
 			draw_arc(glyph_c, 30.0, -PI / 2.0, -PI / 2.0 + TAU * progress, 48,
 				arc_col, 2.5 + 1.5 * toll)
 			# where we're catching it, not a percentage (meaningless when the distance is a lightyear)
 			draw_string(get_theme_default_font(), Vector2(66.0, s.y - 8.0),
-				editor._drift_caption(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
+				game._drift_caption(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
 				Color(0.4, 0.85, 0.65, 0.75))
 			# tension: taut thrum while reeling; a run whips the line hard and shifts it toward red
 			var pts := PackedVector2Array()
@@ -1933,12 +1620,12 @@ class Hud:
 		# the line: slack when quiet, pulled into a deepening belly while something is anchored, throbbing slowly. The
 		# catch's difficulty is animated into the same line: a hard catch trembles rough and shifts toward red, an easy
 		# one stays calm and green.
-		var pull: float = clampf(editor._anchor, 0.0, 1.2)
-		var d: float = editor._candidate_difficulty() if pull > 0.05 else 0.0
+		var pull: float = clampf(game._anchor, 0.0, 1.2)
+		var d: float = game._candidate_difficulty() if pull > 0.05 else 0.0
 		var belly: float = pull * (s.y * 0.3) * (1.0 + 0.15 * sin(t * 2.2))
 		# the wire bows into an arc by distance (in any mode: the position holds), the path traveled toward the thing at
 		# its far end
-		var drift_arc: float = lerpf(0.0, s.y * 0.24, editor._drift_norm())
+		var drift_arc: float = lerpf(0.0, s.y * 0.24, game._drift_norm())
 		var swell := belly + drift_arc
 		var pts := PackedVector2Array()
 		for i in 25:
@@ -1953,52 +1640,51 @@ class Hud:
 		# out at a distance (drifting there, anchored there, or reeling back) the beacon + traveling position show; the
 		# field freezes when anchored and reverses when reeling (both fall out of the odometer). Only truly at home in
 		# anchor/reel do we fall back to a still cast dot.
-		var out_there: bool = editor._profile == "drift" or editor._drift_norm() > 0.003
+		var out_there: bool = game._profile == "drift" or game._drift_norm() > 0.003
 		if out_there:
 			_draw_drift_field(s, y0, swell)
 			_draw_drift_travel(s, y0, swell, t)
 		else:
-			var cast_u: float = 0.35 if editor._profile == "reel" else 0.5
+			var cast_u: float = 0.35 if game._profile == "reel" else 0.5
 			var cp := Vector2(lerpf(64.0, s.x - 12.0, cast_u), y0 + sin(cast_u * PI) * belly)
 			draw_circle(cp, 3.2 + (1.2 * sin(t * 2.2) if pull > 0.05 else 0.0),
 				Color(0.5, 0.95, 0.8, 0.75))
 		if out_there:
 			# the honest distance you're parked at, and (drift only) the warp state
-			var cap := editor._drift_caption()
+			var cap := game._drift_caption()
 			var warp_txt := ""
 			var warp_col := Color(0.4, 0.85, 0.65, 0.7)
-			if editor._profile == "anchor":
+			if game._profile == "anchor":
 				warp_txt = "  ·  anchored"
-			elif editor._profile == "reel":
+			elif game._profile == "reel":
 				warp_txt = "  ·  reeling home"
-			elif editor._warping:
-				warp_txt = "  ·  ⚡ WARP  (reserve %.1f)" % editor._reserve
+			elif game._warping:
+				warp_txt = "  ·  ⚡ WARP  (reserve %.1f)" % game._reserve
 				warp_col = Color(0.75, 0.85, 1.0, 0.9)
-			elif editor._warp_charge_t >= SynthEditor.WARP_CHARGE:
-				warp_txt = "  ·  drive charged - need %.1f reserve" % SynthEditor.WARP_MIN \
-					if editor._reserve < SynthEditor.WARP_MIN else "  ·  drive charged"
+			elif game._warp_charge_t >= VoiceFishing.WARP_CHARGE:
+				warp_txt = "  ·  drive charged - need %.1f reserve" % VoiceFishing.WARP_MIN \
+					if game._reserve < VoiceFishing.WARP_MIN else "  ·  drive charged"
 				warp_col = Color(0.9, 0.8, 1.0, 0.85)
-			elif editor._drift_vel >= SynthEditor.DRIFT_VMAX - 0.000001:
-				warp_txt = "  ·  charging warp %d%%" % int(editor._warp_charge_t / SynthEditor.WARP_CHARGE * 100.0)
+			elif game._drift_vel >= VoiceFishing.DRIFT_VMAX - 0.000001:
+				warp_txt = "  ·  charging warp %d%%" % int(game._warp_charge_t / VoiceFishing.WARP_CHARGE * 100.0)
 			draw_string(get_theme_default_font(), Vector2(66.0, s.y - 8.0),
 				cap + warp_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, warp_col)
 		_draw_compass(s)
 		if pull > 0.05:
-			# nibbles felt so far - brightening ticks above the line; fill up
-			# toward NIBBLE_MAX as patience accumulates
-			for i in editor._nibbles:
-				var nx := lerpf(70.0, s.x - 20.0, float(i) / float(SynthEditor.NIBBLE_MAX - 1))
+			# nibbles felt so far - brightening ticks above the line; fill up toward NIBBLE_MAX as patience accumulates
+			for i in game._nibbles:
+				var nx := lerpf(70.0, s.x - 20.0, float(i) / float(VoiceFishing.NIBBLE_MAX - 1))
 				draw_circle(Vector2(nx, y0 - 14.0), 2.0, Color(1.0, 0.9, 0.5, 0.75))
 		_draw_party_planets(s)
 
-	## The party's influence in the cosmos, sparsely: a member appears as a tiny planet only when it is close to the
-	## current candidate, drifting nearer the constellation the closer it sits. A distant party leaves an empty sky.
+	## The Collection's influence in the cosmos, sparsely: a seed appears as a tiny planet only when it is close to the
+	## current candidate, drifting nearer the constellation the closer it sits. A distant Collection leaves an empty sky.
 	func _draw_party_planets(s: Vector2) -> void:
-		var threshold: float = editor._planet_threshold()
-		var party := editor._party_vector()
-		for i in editor._belt.size():
-			var e: Dictionary = editor._belt[i]
-			var closeness: float = editor._member_closeness(e)
+		var threshold: float = game._planet_threshold()
+		var party := game._party_vector()
+		for i in game._belt.size():
+			var e: Dictionary = game._belt[i]
+			var closeness: float = game._member_closeness(e)
 			if closeness < threshold:
 				continue
 			var u: float = clampf((1.0 - closeness) / maxf(1.0 - threshold, 0.05), 0.06, 1.0)
@@ -2009,8 +1695,8 @@ class Hud:
 				s.y * 0.5 + rng.randf_range(-0.3, 0.3) * s.y)
 			var r: float = 2.0 + 2.0 * clampf((closeness - 0.72) / 0.28, 0.0, 1.0)
 			# just dots here (too tiny to read a phase); color still carries the seed's behavior. The moons (the phase, the
-			# cast-relative shadow) live on the belt and the big candidate planet.
-			var col := SeedGlyph.behavior_color(editor._member_bearing(e, party))
+			# cast-relative shadow) live in the Collection and the big candidate planet.
+			var col := SeedGlyph.behavior_color(game._member_bearing(e, party))
 			draw_circle(pos, r, Color(col, 0.85))
 			draw_arc(pos, r + 1.4, 0.0, TAU, 12, Color(col, 0.4), 1.0)
 
@@ -2018,10 +1704,10 @@ class Hud:
 	## motion - crawling at raw velocity, elongating into streaks the instant the warp lights. Motes near the caster
 	## read bigger and brighter; the deep field thins to faint specks.
 	func _draw_drift_field(s: Vector2, y0: float, belly: float) -> void:
-		var warp: bool = editor._warping
+		var warp: bool = game._warping
 		# the whole field slides toward the caster as the odometer climbs; the multiplier sets how many motes pass per
 		# unit of distance traveled
-		var scroll: float = fposmod(editor._drift_dist * 42.0, 4096.0)   # wrap keeps fractional precision at deep-warp distances
+		var scroll: float = fposmod(game._drift_dist * 42.0, 4096.0)   # wrap keeps fractional precision at deep-warp distances
 		var n := 18
 		for i in n:
 			var u: float = fposmod(float(i) / float(n) - scroll, 1.0)   # 0 caster .. 1 deep field
@@ -2041,7 +1727,7 @@ class Hud:
 	## the arc toward it, reaching it around 0.8 of the way and slipping past it toward the deep field as the odometer
 	## maxes or a warp surges. The beacon swells as we close on it and dims once overshot.
 	func _draw_drift_travel(s: Vector2, y0: float, swell: float, t: float) -> void:
-		var norm: float = editor._drift_norm()
+		var norm: float = game._drift_norm()
 		var x0 := 64.0
 		var x1 := s.x - 12.0
 		var yat := func(u: float) -> float: return y0 + sin(clampf(u, 0.0, 1.0) * PI) * swell
@@ -2058,16 +1744,16 @@ class Hud:
 		draw_circle(bp, br, bcol)
 		# us: traveling toward and past it; a streak trails behind while warping
 		var pp := Vector2(xat.call(pos_u), yat.call(pos_u))
-		if editor._warping:
+		if game._warping:
 			var tu: float = maxf(pos_u - 0.1, 0.0)
 			draw_line(Vector2(xat.call(tu), yat.call(tu)), pp, Color(0.72, 0.86, 1.0, 0.75), 2.0)
 		draw_circle(pp, 3.4, Color(0.5, 0.95, 0.8, 0.92))
 
 	## The 3D compass: a small isometric gizmo (top-right of the wire) showing which way, and how far, the current
-	## candidate sits from the party in the three legible trait axes (see SynthEditor._bearing3). A bearing line with
-	## a dot at its tip, plus a dropped shadow that reads the Y (damage) axis as altitude.
+	## candidate sits from the Collection in the three legible trait axes (see VoiceFishing._bearing3). A bearing line
+	## with a dot at its tip, plus a dropped shadow that reads the Y (damage) axis as altitude.
 	func _draw_compass(s: Vector2) -> void:
-		var b: Vector3 = editor._bearing3()
+		var b: Vector3 = game._bearing3()
 		var o := Vector2(s.x - 40.0, 22.0)
 		var r := 15.0
 		# isometric basis: X to the lower-right, Y straight up, Z to the lower-left
@@ -2094,9 +1780,9 @@ class Hud:
 class SeedGlyph:
 	extends Control
 	var seed_hash := 0
-	var fit := 0.6                   # 0 poor .. 1 kin, RELATIVE within the bag
-	# When set (alpha > 0), the glyph's color is this behavior tint instead of the fit wheel, so a big belt is told
-	# apart by what each seed sounds like. The frazzle still reads fit: color = behavior, tightness = belonging.
+	var fit := 0.6                   # 0 poor .. 1 kin, RELATIVE within the Collection
+	# When set (alpha > 0), the glyph's color is this behavior tint instead of the fit wheel, so a big Collection is
+	# told apart by what each seed sounds like. The frazzle still reads fit: color = behavior, tightness = belonging.
 	var tint := Color(1, 1, 1, 0.0)
 	# When is_planet, the glyph's body is drawn as a moon phase (see draw_planet) instead of a ring. The fingerprint
 	# dots draw on top and may fall into the cut.
@@ -2108,8 +1794,8 @@ class SeedGlyph:
 		return Color.from_hsv(lerpf(0.0, 0.42, clampf(f, 0.0, 1.0)), 0.9, 1.0)
 
 	## A seed's behavior as a full-spectrum color, from its 3D bearing (see VoiceParty.bearing_of): hue is the
-	## direction in the brightness/damage plane, saturation how far it sits from the party (kin wash out, foreigners
-	## burn), and value rides the drive axis.
+	## direction in the brightness/damage plane, saturation how far it sits from the Collection (kin wash out,
+	## foreigners burn), and value rides the drive axis.
 	static func behavior_color(b: Vector3) -> Color:
 		var hue: float = fposmod(atan2(b.y, b.x) / TAU + 0.5, 1.0)
 		var mag: float = clampf(Vector2(b.x, b.y).length(), 0.0, 1.0)

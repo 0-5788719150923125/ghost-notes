@@ -773,11 +773,13 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		vars["misses"] = misses
 		if comment == "aside":
 			lo_hi = [45, 75]
-		elif passed or comment == "brief" or (comment.is_empty() and pace == "quick"):
+		elif passed or comment == "brief":
 			lo_hi = [15, 40]
 		elif comment.is_empty() and pace == "mixed" and int(step) % 3 == 0:
 			lo_hi = [90, 140]
-		elif comment.is_empty() and pace == "mixed":
+		elif comment.is_empty() and (pace == "mixed" or pace == "quick"):
+			# a short look - every card of a quick reading, most of a mixed one's - still long enough to make
+			# its point: a passed-over card's few words are for a card put back
 			lo_hi = [35, 75]
 	var kind := step if step == "intro" or step == "close" \
 		else ("beat" if bare else ("jumper" if not drawn.is_empty() and bool((drawn[drawn.size() - 1] as Dictionary).get("jumper", false)) else "card"))

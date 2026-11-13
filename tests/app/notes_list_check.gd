@@ -702,7 +702,7 @@ func _measure() -> Dictionary:
 	var ch: Chrome = _main._chrome
 	var modes := 0
 	for n in _main.get_children():
-		if n is ReadingPanel or n is SynthEditor or n is MaskEditor or n is NotePanel:
+		if n is ReadingPanel or n is MaskEditor or n is NotePanel:
 			modes += 1
 	return {"list": _main._list != null and is_instance_valid(_main._list),
 		"bottom": ch._bottom_claims.keys(), "export": ch._export_claims.keys(),

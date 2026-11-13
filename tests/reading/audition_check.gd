@@ -47,6 +47,9 @@ var _host: Host
 func _ready() -> void:
 	_ed = ReadingPanel.new()
 	_ed._build_panel()
+	# the words read are the plain reading's: a format's walk (a Letter's, a desk's) taken from the Director's last
+	# medium in the author's settings must not choose them
+	_ed.walk = TextWalk.new()
 	if _ed._doc != null:
 		_ed._doc._sync = false
 	_ed.remove_child(_ed._panel)

@@ -57,8 +57,8 @@ var _sig_fast: HarmonicSignature = null  # short-memory twin for the Echo re-loc
                                          # that the audio moved (a loop seam) must not wait out the
                                          # seconds of context the seeding descriptor integrates
 
-## Emitted when a loaded song reaches its end (not in idle mode). Manual and Synthesis loop, Auto stops
-## at its start and stays in its note. Looping streams never end, so this never fires for them.
+## Emitted when a loaded song reaches its end (not in idle mode). Manual loops, Auto stops at its start
+## and stays in its note. Looping streams never end, so this never fires for them.
 signal song_finished
 
 var _player: AudioStreamPlayer
@@ -82,7 +82,7 @@ var lead_in := 0.0
 var tail := 0.0
 
 ## Whether the loaded audio already contains the bookend silence. Auto and manual play a song that
-## must not be rewritten, so the hold is performed here at playback time. Synthesis renders its own
+## must not be rewritten, so the hold is performed here at playback time. A reading renders its own
 ## take and writes the silence into the PCM, so the ambience pad swells during the intro and the
 ## analyzer hears it. When true the clock needs no offset and playback is not held, but [member
 ## lead_in] and [member tail] are still set because the fade windows read them.
@@ -94,7 +94,7 @@ var bookend_baked := false
 var fade_audio := true
 
 ## The conductor (next/notes.md, "The transport"): whatever plays the show's audio when it is not a
-## plain file (a live reading, a synthesis take), and so whatever the transport's play, pause, stop and
+## plain file (a live reading), and so whatever the transport's play, pause, stop and
 ## rail drive. One at a time, registered by its owner ([method conduct]), released by it ([method
 ## release_conductor]), and forgotten once the owner is freed.
 ##
@@ -185,7 +185,7 @@ func begin(path := "") -> void:
 				push_warning("ghost: bake file missing/empty: %s" % bake_file)
 		elif OS.get_cmdline_user_args().has("--use-bake"):
 			_bake()                              # direct-CLI fallback (bakes in-process)
-		#A synthesis take writes its own bookend into its PCM and records it in its sidecar. Believe the
+		#A reading's take writes its own bookend into its PCM and records it in its sidecar. Believe the
 		#file over the request, or a file that already opens with silence would be held twice.
 		_adopt_baked_bookend()
 		#The lead-in holds the first sample, not the session: the clock runs at once so scenes animate and
@@ -239,14 +239,13 @@ const LIVE_TAP := false
 const TAP_SECONDS := 120.0            # rolling window: the LAST two minutes
 
 var _streaming := false
-var _stream_length := 0.0
 
 
 ## Begin a streamed session: no file - the caller pushes PCM into the returned generator playback as it
 ## produces it ([VoiceStream]), and the analyzer bus hears it like a song. `fp` stands in for the file
 ## fingerprint as the session seed source (derived from the caller's own content, so the same input
-## replays the same show). The audio path and length are unknown at start; the caller reports them via
-## set_stream_info() once the take is done.
+## replays the same show). The audio path and length are unknown: the caller answers for them as it
+## conducts.
 func begin_stream(fp: int, sr: int) -> AudioStreamGeneratorPlayback:
 	var held := paused
 	stop()
@@ -267,14 +266,7 @@ func begin_stream(fp: int, sr: int) -> AudioStreamGeneratorPlayback:
 	return _player.get_stream_playback()
 
 
-## The streamed take is fully synthesized: it now has a real file (for the exporter's relaunch) and a
-## known length (for the exporter's progress).
-func set_stream_info(path: String, length: float) -> void:
-	_loaded_path = path
-	_stream_length = length
-
-
-## True while the session is a streamed take (synthesis mode).
+## True while the session is a streamed take (a reading said live).
 func is_streaming() -> bool:
 	return _streaming
 
@@ -283,28 +275,6 @@ func is_streaming() -> bool:
 ## cannot fire.
 func has_audio() -> bool:
 	return _has_audio
-
-
-## Fade the streaming player out over a breath (~two frames) so a restart's stop/play cycle does not
-## truncate the waveform mid-cycle (an audible pop). restart_stream() restores the volume.
-func fade_stream(dur := 0.04) -> void:
-	if _player == null or not _streaming:
-		return
-	var tw := create_tween()
-	tw.tween_property(_player, "volume_db", -60.0, dur)
-	await tw.finished
-
-
-## Cycle the streaming generator for an in-place content restart. A generator's ring buffer cannot be
-## cleared while playing, so this is a stop/play cycle: position rebases to 0 and a fresh playback
-## object comes back - push to that one.
-func restart_stream() -> AudioStreamGeneratorPlayback:
-	_stream_length = 0.0
-	_loaded_path = ""    # the old take's file no longer matches what is playing
-	_player.stop()
-	_player.volume_db = 0.0          # undo any fade_stream() cut
-	_player.play()
-	return _player.get_stream_playback()
 
 
 ## Can this session be scrubbed at all? A file can be seeked; a generator cannot (nothing behind the
@@ -571,7 +541,6 @@ func stop() -> void:
 	_last_time = 0.0
 	_override_path = ""
 	_streaming = false
-	_stream_length = 0.0
 	song_hash = 0
 	current = AudioFeatures.new()
 	#Put the master back where it was: the bookend trims a global bus, so a session that ended mid-fade
@@ -634,7 +603,7 @@ func stream_origin() -> float:
 ## The audio's own length, without the bookend - what the player is actually playing.
 func _content_length() -> float:
 	if _streaming:
-		return _stream_length
+		return 0.0
 	if _has_audio and _player != null and _player.stream != null:
 		return _player.stream.get_length()
 	return 0.0

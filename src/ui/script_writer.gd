@@ -32,10 +32,10 @@ const FIELDS := {
 	"title": {"label": "Title", "modes": ["generative", "table", "note"],
 		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds. The %title% of the YouTube title."},
 	"byline": {"label": "Byline", "modes": ["table"],
-		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\". Empty, the name stands alone."},
+		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\", or \"%episode%\". It takes the YouTube title's macros, filled for each episode: %title%, %episode%, %seed%, %author%, %book%, %date%. Empty, the name stands alone."},
 	"episode": {"label": "Episode", "modes": ["table"],
 		"wait": "named with the episode",
-		"tip": "What this video is called: the %episode% of the YouTube title. A card show's or a Proof note's is the picked episode's - its writer names it as it plans the episode, an edit here is written into the episode, and it names the export; an episode needs one. A note read as it is written names its own here."},
+		"tip": "What this video is called: the %episode% of the YouTube title and the Byline. A card show's or a Proof note's is the picked episode's - its writer names it as it plans the episode, an edit here is written into the episode, and it names the export; an episode needs one. A note read as it is written names its own here."},
 	"author": {"label": "Author", "modes": ["generative"],
 		"tip": "Who wrote it. Printed on the cover in the Novel and Notebook. The %author% of the YouTube title."},
 	"book": {"label": "Book", "modes": ["generative"],
@@ -92,7 +92,7 @@ func _wording(key: String, dflt: String) -> String:
 
 ## Build the card, the window and the [DocSource] inside it. [param section] and [param blocks]
 ## are DocSource's (the Settings section, the blocks under `ghost:` its panel owns); [param mode] picks which
-## marks the palette offers and the highlighter colors ("generative", "synthesis").
+## marks the palette offers and the highlighter colors ("generative", "table").
 func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	_mode = mode
 	add_theme_constant_override("separation", 4)

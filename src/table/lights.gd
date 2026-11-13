@@ -201,6 +201,13 @@ const SWING_DAMP := 0.55
 ## A sun through a wall stands no higher than this (degrees): a higher sun hardly reaches into a room,
 ## and its wall would stand over the table.
 const WALL_SUN := 65.0
+## A sun's shadow biases (a tabletop's: cards are 0.7 mm thick) at SUN_BIAS_HEIGHT degrees and higher. A lower sun grazes a
+## flat top, whose depth across a shadow texel goes as the cotangent of its height, and without more bias each top shades
+## itself in fine stripes: under it the normal bias grows by that cotangent, the depth bias by half as much, up to
+## SUN_BIAS_MOST times ([method sun_biases]).
+const SUN_BIAS := Vector2(0.015, 0.35)
+const SUN_BIAS_HEIGHT := 45.0
+const SUN_BIAS_MOST := 4.0
 ## How soft a screen's shade is when none is said (`soft`, 0-1): a canopy high over the table throws
 ## soft dapples, a window's bars a meter off crisp ones. At `soft` 1 its shade grows and shrinks by
 ## [constant GROW]'s step - meters for an edge or a bar, noise levels for a canopy, the share of a gap
@@ -743,6 +750,13 @@ static func summary(light: Dictionary) -> String:
 
 
 # --- where it is ---------------------------------------------------------------------------------------
+
+## A sun's shadow biases at [param height] degrees: (depth bias, normal bias), [constant SUN_BIAS] grown as it drops
+## below [constant SUN_BIAS_HEIGHT].
+static func sun_biases(height: float) -> Vector2:
+	var k := clampf(tan(deg_to_rad(SUN_BIAS_HEIGHT)) / tan(deg_to_rad(clampf(height, 1.0, 89.0))), 1.0, SUN_BIAS_MOST)
+	return Vector2(SUN_BIAS.x * (1.0 + k) * 0.5, SUN_BIAS.y * k)
+
 
 ## The sun's direction for [param sun] (made safe): a unit vector from the table toward it, in the
 ## table's space (x to the reader's right, y up, z toward the reader).
@@ -2032,11 +2046,12 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 			sn.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 			sn.directional_shadow_max_distance = 2.0
 			sn.directional_shadow_fade_start = 0.95
-			# A tabletop's biases (cards are 0.7 mm thick), and softness by the filter, not by PCSS: a sun's
-			# PCSS searches as far as its farthest caster (a wall a meter and more off), and the blocker search
-			# then misses a stone's small shadow
-			sn.shadow_bias = 0.015
-			sn.shadow_normal_bias = 0.35
+			# A tabletop's biases, grown as the sun drops ([method sun_biases]), and softness by the filter, not by
+			# PCSS: a sun's PCSS searches as far as its farthest caster (a wall a meter and more off), and the blocker
+			# search then misses a stone's small shadow
+			var biases := sun_biases(float(sun["height"]))
+			sn.shadow_bias = biases.x
+			sn.shadow_normal_bias = biases.y
 			sn.light_angular_distance = 0.0
 			sn.shadow_blur = rig.sun_blur
 			sn.light_specular = 0.7 / float(n_suns)

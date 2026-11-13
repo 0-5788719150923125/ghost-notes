@@ -1,7 +1,8 @@
 extends PanelContainer
 class_name VoiceSampler
 
-## VoiceSampler - "echo a living voice": record the player reading a fixed passage, measure the voice
+## VoiceSampler - "echo a living voice": record the player reading the passage every voice is tested with (handed
+## to [method open]), measure the voice
 ## (the recording is never kept), and mint a new seed whose traits and prosody genome mimic the source.
 ##
 ## What leaves this panel is ~20 scalars: a trait vector (the closed-form inversions of
@@ -10,7 +11,8 @@ class_name VoiceSampler
 ## sits where the living voice sits: pitch, tempo, breathiness, pausing, melodic spread.
 ##
 ## Recording is the stock Godot microphone pattern: an [AudioStreamMicrophone] played onto a muted bus
-## carrying an [AudioEffectRecord]. The Master bus is pulled down while the mic is open, so the take
+## carrying an [AudioEffectRecord], heard through the system's default microphone (no device is asked for:
+## the sound goes on playing where ghost plays it, and the input is the one the system already uses). The Master bus is pulled down while the mic is open, so the take
 ## cannot bleed into the measurement. Analysis runs on a [WorkerThreadPool] thread; `seed_ready` fires
 ## back on the main thread.
 
@@ -18,17 +20,9 @@ signal seed_ready(traits: Dictionary, genome: Dictionary, report: String)
 
 const BUS_NAME := "VoiceIn"
 const MIN_SECONDS := 8.0            # too little speech = statistics of nothing
-const MAX_SECONDS := 45.0           # auto-stop; the passage reads in ~20-30 s
-# The passage is the measurement instrument: statements and a question (terminal contours), an
-# unpunctuated run (breath placement), commas (pause style), and plenty of vowels for pitch tracking.
-const PASSAGE := ("Once upon a time, the river spoke softly to the stones. "
-	+ "Did the water remember every voice it carried? "
-	+ "I think it kept them all somewhere below the surface waiting "
-	+ "for someone patient enough to listen. "
-	+ "Stones and static, signal and silence - the keeper plays them back, "
-	+ "one slow breath at a time.")
+const MAX_SECONDS := 120.0          # auto-stop; the Test passage reads in about a minute
 
-var _device_pick: OptionButton
+var _words: Label                   # the passage read aloud, handed to [method open]
 var _record_btn: Button
 var _cancel_btn: Button
 var _status: Label
@@ -59,20 +53,14 @@ func _ready() -> void:
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.modulate = Color(1, 1, 1, 0.6)
 	col.add_child(hint)
-	var script_label := Label.new()
-	script_label.text = PASSAGE
-	script_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	script_label.add_theme_font_size_override("font_size", 12)
-	script_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.8))
-	col.add_child(script_label)
+	_words = Label.new()
+	_words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_words.add_theme_font_size_override("font_size", 12)
+	_words.add_theme_color_override("font_color", Color(0.9, 0.9, 0.8))
+	col.add_child(_words)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	col.add_child(row)
-	_device_pick = OptionButton.new()
-	_device_pick.add_theme_font_size_override("font_size", 11)
-	_device_pick.custom_minimum_size = Vector2(220, 26)
-	_device_pick.tooltip_text = "The input device the echo listens through."
-	row.add_child(_device_pick)
 	_record_btn = Button.new()
 	_record_btn.text = "Record"
 	_record_btn.custom_minimum_size = Vector2(90, 26)
@@ -92,15 +80,14 @@ func _ready() -> void:
 	_ensure_bus()
 
 
-func open() -> void:
+## Open the booth on [param passage]: the words every voice is tested with, so an echo is heard on the same ones.
+func open(passage: String) -> void:
 	if _analyzing:
 		return
+	_words.text = passage
 	# the show goes quiet when the booth opens, or a looping voice would read into the microphone
 	_set_show_quiet(true)
-	_device_pick.clear()
-	for dev in AudioServer.get_input_device_list():
-		_device_pick.add_item(dev)
-	_status.text = "pick a device, press Record, and read"
+	_status.text = "press Record and read the passage aloud - your system's microphone listens"
 	visible = true
 
 
@@ -154,8 +141,6 @@ func _set_show_quiet(quiet: bool) -> void:
 
 
 func _start_recording() -> void:
-	if _device_pick.selected >= 0:
-		AudioServer.input_device = _device_pick.get_item_text(_device_pick.selected)
 	_player.play()
 	_effect.set_recording_active(true)
 	_recording = true
@@ -175,11 +160,11 @@ func _finish_recording() -> void:
 	var wav := _effect.get_recording()
 	_abort_recording()
 	if _rec_t < MIN_SECONDS or wav == null:
-		_status.text = "too short to measure - read the whole passage (%.0f s minimum)" % MIN_SECONDS
+		_status.text = "too short to measure - read at least %.0f s of the passage" % MIN_SECONDS
 		return
 	var mono := _wav_to_mono(wav)
 	if mono.pcm.size() < int(mono.sr * MIN_SECONDS * 0.5):
-		_status.text = "the device gave almost no audio - is the right input picked?"
+		_status.text = "the microphone gave almost no audio - is it the one your system's sound settings use?"
 		return
 	_analyzing = true
 	_record_btn.disabled = true
@@ -203,18 +188,20 @@ func _analysis_done(out: Dictionary) -> void:
 
 
 func _exit_tree() -> void:
-	# shutdown: never leave the record effect or the mic stream live while the audio driver tears down
+	# shutdown: never leave the record effect or the mic stream live while the audio driver tears down, nor the show
+	# turned down for a booth nobody can see
 	if _recording and _effect != null:
 		_effect.set_recording_active(false)
 	if _player != null:
 		_player.stop()
+	_set_show_quiet(false)
 
 
 func _process(delta: float) -> void:
 	if not _recording:
 		return
 	_rec_t += delta
-	_status.text = "listening - %.0f s (Stop when the passage is done)" % _rec_t
+	_status.text = "listening - %.0f s (Stop when you have read it)" % _rec_t
 	if _rec_t >= MAX_SECONDS:
 		_finish_recording()
 

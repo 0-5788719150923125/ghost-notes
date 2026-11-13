@@ -164,7 +164,9 @@ stays there while the lid is lifted off and placed beside it before the first ca
 chooses a 70 x 120 mm large card or 63.5 x 88.9 mm trading stock; the mesh and printed face share that
 aspect ratio, and all cards in one episode have one size. Positions may set `destination: stack` for a
 tight pile on the table or `box` to return a card to the contents, and `comment: none`, `brief`, or
-`story`. `staging.pace` sets the default length of spoken comments; `none` writes a silent card step. Each
+`story`. `staging.pace` sets the default length of spoken comments, from the brief's own manner (reflective
+by default; quick is still a short look at each card, never a passed-over card's few words); `none` writes
+a silent card step. Each
 laid card gets its own small hand offset. The shuffle's resting point wanders a few millimeters between
 moves on a seeded path, including cuts, reproducible when scrubbing or exporting. Exercised in
 `table_staging_check`; silent and short comments in `cards_choose_check`.
@@ -807,11 +809,12 @@ record). The export menu has no YouTube items.
   opens the same dialog as the export starts, beside the render. The card's "Replace client…" replaces the
   kept one; "Sign out" forgets the sign-in.
 - **The card**: the title is a template, `%title%: %episode%` by default (`%seed%`, `%date%` too;
-  `YouTube.expand_title` drops what a missing value leaves dangling and never says the show's name twice).
+  `Macros.line` drops what a missing value leaves dangling and never says the show's name twice).
   The names are the script card's: Title and Episode, read by the card itself (`YouTubeCard.name_from`,
   which every panel calls and which shows both rows); a show hands the Episode row its picked episode's
   title (`ScriptWriter.hand_field` -> `EpisodeCard.name_episode`, written into the plan; no episode's title
-  is kept in the `cards:` block). The macros are rows (`YouTube.MACROS`): the card's tooltip names only
+  is kept in the `cards:` block). The macros are rows (`Macros.ROWS` in `data/`, which the description and a
+  show's Byline take too): the card's tooltip names only
   those the note fills, and a title naming one it does not (`%seed%` on a reading) is said under it and
   refused at the export's click (`YouTubeCard.why_not`). Visibility is Private, Unlisted or Public (private
   by default); Playlist is None or one of the channel's, loaded with ↻ (listing them and adding a video

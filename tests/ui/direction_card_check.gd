@@ -47,7 +47,7 @@ func _component() -> bool:
 	var hosts := func(ws: String) -> Array: return Registry.field(Components.WORKSPACES, ws, "hosts", []) as Array
 	_ok((hosts.call("reading") as Array).has("direction") and (hosts.call("table") as Array).has("direction"),
 		"the reading's panel and a table's show it")
-	_ok(not (hosts.call("lab") as Array).has("direction"), "CONTROL: the voice lab's shows none")
+	_ok(not (hosts.call("reading") as Array).has("clip"), "CONTROL: the reading's panel shows no clip")
 	return true
 
 

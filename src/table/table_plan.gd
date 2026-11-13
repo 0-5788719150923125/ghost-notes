@@ -63,10 +63,10 @@ static func make(document: Dictionary, table_json: Variant, intro_hold: float) -
 	var src := String(document.get("source", ""))
 	p.parse = CardReading.parse(src) if not src.is_empty() else {}
 	var plan: Dictionary = p.pay.get("plan", {}) if p.pay.get("plan") is Dictionary else {}
-	p.look = CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})
+	p.staging = CardTable.staging_of(plan)
+	p.look = CardTable.dealt_look(CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {}), p.staging)
 	p.seed_value = int(p.pay.get("seed", 0))
 	p.foil = float(p.look.get("foil", 0.6))
-	p.staging = CardTable.staging_of(plan)
 	p.cards_from = String(p.parse.get("source", p.staging["source"])) if not p.parse.is_empty() else String(p.staging["source"])
 	p.alone = String(p.staging["text"]) != "booklet"
 	p.deck_n = deck_count(p.pay)

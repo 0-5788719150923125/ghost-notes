@@ -30,7 +30,7 @@ class_name ScriptMarks
 ##   line     "own": the mark goes on a line of its own; "start": at the head of the line;
 ##            "" anywhere
 ##   modes    the Script cards that offer it, by their workspace's mode ([method Components.script_mode]:
-##            "generative", "synthesis", "table")
+##            "generative", "table")
 ##   blurbs   optional, {mode: blurb}: what it does in a panel where that differs ([method blurb])
 ##   within   optional, a key of [constant REGIONS]: colored only inside that section of the script
 ##   pattern  how [ScriptHighlighter] finds it. Registry ORDER is highlight priority: a span
@@ -160,7 +160,7 @@ const REGISTRY := {
 		"group": "pronunciation",
 		"blurb": "Spells a word in ARPAbet phonemes, read exactly as written. For a name the voice gets wrong.",
 		"before": "[", "fill": "K AE T", "after": "]", "line": "",
-		"modes": ["generative", "synthesis"],
+		"modes": ["generative"],
 		"pattern": "\\[[A-Za-z]{1,2}[0-2]?(?:\\s+[A-Za-z]{1,2}[0-2]?)*\\]",
 	},
 	"letter": {
@@ -168,7 +168,7 @@ const REGISTRY := {
 		"group": "pronunciation",
 		"blurb": "A letter that names something - a number, a point, a case - said by its name and shown as the letter: [a] is \"ay\", where a bare a is read as the word a.",
 		"before": "[", "fill": "a", "after": "]", "line": "",
-		"modes": ["generative", "synthesis"],
+		"modes": ["generative"],
 		"pattern": "\\[[A-Za-z]\\]",
 	},
 	"macro": {
@@ -176,7 +176,7 @@ const REGISTRY := {
 		"group": "text",
 		"blurb": "A placeholder for a fact only the book's build knows. Ghost Notes reads the default after the colon, never the macro itself; one with no default is skipped and named in the panel.",
 		"before": "${", "fill": "CHAPTERS_BEFORE:twenty-one", "after": "}", "line": "",
-		"modes": ["generative", "synthesis", "table"],
+		"modes": ["generative", "table"],
 		"blurbs": {"table": "A placeholder for a fact only the build knows. The agents are handed the default after the colon, never the macro itself; one with no default is left out."},
 		"pattern": "\\$\\{[A-Za-z_][A-Za-z0-9_.]*(?::(?:[^{}]|\\{[^{}]*\\})*)?\\}",
 	},
@@ -209,7 +209,7 @@ const REGISTRY := {
 		"group": "typography",
 		"blurb": "Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own.",
 		"before": "# ", "fill": "Heading", "after": "", "line": "start",
-		"modes": ["generative", "synthesis", "table"],
+		"modes": ["generative", "table"],
 		"blurbs": {"table": "A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck."},
 		"pattern": "(?m)^#{1,6}[ \\t].*$",
 	},
@@ -234,7 +234,7 @@ const REGISTRY := {
 		"group": "typography",
 		"blurb": "Shown in italics in the subtitles and on the page, and a word or a few so marked is hit: held longer and said louder. A longer run is typography, said plainly. The asterisks are never spoken.",
 		"before": "*", "fill": "emphasized", "after": "*", "line": "",
-		"modes": ["generative", "synthesis", "table"],
+		"modes": ["generative", "table"],
 		"blurbs": {"table": "In a line the brief gives the host to say word for word, the word the voice hits, shown in italics in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
 		"pattern": "(?<![*\\w])\\*(?![*\\s])[^*\\n]*?[^*\\s]\\*(?![*\\w])|(?<![*\\w])\\*[^*\\s]\\*(?![*\\w])",
 	},
@@ -243,7 +243,7 @@ const REGISTRY := {
 		"group": "typography",
 		"blurb": "Shown in bold in the subtitles and on the page, and a word or a few so marked is hit harder than an italic one. The asterisks are never spoken.",
 		"before": "**", "fill": "strong", "after": "**", "line": "",
-		"modes": ["generative", "synthesis", "table"],
+		"modes": ["generative", "table"],
 		"blurbs": {"table": "In a line the brief gives the host to say word for word, the word the voice hits hardest, shown in bold in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
 		"pattern": "\\*\\*(?![*\\s])[^*\\n]*?\\*\\*",
 	},
@@ -620,7 +620,7 @@ const REGISTRY := {
 		"group": "notes",
 		"blurb": "Any other HTML comment is an authoring note: never spoken, never printed.",
 		"before": "<!-- ", "fill": "a note to yourself", "after": " -->", "line": "",
-		"modes": ["generative", "synthesis", "table"],
+		"modes": ["generative", "table"],
 		"blurbs": {"table": "Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it."},
 		"pattern": Manuscript.COMMENT,
 	},

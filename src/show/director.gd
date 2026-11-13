@@ -592,7 +592,7 @@ func attach(host: Node, medium: Medium = null) -> void:
 	if medium != null:
 		medium.feed = self             # what it reads of the show ([ShowFeed]) is handed to it
 	# A fresh session hears fresh material: forget the last song's level, its reference and any flurry
-	# state (attach() runs again on every new take in synthesis mode).
+	# state (attach() runs again on every take a reading restarts).
 	_audio_ema = 0.0
 	_ref_acc = 0.0
 	_ref_w = 0.0
@@ -756,8 +756,7 @@ func detach() -> void:
 	_current = null
 	_next = null
 	_host = null
-	# The medium is owned by main (mounted on main's stage, outliving a take's session churn in
-	# synthesis modes); detach drops the reference and tells it to release what it held for this session.
+	# The medium is owned by main (mounted on main's stage, outliving a reading's restarts); detach drops the reference and tells it to release what it held for this session.
 	if _medium != null and is_instance_valid(_medium):
 		_medium.release()
 	_medium = null
@@ -902,7 +901,6 @@ func goto_entry(i: int, into := 0.0) -> void:
 	_sting_left = 0
 	_sting_t = -1.0
 	_burst_left = 0
-	_paced_t = 0.0
 	var nxt := _make_scene()
 	_scene_host(nxt).add_child(nxt)
 	if _current != null and is_instance_valid(_current):
@@ -1046,9 +1044,8 @@ func _bookend_fade() -> float:
 	if slen <= 0.0:
 		return live_fade                              # idle / no song: no bookend
 	var t := Spectrum.current.time
-	# Past the end is not black: a synthesis take reports its length once, then loops inside the
-	# generator while the playback position runs on, so an overrun means the length is stale, not that
-	# the show is over.
+	# Past the end is not black: a stream's length is an estimate while its playback position runs on, so
+	# an overrun means the length is stale, not that the show is over.
 	if t > slen + 0.5:
 		return 1.0
 	# The fade windows follow the bookend when there is one, so the picture arrives before the held
@@ -1149,7 +1146,6 @@ func _tick_schedule(dt: float) -> void:
 	if _listen_echo(dt):
 		_beat_prev = Spectrum.current.beat
 		return                                      # re-localized: the cut is already underway
-	_paced_t += dt
 	if _should_change():
 		_begin_transition()
 	_beat_prev = Spectrum.current.beat
@@ -1343,11 +1339,6 @@ func _listen_echo(dt: float) -> bool:
 func _should_change() -> bool:
 	if _locked >= 0 or _held:
 		return false
-	if _game_paced and _paced_t < GAME_PACED_MIN * pacing:
-		# `* pacing` because this floor is a hold duration like any other: fixed, it would be the one
-		# gate the slider cannot move. The fishing owns the moments (catches and seed jumps cut at once);
-		# past the floor the harmonic exit logic below owns the tour.
-		return false
 	# A non-looping storyboard with no tail holds its final scene forever (checked first, so the last
 	# entry's `hold` cannot try to re-cut into nothing). With a `tail:`, the sequence rolls into the
 	# tail entries, cycling on their own exit rules until the song ends.
@@ -1492,43 +1483,6 @@ func hold(on: bool) -> void:
 	_held = on
 
 
-## Game pacing (synthesis mode): the fishing game owns the cuts. Music-driven scene changes stop; a
-## scene changes when a catch jumps it (or Space skips), so each new scene reads as a reward. Distinct
-## from hold(), which the feedback console toggles and must not release the game's grip.
-var _game_paced := false
-var _paced_t := 0.0          # seconds the current scene has held in game-paced mode
-const GAME_PACED_MIN := 12.0    # floor before musical pacing may cut a game-paced scene: a just-jumped
-                                # seed scene is read as the reward it is, then the normal harmonic exits
-                                # (beat / movement / lull) own the tour again
-
-func set_game_paced(on: bool) -> void:
-	_game_paced = on
-
-
-
-func set_aura(v: float) -> void:
-	aura = clampf(v, 0.0, 1.5)
-
-
-## Jump the show to the scene a seed owns: the index derives from the seed value, so catching a seed or
-## restoring it from the belt brings back its place in the catalog.
-var _jump_next := -1
-
-func jump(seed_val: int) -> void:
-	# The pending jump is stored even without a session: a seed clicked before the first throw must own
-	# the session's initial scene too (_pick_index consumes _jump_next when attach() builds it).
-	_jump_next = absi(seed_val) % maxi(SceneRoster.SCENES.size(), 1)
-	if _host == null:
-		return                       # no session yet: the jump waits for attach()
-	next()
-
-
-## The scene name a seed value maps to (for tooltips and ledgers).
-func scene_title(seed_val: int) -> String:
-	var i := absi(seed_val) % maxi(SceneRoster.SCENES.size(), 1)
-	return String(SceneRoster.SCENES[i].script.resource_path).get_file().get_basename()
-
-
 ## A typed snapshot of the scene on screen, for the feedback console: identity (name, behavior, shot,
 ## seed, song), its typed definition (params) and the audio frame it was reacting to. Values may
 ## contain Godot types (Vector2, Color); FeedbackConsole.to_jsonable flattens them before writing.
@@ -1605,7 +1559,6 @@ func _transition_alphas(k: float) -> Vector2:
 
 
 func _begin_transition() -> void:
-	_paced_t = 0.0
 	if SceneRoster.SCENES.size() < 2:
 		_elapsed = 0.0
 		_cue_prev = 0.0
@@ -1719,10 +1672,6 @@ func _finish_transition() -> void:
 # kind has gone unshown: a soft priority queue, not a hard rotation. Driven by the seeded _rng, so a
 # given song yields the same sequence.
 func _pick_index() -> int:
-	if _jump_next >= 0:
-		var j := _jump_next
-		_jump_next = -1
-		return j
 	if _locked >= 0:
 		return _locked
 	return _pick(_session_seed, _pick_salt, _swaps, _index, _kind_last, _rng)

@@ -27,6 +27,7 @@ extends SceneTree
 ##   more), in bursts, about as often as asked; every flash's light reaching the frames whole; a flash photographed for the set dresser
 ##   caught lit. Controls: the earlier model (`_retired_flash`: two to four alike pulses, each dying over 60 ms) flickers alike and
 ##   slowly, the earlier storm's gaps come in no bursts, and a flash taken at each frame's instant loses or doubles a stroke's light.
+## - A low sun's shadow biases grow with the cotangent of its height, capped; one at SUN_BIAS_HEIGHT and above keeps SUN_BIAS (control).
 ## - Built: a sun that casts, its screens and birds shadow-only on SCREEN_LAYERS; a soft canopy casts the sun SOFT_SUNS times, each sun
 ##   its own copy and every crisp screen and bird (against crisp screens alone: one sun, one caster each); at most MAX_SHADOWED lamps
 ##   cast; a cloud over the sun dims it; fitted, the palest thing in the light takes no more than SUN_HEAT.
@@ -715,6 +716,19 @@ func _built() -> bool:
 		crisp_n += 1 if n is MeshInstance3D else 0
 	_ok(crisp.suns.size() == 1 and crisp_n == 2, "crisp screens: %d suns, %d casters (want 1, 2)" % [crisp.suns.size(), crisp_n])
 	crisp.root.free()
+	# a low sun grazes a flat top, which a high sun's biases leave shading itself in stripes: its biases grow with the
+	# cotangent of its height; the control, a sun at SUN_BIAS_HEIGHT and above, keeps the tabletop's own
+	var low := Lights.build(_light({}, {"look": "sun", "from": "left", "height": 17}), stage, 11)
+	var high := Lights.build(_light({}, {"look": "sun", "from": "left", "height": 60}), stage, 11)
+	var lo_sun: DirectionalLight3D = low.sun
+	var hi_sun: DirectionalLight3D = high.sun
+	_ok(is_equal_approx(hi_sun.shadow_bias, Lights.SUN_BIAS.x) and is_equal_approx(hi_sun.shadow_normal_bias, Lights.SUN_BIAS.y),
+		"control: a high sun's biases are not the tabletop's (%.3f, %.3f)" % [hi_sun.shadow_bias, hi_sun.shadow_normal_bias])
+	_ok(lo_sun.shadow_normal_bias > Lights.SUN_BIAS.y * 3.0 and lo_sun.shadow_bias > Lights.SUN_BIAS.x * 2.0,
+		"a 17-degree sun keeps a high sun's biases (%.3f, %.3f)" % [lo_sun.shadow_bias, lo_sun.shadow_normal_bias])
+	_ok(Lights.sun_biases(2.0).y <= Lights.SUN_BIAS.y * Lights.SUN_BIAS_MOST + 1e-6, "a sun at the horizon's normal bias is not capped")
+	low.root.free()
+	high.root.free()
 	# a cloud dims the sun
 	var clear := -1.0
 	var cloudy := -1.0

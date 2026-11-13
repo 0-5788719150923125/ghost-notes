@@ -22,6 +22,7 @@ class_name EpisodeCard
 ## quota. Each thing that can be made again is a row of its own.
 
 const YouTube := preload("res://src/export/youtube.gd")
+const Macros := preload("res://src/data/macros.gd")
 const TagField := preload("res://src/ui/tag_field.gd")
 
 ## The block it keeps under the document's `ghost:` key.
@@ -465,12 +466,12 @@ func bed_of(export := false) -> Dictionary:
 		return Soundscape.new(made["sound"], made["wind"], seed, sample_rate, t0, made["ride"])}
 
 
-## The reading's document [param d], at a table: the show's title and byline, and the episode as the
-## table draws it - for an export's own reading, the episode pinned when it was asked for.
+## The reading's document [param d], at a table: the show's title and byline (its macros filled for the episode, [method
+## _byline_at]), and the episode as the table draws it - for an export's own reading, the episode pinned when it was asked for.
 func book(d: Dictionary, body: String) -> Dictionary:
 	var pinned := not _export_pin.is_empty() and body.strip_edges() == String(_export_pin["body"])
 	d["title"] = String(_export_pin["title"]) if pinned else _show_title()
-	d["byline"] = String(_export_pin.get("byline", "")) if pinned else _show_byline()
+	d["byline"] = String(_export_pin.get("byline", "")) if pinned else _byline_at(_episode)
 	d["table"] = _export_pin["doc"] if pinned else (_table_doc(_episode) if _episode != null else {})
 	# ...and the desk's rows, where it is shown at one ([EpisodeDesk]: its things and mood)
 	var block: Variant = reading.block_now("medium") if reading != null else {}
@@ -517,7 +518,7 @@ func before_take() -> bool:
 	if ep == null:
 		return false
 	_export_pin = {"episode": ep, "body": ep.script().strip_edges(), "doc": _table_doc(ep),
-		"title": _show_title(), "byline": _show_byline()}
+		"title": _show_title(), "byline": _byline_at(ep)}
 	return true
 
 
@@ -529,10 +530,9 @@ func after_take(path: String) -> String:
 	if path.is_empty() or ep == null:
 		return ""
 	_taken = {"take": path, "episode": ep}
-	var show := _doc.field("title")
-	var ep_title := String(ep.upload_notes()["title"])
-	var err := ep.write_upload_notes(path, _show_tags(), _cur_desc, _youtube.title_now(
-		{"title": show.strip_edges(), "episode": ep_title, "seed": str(ep.seed)}) if _youtube != null else upload_title(show, ep_title))
+	var names := _names_of(ep)
+	var err := ep.write_upload_notes(path, _show_tags(), Macros.fill(_cur_desc, names), _youtube.title_now(names)
+		if _youtube != null else upload_title(String(names["title"]), String(names["episode"])))
 	return ("Rendered the take; upload notes are in the episode's folder (upload.md)." if err.is_empty()
 		else "Rendered the take; the upload notes failed: " + err)
 
@@ -553,17 +553,23 @@ func upload_base(take: String) -> Dictionary:
 	if String(n["title"]).is_empty():
 		return {}
 	var desc := _cur_desc if not _cur_desc.is_empty() else String(n["description"])
-	return {"values": {"title": _doc.field("title").strip_edges(), "episode": String(n["title"]), "seed": str(ep.seed)},
+	return {"values": _names_of(ep),
 		"description": desc, "chapters": Array(n["chapters"] as PackedStringArray), "tags": Array(_show_tags()),
 		"folder": ep.dir, "record": ep.file_of("youtube")}
 
 
-## The macros of the YouTube card's title as the card stands: the show's title (no file's name for it), the
-## picked episode's and its seed.
+## The macros of the YouTube card's title as the card stands: the picked episode's names ([method _names_of]).
 func upload_values() -> Dictionary:
-	var t: Variant = episode_title()
-	return {"title": _doc.field("title").strip_edges() if _doc != null else "", "episode": str(t) if t != null else "",
-		"seed": str(_episode.seed) if _episode != null else ""}
+	return _names_of(_episode)
+
+
+## What the macros of the show's lines stand for at episode [param ep] (its YouTube title and description, its byline): the
+## show's title (no file's name for it), author and book, and the episode's title and seed - empty with no episode, or before
+## its plan names it.
+func _names_of(ep: TableEpisode) -> Dictionary:
+	var field := func(key: String) -> String: return _doc.field(key).strip_edges() if _doc != null else ""
+	return {"title": field.call("title"), "author": field.call("author"), "book": field.call("book"),
+		"episode": String(ep.upload_notes()["title"]) if ep != null else "", "seed": str(ep.seed) if ep != null else ""}
 
 
 ## The picked episode's title, as its plan has it: the Script card's Episode (handed it by the panel -
@@ -622,9 +628,14 @@ func _show_tags() -> PackedStringArray:
 	return YouTube.split_tags(_doc.field("tags")) if _doc != null else PackedStringArray()
 
 
-## The show's byline: its document's `byline:` line.
+## The show's byline: its document's `byline:` line, as written - its macros unfilled.
 func _show_byline() -> String:
 	return _doc.field("byline").strip_edges() if _doc != null else ""
+
+
+## The show's byline as episode [param ep] shows it under the show's name: its macros filled ([method _names_of]).
+func _byline_at(ep: TableEpisode) -> String:
+	return Macros.line(_show_byline(), _names_of(ep))
 
 
 # --- the show's document ---------------------------------------------------------------------
@@ -634,14 +645,15 @@ func _show_title() -> String:
 	return t if not t.is_empty() else "Untitled show"
 
 
-## What the producer works from, read fresh: the title and byline, the line an episode's title goes up in ([method _uploads_as]),
+## What the producer works from, read fresh: the title and byline (its macros unfilled, with the show's names they stand for:
+## the episode's are its plan's), the line an episode's title goes up in ([method _uploads_as]),
 ## the brief (as the agents get it: its card list taken out, its macros read, its notes to self gone - see [method
 ## TablePrompts.brief]), the deck the brief lists (or none, when the producer chooses each episode's - `chooses`), the show's
 ## voices (every one its document names - the reader's and any other, a familiar's - for the reader to hand lines to), how long
 ## a word takes its reader to say (what its passages are written to), and the knobs.
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
-	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
+	return {"title": _show_title(), "byline": _show_byline(), "names": _names_of(null), "uploads_as": _uploads_as(),
 		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body), "fixed": FixedTable.parse(body),
 		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(), "said_word": reading.reader_said_word(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
@@ -2314,7 +2326,8 @@ func youtube_built(card: YouTubeCard) -> void:
 func _build_upload_fields(box: VBoxContainer) -> void:
 	_yt_desc = TextField.new("Description", "No description yet - click to write one",
 		"The video's description. The chapters its readers named, timed from the export "
-		+ "itself, are added under it as the video goes up.")
+		+ "itself, are added under it as the video goes up. It takes the title's macros "
+		+ "(%title%, %episode%, %seed%, %date%...), filled for each episode.")
 	_yt_desc.text_changed.connect(_upload_edited)
 	box.add_child(_yt_desc)
 	_yt_tags = TagField.new()

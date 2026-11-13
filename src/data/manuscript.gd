@@ -131,8 +131,8 @@ static func strip_frontmatter(body: String) -> String:
 	return body          # unterminated: not frontmatter, the whole thing is text
 
 
-## [param text] with every HTML comment removed, for a reader that honors none of the marks (the Synthesis
-## panel); otherwise a cue or hesitation is read aloud.
+## [param text] with every HTML comment removed, for a reader that honors none of the marks (the Lab's fishing
+## line); otherwise a cue or hesitation is read aloud.
 static func unspoken(text: String) -> String:
 	return _rx(COMMENT).sub(text, "", true)
 

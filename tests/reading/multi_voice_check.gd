@@ -16,6 +16,9 @@ func _ready() -> void:
 	# host, and nothing here needs a python process.
 	_ed = ReadingPanel.new()
 	_ed._build_panel()
+	# the words read are the plain reading's: a format's walk (a Letter's, a desk's) taken from the Director's last
+	# medium in the author's settings must not choose them
+	_ed.walk = TextWalk.new()
 	# Synced to nothing: the settings are the author's own.
 	if _ed._doc != null:
 		_ed._doc._sync = false
@@ -427,15 +430,15 @@ func _check_tabs() -> void:
 	_ed._cast._on_tab_selected(1)
 	_ok(absf(_ed._cast._arc.value - 0.20) < 0.001, "a new name did not start as a copy of the first voice")
 	_ed._cast._arc.value = 0.90                      # ...and Emily by
-	_ed._cast._speaker.value = 5                     # a control that regenerates on change
+	_ed._cast.pick(5, "")                            # the reader, as the Lab picks it
 
 	_ed._cast._on_tab_selected(0)
 	_ok(absf(_ed._cast._arc.value - 0.20) < 0.001,
 		"the narrator came back holding %.2f, which is Emily's" % _ed._cast._arc.value)
-	_ok(int(_ed._cast._speaker.value) == 0, "the narrator came back holding Emily's reader")
+	_ok(_ed._cast.speaker_now() == 0, "the narrator came back holding Emily's reader")
 	_ed._cast._on_tab_selected(1)
 	_ok(absf(_ed._cast._arc.value - 0.90) < 0.001, "Emily came back holding %.2f" % _ed._cast._arc.value)
-	_ok(int(_ed._cast._speaker.value) == 5, "Emily came back holding reader %d" % _ed._cast._speaker.value)
+	_ok(_ed._cast.speaker_now() == 5, "Emily came back holding reader %d" % _ed._cast.speaker_now())
 
 	# switching tabs must not repace the reading
 	_ed._stream.chunks = [{"tokens": [], "words": []}]

@@ -293,8 +293,8 @@ vector, 128 numbers of timbre (decoder) and 128 of prosody (predictor), taken by
   eSpeak's symbols (A's time shared by e and ɪ), so Visemes and the desk read them as they read Piper's.
 - **One voice, its packs the speakers:** the host lists one voice, `kokoro`, with 28 speakers (the English
   packs, a speaker number each in the fixed order of `PACKS`; a note keeps the number, so a pack is only ever
-  added at the end) and says who each is (`readers`: the pack, its accent, hexgrad's own grade). The Speaker
-  row and its Browse… read them as they read libritts' 904 readers (`VoiceReaders.offer`). A British pack is
+  added at the end) and says who each is (`readers`: the pack, its accent, hexgrad's own grade). The Voice
+  card's Lab… reads them as it reads libritts' 904 readers (`VoiceReaders.offer`). A British pack is
   read in British eSpeak. The graph and tokenizer are fetched on first use, a pack (half a megabyte) when its
   number is first asked for, into `<data>/ghost/voices/kokoro/`.
 - **One rate:** rendered at 24 kHz, handed back at 22,050 through the band-limited resampler (`_delivered`),
@@ -700,8 +700,8 @@ actor's mouth), and a CPU faster than real time. Kokoro keeps all four; nothing 
 ## Blending Kokoro voices
 
 Goal: new voices synthesized by merging tensors (averaging, interpolation, weighted merges): a toggle per
-reader in Browse…, a pick-list of merging options, and a Test at the top of Browse… (so voices can be tried
-without closing it).
+reader in the Voice card's Lab…, a pick-list of merging options, and a Test at the top of the Lab (so voices can
+be tried without closing it).
 
 **What is merged is the pack, not the weights.** A Kokoro voice is a style pack, [510, 1, 256] (a row per
 sentence length): the first 128 numbers of a row are what the decoder is given (timbre), the last 128 what the
@@ -723,15 +723,20 @@ target recording, scored by Resemblyzer.
   backend says it blends (`describe`), never a voice's row: every field of a row keys the takes kept in that
   voice, and one added would make every kept Kokoro sentence again. A voice taught here (one pack, its own
   decoder) never blends.
-- `VoiceBlend` (`src/voice/`) writes and says the line; `ReaderBrowser` (`src/reading/`) is Browse…: on a
+- `VoiceBlend` (`src/voice/`) writes and says the line; `ReaderBrowser` (`src/reading/`) is the Lab…: on a
   voice that blends, every reader is a tick with a weight (and a part in Sound and delivery), the method and
   accent along the top, Test first. The tab keeps `blend:` beside `speaker:` (the note's voice block,
-  `SLOT_DEFAULTS`); stepping the Speaker number or picking another voice ends it. A blend is asked only when
+  `SLOT_DEFAULTS`); picking another voice ends it. A blend is asked only when
   there is one, so no kept take's key moved.
-- Test at the top of Browse… is the Voice card's own (`ReadingCast.press_test`): a press while it plays always
+- Test at the top of the Lab is the Voice card's own (`ReadingCast.press_test`): a press while it plays always
   stops it, and the next press reads what is ticked then. Nothing ticked is allowed on the way to another
-  reader; the tab reads on in what it had. The browser is at most 80% of the stage's height, its summary one
+  reader; the tab reads on in what it had. The Lab is at most 80% of the window's height, its summary one
   line.
+- The Lab holds every row of the voice's sound beside its readers: Tone, Pace, Pause, the delivery dials, and under
+  Space the room, distance, side and bed. It is built once and hung on the Voice row (in the tree with the card, so
+  its rows are the tab's whether it is open or not). The card keeps Turn, Hesitate, the cast, the model with Test
+  and Lab…, who reads (or the blend) and the ink; no reader number is shown anywhere but the list. A voice of one
+  reader opens on its rows alone; readers nobody described (a voice not yet downloaded) are listed by number.
 - Gates: `hosts/voice/test_kokoro.py` (11), `tests/voice/voice_blend_check.gd` (the same lines read alike in
   both languages), `tests/reading/reader_browser_check.gd`.
 
@@ -754,7 +759,8 @@ ten ways each; `dist/kokoro_blends/` holds every take (gitignored).
 ### Status
 
 Built, gated and heard: most blends sound good, some with mild artifacts, and Max is the favorite (the closest
-to the voice wanted from a male and a female reader). Open by ear: whether kept full sounds fuller than the
+to the voice wanted from a male and a female reader). Open by eye: the Lab with the voice's rows beside its
+readers. Open by ear: whether kept full sounds fuller than the
 mix or only louder, and whether Min earns its row. Not built: blending libritts's readers (Piper's speaker
 embedding is a Gather inside the graph, patchable the way `rest_floor` was), blending across checkpoints
 (v1.1's decoder was retrained), a blend saved under a name of its own, voice arithmetic (A + B - C, an accent
@@ -762,7 +768,7 @@ moved), and a kvoicewalk-style search from a blend toward a recording.
 
 ## A Kokoro blend that moves
 
-In the app, word by word: Browse… beside its list draws the voice across each paragraph ([VoiceShape]): each
+In the app, word by word: the Lab beside its list draws the voice across each paragraph ([VoiceShape]): each
 reader's share as a band whose edges are dragged, the Breath and Push lanes, noise (Fixed or Wander, how far, and its
 Seed - a number, so the draw heard is the draw shown) and Shapes to start from (`VoiceBlend.SHAPES`). While Test
 plays, a playhead sweeps the lanes where the words heard stand, with each lane's value there, never stopping

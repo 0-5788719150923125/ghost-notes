@@ -49,14 +49,8 @@ const PORTRAIT_QUALITIES := [
 ## A portrait video longer than this is not a Short (seconds).
 const SHORT_MAX := 180.0
 
-# Checkable item in the quality menu: for a synthesis take, record the Synthesis workspace itself instead of a silent
-# narration; the game plays itself (see synth_editor.gd's `autopilot`). Disabled when there is no take_provider.
-const UI_TOGGLE_ID := 1000
 ## The quality menu's "A stretch again" ([method _ask_stretch]; [Stitch]).
 const STRETCH_ID := 1001
-# Long enough to usually show one throw -> catch -> hold/fold cycle (a catch's own reel runs 45-240 s, see synth_editor.gd's
-# _begin_hook).
-const SYNTH_AUTOPLAY_DURATION := 150.0
 ## The status line's widest (see [method _place_status]).
 const STATUS_W := 588.0
 ## What the sign-in dialog says. Google's "Access blocked" page never comes back to Ghost Notes, so the dialog names it
@@ -126,7 +120,6 @@ var _prepping := false   # a provider take is rendering (async) - ignore re-clic
 var _stall_t := 0.0      # seconds since the render last showed ANY sign of life
 var _stall_frac := -1.0  # high-water fractional progress the watchdog has seen
 var _stall_size := 0     # high-water size of the movie file being written
-var _synth_autoplay := false   # UI_TOGGLE_ID checked at export time (synth takes only)
 var _yt: YouTube               # the sign-in and the upload
 var _client_dialog: FileDialog # the Google client file, asked for once
 var _client_then := Callable() # what an imported client file leads on to
@@ -166,8 +159,8 @@ const PUNCH_KEEP := 1 << 20
 const PUNCH_BEHIND := 8 << 20
 const STALL_MIN_GROWTH := 65536   # bytes; below this the file is not really moving
 
-## Synthesis hook: a mode whose audio is reproducible on demand (the voice is a pure function of the text and the seed)
-## registers a provider that renders the current take to disk and returns its path, so export works from the first moment.
+## A mode whose audio is made on demand (a reading: its voices are a function of its words and settings) registers a
+## provider that renders the current take to disk and returns its path, so export works from the first moment.
 var take_provider := Callable()
 
 ## The take provider makes the export's audio even while a file plays: a reading's kept take plays as a file ([method
@@ -175,16 +168,13 @@ var take_provider := Callable()
 ## ReadingPanel.export_take], which hands over the kept take).
 var take_first := false
 
-## Optional companion to [member take_provider]: true when the provider has something worth rendering (in synthesis: a seed
-## on the belt, or a voice already cast). When false the button grays out.
+## Optional companion to [member take_provider]: true when the provider has something worth rendering (a reading: words and
+## a voice to read them). When false the button grays out.
 var take_ready := Callable()
 
 ## What the video is called, when the mode knows: a name without an extension (an episode's title), or "" for the exporter's
 ## own `ghost_notes_<quality>`. Asked as the save dialog opens; goes through [method safe_name].
 var name_provider := Callable()
-
-## Whether this mode has a UI worth recording. Only the fishing game does.
-var automation_available := false
 
 ## What an upload of the take at the given path says: `{title, description, chapters, tags, privacy, playlist,
 ## playlist_title, channel, channel_name, record}` - `channel` the id of the channel it goes to ("" when the note has none
@@ -291,12 +281,6 @@ func _build_ui() -> void:
 	for i in QUALITIES.size():
 		_quality_menu.add_item(QUALITIES[i].label, i)
 	_quality_menu.add_separator()
-	_quality_menu.add_check_item("Automate the Synthesis game (record the UI)", UI_TOGGLE_ID)
-	_quality_menu.set_item_tooltip(_quality_menu.get_item_index(UI_TOGGLE_ID),
-		"Synthesis takes only: instead of a silent narration, plays the fishing game\n"
-		+ "itself - Throw, Pull, hold or fold - live, with its panel visible in the video.")
-	# Checkable items would close the popup on the click meant to set them, so only quality items (uncheckable) close it.
-	_quality_menu.hide_on_checkable_item_selection = false
 	# a stretch of an earlier export rendered again (next/editing.md step 13; [Stitch])
 	_quality_menu.add_item("A stretch again, into an earlier export…", STRETCH_ID)
 	_quality_menu.set_item_tooltip(_quality_menu.get_item_index(STRETCH_ID),
@@ -667,8 +651,8 @@ static func _media_seconds(path: String) -> float:
 
 
 # The button is always visible. It may only be disabled (grayed, with a tooltip saying why) when there is no content: no
-# song loaded and no provider that could make one. It is never gated on timing: in synthesis sessions every throw or edit
-# resets the playback clock, so a time gate can never be satisfied.
+# song loaded and no provider that could make one. It is never gated on timing: a reading restarted by an edit resets the
+# playback clock, so a time gate could never be satisfied.
 func _can_export() -> bool:
 	return true
 
@@ -689,7 +673,7 @@ func _poll_pct() -> void:
 
 
 # Step 0: pick the output resolution / fps; the menu pops up by the button. The pickers come first (quality, then path, then
-# the background pipeline): a synthesis take that needs rendering is made in _on_path, after the user commits. A click with
+# the background pipeline): a take that needs rendering is made in _on_path, after the user commits. A click with
 # nothing to export and no way to make it explains itself instead of opening a doomed dialog.
 func _on_export() -> void:
 	if _prepping:
@@ -714,12 +698,6 @@ func _on_export() -> void:
 		_note_t = 8.0
 		_set_status("⚠  " + refused, Color(1.0, 0.85, 0.6))
 		return
-	# Only the fishing game has a game to automate: driven by an explicit flag, and removed rather than grayed elsewhere.
-	var ui_idx := _quality_menu.get_item_index(UI_TOGGLE_ID)
-	if automation_available and ui_idx < 0:
-		_quality_menu.add_check_item("Automate the Synthesis game (record the UI)", UI_TOGGLE_ID)
-	elif not automation_available and ui_idx >= 0:
-		_quality_menu.remove_item(ui_idx)
 	_label_qualities()
 	var btn_rect := _btn.get_global_rect()
 	_quality_menu.reset_size()
@@ -731,10 +709,6 @@ func _on_export() -> void:
 func _on_quality(id: int) -> void:
 	if id == STRETCH_ID:
 		_ask_stretch()
-		return
-	if id == UI_TOGGLE_ID:
-		_synth_autoplay = not _synth_autoplay
-		_quality_menu.set_item_checked(_quality_menu.get_item_index(UI_TOGGLE_ID), _synth_autoplay)
 		return
 	var list := qualities_for(Director.resolved_frame())
 	if id < 0 or id >= list.size():
@@ -784,9 +758,8 @@ func _on_path(out_path: String) -> void:
 	if _upload_this:
 		_check_sign_in(Callable(), scopes_for(peek), str(peek.get("channel", "")), str(peek.get("channel_name", "")),
 			str(peek.get("client", "")))
-	# _song was resolved at click time (_on_export): the live audio path. A synthesis session without a finished take renders
-	# one now, after quality and path are committed: the provider is a coroutine that runs the synthesis on a worker thread,
-	# and the await is required.
+	# _song was resolved at click time (_on_export): the live audio path. A session without a finished take renders one
+	# now, after quality and path are committed: the provider is a coroutine, and the await is required.
 	if _song.is_empty() and take_provider.is_valid():
 		_prepping = true
 		_set_status("⏳  Rendering the take…", Color(0.95, 0.92, 0.7))
@@ -891,10 +864,6 @@ func _start_render() -> void:
 	if not board.is_empty():
 		args.append("--storyboard")
 		args.append(board)
-	# "Automate the Synthesis game (record the UI)" was checked: tell the render to open the Synthesis panel over the take and
-	# let it play itself (Throw / Pull / reel / hold-or-fold on timers).
-	if _synth_autoplay:
-		args.append("--synth-autopilot")
 	# A display of its own, so the desktop cannot freeze the recording. Godot does not render while the compositor is not
 	# drawing its window (`window_can_draw()`), and the movie writer then re-captures the last buffer while the audio clock
 	# advances: the film holds a still for as long as the window is minimized, covered or throttled. On its own X display
@@ -1205,7 +1174,7 @@ func _repair_avi_sizes(path: String) -> void:
 
 
 ## The sample rate a WAV declares, from its fmt chunk (canonical 44-byte header, rate at byte 24). Falls back to the
-## procedural synthesizer's rate if the file cannot be read.
+## formant synthesizer's rate if the file cannot be read.
 static func _wav_rate(path: String) -> int:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null or f.get_length() < 44:

@@ -4,13 +4,12 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/ui/panel_cards_check.gd 120
 ##
-## next/notes.md step 2: each mode's sections in colored cards. Checked on the Generative, Synthesis and Cards panels, on a
+## next/notes.md step 2: each mode's sections in colored cards. Checked on the Generative and Cards panels, on a
 ## note's own panel (a song played by hand) and on Masking's, before a clip is chosen:
 ##
 ## - Every section is a card: a key of its panel's, a title, a family with a color, and a chip in the row.
 ## - A chip brings its card into view: on a panel scrolled to its top, the last card's chip brings it out of the bottom
-##   pile, and its rows still show - on the Generative and Cards panels, which overflow the window (Synthesis' three
-##   cards fit it, and have no pile).
+##   pile, and its rows still show - on the Generative and Cards panels, which overflow the window.
 ## - Every card says what it is for: its title bar's tooltip is its blurb, and its chip's says it before what a click
 ##   does - a component's card the blurb of its row, the words "+" offered it with. "+"'s own tooltips are folded as the
 ##   menu opens (Boot.wrap_items): no line wider than a tooltip is let be.
@@ -32,7 +31,6 @@ func _run() -> void:
 	_ok(not _says(bare, null), "the control - a card made with no blurb does not say what it is for")
 	bare.free()
 	await _panel("Generative", func() -> Node: return ReadingPanel.new(), true)
-	await _panel("Synthesis", func() -> Node: return SynthEditor.new(), false)
 	await _panel("Cards", func() -> Node:
 		var cards := ReadingPanel.new()
 		cards.workspace = "table"

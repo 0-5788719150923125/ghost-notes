@@ -18,7 +18,8 @@ extends SceneTree
 ## - A card goes back in the box only when it was passed over: in a spread where cards stay out, a plan that gives a card a story
 ##   and puts it back lands with that card kept out, a card put back is looked at briefly, and its reader is told it is passed over
 ##   and asked for a few words. Two-sided: a spread that puts every card back is left as planned, and a kept card's reader is told
-##   nothing of the kind.
+##   nothing of the kind. A quick reading's card is a short look, never those few words (two-sided: its card put back is).
+## - a deck that is shuffled deals tall cards ([method CardTable.dealt_look]); two-sided: a box's sideways cards land as planned.
 ## - the draw keeps what it left in a box, for the table to print the cards nobody drew as - and no
 ##   reader is handed one of them (the no-cheating check reads the prompts of an episode that has them).
 
@@ -206,9 +207,14 @@ func _put_back() -> bool:
 			{"name": "b", "asks": "?", "destination": "stack"},
 			{"name": "c", "asks": "?", "comes": "searched", "comment": "story", "destination": "stack", "on": true},
 			{"name": "d", "asks": "?", "comment": "story", "destination": "box"}]},
-		"deck": box, "look": {"deck_name": "D", "kind": "baseball card set"}}))
+		"deck": box, "look": {"deck_name": "D", "kind": "baseball card set", "card_size": "index"}}))
 	_ok(err.is_empty(), "the reported plan did not land: %s" % err)
 	var plan: Dictionary = ep.read_json("plan")
+	# A deck that is shuffled deals tall cards; a box keeps its sideways ones (the control: this plan's box)
+	_ok(String((plan["look"] as Dictionary)["card_size"]) == "index", "control: a box's sideways cards landed made tall")
+	_ok(String(CardTable.dealt_look({"card_size": "index"}, {"source": "deck"})["card_size"]) == "large"
+		and String(CardTable.dealt_look({"card_size": "trading"}, {"source": "deck"})["card_size"]) == "trading",
+		"a shuffled deck kept a card read sideways, or a tall card was changed")
 	var pos: Array = (plan["spread"] as Dictionary)["positions"]
 	_ok(String((pos[3] as Dictionary).get("destination", "")) == "stack" and bool((pos[3] as Dictionary).get("on", false))
 		and String((pos[0] as Dictionary)["destination"]) == "box",
@@ -238,6 +244,15 @@ func _put_back() -> bool:
 	var every_prompt := String(TablePrompts.reader("S", BRIEF, every, "1", ["Hello."], [{"name": "Card A"}], 2)["prompt"]).replace("This card", "this card")
 	_ok(not every_prompt.contains("PASSED OVER") and every_prompt.contains("goes back into the box"),
 		"control: in a spread that puts every card back, a card was called passed over")
+	# A quick reading still reads each card: a short look, never a passed-over card's few words - which its card put back is
+	var quick_deck := {"spread": {"positions": [{"name": "a", "asks": "?"}, {"name": "b", "asks": "?"}]},
+		"staging": {"source": "deck", "text": "booklet", "pace": "quick"}, "look": {"deck_name": "D"}}
+	var quick_prompt := String(TablePrompts.reader("S", BRIEF, quick_deck, "1", ["Hello."], [{"name": "Card A"}], 2)["prompt"])
+	_ok(quick_prompt.contains("Write 35 to 75 words"), "a quick reading's card is not given a short look's words")
+	var quick_box := {"spread": {"positions": [{"name": "a", "asks": "?", "destination": "box"}, {"name": "b", "asks": "?", "destination": "stack"}]},
+		"staging": {"source": "box", "text": "front", "pace": "quick"}, "look": {"deck_name": "D"}}
+	var quick_back := String(TablePrompts.reader("S", BRIEF, quick_box, "1", ["Hello."], [{"name": "Card A"}], 2)["prompt"])
+	_ok(quick_back.contains("Write 15 to 40 words"), "control: a quick reading's card passed over is not asked for a few words")
 	_ok(Rules.missing.is_empty(), "a reader's rule was handed a name it could not fill: %s" % ", ".join(Rules.missing))
 	ep.invalidate("plan")
 	print("cards_choose_check: put back - only a card passed over goes back in the box while others stay out")

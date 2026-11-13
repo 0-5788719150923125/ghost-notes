@@ -598,6 +598,19 @@ static func card_size(look: Dictionary) -> Vector2:
 	return (CARD_SIZES.get(key, CARD_SIZES["large"]) as Dictionary)["size"]
 
 
+## [param look] as the cards of [param staging]'s source are: a source that shuffles ([constant TableActions.SOURCES]
+## `shuffles`) deals tall cards, a sideways size made "large" - the shuffle, the spread and the drifts lay every card as
+## [constant TablePositions.CARD], so a card read sideways comes only out of a box.
+static func dealt_look(look: Dictionary, staging: Dictionary) -> Dictionary:
+	var size := card_size(look)
+	var source: Dictionary = TableActions.SOURCES.get(String(staging.get("source", "deck")), {})
+	if size.x <= size.y or not bool(source.get("shuffles", false)):
+		return look
+	var out := look.duplicate(true)
+	out["card_size"] = "large"
+	return out
+
+
 ## Whether [param look]'s cards are written cards ([constant FRAMES] `written`): a recipe, a note, a list - their
 ## writing the face, in a hand, a small picture beside it.
 static func written(look: Dictionary) -> bool:

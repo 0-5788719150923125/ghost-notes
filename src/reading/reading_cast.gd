@@ -4,8 +4,9 @@ class_name ReadingCast
 ## ReadingCast - the voices a reading is read in, a part of [ReadingPanel]: one per speaker the script cues
 ## ([method refresh]), each a whole settings page (the voice, the reader within it, the tone, the pace and
 ## pauses, the delivery dials, the room, the ink) - and the rows that edit the one on screen, with the Turn and
-## Hesitate rows that belong to no one voice. Its block is the document's `voice:` ([method capture],
-## [method apply]): the Voice card's (next/notes.md).
+## Hesitate rows that belong to no one voice. On the Voice card the voice on screen is its model, Test, who reads
+## and its ink; everything else of its sound is in its Lab ([ReaderBrowser]), whose rows this builds and reads.
+## Its block is the document's `voice:` ([method capture], [method apply]): the Voice card's (next/notes.md).
 ##
 ## A part of its panel (next/structure.md, step 23): it asks the panel for the text the cast is read from, the
 ## reading on the stream (a voice changed, a pace changed, a dial moved) and the status line, and is asked a
@@ -58,14 +59,19 @@ var _fx_seat: HSlider
 var _fx_near: HSlider
 var _fx_pad: HSlider
 var _tone: OptionButton
-var _speaker: SpinBox
-var _speaker_about: Label        # who that speaker number is (VoiceReaders)
-var _browser: ReaderBrowser      # the Speaker row's Browse… (ReaderBrowser)
-## A blend of readers ([VoiceBlend]): the tab on screen's, "" for its Speaker number alone. Ticked in the reader
-## browser on a voice whose readers blend; stepping the Speaker number by hand, or another voice, ends it.
+## The reader on screen, by its number in its voice (`speaker:`): picked in the Lab.
+var _speaker := 0
+var _speaker_top := 100000       # the voice's last reader, once the host has listed it
+var _many := false               # whether the voice on screen holds more than one reader
+var _speaker_about: Label        # who reads (VoiceReaders), or the blend
+var _lab: ReaderBrowser          # the Voice row's Lab… (ReaderBrowser)
+## A blend of readers ([VoiceBlend]): the tab on screen's, "" for its one reader alone. Ticked in the Lab on a
+## voice whose readers blend; another voice ends it.
 var _blend := ""
 var _blending := {}              # the backends whose readers blend, as the host said ([method offer_blends])
-var _speaker_row: HBoxContainer
+## Ghost Notes' own voice as the tab on screen has it ([FormantVoice], the row's `formant:`): bred in the Lab's
+## fishing game, read where the tab's voice is the formant one.
+var _formant := {}
 var _turn: HSlider
 var _hesitate: HSlider
 var _hesitate_on: CheckBox
@@ -199,13 +205,13 @@ func build_cast(box: VBoxContainer) -> void:
 	panel.add_child(_cast_timer)
 
 
-## The voice: the model, Play / Stop / Test, the reader, the tone, the pace and pauses, the
-## delivery dials and the room - every control below belongs to the tab that is showing.
+## The voice: the model, Test and Lab… on the card, with who reads under them and the ink; the tone, the pace and
+## pauses, the delivery dials and the room in the Lab ([ReaderBrowser]). Every one of them belongs to the tab that
+## is showing.
 func build_voice(box: VBoxContainer) -> void:
 	var vrow := HBoxContainer.new()
 	vrow.add_theme_constant_override("separation", 8)
 	box.add_child(vrow)
-		# Named as the rows under it are: Browse is one voice's readers; the voices are this list.
 	var vl := Label.new()
 	vl.text = "Voice"
 	vl.custom_minimum_size = Vector2(72, 0)
@@ -213,11 +219,11 @@ func build_voice(box: VBoxContainer) -> void:
 	vrow.add_child(vl)
 	voice_pick = OptionButton.new()
 	voice_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		# Sized by the row, not by its longest voice: Play becomes "Resume" beside it, and a picker as wide as "libritts
-		# high (downloads)" pushed the whole panel out (see SidePanel._check_width)
+		# Sized by the row, not by its longest voice: a picker as wide as "libritts high (downloads)" pushes the whole
+		# panel out (see SidePanel._check_width)
 	voice_pick.fit_to_longest_item = false
 	voice_pick.clip_text = true
-	voice_pick.tooltip_text = "Which voice model reads: a Piper model, or kokoro. A model that holds more than one reader (libritts, kokoro) picks who reads on the Speaker row below. Each model has its own license - it appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
+	voice_pick.tooltip_text = "Which voice model reads: a Piper model, kokoro, or formant - Ghost Notes' own synthesizer, no model at all, its voice bred in Lab…'s fishing game. A model that holds more than one reader (libritts, kokoro) picks who reads in Lab…. Each model has its own license - it appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
 	voice_pick.item_selected.connect(func(_i: int) -> void:
 		if not _syncing:
 			_voice_picked())
@@ -235,54 +241,38 @@ func build_voice(box: VBoxContainer) -> void:
 	_test.disabled = true
 	_test.pressed.connect(press_test)
 	vrow.add_child(_test)
-
-		# Multi-speaker checkpoints carry many readers under one model (libritts-high has 904, kokoro 28 voicepacks) and
-		# are the only way to change who is reading without changing the model. Hidden for single-speaker voices, like
-		# every capability-driven control here.
-	_speaker_row = HBoxContainer.new()
-	_speaker_row.add_theme_constant_override("separation", 8)
-	_speaker_row.visible = false
-	box.add_child(_speaker_row)
-	var sl2 := Label.new()
-	sl2.text = "Speaker"
-	sl2.custom_minimum_size = Vector2(72, 0)
-	sl2.add_theme_font_size_override("font_size", 12)
-	_speaker_row.add_child(sl2)
-	_speaker = SpinBox.new()
-	_speaker.min_value = 0
-		# No ceiling until the model is known. A Range's default max is 100, and a document or stored cast is applied at
-		# boot, before the host has listed its voices, so a high reader would be clamped. The real ceiling is set by
-		# _show_voice_license once the voice's reader count is known.
-	_speaker.max_value = 100000
-	_speaker.step = 1
-	_speaker.tooltip_text = "Which reader, on a model that holds more than one (libritts carries 904 readers, kokoro 28 voices). Same model, a different person - so it changes WHO is reading, not how. Hidden on single-speaker voices. Regenerates the un-played chunks."
-	_speaker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_speaker.value_changed.connect(func(_v: float) -> void:
-		if _syncing:
-			return
-		_blend = ""                  # a number stepped by hand is that reader alone
-		capture_slot()
-		# same model, different reader: only the un-played chunks need redoing
-		if panel._stream.has_reading():
-			panel._stream.repace()
-		panel.touch())
-	_speaker_row.add_child(_speaker)
-	_speaker.value_changed.connect(func(_v: float) -> void: _describe_speaker())
-		# Browse: every reader of the voice, with who they are, so a voice is chosen by description
-	var browse := Button.new()
-	browse.text = "Browse…"
-	browse.focus_mode = Control.FOCUS_NONE
-	browse.tooltip_text = "Every reader on this voice, with their gender and a description (libritts: how they sound, from LibriTTS-P; kokoro: accent and Kokoro's own grade). Filter, search, and pick one - or, on kokoro, tick two or more to blend them into a new voice, and shape it across each paragraph (each reader's share, breath, push, noise). Test is at its top. Another voice - an actor's own among them - is picked from the Voice list above."
-	browse.pressed.connect(_open_speaker_browser)
-	_speaker_row.add_child(browse)
+	var lab := Button.new()
+	lab.text = "Lab…"
+	lab.focus_mode = Control.FOCUS_NONE
+	lab.tooltip_text = ("The selected tab's voice, worked on in one place with Test at its top: its Tone, Pace, Pause, "
+		+ "delivery dials and room, and on a voice of many readers who reads - each with their gender and a description "
+		+ "(libritts: how they sound, from LibriTTS-P; kokoro: accent and Kokoro's own grade), filtered and searched. On "
+		+ "kokoro, tick two or more to blend them into a new voice, and shape it across each paragraph (each reader's "
+		+ "share, breath, push, noise). On formant, the fishing game that breeds its voices: every voice cast or held "
+		+ "is this tab's. Every change reaches the reading as it is made.")
+	lab.pressed.connect(_open_lab)
+	vrow.add_child(lab)
 
 	_speaker_about = Label.new()
 	_speaker_about.add_theme_font_size_override("font_size", 11)
 	_speaker_about.modulate = Color(1, 1, 1, 0.75)
 	_speaker_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_speaker_about.tooltip_text = "Who this speaker number is: perceived gender and a description - for libritts how the voice sounds (LibriTTS-P, LINE Corporation, CC BY 4.0), for kokoro its accent and Kokoro's own grade of its training data."
-	_speaker_row.add_sibling(_speaker_about)
+	_speaker_about.visible = false
+	_speaker_about.mouse_filter = Control.MOUSE_FILTER_STOP
+	_speaker_about.tooltip_text = "Who reads, on a voice of more than one reader: perceived gender and a description - for libritts how the voice sounds (LibriTTS-P, LINE Corporation, CC BY 4.0), for kokoro its accent and Kokoro's own grade of its training data - or the blend made in Lab…; on formant, the seed the tab reads in and the traits it leans on."
+	box.add_child(_speaker_about)
 
+		# The rest of the voice is the Lab's: built once, hung on the Voice row, so its rows are in the tree with the card.
+	_lab = ReaderBrowser.new(self)
+	var sound := _lab.build(vrow)
+	sound.add_child(ReaderBrowser._heading("Delivery"))
+	_build_sound(sound)
+	_build_ink_row(box)
+
+
+## The voice's own rows, in the Lab's column [param box]: the tone, the pace and pauses, the delivery dials, and
+## under Space where the voice is (the room, its distance, its side, the bed under it).
+func _build_sound(box: VBoxContainer) -> void:
 	var trow := HBoxContainer.new()
 	trow.add_theme_constant_override("separation", 8)
 	box.add_child(trow)
@@ -313,6 +303,7 @@ func build_voice(box: VBoxContainer) -> void:
 	box.add_child(_rate_row)
 	var rl := Label.new()
 	rl.text = "Pace"
+	rl.custom_minimum_size = Vector2(72, 0)
 	rl.add_theme_font_size_override("font_size", 12)
 	_rate_row.add_child(rl)
 	_rate = HSlider.new()
@@ -369,7 +360,7 @@ func build_voice(box: VBoxContainer) -> void:
 		panel._persist())
 	panel.add_child(_repace_timer)
 
-		# Ambience: the same effects Synthesis has, over any PCM. Off by default.
+		# Ambience: the formant voice's own effects, over any PCM (VoiceFX). Off by default.
 		# Delivery, not effect: the discourse layer Piper cannot supply (it never sees the paragraph, so every sentence
 		# starts from the same register at the same rate). See piper._discourse_plan for the rules.
 	_dynamics = _fx_slider(box, "Dynamics", 0.5,
@@ -392,6 +383,7 @@ func build_voice(box: VBoxContainer) -> void:
 		+ "one and a half, and 1 is four. The whole travel is usable now: the shift holds the "
 		+ "reader's own formants, so the register moves without the speaker changing SIZE, and "
 		+ "the ceiling is set by what a speaker would actually do rather than by the DSP.")
+	box.add_child(ReaderBrowser._heading("Space"))
 	_fx_echo = _fx_slider(box, "Echo", 0.0,
 		"The room the voice is in. Low settings are a small close room - the repeat is short enough "
 		+ "to fuse with the voice rather than be heard as a separate sound. It opens out into a "
@@ -442,7 +434,6 @@ func build_voice(box: VBoxContainer) -> void:
 		+ "swells in the gaps, and it is what plays alone through the Intro hold. Any setting plays "
 		+ "the bed at full level; the dial is SEVERITY - how often a low bass swell answers the "
 		+ "reader's pitch moving. Low is the bed alone; higher, the bass comes more often.")
-	_build_ink_row(box)
 
 
 func _build_ink_row(box: VBoxContainer) -> void:
@@ -514,13 +505,15 @@ func follow_text() -> void:
 func show_testing(on: bool) -> void:
 	if _test != null:
 		_test.text = "Test ■" if on else "Test"
-	if _browser != null:
-		_browser.show_testing(on)
+	if _lab != null:
+		_lab.show_testing(on)
 
 
-## Test, the Voice card's and the reader browser's: a press while a test plays always stops it, whatever was
+## Test, the Voice card's and the Lab's: a press while a test plays always stops it, whatever was
 ## changed meanwhile, and only the next press starts one, in what is picked then.
 func press_test() -> void:
+	if _lab != null:
+		_lab.hush()
 	panel._on_test()
 
 
@@ -723,7 +716,7 @@ func refresh(body: String, want := "") -> void:
 		old[_names[i]] = _slots[i]
 	for k in old:
 		_stash[k] = old[k]
-	var seed_row: Dictionary = ReadingPanel.SLOT_DEFAULTS.duplicate()
+	var seed_row: Dictionary = ReadingPanel.SLOT_DEFAULTS.duplicate(true)
 	if not _slots.is_empty():
 		seed_row = slot_cfg(0)
 	elif not _stash.is_empty():
@@ -755,7 +748,7 @@ func tab_name() -> String:
 ## while its passages are queued degrades to the first voice rather than to a null.
 func slot_cfg(i: int) -> Dictionary:
 	if _slots.is_empty():
-		return ReadingPanel.SLOT_DEFAULTS.duplicate()
+		return ReadingPanel.SLOT_DEFAULTS.duplicate(true)
 	return _merge(_slots[clampi(i, 0, _slots.size() - 1)] as Dictionary)
 
 
@@ -790,7 +783,7 @@ func cfg_of(who: String) -> Dictionary:
 
 
 func _merge(row: Dictionary) -> Dictionary:
-	var out := ReadingPanel.SLOT_DEFAULTS.duplicate()
+	var out := ReadingPanel.SLOT_DEFAULTS.duplicate(true)
 	for k in out:
 		if not row.has(k):
 			continue
@@ -798,6 +791,7 @@ func _merge(row: Dictionary) -> Dictionary:
 		match typeof(out[k]):
 			TYPE_INT: out[k] = int(row[k])
 			TYPE_FLOAT: out[k] = float(row[k])
+			TYPE_DICTIONARY: out[k] = (row[k] as Dictionary).duplicate(true) if row[k] is Dictionary else {}
 			_: out[k] = str(row[k])
 	return out
 
@@ -807,7 +801,7 @@ func capture_slot() -> void:
 	if slot < 0 or slot >= _slots.size() or _rate == null:
 		return
 	_slots[slot] = {
-		"voice": _selected_voice_id(), "speaker": int(_speaker.value), "blend": _blend,
+		"voice": _selected_voice_id(), "speaker": _speaker, "blend": _blend, "formant": _formant.duplicate(true),
 		"tone": _tone.selected, "pace": _rate.value, "pause": _pause.value,
 		"dynamics": _dynamics.value, "arc": _arc.value, "effort": _effort.value,
 		"echo": _fx_echo.value, "room": _fx_room.value, "resonance": _fx_res.value,
@@ -825,6 +819,7 @@ func _apply_slot(i: int) -> void:
 	_syncing = true
 	_want_voice = String(s["voice"])
 	_blend = String(s["blend"])
+	_formant = (s["formant"] as Dictionary).duplicate(true)
 	for k in voice_meta.size():
 		if String((voice_meta[k] as Dictionary).get("id", "")) == _want_voice:
 			voice_pick.select(k)
@@ -844,9 +839,10 @@ func _apply_slot(i: int) -> void:
 	_fx_near.value = float(s["near"])
 	_fx_seat.value = float(s.get("seat", 0.0))
 	_show_ink(String(s["ink"]))
-		# After the voice, because it sets the Speaker row's range (a speaker id only means something against its model).
+		# After the voice, because it sets how many readers there are (a speaker id only means something against its model).
 	_show_voice_license()
-	_speaker.value = clampf(float(int(s["speaker"])), _speaker.min_value, _speaker.max_value)
+	_speaker = clampi(int(s["speaker"]), 0, _speaker_top)
+	_describe_speaker()
 	_syncing = false
 
 
@@ -957,7 +953,7 @@ func _show_ink(v: String) -> void:
 func fill_voices(voices: Array) -> void:
 	var keep := _selected_voice_id()  # asked again ([method voice_made]): what is picked stays picked
 	voice_meta = voices
-	# a voice whose speakers the host describes itself (kokoro's voicepacks): the Speaker row reads them
+	# a voice whose speakers the host describes itself (kokoro's voicepacks): the Lab reads them
 	for v in voices:
 		if (v as Dictionary).has("readers"):
 			VoiceReaders.offer(String(v.get("id", "")), v["readers"], String(v.get("readers_about", "")))
@@ -1015,27 +1011,48 @@ func _voice_picked() -> void:
 	panel.touch()
 
 
-## Under the speaker number: who that reader is. Hidden on a single-speaker voice, or when nothing
-## is known about the reader.
+## Under the Voice row: who reads, or the blend. Hidden on a single-speaker voice, or when nothing is known about
+## the reader.
 func _describe_speaker() -> void:
 	if _speaker_about == null:
 		return
-	var d := VoiceReaders.describe(_selected_voice_id(), int(_speaker.value))
+	if _selected_voice_id() == FormantVoice.ID:
+		_speaker_about.text = FormantVoice.line(FormantVoice.voice_of(_formant))
+		_speaker_about.visible = not _speaker_about.text.is_empty()
+		return
+	var d := VoiceReaders.describe(_selected_voice_id(), _speaker)
 	var mixed := VoiceBlend.line(_blend) if blends(_selected_voice_id()) else ""
 	_speaker_about.text = mixed if not mixed.is_empty() else VoiceReaders.line(d, 8)
-	_speaker_about.visible = _speaker_row.visible and (not d.is_empty() or not mixed.is_empty())
+	_speaker_about.visible = _many and (not d.is_empty() or not mixed.is_empty())
 
 
-## The reader browser ([ReaderBrowser]): every reader of the voice, picked - or ticked and blended.
-func _open_speaker_browser() -> void:
-	if _browser == null:
-		_browser = ReaderBrowser.new(self)
-	_browser.open()
+## The Lab ([ReaderBrowser]): the voice on screen's readers, picked - or ticked and blended - and its own rows.
+func _open_lab() -> void:
+	if _lab != null:
+		_lab.open()
 
 
-## The reader on screen, as its Speaker number.
+## The reader on screen, by its number.
 func speaker_now() -> int:
-	return int(_speaker.value)
+	return _speaker
+
+
+## The formant voice on screen ([member _formant]).
+func formant_now() -> Dictionary:
+	return _formant.duplicate(true)
+
+
+## The Lab's fishing game, to the tab on screen: Ghost Notes' own voice [param voice] ([method FormantVoice.kept]),
+## regenerating what has not played.
+func pick_formant(voice: Dictionary) -> void:
+	if voice == _formant:
+		return
+	_formant = voice.duplicate(true)
+	capture_slot()
+	_describe_speaker()
+	if panel._stream.has_reading():
+		panel._stream.repace()
+	panel.touch()
 
 
 ## The blend on screen ([member _blend]).
@@ -1058,15 +1075,29 @@ func blends(id: String) -> bool:
 	return false
 
 
-## The reader browser's pick, to the tab on screen: reader [param speaker] and [param blend] ("" for that reader
-## alone), regenerating what has not played, as a step of the Speaker number does. The same pick again changes nothing.
+## How many readers voice [param id] holds, as the host listed it (1 for a voice it has not listed).
+func readers_of(id: String) -> int:
+	for v in voice_meta:
+		if String((v as Dictionary).get("id", "")) == id:
+			return int((v as Dictionary).get("speakers", 1))
+	return 1
+
+
+## Voice [param id]'s name, as the host listed it.
+func voice_name(id: String) -> String:
+	for v in voice_meta:
+		if String((v as Dictionary).get("id", "")) == id:
+			return String((v as Dictionary).get("name", id))
+	return id if not id.is_empty() else "default voice"
+
+
+## The Lab's pick, to the tab on screen: reader [param speaker] and [param blend] ("" for that reader alone),
+## regenerating what has not played. The same pick again changes nothing.
 func pick(speaker: int, blend: String) -> void:
-	if speaker == int(_speaker.value) and blend == _blend:
+	if speaker == _speaker and blend == _blend:
 		return
 	_blend = blend
-	_syncing = true
-	_speaker.value = clampf(float(speaker), _speaker.min_value, _speaker.max_value)
-	_syncing = false
+	_speaker = clampi(speaker, 0, _speaker_top)
 	capture_slot()
 	_describe_speaker()
 	if panel._stream.has_reading():
@@ -1081,10 +1112,13 @@ func _show_voice_license() -> void:
 		return
 	var v: Dictionary = voice_meta[i]
 	var n := int(v.get("speakers", 1))
-	_speaker_row.visible = n > 1
-	if n > 1:
-		_speaker.max_value = n - 1
-		_speaker.value = clampf(_speaker.value, 0, n - 1)
+		# the formant voice keeps its own prosody: the host's paragraph dials are not its
+	for dial in [_dynamics, _effort, _arc]:
+		if dial != null:
+			(dial as Control).get_parent().visible = String(v.get("id", "")) != FormantVoice.ID
+	_many = n > 1
+	_speaker_top = n - 1 if n > 1 else 100000      # a voice of one keeps the number as it is
+	_speaker = clampi(_speaker, 0, _speaker_top)
 	_describe_speaker()
 	panel._set_status("%s - %s%s" % [String(v.get("id", "")), String(v.get("license", "unknown")),
 		("  (%d speakers)" % n) if n > 1 else ""])

@@ -4,8 +4,8 @@ class_name ScriptHighlighter
 ## ScriptHighlighter - colors a script by the marks the panel reading it understands.
 ##
 ## Driven by [ScriptMarks] patterns rather than rules of its own, so what is colored and what the palette
-## offers are the same list. Only the marks of one mode are colored: in the Synthesis panel a
-## `<!-- hesitation -->` is just a note, and is shown as one.
+## offers are the same list. Only the marks of one mode are colored: a mark the mode does not offer is
+## just a note, and is shown as one.
 ##
 ## The whole text is scanned, not each line: picture descriptions run over several lines and a speaker cue
 ## is only a cue on a line of its own. The scan is redone when the text's version moves, and every line's

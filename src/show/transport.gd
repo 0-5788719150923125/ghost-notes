@@ -5,7 +5,7 @@ class_name Transport
 ## (next/notes.md, "The transport").
 ##
 ## It belongs to the clock: it shows exactly when the show is timed ([method Spectrum.timed]; something
-## conducts: a reading, a synthesis take, a song, a clip in Masking) and an untimed note has none. Every
+## conducts: a reading, a song, a clip in Masking) and an untimed note has none. Every
 ## button goes through Spectrum's transport verbs, which call the registered conductor's hooks or drive a
 ## plain file themselves, so a mode never builds its own Play.
 ##
@@ -17,8 +17,7 @@ class_name Transport
 ## lookup, the karaoke overlay reads `Spectrum.current.time - time_base`, the bookend fade is a function
 ## of position). The [Director] is a simulation, not a function of t, so after a seek the show carries on
 ## from the scene that is up ([Echo] drifts it back toward the content); `--scene <name>` pins one. A live
-## reading seeks by sentence through its conductor's `seek` (reading_panel.gd); a synthesis take cannot
-## seek, and its rail does not take clicks.
+## reading seeks by sentence through its conductor's `seek` (reading_panel.gd).
 ##
 ## What is buffered is shown, lighter than what is played, from the playhead as far as the show is made
 ## ahead ([method Spectrum.ready_ahead]): a reading's voice made, a table's physics baked. Hovering the

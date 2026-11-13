@@ -52,20 +52,10 @@ const CATEGORIES := {"2": "Autos & Vehicles", "23": "Comedy", "27": "Education",
 	"1": "Film & Animation", "20": "Gaming", "26": "Howto & Style", "10": "Music", "25": "News & Politics",
 	"29": "Nonprofits & Activism", "22": "People & Blogs", "15": "Pets & Animals",
 	"28": "Science & Technology", "17": "Sports", "19": "Travel & Events"}
-## The title a new YouTube card starts with: macros every note fills ([constant MACROS]).
+## A note's names, filled in its title and description ([method title_shape], [YouTubeCard]).
+const Macros := preload("res://src/data/macros.gd")
+## The title a new YouTube card starts with: macros every note fills ([constant Macros.ROWS]).
 const TITLE_TEMPLATE := "%title%: %episode%"
-## The title's macros, a row each: `%key%` in a template ([method expand_title]), and what it stands for. A note fills those
-## its card's values hold ([method YouTubeCard.values_now]: its Script card's Title, Episode, Author and Book, which every
-## note has, and what its panel adds - a show's seed), and an `always` one whatever it is: the card offers only those, and a
-## title naming one the note does not fill does not go up ([method unfilled]).
-const MACROS := {
-	"title": {"label": "%title%", "blurb": "the note's Title, on its Script card (a show's name; the note's file name when it has none)"},
-	"episode": {"label": "%episode%", "blurb": "what this video is called: the Episode on the Script card"},
-	"author": {"label": "%author%", "blurb": "who wrote it: the Author on the Script card"},
-	"book": {"label": "%book%", "blurb": "the book it belongs to: the Book on the Script card"},
-	"seed": {"label": "%seed%", "blurb": "the episode's seed - a card show's, or a Proof episode's number"},
-	"date": {"label": "%date%", "blurb": "the day it goes up", "always": true},
-}
 const CATEGORY := "22"
 ## What a video's thumbnail is, the note's YouTube card's choice, never a mode's: YouTube's own (the default), a frame of the
 ## video's title screen (only a take that opened on its title has one, [method Openings.of_take]), or a picture painted for
@@ -1157,64 +1147,6 @@ static func description_of(meta: Dictionary) -> String:
 	return "\n\n".join(parts)
 
 
-## The title from its template: each `%name%` in [param template] replaced by [param values]' `name` ([constant MACROS]:
-## `%date%` today's unless told); an unknown one is left as written. What an empty value leaves dangling (": " at either end,
-## a doubled space) goes, so "%title%: %episode%" on a note whose Episode is empty is the title alone. No name twice: an
-## episode whose title already begins with the show's stands for both.
-static func expand_title(template: String, values: Dictionary) -> String:
-	var v := {}
-	for k in MACROS:
-		v[k] = ""
-	v["date"] = Time.get_date_string_from_system()
-	v.merge(values, true)
-	var name := str(v.get("title", "")).strip_edges()
-	var ep := str(v.get("episode", "")).strip_edges()
-	if not name.is_empty() and ep.to_lower().begins_with(name.to_lower()) and template.contains("%episode%"):
-		v["title"] = ""
-	var out := template
-	for k in v:
-		out = out.replace("%" + str(k) + "%", str(v[k]).strip_edges())
-	# a separator left between two (a gap where a value was) stands once
-	out = RegEx.create_from_string("([:|·–-])(\\s*[:|·–-])+").sub(out, "$1", true)
-	out = " ".join(out.split(" ", false))
-	var trim := " :-|·–,/"
-	while not out.is_empty() and trim.contains(out[0]):
-		out = out.substr(1)
-	while not out.is_empty() and trim.contains(out[out.length() - 1]):
-		out = out.left(-1)
-	return out.strip_edges()
-
-
-## The macros [param template] names ([constant MACROS] keys), in the rows' order.
-static func macros_in(template: String) -> PackedStringArray:
-	var out := PackedStringArray()
-	for k in MACROS:
-		if template.contains("%" + String(k) + "%"):
-			out.append(String(k))
-	return out
-
-
-## The macros [param template] names that [param values] does not fill: a key it lacks, unless the row is `always` filled
-## (%seed% on a note with no episodes). Empty, the title can go up.
-static func unfilled(template: String, values: Dictionary) -> PackedStringArray:
-	var out := PackedStringArray()
-	for k in macros_in(template):
-		if not bool((MACROS[k] as Dictionary).get("always", false)) and not values.has(k):
-			out.append(k)
-	return out
-
-
-## What each macro [param values] fills stands for, as a sentence: "%title% is the note's Title ...;
-## %date% is the day it goes up." Only those it fills ([method unfilled]).
-static func macros_said(values: Dictionary) -> String:
-	var parts := PackedStringArray()
-	for k in MACROS:
-		var row: Dictionary = MACROS[k]
-		if bool(row.get("always", false)) or values.has(k):
-			parts.append("%s is %s" % [String(row["label"]), String(row["blurb"])])
-	return "%s." % "; ".join(parts) if not parts.is_empty() else ""
-
-
 ## What stands for the episode's title in the line an episode's namer is shown it goes up in ([method title_shape]): the
 ## reply's own key, in the Table producer's and the framer's alike (rules/agents/episode.yaml).
 const EPISODE_MARK := "[episode_title]"
@@ -1229,7 +1161,7 @@ static func title_shape(template: String, values: Dictionary, mark := EPISODE_MA
 	var v := {"date": "[date]"}
 	v.merge(values, true)
 	v["episode"] = mark
-	var out := expand_title(template, v)
+	var out := Macros.line(template, v)
 	return "" if out == mark else out
 
 
