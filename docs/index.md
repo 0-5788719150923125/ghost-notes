@@ -36,7 +36,7 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components](components.md) (16 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](components.md) (15 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](media.md) (11) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
@@ -85,6 +85,7 @@ Plain data in and out, at the bottom because it needs nothing: the YAML-subset p
 - [`clock.gd`](../src/data/clock.gd) **Clock** - how the app tells the time: m:ss, h:mm:ss past an hour, whole seconds. The transport's rail, every timeline's ruler and playhead (`TimelineView`), an episode's chapters and an agent's progress all say it this one way. Names no autoload, so a gate run without the app reads it too.
 - [`data_path.gd`](../src/data/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as pure functions, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
 - [`front_matter.gd`](../src/data/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
+- [`macros.gd`](../src/data/macros.gd) **macros** - Macros - the names a line of a note may carry (`%title%`, `%episode%`, `%author%`, `%book%`, `%seed%`, `%date%`), a row each (`ROWS`), and the line with them filled. One set for every place that takes them: the YouTube title and description, a show's Byline under its name on the title ...
 - [`manuscript.gd`](../src/data/manuscript.gd) **Manuscript** - what a chapter file says about itself, beyond the words to be read.
 - [`registry.gd`](../src/data/registry.gd) **Registry** - reading any of ghost's registries, which are one shape: a Dictionary of rows, one per key, in the order they are offered, each row a Dictionary of fields. Every row has a `label` (what a person reads) and a `blurb` (a sentence or two: a tooltip, a line of the docs); the rest is its own kind's (a ...
 - [`rules.gd`](../src/data/rules.gd) **Rules** - what the agents are told, kept as text a person reads: `rules/<group>/<role>.yaml`. The code decides when a rule applies and fills in what it knows; the words are here.
@@ -261,9 +262,10 @@ What every note's panel is built from, and what it asks of the window it is in: 
 
 ### `voice/` - Synthesis (voice)
 
-Text to narrated audio in two paths: ghost's own source-filter synthesizer (no models, no weights, fully inspectable, and the only path that can sing), and a small local neural voice run by a subprocess host. Shared between them: the text front end and its normalization, the threaded real-time stream and the buffer effects. Design: next/voice.md.
+Text to narrated audio in two paths: ghost's own formant synthesizer (no models, no weights, fully inspectable, and the only path that can sing), made in-process, and local neural voices run by a subprocess host - both answered alike to the reading. Shared between them: the text front end and its normalization, the room and the buffer effects. Design: next/voice.md.
 
 - [`delivery.gd`](../src/voice/delivery.gd) **Delivery** - how one voice's settings become what the voice host is asked for and what its room is dialed to: the tone presets, the pause curve and the rests at a seam and a handover, the stress a run of italics gets, the leans a delivery mark asks for, eased sentence by sentence, and the request for one chunk ...
+- [`formant_voice.gd`](../src/voice/formant_voice.gd) **FormantVoice** - Ghost Notes' own voice as one the Voice card lists: the Klatt formant synthesizer (`Voice`), no model, no weights and no recordings, bred in the Lab's fishing game (`VoiceFishing`). `VoiceHost` makes each of its sentences here, in-process on a worker, and answers as the host answers for a neural ...
 - [`phonemes.gd`](../src/voice/phonemes.gd) **Phonemes** - the phoneme inventory and the text-to-phoneme expansion.
 - [`phrasing.gd`](../src/voice/phrasing.gd) **Phrasing** - sentence-level prominence, derived from the text.
 - [`room_fx.gd`](../src/voice/room_fx.gd) **RoomFX** - the room, decided once and rendered by two engines.
@@ -272,12 +274,12 @@ Text to narrated audio in two paths: ghost's own source-filter synthesizer (no m
 - [`voice.gd`](../src/voice/voice.gd) **Voice** - the source-filter speech synthesizer (rungs 0-2 of next/voice.md).
 - [`voice_blend.gd`](../src/voice/voice_blend.gd) **VoiceBlend** - a new voice made of a multi-speaker voice's own readers, and shaped, written as one line.
 - [`voice_field.gd`](../src/voice/voice_field.gd) **VoiceField** - the belt as a field of interfering sources.
-- [`voice_fx.gd`](../src/voice/voice_fx.gd) **VoiceFX** - the ambience from Synthesis, over any PCM.
+- [`voice_fx.gd`](../src/voice/voice_fx.gd) **VoiceFX** - the formant voice's ambience (`Voice`), over any PCM.
 - [`voice_host.gd`](../src/voice/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess.
-- [`voice_party.gd`](../src/voice/voice_party.gd) **VoiceParty** - the Synthesis lab's party math: the belt of kept seeds and the candidate on the line, as numbers. A seed as a vector in the shared trait and genome space, how much the belt accepts each member, the party's acceptance-weighted center and blend, how well a candidate fits the party and how hard it is ...
+- [`voice_party.gd`](../src/voice/voice_party.gd) **VoiceParty** - the fishing game's party math (`VoiceFishing`): the belt (the Collection) of kept seeds and the candidate on the line, as numbers. A seed as a vector in the shared trait and genome space, how much the belt accepts each member, the party's acceptance-weighted center and blend, how well a candidate ...
 - [`voice_readers.gd`](../src/voice/voice_readers.gd) **VoiceReaders** - who a multi-speaker voice's speaker number actually is.
-- [`voice_sampler.gd`](../src/voice/voice_sampler.gd) **VoiceSampler** - "echo a living voice": record the player reading a fixed passage, measure the voice (the recording is never kept), and mint a new seed whose traits and prosody genome mimic the source.
-- [`voice_stream.gd`](../src/voice/voice_stream.gd) **VoiceStream** - real-time speech on its own thread: render lag cannot break it.
+- [`voice_sampler.gd`](../src/voice/voice_sampler.gd) **VoiceSampler** - "echo a living voice": record the player reading the passage every voice is tested with (handed to `open`), measure the voice (the recording is never kept), and mint a new seed whose traits and prosody genome mimic the source.
+- [`voice_stream.gd`](../src/voice/voice_stream.gd) **VoiceStream** - the formant voice (`Voice`) spoken live on its own thread, on a player of its own: the Lab's fishing game (`VoiceFishing`) hears its line through it.
 
 ### `media/` - Media
 
@@ -347,23 +349,23 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 
 ### `reading/` - The voice's workspaces
 
-The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on it, and the voice lab with the fishing game that breeds its voices.
+The panels a voice runs in: the reading (script, cast, voice, stream, export), the Voice card and its Lab (who reads, a blend of readers, and the fishing game that breeds the formant voice).
 
 - [`note_upload.gd`](../src/reading/note_upload.gd) **NoteUpload** - a note read as it is written is its own episode. Nothing on such a note makes episodes (its words are the author's, read by a Voice or an Actor), so its YouTube card holds what a show's card holds for its episodes: the description its uploads take (the card's own box, [method ...
-- [`reader_browser.gd`](../src/reading/reader_browser.gd) **ReaderBrowser** - the Speaker row's Browse...: every reader of the voice on screen with who they are (a filter by gender, a search over the descriptions), so a reader is chosen by description rather than by stepping through numbers and listening to each.
+- [`reader_browser.gd`](../src/reading/reader_browser.gd) **ReaderBrowser** - the Voice card's Lab...: the voice on screen worked on in one place, Test at its top. Who reads (on a voice of more than one reader, every reader with who they are: a filter by gender, a search over the descriptions), and the voice's own rows - the Tone, Pace, Pause, delivery dials and room - which ...
 - [`reading_audition.gd`](../src/reading/reading_audition.gd) **ReadingAudition** - one voice heard on its own (the Voice card's Test): a fixed passage read in the voice on the selected tab - its tone, pace, pauses, delivery and room - and played straight out, with no stage, subtitles or Director.
 - [`reading_bed.gd`](../src/reading/reading_bed.gd) **ReadingBed** - what a reading lays under its voice: the place it is in, heard.
 - [`reading_cast.gd`](../src/reading/reading_cast.gd) **ReadingCast** - the voices a reading is read in, a part of `ReadingPanel`: one per speaker the script cues (`refresh`), each a whole settings page (the voice, the reader within it, the tone, the pace and pauses, the delivery dials, the room, the ink) - and the rows that edit the one on screen, with the Turn ...
 - [`reading_join.gd`](../src/reading/reading_join.gd) **ReadingJoin** - a reading's take, joined a chunk at a time: the rest at each seam, the hesitations spliced in, where the room changes voice and distance, every word timed in the take's own seconds, where each chunk starts and where the outro mark's fade begins.
-- [`reading_panel.gd`](../src/reading/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks and the export. It runs two workspaces, a note read aloud and a show at a table, and is the same panel for both: what differs is the note's components, each a card (`_note_cards`) ...
+- [`reading_panel.gd`](../src/reading/reading_panel.gd) **ReadingPanel** - a reading of a document in its voices: the script, the cast, the voice, the stream, the transport's hooks and the export. It runs two workspaces, a note read aloud and a show at a table, and is the same panel for both: what differs is the note's components, each a card (`_note_cards`) ...
 - [`reading_plan.gd`](../src/reading/reading_plan.gd) **ReadingPlan** - what a reading will say, worked out from its words before a sound is made: the script cut into chunks of a sentence each, every chunk carrying its speaker, its tokens for the voice host, its words for the subtitles, its hesitations, its delivery and its place in its paragraph; where the outro ...
 - [`reading_publish.gd`](../src/reading/reading_publish.gd) **ReadingPublish** - how a reading goes out: what its export is called, what is held while the take renders, and what an upload of it says.
 - [`reading_stream.gd`](../src/reading/reading_stream.gd) **ReadingStream** - the reading on the stream: the sliding window. A chapter is too long to synthesize up front (at roughly 4x real time, twenty minutes of narration is five minutes of silence), so the text is planned into chunks at sentence boundaries (`ReadingPlan`) and only `LOOKAHEAD` of them are ever in ...
 - [`reading_timeline.gd`](../src/reading/reading_timeline.gd) **ReadingTimeline** - a note's words as a timeline (next/editing.md step 12): every mark in the words (`<!-- name: what -->`, the `ScriptMarks` a script may carry: a Letter's strike and sketch, the Dispatch desk's `heard`, `redact`, `bell` and `lamp`, a reading's `pause`) is a flag where it stands in them, on the ...
-- [`synth_editor.gd`](../src/reading/synth_editor.gd) **SynthEditor** - the synthesis surface. The loop is a fishing trip:
 - [`take_cache.gd`](../src/reading/take_cache.gd) **TakeCache** - every sentence the voice has said, kept by what it said and how (next/editing.md step 3). The host's reply for one chunk of a reading - its audio and its word and phone timings - is kept under a digest of the voice, the voice's own record and every argument the request carried (the text, its ...
 - [`text_walk.gd`](../src/reading/text_walk.gd) **TextWalk** - what a reading reads of its note: the words the voice says, the title it announces, the text its cast of speakers and its fingerprint come from, and the passage a voice is auditioned with. This one is the note's own words (a tablet chapter read off its screen); a component that rewrites what the ...
 - [`voice_card.gd`](../src/reading/voice_card.gd) **VoiceCard** - the Voice: the note's cast and the speaker picked in it, a card `NoteCards` builds from the `voice` row like every other component's (next/notes.md, "the Voice as a card").
+- [`voice_fishing.gd`](../src/reading/voice_fishing.gd) **VoiceFishing** - the fishing game that breeds Ghost Notes' own voices (`FormantVoice`): the Lab's pane on a tab that reads in it (`ReaderBrowser`). The loop is a fishing trip:
 - [`voice_shape.gd`](../src/reading/voice_shape.gd) **VoiceShape** - a voice across a paragraph, drawn and dragged (`ReaderBrowser`): the mix as bands, one a reader, their edges curves through `VoiceBlend.POINTS` points, and a lane for each of `VoiceBlend.LANES`, a curve from -1 (bottom) to 1 (top). Left to right is a paragraph, its first word to ...
 
 ### `table/` - The set
@@ -545,6 +547,7 @@ The video chroma-key masking editor - a second app surface inside ghost. See [ma
 The lifecycle around everything, and the one folder that names every other: main, the furniture every mode gets (Chrome), the notes list and a note's own panel, the phone shell, the authoring loop - the log, the feedback console and the Assistant - and the recorder of the README's animation, which drives the real app.
 
 - [`assistant.gd`](../src/app/assistant.gd) **Assistant** - The muted caption under the picker.
+- [`auto_docs.gd`](../src/app/auto_docs.gd) **AutoDocs** - `docs.py` run at every development launch, so `docs/`, the README's lists and the roadmap's order follow the code without anyone running it by hand. It runs in the background and writes only the files whose text changed (the same output `python docs.py --check` holds); what it says lands in the ...
 - [`chrome.gd`](../src/app/chrome.gd) **Chrome** - the shared session furniture every mode of ghost carries. Main creates one Chrome and any mode gets the standard set, so no mode assembles its overlay stack by hand and forgets a piece.
 - [`console.gd`](../src/app/console.gd) **ConsoleView** - The in-app console - a live tail of Godot's own log file. print(), push_warning(), push_error() and engine SCRIPT ERRORs land in user://logs/godot*.log, which a compiled app or launcher run never shows. The `>_` toggle on the shared bottom-right row opens a panel tailing the newest log live. Part ...
 - [`delete_dialog.gd`](../src/app/delete_dialog.gd) **DeleteDialog** - "Delete this note?", asked before a note goes. Asked from the notes list's × and from every note's own "⋯" (see `Shell.note_menu`).

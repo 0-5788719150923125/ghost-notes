@@ -21,8 +21,6 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--from` | `<seconds>` | With `--export`: render from this point on the show clock - the take played from there, a storyboard's entry played up to its moment - so a late fix renders only its stretch; with `--until`, the stretch's end. The exporter's "A stretch again" uses it and puts the stretch back into the earlier export (src/export/stitch.gd). |  |
 | `--episode-check` | `<dir>` | Print what is wrong with a table show's episode as it stands (a step's data that does not parse, what the acts' sanitizer says, the faults of its Timeline and every cue naming nothing, each stale step), then exit - non-zero when anything is. Reads only: for an edit made in a terminal, in seconds. Pairs with `--headless`. |  |
 | `--seed` | `<N>` | Override the session seed (default derives from the audio's own content fingerprint, so the same song replays the same show). |  |
-| `--synth` | `[text-file]` | Open the voice-synthesis editor: write or paste a script, sample a voice by seed; each reading renders a WAV take and plays it as a normal session (scenes react to the narration; karaoke subtitles track it). |  |
-| `--say` |  | With `--synth`: speak the loaded text immediately on boot (automation, demos, headless checks). |  |
 | `--table` |  | Open the Table mode: a show's brief, its episodes (planned, dealt, painted and written by agents a card or a beat at a time) and the Generative voice that reads them at the table. |  |
 | `--mask-edit` | `<session.json>` | Open the Masking editor on a session (also creates one from a video path). |  |
 | `--mask-render` | `<session.json>` | Render a Masking session to video (used with `--write-movie`). | _internal_ |
@@ -32,7 +30,6 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--app-version` |  | Print the embedded app build version as JSON, then exit (release diagnostics). | _internal_ |
 | `--apply-update` | `<target> <parent PID> <staged path> <sha256> <restart>` | Internal helper: after the parent exits, replace the portable executable with a verified update. | _internal_ |
 | `--update-smoke-hold` |  | Keep the exported app running briefly while the updater's replacement path is tested. | _internal_ |
-| `--synth-autopilot` |  | With `--export`: open the Synthesis panel over the take and let the fishing game play itself (random Throw/Pull/reel/hold-or-fold), so the UI is recorded into the video. Generates no audio and persists nothing (set by the exporter's 'Automate the Synthesis game' toggle). | _internal_ |
 | `--use-bake` |  | Drive `Spectrum` from the song's cached bake instead of the live analyzer. | _internal_ |
 | `--bake-file` | `<path>` | Explicit spectrum-bake cache for a render (implies `--use-bake`). | _internal_ |
 | `--showcase-now` |  | Record the README's animation (`docs/showcase.webp`) now, stale or not, and quit; pairs with `--headless`. A development launch records it by itself when what it shows has changed (`src/app/showcase.gd`). |  |

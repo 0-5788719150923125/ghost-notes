@@ -195,6 +195,7 @@ func _ready() -> void:
 		add_child(rec)
 		return
 	add_child(Showcase.new())
+	add_child(AutoDocs.new())
 	Spectrum.song_finished.connect(_on_song_finished)
 	_adopt_old_episodes()
 	#each note's medium, moved once into its `medium:` block

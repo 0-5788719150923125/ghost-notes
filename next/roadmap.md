@@ -109,9 +109,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A lesson at the table (Proof, as a table show)**
       Built as the Proof component; since 2026-11-11 a brief the Table plays (`~/repos/rift/animations/theorem-grooving.md`), on primitives any show can use: work a computer checks (a plan's `problem`, the `solve` step with Lean and sandboxed Python), math on a page (`write`'s `tex` and `draw`, a sheet filled a line at a time), a pen seen writing it (`with`) and pointing at what is talked about (`point`); two voices, Pen teaching and Ink asking. Its Medium is the desk. Open: a first lesson made and watched at the desk; the instruments (a calculator, a tablet with real pages); live. See [proof.md](proof.md).
 
-- [ ] **Let the note own the show**
-      Built: one kind of note, the panel that runs it derived from its components, slots for what a note has one of, a derived "+" and a detach on every panel, and one path that puts a song's show and a reading's up. Built: the Voice is a card `NoteCards` makes from the `voice` row (`VoiceCard`). Built: Synthesis is no workspace of its own - the formant voice is one the Voice card picks, its fishing game the Lab's. Open: Masking is still a panel of its own, a song and a voice on one note, the note holding the clock, the feeds between its components, its moments, places and seed; one window - the note's text while writing, its stage while playing - and a card of the note's own. See [notes.md](notes.md), "Composition, not templates", and [storyboard.md](storyboard.md).
-
 - [ ] **A table's slow frames: what they wait for**
       A table costs the graphics card 6 ms a frame at the viewer's 1920 x 1080 and the app's thread 5, yet the log has its frames 25 ms apart, and the stage governor made hitching of that (185 changes of level in a session). Done 2026-11-11: the governor reads the app's thread alone (`StageGovernor`) and says once when frames are slow for another reason; the Graphics menu has a Resolution (1080p as it always drew). Open: what was waited for - the card shared with a training run or an export, or the processor with the live voice; the log's `ghost: frames are ... apart` line says which next time. See [table_playback_investigation.md](table_playback_investigation.md).
 
@@ -120,6 +117,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [ ] **Computing faster**
       Threads, the GPU and tiny networks. A show is a pure function of seed and time, so only simulation is truly sequential; first measure where a frame goes, then move exact functions to shaders, bake by islands, and run the particle solver in its paper's parallel form. Tiny networks last, for one expensive shader function; parareal with a learned coarse step for the bake. Asked 2026-11-06; nothing built. See [compute.md](compute.md). C# asked 2026-11-10 and measured ([csharp.md](csharp.md)): 13 of 55 scenes cost more than a 60 fps frame in script alone, one loop compiled runs about a hundred times faster, and it is a few kernels, never most of the code - `Terrain` on the GPU first, then a C# spike on one simulation kernel.
+
+- [ ] **Let the note own the show**
+      Built: one kind of note, the panel that runs it derived from its components, slots for what a note has one of, a derived "+" and a detach on every panel, and one path that puts a song's show and a reading's up. Built: the Voice is a card `NoteCards` makes from the `voice` row (`VoiceCard`). Built: Synthesis is no workspace of its own - the formant voice is one the Voice card picks, its fishing game the Lab's. Open: Masking is still a panel of its own, a song and a voice on one note, the note holding the clock, the feeds between its components, its moments, places and seed; one window - the note's text while writing, its stage while playing - and a card of the note's own. See [notes.md](notes.md), "Composition, not templates", and [storyboard.md](storyboard.md).
 
 - [ ] **Model the physical sciences**
       The long arc: grow the primitive kit until the catalog spans the natural world, alone or in combination. Open, by domain: weather (wind streaks, hail, heat shimmer, a lightning storm); light (a moving light casting real shadows, day and night, god rays, caustics, refraction); crystals (mineral lattices, accretion); geology (erosion, rivers, plate motion, volcanoes); structures (bridges, lattices, ruins, roads); botany (vines, flowers, undergrowth); fluids (smoke, whirlpools); the sky (n-body systems, rings, galaxies, comets); mechanics (springs and chains, harmonographs, explosions); biology (cells, reaction-diffusion, predator-prey, ant trails, slime molds); fields (EM and gravitational, interference); chemistry (molecules, crystallization, phase changes, combustion).
@@ -151,6 +151,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [x] **After the first review**
       A clean notes list (New only; delete with ×, or a note's "⋯"), every note starting from nothing, a song as a note's component with Auto as a medium, Manual's storyboards as a card, Tarot renamed Cards, Masking's panel in the framework, and "Edit". See [notes.md](notes.md), "After the first review".
 
+- [x] **Synthesis**
+      `Phonemes`, `Voice` and a threaded `VoiceStream`, the fishing game that breeds voices, and the sampler that mints a seed from a living voice. The formant voice is one of the Voice card's (`FormantVoice`, made in-process by `VoiceHost`), and its game is the Lab's (`VoiceFishing`): next/voice.md.
+
 - [x] **Tarot, now Cards (2026-10-04 to 10-06)**
       An automatic tarot reading: agents plan, paint and write each episode one card at a time, the table shuffles, deals and lights itself, a set dresser builds the reader's table through Ghost Notes' own tools, and an export can go straight to YouTube.
 
@@ -174,9 +177,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [x] **The gates**
       `scripts/check.sh` runs every gate, from a whole-catalog scene smoke to the pixel gates on a virtual display, two-sided wherever a pass could come from a broken instrument.
-
-- [x] **Synthesis**
-      `Phonemes`, `Voice` and a threaded `VoiceStream`, the fishing game that breeds voices, and the sampler that mints a seed from a living voice. The formant voice is one of the Voice card's (`FormantVoice`, made in-process by `VoiceHost`), and its game is the Lab's (`VoiceFishing`): next/voice.md.
 
 - [x] **Staying interactive**
       `TriBatch` batched drawing, `FrameForge` geometry built off the main thread, and `SimClock`, the fixed-rate tick every running system advances on.

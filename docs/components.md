@@ -17,7 +17,7 @@ A row's `script` is the path of the script that builds the component's card, loa
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (16 components, 2 slots, 5 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (15 components, 2 slots, 4 workspaces).
 
 ## Slots
 
@@ -25,8 +25,8 @@ Where a note has room for exactly one. Components that take the same slot are al
 
 | Slot | What it is | Taken by |
 | --- | --- | --- |
-| `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Voice lab, Clip |
-| `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, a voice lab's own show, or a clip's own frame. | Voice lab, Medium, Actor, Clip |
+| `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Clip |
+| `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, or a clip's own frame. | Medium, Actor, Clip |
 
 ## Workspaces
 
@@ -37,7 +37,6 @@ The panels that run a note. Most components are a card on whichever panel is up;
 | **Note** (`note`) | no component: the default | The note's own panel: its words, and a card for each thing attached. |
 | **Reading** (`reading`) | Voice | A voice reads the note: the cast, each speaker's delivery and room, the stream. |
 | **Table** (`table`) | Table | A show at a table: the episodes agents make from the note's brief, and the voice that reads them. |
-| **Voice lab** (`lab`) | Voice lab | Ghost Notes' own synthesizer and the fishing game that breeds its voices. |
 | **Masking** (`clip`) | Clip | A clip's editor: its markers, tracks, effects and timeline. |
 
 ## Components
@@ -60,12 +59,10 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Voice
 
-- **Voice** (`voice`) - A local neural voice reads the note: a cast of speakers, each with their own delivery and room.
+- **Voice** (`voice`) - A voice reads the note: a cast of speakers, each with their own delivery and room, in a local neural voice or Ghost Notes' own formant synthesizer (its voices bred in the Lab's fishing game).
   - needs text; gives audio, reading, moments; takes the clock; asks for `stage`, `subprocess`, `python:voice`; kept in `voice:`
 - **Voice training** (`voice_training`) - Teaches a voice to speak like someone, from their recordings - files, a folder, or links to videos. The note reads in it, and any Voice card can pick it.
   - needs reading; brings Voice; asks for `subprocess`, `ffmpeg`, `python:voice`, `python:speech`, `python:download`, `python:voice_train`; kept in `voice_training:`
-- **Voice lab** (`voice_lab`) - Ghost Notes' own synthesizer reads the note, and a fishing game breeds its voices.
-  - needs text; gives audio, reading, moments; brings Scenes; takes the clock and the presentation; asks for `stage`; kept in `synthesis:`
 
 ### Sound
 

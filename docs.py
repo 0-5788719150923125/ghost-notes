@@ -37,8 +37,9 @@ Writes are idempotent: a file is only touched when its content changes. Drift th
 script missing from the group map, a CLI flag missing from the table, a scene on disk but not registered) is
 printed as a warning and surfaced in the generated docs.
 
-Run from anywhere: ``python docs.py`` (stdlib only). ``python docs.py --check`` writes nothing and exits 1 if
-a generated file is stale or anything drifted - what scripts/check.sh runs.
+Run from anywhere: ``python docs.py`` (stdlib only); every development launch of the app runs it (`AutoDocs`,
+src/app/auto_docs.gd). ``python docs.py --check`` writes nothing and exits 1 if a generated file is stale or
+anything drifted - what scripts/check.sh runs.
 """
 
 from __future__ import annotations

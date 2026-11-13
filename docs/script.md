@@ -46,23 +46,23 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
-| Pronunciation | `[K AE T]` | Generative, Synthesis | Spells a word in ARPAbet phonemes, read exactly as written. For a name the voice gets wrong. |
-| Letter | `[a]` | Generative, Synthesis | A letter that names something - a number, a point, a case - said by its name and shown as the letter: [a] is "ay", where a bare a is read as the word a. |
+| Pronunciation | `[K AE T]` | Generative | Spells a word in ARPAbet phonemes, read exactly as written. For a name the voice gets wrong. |
+| Letter | `[a]` | Generative | A letter that names something - a number, a point, a case - said by its name and shown as the letter: [a] is "ay", where a bare a is read as the word a. |
 
 ## Text
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
-| Template macro | `${CHAPTERS_BEFORE:twenty-one}` | Generative, Synthesis, Table | A placeholder for a fact only the book's build knows. Ghost Notes reads the default after the colon, never the macro itself; one with no default is skipped and named in the panel. **In a Table brief:** A placeholder for a fact only the build knows. The agents are handed the default after the colon, never the macro itself; one with no default is left out. |
+| Template macro | `${CHAPTERS_BEFORE:twenty-one}` | Generative, Table | A placeholder for a fact only the book's build knows. Ghost Notes reads the default after the colon, never the macro itself; one with no default is skipped and named in the panel. **In a Table brief:** A placeholder for a fact only the build knows. The agents are handed the default after the colon, never the macro itself; one with no default is left out. |
 
 ## Typography
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
-| Heading | `# Heading` | Generative, Synthesis, Table | Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own. **In a Table brief:** A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck. |
+| Heading | `# Heading` | Generative, Table | Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own. **In a Table brief:** A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck. |
 | Scene line | `*Nine-thirty. Orientation.*` | Generative | A short paragraph entirely in italics announces a change of time or place; a picture just before it gets a full page. |
-| Italic | `*emphasized*` | Generative, Synthesis, Table | Shown in italics in the subtitles and on the page, and a word or a few so marked is hit: held longer and said louder. A longer run is typography, said plainly. The asterisks are never spoken. **In a Table brief:** In a line the brief gives the host to say word for word, the word the voice hits, shown in italics in the subtitle. Anywhere else it is emphasis for the agents reading the brief. |
-| Bold | `**strong**` | Generative, Synthesis, Table | Shown in bold in the subtitles and on the page, and a word or a few so marked is hit harder than an italic one. The asterisks are never spoken. **In a Table brief:** In a line the brief gives the host to say word for word, the word the voice hits hardest, shown in bold in the subtitle. Anywhere else it is emphasis for the agents reading the brief. |
+| Italic | `*emphasized*` | Generative, Table | Shown in italics in the subtitles and on the page, and a word or a few so marked is hit: held longer and said louder. A longer run is typography, said plainly. The asterisks are never spoken. **In a Table brief:** In a line the brief gives the host to say word for word, the word the voice hits, shown in italics in the subtitle. Anywhere else it is emphasis for the agents reading the brief. |
+| Bold | `**strong**` | Generative, Table | Shown in bold in the subtitles and on the page, and a word or a few so marked is hit harder than an italic one. The asterisks are never spoken. **In a Table brief:** In a line the brief gives the host to say word for word, the word the voice hits hardest, shown in bold in the subtitle. Anywhere else it is emphasis for the agents reading the brief. |
 | Scene break | `* * *` | Generative | A rule across the page between two scenes. Silent. |
 
 ## Tablet
@@ -145,4 +145,4 @@ STATUS ...... CONTAINED
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
-| Note to self | `<!-- a note to yourself -->` | Generative, Synthesis, Table | Any other HTML comment is an authoring note: never spoken, never printed. **In a Table brief:** Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it. |
+| Note to self | `<!-- a note to yourself -->` | Generative, Table | Any other HTML comment is an authoring note: never spoken, never printed. **In a Table brief:** Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it. |

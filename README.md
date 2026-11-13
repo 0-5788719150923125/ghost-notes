@@ -28,7 +28,7 @@ Ghost Notes is an app made with [Godot](https://godotengine.org/) 4.7, in which 
 
 Ghost Notes is built from registries. Each page below is generated from one, listing every entry and where it lives; [docs/index.md](docs/index.md) is the whole map.
 
-- [Components](docs/components.md) (16 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](docs/components.md) (15 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](docs/scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](docs/media.md) (11) - what the show is carried on.
 - [Look filters](docs/filters.md) (8) - the post-process over the whole picture.

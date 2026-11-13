@@ -5,13 +5,13 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 660 references inside a folder, 1164 down the stack, 0 up it.
+Between scripts today: 670 references inside a folder, 1165 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
-| `app/` | The shell | 13 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
+| `app/` | The shell | 14 | `masking`, `letter`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `dispatch/` | Dispatch desk | 9 | `desk`, `table`, `reading`, `media`, `scene_kit`, `render`, `data` |
@@ -24,7 +24,7 @@ Between scripts today: 660 references inside a folder, 1164 down the stack, 0 up
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `show/` | The show | 11 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 20 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `voice/` | Synthesis (voice) | 15 | `audio`, `platform`, `data` |
+| `voice/` | Synthesis (voice) | 16 | `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 27 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
@@ -36,7 +36,7 @@ Between scripts today: 660 references inside a folder, 1164 down the stack, 0 up
 | `render/` | Drawing | 12 | `data` |
 | `audio/` | Audio & analysis | 7 | `platform` |
 | `platform/` | The machine | 11 | `data` |
-| `data/` | Plain data | 7 | nothing |
+| `data/` | Plain data | 8 | nothing |
 
 ## The folders, bottom first
 
@@ -44,7 +44,7 @@ Between scripts today: 660 references inside a folder, 1164 down the stack, 0 up
 
 Plain data in and out, at the bottom because it needs nothing: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, reading any registry's rows (`Registry`), what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
 
-[`clock`](../src/data/clock.gd), [`data_path`](../src/data/data_path.gd), [`front_matter`](../src/data/front_matter.gd), [`manuscript`](../src/data/manuscript.gd), [`registry`](../src/data/registry.gd), [`rules`](../src/data/rules.gd), [`yaml`](../src/data/yaml.gd)
+[`clock`](../src/data/clock.gd), [`data_path`](../src/data/data_path.gd), [`front_matter`](../src/data/front_matter.gd), [`macros`](../src/data/macros.gd), [`manuscript`](../src/data/manuscript.gd), [`registry`](../src/data/registry.gd), [`rules`](../src/data/rules.gd), [`yaml`](../src/data/yaml.gd)
 
 ### `platform/` - The machine
 
@@ -112,9 +112,9 @@ What every note's panel is built from, and what it asks of the window it is in: 
 
 ### `voice/` - Synthesis (voice)
 
-Text to narrated audio in two paths: ghost's own source-filter synthesizer (no models, no weights, fully inspectable, and the only path that can sing), and a small local neural voice run by a subprocess host. Shared between them: the text front end and its normalization, the threaded real-time stream and the buffer effects. Design: next/voice.md.
+Text to narrated audio in two paths: ghost's own formant synthesizer (no models, no weights, fully inspectable, and the only path that can sing), made in-process, and local neural voices run by a subprocess host - both answered alike to the reading. Shared between them: the text front end and its normalization, the room and the buffer effects. Design: next/voice.md.
 
-[`delivery`](../src/voice/delivery.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_blend`](../src/voice/voice_blend.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_party`](../src/voice/voice_party.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
+[`delivery`](../src/voice/delivery.gd), [`formant_voice`](../src/voice/formant_voice.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_blend`](../src/voice/voice_blend.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_party`](../src/voice/voice_party.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
 
 ### `media/` - Media
 
@@ -142,9 +142,9 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 
 ### `reading/` - The voice's workspaces
 
-The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on it, and the voice lab with the fishing game that breeds its voices.
+The panels a voice runs in: the reading (script, cast, voice, stream, export), the Voice card and its Lab (who reads, a blend of readers, and the fishing game that breeds the formant voice).
 
-[`note_upload`](../src/reading/note_upload.gd), [`reader_browser`](../src/reading/reader_browser.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`reading_timeline`](../src/reading/reading_timeline.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`take_cache`](../src/reading/take_cache.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd), [`voice_shape`](../src/reading/voice_shape.gd)
+[`note_upload`](../src/reading/note_upload.gd), [`reader_browser`](../src/reading/reader_browser.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`reading_timeline`](../src/reading/reading_timeline.gd), [`take_cache`](../src/reading/take_cache.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd), [`voice_fishing`](../src/reading/voice_fishing.gd), [`voice_shape`](../src/reading/voice_shape.gd)
 
 ### `table/` - The set
 
@@ -192,7 +192,7 @@ The video chroma-key masking editor - a second app surface inside ghost. See [ma
 
 The lifecycle around everything, and the one folder that names every other: main, the furniture every mode gets (Chrome), the notes list and a note's own panel, the phone shell, the authoring loop - the log, the feedback console and the Assistant - and the recorder of the README's animation, which drives the real app.
 
-[`assistant`](../src/app/assistant.gd), [`chrome`](../src/app/chrome.gd), [`console`](../src/app/console.gd), [`delete_dialog`](../src/app/delete_dialog.gd), [`deps_panel`](../src/app/deps_panel.gd), [`feedback`](../src/app/feedback.gd), [`main`](../src/app/main.gd), [`note_panel`](../src/app/note_panel.gd), [`notes_list`](../src/app/notes_list.gd), [`phone_shell`](../src/app/phone_shell.gd), [`provision_badge`](../src/app/provision_badge.gd), [`showcase`](../src/app/showcase.gd), [`showcase_recorder`](../src/app/showcase_recorder.gd)
+[`assistant`](../src/app/assistant.gd), [`auto_docs`](../src/app/auto_docs.gd), [`chrome`](../src/app/chrome.gd), [`console`](../src/app/console.gd), [`delete_dialog`](../src/app/delete_dialog.gd), [`deps_panel`](../src/app/deps_panel.gd), [`feedback`](../src/app/feedback.gd), [`main`](../src/app/main.gd), [`note_panel`](../src/app/note_panel.gd), [`notes_list`](../src/app/notes_list.gd), [`phone_shell`](../src/app/phone_shell.gd), [`provision_badge`](../src/app/provision_badge.gd), [`showcase`](../src/app/showcase.gd), [`showcase_recorder`](../src/app/showcase_recorder.gd)
 
 ## What still points up
 
