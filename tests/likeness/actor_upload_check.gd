@@ -87,6 +87,9 @@ func _check() -> void:
 	var ed = load("res://src/reading/reading_panel.gd").new()
 	ed.workspace = "reading"
 	ed._build_panel()
+	# the plain reading's walk: a format's (a Letter's, a desk's) taken from the Director's last medium in the
+	# author's settings must not choose what is announced
+	ed.walk = TextWalk.new()
 	ed._doc._sync = false
 	ed._doc._fields = {"title": "A Reading", "tags": "readings, voice"}
 	ed.note_path = ROOT + "/notes/A Reading.md"
