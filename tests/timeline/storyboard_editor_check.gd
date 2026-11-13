@@ -1,8 +1,8 @@
 extends Node
 
 ## storyboard_editor_check - a note's storyboard, written in the app (next/storyboard.md): through
-## the real main scene, with notes of the gate's own (`NoteStore.root`) and a song that is a
-## fixture of silence.
+## the real main scene, with notes and note folders of the gate's own (`NoteStore.root`,
+## `NoteUpload.root`) and a song that is a fixture of silence.
 ##
 ##   tests/run_boot_probe.sh tests/timeline/storyboard_editor_check.gd 300
 ##
@@ -13,15 +13,18 @@ extends Node
 ##   has (control: a name nothing knows is told apart from one something does);
 ## - `Director.forecast` names the scenes, motions and seeds the seeded show will play, and the Director
 ##   cut through that many scenes plays the same list; asking in between changes nothing (control:
-##   another seed's forecast differs). "Start from the seeded show" writes those entries into the note
-##   and the scene on screen is the one the seed opened on;
+##   another seed's forecast differs). A note shown in a Medium holds its storyboard ([NoteStoryboard])
+##   with nothing attached, and offers its timeline while the format plays scenes (control: a format
+##   that plays none does not). With nothing written the editor shows the forecast, grayed and open to
+##   change; the first change writes those entries down as the note's own, and the scene on screen is the
+##   one the seed opened on;
 ## - the editor edits a tree and the show follows: an entry added, an actor, a span, a rename (its spans
 ##   follow), a retiming, a hold dragged longer, an entry moved - each is a new tree, the one before it
 ##   left as it was (held to a copy), and one step back. The source view takes YAML back and refuses text
-##   that makes no storyboard (control). With everything deleted the seed chooses again;
-## - the note keeps it: the tree reaches the note's `scenes:` block through the autosave, and the note
-##   left and opened again walks the same storyboard. A note that names a file plays it and cannot change
-##   it here until it is taken into the note;
+##   that makes no storyboard (control). "To the seed" empties it: the file goes and the seed chooses again;
+## - the note keeps it: the tree is written to the note's folder (`storyboard.json`) a moment after an
+##   edit, never into the note's own file; each state is kept in its history and listed by Restore…, and a
+##   state put back is the storyboard again; the note left and opened again walks the same storyboard;
 ## - a note with a voice, a Medium and a storyboard hands main the same plan as a song's;
 ## - the rows are the tables ([SchemaForm]): a choice picked or a line typed raises one edit with the
 ##   value read (`0.3..0.4` is a range), the unset button unsets, unreadable text is put back and raises
@@ -49,6 +52,7 @@ func _ready() -> void:
 func _run() -> void:
 	_clean()
 	NoteStore.root = ROOT
+	NoteUpload.root = ROOT.path_join("readings")
 	NoteStore.discard = func(p: String) -> int: return DirAccess.remove_absolute(p)
 	_tables()
 	await _form()
@@ -59,9 +63,9 @@ func _run() -> void:
 	var song: String = FixtureAudio.silence(20.0)
 	await _forecast(song)
 	await _write_and_edit(song)
-	await _file_board(song)
 	await _voice(song)
 	NoteStore.discard = Callable()
+	NoteUpload.root = NoteUpload.ROOT
 	_clean()
 	_report()
 
@@ -76,6 +80,10 @@ func _tables() -> void:
 	_same(shots, Shots.REGISTRY.keys(), "its shots are the Shots registry's")
 	_same(Storyboard.ACTOR["kind"]["options"], Cast.REGISTRY.keys(), "an actor's kinds are the Cast registry's")
 	_same(Storyboard.SPAN["action"]["options"], Actions.REGISTRY.keys(), "a span's verbs are the Actions registry's")
+	for fmt in ["auto", "full", "comic"]:
+		_ok(NoteStoryboard.plays_scenes(fmt), "a note shown as %s offers its storyboard" % fmt)
+	for fmt in ["letter", "book", "table"]:
+		_ok(not NoteStoryboard.plays_scenes(fmt), "the control: a note shown as %s plays no scenes, and offers none" % fmt)
 	for kind in Cast.REGISTRY:
 		_ok(Cast.PARAMS.has(kind), "the kind '%s' has a table of what it can be told" % kind)
 	for kind in Cast.PARAMS:
@@ -227,15 +235,18 @@ func _forecast(song: String) -> void:
 func _write_and_edit(song: String) -> void:
 	print("-- written down, it is the same show")
 	var ch: Chrome = _main._chrome
-	var note := NoteStore.create("story", "Words.\n", {"song": {"path": song}, "medium": {"format": "full"},
-		"scenes": {"sequence": []}})
+	var note := NoteStore.create("story", "Words.\n", {"song": {"path": song}, "medium": {"format": "full"}})
+	var board_file := NoteStoryboard.path_in(NoteUpload.folder_of(note))
 	_main._list._open(note)
 	await _frames(24)
 	var panel: NotePanel = _main._note_panel
-	var card: StoryboardCard = panel._story if panel != null else null
-	_ok(card != null, "a note with a storyboard attached has its card")
+	var card: NoteStoryboard = panel._story if panel != null else null
+	_ok(card != null, "a note shown in a Medium holds its storyboard, with nothing attached")
 	if card == null:
 		return
+	card.allow_saves_for_test()
+	_ok(Transport.offered().get("who") is WeakRef and (Transport.offered()["who"] as WeakRef).get_ref() == card,
+		"its timeline is the one beside Play")
 	_ok((panel.show_plan()["board"] as Dictionary).is_empty() and not Director.is_manual(),
 		"nothing is written in it, so the seed chooses")
 	var first: GhostScene = Director._current
@@ -254,19 +265,20 @@ func _write_and_edit(song: String) -> void:
 	_ok(fitted.end.y <= vis.y - ch.stage_bottom + 1.0 and fitted.get_center().y < whole.get_center().y,
 		"the frame is fitted above the dock (%s, in the whole window %s)" % [str(fitted), str(whole)])
 	_ok(is_equal_approx(whole.get_center().y, vis.y * 0.5), "...and before it opened, the frame was the window's")
-	_ok(ed.ghost and ed.read_only and ed._strip.rows.size() == StoryboardCard.AHEAD,
-		"with nothing written it shows what the seed will play, grayed (%d entries)" % ed._strip.rows.size())
-	card._fill_start()
-	card._on_start(0)
+	_ok(ed.ghost and not ed.read_only and ed._strip.rows.size() == NoteStoryboard.AHEAD,
+		"with nothing written it shows what the seed will play, grayed and open to change (%d entries)" % ed._strip.rows.size())
+	_ok(not FileAccess.file_exists(board_file), "...and nothing is kept for it yet")
+	ed._write(["transition"], "fade")
 	await _wait(0.6)
-	var seq: Array = card.capture().get("sequence", [])
-	_ok(seq.size() == StoryboardCard.AHEAD, "Start from the seeded show: %d entries, the note's own" % seq.size())
+	var seq: Array = card.raw().get("sequence", [])
+	_ok(seq.size() == NoteStoryboard.AHEAD and not ed.ghost, "the first change writes the seeded show down: %d entries, the note's own" % seq.size())
+	_ok(FileAccess.file_exists(board_file), "...kept in the note's folder (%s)" % board_file)
 	_ok(Director.is_manual() and int(Director.cursor()["entry"]) == 0, "the Director walks them, from the first")
 	var now: GhostScene = Director._current
 	_ok(now.scene_name == String(opened["scene"]) and now.seed_value == int(opened["seed"]),
 		"...and it is the scene the seed opened on, from the same seed (%s %d / %s %d)"
 		% [now.scene_name, now.seed_value, opened["scene"], opened["seed"]])
-	_ok(not ed.read_only and not ed.ghost and ed._strip.rows.size() == StoryboardCard.AHEAD, "the editor shows them, and they can be changed")
+	_ok(not ed.read_only and not ed.ghost and ed._strip.rows.size() == NoteStoryboard.AHEAD, "the editor shows them, and they can be changed")
 
 	print("-- the editor edits a tree, and the show follows")
 	ed._pick(2)
@@ -348,9 +360,9 @@ func _write_and_edit(song: String) -> void:
 	ed.shift_entry(1)
 	_ok(String(ed.data["sequence"][1]["scene"]) == "stage", "...and one place later with ▶")
 	ed.duplicate_entry()
-	_ok((ed.data["sequence"] as Array).size() == StoryboardCard.AHEAD + 2, "Duplicate adds a copy")
+	_ok((ed.data["sequence"] as Array).size() == NoteStoryboard.AHEAD + 2, "Duplicate adds a copy")
 	ed.remove_entry()
-	_ok((ed.data["sequence"] as Array).size() == StoryboardCard.AHEAD + 1, "Delete removes the entry picked")
+	_ok((ed.data["sequence"] as Array).size() == NoteStoryboard.AHEAD + 1, "Delete removes the entry picked")
 
 	print("-- the inspector's rows")
 	ed._pick(2)
@@ -401,17 +413,34 @@ func _write_and_edit(song: String) -> void:
 	ed.toggle_source()
 
 	print("-- the note keeps it")
-	_ok(DataPath.same(card.capture(), Storyboard.own_block(ed.data)), "the card holds what the editor shows")
+	await _wait(0.6)
+	_ok(DataPath.same(card.raw(), Storyboard.own_block(ed.data)), "it holds what the editor shows")
+	var on_disk := NoteStoryboard.read(NoteUpload.folder_of(note))
+	_ok(bool(on_disk["ok"]) and DataPath.same(on_disk["data"], card.raw()), "the note's folder keeps it, as it stands")
 	panel._writer.doc.allow_autosave_for_test()
 	await _wait(2.4)
-	var on_disk: Variant = NoteStore.blocks_of(note).get("scenes")
-	_ok(on_disk is Dictionary and DataPath.same(on_disk, card.capture()), "the note's scenes: block is the storyboard, through the autosave")
+	_ok(not NoteStore.blocks_of(note).has("scenes"), "...and the note's own file carries none of it")
+	var hist := NoteUpload.folder_of(note).path_join(NoteStoryboard.HISTORY)
+	var states := NoteHistory.entries(hist)
+	var kept_ui: Array = panel.find_children("*", "NoteKept", true, false)
+	var listed: Array = (kept_ui[0] as NoteKept).entries().filter(func(e: Dictionary) -> bool: return e.has("board")) if not kept_ui.is_empty() else []
+	_ok(states.size() >= 2 and listed.size() == states.size(), "each state is kept in its history and listed by Restore… (%d kept, %d listed)"
+		% [states.size(), listed.size()])
+	if states.size() >= 2:
+		var newest := card.raw().duplicate(true)
+		var first_kept: Dictionary = NoteHistory.data_of(hist, states.back())
+		card.restore(first_kept)
+		await _frames(3)
+		_ok(DataPath.same(card.raw(), Storyboard.own_block(Storyboard.whole(first_kept))) and not DataPath.same(card.raw(), newest),
+			"a state put back is the storyboard again (%d entries)" % (card.raw()["sequence"] as Array).size())
+		card.restore(newest)
+		await _frames(3)
 	var walked := Director.storyboard_data()
 	var again := Storyboard.from_yaml(Storyboard.to_yaml(walked))
 	_ok(bool(again["ok"]) and DataPath.same(Storyboard.from_data(again["data"], "x")["sequence"], walked["sequence"]),
 		"what a render is handed loads as the storyboard being walked")
 	_ok(Director.storyboard_source().is_empty(), "...and it is in no file: the note's own")
-	var kept: Dictionary = card.capture()
+	var kept: Dictionary = card.raw()
 	ch._home_button.pressed.emit()
 	await _frames(12)
 	_ok(not ch._bottom_claims.has(StoryboardEditor.CLAIM) and is_zero_approx(ch.stage_bottom),
@@ -420,21 +449,23 @@ func _write_and_edit(song: String) -> void:
 	await _frames(24)
 	panel = _main._note_panel
 	card = panel._story if panel != null else null
-	_ok(card != null and DataPath.same(card.capture(), kept), "opened again, the note shows the same storyboard")
+	_ok(card != null and DataPath.same(card.raw(), kept), "opened again, the note shows the same storyboard")
 	_ok(Director.is_manual() and Director._storyboard_seq.size() == (kept["sequence"] as Array).size(),
 		"...and its show walks it (%d entries)" % Director._storyboard_seq.size())
 	if card == null:
 		return
-	# everything deleted: the seed chooses again
+	card.allow_saves_for_test()
+	# To the seed: nothing written, and the seed chooses again
 	card.open_editor()
 	await _frames(4)
 	ed = card.editor()
-	ed._edit(DataPath.put(ed.data, ["sequence"], []))
+	ed.to_seed()
 	await _wait(0.6)
-	_ok(not Director.is_manual() and card.editor().ghost, "with every entry deleted the seed chooses again, and the editor shows its forecast")
+	_ok(not Director.is_manual() and card.editor().ghost, "To the seed: the seed chooses again, and the editor shows its forecast")
+	_ok(not FileAccess.file_exists(board_file), "...and the note's folder keeps no storyboard")
 	card.editor().add_entry("aurora")
 	await _wait(0.6)
-	_ok((card.capture()["sequence"] as Array).size() == 1 and Director.is_manual() and Director._current.scene_name == "aurora",
+	_ok((card.raw()["sequence"] as Array).size() == 1 and Director.is_manual() and Director._current.scene_name == "aurora",
 		"+ Scene over the forecast starts the note's own with that entry")
 	card.close_editor()
 	await _frames(3)
@@ -443,53 +474,21 @@ func _write_and_edit(song: String) -> void:
 	await _frames(12)
 
 
-# --- a file a note names ----------------------------------------------------------------------------
-
-func _file_board(song: String) -> void:
-	print("-- a note that names a file")
-	var note := NoteStore.create("from a file", "", {"song": {"path": song}, "medium": {"format": "full"},
-		"scenes": {"storyboard": "showcase"}})
-	_main._list._open(note)
-	await _frames(24)
-	var panel: NotePanel = _main._note_panel
-	var card: StoryboardCard = panel._story if panel != null else null
-	_ok(card != null and card.capture() == {"storyboard": "showcase"}, "its block is the file's name, as it was")
-	if card == null:
-		return
-	_ok(Director.is_manual() and Director.storyboard_source() == "showcase", "the show walks the file, and a render is told its name")
-	card.open_editor()
-	await _frames(4)
-	var ed := card.editor()
-	var held: Dictionary = ed.data.duplicate(true)
-	ed.add_entry("aurora")
-	ed._write(["loop"], false)
-	_ok(ed.read_only and DataPath.same(ed.data, held), "the editor shows it and changes nothing in it")
-	card._take.pressed.emit()
-	await _wait(0.6)
-	var own := Storyboard.of_block(card.capture())
-	_ok(String(own["kind"]) == "own" and (own["data"] as Dictionary).has("defs"), "taken into the note, it is the note's own - its defs with it")
-	_ok(not card.editor().read_only, "...and can be changed")
-	_ok(Director.is_manual() and Director.storyboard_source().is_empty(), "the show walks the note's copy")
-	_ok(DataPath.same(Storyboard.from_data(own["data"], "x")["sequence"], Storyboard.load_file("showcase")["sequence"]),
-		"which plays as the file did")
-	_main._chrome._home_button.pressed.emit()
-	await _frames(12)
-
-
 # --- a voice walks one too --------------------------------------------------------------------------
 
 func _voice(_song: String) -> void:
 	print("-- a voice with a picture and a storyboard")
 	var home_procs := Subprocess.tracked()
-	var note := NoteStore.create("narrated", "Words.\n", {"voice": {}, "medium": {"format": "full"},
-		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}, {"scene": "embers", "hold": 4}]}})
+	var note := NoteStore.create("narrated", "Words.\n", {"voice": {}, "medium": {"format": "full"}})
+	NoteStoryboard.write(NoteUpload.folder_of(note),
+		{"loop": true, "sequence": [{"scene": "aurora", "hold": 4}, {"scene": "embers", "hold": 4}]})
 	_main._list._open(note)
 	await _frames(24)
 	var reading: Node = _main._generative
 	_ok(reading != null and is_instance_valid(reading), "it opens as a reading")
 	if reading != null:
 		var titles: Array = (reading._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
-		_ok(titles == ["Body", "Voice", "Medium", "Storyboard"], "its cards are the note's: %s" % str(titles))
+		_ok(titles == ["Body", "Voice", "Medium"], "its cards are the note's: %s" % str(titles))
 		var plan: Dictionary = reading.show_plan()
 		_ok(bool(plan["picture"]) and ((plan["board"] as Dictionary).get("sequence", []) as Array).size() == 2,
 			"the plan it hands main is a song's: a picture, and the storyboard to walk")
@@ -530,11 +529,18 @@ func _wait(seconds: float) -> void:
 
 
 func _clean() -> void:
-	var abs := ProjectSettings.globalize_path(ROOT)
-	if DirAccess.dir_exists_absolute(abs):
-		for f in DirAccess.get_files_at(abs):
-			DirAccess.remove_absolute(abs.path_join(f))
-		DirAccess.remove_absolute(abs)
+	_rmrf(ProjectSettings.globalize_path(ROOT))
+
+
+## [param dir] and everything in it, gone: the gate's own folder (its notes, and their folders under it).
+func _rmrf(dir: String) -> void:
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	for sub in DirAccess.get_directories_at(dir):
+		_rmrf(dir.path_join(sub))
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	DirAccess.remove_absolute(dir)
 
 
 func _ok(cond: bool, msg: String) -> void:

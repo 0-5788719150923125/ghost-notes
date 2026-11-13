@@ -4,7 +4,7 @@ _A spectral experience_
 
 ---
 
-<p align="center"><img src="./docs/showcase.webp" alt="Ghost Notes: a Manual note playing its storyboard - a blue prism divides into a blue one and a red one"></p>
+<p align="center"><img src="./docs/showcase.webp" alt="Ghost Notes: a note playing its storyboard - a blue prism divides, builds a tetrahedron of prisms, and comes apart"></p>
 
 ---
 
@@ -28,13 +28,13 @@ Ghost Notes is an app made with [Godot](https://godotengine.org/) 4.7, in which 
 
 Ghost Notes is built from registries. Each page below is generated from one, listing every entry and where it lives; [docs/index.md](docs/index.md) is the whole map.
 
-- [Components](docs/components.md) (17 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](docs/components.md) (16 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](docs/scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](docs/media.md) (11) - what the show is carried on.
 - [Look filters](docs/filters.md) (8) - the post-process over the whole picture.
 - [Layers](docs/layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.
-- [Stage actors and verbs](docs/stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
+- [Stage actors and verbs](docs/stage.md) (3 actors, 24 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](docs/masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
 - [Script marks](docs/script.md) (71) - every mark a script may carry - the script editor's palette.
 - [Agents](docs/agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
@@ -55,7 +55,6 @@ Documented outside the registry pages.
 - [The environment](docs/environment.md) - what Ghost Notes installs itself, and the few programs that stay the machine's.
 - [The structure](docs/structure.md) - `src/` as a stack of folders: what each is, what it names, and what still points up.
 - [CLI flags](docs/cli.md) - every command-line flag.
-- [Storyboards](storyboards/README.md) - the data spec a note's storyboard is written in.
 
 <!-- AUTODOC:SUBSYSTEMS:END -->
 
@@ -75,8 +74,7 @@ Top-level layout; every script is in [docs/index.md](docs/index.md).
 - **[`src/scenes/`](src/scenes/)** - The visualizer scene catalog - one class per scene. See [docs/scenes.md](docs/scenes.md).
 - **[`src/media/`](src/media/)** - The media - what the show is carried on. See [docs/media.md](docs/media.md).
 - **[`shaders/`](shaders/)** - The GPU shaders: the Look, every Masking effect, the card table and a few scenes.
-- **[`storyboards/`](storyboards/)** - Manual-mode scene scores (YAML; JSON accepted). [storyboards/README.md](storyboards/README.md) is the data spec.
-- **[`data/`](data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table - each license beside its file.
+- **[`data/`](data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table, the README's animation (`showcase.json`, a storyboard) - each license beside its file.
 - **[`fonts/`](fonts/)** - Faces the media draw with: the notebook's handwriting and the card table's lettering.
 - **[`hosts/`](hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/platform/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
 - **[`scripts/`](scripts/)** - Build and check scripts: `scripts/check.sh` runs every gate (`--gpu` adds the ones that need a real renderer), `scripts/build.sh` exports a target into `dist/`.

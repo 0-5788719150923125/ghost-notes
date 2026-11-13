@@ -171,7 +171,7 @@ func _advance(text: String) -> float:
 
 
 ## The radar: `{t (the sweep's clock), blip: {at: Vector2, label, since}, trail: [{at, age}], ping (seconds into the last
-## ping, or -1), planes: [{at, heading}], clutter: [{at, fade}]}`.
+## ping, or -1), planes: [{at, heading}], clutter: [{at, fade, chair?}]}`.
 func show_radar(st: Dictionary) -> void:
 	_show(radar, _radar, st)
 
@@ -251,7 +251,8 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 ## The radar: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
 ## at its middle; the target's blip, lit as the sweep passes and fading after, its place written small beside it; the
 ## places before it fading out; a ping's ring opening out from the blip; an aircraft's small mark drifting across now
-## and then; and with the gain turned up, clutter round him, smaller and dimmer, with no name.
+## and then; and with the gain turned up, clutter round him, smaller and dimmer, with no name (at the top of the knob one
+## on the desk itself, the chair's).
 func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(RADAR_SIZE)
 	var mid := size * 0.5

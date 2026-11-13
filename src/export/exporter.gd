@@ -1304,8 +1304,8 @@ static func override_text(w: int, h: int) -> String:
 
 
 ## What the render is told to walk, "" for the seeded show: the note's storyboard as its panel plans it ([member
-## show_provider]), else the one the Director is walking. A file's is its name or path; one a note keeps in its own block is
-## written out in its loaded form beside the render's other scratch.
+## show_provider]), else the one the Director is walking. A file's is its path; one a note keeps is written out in its loaded
+## form beside the render's other scratch.
 func _storyboard_arg() -> String:
 	var plan: Variant = show_provider.call() if show_provider.is_valid() else {}
 	var board: Variant = (plan as Dictionary).get("board", {}) if plan is Dictionary else {}

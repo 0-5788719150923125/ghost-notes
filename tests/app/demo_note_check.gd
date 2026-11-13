@@ -5,10 +5,11 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/app/demo_note_check.gd 60
 ##
-## On a notes folder and a song of its own under user://: the note is made with the recording's title, its
-## song written and its medium full frame, and its `scenes:` block is the note's own storyboard, loading
-## whole with every entry of storyboards/showcase.yaml. Control: the recording's own block names the file
-## and must not read as the note's own.
+## On a notes folder, note folders and a song of its own under user://: the note is made with the
+## recording's title, its song written as long as the storyboard and its medium full frame, and its own
+## storyboard is kept in its folder ([NoteStoryboard]), loading whole with every entry of
+## data/showcase.json; nothing of it is written into the note's file. Control: another note's folder keeps
+## no storyboard.
 
 const ROOT := "user://demo_note_check"
 
@@ -19,23 +20,29 @@ func _ready() -> void:
 	var root := ProjectSettings.globalize_path(ROOT)
 	_clear(root)
 	NoteStore.root = root.path_join("notes")
+	NoteUpload.root = root.path_join("readings")
 	DirAccess.make_dir_recursive_absolute(NoteStore.root)
 	var song := ROOT.path_join("song.wav")
 	var path := Showcase.make_demo_note(song)
 	_ok(not path.is_empty() and FileAccess.file_exists(path), "the demo note was made (%s)" % path)
 	_ok(NoteStore.title_of(path) == Showcase.TITLE, "it is titled \"%s\"" % Showcase.TITLE)
-	_ok(FileAccess.get_size(ProjectSettings.globalize_path(song)) > 1000, "its song was written")
+	var bytes := FileAccess.get_size(ProjectSettings.globalize_path(song))
+	_ok(bytes == 44 + int(Showcase.song() * ShowcaseRecorder.RATE) * 2 and Showcase.song() > 0.0,
+		"its song was written, as long as the storyboard (%.1f s, %d bytes)" % [Showcase.song(), bytes])
 	var blocks := NoteStore.blocks_of(path) if not path.is_empty() else {}
 	_ok(String((blocks.get("medium", {}) as Dictionary).get("format", "")) == "full", "its medium is full frame")
-	var own := Storyboard.of_block(blocks.get("scenes"))
-	_ok(String(own["kind"]) == "own", "its storyboard is the note's own (kind %s)" % String(own["kind"]))
+	_ok(not blocks.has("scenes"), "nothing of its storyboard is written into the note's file")
+	var own := NoteStoryboard.read(NoteUpload.folder_of(path))
 	var shipped: Dictionary = Storyboard.read_raw(Showcase.STORYBOARD)["data"]
 	var loaded := Storyboard.from_data(own["data"], Storyboard.IN_NOTE, "storyboard")
-	_ok(bool(loaded.ok), "it loads whole")
-	_ok(((own["data"] as Dictionary).get("sequence", []) as Array).size() == (shipped.get("sequence", []) as Array).size()
-		and not (shipped.get("sequence", []) as Array).is_empty(), "it has every entry of the shipped storyboard")
-	# The control: the recording's block names the file, and is not the note's own
-	_ok(String(Storyboard.of_block({"storyboard": Showcase.STORYBOARD})["kind"]) != "own", "control: a block naming the file is not the note's own")
+	_ok(bool(own["ok"]) and bool(loaded.ok), "its storyboard is kept in its folder, and loads whole")
+	_ok(DataPath.same(own["data"], Storyboard.own_block(shipped)) and not (shipped.get("sequence", []) as Array).is_empty(),
+		"it is the shipped storyboard, every entry (%d)" % (shipped.get("sequence", []) as Array).size())
+	# The control: another note's folder keeps none
+	var other := NoteStore.create("another", "", {})
+	_ok(((NoteStoryboard.read(NoteUpload.folder_of(other))["data"] as Dictionary)["sequence"] as Array).is_empty(),
+		"control: another note's folder keeps no storyboard")
+	NoteUpload.root = NoteUpload.ROOT
 	_clear(root)
 	if _fails.is_empty():
 		print("demo_note_check: ALL OK")

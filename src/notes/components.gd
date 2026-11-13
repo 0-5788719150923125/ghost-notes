@@ -61,7 +61,7 @@ const WORKSPACES := {
 		"blurb": "The note's own panel: its words, and a card for each thing attached."},
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
-		"hosts": ["direction", "voice", "voice_training", "medium", "illustrations", "actor", "storyboard", "look", "bookends"],
+		"hosts": ["direction", "voice", "voice_training", "medium", "illustrations", "actor", "look", "bookends"],
 		"classic": ["text", "voice", "medium", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards, or the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
@@ -85,14 +85,9 @@ const REGISTRY := {
 		"needs": [], "provides": ["audio"], "requires": [], "slots": ["clock"], "workspace": "", "capabilities": ["stage"],
 		"marks": [], "block": "song", "card": "song"},
 	"scenes": {"label": "Scenes", "family": &"picture",
-		"blurb": "The visualizer scenes, picked by the seed and cut to the sound.",
+		"blurb": "The visualizer scenes, cut to the sound: picked by the seed, or in the order the note's storyboard writes them (its timeline, beside Play).",
 		"needs": ["audio"], "provides": ["picture", "moments"], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "", "card": ""},
-	"storyboard": {"label": "Storyboard", "family": &"picture",
-		"blurb": "The show written down: which scenes play, in what order and for how long. Where nothing is written, the seed chooses.",
-		"needs": ["audio", "places"], "provides": ["picture"], "requires": ["scenes"], "slots": [], "workspace": "",
-		"capabilities": ["forward_plus"], "marks": [], "block": "scenes", "card": "scenes",
-		"script": "res://src/timeline/storyboard_card.gd"},
 	"voice": {"label": "Voice", "family": &"voice",
 		"blurb": "A local neural voice reads the note: a cast of speakers, each with their own delivery and room.",
 		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": [], "slots": ["clock"], "workspace": "reading",
@@ -245,9 +240,6 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"song": {"path": ""}}
 		"clip":
 			return {"clip": {"path": ""}}
-		# Nothing written in it yet: the seed still chooses, until the first entry is added
-		"storyboard":
-			return {"scenes": Storyboard.own_block({})}
 		# A medium starts as the seeded show; its card picks another format.
 		"medium":
 			return {"medium": {"format": "auto"}}
@@ -287,17 +279,14 @@ static func detach_blocker(key: String, attached: Array) -> String:
 	return ""
 
 
-## Which components a note has, read off its blocks: the text always, each component whose block it carries, and a
-## storyboard where the `scenes:` block holds or names one. A part that comes with another, carried with none of them,
-## has the first (a chapter keeping `illustrations:` and no `medium:` is still shown with its pictures).
+## Which components a note has, read off its blocks: the text always, and each component whose block it carries. A
+## part that comes with another, carried with none of them, has the first (a chapter keeping `illustrations:` and no
+## `medium:` is still shown with its pictures).
 static func attached_of(blocks: Dictionary) -> Array:
 	var out: Array = ["text"]
 	for k in REGISTRY:
 		var b := String((REGISTRY[k] as Dictionary)["block"])
-		if k == "storyboard":
-			if String(Storyboard.of_block(blocks.get("scenes"))["kind"]) != "none":
-				out.append(k)
-		elif not b.is_empty() and blocks.get(b) is Dictionary:
+		if not b.is_empty() and blocks.get(b) is Dictionary:
 			out.append(k)
 	for k in out.duplicate():
 		var hosts: Array = (REGISTRY.get(k, {}) as Dictionary).get("comes_with", [])

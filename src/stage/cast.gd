@@ -13,8 +13,10 @@ class_name Cast
 ##
 ## Verbs communicate with actors through `state` (a plain Dictionary): `state.tremble` (0..1 riser
 ## vibration), `state.lock_to` (pose-lock source id), `state.still` (spin damping), `state.pulse` ({amp,
-## rate} scale breathing), `state.focus` (a world point the eye looks at). Kind classes read what they
-## understand; unknown keys are inert, so a misspelled verb cannot crash a show.
+## rate} scale breathing), `state.focus` (a world point the eye looks at), `state.mit` (a split under way, drawn as
+## the eye's membrane or the prism's bond), `state.form` (its place in a formation, held by the stage - [method
+## Actions.Form.hold]), `state.upright` (a slow righting under way, held by the stage - [method Actions.right]).
+## Kind classes read what they understand; unknown keys are inert, so a misspelled verb cannot crash a show.
 
 const REGISTRY := {
 	"eye": "eye",
@@ -528,6 +530,7 @@ class PrismActor extends Actor:
 		_t += dt
 		var prism := body as PrismBody
 		var drive := clampf((f.energy * 0.85 + f.beat * 0.6) * drive_gain, 0.0, 1.0)
+		drive = clampf(drive + float(state.get("tremble", 0.0)) * 0.5, 0.0, 1.0)   # its core surges as it strains
 		prism.update(dt * time_scale, drive)
 		# hold_still: damp the body's own spin toward rest (it keeps breathing).
 		var still := float(state.get("still", 0.0))
@@ -539,7 +542,13 @@ class PrismActor extends Actor:
 	func draw_items(stage, lens: Lens3D, u: float) -> Array:
 		if fade <= 0.003:
 			return []
-		var pj := lens.project(draw_pos())
+		var p := draw_pos()
+		var tr := float(state.get("tremble", 0.0))
+		if tr > 0.001:
+			# the riser's vibration, as an eye's: the slot jitters at a high frequency
+			p += Vector3((sin(_t * 61.0) + 0.6 * sin(_t * 97.0 + 1.3)) * 0.5,
+				(sin(_t * 71.0 + 0.7) + 0.6 * sin(_t * 113.0)) * 0.5, 0.0) * (0.08 * tr)
+		var pj := lens.project(p)
 		if pj.z <= lens.near:
 			return []
 		var prism := body as PrismBody
@@ -547,8 +556,59 @@ class PrismActor extends Actor:
 		var px := draw_scale() * lens._focal / maxf(0.1, pj.z) * u * 1.15
 		var h := fposmod(hue, 1.0)
 		var a := fade
-		return [{"d": pj.z, "call": func() -> void:
-			prism.draw(stage, center, px, h, a)}]
+		var items := [{"d": pj.z, "call": func() -> void: prism.draw(stage, center, px, h, a)}]
+		# a split's bond: while the split verb stashes `state.mit`, strands tie this prism to its budding twin
+		var mit: Variant = state.get("mit")
+		if typeof(mit) == TYPE_DICTIONARY:
+			var other = stage.actor(String((mit as Dictionary).get("to", "")))
+			if other != null and other.fade > 0.003:
+				var m: Dictionary = mit
+				items.append({"d": pj.z + 0.08, "call": func() -> void:
+					_draw_bond(stage, lens, u, m, other)})
+		return items
+
+	# The bond a dividing prism pulls against: three strands to its twin that spread while thick and pull straight,
+	# thin and bright as the pull stretches them (`waist` starves to 0), quivering with the strain, faster and
+	# brighter as the tug-of-war goes on (`tug`); at the snap they tear, and a stub at each end whips back into its
+	# prism.
+	func _draw_bond(stage, lens: Lens3D, u: float, m: Dictionary, other) -> void:
+		var pa := lens.project(pos)
+		var pb := lens.project(other.pos)
+		if pa.z <= lens.near or pb.z <= lens.near:
+			return
+		var a2 := Vector2(pa.x, pa.y) * u
+		var b2 := Vector2(pb.x, pb.y) * u
+		var dir := b2 - a2
+		var far := dir.length()
+		if far < 1.0:
+			return
+		var along := dir / far
+		var n := Vector2(-along.y, along.x)
+		var waist := clampf(float(m.get("waist", 1.0)), 0.0, 1.0)
+		var strain := 1.0 - waist
+		var tug := clampf(float(m.get("tug", 0.0)), 0.0, 1.0)
+		var snap := float(m.get("snap", -1.0))
+		var ca := Color.from_hsv(fposmod(hue, 1.0), 0.55, 1.0)
+		var cb := Color.from_hsv(fposmod(other.hue, 1.0), 0.55, 1.0)
+		var shown := minf(fade, other.fade)
+		var width := maxf(1.0, u * 0.0035 * (0.35 + waist))
+		if snap < 0.0:
+			var col := ca.lerp(cb, 0.5)
+			col.a = clampf(0.15 + 0.55 * strain + 0.2 * tug, 0.0, 1.0) * shown
+			var ph0 := float(int(m.get("seed", 0)) % 13)
+			for s in 3:
+				var bow := (float(s) - 1.0) * far * 0.09 * waist
+				var pts := PackedVector2Array()
+				for i in 13:
+					var t := float(i) / 12.0
+					var quiver := sin(_t * (23.0 + 30.0 * tug) + ph0 + float(s) * 2.1 + t * 9.0) * far * (0.012 + 0.018 * tug) * strain
+					pts.append(a2.lerp(b2, t) + n * (sin(PI * t) * (bow + quiver)))
+				stage.draw_polyline(pts, col, width, true)
+		elif snap < 0.3:
+			var k := snap / 0.3
+			var stub := far * 0.35 * (1.0 - k) * (1.0 - k)
+			stage.draw_line(a2, a2 + along * stub, Color(ca.r, ca.g, ca.b, 0.6 * (1.0 - k) * shown), width, true)
+			stage.draw_line(b2, b2 - along * stub, Color(cb.r, cb.g, cb.b, 0.6 * (1.0 - k) * shown), width, true)
 
 
 ## A formation of prisms streaming along an invisible track into the void: a group actor (many bodies, one

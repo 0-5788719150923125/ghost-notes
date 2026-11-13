@@ -49,7 +49,8 @@ prompt:
   - include: spoken
   - ""
   - >-
-      When this stretch is done, call `end_scene`. If the game has ended, however it ended, call `game_over` instead. Do not reply with the script: what you called is the script.
+      When this stretch is done, call `end_scene` with its `chapter`: what it turned out to be, named as a viewer would look for it. If the game has ended, however it ended, call `game_over` instead. Do not
+      reply with the script: what you called is the script.
 
 intro: >-
   THIS STRETCH: the table sits down. Everyone talks first, as themselves: what they ate, who is late, what happened last time they played. Then who everyone is playing: each player says it in
@@ -87,12 +88,17 @@ running:
 
 dice:
   - >-
-      THE DICE ARE REAL. When something might fail and failing would matter, name the roll aloud first and what it needs, then call `roll`: only then do you learn it. You can never roll again, and it
-      stands whatever it does to your plans. Roll for the players' dice as `who` is that player, and for everything else as you. Their dice come from where they sit and land on the table in front of everyone.
+      THE DICE ARE REAL. When something might fail and failing would matter, name the roll aloud first, then call `roll` with what it needs (`needs`), decided from what is happening before it lands, said
+      aloud or kept to yourself as the game does: only then do you learn it. You can never roll again or move what it needed, and it stands whatever it does to your plans. Roll for the players' dice as
+      `who` is that player, and for everything else as you. Their dice come from where they sit and land on the table in front of everyone.
   - >-
-      THE NUMBER COMES FIRST AND THE MEANING AFTER. The very next thing said is someone reacting to what landed, and the thrower or you says the number aloud most of the time. The best thing that can happen
-      to this show is a terrible roll at the wrong moment, and the worst is a string of competent successes. The extremes of a die are what the brief says they are, and they are events: everybody stops. Play them to the hilt, in both
-      directions, and let them change what happens next. A success can go badly, and a failure can be the most interesting thing tonight.
+      WHAT THE ANSWER SAYS CAME OF IT, CAME OF IT. A roll that FAILS has failed: say how it goes wrong, never that it nearly worked, half worked or worked anyway, and never make a near miss most of a
+      success. One that SUCCEEDS has succeeded. What the game's rules make of a die's highest or lowest face is theirs, and the answer says when one came up. What they tried happens or does not, as the
+      dice said; what it leads to is the world's.
+  - >-
+      THE NUMBER COMES FIRST AND THE MEANING AFTER. The very next thing said is someone reacting to what landed, and the thrower or you says the number aloud most of the time: the number the answer gives,
+      and no other. The best thing that can happen to this show is a terrible roll at the wrong moment, and the worst is a string of competent successes. The extremes of a die are what the brief says they
+      are, and they are events: everybody stops. Play them to the hilt, in both directions, and let them change what happens next. A failure can be the most interesting thing tonight.
   - >-
       NOT EVERYTHING IS A ROLL. Nothing is rolled when nothing is at stake or when only one outcome would be any fun. A fight, when there is one, is played on the map with the game's own turn order, but it is
       told as quickly as the game allows: nobody wants to hear twelve misses, and those can be said together and thrown together. {{#hidden}}A roll behind your screen (`hidden`) is for what they should not know, and you say only what it looks like.{{/hidden}}
@@ -145,7 +151,7 @@ prep:
   - >-
       WHO IS AT THE TABLE. Each player's character, made as the game's rules make them, on a sheet with the game's own real fields. Roll what the rules roll, with your `roll` tool, and write down what came up, however bad.
       Each brings who they are, as the brief says, into who they are playing. And to each one, A WANT OF THEIR OWN: something private they want tonight, that has nothing to do with your story and may pull against it. That is told to them alone, and they will act on it.
-      Everyone's sheet says how they got their dice and what they look like (`dice`: color, material, a size if they are unusual).
+      Everyone's sheet says how they got their dice and what they look like (`dice`: color, material, a size if they are unusual), and so do your own, under your name.
   - ""
   - insert: submit_format
 
@@ -164,6 +170,7 @@ prep_format: |-
         "wants": "their private want tonight",
         "sheet": {"<the game's own field>": "<its value: a number or a list>"},
         "dice": {"color": "#rrggbb", "ink": "#rrggbb", "material": "one of: {{materials}}", "size": 1.0, "note": "how they came by them"}
-      }
+      },
+      "{{gm}}": {"dice": {"color": "#rrggbb", "ink": "#rrggbb", "material": "one of: {{materials}}", "size": 1.0, "note": "how you came by them"}}
     }
   }

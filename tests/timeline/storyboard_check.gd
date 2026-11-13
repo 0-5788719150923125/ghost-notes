@@ -9,19 +9,22 @@ extends SceneTree
 ## - an edit is a new tree ([DataPath]): put, cut, insert and move each return a root of their own and
 ##   leave the one they were handed as it was (held to a copy made before) sharing no container with
 ##   it; a path that leads nowhere changes nothing;
-## - a note's block is read three ways ([method Storyboard.of_block]): its own storyboard (a `sequence`,
-##   even an empty one), a file's name, or nothing written; it round-trips through the frontmatter's
-##   YAML and through [method Storyboard.to_yaml] / [method Storyboard.from_yaml];
-## - a storyboard taken into a note plays as the file did: the raw tree read from
-##   `storyboards/default.yaml`, kept as a note's block and loaded from there, is the loaded form the
-##   file gives, entry for entry; loading never changes the raw tree handed in; the loaded form written
-##   out for a render ([method Storyboard.raw_of]) and loaded there is the same storyboard;
+## - a storyboard as a note keeps it ([method Storyboard.own_block]) holds the spec's keys in its order;
+##   it round-trips through the JSON a note's folder keeps ([method Storyboard.to_json], an int staying
+##   an int: [method Storyboard.whole]) and through the editor's source view ([method Storyboard.to_yaml]
+##   / [method Storyboard.from_yaml]);
+## - the shipped storyboard (`data/showcase.json`, the README's animation and the demo note's) copied into
+##   a note plays as the file does: kept as a note keeps it and loaded from there, it is the loaded form
+##   the file gives, entry for entry; loading never changes the raw tree handed in; the loaded form written
+##   out for a render ([method Storyboard.raw_of]) and loaded there is the same storyboard; a file is
+##   named by its path, never a bare name;
 ## - the schedule matches numbers worked by hand: a fixed hold over its tempo, a cue's least hold, the
 ##   unauthored fallback, and the half-second floor.
 ##
 ## Controls: a storyboard with a nameless entry is refused with a message that says where; YAML that
 ## does not parse is refused; a `use` of a def that is not there is refused; a deliberately aliasing
-## "edit" (an in-place write) is caught by the same comparison that passes the real ones.
+## "edit" (an in-place write) is caught by the same comparison that passes the real ones; JSON read
+## without [method Storyboard.whole] turns an int into a float.
 
 var _fails: Array = []
 
@@ -99,23 +102,25 @@ func _paths() -> void:
 
 
 func _blocks() -> void:
-	print("-- what a note's block holds")
-	_ok(String(Storyboard.of_block(null)["kind"]) == "none", "no block is nothing written")
-	_ok(String(Storyboard.of_block({})["kind"]) == "none", "an empty block is nothing written")
-	var file := Storyboard.of_block({"storyboard": "default"})
-	_ok(String(file["kind"]) == "file" and String(file["name"]) == "default", "a name is a file's")
-	var empty := Storyboard.of_block({"sequence": []})
-	_ok(String(empty["kind"]) == "own", "an empty sequence is the note's own storyboard, with nothing in it yet")
-	var own := Storyboard.of_block(Storyboard.own_block(_board()))
-	_ok(String(own["kind"]) == "own" and DataPath.same(own["data"], _board()), "a block with a sequence is the note's own")
-	_ok(Storyboard.own_block({"sequence": [], "junk": 1}).keys() == ["sequence"], "a block keeps the storyboard's keys and no others")
+	print("-- a storyboard as a note keeps it")
+	_ok(Storyboard.own_block({}).keys() == ["sequence"], "nothing written is an empty sequence")
+	_ok(Storyboard.own_block({"sequence": [], "junk": 1}).keys() == ["sequence"], "it keeps the storyboard's keys and no others")
 	_ok(Storyboard.own_block({"tail": [], "sequence": [], "loop": true}).keys() == ["loop", "sequence", "tail"],
 		"...in the spec's order, whatever order they were given in")
-	# through the YAML a note's frontmatter is written in
-	var text := MiniYaml.emit({"ghost": {"scenes": Storyboard.own_block(_board())}})
-	var back := MiniYaml.parse(text)
-	_ok(back.ok and DataPath.same(back.data["ghost"]["scenes"], Storyboard.own_block(_board())),
-		"the block round-trips through the frontmatter's YAML")
+	# through the JSON a note's folder keeps
+	var seeded := _board()
+	(seeded["sequence"] as Array)[0]["seed"] = 2147483647
+	var json := Storyboard.to_json(seeded)
+	var parsed: Variant = JSON.parse_string(json)
+	var back: Variant = Storyboard.whole(parsed)
+	_ok(back is Dictionary and DataPath.same(back, Storyboard.own_block(seeded)), "it round-trips through the JSON a note keeps")
+	_ok(back is Dictionary and typeof(back["sequence"][0]["seed"]) == TYPE_INT and int(back["sequence"][0]["seed"]) == 2147483647,
+		"...a seed coming back an int, exactly")
+	_ok(back is Dictionary and typeof(back["sequence"][1]["track"]["spans"][0]["at"]) == TYPE_INT,
+		"...and a whole number an int, as YAML reads one")
+	_ok(parsed is Dictionary and typeof(parsed["sequence"][0]["seed"]) == TYPE_FLOAT,
+		"the control: JSON read as it is turns the seed into a float")
+	_ok(json.find("\"loop\"") < json.find("\"sequence\""), "...written in the spec's order")
 	var src := Storyboard.to_yaml(_board())
 	var from := Storyboard.from_yaml(src)
 	_ok(bool(from["ok"]) and DataPath.same(from["data"], _board()), "...and through the editor's source view")
@@ -131,20 +136,20 @@ func _blocks() -> void:
 
 
 func _library() -> void:
-	print("-- a file taken into a note plays as the file did")
-	for name in ["default", "showcase"]:
+	print("-- the shipped storyboard, copied into a note, plays as the file does")
+	_ok(not bool(Storyboard.read_raw("showcase")["ok"]), "a bare name is no file: a storyboard file is named by its path")
+	for name in ["res://data/showcase.json"]:
 		var raw := Storyboard.read_raw(name)
 		_ok(bool(raw["ok"]), "%s is read as it is written" % name)
 		if not bool(raw["ok"]):
 			continue
 		var held: Dictionary = (raw["data"] as Dictionary).duplicate(true)
 		var from_file := Storyboard.load_file(name)
-		# as a note would keep it: its block, written to YAML and read back
+		# as a note keeps it: JSON, written and read back
 		var block := Storyboard.own_block(raw["data"])
-		var parsed := MiniYaml.parse(MiniYaml.emit({"scenes": block}))
-		_ok(parsed.ok, "%s's block is YAML the frontmatter can hold" % name)
-		var own := Storyboard.of_block(parsed.data["scenes"] if parsed.ok else {})
-		var from_note := Storyboard.from_data(own["data"], Storyboard.IN_NOTE)
+		var parsed: Variant = Storyboard.whole(JSON.parse_string(Storyboard.to_json(block)))
+		_ok(parsed is Dictionary, "%s is JSON a note can keep" % name)
+		var from_note := Storyboard.from_data(parsed if parsed is Dictionary else {}, Storyboard.IN_NOTE)
 		_ok(bool(from_note["ok"]), "%s loads from a note's block (%s)" % [name, String(from_note["error"])])
 		for k in ["name", "loop", "transition", "sensitivity", "sequence", "tail"]:
 			_ok(DataPath.same(from_note.get(k), from_file.get(k)), "%s: '%s' is the file's, value for value" % [name, k])

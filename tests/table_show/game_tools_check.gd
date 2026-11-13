@@ -1,6 +1,6 @@
 extends SceneTree
 
-## game_tools_check - the table, live: a scene played through the tools, the players answered by a stand-in, and what comes out is a script the rest of the show reads (next/tabletop.md). It holds that the tools write the script in the order things happened, that a line can only be someone at the table saying words, that nothing rolled can be hidden or thrown again, that a player's question reaches them with nothing the game master keeps from them, and that a game can end early and the scenes left are nothing. It holds it on a d20 game, a wargame's bucket of sixes on a board measured in inches, and a percentile game with no map. No game is named in the code: this gate is where the three stand. The controls are the refused calls.
+## game_tools_check - the table, live: a scene played through the tools, the players answered by a stand-in, and what comes out is a script the rest of the show reads (next/tabletop.md). It holds that the tools write the script in the order things happened, that a line can only be someone at the table saying words, that nothing rolled can be hidden or thrown again, that a player's question reaches them with nothing the game master keeps from them, and that a game can end early and the scenes left are nothing. It holds that a roll's need is set before it lands and its verdict is the ledger's, that the answer carries no number but the dice's, that a scene is not handed in on a roll nobody answered, that a stretch with no dice is handed in only when asked twice, and that a chapter named at the end names the stretch. It holds it on a d20 game, a wargame's bucket of sixes on a board measured in inches, and a percentile game with no map. No game is named in the code: this gate is where the three stand. The controls are the refused calls.
 ##
 ##     timeout 300 godot --headless --path . --script tests/table_show/game_tools_check.gd
 
@@ -24,6 +24,7 @@ func _run() -> void:
 	await _d20()
 	await _wargame()
 	await _percentile()
+	await _honest()
 	_prep()
 	_gather()
 	_prompts()
@@ -66,9 +67,9 @@ func _d20() -> void:
 	var all := await _call(t, "ask_table", {"what": "Well?"})
 	_check(String(all["text"]).contains("Bea:") and String(all["text"]).contains("Milo:") and not String(all["text"]).contains("Dell:"), "the table is every player")
 	# DICE: the mark is where it happened, and the number is the ledger's
-	var roll := await _call(t, "roll", {"who": "Milo", "dice": "2d20kh1+5", "why": "persuading a goat"})
+	var roll := await _call(t, "roll", {"who": "Milo", "dice": "2d20kh1+5", "why": "persuading a goat", "needs": "15"})
 	_check(String(roll["text"]).contains("Milo"), "a roll says who threw")
-	_check((await _call(t, "roll", {"who": "Milo", "dice": "1d7", "why": "x"})).has("error"), "no such die")
+	_check((await _call(t, "roll", {"who": "Milo", "dice": "1d7", "why": "x", "needs": "none"})).has("error"), "no such die")
 	_check(String((t.items.back() as Dictionary).get("mark", "")) == "roll", "the mark is in the script at this point")
 	var over := await _call(t, "say", {"lines": [{"who": "Bea", "says": "Oh no.", "over": true}, {"who": "Dell", "says": "It eats the money.", "over": 0.8}, {"who": "Milo", "says": "Why.", "together": true}]})
 	_check(not over.has("error"), "lines may overlap")
@@ -128,7 +129,7 @@ func _wargame() -> void:
 	await _call(t, "place", {"figure": "Bea's squad", "at": [2.5, 3.0], "looks": "ten small soldiers", "owner": "Bea"})
 	var m := await _call(t, "move", {"figure": "Bea's squad", "to": [5.5, 7.0]})
 	_check(String(m["text"]).contains("5") and String(m["text"]).contains("inch"), "a move is measured in the game's own unit")
-	var hit := await _call(t, "roll", {"who": "Bea", "dice": "20d6>=3", "why": "shooting"})
+	var hit := await _call(t, "roll", {"who": "Bea", "dice": "20d6>=3", "why": "shooting", "needs": "none"})
 	_check(String(hit["text"]).contains("successes"), "a bucket counts")
 	await _call(t, "change", {"who": "Milo", "field": "models", "by": -4})
 	await _call(t, "say", {"lines": [{"who": "Dell", "says": "Four come off."}]})
@@ -139,23 +140,59 @@ func _wargame() -> void:
 ## No map at all, a percentile, a game that ends: the scenes left are nothing.
 func _percentile() -> void:
 	var t := _tools("3", {"Bea": {"sanity": 50}, "Milo": {"sanity": 30}})
-	var r := await _call(t, "roll", {"who": "Bea", "dice": "1d100", "why": "not screaming"})
+	var r := await _call(t, "roll", {"who": "Bea", "dice": "1d100", "why": "not screaming", "needs": "<=50"})
 	_check(String(r["text"]).contains("="), "a percentile is a number")
 	await _call(t, "change", {"who": "Bea", "field": "sanity", "by": -5})
 	await _call(t, "say", {"lines": [{"who": "Milo", "says": "I buy a boat."}]})
-	var hid := await _call(t, "roll", {"who": "Dell", "dice": "1d20", "why": "whether anyone noticed", "hidden": true})
-	_check(String(hid["text"]).contains("Behind the screen"), "a hidden roll says so")
+	var hid := await _call(t, "roll", {"who": "Dell", "dice": "1d20", "why": "whether anyone noticed", "hidden": true, "needs": 12.0})
+	_check(String(hid["text"]).contains("Behind the screen") and String(hid["text"]).contains("12 or more"), "a hidden roll says so, and a need may be a plain number")
+	# the control: the game cannot end on dice nobody answered, and nothing of its ending is written
+	_check((await _call(t, "game_over", {"how": "x"})).has("error") and not t.ledger.over and not t.submitted, "nothing ends on dice nobody answered")
+	await _call(t, "say", {"lines": [{"who": "Dell", "says": "Nobody notices."}]})
 	var end := await _call(t, "game_over", {"how": "the last of them bought a boat"})
 	_check(not end.has("error") and t.game_over, "a game can end")
 	var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(t.dir.path_join(GameTools.SUBMITTED)))
 	_check(bool((got as Dictionary)["over"]), "and says it did")
 	var ledger := GameLedger.from({}, (got as Dictionary)["events"])
 	_check(ledger.over and ledger.over_how.contains("boat"), "the ledger stands over, from its events")
+	_check(((got as Dictionary)["events"] as Array).filter(func(e: Dictionary) -> bool: return String(e["kind"]) == "over").size() == 1, "and ended once")
 	# a hidden roll: what the table heard has no number
 	var heard := GameTools.transcript((got as Dictionary)["items"], (got as Dictionary)["events"])
 	_check(heard.contains("behind the screen"), "the table knows a hidden die landed")
 	var hidden_words := String(((got as Dictionary)["events"] as Array).filter(func(e: Dictionary) -> bool: return bool(e.get("hidden", false)))[0]["words"])
 	_check(not heard.contains(hidden_words), "...and not what it came to")
+
+
+## The dice are answered as they landed: a need set first and judged by the ledger, no id that reads as a die, no scene handed in on a roll left hanging, and
+## a stretch with no dice handed in only on asking again.
+func _honest() -> void:
+	var t := _tools("4")
+	await _call(t, "say", {"lines": [{"who": "Dell", "says": "The rope bridge sways."}]})
+	var n := t.ledger.events.size()
+	_check((await _call(t, "roll", {"who": "Bea", "dice": "1d20+4", "why": "crossing"})).has("error"), "a roll says what it needs")
+	_check((await _call(t, "roll", {"who": "Bea", "dice": "1d20+4", "why": "crossing", "needs": "a lot"})).has("error"), "in a form that can be read")
+	_check(t.ledger.events.size() == n and t.items.size() == 1, "and nothing was thrown")
+	var r := await _call(t, "roll", {"who": "Bea", "dice": "1d20+4", "why": "crossing", "needs": "13"})
+	var e: Dictionary = t.ledger.events.back()
+	_check(String(r["text"]).begins_with("Bea's throw: ") and not String(r["text"]).contains("Roll "), "the answer carries no event's id")
+	_check(String(r["text"]).contains("SUCCEEDS" if bool(e["made"]) else "FAILS") and bool(e["made"]) == (int(e["total"]) >= 13), "and says what came of it, as the dice did")
+	_check(not GameTools.transcript(t.items, t.ledger.events).contains("needed"), "what the table heard is the dice, not what they needed")
+	# the control: handed in on the dice, it is refused; answered, it is not
+	_check((await _call(t, "end_scene", {"chapter": "The Rope Bridge"})).has("error") and not t.submitted, "a scene is not handed in on dice nobody answered")
+	await _call(t, "say", {"lines": [{"who": "Bea", "says": "Made it."}]})
+	_check(not (await _call(t, "end_scene", {"chapter": "The Rope\nBridge"})).has("error") and t.submitted, "answered, it is")
+	var text := String(JSON.parse_string(FileAccess.get_file_as_string(t.dir.path_join(GameTools.SUBMITTED)))["text"])
+	_check(text.begins_with("<!-- chapter: The Rope Bridge -->"), "a chapter named at the end opens the stretch")
+	var chapters: Array = CardReading.parse("<!-- table: work 4 -->\n\n" + text)["chapters"]
+	_check(chapters.size() == 1 and bool((chapters[0] as Dictionary)["opens"]), "and names it")
+	# a stretch with no dice is asked about once; an opening is not (the control)
+	var quiet := _tools("5")
+	await _call(quiet, "say", {"lines": [{"who": "Dell", "says": "You sit in the inn."}]})
+	_check((await _call(quiet, "end_scene", {})).has("error") and not quiet.submitted, "a stretch with no dice is asked about")
+	_check(not (await _call(quiet, "end_scene", {})).has("error") and quiet.submitted, "and handed in when asked again")
+	var opening := _tools("intro")
+	await _call(opening, "say", {"lines": [{"who": "Dell", "says": "Sit down, everyone."}]})
+	_check(not (await _call(opening, "end_scene", {})).has("error") and opening.submitted, "an opening needs no dice")
 
 
 func _prep() -> void:

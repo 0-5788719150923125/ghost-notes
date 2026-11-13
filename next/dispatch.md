@@ -252,8 +252,9 @@ Three marks from the revised script (rift's `MEDIUM.md`):
   click each, and the voice waits while it turns and a beat (`DispatchScript.GAIN_*`). Above 3 the scope paints clutter
   (`DispatchMedium.clutter_at`): up to 40 dim, unnamed blips round where the target was when it went up, laid as the rooms
   of one building turned its own way with him off its middle, nearest first, so each step paints the next nearest; 33 at
-  nine. Each is painted only once the sweep passes it after the knob reached it, a little off each round; one in four
-  drifts. Turned back down, they fade over a sweep or two and are not painted again. The camera stays on the radar after
+  nine. From nine (`CHAIR_GAIN`) one more is painted on the desk itself, just off its mark on the chair's side
+  (`CHAIR_AT`): whoever sits there. Each is painted only once the sweep passes it after the knob reached it, a little off
+  each round; one in four round him drifts. Turned back down, they fade over a sweep or two and are not painted again. The camera stays on the radar after
   the turn, as a `look:` holds it.
 - **`<!-- bell -->`**: one short near-square beep (880 Hz, 0.2 s) as the block after it goes up; the voice waits half a
   beat. It turns the camera to the terminal.

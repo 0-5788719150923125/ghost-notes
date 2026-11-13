@@ -538,7 +538,7 @@ const REGISTRY := {
 	"gain": {
 		"label": "Gain",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the radar's gain knob is turned to that number, one to ten, a click a step (it starts at three, where only the target is painted). Above three the scope paints clutter - the people round him as faint blips with no name, more the higher it goes, most of them still; turned back down, they fade over a sweep or two. The camera stays on the radar, and the voice waits a beat.",
+		"blurb": "Dispatch desk: the radar's gain knob is turned to that number, one to ten, a click a step (it starts at three, where only the target is painted). Above three the scope paints clutter - the people round him as faint blips with no name, more the higher it goes, most of them still, and from nine one more on the desk at its middle, the chair's own; turned back down, they fade over a sweep or two. The camera stays on the radar, and the voice waits a beat.",
 		"before": "<!-- gain: ", "fill": "9", "after": " -->", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*gain\\s*:[^>]*-->",

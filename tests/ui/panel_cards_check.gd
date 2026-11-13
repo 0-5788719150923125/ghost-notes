@@ -113,13 +113,12 @@ func _brings(name: String, panel: SidePanel) -> void:
 	_ok(panel._deck.side_of(last) == 0 and last.body.is_visible_in_tree(), "%s: its chip brings '%s' into view, its rows showing" % [name, last.title])
 
 
-## A note's own panel: a note with a song, a medium and a storyboard, made in a folder of the gate's own. Its
-## components are cards - the Body, the Song, the Medium, the Storyboard - keyed by the note's panel, a chip each.
+## A note's own panel: a note with a song and a medium, made in a folder of the gate's own. Its components are
+## cards - the Body, the Song, the Medium - keyed by the note's panel, a chip each.
 func _note_panel() -> void:
 	var keep := NoteStore.root
 	NoteStore.root = "user://panel_cards_check"
-	var note := NoteStore.create("Cards check", "Words.\n", {"song": {"path": ""},
-		"medium": {"format": "full"}, "scenes": {"storyboard": "default"}})
+	var note := NoteStore.create("Cards check", "Words.\n", {"song": {"path": ""}, "medium": {"format": "full"}})
 	NoteStore.root = keep
 	var np := NotePanel.new()
 	np.path = note
@@ -127,12 +126,12 @@ func _note_panel() -> void:
 	await _settle()
 	var cards: Array = np._panel.cards()
 	var titles: Array = cards.map(func(c: Node) -> String: return (c as Card).title)
-	_ok(titles == ["Body", "Song", "Medium", "Storyboard"], "a note with a song, a medium and a storyboard: its components are cards (%s)" % str(titles))
+	_ok(titles == ["Body", "Song", "Medium"], "a note with a song and a medium: its components are cards (%s)" % str(titles))
 	_ok(cards.all(func(c: Node) -> bool: return (c as Card).key.begins_with("note.")), "...each keyed by the note's panel")
 	# (a card shown only at times - the Timeline card, while a timeline is open - keeps its chip hidden with it)
 	var chips := np._panel.card_row.get_children().filter(func(c: Node) -> bool: return (c as CanvasItem).visible)
 	_ok(chips.size() == cards.size(), "...with a chip each (%d shown for %d cards)" % [chips.size(), cards.size()])
-	var rows := {"Body": "text", "Song": "song", "Medium": "medium", "Storyboard": "storyboard"}
+	var rows := {"Body": "text", "Song": "song", "Medium": "medium"}
 	for c in cards:
 		var card: Card = c
 		var want := String((Components.REGISTRY.get(rows.get(card.title, ""), {"blurb": "?"}) as Dictionary)["blurb"])

@@ -17,7 +17,7 @@ A row's `script` is the path of the script that builds the component's card, loa
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (17 components, 2 slots, 5 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (16 components, 2 slots, 5 workspaces).
 
 ## Slots
 
@@ -74,10 +74,8 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Picture
 
-- **Scenes** (`scenes`) - The visualizer scenes, picked by the seed and cut to the sound.
+- **Scenes** (`scenes`) - The visualizer scenes, cut to the sound: picked by the seed, or in the order the note's storyboard writes them (its timeline, beside Play).
   - needs audio; gives picture, moments; asks for `forward_plus`
-- **Storyboard** (`storyboard`) - The show written down: which scenes play, in what order and for how long. Where nothing is written, the seed chooses.
-  - needs audio, places; gives picture; brings Scenes; asks for `forward_plus`; kept in `scenes:`
 - **Pictures** (`illustrations`) - The note's pictures: painted by an agent from the image marks in its words, imported from a file, or made by a show's agents for its episode.
   - needs text; gives picture; comes with Medium, Table; asks for `forward_plus`; kept in `illustrations:`
 - **Actor** (`actor`) - An actor reads the note in their own room, learned from their own videos - their look, motion, face and voice, every pixel their own.

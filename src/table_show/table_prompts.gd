@@ -573,7 +573,7 @@ static func game_prep(title: String, brief: String, plan: Dictionary, people: Pa
 		if not line.is_empty():
 			earlier.append(line)
 	vars.merge({"premise": String(plan.get("premise", "")), "has_past": not earlier.is_empty(), "past": "; ".join(earlier),
-		"submit_format": Rules.say("table/game_master.prep_format", {"materials": " | ".join(PackedStringArray(Dice.MATERIALS.keys()))})})
+		"submit_format": Rules.say("table/game_master.prep_format", {"materials": " | ".join(PackedStringArray(Dice.MATERIALS.keys())), "gm": String(vars["gm"])})})
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prep", vars)}
 
 

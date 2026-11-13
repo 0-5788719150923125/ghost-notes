@@ -2,7 +2,7 @@ extends Node
 class_name ShowcaseRecorder
 
 ## ShowcaseRecorder - the README's recording, inside the second ghost that [Showcase] starts under Movie
-## Maker with `--showcase <work>`. It makes a note with a song on the showcase storyboard, opens it the way
+## Maker with `--showcase <work>`. It makes the demo note ([method Showcase.make_demo_note]), opens it the way
 ## the notes list does, presses Play, and quits once [method Showcase.frames] frames have been drawn since.
 ## [Showcase] keeps the last of the frames Movie Maker wrote, so the boot and the note opening never show.
 ##
@@ -31,15 +31,11 @@ func _run() -> void:
 	for f in DirAccess.get_files_at(notes):
 		DirAccess.remove_absolute(notes.path_join(f))
 	NoteStore.root = notes
+	NoteUpload.root = work.path_join("readings")
 	var song := work.path_join("showcase.wav")
-	if not write_song(song):
-		_fail("could not write the song (%s)" % song)
-		return
-	var note := NoteStore.create(Showcase.TITLE, Showcase.BODY, {
-		"song": {"path": song},
-		"medium": {"format": "full"},
-		"scenes": {"storyboard": Showcase.STORYBOARD},
-		"bookends": {"intro": Showcase.INTRO, "outro": Showcase.OUTRO}})
+	if FileAccess.file_exists(song):
+		DirAccess.remove_absolute(song)
+	var note := Showcase.make_demo_note(song)
 	if note.is_empty():
 		_fail("could not make the note")
 		return
@@ -90,11 +86,14 @@ func _fail(why: String) -> void:
 	get_tree().quit(1)
 
 
-## A small song to [param path], [constant Showcase.SONG] seconds: a soft kick on every beat, a
+## A small song to [param path], [method Showcase.song] seconds: a soft kick on every beat, a
 ## tick between, and a low chord that swells and falls back each bar - made, not found, and the
 ## same every time. False when it could not be written.
 static func write_song(path: String) -> bool:
-	var n := int(Showcase.SONG * RATE)
+	var length := Showcase.song()
+	if length <= 0.0:
+		return false
+	var n := int(length * RATE)
 	var beat := 60.0 / BPM
 	var chord := [110.0, 130.81, 164.81, 220.0]          # A minor, low
 	var noise := RandomNumberGenerator.new()
@@ -116,7 +115,7 @@ static func write_song(path: String) -> bool:
 			pad += sin(TAU * float(hz) * t)
 		pad *= 0.05 * sin(PI * bar)
 		# the song fades in and out over a quarter second, so its loop has no click
-		var edge := clampf(minf(t, Showcase.SONG - t) / 0.25, 0.0, 1.0)
+		var edge := clampf(minf(t, length - t) / 0.25, 0.0, 1.0)
 		var v := clampf((kick * 0.7 + tick + pad) * edge, -1.0, 1.0)
 		data.encode_s16(i * 2, int(v * 32000.0))
 	var wav := AudioStreamWAV.new()

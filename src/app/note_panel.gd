@@ -18,8 +18,8 @@ class_name NotePanel
 ## The song is the note's clock, and main runs it ([member begin_song]): loaded as the panel comes up,
 ## after the cards have applied the note's medium, holds and look, and waiting at its start. With no Medium
 ## there is no stage; with one, the Director cuts scenes on the song in the format the Medium card names
-## (the seed's choice, or the note's Storyboard - [method show_plan]), and a format picked while the note
-## is up is shown at once ([member restage]).
+## (the seed's choice, or the note's storyboard - [NoteStoryboard], [method show_plan]), and a format picked
+## while the note is up is shown at once ([member restage]).
 
 ## The Settings section the script's source lives in (its remembered document).
 const SECTION := "note"
@@ -44,7 +44,7 @@ var _attached: Array = []     # the components it has (Components.attached_of)
 var _cards := {}              # block key -> a card with capture() / apply()
 var _song: SongCard
 var _medium: MediumCard
-var _story: StoryboardCard
+var _story: NoteStoryboard
 var _youtube: YouTubeCard
 
 
@@ -93,7 +93,14 @@ func _ready() -> void:
 	#...the timeline open, as a list ([TimelineList]): a card shown only while a timeline editor is open
 	_panel.add_card("timeline", "Timeline", &"picture", "", TimelineList.BLURB).add_child(TimelineList.new())
 	_medium = _cards.get("medium") as MediumCard
-	_story = _cards.get("scenes") as StoryboardCard
+	#...the storyboard, kept in the note's folder and opened from beside Play: on a note shown in a Medium
+	if _medium != null:
+		_story = NoteStoryboard.new()
+		_story.folder = func() -> String: return NoteUpload.folder_of(path)
+		_story.noted.connect(_note)
+		add_child(_story)
+		kept.board_history = func() -> String: return NoteUpload.folder_of(path).path_join(NoteStoryboard.HISTORY) if not path.is_empty() else ""
+		kept.board_restore = _story.restore
 	_youtube = _cards.get("youtube") as YouTubeCard
 	if _youtube != null:
 		_youtube.name_from(_writer)

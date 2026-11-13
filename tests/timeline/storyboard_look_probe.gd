@@ -7,8 +7,9 @@ extends Node
 ##   GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/timeline/storyboard_look_probe.gd 120 --out /some/dir
 ##
 ## It needs the real renderer (a readback under `--headless` is null), runs on a virtual display,
-## and writes `list.png`, `plus.png`, `editor.png` and `source.png` into `--out`. Its notes are in a
-## folder of its own (`NoteStore.root`), and its song is a fixture of silence.
+## and writes `list.png`, `plus.png`, `editor.png` and `source.png` into `--out`. Its notes and their
+## folders are its own (`NoteStore.root`, `NoteUpload.root`), its song a fixture of silence, and the
+## storyboard walked the shipped one (data/showcase.json).
 
 const ROOT := "user://storyboard_look_probe"
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
@@ -33,6 +34,7 @@ func _ready() -> void:
 func _run() -> void:
 	_clean()
 	NoteStore.root = ROOT
+	NoteUpload.root = ROOT.path_join("readings")
 	NoteStore.create("A chapter", "Words.\n", {"voice": {}, "medium": {"format": "book"}})
 	NoteStore.create("A show of cards", "A brief.\n", {"table": {}})
 	_main = preload("res://scenes/main.tscn").instantiate()
@@ -54,12 +56,12 @@ func _run() -> void:
 	await _frames(12)
 	# a note walking a storyboard, its editor open on a stage entry
 	var song: String = FixtureAudio.silence(20.0)
-	var note := NoteStore.create("The point", "Words.\n", {"song": {"path": song},
-		"medium": {"format": "full"}, "scenes": Storyboard.own_block(Storyboard.read_raw("default")["data"])})
+	var note := NoteStore.create("A prism divides", "Words.\n", {"song": {"path": song}, "medium": {"format": "full"}})
+	NoteStoryboard.write(NoteUpload.folder_of(note), Storyboard.read_raw(Showcase.STORYBOARD)["data"])
 	_main._list._open(note)
 	await _frames(30)
 	panel = _main._note_panel
-	var card: StoryboardCard = panel._story
+	var card: NoteStoryboard = panel._story
 	card.open_editor()
 	await _frames(6)
 	var ed := card.editor()
@@ -95,8 +97,14 @@ func _frames(n: int) -> void:
 
 
 func _clean() -> void:
-	var abs := ProjectSettings.globalize_path(ROOT)
-	if DirAccess.dir_exists_absolute(abs):
-		for f in DirAccess.get_files_at(abs):
-			DirAccess.remove_absolute(abs.path_join(f))
-		DirAccess.remove_absolute(abs)
+	_rmrf(ProjectSettings.globalize_path(ROOT))
+
+
+func _rmrf(dir: String) -> void:
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	for sub in DirAccess.get_directories_at(dir):
+		_rmrf(dir.path_join(sub))
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	DirAccess.remove_absolute(dir)

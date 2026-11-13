@@ -93,6 +93,10 @@ const CLUTTER_MOVING := 4
 const CLUTTER_DRIFT := 0.012
 const CLUTTER_FADE := 4.0
 const CLUTTER_JITTER := 0.004
+## The chair's own blip: from this gain the scope paints whoever sits at this desk too, as faint as the clutter and
+## with no name, just off the desk's mark at its middle on the chair's side; it fades with the clutter as the knob goes down.
+const CHAIR_GAIN := 9
+const CHAIR_AT := Vector2(0.0, 0.04)
 ## The lamp going out: the filament's glow dies over this long (seconds), and comes up over the first part of it.
 const LAMP_FADE := 0.18
 ## The camera on the radar as the target sets off (seconds, at least): it stays while he walks, to the ping where he
@@ -1675,15 +1679,17 @@ static func clutter_of(seed: int) -> Array:
 	return out
 
 
-## The clutter on the scope at [param t]: `[{at, fade}]` - each blip the gain reaches, round where the target was when the
-## knob was turned up past three, painted once the sweep has passed it since the knob reached it and a little off where it
-## was each round (the few who move drift); a blip the knob no longer reaches fades over a sweep or two and is never
-## painted again.
+## The clutter on the scope at [param t]: `[{at, fade, chair?}]` - each blip the gain reaches, round where the target was
+## when the knob was turned up past three, and from [constant CHAIR_GAIN] the chair's own at the desk ([constant CHAIR_AT],
+## `chair: true`); each painted once the sweep has passed it since the knob reached it and a little off where it was each
+## round (the few who move drift); a blip the knob no longer reaches fades over a sweep or two and is never painted again.
 func clutter_at(t: float) -> Array:
+	const CHAIR := -1                    # the chair's key among the blips
 	var on := {}                         # a blip -> when the knob reached it
 	var off := {}                        # ...and when it no longer did
 	var mid := Vector2.ZERO
 	var n := 0
+	var seated := false                  # the chair painted at the knob's last step
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		if String(a["kind"]) != "gain" or _t0[i] > t or _t0[i] == INF:
@@ -1706,6 +1712,13 @@ func clutter_at(t: float) -> Array:
 			for k in range(m, n):
 				off[k] = at
 			n = m
+			if (d >= CHAIR_GAIN) != seated:
+				seated = d >= CHAIR_GAIN
+				if seated:
+					on[CHAIR] = at
+					off.erase(CHAIR)
+				else:
+					off[CHAIR] = at
 	var out: Array = []
 	var sweep := fposmod(t / SWEEP, 1.0) * TAU - PI * 0.5
 	for key in on:
@@ -1713,16 +1726,20 @@ func clutter_at(t: float) -> Array:
 		var fade := 1.0 - clampf((t - float(off[k])) / CLUTTER_FADE, 0.0, 1.0) if off.has(k) else 1.0
 		if fade <= 0.0:
 			continue
-		var at: Vector2 = mid + (_clutter[k] as Vector2)
+		var at: Vector2 = CHAIR_AT if k == CHAIR else mid + (_clutter[k] as Vector2)
 		if k % CLUTTER_MOVING == 1:
 			var w := TAU / lerpf(50.0, 110.0, DispatchSounds.hash01(_seed + 63, k))
 			at += Vector2(sin(t * w + DispatchSounds.hash01(_seed + 65, k) * TAU), sin(t * w * 0.7 + DispatchSounds.hash01(_seed + 67, k) * TAU)) * CLUTTER_DRIFT
 		var swept := t - fposmod(sweep - at.angle(), TAU) / TAU * SWEEP
 		if swept < float(on[k]):
 			continue
-		var rnd := int(floor(swept / SWEEP)) * CLUTTER_MOST + k
-		at += (Vector2(DispatchSounds.hash01(_seed + 69, rnd), DispatchSounds.hash01(_seed + 71, rnd)) - Vector2(0.5, 0.5)) * 2.0 * CLUTTER_JITTER
-		out.append({"at": at, "fade": fade})
+		var rnd := int(floor(swept / SWEEP)) * CLUTTER_MOST + maxi(k, 0)
+		var s := _seed + (73 if k == CHAIR else 69)
+		at += (Vector2(DispatchSounds.hash01(s, rnd), DispatchSounds.hash01(s + 2, rnd)) - Vector2(0.5, 0.5)) * 2.0 * CLUTTER_JITTER
+		var blip := {"at": at, "fade": fade}
+		if k == CHAIR:
+			blip["chair"] = true
+		out.append(blip)
 	return out
 
 

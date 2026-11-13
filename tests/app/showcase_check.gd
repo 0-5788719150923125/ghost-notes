@@ -13,8 +13,9 @@ extends Node
 ##   - At most once a day: a recording begun ([method Showcase.mark_started]) holds the next back for [constant
 ##     Showcase.DAY]; control: one begun a day and a minute ago does not. None begun, or an unreadable file,
 ##     holds nothing back.
-##   - The song is the storyboard's length and the same every time: the holds of storyboards/showcase.yaml add
-##     up to [constant Showcase.SONG] (control: the default board's do not), and two songs are byte-identical.
+##   - The song is the storyboard's length and the same every time: every entry of data/showcase.json holds for
+##     its own seconds, and those holds at its tempo add up to [method Showcase.song] (control: the same holds at
+##     twice the tempo do not); the recording keeps the bookends and the song; two songs are byte-identical.
 ##   - A child ghost stopped has not failed: with [method Subprocess.closing] true, the recorder's watcher
 ##     encodes nothing, says it was stopped and lets go of its claim, and the voice host reports no failure.
 ##     Control: the same two watchers with nothing closing - a recorder gone without its capture file did not
@@ -94,20 +95,24 @@ func _check_loaded() -> void:
 func _check_song(dir: String) -> void:
 	var total := 0.0
 	var board := Storyboard.load_file(Showcase.STORYBOARD)
-	for e in board.get("sequence", []):
-		total += float((e as Dictionary).get("hold", 0.0))
-	_ok(is_equal_approx(total, Showcase.SONG),
-		"the showcase storyboard's holds add up to the song (%.1f s, the song %.1f s)" % [total, Showcase.SONG])
-	var other := 0.0
-	for e in Storyboard.load_file("default").get("sequence", []):
-		other += float((e as Dictionary).get("hold", 0.0))
-	_ok(not is_equal_approx(other, Showcase.SONG), "the control: the default board's do not (%.1f s)" % other)
+	var tempo := float(board.get("sensitivity", 1.0)) if float(board.get("sensitivity", -1.0)) > 0.0 else 1.0
+	var seq: Array = board.get("sequence", [])
+	_ok(bool(board.get("ok", false)) and not seq.is_empty() and seq.all(func(e: Dictionary) -> bool: return e.has("hold")),
+		"the showcase storyboard loads, and each entry holds for its own seconds (%d entries)" % seq.size())
+	for e in seq:
+		total += float((e as Dictionary).get("hold", 0.0)) / tempo
+	_ok(Showcase.song() > 0.0 and is_equal_approx(total, Showcase.song()),
+		"its holds at its tempo add up to the song (%.2f s, the song %.2f s)" % [total, Showcase.song()])
+	var faster := float(Storyboard.schedule(seq, tempo * 2.0, 8.0)["end"])
+	_ok(not is_equal_approx(faster, Showcase.song()), "the control: the same holds at twice the tempo do not (%.2f s)" % faster)
+	_ok(Showcase.frames() == int(round((Showcase.INTRO + Showcase.song() + Showcase.OUTRO) * Showcase.FPS)),
+		"the recording keeps the bookends and the song (%d frames)" % Showcase.frames())
 	var one := dir.path_join("one.wav")
 	var two := dir.path_join("two.wav")
 	_ok(ShowcaseRecorder.write_song(one) and ShowcaseRecorder.write_song(two), "the song is written")
 	var bytes := FileAccess.get_file_as_bytes(one)
-	_ok(bytes.size() == 44 + int(Showcase.SONG * ShowcaseRecorder.RATE) * 2,
-		"...%.1f seconds of it (%d bytes)" % [Showcase.SONG, bytes.size()])
+	_ok(bytes.size() == 44 + int(Showcase.song() * ShowcaseRecorder.RATE) * 2,
+		"...%.1f seconds of it (%d bytes)" % [Showcase.song(), bytes.size()])
 	_ok(bytes == FileAccess.get_file_as_bytes(two), "...and the same every time")
 
 

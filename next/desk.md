@@ -13,9 +13,44 @@ it ([EpisodeDesk]). `theorem-grooving.md`'s Medium says `format: desk`, so its n
   for a lesson, a letter and an episode alike, it lies beside the pad's right edge, is picked up as its first stroke comes,
   and is set down a beat after its last action. A letter adds its own: a guess at its first stroke before the words arrive,
   a point at the camera holding the pen, a change of pens. The camera stays wide until the pen is picked up.
-- **An episode's pen leads the voice** ([method EpisodeDesk._ahead], [method DeskMedium._lead_of]): a line is begun ahead of
-  its word by the time its own first two words take to say, and kept that far ahead, as a letter's pen is; a lead never
-  reaches back across a pause before its line.
+- **The desk is seen whole first** ([method EpisodeDesk._first_floor]): an episode's pen is picked up only once the desk has
+  been seen for `DESK_SEEN` (10 s) after the title has gone, the camera wide till then, whenever its first words come.
+- **The hand settles in a long wait** ([method DeskMedium._settled], `Pen.SETTLED_LIFT`): where the pen waits `SETTLE_WAIT` (5 s)
+  or longer, the palm goes down on the paper beside where it stopped - the nib just over the page, its drift and sway nearly
+  gone - and it lifts again just before it sets off; a shorter pause is waited out held up. A settled hand readjusts its hold
+  now and then (`Pen.readjust`, seeded, a pure function of the time): every few seconds, some times not at all, a move of
+  under a second turning the top a few degrees while the nib barely shifts, still between. The pen leaves the pad only for a
+  page turned ([method DeskMedium._parks]; a letter also for a still). The desk's, so a letter's pen settles too.
+- **The pen keeps with the voice** ([PenPace], one way for every write of an episode at the desk). A write keeps with its
+  act's words, to the next act's word (a drawing's every one, a line's 40 at most), ended at the last said by the voice its
+  act's word is in; another voice's line among them is none of its own (`own`). A drawing is done with its words, never
+  drawn on through the talk after them. Three steps, each pure:
+  1. **What goes with which words** (`PenPace.align`). Its labels - a drawing's `<text>`, a line's words, a formula's digits,
+     letters and signs (`SIGNS`) - are matched to its words all at once and in order (`matches`, a dynamic program: a label
+     of words never said whole by its first word, a row "5: q1" said "Step five"; the earliest mention preferred,
+     `LATE_COST`). Each part is drawn from its word over the words an easy pace (`PACE_EASY`) takes, then held: a map of
+     words said to ink drawn.
+  2. **When** (`PenPace.path`). The pen stays in a band on that map - never behind a word as it is said, never more than
+     `AHEAD_MOST` (3) words ahead - at the evenest pace the band allows (`taut`, a string pulled taut), never past
+     `PACE_MOST` times its hand's (3 for a drawing, `PACE_MOST_WORDS` 4 for a line) and never crawling where it could go
+     on. The way is laid on a 0.05 s grid that starts exactly where the pen is, so a plan made again goes on from it. A write
+     may begin up to `AHEAD_MOST` words before its own (`_early`), the pen free; it is done when its way is.
+  3. **What gives** (`PenPace.rests`; `EpisodeDesk.voiced`, the script the reading's walk hands the voice through the Medium
+     row). Where a pen would still be more than `LAG_OK` (0.8 s) behind a word, the voice rests at the sentence end before
+     it: never inside a sentence, at most `REST_MOST` (2.5 s) with what is written there already, and only as long as the
+     pen uses it (in a pause it draws no further than its lead). A word no rest can help is let trail. Rests are planned on a
+     quick voice (`VOICE_WORD` 0.38 s a word, `VOICE_PAUSE` 0.3 s after a sentence), so a slower one waits a little more. The
+     voice also rests before the words of a write a page is turned for.
+  `PenPace.audit` measures a pen against its voice: behind, ahead, pace, fastest, jumps (a pace doubling or halving while it
+  draws) and crawl. `tests/desk/episode_desk_look_probe.gd --audit 1` audits every write of an episode on a kept take and on
+  voices of 0.35, 0.45 and 0.55 s a word, word times known and live (`--live 1`, `--live 0`). On Theorem Grooving's episode
+  it gives 25 rests (35 s in all); every write within its lead and its quickest; what is still behind (3 to 7 s at worst) is
+  content - a write with more ink than its words carry: a whole spoken sentence handwritten, a chart of every step.
+- **Live, nothing runs on words not said yet.** A live reading's word times come a sentence at a time. A word not heard has
+  no time on a write's way, so the pen draws no further than its lead past the last word heard. The plan guesses words to
+  come at the voice's own pace over its last 40 words (`DeskMedium._pace`), never sooner than now; a write's end guessed from
+  words to come is never sooner than a moment from now, and overtaken in a pause the plan is made again (`GUESS_AHEAD`).
+  `--live S` on the look probe hands the desk each sentence S seconds before it begins (0: as it begins).
 - **One pen** ([Pen]). The desk, the Letter and the table pose their pens through it: the nib on a hand's strokes (eased as
   `Ink.share` has it; the table's ink picture is put down on the same easing, so the nib is at the ink's front), between
   them, pointing and resting; the hand's lean, one for all three (`Pen.UP`: to the right and a little down on the screen, back
@@ -44,14 +79,16 @@ it ([EpisodeDesk]). `theorem-grooving.md`'s Medium says `format: desk`, so its n
   readers - no set dresser, no cloth, room or depth painted.
 
 Held by `tests/desk/episode_desk_check.gd` (the lesson from an episode's acts, played at the words; the desk dressed by its
-rows; the episode's medium and steps; the producer keeping it), `tests/media/medium_pick_check.gd` (a table show's Medium
+rows; the episode's medium and steps; the producer keeping it), `tests/desk/pen_pace_check.gd` (matched, paced, rested,
+audited), `tests/media/medium_pick_check.gd` (a table show's Medium
 card, the Desk's rows), `letter_format_check` (the desk rows on a letter),
 `tests/notes/components_check.gd` (Table brings its Medium; the control an Actor), `page_writing_check` (the table's words
 the hand's strokes), `letter_check`, `ink_check`. Looked at with `tests/desk/episode_desk_look_probe.gd` (its own lesson
 of a page and more: the opening, formulas, words, a drawing, a point, a strike, a page turned).
 
 **What the user still has to judge:** a Theorem Grooving episode made at the desk and watched - how close the camera is,
-whether each write keeps with its words, the desk's mood and things.
+whether each write keeps with its words, the desk's mood and things; the rests the voice now takes for the pen, heard in a
+new take (an old take has none).
 
 **Open:**
 
@@ -59,6 +96,8 @@ whether each write keeps with its words, the desk's mood and things.
   choose among the formats the note allows (a lesson at the desk, a demonstration at the table).
 - **Telling the agents what a desk shows.** The producer and the puppeteer see its table (a pad and a pen) but are not told
   that the desk shows only writes, points and strikes: an act that moves or uses anything else is not shown there.
+- **The Letter's sketches.** A letter's sketch is still drawn on past its words to the next line ([method
+  DeskMedium._drawn_by]) and spread evenly over them; [PenPace] is not the Letter's yet.
 - **Two ways to draw ink.** The Letter's page ink ([DeskMedium]'s canvases) and a table sheet's picture skin
   ([TableInk]) still draw the same strokes two ways.
 - **The GPU gates over this work.** The pixel and shader gates (`scripts/check.sh --gpu`) have not run since the desk was

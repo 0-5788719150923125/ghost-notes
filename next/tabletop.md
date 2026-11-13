@@ -8,7 +8,7 @@ buys a boat and becomes a fisherman). The system is generic: any game can be sup
 
 ## Trying it
 
-1. In the notes list, "Existing note..." and pick `rift/cards/nobody-brought-rope.md`.
+1. In the notes list, "Existing note..." and pick `rift/animations/mistakes-were-made.md`.
 2. On the Pipeline card, Generate. The producer plans the night, the game master prepares it, the table is set, the session is played stretch by stretch (each row says how many tool calls it has made), and then what it turned out to need is painted.
 3. Play. The first time, the transport says "catching up" for the few seconds the dice take to be thrown.
 
@@ -97,12 +97,12 @@ Steps for an episode whose plan says `game` (other steps as before). New ones in
 The scene is written by tool calls in order, and the tools write the script.
 
 - `say` lines (who, words, `over`, `together`, delivery), in batches. Said is said: there is no going back.
-- `roll` (who, dice, what for, hidden): the result comes back then, from the seed. Its mark goes into the script at this point on its own.
+- `roll` (who, dice, what for, what it needs, hidden): what it needs (`15`, `<=40`, `>=3` successes, or `none`) is fixed before it lands; the result comes back then, from the episode's seed, with whether it made it - the ledger's verdict, never the game master's - and when the one die that counted showed its highest or lowest face. The answer carries no event id, since a number in it is read as a die. Its mark goes into the script at this point on its own.
 - `change` (a field on a sheet), `move`, `place`, `fall`, `map`, `show`, `state`.
 - `ask` (one player) and `ask_table` (all): see below.
-- `end_scene`, or `game_over`, which skips the scenes left. A scene budget is a ceiling, not a goal.
+- `end_scene`, or `game_over`, which skips the scenes left. A scene budget is a ceiling, not a goal. Each names the stretch's chapter once it has happened. Neither hands in a scene that ends on dice nobody has answered, and a middle stretch with no dice is handed in only when asked twice.
 
-So no mark can be malformed, a roll cannot be hidden or re-rolled until it suits, speakers are always real, and nothing written can contradict the dice because the dice came first. The work shown is the work done, as in a Proof lesson.
+So no mark can be malformed, a roll cannot be hidden or re-rolled until it suits, what it needed cannot move once it lands, speakers are always real, and nothing written can contradict the dice because the dice came first. What is still the game master's word: whether something is rolled at all, and that the number said aloud is the one that landed (the rules hold both; nothing checks spoken numbers). The work shown is the work done, as in a Proof lesson.
 
 ### The players are other agents
 

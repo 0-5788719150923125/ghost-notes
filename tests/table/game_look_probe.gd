@@ -187,7 +187,7 @@ func _run() -> void:
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var parse := CardReading.parse(script)
 	subs.words = timeline(parse, Director.intro_hold)
-	subs.document = {"source": script, "title": "Nobody Brought Rope", "table": {"show": "game-look", "seed": 41, "dir": ProjectSettings.globalize_path(DIR), "plan": plan, "cards": [], "game": session["game"]}}
+	subs.document = {"source": script, "title": "Mistakes Were Made", "table": {"show": "game-look", "seed": 41, "dir": ProjectSettings.globalize_path(DIR), "plan": plan, "cards": [], "game": session["game"]}}
 	add_child(subs)
 	medium.bind_captions(subs)
 	var tm := medium as TableMedium

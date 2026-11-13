@@ -35,9 +35,9 @@ class_name DeskMedium
 ## turning a little with where the nib is on the page, its top trailing the nib's travel; off the paper the nib drifts a
 ## few millimeters, never while it writes. It points at what is spoken of ([DeskScript]'s `point`): the nib comes down
 ## close over the named thing, sweeping along under a wide one, and stays beside its right end so the body leans over
-## clean paper. When it does each thing is the desk's, on the voice's words. An idle pen gets out of the way: over [constant PARK_WORDS] words or more with nothing to do, and
-## before a page turns, it drifts off the pad's top right ([constant PARK]), and comes back as its next action begins
-## ([method _waiting]). Every move between actions is continuous and as long as its way ([method _reach]); the plan leaves
+## clean paper. When it does each thing is the desk's, on the voice's words. An idle pen waits beside where it stopped, and
+## through a long wait the hand settles there on the paper ([method _settled]); before a page turns it drifts off the pad's
+## top right ([constant PARK]), and comes back as its next action begins ([method _waiting]). Every move between actions is continuous and as long as its way ([method _reach]); the plan leaves
 ## that time ([method _way]).
 
 ## The page's canvas (an 8.5 x 11 sheet) and the sheet in the world, in meters.
@@ -67,6 +67,23 @@ const REST_EASE := 0.9
 const REACH_EASE := 0.45
 ## The pen comes down this long before its dictation's first word.
 const PEN_LEAD := 0.2
+## A word not heard yet is guessed at the pace the voice has kept over its last this many words heard, its pauses with them
+## ([method _pace]); before this many are heard, at [constant DeskScript.SAID_WORD].
+const PACE_WORDS := 40
+const PACE_FIRST := 8
+## A line under way that a plan made again has behind where it should be catches up over this long at the least (seconds;
+## [method _ink_time]).
+const CATCH_UP := 0.6
+## A write's end guessed from words not heard yet is never sooner than this long from now ([method _build_plan]): overtaken,
+## the plan is made again ([method take_words]).
+const GUESS_AHEAD := 1.0
+## A long wait: where the pen waits this long or longer between two actions, the hand settles ([constant Pen.SETTLED_LIFT]) -
+## from this long after the last ends, over this long - and lifts the pen again over this long before it sets off for the
+## next ([method _settled]). A shorter pause the pen waits out held up.
+const SETTLE_WAIT := 5.0
+const SETTLE_AFTER := 1.5
+const SETTLE_EASE := 1.4
+const SETTLE_RISE := 0.7
 ## A drawing takes its time (see the class note): never quicker than its dictation, and on past it, through the talk about
 ## it, to as slow as the hand's own pace - done this long, and the nib's way, before the pen's next action is due.
 const DRAW_PACE := 1.0
@@ -77,10 +94,8 @@ const ELASTIC_WINDOW := 1.5
 const ELASTIC_FLOOR := 0.3
 ## The least time a point is held ([Pen]'s pointing).
 const POINT_MIN := 1.0
-## Out of the way: a stretch of this many words or more with nothing for the pen (about 15 s of a voice) sends it off the
-## pad - this long after its last action ends, over this long - to this place (px of the page: right of its edge, level
-## with its top margin).
-const PARK_WORDS := 40
+## Out of the way ([method _parks]): off the pad - this long after its last action ends, over this long - to this place (px
+## of the page: right of its edge, level with its top margin).
 const PARK_AFTER := 1.0
 const PARK_EASE := 2.5
 const PARK := Vector2(DeskScript.PW + 90.0, DeskScript.FIRST_RULE * 0.5)
@@ -133,6 +148,7 @@ var _held := {}                    # action -> what was shown of it when the pla
 ## Worked out once, not every frame: the plans made so far, which a frame's answers are kept for ([method _pages]), and
 ## each finished action's ink, the same at any later moment ([method _done_ink_of]).
 var _plan_rev := 0
+var _guessed_until := INF           # the soonest a write's end, guessed from words not heard yet, is overtaken
 var _done_ink := {}
 var _pages_now := NAN
 var _pages_rev := -1
@@ -515,6 +531,10 @@ func take_words(words: Array) -> void:
 	if grown:
 		_built_n = words.size()
 		_build_plan()
+	elif _now >= _guessed_until:
+		# ...a write's end guessed from words not heard yet, overtaken in a pause before they come: made again from now
+		_hold_past()
+		_build_plan()
 
 
 ## The lesson opens a settle before its first word, which the pen's first dictation is ([method Openings.settle]: the
@@ -601,6 +621,7 @@ func _begin(spoken: PackedStringArray, start: PackedStringArray, near: int, est_
 ## start, a turn, a done action's end; one under way ends no sooner than the pen can finish it from where it is.
 func _build_plan() -> void:
 	_plan_rev += 1
+	_guessed_until = INF
 	var prev_end := -INF
 	var last := -1                  # the last action the pen does
 	for i in _actions.size():
@@ -617,6 +638,8 @@ func _build_plan() -> void:
 				last = i
 			continue
 		var ready := prev_end + (_way(last, i) if last >= 0 else 0.0)
+		if last < 0:
+			ready = maxf(ready, _first_floor())
 		var after := int(a.get("after", 0))
 		var span := int(a.get("span", 0))
 		var write := float(a.get("write", 0.0))
@@ -628,13 +651,16 @@ func _build_plan() -> void:
 			var due := _due(i, _word_t0(after))
 			if due == INF:
 				break
-			start = float(held.get("start", maxf(due - lead, ready)))
+			start = float(held.get("start", maxf(due - lead - _early(i), ready)))
 			var said := _word_t1(after + span - 1)
-			end = clampf(said - lead if said < INF else start + float(span) * DeskScript.EST_WORD,
+			end = clampf(said - lead if said < INF else maxf(_guess(after + span - 1, true) - lead, _now + GUESS_AHEAD),
 				start + write / DeskScript.MAX_PACE, start + write / DeskScript.MIN_PACE)
 			end = _paced_end(i, start, end)
 			if String(a["kind"]) == "draw":
 				end = maxf(end, minf(start + write / DRAW_PACE, _drawn_by(i)))
+			if said == INF and end < start + write / DeskScript.MIN_PACE - 0.01:
+				# (made again a little before it comes, so the guess is never taken for the write being done)
+				_guessed_until = minf(_guessed_until, end - GUESS_AHEAD * 0.5)
 		elif String(a["kind"]) == "point":
 			var t0 := _word_t0(after)
 			if t0 == INF:
@@ -667,7 +693,7 @@ func _build_plan() -> void:
 			var late := maxf(turn_at + DeskScript.TURN + 0.05 + float(a.get("settle", 0.0)), turn_at + back) - start
 			if late > 0.0:
 				start += late
-				end += late
+				end = _replanned_end(i, start, end + late)
 		if held.has("end"):
 			end = float(held["end"])
 		elif held.has("at"):
@@ -724,8 +750,8 @@ func _drawn_by(i: int) -> float:
 	return by
 
 
-## When spoken word [param si] begins (or [param ends]): heard, or guessed [constant DeskScript.EST_WORD]
-## a word on from the last word heard; INF before any is.
+## When spoken word [param si] begins (or [param ends]): heard, or guessed at the voice's own pace ([method _pace]) on from
+## the last word heard - and never sooner than now, as a word the voice has not reached is not said yet; INF before any is.
 func _guess(si: int, ends: bool) -> float:
 	var t := _word_t1(si) if ends else _word_t0(si)
 	if t < INF:
@@ -735,7 +761,21 @@ func _guess(si: int, ends: bool) -> float:
 		k -= 1
 	if k < 0:
 		return INF
-	return _follower.said1[k] + float(si - k - (0 if ends else 1)) * DeskScript.EST_WORD
+	return maxf(_follower.said1[k], _now) + float(si - k - (0 if ends else 1)) * _pace()
+
+
+## The pace the voice has kept (seconds a word, its pauses with them): over its last [constant PACE_WORDS] words heard, never
+## quicker than [constant DeskScript.EST_WORD]; [constant DeskScript.SAID_WORD] before [constant PACE_FIRST] are heard.
+func _pace() -> float:
+	var known := _follower.known_last()
+	if known < PACE_FIRST:
+		return DeskScript.SAID_WORD
+	var back := maxi(known - PACE_WORDS, 0)
+	var t0 := _word_t0(back)
+	var t1 := _word_t1(known)
+	if t0 == INF or t1 == INF:
+		return DeskScript.SAID_WORD
+	return clampf((t1 - t0) / float(known - back + 1), DeskScript.EST_WORD, 1.5)
 
 
 ## What the page has shown, taken as the plan is about to be made again at [member _now]: for each action begun, its start
@@ -778,7 +818,8 @@ func _word_t1(si: int) -> float:
 ## How far through its writing action [param i] is at [member _now], as the ink's own clock (seconds of [method
 ## Ink.schedule]): a dictated item's by [method elastic], over its dictation's words; one written in silence at an even
 ## pace, across the rest the voice gives it. One under way when the plan was made again ([member _held]) goes on from what
-## was written then: the rest of it is spread over what the new plan has left of it, so the ink never goes back or jumps.
+## was written then, so the ink never goes back or jumps: ahead of the new plan, the rest of it spread over what the plan has
+## left of it; behind it, catching up over [constant CATCH_UP] or what its quickest pace takes, whichever is longer.
 func _ink_time(i: int) -> float:
 	# asked of the line being written four or five times a frame (the page, its wet ink, the pen now and a moment before),
 	# and each works the dictation out word by word
@@ -801,6 +842,11 @@ func _ink_time_now(i: int) -> float:
 		var at := float(h["at"])
 		var u0 := float(h["u"])
 		var from := _share(i, at)
+		if u0 < from - 0.001:
+			# ...behind where the plan made again has it (words came that it was waiting for): it catches up, eased, at most at
+			# its quickest, and keeps with the plan from there
+			var catch := maxf((from - u0) * _length(i) / DeskScript.MAX_PACE, CATCH_UP)
+			return _length(i) * lerpf(u0, maxf(u, from), _ease(clampf((_now - at) / catch, 0.0, 1.0)))
 		var rest := (u - from) / (1.0 - from) if from < 0.98 \
 			else (_now - at) / maxf(float(_plan[i]["end"]) - at, 0.01)
 		u = u0 + (1.0 - u0) * clampf(rest, 0.0, 1.0)
@@ -828,18 +874,21 @@ func _share(i: int, t: float) -> float:
 	return elastic(t, start, end, times[0], times[1])
 
 
-## The times of the [param span] words from [param after]: [t0s, t1s], a word not heard yet placed
-## after the last that was, a steady word apart ([constant DeskScript.EST_WORD]).
+## The times of the [param span] words from [param after]: [t0s, t1s], a word not heard yet placed after the last that was
+## and never sooner than now - the voice has not said it - a word of the voice's own pace apart ([method _pace]).
 func _dictation(after: int, span: int, start: float) -> Array:
 	var t0s := PackedFloat32Array()
 	var t1s := PackedFloat32Array()
 	var last := start + PEN_LEAD
+	var pace := -1.0
 	for j in span:
 		var t0 := _word_t0(after + j)
 		var t1 := _word_t1(after + j)
 		if t0 == INF or t1 == INF:
-			t0 = last + 0.05
-			t1 = t0 + DeskScript.EST_WORD * 0.9
+			if pace < 0.0:
+				pace = _pace()
+			t0 = maxf(last, _now) + 0.05
+			t1 = t0 + pace * 0.9
 		t0s.append(t0)
 		t1s.append(t1)
 		last = t1
@@ -1067,8 +1116,9 @@ func _ink_of(i: int) -> Array:
 				out.append({"points": pts, "width": maxf(FAINT_W if faint else 2.4, float((s as Dictionary)["width"]) * k * 1.35),
 					"faint": faint})
 		"strike":
-			var line := _struck_line(a)
-			out.append({"points": PackedVector2Array([line[0], line[0].lerp(line[1], _written(i))]), "width": 3.2})
+			var walked := _along(_struck_path(a), _written(i))
+			for j in range(0, walked.size() - 1, 2):
+				out.append({"points": PackedVector2Array([walked[j], walked[j + 1]]), "width": 3.2})
 	# in its pen's ink: a letter's action names the ink it is written in ([constant LetterScript.COLOR]); none, the desk's
 	var named := String(a.get("ink", ""))
 	if not named.is_empty():
@@ -1095,6 +1145,75 @@ static func _strike_line(a: Dictionary, from := 0.0, to := -1.0) -> Array:
 func _struck_line(s: Dictionary) -> Array:
 	var a: Dictionary = _actions[int(s["of"])]
 	return _strike_line(a, float(s.get("x0", 0.0)), float(s.get("x1", -1.0)))
+
+
+## Where a line of type is crossed out, per row of words ([param gap] TeX points apart at least): each row's baseline in the
+## record's points and the x it spans, `[[y, x0, x1]]` top down - a sub- or superscript is its row's, never a row.
+static func _rows_of(record: Dictionary, gap := 9.0) -> Array:
+	var ink: Array = []
+	for g in record.get("glyphs", []):
+		ink.append([float((g as Dictionary)["y"]), float(g["x"]), float(g["x"]) + float(g["w"])])
+	for r in record.get("rules", []):
+		ink.append([float((r as Dictionary)["y"]), float(r["x"]), float(r["x"]) + float(r["w"])])
+	ink.sort_custom(func(p: Array, q: Array) -> bool: return float(p[0]) < float(q[0]))
+	var rows: Array = []
+	var seen := {}                  # a row's rounded baseline -> how many glyphs sit on it
+	var last := -INF
+	for q in ink:
+		var y := float(q[0])
+		if rows.is_empty() or y - last > gap:
+			rows.append([y, float(q[1]), float(q[2])])
+			seen = {}
+		var row: Array = rows.back()
+		row[1] = minf(float(row[1]), float(q[1]))
+		row[2] = maxf(float(row[2]), float(q[2]))
+		var key := roundf(y * 2.0)
+		seen[key] = int(seen.get(key, 0)) + 1
+		if int(seen[key]) >= int(seen.get(roundf(float(row[0]) * 2.0), 0)):
+			row[0] = y
+		last = y
+	return rows
+
+
+## The way the pen crosses out what strike [param s] strikes, as a polyline of strokes taken in pairs of points: one stroke
+## through a line of words, and through a block of several rows (TeX wrapped it) one stroke across each, left to right, the
+## pen lifted between them. The segment from one row's end to the next row's start is that travel, never ink ([method _ink_of]).
+func _struck_path(s: Dictionary) -> PackedVector2Array:
+	var line := _struck_line(s)
+	var a: Dictionary = _actions[int(s["of"])]
+	var rows: Array = _rows_of(_records.get(String(a.get("id", "")), {})) if not s.has("x1") else []
+	if rows.size() < 2:
+		return PackedVector2Array([line[0], line[1]])
+	var out := PackedVector2Array()
+	var at: Vector2 = a["at"]
+	var scale := float(a["k"]) * DeskScript.PX_PER_PT
+	var h := float(a.get("h", 30.0))
+	for r in rows.size():
+		var row: Array = rows[r]
+		var y := at.y + float(row[0]) * scale
+		var left := Vector2(at.x + float(row[1]) * scale - 14.0, y - h * 0.32)
+		var right := Vector2(at.x + float(row[2]) * scale + 14.0, y - h * 0.45)
+		out.append(left)
+		out.append(right)
+	return out
+
+
+## The first part of polyline [param path], [param u] (0 to 1) of its length.
+static func _along(path: PackedVector2Array, u: float) -> PackedVector2Array:
+	var total := 0.0
+	for i in range(1, path.size()):
+		total += path[i - 1].distance_to(path[i])
+	var want := total * clampf(u, 0.0, 1.0)
+	var out := PackedVector2Array([path[0]])
+	for i in range(1, path.size()):
+		var seg := path[i - 1].distance_to(path[i])
+		if want >= seg:
+			out.append(path[i])
+			want -= seg
+			continue
+		out.append(path[i - 1].lerp(path[i], want / seg if seg > 0.0 else 0.0))
+		break
+	return out
 
 
 # --- the pen ---------------------------------------------------------------------------------
@@ -1129,7 +1248,7 @@ func pen_at() -> Dictionary:
 			var wait := _waiting(last, i) if last >= 0 else rest
 			var u := _ease(clampf(1.0 - (start - _now) / _reach(last, i), 0.0, 1.0))
 			return {"p": (wait["p"] as Vector2).lerp(_action_point(a, true), u),
-				"lift": lerpf(float(wait["lift"]), _down(a), u)}
+				"lift": lerpf(float(wait["lift"]), _down(a), u), "still": float(wait.get("still", 0.0)) * (1.0 - u)}
 		if _now < float(_plan[i]["end"]):
 			return _pen_during(a, i, start)
 		last = i
@@ -1142,8 +1261,9 @@ func pen_at() -> Dictionary:
 
 ## Where the nib waits at [member _now], after action [param last] and before action [param next] (-1:
 ## none comes): it settles beside the end of what it did, a little lifted; and where [method _parks]
-## says the wait is long, or a page is to turn, it drifts on from there to [constant PARK] - before a
-## turn at once, as the sheet will lift. One continuous way from where the action left the nib.
+## says - a page is to turn - it drifts on from there to [constant PARK], before a turn at once, as the
+## sheet will lift. One continuous way from where the action left the nib. `still`: how settled the hand
+## is ([method _settled]), the nib lowered that much.
 func _waiting(last: int, next: int) -> Dictionary:
 	var a: Dictionary = _actions[last]
 	var end := float(_plan[last]["end"])
@@ -1159,24 +1279,50 @@ func _waiting(last: int, next: int) -> Dictionary:
 		var cleared := PARK_CLEAR / PARK_EASE
 		p = Vector2(lerpf(p.x, PARK.x, _ease(clampf(v / cleared, 0.0, 1.0))),
 			lerpf(p.y, PARK.y, _ease(clampf((v - cleared * 0.75) / (1.0 - cleared * 0.75), 0.0, 1.0))))
-	return {"p": p, "lift": lift}
+	var still := _settled(last, next)
+	return {"p": p, "lift": lerpf(lift, Pen.SETTLED_LIFT, still), "still": still}
+
+
+## How settled the hand is at [member _now] in the wait after action [param last] (0 to 1): where the pen waits [constant
+## SETTLE_WAIT] or longer before it sets off for action [param next] (-1: none comes), from [constant SETTLE_AFTER] after the
+## last ends, over [constant SETTLE_EASE], and up again over [constant SETTLE_RISE] before it sets off.
+func _settled(last: int, next: int) -> float:
+	var end := float(_plan[last]["end"])
+	var go := INF
+	if next >= 0 and float(_plan[next]["start"]) < INF:
+		go = float(_plan[next]["start"]) - _reach(last, next)
+	if go - end < SETTLE_WAIT:
+		return 0.0
+	return _ease(clampf((_now - end - SETTLE_AFTER) / SETTLE_EASE, 0.0, 1.0)) * _ease(clampf((go - _now) / SETTLE_RISE, 0.0, 1.0))
+
+
+## When action [param i] ends now that a page turned for it has moved its start to [param start] ([method _build_plan]):
+## [param end], moved with it. A medium whose pen keeps to the voice rather than its start answers for itself ([EpisodeDesk]).
+func _replanned_end(_i: int, _start: float, end: float) -> float:
+	return end
+
+
+## How much sooner than its words written action [param i] may begin, the pen free ([method _build_plan]): none here - a
+## medium whose pen has room to keep an even pace answers for itself ([EpisodeDesk]).
+func _early(_i: int) -> float:
+	return 0.0
+
+
+## The soonest the pen's first action begins ([method _build_plan]): whenever its words come, here. A medium that shows its
+## desk first answers for itself ([EpisodeDesk]).
+func _first_floor() -> float:
+	return -INF
 
 
 
 
 
-## Does the pen get out of the way between action [param last] and action [param next] (-1: the lesson's
-## end)? When [constant PARK_WORDS] words or more are said between them, or [param next] turns the page.
-## Read off the script, never the voice's times, so it never changes its mind as a voice's words arrive.
-func _parks(last: int, next: int) -> bool:
-	var a: Dictionary = _actions[last]
-	var to := _spoken_n
-	if next >= 0:
-		var b: Dictionary = _actions[next]
-		if bool(b.get("turn", false)):
-			return true
-		to = int(b.get("after", 0))
-	return to - (int(a.get("after", 0)) + int(a.get("span", 0))) >= PARK_WORDS
+## Does the pen get out of the way between action [param _last] and action [param next] (-1: the lesson's
+## end)? Only for a page [param next] turns: a hand waiting, however long, rests where it stopped, the way
+## back to the page shortest from there. Read off the script, never the voice's times, so it never changes
+## its mind as a voice's words arrive. A medium with more reasons answers for itself ([LetterMedium]).
+func _parks(_last: int, next: int) -> bool:
+	return next >= 0 and bool((_actions[next] as Dictionary).get("turn", false))
 
 
 ## How long the nib takes to reach action [param next] after action [param last] (-1: none came): its way from where it
@@ -1209,9 +1355,10 @@ func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 		"strike":
 			var of := int(a.get("of", -1))
 			if of >= 0:
-				var line := _struck_line(a)
 				var u := clampf((_now - start) / maxf(float(a["write"]), 0.01), 0.0, 1.0)
-				return {"p": (line[0] as Vector2).lerp(line[1], u), "lift": 0.0}
+				var walked := _along(_struck_path(a), u)
+				# (an odd count: the pen is on its way from one row's end to the next row's start)
+				return {"p": walked[walked.size() - 1], "lift": Pen.REST_LIFT * 0.5 if walked.size() % 2 == 1 else 0.0}
 		"point":
 			return {"p": Pen.pointing(point_path(a), _now - start, float(_plan[i]["end"]) - start), "lift": Pen.POINT_LIFT}
 	return {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": Pen.REST_LIFT}
@@ -1229,7 +1376,8 @@ func _action_point(a: Dictionary, first: bool) -> Vector2:
 		"strike":
 			var of := int(a.get("of", -1))
 			if of >= 0:
-				return _struck_line(a)[0 if first else 1]
+				var path := _struck_path(a)
+				return path[0] if first else path[path.size() - 1]
 		"point":
 			return point_path(a)[0 if first else 2]
 	return Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0)
@@ -1439,13 +1587,20 @@ func _held_xf() -> Transform3D:
 	var at := pen_at()
 	var p: Vector2 = at["p"]
 	var lift := float(at["lift"])
+	var still := float(at.get("still", 0.0))
 	var keep := _now
 	_now = keep - Pen.MOTION_DT
 	var before: Vector2 = pen_at()["p"]
 	_now = keep
 	var moved := (p - before) / Pen.MOTION_DT
-	var up := Pen.lean(Pen.UP, _now, _seed, p.x / PW, Vector3(moved.x / PW * PAD_W, 0.0, moved.y / PH * PAD_H))
-	return Pen.frame(_world(p, lift) + Pen.drift(_now, _seed, lift), up)
+	var up := Pen.lean(Pen.UP, _now, _seed, p.x / PW, Vector3(moved.x / PW * PAD_W, 0.0, moved.y / PH * PAD_H), still)
+	var nib := _world(p, lift) + Pen.drift(_now, _seed, lift, still)
+	if still > 0.0:
+		# ...a settled hand readjusting its hold now and then: the top turned, the nib barely moved
+		var hold := Pen.readjust(_now, _seed)
+		up = Pen.turned(up, float(hold["yaw"]) * still, float(hold["tilt"]) * still)
+		nib += (hold["nib"] as Vector3) * still
+	return Pen.frame(nib, up)
 
 
 # --- the camera -------------------------------------------------------------------------------

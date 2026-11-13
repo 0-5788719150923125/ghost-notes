@@ -7,15 +7,18 @@ class_name GameTools
 ## The scene is written by the calls, in order, and the tools write the script ([method compose]):
 ##
 ##   say       lines, in batches: who, their words, whether they come in over the last line or together with it. Said is said.
-##   roll      dice thrown from where a person sits: the number comes back then, from the seed ([GameLedger], [DiceNotation]), and its mark is in the script at this point.
+##   roll      dice thrown from where a person sits, what they must come to fixed first: the number comes back then, from the seed ([GameLedger], [DiceNotation]),
+##             with whether it made it, and its mark is in the script at this point.
 ##   change    a field of a sheet                  move, place, fall, rise, remove   a figure on the map
 ##   map       another map goes down               reveal                            a picture held up
 ##   state     everything as it stands
 ##   ask       a player, asked: see below           ask_table                         all of them at once
-##   end_scene this scene is done                   game_over                         the game is done, and the scenes left will not be played
+##   end_scene this scene is done, and named         game_over                         the game is done, and the scenes left will not be played
 ##
 ## So nothing written can contradict the dice, which came first; no mark can be malformed; a roll cannot be hidden or re-thrown, for everything rolled is on the table
-## by the time the agent knows it; and everyone speaking is someone at the table. No tool takes anything back.
+## by the time the agent knows it; what a roll needed is set before it lands and judged by the ledger; and everyone speaking is someone at the table. No tool takes
+## anything back. A scene is not handed in on a roll nobody has answered, and a stretch of the session with no dice in it is handed in only when asked twice.
+## The answer to a roll never carries the event's id: a number in it is read as a die.
 ##
 ## The players are other agents: [method _ask] starts a job for that person, knowing only their sheet, their own want and what has been said aloud, and hands its answer back to this
 ## one's call. The game master may not decide what they do, only what comes of it. A gate replaces the job ([member asker]).
@@ -59,6 +62,7 @@ var words_aim := Vector2i(400, 1000)
 var _released := false
 var _asked := {}          # a person -> [{q, a}] in this scene
 var _jobs := 0
+var _diceless_told := false
 
 
 func _init(ep: TableEpisode, scene: String, plan_data: Dictionary, prep_data: Dictionary, cast: PackedStringArray, start: GameLedger, job_dir: String, before: String) -> void:
@@ -92,9 +96,10 @@ func list_tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {"lines": {"type": "array", "items": {"type": "object", "properties": {
 				"who": who, "says": {"type": "string"}, "over": {"description": "true, or seconds"}, "together": {"type": "boolean"}, "chapter": {"type": "string", "description": "this line begins a chapter of the video, named so"}},
 				"required": ["who", "says"]}}}, "required": ["lines"]}},
-		{"name": "roll", "description": "Dice thrown onto the table, now, by the person named, from where they sit. Answered with what came up, which then stands: nothing rolls it again. Say what the roll is for and who throws it BEFORE you know the result. Written as players write it: 1d20+5, 2d20kh1+5, 8d6, 20d6>=3, 1d100, 4dF.",
+		{"name": "roll", "description": "Dice thrown onto the table, now, by the person named, from where they sit. Answered with what came up and, when it needed something, whether it made it: that stands, and nothing rolls it again. Say what the roll is for and who throws it BEFORE you know the result. Written as players write it: 1d20+5, 2d20kh1+5, 8d6, 20d6>=3, 1d100, 4dF.",
 			"inputSchema": {"type": "object", "properties": {"who": who, "dice": {"type": "string"}, "why": {"type": "string"},
-				"hidden": {"type": "boolean", "description": "thrown behind a screen: the table sees and hears it land, and only the thrower knows"}}, "required": ["who", "dice", "why"]}},
+				"needs": {"type": "string", "description": "what it must come to, decided now, before it lands, from what is happening: a number it must reach (15), a comparison (<=40 for a game rolled under, >=3 for counted successes), or none when nothing is to be reached (an amount, an order of turns, a table to read). Never changed after."},
+				"hidden": {"type": "boolean", "description": "thrown behind a screen: the table sees and hears it land, and only the thrower knows"}}, "required": ["who", "dice", "why", "needs"]}},
 		{"name": "change", "description": "Write on a sheet: a field `by` a number, `to` a value, or `add` / `remove` from a list. Fields are named by you: the game's own. Answered with what it was and what it is.",
 			"inputSchema": {"type": "object", "properties": {"who": {"type": "string"}, "field": {"type": "string"}, "by": {"type": "number"}, "to": {}, "add": {}, "remove": {}, "why": {"type": "string"}}, "required": ["who", "field"]}},
 		{"name": "map", "description": "Lay another map on the table. Whatever stood on the last comes off. `looks`: what it shows, from directly above, for the painter - any place at all, prepared or not. `size`: [across, down] in squares. `grid` false for a game measured with a tape, and `unit` what it measures in.",
@@ -113,9 +118,10 @@ func list_tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {"who": who, "what": {"type": "string", "description": "what you, the game master, say to them, in your own words"}}, "required": ["who", "what"]}},
 		{"name": "ask_table", "description": "Ask every player at once: each answers on their own, not hearing the others.",
 			"inputSchema": {"type": "object", "properties": {"what": {"type": "string"}}, "required": ["what"]}},
-		{"name": "end_scene", "description": "This stretch of the session is done, and is handed in as it stands.", "inputSchema": {"type": "object", "properties": {}}},
-		{"name": "game_over", "description": "The game has ended, however it did: a triumph, everyone dead, or it simply stopped being that game. The scenes not yet played will not be. `how`: what became of them, in a line. The close is still played.",
-			"inputSchema": {"type": "object", "properties": {"how": {"type": "string"}}, "required": ["how"]}},
+		{"name": "end_scene", "description": "This stretch of the session is done, and is handed in as it stands. `chapter`: what this stretch turned out to be, named as a viewer would look for it in the video's chapters, now that it has happened.",
+			"inputSchema": {"type": "object", "properties": {"chapter": {"type": "string"}}}},
+		{"name": "game_over", "description": "The game has ended, however it did: a triumph, everyone dead, or it simply stopped being that game. The scenes not yet played will not be. `how`: what became of them, in a line. `chapter`: this stretch's name, as for `end_scene`. The close is still played.",
+			"inputSchema": {"type": "object", "properties": {"how": {"type": "string"}, "chapter": {"type": "string"}}, "required": ["how"]}},
 	]
 
 
@@ -126,7 +132,11 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 		"say":
 			return _say(args)
 		"roll":
-			return _did(ledger.roll(_person(args.get("who", "")), String(args.get("dice", "")), String(args.get("why", "")), seed_value, bool(args.get("hidden", false))), "roll")
+			var needs: Variant = args.get("needs")
+			var need := str(int(needs)) if needs is float or needs is int else str(needs) if needs != null else ""
+			if need.strip_edges().is_empty():
+				return {"text": "`needs`: what it must come to, decided before it lands - a number (15), a comparison (<=40, >=3), or none. Nothing was thrown.", "error": true}
+			return _did(ledger.roll(_person(args.get("who", "")), String(args.get("dice", "")), String(args.get("why", "")), seed_value, bool(args.get("hidden", false)), need), "roll")
 		"change":
 			return _did(ledger.change(String(args.get("who", "")), String(args.get("field", "")), _how_changed(args), String(args.get("why", ""))))
 		"map":
@@ -147,11 +157,9 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 		"ask_table":
 			return await _ask_table(args)
 		"end_scene":
-			return _submit()
+			return _submit(String(args.get("chapter", "")))
 		"game_over":
-			ledger.end_game(String(args.get("how", "")))
-			game_over = true
-			return _submit()
+			return _submit(String(args.get("chapter", "")), true, String(args.get("how", "")))
 	return {"text": "No tool called %s." % name, "error": true}
 
 
@@ -164,7 +172,7 @@ func _did(got: Dictionary, mark := "") -> Dictionary:
 		items.append({"mark": mark, "id": int(e["id"])})
 	var text := String(got["words"])
 	if String(e.get("kind", "")) == "roll":
-		text = "Roll %d, thrown by %s: %s." % [int(e["id"]), String(e["who"]), text]
+		text = "%s's throw: %s." % [String(e["who"]), text]
 		if bool(e.get("hidden", false)):
 			text += " Behind the screen: only you know it."
 	return {"text": text}
@@ -366,9 +374,24 @@ static func transcript(list: Array, events: Array) -> String:
 
 # --- handing it in ----------------------------------------------------------------------------------------------------------------------------------
 
-func _submit() -> Dictionary:
+## Hand the scene in, named [param chapter] if a name is given (the first thing in it, so it names the stretch); [param ending]: the game is over, [param how].
+func _submit(chapter := "", ending := false, how := "") -> Dictionary:
 	if words_said(items) < 1:
 		return {"text": "Nothing has been said in this scene.", "error": true}
+	if not items.is_empty() and String((items.back() as Dictionary).get("mark", "")) == "roll":
+		return {"text": "The last dice thrown have not been answered: someone says what landed, and you say what came of it, before this ends. Nothing was handed in.", "error": true}
+	if not ending and step.is_valid_int() and not _diceless_told and not _rolled_any():
+		_diceless_told = true
+		return {"text": "Nothing has been thrown in this stretch. If nothing anyone tried could have gone wrong, call it again; if something could, play on and roll it. Nothing was handed in.", "error": true}
+	if ending:
+		ledger.end_game(how)
+		game_over = true
+	var named := " ".join(chapter.strip_edges().split("\n", false))
+	if not named.is_empty():
+		if (items[0] as Dictionary).has("chapter"):
+			items[0] = {"chapter": named}
+		else:
+			items.push_front({"chapter": named})
 	submitted = true
 	var path := dir.path_join(SUBMITTED)
 	var f := FileAccess.open(path + ".part", FileAccess.WRITE)
@@ -378,6 +401,13 @@ func _submit() -> Dictionary:
 	f.close()
 	DirAccess.rename_absolute(path + ".part", path)
 	return {"text": "Handed in. Your work is done."}
+
+
+func _rolled_any() -> bool:
+	for it in items:
+		if String((it as Dictionary).get("mark", "")) == "roll":
+			return true
+	return false
 
 
 ## The scene as a script ([CardReading]): each line under its speaker's cue, an overlap's mark after the cue, each thing a viewer sees as its own-line mark, in order.

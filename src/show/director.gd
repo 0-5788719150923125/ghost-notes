@@ -186,7 +186,7 @@ var _held := false           # the feedback console freezes cuts while open
 var _kind_last := {}         # scene script path -> _swaps value when last shown
 var _session_seed := 0       # base seed for this session (random per play; --seed pins)
 
-# Manual mode: a storyboard is an ordered, authored sequence of scenes (see storyboards/README.md).
+# Manual mode: a storyboard is an ordered, authored sequence of scenes ([Storyboard], docs/stage.md).
 # While _storyboard_seq is non-empty the Director walks it instead of the novelty scheduler, and each
 # entry can dictate its own exit.
 var _storyboard_seq: Array = []
@@ -799,9 +799,9 @@ func storyboard_source() -> String:
 	return _storyboard_source
 
 
-## Load a storyboard by name (res://storyboards/<name>.yaml or .json) or by a full path, switching the
-## Director into manual mode. Returns true on success. Safe before attach(), where it is the board the
-## session starts on (`--storyboard`, a note that names a file). Parsing, defs expansion and validation
+## Load a storyboard file by its path (`.yaml` or `.json`), switching the Director into manual mode.
+## Returns true on success. Safe before attach(), where it is the board the session starts on
+## (`--storyboard`, a render's). Parsing, defs expansion and validation
 ## live in [Storyboard]; the Director keeps the walk state.
 func load_storyboard(name_or_path: String) -> bool:
 	return load_board(Storyboard.load_file(name_or_path), name_or_path)

@@ -44,7 +44,8 @@ class_name DispatchScript
 ##                                     after another dissolving into it.
 ##     <!-- strike -->                 after a typed block: the writer stops to decide, then backspaces it off the screen.
 ##     <!-- gain: 9 -->                the radar's gain knob is turned to that number (1 to 10; it starts at 3), a click a
-##                                     step. Above 3 the scope paints clutter round the target, more the higher it is.
+##                                     step. Above 3 the scope paints clutter round the target, more the higher it is;
+##                                     from 9, one more on the desk itself, the chair's.
 ##     <!-- bell -->                   the terminal's bell, one short beep as the block after it goes up.
 ##     <!-- lamp: off -->, <!-- lamp: on -->   the gooseneck lamp is switched off (or on), with a click.
 ##

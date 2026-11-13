@@ -8,7 +8,7 @@ The spec is JSON - never argv, because ghost passes no free text on a command li
 folder TeX's programs are in (ghost's own TeX; with none, they are looked up on PATH); `data` the
 series the episode's runs kept, which a drawing plots by name (figure.py). `mode` is "math" (one
 formula, display style, on one line), "display" (a display environment such as `align*`, set in a
-column `width` points wide), "text" (a paragraph with $...$ in it, wrapped at `width`) or "figure"
+column `width` points wide), "text" (a paragraph with $...$ in it, wrapped at `width`, a newline ending a line) or "figure"
 (a DRAWING: `tex` is an SVG, which figure.py turns into pen paths, its labels set by TeX in the same
 run). The answer, written to `out`, is one record per item:
 
@@ -65,6 +65,27 @@ PREAMBLE = r"""\documentclass[12pt]{article}
 BASE = r"\special{ghost:base}"  # marks the box's first baseline where TeX knows it
 
 
+def _lines(tex):
+    """A paragraph's own line breaks kept: a newline outside $...$ ends the line (TeX would read it as a space)."""
+    out = []
+    inside = False
+    i = 0
+    while i < len(tex):
+        c = tex[i]
+        if c == "\\" and i + 1 < len(tex):
+            out.append(tex[i:i + 2])
+            i += 2
+            continue
+        if c == "$":
+            inside = not inside
+        if c == "\n" and not inside:
+            out.append("\\par ")
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def _box(item, width):
     """The TeX that ships one item as a page holding only its box."""
     tex, mode = item["tex"], item.get("mode", "math")
@@ -73,7 +94,7 @@ def _box(item, width):
     elif mode == "display":
         body = r"\vbox{\hsize=%.2fpt \noindent\parskip=0pt %s}" % (width, tex)
     else:
-        body = r"\vbox{\hsize=%.2fpt \noindent\parindent=0pt\raggedright %s%s}" % (width, BASE, tex)
+        body = r"\vbox{\hsize=%.2fpt \noindent\parindent=0pt\raggedright %s%s}" % (width, BASE, _lines(tex))
     return "\\setbox0=%s\n\\shipout\\box0\n" % body
 
 

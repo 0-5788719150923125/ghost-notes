@@ -178,7 +178,7 @@ reply: |-
   {{/habits}}
     "brainstorm": ["twelve one-line directions"],
     "episode_title": "this episode's title, in title case{{#uploads_as}} - its own part of the line the video goes up as{{/uploads_as}}",
-    "description": "the video's YouTube description, in the genre's own shape (a greeting, what this reading covers, the usual disclaimers and calls to action) and told the show's way; three short paragraphs, no emoji, no links",
+    "description": "the video's YouTube description, in the genre's own shape (a greeting, what this reading covers, the usual disclaimers and calls to action) and told the show's way; three short paragraphs, no emoji, no links; then, word for word with its links, whatever the brief says every description must carry",
     "tags": ["eight to twelve search tags, the genre's own"],
     "audience": "who this episode says it is for, by what they already know and care about - never by their age",
     "topic": "what the reading is about, in a few words",
@@ -220,7 +220,7 @@ reply_beats: |-
   {{/habits}}
     "brainstorm": ["twelve one-line directions"],
     "episode_title": "this episode's title, in title case{{#uploads_as}} - its own part of the line the video goes up as{{/uploads_as}}",
-    "description": "the video's YouTube description, in the genre's own shape and told the show's way; three short paragraphs, no emoji, no links",
+    "description": "the video's YouTube description, in the genre's own shape and told the show's way; three short paragraphs, no emoji, no links; then, word for word with its links, whatever the brief says every description must carry",
     "tags": ["eight to twelve search tags, the genre's own"],
     "audience": "who this episode says it is for, by what they already know and care about - never by their age",
     "topic": "what the episode is about, in a few words",

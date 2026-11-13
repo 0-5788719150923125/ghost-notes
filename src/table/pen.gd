@@ -16,12 +16,27 @@ class_name Pen
 ## paper; at a small thing it comes straight to that place. Its body leans from the nib as a right hand holds it, to the
 ## right and a little down on the screen ([constant UP]), swaying slowly, turned a little with where the nib is across the
 ## page and trailing the nib's travel ([method lean]); lifted, it drifts as any held thing does ([method drift]), never
-## while it writes.
+## while it writes. Through a long wait the hand settles, its palm down on the paper: the nib just over where it stopped and
+## still ([constant SETTLED_LIFT], `steady`), but for a readjustment now and then ([method readjust]).
 
 ## How high the nib lifts between strokes, waits between actions, and points from (meters).
 const LIFT := 0.004
 const REST_LIFT := 0.022
 const POINT_LIFT := 0.0035
+## A hand settled through a long wait, its palm down on the paper: the nib this high, its drift and sway this share of a held
+## pen's ([method drift], [method lean]'s `steady`).
+const SETTLED_LIFT := 0.003
+const SETTLED_SWAY := 0.02
+## A settled hand readjusts the pen now and then ([method readjust]): about every [constant ADJUST_EVERY] seconds (as soon as
+## 0.4 of that, as late as 1.6), some of those times not at all ([constant ADJUST_SKIP]), each move over [constant
+## ADJUST_TAKES] seconds - the top turned to within [constant ADJUST_YAW] and [constant ADJUST_TILT] degrees of where the hand
+## settled, the nib moved within [constant ADJUST_NIB] meters, most moves small - and still between.
+const ADJUST_EVERY := 4.5
+const ADJUST_SKIP := 0.35
+const ADJUST_TAKES := Vector2(0.35, 0.8)
+const ADJUST_YAW := 7.0
+const ADJUST_TILT := 4.0
+const ADJUST_NIB := 0.0005
 ## How it leans from its nib: up 48 degrees, and across to the right and 30 degrees toward the writer - back over the hand
 ## toward a right-handed writer's shoulder, on the screen to the right and a little down.
 const UP := Vector3(0.582, 0.741, 0.336)
@@ -100,16 +115,12 @@ static func pointing(path: Array, since: float, lasts: float) -> Vector2:
 ## [param seed]'s), turned toward the page's top as the nib goes left ([param x_share], 0 at the page's left edge, 1 at its
 ## right - a forearm pivoting at the elbow), and its top trailing [param motion], the nib's travel (meters a second). A
 ## unit vector, always within a few degrees of [param base]. The same moment is the same lean.
-static func lean(base: Vector3, now: float, seed: int, x_share: float, motion: Vector3) -> Vector3:
+static func lean(base: Vector3, now: float, seed: int, x_share: float, motion: Vector3, steady := 0.0) -> Vector3:
 	var ph := _phases(seed)
 	var up := base.normalized()
-	var yaw := SWAY_YAW * (0.65 * sin(TAU * now / 7.3 + ph[0]) + 0.35 * sin(TAU * now / 3.1 + ph[1])) \
-		+ REACH_YAW * (0.7 - clampf(x_share, 0.0, 1.0))
-	up = up.rotated(Vector3.UP, deg_to_rad(yaw))
-	var flat := Vector3(up.x, 0.0, up.z)
-	if flat.length() > 0.001:
-		var tilt := SWAY_TILT * sin(TAU * now / 5.7 + ph[2])
-		up = up.rotated(Vector3.UP.cross(flat).normalized(), deg_to_rad(tilt))
+	var sway := _sway(steady)
+	up = turned(up, SWAY_YAW * sway * (0.65 * sin(TAU * now / 7.3 + ph[0]) + 0.35 * sin(TAU * now / 3.1 + ph[1]))
+		+ REACH_YAW * (0.7 - clampf(x_share, 0.0, 1.0)), SWAY_TILT * sway * sin(TAU * now / 5.7 + ph[2]))
 	var trail := Vector3(motion.x, 0.0, motion.z) * -TRAIL
 	var most := tan(deg_to_rad(TRAIL_MAX))
 	if trail.length() > most:
@@ -119,9 +130,59 @@ static func lean(base: Vector3, now: float, seed: int, x_share: float, motion: V
 
 ## The nib's drift at [param now], [param lift] meters off the paper (meters, in the table's space): a held thing's drift
 ## ([method Hands.drift]) as a hand holding a pen up sways - full at [constant REST_LIFT], slight while it points, none
-## while it writes, where the nib is the ink's.
-static func drift(now: float, seed: int, lift: float) -> Vector3:
-	return Hands.drift(now, seed, Hands.HOLD_SWAY * clampf(lift / REST_LIFT, 0.0, 1.0))[0]
+## while it writes, where the nib is the ink's - and a settled hand's ([param steady], 0 to 1) that much less.
+static func drift(now: float, seed: int, lift: float, steady := 0.0) -> Vector3:
+	return Hands.drift(now, seed, Hands.HOLD_SWAY * clampf(lift / REST_LIFT, 0.0, 1.0) * _sway(steady))[0]
+
+
+## [param up] turned [param yaw] degrees about the vertical, then [param tilt] degrees in its rise.
+static func turned(up: Vector3, yaw: float, tilt: float) -> Vector3:
+	var v := up.rotated(Vector3.UP, deg_to_rad(yaw))
+	var flat := Vector3(v.x, 0.0, v.z)
+	return v.rotated(Vector3.UP.cross(flat).normalized(), deg_to_rad(tilt)) if flat.length() > 0.001 else v
+
+
+## How a settled hand holds the pen at [param now], from where it settled: `{yaw, tilt}` (degrees, its top turned, [method
+## turned]) and `nib` (meters, the nib moved across the paper) - still most of the time, moved to a new hold now and then
+## over a moment, eased ([constant ADJUST_EVERY]). A pure function of the time and the hand's [param seed].
+static func readjust(now: float, seed: int) -> Dictionary:
+	var k := floori(now / ADJUST_EVERY)
+	if now < _adjusts_at(k, seed):
+		k -= 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(["pen-adjust-takes", seed, k])
+	var u := smoothstep(0.0, 1.0, (now - _adjusts_at(k, seed)) / rng.randf_range(ADJUST_TAKES.x, ADJUST_TAKES.y))
+	var a := _hold(k - 1, seed)
+	var b := _hold(k, seed)
+	return {"yaw": lerpf(a[0], b[0], u), "tilt": lerpf(a[1], b[1], u), "nib": Vector3(lerpf(a[2], b[2], u), 0.0, lerpf(a[3], b[3], u))}
+
+
+## When the hand's [param k]th readjustment begins (seconds).
+static func _adjusts_at(k: int, seed: int) -> float:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(["pen-adjust-at", seed, k])
+	return (float(k) + rng.randf_range(0.0, 0.6)) * ADJUST_EVERY
+
+
+## The hold the hand comes to at its [param k]th readjustment, or the one before where it makes none ([constant ADJUST_SKIP]):
+## [yaw, tilt, nib x, nib z], most of each near where it settled.
+static func _hold(k: int, seed: int) -> PackedFloat32Array:
+	for j in range(k, k - 8, -1):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(["pen-adjust-hold", seed, j])
+		if rng.randf() < ADJUST_SKIP:
+			continue
+		var out := PackedFloat32Array()
+		for most in [ADJUST_YAW, ADJUST_TILT, ADJUST_NIB, ADJUST_NIB]:
+			var r := rng.randf_range(-1.0, 1.0)
+			out.append(float(most) * signf(r) * pow(absf(r), 1.6))
+		return out
+	return PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+
+
+## How much of a held pen's sway and drift a hand [param steady] settled (0 to 1) keeps.
+static func _sway(steady: float) -> float:
+	return lerpf(1.0, SETTLED_SWAY, clampf(steady, 0.0, 1.0))
 
 
 ## A pen built with its nib at its origin and its body up along +Y, its nib at [param nib] and its body along [param up].

@@ -7,10 +7,11 @@ extends SceneTree
 ## What it holds:
 ##   - The check: a timeline made by the contract's own hands has no problems; the control is one with a clock, a kind
 ##     and an engine that have no row and an item outside its group, each named.
-##   - A storyboard read as one (storyboards/showcase.yaml, the demo note's): a group per entry, at the times the
+##   - A storyboard read as one (data/showcase.json, the demo note's): a group per entry, at the times the
 ##     Director's schedule gives; the first entry's blue prism a lane, its `arrive` a span scaled into the entry's
-##     seconds; every item's `source` the span it was read from; every item a `verb` (a simulation, reached by playing
-##     from the start - the control for seeking); and it survives JSON whole.
+##     seconds; every span's `source` the span it was read from, and a flag's the key; every span a `verb` (a
+##     simulation, reached by playing from the start - the control for seeking, as a flag is seekable); and it
+##     survives JSON whole.
 ##   - An episode read as one (a cardless fixture under its own root, never the author's): the intro, each beat and
 ##     the close a group; an act a span on the `time` engine (seekable) in its thing's lane, found under way at a
 ##     moment inside it; a cue a flag at the word it stands before; a beat with acts and no words as long as its acts;
@@ -50,7 +51,7 @@ func _contract() -> void:
 
 
 func _storyboard() -> void:
-	var raw: Dictionary = Storyboard.read_raw("showcase")["data"]
+	var raw: Dictionary = Storyboard.read_raw("res://data/showcase.json")["data"]
 	var tl := Storyboard.timeline(raw)
 	var seq: Array = raw["sequence"]
 	var sched := Storyboard.schedule(Storyboard.expanded(seq, raw.get("defs", {})), float(raw.get("sensitivity", 1.0)), 8.0)
@@ -65,20 +66,37 @@ func _storyboard() -> void:
 	for l in first["lanes"]:
 		if String(l["id"]) == "blue":
 			blue = l
-	var arrive: Dictionary = (blue.get("items", []) as Array)[0] if not (blue.get("items", []) as Array).is_empty() else {}
+	var arrive: Dictionary = {}
+	for it in blue.get("items", []):
+		if String((it as Dictionary).get("label", "")) == "arrive":
+			arrive = it
+	var written: Dictionary = {}
+	for sp in seq[0]["track"]["spans"]:
+		if String((sp as Dictionary).get("action", "")) == "arrive":
+			written = sp
 	var scale := float(first["length"]) / float(seq[0]["track"]["nominal"])
-	_ok(String(arrive.get("label", "")) == "arrive" and String(arrive.get("kind", "")) == "span"
-		and is_equal_approx(float(arrive["at"]), 0.2 * scale) and is_equal_approx(float(arrive["length"]), 2.2 * scale),
-		"the first entry's blue prism is a lane, its arrive a span in the entry's seconds: %s" % str(arrive))
+	var t0 := float(written.get("from", written.get("at", -1.0)))
+	var t1 := float(written.get("to", t0))
+	_ok(not written.is_empty() and String(arrive.get("kind", "")) == "span" and t1 > t0
+		and is_equal_approx(float(arrive.get("at", -1.0)), t0 * scale) and is_equal_approx(float(arrive.get("length", -1.0)), (t1 - t0) * scale),
+		"the first entry's blue prism is a lane, its arrive a span in the entry's seconds: %s (written %s)" % [str(arrive), str(written)])
 	var sources_ok := true
 	var all_verbs := true
+	var flags_seek := true
+	var spans := 0
 	for g in groups:
 		for l in g["lanes"]:
 			for it in l["items"]:
-				var span: Variant = DataPath.at(raw, it["source"])
-				sources_ok = sources_ok and span is Dictionary and String((span as Dictionary).get("action", "")) == String(it["label"])
+				var written_at: Variant = DataPath.at(raw, it["source"])
+				# a flag ([StageKeys]) is a key of the track's, on the `time` engine: seekable
+				if (it["source"] as Array).has("keys"):
+					flags_seek = flags_seek and written_at is Dictionary and Timeline.seekable(g, it)
+					continue
+				spans += 1
+				sources_ok = sources_ok and written_at is Dictionary and String((written_at as Dictionary).get("action", "")) == String(it["label"])
 				all_verbs = all_verbs and not Timeline.seekable(g, it)
-	_ok(sources_ok, "every item's source is the span it was read from")
+	_ok(spans > 0 and sources_ok, "every span's source is the span it was read from (%d spans)" % spans)
+	_ok(flags_seek, "...and every flag's the key it was read from, seekable")
 	_ok(all_verbs, "the control for seeking: a stage's spans are simulations, reached by playing from the start")
 	_ok(Timeline.check(tl).is_empty(), "the storyboard's timeline has no problems: %s" % ", ".join(Timeline.check(tl)))
 	_ok(DataPath.same(JSON.parse_string(JSON.stringify(tl)), tl), "it survives JSON whole")

@@ -63,6 +63,12 @@ prompt:
 # expression, and numbers a run computed are a series it kept, drawn by its name (`data`).
 drawings:
   - >-
+      AS MUCH AS THE WORDS CARRY. What a sheet takes is written as the reader says it, so it is no
+      more than those words carry: a line of words is a few words long, a dozen at most, never a
+      whole sentence of the talk - a longer thing is said in full and only its key words written;
+      a drawing has the parts its talk names, each label said as it is written. The pen is never
+      left behind the voice.
+  - >-
       DRAWINGS. A `write` with `draw` puts a drawing on a sheet, drawn by the pen part by part in the
       order its elements are listed: <svg viewBox="0 0 360 HEIGHT"> ... </svg>, 360 wide (the page's
       width) and HEIGHT between 80 and 260. The pen draws <line>, <polyline>, <polygon>, <rect>,

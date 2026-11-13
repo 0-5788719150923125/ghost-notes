@@ -22,8 +22,8 @@ extends Node
 ##   the same and the list comes back.
 ## - The round trip: New, then "+" Song (a Song card asking for one, nothing timed, no stage, a Medium no
 ##   longer grayed), "+" Medium (Auto: the seeded show); choosing a song writes it into the note and opens it
-##   again loaded and waiting at its start; it plays through the transport; "+" Storyboard adds its card and
-##   the seed still chooses until something is written. A second clock is refused with the reason (a Voice
+##   again loaded and waiting at its start; it plays through the transport; a note with a Medium holds its
+##   storyboard with nothing attached, and the seed chooses until something is written. A second clock is refused with the reason (a Voice
 ##   on a note with a song), and a component comes off again: the Song card's ×, once asked, takes the
 ##   `song:` block out and leaves the other blocks and words. The ⌂ leaves it; New then "+" Voice reopens a
 ##   plain note as a reading; back on the list nothing is left behind (claims, row, conductor, stage,
@@ -328,7 +328,7 @@ func _dialog_in(n: Node) -> DeleteDialog:
 # --- the round trip ------------------------------------------------------------------------------
 
 func _check_round_trip() -> void:
-	print("-- New, + Song, + Medium, a song, play, a storyboard, detach, leave")
+	print("-- New, + Song, + Medium, a song, play, its storyboard, detach, leave")
 	var ch: Chrome = _main._chrome
 	var home := _measure()
 	var list: NotesList = _main._list
@@ -375,11 +375,10 @@ func _check_round_trip() -> void:
 	await _frames(10)
 	_ok(Spectrum.transport_playing(), "and it plays through the transport")
 	_ok(ch._home_button.visible, "the ⌂ shows in a note")
-	# a storyboard, attached to the same note: nothing written yet, so the seed still chooses
-	panel = await _attach(panel, "storyboard")
-	_ok(panel != null and panel._story != null and Storyboard.of_block(NoteStore.blocks_of(note).get("scenes"))["kind"] == "own",
-		"+ Storyboard: its card, and the note's own storyboard in its scenes: block")
-	_ok(Director.is_attached() and not Director.is_manual(), "...with nothing written in it, the seed still chooses")
+	# a note shown in a Medium holds its storyboard with nothing attached: nothing written yet, so the seed chooses
+	_ok(panel != null and panel._story != null and not NoteStore.blocks_of(note).has("scenes"),
+		"a note with a Medium holds its storyboard, and nothing of it is written into the note")
+	_ok(Director.is_attached() and not Director.is_manual(), "...with nothing written in it, the seed chooses")
 	# ...and a component comes off again
 	if panel != null:
 		var words := String(FrontMatter.split(FileAccess.get_file_as_string(note)).body)
@@ -399,7 +398,7 @@ func _check_round_trip() -> void:
 		await _frames(20)
 		panel = _main._note_panel
 		var left := NoteStore.blocks_of(note)
-		_ok(not left.has("song") and left.has("medium") and left.has("scenes"),
+		_ok(not left.has("song") and left.has("medium") and left.keys() == ["medium"],
 			"detaching the Song takes its block out and leaves the others (%s)" % str(left.keys()))
 		_ok(String(FrontMatter.split(FileAccess.get_file_as_string(note)).body) == words, "...and the note's words as they were")
 		_ok(panel != null and panel._song == null and not Spectrum.timed() and not _stage_up(),

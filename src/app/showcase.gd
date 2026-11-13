@@ -2,8 +2,10 @@ extends Node
 class_name Showcase
 
 ## Showcase - the README's animation, recorded from the real app: a note with a song playing
-## `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair
-## lock, then take opposite highways), with the note's panel, the row and the transport around it.
+## `data/showcase.json` (a blue prism flies in and divides into a blue one and a red one, they divide again
+## into the corners of a larger tetrahedron that turns as one, it comes apart, and the last, red, drifts out),
+## with the note's panel, the row and the transport around it. The same note is the demo note every desktop
+## starts with ([method make_demo_note]), its storyboard its own to edit.
 ##
 ## Only when it would change: the recording keeps a list of every file it loaded (each script, shader,
 ## scene and font in Godot's resource cache while the show plays, the storyboard and `project.godot` -
@@ -30,19 +32,20 @@ class_name Showcase
 ##   godot --headless --path . -- --showcase-now     records it now, stale or not, then quits
 
 ## The webp's size, frame rate and quality (libwebp, 0-100). Movie Maker records at the project's own size
-## whatever the window ([method recorded_size]), and FFmpeg scales that down to this.
+## whatever the window ([method recorded_size]), and FFmpeg scales that down to this. An animated webp keeps
+## only what each frame changes, so where a lit thing goes back to black a faint lossy smear stays on the void;
+## clearing it (quality 97) costs about three times the size.
 const SIZE := Vector2i(1280, 720)
 const FPS := 15
 const QUALITY := 72
-## The storyboard it plays, and the song's length - the storyboard's holds, end to end.
-const STORYBOARD := "showcase"
-const SONG := 15.0
+## The storyboard it plays: the song is as long as its entries, end to end ([method song]).
+const STORYBOARD := "res://data/showcase.json"
 ## The note's bookends: the picture fades up from an empty void and back down to it, so the animation loops.
 const INTRO := 0.5
 const OUTRO := 1.0
 ## The note the recording makes. Its title is the header of the panel in the picture.
 const TITLE := "A prism divides"
-const BODY := "One blue prism, then two - a blue one and a red one.\n"
+const BODY := "One blue prism, then two, then a shape of many - and then none.\n"
 ## The demo note's song ([method make_demo_note]): written once beside the author's things.
 const DEMO_SONG := "user://demo/a_prism_divides.wav"
 
@@ -60,9 +63,9 @@ const DAY := 86400
 const STARTED := "started"
 ## Folders whose files a recording could load. Everything else in the project (tests, hosts,
 ## reference imagery, the work folder itself) is never part of the show.
-const SOURCE_DIRS := ["src", "shaders", "scenes", "fonts", "storyboards", "data"]
+const SOURCE_DIRS := ["src", "shaders", "scenes", "fonts", "data"]
 ## Read with FileAccess rather than loaded as resources, so the cache never lists them.
-const ALWAYS := ["res://project.godot", "res://scenes/main.tscn", "res://storyboards/showcase.yaml"]
+const ALWAYS := ["res://project.godot", "res://scenes/main.tscn", STORYBOARD]
 
 var _render_pid := -1
 var _encode_pid := -1
@@ -92,7 +95,17 @@ static func skip_reason() -> String:
 
 ## The frames a recording keeps: the bookends and the song between them.
 static func frames() -> int:
-	return int(round((INTRO + SONG + OUTRO) * FPS))
+	return int(round((INTRO + song() + OUTRO) * FPS))
+
+
+## The song's length in seconds: the storyboard's entries end to end at its tempo (each holds for its own
+## seconds). 0 where the storyboard does not load.
+static func song() -> float:
+	var sb := Storyboard.load_file(STORYBOARD)
+	if not bool(sb.ok):
+		return 0.0
+	var tempo := float(sb.sensitivity) if float(sb.sensitivity) > 0.0 else 1.0
+	return float(Storyboard.schedule(sb.sequence, tempo, 8.0)["end"])
 
 
 ## The size Movie Maker records at: the project's viewport, set before any script runs (`--resolution`
@@ -157,21 +170,28 @@ static func mark_started(work: String) -> void:
 
 
 ## The demo note: the note this recording plays, made in the notes folder with its song ([constant
-## DEMO_SONG] by default; a gate's seam) and with its own copy of the storyboard, so the Timeline edits it.
-## The recording names the file instead and keeps it as it ships. A machine's first desktop launch makes it
-## once ([method main._seed_demo_note]). Returns the note's path, or "" with the reason pushed as a warning.
+## DEMO_SONG] by default; a gate's seam) and a copy of the storyboard kept in its folder as its own
+## ([NoteStoryboard]), so its timeline edits it. A machine's first desktop launch makes it once ([method
+## main._seed_demo_note]); the recording makes it in a folder of its own. Returns the note's path, or "" with the
+## reason pushed as a warning.
 static func make_demo_note(song_path := DEMO_SONG) -> String:
+	var read := Storyboard.read_raw(STORYBOARD)
+	if not bool(read["ok"]):
+		push_warning("ghost: could not read the demo note's storyboard - %s" % String(read["error"]))
+		return ""
 	var song := ProjectSettings.globalize_path(song_path)
 	DirAccess.make_dir_recursive_absolute(song.get_base_dir())
 	if not FileAccess.file_exists(song) and not ShowcaseRecorder.write_song(song):
 		push_warning("ghost: could not write the demo note's song (%s)" % song)
 		return ""
-	var read := Storyboard.read_raw(STORYBOARD)
-	if not bool(read["ok"]):
-		push_warning("ghost: could not read the demo note's storyboard - %s" % String(read["error"]))
+	var note := NoteStore.create(TITLE, BODY, {"song": {"path": song}, "medium": {"format": "full"},
+		"bookends": {"intro": INTRO, "outro": OUTRO}})
+	if note.is_empty():
 		return ""
-	return NoteStore.create(TITLE, BODY, {"song": {"path": song}, "medium": {"format": "full"},
-		"scenes": Storyboard.own_block(read["data"]), "bookends": {"intro": INTRO, "outro": OUTRO}})
+	var err := NoteStoryboard.write(NoteUpload.folder_of(note), read["data"])
+	if not err.is_empty():
+		push_warning("ghost: could not keep the demo note's storyboard - %s" % err)
+	return note
 
 
 ## Is the README's animation out of date: no webp, no stamp, or the files it loaded have changed?

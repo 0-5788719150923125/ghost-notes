@@ -109,9 +109,6 @@ const CATCH_SPRING := 0.5
 const LET_GO := 30.0
 const LET_GO_EASE := 2.0
 const LET_GO_LEAD := 3.0
-## A turn not planned yet is guessed at the pace the voice has kept over its last this many words heard, rests and all
-## ([method _turn_guess]).
-const PACE_WORDS := 40
 ## A bare hesitation's length (seconds), for that guess: the Voice card's Hesitate row as it comes ([ReadingCast]'s
 ## default; named there, the medium would pull the reading's autoloads into every gate that builds it).
 const HESITATE := 1.5

@@ -22,7 +22,8 @@ extends SceneTree
 ##   row fifteen units) with every key on its case;
 ## - the mug is drunk from: upright, brought to the mouth and out of the picture for the sip, back in its ring;
 ## - the gain knob turns from three to nine a click a step with the camera on the radar: at three only the target is on the
-##   scope, at nine the clutter round it, each blip painted once the sweep has passed it; turned back, they fade;
+##   scope, at nine the clutter round it and the chair's own on the desk (not at eight), each blip painted once the sweep
+##   has passed it; turned back, they fade;
 ## - the bell rings as the block after it goes up; the lamp goes out at its click, the camera on the whole desk;
 ## - built on a worker, as the app builds it: the show is held until it lands.
 ##
@@ -403,14 +404,25 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 	var full := md.clutter_at(turned + DispatchMedium.SWEEP * 1.05)
 	var early := md.clutter_at(turned + 0.01)
 	var him := md.target_at(turned)
+	var round_him := full.filter(func(c: Dictionary) -> bool: return not c.has("chair"))
+	var chair := full.filter(func(c: Dictionary) -> bool: return c.has("chair"))
 	var near := true
-	for c in full:
+	for c in round_him:
 		if ((c as Dictionary)["at"] as Vector2).distance_to(him) > DispatchMedium.CLUTTER_BUILDING.length() + DispatchMedium.CLUTTER_DRIFT + 0.01 \
 				or (c as Dictionary).has("label"):
 			near = false
-	_ok(not before.has("clutter") and full.size() == DispatchMedium.clutter_n(9) and full.size() >= 20 and near,
-		"at three nothing on the scope but him (the control); at nine the clutter round him, unnamed (%d blips)" % full.size())
+	_ok(not before.has("clutter") and round_him.size() == DispatchMedium.clutter_n(9) and round_him.size() >= 20 and near,
+		"at three nothing on the scope but him (the control); at nine the clutter round him, unnamed (%d blips)" % round_him.size())
 	_ok(early.size() < full.size(), "each blip is painted only once the sweep has passed it since the knob reached it (the control: just turned, %d of %d)" % [early.size(), full.size()])
+	# the chair's own blip at nine; the control: the same night with the knob stopped at eight
+	var seated := chair.size() == 1 and ((chair[0] as Dictionary)["at"] as Vector2).distance_to(DispatchMedium.CHAIR_AT) <= DispatchMedium.CLUTTER_JITTER * 1.5 \
+		and not (chair[0] as Dictionary).has("label") and Vector2(DispatchMedium.CHAIR_AT).length() < 0.1
+	var gain_up: Dictionary = md._actions[up]
+	gain_up["to"] = 8
+	var at_eight := md.clutter_at(md._step_at(up, 8) + DispatchMedium.SWEEP * 1.05)
+	gain_up["to"] = 9
+	var unseated := at_eight.filter(func(c: Dictionary) -> bool: return c.has("chair")).is_empty() and at_eight.size() == DispatchMedium.clutter_n(8)
+	_ok(seated and unseated, "at nine the scope paints one more, unnamed, on the desk at its middle; at eight it does not (the control: %d blips at eight)" % at_eight.size())
 	var lowered := md._step_at(down, 3)
 	var fading := md.clutter_at(lowered + 0.5)
 	var faded := true

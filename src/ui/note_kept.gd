@@ -5,13 +5,14 @@ class_name NoteKept
 ##
 ##   - Cache opens the folder of what is made for what the note shows: the picked episode's, else the note's own.
 ##   - Restore... lists every state it can go back to, newest first, each its moment and what changed: the note's every save
-##     ([NoteHistory], kept as the note's file is written) and, where it shows an episode, that episode's step versions
-##     ([method EpisodeFeed.versions]). Going back keeps what stood: the note put back is written as its newest save, a step put
-##     back sends what stood a version back - so the list only grows.
+##     ([NoteHistory], kept as the note's file is written), its storyboard's every state ([method NoteHistory.record_data])
+##     and, where it shows an episode, that episode's step versions ([method EpisodeFeed.versions]). Going back keeps what
+##     stood: the note or storyboard put back is kept as its newest state, a step put back sends what stood a version back -
+##     so the list only grows.
 ##
 ## Handed by its panel: the note's [member doc], where its cache is ([member cache_dir]) and its history
-## ([member history_dir]), and the episode it shows ([member feed]). Never written from a process that may
-## not write the author's things.
+## ([member history_dir]), its storyboard's ([member board_history], [member board_restore]) and the episode it
+## shows ([member feed]). Never written from a process that may not write the author's things.
 
 ## The note's source: what is put back is written through it, and each of its writes is kept.
 var doc: DocSource
@@ -19,6 +20,10 @@ var doc: DocSource
 var cache_dir: Callable = Callable()
 ## () -> String: where the note's saved states are kept ("" for a note with no file).
 var history_dir: Callable = Callable()
+## () -> String: where the note's storyboard's states are kept ("" for none).
+var board_history: Callable = Callable()
+## (data: Dictionary) -> String: a storyboard state put back as the note's storyboard; "" done, else why not.
+var board_restore: Callable = Callable()
 ## () -> EpisodeFeed: the episode the note shows, null for none.
 var feed: Callable = Callable()
 ## () -> void: something was put back.
@@ -79,6 +84,11 @@ func entries() -> Array:
 	if not dir.is_empty():
 		for e in NoteHistory.entries(dir):
 			out.append({"at": float((e as Dictionary)["at"]), "where": "The note", "said": String((e as Dictionary)["said"]), "note": e})
+	var bdir := String(board_history.call()) if board_history.is_valid() else ""
+	if not bdir.is_empty():
+		for e in NoteHistory.entries(bdir):
+			out.append({"at": float((e as Dictionary)["at"]), "where": "The storyboard", "said": String((e as Dictionary)["said"]),
+				"board": e})
 	var f: EpisodeFeed = feed.call() if feed.is_valid() else null
 	if f != null:
 		for v in f.versions():
@@ -111,6 +121,12 @@ func put_back(e: Dictionary) -> String:
 			return "could not move the note into place"
 		doc.reload()
 		keep_now()
+	elif e.has("board"):
+		var bdir := String(board_history.call()) if board_history.is_valid() else ""
+		var data := NoteHistory.data_of(bdir, e["board"]) if not bdir.is_empty() else {}
+		if not (data.get("sequence") is Array) or not board_restore.is_valid():
+			return "that state is no longer kept"
+		err = String(board_restore.call(data))
 	else:
 		var fe: EpisodeFeed = feed.call() if feed.is_valid() else null
 		err = fe.put_back(e["key"]) if fe != null else "no episode is shown"

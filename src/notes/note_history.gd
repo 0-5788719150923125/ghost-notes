@@ -8,7 +8,8 @@ class_name NoteHistory
 ##
 ## Going back never loses the way forward: a state put back is written as the note's file and so is kept as the newest
 ## entry, the state it replaced stays in the history, and "forward" is putting back a later entry. The history only
-## grows. The newest [constant KEPT] are kept.
+## grows. The newest [constant KEPT] are kept. A tree the note keeps beside its file (its storyboard) is kept the same way,
+## as JSON in a folder of its own ([method record_data]).
 
 const KEPT := 300
 const INDEX := "history.json"
@@ -17,6 +18,34 @@ const INDEX := "history.json"
 ## The note's text [param text] kept in [param dir] (the newest [param kept]), the change since the one before said. ""
 ## kept, or the same as the newest (kept once); else why not.
 static func record(dir: String, text: String, kept := KEPT) -> String:
+	return _keep(dir, text, "md", summary, kept)
+
+
+## [param data], a tree the note keeps beside its file (its storyboard), kept in [param dir] as JSON, the change since
+## the one before said by each place in the tree. "" kept, or the same as the newest; else why not.
+static func record_data(dir: String, data: Dictionary, kept := KEPT) -> String:
+	return _keep(dir, JSON.stringify(data, "\t", false), "json", data_summary, kept)
+
+
+## The tree entry [param entry] holds ([method record_data]), {} when it is gone.
+static func data_of(dir: String, entry: Dictionary) -> Dictionary:
+	var d: Variant = JSON.parse_string(text_of(dir, entry))
+	return d if d is Dictionary else {}
+
+
+## What changed from [param before] to [param after] (two JSON texts of one tree), in a line: each value by its place.
+static func data_summary(before: String, after: String) -> String:
+	var a: Variant = JSON.parse_string(before)
+	var b: Variant = JSON.parse_string(after)
+	var changes := PackedStringArray()
+	_diff(a if a is Dictionary else {}, b if b is Dictionary else {}, "", changes)
+	if changes.is_empty():
+		return "nothing changed"
+	var shown := ", ".join(changes.slice(0, 3))
+	return shown + (" and %d more" % (changes.size() - 3) if changes.size() > 3 else "")
+
+
+static func _keep(dir: String, text: String, ext: String, said: Callable, kept: int) -> String:
 	if dir.is_empty():
 		return "the note has no folder of its own"
 	var list := _index(dir)
@@ -29,15 +58,15 @@ static func record(dir: String, text: String, kept := KEPT) -> String:
 	var at := Time.get_unix_time_from_system()
 	# ...one file each, though two can land in one millisecond (the second would write over the first)
 	var n := int(at * 1000.0)
-	while FileAccess.file_exists(dir.path_join("%d.md" % n)):
+	while FileAccess.file_exists(dir.path_join("%d.%s" % [n, ext])):
 		n += 1
-	var file := "%d.md" % n
+	var file := "%d.%s" % [n, ext]
 	var f := FileAccess.open(dir.path_join(file), FileAccess.WRITE)
 	if f == null:
 		return "could not keep the note's state in " + dir
 	f.store_string(text)
 	f.close()
-	list.append({"at": at, "file": file, "said": summary(before, text) if not list.is_empty() else "as it was first kept"})
+	list.append({"at": at, "file": file, "said": String(said.call(before, text)) if not list.is_empty() else "as it was first kept"})
 	while list.size() > kept:
 		DirAccess.remove_absolute(dir.path_join(String((list.pop_front() as Dictionary)["file"])))
 	var ix := FileAccess.open(dir.path_join(INDEX), FileAccess.WRITE)

@@ -12,7 +12,7 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--live-tap` |  | Record what the mixer actually plays - the Master bus, the last two minutes - to user://synth/live_tap.wav when ghost quits. For when what you hear and what a measurement says disagree. |  |
 | `--clock-watch` |  | Report when the show's clock stops advancing while frames keep being written - the shape a frozen recording takes. On automatically in every render; useful on a plain session because that runs at the speed of the audio rather than the encoder. |  |
 | `--until` | `<seconds>` | Stop at this point on the show clock. Renders a slice instead of the whole thing, which is how a defect deep in a long export is reproduced without paying for the whole export. |  |
-| `--storyboard` | `<name>` | Manual mode: play `storyboards/<name>.yaml` (or `.json`). |  |
+| `--storyboard` | `<path>` | Play the storyboard file at this path (`.json` or `.yaml`), as a render of a note's does. |  |
 | `--frame` | `landscape\|portrait` | The show's frame for this run - 16:9 or 9:16 - over the remembered one, as `--medium` overrides the medium. A medium without a portrait frame plays landscape. Passed to an export's render, so it renders the frame the session showed. |  |
 | `--handheld` |  | Run the phone shell on the desktop: the notes list and the editor, full screen in a phone's shape, no stage, no transport, nothing downloaded (`GHOST_HANDHELD=1` does the same). A phone runs it always. |  |
 | `--note` | `<path>` | Open one note, in the workspace its components name (a voice's reading, a show of cards, the note's own panel for its words or a song) - past the notes list. |  |

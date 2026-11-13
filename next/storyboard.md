@@ -1,6 +1,12 @@
 # The storyboard: a show written down
 
-The modes were never in the engine; they were in the shell. This note is the design that follows, what is built of it, and what comes next. [notes.md](notes.md) is the plan it continues ("Composition, not templates"); [storyboards/README.md](../storyboards/README.md) is the data spec.
+The modes were never in the engine; they were in the shell. This note is the design that follows, what is built of it, and what comes next. [notes.md](notes.md) is the plan it continues ("Composition, not templates"); [docs/stage.md](../docs/stage.md) is the data spec.
+
+## Status
+
+- **Built:** a storyboard is no component. A note shown in a Medium holds its own (`NoteStoryboard`), kept as `storyboard.json` in the note's folder (`NoteUpload.folder_of`), never in its frontmatter; its timeline opens from ☰ beside Play while the format plays scenes (Auto, Full frame, Comic). The forecast is editable in place: the first change writes it down; "To the seed" empties it. Each state is kept in the note's history (`history/storyboard/`) and listed by Restore…. There is no `storyboards/` folder: the one shipped storyboard is `data/showcase.json`, the README's animation and the demo note's ("A prism divides"), played by path; `--storyboard <path>` plays any file.
+- **Looked at:** the gates (`storyboard_check`, `storyboard_editor_check`, `demo_note_check`, `showcase_check`, `teardown_check`, `form_leave_check`, `prism_motion_check`); the README animation recorded through the real app (22.9 s: two empty seconds, a blue prism flying in apex first from the upper right, landing like a spring and righting slowly through its first clone, a red clone pulled off it in a tug-of-war that snaps, a cascade of clones to ten, the ten tetrahedra of a tetrahedron cut three to an edge turning as one, the dissolve, the last red darting out to the upper right), looked at frame by frame; the editor not yet used by a person.
+- **The user's to judge:** the new prism show recorded; whether a reading shown in scenes should open its storyboard or its words' marks from ☰ (the storyboard ranks over the marks, as an episode does - a choice on ☰ is unbuilt).
 
 ## The finding
 
@@ -11,9 +17,9 @@ The modes were never in the engine; they were in the shell. This note is the des
 | what the user does | what produces the entries |
 | --- | --- |
 | attaches a Picture and nothing else | the seed, cut by cut (`Director._pick`) |
-| writes a storyboard | the note's own `scenes:` block |
-| starts from the seeded show | `Director.forecast` - the seed's entries, written into the note |
-| names a file | `storyboards/<name>.yaml`, read and never written |
+| writes a storyboard | `storyboard.json` in the note's folder |
+| changes the seeded show | `Director.forecast` - the seed's entries, written down at the first change |
+| plays a file | `--storyboard <path>`, read and never written |
 
 One function answers the first and the third (`_pick`, handed its state instead of reading it), so what a forecast says and what plays cannot drift apart. `storyboard_editor_check` cuts the real Director through six scenes and holds them to the forecast.
 
@@ -32,27 +38,27 @@ So a voice with a Picture and a storyboard (a narrated story with authored scene
 
 ### The storyboard as the note's own data
 
-- **In the note.** A note's `scenes:` block holds its storyboard (`Storyboard.of_block`: the note's own, a file's name, or nothing written). It is written by the same autosave every card's block goes through, merged three ways with an edit made outside.
+- **In the note's folder.** `NoteStoryboard` keeps a note's storyboard as JSON (`Storyboard.to_json`; a whole number read back an int, `Storyboard.whole`), written a moment after an edit settles and kept in the note's history at each write. Nothing written is no file: the seed chooses.
 - **Two shapes.** The raw tree is what is written - `defs` and `use` in it - and what the editor edits. The loaded form (`Storyboard.from_data`) is what the Director walks. Loading never changes the raw tree.
 - **Edits are pure.** `DataPath` (`put`, `cut`, `insert`, `move`) returns a new root and leaves its argument alone, so an editor's undo is the list of trees it has shown.
 - **Fields are tables.** `Storyboard.BOARD / ENTRY / TIMINGS / STAGE / CAMERA / ACTOR / SPAN`, `Cast.PARAMS` (per kind) and `Actions.ARGS` (per verb) say what can be set: label, type, default, bounds or choices, a sentence. `SchemaForm` draws rows from a table, so a field added to a table is a control in the editor and a row in `docs/stage.md`.
 - **One schedule.** `Storyboard.schedule` is the arithmetic the Director walks; the editor's ruler is drawn from the same function.
-- **A render gets it too.** An export of a note-owned storyboard hands the render a file written from what the Director is walking (`Exporter._storyboard_arg`).
+- **A render gets it too.** An export of a note's storyboard hands the render a file written from what the Director is walking (`Exporter._storyboard_arg`).
 
 ### The editor
 
-`StoryboardCard` ("Timeline…") opens `StoryboardEditor`, a dock along the bottom of the frame; the show is fitted above it (`Chrome.claim_stage`), so what is edited is seen whole.
+`NoteStoryboard` opens `StoryboardEditor` from ☰ beside Play (`Transport.offer_timeline`, rank 2), a dock along the bottom of the frame; the show is fitted above it (`Chrome.claim_stage`), so what is edited is seen whole.
 
 - **The strip** (`StoryboardStrip`): entries on a ruler, as wide as they are scheduled to stay. Click to pick (the show cuts there, and where the storyboard follows the song the song seeks too); drag to reorder; drag the right edge of a fixed hold to lengthen it. A cue-timed entry has a broken edge: it has no fixed end.
 - **The lanes** (`TimelineLanes`, on Masking's `TrackLane` and `FlagStrip`; next/editing.md, "The Timeline"): for a stage entry, a lane per actor and its spans - a block for a window, a diamond for a moment. Drag to retime; double-click a lane to add.
 - **The inspector**: whatever is picked - the storyboard, an entry, an actor, a span - as rows from the tables. A value a def gives is shown dimmed, as a default is; changing it writes the map's own key over the def.
 - **Source**: the whole tree as YAML, taken back if it still loads.
-- **Start from**: the seeded show written down, or a copy of a board in `storyboards/`.
-- With nothing written, the editor shows the seed's forecast, grayed: what "automatic" is about to play, as a storyboard.
+- With nothing written, the editor shows the seed's forecast, grayed: what "automatic" is about to play, as a storyboard. A change to it writes it down; + Scene starts one from nothing.
+- **To the seed**: empties it, and the seed chooses again (Restore… brings it back).
 
 ### Gates
 
-`storyboard_check` (pure: edits leave their input alone, the block round-trips through YAML, a board taken into a note loads as the file did, the schedule's numbers, four controls), `storyboard_editor_check` (through the real app: the tables against their registries, forecast against real cuts, written-down is the same scene from the same seed, every edit pure and one step back, the note keeps it, a file is read-only until taken in, a voice walks one too), `components_check` (workspaces, slots, detach), `notes_list_check` (New is a button, a note becomes a show by "+", a component detaches), `teardown_check` (a story left with the editor open, a narrated note).
+`storyboard_check` (pure: edits leave their input alone, it round-trips through the JSON a note keeps and the YAML source view, the shipped one copied into a note loads as the file does, the schedule's numbers, five controls), `storyboard_editor_check` (through the real app: the tables against their registries, which formats offer it, forecast against real cuts, written-down is the same scene from the same seed, every edit pure and one step back, the note's folder keeps it and its history, To the seed, a voice walks one too), `demo_note_check` (the shipped show lands in the demo note's folder), `components_check` (workspaces, slots, detach), `notes_list_check` (New is a button, a note becomes a show by "+", a component detaches), `teardown_check` (a story left with the editor open, a narrated note).
 
 ## What it does not do yet
 
@@ -61,7 +67,6 @@ So a voice with a Picture and a storyboard (a narrated story with authored scene
 - **A storyboard needs a sound.** With no song and no voice there is no clock, so no show. A storyboard of fixed holds could conduct itself (a silent film); `Spectrum` has no clock without audio yet.
 - **Scenes are still code.** An entry names a scene and pins its seed; what the scene rolls from that seed is not data except on a `stage`. Properties for the geometry, lighting and textures are the scene-spec pipeline (roadmap): the Layer registry is the nearest step - a `layers` entry, as `stage` is for actors, would make `aurora` (`bed` + `stars` + `aurora`) a storyboard entry instead of a file.
 - **No keyframed properties.** The Look, the camera dials and the holds are one value per note. A lane of keyframes for any numeric field is the modulation notes.md describes; the tables are what such a lane would be built from.
-- **Frontmatter length.** A long storyboard is long YAML above the note's words: `MiniYaml.emit` writes block style. A note may name a file instead; a flow style for list items, and editing a file in place, are the next rungs. The emitter is unchanged on purpose: changing it would reformat every note already written.
 - **Transitions are three names.** `cut`, `dip`, `fade`, and a morph where two entries line up. A transition as its own timeline item is not built.
 - **The editor is not judged by a person yet.** It was looked at through rendered pictures (`tests/timeline/storyboard_look_probe.gd`), not used.
 

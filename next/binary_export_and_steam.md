@@ -63,7 +63,7 @@ Not legal issues; the reasons an exported ghost would fail as the code stands.
   the Provisioner hashes must ship as loose files beside the executable and be found through
   `OS.get_executable_path().get_base_dir()`.
 - **Non-resource files are left out of the `.pck`** unless the preset's include filter names them: `data/cmudict.dict`,
-  `data/english.yml`, `storyboards/*.yml`, the hosts' files, every license file. Check `.json` too.
+  `data/english.yml`, `data/showcase.json`, the hosts' files, every license file. Check `.json` too.
 - **The video export and the audio bake relaunch the engine against the project folder** (`src/export/exporter.gd`,
   `src/masking/mask_editor.gd`), and the render reads its resolution from an `override.cfg` in the project root. An
   exported build has no project folder: the binary must relaunch itself with the overrides passed another way. Masking's

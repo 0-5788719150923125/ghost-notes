@@ -13,6 +13,7 @@ What is held, each with an input that must fail where a pass could be an acciden
 - the origin is TeX's baseline (the `ghost:base` special), not the first glyph's: a radical hangs
   below the baseline, so an item that starts with one still has its "2" on y = 0;
 - glyphs carry their PostScript names (`summationdisplay`, `radical`), which the hand reads.
+- words with math keep their newlines as line ends (control: the same words with spaces stay on one line).
 - a drawing (figure.py): its labels set in the same run and placed where the SVG put them, the whole measured
   down from a baseline at its foot; a label TeX refuses fails the drawing alone, with TeX's words; a plot is
   computed (y = x squared through the right corner of its axes, 1/x broken at 0 and cut at the range's edge); an
@@ -83,12 +84,29 @@ def main():
           "could not have been the origin" % radical["y"])
     check(any(g["n"] == "summationdisplay" for g in items["sum"]["glyphs"]),
           "a display sum is named summationdisplay")
+    _lines()
     _figures()
     if FAILS:
         print("test_typeset: %d FAILURE(S)" % len(FAILS))
         return 1
     print("test_typeset: ALL OK")
     return 0
+
+
+def _lines():
+    work = pathlib.Path(tempfile.mkdtemp(prefix="ghost-typeset-"))
+    try:
+        got = typeset.typeset({"work": str(work / "w"), "width": 300, "items": [
+            {"id": "broken", "mode": "text", "tex": "one $n$ here\ntwo there"},
+            {"id": "flowed", "mode": "text", "tex": "one $n$ here two there"},
+        ]})
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    rows = {}
+    for it in got["items"]:
+        rows[it["id"]] = sorted({round(g["y"], 1) for g in it["glyphs"]})
+    check(len(rows["broken"]) == 2, "a newline in words with math ends the line (rows at %s)" % rows["broken"])
+    check(len(rows["flowed"]) == 1, "the control: the same words with a space stay on one line (rows at %s)" % rows["flowed"])
 
 
 def _figures():

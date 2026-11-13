@@ -8,10 +8,9 @@ class_name Storyboard
 ## (`Director._next_entry`): the seeded show is a storyboard nobody wrote down, and a written one is the
 ## same show made explicit. This spec and the editor over it ([StoryboardEditor]) are the general case.
 ##
-## Where one lives: in a note's own `scenes:` block ([method of_block]; the block is edited in the app), or
-## in a file a note names: YAML (it holds comments) or JSON, both parsing to the same tree. Bare names
-## resolve inside `res://storyboards/` (`.yaml` first, then `.json`); explicit paths are taken as-is. A file
-## is read here and never written: to change one in the app, a note takes it in.
+## Where one lives: a note's in its own folder as JSON ([NoteStoryboard], written by the editor as it is
+## edited); any other in a file named by its path (`--storyboard`, a render's), YAML or JSON, both parsing to
+## the same tree. A JSON number that is whole is read as an int, as YAML reads one ([method whole]).
 ##
 ## Two shapes: the raw tree is what is written (`defs`, `use` and all; what a note keeps and an editor
 ## edits, [DataPath] making each edit a new tree). The loaded form is what the Director walks: `use`
@@ -31,9 +30,8 @@ class_name Storyboard
 ## [method load_file] and [method from_data] return the loaded form, `{ok, error, path, name, loop,
 ## transition, sensitivity, sequence, tail}`; on failure only `ok` / `error` matter.
 
-const DIR := "res://storyboards/"
 const MAX_USE_DEPTH := 8
-## The keys of a storyboard, in the order a note's block is written in.
+## The keys of a storyboard, in the order it is written in.
 const KEYS := ["name", "loop", "transition", "sensitivity", "elastic", "defs", "sequence", "tail"]
 ## Where a storyboard's errors say it is when a note keeps it.
 const IN_NOTE := "in this note"
@@ -128,7 +126,7 @@ const ACTOR := {
 const SPAN := {
 	"action": {"label": "Does", "type": "enum", "default": "set",
 		"options": ["look", "blink", "arrive", "sprout", "split", "crystallize", "tremble", "burst", "lock",
-			"desync", "hold_still", "sway", "counterflow", "specialize", "gather", "fly", "helix_split",
+			"desync", "hold_still", "sway", "counterflow", "specialize", "form", "leave", "gather", "fly", "helix_split",
 			"lane_jump", "set", "ramp", "pulse", "flash"],
 		"blurb": "What happens."},
 	"target": {"label": "Who", "type": "targets", "default": null,
@@ -144,25 +142,27 @@ const SPAN := {
 }
 
 
-static func load_file(name_or_path: String) -> Dictionary:
-	var raw := read_raw(name_or_path)
+## The storyboard in the file [param file], in its loaded form ([method from_data]); named after the file
+## where it names itself nothing.
+static func load_file(file: String) -> Dictionary:
+	var raw := read_raw(file)
 	if not bool(raw.ok):
 		return _fail(String(raw.error))
-	return from_data(raw.data, String(raw.path), name_or_path, String(raw.path))
+	return from_data(raw.data, String(raw.path), file.get_file().get_basename(), String(raw.path))
 
 
-## A storyboard file as it is written (parsed, `defs` and `use` still in it): what a note takes in to make
-## it its own. `{ok, error, path, data}`.
-static func read_raw(name_or_path: String) -> Dictionary:
-	var path := resolve_path(name_or_path)
+## A storyboard file as it is written (parsed, `defs` and `use` still in it). `{ok, error, path, data}`.
+static func read_raw(file: String) -> Dictionary:
+	var path := resolve_path(file)
 	if path.is_empty():
-		return {"ok": false, "error": "storyboard not found: %s" % name_or_path, "path": "", "data": {}}
+		return {"ok": false, "error": "storyboard not found: %s" % file, "path": "", "data": {}}
 	var text := FileAccess.get_file_as_string(path)
 	var data: Variant
 	if path.ends_with(".json"):
 		data = JSON.parse_string(text)
 		if data == null:
 			return {"ok": false, "error": "storyboard %s: invalid JSON" % path, "path": path, "data": {}}
+		data = whole(data)
 	else:
 		var y := MiniYaml.parse(text)
 		if not y.ok:
@@ -212,27 +212,8 @@ static func from_data(data: Variant, where: String, fallback_name := "", path :=
 	}
 
 
-## What a note's `scenes:` block holds, `{kind, name, data}`: its own storyboard (`kind` "own", the raw tree
-## in `data`; a block with a `sequence`, even an empty one), the name or path of a file (`kind` "file", in
-## `name`), or nothing written down ("none": the show is the seed's).
-static func of_block(block: Variant) -> Dictionary:
-	if not (block is Dictionary):
-		return {"kind": "none", "name": "", "data": {}}
-	var b: Dictionary = block
-	if b.get("sequence") is Array:
-		var data := {}
-		for k in KEYS:
-			if b.has(k):
-				data[k] = b[k]
-		return {"kind": "own", "name": String(b.get("name", "")), "data": data.duplicate(true)}
-	var named := String(b.get("storyboard", "")).strip_edges()
-	if not named.is_empty():
-		return {"kind": "file", "name": named, "data": {}}
-	return {"kind": "none", "name": "", "data": {}}
-
-
-## The block a note keeps its own storyboard in: [param data]'s keys in [constant KEYS]' order, and a
-## `sequence` always (an empty one is a storyboard with nothing written in it yet, still the note's own).
+## A storyboard as a note keeps it: [param data]'s keys in [constant KEYS]' order, and a `sequence` always
+## (an empty one is a storyboard with nothing written in it yet: the seed chooses).
 static func own_block(data: Dictionary) -> Dictionary:
 	var out := {}
 	for k in KEYS:
@@ -241,11 +222,6 @@ static func own_block(data: Dictionary) -> Dictionary:
 	if not (out.get("sequence") is Array):
 		out["sequence"] = []
 	return out.duplicate(true)
-
-
-## The block of a note that plays a storyboard file: its name in `res://storyboards/`, or a path.
-static func file_block(name_or_path: String) -> Dictionary:
-	return {"storyboard": name_or_path}
 
 
 ## How an entry is timed, a key of [constant TIMINGS]: "hold" (a fixed time), "cue" (until the music gives
@@ -374,6 +350,27 @@ static func to_yaml(data: Dictionary) -> String:
 	return MiniYaml.emit(own_block(data))
 
 
+## A storyboard as JSON text, in [constant KEYS]' order and each map's own: how a note keeps its own.
+## [method read_raw] reads it back.
+static func to_json(data: Dictionary) -> String:
+	return JSON.stringify(own_block(data), "\t", false) + "\n"
+
+
+## [param v] with every whole float an int: JSON has one kind of number, and an int a storyboard says (a
+## seed) stays one.
+static func whole(v: Variant) -> Variant:
+	if v is Dictionary:
+		var out := {}
+		for k in v:
+			out[k] = whole(v[k])
+		return out
+	if v is Array:
+		return (v as Array).map(whole)
+	if typeof(v) == TYPE_FLOAT and is_finite(v) and absf(v) < 9.0e15 and v == floorf(v):
+		return int(v)
+	return v
+
+
 ## ...and back: `{ok, error, data}`, the raw tree, refused with the reason where the text does not parse or
 ## does not make a storyboard that loads.
 static func from_yaml(text: String) -> Dictionary:
@@ -390,15 +387,10 @@ static func from_yaml(text: String) -> Dictionary:
 	return {"ok": true, "error": "", "data": data}
 
 
-## Resolve a bare name or explicit path to an existing storyboard file, or "".
-static func resolve_path(name_or_path: String) -> String:
-	var cands: Array = [name_or_path] \
-		if name_or_path.ends_with(".json") or name_or_path.ends_with(".yaml") or name_or_path.ends_with(".yml") \
-		else [DIR + name_or_path + ".yaml", DIR + name_or_path + ".yml", DIR + name_or_path + ".json"]
-	for p in cands:
-		if FileAccess.file_exists(p):
-			return p
-	return ""
+## [param path] where it names a storyboard file that is there (`.yaml`, `.yml` or `.json`), else "".
+static func resolve_path(path: String) -> String:
+	var known := path.ends_with(".json") or path.ends_with(".yaml") or path.ends_with(".yml")
+	return path if known and FileAccess.file_exists(path) else ""
 
 
 ## [param node] with every `use` in it expanded against [param defs]: what one map of a raw storyboard is

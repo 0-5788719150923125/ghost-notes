@@ -104,15 +104,75 @@ func _set_field(who: String, field: String, to: Variant) -> void:
 # --- what an agent asks for: each answers `{ok, event, words}`, and only an answer that is `ok` has happened -----------------------------------------------
 
 ## Roll [param notation] for [param who], the [param n]th thing to happen in an episode of [param seed]. `hidden`: thrown behind a screen, so no number reaches anyone at the table but the one who threw it.
-func roll(who: String, notation: String, why: String, seed: int, hidden := false) -> Dictionary:
+## [param needs]: what it must come to, fixed before it lands ([method needs_of]); then the ledger, never the one who asked, says whether it did (`made`). The event's
+## `words` are the dice alone, as the table saw them land; the answer's add what came of it, for the one running the game.
+func roll(who: String, notation: String, why: String, seed: int, hidden := false, needs := "") -> Dictionary:
+	var need := needs_of(needs)
+	if not bool(need["ok"]):
+		return {"ok": false, "words": String(need["error"])}
 	var id := next_id()
 	var got := DiceNotation.roll(notation, hash([seed, "game", id]))
 	if not bool(got["ok"]):
 		return {"ok": false, "words": String(got["error"])}
 	var e := {"id": id, "kind": "roll", "who": who, "notation": notation, "why": why, "hidden": hidden, "total": got["total"],
 		"natural": got["natural"], "successes": got["successes"], "thrown": got["thrown"], "words": got["words"]}
+	var said := String(got["words"])
+	var cmp := String(need["cmp"])
+	if not cmp.is_empty():
+		var counted := bool(got["counted"])
+		var came := int(got["successes"]) if counted else int(got["total"])
+		var made := DiceNotation._hits(came, cmp, int(need["target"]))
+		e["needs"] = "%s%d" % [cmp, int(need["target"])]
+		e["made"] = made
+		said += ". It needed %s%s, and came to %d: it %s" % [_needs_words(cmp, int(need["target"])), " successes" if counted else "", came, "SUCCEEDS" if made else "FAILS"]
+	var face := _one_kept(got)
+	if face.x > 0 and (face.x == face.y or face.x == 1):
+		e["extreme"] = "highest" if face.x == face.y else "lowest"
+		said += ". The die that counted came up %d, its %s face" % [face.x, String(e["extreme"])]
 	apply(e)
-	return {"ok": true, "event": e, "words": String(got["words"])}
+	return {"ok": true, "event": e, "words": said}
+
+
+## What a roll must come to, as it is written before it lands: a number, meaning that or more (`15`, `15+`), or a comparison and a number (`<=40`, `>3`);
+## `none` for a roll with nothing to reach. `{ok, cmp, target, error}`, `cmp` empty for none.
+static func needs_of(text: String) -> Dictionary:
+	var s := text.strip_edges().to_lower().replace(" ", "")
+	if s.is_empty() or s == "none":
+		return {"ok": true, "cmp": "", "target": 0, "error": ""}
+	var m := RegEx.create_from_string("^(>=|<=|>|<|=)?(-?\\d+)(\\+)?$").search(s)
+	if m == null or (not m.get_string(1).is_empty() and not m.get_string(3).is_empty()):
+		return {"ok": false, "cmp": "", "target": 0,
+			"error": "could not read what it needs, \"%s\": write a number it must reach (15), a comparison (<=40, >3), or none. Nothing was thrown." % text}
+	return {"ok": true, "cmp": m.get_string(1) if not m.get_string(1).is_empty() else ">=", "target": int(m.get_string(2)), "error": ""}
+
+
+static func _needs_words(cmp: String, target: int) -> String:
+	match cmp:
+		"<=":
+			return "%d or less" % target
+		">":
+			return "more than %d" % target
+		"<":
+			return "less than %d" % target
+		"=":
+			return "exactly %d" % target
+	return "%d or more" % target
+
+
+## The one numbered die that counted in [param got], `(its value, its sides)`; `(0, 0)` when more than one counted, or none.
+static func _one_kept(got: Dictionary) -> Vector2i:
+	var found := Vector2i.ZERO
+	for g in got["groups"]:
+		var d: Dictionary = g
+		if not (d["labels"] as PackedStringArray).is_empty():
+			return Vector2i.ZERO
+		for k in (d["rolled"] as Array).size():
+			if not bool((d["kept"] as Array)[k]):
+				continue
+			if found != Vector2i.ZERO:
+				return Vector2i.ZERO
+			found = Vector2i(int((d["rolled"] as Array)[k]), int(d["sides"]))
+	return found
 
 
 ## A field of a sheet, by a number (`by`, added), to a value (`to`), or a list's `add` or `remove`. Nothing about a field is checked but that the change makes sense for what is there.

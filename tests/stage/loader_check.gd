@@ -2,8 +2,9 @@ extends SceneTree
 
 ## One-shot loader self-check (run headless):
 ##   godot --path . --headless --script res://tests/stage/loader_check.gd
-## Exercises MiniYaml (subset accepts, rejects, typing) and Storyboard (resolution, defs/use, sampling,
-## validation). Prints PASS/FAIL lines; exits 1 on any FAIL.
+## Exercises MiniYaml (subset accepts, rejects, typing) and Storyboard (a file by its path, the shipped one,
+## defs/use, sampling, a tail and `elastic`, validation). Fixtures are made here; the shipped storyboard is
+## data/showcase.json. Prints PASS/FAIL lines; exits 1 on any FAIL.
 
 var fails := 0
 
@@ -116,19 +117,17 @@ seq:
 	expect_err("unterminated quote rejected", "a: \"oops")
 	expect_err("unterminated flow rejected", "a: {k: 1")
 
-	# --- Storyboard: resolution + canonical load -----------------------------
-	var sb := Storyboard.load_file("default")
-	check("default resolves to yaml", sb.ok and String(sb.path).ends_with("default.yaml"), sb.error)
-	check("default fields", sb.ok and sb.name == "the-point" and sb.loop == false
-		and sb.sequence.size() == 7)
+	# --- Storyboard: a file by its path, and the shipped one -----------------
+	var sb := Storyboard.load_file("res://data/showcase.json")
+	check("the shipped storyboard loads by its path", sb.ok and String(sb.path) == "res://data/showcase.json", sb.error)
+	check("...named, and looping (the README's animation)", sb.ok and sb.name == "showcase" and sb.loop == true)
 	if sb.ok:
 		var e0: Dictionary = sb.sequence[0]
-		check("default is stage entries", e0.scene == "stage" and e0.behavior == "static"
-			and float(e0.hold) == 6.0)
-		check("stage cast/track shape", typeof(e0.cast) == TYPE_ARRAY and e0.cast[0].id == "left"
-			and typeof(e0.track) == TYPE_DICTIONARY and (e0.track.spans as Array).size() >= 3)
-		check("defs expanded into entries", typeof(e0.camera) == TYPE_DICTIONARY
-			and int(e0.camera.fov) == 48)   # from the front-camera def via use:
+		check("it is stage entries", e0.scene == "stage" and e0.has("hold"))
+		check("stage cast/track shape", typeof(e0.cast) == TYPE_ARRAY and not (e0.cast as Array).is_empty()
+			and typeof(e0.track) == TYPE_DICTIONARY and not (e0.track.spans as Array).is_empty())
+		check("no `use` is left once loaded", not JSON.stringify(sb.sequence).contains("\"use\""))
+	check("a bare name is no file", not Storyboard.load_file("showcase").ok)
 
 	# The same board in both formats must normalize identically (JSON = editor format).
 	var ytext := """
@@ -162,10 +161,10 @@ sequence:
 	check("yaml board loads", sy.ok, sy.error)
 	check("json board loads", sj.ok, sj.error)
 	if sy.ok and sj.ok:
-		# Numbers compare as values: YAML types integrals as int, JSON parses all
-		# numbers as float; every consumer casts, so 4 == 4.0 here.
+		# a JSON file's whole numbers are read as ints, as YAML types them (Storyboard.whole)
 		check("yaml == json normalized", deep_eq(sy.sequence, sj.sequence),
 			JSON.stringify(sy.sequence) + " vs " + JSON.stringify(sj.sequence))
+		check("...a whole number an int in both", typeof(sj.sequence[0].hold) == TYPE_INT and typeof(sy.sequence[0].hold) == TYPE_INT)
 
 	# --- Storyboard: defs/use + validation + sampling ------------------------
 	var ypath := "/tmp/ghost_check_board.yaml"
@@ -204,8 +203,12 @@ sequence:
 		check("range sampling in [lo,hi] and seeded", rad >= 0.30 and rad <= 0.40 and rad == rad2)
 
 	# --- tail + elastic stamping ---------------------------------------------
-	var d0 := Storyboard.load_file("default")
-	check("default has a tail", d0.ok and (d0.tail as Array).size() >= 1, d0.error)
+	var tf := FileAccess.open("/tmp/ghost_check_tail.yaml", FileAccess.WRITE)
+	tf.store_string("name: tailed\nloop: false\nelastic: 0.25\nsequence:\n  - {scene: aurora, hold: 4}\n"
+		+ "tail:\n  - {scene: embers, hold: 6}\n")
+	tf.close()
+	var d0 := Storyboard.load_file("/tmp/ghost_check_tail.yaml")
+	check("a tail is read", d0.ok and (d0.tail as Array).size() == 1, d0.error)
 	if d0.ok and not (d0.tail as Array).is_empty():
 		check("elastic stamped into entries",
 			is_equal_approx(float((d0.sequence[0] as Dictionary).get("elastic", 0.0)), 0.25)

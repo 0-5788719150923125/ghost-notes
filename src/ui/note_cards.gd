@@ -19,7 +19,7 @@ class_name NoteCards
 
 ## The components whose settings are a card any workspace can show, in the order they stand: the rows of
 ## [constant Components.REGISTRY] that name a `script`. What produces the text stands above what shows it.
-const KEYS := ["table", "direction", "voice", "voice_training", "medium", "illustrations", "actor", "storyboard",
+const KEYS := ["table", "direction", "voice", "voice_training", "medium", "illustrations", "actor",
 	"look", "bookends", "youtube"]
 
 

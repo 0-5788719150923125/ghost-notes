@@ -41,21 +41,28 @@ const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "n
 const BLOCKS := {
 	"note": {},
 	"auto": {"song": {"path": "SONG"}, "medium": {"format": "auto"}},
-	"manual": {"song": {"path": "SONG"}, "medium": {"format": "full"}, "scenes": {"storyboard": "default"}},
+	"manual": {"song": {"path": "SONG"}, "medium": {"format": "full"}},
 	# a storyboard of the note's own, with the editor opened over the show before each leaving
-	"story": {"song": {"path": "SONG"}, "medium": {"format": "full"},
-		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}, {"scene": "embers", "hold": 4}]}},
+	"story": {"song": {"path": "SONG"}, "medium": {"format": "full"}},
 	"synthesis": {"synthesis": {}},
 	"generative": {"voice": {}},
 	# a voice with a Medium and a storyboard: a pairing no template had
-	"narrated": {"voice": {}, "medium": {"format": "full"},
-		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}]}},
+	"narrated": {"voice": {}, "medium": {"format": "full"}},
 	"table": {"table": {}},
 	# an actor reading the note: its card pins the likeness medium, and brings a Voice beside it
 	"likeness": {"actor": {}},
 	"masking": {"clip": {"path": ""}},
 }
+## The storyboard each make-up keeps in its note's folder ([NoteStoryboard]): the shipped one's stage entries
+## (actors carried across cuts), or a written list. A path is the file's raw tree.
+const BOARDS := {
+	"manual": "res://data/showcase.json",
+	"story": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}, {"scene": "embers", "hold": 4}]},
+	"narrated": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}]},
+}
 const ROOT := "user://teardown_check_notes"
+## The notes' folders, the gate's own.
+const READINGS := "user://teardown_check_readings"
 ## How long the Environment panel's first probe may take: a backstop only, far over a cold probe on a
 ## loaded runner.
 const PROBE_WAIT_MS := 120000
@@ -72,6 +79,7 @@ func _ready() -> void:
 func _run() -> void:
 	var song: String = preload("res://tests/fixture_audio.gd").silence(20.0)
 	NoteStore.root = ROOT
+	NoteUpload.root = READINGS
 	_notes = {}
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
@@ -110,6 +118,7 @@ func _run() -> void:
 			_ok(same, "%s: %s holds steady from the second visit on (%s)" % [mode, k, str(seen.map(func(x): return x[k]))])
 	await _check_fresh(song)
 	await _control(song)
+	NoteUpload.root = NoteUpload.ROOT
 	_clean()
 	_report()
 
@@ -133,6 +142,11 @@ func _enter(mode: String, song: String) -> void:
 		return
 	if not _notes.has(mode):
 		_notes[mode] = NoteStore.create("teardown %s" % mode, "Words.\n", _blocks(mode, song))
+		if BOARDS.has(mode):
+			var board: Variant = BOARDS[mode]
+			var tree: Dictionary = Storyboard.read_raw(String(board))["data"] if board is String else board
+			_ok(NoteStoryboard.write(NoteUpload.folder_of(String(_notes[mode])), tree).is_empty() and not tree.is_empty(),
+				"%s: its storyboard is kept in its note's folder" % mode)
 	list._open(String(_notes[mode]))
 	await _frames(20)
 
@@ -149,8 +163,8 @@ func _blocks(mode: String, song: String) -> Dictionary:
 ## stage, and the leaving that follows must give both back.
 func _open_timeline(cycle: int) -> void:
 	var panel: NotePanel = _main._note_panel
-	var card: StoryboardCard = panel._story if panel != null else null
-	_ok(card != null, "story #%d: the note has a Storyboard card" % (cycle + 1))
+	var card: NoteStoryboard = panel._story if panel != null else null
+	_ok(card != null, "story #%d: the note holds its storyboard" % (cycle + 1))
 	if card == null:
 		return
 	card.open_editor()
@@ -321,3 +335,15 @@ func _clean() -> void:
 		for f in DirAccess.get_files_at(abs):
 			DirAccess.remove_absolute(abs.path_join(f))
 		DirAccess.remove_absolute(abs)
+	_rmrf(ProjectSettings.globalize_path(READINGS))
+
+
+## [param dir] and everything in it, gone: the gate's own folders only.
+func _rmrf(dir: String) -> void:
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	for sub in DirAccess.get_directories_at(dir):
+		_rmrf(dir.path_join(sub))
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	DirAccess.remove_absolute(dir)

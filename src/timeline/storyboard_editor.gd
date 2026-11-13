@@ -2,7 +2,7 @@ extends CanvasLayer
 class_name StoryboardEditor
 
 ## StoryboardEditor - the nonlinear editor of a note's storyboard: a dock along the bottom of the
-## frame, under the show it edits. Opened from the [StoryboardCard] ("Timeline...").
+## frame, under the show it edits. Opened from beside Play by the [NoteStoryboard] that keeps it.
 ##
 ## Three views of one tree. The strip ([StoryboardStrip]) shows the entries along a ruler, in the order
 ## and for the lengths the Director will walk them, the tail after the sequence. The lanes
@@ -13,16 +13,17 @@ class_name StoryboardEditor
 ## [constant Actions.ARGS] ...), so nothing here lists what a scene, an actor or a verb can be told.
 ##
 ## Every edit is a new tree ([DataPath]): the editor never changes the storyboard it was handed, it
-## raises [signal edited] with the next one. Undo is the list of trees it has shown. The card that owns
-## the storyboard keeps it in the note and hands it to the show.
+## raises [signal edited] with the next one. Undo is the list of trees it has shown. What owns the
+## storyboard keeps it and hands it to the show.
 ##
 ## What is written is what is shown. The tree is the raw one, `defs` and `use` in it: a map that uses a
 ## def shows the def's values dimmed, as it shows any default, and a value changed there is written into
 ## the map itself, over the def. Source shows the whole tree as YAML and takes it back if it still loads
 ## ([method Storyboard.from_yaml]), so every key the spec has is reachable.
 ##
-## A storyboard nobody can change here is still shown ([member read_only]): one read from a file, and
-## the seeded show written down as far ahead as asked ([method Director.forecast]), grayed.
+## A storyboard nobody can change here is still shown ([member read_only]). The seeded show written down
+## as far ahead as asked ([method Director.forecast]) is drawn grayed ([member ghost]) until it is changed:
+## the first edit writes it down.
 
 ## The storyboard was edited: the new raw tree.
 signal edited(data: Dictionary)
@@ -120,6 +121,18 @@ func replace(p_data: Dictionary) -> void:
 	data = p_data
 	_sel = clampi(_sel, -1, _count() - 1)
 	_refresh()
+
+
+## [param text] shown under the toolbar ("" for nothing): what is wrong with what is written.
+func set_banner(text: String) -> void:
+	banner = text
+	if is_inside_tree():
+		_refresh()
+
+
+## Nothing written: the seed chooses again ([signal edited] with an empty storyboard).
+func to_seed() -> void:
+	_edit({"sequence": []})
 
 
 ## Where the show is: the entry on screen and the seconds it has been up (-1 for none).
@@ -250,6 +263,10 @@ func _rows() -> Array:
 func _edit(next: Variant) -> void:
 	if read_only or not (next is Dictionary) or DataPath.same(next, data):
 		return
+	# the seeded show was being shown: changed, it is written down
+	if ghost:
+		ghost = false
+		banner = ""
 	_undo.append(data)
 	if _undo.size() > HISTORY:
 		_undo.pop_front()
@@ -647,6 +664,8 @@ func _toolbar() -> HBoxContainer:
 	_tool(bar, "del", "Delete", "Remove the entry picked (Delete).", remove_entry)
 	_tool(bar, "left", "◀", "Move the entry picked one place earlier.", shift_entry.bind(-1))
 	_tool(bar, "right", "▶", "Move the entry picked one place later.", shift_entry.bind(1))
+	_tool(bar, "seed", "To the seed", ("Let the seed choose the scenes again. What is written here is kept: Restore… on the "
+		+ "Body card brings it back."), to_seed)
 	_tool(bar, "undo", "↶", "Undo (Ctrl+Z)", undo)
 	_tool(bar, "redo", "↷", "Redo (Ctrl+Shift+Z)", redo)
 	var src := _tool(bar, "source", "Source", ("The whole storyboard as YAML: every key it has, the "
@@ -659,7 +678,7 @@ func _toolbar() -> HBoxContainer:
 	_summary.modulate = Color(1, 1, 1, 0.6)
 	_summary.clip_text = true
 	bar.add_child(_summary)
-	var close := _tool(bar, "close", "×", "Close the storyboard's editor. Nothing is lost: every edit is in the note already.",
+	var close := _tool(bar, "close", "×", "Close the storyboard's editor. Nothing is lost: every edit is kept already.",
 		func() -> void: closed.emit())
 	close.flat = true
 	return bar
@@ -811,6 +830,7 @@ func _show_all() -> void:
 		Clock.text(total), ("  + %d in the tail" % _tail().size()) if not _tail().is_empty() else ""]
 	for key in ["dup", "del", "left", "right"]:
 		(_buttons[key] as Button).disabled = read_only or _sel < 0
+	(_buttons["seed"] as Button).disabled = read_only or ghost or _seq().is_empty()
 	(_buttons["undo"] as Button).disabled = read_only or _undo.is_empty()
 	(_buttons["redo"] as Button).disabled = read_only or _redo.is_empty()
 	(_buttons["apply"] as Button).disabled = read_only

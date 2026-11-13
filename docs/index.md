@@ -36,13 +36,13 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components](components.md) (17 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](components.md) (16 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](media.md) (11) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
-- [Stage actors and verbs](stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
+- [Stage actors and verbs](stage.md) (3 actors, 24 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
 - [Script marks](script.md) (71) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
@@ -53,7 +53,6 @@ core. The commitments:
 - [The environment](environment.md) - what Ghost Notes installs itself, and the few programs that stay the machine's.
 - [The structure](structure.md) - `src/` as a stack of folders: what each is, what it names, and what still points up.
 - [CLI flags](cli.md) - every command-line flag.
-- [Storyboards](../storyboards/README.md) - the data spec a note's storyboard is written in.
 
 ## Directory layout
 
@@ -63,8 +62,7 @@ core. The commitments:
 - **[`src/scenes/`](../src/scenes/)** - The visualizer scene catalog - one class per scene. See [docs/scenes.md](../docs/scenes.md).
 - **[`src/media/`](../src/media/)** - The media - what the show is carried on. See [docs/media.md](../docs/media.md).
 - **[`shaders/`](../shaders/)** - The GPU shaders: the Look, every Masking effect, the card table and a few scenes.
-- **[`storyboards/`](../storyboards/)** - Manual-mode scene scores (YAML; JSON accepted). [storyboards/README.md](../storyboards/README.md) is the data spec.
-- **[`data/`](../data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table - each license beside its file.
+- **[`data/`](../data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table, the README's animation (`showcase.json`, a storyboard) - each license beside its file.
 - **[`fonts/`](../fonts/)** - Faces the media draw with: the notebook's handwriting and the card table's lettering.
 - **[`hosts/`](../hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/platform/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
 - **[`scripts/`](../scripts/)** - Build and check scripts: `scripts/check.sh` runs every gate (`--gpu` adds the ones that need a real renderer), `scripts/build.sh` exports a target into `dist/`.
@@ -188,7 +186,7 @@ What every scene is built on: the `GhostScene` base and its 3D sibling, the came
 
 ### `stage/` - Storyboards & stage
 
-A show written down, as data: the storyboard's spec and its field tables, and the Cast/Actions/Track stack that renders a described scene. See [storyboards/README.md](../storyboards/README.md) for the data spec and [stage.md](stage.md) for the fields and the actor/verb registries.
+A show written down, as data: the storyboard's spec and its field tables, and the Cast/Actions/Track stack that renders a described scene. [stage.md](stage.md) is the data spec: how one is written, its fields and the actor/verb registries.
 
 - [`actions.gd`](../src/stage/actions.gd) **Actions** - the verb registry for data-driven scenes (see scenes/stage.gd).
 - [`cast.gd`](../src/stage/cast.gd) **Cast** - the actor registry for data-driven scenes (see scenes/stage.gd).
@@ -324,11 +322,11 @@ The player: the Director's schedule and transitions, the one transport, karaoke 
 
 ### `timeline/` - The storyboard's editor
 
-The card that keeps a note's storyboard and the dock it opens: a strip of entries, a stage entry's lanes, and the ruler.
+What keeps a note's storyboard in its folder and the dock it opens beside Play: a strip of entries, a stage entry's lanes, and the ruler.
 
 - [`flag_strip.gd`](../src/timeline/flag_strip.gd) **FlagStrip** - the timeline's flags: a scrub strip with markers on it, Masking's and the editor's alike (next/editing.md, "The Timeline"). Masking's `MaskTimeline` is this with its clip's waveform under it; any timeline hands it its flags through Callables, as `TrackLane` is handed its block.
-- [`storyboard_card.gd`](../src/timeline/storyboard_card.gd) **StoryboardCard** - the note's storyboard: the show written down, on a note with a Medium. What plays, in what order, for how long - and where nothing is written, the seed still chooses. The card says what the note holds and lists its entries, one a click away; the writing is done in the `StoryboardEditor` it opens ...
-- [`storyboard_editor.gd`](../src/timeline/storyboard_editor.gd) **StoryboardEditor** - the nonlinear editor of a note's storyboard: a dock along the bottom of the frame, under the show it edits. Opened from the `StoryboardCard` ("Timeline...").
+- [`note_storyboard.gd`](../src/timeline/note_storyboard.gd) **NoteStoryboard** - a note's storyboard: the show written down, kept in the note's own folder as JSON (`FILE`) and edited in the `StoryboardEditor` that opens from beside Play (`Transport.offer_timeline`). A panel whose note has a Medium holds one; it offers the timeline while the format shown plays ...
+- [`storyboard_editor.gd`](../src/timeline/storyboard_editor.gd) **StoryboardEditor** - the nonlinear editor of a note's storyboard: a dock along the bottom of the frame, under the show it edits. Opened from beside Play by the `NoteStoryboard` that keeps it.
 - [`storyboard_strip.gd`](../src/timeline/storyboard_strip.gd) **StoryboardStrip** - a storyboard's entries laid along a ruler: one block per entry, as wide as it is scheduled to stay, the tail's after the sequence's. The top row of the `StoryboardEditor`.
 - [`timeline_dock.gd`](../src/timeline/timeline_dock.gd) **TimelineDock** - any show's `Timeline`, docked under it, on Masking's controls (next/editing.md, "The Timeline" and step 6): the show's groups as flags on one `FlagStrip` across the whole of it (an episode's beats; picked by a flag's handle, or by scrubbing to a moment inside one), and the group picked on ...
 - [`timeline_lanes.gd`](../src/timeline/timeline_lanes.gd) **TimelineLanes** - one stage entry's spans on Masking's controls (next/editing.md, "The Timeline"). A window span (`from` to `to`) is a `TrackLane` - drag its edges to trim it, its body to move it - and every moment (`at`) a flag on one `FlagStrip` beneath them, picked by its handle and then dragged; the strip ...
@@ -447,7 +445,7 @@ A show at a table nobody writes: a show's brief, its episodes - each planned, de
 - [`design_window.gd`](../src/table_show/design_window.gd) **DesignWindow** - a painted design's elements as rows (next/editing.md step 4): reorder, move to a beat, re-time, remove.
 - [`desk_table.gd`](../src/table_show/desk_table.gd) **DeskTable** - the table an episode shown at the desk is blocked on (`EpisodeDesk`, next/desk.md): a legal pad of sheets and a pen, and nothing for a set dresser to build or a painter to paint. The desk the episode is seen at is the Letter's (`DeskLook`); this is only what the puppeteer writes on and with, so its ...
 - [`episode_card.gd`](../src/table_show/episode_card.gd) **EpisodeCard** - the Table component's card: a show at a table nobody writes by hand - cards read, things made, or both. What it does there, and what the show is, are the brief's to say.
-- [`episode_walk.gd`](../src/table_show/episode_walk.gd) **EpisodeWalk** - a show of cards reads its episode, never the note: the note is the brief agents work from, and what the reader says is the script written for the episode up now. A `TextWalk` Cards hands its reading.
+- [`episode_walk.gd`](../src/table_show/episode_walk.gd) **EpisodeWalk** - a show of cards reads its episode, never the note: the note is the brief agents work from, and what the reader says is the script written for the episode up now. A `TextWalk` Cards hands its reading. An episode shown in a Medium whose row's script rests the voice for its own work (a static ...
 - [`fixed_table.gd`](../src/table_show/fixed_table.gd) **FixedTable** - a show's fixed things (next/painted_surface.md; next/table_work.md section 11): what a brief says stands on every episode's table exactly as written (a mask on its stand, an artist's station), which every set dresser would otherwise build anew each episode.
 - [`game_prep_tools.gd`](../src/table_show/game_prep_tools.gd) **GamePrepTools** - what the game master has alone, before anyone sits down (next/tabletop.md): real dice for what the game's rules roll when a character is made, and handing the preparation in. Nothing thrown here is on any table.
 - [`game_tools.gd`](../src/table_show/game_tools.gd) **GameTools** - the table, live (next/tabletop.md "Play is live"): what the game master has while it runs one scene of a game really being played. Served as tools (`AgentTools`) like the set dresser's.
@@ -479,6 +477,7 @@ A desk a letter is written at, seen and heard: the legal pad, the pen that moves
 - [`legal_pad.gd`](../src/desk/legal_pad.gd) **LegalPad** - the desk's pad (`DeskMedium`): its cardboard back, its stack, the binding across its head, the page being written, and the pages turned over its head.
 - [`letter.gd`](../src/desk/letter.gd) **LetterMedium** - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) with the letter's own hand and moments (`LetterScript`).
 - [`letter_script.gd`](../src/desk/letter_script.gd) **LetterScript** - a letter as the voice reads it and the desk writes it (next/letter.md).
+- [`pen_pace.gd`](../src/desk/pen_pace.gd) **PenPace** - when a pen writing by itself draws what the voice says (an episode at the desk, `EpisodeDesk`; next/desk.md), pure: one write's ink against its voice's words, in three steps.
 
 ### `letter/` - Letter
 
@@ -556,7 +555,7 @@ The lifecycle around everything, and the one folder that names every other: main
 - [`notes_list.gd`](../src/app/notes_list.gd) **NotesList** - where Ghost Notes opens (next/notes.md, "No home screen"): the user's notes - the default folder and every folder or file added (`NoteStore`), newest first.
 - [`phone_shell.gd`](../src/app/phone_shell.gd) **PhoneShell** - Ghost Notes on a phone (next/notes.md, "Platforms: desktop and Android"): a notes app and nothing more. A list of the notes in `user://notes/` (`NoteStore`) and the editor, full screen in portrait, with no stage, transport, Chrome furniture or agent: on a phone a note has one component, its text. ...
 - [`provision_badge.gd`](../src/app/provision_badge.gd) **provision_badge** - ProvisionBadge - a small notice at the top of the frame while ghost installs or updates its own dependencies, in every mode. Chrome furniture, because an install can start from anywhere (the voice's environment, FFmpeg for a clip, an update at launch). Hidden the rest of the time.
-- [`showcase.gd`](../src/app/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a note with a song playing `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair lock, then take opposite highways), with the note's panel, the row and the transport around it.
-- [`showcase_recorder.gd`](../src/app/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes a note with a song on the showcase storyboard, opens it the way the notes list does, presses Play, and quits once `Showcase.frames` frames have been drawn since. ...
+- [`showcase.gd`](../src/app/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a note with a song playing `data/showcase.json` (a blue prism flies in and divides into a blue one and a red one, they divide again into the corners of a larger tetrahedron that turns as one, it comes apart, and the last, red, drifts out), with ...
+- [`showcase_recorder.gd`](../src/app/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes the demo note (`Showcase.make_demo_note`), opens it the way the notes list does, presses Play, and quits once `Showcase.frames` frames have been drawn since. ...
 
 Scene scripts (58) are cataloged separately in [scenes.md](scenes.md).

@@ -36,6 +36,7 @@ var _t := 0.0
 var _flashes: Array = []           # transient overlays: {actor, k, col}
 var _ties: Array = []              # snap ties: {a, b, k}
 var _drops: Array = []             # spatter droplets: {p, v (Vector3), r, k} - brief ballistic debris
+static var _glow: GradientTexture2D = null   # a flash's light: white at the middle, gone at the edge ([method _glow_texture])
 # The elastic timeline clock (entry `elastic`, 0 = off): the keyframe clock breathes with the
 # music, running up to (1 + elastic)x on an energetic passage and down to (1 - elastic)x on a
 # quiet one. The signal is endogenous and zero-mean (fast energy EMA vs slow baseline EMA), so
@@ -166,6 +167,9 @@ func update(f: AudioFeatures, delta: float) -> void:
 			var to: Cast.Actor = _actors[to_id]
 			if a.body is PrismBody and to.body is PrismBody:
 				(a.body as PrismBody).lock_pose_to(to.body as PrismBody)
+	# ...and so do what verbs latch: a formation's places, a righting under way ([method Actions.hold])
+	for a in _actors.values():
+		Actions.hold(a, delta)
 	for fl in _flashes:
 		fl.k -= delta * 2.4
 	_flashes = _flashes.filter(func(x): return x.k > 0.001)
@@ -195,9 +199,13 @@ func _draw() -> void:
 		var pr := project_actor(fl.actor)
 		if pr.is_empty():
 			continue
+		# light, not a disc: a radial falloff in the flash's color, shrinking as it fades, round a small white core
 		var col: Color = fl.col
-		draw_circle(pr.center, pr.px * (0.6 + 1.4 * fl.k), Color(col.r, col.g, col.b, 0.5 * fl.k))
-		draw_circle(pr.center, pr.px * (0.3 + 0.65 * fl.k), Color(1, 1, 1, 0.6 * fl.k))
+		var glow := _glow_texture()
+		var r: float = pr.px * (0.3 + 0.9 * fl.k)
+		draw_texture_rect(glow, Rect2(pr.center - Vector2(r, r), Vector2(r, r) * 2.0), false, Color(col.r, col.g, col.b, 0.8 * fl.k))
+		var rc: float = pr.px * (0.12 + 0.14 * fl.k)
+		draw_texture_rect(glow, Rect2(pr.center - Vector2(rc, rc), Vector2(rc, rc) * 2.0), false, Color(1, 1, 1, 0.85 * fl.k))
 	for tf in _ties:
 		var pa := project_actor(tf.a)
 		var pb := project_actor(tf.b)
@@ -224,6 +232,24 @@ func _clock_rate(f: AudioFeatures, delta: float) -> float:
 	_e_fast = lerpf(_e_fast, f.energy, 1.0 - exp(-delta / 0.8))
 	_e_slow = lerpf(_e_slow, f.energy, 1.0 - exp(-delta / 8.0))
 	return clampf(1.0 + _elastic * tanh((_e_fast - _e_slow) * 4.0), 1.0 - _elastic, 1.0 + _elastic)
+
+
+## The light a flash is drawn with, built once: a radial falloff, white at the middle to clear at the edge, tinted by
+## the draw's modulate.
+static func _glow_texture() -> GradientTexture2D:
+	if _glow == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.3, 1.0])
+		g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.35), Color(1, 1, 1, 0)])
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 128
+		t.height = 128
+		_glow = t
+	return _glow
 
 
 ## Look up an actor by id (verbs use this to reach their counterparts). Null if absent.

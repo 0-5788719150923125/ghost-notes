@@ -720,7 +720,7 @@ ghost-notes/
 ├── project.godot     the Godot project, at the root
 ├── src/              GDScript: formerly scripts/
 ├── scripts/          build scripts (step 1)
-├── scenes/ shaders/ data/ fonts/ tests/ docs/ next/ storyboards/ ...
+├── scenes/ shaders/ data/ fonts/ tests/ docs/ next/ ...
 ├── hosts/            the Python hosts: voice/, face/, capture/
 └── README.md  CLAUDE.md  LICENSE (MIT)
 ```
@@ -809,7 +809,7 @@ it comes before a build goes to anyone else.
 - Ghost writes into `res://`, which is read-only once exported: feedback, Masking's sessions and downloads
   (`MASKS_DIR`), and the render's `override.cfg`.
 - Non-resource files need the preset's include filter: `data/english.yml`, `data/cmudict.dict`,
-  `storyboards/*.yaml`, the license texts.
+  `data/showcase.json`, the license texts.
 - The table's card fonts are opened as raw `.ttf` files (`load_dynamic_font`), which an export does not
   contain; `load()` fixes it, as the notebook does.
 - The Assistant and Masking's reload check need the checkout: the `checkout` capability.

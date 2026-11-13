@@ -56,7 +56,7 @@ Camera stays static until prism_swarm (brief guardrail: travel only from the swa
 
 ## Storyboard
 
-`storyboards/default.json` ("the-point") rewritten to the 5-scene chain with timecoded
-`hold`s matching the beats, `loop:false` (hold the final card). Morphs fire
-automatically because each entry's `morph_in` matches the previous `morph_out`.
+The-point's storyboard does not ship: the one storyboard in the repo is the README's
+(`data/showcase.json`). Its verbs (`sprout`, `crystallize`, `burst`, `gather`, `fly`,
+`helix_split`, `lane_jump`) stay in the Actions registry for any storyboard to use.
 </content>

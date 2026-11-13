@@ -121,6 +121,8 @@ var _blocks := {}             # the note's blocks, as it opened
 ## The cards that keep a block of the document's frontmatter, by block (see [method _add_block_card]): each
 ## answers `capture() -> Dictionary` and `apply(block)`. The voice is this panel's own.
 var _block_cards := {}
+## The note's storyboard, on a reading shown in a Medium ([NoteStoryboard]); null otherwise.
+var _story: NoteStoryboard = null
 var _youtube: YouTubeCard
 ## The note as its own episode on the YouTube card ([NoteUpload]): its description, tags and the steps made from
 ## its words, when [member publish] says it is one; null otherwise.
@@ -306,9 +308,12 @@ func _build_panel() -> void:
 	if not publish.note_is_episode():
 		_writer.hand_field("episode", func() -> Variant: return publish.episode_title(),
 			func(t: String) -> String: return publish.name_episode(t))
-		# the rest are the note's: the Voice ([VoiceCard], the cast this panel reads), the Medium, the Storyboard, the
+		# the rest are the note's: the Voice ([VoiceCard], the cast this panel reads), the Medium, the
 		# Look, the bookends...
 	_note_cards(false)
+		# ...the storyboard, kept in the note's folder and opened from beside Play: a reading shown in a Medium
+	if workspace == "reading" and not note_path.is_empty() and _voiced().has("medium"):
+		_add_story()
 	# ...and where the video goes, when the note says so
 	if _attached.has("youtube"):
 		_add_youtube()
@@ -417,9 +422,8 @@ func show_plan() -> Dictionary:
 	if note_path.is_empty():
 		return {"picture": true}
 	var plan := {"picture": not Components.holder("presentation", _attached).is_empty(), "board": {}, "source": ""}
-	var story: Object = _block_cards.get("scenes")
-	if story != null and story.has_method("plan"):
-		plan.merge(story.call("plan"), true)
+	if _story != null:
+		plan.merge(_story.plan(), true)
 	return plan
 
 
@@ -430,6 +434,17 @@ func _reshape() -> void:
 		var ghost := NoteStore.blocks_of(note_path)
 		ghost.merge(held, true)
 		return FrontMatter.write_block(note_path, ghost))
+
+
+## The note's storyboard ([NoteStoryboard]), kept in its folder, and its states on Restore….
+func _add_story() -> void:
+	_story = NoteStoryboard.new()
+	_story.folder = func() -> String: return NoteUpload.folder_of(note_path)
+	_story.noted.connect(_note)
+	add_child(_story)
+	if _kept != null:
+		_kept.board_history = func() -> String: return NoteUpload.folder_of(note_path).path_join(NoteStoryboard.HISTORY)
+		_kept.board_restore = _story.restore
 
 
 ## A component picked from "+". YouTube's card is added at once (the autosave writes its block into the note).

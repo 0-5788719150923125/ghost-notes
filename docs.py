@@ -106,8 +106,8 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "visual layers scenes compose by key (`Layer`), and `ShowFeed` - what the show hands the parts it mounts."),
     ("stage", "Storyboards & stage",
      "A show written down, as data: the storyboard's spec and its field tables, and the Cast/Actions/Track stack that "
-     "renders a described scene. See [storyboards/README.md](../storyboards/README.md) for the data spec and "
-     "[stage.md](stage.md) for the fields and the actor/verb registries."),
+     "renders a described scene. [stage.md](stage.md) is the data spec: how one is written, its fields and the "
+     "actor/verb registries."),
     ("scenes", "Scenes",
      "The catalog, one scene a file. Cataloged in [scenes.md](scenes.md), each from its own doc comment."),
     ("agents", "Agents",
@@ -141,8 +141,8 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "The player: the Director's schedule and transitions, the one transport, karaoke subtitles, the Look over the "
      "whole picture, and the cards of the show's own settings."),
     ("timeline", "The storyboard's editor",
-     "The card that keeps a note's storyboard and the dock it opens: a strip of entries, a stage entry's lanes, and "
-     "the ruler."),
+     "What keeps a note's storyboard in its folder and the dock it opens beside Play: a strip of entries, a stage "
+     "entry's lanes, and the ruler."),
     ("export", "Export",
      "Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the "
      "workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither."),
@@ -233,7 +233,8 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
     ("--until", "<seconds>",
      "Stop at this point on the show clock. Renders a slice instead of the whole thing, which is how a defect deep in "
      "a long export is reproduced without paying for the whole export.", False),
-    ("--storyboard", "<name>", "Manual mode: play `storyboards/<name>.yaml` (or `.json`).", False),
+    ("--storyboard", "<path>", "Play the storyboard file at this path (`.json` or `.yaml`), as a render of a note's does.",
+     False),
     ("--frame", "landscape|portrait",
      "The show's frame for this run - 16:9 or 9:16 - over the remembered one, as `--medium` overrides the medium. A "
      "medium without a portrait frame plays landscape. Passed to an export's render, so it renders the frame the "
@@ -321,12 +322,9 @@ TOP_LEVEL: List[Tuple[str, str]] = [
     ("src/scenes/", "The visualizer scene catalog - one class per scene. See [docs/scenes.md](docs/scenes.md)."),
     ("src/media/", "The media - what the show is carried on. See [docs/media.md](docs/media.md)."),
     ("shaders/", "The GPU shaders: the Look, every Masking effect, the card table and a few scenes."),
-    ("storyboards/",
-     "Manual-mode scene scores (YAML; JSON accepted). [storyboards/README.md](storyboards/README.md) is the data "
-     "spec."),
     ("data/",
-     "Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table - each license beside "
-     "its file."),
+     "Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table, the README's "
+     "animation (`showcase.json`, a storyboard) - each license beside its file."),
     ("fonts/", "Faces the media draw with: the notebook's handwriting and the card table's lettering."),
     ("hosts/",
      "The Python hosts ghost spawns, each in an environment of its own the Provisioner builds "
@@ -360,7 +358,6 @@ SUBSYSTEMS: List[Tuple[str, str, str]] = [
     ("The structure", "docs/structure.md",
      "`src/` as a stack of folders: what each is, what it names, and what still points up."),
     ("CLI flags", "docs/cli.md", "every command-line flag."),
-    ("Storyboards", "storyboards/README.md", "the data spec a note's storyboard is written in."),
 ]
 
 CAPABILITY_WHERE = {"desktop": "the desktop", "checkout": "a checkout of the repository"}
@@ -1065,10 +1062,28 @@ def script_page(marks: Script) -> str:
 
 def stage_page(cast: Script, actions: Script, track: Script, board: Script) -> str:
     blocks: List[Block] = [
-        "The data-driven scene stack behind storyboard `stage` entries: a "
-        "**Cast** of actors, **Actions** verbs applied to them on a "
-        "**Track** timeline. The storyboard file format itself is specified "
-        "in [storyboards/README.md](../storyboards/README.md).",
+        "A storyboard is a show written down: an ordered list of entries, each naming a scene, how long it stays "
+        "and how it leaves. The Director walks whatever list it is handed, and where it is handed none it writes one "
+        "as it goes from the seed, so the seeded show is a storyboard nobody wrote down. A note's is kept in its own "
+        "folder as JSON and written in its timeline beside Play (`NoteStoryboard`); `--storyboard <path>` plays a "
+        "file, YAML or JSON.",
+        "## How one is written",
+        "- **Sampled ranges.** Anywhere a number is expected, `[lo, hi]` is a range, sampled once per instance from "
+        "the seed: the same song plays the same show, and another seed rolls a fresh variation of everything left as "
+        "a range. A two-number list is always a range; positions are `[x, y, z]`.\n"
+        "- **defs / use.** `defs:` is a top-level map of named fragments; `use: <name>` inside any map deep-merges "
+        "the fragment under the map's own keys (its own keys win), and a map that is only `{use: name}` becomes the "
+        "fragment. Fragments may use fragments (a cycle is refused).\n"
+        "- **How long an entry stays.** A fixed `hold` in seconds, or `exit` on a musical cue (`beat`, `movement`, "
+        "`lull`, bounded by `min_hold` / `max_hold`), or neither: the scene's own lifecycle. `sensitivity` is the "
+        "tempo: every hold and every stage track compresses with it, so each event still lands.\n"
+        "- **A loop or the song.** `loop: true` starts again from the first entry. Off, the show follows the song: it "
+        "cycles the `tail` after the sequence and rolls back to the top when the song does.\n"
+        "- **The stage.** `scene: stage` is the one made of data: its `cast` (actors from the Cast registry, each with "
+        "a unique `id` and a `kind`; one that appears mid-entry is declared `hidden: true`) and its `track` (spans of "
+        "verbs from the Actions registry, timed in the track's `nominal` seconds and scaled to the entry's length). "
+        "Consecutive stage entries carry their live actors across the cut where ids match - the same body, pose and "
+        "latched verbs - unless an entry says `carry: false`.",
         "## Fields",
         "What a storyboard can say, read from the tables its editor builds its rows from "
         f"(`Storyboard.BOARD` and its siblings in {link(board.rel)}): a field in a "
@@ -1882,7 +1897,7 @@ RULES: List[Rule] = [
     # row naming its script by path, or a gate reading a source as text breaks when it runs. Doc comments
     # count; next/'s notes are allowed to remember a file that is gone.
     Rule("paths", ("project.godot", "CLAUDE.md", "README.md", "src/**/*", "tests/**/*", "rules/**/*",
-                   "storyboards/**/*", "shaders/**/*", "scenes/**/*", "hosts/**/*", "scripts/**/*"),
+                   "shaders/**/*", "scenes/**/*", "hosts/**/*", "scripts/**/*"),
          r"(?<![\w/])(?:res://)?((?:src|tests)/[a-z_0-9]+(?:/[a-z_0-9]+)*\.gd)\b",
          "{file} names {hit}, which does not exist",
          (("a.gd", 'load("res://src/platform/no_such_script.gd")', 1),
