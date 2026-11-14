@@ -176,7 +176,7 @@ func show_radar(st: Dictionary) -> void:
 	_show(radar, _radar, st)
 
 
-## The scope: `{t, level (0-1), storm}`.
+## The scope: `{t, level (0-1), storm, voice (0-1)}`.
 func show_scope(st: Dictionary) -> void:
 	_show(scope, _scope, st)
 
@@ -322,7 +322,8 @@ static func _lit(at: Vector2, sweep: float) -> float:
 	return exp(-behind / 1.6)
 
 
-## The scope: a dim grid, and the trace across it - a hum's slow sine at rest, the static's jumping noise in a storm.
+## The scope: a dim grid, and the trace across it - a hum's slow sine at rest, the static's jumping noise in a storm, and
+## a voice coming in on the receiver as a fast wave swelling and shrinking along it.
 func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(SCOPE_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.005, 0.02, 0.01))
@@ -335,12 +336,17 @@ func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	var t := float(st.get("t", 0.0))
 	var level := float(st.get("level", 0.0))
 	var storm := String(st.get("storm", ""))
+	var voice := float(st.get("voice", 0.0))
 	var pts := PackedVector2Array()
 	var seed := int(t * 60.0)
 	for i in 129:
 		var x := size.x * float(i) / 128.0
 		var u := float(i) / 128.0
 		var y := sin(u * TAU * 3.0 + t * 2.0) * 4.0
+		if voice > 0.0:
+			var swell := 0.55 + 0.45 * sin(u * TAU * 1.3 + t * 7.0)
+			y += (sin(u * TAU * 11.0 + t * 37.0) * 0.6 + sin(u * TAU * 23.0 + t * 53.0) * 0.3
+				+ sin(u * TAU * 37.0 + t * 19.0) * 0.15) * swell * voice * size.y * 0.3
 		if level > 0.0:
 			var n := DispatchSounds.hash01(seed, i) * 2.0 - 1.0
 			if storm == "surf":

@@ -55,6 +55,11 @@ const POP_LEN := 0.004
 ## A storm's surf: how long a swell takes (seconds, least and most) and its loudness at its crest.
 const SWELL := Vector2(1.4, 3.6)
 const SURF := 0.05
+## A voice said over the receiver ([method receiver_level]): the storm brought down to this much under it, eased over this
+## many seconds at each end; and how long a syllable swells the needle (seconds).
+const UNDER := 0.75
+const UNDER_EASE := 0.4
+const SYLLABLE := 0.22
 ## The phones: a key's two tones and their length and gap (seconds), how loud in the earpiece; the ring sent back (two
 ## tones, the pair's on and off) and how loud; a phone buzzing - its motor (Hz), its rattle against its neighbors (knocks
 ## a second) - and how loud.
@@ -263,7 +268,7 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 	for g in going:
 		var gd: Dictionary = g[0]
 		if String(gd["kind"]) == "static":
-			var lv := storm_level(String(gd.get("storm", "popcorn")), float(g[1]), int(gd.get("seed", 0)), float(gd["t1"]) - float(gd["t"]))
+			var lv := receiver_level(gd, float(g[1]))
 			g.append(lv)
 			hiss = HISS_OPEN * lv * 0.6 + HISS
 	var f_hs := 2.0 * sin(PI * 2400.0 / float(RATE))
@@ -442,6 +447,31 @@ func _storm(d: Dictionary, u: float, f_ss: float, level: float) -> float:
 		if hash01(seed, slot) < p:
 			var a := POP * lerpf(0.3, 1.0, hash01(seed + 7, slot))
 			_burst(lerpf(900.0, 3200.0, hash01(seed + 11, slot)), 0.6, POP_LEN, a, Vector2(0.62, 0.78))
+	return 0.0
+
+
+## How open the receiver is [param u] seconds into [param d], a stretch of it in the desk's plan (`{t, t1, storm, seed,
+## under}`, [method DispatchMedium._build_receiver]): its storm's level, brought down to [constant UNDER] where a voice is
+## said over it (`under`, `[from, to]` in seconds into it). A pure function of them; the sound and the needle both follow.
+static func receiver_level(d: Dictionary, u: float) -> float:
+	var lv := storm_level(String(d.get("storm", "popcorn")), u, int(d.get("seed", 0)), float(d["t1"]) - float(d["t"]))
+	var over := 0.0
+	for s in d.get("under", []):
+		var a := float((s as Array)[0])
+		var b := float((s as Array)[1])
+		over = maxf(over, clampf((u - a) / UNDER_EASE + 1.0, 0.0, 1.0) * clampf((b - u) / UNDER_EASE + 1.0, 0.0, 1.0))
+	return lv * lerpf(1.0, UNDER, smoothstep(0.0, 1.0, over))
+
+
+## How hard a voice said over the receiver moves its needle and trace [param u] seconds into [param d] (0-1): each of its
+## `words` (`[from, to]` in seconds into it) a swell a syllable, nothing between them.
+static func voice_level(d: Dictionary, u: float) -> float:
+	for w in d.get("words", []):
+		var a := float((w as Array)[0])
+		var b := float((w as Array)[1])
+		if u >= a and u < b:
+			var syllables := maxf(1.0, roundf((b - a) / SYLLABLE))
+			return 0.5 + 0.5 * absf(sin(PI * syllables * (u - a) / maxf(b - a, 0.01)))
 	return 0.0
 
 

@@ -61,6 +61,11 @@ class_name DispatchScript
 ##
 ## A typed block and a session are added under what the terminal shows; a shown one replaces it.
 ##
+## A typed block is the room's words, except after the cue of a voice with no phone on the desk: that voice comes in on
+## the receiver, and the room takes it down. It is said in that voice, heard through the receiver ([constant RECEIVER]),
+## behind the keys as any typed block is, and the receiver opens under it on the storm it last opened on (Io-B's crackle
+## when it has not).
+##
 ## Redacted words, inside a shown block or a session: `NAME ........ <!-- redact: DOE, JANE -->`. The words are put up
 ## as any others and hidden over the camera's finished picture ([DispatchCensor]), never replaced by a word. A redacted
 ## character travels as itself moved into a private plane of Unicode ([constant REDACT_BASE]), so typing, wrapping,
@@ -99,6 +104,9 @@ const IS_DISPATCH := "(?m)^\\s*(?:<!--\\s*(?:call|ring|ping)\\s*:|```\\s*(?:type
 
 ## The screens a picture may be pinned to, each a thing on the desk ([DispatchSet]).
 const SCREENS := ["feed", "satellite", "tv"]
+## What a voice with no phone of its own is heard through when the room types its words: the receiver
+## ([constant VoiceFX.HEARD]).
+const RECEIVER := "receiver"
 
 ## The timing of each action (seconds). `rest` is what the voice waits for it; an action may move on past its rest,
 ## under the next words (`len`). A phone: out of its row, opened and to the ear; dialed; the two rings in the earpiece,
@@ -599,6 +607,7 @@ static func parse(body: String) -> Dictionary:
 	var last_text := ""                   # the phone that texted last
 	var reply_to := ""                    # the phone the room's next words are typed into
 	var gain := GAIN_REST                 # where the radar's gain knob stands
+	var storm := "popcorn"                # the storm the receiver last opened on
 	gap.append([OPENING, -1])
 	pending.append("<!-- action-hold: %s -->" % String.num(OPENING, 2))
 	for b in blocks(body):
@@ -646,18 +655,25 @@ static func parse(body: String) -> Dictionary:
 					_act(actions, gap, pending, spoken.size(), {"kind": "screen", "text": shown}, SCREEN_REST + drawn, SCREEN_REST + drawn)
 					continue
 				var who := room if not room.is_empty() else speaker
-				_flush(speak, pending, who, "", said_as, heard_as)
+				var heard := ""
+				if on_receiver(speaker, room, phones):
+					who = speaker
+					heard = RECEIVER
+				_flush(speak, pending, who, heard, said_as, heard_as)
 				said_as = who
-				heard_as = ""
+				heard_as = heard
 				var voice_text := said_of(shown)
 				var words := words_of(voice_text)
 				var keyed := typed_spans(shown)
 				var from := spoken.size()
 				var ahead := TYPE_LEAD + KEY_EACH * float(int((keyed[mini(AHEAD_WORDS, keyed.size()) - 1] as Dictionary)["c1"])) \
 					if not keyed.is_empty() else TYPE_LEAD
-				var i := _act(actions, gap, pending, from, {"kind": "type", "text": shown, "from": from,
-					"to": from + words.size(), "spans": keyed}, ahead, ahead)
-				_flush(speak, pending, who, "", said_as, heard_as)
+				var typed_as := {"kind": "type", "text": shown, "from": from, "to": from + words.size(), "spans": keyed}
+				if heard == RECEIVER:
+					typed_as["heard"] = RECEIVER
+					typed_as["storm"] = storm
+				var i := _act(actions, gap, pending, from, typed_as, ahead, ahead)
+				_flush(speak, pending, who, heard, said_as, heard_as)
 				speak.append(voice_text)
 				spoken.append_array(words)
 				said_any = said_any or not words.is_empty()
@@ -771,6 +787,7 @@ static func parse(body: String) -> Dictionary:
 						_act(actions, gap, pending, at, {"kind": "sound", "sound": key, "words": arg}, secs, secs)
 					"static":
 						var st := static_of(arg)
+						storm = String(st["kind"])
 						_act(actions, gap, pending, at, {"kind": "static", "storm": st["kind"]}, float(st["secs"]), float(st["secs"]))
 					"print":
 						var text := PackedStringArray()
@@ -962,6 +979,11 @@ static func _heard(who: String, room: String, in_hand: String, held: Array) -> S
 	if not in_hand.is_empty() or not held.is_empty():
 		return "far"
 	return ""
+
+
+## Is a typed block after [param speaker]'s cue the receiver's: a voice that is not the room's, with no phone on the desk.
+static func on_receiver(speaker: String, room: String, phones: PackedStringArray) -> bool:
+	return not speaker.is_empty() and not room.is_empty() and speaker != room and not phones.has(label_of(speaker))
 
 
 ## An action before spoken word [param at]: added, its rest written into the voice's text, its place in its silence

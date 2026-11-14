@@ -6,6 +6,9 @@ extends SceneTree
 ##   overhead;
 ## - the storms differ: Io-B's pops are spiky (peak far over level), Io-A's surf is smooth swells; both are heard over the
 ##   receiver's hiss;
+## - a voice over the receiver: the storm is brought down under it and is whole again past it (the control: the same stretch
+##   with no voice is its storm, unchanged), heard there over the bare hiss; the needle swells within a word and is still
+##   between two;
 ## - subdued: a phone flipped and snapped, keys, the ping, the toggle, the mug set down, the gain knob's click, the lamp's
 ##   switch, the earpiece ring and the terminal's bell are none louder than the desk's most;
 ## - the bell is one short beep, heard over the hiss while it sounds and gone when it ends;
@@ -57,6 +60,23 @@ func _init() -> void:
 	_ok(_rms(pop, 0.5, 4.5) > _rms(quiet, 0.5, 4.5) * 3.0 and _rms(surf, 0.5, 4.5) > _rms(quiet, 0.5, 4.5) * 3.0,
 		"both storms are heard over the hiss")
 	_ok(_peak(pop) < DispatchSounds.LOUD_MOST * 2.0 and _peak(surf) < DispatchSounds.LOUD_MOST * 2.0, "the storms are never too loud")
+	# a voice over the receiver
+	var bare := {"t": 0.0, "t1": 10.0, "kind": "static", "storm": "surf", "seed": 11}
+	var under := bare.duplicate()
+	under["under"] = [[3.0, 6.0]]
+	under["words"] = [[3.3, 3.8], [4.2, 4.6]]
+	var plain := DispatchSounds.storm_level("surf", 4.5, 11, 10.0)
+	var lowered := DispatchSounds.receiver_level(under, 4.5)
+	_ok(is_equal_approx(DispatchSounds.receiver_level(bare, 4.5), plain) and is_equal_approx(lowered, plain * DispatchSounds.UNDER)
+		and is_equal_approx(DispatchSounds.receiver_level(under, 8.0), DispatchSounds.storm_level("surf", 8.0, 11, 10.0)),
+		"a voice brings the storm down under it, and it is whole past it (the control: with no voice it is its storm - %.3f, %.3f under, of %.3f)"
+		% [DispatchSounds.receiver_level(bare, 4.5), lowered, plain])
+	var over_voice := _render([under], 10.0)
+	var no_voice := _render([bare], 10.0)
+	_ok(_rms(over_voice, 3.5, 5.5) < _rms(no_voice, 3.5, 5.5) * 0.85 and _rms(over_voice, 3.5, 5.5) > _rms(quiet, 0.5, 4.5) * 2.0,
+		"under a voice the storm is quieter, and still heard over the hiss (%.4f against %.4f)" % [_rms(over_voice, 3.5, 5.5), _rms(no_voice, 3.5, 5.5)])
+	_ok(DispatchSounds.voice_level(under, 3.55) > 0.5 and DispatchSounds.voice_level(under, 4.0) == 0.0 and DispatchSounds.voice_level(bare, 3.55) == 0.0,
+		"the needle swells within a word, is still between two, and never without a voice")
 	# one-shots and the phone
 	var desk: Array = []
 	var k := 0.2

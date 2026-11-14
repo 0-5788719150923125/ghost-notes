@@ -188,6 +188,13 @@ The opening, the radar, the terminal and the desk's props were reworked; what st
   through to the next word's start, no quicker than `KEY_QUICK` a key and always done before the voice says it
   (`DispatchMedium._char_times`), so the voice reads what is on the screen and goes on unbroken. A mark inside a typed block
   does not reach the voice. A reply on a phone is still typed as it is said.
+- **A voice with no phone comes in on the receiver** (`DispatchScript.on_receiver`): a typed block after its cue is said in
+  that voice, `heard: receiver` (VoiceFX's shortwave row: a narrow band, a slow selective fade, a little hiss and crackle in
+  the voice, no squelch), the room taking it down. The receiver opens under it on the storm it last opened on, carried
+  straight on from a static that ends within `RECEIVER_JOIN` of it and open `RECEIVER_TAIL` past its last word
+  (`DispatchMedium._build_receiver`, one stretch of the plan's sound); the storm is brought down to `DispatchSounds.UNDER`
+  under the words, and the needle and the scope's trace swell with each word. A paragraph by such a voice is still heard as
+  `_heard` says (a voice in a caller's room). Open: the author's ear on the balance of voice and static.
 - **A block set all in capitals is said in sentence case** (`DispatchScript.said_of`): `TextNorm.INITIALISMS` reads `IT` as
   the letters, which is right for a field and wrong for a terminal's words. Only a block with no small letter is lowered, so
   an initialism in a log line keeps its capitals; a named letter, `[D]`, stays the letter. The screen still shows the

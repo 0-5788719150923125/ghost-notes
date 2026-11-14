@@ -75,7 +75,7 @@ const REGISTRY := {
 	"heard": {
 		"label": "Heard through",
 		"group": "voices",
-		"blurb": "On the line after a speaker's cue: this whole turn is heard through something - phone (held to the ear), desk (a phone lying on the desk), far (a voice in the caller's room, through their phone) or radio (a two-way radio under crackling static, its squelch hissing as the voice keys up and off). The band, the grit and the line's static are the voice's; a turn with none is heard in the room. A dispatch desk writes these itself.",
+		"blurb": "On the line after a speaker's cue: this whole turn is heard through something - phone (held to the ear), desk (a phone lying on the desk), far (a voice in the caller's room, through their phone), radio (a two-way radio under crackling static, its squelch hissing as the voice keys up and off) or receiver (a shortwave receiver: a voice from very far off inside the signal, sinking into its hiss and crackle as the signal fades). The band, the grit and the line's static are the voice's; a turn with none is heard in the room. A dispatch desk writes these itself.",
 		"before": "<!-- heard: ", "fill": "radio", "after": " -->", "line": "own",
 		"modes": ["generative"],
 		"pattern": "(?m)^[ \\t]*<!--\\s*heard\\s*:\\s*[A-Za-z_]+\\s*-->[ \\t]*$",
@@ -586,7 +586,7 @@ const REGISTRY := {
 	"typed": {
 		"label": "Typed",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: typed on the terminal and said a little behind the keys, as a letter is read behind its pen - the first two words typed before the voice begins, each word after while it says the one two before, so the line is said straight through. A block in capitals is said in sentence case (a short word in capitals is read as letters). Added under what the terminal shows.",
+		"blurb": "Dispatch desk: typed on the terminal and said a little behind the keys, as a letter is read behind its pen - the first two words typed before the voice begins, each word after while it says the one two before, so the line is said straight through. A block in capitals is said in sentence case (a short word in capitals is read as letters). Added under what the terminal shows. The room's words, unless it follows the cue of a voice with no phone on the desk: that voice comes in on the receiver and is taken down - said in its voice, heard through the receiver, the receiver open on its last static under it.",
 		"before": "```type\n", "fill": "23:21. Grocery store, aisle seven.", "after": "\n```", "line": "own",
 		"modes": ["generative"],
 		"pattern": "(?m)^[ \\t]*```[ \\t]*type[ \\t]*\\n[\\s\\S]*?\\n[ \\t]*```[ \\t]*$",

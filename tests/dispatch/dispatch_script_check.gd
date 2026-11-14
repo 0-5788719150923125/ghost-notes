@@ -23,6 +23,9 @@ extends SceneTree
 ## - gain, bell, lamp: the knob turns from three to its number and back with the voice waiting; the bell rings a half beat
 ##   before the block after it; the lamp is switched off; none are said (controls: a gain with no number and a lamp neither on
 ##   nor off are said and do nothing);
+## - the receiver: a typed block after the cue of a voice with no phone on the desk is said in that voice, heard through the
+##   receiver, on the storm the receiver last opened on (Io-B's crackle before any), and the room's voice comes back after
+##   it (the control: after a voice with a phone it is the room's, heard in the room);
 ## - controls: a call to a phone not on the desk, a phone voice with no phone open, and a call left open are each said.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_script_check.gd
@@ -224,6 +227,23 @@ func _init() -> void:
 	_ok(full.size() == 1 and int(full[0]["to"]) > int(full[0]["from"]), "a picture over the whole screen spans its passage")
 	_ok(Manuscript.images(DispatchScript.pictures_only(body)).size() == 2, "every picture is handed to the painter")
 	_ok(DispatchScript.rehearsal(d).size() == spoken.size(), "a rehearsal times every spoken word")
+	# the receiver
+	var desk := "---\ndesk:\n  phones: [VAN]\n---\n\n<!-- speaker: Control -->\n\nListen.\n\n"
+	var council := DispatchScript.parse(desk + "<!-- speaker: Council -->\n\n```type\nWHAT DO WE DO\n```\n\n"
+		+ "<!-- static: 4, surf -->\n\n```type\nWAIT\n```\n\n<!-- speaker: Control -->\n\nAlways.\n")
+	var csp := String(council["speakable"])
+	var typed_turns: Array = (council["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "type")
+	_ok(csp.contains("<!-- speaker: Council -->\n<!-- heard: receiver -->") and csp.find("What do we do") > csp.find("speaker: Council")
+		and csp.find("speaker: Control", csp.find("Wait")) > 0 and VoiceFX.HEARD.has(DispatchScript.RECEIVER),
+		"a voice with no phone comes in on the receiver, in its own voice, and the room comes back after it (%s)" % csp.replace("\n", " / "))
+	_ok(typed_turns.size() == 2 and String(typed_turns[0].get("heard", "")) == DispatchScript.RECEIVER
+		and String(typed_turns[0]["storm"]) == "popcorn" and String(typed_turns[1]["storm"]) == "surf",
+		"the receiver opens on the storm it last opened on, Io-B's before any (%s)" % str(typed_turns.map(func(a: Dictionary) -> String: return String(a.get("storm", "")))))
+	var van := DispatchScript.parse(desk + "<!-- speaker: Van -->\n\n```type\nWHAT DO WE DO\n```\n")
+	var vsp := String(van["speakable"])
+	var van_typed: Array = (van["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "type")
+	_ok(not vsp.contains("speaker: Van") and not vsp.contains("heard") and van_typed.size() == 1 and not (van_typed[0] as Dictionary).has("heard"),
+		"the control: a typed block after a voice with a phone is the room's, heard in the room (%s)" % vsp.replace("\n", " / "))
 	# controls
 	var stray := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- call: NOBODY -->\n\n<!-- speaker: Red -->\n\nHello.\n")
 	_ok(not (stray["warnings"] as PackedStringArray).is_empty() and Array(stray["phones"]).has("NOBODY"),

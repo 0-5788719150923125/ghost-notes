@@ -31,6 +31,9 @@ class_name DispatchMedium
 ## open before the eye with the message on its screen, never captioned; a reply is typed into it as it is said, under the
 ## message, and sent; then it goes home.
 ##
+## The receiver is open in its storms and under a voice that comes in on it ([method _build_receiver]): the storm brought
+## down while the voice is said over it, the needle and the scope's trace moving with the storm and with each word.
+##
 ## The subtitles caption what cannot be read on the desk, as the letter's do: speech, never the words typed on the
 ## terminal as they are said ([method _captioned]); a text is read on its phone and nowhere else.
 ##
@@ -148,6 +151,13 @@ static var away_in_tests := false
 const IMAGE_FADE := DispatchScript.IMAGE_FADE
 ## The least lead an action has after the word before it (seconds).
 const LEAD := 0.12
+## The receiver under a voice heard through it ([method _build_receiver]): open this long past its last word, carried on
+## from a stretch that ended at most this long before it began, and its voice said over from a little before its first
+## word to a little past its last.
+const RECEIVER_TAIL := 1.2
+const RECEIVER_JOIN := 1.0
+const UNDER_LEAD := 0.25
+const UNDER_TAIL := 0.35
 ## The terminal's glass (`shaders/dispatch_screen.gdshader`): its bulge, scanlines and bloom; the censor follows its bulge.
 const TERMINAL_GLASS := {"curve": 0.12, "lines": 0.32, "line_count": 300.0, "bloom": 0.7}
 ## The environment: the hollow's fog and its ambient light.
@@ -178,6 +188,7 @@ var _clutter: Array = []                # where the radar's clutter stands round
 var _leg_known := {}                    # a bare ping's action -> the show time a plan first placed it
 var _sound_plan: Array = []
 var _sound_rev := 0
+var _open: Array = []                   # where the receiver is open ([method _build_receiver])
 var _now := 0.0
 var _last_now := -1.0
 var _snap := true
@@ -697,6 +708,7 @@ func _build_plan() -> void:
 	for i in _actions.size():
 		if String((_actions[i] as Dictionary)["kind"]) in ["type", "reply"]:
 			_chars[i] = _char_times(i)
+	_build_receiver()
 	_build_phones()
 	_build_track()
 	if _set != null:
@@ -1162,8 +1174,6 @@ func _build_sound() -> void:
 						out.append({"t": t + keys[c] / _sp[i], "what": "space" if typed[c] == " " else "key", "at": term_at})
 					if float(sp["enter"]) >= 0.0:
 						out.append({"t": t + float(sp["enter"]) / _sp[i], "what": "enter", "at": term_at})
-			"static":
-				out.append({"t": t, "t1": e, "kind": "static", "storm": String(a["storm"]), "seed": hash([_seed, i])})
 			"sound":
 				if String(a["sound"]) == "jet":
 					out.append({"t": t, "t1": e, "kind": "jet"})
@@ -1204,6 +1214,8 @@ func _build_sound() -> void:
 					out.append({"t": t + decide + back * float(c) / float(maxi(n, 1)), "what": "key", "at": term_at})
 			"sleep", "screen":
 				out.append({"t": t + 0.1, "what": "crt", "at": term_at})
+	# the receiver, open: its storms and the voices said over them
+	out.append_array(_open)
 	out.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["t"]) < float(y["t"]))
 	_sound_plan = out
 	_sound_rev += 1
@@ -1227,8 +1239,11 @@ func _pose(t: float) -> void:
 	_screens.show_terminal(terminal_at(t))
 	_screens.show_radar(radar_at(t))
 	var st := storm_at(t)
-	_screens.show_scope({"t": snappedf(t, 1.0 / 30.0), "level": float(st.get("level", 0.0)), "storm": String(st.get("storm", ""))})
-	_set.needle.rotation_degrees = Vector3(0, 0, lerpf(48.0, -48.0, clampf(0.08 + float(st.get("level", 0.0)) * 0.85 + 0.03 * sin(t * 1.3), 0.0, 1.0)))
+	var voice := float(st.get("voice", 0.0))
+	_screens.show_scope({"t": snappedf(t, 1.0 / 30.0), "level": float(st.get("level", 0.0)), "storm": String(st.get("storm", "")),
+		"voice": voice})
+	_set.needle.rotation_degrees = Vector3(0, 0, lerpf(48.0, -48.0, clampf(0.08 + float(st.get("level", 0.0)) * 0.85 + voice * 0.45
+		+ 0.03 * sin(t * 1.3), 0.0, 1.0)))
 	_set.terminal_glow.light_energy = 0.03 if bool(terminal_at(t).get("asleep", true)) else 0.16
 	_pose_printer(t)
 	_pose_screens(t)
@@ -1869,13 +1884,56 @@ static func place_on_scope(place: String) -> Vector2:
 	return at
 
 
-## The receiver at [param t]: the storm it is open on, `{storm, level}` - {} for none.
-func storm_at(t: float) -> Dictionary:
+## Where the receiver is open, by time: each static for its seconds, and each typed turn heard through it
+## ([constant DispatchScript.RECEIVER]) from its first key to [constant RECEIVER_TAIL] past its last word, on the storm
+## it last opened on (open until its last word is heard). A stretch that begins within [constant RECEIVER_JOIN] of the
+## last one's end carries it on, so a static runs straight into the voice and the voice out into the next static. Each
+## is a sound of the desk's plan, `{t, t1, kind: "static", storm, seed, under, words}`: `under` where a voice is said
+## over it and `words` each word, `[from, to]` in seconds into it ([method DispatchSounds.receiver_level]).
+func _build_receiver() -> void:
+	var parts: Array = []
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
-		if String(a["kind"]) == "static" and _t0[i] <= t and t < _end_of(i):
-			var span := _end_of(i) - _t0[i]
-			return {"storm": String(a["storm"]), "level": DispatchSounds.storm_level(String(a["storm"]), t - _t0[i], hash([_seed, i]), span)}
+		if _t0[i] == INF:
+			continue
+		if String(a["kind"]) == "static":
+			parts.append({"t": _t0[i], "t1": _end_of(i), "storm": String(a["storm"]), "seed": hash([_seed, i]), "words": []})
+		elif String(a["kind"]) == "type" and String(a.get("heard", "")) == DispatchScript.RECEIVER:
+			var words: Array = []
+			for n in range(int(a["from"]), int(a["to"])):
+				var w0 := _word_t0(n) if n < _spoken_n else INF
+				var w1 := _word_t1(n) if n < _spoken_n else INF
+				if w0 == INF or w1 == INF:
+					words = []
+					break
+				words.append([w0, w1])
+			var t1 := float((words.back() as Array)[1]) + RECEIVER_TAIL if not words.is_empty() else INF
+			parts.append({"t": _t0[i], "t1": t1, "storm": String(a.get("storm", "popcorn")), "seed": hash([_seed, i]), "words": words})
+	parts.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["t"]) < float(y["t"]))
+	_open = []
+	for p in parts:
+		var o: Dictionary = _open.back() if not _open.is_empty() else {}
+		if o.is_empty() or float(p["t"]) > float(o["t1"]) + RECEIVER_JOIN:
+			o = {"t": float(p["t"]), "t1": float(p["t1"]), "kind": "static", "storm": String(p["storm"]), "seed": int(p["seed"]),
+				"under": [], "words": []}
+			_open.append(o)
+		o["t1"] = maxf(float(o["t1"]), float(p["t1"]))
+		var words: Array = p["words"]
+		if words.is_empty():
+			continue
+		var t := float(o["t"])
+		(o["under"] as Array).append([float((words[0] as Array)[0]) - UNDER_LEAD - t, float((words.back() as Array)[1]) + UNDER_TAIL - t])
+		for w in words:
+			(o["words"] as Array).append([float((w as Array)[0]) - t, float((w as Array)[1]) - t])
+
+
+## The receiver at [param t]: the storm it is open on, `{storm, level, voice}` - how hard the storm is, and how hard a voice
+## said over it moves the needle and the trace ([method DispatchSounds.voice_level]) - {} for none.
+func storm_at(t: float) -> Dictionary:
+	for o in _open:
+		if float(o["t"]) <= t and t < float(o["t1"]):
+			var u := t - float(o["t"])
+			return {"storm": String(o["storm"]), "level": DispatchSounds.receiver_level(o, u), "voice": DispatchSounds.voice_level(o, u)}
 	return {}
 
 

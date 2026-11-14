@@ -22,17 +22,25 @@ class_name VoiceFX
 # A row further off is quieter and narrower: a phone on the desk is a smaller sound than one at the ear,
 # and a voice in a room at the far end of a line is heard through that line and its room both. A radio
 # is narrower and driven harder, under static of its own (below); any script may mark a turn
-# `<!-- heard: radio -->`.
+# `<!-- heard: radio -->`. A shortwave receiver has no squelch: its voice is inside the signal, and the
+# signal fades (`fade`, below).
 const HEARD := {
 	"phone": {"label": "Through a phone", "blurb": "Held to the ear: the telephone's band, close, with a little grit and the line's faint hiss.",
-		"low": 300.0, "high": 3400.0, "drive": 2.0, "gain": 0.95, "hiss": 0.004, "crackle": 0.0, "squelch": false},
+		"low": 300.0, "high": 3400.0, "drive": 2.0, "gain": 0.95, "hiss": 0.004, "crackle": 0.0, "squelch": false, "fade": 0.0},
 	"desk": {"label": "From a phone on the desk", "blurb": "A phone lying open on the desk, on hold: the same band and line, smaller and further off.",
-		"low": 420.0, "high": 3000.0, "drive": 1.5, "gain": 0.42, "hiss": 0.004, "crackle": 0.0, "squelch": false},
+		"low": 420.0, "high": 3000.0, "drive": 1.5, "gain": 0.42, "hiss": 0.004, "crackle": 0.0, "squelch": false, "fade": 0.0},
 	"far": {"label": "Through somebody else's phone", "blurb": "A voice in the caller's room, heard through the caller's phone: narrower still, and faint.",
-		"low": 500.0, "high": 2600.0, "drive": 1.2, "gain": 0.3, "hiss": 0.004, "crackle": 0.0, "squelch": false},
+		"low": 500.0, "high": 2600.0, "drive": 1.2, "gain": 0.3, "hiss": 0.004, "crackle": 0.0, "squelch": false, "fade": 0.0},
 	"radio": {"label": "Over a radio", "blurb": "A two-way radio or a scanner: a narrow, hard-driven band under static that crackles, the squelch bursting as the voice keys up and hissing off after it.",
-		"low": 350.0, "high": 2700.0, "drive": 3.0, "gain": 0.85, "hiss": 0.03, "crackle": 4.0, "squelch": true},
+		"low": 350.0, "high": 2700.0, "drive": 3.0, "gain": 0.85, "hiss": 0.03, "crackle": 4.0, "squelch": true, "fade": 0.0},
+	"receiver": {"label": "Over a shortwave receiver", "blurb": "A voice from very far off, inside the signal: a shortwave receiver's narrow band, sinking into its hiss and crackle and coming back out as the signal fades, never keyed up or off.",
+		"low": 300.0, "high": 2600.0, "drive": 2.4, "gain": 0.9, "hiss": 0.008, "crackle": 2.5, "squelch": false, "fade": 0.55},
 }
+# A shortwave signal fades in and out as the sky it bounced off moves (selective fading): a row's `fade` is
+# how deep a dip goes at most (0 none, 1 to nothing). The voice walks smoothly to a new dip, anywhere
+# from none to that, every FADE_EVERY seconds; the static is not faded, so the voice sinks into it and
+# comes back out.
+const FADE_EVERY := Vector2(0.7, 2.2)
 
 # --- ...and its static: a line's hiss, a radio's crackle -------------------------
 # A row's `hiss` is white noise at that RMS and its `crackle` that many pops a second (each a few
@@ -391,6 +399,13 @@ var _st_tail := 0
 var _st_pop := 0.0
 var _st_k := PackedFloat32Array([0, 0, 0, 0])   # the envelope's fall, the fade's step, the pop's ring, a pop's chance
 var _st_rng := 0x2545F491
+# ...and a shortwave signal's fading (FADE_EVERY): the row's depth, the dip walked from and to, the walk's length and
+# how far along it is, in samples.
+var _fd_depth := 0.0
+var _fd_a := 0.0
+var _fd_b := 0.0
+var _fd_n := 0
+var _fd_i := 0
 
 func setup(sr: int) -> void:
 	sample_rate = sr
@@ -805,12 +820,18 @@ func _resolve_heard() -> bool:
 	_st_burst = 0
 	_st_tail = 0
 	_st_pop = 0.0
+	_fd_depth = clampf(float(row.get("fade", 0.0)), 0.0, 1.0)
+	_fd_a = 0.0
+	_fd_b = 0.0
+	_fd_n = 0
+	_fd_i = 0
 	return true
 
 
-## One sample through the phone: its static added, high-pass, low-pass, the clip, the level.
+## One sample through the phone: the voice faded as the signal fades, its static added, high-pass, low-pass, the clip,
+## the level.
 func _heard_tick(v: float) -> float:
-	var x := v + _static_tick(v)
+	var x := v * _fade_tick() + _static_tick(v)
 	var y := _hd[0] * x + _hd[1] * _hs[0] + _hd[2] * _hs[1] - _hd[3] * _hs[2] - _hd[4] * _hs[3]
 	_hs[1] = _hs[0]
 	_hs[0] = x
@@ -861,6 +882,21 @@ func _static_tick(v: float) -> float:
 		if absf(_st_pop) < 1e-6:
 			_st_pop = 0.0
 	return n
+
+
+## How much of the signal comes through this sample (see [constant FADE_EVERY]): 1 for a row that never fades. Draws on
+## the static's generator only when it fades, so every other row's static is what it was.
+func _fade_tick() -> float:
+	if _fd_depth <= 0.0:
+		return 1.0
+	if _fd_i >= _fd_n:
+		_fd_a = _fd_b
+		_fd_b = _st_rand()
+		_fd_n = maxi(1, int(lerpf(FADE_EVERY.x, FADE_EVERY.y, _st_rand()) * float(sample_rate)))
+		_fd_i = 0
+	var w := 0.5 - 0.5 * cos(PI * float(_fd_i) / float(_fd_n))
+	_fd_i += 1
+	return 1.0 - _fd_depth * lerpf(_fd_a, _fd_b, w)
 
 
 ## The static's generator: the next number in [0, 1) (xorshift32).

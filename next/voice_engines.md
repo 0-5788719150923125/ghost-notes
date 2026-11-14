@@ -646,7 +646,11 @@ a pack's weakest row). Where in the model the silent stretch comes from is not t
   own window ("Rests and fades").
 - **F0 is not an input yet:** the arc and the Tone still resample and restore formants. Splitting the graph at
   `F0Ntrain` -> decoder would make pitch a curve the host writes: the pitch accent on a stressed word ("Still
-  proposed" 4), the trail's sag and the delivery steps without a resample.
+  proposed" 4), the trail's sag and the delivery steps without a resample. The way in: a pitch offset per token
+  (semitones), spread along the graph's own alignment onto `/encoder/Reshape_output_0` as `kokoro_moving.py` spreads a
+  style per token, and smoothed so an accent rises and falls instead of stepping. Both graphs take it (the patched one
+  and `model_moving.onnx`), the patch stamp changes so installed graphs are made again, and `EMPHASIS` gains a semitone
+  column. next/music.md's sung pitch is the same input.
 - **The vowel probe** is not run (what it measures is a Piper checkpoint's).
 - **Provenance:** Apache-2.0 weights, but hexgrad trained partly on synthetic audio from closed commercial
   voices.

@@ -133,6 +133,8 @@ The camera sits in the chair and turns to what is active (`_attention`, `SPOTS`)
 
 A phone in hand is held to the ear: it rises out of its row, flips open and floats up beside the camera, in the frame's lower right, its screen saying who is on it and for how long, and goes back the same way. A call is speed-dialed: the phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows. A phone ringing buzzes and rattles in its row. A text chimes and the phone comes up open before the eye with the message on its screen, never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home.
 
+The receiver is open in its storms and under a voice that comes in on it (`_build_receiver`): the storm brought down while the voice is said over it, the needle and the scope's trace moving with the storm and with each word.
+
 The subtitles caption what cannot be read on the desk, as the letter's do: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
 
 Redacted words on the terminal are hidden over the frame (`DispatchCensor`, `_censor_at`): drawn after the 3D and before a picture over the whole screen, so a picture covers it.

@@ -12,6 +12,9 @@ extends SceneTree
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
 ##   old place written beside it until it arrives; the receiver is open only in its storm;
+## - a voice with no phone comes in on the receiver: open from the static before it straight on through its words, the storm
+##   brought down under them and the needle swelling in a word, shut after its tail, one stretch of sound (the control: the
+##   room's own typed block opens nothing);
 ## - a text is read on its phone (chime, phone up, message on screen, never captioned, reply typed as said and sent); a call
 ##   is speed-dialed (1 held, Send, ear);
 ## - captions: a typed word is read on the terminal, a spoken line is captioned;
@@ -323,6 +326,7 @@ func _run() -> void:
 		and md.phone_at(String(dial_mv["label"]), float(dial_mv["dialed"]) + DispatchScript.DIAL + 0.2) == "ear",
 		"a call is speed-dialed: up before the eye, 1 held, then to the ear for the rings (%s)" % str(dial_mv.get("label")))
 	_gain_bell_lamp(md, actions, t0, plan_r, screen_i)
+	_receiver(st, md.feed)
 	# captions
 	md._follower.extend(words)
 	_ok(not md._captioned(mid, mid, 0.0) and md._captioned(hello, hello, 0.0), "a typed word is captioned, or a spoken one is not")
@@ -458,6 +462,52 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 	var by_word := ShowOpening.end_fade(last + 2.0, md._follower, md._spoken_n, outro)
 	_ok(outro > 2.0 and after > 3.0 and is_equal_approx(seen, 1.0) and black < 0.001 and by_word < 1.0,
 		"the outro waits for what the desk does after the last word, black as it runs out (the control: from the last word, %.2f at 2 s; %.1f s of desk)" % [by_word, after])
+
+
+## A voice with no phone, typed as it comes in on the receiver after a static; then the room's own typed block (the control).
+func _receiver(st: SubViewport, feed: ShowFeed) -> void:
+	var body := ("---\ndesk:\n  phones: [VAN]\n---\n\n<!-- speaker: Control -->\n\nListen.\n\n<!-- static: 3 -->\n\n"
+		+ "<!-- speaker: Council -->\n\n```type\nWHAT DO WE DO ABOUT HIM\n```\n\n<!-- speaker: Control -->\n\nAlways.\n\n"
+		+ "```type\nLOGGED\n```\n\nThere.\n")
+	var md := DispatchMedium.new()
+	md.feed = feed
+	md.mount(st)
+	md.load_note(body, {"seed": 3})
+	md._now = 0.0
+	md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+	var acts: Array = md._actions
+	var typed: Array = []
+	for i in acts.size():
+		if String((acts[i] as Dictionary)["kind"]) == "type":
+			typed.append(i)
+	var s_i := _first(acts, "static")
+	var c_i := int(typed[0])
+	var r_i := int(typed[1])
+	var first0 := md._word_t0(int(acts[c_i]["from"]))
+	var first1 := md._word_t1(int(acts[c_i]["from"]))
+	var last1 := md._word_t1(int(acts[c_i]["to"]) - 1)
+	var shut := -1.0
+	var t := md.starts()[s_i] + 0.05
+	while t < last1 + DispatchMedium.RECEIVER_TAIL - 0.05:
+		if md.storm_at(t).is_empty():
+			shut = t
+			break
+		t += 0.05
+	_ok(String(acts[c_i].get("heard", "")) == DispatchScript.RECEIVER and shut < 0.0
+		and md.storm_at(last1 + DispatchMedium.RECEIVER_TAIL + 0.1).is_empty(),
+		"the receiver is open from the static straight on through the voice that comes in on it, and shut after its tail (shut at %.2f)" % shut)
+	var o: Dictionary = md._open[0]
+	var mid := (first0 + first1) * 0.5
+	var plain := DispatchSounds.storm_level(String(o["storm"]), mid - float(o["t"]), int(o["seed"]), float(o["t1"]) - float(o["t"]))
+	var at_mid := md.storm_at(mid)
+	_ok(is_equal_approx(float(at_mid["level"]), plain * DispatchSounds.UNDER) and float(at_mid["voice"]) > 0.4,
+		"under the voice the storm is brought down and the needle swells in a word (%.3f of %.3f, voice %.2f)" % [float(at_mid["level"]), plain, float(at_mid["voice"])])
+	var stretches := md.sound_plan().filter(func(x: Dictionary) -> bool: return String(x.get("kind", "")) == "static")
+	_ok(stretches.size() == 1 and not (stretches[0]["under"] as Array).is_empty(),
+		"the static and the voice on it are one stretch of the receiver's sound (%d)" % stretches.size())
+	var room_mid := md._word_t0(int(acts[r_i]["from"])) + 0.05
+	_ok(not (acts[r_i] as Dictionary).has("heard") and md.storm_at(room_mid).is_empty(),
+		"the control: the room's own typed block opens nothing on the receiver")
 
 
 static func _first(actions: Array, kind: String) -> int:

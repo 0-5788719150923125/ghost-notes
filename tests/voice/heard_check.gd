@@ -12,7 +12,9 @@ extends SceneTree
 ## - the static rides the voice: over a radio, static is heard in the gap between two words and not before the voice
 ##   begins, the squelch's tail is heard as the channel closes, and the rest after it is clean (THE CONTROL: heard through
 ##   nothing, the gap is silent); a phone's line hisses there too, far under a radio's; the same take is the same
-##   static, sample for sample.
+##   static, sample for sample;
+## - over a shortwave receiver the signal fades: a steady tone through it rises and falls over seconds (THE CONTROL: through
+##   a phone it holds steady), and nothing keys up or off - no squelch tail as the channel closes.
 ##
 ## Run: godot --headless --path . --script tests/voice/heard_check.gd
 
@@ -27,6 +29,7 @@ var _fails: Array = []
 func _init() -> void:
 	_band()
 	_static()
+	_receiver()
 	_plan_and_join()
 	if _fails.is_empty():
 		print("heard_check: ALL OK")
@@ -107,6 +110,33 @@ func _static() -> void:
 			break
 	_ok(same, "the same take is the same static, sample for sample")
 	print("heard_check: static between words %.4f (radio), %.4f (phone); the squelch's tail %.4f" % [radio_gap, phone_gap, tail])
+
+
+func _receiver() -> void:
+	var tone := _tone(1000.0, 0.05, 6.0)
+	var spread := func(out: PackedFloat32Array) -> float:
+		var lo := INF
+		var hi := 0.0
+		var win := int(0.25 * SR)
+		for k in range(1, out.size() / win):
+			var a := _at(out.slice(k * win - int(0.1 * SR), (k + 1) * win), 1000.0)
+			lo = minf(lo, a)
+			hi = maxf(hi, a)
+		return hi / maxf(lo, 1e-9)
+	var fading: float = spread.call(_through("receiver", tone))
+	var steady: float = spread.call(_through("phone", tone))
+	_ok(fading > 1.2 and steady < 1.05, "over a receiver the signal fades in and out (THE CONTROL: through a phone it holds steady - %.2f against %.2f)" % [fading, steady])
+	var buf := _tone(220.0, 0.05, 0.5)
+	var end := buf.size()
+	var rest := PackedFloat32Array()
+	rest.resize(int(1.5 * SR))
+	buf.append_array(rest)
+	var out := _through("receiver", buf)
+	var hold := int(VoiceFX.STATIC_HOLD * SR)
+	var open := _rms_in(out, end + int(0.05 * SR), end + int(0.25 * SR))
+	var tail := _rms_in(out, end + hold + int(0.01 * SR), end + hold + int(0.08 * SR))
+	_ok(open > 1e-3 and tail < open * 0.5, "a receiver hisses past the voice and keys nothing off (%.4f, then %.4f)" % [open, tail])
+	print("heard_check: a receiver's fade %.2f (phone %.2f)" % [fading, steady])
 
 
 static func _rms_in(buf: PackedFloat32Array, a: int, b: int) -> float:
