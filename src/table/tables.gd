@@ -605,12 +605,16 @@ static func apply_painting(built: Dictionary, tex: Texture2D, height: Texture2D 
 ## relief that does not lie under its picture is worse than none, so the map is measured against the
 ## painting before it is used: the two images' structure (where each changes, its gradient's size -
 ## blind to which way round the gray runs) at [constant FIT_W] across, correlated at every shift up to
-## [constant FIT_SHIFT] pixels either way. The best is its score (1 the same structure, about 0
+## [constant FIT_SHIFT] pixels either way. A failed fit is tried with the gradient measured BEFORE
+## shrinking, at [constant FIT_DETAIL] times the width: fine grain survives, even where the map leaves
+## out the painting's broad stains and color. Row and column means are removed in this second pass:
+## repeated seams alone must not match unrelated grain. The best is its score (1 the same structure, about 0
 ## unrelated) and its shift; under [constant FIT_LEAST] it is refused - unless it has nothing to
 ## misplace: a flat map ([constant FLAT_SPAN]) or an even one ([constant EVEN_SPREAD]).
 const FIT_W := 96
 const FIT_SHIFT := 4
 const FIT_LEAST := 0.35
+const FIT_DETAIL := 4
 ## A flat map lies under anything: a surface with no relief (a cutting mat, its grid printed on smooth
 ## vinyl) comes back nearly one gray, and its faint scratches correlate with nothing (0.03). A map whose
 ## lightness spans less than this (2nd to 98th percentile, at [constant FIT_W] across) is kept as it is:
@@ -648,8 +652,15 @@ static func wants_height(spec: Dictionary) -> bool:
 static func height_fit(painting: Image, height: Image) -> Dictionary:
 	var w := FIT_W
 	var h := maxi(8, roundi(float(FIT_W) * float(painting.get_height()) / float(maxi(painting.get_width(), 1))))
-	var a := _structure(painting, w, h)
-	var b := _structure(height, w, h)
+	var coarse := _height_fit(_structure(painting, w, h), _structure(height, w, h), w, h)
+	if float(coarse["score"]) >= FIT_LEAST:
+		return coarse
+	var fine := _height_fit(_structure(painting, w, h, FIT_DETAIL), _structure(height, w, h, FIT_DETAIL), w, h)
+	return fine if float(fine["score"]) > float(coarse["score"]) else coarse
+
+
+## The same search grid and UV shifts for both scales; only the structure being matched changes.
+static func _height_fit(a: PackedFloat32Array, b: PackedFloat32Array, w: int, h: int) -> Dictionary:
 	var best := -1.0
 	var at := Vector2i.ZERO
 	for dy in range(-FIT_SHIFT, FIT_SHIFT + 1):
@@ -736,9 +747,31 @@ static func _spread_of(v: PackedFloat32Array) -> float:
 
 
 ## An image's STRUCTURE at [param w] x [param h]: the size of its lightness's gradient, softened by a
-## pixel, less its mean - where it changes, not which way.
-static func _structure(img: Image, w: int, h: int) -> PackedFloat32Array:
-	var g := _slope(img, w, h)
+## pixel, less its mean - where it changes, not which way. With [param detail] > 1, measure at that
+## many times the size, then average each block into the search grid. Shrinking the IMAGE first can
+## erase a height map's fine grain and leave only the painting's color variation to compare it to.
+## Remove row and column means in this fine pass: periodic seams shared by unrelated boards can
+## otherwise dominate the grain. A plain seam that really matches still has the coarse pass.
+static func _structure(img: Image, w: int, h: int, detail := 1) -> PackedFloat32Array:
+	var g := _slope(img, w * detail, h * detail)
+	if detail > 1:
+		var pooled := PackedFloat32Array()
+		pooled.resize(w * h)
+		for y in range(1, h - 1):
+			for x in range(1, w - 1):
+				pooled[y * w + x] = _mean_of(g, w * detail, Rect2i(x * detail, y * detail, detail, detail))
+		g = pooled
+		var rows := PackedFloat32Array()
+		var cols := PackedFloat32Array()
+		rows.resize(h)
+		cols.resize(w)
+		for y in range(1, h - 1):
+			rows[y] = _mean_of(g, w, Rect2i(1, y, w - 2, 1))
+		for x in range(1, w - 1):
+			cols[x] = _mean_of(g, w, Rect2i(x, 1, 1, h - 2))
+		for y in range(1, h - 1):
+			for x in range(1, w - 1):
+				g[y * w + x] -= rows[y] + cols[x]
 	var mean := 0.0
 	for y in range(1, h - 1):
 		for x in range(1, w - 1):

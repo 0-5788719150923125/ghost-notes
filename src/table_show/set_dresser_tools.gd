@@ -62,6 +62,9 @@ const JUDGE_LIGHT := "Say what the pictures show of the light: where it comes fr
 const OUT_OF_SHOT := 0.05
 ## How many pictures one set dresser may take. Its run has no time limit (see AgentJobs); a table of dozens of things takes more looks than one of five.
 const LOOKS := 60
+const RESUME_FIELDS := ["_things", "_effects", "_materials", "_top", "_layers", "_top_put", "_layers_put",
+	"_idea", "_title", "_light", "_light_put", "_sound", "_sound_put", "_ride", "_ride_put", "_assembly",
+	"_looks", "_set_since_change", "_warned", "_warned_title", "_warned_unplaced", "_warned_cut", "submitted"]
 
 var episode: TableEpisode
 var plan: Dictionary
@@ -101,7 +104,7 @@ var _fixed_names: Array = []
 
 ## [param name] and [param byline]: the show's, set over the table at the opening. [param fixed]: what the brief stands on every
 ## episode's table ([FixedTable]).
-func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, name := "", byline := "", fixed := {}) -> void:
+func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, name := "", byline := "", fixed := {}, keep := false) -> void:
 	episode = ep
 	plan = episode_plan
 	dir = job_dir
@@ -121,6 +124,8 @@ func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, name := 
 	_preview = TablePreview.new(ep, plan, dir.path_join("preview"), name, byline)
 	# a run starts clean: a rerun works in the folder the last run left, and its handed-in table or pictures must not pass for this run's
 	DirAccess.make_dir_recursive_absolute(dir)
+	if keep:
+		return
 	for f in DirAccess.get_files_at(dir):
 		var fs := String(f)
 		if fs == SUBMITTED or fs == "tools.jsonl" or (fs.begins_with("look_") and fs.ends_with(".jpg")):

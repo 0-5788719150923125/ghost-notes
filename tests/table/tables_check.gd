@@ -19,7 +19,8 @@ extends SceneTree
 ##   shifted (and the shift found), or drawn the other way round - and an unrelated picture refused (two-sided); a flat map, or one
 ##   whose relief is alike everywhere, fits nothing and is kept all the same, unmoved - against boards drawn somewhere else, which
 ##   are taken away; the episode lists the step only once the table lays the painting where its depth is read, a new cloth clears
-##   it and a new table does not.
+##   it and a new table does not. Fine grain whose map leaves out the painting's broad color is still matched, against unrelated
+##   grain and a move beyond the search, which are refused.
 ## - The light reads what lies uppermost: a pale runner over a dark cloth is pale under the runner and dark beside it; past the
 ##   top, the floor.
 
@@ -304,6 +305,27 @@ func _gray_of(img: Image, shift: Vector2i, flip: bool) -> Image:
 	return out
 
 
+## The same fine relief under a broad stain, and without it. Shrinking the picture before measuring
+## its gradient erases this grain and compares the stain to a map that rightly leaves the stain out.
+func _fine_grain(seed: int) -> Array:
+	var paint := Image.create(768, 512, false, Image.FORMAT_RGB8)
+	var height := Image.create(768, 512, false, Image.FORMAT_RGB8)
+	var grain := FastNoiseLite.new()
+	grain.seed = seed
+	grain.frequency = 0.025
+	var stain := FastNoiseLite.new()
+	stain.seed = seed + 91
+	stain.frequency = 0.008
+	for y in 512:
+		for x in 768:
+			var relief := (0.5 + grain.get_noise_2d(x, y) * 0.45) * sin(float(y) * TAU / 6.0 + float(x) * 0.02)
+			var h := 0.5 + relief * 0.14
+			var p := 0.5 + relief * 0.14 + stain.get_noise_2d(x, y) * 0.4
+			paint.set_pixel(x, y, Color(p, p * 0.8, p * 0.6))
+			height.set_pixel(x, y, Color(h, h, h))
+	return [paint, height]
+
+
 func _height_map() -> void:
 	print("-- a painted height map is used only where it lies under the painting")
 	var paint := _boards(3, 768, 512)
@@ -315,6 +337,25 @@ func _height_map() -> void:
 		"its own height map, moved, is accepted (%.2f) and the move found (%s against %s)" % [float(same["score"]), str(same["shift"]), str(want)])
 	_ok(float(flipped["score"]) >= Tables.FIT_LEAST, "drawn the other way round it is accepted too (%.2f)" % float(flipped["score"]))
 	_ok(float(other["score"]) < Tables.FIT_LEAST, "an unrelated picture is refused (%.2f)" % float(other["score"]))
+	var vertical_paint := paint.duplicate() as Image
+	var vertical_wrong := _gray_of(_boards(91, 768, 512), Vector2i(5, 9), false)
+	vertical_paint.rotate_90(CLOCKWISE)
+	vertical_wrong.rotate_90(CLOCKWISE)
+	var vertical := Tables.height_fit(vertical_paint, vertical_wrong)
+	_ok(float(vertical["score"]) < Tables.FIT_LEAST,
+		"unrelated boards with shared vertical seams are refused too (%.2f)" % float(vertical["score"]))
+	# An aligned map can share the grain without sharing the broad color. Check the old measurement
+	# really loses it, and that the fine measurement still finds a move in UV, with two wrong maps.
+	var fine := _fine_grain(17)
+	var coarse := Tables._height_fit(Tables._structure(fine[0], 96, 64), Tables._structure(fine[1], 96, 64), 96, 64)
+	var detailed := Tables.height_fit(fine[0], _gray_of(fine[1], Vector2i(16, -8), true))
+	var unrelated := Tables.height_fit(fine[0], _fine_grain(73)[1])
+	var misplaced := Tables.height_fit(fine[0], _gray_of(fine[1], Vector2i(160, 0), false))
+	_ok(float(coarse["score"]) < Tables.FIT_LEAST, "control: shrinking first loses fine relief under a stain (%.2f)" % float(coarse["score"]))
+	_ok(float(detailed["score"]) >= Tables.FIT_LEAST and (detailed["shift"] as Vector2).distance_to(want) < 0.012,
+		"fine relief is matched through a stain, inverted and shifted (%.2f, %s)" % [float(detailed["score"]), str(detailed["shift"])])
+	_ok(float(unrelated["score"]) < Tables.FIT_LEAST and float(misplaced["score"]) < Tables.FIT_LEAST,
+		"control: unrelated fine relief (%.2f) and relief moved too far (%.2f) are refused" % [float(unrelated["score"]), float(misplaced["score"])])
 	# a flat map (a cutting mat's: one gray and a few faint scratches) is the right answer for a surface with no relief - it correlates with
 	# nothing, and is kept by its span; a real map is not flat
 	var mat := Image.create(768, 512, false, Image.FORMAT_RGB8)
@@ -327,15 +368,16 @@ func _height_map() -> void:
 		"a flat map fits nothing (%.2f) and is known flat (%.3f)" % [float(mat_fit["score"]), Tables.height_span(mat)])
 	_ok(Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)) > Tables.FLAT_SPAN * 2.0,
 		"control: a real height map is not flat (%.3f)" % Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)))
-	# an even map (a felted nap under a dyed stripe: the stripe is not drawn) fits nothing either, and is known by its relief being alike
-	# everywhere; boards are not - their seams, one to a block, are even by blocks and caught by rows
+	# An independent even nap under a dyed stripe fits nothing, and is known by its relief being alike
+	# everywhere. Use a different nap in the painting: the fine pass CAN match the same nap through dye.
+	# Boards are not even - their seams, one to a block, are caught by rows.
 	var nap := _nap(5, 768, 512)
-	var striped := _gray_of(nap, Vector2i.ZERO, false)
+	var striped := _gray_of(_nap(23, 768, 512), Vector2i.ZERO, false)
 	striped.fill_rect(Rect2i(0, 200, 768, 90), Color(0.08, 0.08, 0.12))
 	var nap_fit := Tables.height_fit(striped, nap)
 	_ok(float(nap_fit["score"]) < Tables.FIT_LEAST and Tables.height_span(nap) > Tables.FLAT_SPAN
 		and Tables.relief_spread(nap) < Tables.EVEN_SPREAD,
-		"an even map fits nothing (%.2f), is not flat (%.3f) and is known even (%.2f)" % [float(nap_fit["score"]),
+		"an independent even map fits nothing (%.2f), is not flat (%.3f) and is known even (%.2f)" % [float(nap_fit["score"]),
 			Tables.height_span(nap), Tables.relief_spread(nap)])
 	var seams := _gray_of(_boards(91, 768, 512), Vector2i(5, 9), false)
 	_ok(Tables.relief_spread(seams) > Tables.EVEN_SPREAD,

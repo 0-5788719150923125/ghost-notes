@@ -31,6 +31,7 @@ class_name PuppeteerTools
 const SUBMITTED := "submitted.json"
 ## How many pictures one puppeteer may take.
 const LOOKS := 30
+const RESUME_FIELDS := ["_acts", "_looks", "_watched", "_warned_unseen", "_laid", "_fonts", "submitted"]
 ## What to ask of a picture of an act.
 const JUDGE := "Say what the six frames actually show, start to end: does each thing move as a held thing would - lifted before it travels, carried, set down - is it where the work is, can the viewer see what is done, and does anything pass through anything or leave the frame? Write the act again to fix what is wrong."
 
@@ -53,7 +54,7 @@ var _fonts := {}
 
 
 ## [param table]: the episode's set table, as `table.json` holds it.
-func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, table: Dictionary) -> void:
+func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, table: Dictionary, keep := false) -> void:
 	episode = ep
 	plan = episode_plan
 	dir = job_dir
@@ -61,6 +62,8 @@ func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, table: D
 	_preview = TablePreview.new(ep, plan, dir.path_join("preview"))
 	# a run starts clean: a rerun works in the folder the last run left
 	DirAccess.make_dir_recursive_absolute(dir)
+	if keep:
+		return
 	for f in DirAccess.get_files_at(dir):
 		var fs := String(f)
 		if fs == SUBMITTED or fs == "tools.jsonl" or (fs.begins_with("look_") and fs.ends_with(".jpg")):
@@ -139,6 +142,34 @@ func looks_used() -> int:
 	return _looks
 
 
+## Older runs have a completed-call journal but no checkpoint. Recover only the draft edits and
+## bookkeeping, without replaying physics, pictures or submit. A partially completed call is absent.
+func recover(entries: Array) -> void:
+	for e in entries:
+		var args: Dictionary = e["args"]
+		match String(e["tool"]):
+			"act":
+				_put_acts(args)
+			"remove":
+				_remove(args)
+			"watch", "model":
+				if not bool(e.get("error", false)) and not (e.get("images", []) as Array).is_empty():
+					_looks += 1
+					if String(e["tool"]) == "watch":
+						_watched[Manuscript.slug(String(args.get("name", "")))] = true
+			"submit":
+				if String(e.get("text", "")).begins_with("Not watched"):
+					_warned_unseen = true
+	var ink_path := dir.path_join("preview").path_join(TableInk.FILE)
+	var ink: Variant = JSON.parse_string(FileAccess.get_file_as_string(ink_path)) if FileAccess.file_exists(ink_path) else null
+	if ink is Dictionary:
+		_fonts = ink.get("fonts", {})
+		for item in ink.get("items", []):
+			if item is Dictionary:
+				_laid[String(item.get("id", ""))] = item
+	submitted = FileAccess.file_exists(dir.path_join(SUBMITTED))
+
+
 func _parts() -> Dictionary:
 	if not TablePreview.can_set():
 		return {"text": "The table cannot be stood in this run: work from the table as you were told it."}
@@ -149,11 +180,18 @@ func _parts() -> Dictionary:
 
 
 func _act(args: Dictionary) -> Dictionary:
+	var put := _put_acts(args)
+	if put.is_empty():
+		return {"text": "Nothing was put: give `acts`, a list of acts.", "error": true}
+	return await _check_acts(put)
+
+
+func _put_acts(args: Dictionary) -> Array:
 	var raw: Variant = args.get("acts", [])
 	if raw is Dictionary:
 		raw = [raw]
 	if not (raw is Array) or (raw as Array).is_empty():
-		return {"text": "Nothing was put: give `acts`, a list of acts.", "error": true}
+		return []
 	var put: Array = []
 	for a in raw:
 		if not (a is Dictionary):
@@ -169,6 +207,10 @@ func _act(args: Dictionary) -> Dictionary:
 		_watched.erase(nm)
 		if not put.has(nm):
 			put.append(nm)
+	return put
+
+
+func _check_acts(put: Array) -> Dictionary:
 	var lines := PackedStringArray()
 	var made := Motions.sanitize_acts(draft(), episode.beat_count())
 	var kept := {}

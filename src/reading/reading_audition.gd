@@ -5,9 +5,12 @@ class_name ReadingAudition
 ## selected tab - its tone, pace, pauses, delivery and room - and played straight out, with no stage, subtitles
 ## or Director.
 ##
-## Streamed, like a reading: every sentence is requested at once (the host answers them in order), each is joined
-## onto the stream the moment it and everything before it has arrived, and playback starts with the first
-## sentence. A Stop cancels what is still asked ([method stop]).
+## Streamed, like a reading: sentences are asked of the host a few seconds ahead of what is heard ([method
+## _ask_ahead]), each with the voice's settings as they are when it is asked; a change on the card (a share, Push,
+## Breath, the noise, the pace) asks again what is not yet joined ([method _ask_again]), so it is heard once the few
+## seconds already joined have played. Each is joined onto the stream the moment it and everything
+## before it has arrived, and playback starts with the first sentence. A Stop cancels what is still asked ([method
+## stop]).
 ##
 ## A part of its panel (next/structure.md, step 19): its state is its own, and it asks the [ReadingPanel] it was
 ## made by for the host, a voice's settings and the request for a chunk. The sentences are joined by a
@@ -18,7 +21,7 @@ class_name ReadingAudition
 ## identical material. It exercises what a chapter asks of a voice - a long sentence with commas, a colon, a
 ## semicolon, a question, an exclamation, a number, a list, a dash, quoted dialogue and a short sentence landing
 ## after a long one - and opens on a short sentence, since the first sound waits for the first sentence to be
-## made. About a minute long.
+## made. About six minutes long: long enough to work a voice's dials while it reads.
 const PASSAGE := """The rain had not stopped. Since morning it had kept on, and the lamps along the river were already lit by four o'clock. I counted them from the window: twelve on this side, eleven on the other, one of them out.
 
 "Are you coming, or not?" she asked from the doorway. I told her I would be a minute. It was closer to twenty.
@@ -27,12 +30,38 @@ Some evenings are like that. You mean to leave, and the room keeps you, and by t
 
 The street was empty but for a man and his dog, and the dog was plainly in charge. They crossed at the bakery, where the windows had fogged over and someone had written a name in the steam - not mine, though for a moment I hoped it was.
 
-"You took your time," she said when I arrived. I said that time had taken me; she did not find this as clever as I did. We ordered two coffees, a slice of lemon cake and, after a long look at the menu, a second slice. By nine the rain had eased to a hush, and we walked home the long way."""
+"You took your time," she said when I arrived. I said that time had taken me; she did not find this as clever as I did. We ordered two coffees, a slice of lemon cake and, after a long look at the menu, a second slice. By nine the rain had eased to a hush, and we walked home the long way.
+
+Halfway there she stopped under an awning and asked whether I remembered the house on Alder Street. I did. It had a blue door, a crooked gate and a garden nobody tended, and in the summer it smelled of mint and hot stone. "They are tearing it down," she said. "Next month, or the month after." I asked who had told her. Nobody had; she had seen the sign.
+
+We stood there longer than we meant to. A bus went by, lit and nearly empty, and the driver lifted a hand to no one in particular. Across the road a shop was closing: the owner pulled the shutter halfway, thought better of it, and went back inside for something he had forgotten.
+
+"Do you ever think about leaving?" she asked. Not the city, she meant, but everything: the work, the flat, the habits that had grown up around us like ivy. I said I thought about it every Tuesday and never on a Friday. She laughed at that, which was more than it deserved.
+
+The rest of the walk was quiet. We passed the old cinema, which had become a church, and the church, which had become flats. We passed a dentist, a laundry, three cafes and a shop that sold only clocks - forty of them in the window, and no two agreeing on the hour. At the corner of Mill Lane a cat watched us from a wall with the patience of a judge.
+
+By the time we reached her door it was after ten. She looked for her keys in one pocket, then another, then in her bag, and found them at last in the first pocket, where they had been all along. "Every time," she said. "Every single time."
+
+I walked the last part alone. The rain had stopped for good, and the streets shone as if someone had polished them for an occasion that was called off. I thought about the house with the blue door. I thought about what she had said, and what I had said back, and whether either of us had meant it.
+
+At home I made tea I did not want and sat by the window. The lamps along the river were still lit: twelve on this side, eleven on the other. The one that had been out all evening was burning again. Someone, somewhere, had climbed a ladder in the rain to fix it, and I would never know who.
+
+In the morning there was a letter on the mat. It was from my brother, who writes twice a year and always as though no time has passed. He was well, he said. The boat was nearly finished; the roof was not. He had planted potatoes, onions, beans and, against all advice, a lemon tree. Would I come in the spring? I read it twice, then a third time, and then I put the kettle on and began to write back.
+
+"Dear Tom," I wrote, and stopped. How do you begin a letter to someone who has never once asked how you are, and yet always seems to know? I tried again. I told him about the rain, the lamps and the cake. I did not tell him about the house on Alder Street. Some things are better said out loud, or not at all.
+
+Spring came late that year, but it came. I took the early train on a Saturday in April, with a bag, a book I did not open and a jar of marmalade that had survived three moves. The fields went by, green and then gold and then green again. A man across the aisle counted cows out loud until he reached forty-seven and fell asleep.
+
+Tom met me at the station in a coat that had been our father's. He looked older, and happier, and he had a scar on his hand I had never seen. "The boat," he said, before I could ask. "It won." We drove to the house with the windows down, and neither of us said much, and it was the best conversation we had had in years."""
 ## The room runs on a worker. VoiceFX is GDScript DSP at about 15 microseconds a sample (a third of the main
 ## thread per second of audio), so the dry audio goes through the chain on a worker, half a second at a time and
 ## one piece at a time (the chain is stateful, so pieces run in order), and the main thread only moves finished
 ## samples into the ring. A dial moved mid-test reaches the next piece: settings are taken when a piece starts.
 const FX_PIECE := 0.5
+## Sentences are asked while less than LEAD seconds of joined audio wait unheard, at most AHEAD asked or decoding at
+## once: far enough ahead that the voice never waits, near enough that a change on the card is heard soon.
+const LEAD := 6.0
+const AHEAD := 2
 
 ## The panel this is a part of: the host, the voices' settings and the requests are its.
 var panel: ReadingPanel
@@ -47,6 +76,11 @@ var _req := {}                 # host request id -> chunk index
 var _parts := {}               # chunk index -> {wav, spans}, as they arrive
 var _tasks := {}               # chunk index -> {box, task}: decoding on a worker
 var _next := 0                 # the next sentence to join onto the stream
+var _asked := 0                # the next sentence to ask the host for
+## Seconds asked ahead of what is heard ([constant LEAD]); a gate with no one listening widens it.
+var lead := LEAD
+var _asked_with := 0           # the voice's settings (their hash) the sentences not yet joined were asked with
+var _round := 0                # how many times the sentences were asked again: a take's file is its round's
 var _join: ReadingJoin = null  # the dry take: seams, rests, where the reader moves
 var _dry := PackedFloat32Array()   # joined audio waiting for the room (see _pump_fx)
 var _dry_at := 0               # the frame _dry[0] is
@@ -62,7 +96,7 @@ func _init(owner: ReadingPanel) -> void:
 	panel = owner
 
 
-## Read [param passage] in the voice named [param name]: every sentence asked of the host at once.
+## Read [param passage] in the voice named [param name]: its first sentences asked of the host, the rest as it plays.
 func start(passage: String, name: String) -> void:
 	stop()
 	voice = name
@@ -74,13 +108,41 @@ func start(passage: String, name: String) -> void:
 	_sr = panel._sr
 	_join = ReadingJoin.new(_sr)
 	_next = 0
+	_asked = 0
 	_dry_at = 0
 	_fx = null
-	var s := panel._cast.cfg_of(name)
-	for i in chunks.size():
-		var id := panel._host.request("", panel._cast.voice_id_of(s), ReadingPanel.TAKE_DIR + "/test_%d.wav" % i,
-			panel._request_args(s, chunks[i]), null)
-		_req[id] = i
+	_ask_ahead()
+
+
+## Ask the host for the next sentences while less than [constant LEAD] seconds wait unheard (joined, not yet pushed to
+## the ring) and fewer than [constant AHEAD] are asked or decoding. Each takes the voice's settings as they are now.
+func _ask_ahead() -> void:
+	while _asked < chunks.size() and _req.size() + _tasks.size() < AHEAD \
+			and float(_dry_at + _dry.size() - _pushed) < lead * float(_sr):
+		var s := panel._cast.cfg_of(voice)
+		_asked_with = s.hash()
+		var id := panel._host.request("", panel._cast.voice_id_of(s),
+			ReadingPanel.TAKE_DIR + "/test_%d_%d.wav" % [_round, _asked], panel._request_args(s, chunks[_asked]), null)
+		_req[id] = _asked
+		_asked += 1
+
+
+## The voice changed on the card while sentences were still being made: those asked with the old settings are
+## cancelled on the host and dropped (their takes deleted), and asked again from the first not yet joined, so a
+## change is heard as soon as what is already joined has played.
+func _ask_again() -> void:
+	if not _req.is_empty() and panel._host != null:
+		panel._host.cancel(_req.keys())
+	_req = {}
+	for k in _tasks:
+		WorkerThreadPool.wait_for_task_completion(int((_tasks[k] as Dictionary)["task"]))
+	_tasks = {}
+	for k in _parts:
+		_forget(String((_parts[k] as Dictionary)["wav"]))
+	_parts = {}
+	_round += 1
+	_asked = _next
+	_ask_ahead()
 
 
 ## Whether an audition is being made or heard.
@@ -152,6 +214,7 @@ func stop() -> void:
 	_fx_task = {}
 	_dry = PackedFloat32Array()
 	_req = {}
+	_asked = chunks.size()
 	for k in _parts:
 		_forget(String((_parts[k] as Dictionary)["wav"]))
 	_parts = {}
@@ -184,6 +247,7 @@ func take(id: int, result: Dictionary) -> void:
 	_tasks[i] = {"box": box, "task": WorkerThreadPool.add_task(func() -> void:
 		box[0] = Splice.decode_wav(wav))}
 	_join_parts()
+	_ask_ahead()
 
 
 ## Every frame: join what the workers finished, keep the room going, feed the ring a frame's worth of finished
@@ -192,6 +256,10 @@ func take(id: int, result: Dictionary) -> void:
 func tick() -> void:
 	if not _tasks.is_empty():
 		_join_parts()
+	if (not _req.is_empty() or not _tasks.is_empty()) and panel._cast.cfg_of(voice).hash() != _asked_with:
+		_ask_again()
+	if _asked < chunks.size():
+		_ask_ahead()
 	if not _fx_task.is_empty() or not _dry.is_empty():
 		_pump_fx()
 	if _player == null or not _player.playing:

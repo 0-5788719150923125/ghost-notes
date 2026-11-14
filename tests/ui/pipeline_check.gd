@@ -17,7 +17,9 @@ extends SceneTree
 ##   count), a section with nothing missing passed by; while it walks every refresh button waits; Stop stops all of it.
 ##   Generate is grayed with nothing missing, Stop with nothing being made. The play button on a heading makes that section
 ##   alone (control: the other is not started). While a row made again runs alone, Generate is offered and widens it to the
-##   rest (control: a section busy making all of it leaves Generate grayed).
+##   rest (control: a section busy making all of it leaves Generate grayed). Carried into a panel built anew over the same
+##   note, the walk leaves the section still making what it was asked as it is and makes the next at its turn (control:
+##   Generate pressed over the same sections asks the busy one again).
 ## - Groups: a group's rows fold under its name, which says how they stand. What is listed is built once: a refresh with the
 ##   same rows keeps the same controls - a list built again under a press loses it (control: a new row builds it again). A
 ##   section's card freed under it takes the section along.
@@ -41,7 +43,9 @@ func _run() -> void:
 	Stub = load("res://tests/ui/pipeline_stub_section.gd")
 	await _one_place()
 	_one_redo()
+	_resume_action()
 	_one_generate()
+	_carried_on()
 	_widened()
 	_locks()
 	_groups_and_rebuilds()
@@ -61,6 +65,32 @@ func _row(key: String, state := "made", again := "") -> PipelineRow:
 	r.state = state
 	r.again = again
 	return r
+
+
+func _resume_action() -> void:
+	var card = _Card.new()
+	var section = Stub.new("Resume gate")
+	card.add(section)
+	var calls: Array = []
+	var work := _row("work", "missing", "Start work again")
+	work.go_text = "Resume"
+	work.go = "Continue saved progress"
+	work.make = func() -> void: calls.append("resumed")
+	section.listed = [work]
+	card.refresh()
+	var button: Button = card.row("work")["make"]
+	_ok(button != null and button.text == "Resume" and not button.disabled,
+		"a resumable row offers a labelled Resume action alongside regenerate")
+	button.pressed.emit()
+	_ok(calls == ["resumed"] and section.made == 0, "Resume invokes its own continuation, without generating the section")
+	work.go_open = false
+	card.refresh()
+	card._press_make("Resume gate/work")
+	_ok(calls.size() == 1 and button.disabled, "a busy or unavailable Resume cannot be pressed")
+	work.go = ""
+	card.refresh()
+	_ok(card.row("work")["make"] == null, "a row with no resumable progress has no Resume button")
+	card.free()
 
 
 ## One place
@@ -238,6 +268,49 @@ func _one_generate() -> void:
 	_ok(second.made == 1 and first.made == 0, "the ▶ on a heading makes that section alone (the control: the other is not started)")
 	second.is_busy = false
 	card.free()
+
+
+## Generate's walk carried into the panel built anew over the same note ([method PipelineCard.carry_on]): the section still
+## making what it was asked carries on as it is, and the next is made at its turn. Control: Generate pressed over the same
+## sections asks the busy one again.
+func _carried_on() -> void:
+	var card = _Card.new()
+	var first = Stub.new("First")
+	var second = Stub.new("Second")
+	first.listed = [_row("a", "running")]
+	second.listed = [_row("b", "missing")]
+	first.is_busy = true
+	for s in [first, second]:
+		card.add(s)
+	card.carry_on()
+	_ok(first.made == 0 and card.walking(), "carried on, it walks - from the next refresh")
+	card.refresh()
+	card.refresh()
+	_ok(first.made == 0 and second.made == 0 and card.walking() and card._generate.disabled,
+		"the section still making what it was asked carries on as it is, and the next waits")
+	first.is_busy = false
+	first.has_missing = false
+	card.refresh()
+	_ok(second.made == 1 and first.made == 0, "the first done, the next is made at its turn")
+	second.is_busy = false
+	second.made = 0
+	first.is_busy = true
+	first.has_missing = true
+	card.carry_on()
+	first.is_busy = false               # ...its work stopped with the panel before
+	card.refresh()
+	_ok(first.made == 1, "a section no longer making anything is made at its turn")
+	card.stop()
+	card.free()
+	var control = _Card.new()
+	var busy = Stub.new("Busy")
+	busy.listed = [_row("a", "running")]
+	busy.is_busy = true
+	control.add(busy)
+	control.generate()
+	_ok(busy.made == 1, "control: Generate pressed over the same sections asks the busy one again")
+	control.stop()
+	control.free()
 
 
 ## Generate widens a row made again: while a section makes only some of what it is missing, Generate is offered, and

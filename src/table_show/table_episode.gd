@@ -82,7 +82,7 @@ static func history(show_key: String) -> Array:
 
 
 ## What the show has already made, for a later episode's agents to go somewhere else (see [TablePrompts]): every other episode of
-## [param show_key] with a plan, newest first, at most [param most] - `{seed, plan, cards: [{name, reversed, jumper, art, said}],
+## [param show_key] with a plan, newest first, at most [param most] - `{seed, plan, cards: [{name, meaning, writing, reversed, jumper, art, said}],
 ## beats: [{name, said}], things, air, furniture, light, intro, close}`: the cards it drew, what each pictured and what the reader
 ## said as it turned over (or, in a show that draws none, each beat's name and its words), the things on its table, its air, the
 ## table itself ([method Tables.summary]) and its light ([method Lights.summary]), and its first and last passages. What an episode
@@ -104,7 +104,8 @@ static func archive(show_key: String, except: int, most := 40) -> Array:
 		for i in drawn.size():
 			var c: Dictionary = drawn[i] if drawn[i] is Dictionary else {}
 			var design: Variant = ep.read_json("design:%d" % (i + 1))
-			cards.append({"name": str(c.get("name", "")), "reversed": bool(c.get("reversed", false)),
+			cards.append({"name": str(c.get("name", "")), "meaning": str(c.get("meaning", "")),
+				"writing": (design as Dictionary).get("writing", {}) if design is Dictionary else {}, "reversed": bool(c.get("reversed", false)),
 				"jumper": bool(c.get("jumper", false)),
 				"art": str((design as Dictionary).get("art", "")) if design is Dictionary else "",
 				"said": ep.read_text("say:%d" % (i + 1))})

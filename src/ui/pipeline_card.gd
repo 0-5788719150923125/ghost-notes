@@ -17,7 +17,8 @@ class_name PipelineCard
 ##
 ## One Generate: every section's missing work, top to bottom, each waiting for the one before
 ## ([method generate]): the words first, then what is made from them. The play button on a section's
-## heading makes that section alone. While Generate walks, every refresh button waits.
+## heading makes that section alone. While Generate walks, every refresh button waits. A note opened again
+## while it walks (a format picked, a card attached) walks on in the panel built anew ([method carry_on]).
 
 ## What the card is for, on its title bar and its chip ([member Card.blurb]).
 const BLURB := "Everything agents and tools make for this note, in one list. Generate makes what is missing, and a row's ⟳ makes that one thing again."
@@ -38,6 +39,7 @@ var asking: ConfirmationDialog = null
 var _sections: Array = []        # [PipelineSection], top to bottom
 var _queue: Array = []           # the sections Generate has still to walk
 var _begun := false              # ...and whether the first of them was started
+var _carried := false            # ...and whether the walk came from the panel before ([method carry_on])
 var _t := 0.0
 
 var _bar: HBoxContainer          # the tally, Generate and Stop: on the card's title bar
@@ -127,6 +129,7 @@ func _notification(what: int) -> void:
 func _exit_tree() -> void:
 	_queue = []
 	_begun = false
+	_carried = false
 	for s in _sections:
 		if (s as PipelineSection).alive():
 			(s as PipelineSection).leave()
@@ -187,7 +190,17 @@ func generate() -> void:
 		(s as PipelineSection).told = ""
 	_queue = sections()
 	_begun = false
+	_carried = false
 	refresh()
+
+
+## Generate's walk taken up by the panel built anew over the same note: a section still making what Generate asked of it
+## carries on as it is, with the settings Generate was pressed with, and what comes after it is made at its turn. Called
+## once every card has opened what it shows; walks from the next refresh.
+func carry_on() -> void:
+	_queue = sections()
+	_begun = false
+	_carried = true
 
 
 ## Walks as far as it can: a section is started once, and the walk waits while it is busy. One that
@@ -201,18 +214,20 @@ func _walk() -> void:
 			continue
 		if not _begun:
 			_begun = true
-			if s.shown() and s.missing():
+			if s.shown() and s.missing() and not (_carried and s.busy()):
 				s.make()
 		if s.busy():
 			return
 		_queue.pop_front()
 		_begun = false
+	_carried = false
 
 
 ## Stop: all of it. What is finished is kept.
 func stop() -> void:
 	_queue = []
 	_begun = false
+	_carried = false
 	for s in sections():
 		(s as PipelineSection).stop()
 	refresh()
@@ -224,6 +239,7 @@ func episode_left(feed: EpisodeFeed, shown: EpisodeFeed = null) -> void:
 	if feed == null or shown == null or feed.folder() == shown.folder():
 		_queue = []
 		_begun = false
+		_carried = false
 	for s in sections():
 		(s as PipelineSection).episode_left(feed)
 
@@ -429,7 +445,7 @@ func _add_row(section: PipelineSection, it: PipelineRow) -> Label:
 	var at := "%s/%s" % [section.title, it.key]
 	var make: Button = null
 	if not it.go.is_empty():
-		make = _small_button("▶", it.go)
+		make = _small_button(it.go_text, it.go)
 		make.pressed.connect(_press_make.bind(at))
 		row.add_child(make)
 	# A lock beside its refresh button ([member PipelineRow.locked]): locked, it is kept - Generate passes it by, stale or not
@@ -529,6 +545,7 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 		redo.tooltip_text = it.again + ("\n\n" + it.asks if not it.asks.is_empty() else "")
 	var make: Variant = r["make"]
 	if make is Button:
+		(make as Button).text = it.go_text
 		(make as Button).disabled = walking_now or not it.go_open
 		(make as Button).tooltip_text = it.go
 	var edit_b: Variant = r.get("edit")

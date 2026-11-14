@@ -39,6 +39,8 @@ const RUN_SECONDS_DEFAULT := 60.0
 ## The compute environment runs are made in. Moved aside only by a probe, to run in a scratch one.
 static var venv := "user://compute_venv"
 
+const RESUME_FIELDS := ["checks", "runs", "submitted"]
+
 var episode: TableEpisode
 var problem: Dictionary
 var job_dir := ""

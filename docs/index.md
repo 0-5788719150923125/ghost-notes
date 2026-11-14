@@ -204,6 +204,7 @@ The catalog, one scene a file. Cataloged in [scenes.md](scenes.md), each from it
 Every piece of writing and painting ghost asks an AI for: who writes (TextGen) and who paints (ImageGen), one queue for both (AgentJobs), the tools ghost serves an agent while it works (AgentTools), which Amazon Bedrock models an AWS account can call (BedrockCatalog), and how the Assistant's command-line tools are run.
 
 - [`agent_jobs.gd`](../src/agents/agent_jobs.gd) **AgentJobs** - every piece of writing and painting ghost asks an AI for, in one queue.
+- [`agent_resume.gd`](../src/agents/agent_resume.gd) **AgentResume** - durable progress for interrupted authoring tools.
 - [`agent_tools.gd`](../src/agents/agent_tools.gd) **AgentTools** - the tools an agent can call while it works, served by ghost itself.
 - [`assistant_backends.gd`](../src/agents/assistant_backends.gd) **AssistantBackends** - the CLIs `Assistant` can dispatch a feedback note to, and everything that differs between them: how a run is launched, how it is resumed, and how its event stream reads.
 - [`bedrock_catalog.gd`](../src/agents/bedrock_catalog.gd) **BedrockCatalog** - which Amazon Bedrock models this AWS account can call, and how to reach each. Shared by the Bedrock writer (`TextGen`'s `bedrock`) and painter (`ImageGen`'s `bedrock`); it only makes the free listing calls, never a model call.

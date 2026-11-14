@@ -45,19 +45,22 @@ var _tcp: TCPServer = null
 var _port := 0
 var _conns: Array = []          # [{peer, buf, busy, t}]
 var _jobs := {}                 # token -> {toolset, dir, calls, images}
+var _active := {}               # dir -> calls still returning, even after their endpoint was closed
 
 
 ## A URL for [param toolset], whose calls are logged into [param dir] (the job's folder); "" when
 ## no server can run here (a read-only process, or no port).
-static func open(dir: String, toolset: Object) -> String:
+static func open(dir: String, toolset: Object, checkpoint: Dictionary = {}) -> String:
 	if AgentJobs.read_only() or toolset == null:
 		return ""
 	var s := _server()
 	if s == null:
 		return ""
 	var token := Crypto.new().generate_random_bytes(16).hex_encode()
-	s._jobs[token] = {"toolset": toolset, "dir": dir, "calls": 0, "images": 0}
+	s._jobs[token] = {"toolset": toolset, "dir": dir, "calls": int(checkpoint.get("calls", 0)), "images": int(checkpoint.get("images", 0))}
 	DirAccess.make_dir_recursive_absolute(dir)
+	if checkpoint.is_empty():
+		AgentResume.finish(dir)
 	return "http://127.0.0.1:%d%s%s" % [s._port, PATH, token]
 
 
@@ -75,6 +78,8 @@ static func token_of(url: String) -> String:
 ## Stop answering for the job behind [param url] (its token alone works too).
 static func close(url: String) -> void:
 	if _the != null:
+		if _the._jobs.has(url.get_file()):
+			(_the._jobs[url.get_file()] as Dictionary)["closed"] = true
 		_the._jobs.erase(url.get_file())
 
 
@@ -83,6 +88,12 @@ static func calls(url: String) -> int:
 	if _the == null or not _the._jobs.has(url.get_file()):
 		return -1
 	return int((_the._jobs[url.get_file()] as Dictionary)["calls"])
+
+
+## A stopped tool may still be giving a worker or subprocess back. Do not open a continuation in
+## its folder until it has returned, or its late file writes could overlap the continuation's.
+static func working(dir: String) -> bool:
+	return _the != null and int(_the._active.get(dir, 0)) > 0
 
 
 ## Take what has arrived and answer what is complete. Called every frame.
@@ -216,8 +227,13 @@ func _rpc(job: Dictionary, msg: Dictionary) -> Dictionary:
 			if int(job["calls"]) > MAX_CALLS:
 				res = {"text": "No calls left: this job has made %d. Stop here." % MAX_CALLS, "error": true}
 			else:
+				var dir := String(job["dir"])
+				_active[dir] = int(_active.get(dir, 0)) + 1
 				var got: Variant = await toolset.call("call_tool", name, args)
+				_active[dir] = int(_active.get(dir, 1)) - 1
 				res = got if got is Dictionary else {"text": "the tool returned nothing", "error": true}
+			if bool(job.get("closed", false)):
+				return AgentTools.rpc_error(id, -32000, "This job's tools are closed.")
 			return AgentTools.rpc_result(id, _content(job, name, args, res))
 	return AgentTools.rpc_error(id, -32601, "Method not found: %s" % String(msg["method"]))
 
@@ -252,6 +268,10 @@ func _content(job: Dictionary, name: String, args: Dictionary, res: Dictionary) 
 		content.append({"type": "image", "data": Marshalls.raw_to_base64(jpg), "mimeType": "image/jpeg"})
 	AgentTools.log_call(String(job["dir"]), {"at": int(Time.get_unix_time_from_system()), "tool": name,
 		"args": args, "text": text, "images": Array(saved), "error": error})
+	var err := AgentResume.save(String(job["dir"]), job["toolset"], int(job["calls"]), int(job["images"]))
+	if not err.is_empty():
+		push_warning("ghost: %s - %s" % [String(job["dir"]).get_file(), err])
+		content.append({"type": "text", "text": "Progress could not be saved for resuming: " + err})
 	return {"content": content, "isError": error}
 
 

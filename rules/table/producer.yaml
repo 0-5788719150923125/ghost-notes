@@ -41,6 +41,13 @@ prompt:
       You are the PRODUCER. Plan episode #{{seed}} before the camera rolls.
   - ""
   - >-
+      EPISODE LENGTH. Unless the brief specifies a different duration, plan for {{minutes_lo}} to
+      {{minutes_hi}} minutes in all, and keep that range as two numbers in `minutes`. Where the brief
+      specifies a duration, use its range instead (repeat the number for a single duration).
+      Allow enough substance for that time: stories, explanations and work worth watching. A small
+      number of cards still makes a full episode. Animation time is a floor, not the whole story's length.
+  - ""
+  - >-
       HOW MANY CARDS. The brief says what this show's episodes draw. Where it gives a number or a
       range, choose the number in it that this episode's angle needs; where it gives none, as many as
       this episode needs - at most {{spread_most}} either way. Nobody knows which cards will come up -
@@ -146,6 +153,14 @@ prompt:
           in every episode is no habit: it stays. How the cards come out and are handled is never one
           of the habits: it follows from the kind of card and the story, and is never varied for its
           own sake.
+  - when: habits
+    say: >-
+          THE CONTENT MATTERS TOO. The history records what was actually drawn and used, including
+          what written cards said. Compare those contents, not just their titles and packaging.
+          When you choose this episode's deck, give it substantially different contents and combinations
+          from the recent draws; changing a card's name or its box leaves the same work underneath.
+          Keep what the brief fixes, including a show's own fixed deck. A familiar item may return
+          where it belongs, with a fresh treatment; avoid replaying the same combination and story.
   - ""
   # WORK AT THE TABLE (next/table_work.md): a show whose brief has things done at the table plans it here,
   # each beat's work in plain words; the set dresser builds for it and the puppeteer blocks it. A brief with
@@ -177,6 +192,7 @@ reply: |-
     "habits": ["one habit of the earlier episodes per line, and how many of them fell into it"],
   {{/habits}}
     "brainstorm": ["twelve one-line directions"],
+    "minutes": [{{minutes_lo}}, {{minutes_hi}}],
     "episode_title": "this episode's title, in title case{{#uploads_as}} - its own part of the line the video goes up as{{/uploads_as}}",
     "description": "the video's YouTube description, in the genre's own shape (a greeting, what this reading covers, the usual disclaimers and calls to action) and told the show's way; three short paragraphs, no emoji, no links; then, word for word with its links, whatever the brief says every description must carry",
     "tags": ["eight to twelve search tags, the genre's own"],
@@ -219,6 +235,7 @@ reply_beats: |-
     "habits": ["one habit of the earlier episodes per line, and how many of them fell into it"],
   {{/habits}}
     "brainstorm": ["twelve one-line directions"],
+    "minutes": [{{minutes_lo}}, {{minutes_hi}}],
     "episode_title": "this episode's title, in title case{{#uploads_as}} - its own part of the line the video goes up as{{/uploads_as}}",
     "description": "the video's YouTube description, in the genre's own shape and told the show's way; three short paragraphs, no emoji, no links; then, word for word with its links, whatever the brief says every description must carry",
     "tags": ["eight to twelve search tags, the genre's own"],

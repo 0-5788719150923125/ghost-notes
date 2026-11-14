@@ -215,6 +215,24 @@ func _check() -> void:
 	pic.save_png(own)
 	_ok(_show.import_picture("image:surface", own).is_empty() and _ep.kept("image:surface")
 		and Image.load_from_file(_ep.file_of("image:surface")).get_pixel(2, 2).r > 0.8, "a picture of one's own, imported over the cloth, kept")
+	# The real episode rows expose saved work through the shared Pipeline action.
+	_ep.write_json("plan", {"episode_title": "Interrupted", "spread": {"positions": [{"name": "One", "work": "lift a cup"}]}})
+	var p: TableProducer = _show._producer
+	var dir: String = _ep.job_dir("acts")
+	var tools := PuppeteerTools.new(_ep, _ep.read_json("plan"), dir, _ep.read_json("table"))
+	tools._looks = 29
+	AgentResume.save(dir, tools, 1, 0)
+	AgentResume.write_json(dir.path_join(AgentResume.REQUEST), {"version": AgentResume.VERSION, "step": "acts",
+		"script": TableProducer.RESUMABLE["acts"], "job": {"backend": "claude", "system": "s", "prompt": "p"},
+		"inputs": p._resume_inputs("acts"), "output": ""})
+	tools.release()
+	_pipe.refresh()
+	var resume_row: Dictionary = _pipe.row("acts")
+	_ok(resume_row.get("make") is Button and resume_row["make"].text == "Resume" and resume_row["make"].disabled
+		and _pipe.asks_first("acts"), "saved Work exposes Resume, respects read-only, and asks before regenerating")
+	_ep.write_json("table", {"things": []})
+	_pipe.refresh()
+	_ok(_pipe.row("acts").get("make") == null, "changed inputs remove Resume from the real episode row")
 
 
 func _menus(node: Node) -> int:

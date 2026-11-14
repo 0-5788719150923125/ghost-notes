@@ -112,6 +112,13 @@ var note_moved: Callable
 ## Set by main: (path: String) -> void - open the note again, as what a component attached to it
 ## or taken off it made it.
 var reopen: Callable
+## Whether it is going because its note is being opened again ([method _rewrite]): what a card is making carries on into the
+## panel built anew, never stopped by this one going.
+var reopening := false
+
+## The note whose Generate was walking as it was opened again: the panel built anew over it walks on ([method
+## PipelineCard.carry_on]).
+static var _walk_carried := ""
 
 ## The components the note has ([method Components.attached_of]), read as the panel is built: the cards it shows
 ## and what "+" offers follow them. [] when started without a note (the command line, a gate), which is every
@@ -195,6 +202,11 @@ func _ready() -> void:
 	_host.progress.connect(func(_s: String, m: String) -> void: _set_status(m))
 	_host.synthesized.connect(_on_synthesized)
 	_load_persisted()
+	# ...deferred: the cards open what they show on this panel's `ready`, which ends any walk on the episode shown
+	if not _walk_carried.is_empty():
+		if _walk_carried == note_path:
+			_pipeline.carry_on.call_deferred()
+		_walk_carried = ""
 	_set_status("Starting the voice host…")
 	_host.start()
 		# The reading conducts: registered while the panel is up, so the transport shows a Play before anything has
@@ -479,6 +491,8 @@ func _rewrite(write: Callable) -> void:
 		return
 	_doc.set_process(false)
 	_doc.capture = Callable()
+	reopening = true
+	_walk_carried = note_path if _pipeline != null and _pipeline.walking() else ""
 	reopen.call(note_path)
 
 
@@ -824,9 +838,12 @@ func _has_reading() -> bool:
 	return not _cast_text().strip_edges().is_empty()
 
 
-## The passage every voice is auditioned with by Test.
+## The passage every voice is auditioned with by Test: a format's own words first where its walk has them (a table
+## show's reader, a letter), then the shared passage, so every Test is long enough to work the voice's dials while it
+## reads.
 func _test_passage() -> String:
-	return walk.test_passage(ReadingAudition.PASSAGE)
+	var own := walk.test_passage(ReadingAudition.PASSAGE)
+	return own if own == ReadingAudition.PASSAGE else own + "\n\n" + ReadingAudition.PASSAGE
 
 
 # --- persistence -----------------------------------------------------------------------------------

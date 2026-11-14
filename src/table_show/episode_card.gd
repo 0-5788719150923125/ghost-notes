@@ -197,9 +197,14 @@ func _shown_in() -> String:
 	return _note_medium()
 
 
+## What it is making stops - unless the note is being opened again (a format picked, a card attached or taken off), when
+## the card it comes up with takes it up ([method TableProducer.hand_over]).
 func _exit_tree() -> void:
-	if _producer != null:
-		_producer.stop()
+	if _producer != null and _producer.holder == self:
+		if reading != null and reading.reopening:
+			_producer.hand_over()
+		else:
+			_producer.stop()
 	if reading != null:
 		Director.unpin_medium(self)
 
@@ -216,7 +221,7 @@ func _process(delta: float) -> void:
 	_row_t -= delta
 	if _row_t <= 0.0:
 		_row_t = 0.25
-		if _producer != null:
+		if _producer != null and _producer.holder == self:
 			_producer.tick()
 		_refresh_card()
 		_seed_globals()
@@ -937,17 +942,18 @@ func _show_key() -> String:
 	return k if not k.is_empty() else Manuscript.slug(_show_title())
 
 
-## Point the panel at the current seed's episode (made, partly made, or not at all).
+## Point the panel at the current seed's episode (made, partly made, or not at all), and take up what is making it
+## ([method TableProducer.of]): the episode it has, opened again, goes on being made; another stops.
 func _open_episode() -> void:
 	if _episode_pick == null:
 		return
-	if _producer != null and _producer.running:
+	var ep := TableEpisode.open(_show_key(), int(_knobs["seed"]))
+	if _producer != null and _producer.running and (_episode == null or _episode.dir != ep.dir):
 		_producer.stop()
 	if reading != null:
 		reading.episode_left(_feed)   # ...and what the other cards were making of it
 	_flush_upload_fields()      # an edit still waiting belongs to the episode being left
-	var seed := int(_knobs["seed"])
-	_episode = TableEpisode.open(_show_key(), seed)
+	_episode = ep
 	# An episode made before records gains them as it is opened here (TableEpisode.adopt), so its rows show at once what is kept -
 	# never in a process that may not write the author's things
 	if not Settings.is_read_only():
@@ -955,7 +961,8 @@ func _open_episode() -> void:
 	_feed = Feed.new(self, _episode)
 	# the spec is taken when Generate is pressed (see _generate) - never here, where reading the
 	# document would land back in apply
-	_producer = TableProducer.new(_episode, {})
+	_producer = TableProducer.of(_episode)
+	_producer.holder = self
 	if is_inside_tree() and reading != null:
 		Director.pin_medium(_shown_in(), self)
 	_brief_changed = false
@@ -1038,6 +1045,16 @@ func _run(steps: Array, remake := false, note := "") -> void:
 	_producer.spec = _spec()
 	_brief_changed = false
 	_producer.start(steps, remake, note)
+
+
+func _resume(step: String) -> void:
+	if _producer == null or Settings.is_read_only():
+		return
+	_producer.spec = _spec()
+	var err := _producer.resume(step)
+	if not err.is_empty():
+		_section.tell(err)
+	_mark_stale()
 
 
 ## Asked first: an episode is minutes of the writer's and the painter's quota.
@@ -1356,6 +1373,14 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 		r.wraps = true
 	if st == "failed":
 		r.said = _producer.error_of(step)
+	var resumable := _producer.can_resume(step)
+	if resumable:
+		r.go_text = "Resume"
+		r.go = "Continue the saved draft with its remaining looks and completed observations. It spends the writer's quota."
+		r.go_open = not busy and not Settings.is_read_only()
+		r.make = _resume.bind(step)
+		if st == "missing":
+			r.said = "interrupted - progress saved"
 	# A depth not made yet holds nothing back ([method TableEpisode.complete]): it comes with the cloth, where the table wants one
 	if step == "image:height" and st == "missing":
 		r.state = "none"
@@ -1375,6 +1400,8 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 	if not ready:
 		r.again += " - once what it is made from is made"
 	r.asks = _asks_of(step, f)
+	if resumable:
+		r.asks = "This starts over and replaces the interrupted step's saved progress." + ("\n" + r.asks if not r.asks.is_empty() else "")
 	# A lock beside its ⟳ on what is made (TableEpisode.kept): locked, it is KEPT - Generate passes it by, stale or not; a step changed
 	# by hand is kept until it is unlocked
 	r.lockable = _episode.has(step)

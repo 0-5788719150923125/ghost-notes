@@ -55,6 +55,8 @@ var edit_tip := ""
 var edit := Callable()
 ## WHAT ITS ▶ DOES, "" for a row with none: what is made without throwing anything away (an actor's step and what it needs).
 var go := ""
+## The action's visible text: normally ▶, or Resume for an interrupted draft.
+var go_text := "▶"
 ## Whether its ▶ is offered now.
 var go_open := true
 ## Its ▶.

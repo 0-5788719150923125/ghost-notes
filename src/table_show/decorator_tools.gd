@@ -17,6 +17,8 @@ const OFF_MOST := 0.35
 ## said to be hardly seen (a base nearly the color of the bare mask shows nothing).
 const UNSEEN := 0.08
 
+const RESUME_FIELDS := ["_raw", "_looks", "_warned", "reference", "submitted"]
+
 var dir := ""
 var submitted := false
 ## The face painted first that the first surface's design copies (`face_ref.png`, [method Skins.face_reference]; "" none): each look of it
@@ -32,10 +34,12 @@ var _released := false
 var _warned := false
 
 
-func _init(job_dir: String, table_skins: Array) -> void:
+func _init(job_dir: String, table_skins: Array, keep := false) -> void:
 	dir = job_dir
 	skins = table_skins
 	DirAccess.make_dir_recursive_absolute(dir)
+	if keep:
+		return
 	for f in DirAccess.get_files_at(dir):
 		var fs := String(f)
 		if fs == SUBMITTED or fs == "tools.jsonl" or (fs.begins_with("look_") and fs.ends_with(".jpg")):

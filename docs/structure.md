@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 670 references inside a folder, 1165 down the stack, 0 up it.
+Between scripts today: 672 references inside a folder, 1166 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -27,7 +27,7 @@ Between scripts today: 670 references inside a folder, 1165 down the stack, 0 up
 | `voice/` | Synthesis (voice) | 16 | `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 27 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
-| `agents/` | Agents | 6 | `platform`, `data` |
+| `agents/` | Agents | 7 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 5 | `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `scene_kit/` | Scene substrate | 9 | `geometry`, `motion`, `render`, `audio`, `data` |
@@ -96,7 +96,7 @@ The catalog, one scene a file. Cataloged in [scenes.md](scenes.md), each from it
 
 Every piece of writing and painting ghost asks an AI for: who writes (TextGen) and who paints (ImageGen), one queue for both (AgentJobs), the tools ghost serves an agent while it works (AgentTools), which Amazon Bedrock models an AWS account can call (BedrockCatalog), and how the Assistant's command-line tools are run.
 
-[`agent_jobs`](../src/agents/agent_jobs.gd), [`agent_tools`](../src/agents/agent_tools.gd), [`assistant_backends`](../src/agents/assistant_backends.gd), [`bedrock_catalog`](../src/agents/bedrock_catalog.gd), [`image_gen`](../src/agents/image_gen.gd), [`text_gen`](../src/agents/text_gen.gd)
+[`agent_jobs`](../src/agents/agent_jobs.gd), [`agent_resume`](../src/agents/agent_resume.gd), [`agent_tools`](../src/agents/agent_tools.gd), [`assistant_backends`](../src/agents/assistant_backends.gd), [`bedrock_catalog`](../src/agents/bedrock_catalog.gd), [`image_gen`](../src/agents/image_gen.gd), [`text_gen`](../src/agents/text_gen.gd)
 
 ### `notes/` - Notes
 

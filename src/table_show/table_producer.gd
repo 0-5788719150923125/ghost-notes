@@ -34,6 +34,8 @@ class_name TableProducer
 ##
 ## How many cards, and whether any, are the producer's: the brief says in its own words what its episodes draw, and the plan's
 ## spread is the draw - as many cards as it has positions, at most [constant SPREAD_MOST].
+## New plans keep a runtime range in `minutes`; readers share its word budget at the chosen voice's pace. A generated
+## passage substantially below its requested word count is retried, then left failed for review instead of shortening the show.
 ##
 ## A show that draws no cards (its producer plans beats, [method TableEpisode.cardless]) is planned in beats: no deck, no design,
 ## no card painted or checked - the plan, the cloth and the room, the table, the work, and a passage per beat said while its work
@@ -47,11 +49,17 @@ class_name TableProducer
 ## Nothing runs on its own: [method start] is a person pressing Generate, because every step spends the author's quota, and a
 ## person asking for one part ([param only]) gets that part - what follows from it waits for Generate. Only the two steps that
 ## cost nothing and are a pure function of what they follow (the shuffle, assembling the script) come along on their own.
+##
+## ONE PRODUCER PER EPISODE ([method of]): what it was asked carries on with the settings it was started with, whatever is
+## changed meanwhile. A note opened again (a format picked, a card attached or taken off) is a panel built anew: its card
+## hands the producer over ([method hand_over]) and the card the note comes up with takes it up where it is.
 
 signal changed
 
 ## A step whose job fails is tried this many more times before the episode stops on it.
 const RETRIES := 1
+## How long a producer handed over waits for a card to take it up before it stops ([method hand_over]).
+const HANDOVER_S := 10.0
 ## A show's names, filled in its byline ([method _byline]).
 const Macros := preload("res://src/data/macros.gd")
 ## The most beats a show that draws no cards is planned in, between its intro and its close.
@@ -108,11 +116,56 @@ var skin_layer := -1
 ## Steps asked again with a note (next/editing.md step 9): step -> the author's note, appended to that step's prompt alone
 ## ([method _asked]) until it lands.
 var asked := {}
+## Who ticks it, and stops it on going: the card that took it up last ([method of]); null while it is handed over.
+var holder: Object = null
+
+## Episode folder -> the producer making it, while it has work under way ([method of]).
+static var _live := {}
+## Disk checkpoints are read only when they change; Pipeline asks four times a second.
+var _resume_cache := {}
+## Queue seam for gates: resuming must be testable without asking a real writer.
+var _submit_job: Callable = AgentJobs.submit
+
+const RESUMABLE := {
+	"acts": "res://src/table_show/puppeteer_tools.gd", "table": "res://src/table_show/set_dresser_tools.gd",
+	"model": "res://src/table_show/model_tools.gd", "skin": "res://src/table_show/decorator_tools.gd",
+	"solve": "res://src/table_show/solver_tools.gd"}
 
 
 func _init(ep: TableEpisode, sp: Dictionary) -> void:
 	episode = ep
 	spec = sp
+
+
+## The producer for [param ep]: the one making it now, else a new one.
+static func of(ep: TableEpisode) -> TableProducer:
+	var p: TableProducer = _live.get(ep.dir)
+	if p != null and (p.running or p.busy()):
+		return p
+	_live.erase(ep.dir)
+	return TableProducer.new(ep, {})
+
+
+## Its holder is going while the note is opened again: it goes on making what it was asked, for the card the note comes up
+## with to take up ([method of]), and stops if none has after [constant HANDOVER_S] (the note came up without its Table).
+func hand_over() -> void:
+	holder = null
+	var tree := Engine.get_main_loop() as SceneTree
+	if not (running or busy()) or tree == null:
+		stop()
+		return
+	tree.create_timer(HANDOVER_S).timeout.connect(unclaimed)
+
+
+## Stops it if no card has taken it up since it was handed over.
+func unclaimed() -> void:
+	if holder == null:
+		stop()
+
+
+func _forget_live() -> void:
+	if _live.get(episode.dir) == self:
+		_live.erase(episode.dir)
 
 
 ## Make what is missing: every step, or only [param steps] (and the free steps that follow them) - and, with [param remake], those
@@ -132,6 +185,7 @@ func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
 	episode.adopt()
 	_take_direction()
 	running = true
+	_live[episode.dir] = self
 	tick()
 	changed.emit()
 
@@ -159,6 +213,7 @@ func with_direction(system: String) -> String:
 
 func stop() -> void:
 	running = false
+	_forget_live()
 	for step in _jobs:
 		AgentJobs.cancel(String(_jobs[step]))
 		AgentJobs.forget(String(_jobs[step]))
@@ -266,6 +321,10 @@ func tick() -> void:
 			var s := String(step)
 			if (episode.has(s) and not owed(s)) or _jobs.has(s) or _hosts.has(s) or _errors.has(s) or passes_by(s):
 				continue
+			# Generate must not silently erase an interrupted draft. Resume continues it; an explicit
+			# row redo (again) starts over after the row has said what it will replace.
+			if not again.has(s) and not _resume_info(s).is_empty():
+				continue
 			# ...once what it is made from is made, and not about to be made again: made now from what goes a version back, it
 			# would only go stale
 			var ready := true
@@ -279,6 +338,7 @@ func tick() -> void:
 			moved = true
 		if _jobs.is_empty() and _hosts.is_empty() and _waiting.is_empty():
 			running = false          # done, or stopped on a failure nothing else can get past
+			_forget_live()
 			moved = true
 	if moved:
 		changed.emit()
@@ -305,6 +365,195 @@ func passes_by(step: String) -> bool:
 	return episode.by_hand(step) and not again.has(step) and not only.has(step)
 
 
+## All inputs, including pictures and direction: a draft is resumed only against the same episode.
+func _resume_inputs(step: String) -> Dictionary:
+	var out := {}
+	for key in episode.needs(step) + ["direction"]:
+		out[String(key)] = episode.digest(String(key))
+	return out
+
+
+func can_resume(step: String) -> bool:
+	return not running and not busy() and not _resume_info(step).is_empty()
+
+
+func _resume_info(step: String) -> Dictionary:
+	if not RESUMABLE.has(step):
+		return {}
+	var dir := episode.job_dir(step)
+	if AgentTools.working(dir):
+		return {}
+	var stamp := ""
+	for name in [AgentResume.REQUEST, AgentResume.CHECKPOINT, "tools.jsonl", "submitted.json"]:
+		var path := dir.path_join(name)
+		stamp += "%s:%d:%d|" % [name, FileAccess.get_modified_time(path), FileAccess.get_size(path)] if FileAccess.file_exists(path) else name + "|"
+	var cached: Dictionary = _resume_cache.get(step, {})
+	if String(cached.get("stamp", "")) != stamp:
+		var request := AgentResume.read_request(dir)
+		var checkpoint := AgentResume.read_checkpoint(dir)
+		var data := {"request": request, "checkpoint": checkpoint}
+		# Before checkpoints existed, Work's journal kept every completed edit and watch.
+		if request.is_empty() and not FileAccess.file_exists(dir.path_join(AgentResume.REQUEST)) and step == "acts" and not episode.has(step):
+			data = _legacy_work(dir)
+		cached = {"stamp": stamp, "data": data}
+		_resume_cache[step] = cached
+	var data: Dictionary = cached.get("data", {})
+	var request: Dictionary = data.get("request", {})
+	var checkpoint: Dictionary = data.get("checkpoint", {})
+	if String(request.get("step", "")) != step or String(request.get("script", "")) != String(RESUMABLE[step]) \
+			or not (request.get("job") is Dictionary) or request.get("inputs") != _resume_inputs(step) \
+			or String(request.get("output", "")) != episode.digest(step):
+		return {}
+	var job: Dictionary = request["job"]
+	if not (job.get("system") is String) or not (job.get("prompt") is String) \
+			or not (job.get("images", []) is Array) or not (request.get("spec", {}) is Dictionary):
+		return {}
+	if not TextGen.has(String(job.get("backend", ""))) or not TextGen.make(String(job["backend"])).takes_tools():
+		return {}
+	if not bool(data.get("legacy", false)) and (checkpoint.is_empty() or String(checkpoint.get("script", "")) != String(request["script"])):
+		return {}
+	if not bool(data.get("legacy", false)) and not AgentResume.compatible(load(String(RESUMABLE[step])), checkpoint):
+		return {}
+	var calls := int(checkpoint.get("calls", 0))
+	if calls <= 0 or (calls >= AgentTools.MAX_CALLS and not FileAccess.file_exists(dir.path_join("submitted.json"))):
+		return {}
+	return data
+
+
+func _legacy_work(dir: String) -> Dictionary:
+	var entries := AgentResume.history(dir)
+	if entries.is_empty() or not FileAccess.file_exists(dir.path_join("prompt.txt")):
+		return {}
+	# No old fingerprint exists: be conservative about inputs edited since the run began.
+	var began := int(entries[0].get("at", 0))
+	for key in episode.needs("acts") + ["direction"]:
+		var path := episode.file_of(String(key))
+		if FileAccess.file_exists(path) and int(FileAccess.get_modified_time(path)) > began:
+			return {}
+	var images := 0
+	for entry in entries:
+		for name in entry.get("images", []):
+			images = maxi(images, String(name).trim_prefix("look_").get_basename().to_int())
+	var system := dir.path_join("system.txt")
+	return {"legacy": true, "entries": entries,
+		"checkpoint": {"calls": entries.size(), "images": images, "log_bytes": FileAccess.get_size(dir.path_join("tools.jsonl"))},
+		"request": {"version": AgentResume.VERSION, "step": "acts", "script": RESUMABLE["acts"], "spec": spec,
+			"inputs": _resume_inputs("acts"), "from": episode.made_from("acts"), "output": "",
+			"job": {"kind": "text", "backend": String(spec.get("writer", "claude")), "tier": "best",
+				"system": FileAccess.get_file_as_string(system) if FileAccess.file_exists(system) else "",
+				"prompt": FileAccess.get_file_as_string(dir.path_join("prompt.txt")), "images": [],
+				"model": String(spec.get("writer_model", "")), "effort": String(spec.get("writer_effort", ""))}}}
+
+
+## Create only known authoring tools, keeping their files. Live renderers and processes are rebuilt;
+## the saved data, counters, draft order and submit guards are restored before tools are served.
+func _resume_tools(step: String, saved_spec: Dictionary) -> Object:
+	var dir := episode.job_dir(step)
+	match step:
+		"acts":
+			return PuppeteerTools.new(episode, _plan(), dir, episode.read_json("table"), true)
+		"table":
+			return SetDresserTools.new(episode, _plan(), dir, String(saved_spec.get("title", "")),
+				_byline(), saved_spec.get("fixed", {}), true)
+		"model":
+			return ModelTools.new(dir, true)
+		"skin":
+			var tools := DecoratorTools.new(dir, Skins.skins_of(episode.read_json("table")), true)
+			tools.reference = episode.dir.path_join("face_ref.png") if episode.has("image:face") else ""
+			return tools
+		"solve":
+			return SolverTools.new(episode, episode.problem(), dir)
+	return null
+
+
+## A person's Resume press. An already submitted draft lands locally; otherwise a fresh writer gets
+## the original task and completed observations. No generation, preview or external check is replayed.
+func resume(step: String) -> String:
+	if AgentJobs.read_only():
+		return "This session is read-only."
+	if running or busy():
+		return "Stop the current run before resuming another step."
+	_resume_cache.erase(step)
+	var data := _resume_info(step)
+	if data.is_empty():
+		return "No compatible saved progress remains for this step."
+	var request: Dictionary = data["request"]
+	var checkpoint: Dictionary = data["checkpoint"]
+	spec = (request.get("spec", {}) as Dictionary).duplicate(true)
+	var dir := episode.job_dir(step)
+	var toolset := _resume_tools(step, request.get("spec", {}))
+	if toolset == null:
+		return "This step's tools cannot be restored."
+	if bool(data.get("legacy", false)):
+		(toolset as PuppeteerTools).recover(data["entries"])
+	else:
+		if not AgentResume.restore(toolset, checkpoint):
+			toolset.call("release")
+			return "The saved checkpoint is damaged or incompatible."
+	if toolset is SolverTools:
+		# A cancelled run can finish writing its numbered evidence before returning to the closed
+		# endpoint. Keep that evidence and charge its budget even though its reply was not delivered.
+		(toolset as SolverTools).runs = maxi((toolset as SolverTools).runs, (toolset as SolverTools)._runs().size())
+	var err := AgentResume.archive(dir)
+	if not err.is_empty():
+		toolset.call("release")
+		return err
+	# Discard only the uncommitted tail, after archiving it with the previous attempt.
+	var entries := AgentResume.history(dir, int(checkpoint.get("log_bytes", 0)))
+	var notes := AgentResume.notes(dir)
+	err = AgentResume.trim_history(dir, entries)
+	if err.is_empty():
+		err = AgentResume.save(dir, toolset, int(checkpoint["calls"]), int(checkpoint["images"]))
+	if err.is_empty():
+		err = AgentResume.write_json(dir.path_join(AgentResume.REQUEST), request)
+	if not err.is_empty():
+		toolset.call("release")
+		return err
+	var url := AgentTools.open(dir, toolset, checkpoint)
+	if url.is_empty():
+		toolset.call("release")
+		return "The tools could not be served."
+	_tools[step] = {"url": url, "set": toolset}
+	_errors.erase(step)
+	_tries[step] = 1
+	_from[step] = request.get("from", {})
+	only = [step]
+	again = [step] if episode.has(step) else []
+	running = true
+	_live[episode.dir] = self
+	if bool(toolset.get("submitted")) and FileAccess.file_exists(dir.path_join("submitted.json")):
+		_land(step, {"ok": true})
+		if not _errors.has(step) and episode.has(step):
+			_made(step, String(MAKERS.get(step, "agent")))
+	else:
+		var job: Dictionary = (request["job"] as Dictionary).duplicate(true)
+		job.merge({"kind": "text", "dir": dir, "tools_url": url, "label": "table %s (resumed)" % step}, true)
+		job["prompt"] = String(job.get("prompt", "")) + "\n\n" + AgentResume.continuation(toolset, entries, int(checkpoint["calls"]))
+		if not notes.is_empty():
+			job["prompt"] += "\n\nPREVIOUS WRITER'S NOTES:\n" + notes
+		if step == "solve":
+			job["prompt"] += "\n\nSAVED NOTEBOOK:\n" + episode.read_text("notebook")
+		var images: Array = job.get("images", []).duplicate(true)
+		var recent: Array = []
+		for entry in entries:
+			for name in entry.get("images", []):
+				recent.append(String(name))
+		for name in recent.slice(maxi(0, recent.size() - 2)):
+			if FileAccess.file_exists(dir.path_join(String(name))):
+				images.append({"path": dir.path_join(String(name)), "label": "Saved observation from the interrupted run", "flip": false})
+		job["images"] = images
+		var id: String = _submit_job.call(job)
+		if id.is_empty():
+			_errors[step] = "The resumed writer could not be queued."
+			_close_tools(step)
+			running = false
+			_forget_live()
+			return String(_errors[step])
+		_jobs[step] = id
+	changed.emit()
+	return ""
+
+
 ## [param step] landed, made by [param by]: recorded from what it was made from as its making began, and no longer owed.
 func _made(step: String, by: String) -> void:
 	var err := episode.note_made(step, by, _from.get(step, {}))
@@ -313,9 +562,21 @@ func _made(step: String, by: String) -> void:
 	_from.erase(step)
 	again.erase(step)
 	asked.erase(step)
+	AgentResume.finish(episode.job_dir(step))
+	_resume_cache.erase(step)
 
 
 func _make(step: String) -> void:
+	AgentResume.finish(episode.job_dir(step))
+	_resume_cache.erase(step)
+	if RESUMABLE.has(step):
+		# Mark a fresh attempt even if its writer takes no tools. Otherwise old tools.jsonl left
+		# by a previous tool writer could be mistaken for a pre-checkpoint run after another crash.
+		var err := AgentResume.write_json(episode.job_dir(step).path_join(AgentResume.REQUEST), {
+			"version": AgentResume.VERSION, "step": step, "fresh": true})
+		if not err.is_empty():
+			_errors[step] = err
+			return
 	_from[step] = episode.made_from(step)
 	var parts := step.split(":")
 	match String(parts[0]):
@@ -374,7 +635,18 @@ func _submit_text(step: String, p: Dictionary, tier: String, extra: Dictionary =
 		"prompt": _asked(step, String(p["prompt"])), "images": p.get("images", []), "label": "table %s" % step,
 		"model": String(spec.get("writer_model", "")), "effort": String(spec.get("writer_effort", ""))}
 	job.merge(extra, true)
-	var id := AgentJobs.submit(job)
+	var t: Dictionary = _tools.get(step, {})
+	if not t.is_empty() and not AgentResume.fields(t["set"]).is_empty():
+		var saved := job.duplicate(true)
+		saved.erase("tools_url")
+		var err := AgentResume.write_json(episode.job_dir(step).path_join(AgentResume.REQUEST), {
+			"version": AgentResume.VERSION, "step": step, "script": t["set"].get_script().resource_path,
+			"job": saved, "spec": spec, "inputs": _resume_inputs(step), "from": _from.get(step, {}), "output": episode.digest(step)})
+		if not err.is_empty():
+			_errors[step] = err
+			_close_tools(step)
+			return
+	var id: String = _submit_job.call(job)
 	if id.is_empty():
 		_errors[step] = "this session cannot start agents (read-only)"
 		_close_tools(step)
@@ -1638,6 +1910,15 @@ func say_prompt(who: String) -> Dictionary:
 	return p
 
 
+## A generated passage's word count, excluding voice and stage marks. A small tolerance allows for differing word counters.
+static func short_passage(text: String, requested: Vector2i) -> String:
+	var spoken := Manuscript._rx(Manuscript.COMMENT).sub(text, " ", true)
+	var count := Manuscript._rx("\\S+").search_all(spoken).size()
+	if count < floori(float(requested.x) * 0.9):
+		return "the reader wrote %d words; this passage needs %d to %d words to meet the episode's runtime" % [count, requested.x, requested.y]
+	return ""
+
+
 ## The intro and the passages for cards 1..upto, in order - each card's work passage after its own, but the
 ## last card's when [param last_work] is false (the work passage being written now).
 func _said(upto: int, last_work := true) -> Array:
@@ -1810,6 +2091,9 @@ func _land(step: String, res: Dictionary) -> void:
 		var checks := int((t["set"] as SolverTools).checks) if not t.is_empty() and t["set"] is SolverTools else 0
 		var handed_in := _handed_in("solve")
 		_close_tools("solve")
+		if handed_in.is_empty() and not _resume_info(step).is_empty():
+			_errors[step] = String(res.get("error", "The solver stopped before submitting; its progress can be resumed."))
+			return
 		var why := _land_solve(handed_in, res, checks)
 		if why.is_empty():
 			# what the runs left in their folder was scratch: what they did is in runs.json
@@ -1860,8 +2144,11 @@ func _land(step: String, res: Dictionary) -> void:
 				t = fit_silence(t, beat_acts, _said_word())
 								# no notation in what is said: a voice handed TeX reads its marks
 				var notation := notation_in(t)
+				var short := short_passage(t, say_prompt(step.trim_prefix("say:"))["words"]) if _plan().has("minutes") else ""
 				if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20):
 					err = "the reader wrote nothing speakable"
+				elif not short.is_empty():
+					err = short
 				elif not notation.is_empty() and int(_tries.get(step, 0)) <= RETRIES:
 					err = "its words carry notation the voice cannot say (%d line%s): %s" % [notation.size(), "" if notation.size() == 1 else "s", notation[0]]
 				else:
@@ -1896,7 +2183,7 @@ func _land(step: String, res: Dictionary) -> void:
 		_errors.erase(step)
 		return
 	push_warning("ghost: table %s - %s" % [step, err])
-	if int(_tries.get(step, 0)) > RETRIES:
+	if int(_tries.get(step, 0)) > RETRIES or not _resume_info(step).is_empty():
 		_errors[step] = err
 
 
@@ -1935,6 +2222,9 @@ func _land_plan(text: String) -> String:
 	if not (d is Dictionary):
 		return "the plan was not JSON"
 	var plan: Dictionary = d
+	if plan.get("game") != true:
+		var minutes := TablePrompts.minutes_of(plan)
+		plan["minutes"] = [minutes.x, minutes.y]
 	# A plan of beats draws no cards: the producer's own choice, read off the brief. a game is one that has none: it plans no beats, for nobody knows what they will be (next/tabletop.md)
 	if plan.get("game") == true or (plan.get("beats") is Array and not (plan.get("beats") as Array).is_empty()):
 		return _land_beats(plan)

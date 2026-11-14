@@ -6,8 +6,9 @@ extends Node
 ##
 ## Holds, with a stand-in voice host that answers with takes made here:
 ##
-## - Test asks the host for every sentence of the passage at once, in the selected voice, and says
-##   so on its button;
+## - Test asks the host for the passage's first [constant ReadingAudition.AHEAD] sentences, not all of it, in the
+##   selected voice, and says so on its button; the rest are asked as replies arrive, each with the voice's
+##   settings as they are then (a pace changed mid-test reaches the sentences asked after it, and not those before);
 ## - a sentence that arrives before the one ahead of it waits: nothing is joined out of order;
 ## - the passage is joined as a reading joins it ([ReadingJoin]): every sentence, a seam of the voice's
 ##   between each two, a second of silence after the last, every joined frame through the room once;
@@ -74,24 +75,50 @@ func _run() -> void:
 	var a := _ed._audition
 	_ed._on_test()
 	var n := a.chunks.size()
-	_ok(n >= 10 and _host.asked.size() == n, "Test asked for %d of the passage's %d sentences" % [_host.asked.size(), n])
-	_ok(_host.asked.all(func(q: Dictionary) -> bool: return String(q["voice"]) == "en_US-libritts-high"),
-		"Test asked in another voice than the tab's")
+	_ok(n >= 10 and _host.asked.size() == ReadingAudition.AHEAD,
+		"Test asked for %d of the passage's %d sentences at once, not %d" % [_host.asked.size(), n, ReadingAudition.AHEAD])
 	_ok(_ed._cast._test.text == "Test ■" and a.busy(), "Test does not say it is testing")
-	# the second sentence first: it waits for the first
+	# nobody listens here, so nothing is heard: the lead is widened, or the asking would stop LEAD seconds in
+	a.lead = 1.0e9
 	var sizes: Array = []
 	var files: Array = []
 	for i in n:
 		sizes.append(int(SR * (0.4 + 0.1 * (i % 3))))
 		files.append(_wav(i, int(sizes[i])))
+	# the second sentence first: it waits for the first
 	a.take(1001 + 1, {"wav": files[1], "sample_rate": SR, "tokens": []})
 	await _settle(a)
 	_ok(a._next == 0 and a._join.frames == 0, "control: a sentence that came early was joined before the one ahead of it")
 	a.take(1001, {"wav": files[0], "sample_rate": SR, "tokens": []})
-	for i in range(2, n):
-		a.take(1001 + i, {"wav": files[i], "sample_rate": SR, "tokens": []})
 	await _settle(a)
+	# the pace changed mid-test: what is asked and not yet joined is asked again at it, and so is all that follows
+	var pending: Array = a._req.keys()
+	pending.sort()
+	var changed_at := _host.asked.size()
+	_ed._cast._slots[0]["pace"] = 1.5
+	await _settle(a)
+	var dropped := _host.cancelled.duplicate()
+	dropped.sort()
+	_ok(not pending.is_empty() and dropped == pending,
+		"the pace changed: %d of the %d sentences still asked were asked again" % [dropped.size(), pending.size()])
+	_host.cancelled = []
+	for _r in 400:
+		if a._next >= n:
+			break
+		for id in a._req.keys():
+			a.take(int(id), {"wav": files[int(a._req[id])], "sample_rate": SR, "tokens": []})
+		await _settle(a)
 	_ok(a._next == n, "%d of %d sentences joined" % [a._next, n])
+	_ok(_host.asked.all(func(q: Dictionary) -> bool: return String(q["voice"]) == "en_US-libritts-high"),
+		"Test asked in another voice than the tab's")
+	var scale := func(i: int) -> float: return float((_host.asked[i]["params"] as Dictionary).get("length_scale", 0.0))
+	var after_ok := true
+	for i in range(changed_at, _host.asked.size()):
+		after_ok = after_ok and scale.call(i) < scale.call(0) * 0.8
+	_ok(after_ok and _host.asked.size() > changed_at, "a sentence asked after the pace changed did not read at it")
+	_ok(is_equal_approx(scale.call(changed_at - 1), scale.call(0)),
+		"control: a sentence asked before the pace changed read at the new pace")
+	_ed._cast._slots[0]["pace"] = 1.0
 	var s: Dictionary = _ed._cast.cfg_of(Manuscript.NARRATOR)
 	var seam := int(Delivery.seam_gap_of(s) * SR)
 	var spoken := 0

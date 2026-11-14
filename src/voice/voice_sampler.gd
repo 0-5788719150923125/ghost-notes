@@ -20,7 +20,7 @@ signal seed_ready(traits: Dictionary, genome: Dictionary, report: String)
 
 const BUS_NAME := "VoiceIn"
 const MIN_SECONDS := 8.0            # too little speech = statistics of nothing
-const MAX_SECONDS := 120.0          # auto-stop; the Test passage reads in about a minute
+const MAX_SECONDS := 600.0          # auto-stop; the Test passage reads in about six minutes
 
 var _words: Label                   # the passage read aloud, handed to [method open]
 var _record_btn: Button

@@ -26,7 +26,7 @@ class_name TablePrompts
 ##   set dresser - the reader's table: what stands on it, described to be built; knows no card.
 ##
 ## What the show has already made ([method TableEpisode.archive]) reaches each role in the part it decides, cut short: the
-## producer sees every earlier episode's angle, running bit, deck (what its cards pictured, and how) and cloth and room, and
+## producer sees every earlier episode's angle, running bit, drawn contents and writing, deck (what its cards pictured, and how), cloth and room, and
 ## names the habits they share before it plans; the designer sees how earlier decks pictured the same card; the set dresser, what
 ## earlier tables held; a reader passage, how earlier episodes opened, met a card or closed. An agent told only to vary drifts
 ## back to the likeliest choice, because it cannot steer away from choices it has never seen - and the habits are in the form
@@ -36,10 +36,11 @@ class_name TablePrompts
 ## than twice the cards drawn, so the seed, not the producer, decides which come out.
 const BOX := [12, 30]
 
-## How many words each passage runs to - the length of an episode comes from these - and a work's own passage, for each
-## second of its work at the voice's pace: at least enough to cover it, and room for a story.
+## Passage sizes for plans without a runtime, and the minimum room for a work's own passage at the voice's pace.
 const WORDS := {"intro": [130, 190], "card": [110, 170], "close": [90, 140]}
 const WORK_WORDS := Vector2(1.0, 1.8)
+## An episode's runtime in minutes unless the brief specifies another range. New plans keep it as `minutes`.
+const MINUTES := Vector2(10.0, 15.0)
 
 ## How many earlier episodes the producer reads in full, and how many more in a line each.
 const PAST_FULL := 10
@@ -250,6 +251,7 @@ static func producer(title: String, brief: String, seed: int,
 	for i in mini(history.size(), PAST_FULL + PAST_LINES):
 		past.append(_past(_d(history[i])) if i < PAST_FULL else _past_line(_d(history[i])))
 	var vars := {"seed": seed, "chooses": chooses, "spread_most": spread_most, "run": SolverTools.can_run(),
+		"minutes_lo": _s(MINUTES.x), "minutes_hi": _s(MINUTES.y),
 		"beats_most": TableProducer.BEATS_MOST, "habits": not past.is_empty(), "past": "\n".join(past), "uploads_as": uploads_as.strip_edges(),
 		"place": String(d["place"]), "year": int(d["year"]), "hue": int(d["hue"]), "hour": int(d["hour"]), "direction": int(d["direction"]),
 		"frame_styles": ", ".join(frames.keys()), "windows": ", ".join(CardTable.WINDOWS.keys()), "corners": ", ".join(CardTable.CORNERS.keys()),
@@ -395,6 +397,73 @@ const QUIET_MOST := 0.85
 static func quiet_of(plan: Dictionary) -> float:
 	var q: Variant = plan.get("quiet", 0.0)
 	return clampf(float(q), 0.0, QUIET_MOST) if q is float or q is int else 0.0
+
+
+## A plan's finite, positive runtime range, or the default. A game's length belongs to its session rules.
+static func minutes_of(plan: Dictionary) -> Vector2:
+	var raw: Variant = plan.get("minutes")
+	if raw is Array and raw.size() == 2 and (raw[0] is float or raw[0] is int) and (raw[1] is float or raw[1] is int):
+		var span := Vector2(float(raw[0]), float(raw[1]))
+		if span.is_finite() and span.x > 0.0 and span.y >= span.x:
+			return span
+	return MINUTES
+
+
+## The episode's spoken-word budget, shared across its passages at this voice's pace. Openings, closes and short card
+## comments keep their size; the story passages share the remaining time. Work gets its own story passage after its card.
+## Plans without `minutes` keep their passage sizes until replanned. Quiet time counts toward the runtime, not the word count.
+static func passage_words(plan: Dictionary, said_word := SAID_WORD) -> Dictionary:
+	if not plan.has("minutes") or plan.get("game") == true:
+		return {}
+	var fixed := {"intro": Vector2i(WORDS["intro"][0], WORDS["intro"][1]), "close": Vector2i(WORDS["close"][0], WORDS["close"][1])}
+	var stories := PackedStringArray()
+	var quiet_stories := PackedStringArray()
+	var bare := CardTable.cardless(plan)
+	var staging := CardTable.staging_of(plan)
+	var positions: Array = _d(plan.get("spread")).get("positions", [])
+	for i in positions.size():
+		var p := _d(positions[i])
+		var key := str(i + 1)
+		var comment := _s(p.get("comment", ""))
+		var work := not bare and not _s(p.get("work", "")).is_empty()
+		if bare:
+			stories.append(key)
+			if not _s(p.get("work", "")).is_empty():
+				quiet_stories.append(key)
+		elif comment == "none":
+			fixed[key] = Vector2i.ZERO
+		elif comment == "aside":
+			fixed[key] = Vector2i(45, 75)
+		elif comment == "brief" or (String(staging["source"]) == "box" and TableProducer.passed(p, positions)):
+			fixed[key] = Vector2i(15, 40)
+		elif comment.is_empty() and String(staging["pace"]) in ["quick", "mixed"]:
+			fixed[key] = Vector2i(90, 140) if String(staging["pace"]) == "mixed" and (i + 1) % 3 == 0 else Vector2i(35, 75)
+		elif work:
+			fixed[key] = Vector2i(WORDS["card"][0], WORDS["card"][1])
+		else:
+			stories.append(key)
+		if work:
+			stories.append("work:" + key)
+			quiet_stories.append("work:" + key)
+	# A show made only of brief looks still needs room to tell its story.
+	if stories.is_empty():
+		fixed.erase("close")
+		stories.append("close")
+	var total := Vector2.ZERO
+	for span: Vector2i in fixed.values():
+		total += Vector2(span)
+	var target := minutes_of(plan) * (60.0 / maxf(said_word, 0.01))
+	var scale := minf(1.0, target.x / maxf(total.x + 30.0 * stories.size(), 1.0))
+	var used := Vector2.ZERO
+	for key in fixed:
+		var span := Vector2(fixed[key]) * scale
+		fixed[key] = Vector2i(roundi(span.x), roundi(span.y))
+		used += Vector2(fixed[key])
+	var share := (target - used) / float(stories.size())
+	for key in stories:
+		var talk := share * (1.0 - quiet_of(plan)) if key in quiet_stories else share
+		fixed[key] = Vector2i(maxi(1, roundi(talk.x)), maxi(1, roundi(maxf(talk.x, talk.y))))
+	return fixed
 
 
 ## The puppeteer, blocking the episode's work on its set table ([PuppeteerTools]): the plan's work, the cards
@@ -859,9 +928,23 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		var pos: Dictionary = positions[int(step) - 1] if int(step) >= 1 and int(step) - 1 < positions.size() and positions[int(step) - 1] is Dictionary else {}
 		vars["chapter_now"] = TableEpisode.card_chapter(String(pos.get("name", "")), String(c.get("name", "")),
 			bool(c.get("reversed", false)), bool(c.get("jumper", false)))
+	var budget := passage_words(plan, said_word)
+	var key := "work:%d" % work_k if work_k > 0 else step
+	if budget.has(key):
+		var span: Vector2i = budget[key]
+		# The work's own timing remains a floor; a story may carry on while the work waits for its next cue.
+		lo_hi = [maxi(span.x, int(lo_hi[0])) if not work.is_empty() else span.x,
+			maxi(span.y, int(lo_hi[1])) if not work.is_empty() else span.y]
+		if bool(vars.get("quiet", false)) and step not in ["intro", "close"]:
+			var q := quiet_of(plan)
+			vars["quiet_seconds"] = maxi(int(vars["quiet_seconds"]), roundi(float(lo_hi[0] + lo_hi[1]) * 0.5 * said_word * q / (1.0 - q)))
+	vars["runtime"] = plan.has("minutes")
+	var minutes := minutes_of(plan)
+	vars["minutes_lo"] = _s(minutes.x)
+	vars["minutes_hi"] = _s(minutes.y)
 	vars["lo"] = int(lo_hi[0])
 	vars["hi"] = int(lo_hi[1])
-	return {"system": show_context(title, brief), "prompt": Rules.say("table/reader.prompt", vars)}
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/reader.prompt", vars), "words": Vector2i(vars["lo"], vars["hi"])}
 
 
 ## CARD [param k] as the reader meets it: which way it came (the first that holds of a jumper, dealt, the
@@ -1063,6 +1146,9 @@ static func _past(e: Dictionary) -> String:
 	lines.append("  The reader: %s" % clip(_s(p.get("reader_mood", "")), 60))
 	if not _s(p.get("running_bit", "")).is_empty():
 		lines.append("  Running bit: %s" % clip(_s(p.get("running_bit", "")), 30))
+	var contents := _past_contents(e)
+	if not contents.is_empty():
+		lines.append("  What was drawn and used: %s" % contents)
 	# A show that draws no cards: its beats, then its table - no deck, no printing
 	if CardTable.cardless(p):
 		var beats := PackedStringArray()
@@ -1122,8 +1208,19 @@ static func _past_line(e: Dictionary) -> String:
 	var look := _d(p.get("look"))
 	if CardTable.cardless(p):
 		return "- \"%s\" - %s; %s" % [_s(p.get("episode_title", "")), clip(_s(p.get("topic", "")), 10), clip(_s(look.get("setting", "")), 10)]
-	return "- \"%s\" - %s; deck \"%s\": %s" % [_s(p.get("episode_title", "")), clip(_s(p.get("topic", "")), 10),
-		_s(look.get("deck_name", "")), clip(_s(look.get("deck_style", "")), 14)]
+	return "- \"%s\" - %s; deck \"%s\": %s; drawn: %s" % [_s(p.get("episode_title", "")), clip(_s(p.get("topic", "")), 10),
+		_s(look.get("deck_name", "")), clip(_s(look.get("deck_style", "")), 14), _past_contents(e, false)]
+
+
+## Actual drawn contents, including written cards with no art. Only the producer receives this history.
+static func _past_contents(e: Dictionary, full := true) -> String:
+	var out := PackedStringArray()
+	for c in e.get("cards", []) if e.get("cards") is Array else []:
+		var card := _d(c)
+		var writing := _d(card.get("writing"))
+		out.append("%s - %s%s" % [_s(card.get("name", "")), clip(_s(card.get("meaning", "")), 40 if full else 16),
+			("; written: " + clip(" / ".join(DataPath.strings(writing.get("lines", []))), 80 if full else 32)) if not writing.is_empty() else ""])
+	return "; ".join(out)
 
 
 ## How earlier decks pictured the card named [param card_name], one line each.

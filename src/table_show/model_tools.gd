@@ -13,6 +13,7 @@ class_name ModelTools
 const SUBMITTED := "submitted.json"
 ## How many pictures one modeler may take.
 const LOOKS := 24
+const RESUME_FIELDS := ["_raw", "_made", "_looks", "_warned_floating", "submitted"]
 const JUDGE := "Would a stranger know what this is from any one of these? What is flat, empty, muddy or wrong, and what would make it better?"
 
 var dir := ""
@@ -26,9 +27,11 @@ var _released := false
 var _warned_floating := false
 
 
-func _init(job_dir: String) -> void:
+func _init(job_dir: String, keep := false) -> void:
 	dir = job_dir
 	DirAccess.make_dir_recursive_absolute(dir)
+	if keep:
+		return
 	for f in DirAccess.get_files_at(dir):
 		var fs := String(f)
 		if fs == SUBMITTED or fs == "tools.jsonl" or (fs.begins_with("look_") and fs.ends_with(".jpg")):

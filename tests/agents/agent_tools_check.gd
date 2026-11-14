@@ -24,6 +24,7 @@ var _fails := 0
 
 class Toolset:
 	extends RefCounted
+	const RESUME_FIELDS := ["seen"]
 
 	var tree: SceneTree
 	var seen: Array = []
@@ -143,6 +144,14 @@ func _run() -> void:
 	_ok(tools == ["echo", "picture", "slow"], "the calls were not logged in order: %s" % str(tools))
 	_ok(log.size() >= 2 and String(log[1]).contains("look_01.jpg"), "the log does not name the picture kept")
 	_ok(AgentTools.calls(url) == 3, "the job's calls were counted as %d" % AgentTools.calls(url))
+	var checkpoint := AgentResume.read_checkpoint(dir)
+	var restored := Toolset.new()
+	_ok(AgentResume.restore(restored, checkpoint) and restored.seen == ts.seen
+		and int(checkpoint.get("calls", -1)) == 3 and int(checkpoint.get("images", -1)) == 1,
+		"completed socket calls did not commit their state and budgets before answering")
+	var resumed_url := AgentTools.open(dir, restored, checkpoint)
+	_ok(AgentTools.calls(resumed_url) == 3, "opening restored tools reset the call budget")
+	AgentTools.close(resumed_url)
 
 	# The wire
 	var body := JSON.stringify({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "echo", "arguments": {"say": "in two"}}})
@@ -195,9 +204,28 @@ func _run() -> void:
 	AgentTools.close(url)
 	r = await _post(path, {"jsonrpc": "2.0", "id": 11, "method": "ping"})
 	_ok(int(r["status"]) == 404, "a closed job was answered %d" % r["status"])
+	# A stopped call that returns later cannot overwrite the resumed job's journal or checkpoint.
+	var late_dir := dir.path_join("late")
+	var late := Toolset.new()
+	late.tree = self
+	var late_url := AgentTools.open(late_dir, late)
+	var late_job: Dictionary = AgentTools._the._jobs[late_url.get_file()]
+	var pending := {}
+	_late_call(late_job, pending)
+	_ok(AgentTools.working(late_dir), "a call taking frames was not marked in flight")
+	AgentTools.close(late_url)
+	for i in 5:
+		await process_frame
+	_ok(pending.has("reply") and pending["reply"].has("error") and not AgentTools.working(late_dir)
+		and not FileAccess.file_exists(late_dir.path_join("tools.jsonl")) and AgentResume.read_checkpoint(late_dir).is_empty(),
+		"a call returning after Stop wrote progress over a continuation")
 
 	print("agent_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
+
+
+func _late_call(job: Dictionary, pending: Dictionary) -> void:
+	pending["reply"] = await AgentTools._the._rpc(job, {"id": 99, "method": "tools/call", "params": {"name": "slow"}})
 
 
 func _raw(method: String, path: String, body: String, extra := {}) -> PackedByteArray:

@@ -135,6 +135,13 @@ prompt:
   - when: voices
     include: voices
   - ""
+  - when: runtime
+    say: >-
+          The whole episode is planned for {{minutes_lo}} to {{minutes_hi}} minutes. The word range
+          below is this passage's share, calculated at your voice's pace. Give it that much substance:
+          tell the stories and explanations fully, with their people, details and consequences. The
+          work may wait for its next cue while you talk. Do not compress the passage to its animation
+          time, repeat yourself to fill time, or move another passage's story here.
   - "Write {{lo}} to {{hi}} words."
   - ""
   - include: spoken

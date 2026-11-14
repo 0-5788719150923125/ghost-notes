@@ -50,7 +50,10 @@ and at a row each four times a second it would cost a playing show).
 
 **One Generate.** Top to bottom, every section's missing work in turn, each waiting for the one before: an episode's words
 first, then what is made from them. A section's own ▶ on its heading makes only that section, so "paint the missing
-pictures, not the tags" is one click. While Generate walks, every ⟳ waits, and Stop stops it all.
+pictures, not the tags" is one click. While Generate walks, every ⟳ waits, and Stop stops it all. What Generate was asked
+goes on with the settings it was pressed with: a note opened again while it walks (a format picked, a card attached or
+taken off) builds its panel anew, whose cards take up what is being made (`TableProducer.of`) and whose Generate walks on
+(`PipelineCard.carry_on`).
 
 ## What changed for the person
 
@@ -63,6 +66,26 @@ pictures, not the tags" is one click. While Generate walks, every ⟳ waits, and
 - A Picture's "Regenerate" stays beside its thumbnail and in its full-size window, where the picture is judged.
   "Generate missing" and "Regenerate all" are there too.
 - Proof's Invent and Refine stay on the Proof card: they write the note's words, which come before the pipeline.
+
+## Interrupted authoring
+
+An interrupted authoring step offers **Resume** beside its regenerate button when its tools have saved progress.
+Work, table setup, model design, decoration and solving checkpoint their draft and bookkeeping after every completed
+tool call. The remaining looks, call budget and submit guards survive Stop, a crash, or an app restart. Generate
+leaves this progress alone; regenerate asks before starting it over. Nothing resumes automatically on open.
+
+Resume restores against the same input files and original settings. It starts a writer with the original task,
+the restored draft, recent completed tool answers, visible writer notes and saved pictures. Writer sessions remain
+stateless: hidden reasoning and an in-flight call are not checkpointed. The old writer's files are kept under
+`jobs/<step>/attempts/` before the new attempt writes its own stream. A draft already submitted before the crash
+lands locally without another writer. Changed inputs, a replaced output or an incompatible checkpoint prevent Resume.
+
+Work runs made before checkpointing can also recover their draft edits, replacements, removals, looks and watched
+acts from `tools.jsonl`, without replaying simulations or pictures, where the inputs have not changed since the run.
+Other old runs, one-shot writers, generated images, live game sessions and the canvas painter have no supported
+draft restoration and offer no Resume button. New toolsets opt in by naming only their durable data in `RESUME_FIELDS`.
+
+Gates: `producer_resume_check`, `agent_tools_check`, and `pipeline_check`, with no paid agent calls.
 
 ## Status
 
