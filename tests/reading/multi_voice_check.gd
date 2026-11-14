@@ -58,6 +58,12 @@ func _ready() -> void:
 	_check_stress_reaches_the_voice()
 	_check_cards_familiar()
 	_check_voice_colors()
+	# Free the children moved into the tree while their callback owner is still alive, including deferred UI work.
+	for child in [_ed._panel, _ed._cast._repace_timer, _ed._cast._cast_timer]:
+		child.queue_free()
+	for _i in 4:
+		await get_tree().process_frame
+	Spectrum.release_conductor(_ed)
 	_ed.free()
 	if _fails.is_empty():
 		print("multi_voice_check: ALL OK")
