@@ -27,7 +27,7 @@ extends Node
 ## - unticking back to one reader is that reader alone; the last tick comes off too: nothing ticked, the tab reads
 ##   on in what it had, Test waits for a tick, and the next tick is that reader alone;
 ## - the Lab opened again shows the blend ticked, and the line under the Voice row says it;
-## - Test at the top asks the host for the passage in the blend, both Test buttons say so, a press while it plays
+## - Test at the top asks the host for the passage's first sentences in the blend, both Test buttons say so, a press while it plays
 ##   always stops it (a blend changed meanwhile too), and the next press reads the new blend;
 ## - picking another voice ends the blend;
 ## - a voice of one reader opens on its rows alone, Test ready; readers nobody described are picked by number;
@@ -245,12 +245,12 @@ func _run() -> void:
 	sh.edited.emit()
 	_ok(cast.blend_now() == "mix: af_heart, bf_emma", "back to an even mix: %s" % cast.blend_now())
 
-	# Test at the top: in the blend; again with nothing changed stops it; after a change starts it again
+	# Test at the top: the first AHEAD sentences in the blend, the rest streamed as it plays; another press stops it.
 	b._test.pressed.emit()
 	var n := _host.asked.size()
-	_ok(n > 5 and _host.asked.all(func(q: Dictionary) -> bool:
+	_ok(n == ReadingAudition.AHEAD and n < _ed._audition.chunks.size() and _host.asked.all(func(q: Dictionary) -> bool:
 			return String((q["params"] as Dictionary).get("blend", "")) == cast.blend_now()),
-		"Test asked the host for the passage in the blend (%d sentences)" % n)
+		"Test asked the host for the passage's first %d sentences in the blend" % n)
 	_ok(b._test.text == "Test ■" and cast._test.text == "Test ■", "both Test buttons say a test is playing")
 	b._test.pressed.emit()
 	_ok(not _ed._test_busy() and _host.asked.size() == n and b._test.text == "Test",
