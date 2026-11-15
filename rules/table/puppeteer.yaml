@@ -178,6 +178,13 @@ acts:
       camera at the host's chair can see; nothing fiddly, and the work itself never out of the frame -
       a thing may be fetched in from out of the shot and taken back out, but what is done with it is
       done in view. Each step of the work is an act of its own, so the reader can say it as it happens.
+  - >-
+      Long spoken passages need visible work that belongs to the task: stirring, grinding, writing,
+      or inspecting as appropriate. Steam or glow alone does not fill minutes of narration. Use an
+      "under" act with a tool when the task permits it, and return the tool before the next operation.
+      An empty receiving vessel starts empty: pour the actual grains into it, never reveal a second
+      bed to stand for them. Grain size and material travel with the grains. A material's `dissolves`
+      sets seconds of wet contact to disappear (0 persists); use it for ingredients meant to dissolve.
   # THE WORK IS DONE WHERE IT IS SEEN (the user, 2026-10-26, of the first real episode: "we should shift objects
   # to the center screen/stage/table, as we use them ... the mortar and pestle was animated in the far left
   # corner; we should have brought it front-and-center ... we poured it into a dish that was far to the right: we
@@ -324,6 +331,11 @@ acts:
       written on) takes them by `write`, written by the unseen pen as the reader says so, where the
       camera sees them - at the work's spot, before the sheet goes on its way. Nothing else on the table
       carries words.
+      Always orient written material for the viewer at the camera: lines read left to right across
+      the view, with the tops of the letters away from the viewer. Turn the sheet into that position
+      before writing begins, and keep it readable while it is shown. A `carry` to the work's spot
+      preserves its previous orientation unless you set `turn`; that turn is from how it was built,
+      including the turn of the thing it belongs to. Check the writing from the camera with `watch`.
 
 # WHAT IS BUILT OF MANY SMALL PARTS (next/assembly.md; the user, 2026-11-02: "we might pull a brick, try to fit it, put it back, try a
 # different one. We might build some structure, then destroy it and start over"): no carry per piece, which is 40 acts of a dozen

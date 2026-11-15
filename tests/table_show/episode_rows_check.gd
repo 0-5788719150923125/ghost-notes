@@ -10,9 +10,12 @@ extends SceneTree
 ## and a new Cloth does not (the control), for its depth is remade with it, nor the Close, for the script is only the readings put
 ## together. And only when that work exists (the control: the same row, on an episode with nothing made after it, asks nothing).
 ## A ⟳ only what can start: one whose inputs are not made is not offered, saying so.
-## While the episode is being made every ⟳ waits. Pressed and answered, no file goes (next/editing.md step 1): the step is made again
+## While the episode is being made other ⟳ buttons accept queued requests; an active or queued step takes no duplicate.
+## Pressed and answered, no file goes (next/editing.md step 1): the step is made again
 ## over what stands, and what was made from it goes stale (the control: invalidate, which moves them a version back, out of place).
 ## A made row carries a lock, and locked it is kept.
+## Generate includes stale unlocked outputs even when every file exists; Script's lock remains available without a ⟳.
+## An unused optional Voice recording leaves a completed 15-step tally at 15/15; requested and saved recordings count normally.
 ## What it takes with it is worked out once, the same as [method TableEpisode.dependents] says for every step (the control: a
 ## card's painting takes its reading), and read again only when the episode's files change (the control: a new file).
 
@@ -48,6 +51,8 @@ func _run() -> void:
 	_show._open_episode()
 	_ep = _show._episode
 	_check()
+	_stale_rows()
+	_optional_voice()
 	_ed.free()
 	episodes.root = was
 	_rmrf(ProjectSettings.globalize_path(ROOT))
@@ -124,8 +129,17 @@ func _check() -> void:
 	plan = _redo("plan")
 	_ok(not plan.disabled, "made and idle, its ⟳ is offered")
 	_show._producer.running = true
+	_show._producer._jobs["table"] = "episode_rows_check"
 	_pipe.refresh()
-	_ok(plan.disabled and _redo("say:close").disabled, "while the episode is being made, every ⟳ waits")
+	_ok(not plan.disabled and not _redo("say:close").disabled and _redo("table").disabled,
+		"while Set is being made, other rows accept requests and the active row takes no duplicate")
+	_show._producer.again = ["say:close"]
+	_pipe.refresh()
+	_ok(_redo("say:close").disabled and _pipe.row("say:close")["row"].state == "queued"
+		and _pipe.row("say:close")["row"].queueable and not _redo("say:intro").disabled,
+		"a queued row says so and takes no duplicate, while other rows remain available")
+	_show._producer.again.clear()
+	_show._producer._jobs.clear()
 	_show._producer.running = false
 
 	# Once, and the same
@@ -233,6 +247,89 @@ func _check() -> void:
 	_ep.write_json("table", {"things": []})
 	_pipe.refresh()
 	_ok(_pipe.row("acts").get("make") == null, "changed inputs remove Resume from the real episode row")
+
+
+func _stale_rows() -> void:
+	_show._knobs["seed"] = 6
+	_show._open_episode()
+	_ep = _show._episode
+	_ep.write_json("plan", {"episode_title": "Stale rows", "spread": {"positions": [{"name": "One"}]},
+		"staging": {"source": "none"}, "work_intro": "Turn the tile"})
+	_ep.write_json("draw", {"cards": []})
+	_ep.write_json("table", {"things": []})
+	_ep.write_json("acts", {"acts": []})
+	for step in _ep.steps():
+		if not _ep.has(String(step)):
+			_write([step])
+		_ep.note_made(String(step), "gate")
+	_ep.set_kept("say:1", true)
+	_ep.set_kept("script", true)
+	_pipe.refresh()
+	var cached: Dictionary = _show._facts()
+	_ok(not _show._section.missing() and _pipe._generate.disabled, "a fresh episode has nothing for Generate")
+	_ep.write_json("acts", {"acts": [], "revision": "new work"})
+	_ep.note_made("acts", "gate")
+	_ep.write_text("say:1", "Updated narration.")
+	_ep.note_made("say:1", "gate")
+	_pipe.refresh()
+	_ok(_ep.complete() and _ep.stale("say:intro") and _ep.stale("say:close") and _ep.stale("script")
+		and _show._section.missing() and not _pipe._generate.disabled,
+		"Generate offers stale unlocked Intro and Close when every episode file already exists")
+	_ok(is_same(_show._facts(), cached), "the control: source changes leave the file-list cache unchanged")
+	for step in ["say:intro", "say:close"]:
+		_ep.set_kept(step, true)
+	_pipe.refresh()
+	_ok(not _show._section.missing() and _pipe._generate.disabled, "locked stale outputs are preserved by Generate")
+	var script_lock: Variant = _pipe.row("script").get("lock")
+	_ok(script_lock is Button and _ep.kept("script"), "Script exposes its saved lock despite having no regeneration button")
+	if script_lock is Button:
+		_ok(not script_lock.tooltip_text.contains("Its ⟳"), "a lock's tooltip does not name a regeneration button its row lacks")
+		(script_lock as Button).pressed.emit()
+	_pipe.refresh()
+	_ok(not _ep.kept("script") and _show._section.missing() and not _pipe._generate.disabled,
+		"unlocking stale Script immediately offers Generate without changing the file list")
+	_pipe.generate()
+	_ok(_show._section.told.contains("read-only"), "Generate reaches the episode with only stale unlocked Script to make")
+
+
+func _optional_voice() -> void:
+	var counter = load("res://src/ui/pipeline_card.gd").new()
+	var section = load("res://tests/ui/pipeline_stub_section.gd").new("Optional voice")
+	section.has_missing = false
+	var completed: Array = []
+	for i in 15:
+		var row := PipelineRow.new("completed_%d" % i, "Completed")
+		row.state = "made"
+		completed.append(row)
+	counter.add(section)
+	var voice: PipelineRow = _show._take_row(false)
+	section.listed = completed + [voice]
+	counter.refresh()
+	_ok(counter._tally.text.ends_with("15/15") and voice.said.contains("Optional"),
+		"an unused optional Voice recording leaves a completed pipeline at 15/15")
+	_ok(not voice.open and counter.row("take")["redo"].disabled,
+		"without a ready voice, the recording action is unavailable even when Script exists")
+	_show._taking = true
+	section.listed = completed + [_show._take_row(false)]
+	counter.refresh()
+	_ok(counter._tally.text.ends_with("15/16"), "the control: a recording explicitly being made counts as work in progress")
+	_show._taking = false
+	var scratch: String = _ep.dir.path_join("recorded_voice.wav")
+	var wav := FileAccess.open(scratch, FileAccess.WRITE)
+	wav.store_string("RIFF")
+	wav.close()
+	var side := FileAccess.open(scratch.get_basename() + ".json", FileAccess.WRITE)
+	side.store_string(JSON.stringify({"sig": _show._voice_sig(), "words": [{"text": "Hello", "t1": 1.0}]}))
+	side.close()
+	_ok(_ep.keep_take(scratch).is_empty(), "a saved recording is kept in the gate's episode")
+	section.listed = completed + [_show._take_row(false)]
+	counter.refresh()
+	_ok(counter._tally.text.ends_with("16/16"), "the control: a matching saved Voice recording counts as completed")
+	_ep.write_text("script", _ep.read_text("script") + " A changed script.")
+	section.listed = completed + [_show._take_row(false)]
+	counter.refresh()
+	_ok(counter._tally.text.ends_with("15/16"), "the control: a saved recording made stale by changed words remains visible as stale work")
+	counter.free()
 
 
 func _menus(node: Node) -> int:

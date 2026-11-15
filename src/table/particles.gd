@@ -2,7 +2,7 @@ extends RefCounted
 class_name Particles
 
 ## Particles: grains and loose things, stepped (next/table_physics.md, "Grains and loose things"). Position based dynamics as the unified
-## particle solver does it (Macklin, Muller, Chentanez and Kim, SIGGRAPH 2014): everything is spheres; a grain is one, with friction; a
+## particle solver does it (Macklin, Muller, Chentanez and Kim, SIGGRAPH 2014): a grain is a sphere with friction; a
 ## loose thing is a few held to their shape by shape matching (Muller et al., SIGGRAPH 2005). One pass of the constraints a substep, more
 ## substeps rather than more passes (Macklin et al., "Small Steps in Physics Simulation", 2019). Pure data: no node, no tree - the bake
 ## runs it on a thread of its own ([TablePhysics]) and a preview on the thread it is built on.
@@ -19,9 +19,9 @@ class_name Particles
 ##     and Cundall, 2004).
 ##   - A sheet that bends ([method make_soft]) is held by links between its points (stretch and bending of position based dynamics, Muller
 ##     et al., 2007) with a weak pull back to its own shape, rather than matched to its shape; a thin tool cannot slip between its points
-##     ([member _nr]) and pushes it no faster than the tool goes ([constant SOFT_PUSH]). [SheetBend] draws what it does.
+##     ([member _nr]). Tubes meet its drawn triangles through [SheetBend] vertex weights, including the gaps between points.
 ##   - A liquid is never quite still ([method current], [method swell]): a slow current and a swell carry what floats, as hard as it boils
-##     and stirs. A body afloat never sleeps.
+##     and stirs. Buoyant matter stays awake, whether a body or separate grains.
 
 ## The most particles at once, the substeps a frame, gravity, the fastest a particle may go (meters a second). A loose thing is made a
 ## body only as something comes to it ([method TablePhysics._wake_loose]), so these count what is laid in things and what the work touched.
@@ -65,7 +65,7 @@ const SETTLE := Vector2(0.04, 0.3)
 ## A heap trembling, not moving: the fastest one of its grains goes while the heap is at rest ([method _settle]) - meters a second (a grain
 ## rolling off a heap's shoulder goes faster).
 const TREMBLE := 0.15
-## A liquid is calm, and what floats on it may sleep ([method _afloat]): turning slower than this (radians a second), its surface this
+## A liquid is calm enough to support what floats ([method _afloat]): turning slower than this (radians a second), its surface this
 ## level (the cosine of its tilt).
 const CALM_SWIRL := 0.05
 const CALM_LEVEL := 0.9995
@@ -96,6 +96,8 @@ const SOFT_CALM := 0.08
 ## is a thin tool, met at a point's whole radius (meters): a rod or a handle goes between points that would stop a bowl.
 const SOFT_PUSH := 0.04
 const THIN_TOOL := 0.02
+## Clearance between a drawn sheet and a thin tool's surface (meters), above its own half-thickness.
+const SURFACE_GAP := 0.00015
 ## How far past its box a solid is looked at for a sphere, a frame ([method step]), over how far both can go in it (meters).
 const NEAR_SLACK := 0.01
 ## ...and how much of its bend a sheet keeps, a substep in a hand.
@@ -751,11 +753,14 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 			var flat2 := rel.x * rel.x + rel.z * rel.z
 			var vl := Vector3(-rel.z, 0.0, rel.x) * (float(l["swirl"]) * (core2 / flat2 if flat2 > core2 and core2 > 0.0 else 1.0))
 			# ...and what floats, by its current (what lies on the floor stays there)
-			if body[i] >= 0 and rho[i] < LIQUID_DENSITY:
+			if rho[i] < LIQUID_DENSITY:
 				vl += current(l, x[i])
 			var k := DRAG * f / maxf(rho[i] * r[i], 1e-5)
 			vi = vl + (vi - vl) * exp(-k * h)
 			if dis[i] > 0.0 and f > 0.0:
+				# Eroding matter is drawn as its remaining particles, never the intact mesh.
+				if body[i] >= 0:
+					(bodies[body[i]] as Dictionary)["intact"] = false
 				r[i] = maxf(r[i] - r0[i] * h * f / dis[i], 0.0)
 				if r[i] < GONE:
 					_kill(i)
@@ -783,6 +788,9 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 	# Kept out of one another - and then, last, out of every solid, with friction against its motion: what a substep ends with is never
 	# inside a solid.
 	_contacts()
+	for bd in bodies:
+		if bd.has("surface"):
+			bd["sweep_q"] = bd["q"]
 	# ...a sheet's links, then the solids, so what it comes to stands in nothing: its points are kept out one by one, and go where its links take them
 	var pass_now := int(round(a * float(_steps))) % SOFT_EVERY == 0
 	if pass_now:
@@ -794,6 +802,10 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 		if alive[i] == 0 or _hold[i] == 1:
 			continue
 		_solid_pass(i)
+	for bi in bodies.size():
+		var bd: Dictionary = bodies[bi]
+		if bd.has("surface") and bd["held"] == null and not body_asleep(bi):
+			_surface_contacts(bd)
 	# The loose things hold their shapes - those awake - and go whole as far as nothing they meet stops them: matched to their shape only
 	# after each sphere is kept out of the solids, else a scale across a vial's narrow mouth is pulled down by its inner spheres and falls
 	# through ([method _way])
@@ -1058,7 +1070,8 @@ func _solid_pass(i: int) -> void:
 		var local := inv * p
 		var f: Vector4 = (_nf[c] as ShapeField).sample(local)
 		# ...a sheet's point meets a thin tool at its whole radius: a handle thinner than the gap between its points would go between them
-		var meets := float(r[i]) if bends and _nr[c] == 1 else rad
+		var surface := bends and (bodies[body[i]] as Dictionary).has("surface") and (_nf[c] as ShapeField).kind == "capsules"
+		var meets := float(r[i]) if bends and _nr[c] == 1 and not surface else rad
 		if f.x >= meets:
 			continue
 		var xf: Transform3D = _nx[c]
@@ -1394,6 +1407,287 @@ func _soft_pass(bi: int) -> void:
 			_p[i] += (c + R * rest[k] - _p[i]) * SOFT_SHAPE
 
 
+## The sheet's drawn triangles meet a tube's whole capsule, including between the particles. Corrections use the same vertex weights as [SheetBend].
+func _surface_contacts(bd: Dictionary) -> void:
+	if not bool(bd["intact"]):
+		return
+	var skin: Dictionary = bd["surface"]
+	if not skin.has("bias") or (skin["bias"] as PackedVector3Array).is_empty():
+		return
+	var tris: PackedInt32Array = skin["triangles"]
+	var ids: PackedInt32Array = bd["ids"]
+	var rot := Basis(bd["q"] as Quaternion)
+	var verts := PackedVector3Array()
+	for vi in (skin["bias"] as PackedVector3Array).size():
+		verts.append(_surface_point(skin, ids, vi, rot, _p))
+	var box := AABB(verts[0], Vector3.ZERO)
+	for p in verts:
+		box = box.expand(p)
+	for c in _nf.size():
+		var field: ShapeField = _nf[c]
+		if _nr[c] == 0 or field.kind != "capsules" or _ne[c] == 1 or not (_nb[c] as AABB).intersects(box.grow(SPHERE.y)):
+			continue
+		var xf: Transform3D = _nx[c]
+		var scale := xf.basis.get_scale() * field.scale
+		var most_scale := maxf(scale.x, maxf(scale.y, scale.z))
+		for _pass in 8:
+			var deepest := 0.0
+			for cap in field.caps_a.size():
+				var a := xf * (field.pivot + (field.caps_a[cap] - field.pivot) * field.scale)
+				var b := xf * (field.pivot + (field.caps_b[cap] - field.pivot) * field.scale)
+				var radius := field.caps_r[cap] * most_scale + SURFACE_GAP
+				var cap_box := AABB(a, Vector3.ZERO).expand(b).grow(radius)
+				if not box.intersects(cap_box):
+					continue
+				for t in range(0, tris.size() - 2, 3):
+					var ia := tris[t]
+					var ib := tris[t + 1]
+					var ic := tris[t + 2]
+					var ta := verts[ia]
+					var tb := verts[ib]
+					var tc := verts[ic]
+					if not AABB(ta, Vector3.ZERO).expand(tb).expand(tc).grow(radius).intersects(cap_box):
+						continue
+					if (tb - ta).cross(tc - ta).length_squared() < 1e-18:
+						continue
+					var pair := _capsule_triangle(a, b, ta, tb, tc)
+					var delta := pair[1] - pair[0]
+					var dist := delta.length()
+					if dist >= radius:
+						continue
+					deepest = maxf(deepest, radius - dist)
+					var bary := pair[2]
+					var normal := delta / dist if dist > 1e-7 else Vector3.ZERO
+					if normal == Vector3.ZERO:
+						var before := _surface_point(skin, ids, ia, rot, x) * bary.x + _surface_point(skin, ids, ib, rot, x) * bary.y + _surface_point(skin, ids, ic, rot, x) * bary.z
+						var was: Transform3D = _n0[c]
+						var f := field.sample(was.affine_inverse() * before)
+						normal = (was.basis * Vector3(f.y, f.z, f.w)).normalized()
+					verts = _surface_push(skin, ids, Vector3i(ia, ib, ic), bary, normal * (radius - dist), verts)
+			if deepest < SURFACE_GAP * 0.25:
+				break
+		# A finite constraint pass can leave a fold across a shaft. Advance from the previous clear
+		# surface in the tool's frame, retaining the last clear deformation rather than crossing it.
+		var caps: Array = []
+		for cap in field.caps_a.size():
+			caps.append([xf * (field.pivot + (field.caps_a[cap] - field.pivot) * field.scale),
+				xf * (field.pivot + (field.caps_b[cap] - field.pivot) * field.scale), field.caps_r[cap] * most_scale + SURFACE_GAP * 0.25])
+		if not _surface_clear(verts, tris, caps) and bd.has("sweep_q"):
+			var carry := xf * (_n0[c] as Transform3D).affine_inverse()
+			var from_q := (carry.basis.get_rotation_quaternion() * (bd["sweep_q"] as Quaternion)).normalized()
+			var to_q: Quaternion = bd["q"]
+			var from := PackedVector3Array()
+			var to := PackedVector3Array()
+			var local_ids := PackedInt32Array()
+			for k in ids.size():
+				from.append(carry * x[ids[k]])
+				to.append(_p[ids[k]])
+				local_ids.append(k)
+			var start := PackedVector3Array()
+			for vi in verts.size():
+				start.append(_surface_point(skin, local_ids, vi, Basis(from_q), from))
+			if not _surface_clear(start, tris, caps):
+				continue
+			var low := 0.0
+			var high := 1.0
+			var chosen := start
+			for _cut in 8:
+				var share := (low + high) * 0.5
+				var points := PackedVector3Array()
+				for k in ids.size():
+					points.append(from[k].lerp(to[k], share))
+				var rotation := Basis(from_q.slerp(to_q, share))
+				var trial := PackedVector3Array()
+				for vi in verts.size():
+					trial.append(_surface_point(skin, local_ids, vi, rotation, points))
+				if _surface_clear(trial, tris, caps):
+					low = share
+					chosen = trial
+				else:
+					high = share
+			bd["q"] = from_q.slerp(to_q, low)
+			rot = Basis(bd["q"] as Quaternion)
+			var center := Vector3.ZERO
+			for k in ids.size():
+				_p[ids[k]] = from[k].lerp(to[k], low)
+				center += _p[ids[k]]
+			bd["c"] = center / float(ids.size())
+			verts = chosen
+
+
+static func _surface_clear(verts: PackedVector3Array, tris: PackedInt32Array, caps: Array) -> bool:
+	for cap in caps:
+		var a: Vector3 = cap[0]
+		var b: Vector3 = cap[1]
+		var radius: float = cap[2]
+		var box := AABB(a, Vector3.ZERO).expand(b).grow(radius)
+		for k in range(0, tris.size() - 2, 3):
+			var ta := verts[tris[k]]
+			var tb := verts[tris[k + 1]]
+			var tc := verts[tris[k + 2]]
+			if not AABB(ta, Vector3.ZERO).expand(tb).expand(tc).intersects(box):
+				continue
+			if (tb - ta).cross(tc - ta).length_squared() < 1e-18:
+				continue
+			var pair := _capsule_triangle(a, b, ta, tb, tc)
+			if pair[0].distance_squared_to(pair[1]) < radius * radius:
+				return false
+	return true
+
+
+static func _surface_point(skin: Dictionary, ids: PackedInt32Array, vi: int, rot: Basis, points: PackedVector3Array) -> Vector3:
+	var near: PackedInt32Array = skin["near"]
+	var weights: PackedFloat32Array = skin["weight"]
+	var p: Vector3 = rot * (skin["bias"] as PackedVector3Array)[vi]
+	for k in 4:
+		p += points[ids[near[vi * 4 + k]]] * weights[vi * 4 + k]
+	return p
+
+
+func _surface_push(skin: Dictionary, ids: PackedInt32Array, tri: Vector3i, bary: Vector3, push: Vector3, verts: PackedVector3Array) -> PackedVector3Array:
+	var grad := {}
+	var near: PackedInt32Array = skin["near"]
+	var weights: PackedFloat32Array = skin["weight"]
+	for corner in 3:
+		for k in 4:
+			var index := tri[corner] * 4 + k
+			var point := near[index]
+			grad[point] = float(grad.get(point, 0.0)) + bary[corner] * weights[index]
+	var denom := 0.0
+	for point in grad:
+		denom += float(grad[point]) * float(grad[point]) * w[ids[point]]
+	if denom < 1e-12:
+		return verts
+	for point in grad:
+		var i := ids[point]
+		if alive[i] == 0:
+			continue
+		var delta := push * (float(grad[point]) * w[i] / denom)
+		_p[i] += delta
+		for follows in (skin["inverse"] as Array)[point]:
+			var row: Vector2 = follows
+			verts[int(row.x)] += delta * row.y
+	return verts
+
+
+## Closest points on a segment and a triangle, with the triangle point's barycentric weights.
+static func _capsule_triangle(a: Vector3, b: Vector3, ta: Vector3, tb: Vector3, tc: Vector3) -> PackedVector3Array:
+	var normal := (tb - ta).cross(tc - ta)
+	var den := normal.dot(b - a)
+	if absf(den) > 1e-24:
+		var along := normal.dot(ta - a) / den
+		if along >= 0.0 and along <= 1.0:
+			var hit := a.lerp(b, along)
+			var weights := _triangle_weights(hit, ta, tb, tc)
+			if minf(weights.x, minf(weights.y, weights.z)) >= -1e-6:
+				return PackedVector3Array([hit, hit, weights])
+	var bary := _closest_triangle(a, ta, tb, tc)
+	var q := ta * bary.x + tb * bary.y + tc * bary.z
+	var best := PackedVector3Array([a, q, bary])
+	var least := a.distance_squared_to(q)
+	bary = _closest_triangle(b, ta, tb, tc)
+	q = ta * bary.x + tb * bary.y + tc * bary.z
+	if b.distance_squared_to(q) < least:
+		least = b.distance_squared_to(q)
+		best = PackedVector3Array([b, q, bary])
+	var corners := PackedVector3Array([ta, tb, tc])
+	for edge in 3:
+		var next := (edge + 1) % 3
+		var pair := _segment_pair(a, b, corners[edge], corners[next])
+		var d := pair[0].distance_squared_to(pair[1])
+		if d >= least:
+			continue
+		least = d
+		var u := clampf((pair[1] - corners[edge]).dot(corners[next] - corners[edge]) / maxf(corners[edge].distance_squared_to(corners[next]), 1e-18), 0.0, 1.0)
+		bary = Vector3.ZERO
+		bary[edge] = 1.0 - u
+		bary[next] = u
+		best = PackedVector3Array([pair[0], pair[1], bary])
+	return best
+
+
+## Closest points on finite segments, with tolerances for millimeter geometry rather than a world-sized absolute epsilon.
+static func _segment_pair(a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> PackedVector3Array:
+	var u := b - a
+	var v2 := d - c
+	var r2 := a - c
+	var aa := u.dot(u)
+	var ee := v2.dot(v2)
+	var ff := v2.dot(r2)
+	var s := 0.0
+	var t := 0.0
+	if aa <= 1e-20 and ee <= 1e-20:
+		return PackedVector3Array([a, c])
+	if aa <= 1e-20:
+		t = clampf(ff / ee, 0.0, 1.0)
+	else:
+		var cc := u.dot(r2)
+		if ee <= 1e-20:
+			s = clampf(-cc / aa, 0.0, 1.0)
+		else:
+			var bb := u.dot(v2)
+			var den := aa * ee - bb * bb
+			if den > 1e-10 * aa * ee:
+				s = clampf((bb * ff - cc * ee) / den, 0.0, 1.0)
+			t = (bb * s + ff) / ee
+			if t < 0.0:
+				t = 0.0
+				s = clampf(-cc / aa, 0.0, 1.0)
+			elif t > 1.0:
+				t = 1.0
+				s = clampf((bb - cc) / aa, 0.0, 1.0)
+	return PackedVector3Array([a + u * s, c + v2 * t])
+
+
+static func _triangle_weights(p: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+	var u := b - a
+	var v2 := c - a
+	var q := p - a
+	var uu := u.dot(u)
+	var uv := u.dot(v2)
+	var vv := v2.dot(v2)
+	var qu := q.dot(u)
+	var qv := q.dot(v2)
+	var den := maxf(uu * vv - uv * uv, 1e-24)
+	var y := (vv * qu - uv * qv) / den
+	var z := (uu * qv - uv * qu) / den
+	return Vector3(1.0 - y - z, y, z)
+
+
+static func _closest_triangle(p: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+	var ab := b - a
+	var ac := c - a
+	var ap := p - a
+	var d1 := ab.dot(ap)
+	var d2 := ac.dot(ap)
+	if d1 <= 0.0 and d2 <= 0.0:
+		return Vector3(1, 0, 0)
+	var bp := p - b
+	var d3 := ab.dot(bp)
+	var d4 := ac.dot(bp)
+	if d3 >= 0.0 and d4 <= d3:
+		return Vector3(0, 1, 0)
+	var vc := d1 * d4 - d3 * d2
+	if vc <= 0.0 and d1 >= 0.0 and d3 <= 0.0:
+		var u := d1 / maxf(d1 - d3, 1e-24)
+		return Vector3(1.0 - u, u, 0)
+	var cp := p - c
+	var d5 := ab.dot(cp)
+	var d6 := ac.dot(cp)
+	if d6 >= 0.0 and d5 <= d6:
+		return Vector3(0, 0, 1)
+	var vb := d5 * d2 - d1 * d6
+	if vb <= 0.0 and d2 >= 0.0 and d6 <= 0.0:
+		var u := d2 / maxf(d2 - d6, 1e-24)
+		return Vector3(1.0 - u, 0, u)
+	var va := d3 * d6 - d5 * d4
+	if va <= 0.0 and d4 - d3 >= 0.0 and d5 - d6 >= 0.0:
+		var u := (d4 - d3) / maxf(d4 - d3 + d5 - d6, 1e-24)
+		return Vector3(0, 1.0 - u, u)
+	var sum := maxf(va + vb + vc, 1e-24)
+	return Vector3(va, vb, vc) / sum
+
+
 func _links(ids: PackedInt32Array, links: PackedInt32Array, lens: PackedFloat32Array, firm: float) -> void:
 	for e in lens.size():
 		var i := ids[links[e * 2]]
@@ -1498,9 +1792,9 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 	for i in act:
 		if alive[i] == 0 or _is_held(i):
 			continue
-		var heap := body[i] < 0 and resting.has(owner[i])
-		# ...A body afloat never sleeps: what it floats on is never still ([method current])
-		if body[i] >= 0 and wet[i] >= 0 and rho[i] < LIQUID_DENSITY:
+		var heap := body[i] < 0 and resting.has(owner[i]) and (_held_by[i] == 1 or _afloat(i))
+		# Floating matter stays awake as its liquid moves, whether a whole body or a separate grain.
+		if wet[i] >= 0 and rho[i] < LIQUID_DENSITY:
 			still[i] = 0.0
 			continue
 		if ((v[i].length() < SLEEP_SPEED or bool(in_place.get(body[i], false))) and (_held_by[i] == 1 or borne.has(body[i]) or _afloat(i))) or heap:
@@ -1512,7 +1806,8 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 		elif still[i] >= SLEEP_AFTER:
 			calm.append(i)
 	for i in act:
-		if alive[i] == 1 and body[i] < 0 and ripe.has(owner[i]) and not _is_held(i):
+		if alive[i] == 1 and body[i] < 0 and ripe.has(owner[i]) and not _is_held(i) \
+				and (_held_by[i] == 1 or _afloat(i)) and not (wet[i] >= 0 and rho[i] < LIQUID_DENSITY):
 			var c: Vector2i = ripe[owner[i]]
 			if c.x * 2 >= c.y:
 				calm.append(i)
@@ -1570,10 +1865,9 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 		b["hrel"] = hx2.affine_inverse() * Transform3D(Basis(b["q"] as Quaternion), b["c"] as Vector3)
 
 
-## Whether particle [param i] floats on a calm liquid: held up by it, as by what is under it - so it sleeps there, and wakes as the liquid
-## is stirred, tipped or struck.
+## Whether particle [param i] is buoyant in calm liquid: support for a body whose other points may stand clear of the surface.
 func _afloat(i: int) -> bool:
-	if wet[i] < 0 or wet[i] >= _liquids.size():
+	if wet[i] < 0 or wet[i] >= _liquids.size() or rho[i] >= LIQUID_DENSITY:
 		return false
 	var l: Dictionary = _liquids[wet[i]]
 	return absf(float(l.get("swirl", 0.0))) < CALM_SWIRL and (l["n"] as Vector3).dot(Vector3.UP) > CALM_LEVEL

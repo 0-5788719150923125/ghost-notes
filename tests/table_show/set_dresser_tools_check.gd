@@ -46,7 +46,7 @@ extends SceneTree
 ##   still sent to fix it; the producer says how many pictures its set dresser has taken while its tools are open, and the prompt
 ##   says a shrink is fine.
 ## - The blueprint: things placed by name - `at`, `turn`, `scale`, only what is given - and refused with a reason when not put, the
-##   cards' box, or not a number; a thing put again keeps its place unless given one; a thing never placed waits off the table in
+##   draped strand, or not a number; the cards' box can be placed too. A thing put again keeps its place unless given one; a thing never placed waits off the table in
 ##   every picture (control: the draft keeps it) and is asked about once at submit; with no renderer the plan is said in words and no
 ##   picture taken. A thing written where it stands is said at its spot - moved from it, or taller than its spot shows, a fault; cut
 ##   by the frame's side, not - and never "made smaller to fit".
@@ -784,6 +784,12 @@ func _blueprint() -> bool:
 	await t.call_tool("put", {"things": [{"name": "a bowl", "at": [5, -10], "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [7, 3], [0, 3]], "material": "beeswax"}]}]})
 	_ok((t.draft()["things"][1] as Dictionary).get("at") == [5, -10], "control: a thing put again with a place did not move: %s" % str(t.draft()["things"][1]))
 	_ok(t._unplaced().is_empty() and (t._on_table()["things"] as Array).size() == 3, "a placed thing is still waiting: %s" % str(t._unplaced()))
+	await t.call_tool("put", {"things": [{"name": "the card chest", "holds_cards": true,
+		"parts": [{"shape": "extrude", "outline": "rect", "size": [17, 20], "height": 8, "wall": 0.6, "material": "beeswax"}]}]})
+	_ok(t._unplaced().has("the card chest"), "a card chest cannot be placed on the blueprint")
+	await t.call_tool("blueprint", {"things": [{"name": "the card chest", "at": [38, -55]}]})
+	_ok(t.draft()["things"][3].get("at") == [38.0, -55.0] and t._unplaced().is_empty(),
+		"the blueprint refused a written position for the card chest")
 	# The table made safe keeps a written place, and drops one that is not two numbers
 	var safe := CardTable.sanitize_table({"things": [{"name": "a", "at": [12, -400], "scale": 9, "parts": [{"shape": "ball", "size": [2, 2, 2]}]},
 		{"name": "b", "at": [1], "parts": [{"shape": "ball", "size": [2, 2, 2]}]},

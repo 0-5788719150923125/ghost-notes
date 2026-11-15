@@ -17,9 +17,9 @@ class_name EpisodeCard
 ## the one a chapter is read in, and knows nothing of cards.
 ##
 ## Generation is explicit, as with every picture in ghost, and on the note's Pipeline card ([Section]; next/pipeline.md):
-## Generate makes what the episode is missing, New episode (here) makes a new seed, and a row's redo deletes that step (and what
-## was made from it, asking first when that is anything) and makes it again. Nothing runs on open - it spends the author's
-## quota. Each thing that can be made again is a row of its own.
+## Generate makes what the episode is missing, New episode (here) makes a new seed, and a row's redo replaces that step,
+## keeping its previous version and leaving what was made from it stale. Nothing runs on open - it spends the author's
+## quota. Each thing that can be made again is a row of its own; further requests queue without stopping the current work.
 
 const YouTube := preload("res://src/export/youtube.gd")
 const Macros := preload("res://src/data/macros.gd")
@@ -948,7 +948,7 @@ func _open_episode() -> void:
 	if _episode_pick == null:
 		return
 	var ep := TableEpisode.open(_show_key(), int(_knobs["seed"]))
-	if _producer != null and _producer.running and (_episode == null or _episode.dir != ep.dir):
+	if _making() and (_episode == null or _episode.dir != ep.dir):
 		_producer.stop()
 	if reading != null:
 		reading.episode_left(_feed)   # ...and what the other cards were making of it
@@ -1041,9 +1041,10 @@ func _run(steps: Array, remake := false, note := "") -> void:
 		_knobs["show"] = _show_key()
 		_touch()
 		_open_episode()
-	# the spec as it is now: the brief may have been edited since the episode was opened
-	_producer.spec = _spec()
-	_brief_changed = false
+	# A run keeps the settings it began with; further requests join that run.
+	if not _making():
+		_producer.spec = _spec()
+		_brief_changed = false
 	_producer.start(steps, remake, note)
 
 
@@ -1118,8 +1119,6 @@ func _exporting(ep: TableEpisode) -> bool:
 func _redo(step: String) -> void:
 	if _episode == null:
 		return
-	if _producer.running:
-		_producer.stop()
 	# Made again, nothing thrown away (next/editing.md step 1): what stands plays until the new one lands over it, a version back,
 	# and what was made from it goes stale ([member TableProducer.again])
 	print("ghost: table make %s again - what stands goes a version back" % step)
@@ -1154,7 +1153,7 @@ class Section extends PipelineSection:
 		card._generate()
 
 	func make_tip() -> String:
-		return ("Make whatever this episode is missing, in order: the plan, the shuffle, the deck, the pictures, and the "
+		return ("Make whatever this episode is missing or needs refreshed, preserving kept steps, in order: the plan, the shuffle, the deck, the pictures, and the "
 			+ "reading - one card at a time, each written knowing only the cards already drawn. Spends the writer's and "
 			+ "the painter's quota.")
 
@@ -1170,7 +1169,7 @@ class Section extends PipelineSection:
 		return card._producer != null and card._producer.running and not card._producer.only.is_empty() and missing()
 
 	func missing() -> bool:
-		return card._episode != null and not bool(card._facts()["complete"])
+		return card._producer != null and card._producer.needs_work()
 
 
 ## What it hands the note's Pipeline card.
@@ -1179,11 +1178,11 @@ func pipeline() -> PipelineSection:
 
 
 func _making() -> bool:
-	return _producer != null and (_producer.running or _producer.busy())
+	return _producer != null and (_producer.running or _producer.busy() or not _producer.again.is_empty())
 
 
 ## What the rows read, once per change of the episode's files: a step made or thrown away changes the listing, and the
-## plan's own edits (the Episode's title) its time. What is worked out row by row is kept here too (`asks`, `ready`, `said`).
+## plan's own edits (the Episode's title) its time. What is worked out row by row is kept here too (`asks`, `said`).
 func _facts() -> Dictionary:
 	var dir := _episode.dir
 	var files := DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
@@ -1193,15 +1192,12 @@ func _facts() -> Dictionary:
 	if now == _facts_of:
 		return _facts_kept
 	_facts_of = now
-	var needs := {}
 	var all := _episode.steps()
-	for st in all:
-		needs[String(st)] = _episode.needs(String(st))
-	_facts_kept = {"plan": _episode.read_json("plan"), "steps": all, "needs": needs, "lost": _episode.all_dependents(),
+	_facts_kept = {"plan": _episode.read_json("plan"), "steps": all, "lost": _episode.all_dependents(),
 		"doc": _episode.document(), "complete": _episode.complete(), "cardless": _episode.cardless(),
 		"cards": _episode.card_count(), "beats": _episode.beat_count() if _episode.cardless() else 0,
 		"word": _episode.beat_word(), "printings": _episode.printings(), "depth": _episode.wants_height(),
-		"asks": {}, "ready": {}, "said": {}}
+		"asks": {}, "said": {}}
 	return _facts_kept
 
 
@@ -1301,18 +1297,18 @@ func set_tune(key: String, value: Variant) -> void:
 	_set_status("Paced for this show: the table is set with it the next time it stands.")
 
 
-## The voice's take as a row (next/editing.md step 3): made, stale (the script changed since it was said) or not made, with its
-## length; its ⟳ says the whole script once, every sentence said before coming from the cache, and keeps it with the episode.
+## An optional saved narration: excluded from the tally until requested or saved, then running, made or stale.
+## Its ⟳ says the whole script once, reusing cached sentences, and keeps it with the episode.
 func _take_row(busy: bool) -> PipelineRow:
 	var r := PipelineRow.new("take", "Voice")
 	var has_take := FileAccess.file_exists(_episode.take_file())
-	r.state = "running" if _taking else ("made" if _episode.take_matches(_voice_sig()) else ("stale" if has_take else "missing"))
-	r.said = ("being said, a sentence at a time" if _taking else (Clock.text(_episode.take_length()) if has_take else ""))
+	r.state = "running" if _taking else ("made" if _episode.take_matches(_voice_sig()) else ("stale" if has_take else "none"))
+	r.said = ("being said, a sentence at a time" if _taking else (Clock.text(_episode.take_length()) if has_take else "Optional - save spoken narration"))
 	r.wraps = _taking
-	r.tip = ("The whole reading said once and kept: Play plays it as the export will, the table plans on when each word is really "
+	r.tip = ("Optional: save the whole reading as audio. Play plays it as the export will, the table plans on when each word is really "
 		+ "said rather than a guess, and a seek lands where it is asked. Stale once the words or a voice change.")
 	r.again = "Say the whole script and keep it: sentences said before are not said again"
-	r.open = not busy and not _taking and reading != null and _episode.has("script")
+	r.open = not busy and not _taking and _episode.has("script") and reading != null and reading.can_export_take()
 	r.redo = _make_take
 	return r
 
@@ -1373,6 +1369,11 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 		r.wraps = true
 	if st == "failed":
 		r.said = _producer.error_of(step)
+	elif st == "queued" and doing.is_empty():
+		var waits := PackedStringArray()
+		for need in _producer.waiting_on(step):
+			waits.append(_step_name(String(need), f))
+		r.said = "Queued" if waits.is_empty() else "Queued - waiting for " + ", ".join(waits)
 	var resumable := _producer.can_resume(step)
 	if resumable:
 		r.go_text = "Resume"
@@ -1390,20 +1391,7 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 		r.said = "by hand - waits for you"
 	if step == "table" and st == "ready" and not _table_things().is_empty():
 		r.tip = "On the table:\n" + "\n".join(_table_things())
-	r.again = String(info["again"])
-	if r.again.is_empty():
-		_edit_of(r, step)
-		return r
-	# ⟳ only what can start: a step whose inputs are not made was passed by without a word (TableProducer.tick)
-	var ready := _ready_to_make(step, f)
-	r.open = ready and not busy
-	if not ready:
-		r.again += " - once what it is made from is made"
-	r.asks = _asks_of(step, f)
-	if resumable:
-		r.asks = "This starts over and replaces the interrupted step's saved progress." + ("\n" + r.asks if not r.asks.is_empty() else "")
-	# A lock beside its ⟳ on what is made (TableEpisode.kept): locked, it is KEPT - Generate passes it by, stale or not; a step changed
-	# by hand is kept until it is unlocked
+	# Every made output can be kept or released, including derived outputs with no refresh button.
 	r.lockable = _episode.has(step)
 	r.locked = _episode.kept(step)
 	r.lock = func(on: bool) -> void:
@@ -1411,6 +1399,21 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 		if not err.is_empty():
 			_set_status("Could not keep the lock: " + err)
 		_mark_stale()
+	r.again = String(info["again"])
+	if r.again.is_empty():
+		_edit_of(r, step)
+		return r
+	# Requests may wait for inputs already queued; an active or queued step takes only one request.
+	var ready := _producer.can_queue(step)
+	r.queueable = true
+	r.open = ready and st != "running" and st != "queued"
+	if busy and r.open:
+		r.again += " - queue after its inputs are ready"
+	if not ready:
+		r.again += " - once what it is made from is made"
+	r.asks = _asks_of(step, f)
+	if resumable:
+		r.asks = "This starts over and replaces the interrupted step's saved progress." + ("\n" + r.asks if not r.asks.is_empty() else "")
 	r.redo = _redo.bind(step)
 	_edit_of(r, step)
 	return r
@@ -1926,8 +1929,8 @@ func _button_to(box: Container, text: String, action: Callable) -> void:
 	box.add_child(b)
 
 
-## A click on the table names what is there (next/editing.md step 7: "a click on the stage names a thing and its part"): said, and
-## shown in the timeline's inspector to be changed ([method pick_thing]). A click that names nothing goes on to what else wants it.
+## While the timeline is open, a click on the table selects an object in its inspector ([method pick_thing]).
+## Stage clicks never open the timeline; its transport button opens it explicitly.
 func _unhandled_input(event: InputEvent) -> void:
 	# A free look, while one is on: a right-drag turns about the table, the wheel draws in or out
 	var med := Director.shown_medium() as TableMedium
@@ -1943,6 +1946,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			med.look_by(0.0, 0.0, 0.9 if wheel.button_index == MOUSE_BUTTON_WHEEL_UP else 1.1)
 			get_viewport().set_input_as_handled()
 			return
+	if _dock == null or not is_instance_valid(_dock):
+		return
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT or _episode == null or not is_visible_in_tree():
 		return
@@ -1953,14 +1958,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	pick_thing(String(hit["thing"]), String(hit.get("part", "")))
 
 
-## [param thing] (and its [param part]) picked on the table: named on the status line, and shown in the timeline's inspector - the
-## table from above, its rows and its parts ([method _inspect_thing]). "" shown, else why not.
+## [param thing] and [param part] selected in the timeline's existing inspector. The timeline must already be open.
 func pick_thing(thing: String, part := "") -> String:
+	if _dock == null or not is_instance_valid(_dock):
+		return "open the timeline to inspect a table object"
 	_set_status("On the table: %s%s." % [thing, " - its %s" % part if not part.is_empty() and part != thing else ""])
-	var dock := open_dock()
-	if dock == null:
-		return "no episode is open"
-	dock.inspect({"thing": thing, "part": part})
+	_dock.inspect({"thing": thing, "part": part})
 	return ""
 
 
@@ -2018,8 +2021,6 @@ func _edit_step(step: String) -> void:
 	# ...and its maker asked again with a note (next/editing.md step 9), where an agent made it: what stands plays until the new one lands
 	var maker := String(MAKERS.get(step.get_slice(":", 0), ""))
 	w.ask = Callable() if maker.is_empty() or step == "script" else func(note: String) -> String:
-		if _producer.running:
-			_producer.stop()
 		_run([step] + (TOGETHER.get(step, []) as Array), true, note)
 		_mark_stale()
 		return ""
@@ -2187,17 +2188,6 @@ func _doing_of(step: String) -> String:
 	return piece
 
 
-## Whether everything [param step] is made from is made.
-func _ready_to_make(step: String, f: Dictionary) -> bool:
-	var kept: Dictionary = f["ready"]
-	if not kept.has(step):
-		var ready := true
-		for need in (f["needs"] as Dictionary).get(step, []):
-			ready = ready and _episode.has(String(need))
-		kept[step] = ready
-	return bool(kept[step])
-
-
 ## What [param step]'s redo throws away besides what it remakes: "" for nothing, and it starts at once; otherwise the row goes
 ## amber and asks.
 func _asks_of(step: String, f: Dictionary) -> String:
@@ -2255,10 +2245,12 @@ func _pipeline_line() -> String:
 	if _episode == null:
 		return ""
 	var note := ""
-	if bool(_facts()["complete"]):
-		note = "Ready - press Play to watch it, or export it."
-	elif _making():
+	if _making():
 		note = "Making episode #%d…" % _episode.seed
+	elif bool(_facts()["complete"]) and _producer.needs_work():
+		note = "Out of date - Generate refreshes unlocked steps."
+	elif bool(_facts()["complete"]):
+		note = "Ready - press Play to watch it, or export it."
 	elif _episode.has("plan"):
 		note = "Partly made - Generate finishes it."
 	else:

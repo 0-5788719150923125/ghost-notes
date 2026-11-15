@@ -38,6 +38,8 @@ var tip := ""
 var again := ""
 ## Whether its ⟳ is offered now.
 var open := true
+## Its owner accepts requests while Generate walks, and waits for their dependencies before starting them.
+var queueable := false
 ## What its ⟳ throws away besides what it remakes, a sentence: "" starts at once, otherwise it asks first.
 var asks := ""
 ## Its ⟳.

@@ -42,6 +42,8 @@ extends Node
 ##   solid, nor through the table; no jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the
 ##   air; a loose thing inside its vessel's walls; a surface moving smoothly; a painting tool's own surface in nothing but what gives,
 ##   to a millimeter (a pot's wall is three). Each said once, with when and how much.
+## - `--contacts`: after baking, each frame from `--from` through `--to` checks the drawn sheets against thin tools' full capsules,
+##   with 0.2 mm tolerance. Unlike the general audit's slower geometry sampling, it checks at the bake's 60 frames a second.
 ## - `--no-keep-out`: the drawn tools left as their plans place them (TablePaint.keep_out off).
 ## - `--plan-only` (with `--heard`): the live plans alone, nothing baked - each act's time and every stretch over 8 s the painting hand
 ##   stands idle. `--to` stops it there.
@@ -667,6 +669,11 @@ func _run() -> void:
 				_series_against(mine, _series_read(_arg(args, "against", "")))
 			else:
 				print("episode_bake_probe: no %s to compare with yet (--compare=a,b, once it is written)" % _arg(args, "against", ""))
+	if args.has("--contacts"):
+		_contact_audit(w, ph, t_from, t_to)
+		print("episode_bake_probe: done")
+		get_tree().quit(0)
+		return
 	if args.has("--audit"):
 		args_soft_trace = args.has("--soft-trace")
 		_audit(w, ph, t_to)
@@ -1549,7 +1556,36 @@ func _audit_float(w: TableWork, ph: TablePhysics, keys: Array, key: int, t: floa
 	return least if least != INF else 0.0
 
 
-## SHEET [param L] at [param t], each thin tool's axis against what is drawn of it - where a tool is near it - said through [param note].
+## Drawn sheet contacts at every baked frame in the requested interval. The full capsule is checked, including its radius.
+func _contact_audit(w: TableWork, ph: TablePhysics, t_from: float, t_to: float) -> void:
+	var tally := {"hits": 0}
+	var frames := 0
+	var note := func(what: String, t: float, amount: float) -> void:
+		tally["hits"] = int(tally["hits"]) + 1
+		if int(tally["hits"]) <= 12:
+			print("  CONTACT %.4f: %s, %.3f mm" % [t, what, amount])
+	for k in range(int(ceil(t_from * TablePhysics.FPS)), int(floor(t_to * TablePhysics.FPS)) + 1):
+		var t := float(k) / TablePhysics.FPS
+		var motion := {}
+		for key in ph._rigid_of:
+			var pose: Variant = ph.pose_of(int(key), t)
+			if pose != null:
+				motion[int(ph._rigid_of[key])] = (pose as Transform3D) * ph._rest_of(int(key)).affine_inverse()
+		var worlds := {}
+		for si in ph.solids.size():
+			var sd: Dictionary = ph.solids[si]
+			var xf: Transform3D = sd["rest"]
+			if sd.has("body") and motion.has(int(sd["body"])):
+				xf = (motion[int(sd["body"])] as Transform3D) * xf
+			worlds[si] = xf
+		for L in ph.loose:
+			if bool(L["soft"]) and ph.pose_of(int(L["wi"]), t) != null and ph.whole(int(L["wi"]), t):
+				_audit_through(w, ph, L, t, worlds, note)
+		frames += 1
+	print("  CONTACT AUDIT: %d penetrations across %d frames (%.2f - %.2f s)" % [int(tally["hits"]), frames, t_from, t_to])
+
+
+## SHEET [param L] at [param t], each thin tool's finite capsules against what is drawn of it, allowing 0.2 mm - said through [param note].
 func _audit_through(w: TableWork, ph: TablePhysics, L: Dictionary, t: float, worlds: Dictionary, note: Callable) -> void:
 	var wi := int(L["wi"])
 	var motion := (ph.pose_of(wi, t) as Transform3D) * (L["built"] as Transform3D).affine_inverse()
@@ -1563,8 +1599,10 @@ func _audit_through(w: TableWork, ph: TablePhysics, L: Dictionary, t: float, wor
 		if not (xf * (sd["box"] as AABB)).grow(0.01).intersects(box):
 			continue
 		var f: ShapeField = sd["field"]
+		var scale := xf.basis.get_scale() * f.scale
 		for k in f.caps_a.size():
-			segs.append([xf * f.caps_a[k], xf * f.caps_b[k], ph._solid_label(si)])
+			segs.append([xf * (f.pivot + (f.caps_a[k] - f.pivot) * f.scale), xf * (f.pivot + (f.caps_b[k] - f.pivot) * f.scale),
+				ph._solid_label(si), f.caps_r[k] * maxf(scale.x, maxf(scale.y, scale.z))])
 	if segs.is_empty():
 		return
 	w.tick(t)
@@ -1573,16 +1611,23 @@ func _audit_through(w: TableWork, ph: TablePhysics, L: Dictionary, t: float, wor
 		var n: Node = stack.pop_back()
 		stack.append_array(n.get_children())
 		var mi := n as MeshInstance3D
-		if mi == null or mi.mesh == null:
+		if mi == null or mi.mesh == null or mi.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
 			continue
 		var xf := w._world_of(mi)
 		var faces := mi.mesh.get_faces()
 		for sg in segs:
 			var a: Vector3 = (sg as Array)[0]
 			var b: Vector3 = (sg as Array)[1]
+			var cap_box := AABB(a, Vector3.ZERO).expand(b).grow(float((sg as Array)[3]))
 			for k in range(0, faces.size() - 2, 3):
-				if Geometry3D.segment_intersects_triangle(a, b, xf * faces[k], xf * faces[k + 1], xf * faces[k + 2]) != null:
-					note.call("%s stands through %s (moments)" % [String((sg as Array)[2]), String(L["name"])], t, 1.0)
+				var ta := xf * faces[k]
+				var tb := xf * faces[k + 1]
+				var tc := xf * faces[k + 2]
+				if not AABB(ta, Vector3.ZERO).expand(tb).expand(tc).intersects(cap_box):
+					continue
+				var pair := Particles._capsule_triangle(a, b, ta, tb, tc)
+				if pair[0].distance_to(pair[1]) < float((sg as Array)[3]) - 0.0002:
+					note.call("%s stands through %s/%s (mm)" % [String((sg as Array)[2]), String(L["name"]), mi.name], t, (float((sg as Array)[3]) - pair[0].distance_to(pair[1])) * 1000.0)
 					_through_n[String((sg as Array)[2])] = int(_through_n.get(String((sg as Array)[2]), 0)) + 1
 					break
 

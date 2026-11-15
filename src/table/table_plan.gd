@@ -215,7 +215,13 @@ func box_keep() -> Vector2:
 	return Vector2(most.x, most.z) if cards_from == "box" else Vector2.ZERO
 
 
+## A written box position is its center, in the same centimeters as the other things.
 func box_center() -> Vector3:
+	if cards_from == "box":
+		for t in table.get("things", []):
+			if bool((t as Dictionary).get("holds_cards", false)) and (t as Dictionary).has("at"):
+				var at: Array = t["at"]
+				return Vector3(Tables.ORIGIN.x + float(at[0]) * 0.01, 0.0, Tables.ORIGIN.y + float(at[1]) * 0.01)
 	return TablePositions.SHOEBOX_AT if cards_from == "box" and String(staging.get("box_style", "open")) == "shoebox" else Vector3.ZERO
 
 

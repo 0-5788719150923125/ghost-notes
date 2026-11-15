@@ -50,6 +50,8 @@ class_name YouTubeCard
 ##
 ## The playlist is named as YouTube names it now: a loaded list's title is the block's, and a card opening on a playlist
 ## loads the list itself when its sign-in may already see them, asking and saying nothing ([method _look_quietly]).
+## Management policy defaults to None. Unlist older videos leaves the new upload's visibility alone and unlists all other
+## public videos this channel owns in the chosen playlist, once the new upload joins it; private videos stay private.
 
 const YouTube := preload("res://src/export/youtube.gd")
 const Macros := preload("res://src/data/macros.gd")
@@ -59,7 +61,7 @@ const KEY := "youtube"
 ## A new card's block: nothing goes up until the box is ticked, and then privately.
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
 	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "", "client": "",
-	"write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
+	"management_policy": "none", "write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
 	"thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
 	"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true}
 ## The Script card's rows the title's macros are read from ([method name_from]): [constant Macros.ROWS]' keys of the same names.
@@ -86,6 +88,8 @@ var _preview: Label
 var _privacy: OptionButton
 var _category: OptionButton
 var _playlist: OptionButton
+var _management: OptionButton
+var _management_note: Label
 var _reload: Button
 var _account: Label
 var _sign: Button
@@ -246,6 +250,19 @@ func _init() -> void:
 	prow.add_child(_reload)
 	_row("Playlist", prow)
 	_fill_playlists()
+	_management = OptionButton.new()
+	_management.fit_to_longest_item = false
+	_management.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var policy_tips := PackedStringArray()
+	for k in YouTube.MANAGEMENT_POLICIES:
+		_management.add_item(Registry.label(YouTube.MANAGEMENT_POLICIES, k))
+		_management.set_item_metadata(_management.item_count - 1, k)
+		policy_tips.append("%s: %s" % [Registry.label(YouTube.MANAGEMENT_POLICIES, k), Registry.blurb(YouTube.MANAGEMENT_POLICIES, k)])
+	_management.tooltip_text = "\n\n".join(policy_tips)
+	_management.item_selected.connect(func(_i: int) -> void: refresh())
+	_row("Management policy", _management)
+	_management_note = _small("")
+	add_child(_management_note)
 	_build_thumbnail()
 	_desc = TextField.new("Description", "No description yet - click to write one",
 		"The video's description, as it goes up. The playlist it joins is named and linked "
@@ -400,6 +417,7 @@ func capture() -> Dictionary:
 	var p := _thumb_painter.choice()
 	return {"upload": _upload.button_pressed, "title": _title.text, "privacy": _privacy_key(),
 		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"]),
+		"management_policy": management_policy(),
 		"channel": String(_chan["id"]), "channel_name": _channel_name(), "client": _client_pick, "write_tags": writes_tags(),
 		"description": _desc.text, "thumbnail": thumbnail(),
 		"thumbnail_writer": w["agent"], "thumbnail_writer_model": w["model"], "thumbnail_writer_effort": w["effort"],
@@ -428,6 +446,8 @@ func apply(block: Dictionary) -> void:
 		_privacy.select(0)
 	var cat := str(b["category"])
 	_select(_category, cat if YouTube.CATEGORIES.has(cat) else YouTube.CATEGORY)
+	var policy := str(b["management_policy"])
+	_select(_management, policy if YouTube.MANAGEMENT_POLICIES.has(policy) else "none")
 	var th := str(b["thumbnail"])
 	_select(_thumbnail, th if YouTube.THUMBNAILS.has(th) else YouTube.THUMBNAIL)
 	_thumb_writer.set_choice(str(b["thumbnail_writer"]), str(b["thumbnail_writer_model"]), str(b["thumbnail_writer_effort"]))
@@ -453,6 +473,11 @@ func _privacy_key() -> String:
 
 func _category_key() -> String:
 	return String(_category.get_item_metadata(_category.selected)) if _category.selected >= 0 else YouTube.CATEGORY
+
+
+## The policy applied after this upload joins its playlist; None by default, including on older notes.
+func management_policy() -> String:
+	return String(_management.get_item_metadata(_management.selected)) if _management.selected >= 0 else "none"
 
 
 ## The thumbnail picked ([constant YouTube.THUMBNAILS]).
@@ -592,6 +617,7 @@ func meta(base: Dictionary, take := "") -> Dictionary:
 	out["category"] = _category_key()
 	out["playlist"] = String(_list["id"])
 	out["playlist_title"] = String(_list["title"])
+	out["management_policy"] = management_policy()
 	out["channel"] = String(_chan["id"])
 	out["channel_name"] = _channel_name()
 	out["client"] = _client_key()
@@ -644,6 +670,9 @@ func refresh() -> void:
 	_refresh_account()
 	_refresh_tags()
 	_refresh_thumbnail()
+	_management_note.visible = management_policy() != "none"
+	_management_note.text = ("Choose a playlist above to apply this policy on the next upload." if String(_list["id"]).is_empty()
+		else "After each upload, all other Public videos you own in this playlist become Unlisted. Private videos and scheduled publication stay unchanged. The new upload keeps its chosen visibility.")
 	_look_quietly()
 
 

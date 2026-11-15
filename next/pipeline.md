@@ -50,10 +50,26 @@ and at a row each four times a second it would cost a playing show).
 
 **One Generate.** Top to bottom, every section's missing work in turn, each waiting for the one before: an episode's words
 first, then what is made from them. A section's own ▶ on its heading makes only that section, so "paint the missing
-pictures, not the tags" is one click. While Generate walks, every ⟳ waits, and Stop stops it all. What Generate was asked
+pictures, not the tags" is one click. While Generate walks, rows whose owners accept queued requests stay available;
+other ⟳ buttons wait. Stop stops it all. What Generate was asked
 goes on with the settings it was pressed with: a note opened again while it walks (a format picked, a card attached or
 taken off) builds its panel anew, whose cards take up what is being made (`TableProducer.of`) and whose Generate walks on
 (`PipelineCard.carry_on`).
+
+An episode's regeneration requests join its producer's current run. Other rows stay available while one runs;
+requested rows show as queued and take no duplicate request. Each waits for its inputs, including remakes farther
+upstream through an unchanged intermediate step. Queuing preserves the active jobs, their settings, notes and retry
+counts. Generate can widen the run to the whole episode; Stop clears the requests and stops the active jobs.
+If an input fails, dependent requests wait for it to be retried rather than using the previous output.
+
+Generate includes stale unlocked episode steps even when every file exists. The set of files alone does not decide
+whether there is work: changing a passage or releasing its lock takes effect on the next refresh. Every made output
+has a lock, including Script and other derived outputs with no regeneration button. An unlocked stale Script is rebuilt
+locally from the passages by Generate, or after a passage is regenerated; a kept Script waits until it is unlocked.
+
+The episode's Voice row is an optional saved narration. Until it is requested or a recording is saved it is excluded
+from the tally, so an unused recording leaves a completed episode complete. Its action waits for a ready voice;
+once requested or saved, its running, made or stale state counts normally.
 
 ## What changed for the person
 

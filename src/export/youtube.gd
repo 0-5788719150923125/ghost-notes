@@ -46,6 +46,15 @@ const TOKEN_URI := "https://oauth2.googleapis.com/token"
 const PRIVACY := "private"
 ## Who may see an upload, in the order the card offers them: YouTube's own words, and ours.
 const PRIVACIES := {"private": "Private", "unlisted": "Unlisted", "public": "Public"}
+## Applied only after the new upload joins its playlist; the new video's visibility stays as chosen.
+const MANAGEMENT_POLICIES := {
+	"none": {"label": "None", "blurb": "Leave every other video's visibility as it is."},
+	"unlist_others": {"label": "Unlist older videos", "blurb": ("After the new upload joins the selected playlist, make every other Public video owned by this channel "
+		+ "in that playlist Unlisted. Private videos and scheduled publication stay unchanged. "
+		+ "The new upload keeps the Visibility chosen above. Unlisted videos remain accessible by link and in a playlist viewers can access. "
+		+ "Visibility changes apply everywhere a video appears, including other playlists. Videos owned by other channels cannot be changed. "
+		+ "Selecting this policy takes effect on the next upload, not immediately.")},
+}
 ## The categories an upload may go up in, by YouTube's id, in YouTube Studio's words and order: the ones `videoCategories.list`
 ## marks assignable (the rest - Shorts, Trailers, Movies - an upload cannot take). The note's card picks one.
 const CATEGORIES := {"2": "Autos & Vehicles", "23": "Comedy", "27": "Education", "24": "Entertainment",
@@ -99,6 +108,7 @@ static var revoke_url := "https://oauth2.googleapis.com/revoke"
 static var thumbnail_url := "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
 static var playlists_url := "https://www.googleapis.com/youtube/v3/playlists"
 static var playlist_items_url := "https://www.googleapis.com/youtube/v3/playlistItems"
+static var videos_url := "https://www.googleapis.com/youtube/v3/videos"
 static var channels_url := "https://www.googleapis.com/youtube/v3/channels"
 static var chunk := CHUNK
 ## Seconds per step of the wait between failures; a gate shortens it.
@@ -755,15 +765,16 @@ static func forget_pending() -> void:
 
 ## Queue [param file] to go up to channel [param channel] as [param body] (see [method video_body]), its result recorded in
 ## [param record], [param thumbnail] (an image) set as its thumbnail and the video added to the playlist [param playlist],
-## when those are given: the pending upload, or `{error}`. Queued before anything is sent, so an upload stopped at any point
+## when those are given, then [param management_policy] applied to its playlist: the pending upload, or `{error}`.
+## Queued before anything is sent, so an upload stopped at any point
 ## waits to be resumed. One queued with no channel goes to the channel its sign-in lands on ([method aim_pending]).
 static func queue(file: String, body: Dictionary, channel: String, record := "", thumbnail := "",
-		playlist := "") -> Dictionary:
+		playlist := "", management_policy := "none") -> Dictionary:
 	var size := _size_of(file)
 	if size <= 0:
 		return {"error": "the video file is missing or empty"}
 	var p := {"file": file, "size": size, "body": body, "channel": channel, "record": record,
-		"thumbnail": thumbnail, "playlist": playlist, "session": "", "at": _now()}
+		"thumbnail": thumbnail, "playlist": playlist, "management_policy": management_policy, "session": "", "at": _now()}
 	var err := _write(_path("pending.json"), JSON.stringify(p, "\t"), true)
 	return {"error": err} if not err.is_empty() else p
 
@@ -961,7 +972,7 @@ func _status(session: String, size: int, ch: String) -> Dictionary:
 
 
 ## The upload is done: forget it, set its thumbnail, add it to its playlist, record it, and say what YouTube made of it
-## (`thumbnail_error` and `playlist_error` say why a thumbnail was not set or the playlist not joined; the video is up either way).
+## (`thumbnail_error`, `playlist_error` and `management.error` describe follow-up failures; the video is up either way).
 func _finish(p: Dictionary, video: Variant) -> Dictionary:
 	forget_pending()
 	var v: Dictionary = video if video is Dictionary else {}
@@ -982,6 +993,8 @@ func _finish(p: Dictionary, video: Variant) -> Dictionary:
 	if not list.is_empty():
 		out["playlist_error"] = await add_to_playlist(id, list, ch)
 		out["playlist"] = list if String(out["playlist_error"]).is_empty() else ""
+		if String(out["playlist_error"]).is_empty() and str(p.get("management_policy", "none")) == "unlist_others":
+			out["management"] = await unlist_others(id, list, ch)
 	var rec := str(p.get("record", ""))
 	if not rec.is_empty():
 		var err := record_upload(rec, out)
@@ -1090,6 +1103,89 @@ func add_to_playlist(video_id: String, playlist_id: String, ch: String) -> Strin
 			return ""
 		return error_text(code, r["body"])
 	return "YouTube refused the sign-in"
+
+
+## Unlist every other public video owned by [param ch] in [param playlist_id], preserving its other writable status fields.
+## Lists all pages before editing, deduplicates videos, skips missing/foreign/non-public videos, and stops on a failure.
+## `{unlisted, skipped, error?}` records partial progress. The new upload is never edited. PLAYLIST_SCOPE covers these calls.
+func unlist_others(video_id: String, playlist_id: String, ch: String) -> Dictionary:
+	var out := {"unlisted": 0, "skipped": 0}
+	if not granted(PLAYLIST_SCOPE, ch):
+		out["error"] = "sign in again from the YouTube card to manage playlist videos"
+		return out
+	var ids := PackedStringArray()
+	var seen := {video_id: true}
+	var pages := {}
+	var page := ""
+	while true:
+		pages[page] = true
+		var got := await _management_request(playlist_items_url + "?" + form({"part": "contentDetails",
+			"playlistId": playlist_id, "maxResults": 50, "pageToken": page}), ch)
+		if got.has("error"):
+			out["error"] = str(got["error"])
+			return out
+		for item: Dictionary in got.get("items", []):
+			var id := str(item.get("contentDetails", {}).get("videoId", ""))
+			if not id.is_empty() and not seen.has(id):
+				ids.append(id)
+				seen[id] = true
+		page = str(got.get("nextPageToken", ""))
+		if page.is_empty():
+			break
+		if pages.has(page):
+			out["error"] = "YouTube repeated a playlist page; no videos were changed"
+			return out
+	for at in range(0, ids.size(), 50):
+		var batch := ids.slice(at, at + 50)
+		var got := await _management_request(videos_url + "?" + form({"part": "snippet,status",
+			"id": ",".join(batch)}), ch)
+		if got.has("error"):
+			out["error"] = str(got["error"])
+			return out
+		out["skipped"] += batch.size() - (got.get("items", []) as Array).size()
+		for video: Dictionary in got.get("items", []):
+			var id := str(video.get("id", ""))
+			var status: Dictionary = video.get("status", {})
+			if id == video_id or not batch.has(id) or str(video.get("snippet", {}).get("channelId", "")) != ch \
+					or str(status.get("privacyStatus", "")) != "public":
+				out["skipped"] += 1
+				continue
+			# A status update replaces omitted mutable fields; preserve the public video's other settings.
+			var keep := {"privacyStatus": "unlisted"}
+			for key in ["embeddable", "license", "publicStatsViewable", "selfDeclaredMadeForKids", "containsSyntheticMedia"]:
+				if status.has(key):
+					keep[key] = status[key]
+			var changed := await _management_request(videos_url + "?part=status", ch, HTTPClient.METHOD_PUT,
+				{"id": id, "status": keep})
+			if changed.has("error"):
+				out["error"] = "%s: %s (%d videos already unlisted)" % [id, str(changed["error"]), out["unlisted"]]
+				return out
+			out["unlisted"] += 1
+	return out
+
+
+## An authenticated playlist-policy read or status update, renewing an expired token once.
+func _management_request(url: String, ch: String, method := HTTPClient.METHOD_GET, body := {}) -> Dictionary:
+	for attempt in 2:
+		if _stop:
+			return {"error": "playlist management stopped"}
+		var tok := await access_token(ch)
+		if tok.has("error"):
+			return tok
+		var r := await _send(url, PackedStringArray(["Authorization: Bearer " + str(tok["token"]),
+			"Content-Type: application/json; charset=UTF-8"]), method,
+			JSON.stringify(body).to_utf8_buffer() if method == HTTPClient.METHOD_PUT else PackedByteArray(), 60.0)
+		if r.has("error"):
+			return r
+		if int(r["code"]) == 401 and attempt == 0:
+			_expire(ch)
+			continue
+		if int(r["code"]) != 200:
+			return {"error": error_text(int(r["code"]), r["body"])}
+		if not (r.get("json") is Dictionary):
+			return {"error": "YouTube returned an unreadable playlist management response"}
+		return r["json"]
+	return {"error": "YouTube refused the sign-in"}
 
 
 ## The uploads recorded in [param path] - a mode's record file - oldest first:

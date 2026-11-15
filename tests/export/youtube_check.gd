@@ -36,6 +36,7 @@ extends SceneTree
 ##   lays its title, privacy, category, playlist and channel over the panel's part. Channel toggles per channel kept, the note's
 ##   pressed; a channel not kept here shows dimmed with its name kept; another's toggle clears the playlist; a resume goes to its
 ##   channel; `title_shape` marks the episode's title in the template.
+## - management policy: None on new/older/unknown blocks, round-trips and reaches upload metadata, with a playlist hint.
 ## - the tag field (tag_field.gd): chips, comma/Enter/paste splitting, × and Backspace removal, each tag once, fixed tags first,
 ##   dimmed chip with a reason, read-only has no ×, a long tag cannot widen the field.
 ## - the table panel's fields are the show's global values (description, tags, title, byline); a new episode shows them at once; an
@@ -609,6 +610,7 @@ func _card() -> bool:
 	var cap: Dictionary = card.capture()
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
 		"playlist_title": "", "channel": "", "channel_name": "", "client": "", "write_tags": false, "description": "",
+		"management_policy": "none",
 		"thumbnail": "youtube", "thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
 		"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true},
 		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet, with YouTube's thumbnail - matched to the video's pictures once painted (%s)" % str(cap))
@@ -621,12 +623,22 @@ func _card() -> bool:
 		"bound, the card shows all four on it and reads the note's names from there (%s)" % str(card.values_now()))
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
 	var block := {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
+		"management_policy": "unlist_others",
 		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "client": "a1b2c3d4e5f6", "write_tags": true,
 		"description": "Line one.\n\nLine two.", "thumbnail": "painted", "thumbnail_writer": "claude",
 		"thumbnail_writer_model": "m1", "thumbnail_writer_effort": "high", "thumbnail_painter": "grok",
 		"thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": false}
 	card.apply(block)
 	_ok(card.capture() == block, "its block round-trips, the description's lines and all (%s)" % str(card.capture()))
+	_ok(card.meta({"tags": []}).get("management_policy") == "unlist_others" and card._management_note.visible
+		and card._management.tooltip_text.contains("Private videos and scheduled publication stay unchanged")
+		and card._management_note.text.contains("Private videos and scheduled publication stay unchanged")
+		and card._management.tooltip_text.contains("everywhere"),
+		"the policy reaches upload metadata and explains preserving private videos and visibility outside the playlist")
+	card.apply({"management_policy": "unknown"})
+	_ok(card.management_policy() == "none", "an unknown policy leaves other videos alone")
+	card.apply({"management_policy": "unlist_others"})
+	_ok(card._management_note.text.contains("Choose a playlist"), "a policy without a playlist says how to activate it")
 	card.apply(block.merged({"thumbnail": "youtube"}, true))
 	_ok(not card._desc.visible and card.description().is_empty() and card.meta({"tags": [], "description": "Theirs."}).get("description") == "Theirs.",
 		"control: its description box is hidden until the panel shows it, and then nothing of it goes up")
@@ -637,6 +649,7 @@ func _card() -> bool:
 	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
 		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true})
 	var m: Dictionary = card.meta({"tags": ["a"], "record": "r.json"})
+	_ok(m.get("management_policy") == "none", "an older block defaults to leaving other videos alone")
 	_ok(m.get("title") == "Truthful Tarot - The Tower (%s)" % Time.get_date_string_from_system() and m.get("privacy") == "unlisted"
 		and m.get("category") == "27" and YouTube.video_body(m)["snippet"]["categoryId"] == "27"
 		and m.get("playlist") == "PL1" and m.get("playlist_title") == "Readings" and m.get("tags") == ["a"]

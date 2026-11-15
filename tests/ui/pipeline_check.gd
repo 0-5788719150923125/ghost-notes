@@ -14,7 +14,8 @@ extends SceneTree
 ##   runs nothing. A row with no refresh button keeps its place and takes no press; one not open now takes none.
 ## - One Generate: top to bottom, a section started only once the one before it is done (control: while the first is busy
 ##   the second is not started), asked at its turn whether it has anything to make (words written by the section before it
-##   count), a section with nothing missing passed by; while it walks every refresh button waits; Stop stops all of it.
+##   count), a section with nothing missing passed by; while it walks only owners accepting queued requests keep their
+##   refresh buttons available; Stop stops all of it.
 ##   Generate is grayed with nothing missing, Stop with nothing being made. The play button on a heading makes that section
 ##   alone (control: the other is not started). While a row made again runs alone, Generate is offered and widens it to the
 ##   rest (control: a section busy making all of it leaves Generate grayed). Carried into a panel built anew over the same
@@ -241,7 +242,12 @@ func _one_generate() -> void:
 	second.listed = [redo]
 	card.refresh()
 	(card.row("b")["redo"] as Button).pressed.emit()
-	_ok((card.row("b")["redo"] as Button).disabled and ran.is_empty(), "while it walks, every ⟳ waits")
+	_ok((card.row("b")["redo"] as Button).disabled and ran.is_empty(), "an owner without queued requests waits during Generate")
+	redo.queueable = true
+	card.refresh()
+	(card.row("b")["redo"] as Button).pressed.emit()
+	_ok(not (card.row("b")["redo"] as Button).disabled and ran == ["b"] and card.walking() and first.is_busy,
+		"an owner accepting queued requests keeps its row available during Generate, without interrupting the walk")
 	second.has_missing = true          # the first has written its words
 	first.is_busy = false
 	card.refresh()

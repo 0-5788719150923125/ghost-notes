@@ -109,6 +109,12 @@ prompt:
       real one is: things pushed out to the sides and the back, standing close, a short thing in front
       of a taller one, some cut by the frame's sides - never one hidden whole behind another.
   - >-
+      Compose the whole table around its main work area. When that area moves, adjust the surrounding
+      groups to fit it: close unintended gaps and balance the heights and density while preserving room
+      for the work. Judge the whole camera view after placing the objects, not just each object alone.
+      Anything handled during the show stays within a seated person's easy reach, including storage
+      beside the workspace; being outside the picture need not mean being farther away.
+  - >-
       Every thing is a real object, set out in earnest. Nothing on the table carries words, letters,
       numbers or labels.
   # ...but the work may write them (the user, 2026-10-29: "The slip should show writing, if the script says it should")
@@ -262,6 +268,11 @@ prompt:
           go: leaning on the rim, the end that works down in what the vessel holds and the handle tipped up
           out of it - never lying level on the top of a liquid, as if it floated. The puppeteer moves them
           once the table is set: build each so a viewer would know what it is for.
+  - when: work
+    say: >-
+          A receiving vessel starts empty when the work will fill it: the grains arrive from their
+          source, so it needs no second grains bed to represent them. For loose ingredients meant to
+          disappear in liquid, set their material's `dissolves` to seconds of wet contact; 0 persists.
   # A BOX WHOSE CARDS THE WORK IS MADE OF (a recipe box): the table is set before a card comes up, so it is set for
   # any of them - each listed, none drawn
   - when: [work, box_cards]
@@ -602,7 +613,7 @@ box:
   - when: shoebox
     say: "This episode calls for a substantial cardboard shoebox with a removable lid. It starts to one side, then stays in the center with its long side across the table."
   - when: "!shoebox"
-    say: "The open box stands to one side with its long side front to back."
+    say: "The open box stands to one side with its long side front to back. Give it `at` to place its center in centimeters like the other things; without it the table uses the deck's place. Keep it within easy reach beside the workspace. It may extend past a side of the frame with only a small part visible; use the camera view to judge its prominence. Keep the vessel or surface worked throughout near the center where its contents are visible, with the surrounding groups composed around it."
   - when: filed
     say: "Leave enough depth and height for the cards to stand on edge."
   - when: piled

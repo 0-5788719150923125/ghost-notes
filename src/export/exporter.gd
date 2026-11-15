@@ -1598,7 +1598,8 @@ func _queue_upload() -> void:
 	if channel.is_empty() and _sign == "ok":
 		channel = _sign_landed
 	var q: Dictionary = YouTube.queue(_out, YouTube.video_body(_upload_meta, _out.get_file().get_basename()),
-		channel, str(_upload_meta.get("record", "")), thumb, str(_upload_meta.get("playlist", "")))
+		channel, str(_upload_meta.get("record", "")), thumb, str(_upload_meta.get("playlist", "")),
+		str(_upload_meta.get("management_policy", "none")))
 	if q.has("error"):
 		_state = "done"
 		_done_t = 30.0
@@ -1682,12 +1683,6 @@ func _run_upload() -> void:
 	var url := str(res.get("url", ""))
 	var privacy := str(res.get("privacy", ""))
 	DisplayServer.clipboard_set(url)
-	if not privacy.is_empty() and privacy != asked:
-		# what YouTube does with uploads from a Cloud project that has not passed its API audit
-		_set_status("✓  On YouTube, but YouTube kept it %s: %s (link copied)" % [privacy, url], Color(1.0, 0.85, 0.6))
-		push_warning("ghost: YouTube kept the upload %s - uploads from a Cloud project that has not "
-			% privacy + "passed YouTube's API audit stay private until it does")
-		return
 	var thumb_err := str(res.get("thumbnail_error", "")) if not str(res.get("thumbnail_error", "")).is_empty() else _thumb_why
 	if not thumb_err.is_empty():
 		push_warning("ghost: YouTube - the thumbnail was not set: " + thumb_err)
@@ -1697,8 +1692,21 @@ func _run_upload() -> void:
 	var warn := ("   ⚠ thumbnail not set: " + thumb_err) if not thumb_err.is_empty() else ""
 	if not list_err.is_empty():
 		warn += "   ⚠ not in the playlist: " + list_err
+	var management: Dictionary = res.get("management", {})
+	var policy_err := str(management.get("error", ""))
+	if not policy_err.is_empty():
+		warn += "   ⚠ playlist policy incomplete: " + policy_err
+		push_warning("ghost: YouTube - playlist policy incomplete: " + policy_err)
+	elif not management.is_empty():
+		warn += "   Older videos unlisted: %d" % int(management.get("unlisted", 0))
+	if not privacy.is_empty() and privacy != asked:
+		# An unaudited Cloud project's upload may stay private; follow-up results still need to be shown.
+		_set_status("✓  On YouTube, but YouTube kept it %s: %s (link copied)%s" % [privacy, url, warn], Color(1.0, 0.85, 0.6))
+		push_warning("ghost: YouTube kept the upload %s - uploads from a Cloud project that has not "
+			% privacy + "passed YouTube's API audit stay private until it does")
+		return
 	_set_status("✓  On YouTube (%s): %s  (link copied)%s" % [privacy if not privacy.is_empty() else asked, url, warn],
-		Color(0.82, 0.95, 0.86) if warn.is_empty() else Color(1.0, 0.85, 0.6))
+		Color(0.82, 0.95, 0.86) if thumb_err.is_empty() and list_err.is_empty() and policy_err.is_empty() else Color(1.0, 0.85, 0.6))
 
 
 func _sign_out(channel: String) -> void:

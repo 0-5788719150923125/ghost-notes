@@ -28,7 +28,7 @@ var _normals0 := PackedVector3Array()  # each vertex's normal as built: what it 
 
 
 ## [param mi]'s mesh made ready to bend by [param points], where [param built] carries the mesh's space to the table's as the sheet was built. Null: not a mesh this can bend.
-static func of(mi: MeshInstance3D, built: Transform3D, points: PackedVector3Array) -> SheetBend:
+static func of(mi: MeshInstance3D, built: Transform3D, points: PackedVector3Array, surface: Dictionary = {}) -> SheetBend:
 	# (bent again every frame, it casts its own shadow: a twin cut once would keep it flat - ShadowCasters)
 	mi.set_meta("shadow_own", true)
 	var mesh := mi.mesh as ArrayMesh
@@ -45,14 +45,14 @@ static func of(mi: MeshInstance3D, built: Transform3D, points: PackedVector3Arra
 	if arrays[Mesh.ARRAY_CUSTOM0] != null:
 		b._flags = Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
 	b._to_mesh = built.basis.inverse()
-	b._measure(arrays[Mesh.ARRAY_VERTEX], arrays[Mesh.ARRAY_NORMAL], built, points)
+	b._measure(arrays[Mesh.ARRAY_VERTEX], arrays[Mesh.ARRAY_NORMAL], built, points, surface)
 	mi.mesh = b._mesh
 	mi.extra_cull_margin = CULL_MARGIN
 	b._lay()
 	return b
 
 
-func _measure(verts: PackedVector3Array, normals: PackedVector3Array, built: Transform3D, points: PackedVector3Array) -> void:
+func _measure(verts: PackedVector3Array, normals: PackedVector3Array, built: Transform3D, points: PackedVector3Array, surface: Dictionary) -> void:
 	var places := {}
 	var facings := {}
 	_place.resize(verts.size())
@@ -73,9 +73,39 @@ func _measure(verts: PackedVector3Array, normals: PackedVector3Array, built: Tra
 		var a := verts[t * 3]
 		var made := (verts[t * 3 + 1] - a).cross(verts[t * 3 + 2] - a)
 		_signs[t] = 1.0 if made.dot(normals[t * 3]) >= 0.0 else -1.0
-	# ...each place by the points nearest it as built, the nearer the more
-	for u in _rest.size():
-		var at := built * _rest[u]
+	var world_places := PackedVector3Array()
+	for p in _rest:
+		world_places.append(built * p)
+	var bound := binding(world_places, points)
+	_near = bound["near"]
+	_weight = bound["weight"]
+	# Geometry and its ink share the solver's exact followers, including ties between equally near points.
+	if surface.has("vertices"):
+		var source: PackedVector3Array = surface["vertices"]
+		for vi in world_places.size():
+			var closest := -1
+			var least := INF
+			for si in source.size():
+				var d := world_places[vi].distance_squared_to(source[si])
+				if d < least:
+					least = d
+					closest = si
+			if closest < 0 or least > 0.0003 * 0.0003:
+				continue
+			for k in FOLLOWS:
+				_near[vi * FOLLOWS + k] = (surface["near"] as PackedInt32Array)[closest * FOLLOWS + k]
+				_weight[vi * FOLLOWS + k] = (surface["weight"] as PackedFloat32Array)[closest * FOLLOWS + k]
+
+
+## Surface vertices bound to the same four particle offsets in the solver and the picture. The bias preserves their original shape.
+static func binding(places: PackedVector3Array, points: PackedVector3Array) -> Dictionary:
+	var near := PackedInt32Array()
+	var weight := PackedFloat32Array()
+	var bias := PackedVector3Array()
+	var inverse: Array = []
+	for _p in points:
+		inverse.append([])
+	for at in places:
 		var ds: Array = []
 		for k in points.size():
 			ds.append([at.distance_squared_to(points[k]), k])
@@ -85,11 +115,17 @@ func _measure(verts: PackedVector3Array, normals: PackedVector3Array, built: Tra
 		for k in FOLLOWS:
 			var d: Array = ds[mini(k, count - 1)]
 			var wt := 1.0 / (float(d[0]) + 1e-7) if k < count else 0.0
-			_near.append(int(d[1]))
-			_weight.append(wt)
+			near.append(int(d[1]))
+			weight.append(wt)
 			total += wt
+		var center := Vector3.ZERO
+		var base := weight.size() - FOLLOWS
 		for k in FOLLOWS:
-			_weight[u * FOLLOWS + k] /= total
+			weight[base + k] /= total
+			center += points[near[base + k]] * weight[base + k]
+			(inverse[near[base + k]] as Array).append(Vector2(bias.size(), weight[base + k]))
+		bias.append(at - center)
+	return {"near": near, "weight": weight, "bias": bias, "inverse": inverse}
 
 
 ## Bent by [param off] (each point off its own shape, the table's space as built): null or the same as last, nothing is done.

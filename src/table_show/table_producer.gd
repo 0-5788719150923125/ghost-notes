@@ -49,6 +49,7 @@ class_name TableProducer
 ## Nothing runs on its own: [method start] is a person pressing Generate, because every step spends the author's quota, and a
 ## person asking for one part ([param only]) gets that part - what follows from it waits for Generate. Only the two steps that
 ## cost nothing and are a pure function of what they follow (the shuffle, assembling the script) come along on their own.
+## Further requests join the current run; queued steps wait for their inputs and any inputs being remade farther upstream.
 ##
 ## ONE PRODUCER PER EPISODE ([method of]): what it was asked carries on with the settings it was started with, whatever is
 ## changed meanwhile. A note opened again (a format picked, a card attached or taken off) is a panel built anew: its card
@@ -140,7 +141,7 @@ func _init(ep: TableEpisode, sp: Dictionary) -> void:
 ## The producer for [param ep]: the one making it now, else a new one.
 static func of(ep: TableEpisode) -> TableProducer:
 	var p: TableProducer = _live.get(ep.dir)
-	if p != null and (p.running or p.busy()):
+	if p != null and (p.running or p.busy() or not p.again.is_empty()):
 		return p
 	_live.erase(ep.dir)
 	return TableProducer.new(ep, {})
@@ -151,7 +152,7 @@ static func of(ep: TableEpisode) -> TableProducer:
 func hand_over() -> void:
 	holder = null
 	var tree := Engine.get_main_loop() as SceneTree
-	if not (running or busy()) or tree == null:
+	if not (running or busy() or not again.is_empty()) or tree == null:
 		stop()
 		return
 	tree.create_timer(HANDOVER_S).timeout.connect(unclaimed)
@@ -173,6 +174,30 @@ func _forget_live() -> void:
 ## is kept ([method owed]). A person pressing is what starts it, so here an episode made before records gains them ([method
 ## TableEpisode.adopt]).
 func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
+	if running or busy() or not again.is_empty():
+		if steps.is_empty():
+			only.clear()
+			for step in _errors.keys():
+				_errors.erase(step)
+				_tries.erase(step)
+		elif not only.is_empty():
+			for step in steps:
+				if not only.has(step):
+					only.append(step)
+		for step in steps:
+			if _jobs.has(step) or _hosts.has(step) or _waiting.has(step) or (again.has(step) and not _errors.has(step)):
+				continue
+			_errors.erase(step)
+			_tries.erase(step)
+			if remake and not again.has(step):
+				again.append(step)
+			if not note.strip_edges().is_empty():
+				asked[String(step)] = note.strip_edges()
+		running = true
+		_live[episode.dir] = self
+		tick()
+		changed.emit()
+		return
 	_errors.clear()
 	_tries.clear()
 	skin_layer = layer
@@ -213,6 +238,8 @@ func with_direction(system: String) -> String:
 
 func stop() -> void:
 	running = false
+	again.clear()
+	asked.clear()
 	_forget_live()
 	for step in _jobs:
 		AgentJobs.cancel(String(_jobs[step]))
@@ -243,6 +270,8 @@ func state_of(step: String) -> String:
 		return "queued"
 	if _errors.has(step):
 		return "failed"
+	if again.has(step):
+		return "queued"
 	if episode.has(step):
 		return "ready"
 	return "missing"
@@ -327,18 +356,14 @@ func tick() -> void:
 				continue
 			# ...once what it is made from is made, and not about to be made again: made now from what goes a version back, it
 			# would only go stale
-			var ready := true
-			for need in episode.needs(s):
-				if not episode.has(String(need)) or owed(String(need)) or _jobs.has(String(need)) or _hosts.has(String(need)):
-					ready = false
-					break
-			if not ready or not (only.is_empty() or only.has(s) or LOCAL.has(s)):
+			if not waiting_on(s).is_empty() or not (only.is_empty() or only.has(s) or LOCAL.has(s)):
 				continue
 			_make(s)
 			moved = true
 		if _jobs.is_empty() and _hosts.is_empty() and _waiting.is_empty():
 			running = false          # done, or stopped on a failure nothing else can get past
-			_forget_live()
+			if again.is_empty():
+				_forget_live()
 			moved = true
 	if moved:
 		changed.emit()
@@ -352,6 +377,65 @@ func owed(step: String) -> bool:
 	if again.has(step):
 		return true
 	return (only.is_empty() or LOCAL.has(step)) and episode.stale(step) and not episode.kept(step)
+
+
+## Whether Generate has work: requested remakes, missing outputs, or stale outputs that are not kept.
+## This is read fresh: a changed input or lock leaves the episode's file listing unchanged.
+func needs_work() -> bool:
+	if not again.is_empty():
+		return true
+	for step in episode.steps():
+		var s := String(step)
+		if episode.by_hand(s):
+			continue
+		if not episode.has(s):
+			if s != "image:height":
+				return true
+		elif episode.stale(s) and not episode.kept(s):
+			return true
+	return false
+
+
+## Inputs not made yet or waiting for an upstream remake, and active jobs still using this step's previous output.
+func waiting_on(step: String) -> Array:
+	var out: Array = []
+	for need in episode.needs(step):
+		if not episode.has(String(need)) or _input_pending(String(need), {}):
+			out.append(String(need))
+	for active in _jobs.keys() + _hosts.keys():
+		if String(active) != step and not out.has(active) and _uses_input(String(active), step, {}):
+			out.append(String(active))
+	return out
+
+
+func _uses_input(step: String, input: String, seen: Dictionary) -> bool:
+	if seen.has(step):
+		return false
+	seen[step] = true
+	for need in episode.needs(step):
+		if String(need) == input or _uses_input(String(need), input, seen):
+			return true
+	return false
+
+
+func _input_pending(step: String, seen: Dictionary) -> bool:
+	if seen.has(step):
+		return false
+	seen[step] = true
+	if owed(step) or _jobs.has(step) or _hosts.has(step) or _waiting.has(step):
+		return true
+	for need in episode.needs(step):
+		if _input_pending(String(need), seen):
+			return true
+	return false
+
+
+## Whether a row can be requested: its direct inputs exist or have already been requested.
+func can_queue(step: String) -> bool:
+	for need in episode.needs(step):
+		if not episode.has(String(need)) and not again.has(need) and not _jobs.has(need) and not _hosts.has(need) and not _waiting.has(need):
+			return false
+	return true
 
 
 ## [param prompt] for [param step], with the author's note where it was asked again with one ([member asked]).

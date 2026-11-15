@@ -11,7 +11,8 @@ class_name SheetWriting
 ## point of it is put down, stroke by stroke as the hand writes - a pen seen follows the same strokes ([Pen]). A typewriter's words are
 ## set from the font's own glyphs instead ([method picture]), line by line, left to right. A thin
 ## skin over the sheet's top - bent and folded as the sheet is ([method Props.sheet_lift]) - shows that picture as far as the pen has got
-## (`shaders/sheet_writing.gdshader`).
+## (`shaders/sheet_writing.gdshader`). A flexible sheet uses its own top triangles for the ink too ([method conform]), so the ink follows
+## the same surface through a bend.
 ##
 ## A page, written a line at a time ([method page], next/proof.md): several writes on one sheet go one under another from its head, as
 ## lines on a page do, all at one size - words in the sheet's hand, and what TeX lays out ([TableInk]: a formula, a drawing, words with
@@ -53,6 +54,47 @@ const WORDS_TALLER := 1.35
 const PEN_LEAD := 0.6
 const PEN_TAIL := 0.45
 const WORD_LETTER := 0.12
+
+
+## Lay the ink on the sheet's own top triangles, with its picture's original bounds. [param to_node] takes the built surface into the ink node's space.
+static func conform(ink: MeshInstance3D, sheet: Dictionary, vertices: PackedVector3Array, triangles: PackedInt32Array, to_node: Transform3D) -> void:
+	var place: Transform3D = sheet["place"]
+	var back := place.affine_inverse()
+	var lo := Vector2.INF
+	var hi := -Vector2.INF
+	for p in (ink.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+		var flat := back * p
+		lo = lo.min(Vector2(flat.x, flat.z))
+		hi = hi.max(Vector2(flat.x, flat.z))
+	var span := hi - lo
+	if span.x <= 0.0 or span.y <= 0.0:
+		return
+	var flat := PackedVector3Array()
+	for p in vertices:
+		flat.append(back * to_node * p)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var count := 0
+	for k in range(0, triangles.size() - 2, 3):
+		var top := true
+		for j in 3:
+			var p := flat[triangles[k + j]]
+			var y := float(sheet["thick"]) + Props.sheet_lift(p.x - float(sheet["x0"]), p.z - float(sheet["z0"]), float(sheet["w"]), float(sheet["l"]), float(sheet["bend"]), float(sheet["fold"]))
+			top = top and absf(p.y - y) < 0.00002
+		if not top:
+			continue
+		var a := place * flat[triangles[k]]
+		var b := place * flat[triangles[k + 1]]
+		var c := place * flat[triangles[k + 2]]
+		var normal := (c - a).cross(b - a).normalized()
+		for j in 3:
+			var p := flat[triangles[k + j]]
+			st.set_normal(normal)
+			st.set_uv((Vector2(p.x, p.z) - lo) / span)
+			st.add_vertex(place * (p + Vector3.UP * ABOVE))
+			count += 1
+	if count > 0:
+		ink.mesh = st.commit()
 
 
 ## The hand [param hand] ([constant CardTable.HANDS]) is written in by a pen ([Handwriting]), or "" for one that is set (a typewriter's).

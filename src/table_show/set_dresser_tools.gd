@@ -736,10 +736,9 @@ func _room_at(t: Dictionary) -> float:
 	return CardTable.headroom_at(lay["camera"], float(lay["fov"]), Tables.ORIGIN + Vector2(float(t["at"][0]), float(t["at"][1])) * 0.01)
 
 
-## Whether thing [param t] is placed on the blueprint: all but the cards' box (the table's to stand)
-## and a strand draped across the table (its path is where it lies).
+## Whether thing [param t] can be placed on the blueprint: a strand's path already says where it lies.
 static func _needs_place(t: Dictionary) -> bool:
-	return t.get("holds_cards") != true and not Props.draped(t)
+	return not Props.draped(t)
 
 
 ## Each thing's number, by name: its place in the order put.

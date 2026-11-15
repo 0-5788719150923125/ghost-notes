@@ -17,11 +17,11 @@ class_name PipelineCard
 ##
 ## One Generate: every section's missing work, top to bottom, each waiting for the one before
 ## ([method generate]): the words first, then what is made from them. The play button on a section's
-## heading makes that section alone. While Generate walks, every refresh button waits. A note opened again
-## while it walks (a format picked, a card attached) walks on in the panel built anew ([method carry_on]).
+## heading makes that section alone. While Generate walks, rows whose owners accept queued requests remain available.
+## A note opened again while it walks (a format picked, a card attached) walks on in the panel built anew ([method carry_on]).
 
 ## What the card is for, on its title bar and its chip ([member Card.blurb]).
-const BLURB := "Everything agents and tools make for this note, in one list. Generate makes what is missing, and a row's ⟳ makes that one thing again."
+const BLURB := "Everything agents and tools make for this note, in one list. Generate makes what is missing or out of date, preserving kept steps, and a row's ⟳ makes that one thing again."
 ## The widest a row's name stands: a longer one is clipped, whole in its tooltip.
 const NAME_MOST := 124.0
 ## How far a group's rows stand in.
@@ -67,7 +67,7 @@ func _init(prefix := "") -> void:
 	_tally.modulate = Color(1, 1, 1, 0.75)
 	_tally.mouse_filter = Control.MOUSE_FILTER_STOP
 	_bar.add_child(_tally)
-	_generate = _bar_button("Generate", "Make everything below that is missing, top to bottom: each part waits for the one before it. It spends the agents' quota. To make one part, use the ▶ on its heading; to make one thing again, its ⟳.")
+	_generate = _bar_button("Generate", "Make everything below that is missing or out of date, preserving kept steps, top to bottom: each part waits for the one before it. It spends the agents' quota. To make one part, use the ▶ on its heading; to make one thing again, its ⟳.")
 	_generate.pressed.connect(generate)
 	_stop = _bar_button("Stop", "Stop whatever is being made here. What is finished is kept.")
 	_stop.pressed.connect(stop)
@@ -170,7 +170,7 @@ func busy() -> bool:
 	return false
 
 
-## Whether Generate is walking: every ⟳ waits.
+## Whether Generate is walking: only rows whose owners accept queued requests can be refreshed.
 func walking() -> bool:
 	return not _queue.is_empty()
 
@@ -541,7 +541,7 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 	(r["name"] as Label).tooltip_text = it.tip if not it.tip.is_empty() else it.label
 	var redo: Button = r["redo"]
 	if not it.again.is_empty():
-		redo.disabled = walking_now or not it.open
+		redo.disabled = (walking_now and not it.queueable) or not it.open
 		redo.tooltip_text = it.again + ("\n\n" + it.asks if not it.asks.is_empty() else "")
 	var make: Variant = r["make"]
 	if make is Button:
@@ -556,8 +556,9 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 	if lock_b is Button:
 		(lock_b as Button).icon = _lock_icon(it.locked)
 		(lock_b as Button).disabled = walking_now
-		(lock_b as Button).tooltip_text = ("Kept: Generate passes this by, even once what it was made from has changed. Its ⟳ still "
-			+ "makes it again. Press to let Generate make it again when it goes stale." if it.locked
+		(lock_b as Button).tooltip_text = ("Kept: Generate passes this by, even once what it was made from has changed. "
+			+ ("Its ⟳ still makes it again. " if not it.again.is_empty() else "")
+			+ "Press to let Generate make it again when it goes stale." if it.locked
 			else "Press to keep this: Generate passes a kept part by, even once what it was made from has changed.")
 
 
@@ -685,7 +686,7 @@ func _press_redo(at: String) -> void:
 	if r.is_empty():
 		return
 	var it: PipelineRow = r["row"]
-	if not it.open or walking() or not it.redo.is_valid():
+	if not it.open or (walking() and not it.queueable) or not it.redo.is_valid():
 		return
 	(r["section"] as PipelineSection).told = ""
 	if it.asks.is_empty():

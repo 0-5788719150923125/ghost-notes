@@ -3,7 +3,7 @@ extends SceneTree
 ## The gate of what is in things ([ShapeField], [Vessel], [Particles], [TablePhysics]; next/table_physics.md), with no
 ## renderer.
 ##
-##   godot --headless --path . --script res://tests/table/physics_check.gd [-- --only=_jars_apart,_sheet_lies]
+##   timeout 600 godot --headless --path . --script res://tests/table/physics_check.gd [-- --only=_jars_apart,_sheet_lies]
 ##
 ## Each check's doc comment says what it asserts and the control that must not behave that way. They cover: shape fields and
 ## vessels (volume, level, overflow); pours, dips and liquid conservation; grains, loose things and sheets (tumbling, resting,
@@ -31,7 +31,8 @@ func _run() -> void:
 			_moved_on, _let_go_in, _held_between, _thing_meets, _held_up_from_below, _carried_with, _put_back_in, _thin_walls, _plan_drops_stale, _held_till_placed, _unbrought_not_there, _waits_for_bake, _replan_from_change,
 			_seat_rides, _leans_in, _held_unless_resting, _level_counts, _floats_in, _clears_way, _pours_into, _runs_down, _dips_full,
 			_jars_apart, _tool_entry, _rests_let_go, _sheet_lies, _past_baked, _rests_on_rim, _pours_loose, _world_from_table,
-			_kept_across_plans, _warmed_first, _frame_names_bodies, _part_stays_when_thing_goes, _not_dropped_on_a_rim, _sheet_tip_in_pot, _brew_kept, _stands_held_for_a_moment, _sheet_bends_round, _floater_lives, _sheet_stays_whole]:
+			_kept_across_plans, _warmed_first, _frame_names_bodies, _part_stays_when_thing_goes, _not_dropped_on_a_rim, _sheet_tip_in_pot, _brew_kept, _stands_held_for_a_moment, _sheet_bends_round, _floater_lives, _sheet_stays_whole, _grain_starts, _paper_dissolves,
+			_grains_leave_room, _liquid_drawn_pose, _vessel_on_table, _thing_drawn_on_host, _writing_bends, _sheet_surface_contact, _shades_turn, _grains_need_support, _curved_tool, _floating_grains, _sheet_wakes_turned, _capsule_geometry]:
 		# ...or only those named after `--only=` (by hand: `-- --only=_jars_apart,_sheet_lies`)
 		var only := ""
 		for a in OS.get_cmdline_user_args():
@@ -61,7 +62,7 @@ static func _medium() -> TableMedium:
 
 
 ## [param spec] built and stood on [param m] at [param at] (meters, the table's space): `{node, built, thing}`.
-static func _stand(m: TableMedium, spec: Dictionary, name: String, at: Vector3, seed := 5) -> Dictionary:
+static func _stand(m: TableMedium, spec: Dictionary, name: String, at: Vector3, seed := 5, shades: Array = []) -> Dictionary:
 	var safe := Props.sanitize(spec, [])
 	var thing: Dictionary = {}
 	for t in safe["things"]:
@@ -72,7 +73,7 @@ static func _stand(m: TableMedium, spec: Dictionary, name: String, at: Vector3, 
 	var node: Node3D = b["node"]
 	node.transform = Transform3D(Basis.IDENTITY, at)
 	m._props.add_child(node)
-	m._work.take(thing, b, node)
+	m._work.take(thing, b, node, shades)
 	return {"node": node, "built": b, "thing": thing}
 
 
@@ -2799,6 +2800,11 @@ func _sheet_tip_in_pot() -> bool:
 		if kind == "grid":
 			spheres = spheres.slice(0, spheres.size() - Particles.SHEET_REACHES)
 			L["spheres"] = spheres
+			var skin: Dictionary = L["surface"]
+			var rebound := SheetBend.binding(skin["vertices"], spheres)
+			rebound["vertices"] = skin["vertices"]
+			rebound["triangles"] = skin["triangles"]
+			L["surface"] = rebound
 		gap[kind] = _farthest_from(m, fw, spheres)
 		var worst := 0.0
 		for t in [5.0, 6.0, 7.0, 8.0]:
@@ -2987,7 +2993,7 @@ const FLOAT_SPEC := {"things": [
 		"rock": {"kind": "stone", "color": "#555555"}, "tin": {"kind": "metal", "color": "#999999", "density": 0.4}}}
 
 
-## How many of [param frames] moments the rod's axis (from its foot, 20 cm up) passes through loose work [param wi]'s drawn surface, as the table draws both.
+## How many of [param moments] the rod's 7 mm shaft (from its foot, 20 cm up) penetrates loose work [param wi]'s drawn surface, within 0.2 mm.
 func _rod_through(m: TableMedium, wi: int, ph: TablePhysics, rod_key: int, moments: Array) -> int:
 	var count := 0
 	for t in moments:
@@ -3008,7 +3014,8 @@ func _rod_through(m: TableMedium, wi: int, ph: TablePhysics, rod_key: int, momen
 			var xf := m._work._world_of(mi)
 			var faces := mi.mesh.get_faces()
 			for k in range(0, faces.size() - 2, 3):
-				if Geometry3D.segment_intersects_triangle(foot, head, xf * faces[k], xf * faces[k + 1], xf * faces[k + 2]) != null:
+				var pair := Particles._capsule_triangle(foot, head, xf * faces[k], xf * faces[k + 1], xf * faces[k + 2])
+				if pair[0].distance_to(pair[1]) < 0.0033:
 					hit = true
 					break
 		if hit:
@@ -3017,7 +3024,7 @@ func _rod_through(m: TableMedium, wi: int, ph: TablePhysics, rod_key: int, momen
 
 
 ## A sheet bends round what meets it, gently ([method Particles.make_soft], [SheetBend]): a feather afloat, a 7 mm rod brought down across
-## its middle and swept through it: the rod hardly ever stands through what is drawn; what is drawn bends, the points about the rod off
+## its middle and swept through it: the rod never stands through what is drawn; what is drawn bends, the points about the rod off
 ## their own shape by millimeters and the mesh with them; nothing is thrown out of the liquid; and left alone again, it lies back. The
 ## controls: met only at its points' own thickness, a rod fits between them; and the rod did move it.
 func _sheet_bends_round() -> bool:
@@ -3052,8 +3059,8 @@ func _sheet_bends_round() -> bool:
 	_ok(far < float(L["rad"]) + rod_r, "part of the feather lies %.1f mm from any point: a %.0f mm rod goes between them, met at %.1f mm" % [far * 1000.0, rod_r * 2000.0, float(L["rad"]) * 1000.0])
 	_ok(far > float(L["contact"]) + rod_r, "the control: met at its own thickness, a rod would not go between the feather's points (%.1f mm from one at most)" % (far * 1000.0))
 	var moments: Array = []
-	for k in 45:
-		moments.append(11.5 + float(k) * 0.1)
+	for k in 270:
+		moments.append(11.5 + float(k) / 60.0)
 	m._work.tick(30.0)
 	var through := _rod_through(m, wi, ph, rod_key, moments)
 	var most := 0.0
@@ -3079,8 +3086,8 @@ func _sheet_bends_round() -> bool:
 	for q in (ph.bend_of(wi, 29.0) as PackedVector3Array):
 		after = maxf(after, q.length())
 	print("  the rod through the feather at %d of %d moments, bent %.1f mm at most, %.1f mm left after, fastest point %.1f cm/s, %.1f cm over the surface at most" % [through, moments.size(), most * 1000.0, after * 1000.0, fastest * 100.0, highest * 100.0])
-	_ok(through <= 2, "the rod stood through the feather as drawn at %d of %d moments" % [through, moments.size()])
-	_ok(most > 0.004, "met by the rod, the feather bent only %.1f mm" % (most * 1000.0))
+	_ok(through == 0, "the rod stood through the feather as drawn at %d of %d moments" % [through, moments.size()])
+	_ok(most > 0.002, "met by the rod, the feather bent only %.1f mm" % (most * 1000.0))
 	_ok(fastest > 0.02, "the control: the feather was hardly moved, %.1f cm a second at most" % (fastest * 100.0))
 	_ok(fastest < 0.16, "the feather's fastest point went %.1f cm a second, the rod 8: a whip" % (fastest * 100.0))
 	_ok(highest < 0.012, "the feather was thrown %.1f cm over the surface" % (highest * 100.0))
@@ -3368,4 +3375,467 @@ func _world_from_table() -> bool:
 	m._root3.free()
 	_ok(float(resumed["first"]) <= 2.0, "the control: its first act moved, the bake went back only to %.1f s" % float(resumed["first"]))
 	_ok(float(resumed["new"]) >= 7.0, "an act moving a thing nothing had moved, at 8 s, baked again from %.1f s" % float(resumed["new"]))
+	return true
+
+
+## Empty grain beds create no matter; visible ones keep their written size and sleep only on the floor or other grains.
+func _grain_starts() -> bool:
+	for absent in [true, false]:
+		var spec := SNOW_SPEC.duplicate(true)
+		var grain: Dictionary = spec["things"][0]["parts"][1]
+		grain["start"] = {"grow": 0.0 if absent else 1.0}
+		spec["materials"]["snow"]["dissolves"] = 0.0
+		var m := _medium()
+		_stand(m, spec, "jar", _at(Vector3.ZERO))
+		m._work.build({}, 1)
+		var ph: TablePhysics = m._work.physics
+		var ids: PackedInt32Array = ph.grains[0]["ids"]
+		_ok(ids.is_empty() == absent, "an absent grain bed creates particles, or the visible control creates none")
+		if not absent:
+			for i in ids:
+				_ok(is_equal_approx(ph.sim.r[i], 0.0015), "a vessel enlarged its written grains")
+			var sd: Dictionary = ph.solids[int(ph.grains[0]["solid"])]
+			var inv: Transform3D = (sd["rest"] as Transform3D).affine_inverse()
+			for i in ids:
+				var p := ph.sim.x[i]
+				var supported := (sd["field"] as ShapeField).sample(inv * (p + Vector3.DOWN * 0.0001)).x < ph.sim.r[i]
+				for j in ids:
+					if ph.sim.x[j].y < p.y and absf(p.distance_to(ph.sim.x[j]) - ph.sim.r[i] - ph.sim.r[j]) < 0.00001:
+						supported = true
+				_ok(supported, "a grain sleeps above both the floor and the grains below it")
+		m._root3.free()
+	var basin := _part({"shape": "lathe", "material": "clay", "profile": [[0,0],[9,0],[9.3,0.8],[8.8,1.5],
+		[8.4,4],[8.1,4.4],[7.6,4.4],[7.6,1.2],[0,1.2]]})
+	var field := ShapeField.of(basin, AABB(Vector3(-0.093,0,-0.093),Vector3(0.186,0.044,0.186)))
+	var vs := Vessel.of(field)
+	var ph := TablePhysics.new()
+	var xf := Transform3D(Basis.from_scale(Vector3.ONE * 0.75), Vector3.ZERO)
+	var rad := 0.005
+	var packed := ph._pack(vs, rad / 0.75, vs.level(Vector3.UP,0.4), Vector3.UP, xf, 0, rad / 0.75)
+	_ok(not ph._supported_grains(packed,rad,vs,xf).is_empty(), "a shallow scaled vessel lost all its grains")
+	var empty := ph._pack(vs, rad / 0.75, vs.level(Vector3.UP,0.0), Vector3.UP, xf, 0, rad / 0.75)
+	_ok(empty.is_empty(), "the control: an empty shallow vessel has grains")
+	return true
+
+
+## Wet paper disappears as particles and as geometry; insoluble paper stays, and seeking restores the earlier picture.
+func _paper_dissolves() -> bool:
+	for dissolves in [2.0, 0.0]:
+		var spec := FLOAT_SPEC.duplicate(true)
+		spec["materials"]["plume"] = {"kind": "paper", "density": 0.7, "dissolves": dissolves, "color": "#eeeecc"}
+		var m := _medium()
+		_stand(m, spec, "pot", _at(Vector3(0, 0, -8)))
+		_stand(m, spec, "gifts", _at(Vector3(-40, 0, -8)))
+		m._work.build({"acts": [{"name": "in", "beat": 1, "length": 3.0, "tracks": [
+			{"thing": "gifts", "part": "feather", "law": "path", "jitter": 0.0, "keys": [
+				{"at": 0.0}, {"at": 0.3, "by": [0, 22, 0]}, {"at": 0.75, "by": [40, 22, 0]}, {"at": 1.0, "by": [40, 8, 0]}]}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var wi := _work_of_name(m, "feather")
+		var node: Node3D = m._work.works[wi]["node"]
+		m._work.tick(0.5)
+		_ok(node.visible and ph.whole(wi, 0.5), "paper is absent before it gets wet")
+		m._work.tick(25.0)
+		var f: Dictionary = ph.frame_at(25.0)
+		var left := 0
+		for i in (f["owner"] as PackedInt32Array).size():
+			if f["owner"][i] == 1000 and f["alive"][i] == 1:
+				left += 1
+		_ok((left == 0 and not node.visible) if dissolves > 0.0 else (left > 0 and node.visible),
+			"paper with dissolves=%s: %d particles, visible=%s" % [dissolves, left, node.visible])
+		m._work.tick(0.5)
+		_ok(node.visible, "seeking before wet contact does not restore paper")
+		m._root3.free()
+	return true
+
+
+## Many ingredient beds and a sprinkle leave room for a sheet to become a body and float. The control: their requested grains exceed the solver's capacity.
+func _grains_leave_room() -> bool:
+	var m := _medium()
+	_stand(m, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	_stand(m, FLOAT_SPEC, "gifts", _at(Vector3(-40, 0, -8)))
+	var beds: Array = []
+	for k in 8:
+		beds.append({"name": "bed %d" % k, "shape": "grains", "amount": TablePhysics.GRAINS_MOST,
+			"grain": 0.3, "material": "sand", "at": [k * 15, 0, 0]})
+	var mats: Dictionary = (FLOAT_SPEC["materials"] as Dictionary).duplicate(true)
+	mats["sand"] = {"kind": "powder", "dissolves": 0.0}
+	_stand(m, {"materials": mats, "things": [{"name": "beds", "parts": beds}]}, "beds", _at(Vector3(80, 0, -8)))
+	m._work.build({"acts": [
+		{"name": "pinch", "beat": 1, "length": 1.0, "tracks": [{"law": "sprinkle", "material": "sand", "at": [80, 1, -8], "amount": 240}]},
+		{"name": "in", "beat": 1, "length": 3.0, "tracks": [{"thing": "gifts", "part": "feather", "law": "path", "jitter": 0.0,
+			"keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 22, 0]}, {"at": 0.75, "by": [40, 22, 0]}, {"at": 1.0, "by": [40, 13, 0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 0.5, "t1": 1.5}, {"i": 1, "t0": 2.0, "t1": 5.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var reserved := ph._loose_room()
+	_ok(8 * TablePhysics.GRAINS_MOST > Particles.MOST and ph.sim.n > Particles.MOST / 2,
+		"the control: the beds do not exercise the particle budget")
+	_ok(ph.sim.room() >= reserved, "ingredient beds used the loose bodies' %d reserved slots" % reserved)
+	m._work.tick(1.6)
+	_ok(ph.sim.room() >= reserved, "a sprinkle used the loose bodies' reserved slots")
+	m._work.tick(10.0)
+	var wi := _work_of_name(m, "feather")
+	var L: Dictionary = ph.loose[int(ph._loose_of[wi])]
+	var bi := int(L["body"])
+	_ok(bi >= 0 and not bool(L["full"]), "the floating sheet never became a physics body")
+	if bi >= 0:
+		var wet := 0
+		for i in (ph.sim.bodies[bi] as Dictionary)["ids"]:
+			wet += 1 if ph.sim.wet[i] >= 0 else 0
+		_ok(wet > 0 and not ph.sim.body_asleep(bi), "the sheet does not float after its carry")
+	m._root3.free()
+	return true
+
+
+## A carried liquid's shader and its bake agree after every seek, on the first frame. The control: its vessel moves far between samples.
+func _liquid_drawn_pose() -> bool:
+	var m := _medium()
+	_stand(m, FLOAT_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	m._work.build({"acts": [{"name": "move", "beat": 1, "length": 3.0, "tracks": [
+		{"thing": "pot", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [16, 12, 0], "turn": [0, 0, 18]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var li := _liquid(m, "pot")
+	var mesh: MeshInstance3D = ph.liquids[li]["nodes"][0]
+	var moved := 0.0
+	var was := m._work._world_of(mesh)
+	for t in [0.5, 3.8, 1.3, 3.0, 0.5]:
+		m._work.tick(float(t))
+		var xf := m._work._world_of(mesh)
+		moved = maxf(moved, xf.origin.distance_to(was.origin))
+		var mat := mesh.material_override as ShaderMaterial
+		var at: Vector3 = mat.get_shader_parameter("surface_at")
+		var up: Vector3 = mat.get_shader_parameter("surface_up")
+		var f: Dictionary = ph.frame_at(float(t))
+		var lq: PackedFloat32Array = f["liq"]
+		var center := Vector3(lq[li * 16 + 4], lq[li * 16 + 5], lq[li * 16 + 6])
+		var normal := Vector3(lq[li * 16 + 1], lq[li * 16 + 2], lq[li * 16 + 3])
+		_ok((xf * at).distance_to(center) < 0.00001, "the drawn liquid's surface is off its bake after seeking to %.1f" % float(t))
+		_ok((xf.basis.inverse().transposed() * up).normalized().distance_to(normal) < 0.00001,
+			"the drawn liquid's tilt is off its bake after seeking to %.1f" % float(t))
+		was = xf
+	_ok(moved > 0.08, "the control: the liquid's vessel never moved far between seeks")
+	m._root3.free()
+	return true
+
+
+## A vessel stands on the table while a scoop moves inside it; its grains remain in it. The control: its middle is inside the scoop.
+func _vessel_on_table() -> bool:
+	var spec := {"materials": {"clay": {"kind": "ceramic"}, "sand": {"kind": "stone"}}, "things": [{"name": "vessel", "parts": [
+		{"name": "pot", "shape": "lathe", "material": "clay", "profile": [[0,0],[8,0],[8,12],[7.6,12],[7.6,0.4],[0,0.4]]},
+		{"name": "bed", "shape": "grains", "at": [0,1,0], "grain": 0.6, "material": "sand"},
+		{"name": "scoop", "shape": "lathe", "material": "clay", "at": [0,4,0], "joint": {"kind": "free"},
+			"profile": [[0,0],[3,0],[3,6],[2.7,6],[2.7,0.3],[0,0.3]]}]}]}
+	var m := _medium()
+	var stood := _stand(m, spec, "vessel", _at(Vector3.ZERO))
+	m._work.build({"acts": [{"name": "lift", "beat": 1, "length": 3.0, "tracks": [
+		{"thing": "vessel", "part": "scoop", "law": "path", "jitter": 0.0,
+			"keys": [{"at": 0.0}, {"at": 1.0, "by": [0,15,0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var body: Dictionary = ph.rigid.bodies[int(ph._rigid_of[-1])]
+	var scoop := _work_of_name(m, "scoop")
+	var in_scoop := false
+	for L in ph.liquids:
+		var sd: Dictionary = ph.solids[int(L["solid"])]
+		if int(sd["wi"]) == scoop:
+			in_scoop = (L["vessel"] as Vessel).contains((sd["rest"] as Transform3D).affine_inverse() * (body["c0"] as Vector3))
+	_ok(in_scoop, "the control: the vessel's middle is not inside its scoop")
+	_ok(int(body["host"]) < 0, "the vessel rests on its scoop instead of the table")
+	var rest: Transform3D = (stood["node"] as Node3D).transform
+	m._work.tick(5.0)
+	var baked: Transform3D = ph.thing_pose_of(0, 5.0)
+	_ok(baked.origin.distance_to(rest.origin) < 0.001, "lifting the scoop carries its vessel off the table")
+	_ok((m._work._world_of((stood["node"] as Node3D))).is_equal_approx(baked), "the drawn vessel is off its baked pose")
+	var g: Dictionary = ph.grains[0]
+	var sd: Dictionary = ph.solids[int(g["solid"])]
+	var vs: Vessel = ph.liquids[int(ph._vessel_of[int(g["solid"])])]["vessel"]
+	var inv := (sd["xf"] as Transform3D).affine_inverse()
+	_ok(not (g["ids"] as PackedInt32Array).is_empty(), "the vessel has no grains to follow")
+	for i in g["ids"]:
+		_ok(vs.contains(inv * ph.sim.x[i]), "a grain floats outside the vessel after the scoop moves")
+	m._root3.free()
+	return true
+
+
+## A whole thing with no act of its own is drawn on the host that carries it. The control: the host moves several centimeters.
+func _thing_drawn_on_host() -> bool:
+	var m := _medium()
+	var spec := {"materials": {"clay": {"kind": "ceramic"}}, "things": [
+		{"name": "tray", "parts": [{"shape": "box", "size": [18,2,18], "material": "clay"}]},
+		{"name": "cup", "parts": [CUP]}]}
+	_stand(m, spec, "tray", _at(Vector3.ZERO))
+	var cup := _stand(m, spec, "cup", _at(Vector3(0,2,0)))
+	m._work.build({"acts": [{"name": "move", "beat": 1, "length": 3.0, "tracks": [
+		{"thing": "tray", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [8,0,0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+	m._work._timelines()
+	var before := m._work._world_of(cup["node"])
+	m._work.tick(5.0)
+	var baked: Transform3D = m._work.physics.thing_pose_of(1, 5.0)
+	_ok(baked.origin.distance_to(before.origin) > 0.04, "the control: the cup was not carried by its tray")
+	_ok(m._work._world_of(cup["node"]).is_equal_approx(baked), "a whole thing with no act is drawn off its baked host")
+	m._root3.free()
+	return true
+
+
+## A sheet casts its changing shape; late writing follows its bend and returns on a seek. Controls: a static caster gets a twin, and the ink starts flat.
+func _writing_bends() -> bool:
+	var m := _medium()
+	var spec := {"materials": {"paper": {"kind": "paper"}}, "things": [{"name": "slip", "parts": [
+		{"name": "page", "shape": "sheet", "outline": "rect", "size": [8,4], "material": "paper", "loose": true,
+			"joint": {"kind": "free"}}]}]}
+	_stand(m, spec, "slip", _at(Vector3.ZERO))
+	m._work.build({"acts": [{"name": "write", "beat": 1, "length": 1.0, "tracks": [
+		{"thing": "slip", "part": "page", "law": "write", "text": "A name", "hand": "neat"}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 2.0}]
+	m._work._timelines()
+	var wi := _work_of_name(m, "page")
+	var control := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.08,0.001,0.04)
+	control.mesh = box
+	m._root3.add_child(control)
+	ShadowCasters.cut_under(m._root3)
+	_ok(control.has_meta("shadow_twin"), "the control: a static mesh has no shadow twin")
+	for mesh in (m._work.works[wi]["node"] as Node).find_children("*", "MeshInstance3D", true, false):
+		_ok(not (mesh as MeshInstance3D).has_meta("shadow_twin") and (mesh as MeshInstance3D).cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+			"the sheet casts a static shadow instead of its bending shape")
+	m._work.tick(0.0)
+	_ok(not (m._work._writing[wi] as Dictionary).has("node"), "the control: ink already exists before the writing begins")
+	m._work.tick(2.0)
+	var ink: MeshInstance3D = m._work._writing[wi]["node"]
+	var before := ink.mesh.get_faces()
+	var off := PackedVector3Array()
+	off.resize(m._work.physics.sheet_points(wi).size())
+	off.fill(Vector3(0,0.01,0))
+	m._work._bend_sheet(wi, off)
+	var after := ink.mesh.get_faces()
+	var xf := m._work._world_of(ink)
+	var moved := 0.0
+	for k in before.size():
+		moved = maxf(moved, (xf * after[k]).distance_to(xf * before[k]))
+	_ok(absf(moved - 0.01) < 0.00001, "a 10 mm bend moves the late-made ink only %.2f mm" % (moved * 1000.0))
+	# An uneven bend keeps the ink on the paper's actual triangles, with the same corners and diagonals.
+	for k in off.size():
+		off[k] = Vector3(0, sin(float(k) * 1.7) * 0.008, 0)
+	m._work._bend_sheet(wi, off)
+	var paper: SheetBend = m._work._sheet_bends[wi][0]
+	var faces := paper._mi.mesh.get_faces()
+	var written := ink.mesh.get_faces()
+	var same_triangles := true
+	for k in range(0, written.size(), 3):
+		var nearest := INF
+		for j in range(0, faces.size(), 3):
+			var worst := 0.0
+			for c in 3:
+				worst = maxf(worst, written[k + c].distance_to(faces[j + c]))
+			nearest = minf(nearest, worst)
+		same_triangles = same_triangles and nearest < 0.0003
+	_ok(same_triangles, "the ink spans different triangles from the bent paper")
+	m._work._bend_sheet(wi, null)
+	var restored := ink.mesh.get_faces()
+	_ok(restored == before, "seeking back to a straight sheet leaves its writing bent")
+	m._root3.free()
+	return true
+
+
+## A thin rod meets the face between a sheet's particles, with its full radius. The control without surface contacts passes through the gap.
+func _sheet_surface_contact() -> bool:
+	var hits: Array = []
+	for surface in [false, true]:
+		var sim := Particles.new()
+		var matter := sim.add_matter(0.7, 0.0, 0.0)
+		var points := PackedVector3Array([Vector3(-0.025, 0.1, -0.025), Vector3(0.025, 0.1, -0.025), Vector3(0, 0.1, 0.025)])
+		var bi := sim.add_body(points, 0.0012, matter, 0, -2)
+		sim.make_soft(bi)
+		if surface:
+			var skin := SheetBend.binding(points, points)
+			skin["triangles"] = PackedInt32Array([0, 1, 2])
+			sim.bodies[bi]["surface"] = skin
+		var part := _part({"shape":"tube", "path":[[0, 0, 0], [0, 10, 0]], "radius":0.25, "material":"clay"})
+		var box := AABB(Vector3(-0.0025, 0, -0.0025), Vector3(0.005, 0.1, 0.005))
+		var field := ShapeField.of(part, box)
+		var sd := {"field":field, "box":box, "xf":Transform3D(Basis.IDENTITY, Vector3(0, 0.13, 0)), "xf0":Transform3D(Basis.IDENTITY, Vector3(0, 0.13, 0)),
+			"moving":true, "stirs":true, "thin":true, "mu":Vector2(0.5, 0.4), "on":true, "jolt":0.0, "dt":0.001}
+		var through := 0
+		var least := INF
+		for step in 120:
+			sd["xf0"] = sd["xf"]
+			sd["xf"] = Transform3D(Basis.IDENTITY, Vector3(0, lerpf(0.13, 0.06, minf(float(step+1)/80.0, 1.0)), 0))
+			sd["inv"] = (sd["xf"] as Transform3D).affine_inverse()
+			sd["wbox"] = ((sd["xf"] as Transform3D) * box).merge((sd["xf0"] as Transform3D) * box)
+			sim.step(0.001, {"solids":[sd]})
+			var ids: PackedInt32Array = sim.bodies[bi]["ids"]
+			var a: Vector3 = (sd["xf"] as Transform3D).origin
+			var pair := Particles._capsule_triangle(a, a+Vector3(0, 0.1, 0), sim.x[ids[0]], sim.x[ids[1]], sim.x[ids[2]])
+			least = minf(least, pair[0].distance_to(pair[1]))
+			through += 1 if pair[0].distance_to(pair[1]) < 0.0023 else 0
+		hits.append(through)
+		print("  surface=%s: %d penetrations, least clearance %.3f mm" % [surface, through, least*1000.0])
+	_ok(int(hits[0]) > 0, "the control: the rod misses the gap between the sheet's particles")
+	_ok(int(hits[1]) == 0, "the rod penetrates the sheet's surface at %d frames" % int(hits[1]))
+	return true
+
+
+## Both footprint shadows turn and move with a rack, hide in the air, and return on seeking. The control: translation alone leaves a crossed footprint.
+func _shades_turn() -> bool:
+	var m := _medium()
+	var slab := Node3D.new()
+	var contact := Node3D.new()
+	slab.position = Vector3(0.07, 0.006, 0.02)
+	contact.position = Vector3(0.1, 0, 0.04)
+	m._props.add_child(slab)
+	m._props.add_child(contact)
+	var shadows := [slab.transform, contact.transform]
+	var spec := {"materials":{"clay":{"kind":"ceramic"}}, "things":[{"name":"rack", "parts":[{"shape":"box", "size":[18, 2, 6], "material":"clay"}]}]}
+	var stood := _stand(m, spec, "rack", _at(Vector3.ZERO), 5, [slab, contact])
+	var rest := m._work._world_of(stood["node"])
+	m._work.build({"acts":[{"name":"move", "beat":1, "length":2.0, "tracks":[{"thing":"rack", "law":"path", "jitter":0.0,
+		"keys":[{"at":0.0}, {"at":0.5, "by":[6, 10, 0], "turn":[0, 45, 0]}, {"at":1.0, "by":[12, 0, 0], "turn":[0, 90, 0]}]}]}]}, 1)
+	m._work.runs = [{"i":0, "t0":1.0, "t1":3.0}]
+	m._work._timelines()
+	var seen_control := false
+	for t in [0.5, 3.0, 2.0, 0.5, 3.0]:
+		m._work.tick(float(t))
+		var now := m._work._world_of(stood["node"])
+		var moved := now * rest.affine_inverse()
+		var yaw := atan2(moved.basis.z.x, moved.basis.z.z)
+		var flat := Transform3D(Basis(Vector3.UP, yaw), Vector3(moved.origin.x, 0, moved.origin.z))
+		for k in 2:
+			var node: Node3D = [slab, contact][k]
+			_ok(node.transform.is_equal_approx(flat * shadows[k]), "a footprint shadow is off the rack after a turn or seek")
+			_ok(node.visible == (float(t) != 2.0), "a footprint shadow is visible while the rack is lifted, or missing when set down")
+			seen_control = seen_control or node.transform.origin.distance_to((shadows[k] as Transform3D).origin + (now.origin-rest.origin)) > 0.03
+	_ok(seen_control, "the control: translation alone places these shadows as well as the full turn")
+	m._root3.free()
+	return true
+
+
+## A slow heap has to be supported to sleep; buoyant grains stay independent and awake. The control: dry grains on the table sleep.
+func _grains_need_support() -> bool:
+	for kind in ["air", "water", "heavy-water", "table"]:
+		var sim := Particles.new()
+		var mat := sim.add_matter(1.1 if kind == "heavy-water" else 0.5, 0.0, 0.0)
+		var ids := PackedInt32Array()
+		for k in 4:
+			var i := sim.add(Vector3(float(k)*0.01, 0.05 if kind != "table" else 0.002, 0), 0.002, mat, 0, -2)
+			ids.append(i)
+			if kind in ["water", "heavy-water"]:
+				sim.wet[i] = 0
+			if kind == "table":
+				sim.touch[i] = Particles.TABLE
+				sim._held_by[i] = 1
+		sim._liquids = [{"n":Vector3.UP, "swirl":0.0, "solid":-1}]
+		sim._settle(0.3, ids)
+		for i in ids:
+			_ok((sim.asleep[i] == 1) == (kind == "table"), "a slow grain in %s has the wrong sleeping state" % kind)
+	return true
+
+
+## A bent tube is thin by its shaft, even when its bounding box is wide in all three dimensions. A thick tube and a broad plate are controls.
+func _curved_tool() -> bool:
+	var m := _medium()
+	var spec := {"materials": {"clay": {"kind": "ceramic"}}, "things": [{"name": "tools", "parts": [
+		{"name": "handle", "shape": "tube", "path": [[0, 0, 0], [4, 6, 2], [8, 12, 8]], "radius": 0.3, "material": "clay"},
+		{"name": "thick", "shape": "tube", "path": [[0, 0, 0], [4, 6, 2], [8, 12, 8]], "radius": 1.5, "material": "clay"},
+		{"name": "plate", "shape": "box", "size": [10, 0.2, 10], "material": "clay"}]}]}
+	_stand(m, spec, "tools", _at(Vector3.ZERO))
+	m._work.build({"acts": []}, 1)
+	m._work.tick(0.0)
+	var checked := 0
+	for sd in m._work.physics.solids:
+		var name := m._work._part_label(int(sd["wi"]))
+		if name in ["handle", "thick", "plate"]:
+			_ok(bool(sd["thin"]) == (name == "handle"), "%s has the wrong thin-tool classification" % name)
+			checked += 1
+	_ok(checked == 3, "the curved-tool fixture did not build all three controls")
+	m._root3.free()
+	return true
+
+
+## Separate buoyant grains follow the moving surface and its current. Controls: calm water leaves their spacing alone, and denser grains sink.
+func _floating_grains() -> bool:
+	var part := _part({"shape": "lathe", "profile": [[0, 0], [21, 0], [21, 12], [20, 12], [20, 1], [0, 1]], "material": "clay"})
+	var vs := Vessel.of(ShapeField.of(part, AABB(Vector3(-0.21, 0, -0.21), Vector3(0.42, 0.12, 0.42))))
+	for row in [Vector2(0.0, 0.5), Vector2(0.3, 0.5), Vector2(0.3, 1.1)]:
+		var agit: float = row.x
+		var sim := Particles.new()
+		var mat := sim.add_matter(row.y, 0.0, 0.0)
+		for k in 4:
+			sim.add(Vector3(float(k - 2) * 0.02, 0.07, float(k % 2) * 0.02), 0.002, mat, 0, -2)
+		var liquid := {"vessel": vs, "volume": vs.volume * 0.5, "inv": Transform3D.IDENTITY, "n": Vector3.UP,
+			"c": Vector3(0, 0.06, 0), "axis": Vector3(0, 0.06, 0), "solid": -1, "swirl": 0.0, "agit": agit, "t": 0.0,
+			"flow": PackedFloat32Array([14, 9, 0.4, 0.6, -9, 17, 1.2, -0.5, 20, 7, 1.5, 1.4, 8, 16, 0.5, -1.1])}
+		var first := sim.x.duplicate()
+		var high := 0.0
+		for frame in 720:
+			liquid["t"] = float(frame) / 60.0
+			sim.step(1.0 / 60.0, {"liquids": [liquid]})
+			if frame > 120:
+				for i in sim.n:
+					high = maxf(high, absf(sim.x[i].y - 0.06 - Particles.swell(liquid, sim.x[i])))
+		if row.y > Particles.LIQUID_DENSITY:
+			for i in sim.n:
+				_ok(sim.x[i].y < 0.05, "a dense grain is suspended at the surface, %.3f mm high" % (sim.x[i].y * 1000.0))
+			print("  dense grains sank %.3f mm below the surface" % ((0.06 - sim.x[0].y) * 1000.0))
+			continue
+		var apart := 0.0
+		for i in sim.n:
+			_ok(sim.asleep[i] == 0, "a buoyant grain froze at the surface")
+			for j in i:
+				apart = maxf(apart, absf(sim.x[i].distance_to(sim.x[j]) - first[i].distance_to(first[j])))
+		print("  grains in agitation %.1f: surface error %.3f mm, spacing changed %.3f mm" % [agit, high * 1000.0, apart * 1000.0])
+		_ok(high < 0.002, "grains hover or sink %.3f mm from the moving surface" % (high * 1000.0))
+		_ok(apart > 0.001 if agit > 0.0 else apart < 0.0001, "the grains' spacing does not follow the liquid's current")
+	return true
+
+
+## A sheet woken after turning uses its new rest frame for surface offsets. The control: offsets left in the built frame put its surface elsewhere.
+func _sheet_wakes_turned() -> bool:
+	var m := _medium()
+	_stand(m, FLOAT_SPEC, "gifts", _at(Vector3.ZERO))
+	m._work.build({"acts": [{"name": "turn", "beat": 1, "length": 2, "tracks": [
+		{"thing": "gifts", "part": "feather", "law": "path", "jitter": 0.0, "keys": [{"at": 0.0}, {"at": 1.0, "by": [0, 10, 0], "turn": [0, 90, 0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 3.0}]
+	m._work._timelines()
+	var ph := m._work.physics
+	var wi := _work_of_name(m, "feather")
+	var li := int(ph._loose_of[wi])
+	ph._take_plan()
+	_ok(ph._wake_loose(li, 3.0), "the turned sheet could not wake")
+	var L: Dictionary = ph.loose[li]
+	var bd: Dictionary = ph.sim.bodies[int(L["body"])]
+	var skin: Dictionary = bd["surface"]
+	var built_skin: Dictionary = L["surface"]
+	var moved := (L["n0"] as Transform3D) * (L["built"] as Transform3D).affine_inverse()
+	var worst := 0.0
+	var control := 0.0
+	var verts: PackedVector3Array = built_skin["vertices"]
+	for vi in verts.size():
+		var want := moved * verts[vi]
+		worst = maxf(worst, want.distance_to(Particles._surface_point(skin, bd["ids"], vi, Basis.IDENTITY, ph.sim.x)))
+		control = maxf(control, want.distance_to(Particles._surface_point(built_skin, bd["ids"], vi, Basis.IDENTITY, ph.sim.x)))
+	_ok(worst < 0.000001, "the woken surface is %.3f mm off its sheet" % (worst * 1000.0))
+	_ok(control > 0.0005, "the control: unturned surface offsets happen to fit the turned sheet")
+	m._root3.free()
+	return true
+
+
+## Capsule distances keep the same meaning at a millimeter and a meter. Controls: an axis through the face, and one beside its edge at a known distance.
+func _capsule_geometry() -> bool:
+	for scale in [0.01, 1.0, 100.0]:
+		var a := Vector3.ZERO
+		var b := Vector3(0.003, 0, 0) * float(scale)
+		var c := Vector3(0, 0, 0.003) * float(scale)
+		for inside in [true, false]:
+			var p := Vector3(0.001, 0, 0.001) * float(scale) if inside else Vector3(0.002, 0, 0.002) * float(scale)
+			var pair := Particles._capsule_triangle(p - Vector3.UP * 0.01 * float(scale), p + Vector3.UP * 0.01 * float(scale), a, b, c)
+			var gap := pair[0].distance_to(pair[1]) / float(scale)
+			var want := 0.0 if inside else 0.001 / sqrt(2.0)
+			_ok(absf(gap - want) < 1e-8, "capsule/triangle distance at scale %.2f is %.6f mm, expected %.6f" % [scale, gap * 1000.0, want * 1000.0])
 	return true

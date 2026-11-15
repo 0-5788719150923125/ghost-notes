@@ -369,7 +369,7 @@ func take(t: Dictionary, b: Dictionary, node: Node3D, shades: Array = []) -> voi
 	var held: Array = []
 	for sh in shades:
 		if sh is Node3D:
-			held.append({"node": sh, "at": (sh as Node3D).position})
+			held.append({"node": sh, "at": (sh as Node3D).position, "xf": (sh as Node3D).transform})
 	var entry := {"name": String(t.get("name", "")), "node": node, "rest": node.transform, "works": [],
 		"lit": not (b.get("wicks", []) as Array).is_empty(), "box": b.get("size", AABB()), "mesh": null,
 		"meshes": b.get("meshes", []), "shades": held}
@@ -3745,7 +3745,7 @@ func tick(t: float) -> void:
 	var stirred := {}
 	for ti in things.size():
 		var ch := "t%d:pose" % ti
-		if not _moved.has(ch):
+		if not _moved.has(ch) and (physics == null or not physics._rigid_of.has(-1 - ti)):
 			continue
 		var th: Dictionary = things[ti]
 		var node: Node3D = th["node"]
@@ -3784,6 +3784,8 @@ func tick(t: float) -> void:
 		elif above:
 			stirred[wi] = true
 	c = _spent("parts posed", c)
+	if physics != null:
+		physics.draw_liquids(t)
 	_tick_shades()
 	c = _spent("shades", c)
 	for p in _plumes:
@@ -3896,10 +3898,7 @@ func _tick_shades() -> void:
 	for ti in things.size():
 		var th: Dictionary = things[ti]
 		var shades: Array = th["shades"]
-		var moves := _moved.has("t%d:pose" % ti)
-		for wi in th["works"]:
-			moves = moves or _part_moves(int(wi))
-		if shades.is_empty() or not moves:
+		if shades.is_empty():
 			continue
 		var rest := _world_rest_thing(ti)
 		var now := _world_of(th["node"])
@@ -3920,13 +3919,15 @@ func _tick_shades() -> void:
 		var p1 := now * Vector3(probe.x, box.position.y, probe.z)
 		var up := (now.basis * Vector3.UP).normalized()
 		var shown := p1.y - p0.y < SHADE_LIFT and up.angle_to((rest.basis * Vector3.UP).normalized()) < SHADE_TIP
-		var d := Vector3(p1.x - p0.x, 0.0, p1.z - p0.z)
+		var moved := now * rest.affine_inverse()
+		var yaw := atan2(moved.basis.z.x, moved.basis.z.z)
+		var flat := Transform3D(Basis(Vector3.UP, yaw), Vector3(moved.origin.x, 0.0, moved.origin.z))
 		for sh in shades:
 			var n: Node3D = (sh as Dictionary)["node"]
 			if not is_instance_valid(n):
 				continue
 			n.visible = shown
-			n.position = ((sh as Dictionary)["at"] as Vector3) + d
+			n.transform = flat * ((sh as Dictionary)["xf"] as Transform3D)
 
 
 ## Whether work [param wi] is drawn as it is at [param t] already ([method tick]): no channel it is posed
@@ -3968,13 +3969,14 @@ func _bend_sheet(wi: int, off: Variant) -> void:
 		var list: Array = []
 		var node: Node3D = (works[wi] as Dictionary)["node"]
 		var built: Transform3D = physics.loose_built(wi) * _world_of(node).affine_inverse()
+		var skin: Dictionary = physics.loose[int(physics._loose_of[wi])]["surface"]
 		var stack: Array = [node]
 		while not stack.is_empty():
 			var n: Node = stack.pop_back()
 			stack.append_array(n.get_children())
 			var mi := n as MeshInstance3D
 			if mi != null and mi.mesh != null:
-				var bend := SheetBend.of(mi, built * _world_of(mi), physics.sheet_points(wi))
+				var bend := SheetBend.of(mi, built * _world_of(mi), physics.sheet_points(wi), skin)
 				if bend != null:
 					list.append(bend)
 		_sheet_bends[wi] = list
@@ -4040,6 +4042,8 @@ func _pose_work(wi: int, t: float) -> void:
 		j = _joint(wi, t)
 	node.transform = j * s
 	node.visible = float(value("w%d:shown" % wi, t)) > 0.5 and grow > 0.001 and fill > 0.001
+	if _writing.has(wi):
+		_written(wi, t)
 	# ...a sheet as it is bent ([SheetBend]) - as a hand or the acts' own pose has it, straight
 	if physics != null and bool(w.get("loose", false)) and physics.bends(wi):
 		_bend_sheet(wi, physics.bend_of(wi, t) if not _outran(wi, t) and not _planned else null)
@@ -4059,8 +4063,6 @@ func _pose_work(wi: int, t: float) -> void:
 				mat.set_shader_parameter("murk", 1.0 - (tint as Color).a)
 			mat.set_shader_parameter("glow", glow)
 			mat.set_shader_parameter("boil", boil)
-	if _writing.has(wi):
-		_written(wi, t)
 	# ...and what the physics had it as, for the next frame to ask whether anything of it changed ([method _settled])
 	if physics != null:
 		_drawn_of[wi] = [physics.pose_of(wi, t) if (physics._rigid_of.has(wi) or physics._loose_of.has(wi)) else null,
@@ -4106,6 +4108,16 @@ func _written(wi: int, t: float) -> void:
 			wr["node"] = SheetWriting.node((wk["w"] as Dictionary)["sheet"], String(wr["text"]), String(wr["hand"]), Color.html(String(wr["ink"])),
 				ink_seed + wi)
 		(wk["node"] as Node3D).add_child(wr["node"])
+		if physics != null and physics.bends(wi):
+			var skin: Dictionary = physics.loose[int(physics._loose_of[wi])]["surface"]
+			SheetWriting.conform(wr["node"], (wk["w"] as Dictionary)["sheet"], skin["vertices"], skin["triangles"], physics.loose_built(wi).affine_inverse())
+		# Ink made after the sheet first appeared follows the same baked bend as its paper.
+		if physics != null and physics.bends(wi) and _sheet_bends.has(wi):
+			var built := physics.loose_built(wi) * _world_of(wk["node"]).affine_inverse()
+			var skin: Dictionary = physics.loose[int(physics._loose_of[wi])]["surface"]
+			var bend := SheetBend.of(wr["node"], built * _world_of(wr["node"]), physics.sheet_points(wi), skin)
+			if bend != null:
+				(_sheet_bends[wi] as Array).append(bend)
 	((wr["node"] as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("written", got)
 
 

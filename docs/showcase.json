@@ -1,5 +1,5 @@
 {
-	"digest": "4fdd6f12492fba904145a7ba349721a53c73ecaa7f67d215af3b4f939b2077ee",
+	"digest": "804145d28153b19046983228b208924652d8984e8bb45930906ad6ef311aee91",
 	"files": [
 		"res://data/showcase.json",
 		"res://project.godot",
@@ -39,6 +39,7 @@
 		"res://shaders/umbra_field.gdshader",
 		"res://shaders/vapor_field.gdshader",
 		"res://src/agents/agent_jobs.gd",
+		"res://src/agents/agent_resume.gd",
 		"res://src/agents/agent_tools.gd",
 		"res://src/agents/assistant_backends.gd",
 		"res://src/agents/bedrock_catalog.gd",

@@ -29,6 +29,9 @@ extends SceneTree
 ##   is up; a channel that may not set one (403) still has its video, and is told why.
 ## - playlists: a sign-in that may only upload is not asked for them; one granted the scope lists every page; an upload queued for
 ##   a playlist joins it once up, and one whose playlist is refused is still up, and says why.
+## - playlist management: None sends no policy requests; every page is read and every distinct owned older public video
+##   unlisted, while private/scheduled videos, other status settings and each new upload's chosen visibility survive.
+##   Missing/foreign/non-public videos are skipped; a 401 renews; listing, insertion and update failures are reported.
 ## - the YouTube card's sign-in: ticking "Upload after export" with no client asks for its file (a cancel leaves the box clear);
 ##   with one and no sign-in it opens the browser and a dialog at once; Google's dead-end block leaves the dialog waiting and
 ##   naming it; "Open the page again" finishes the same sign-in and the box ticks; closing the dialog cancels; a refusal shows the
@@ -70,6 +73,7 @@ func _run() -> void:
 		quit(1))
 	var keep := {"root": YouTube.root, "upload": YouTube.upload_url, "revoke": YouTube.revoke_url,
 		"thumbnail": YouTube.thumbnail_url, "playlists": YouTube.playlists_url, "items": YouTube.playlist_items_url,
+		"videos": YouTube.videos_url,
 		"channels": YouTube.channels_url, "chunk": YouTube.chunk, "backoff": YouTube.backoff_unit, "open": YouTube.open_url}
 	YouTube.root = ROOT
 	_wipe(ROOT)
@@ -82,6 +86,7 @@ func _run() -> void:
 	YouTube.thumbnail_url = base + "/thumbnails/set"
 	YouTube.playlists_url = base + "/youtube/v3/playlists"
 	YouTube.playlist_items_url = base + "/youtube/v3/playlistItems"
+	YouTube.videos_url = base + "/youtube/v3/videos"
 	YouTube.channels_url = base + "/youtube/v3/channels"
 	YouTube.chunk = CHUNK
 	YouTube.backoff_unit = 0.01
@@ -94,7 +99,7 @@ func _run() -> void:
 	_yt = YouTube.new()
 	root.add_child(_yt)
 	for check in [_sign_in, _upload, _resume, _lapsed_session, _thumbnail, _frame, _lapsed_sign_in, _declined,
-			_sign_out, _playlists, _two_channels, _two_clients, _card_clients, _card_sign_in]:
+			_sign_out, _playlists, _management, _export_management, _two_channels, _two_clients, _card_clients, _card_sign_in]:
 		if not bool(await check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -105,6 +110,7 @@ func _run() -> void:
 	YouTube.thumbnail_url = keep["thumbnail"]
 	YouTube.playlists_url = keep["playlists"]
 	YouTube.playlist_items_url = keep["items"]
+	YouTube.videos_url = keep["videos"]
 	YouTube.channels_url = keep["channels"]
 	YouTube.chunk = keep["chunk"]
 	YouTube.backoff_unit = keep["backoff"]
@@ -392,6 +398,119 @@ func _playlists() -> bool:
 	_ok(not res2.has("error") and str(res2.get("url", "")).begins_with("https://youtu.be/") and res2.get("playlist") == ""
 		and str(res2.get("playlist_error", "")).contains("playlist"),
 		"a playlist YouTube refuses leaves the video up, and says why (%s)" % res2.get("playlist_error", ""))
+	return true
+
+
+func _management() -> bool:
+	var file := _video("policy.mp4", 20)
+	var original := {"privacyStatus": "public", "embeddable": false, "license": "creativeCommon",
+		"publicStatsViewable": false, "selfDeclaredMadeForKids": true, "containsSyntheticMedia": true,
+		"uploadStatus": "processed", "madeForKids": true}
+	for privacy in ["private", "unlisted", "public"]:
+		_fake.videos["old-public"] = {"id": "old-public", "snippet": {"channelId": "UC-arc"}, "status": original.duplicate()}
+		var scheduled := original.merged({"privacyStatus": "private", "publishAt": "2099-01-01T00:00:00Z"}, true)
+		var private_status := original.merged({"privacyStatus": "private"}, true)
+		_fake.videos["old-private"] = {"id": "old-private", "snippet": {"channelId": "UC-arc"}, "status": private_status}
+		_fake.videos["old-scheduled"] = {"id": "old-scheduled", "snippet": {"channelId": "UC-arc"}, "status": scheduled}
+		_fake.videos["already"] = {"id": "already", "snippet": {"channelId": "UC-arc"}, "status": {"privacyStatus": "unlisted"}}
+		_fake.videos["foreign"] = {"id": "foreign", "snippet": {"channelId": "UC-ink"}, "status": {"privacyStatus": "public"}}
+		_fake.items["PL-1"] = ["old-public", "old-private", "old-scheduled", "already", "foreign", "missing", "old-public"]
+		_fake.items["PL-3"] = ["old-public"]
+		var before := _fake.managed.size()
+		var queued := YouTube.queue(file, YouTube.video_body({"privacy": privacy}), "UC-arc", "", "", "PL-1", "unlist_others")
+		_ok(queued.get("management_policy") == "unlist_others" and YouTube.pending().get("management_policy") == "unlist_others",
+			"the pending upload keeps its management policy for resume")
+		_fake.management_401 = true
+		# A fresh uploader reads the policy from disk, as a restart does.
+		var resumed := YouTube.new()
+		root.add_child(resumed)
+		var res: Dictionary = await resumed.resume()
+		resumed.queue_free()
+		var progress: Dictionary = res.get("management", {})
+		_ok(not res.has("error") and not progress.has("error") and progress.get("unlisted") == 1
+			and progress.get("skipped") == 5 and _fake.managed.size() == before + 1,
+			"all playlist pages are managed once per public video, skipping missing, foreign and non-public (%s)" % str(res))
+		_ok(res.get("privacy") == privacy and _fake.videos[res["id"]]["status"]["privacyStatus"] == privacy,
+			"the latest upload keeps its chosen %s visibility" % privacy)
+		var expected := original.duplicate()
+		expected.erase("uploadStatus")
+		expected.erase("madeForKids")
+		expected["privacyStatus"] = "unlisted"
+		_ok(_fake.videos["old-public"]["status"] == expected and _fake.videos["old-private"]["status"] == private_status
+			and _fake.videos["old-scheduled"]["status"] == scheduled
+			and _fake.videos["foreign"]["status"]["privacyStatus"] == "public" and _fake.items["PL-3"] == ["old-public"],
+			"private videos and schedules stay untouched; other status settings and playlist memberships survive")
+	var requests := _fake.management_requests
+	for policy in ["none", "unknown"]:
+		YouTube.queue(file, YouTube.video_body({}), "UC-arc", "", "", "PL-1", policy)
+		var res: Dictionary = await _yt.resume()
+		_ok(not res.has("management") and _fake.management_requests == requests, "%s sends no policy requests" % policy)
+	YouTube.queue(file, YouTube.video_body({}), "UC-arc", "", "", "", "unlist_others")
+	var no_list: Dictionary = await _yt.resume()
+	_ok(not no_list.has("management") and _fake.management_requests == requests, "without a playlist no older videos change")
+	YouTube.queue(file, YouTube.video_body({}), "UC-arc", "", "", "PL-gone", "unlist_others")
+	var refused: Dictionary = await _yt.resume()
+	_ok(not refused.has("management") and _fake.management_requests == requests and not str(refused.get("playlist_error", "")).is_empty(),
+		"a refused playlist insertion prevents all management requests")
+	_fake.items["PL-1"] = ["old-public", "old-private"]
+	for id in ["old-public", "old-private"]:
+		_fake.videos[id]["status"]["privacyStatus"] = "public"
+	_fake.management_forbidden = "old-private"
+	var record := _file("policy-record.json", "{\"uploads\": []}")
+	YouTube.queue(file, YouTube.video_body({}), "UC-arc", record, "", "PL-1", "unlist_others")
+	var partial: Dictionary = await _yt.resume()
+	var recorded: Dictionary = YouTube.uploads_in(record)[0]["management"]
+	_ok(not partial.has("error") and partial.get("playlist") == "PL-1" and partial["management"]["unlisted"] == 1
+		and str(partial["management"].get("error", "")).contains("old-private") and YouTube.pending().is_empty()
+		and int(recorded["unlisted"]) == 1 and recorded["error"] == partial["management"]["error"],
+		"a policy failure records partial progress and the successful upload without queueing a duplicate (%s)" % str(partial))
+	_fake.management_forbidden = ""
+	_fake.management_list_error = true
+	var before := _fake.managed.size()
+	YouTube.queue(file, YouTube.video_body({}), "UC-arc", "", "", "PL-1", "unlist_others")
+	var failed_list: Dictionary = await _yt.resume()
+	_ok(not failed_list.has("error") and failed_list["management"].has("error") and _fake.managed.size() == before,
+		"a playlist read failure leaves all older videos alone and reports the successful upload")
+	_fake.management_list_error = false
+	# More than one videos.list batch, with only one video needing a write.
+	_fake.items["PL-1"] = []
+	for i in 51:
+		var id := "batch-%d" % i
+		_fake.items["PL-1"].append(id)
+		_fake.videos[id] = {"id": id, "snippet": {"channelId": "UC-arc"},
+			"status": {"privacyStatus": "public" if i == 50 else "unlisted"}}
+	YouTube.queue(file, YouTube.video_body({}), "UC-arc", "", "", "PL-1", "unlist_others")
+	var batched: Dictionary = await _yt.resume()
+	_ok(not batched["management"].has("error") and batched["management"]["unlisted"] == 1
+		and batched["management"]["skipped"] == 50, "more than fifty videos are read in batches, including the last page")
+	return true
+
+
+## The export queues the policy and shows its result even when YouTube overrides the new upload's visibility.
+func _export_management() -> bool:
+	var ex = load("res://src/export/exporter.gd").new()
+	ex._build_ui()
+	ex._yt = _yt
+	ex._out = _video("export-policy.mp4", 10)
+	ex._upload_meta = {"channel": "UC-arc", "playlist": "PL-1", "privacy": "public", "management_policy": "unlist_others"}
+	_fake.items["PL-1"] = ["old-public"]
+	_fake.videos["old-public"]["status"]["privacyStatus"] = "public"
+	await ex._queue_upload()
+	_ok(YouTube.pending().get("management_policy") == "unlist_others", "the exporter queues the card's management policy")
+	await ex._run_upload()
+	_ok(ex._status.text.contains("On YouTube (public)") and ex._status.text.contains("Older videos unlisted: 1"),
+		"the exporter reports the successful upload and playlist management (%s)" % ex._status.text)
+	_fake.videos["old-public"]["status"]["privacyStatus"] = "public"
+	_fake.management_forbidden = "old-public"
+	_fake.upload_privacy = "private"
+	await ex._queue_upload()
+	await ex._run_upload()
+	_ok(ex._status.text.contains("YouTube kept it private") and ex._status.text.contains("playlist policy incomplete"),
+		"a visibility override still shows a playlist policy failure (%s)" % ex._status.text)
+	_fake.upload_privacy = ""
+	_fake.management_forbidden = ""
+	ex._yt = null
+	ex.free()
 	return true
 
 
@@ -788,6 +907,13 @@ class FakeGoogle extends Node:
 	var playlists := {"UC-arc": [{"id": "PL-1", "title": "Readings"}, {"id": "PL-2", "title": "Shorts"}, {"id": "PL-3", "title": "Drafts"}],
 		"UC-ink": [{"id": "PL-9", "title": "Ink Drafts"}]}
 	var items := {}            # playlist id -> the video ids added to it
+	var videos := {}           # video resources, including those not uploaded by this app
+	var managed: Array = []
+	var management_requests := 0
+	var management_401 := false
+	var management_forbidden := ""
+	var management_list_error := false
+	var upload_privacy := ""    # YouTube may restrict an unaudited project's new upload to private
 	var sessions := {}         # id -> {meta, declared, type, data, id}
 	var order: Array = []      # session ids, oldest first
 	var faults := {}           # chunk number -> "503" | "half" | "401"
@@ -877,6 +1003,8 @@ class FakeGoogle extends Node:
 				"snippet": {"title": c["title"], "customUrl": c["handle"]}}]})
 		if method == "GET" and path.begins_with("/youtube/v3/playlists?"):
 			return _playlists(YouTube.query_of(path), who)
+		if (method == "GET" and path.begins_with("/youtube/v3/playlistItems?")) or path.begins_with("/youtube/v3/videos?"):
+			return _manage(method, path, body, who)
 		if method == "POST" and path.begins_with("/youtube/v3/playlistItems?"):
 			var j := JSON.new()
 			if not scopes.has(YouTube.PLAYLIST_SCOPE) or j.parse(body.get_string_from_utf8()) != OK:
@@ -947,10 +1075,56 @@ class FakeGoogle extends Node:
 
 	func _done(s: Dictionary) -> Dictionary:
 		var meta: Dictionary = s["meta"]
+		if not upload_privacy.is_empty():
+			meta["status"]["privacyStatus"] = upload_privacy
+		videos[s["id"]] = {"id": s["id"], "snippet": {"channelId": s["account"]}, "status": meta["status"].duplicate()}
 		return _json(201, {"kind": "youtube#video", "id": s["id"],
 			"snippet": {"title": meta["snippet"]["title"], "channelId": s["account"],
 				"channelTitle": (CHANNELS[s["account"]] as Dictionary)["title"]},
 			"status": {"privacyStatus": meta["status"]["privacyStatus"], "uploadStatus": "uploaded"}})
+
+	func _manage(method: String, path: String, body: PackedByteArray, who: Dictionary) -> Dictionary:
+		management_requests += 1
+		if management_401:
+			management_401 = false
+			_live.clear()
+			return _json(401, {"error": {"message": "Invalid Credentials"}})
+		if not str(who["scope"]).split(" ").has(YouTube.PLAYLIST_SCOPE):
+			return _json(403, {"error": {"message": "insufficientPermissions"}})
+		var q := YouTube.query_of(path)
+		if path.begins_with("/youtube/v3/playlistItems?"):
+			if management_list_error:
+				return _json(503, {"error": {"message": "Backend Error"}})
+			var all: Array = items.get(q.get("playlistId"), [])
+			var at := int(str(q.get("pageToken", "0")))
+			var page: Array = all.slice(at, at + 2).map(func(id: String) -> Dictionary: return {"contentDetails": {"videoId": id}})
+			var out := {"items": page}
+			if at + 2 < all.size():
+				out["nextPageToken"] = str(at + 2)
+			return _json(200, out)
+		if method == "GET":
+			var ids := str(q.get("id", "")).split(",")
+			if ids.size() > 50 or q.get("part") != "snippet,status":
+				return _json(400, {"error": {"message": "bad video list request"}})
+			var out: Array = []
+			for id in ids:
+				if videos.has(id):
+					out.append(videos[id])
+			return _json(200, {"items": out})
+		var data: Dictionary = JSON.parse_string(body.get_string_from_utf8())
+		var id := str(data.get("id", ""))
+		if id == management_forbidden:
+			return _json(403, {"error": {"message": "forbiddenPrivacySetting"}})
+		if q.get("part") != "status" or data.keys().size() != 2 or not videos.has(id) \
+				or videos[id]["snippet"]["channelId"] != who["account"]:
+			return _json(400, {"error": {"message": "bad video update request"}})
+		var status: Dictionary = data["status"]
+		for key in status:
+			if key not in ["privacyStatus", "embeddable", "license", "publicStatsViewable", "selfDeclaredMadeForKids", "containsSyntheticMedia"]:
+				return _json(400, {"error": {"message": "invalid status field"}})
+		videos[id]["status"] = status
+		managed.append(id)
+		return _json(200, videos[id])
 
 	## Two playlists a page, so a channel's three take two pages: those of the channel [param who]
 	## signs in to.

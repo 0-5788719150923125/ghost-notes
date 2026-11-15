@@ -35,7 +35,7 @@ scenes from scratch and debug them in manual mode. The C# question is answered i
    episode, lesson or words' marks, the highest rank standing); while one is open the rail steps aside and the editor's strip
    tracks the show and seeks it. Flags carry no words (overlapping labels are unreadable); a flag's name is its tooltip, and the
    panel's Timeline card lists every item in order, a row picking it and moving the show there (`TimelineList`).
-7. **The set** - a click on the stage names what is there (`Director.pick`): a stage's actor into its inspector, a table's thing
+7. **The set** - with the timeline opened from its transport button, a click on the stage names what is there (`Director.pick`): a stage's actor into its inspector, a table's thing
    and part into the dock - the table from above to drag it on (`TablePlanView`), its rows, its parts, + Part, + New thing,
    a free look.
 8. **From nothing** - "By hand" episodes Generate passes by; a library of things (`ThingLibrary`).

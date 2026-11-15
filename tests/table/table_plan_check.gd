@@ -122,6 +122,12 @@ func _run() -> void:
 			subs.document = {"source": c["script"], "title": "Plan Check", "table": _doc(c, s)["table"]}
 			medium._key = ""
 			medium._ensure_doc()
+			if c["label"] == "placed_box":
+				var center := Vector3(Tables.ORIGIN.x + 0.3, 0.0, Tables.ORIGIN.y - 0.3)
+				_ok(medium._plan.box_center().is_equal_approx(center), "a written box reserves its own place")
+				var world: AABB = medium._box_part.stood["world"]
+				_ok(Vector2(world.get_center().x, world.get_center().z).distance_to(Vector2(center.x, center.z)) < 0.0001,
+					"the built box stands at its written center")
 			var json: Variant = c["table"] if c["table"] is Dictionary else null
 			var want := _snap(TablePlan.make(subs.document, json, Director.intro_hold))
 			var have := _snap(medium._plan)
@@ -173,6 +179,9 @@ func _configs() -> Array:
 		{"label": "jumper", "script": jumper, "n": 3, "plan": {}, "table": null},
 		{"label": "seven", "script": CardReading.compose(long), "n": 7, "plan": {}, "table": null},
 		{"label": "box", "script": boxed, "n": 3, "plan": {"staging": {"source": "box"}}, "table": null},
+		{"label": "placed_box", "script": boxed, "n": 3, "plan": {"staging": {"source": "box"}}, "table": {
+			"materials": {"wood": {"kind": "wood"}}, "things": [{"name": "chest", "holds_cards": true, "at": [30, -30],
+			"parts": [{"shape": "extrude", "outline": "rect", "size": [17, 20], "height": 8, "wall": 0.6, "material": "wood"}]}]}},
 		{"label": "shoebox", "script": boxed, "n": 3, "plan": {"staging": {"source": "box", "box_style": "shoebox", "contents": "piles"}}, "table": null},
 		{"label": "given", "script": plain, "n": 3, "plan": {}, "table": "given"},
 		{"label": "written", "script": plain, "n": 3, "plan": {}, "table": WRITTEN},
